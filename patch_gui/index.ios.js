@@ -17717,6 +17717,7 @@ const DISTORTION_FIXED_DISPLAY_RANGE = 2;
 const DISTORTION_CURVE_POINT_COUNT = 241;
 const DISTORTION_TRANSFER_OCCUPANCY_BIN_COUNT = 81;
 const DISTORTION_TRANSFER_OCCUPANCY_ACTIVITY_EPSILON = 0.035;
+const DISTORTION_DRIVE_ENGAGEMENT_DB = 6;
 function clamp$a(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -17838,26 +17839,36 @@ function shapeSymmetricDistortionSample(inputSample, knee) {
   const denominator = Math.pow(1 + Math.pow(magnitude, exponent), 1 / exponent);
   return inputSample / denominator;
 }
-function shapeDistortionSample(inputSample, knee, type = 0) {
+function shapeDistortionSample(inputSample, knee, type = 0, driveDb = DISTORTION_DRIVE_ENGAGEMENT_DB) {
   const input = Number(inputSample) || 0;
   const selectedType = clamp$a(Math.round(Number(type) || 0), 0, 2);
+  let shapedSample;
   if (selectedType === 1) {
     const bias = 0.08;
-    return shapeSymmetricDistortionSample(input + bias, knee) - shapeSymmetricDistortionSample(bias, knee);
-  }
-  if (selectedType === 2) {
+    shapedSample = shapeSymmetricDistortionSample(input + bias, knee) - shapeSymmetricDistortionSample(bias, knee);
+  } else if (selectedType === 2) {
     const magnitude = Math.abs(input);
-    if (magnitude <= 1) return input;
-    const segment = Math.floor((magnitude - 1) * 0.5);
-    const phase = clamp$a((magnitude - (1 + 2 * segment)) * 0.5, 0, 1);
-    const segmentSign = segment % 2 === 0 ? 1 : -1;
-    const roundedReflection = segmentSign * Math.cos(Math.PI * phase);
-    const mirrorReflection = segmentSign * (1 - 2 * phase);
-    const reflectionStrength = clamp$a(Number(knee) || 0, 0, 1);
-    const folded = roundedReflection + (mirrorReflection - roundedReflection) * reflectionStrength;
-    return input < 0 ? -folded : folded;
+    if (magnitude <= 1) {
+      shapedSample = input;
+    } else {
+      const segment = Math.floor((magnitude - 1) * 0.5);
+      const phase = clamp$a((magnitude - (1 + 2 * segment)) * 0.5, 0, 1);
+      const segmentSign = segment % 2 === 0 ? 1 : -1;
+      const roundedReflection = segmentSign * Math.cos(Math.PI * phase);
+      const mirrorReflection = segmentSign * (1 - 2 * phase);
+      const reflectionStrength = clamp$a(Number(knee) || 0, 0, 1);
+      const folded = roundedReflection + (mirrorReflection - roundedReflection) * reflectionStrength;
+      shapedSample = input < 0 ? -folded : folded;
+    }
+  } else {
+    shapedSample = shapeSymmetricDistortionSample(input, knee);
   }
-  return shapeSymmetricDistortionSample(input, knee);
+  const engagement = clamp$a(
+    (Number(driveDb) || 0) / DISTORTION_DRIVE_ENGAGEMENT_DB,
+    0,
+    1
+  );
+  return input + (shapedSample - input) * engagement;
 }
 function buildDistortionSamplePoints(frame) {
   const sampleCount = Math.min(frame.inputSamples.length, frame.outputSamples.length);
@@ -17925,6 +17936,43 @@ function buildDistortionHistoryBins(frame) {
   }
   return bins;
 }
+function projectDistortionHistoryBinToTransfer({
+  bin,
+  driveDb = DISTORTION_DRIVE_ENGAGEMENT_DB,
+  knee,
+  type = 0
+}) {
+  if (!bin.valid) {
+    return bin;
+  }
+  const inputMin = Math.min(bin.inputMin, bin.inputMax);
+  const inputMax = Math.max(bin.inputMin, bin.inputMax);
+  const candidateInputs = Array.from({ length: 33 }, (_, index) => inputMin + (inputMax - inputMin) * (index / 32));
+  for (const transferBoundary of [-3, -1, 0, 1, 3]) {
+    if (transferBoundary > inputMin && transferBoundary < inputMax) {
+      candidateInputs.push(transferBoundary);
+    }
+  }
+  const projectedOutputs = candidateInputs.map((input) => shapeDistortionSample(input, knee, type, driveDb));
+  const outputMin = Math.min(...projectedOutputs);
+  const outputMax = Math.max(...projectedOutputs);
+  const removedPeak = Math.max(
+    0,
+    inputMax - outputMax,
+    outputMin - inputMin
+  );
+  return {
+    ...bin,
+    inputMin,
+    inputMax,
+    inputPeak: Math.max(Math.abs(inputMin), Math.abs(inputMax)),
+    outputMin,
+    outputMax,
+    outputPeak: Math.max(Math.abs(outputMin), Math.abs(outputMax)),
+    removedPeak,
+    clipped: removedPeak >= DISTORTION_SCOPE_CLIP_EPSILON
+  };
+}
 function summarizeDistortionHistoryFrame(frame) {
   const inputPeak = findBoundPeak(frame.inputMins, frame.inputMaxs);
   const outputPeak = findBoundPeak(frame.outputMins, frame.outputMaxs);
@@ -17974,6 +18022,7 @@ function buildDistortionTransferOccupancy({
   samplePoints,
   knee,
   type = 0,
+  driveDb = DISTORTION_DRIVE_ENGAGEMENT_DB,
   inputRange,
   binCount = DISTORTION_TRANSFER_OCCUPANCY_BIN_COUNT
 }) {
@@ -17981,8 +18030,6 @@ function buildDistortionTransferOccupancy({
   const safeBinCount = Math.max(9, Math.round(Number(binCount) || DISTORTION_TRANSFER_OCCUPANCY_BIN_COUNT));
   const densityBins = new Array(safeBinCount).fill(0);
   const removedBins = new Array(safeBinCount).fill(0);
-  const clippedBins = new Array(safeBinCount).fill(0);
-  const outputSumBins = new Array(safeBinCount).fill(0);
   let leftOverflowCount = 0;
   let rightOverflowCount = 0;
   for (const point of samplePoints) {
@@ -18000,44 +18047,23 @@ function buildDistortionTransferOccupancy({
       0,
       safeBinCount - 1
     );
+    const transferOutput = shapeDistortionSample(point.input, knee, type, driveDb);
     densityBins[binIndex] += 1;
-    removedBins[binIndex] += Math.abs(point.removed);
-    clippedBins[binIndex] += point.clipped ? 1 : 0;
-    outputSumBins[binIndex] += point.output;
+    removedBins[binIndex] += Math.abs(point.input - transferOutput);
   }
   const smoothedDensity = normalizeSeries(smoothSeries(densityBins));
   const smoothedRemoved = normalizeSeries(smoothSeries(removedBins));
-  const smoothedClipped = smoothSeries(clippedBins).map((value, index) => {
-    const density = densityBins[index] ?? 0;
-    return density > 0 ? clamp$a(value / density, 0, 1) : 0;
-  });
-  const measuredOutputBins = outputSumBins.map((sum, index) => (densityBins[index] ?? 0) > 0 ? sum / (densityBins[index] ?? 1) : null);
-  const outputAtBin = (index, input) => {
-    const measured = measuredOutputBins[index];
-    if (measured !== null && measured !== void 0) return measured;
-    let left = index - 1;
-    while (left >= 0 && measuredOutputBins[left] === null) left -= 1;
-    let right = index + 1;
-    while (right < safeBinCount && measuredOutputBins[right] === null) right += 1;
-    const leftOutput = left >= 0 ? measuredOutputBins[left] : null;
-    const rightOutput = right < safeBinCount ? measuredOutputBins[right] : null;
-    if (leftOutput !== null && leftOutput !== void 0 && rightOutput !== null && rightOutput !== void 0) {
-      const amount = (index - left) / Math.max(1, right - left);
-      return leftOutput + (rightOutput - leftOutput) * amount;
-    }
-    if (leftOutput !== null && leftOutput !== void 0) return leftOutput;
-    if (rightOutput !== null && rightOutput !== void 0) return rightOutput;
-    return shapeDistortionSample(input, knee, type);
-  };
   const rawPoints = Array.from({ length: safeBinCount }, (_, index) => {
     const normalized2 = safeBinCount <= 1 ? 0 : index / (safeBinCount - 1);
     const input = normalized2 * safeInputRange * 2 - safeInputRange;
+    const output = shapeDistortionSample(input, knee, type, driveDb);
+    const removed = Math.abs(input - output);
     return {
       input,
-      output: outputAtBin(index, input),
+      output,
       density: smoothedDensity[index] ?? 0,
       removed: smoothedRemoved[index] ?? 0,
-      clipped: clamp$a(smoothedClipped[index] ?? 0, 0, 1)
+      clipped: removed >= DISTORTION_SCOPE_CLIP_EPSILON ? 1 : 0
     };
   });
   const segments = [];
@@ -18066,6 +18092,7 @@ function buildDistortionTransferOccupancy({
 function sampleDistortionCurve({
   knee,
   type = 0,
+  driveDb = DISTORTION_DRIVE_ENGAGEMENT_DB,
   inputRange,
   pointCount = DISTORTION_CURVE_POINT_COUNT
 }) {
@@ -18076,7 +18103,7 @@ function sampleDistortionCurve({
     const input = normalized2 * safeInputRange * 2 - safeInputRange;
     return {
       input,
-      output: shapeDistortionSample(input, knee, type)
+      output: shapeDistortionSample(input, knee, type, driveDb)
     };
   });
 }
@@ -18183,6 +18210,46 @@ function buildRibbonPath(points) {
   }
   return buildFilledBridgePath(upper, lower);
 }
+function midpointTransferRibbonPoint(first, second) {
+  return {
+    x: (first.x + second.x) * 0.5,
+    y: (first.y + second.y) * 0.5,
+    width: (first.width + second.width) * 0.5,
+    density: (first.density + second.density) * 0.5,
+    clipped: second.clipped
+  };
+}
+function splitTransferRibbonByClipping(points) {
+  const firstPoint = points[0];
+  if (!firstPoint) {
+    return [];
+  }
+  const regions = [];
+  let currentRegion = {
+    clipped: firstPoint.clipped,
+    points: [firstPoint]
+  };
+  for (let index = 1; index < points.length; index += 1) {
+    const point = points[index];
+    const previousPoint = points[index - 1];
+    if (!point || !previousPoint) {
+      continue;
+    }
+    if (point.clipped === currentRegion.clipped) {
+      currentRegion.points.push(point);
+      continue;
+    }
+    const boundaryPoint = midpointTransferRibbonPoint(previousPoint, point);
+    currentRegion.points.push(boundaryPoint);
+    regions.push(currentRegion);
+    currentRegion = {
+      clipped: point.clipped,
+      points: [boundaryPoint, point]
+    };
+  }
+  regions.push(currentRegion);
+  return regions;
+}
 function buildAxisLabelX(sampleValue, plot, range) {
   return mapPlotX(sampleValue, plot, range);
 }
@@ -18191,6 +18258,7 @@ function buildAxisLabelY(sampleValue, plot, range) {
 }
 function DistortionVisualizer({
   compact,
+  driveDb,
   knee,
   type,
   transferFrame,
@@ -18214,65 +18282,70 @@ function DistortionVisualizer({
     () => historyFrame ? buildDistortionHistoryBins(historyFrame) : [],
     [historyFrame]
   );
+  const projectedHistoryBins = reactExports.useMemo(() => historyBins.map((bin) => projectDistortionHistoryBinToTransfer({
+    bin,
+    driveDb,
+    knee,
+    type
+  })), [driveDb, historyBins, knee, type]);
   const historySummary = reactExports.useMemo(
     () => historyFrame ? summarizeDistortionHistoryFrame(historyFrame) : { inputPeak: 0, outputPeak: 0, removedPeak: 0 },
     [historyFrame]
   );
   const transferCurve = reactExports.useMemo(
-    () => sampleDistortionCurve({ knee, type, inputRange: displayRange }),
-    [displayRange, knee, type]
+    () => sampleDistortionCurve({ driveDb, knee, type, inputRange: displayRange }),
+    [displayRange, driveDb, knee, type]
   );
   const transferOccupancy = reactExports.useMemo(() => buildDistortionTransferOccupancy({
     samplePoints,
+    driveDb,
     knee,
     type,
     inputRange: displayRange
-  }), [displayRange, knee, samplePoints, type]);
+  }), [displayRange, driveDb, knee, samplePoints, type]);
   const transferPlotRect = compact ? COMPACT_PLOT : TRANSFER_PLOT;
   const historyPlotRect = compact ? COMPACT_PLOT : HISTORY_PLOT;
-  const transferCurvePath = reactExports.useMemo(() => samplePoints.length > 0 ? "" : buildPolylinePath(transferCurve.map((point) => ({
-    x: mapPlotX(point.input, transferPlotRect, displayRange),
-    y: mapPlotY(point.output, transferPlotRect, displayRange)
-  }))), [displayRange, samplePoints.length, transferCurve, transferPlotRect]);
+  const transferCurvePath = reactExports.useMemo(() => buildPolylinePath(
+    transferCurve.map((point) => ({
+      x: mapPlotX(point.input, transferPlotRect, displayRange),
+      y: mapPlotY(point.output, transferPlotRect, displayRange)
+    }))
+  ), [displayRange, transferCurve, transferPlotRect]);
   const transferOccupancyPaths = reactExports.useMemo(() => transferOccupancy.segments.map((segment) => {
     const mappedPoints = segment.map((point) => ({
       x: mapPlotX(point.input, transferPlotRect, displayRange),
       y: mapPlotY(point.output, transferPlotRect, displayRange),
+      width: 8 + point.density * 18,
       density: point.density,
-      removed: point.removed,
-      clipped: point.clipped
+      clipped: point.clipped >= 0.5
     }));
-    const occupancyPath = buildRibbonPath(mappedPoints.map((point) => ({
-      x: point.x,
-      y: point.y,
-      width: 8 + point.density * 18
-    })));
-    const clippedPath = buildRibbonPath(mappedPoints.map((point) => ({
-      x: point.x,
-      y: point.y,
-      width: Math.max(0, point.density * point.removed * Math.max(0.25, point.clipped) * 28)
-    })));
     const peakDensity = mappedPoints.reduce((peak, point) => Math.max(peak, point.density), 0);
-    const peakRemoved = mappedPoints.reduce((peak, point) => Math.max(peak, point.removed), 0);
-    const peakClipped = mappedPoints.reduce((peak, point) => Math.max(peak, point.clipped), 0);
     return {
-      occupancyPath,
-      clippedPath,
-      occupancyOpacity: clamp$9(0.14 + peakDensity * 0.34, 0.14, 0.48),
-      clippedOpacity: clamp$9(peakRemoved * 0.62 + peakClipped * 0.24, 0, 0.72)
+      glowPath: buildRibbonPath(mappedPoints),
+      glowOpacity: clamp$9(0.12 + peakDensity * 0.12, 0.12, 0.24),
+      regions: splitTransferRibbonByClipping(mappedPoints).map((region) => {
+        const regionPeakDensity = region.points.reduce(
+          (peak, point) => Math.max(peak, point.density),
+          0
+        );
+        return {
+          clipped: region.clipped,
+          path: buildRibbonPath(region.points),
+          opacity: region.clipped ? clamp$9(0.82 + regionPeakDensity * 0.16, 0.82, 0.98) : clamp$9(0.58 + regionPeakDensity * 0.26, 0.58, 0.84)
+        };
+      }).filter((region) => region.path)
     };
-  }).filter((segment) => segment.occupancyPath), [displayRange, transferOccupancy, transferPlotRect]);
+  }).filter((segment) => segment.glowPath), [displayRange, transferOccupancy, transferPlotRect]);
   const historyColumns = reactExports.useMemo(() => {
-    const plotBinCount = Math.max(1, historyBins.length);
+    const plotBinCount = Math.max(1, projectedHistoryBins.length);
     const columnWidth = historyPlotRect.width / plotBinCount;
-    return historyBins.map((bin, index) => {
+    return projectedHistoryBins.map((bin, index) => {
       const left = historyPlotRect.left + index * columnWidth + HISTORY_BAR_GAP * 0.5;
       const width = Math.max(1, columnWidth - HISTORY_BAR_GAP);
-      const outputTop = mapPlotY(bin.outputPeak, historyPlotRect, displayRange);
-      const outputBottom = mapPlotY(-bin.outputPeak, historyPlotRect, displayRange);
-      const inputTop = mapPlotY(bin.inputPeak, historyPlotRect, displayRange);
-      const inputBottom = mapPlotY(-bin.inputPeak, historyPlotRect, displayRange);
-      const hasRemoval = bin.valid && bin.inputPeak > bin.outputPeak + 1e-4;
+      const outputTop = mapPlotY(bin.outputMax, historyPlotRect, displayRange);
+      const outputBottom = mapPlotY(bin.outputMin, historyPlotRect, displayRange);
+      const inputTop = mapPlotY(bin.inputMax, historyPlotRect, displayRange);
+      const inputBottom = mapPlotY(bin.inputMin, historyPlotRect, displayRange);
       const outputHeight = Math.max(0, outputBottom - outputTop);
       const removedTopHeight = Math.max(0, outputTop - inputTop);
       const removedBottomHeight = Math.max(0, inputBottom - outputBottom);
@@ -18285,13 +18358,13 @@ function DistortionVisualizer({
           width,
           height: outputHeight
         },
-        removedTop: hasRemoval ? {
+        removedTop: bin.valid && removedTopHeight > 1e-4 ? {
           x: left,
           y: inputTop,
           width,
           height: removedTopHeight
         } : null,
-        removedBottom: hasRemoval ? {
+        removedBottom: bin.valid && removedBottomHeight > 1e-4 ? {
           x: left,
           y: outputBottom,
           width,
@@ -18299,11 +18372,14 @@ function DistortionVisualizer({
         } : null
       };
     });
-  }, [displayRange, historyBins, historyPlotRect]);
+  }, [displayRange, historyPlotRect, projectedHistoryBins]);
   const overshoot = Math.max(0, (activeTransferFrame?.inputPeak ?? 0) - 1);
   const headroom = Math.max(0, 1 - (activeTransferFrame?.inputPeak ?? 0));
   const clippedSampleCount = samplePoints.reduce((count, point) => count + (point.clipped ? 1 : 0), 0);
-  const clippedHistoryBinCount = historyBins.reduce((count, bin) => count + (bin.clipped ? 1 : 0), 0);
+  const clippedHistoryBinCount = projectedHistoryBins.reduce(
+    (count, bin) => count + (bin.clipped ? 1 : 0),
+    0
+  );
   const debugState = reactExports.useMemo(() => ({
     hasTransferScope: Boolean(activeTransferFrame),
     hasHistory: Boolean(historyFrame),
@@ -18318,7 +18394,9 @@ function DistortionVisualizer({
     transfer: {
       samplePointCount: samplePoints.length,
       occupancySegmentCount: transferOccupancyPaths.length,
-      clippedOccupancySegmentCount: transferOccupancyPaths.filter((segment) => segment.clippedPath).length,
+      clippedOccupancySegmentCount: transferOccupancyPaths.filter(
+        (segment) => segment.regions.some((region) => region.clipped)
+      ).length,
       peakDensity: transferOccupancy.peakDensity,
       peakRemoved: transferOccupancy.peakRemoved,
       leftOverflowCount: transferOccupancy.leftOverflowCount,
@@ -18424,39 +18502,42 @@ function DistortionVisualizer({
                 "rect",
                 {
                   "data-role": "distortion-history-output-column",
+                  "data-clipping": "unclipped",
                   x: column.output.x,
                   y: column.output.y,
                   width: column.output.width,
                   height: column.output.height,
                   rx: Math.min(2.2, column.output.width * 0.45),
-                  fill: "rgba(255,255,255,0.92)",
-                  opacity: 0.18
+                  fill: "rgb(226 232 240)",
+                  opacity: 0.42
                 }
               ) : null,
               column.removedTop ? /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "rect",
                 {
                   "data-role": "distortion-history-removed-column",
+                  "data-clipping": "clipped",
                   x: column.removedTop.x,
                   y: column.removedTop.y,
                   width: column.removedTop.width,
                   height: column.removedTop.height,
                   rx: Math.min(2.2, column.removedTop.width * 0.45),
-                  fill: "rgb(var(--section-accent-rgb) / 0.88)",
-                  opacity: 0.3
+                  fill: "rgb(251 113 133)",
+                  opacity: 0.86
                 }
               ) : null,
               column.removedBottom ? /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "rect",
                 {
                   "data-role": "distortion-history-removed-column",
+                  "data-clipping": "clipped",
                   x: column.removedBottom.x,
                   y: column.removedBottom.y,
                   width: column.removedBottom.width,
                   height: column.removedBottom.height,
                   rx: Math.min(2.2, column.removedBottom.width * 0.45),
-                  fill: "rgb(var(--section-accent-rgb) / 0.88)",
-                  opacity: 0.3
+                  fill: "rgb(251 113 133)",
+                  opacity: 0.86
                 }
               ) : null
             ] }, `compact-hist-${index}`)),
@@ -18464,35 +18545,28 @@ function DistortionVisualizer({
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "path",
                 {
-                  "data-role": "distortion-transfer-occupancy",
-                  d: segment.occupancyPath,
-                  fill: "rgba(255,255,255,0.14)",
-                  opacity: segment.occupancyOpacity,
+                  d: segment.glowPath,
+                  fill: "rgb(226 232 240)",
+                  opacity: segment.glowOpacity,
                   filter: "url(#distortionTransferOccupancyGlow)"
                 }
               ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
+              segment.regions.map((region, regionIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "path",
                 {
-                  "data-role": "distortion-transfer-occupancy",
-                  d: segment.occupancyPath,
-                  fill: "rgba(255,255,255,0.26)",
-                  opacity: Math.min(1, segment.occupancyOpacity + 0.1)
-                }
-              ),
-              segment.clippedPath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "path",
-                {
-                  "data-role": "distortion-transfer-clipped-occupancy",
-                  d: segment.clippedPath,
-                  fill: "rgb(var(--section-accent-rgb) / 0.36)",
-                  opacity: segment.clippedOpacity
-                }
-              ) : null
+                  "data-role": region.clipped ? "distortion-transfer-clipped-occupancy" : "distortion-transfer-occupancy",
+                  "data-clipping": region.clipped ? "clipped" : "unclipped",
+                  d: region.path,
+                  fill: region.clipped ? "rgb(251 113 133)" : "rgb(226 232 240)",
+                  opacity: region.opacity
+                },
+                `compact-occ-${index}-region-${regionIndex}`
+              ))
             ] }, `compact-occ-${index}`)),
             transferCurvePath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
               "path",
               {
+                "data-role": "distortion-transfer-curve",
                 d: transferCurvePath,
                 fill: "none",
                 stroke: "var(--section-accent)",
@@ -18600,35 +18674,28 @@ function DistortionVisualizer({
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "path",
               {
-                "data-role": "distortion-transfer-occupancy",
-                d: segment.occupancyPath,
-                fill: "rgba(255,255,255,0.14)",
-                opacity: segment.occupancyOpacity,
+                d: segment.glowPath,
+                fill: "rgb(226 232 240)",
+                opacity: segment.glowOpacity,
                 filter: "url(#distortionTransferOccupancyGlow)"
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
+            segment.regions.map((region, regionIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx(
               "path",
               {
-                "data-role": "distortion-transfer-occupancy",
-                d: segment.occupancyPath,
-                fill: "rgba(255,255,255,0.26)",
-                opacity: Math.min(1, segment.occupancyOpacity + 0.1)
-              }
-            ),
-            segment.clippedPath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "path",
-              {
-                "data-role": "distortion-transfer-clipped-occupancy",
-                d: segment.clippedPath,
-                fill: "rgb(var(--section-accent-rgb) / 0.36)",
-                opacity: segment.clippedOpacity
-              }
-            ) : null
+                "data-role": region.clipped ? "distortion-transfer-clipped-occupancy" : "distortion-transfer-occupancy",
+                "data-clipping": region.clipped ? "clipped" : "unclipped",
+                d: region.path,
+                fill: region.clipped ? "rgb(251 113 133)" : "rgb(226 232 240)",
+                opacity: region.opacity
+              },
+              `transfer-occupancy-${index}-region-${regionIndex}`
+            ))
           ] }, `transfer-occupancy-${index}`)),
           transferCurvePath ? /* @__PURE__ */ jsxRuntimeExports.jsx(
             "path",
             {
+              "data-role": "distortion-transfer-curve",
               d: transferCurvePath,
               fill: "none",
               stroke: "var(--section-accent)",
@@ -18642,36 +18709,39 @@ function DistortionVisualizer({
               "rect",
               {
                 "data-role": "distortion-history-output-column",
+                "data-clipping": "unclipped",
                 x: column.output.x,
                 y: column.output.y,
                 width: column.output.width,
                 height: column.output.height,
                 rx: Math.min(2.2, column.output.width * 0.45),
-                fill: "rgba(255,255,255,0.92)"
+                fill: "rgb(226 232 240)"
               }
             ) : null,
             column.removedTop ? /* @__PURE__ */ jsxRuntimeExports.jsx(
               "rect",
               {
                 "data-role": "distortion-history-removed-column",
+                "data-clipping": "clipped",
                 x: column.removedTop.x,
                 y: column.removedTop.y,
                 width: column.removedTop.width,
                 height: column.removedTop.height,
                 rx: Math.min(2.2, column.removedTop.width * 0.45),
-                fill: "rgb(var(--section-accent-rgb) / 0.88)"
+                fill: "rgb(251 113 133)"
               }
             ) : null,
             column.removedBottom ? /* @__PURE__ */ jsxRuntimeExports.jsx(
               "rect",
               {
                 "data-role": "distortion-history-removed-column",
+                "data-clipping": "clipped",
                 x: column.removedBottom.x,
                 y: column.removedBottom.y,
                 width: column.removedBottom.width,
                 height: column.removedBottom.height,
                 rx: Math.min(2.2, column.removedBottom.width * 0.45),
-                fill: "rgb(var(--section-accent-rgb) / 0.88)"
+                fill: "rgb(251 113 133)"
               }
             ) : null
           ] }, `history-column-${index}`)),
@@ -29923,6 +29993,7 @@ const IOSDistortionPanel = reactExports.memo(function IOSDistortionPanel2({
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           DistortionVisualizer,
           {
+            driveDb: driveValue,
             knee: kneeValue,
             type: typeValue,
             transferFrame: scopeFrame,

@@ -6,6 +6,8 @@ export const DISTORTION_CURVE_POINT_COUNT = 241;
 export const DISTORTION_TRANSFER_OCCUPANCY_BIN_COUNT = 81;
 export const DISTORTION_TRANSFER_OCCUPANCY_ACTIVITY_EPSILON = 0.035;
 
+const DISTORTION_DRIVE_ENGAGEMENT_DB = 6;
+
 export type DistortionScopeFrame = {
     sampleRateHz: number;
     dominantChannel: number;
@@ -233,31 +235,47 @@ function shapeSymmetricDistortionSample(inputSample: number, knee: number) {
     return inputSample / denominator;
 }
 
-export function shapeDistortionSample(inputSample: number, knee: number, type = 0) {
+/** Mirror the production distortion core's selected transfer function. */
+export function shapeDistortionSample(
+    inputSample: number,
+    knee: number,
+    type = 0,
+    driveDb = DISTORTION_DRIVE_ENGAGEMENT_DB,
+) {
     const input = Number(inputSample) || 0;
     const selectedType = clamp(Math.round(Number(type) || 0), 0, 2);
+    let shapedSample: number;
 
     if (selectedType === 1) {
         const bias = 0.08;
-        return shapeSymmetricDistortionSample(input + bias, knee)
+        shapedSample = shapeSymmetricDistortionSample(input + bias, knee)
             - shapeSymmetricDistortionSample(bias, knee);
-    }
-
-    if (selectedType === 2) {
+    } else if (selectedType === 2) {
         const magnitude = Math.abs(input);
-        if (magnitude <= 1) return input;
-        const segment = Math.floor((magnitude - 1) * 0.5);
-        const phase = clamp((magnitude - (1 + 2 * segment)) * 0.5, 0, 1);
-        const segmentSign = segment % 2 === 0 ? 1 : -1;
-        const roundedReflection = segmentSign * Math.cos(Math.PI * phase);
-        const mirrorReflection = segmentSign * (1 - 2 * phase);
-        const reflectionStrength = clamp(Number(knee) || 0, 0, 1);
-        const folded = roundedReflection
-            + (mirrorReflection - roundedReflection) * reflectionStrength;
-        return input < 0 ? -folded : folded;
+        if (magnitude <= 1) {
+            shapedSample = input;
+        } else {
+            const segment = Math.floor((magnitude - 1) * 0.5);
+            const phase = clamp((magnitude - (1 + 2 * segment)) * 0.5, 0, 1);
+            const segmentSign = segment % 2 === 0 ? 1 : -1;
+            const roundedReflection = segmentSign * Math.cos(Math.PI * phase);
+            const mirrorReflection = segmentSign * (1 - 2 * phase);
+            const reflectionStrength = clamp(Number(knee) || 0, 0, 1);
+            const folded = roundedReflection
+                + (mirrorReflection - roundedReflection) * reflectionStrength;
+            shapedSample = input < 0 ? -folded : folded;
+        }
+    } else {
+        shapedSample = shapeSymmetricDistortionSample(input, knee);
     }
 
-    return shapeSymmetricDistortionSample(input, knee);
+    const engagement = clamp(
+        (Number(driveDb) || 0) / DISTORTION_DRIVE_ENGAGEMENT_DB,
+        0,
+        1,
+    );
+
+    return input + ((shapedSample - input) * engagement);
 }
 
 export function buildDistortionSamplePoints(frame: DistortionScopeFrame) {
@@ -335,6 +353,61 @@ export function buildDistortionHistoryBins(frame: DistortionHistoryFrame) {
     return bins;
 }
 
+/**
+ * Re-project one real input-history bin through the same production-core
+ * transfer function used by the deterministic curve.
+ */
+export function projectDistortionHistoryBinToTransfer({
+    bin,
+    driveDb = DISTORTION_DRIVE_ENGAGEMENT_DB,
+    knee,
+    type = 0,
+}: {
+    bin: DistortionHistoryBin;
+    driveDb?: number;
+    knee: number;
+    type?: number;
+}): DistortionHistoryBin {
+    if (!bin.valid) {
+        return bin;
+    }
+
+    const inputMin = Math.min(bin.inputMin, bin.inputMax);
+    const inputMax = Math.max(bin.inputMin, bin.inputMax);
+    const candidateInputs = Array.from({ length: 33 }, (_, index) => (
+        inputMin + ((inputMax - inputMin) * (index / 32))
+    ));
+
+    for (const transferBoundary of [-3, -1, 0, 1, 3]) {
+        if (transferBoundary > inputMin && transferBoundary < inputMax) {
+            candidateInputs.push(transferBoundary);
+        }
+    }
+
+    const projectedOutputs = candidateInputs.map((input) => (
+        shapeDistortionSample(input, knee, type, driveDb)
+    ));
+    const outputMin = Math.min(...projectedOutputs);
+    const outputMax = Math.max(...projectedOutputs);
+    const removedPeak = Math.max(
+        0,
+        inputMax - outputMax,
+        outputMin - inputMin,
+    );
+
+    return {
+        ...bin,
+        inputMin,
+        inputMax,
+        inputPeak: Math.max(Math.abs(inputMin), Math.abs(inputMax)),
+        outputMin,
+        outputMax,
+        outputPeak: Math.max(Math.abs(outputMin), Math.abs(outputMax)),
+        removedPeak,
+        clipped: removedPeak >= DISTORTION_SCOPE_CLIP_EPSILON,
+    };
+}
+
 export function summarizeDistortionHistoryFrame(frame: DistortionHistoryFrame) {
     const inputPeak = findBoundPeak(frame.inputMins, frame.inputMaxs);
     const outputPeak = findBoundPeak(frame.outputMins, frame.outputMaxs);
@@ -396,12 +469,14 @@ export function buildDistortionTransferOccupancy({
     samplePoints,
     knee,
     type = 0,
+    driveDb = DISTORTION_DRIVE_ENGAGEMENT_DB,
     inputRange,
     binCount = DISTORTION_TRANSFER_OCCUPANCY_BIN_COUNT,
 }: {
     samplePoints: DistortionSamplePoint[];
     knee: number;
     type?: number;
+    driveDb?: number;
     inputRange: number;
     binCount?: number;
 }): DistortionTransferOccupancy {
@@ -409,8 +484,6 @@ export function buildDistortionTransferOccupancy({
     const safeBinCount = Math.max(9, Math.round(Number(binCount) || DISTORTION_TRANSFER_OCCUPANCY_BIN_COUNT));
     const densityBins = new Array<number>(safeBinCount).fill(0);
     const removedBins = new Array<number>(safeBinCount).fill(0);
-    const clippedBins = new Array<number>(safeBinCount).fill(0);
-    const outputSumBins = new Array<number>(safeBinCount).fill(0);
     let leftOverflowCount = 0;
     let rightOverflowCount = 0;
 
@@ -432,52 +505,27 @@ export function buildDistortionTransferOccupancy({
             safeBinCount - 1,
         );
 
+        const transferOutput = shapeDistortionSample(point.input, knee, type, driveDb);
+
         densityBins[binIndex] += 1;
-        removedBins[binIndex] += Math.abs(point.removed);
-        clippedBins[binIndex] += point.clipped ? 1 : 0;
-        outputSumBins[binIndex] += point.output;
+        removedBins[binIndex] += Math.abs(point.input - transferOutput);
     }
 
     const smoothedDensity = normalizeSeries(smoothSeries(densityBins));
     const smoothedRemoved = normalizeSeries(smoothSeries(removedBins));
-    const smoothedClipped = smoothSeries(clippedBins).map((value, index) => {
-        const density = densityBins[index] ?? 0;
-        return density > 0 ? clamp(value / density, 0, 1) : 0;
-    });
-
-    const measuredOutputBins = outputSumBins.map((sum, index) => (
-        (densityBins[index] ?? 0) > 0 ? sum / (densityBins[index] ?? 1) : null
-    ));
-    const outputAtBin = (index: number, input: number) => {
-        const measured = measuredOutputBins[index];
-        if (measured !== null && measured !== undefined) return measured;
-
-        let left = index - 1;
-        while (left >= 0 && measuredOutputBins[left] === null) left -= 1;
-        let right = index + 1;
-        while (right < safeBinCount && measuredOutputBins[right] === null) right += 1;
-
-        const leftOutput = left >= 0 ? measuredOutputBins[left] : null;
-        const rightOutput = right < safeBinCount ? measuredOutputBins[right] : null;
-        if (leftOutput !== null && leftOutput !== undefined && rightOutput !== null && rightOutput !== undefined) {
-            const amount = (index - left) / Math.max(1, right - left);
-            return leftOutput + ((rightOutput - leftOutput) * amount);
-        }
-        if (leftOutput !== null && leftOutput !== undefined) return leftOutput;
-        if (rightOutput !== null && rightOutput !== undefined) return rightOutput;
-        return shapeDistortionSample(input, knee, type);
-    };
 
     const rawPoints = Array.from({ length: safeBinCount }, (_, index) => {
         const normalized = safeBinCount <= 1 ? 0 : index / (safeBinCount - 1);
         const input = (normalized * safeInputRange * 2) - safeInputRange;
+        const output = shapeDistortionSample(input, knee, type, driveDb);
+        const removed = Math.abs(input - output);
 
         return {
             input,
-            output: outputAtBin(index, input),
+            output,
             density: smoothedDensity[index] ?? 0,
             removed: smoothedRemoved[index] ?? 0,
-            clipped: clamp(smoothedClipped[index] ?? 0, 0, 1),
+            clipped: removed >= DISTORTION_SCOPE_CLIP_EPSILON ? 1 : 0,
         };
     });
 
@@ -513,11 +561,13 @@ export function buildDistortionTransferOccupancy({
 export function sampleDistortionCurve({
     knee,
     type = 0,
+    driveDb = DISTORTION_DRIVE_ENGAGEMENT_DB,
     inputRange,
     pointCount = DISTORTION_CURVE_POINT_COUNT,
 }: {
     knee: number;
     type?: number;
+    driveDb?: number;
     inputRange: number;
     pointCount?: number;
 }) {
@@ -530,7 +580,7 @@ export function sampleDistortionCurve({
 
         return {
             input,
-            output: shapeDistortionSample(input, knee, type),
+            output: shapeDistortionSample(input, knee, type, driveDb),
         };
     });
 }

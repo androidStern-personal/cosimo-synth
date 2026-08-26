@@ -1378,21 +1378,27 @@ Source note (2026-08-25):
     - The -18 dBFS static table passed its narrow test but failed Andrew's quiet physical-phone signal by 12.47 dB. T25 is reopened until the live level matcher, reviewer repairs, rebuilt phone surface, standalone, and VST3 are all requalified.
     Completion evidence (2026-08-26; graph claim corrected 2026-08-26):
     - Replaced the invalid static compensation table with the bounded stereo-linked live dry/wet energy and correlation matcher. Andrew's filtered-saw fixture now measures Mix 50%-vs-1% at -0.121..-0.093 dB from -36 through -18 dBFS; representative grid worst is 0.324 dB and musical-holdout worst is 0.873 dB.
-    - Independently reproduced and repaired the reviewers' audio/runtime defects: Drive-zero discontinuity, reset burst, off-grid/sample-rate drift, endpoint lag, missing Harmonics/DC/reset/Type-transition proof, and strict current-contract fixtures. The prior claim that the visualizer geometry was repaired is withdrawn: the real composed Drive editor still renders a graph that is barely visible or useful, tracked by T25A below. Intentional ADR-021 old-state rejection and the lack of an alias-energy claim are documented rather than misrepresented as fixes.
-    - Distortion 6/6 and full rack 79/79 Cmajor tests, 723/723 shared/unit tests, focused UI/state/browser gates, Chromium/WebKit offline rendering, and the five-case current-contract Speedrun pipeline pass. Those gates support the accepted sound and state work; they did not establish useful graph visibility. Final web/iPhone/desktop bundles were rebuilt; this worktree's HMR standalone is running on 127.0.0.1:5176; the compiled VST3 is installed at `~/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` and passes strict codesign verification.
+    - Independently reproduced and repaired the reviewers' audio/runtime defects: Drive-zero discontinuity, reset burst, off-grid/sample-rate drift, endpoint lag, missing Harmonics/DC/reset/Type-transition proof, and strict current-contract fixtures. The visualizer repair claim is withdrawn: T25 suppressed the full transfer curve whenever telemetry existed and substituted low-level post-match samples as the only active geometry, collapsing the real graph into a thin line. T25A owns the restoration below. Intentional ADR-021 old-state rejection and the lack of an alias-energy claim are documented rather than misrepresented as fixes.
+    - Distortion 6/6 and full rack 79/79 Cmajor tests, 723/723 shared/unit tests, focused parameter/state/browser gates, Chromium/WebKit offline rendering, and the five-case current-contract Speedrun pipeline pass. Those gates support the accepted sound and state work; they did not establish a correct or useful graph. Final web/iPhone/desktop bundles were rebuilt; this worktree's HMR standalone is running on 127.0.0.1:5176; the compiled VST3 is installed at `~/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` and passes strict codesign verification.
 
-[ ] T25A — Restore the Drive graph after the accepted distortion redesign
+[x] T25A — Restore the pre-T25 Drive graphic with current-algorithm transfer curves
     Active owner (2026-08-26):
-    - Codex task `Fix T25 Drive graph regression`, thread `01a03b99-e818-7ec2-8d0d-1ab5ba6b7d0f`, branch `codex/t25-drive-graph-regression`, worktree `/Users/winterfell/.codex/worktrees/6195ed10-94d0-4866-a3af-aec686aff452/cosimo-synth`, model SOL, reasoning max.
-    Regression to close:
-    - In the real composed Drive editor, the graph now barely shows useful movement even though the newly landed distortion algorithms and gain matching are accepted.
-    Required work:
-    - Reproduce quiet and normal synth signals with Symmetric, Asymmetric, and Wavefold in the production Drive editor. Determine whether scaling, geometry, sampling, telemetry, or the signal sent to the graph is responsible.
-    - Restore a clearly visible graph at representative levels while keeping it truthful to the signal actually processed. Do not synthesize decorative activity or change the accepted audio algorithms, level matching, Mix, filters, oversampling, or sound unless the graph data feed itself is defective and can be repaired without changing audio.
-    - Compare before and after with identical input, Type, Drive, Knee, Mix, filters, and editor dimensions.
+    - Completed by Codex task `Fix T25 Drive graph regression`, thread `01a03b99-e818-7ec2-8d0d-1ab5ba6b7d0f`, branch `codex/t25-drive-graph-regression`, worktree `/Users/winterfell/.codex/worktrees/6195ed10-94d0-4866-a3af-aec686aff452/cosimo-synth`.
+    Locked visual behavior:
+    - Restore the exact pre-T25 renderer, scale, plot geometry, layering, and presentation. Do not replace it with a new visualization or adaptive scale.
+    - Keep the full transfer function visible during live telemetry. Its curve must truthfully represent the selected current Symmetric, Asymmetric, or Wavefold algorithm and respond to the controls that define that algorithm.
+    - Draw the live signal overlay in the same input/output coordinate system as the transfer function so users see the exercised waveform meet and clip where the curve flattens or folds.
+    - Preserve real telemetry as the activity source. Render clipped and unclipped portions in clearly different, high-contrast colors; do not fabricate movement.
+    - Do not change the accepted distortion DSP, gain matching, Mix, filters, oversampling, or sound.
     Done when:
-    - A red-capable automated regression drives the real composed editor and distinguishes the broken graph from the repaired result across quiet and normal levels and all three Types.
-    - Matching screenshots or recordings prove the real Drive editor at representative phone, desktop, and plugin sizes; the required fresh desktop HMR app and installed VST3 are delivered.
+    - A red-capable real composed-editor regression fails when telemetry hides the transfer curve, when the live overlay diverges from its curve, or when clipped/unclipped regions are not materially distinguishable.
+    - Current-algorithm curve samples are checked against the production DSP equations for all three Types, and the real editor is visually compared with the pre-T25 reference at phone, desktop, and plugin sizes.
+    - The required fresh desktop HMR app and installed VST3 are delivered.
+    Completion evidence (2026-08-26):
+    - Restored the fixed pre-T25 compact canvas, plot geometry, layering, and always-visible curve. Symmetric, Asymmetric, and Wavefold now use the current production-core equations, including Drive's 0–6 dB engagement ramp.
+    - The live overlay remains driven by real input telemetry, but its geometry is projected through that same core transfer instead of using the post-level-match preview output. The background waveform and curve therefore share one amplitude scale and clipping/folding boundary without fabricated activity. Unclipped silver and clipped coral regions now have materially stronger color and opacity contrast.
+    - The composed-editor regression covers quiet and normal signals for all three Types, exact restored compact geometry, curve/history boundary alignment, and contrast. Shared/UI/browser suites pass 124/124; deterministic before/after captures at 393×852 phone, 1440×900 desktop, and 1120×680 plugin dimensions retain identical Type/Drive/Knee/Mix/filter settings and editor geometry.
+    - No distortion DSP or audio behavior changed. A fresh HMR standalone is running from this worktree at `127.0.0.1:5178`; the compiled VST3 is installed at `~/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` and passes strict codesign verification.
 
 [ ] T26 — Build the fixed two-band Enhancer and decide separately whether to build its voice-tracked form
     Active owner (2026-08-26):

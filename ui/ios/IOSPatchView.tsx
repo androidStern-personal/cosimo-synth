@@ -906,6 +906,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
             </div>
 
             <DistortionVisualizer
+                driveDb={driveValue}
                 knee={kneeValue}
                 type={typeValue}
                 transferFrame={scopeFrame}

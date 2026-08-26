@@ -803,11 +803,16 @@ function DistortionRackVisual({
     history: SynthPatchViewModel["observedDistortionHistory"];
     scope: SynthPatchViewModel["observedDistortionScope"];
 }) {
-    const kneeDescriptor = getRackEffectDescriptor("drive").parameters.find(
+    const effect = getRackEffectDescriptor("drive");
+    const driveDescriptor = effect.parameters.find(
+        (parameter) => parameter.endpointID === "distortionDriveDb",
+    )!;
+    const drive = useRackParameterBinding(driveDescriptor);
+    const kneeDescriptor = effect.parameters.find(
         (parameter) => parameter.endpointID === "distortionKnee",
     )!;
     const knee = useRackParameterBinding(kneeDescriptor);
-    const typeDescriptor = getRackEffectDescriptor("drive").parameters.find(
+    const typeDescriptor = effect.parameters.find(
         (parameter) => parameter.endpointID === "distortionType",
     )!;
     const type = useRackParameterBinding(typeDescriptor);
@@ -815,6 +820,7 @@ function DistortionRackVisual({
     return (
         <DistortionVisualizer
             compact
+            driveDb={drive.value}
             knee={knee.value}
             type={type.value}
             transferFrame={scope}

@@ -3634,11 +3634,17 @@ test("desktop distortion wet low-pass knob renders the full 20 Hz floor", async 
     }
 });
 
-test("desktop distortion graph renders occupancy bands on the fixed transfer scale", async () => {
+test("T25A: the composed Drive graph keeps its transfer curve aligned with contrasting live clipping", async () => {
     const page = await openHarnessPage();
 
     try {
         await selectRackEffect(page, "drive");
+        const driveEditor = page.locator('[data-role="rack-editor-drive"]');
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("distortionDriveDb", 12);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("distortionKnee", 0.65);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("distortionType", 0);
+        });
         const scopeFixture = buildDistortionScopeFixture();
         const historyFixture = buildDistortionHistoryFixture();
 
@@ -3660,13 +3666,104 @@ test("desktop distortion graph renders occupancy bands on the fixed transfer sca
                 && graphState.history?.validBinCount > 0
             ),
         );
+        if (await driveEditor.getAttribute("data-effect-enabled") !== "true") {
+            const driveEditorHandle = await driveEditor.elementHandle();
+            assert.ok(driveEditorHandle);
+            await page.locator('[data-role="rack-editor-power"]').click();
+            await page.waitForFunction(
+                (element) => element.getAttribute("data-effect-enabled") === "true",
+                driveEditorHandle,
+            );
+        }
         const overlayState = await page.evaluate(() => {
             const host = document.querySelector("cosimo-desktop-react-view");
             const viewRoot = host?.shadowRoot ?? host;
+            const graph = viewRoot?.querySelector('[data-role="distortion-visualizer"]');
+            const transferCurve = viewRoot?.querySelector('[data-role="distortion-transfer-curve"]');
+            const unclippedPaths = Array.from(
+                viewRoot?.querySelectorAll('[data-role="distortion-transfer-occupancy"][data-clipping="unclipped"]') ?? [],
+            );
+            const clippedPaths = Array.from(
+                viewRoot?.querySelectorAll('[data-role="distortion-transfer-clipped-occupancy"][data-clipping="clipped"]') ?? [],
+            );
+            const readFill = (element) => element instanceof SVGElement
+                ? getComputedStyle(element).fill
+                : "";
+            const readOpacity = (element) => element instanceof SVGElement
+                ? Number.parseFloat(getComputedStyle(element).opacity)
+                : 0;
+            const parseRgb = (color) => {
+                const channels = color.match(/[\d.]+/g)?.slice(0, 3).map(Number) ?? [];
+                return channels.length === 3 ? channels : null;
+            };
+            const unclippedFill = readFill(unclippedPaths[0]);
+            const clippedFill = readFill(clippedPaths[0]);
+            const unclippedRgb = parseRgb(unclippedFill);
+            const clippedRgb = parseRgb(clippedFill);
+            const historyUnclipped = viewRoot?.querySelector(
+                '[data-role="distortion-history-output-column"][data-clipping="unclipped"]',
+            );
+            const historyClipped = viewRoot?.querySelector(
+                '[data-role="distortion-history-removed-column"][data-clipping="clipped"]',
+            );
+            const historyUnclippedFill = readFill(historyUnclipped);
+            const historyClippedFill = readFill(historyClipped);
+            const historyUnclippedRgb = parseRgb(historyUnclippedFill);
+            const historyClippedRgb = parseRgb(historyClippedFill);
+            const curveBounds = transferCurve instanceof SVGGraphicsElement
+                ? transferCurve.getBBox()
+                : null;
+            const graphCenterY = graph instanceof SVGSVGElement
+                ? graph.viewBox.baseVal.height * 0.5
+                : 0;
+            const upperClipBoundaries = Array.from(viewRoot?.querySelectorAll(
+                '[data-role="distortion-history-removed-column"][data-clipping="clipped"]',
+            ) ?? []).flatMap((element) => {
+                if (!(element instanceof SVGGraphicsElement)) return [];
+                const box = element.getBBox();
+                const boundary = box.y + box.height;
+                return boundary < graphCenterY ? [boundary] : [];
+            });
 
             return {
-                occupancyCount: viewRoot?.querySelectorAll('[data-role="distortion-transfer-occupancy"]').length ?? 0,
-                clippedOccupancyCount: viewRoot?.querySelectorAll('[data-role="distortion-transfer-clipped-occupancy"]').length ?? 0,
+                effectEnabled: viewRoot?.querySelector('[data-role="rack-editor-drive"]')
+                    ?.getAttribute("data-effect-enabled") ?? "",
+                curveCount: transferCurve ? 1 : 0,
+                viewBox: graph?.getAttribute("viewBox") ?? "",
+                curveLeft: curveBounds?.x ?? Number.NaN,
+                curveRight: curveBounds ? curveBounds.x + curveBounds.width : Number.NaN,
+                curveWidthFraction: (
+                    graph instanceof SVGSVGElement
+                    && transferCurve instanceof SVGGraphicsElement
+                    && graph.viewBox.baseVal.width > 0
+                ) ? transferCurve.getBBox().width / graph.viewBox.baseVal.width : 0,
+                unclippedCount: unclippedPaths.length,
+                clippedCount: clippedPaths.length,
+                unclippedFill,
+                clippedFill,
+                unclippedOpacity: readOpacity(unclippedPaths[0]),
+                clippedOpacity: readOpacity(clippedPaths[0]),
+                colorDistance: unclippedRgb && clippedRgb
+                    ? Math.hypot(
+                        unclippedRgb[0] - clippedRgb[0],
+                        unclippedRgb[1] - clippedRgb[1],
+                        unclippedRgb[2] - clippedRgb[2],
+                    )
+                    : 0,
+                historyUnclippedFill,
+                historyClippedFill,
+                historyUnclippedOpacity: readOpacity(historyUnclipped),
+                historyClippedOpacity: readOpacity(historyClipped),
+                historyColorDistance: historyUnclippedRgb && historyClippedRgb
+                    ? Math.hypot(
+                        historyUnclippedRgb[0] - historyClippedRgb[0],
+                        historyUnclippedRgb[1] - historyClippedRgb[1],
+                        historyUnclippedRgb[2] - historyClippedRgb[2],
+                    )
+                    : 0,
+                clipBoundaryDelta: curveBounds && upperClipBoundaries.length > 0
+                    ? Math.abs(curveBounds.y - Math.min(...upperClipBoundaries))
+                    : Number.POSITIVE_INFINITY,
                 historyOutputColumnCount: viewRoot?.querySelectorAll('[data-role="distortion-history-output-column"]').length ?? 0,
                 historyRemovedColumnCount: viewRoot?.querySelectorAll('[data-role="distortion-history-removed-column"]').length ?? 0,
                 legacyTraceCount: viewRoot?.querySelectorAll('[data-role="distortion-transfer-trace"]').length ?? 0,
@@ -3684,12 +3781,121 @@ test("desktop distortion graph renders occupancy bands on the fixed transfer sca
         assert.equal(renderedState.history.validBinCount, historyFixture.validBinCount);
         assert.equal(renderedState.history.clippedBinCount > 0, true);
         assert.equal(renderedState.history.removedPeak > 0.1, true);
-        assert.equal(overlayState.occupancyCount > 0, true);
-        assert.equal(overlayState.clippedOccupancyCount > 0, true);
+        assert.equal(overlayState.effectEnabled, "true", "the composed Drive path must be enabled during proof");
+        assert.equal(overlayState.curveCount, 1, "live telemetry must not hide the transfer function");
+        assert.equal(overlayState.viewBox, "0 0 600 340", "the compact pre-T25 canvas geometry must stay restored");
+        assert.equal(Math.abs(overlayState.curveLeft - 12) <= 0.5, true);
+        assert.equal(Math.abs(overlayState.curveRight - 588) <= 0.5, true);
+        assert.equal(overlayState.curveWidthFraction >= 0.9, true, "transfer function must span the restored plot");
+        assert.equal(overlayState.unclippedCount > 0, true);
+        assert.equal(overlayState.clippedCount > 0, true);
+        assert.notEqual(overlayState.unclippedFill, overlayState.clippedFill);
+        assert.match(overlayState.unclippedFill, /^rgb\(/);
+        assert.match(overlayState.clippedFill, /^rgb\(/);
+        assert.equal(overlayState.unclippedOpacity >= 0.58, true);
+        assert.equal(overlayState.clippedOpacity >= 0.82, true);
+        assert.equal(overlayState.colorDistance >= 100, true, "clipped and unclipped colors need strong contrast");
         assert.equal(overlayState.historyOutputColumnCount, historyFixture.binCount);
         assert.equal(overlayState.historyRemovedColumnCount > 0, true);
+        assert.notEqual(overlayState.historyUnclippedFill, overlayState.historyClippedFill);
+        assert.equal(overlayState.historyUnclippedOpacity >= 0.4, true);
+        assert.equal(overlayState.historyClippedOpacity >= 0.8, true);
+        assert.equal(
+            overlayState.historyColorDistance >= 100,
+            true,
+            "the background waveform needs strong clipped/unclipped color contrast",
+        );
+        assert.equal(
+            overlayState.clipBoundaryDelta <= 2,
+            true,
+            "the background waveform must clip at the transfer function's visible ceiling",
+        );
         assert.equal(overlayState.legacyTraceCount, 0);
         assert.equal(overlayState.legacyClippedPointCount, 0);
+
+        const signalCases = [
+            { name: "quiet", amplitude: 0.55, requiresClipping: false },
+            { name: "normal", amplitude: 1.62, requiresClipping: true },
+        ];
+        const typeResults = [];
+
+        for (const type of [0, 1, 2]) {
+            for (const signalCase of signalCases) {
+                const nextScopeFixture = buildDistortionScopeFixture({ amplitude: signalCase.amplitude });
+
+                await page.evaluate(({ nextType, nextScope }) => {
+                    window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("distortionType", nextType);
+                    window.__COSIMO_DESKTOP_HARNESS__.emitDistortionScope(nextScope);
+                }, {
+                    nextType: type,
+                    nextScope: nextScopeFixture,
+                });
+                await waitForPageValue(
+                    page,
+                    `Drive graph ${signalCase.name} Type ${type}`,
+                    () => window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().distortionGraphState,
+                    (graphState) => Math.abs(
+                        Number(graphState?.inputPeak) - nextScopeFixture.inputPeak,
+                    ) <= 1e-6,
+                );
+                await waitForReactFrames(page, 2);
+
+                const graphCase = await page.evaluate(() => {
+                    const host = document.querySelector("cosimo-desktop-react-view");
+                    const viewRoot = host?.shadowRoot ?? host;
+                    const graph = viewRoot?.querySelector('[data-role="distortion-visualizer"]');
+                    const curve = viewRoot?.querySelector('[data-role="distortion-transfer-curve"]');
+                    const livePaths = Array.from(viewRoot?.querySelectorAll(
+                        '[data-role="distortion-transfer-occupancy"], [data-role="distortion-transfer-clipped-occupancy"]',
+                    ) ?? []).filter((element) => element instanceof SVGGraphicsElement);
+                    const liveBounds = livePaths.reduce((bounds, element) => {
+                        const box = element.getBBox();
+                        return {
+                            left: Math.min(bounds.left, box.x),
+                            right: Math.max(bounds.right, box.x + box.width),
+                        };
+                    }, { left: Number.POSITIVE_INFINITY, right: Number.NEGATIVE_INFINITY });
+
+                    return {
+                        curvePath: curve?.getAttribute("d") ?? "",
+                        liveWidthFraction: graph instanceof SVGSVGElement
+                            && Number.isFinite(liveBounds.left)
+                            && graph.viewBox.baseVal.width > 0
+                            ? (liveBounds.right - liveBounds.left) / graph.viewBox.baseVal.width
+                            : 0,
+                        unclippedCount: viewRoot?.querySelectorAll(
+                            '[data-role="distortion-transfer-occupancy"][data-clipping="unclipped"]',
+                        ).length ?? 0,
+                        clippedCount: viewRoot?.querySelectorAll(
+                            '[data-role="distortion-transfer-clipped-occupancy"][data-clipping="clipped"]',
+                        ).length ?? 0,
+                    };
+                });
+
+                assert.notEqual(graphCase.curvePath, "", `${signalCase.name} Type ${type} lost its curve`);
+                assert.equal(
+                    graphCase.liveWidthFraction >= 0.1,
+                    true,
+                    `${signalCase.name} Type ${type} live signal became visually negligible`,
+                );
+                assert.equal(graphCase.unclippedCount > 0, true);
+                if (signalCase.requiresClipping) {
+                    assert.equal(graphCase.clippedCount > 0, true, `normal Type ${type} lost its clipped region`);
+                }
+
+                typeResults.push({
+                    type,
+                    signal: signalCase.name,
+                    curvePath: graphCase.curvePath,
+                });
+            }
+        }
+
+        assert.equal(
+            new Set(typeResults.filter((result) => result.signal === "normal").map((result) => result.curvePath)).size,
+            3,
+            "Symmetric, Asymmetric, and Wavefold must render their distinct production curves",
+        );
     } finally {
         await page.close();
     }

@@ -1090,11 +1090,12 @@ test("distortion display range stays fixed while the active frame updates", asyn
     assert.deepEqual(heldState.frame, quietFrame);
 });
 
-test("distortion curve family stays symmetric and sample classification marks removed peaks", async () => {
+test("distortion transfer curves match the production core and live occupancy stays on the selected curve", async () => {
     const {
         buildDistortionHistoryBins,
         buildDistortionSamplePoints,
         buildDistortionTransferOccupancy,
+        projectDistortionHistoryBinToTransfer,
         sampleDistortionCurve,
         shapeDistortionSample,
         summarizeDistortionHistoryFrame,
@@ -1112,6 +1113,14 @@ test("distortion curve family stays symmetric and sample classification marks re
     assert.equal(Math.abs(shapeDistortionSample(-1.2, 0.65, 1) + shapeDistortionSample(1.2, 0.65, 1)) > 0.005, true);
     assert.equal(shapeDistortionSample(1.1, 0, 2) > shapeDistortionSample(1.5, 0, 2), true);
     assert.equal(shapeDistortionSample(1.5, 0, 2) > shapeDistortionSample(2.9, 0, 2), true);
+    assert.equal(shapeDistortionSample(1.2, 0.65, 0, 0), 1.2);
+    assert.equal(
+        Math.abs(
+            shapeDistortionSample(1.2, 0.65, 0, 3)
+            - ((1.2 + shapeDistortionSample(1.2, 0.65, 0, 6)) * 0.5)
+        ) <= 1e-9,
+        true,
+    );
 
     const points = buildDistortionSamplePoints({
         sampleRateHz: 44_100,
@@ -1124,17 +1133,34 @@ test("distortion curve family stays symmetric and sample classification marks re
     });
     assert.deepEqual(points.map((point) => point.clipped), [true, false, false, true]);
 
-    const forwardOccupancy = buildDistortionTransferOccupancy({
-        samplePoints: points,
-        knee: 0.65,
-        inputRange: 2,
-        binCount: 17,
+    const fullRangeInputs = Array.from({ length: 81 }, (_, index) => -2 + (index * 0.05));
+    const fullRangePoints = buildDistortionSamplePoints({
+        sampleRateHz: 44_100,
+        dominantChannel: 0,
+        inputPeak: 2,
+        outputPeak: 0.37,
+        removedPeak: 2.37,
+        inputSamples: fullRangeInputs,
+        // Deliberately unrelated telemetry output: live overlay geometry must
+        // follow the selected transfer function, not the post-match preview.
+        outputSamples: fullRangeInputs.map((input) => Math.sin(input * 7) * 0.37),
     });
-    const reversedOccupancy = buildDistortionTransferOccupancy({
-        samplePoints: [...points].reverse(),
+    const occupancies = [0, 1, 2].map((type) => buildDistortionTransferOccupancy({
+        samplePoints: fullRangePoints,
         knee: 0.65,
+        type,
+        driveDb: 12,
         inputRange: 2,
-        binCount: 17,
+        binCount: 81,
+    }));
+    const forwardOccupancy = occupancies[0];
+    const reversedOccupancy = buildDistortionTransferOccupancy({
+        samplePoints: [...fullRangePoints].reverse(),
+        knee: 0.65,
+        type: 0,
+        driveDb: 12,
+        inputRange: 2,
+        binCount: 81,
     });
     const summarizeOccupancy = (occupancy) => ({
         leftOverflowCount: occupancy.leftOverflowCount,
@@ -1152,12 +1178,17 @@ test("distortion curve family stays symmetric and sample classification marks re
 
     assert.equal(forwardOccupancy.segments.length > 0, true);
     assert.equal(forwardOccupancy.peakRemoved > 0, true);
-    const measuredPositivePoint = forwardOccupancy.segments
-        .flat()
-        .reduce((closest, point) => (
-            Math.abs(point.input - 1) < Math.abs(closest.input - 1) ? point : closest
-        ));
-    assert.equal(Math.abs(measuredPositivePoint.output - 0.96) < 1e-9, true);
+    for (const [type, occupancy] of occupancies.entries()) {
+        const maximumAlignmentError = occupancy.segments
+            .flat()
+            .reduce((maximum, point) => Math.max(
+                maximum,
+                Math.abs(point.output - shapeDistortionSample(point.input, 0.65, type, 12)),
+            ), 0);
+        assert.equal(maximumAlignmentError <= 1e-9, true, `Type ${type} live overlay left its transfer curve`);
+        assert.equal(occupancy.segments.flat().some((point) => point.clipped < 0.1), true);
+        assert.equal(occupancy.segments.flat().some((point) => point.clipped > 0.9), true);
+    }
     assert.deepEqual(
         summarizeOccupancy(forwardOccupancy),
         summarizeOccupancy(reversedOccupancy),
@@ -1189,6 +1220,33 @@ test("distortion curve family stays symmetric and sample classification marks re
     assert.deepEqual(historyBins.map((bin) => bin.valid), [false, true, true, true]);
     assert.equal(historyBins[1]?.clipped, true);
     assert.equal(historyBins[2]?.clipped, true);
+    const identityHistoryBin = projectDistortionHistoryBinToTransfer({
+        bin: historyBins[1],
+        driveDb: 0,
+        knee: 0.65,
+        type: 0,
+    });
+    assert.equal(identityHistoryBin.outputMin, identityHistoryBin.inputMin);
+    assert.equal(identityHistoryBin.outputMax, identityHistoryBin.inputMax);
+    assert.equal(identityHistoryBin.clipped, false);
+    const projectedHistoryBins = [0, 1, 2].map((type) => (
+        projectDistortionHistoryBinToTransfer({
+            bin: historyBins[1],
+            driveDb: 12,
+            knee: 0.65,
+            type,
+        })
+    ));
+    assert.equal(
+        Math.abs(projectedHistoryBins[0].outputMax - shapeDistortionSample(1.3, 0.65, 0, 12)) <= 1e-9,
+        true,
+    );
+    assert.equal(
+        Math.abs(projectedHistoryBins[1].outputMin + projectedHistoryBins[1].outputMax) > 0.005,
+        true,
+    );
+    assert.equal(Math.abs(projectedHistoryBins[2].outputMax - 1) <= 1e-9, true);
+    assert.equal(projectedHistoryBins.every((bin) => bin.clipped), true);
     assert.equal(historySummary.inputPeak, 1.3);
     assert.equal(historySummary.outputPeak, 1);
     assert.equal(Math.abs(historySummary.removedPeak - 0.3) <= 1e-9, true);
