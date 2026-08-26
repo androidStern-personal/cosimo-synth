@@ -26,6 +26,33 @@
     "rootBorderTop": "1px solid color(srgb 0.817495 0.405964 0.838966 / 0.493137)",
     "rootBoxShadow": "rgba(0, 0, 0, 0.55) 0px -14px 42px 0px"
   },
+  "phone-393x852-drawer-half.png": {
+    "viewport": {
+      "width": 393,
+      "height": 852
+    },
+    "root": {
+      "x": 0,
+      "y": 426,
+      "width": 393,
+      "height": 426
+    },
+    "surface": {
+      "x": 8,
+      "y": 505,
+      "width": 377,
+      "height": 341
+    },
+    "controls": {
+      "x": 0,
+      "y": 461,
+      "width": 393,
+      "height": 40
+    },
+    "timeAxis": "horizontal",
+    "rootBorderTop": "1px solid color(srgb 0.817495 0.405964 0.838966 / 0.493137)",
+    "rootBoxShadow": "rgba(0, 0, 0, 0.55) 0px -14px 42px 0px"
+  },
   "phone-393x852-full.png": {
     "viewport": {
       "width": 393,

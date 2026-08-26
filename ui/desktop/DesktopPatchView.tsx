@@ -3021,8 +3021,7 @@ function MsegEditorModal({
                         morphShapeAPoints={msegState.shapeA?.points ?? null}
                         morphShapeBPoints={msegState.shapeB?.points ?? null}
                         morphValue={morphBinding.value}
-                        showMorphCurve={isMorphAdjusting}
-                        morphPresentation="primary"
+                        realizedMorphEmphasis={isMorphAdjusting ? "active" : "resting"}
                         selectedPointIndex={selectedPointIndex}
                         hoveredSegmentIndex={hoveredSegmentIndex}
                         activeSegmentIndex={activeSegmentIndex}
@@ -3148,7 +3147,7 @@ function EditableMsegSurfaceHost({
             morphShapeAPoints={msegState.shapeA?.points ?? null}
             morphShapeBPoints={msegState.shapeB?.points ?? null}
             morphValue={morphValue}
-            showMorphCurve={showMorphCurve}
+            realizedMorphEmphasis={showMorphCurve ? "active" : "resting"}
             selectedPointIndex={editing.selectedPointIndex}
             hoveredSegmentIndex={editing.hoveredSegmentIndex}
             activeSegmentIndex={editing.activeSegmentIndex}
@@ -4851,6 +4850,13 @@ function DesktopPatchViewBody({
     // the mounted sheet alive while changing A -> B, so its heading and cells
     // can never observe different source snapshots.
     const [quickEditorSource, setQuickEditorSource] = useState<MobileModSource | null>(null);
+    const [isQuickMsegMorphAdjusting, setIsQuickMsegMorphAdjusting] = useState(false);
+
+    useEffect(() => {
+        if (quickEditorSource?.sourceKind !== "mseg") {
+            setIsQuickMsegMorphAdjusting(false);
+        }
+    }, [quickEditorSource]);
 
     /* T20 — the ADR-017 long-press parameter menu: one shared shell state
        machine (also used by the iOS shell). */
@@ -5457,7 +5463,7 @@ function DesktopPatchViewBody({
                             morphShapeAPoints={synthView.msegState.shapeA?.points ?? null}
                             morphShapeBPoints={synthView.msegState.shapeB?.points ?? null}
                             morphValue={synthView.selectedMsegMorph.value}
-                            showMorphCurve={false}
+                            realizedMorphEmphasis={isQuickMsegMorphAdjusting ? "active" : "resting"}
                             selectedPointIndex={synthView.msegEditor.selectedPointIndex}
                             hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
                             activeSegmentIndex={synthView.msegEditor.activeSegmentIndex}
@@ -5489,6 +5495,7 @@ function DesktopPatchViewBody({
                     onSelectMsegShape={synthView.handleSelectMsegShape}
                     onMsegRateChange={synthView.handleMsegRateChange}
                     msegMorphBinding={synthView.selectedMsegMorph}
+                    onMsegMorphAdjustingChange={setIsQuickMsegMorphAdjusting}
                     msegLoopEnabled={synthView.msegState?.playback.loop !== null}
                     onToggleMsegLoop={synthView.handleToggleMsegLoop}
                     envelope={synthView.selectedEnvelope}

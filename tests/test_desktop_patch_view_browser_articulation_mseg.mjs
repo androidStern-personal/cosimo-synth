@@ -3649,7 +3649,7 @@ test("the full-screen Rate knob shows its live precision HUD above the expanded 
     }
 });
 
-test("the full-screen Morph knob visibly reshapes the primary envelope while it moves", async () => {
+test("the full-screen Morph knob emphasizes a persistent realized envelope while it moves", async () => {
     const modulationState = createDefaultModulationState();
     modulationState.msegSlots[0] = {
         ...modulationState.msegSlots[0],
@@ -3693,7 +3693,11 @@ test("the full-screen Morph knob visibly reshapes the primary envelope while it 
         await page.keyboard.press("Home");
         const storedShapeBefore = readStoredMsegShape(await getHarnessSnapshot(page));
         const baseCurveBefore = await surface.locator('[data-role="mseg-base-curve"]').getAttribute("d");
+        const realizedCurveBefore = await surface.evaluate((element) => (
+            element.querySelector('[data-role="mseg-effective-curve"]')?.getAttribute("d") ?? ""
+        ));
         assert.match(baseCurveBefore ?? "", /^M /);
+        assert.match(realizedCurveBefore, /^M /);
 
         const knobBounds = await morphKnob.boundingBox();
         assert.ok(knobBounds);
@@ -3715,33 +3719,90 @@ test("the full-screen Morph knob visibly reshapes the primary envelope while it 
         const livePresentation = await surface.evaluate((element) => ({
             presentation: element.getAttribute("data-morph-presentation"),
             baseCurve: element.querySelector('[data-role="mseg-base-curve"]')?.getAttribute("d") ?? "",
+            realizedCurve: element.querySelector('[data-role="mseg-effective-curve"]')?.getAttribute("d") ?? "",
             effectiveOverlayCount: element.querySelectorAll('[data-role="mseg-effective-curve"]').length,
-            referenceOverlayCount: element.querySelectorAll(
-                '[data-role="mseg-reference-curve"], [data-role="mseg-reference-fill"]',
-            ).length,
+            referenceCurveCount: element.querySelectorAll('[data-role="mseg-reference-curve"]').length,
             pointCount: element.querySelectorAll('[data-role="mseg-point"]').length,
+            baseStroke: getComputedStyle(element.querySelector('[data-role="mseg-base-curve"]')).stroke,
+            referenceStroke: getComputedStyle(element.querySelector('[data-role="mseg-reference-curve"]')).stroke,
+            realizedStroke: getComputedStyle(element.querySelector('[data-role="mseg-effective-curve"]')).stroke,
+            realizedOpacity: Number(getComputedStyle(element.querySelector('[data-role="mseg-effective-curve"]')).opacity),
+            realizedStrokeWidth: Number.parseFloat(
+                getComputedStyle(element.querySelector('[data-role="mseg-effective-curve"]')).strokeWidth,
+            ),
         }));
-        assert.equal(livePresentation.presentation, "primary");
-        assert.notEqual(livePresentation.baseCurve, baseCurveBefore);
-        assert.equal(livePresentation.effectiveOverlayCount, 0);
-        assert.equal(livePresentation.referenceOverlayCount, 0);
-        assert.equal(livePresentation.pointCount, 0, "A morphed result must not show handles belonging to only shape A or B.");
+        assert.equal(livePresentation.presentation, "morph-active");
+        assert.equal(livePresentation.baseCurve, baseCurveBefore, "Dragging Morph must not replace the editable A envelope.");
+        assert.notEqual(livePresentation.realizedCurve, realizedCurveBefore);
+        assert.equal(livePresentation.effectiveOverlayCount, 1);
+        assert.equal(livePresentation.referenceCurveCount, 1);
+        assert.equal(livePresentation.pointCount > 0, true);
+        assert.notEqual(livePresentation.realizedStroke, livePresentation.baseStroke);
+        assert.notEqual(livePresentation.realizedStroke, livePresentation.referenceStroke);
+        assert.equal(livePresentation.realizedOpacity >= 0.95, true);
+        assert.equal(livePresentation.realizedStrokeWidth >= 3.5, true);
 
         await page.mouse.up();
         await page.waitForFunction(() => (
             document.querySelector('[data-role="mseg-editor-surface"]')?.getAttribute("data-morph-presentation") === "edit-shape"
         ));
+        await page.waitForFunction(() => {
+            const curve = document.querySelector('[data-role="mseg-editor-surface"] [data-role="mseg-effective-curve"]');
+            return curve !== null && Number(getComputedStyle(curve).opacity) < 0.9;
+        });
+        const restingPresentation = await surface.evaluate((element) => ({
+            realizedCurve: element.querySelector('[data-role="mseg-effective-curve"]')?.getAttribute("d") ?? "",
+            effectiveOverlayCount: element.querySelectorAll('[data-role="mseg-effective-curve"]').length,
+            referenceCurveCount: element.querySelectorAll('[data-role="mseg-reference-curve"]').length,
+            realizedOpacity: Number(getComputedStyle(element.querySelector('[data-role="mseg-effective-curve"]')).opacity),
+            realizedStrokeWidth: Number.parseFloat(
+                getComputedStyle(element.querySelector('[data-role="mseg-effective-curve"]')).strokeWidth,
+            ),
+        }));
         assert.deepEqual(readStoredMsegShape(await getHarnessSnapshot(page)), storedShapeBefore);
         assert.equal(await surface.locator('[data-role="mseg-point"]').count() > 0, true);
+        assert.equal(restingPresentation.effectiveOverlayCount, 1);
+        assert.equal(restingPresentation.referenceCurveCount, 1);
+        assert.equal(restingPresentation.realizedCurve, livePresentation.realizedCurve);
+        assert.equal(restingPresentation.realizedOpacity >= 0.6, true);
+        assert.equal(restingPresentation.realizedOpacity < livePresentation.realizedOpacity, true);
+        assert.equal(restingPresentation.realizedStrokeWidth < livePresentation.realizedStrokeWidth, true);
     } finally {
         await page.mouse.up().catch(() => {});
         await page.close();
     }
 });
 
-test("the drawer Morph knob shows its changing amount in the shared precision HUD", async () => {
+test("the compact drawer Morph knob emphasizes its persistent realized envelope and precision HUD", async () => {
+    const modulationState = createDefaultModulationState();
+    modulationState.msegSlots[0] = {
+        ...modulationState.msegSlots[0],
+        shapeB: {
+            ...modulationState.msegSlots[0].shapeB,
+            points: [
+                { x: 0, y: 1, curvePower: 0 },
+                { x: 0.38, y: 0.12, curvePower: 2.5 },
+                { x: 1, y: 0.45, curvePower: -1.5 },
+            ],
+        },
+    };
     const page = await openHarnessPage({
-        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(({ stateKey, serializedState }) => {
+                const initial = window.__COSIMO_DESKTOP_HARNESS_INITIAL__ ?? {};
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    ...initial,
+                    storedState: {
+                        ...initial.storedState,
+                        [stateKey]: serializedState,
+                    },
+                };
+            }, {
+                stateKey: MODULATION_STATE_KEY,
+                serializedState: JSON.stringify(modulationState),
+            });
+        },
     });
 
     try {
@@ -3750,9 +3811,30 @@ test("the drawer Morph knob shows its changing amount in the shared precision HU
         await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
 
         const drawer = page.locator('[data-role="quick-source-sheet"]');
+        const surface = drawer.locator('[data-role="quick-sheet-mseg-surface"]');
         const morphKnob = drawer.locator('[data-role="quick-source-sheet-cell-morph"]');
         await morphKnob.focus();
         await page.keyboard.press("Home");
+        const restingPresentation = await surface.evaluate((element) => {
+            const base = element.querySelector('[data-role="mseg-base-curve"]');
+            const reference = element.querySelector('[data-role="mseg-reference-curve"]');
+            const realized = element.querySelector('[data-role="mseg-effective-curve"]');
+            return {
+                presentation: element.getAttribute("data-morph-presentation"),
+                path: realized?.getAttribute("d") ?? "",
+                stroke: realized === null ? "" : getComputedStyle(realized).stroke,
+                baseStroke: base === null ? "" : getComputedStyle(base).stroke,
+                referenceStroke: reference === null ? "" : getComputedStyle(reference).stroke,
+                opacity: realized === null ? 0 : Number(getComputedStyle(realized).opacity),
+                strokeWidth: realized === null ? 0 : Number.parseFloat(getComputedStyle(realized).strokeWidth),
+            };
+        });
+        assert.equal(restingPresentation.presentation, "edit-shape");
+        assert.match(restingPresentation.path, /^M /);
+        assert.notEqual(restingPresentation.stroke, restingPresentation.baseStroke);
+        assert.notEqual(restingPresentation.stroke, restingPresentation.referenceStroke);
+        assert.equal(restingPresentation.opacity >= 0.6, true);
+        assert.equal(restingPresentation.strokeWidth >= 2, true);
         const knobBounds = await morphKnob.boundingBox();
         assert.ok(knobBounds);
         const start = {
@@ -3790,6 +3872,25 @@ test("the drawer Morph knob shows its changing amount in the shared precision HU
         await page.waitForFunction(() => (
             Number(document.querySelector('[data-role="quick-source-sheet-cell-morph"]')?.getAttribute("aria-valuenow")) > 0.1
         ));
+        await page.waitForFunction(() => {
+            const curve = document.querySelector('[data-role="quick-sheet-mseg-surface"] [data-role="mseg-effective-curve"]');
+            return curve !== null && Number(getComputedStyle(curve).opacity) >= 0.95;
+        });
+        const livePresentation = await surface.evaluate((element) => {
+            const realized = element.querySelector('[data-role="mseg-effective-curve"]');
+            return {
+                presentation: element.getAttribute("data-morph-presentation"),
+                path: realized?.getAttribute("d") ?? "",
+                opacity: realized === null ? 0 : Number(getComputedStyle(realized).opacity),
+                strokeWidth: realized === null ? 0 : Number.parseFloat(getComputedStyle(realized).strokeWidth),
+            };
+        });
+        assert.equal(livePresentation.presentation, "morph-active");
+        assert.notEqual(livePresentation.path, restingPresentation.path);
+        assert.equal(livePresentation.opacity >= 0.95, true);
+        assert.equal(livePresentation.strokeWidth >= 3.5, true);
+        assert.equal(livePresentation.opacity > restingPresentation.opacity, true);
+        assert.equal(livePresentation.strokeWidth > restingPresentation.strokeWidth, true);
 
         const hud = page.locator('[data-role="mobile-voice-hud-layer"] [data-role="mobile-voice-hud"].is-visible');
         await hud.waitFor();
@@ -3810,6 +3911,23 @@ test("the drawer Morph knob shows its changing amount in the shared precision HU
                 clientY: y,
             }));
         }, start);
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="quick-sheet-mseg-surface"]')?.getAttribute("data-morph-presentation") === "edit-shape"
+        ));
+        await page.waitForFunction(() => {
+            const curve = document.querySelector('[data-role="quick-sheet-mseg-surface"] [data-role="mseg-effective-curve"]');
+            return curve !== null && Number(getComputedStyle(curve).opacity) < 0.9;
+        });
+        const releasedPresentation = await surface.evaluate((element) => {
+            const realized = element.querySelector('[data-role="mseg-effective-curve"]');
+            return {
+                path: realized?.getAttribute("d") ?? "",
+                opacity: realized === null ? 0 : Number(getComputedStyle(realized).opacity),
+            };
+        });
+        assert.equal(releasedPresentation.path, livePresentation.path);
+        assert.equal(releasedPresentation.opacity > 0, true);
+        assert.equal(releasedPresentation.opacity < livePresentation.opacity, true);
     } finally {
         await page.mouse.up().catch(() => {});
         await page.close();
@@ -3833,6 +3951,22 @@ test("MSEG drawer follows its longest graph axis during live resizing without re
         await page.waitForFunction(() => (
             document.querySelector('[data-role="quick-sheet-mseg-surface"]')?.getAttribute("data-time-axis") === "horizontal"
         ));
+        const compactMorphPresentation = await surface.evaluate((element) => {
+            const base = element.querySelector('[data-role="mseg-base-curve"]');
+            const reference = element.querySelector('[data-role="mseg-reference-curve"]');
+            const realized = element.querySelector('[data-role="mseg-effective-curve"]');
+            return {
+                count: realized === null ? 0 : 1,
+                opacity: realized === null ? 0 : Number(getComputedStyle(realized).opacity),
+                stroke: realized === null ? "" : getComputedStyle(realized).stroke,
+                baseStroke: base === null ? "" : getComputedStyle(base).stroke,
+                referenceStroke: reference === null ? "" : getComputedStyle(reference).stroke,
+            };
+        });
+        assert.equal(compactMorphPresentation.count, 1);
+        assert.equal(compactMorphPresentation.opacity > 0, true);
+        assert.notEqual(compactMorphPresentation.stroke, compactMorphPresentation.baseStroke);
+        assert.notEqual(compactMorphPresentation.stroke, compactMorphPresentation.referenceStroke);
 
         const shapeBeforeResize = readStoredMsegShape(await getHarnessSnapshot(page));
         const horizontalPointCenters = await surface.locator('[data-role="mseg-point"]').evaluateAll((points) => (
@@ -3882,6 +4016,7 @@ test("MSEG drawer follows its longest graph axis during live resizing without re
         await page.waitForFunction(() => (
             document.querySelector('[data-role="quick-sheet-mseg-surface"]')?.getAttribute("data-time-axis") === "vertical"
         ));
+        assert.equal(await surface.locator('[data-role="mseg-effective-curve"]').count(), 1);
         await page.mouse.up();
 
         await page.waitForFunction(() => (
@@ -3894,6 +4029,17 @@ test("MSEG drawer follows its longest graph axis during live resizing without re
             }))
         ));
         assert.equal(verticalPointCenters[0].y < verticalPointCenters.at(-1).y, true);
+        const halfDrawerMorphPresentation = await surface.evaluate((element) => {
+            const realized = element.querySelector('[data-role="mseg-effective-curve"]');
+            return {
+                count: realized === null ? 0 : 1,
+                path: realized?.getAttribute("d") ?? "",
+                opacity: realized === null ? 0 : Number(getComputedStyle(realized).opacity),
+            };
+        });
+        assert.equal(halfDrawerMorphPresentation.count, 1);
+        assert.match(halfDrawerMorphPresentation.path, /^M /);
+        assert.equal(halfDrawerMorphPresentation.opacity > 0, true);
         assert.deepEqual(
             readStoredMsegShape(await getHarnessSnapshot(page)),
             shapeBeforeResize,

@@ -165,6 +165,7 @@ export type MobileQuickSourceSheetProps = {
     readonly onSelectMsegShape: (shapeIndex: 0 | 1) => void;
     readonly onMsegRateChange: (next: number) => void;
     readonly msegMorphBinding: PatchControlBinding<number>;
+    readonly onMsegMorphAdjustingChange: (isAdjusting: boolean) => void;
     readonly msegLoopEnabled: boolean;
     readonly onToggleMsegLoop: () => void;
     readonly envelope: QuickSheetEnvelope | null;
@@ -194,6 +195,7 @@ export function MobileQuickSourceSheet({
     onSelectMsegShape,
     onMsegRateChange,
     msegMorphBinding,
+    onMsegMorphAdjustingChange,
     msegLoopEnabled,
     onToggleMsegLoop,
     envelope,
@@ -407,6 +409,7 @@ export function MobileQuickSourceSheet({
             resolveScrollLockTargets={resolveScrollLockTargets}
             onRequestHaptic={onRequestHaptic}
             onRequestParameterMenu={onRequestParameterMenu}
+            onMorphAdjustingChange={onMsegMorphAdjustingChange}
             loopEnabled={msegLoopEnabled}
             onToggleLoop={onToggleMsegLoop}
         />

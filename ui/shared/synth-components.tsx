@@ -845,8 +845,7 @@ export function EditableMsegSurface({
     morphShapeAPoints = null,
     morphShapeBPoints = null,
     morphValue = null,
-    showMorphCurve = false,
-    morphPresentation = "overlay",
+    realizedMorphEmphasis = "resting",
     selectedPointIndex,
     hoveredSegmentIndex = -1,
     activeSegmentIndex = -1,
@@ -866,9 +865,8 @@ export function EditableMsegSurface({
     morphShapeAPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphShapeBPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphValue?: number | null;
-    showMorphCurve?: boolean;
-    /** Overlay preserves shape editing; primary shows the effective A/B result as the envelope itself. */
-    morphPresentation?: "overlay" | "primary";
+    /** The realized A/B result is always present; active only changes its visual prominence. */
+    realizedMorphEmphasis?: "resting" | "active";
     selectedPointIndex: number;
     hoveredSegmentIndex?: number;
     activeSegmentIndex?: number;
@@ -902,7 +900,6 @@ export function EditableMsegSurface({
         morphCurvePath,
         highlightedSegmentPath,
         metrics,
-        isShowingPrimaryMorph,
     } = useMemo(() => {
         const basePaths = buildMsegSurfacePaths(points, size.width, size.height, {
             orientation,
@@ -910,41 +907,33 @@ export function EditableMsegSurface({
         const referencePaths = referencePoints
             ? buildMsegSurfacePaths(referencePoints, size.width, size.height, { orientation })
             : null;
-        const effectiveMorphPaths = showMorphCurve
-            ? buildMsegMorphSurfacePaths(
-                morphShapeAPoints,
-                morphShapeBPoints,
-                morphValue,
-                size.width,
-                size.height,
-                { orientation },
-            )
-            : null;
-        const showPrimaryMorph = morphPresentation === "primary" && effectiveMorphPaths !== null;
-        const visibleBasePaths = showPrimaryMorph ? effectiveMorphPaths : basePaths;
-        const nextMorphCurvePath = !showPrimaryMorph && effectiveMorphPaths !== null
-            ? effectiveMorphPaths.curvePath
-            : "";
-        const nextHighlightedSegmentPath = !showPrimaryMorph && emphasizedSegmentIndex >= 0
+        const effectiveMorphPaths = buildMsegMorphSurfacePaths(
+            morphShapeAPoints,
+            morphShapeBPoints,
+            morphValue,
+            size.width,
+            size.height,
+            { orientation },
+        );
+        const nextHighlightedSegmentPath = emphasizedSegmentIndex >= 0
             ? buildMsegSegmentPath(points, emphasizedSegmentIndex, size.width, size.height, { orientation })
             : "";
 
         return {
-            ...visibleBasePaths,
-            referenceCurvePath: showPrimaryMorph ? "" : referencePaths?.curvePath ?? "",
-            referenceFillPath: showPrimaryMorph ? "" : referencePaths?.fillPath ?? "",
-            morphCurvePath: nextMorphCurvePath,
+            ...basePaths,
+            referenceCurvePath: referencePaths?.curvePath ?? "",
+            referenceFillPath: referencePaths?.fillPath ?? "",
+            morphCurvePath: effectiveMorphPaths?.curvePath ?? "",
             highlightedSegmentPath: nextHighlightedSegmentPath,
-            isShowingPrimaryMorph: showPrimaryMorph,
         };
-    }, [emphasizedSegmentIndex, morphPresentation, morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, showMorphCurve, size.height, size.width]);
+    }, [emphasizedSegmentIndex, morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, size.height, size.width]);
 
     return (
         <svg
             ref={surfaceRef}
             data-role={dataRole}
             data-time-axis={orientation}
-            data-morph-presentation={isShowingPrimaryMorph ? "primary" : "edit-shape"}
+            data-morph-presentation={realizedMorphEmphasis === "active" ? "morph-active" : "edit-shape"}
             className={joinClasses(
                 "h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]",
                 className,
@@ -1006,7 +995,10 @@ export function EditableMsegSurface({
             {morphCurvePath ? (
                 <path
                     data-role="mseg-effective-curve"
-                    className="cosimo-mseg-effective-curve-line"
+                    className={joinClasses(
+                        "cosimo-mseg-effective-curve-line",
+                        realizedMorphEmphasis === "active" && "is-active",
+                    )}
                     d={morphCurvePath}
                 />
             ) : null}
@@ -1018,50 +1010,48 @@ export function EditableMsegSurface({
                     d={highlightedSegmentPath}
                 />
             ) : null}
-            {isShowingPrimaryMorph ? null : (
-                <g>
-                    {points.map((point, pointIndex) => {
-                        const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height, {
-                            orientation,
-                        });
-                        const isSelected = pointIndex === selectedPointIndex;
-                        const isEmphasizedSegmentEndpoint =
-                            hasEmphasizedSegment &&
-                            (pointIndex === emphasizedSegmentIndex || pointIndex === emphasizedSegmentIndex + 1);
-                        const pointState = hasEmphasizedSegment
-                            ? isEmphasizedSegmentEndpoint
-                                ? "highlighted"
-                                : "muted"
-                            : isSelected
-                                ? "selected"
-                                : "default";
-                        const radius = pointState === "selected"
-                            ? MSEG_SELECTED_POINT_RADIUS_PX
-                            : MSEG_POINT_RADIUS_PX;
-                        const pointClassName = pointState === "selected"
-                            ? "cosimo-mseg-point-selected"
-                            : pointState === "highlighted"
-                                ? "cosimo-mseg-point-highlight"
-                                : pointState === "muted"
-                                    ? "cosimo-mseg-point-muted"
-                                    : "cosimo-mseg-point-default";
+            <g>
+                {points.map((point, pointIndex) => {
+                    const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height, {
+                        orientation,
+                    });
+                    const isSelected = pointIndex === selectedPointIndex;
+                    const isEmphasizedSegmentEndpoint =
+                        hasEmphasizedSegment &&
+                        (pointIndex === emphasizedSegmentIndex || pointIndex === emphasizedSegmentIndex + 1);
+                    const pointState = hasEmphasizedSegment
+                        ? isEmphasizedSegmentEndpoint
+                            ? "highlighted"
+                            : "muted"
+                        : isSelected
+                            ? "selected"
+                            : "default";
+                    const radius = pointState === "selected"
+                        ? MSEG_SELECTED_POINT_RADIUS_PX
+                        : MSEG_POINT_RADIUS_PX;
+                    const pointClassName = pointState === "selected"
+                        ? "cosimo-mseg-point-selected"
+                        : pointState === "highlighted"
+                            ? "cosimo-mseg-point-highlight"
+                            : pointState === "muted"
+                                ? "cosimo-mseg-point-muted"
+                                : "cosimo-mseg-point-default";
 
-                        return (
-                            <circle
-                                key={`point-${pointIndex}-${point.x}-${point.y}`}
-                                data-role="mseg-point"
-                                data-point-index={String(pointIndex)}
-                                data-point-state={pointState}
-                                cx={coordinates.x}
-                                cy={coordinates.y}
-                                r={radius}
-                                className={pointClassName}
-                                vectorEffect="non-scaling-stroke"
-                            />
-                        );
-                    })}
-                </g>
-            )}
+                    return (
+                        <circle
+                            key={`point-${pointIndex}-${point.x}-${point.y}`}
+                            data-role="mseg-point"
+                            data-point-index={String(pointIndex)}
+                            data-point-state={pointState}
+                            cx={coordinates.x}
+                            cy={coordinates.y}
+                            r={radius}
+                            className={pointClassName}
+                            vectorEffect="non-scaling-stroke"
+                        />
+                    );
+                })}
+            </g>
             {timeAxisTicks.length === 0 ? null : (
                 <g
                     data-role="mseg-time-axis"

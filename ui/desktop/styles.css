@@ -575,11 +575,20 @@
 
 .cosimo-mseg-effective-curve-line {
     fill: none;
-    stroke: var(--section-accent);
-    stroke-width: 3.25;
+    stroke: var(--cosimo-accent-cyan);
+    stroke-width: 2.25;
     stroke-linecap: round;
     stroke-linejoin: round;
-    filter: drop-shadow(0 0 8px var(--section-accent-glow));
+    opacity: 0.64;
+    filter: drop-shadow(0 0 4px rgb(var(--cosimo-accent-cyan-rgb) / 0.30));
+    transition: opacity 120ms ease, stroke-width 120ms ease, filter 120ms ease;
+    vector-effect: non-scaling-stroke;
+}
+
+.cosimo-mseg-effective-curve-line.is-active {
+    stroke-width: 3.75;
+    opacity: 1;
+    filter: drop-shadow(0 0 8px rgb(var(--cosimo-accent-cyan-rgb) / 0.72));
 }
 
 .cosimo-curve-line-highlight {
@@ -622,9 +631,7 @@
 }
 
 .mseg-editor-shell .cosimo-mseg-effective-curve-line {
-    stroke: var(--quick-sheet-accent);
-    stroke-width: 2.75;
-    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--quick-sheet-accent) 28%, transparent));
+    stroke: var(--cosimo-accent-cyan);
 }
 
 .mseg-editor-shell :is(.cosimo-mseg-point-default, .cosimo-mseg-point-highlight, .cosimo-mseg-point-selected) {

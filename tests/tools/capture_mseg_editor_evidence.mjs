@@ -104,15 +104,21 @@ async function openDrawer(page, expandToHalf = false) {
     await settleVisuals(page);
     if (expandToHalf) {
         const grip = page.locator('[data-role="quick-source-sheet-grip"]');
-        const bounds = await grip.boundingBox();
+        const [bounds, sheetBounds, viewportHeight] = await Promise.all([
+            grip.boundingBox(),
+            page.locator('[data-role="quick-source-sheet"]').boundingBox(),
+            page.evaluate(() => window.innerHeight),
+        ]);
         assert.ok(bounds);
+        assert.ok(sheetBounds);
         const start = {
             x: bounds.x + (bounds.width / 2),
             y: bounds.y + (bounds.height / 2),
         };
+        const halfHeightDelta = (viewportHeight * 0.5) - sheetBounds.height;
         await page.mouse.move(start.x, start.y);
         await page.mouse.down();
-        await page.mouse.move(start.x, start.y - 56, { steps: 6 });
+        await page.mouse.move(start.x, start.y - halfHeightDelta, { steps: 8 });
         await page.mouse.up();
         await page.locator('[data-role="quick-source-sheet"][data-detent="half"]').waitFor();
         await page.waitForTimeout(240);
@@ -187,10 +193,10 @@ async function captureFullEditor(viewport, fileName, openFromDrawer = false) {
     }
 }
 
-async function captureDrawerMorphHud(viewport, fileName) {
+async function captureDrawerMorphHud(viewport, fileName, expandToHalf = false, releaseBeforeCapture = false) {
     const page = await openEvidencePage(viewport);
     try {
-        await openDrawer(page);
+        await openDrawer(page, expandToHalf);
         await beginHorizontalControlDrag(
             page,
             '[data-role="quick-source-sheet-cell-morph"]',
@@ -199,6 +205,22 @@ async function captureDrawerMorphHud(viewport, fileName) {
         await page.locator(
             '[data-role="mobile-voice-hud-layer"] [data-role="mobile-voice-hud"].is-visible',
         ).waitFor();
+        await page.locator(
+            '[data-role="quick-sheet-mseg-surface"][data-morph-presentation="morph-active"]',
+        ).waitFor();
+        if (releaseBeforeCapture) {
+            await page.mouse.up();
+            await page.locator(
+                '[data-role="quick-sheet-mseg-surface"][data-morph-presentation="edit-shape"]',
+            ).waitFor();
+            await page.waitForFunction(() => {
+                const curve = document.querySelector(
+                    '[data-role="quick-sheet-mseg-surface"] [data-role="mseg-effective-curve"]',
+                );
+                return curve !== null && Number(getComputedStyle(curve).opacity) < 0.8;
+            });
+            await settleVisuals(page);
+        }
         await page.screenshot({ path: `${evidenceDirectory}${fileName}`, type: "png" });
     } finally {
         await page.mouse.up().catch(() => {});
@@ -206,7 +228,7 @@ async function captureDrawerMorphHud(viewport, fileName) {
     }
 }
 
-async function captureFullEditorFeedback(viewport, fileName, controlName) {
+async function captureFullEditorFeedback(viewport, fileName, controlName, releaseBeforeCapture = false) {
     const page = await openEvidencePage(viewport);
     try {
         if (viewport.width < 640) {
@@ -227,8 +249,21 @@ async function captureFullEditorFeedback(viewport, fileName, controlName) {
             ).waitFor();
         } else {
             await page.locator(
-                '[data-role="mseg-editor-surface"][data-morph-presentation="primary"]',
+                '[data-role="mseg-editor-surface"][data-morph-presentation="morph-active"]',
             ).waitFor();
+            if (releaseBeforeCapture) {
+                await page.mouse.up();
+                await page.locator(
+                    '[data-role="mseg-editor-surface"][data-morph-presentation="edit-shape"]',
+                ).waitFor();
+                await page.waitForFunction(() => {
+                    const curve = document.querySelector(
+                        '[data-role="mseg-editor-surface"] [data-role="mseg-effective-curve"]',
+                    );
+                    return curve !== null && Number(getComputedStyle(curve).opacity) < 0.8;
+                });
+                await settleVisuals(page);
+            }
         }
         await page.screenshot({ path: `${evidenceDirectory}${fileName}`, type: "png" });
     } finally {
@@ -243,6 +278,11 @@ test("capture real MSEG drawer and full-screen evidence", async () => {
         "phone-393x852-drawer.png": await captureDrawer(
             { width: 393, height: 852 },
             "phone-393x852-drawer.png",
+        ),
+        "phone-393x852-drawer-half.png": await captureDrawer(
+            { width: 393, height: 852 },
+            "phone-393x852-drawer-half.png",
+            true,
         ),
         "phone-393x852-full.png": await captureFullEditor(
             { width: 393, height: 852 },
@@ -273,16 +313,33 @@ test("capture real MSEG drawer and full-screen evidence", async () => {
         { width: 393, height: 852 },
         "phone-393x852-drawer-morph-hud.png",
     );
+    await captureDrawerMorphHud(
+        { width: 393, height: 852 },
+        "phone-393x852-drawer-half-morph-hud.png",
+        true,
+    );
+    await captureDrawerMorphHud(
+        { width: 393, height: 852 },
+        "phone-393x852-drawer-half-morph-resting.png",
+        true,
+        true,
+    );
     await captureFullEditorFeedback(
         { width: 393, height: 852 },
         "phone-393x852-full-rate-hud.png",
         "rate",
     );
-        await captureFullEditorFeedback(
-            { width: 900, height: 600 },
-            "plugin-900x600-full-morph-live.png",
-            "morph",
-        );
+    await captureFullEditorFeedback(
+        { width: 900, height: 600 },
+        "plugin-900x600-full-morph-live.png",
+        "morph",
+    );
+    await captureFullEditorFeedback(
+        { width: 393, height: 852 },
+        "phone-393x852-full-morph-resting.png",
+        "morph",
+        true,
+    );
 
     assert.equal(captures["phone-393x852-drawer.png"].controls.height <= 40, true);
     assert.equal(captures["phone-393x852-full.png"].timeAxis, "vertical");
