@@ -1266,7 +1266,9 @@ Source note (2026-08-25):
     - Independently reproduced and repaired the reviewers' real defects: Drive-zero discontinuity, reset burst, off-grid/sample-rate drift, endpoint lag, missing Harmonics/DC/reset/Type-transition proof, misleading visualizer geometry, and strict current-contract fixtures. Intentional ADR-021 old-state rejection and the lack of an alias-energy claim are documented rather than misrepresented as fixes.
     - Distortion 6/6 and full rack 79/79 Cmajor tests, 723/723 shared/unit tests, focused UI/state/browser gates, Chromium/WebKit offline rendering, and the five-case current-contract Speedrun pipeline pass. Final web/iPhone/desktop bundles were rebuilt; this worktree's HMR standalone is running on 127.0.0.1:5176; the compiled VST3 is installed at `~/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` and passes strict codesign verification.
 
-[ ] T26 — Build the fixed two-band Enhancer and decide separately whether to build its voice-tracked form
+[?] T26 — Build the fixed two-band Enhancer and decide separately whether to build its voice-tracked form
+    Active owner (2026-08-26):
+    - Codex task `T26 Enhancer`, branch `codex/t26-enhancer`, worktree `/Users/winterfell/.codex/worktrees/479c3700-c222-4730-88a3-1f9ff584b411/cosimo-synth`.
     Design authority: `ENHANCER_DESIGN.md`.
     Locked bus effect:
     - Build two parametric bell bands, each with frequency, Q, separate mid and side amounts, and Tube/Solid character. Generate only the shaped-minus-unprocessed residue, remove DC, and add that residue back to the original signal.
@@ -1277,6 +1279,12 @@ Source note (2026-08-25):
     Done when:
     - Zero amount is bit-identical to dry; mono stays mono; a side-only test remains side-only; safety and reset checks pass; and level-matched listening shows added harmonics without an unintended loudness jump.
     - The voice-tracked variant ends with an explicit build/defer/reject decision backed by retained renders and measured cost, rather than becoming implied scope for the bus effect.
+    Automated implementation evidence (2026-08-26):
+    - The isolated production `wt::EnhancerBus` and strict `cosimo.enhancer` v1 state contract are built without T28 composition or UI wiring. The ten endpoints are internally smoothed, non-automatable, and absent from the rack, modulation, Effects Lane, manifests, and current synth root.
+    - Enhancer DSP passes 9/9 in both default and generated-C++ Cmajor engines; the unchanged rack passes 79/79; state/exposure passes 4/4. Deterministic JS/Wasm renders cover pink noise, drums, bass, bright poly, and 44.1/48/96/192 kHz; worst measured change is 0.10 LUFS and 0.166 dB RMS, with nonzero residue and controlled DC. Dry/enhanced review WAVs and `report.json` regenerate under ignored `build/t26-enhancer-review/` with `npm run test:enhancer`.
+    Exactly remaining before completion:
+    - Andrew must run/accept the design's level-matched listening comparison against Spectre at Subtle/Medium on the same stems. Automated loudness and harmonic evidence does not substitute for that voicing decision.
+    - Andrew must explicitly choose build, defer, or reject for the per-voice MIDI-tracked form. Codex recommends DEFER: the documented estimate (40–50 FLOPs/voice/sample; roughly 30–40 MFLOP/s for 16 voices at 48 kHz) establishes plausibility, but this task prohibited its implementation, so no retained per-voice renders or measured native/mobile cost exist yet.
 
 [ ] T27 — Reproduce the Sausage Fattener reference before using it to voice Cosimo's compressor and clipper
     Reference authority: `SAUSAGE_FATTENER_ANALYSIS.md`.

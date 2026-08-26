@@ -1,0 +1,400 @@
+namespace wt
+{
+    // Fixed end-of-chain two-band Enhancer. T28 will compose this processor into
+    // the Polish chain; T26 deliberately leaves it out of WavetableSynth and the
+    // Effects Lane. The ten settings are non-automatable value endpoints because
+    // they are preset-persisted voicing controls, never modulation destinations.
+
+    let enhancerOversampleFactor = 4;
+    let enhancerBandCount = 2;
+    let enhancerFrequencyMinHz = 30.0f;
+    let enhancerFrequencyMaxHz = 16000.0f;
+    let enhancerQMin = 0.3f;
+    let enhancerQMax = 8.0f;
+    let enhancerAmountMin = 0.0f;
+    let enhancerAmountMax = 1.0f;
+    let enhancerCurveTube = 0;
+    let enhancerCurveSolid = 1;
+    let enhancerB1FrequencyDefaultHz = 130.0f;
+    let enhancerB1QDefault = 0.71f;
+    let enhancerB1CurveDefault = enhancerCurveSolid;
+    let enhancerB2FrequencyDefaultHz = 9000.0f;
+    let enhancerB2QDefault = 0.71f;
+    let enhancerB2CurveDefault = enhancerCurveTube;
+
+    // One time constant covers every continuous control and the Tube/Solid
+    // crossfade. Coefficients update at control rate: two tan() calls every 16
+    // frames while moving, then none while static.
+    let enhancerControlSmoothingMs = 15.0f;
+    let enhancerCoefficientUpdateFrames = 16;
+    let enhancerCoefficientEpsilon = 0.000001f;
+
+    // ENHANCER_DESIGN.md starts the Amount voicing at +24 dB * amount^2.
+    // Amount also gates the band before the shaper, so amount 0 makes the core
+    // input and aligned residue exactly zero. The conservative post trim keeps
+    // the additive residue inside the design's <= 0.5 dB loudness budget on the
+    // retained musical fixtures while leaving its harmonic lines measurable.
+    let enhancerDriveRangeDb = 24.0f;
+    let enhancerResidueTrim = 0.035f;
+
+    // A sample-rate-aware version of the standard x[n]-x[n-1]+R*y[n-1]
+    // DC-blocker idiom. std::filters::dcblocker fixes R at 0.996, making its
+    // cutoff rise fourfold from 48 to 192 kHz; that would materially thin the
+    // 130 Hz band's residue at high sample rates. Ten hertz removes asymmetric
+    // curve bias without making the Enhancer's voicing sample-rate-dependent.
+    let enhancerDcBlockerCutoffHz = 10.0f;
+
+    namespace enhancerFilters = std::filters (float32<2>, float64, 32);
+
+    float32 clampEnhancerFrequencyHz (float32 value, float32 sampleRateHz)
+    {
+        let safeMaximum = std::intrinsics::min (
+            enhancerFrequencyMaxHz,
+            sampleRateHz * 0.45f
+        );
+        return std::intrinsics::clamp (value, enhancerFrequencyMinHz, safeMaximum);
+    }
+
+    float32 clampEnhancerQ (float32 value)
+    {
+        return std::intrinsics::clamp (value, enhancerQMin, enhancerQMax);
+    }
+
+    float32 clampEnhancerAmount (float32 value)
+    {
+        return std::intrinsics::clamp (value, enhancerAmountMin, enhancerAmountMax);
+    }
+
+    float32 resolveEnhancerSolidWeight (float32 value)
+    {
+        return value >= 0.5f ? 1.0f : 0.0f;
+    }
+
+    float32 enhancerAmountDrive (float32 amount)
+    {
+        let amount01 = clampEnhancerAmount (amount);
+        let driveDb = enhancerDriveRangeDb * amount01 * amount01;
+        return amount01 * std::levels::dBtoGain (driveDb);
+    }
+
+    float32 smoothEnhancerControl (
+        float32 current,
+        float32 target,
+        float32 smoothingAmount,
+        float32 snapEpsilon
+    )
+    {
+        let next = current + (target - current) * smoothingAmount;
+        return std::intrinsics::abs (target - next) <= snapEpsilon ? target : next;
+    }
+
+    struct EnhancerDcBlocker
+    {
+        float32<2> previousInput;
+        float32<2> previousOutput;
+        float32 pole;
+
+        void setSampleRate (float64 sampleRate)
+        {
+            this.pole = float32 (std::intrinsics::exp (
+                -twoPi * float64 (enhancerDcBlockerCutoffHz) / sampleRate
+            ));
+        }
+
+        void reset()
+        {
+            this.previousInput = ();
+            this.previousOutput = ();
+        }
+
+        float32<2> process (float32<2> sampleFrame)
+        {
+            let filtered = sampleFrame - this.previousInput + this.previousOutput * this.pole;
+            this.previousInput = sampleFrame;
+            this.previousOutput = filtered;
+            return filtered;
+        }
+    }
+
+    processor EnhancerShaperCore
+    {
+        input stream float32<2> in;
+        input value float32 solidWeightIn [[ init: 0.0f ]];
+        output stream float32<2> out;
+        output stream float32<2> thru;
+
+        // Clipped rational tanh approximation: unity slope at the origin,
+        // monotonic soft saturation, and exact +/-1 endpoints at +/-3.
+        float32 tubeShape (float32 sample)
+        {
+            let x = std::intrinsics::clamp (sample, -3.0f, 3.0f);
+            let squared = x * x;
+            return x * (27.0f + squared) / (27.0f + 9.0f * squared);
+        }
+
+        float32 solidShape (float32 sample)
+        {
+            let bias = 0.08f;
+            return tubeShape (sample + bias) - tubeShape (bias);
+        }
+
+        float32 shape (float32 sample, float32 solidWeight)
+        {
+            let tube = tubeShape (sample);
+            let solid = solidShape (sample);
+            return tube + (solid - tube) * solidWeight;
+        }
+
+        void main()
+        {
+            loop
+            {
+                let sampleFrame = in;
+                let solidWeight = std::intrinsics::clamp (solidWeightIn, 0.0f, 1.0f);
+                thru <- sampleFrame;
+                out <- float32<2> (
+                    shape (sampleFrame[0], solidWeight),
+                    shape (sampleFrame[1], solidWeight)
+                );
+                advance();
+            }
+        }
+    }
+
+    processor EnhancerBus
+    {
+        input stream float32<2> in;
+
+        input value float32 b1FreqHzIn [[ name: "Enhancer Band 1 Frequency", min: enhancerFrequencyMinHz, max: enhancerFrequencyMaxHz, init: enhancerB1FrequencyDefaultHz, unit: "Hz", automatable: false, rampFrames: 0 ]];
+        input value float32 b1QIn [[ name: "Enhancer Band 1 Q", min: enhancerQMin, max: enhancerQMax, init: enhancerB1QDefault, automatable: false, rampFrames: 0 ]];
+        input value float32 b1MidAmountIn [[ name: "Enhancer Band 1 Mid Amount", min: enhancerAmountMin, max: enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
+        input value float32 b1SideAmountIn [[ name: "Enhancer Band 1 Side Amount", min: enhancerAmountMin, max: enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
+        input value float32 b1CurveIn [[ name: "Enhancer Band 1 Character", min: 0.0f, max: 1.0f, init: float32 (enhancerB1CurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: false, rampFrames: 0 ]];
+
+        input value float32 b2FreqHzIn [[ name: "Enhancer Band 2 Frequency", min: enhancerFrequencyMinHz, max: enhancerFrequencyMaxHz, init: enhancerB2FrequencyDefaultHz, unit: "Hz", automatable: false, rampFrames: 0 ]];
+        input value float32 b2QIn [[ name: "Enhancer Band 2 Q", min: enhancerQMin, max: enhancerQMax, init: enhancerB2QDefault, automatable: false, rampFrames: 0 ]];
+        input value float32 b2MidAmountIn [[ name: "Enhancer Band 2 Mid Amount", min: enhancerAmountMin, max: enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
+        input value float32 b2SideAmountIn [[ name: "Enhancer Band 2 Side Amount", min: enhancerAmountMin, max: enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
+        input value float32 b2CurveIn [[ name: "Enhancer Band 2 Character", min: 0.0f, max: 1.0f, init: float32 (enhancerB2CurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: false, rampFrames: 0 ]];
+
+        // Audio-history reset for the future single resident Polish instance.
+        // This is lifecycle plumbing, not a saved/user setting.
+        input event int32 resetIn;
+
+        output stream float32<2> out;
+
+        static_assert (processor.latency == 0, "The isolated Enhancer must remain zero latency");
+
+        enhancerFilters::tpt::svf::Implementation[enhancerBandCount] bandFilters;
+        EnhancerDcBlocker[enhancerBandCount] residueDcBlockers;
+        node band1Core = wt::EnhancerShaperCore * enhancerOversampleFactor;
+        node band2Core = wt::EnhancerShaperCore * enhancerOversampleFactor;
+
+        float32 b1FreqHz = enhancerB1FrequencyDefaultHz;
+        float32 b1Q = enhancerB1QDefault;
+        float32 b1MidAmount;
+        float32 b1SideAmount;
+        float32 b1SolidWeight = float32 (enhancerB1CurveDefault);
+        float32 b2FreqHz = enhancerB2FrequencyDefaultHz;
+        float32 b2Q = enhancerB2QDefault;
+        float32 b2MidAmount;
+        float32 b2SideAmount;
+        float32 b2SolidWeight = float32 (enhancerB2CurveDefault);
+        float32 tunedB1FreqHz;
+        float32 tunedB1Q;
+        float32 tunedB2FreqHz;
+        float32 tunedB2Q;
+        int32 framesUntilCoefficientUpdate;
+
+        var smoothingAmount = 1.0f - std::intrinsics::exp (
+            -1.0f / (
+                enhancerControlSmoothingMs * 0.001f * float32 (processor.frequency)
+            )
+        );
+
+        void init()
+        {
+            for (wrap<enhancerBandCount> band)
+            {
+                bandFilters[band].setMode (enhancerFilters::tpt::svf::Mode::bandPass);
+                residueDcBlockers[band].setSampleRate (processor.frequency);
+            }
+        }
+
+        event resetIn (int32 ignored)
+        {
+            for (wrap<enhancerBandCount> band)
+            {
+                bandFilters[band].reset();
+                residueDcBlockers[band].reset();
+            }
+
+            // A node reset clears both oversampling resamplers as well as the
+            // stateless shaper child.
+            band1Core.reset();
+            band2Core.reset();
+            // Smoothed settings are deliberately preserved. resetIn owns audio
+            // history only; preset/state recall owns the ten control values.
+            tunedB1FreqHz = 0.0f;
+            tunedB1Q = 0.0f;
+            tunedB2FreqHz = 0.0f;
+            tunedB2Q = 0.0f;
+            framesUntilCoefficientUpdate = 0;
+        }
+
+        void smoothControls()
+        {
+            let sampleRate = float32 (processor.frequency);
+            b1FreqHz = smoothEnhancerControl (
+                b1FreqHz,
+                clampEnhancerFrequencyHz (b1FreqHzIn, sampleRate),
+                smoothingAmount,
+                0.001f
+            );
+            b1Q = smoothEnhancerControl (
+                b1Q,
+                clampEnhancerQ (b1QIn),
+                smoothingAmount,
+                enhancerCoefficientEpsilon
+            );
+            b1MidAmount = smoothEnhancerControl (
+                b1MidAmount,
+                clampEnhancerAmount (b1MidAmountIn),
+                smoothingAmount,
+                enhancerCoefficientEpsilon
+            );
+            b1SideAmount = smoothEnhancerControl (
+                b1SideAmount,
+                clampEnhancerAmount (b1SideAmountIn),
+                smoothingAmount,
+                enhancerCoefficientEpsilon
+            );
+            b1SolidWeight = smoothEnhancerControl (
+                b1SolidWeight,
+                resolveEnhancerSolidWeight (b1CurveIn),
+                smoothingAmount,
+                enhancerCoefficientEpsilon
+            );
+
+            b2FreqHz = smoothEnhancerControl (
+                b2FreqHz,
+                clampEnhancerFrequencyHz (b2FreqHzIn, sampleRate),
+                smoothingAmount,
+                0.001f
+            );
+            b2Q = smoothEnhancerControl (
+                b2Q,
+                clampEnhancerQ (b2QIn),
+                smoothingAmount,
+                enhancerCoefficientEpsilon
+            );
+            b2MidAmount = smoothEnhancerControl (
+                b2MidAmount,
+                clampEnhancerAmount (b2MidAmountIn),
+                smoothingAmount,
+                enhancerCoefficientEpsilon
+            );
+            b2SideAmount = smoothEnhancerControl (
+                b2SideAmount,
+                clampEnhancerAmount (b2SideAmountIn),
+                smoothingAmount,
+                enhancerCoefficientEpsilon
+            );
+            b2SolidWeight = smoothEnhancerControl (
+                b2SolidWeight,
+                resolveEnhancerSolidWeight (b2CurveIn),
+                smoothingAmount,
+                enhancerCoefficientEpsilon
+            );
+        }
+
+        void updateBandCoefficients()
+        {
+            if (framesUntilCoefficientUpdate > 0)
+            {
+                framesUntilCoefficientUpdate -= 1;
+                return;
+            }
+
+            framesUntilCoefficientUpdate = enhancerCoefficientUpdateFrames - 1;
+
+            if (std::intrinsics::abs (b1FreqHz - tunedB1FreqHz) > enhancerCoefficientEpsilon
+                || std::intrinsics::abs (b1Q - tunedB1Q) > enhancerCoefficientEpsilon)
+            {
+                bandFilters[0].setFrequency (processor.frequency, b1FreqHz, b1Q);
+                tunedB1FreqHz = b1FreqHz;
+                tunedB1Q = b1Q;
+            }
+
+            if (std::intrinsics::abs (b2FreqHz - tunedB2FreqHz) > enhancerCoefficientEpsilon
+                || std::intrinsics::abs (b2Q - tunedB2Q) > enhancerCoefficientEpsilon)
+            {
+                bandFilters[1].setFrequency (processor.frequency, b2FreqHz, b2Q);
+                tunedB2FreqHz = b2FreqHz;
+                tunedB2Q = b2Q;
+            }
+        }
+
+        void main()
+        {
+            loop
+            {
+                smoothControls();
+                updateBandCoefficients();
+
+                let dry = in;
+                let midSide = float32<2> (
+                    0.5f * (dry[0] + dry[1]),
+                    0.5f * (dry[0] - dry[1])
+                );
+
+                // The TPT band's centre gain is Q. Dividing by Q makes this
+                // the constant-peak bandpass residue of a parallel bell boost.
+                let band1 = bandFilters[0].process (midSide) / b1Q;
+                let band2 = bandFilters[1].process (midSide) / b2Q;
+                let band1Drive = float32<2> (
+                    enhancerAmountDrive (b1MidAmount),
+                    enhancerAmountDrive (b1SideAmount)
+                );
+                let band2Drive = float32<2> (
+                    enhancerAmountDrive (b2MidAmount),
+                    enhancerAmountDrive (b2SideAmount)
+                );
+
+                band1Core.in <- band1 * band1Drive;
+                band1Core.solidWeightIn <- b1SolidWeight;
+                band1Core.advance();
+                band2Core.in <- band2 * band2Drive;
+                band2Core.solidWeightIn <- b2SolidWeight;
+                band2Core.advance();
+
+                let band1Residue = residueDcBlockers[0].process (
+                    band1Core.out - band1Core.thru
+                ) * enhancerResidueTrim;
+                let band2Residue = residueDcBlockers[1].process (
+                    band2Core.out - band2Core.thru
+                ) * enhancerResidueTrim;
+                let residueMidSide = band1Residue + band2Residue;
+
+                // Keep the neutral path literally untouched. This also prevents
+                // a signed-zero or M/S round-trip from weakening the bit-identity
+                // contract when all four smoothed amounts have reached zero.
+                if (b1MidAmount == 0.0f && b1SideAmount == 0.0f
+                    && b2MidAmount == 0.0f && b2SideAmount == 0.0f)
+                {
+                    out <- dry;
+                }
+                else
+                {
+                    let residue = float32<2> (
+                        residueMidSide[0] + residueMidSide[1],
+                        residueMidSide[0] - residueMidSide[1]
+                    );
+                    out <- dry + residue;
+                }
+
+                advance();
+            }
+        }
+    }
+}

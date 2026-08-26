@@ -1,0 +1,73 @@
+processor EnhancerSampleRateProbe
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+
+    float64 phase;
+
+    void configure()
+    {
+        enhancer.b1FreqHzIn <- 1200.0f;
+        enhancer.b1QIn <- 4.0f;
+        enhancer.b1MidAmountIn <- 0.85f;
+        enhancer.b1SideAmountIn <- 0.0f;
+        enhancer.b1CurveIn <- 1.0f;
+        enhancer.b2FreqHzIn <- 9000.0f;
+        enhancer.b2QIn <- 0.71f;
+        enhancer.b2MidAmountIn <- 0.0f;
+        enhancer.b2SideAmountIn <- 0.0f;
+        enhancer.b2CurveIn <- 0.0f;
+    }
+
+    float64 measureResiduePower (float32 frequencyHz)
+    {
+        configure();
+        enhancer.resetIn <- 1;
+        phase = 0.0;
+        let settleFrames = int32 (processor.frequency * 0.08);
+        let measureFrames = int32 (processor.frequency * 0.16);
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            let sample = 0.3f * float32 (std::intrinsics::sin (phase));
+            phase += twoPi * float64 (frequencyHz) / processor.frequency;
+            enhancer.in <- float32<2> (sample, sample);
+            enhancer.advance();
+        }
+
+        float64 residuePower;
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let sample = 0.3f * float32 (std::intrinsics::sin (phase));
+            phase += twoPi * float64 (frequencyHz) / processor.frequency;
+            enhancer.in <- float32<2> (sample, sample);
+            enhancer.advance();
+            let residue = enhancer.out[0] - sample;
+            residuePower += float64 (residue) * float64 (residue);
+        }
+        return residuePower / float64 (measureFrames);
+    }
+
+    void main()
+    {
+        let inBandPower = measureResiduePower (1200.0f);
+        let outOfBandPower = measureResiduePower (7000.0f);
+        let dryPower = 0.5f * 0.3f * 0.3f;
+        let maximumAddedDb = std::levels::gainTodB (float32 (std::intrinsics::sqrt (
+            (dryPower + inBandPower) / dryPower
+        )));
+        let finite = inBandPower == inBandPower && outOfBandPower == outOfBandPower;
+
+        out <- (processor.frequency == 44100.0 || processor.frequency == 48000.0
+                || processor.frequency == 96000.0 || processor.frequency == 192000.0) ? 1 : 0;
+        advance();
+        out <- (finite && inBandPower > 1.0e-10) ? 1 : 0;
+        advance();
+        out <- (inBandPower > outOfBandPower * 4.0) ? 1 : 0;
+        advance();
+        out <- (maximumAddedDb <= 0.5f) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
