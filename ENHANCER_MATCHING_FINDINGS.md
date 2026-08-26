@@ -1,5 +1,12 @@
 # Enhancer Matching: Remaining-Uncertainty Pass
 
+> Follow-up correction, 2026-08-26: the effect-contribution tables in this pass
+> subtract raw input from Spectre's balanced-50% output. Spectre's processed dry
+> endpoint carries fractional-latency phase, so those tables are useful full-path
+> diagnostics but are not isolated wet-endpoint comparisons. The corrected wet-only
+> topology experiment and superseding metrics are in
+> `ENHANCER_WRAPPER_PROTOTYPE_FINDINGS.md`.
+
 Date: 2026-08-26
 
 Target: activated Wavesfactory Spectre 1.5.6, Medium, Good quality
