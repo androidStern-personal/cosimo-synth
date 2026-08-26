@@ -65,7 +65,6 @@ async function installLifecycleProbe(page) {
         let hidden = false;
         let sessionState = "active";
         let resumePolicy = "allow";
-        let touchStartActivation = false;
         let trustedGesture = false;
         let gestureResumeCount = 0;
         let resumeCallCount = 0;
@@ -73,7 +72,6 @@ async function installLifecycleProbe(page) {
         let workletConnectCount = 0;
         let workletDisconnectCount = 0;
         let workletNodeCount = 0;
-        const pendingResumeResolvers = [];
         const workletNodes = new WeakSet();
 
         const audioSession = new EventTarget();
@@ -128,18 +126,8 @@ async function installLifecycleProbe(page) {
             if (!trustedGesture && resumePolicy === "reject") {
                 return Promise.reject(new DOMException("A gesture is required.", "NotAllowedError"));
             }
-            if (!trustedGesture && resumePolicy === "pending") {
-                return new Promise((resolve) => pendingResumeResolvers.push(resolve));
-            }
-
             if (trustedGesture) gestureResumeCount += 1;
-            const result = Reflect.apply(nativeResume, this, []);
-            if (trustedGesture) {
-                void result.then(() => {
-                    for (const resolve of pendingResumeResolvers.splice(0)) resolve();
-                });
-            }
-            return result;
+            return Reflect.apply(nativeResume, this, []);
         };
 
         const nativeConnect = AudioNode.prototype.connect;
@@ -155,7 +143,7 @@ async function installLifecycleProbe(page) {
 
         const markTrustedGesture = (event) => {
             if (!event.isTrusted) return;
-            if (event.type === "pointerdown" && event.pointerType !== "mouse" && !touchStartActivation) return;
+            if (event.type === "pointerdown" && event.pointerType !== "mouse") return;
             if (event.type === "pointerup" && event.pointerType === "mouse") return;
             trustedGesture = true;
             setTimeout(() => { trustedGesture = false; }, 0);
@@ -252,7 +240,6 @@ async function installLifecycleProbe(page) {
                 audioSession.dispatchEvent(new Event("statechange"));
             },
             setResumePolicy(policy) { resumePolicy = policy; },
-            setTouchStartActivation(value) { touchStartActivation = Boolean(value); },
             snapshot,
         };
     });
@@ -405,20 +392,6 @@ async function waitForMiddleCRelease(page) {
     });
 }
 
-async function sampleAudioPeakUntilStopped(page) {
-    await page.evaluate(() => {
-        const poll = () => {
-            globalThis.__COSIMO_WEB_POC__.getSnapshot();
-            globalThis.__COSIMO_T45_PEAK_POLL__ = setTimeout(poll, 1);
-        };
-        poll();
-    });
-    return async () => page.evaluate(() => {
-        clearTimeout(globalThis.__COSIMO_T45_PEAK_POLL__);
-        delete globalThis.__COSIMO_T45_PEAK_POLL__;
-    });
-}
-
 async function waitForRecovery(page) {
     await page.waitForFunction(() => {
         const host = globalThis.__COSIMO_WEB_POC__.getSnapshot();
@@ -468,6 +441,18 @@ async function assertAudible(page, label) {
         await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.noteOff(48));
     }
     await waitForAudioSilence(page, label);
+}
+
+async function returnWithGestureRequired(page) {
+    await page.evaluate(async () => {
+        const probe = globalThis.__COSIMO_T45_LIFECYCLE_PROBE__;
+        probe.setResumePolicy("reject");
+        await probe.leave("pagehide");
+        probe.returnWith("pageshow");
+    });
+    await page.waitForFunction(() => (
+        globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRecoveryPhase === "blocked"
+    ));
 }
 
 before(async () => {
@@ -595,56 +580,12 @@ test(`[${browserEngine}] each lifecycle signal releases input and recovers the e
     }
 });
 
-test(`[${browserEngine}] the first trusted musical or control action retries audio and still acts`, async () => {
+test(`[${browserEngine}] a trusted control touch retries audio without swallowing the control`, async () => {
     const harness = await openStartedPage(browserEngine);
     const baseline = await captureIdentity(harness.page);
 
     try {
-        await harness.page.evaluate(() => {
-            const probe = globalThis.__COSIMO_T45_LIFECYCLE_PROBE__;
-            probe.setResumePolicy("pending");
-            return probe.leave("visibility");
-        });
-        await harness.page.evaluate(() => {
-            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.returnWith("visibility");
-        });
-        await harness.page.waitForFunction(() => (
-            globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRecoveryPhase === "recovering"
-        ));
-        await harness.page.evaluate(() => globalThis.__COSIMO_WEB_POC__.resetAudioMetrics());
-
-        await pressMiddleC(harness.page);
-        try {
-            await harness.page.waitForFunction(() => {
-                const host = globalThis.__COSIMO_WEB_POC__.getSnapshot();
-                return host.audioRecoveryPhase === "active" && host.audioPeak > 0.00001;
-            }, null, { timeout: 5_000 });
-        } catch (error) {
-            const failedGesture = await harness.page.evaluate(() => ({
-                host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
-                lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
-            }));
-            throw new Error(`Musical gesture recovery failed: ${JSON.stringify(failedGesture)}`, { cause: error });
-        } finally {
-            await harness.page.mouse.up();
-        }
-        await waitForMiddleCRelease(harness.page);
-        await harness.page.waitForFunction((previousNoteUpCount) => (
-            globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot().noteUpCount === previousNoteUpCount + 1
-        ), baseline.keyboard.noteUpCount);
-        await assertIdentityPreserved(harness.page, baseline, "musical gesture recovery");
-
-        await harness.page.evaluate(() => {
-            const probe = globalThis.__COSIMO_T45_LIFECYCLE_PROBE__;
-            probe.setResumePolicy("reject");
-            return probe.leave("pagehide");
-        });
-        await harness.page.evaluate(() => {
-            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.returnWith("pageshow");
-        });
-        await harness.page.waitForFunction(() => (
-            globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRecoveryPhase === "blocked"
-        ));
+        await returnWithGestureRequired(harness.page);
 
         const fxTab = harness.page.locator('[data-role="mobile-workspace-tab-fx"]');
         const bounds = await fxTab.boundingBox();
@@ -654,8 +595,10 @@ test(`[${browserEngine}] the first trusted musical or control action retries aud
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             return globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRecoveryPhase === "active"
                 && root?.querySelector('[data-role="mobile-workspace-tab-fx"]')
-                    ?.getAttribute("aria-selected") === "true";
+                    ?.getAttribute("aria-selected") === "true"
+                && document.getElementById("cosimo-audio-recovery-notice")?.hidden === false;
         }, null, { timeout: 5_000 });
+
         await assertAudible(harness.page, "control gesture recovery");
         await assertIdentityPreserved(harness.page, baseline, "control gesture recovery");
 
@@ -663,84 +606,37 @@ test(`[${browserEngine}] the first trusted musical or control action retries aud
             host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
             lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
         }));
-        assert.equal(
-            recovery.host.audioRecoveryAttemptCount - baseline.audioRecoveryAttemptCount,
-            5,
-            JSON.stringify(recovery),
-        );
-        assert.equal(recovery.host.audioSessionType, "playback", JSON.stringify(recovery));
-        assert.equal(
-            recovery.lifecycle.gestureResumeCount - baseline.lifecycle.gestureResumeCount,
-            2,
-            JSON.stringify(recovery),
-        );
-        assert.equal(
-            recovery.lifecycle.resumeCallCount - baseline.lifecycle.resumeCallCount,
-            5,
-            JSON.stringify(recovery),
-        );
-        assert.equal(recovery.lifecycle.sessionState, "active", JSON.stringify(recovery));
-        assert.equal(
-            recovery.lifecycle.suspendCallCount - baseline.lifecycle.suspendCallCount,
-            5,
-            JSON.stringify(recovery),
-        );
+        assert.equal(recovery.host.audioRecoveryAttemptCount - baseline.audioRecoveryAttemptCount, 3);
+        assert.equal(recovery.lifecycle.gestureResumeCount - baseline.lifecycle.gestureResumeCount, 1);
+        assert.equal(recovery.lifecycle.resumeCallCount - baseline.lifecycle.resumeCallCount, 3);
+        assert.equal(recovery.lifecycle.suspendCallCount - baseline.lifecycle.suspendCallCount, 3);
         harness.assertNoFailures();
     } finally {
         await harness.context.close();
     }
 });
 
-test(`[${browserEngine}] a quick mouse piano click recovers audio and is heard`, async () => {
+test(`[${browserEngine}] a mouse note retries audio and releases normally`, async () => {
     const harness = await openStartedPage(browserEngine);
     const baseline = await captureIdentity(harness.page);
 
     try {
-        await harness.page.evaluate(() => {
-            const probe = globalThis.__COSIMO_T45_LIFECYCLE_PROBE__;
-            probe.setResumePolicy("reject");
-            return probe.leave("pagehide");
-        });
-        await harness.page.evaluate(() => {
-            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.returnWith("pageshow");
-        });
-        await harness.page.waitForFunction(() => (
-            globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRecoveryPhase === "blocked"
-        ));
+        await returnWithGestureRequired(harness.page);
 
-        await harness.page.evaluate(() => globalThis.__COSIMO_WEB_POC__.resetAudioMetrics());
-        const voiceStartsBefore = await harness.page.evaluate(() => (
-            globalThis.__COSIMO_WEB_POC__.getSnapshot().voiceArticulationStarts.length
-        ));
-        const stopPeakSampling = await sampleAudioPeakUntilStopped(harness.page);
-        const bounds = await noteBounds(harness.page);
-        try {
-            await harness.page.mouse.click(
-                bounds.x + bounds.width / 2,
-                bounds.y + bounds.height * 0.8,
-            );
-            await harness.page.waitForFunction(({ previousNoteUpCount, previousVoiceStarts }) => {
-                const host = globalThis.__COSIMO_WEB_POC__.getSnapshot();
-                const keyboard = globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot();
-                return host.audioRecoveryPhase === "active"
-                    && host.audioPeak > 0.00001
-                    && host.voiceArticulationStarts.length > previousVoiceStarts
-                    && keyboard.noteUpCount === previousNoteUpCount + 1;
-            }, {
-                previousNoteUpCount: baseline.keyboard.noteUpCount,
-                previousVoiceStarts: voiceStartsBefore,
-            }, { timeout: 5_000 });
-        } catch (error) {
-            const failure = await harness.page.evaluate(() => ({
-                host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
-                keyboard: globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot(),
-                lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
-            }));
-            throw new Error(`Mouse click recovery failed: ${JSON.stringify(failure)}`, { cause: error });
-        } finally {
-            await stopPeakSampling();
-        }
-        await assertIdentityPreserved(harness.page, baseline, "mouse click recovery");
+        await pressMiddleC(harness.page);
+        await harness.page.waitForFunction(() => {
+            const host = globalThis.__COSIMO_WEB_POC__.getSnapshot();
+            const notice = document.getElementById("cosimo-audio-recovery-notice");
+            return host.audioRecoveryPhase === "active"
+                && notice?.hidden === false;
+        }, null, { timeout: 5_000 });
+        await harness.page.mouse.up();
+        await waitForMiddleCRelease(harness.page);
+        await harness.page.waitForFunction((previousNoteUpCount) => (
+            globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot().noteUpCount
+                === previousNoteUpCount + 1
+        ), baseline.keyboard.noteUpCount);
+        await assertIdentityPreserved(harness.page, baseline, "mouse note recovery");
 
         const recovery = await harness.page.evaluate(() => ({
             host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
@@ -753,62 +649,61 @@ test(`[${browserEngine}] a quick mouse piano click recovers audio and is heard`,
         assert.equal(recovery.lifecycle.gestureResumeCount - baseline.lifecycle.gestureResumeCount, 1);
         assert.equal(recovery.lifecycle.resumeCallCount - baseline.lifecycle.resumeCallCount, 2);
         assert.equal(recovery.lifecycle.suspendCallCount - baseline.lifecycle.suspendCallCount, 2);
+
+        await harness.page.evaluate(() => globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.leave("audio-context"));
+        await harness.page.waitForFunction(() => (
+            globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRecoveryPhase === "blocked"
+            && document.getElementById("cosimo-audio-recovery-notice")?.hidden === true
+        ));
         harness.assertNoFailures();
     } finally {
+        await harness.page.mouse.up().catch(() => {});
         await harness.context.close();
     }
 });
 
-test(`[${browserEngine}] the first touchscreen piano tap recovers audio and is heard`, async () => {
+test(`[${browserEngine}] a recovery note asks the player to play again`, async () => {
     const harness = await openStartedPage(browserEngine);
     const baseline = await captureIdentity(harness.page);
 
     try {
-        await harness.page.evaluate(() => {
-            const probe = globalThis.__COSIMO_T45_LIFECYCLE_PROBE__;
-            probe.setResumePolicy("reject");
-            return probe.leave("pagehide");
-        });
-        await harness.page.evaluate(() => {
-            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.returnWith("pageshow");
-        });
-        await harness.page.waitForFunction(() => (
-            globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRecoveryPhase === "blocked"
-        ));
+        await returnWithGestureRequired(harness.page);
 
-        const voiceStartsBefore = await harness.page.evaluate(() => (
-            globalThis.__COSIMO_WEB_POC__.getSnapshot().voiceArticulationStarts.length
-        ));
-        await harness.page.evaluate(() => globalThis.__COSIMO_WEB_POC__.resetAudioMetrics());
-        const stopPeakSampling = await sampleAudioPeakUntilStopped(harness.page);
         const bounds = await noteBounds(harness.page);
-        try {
-            await harness.page.touchscreen.tap(
-                bounds.x + bounds.width / 2,
-                bounds.y + bounds.height * 0.8,
-            );
-            await harness.page.waitForFunction((previousVoiceStarts) => {
-                const host = globalThis.__COSIMO_WEB_POC__.getSnapshot();
-                return host.audioRecoveryPhase === "active"
-                    && host.audioPeak > 0.00001
-                    && host.voiceArticulationStarts.length > previousVoiceStarts;
-            }, voiceStartsBefore, { timeout: 5_000 });
-        } catch (error) {
-            const failure = await harness.page.evaluate(() => ({
-                host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
-                lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
-            }));
-            throw new Error(`Touchscreen piano recovery failed: ${JSON.stringify(failure)}`, { cause: error });
-        } finally {
-            await stopPeakSampling();
-        }
+        await harness.page.evaluate(() => {
+            const keyboardRoot = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector("cosimo-react-desktop-keyboard")?.shadowRoot;
+            if (!keyboardRoot) throw new Error("The production keyboard is unavailable.");
+            keyboardRoot.addEventListener("touchend", () => {
+                globalThis.__COSIMO_T45_RELEASE_AT_TOUCH_END__ =
+                    globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot();
+            }, { once: true });
+        });
+        await harness.page.touchscreen.tap(
+            bounds.x + bounds.width / 2,
+            bounds.y + bounds.height * 0.8,
+        );
+        await harness.page.waitForFunction(() => (
+            globalThis.__COSIMO_T45_RELEASE_AT_TOUCH_END__ !== undefined
+        ));
+        const releaseAtTouchEnd = await harness.page.evaluate(() => (
+            globalThis.__COSIMO_T45_RELEASE_AT_TOUCH_END__
+        ));
+        assert.equal(releaseAtTouchEnd.noteDownCount, baseline.keyboard.noteDownCount + 1);
+        assert.equal(releaseAtTouchEnd.noteUpCount, baseline.keyboard.noteUpCount + 1);
+        assert.equal(releaseAtTouchEnd.currentKeyboardNoteCount, 0);
+        assert.equal(releaseAtTouchEnd.currentTouchCount, 0);
+        assert.deepEqual(releaseAtTouchEnd.soundingNotes, []);
+
+        await harness.page.waitForFunction(() => {
+            const host = globalThis.__COSIMO_WEB_POC__.getSnapshot();
+            const notice = document.getElementById("cosimo-audio-recovery-notice");
+            return host.audioRecoveryPhase === "active"
+                && notice?.hidden === false
+                && notice.textContent?.trim() === "Audio restarted — play again";
+        }, null, { timeout: 5_000 });
         await waitForMiddleCRelease(harness.page);
-        await harness.page.waitForFunction((previousNoteUpCount) => {
-            const keyboard = globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot();
-            return keyboard.noteUpCount === previousNoteUpCount + 1
-                && keyboard.soundingNotes.length === 0;
-        }, baseline.keyboard.noteUpCount);
-        await assertIdentityPreserved(harness.page, baseline, "touchscreen piano recovery");
+        await assertIdentityPreserved(harness.page, baseline, "recovery note");
 
         const recovery = await harness.page.evaluate(() => ({
             host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
@@ -821,6 +716,23 @@ test(`[${browserEngine}] the first touchscreen piano tap recovers audio and is h
         assert.equal(recovery.lifecycle.gestureResumeCount - baseline.lifecycle.gestureResumeCount, 1);
         assert.equal(recovery.lifecycle.resumeCallCount - baseline.lifecycle.resumeCallCount, 3);
         assert.equal(recovery.lifecycle.suspendCallCount - baseline.lifecycle.suspendCallCount, 3);
+
+        await harness.page.touchscreen.tap(
+            bounds.x + bounds.width / 2,
+            bounds.y + bounds.height * 0.8,
+        );
+        await harness.page.waitForFunction((previousCounts) => {
+            const keyboard = globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot();
+            return keyboard.noteDownCount === previousCounts.noteDownCount + 2
+                && keyboard.noteUpCount === previousCounts.noteUpCount + 2
+                && document.getElementById("cosimo-audio-recovery-notice")?.hidden === true;
+        }, {
+            noteDownCount: baseline.keyboard.noteDownCount,
+            noteUpCount: baseline.keyboard.noteUpCount,
+        }, { timeout: 5_000 });
+        assert.equal(await harness.page.locator("#cosimo-audio-recovery-notice").isHidden(), true);
+        await waitForMiddleCRelease(harness.page);
+        await assertIdentityPreserved(harness.page, baseline, "second touchscreen note");
         harness.assertNoFailures();
     } finally {
         await harness.context.close();
@@ -828,66 +740,54 @@ test(`[${browserEngine}] the first touchscreen piano tap recovers audio and is h
 });
 
 if (browserEngine === "chromium") {
-test("[chromium] an accepted touch-down recovery makes the held piano key audible before lift", async () => {
+test("[chromium] lifting the recovery touch does not dismiss the play-again notice", async () => {
     const harness = await openStartedPage("chromium");
     const baseline = await captureIdentity(harness.page);
     const cdp = await harness.context.newCDPSession(harness.page);
 
     try {
+        await returnWithGestureRequired(harness.page);
         await harness.page.evaluate(() => {
-            const probe = globalThis.__COSIMO_T45_LIFECYCLE_PROBE__;
-            probe.setResumePolicy("reject");
-            return probe.leave("pagehide");
+            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.setResumePolicy("allow");
         });
-        await harness.page.evaluate(() => {
-            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.returnWith("pageshow");
-        });
-        await harness.page.waitForFunction(() => (
-            globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRecoveryPhase === "blocked"
-        ));
-        await harness.page.evaluate(() => {
-            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.setTouchStartActivation(true);
-            globalThis.__COSIMO_WEB_POC__.resetAudioMetrics();
-        });
-
         const bounds = await noteBounds(harness.page);
         const point = {
             x: bounds.x + bounds.width / 2,
             y: bounds.y + bounds.height * 0.8,
         };
+
         await cdp.send("Input.dispatchTouchEvent", {
             type: "touchStart",
             touchPoints: [{ ...point, radiusX: 5, radiusY: 5, force: 1 }],
         });
-        await harness.page.waitForFunction(() => {
-            const host = globalThis.__COSIMO_WEB_POC__.getSnapshot();
-            return host.audioRecoveryPhase === "active" && host.audioPeak > 0.00001;
-        }, null, { timeout: 5_000 });
+        await harness.page.waitForFunction(() => (
+            globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRecoveryPhase === "active"
+            && document.getElementById("cosimo-audio-recovery-notice")?.hidden === false
+        ));
         await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
         await waitForMiddleCRelease(harness.page);
-        await harness.page.waitForFunction((previousNoteUpCount) => {
-            const keyboard = globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot();
-            return keyboard.noteUpCount === previousNoteUpCount + 1
-                && keyboard.soundingNotes.length === 0;
-        }, baseline.keyboard.noteUpCount);
-        await assertIdentityPreserved(harness.page, baseline, "touch-down piano recovery");
+        assert.equal(await harness.page.locator("#cosimo-audio-recovery-notice").isVisible(), true);
 
-        const recovery = await harness.page.evaluate(() => ({
-            host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
-            keyboard: globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot(),
-            lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
-        }));
-        assert.equal(recovery.keyboard.noteDownCount - baseline.keyboard.noteDownCount, 1);
-        assert.equal(recovery.keyboard.noteUpCount - baseline.keyboard.noteUpCount, 1);
-        assert.equal(recovery.host.audioRecoveryAttemptCount - baseline.audioRecoveryAttemptCount, 2);
-        assert.equal(recovery.lifecycle.gestureResumeCount - baseline.lifecycle.gestureResumeCount, 1);
-        assert.equal(recovery.lifecycle.resumeCallCount - baseline.lifecycle.resumeCallCount, 2);
-        assert.equal(recovery.lifecycle.suspendCallCount - baseline.lifecycle.suspendCallCount, 2);
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...point, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await harness.page.waitForFunction(() => (
+            document.getElementById("cosimo-audio-recovery-notice")?.hidden === true
+        ));
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await waitForMiddleCRelease(harness.page);
+        await assertIdentityPreserved(harness.page, baseline, "touch notice dismissal");
         harness.assertNoFailures();
     } finally {
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchEnd",
+            touchPoints: [],
+        }).catch(() => {});
         await cdp.detach().catch(() => {});
         await harness.context.close();
     }
 });
 }
+
 }

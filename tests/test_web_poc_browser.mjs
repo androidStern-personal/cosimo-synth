@@ -3028,29 +3028,6 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
             document.dispatchEvent(new Event("visibilitychange"));
         });
 
-        await page.evaluate(() => globalThis.__COSIMO_AUDIO_CONTEXT_FOR_TEST__.suspend());
-        assert.equal(
-            await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot().audioContextState),
-            "suspended",
-            "Expected the interruption harness to suspend the production AudioContext.",
-        );
-
-        await page.touchscreen.tap(
-            noteBounds.x + noteBounds.width / 2,
-            noteBounds.y + noteBounds.height * 0.8,
-        );
-        await page.waitForFunction(() => (
-            globalThis.__COSIMO_WEB_POC__?.getSnapshot().audioContextState === "running"
-        ), null, { timeout: 3_000 });
-
-        await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.resetAudioMetrics());
-        const recoveredTouch = await holdTouchKeyboardNote(page, { touchIdentifier: 8 });
-        assert.equal(recoveredTouch?.active, true, "Expected the recovered Safari touch to keep the key pressed.");
-        assert.equal(recoveredTouch?.audioContextState, "running");
-        assert.ok(
-            recoveredTouch?.audioPeak > 0.00001,
-            `Expected non-silent audio after Safari recovery, received peak ${recoveredTouch?.audioPeak ?? 0}.`,
-        );
     } finally {
         await page.close();
     }

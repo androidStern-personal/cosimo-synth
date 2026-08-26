@@ -98,11 +98,38 @@
       color: #ffd7df;
       white-space: pre-wrap;
     }
+
+    #cosimo-audio-recovery-notice {
+      position: absolute;
+      top: 1rem;
+      left: 50%;
+      z-index: 15;
+      max-width: calc(100% - 2rem);
+      transform: translateX(-50%);
+      border: 1px solid rgb(185 244 93 / 48%);
+      border-radius: 999px;
+      padding: 0.65rem 1rem;
+      background: rgb(18 24 26 / 94%);
+      box-shadow: 0 8px 24px rgb(0 0 0 / 32%);
+      color: #e9ffc4;
+      font-size: 0.85rem;
+      font-weight: 650;
+      pointer-events: none;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    #cosimo-audio-recovery-notice[hidden] {
+      display: none;
+    }
   </style>
 </head>
 <body>
   <main id="cosimo-web-shell">
     <div id="cosimo-view" aria-label="Cosimo Synth"></div>
+    <div id="cosimo-audio-recovery-notice" role="status" aria-live="polite" hidden>
+      Audio restarted — play again
+    </div>
     <button id="cosimo-start-overlay" type="button" disabled>
       <span id="cosimo-start-copy">
         <span id="cosimo-start-title">Cosimo Synth</span>

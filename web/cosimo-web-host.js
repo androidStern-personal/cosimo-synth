@@ -23,6 +23,7 @@ if (hostOwnsRuntimeLanes) {
 }
 
 const elements = {
+    audioRecoveryNotice: document.getElementById("cosimo-audio-recovery-notice"),
     error: document.getElementById("cosimo-error"),
     startAction: document.getElementById("cosimo-start-action"),
     startOverlay: document.getElementById("cosimo-start-overlay"),
@@ -300,10 +301,27 @@ function canRecoverBrowserAudio() {
     return !document.hidden && currentAudioSessionState() !== "interrupted";
 }
 
+function showAudioRecoveryNotice() {
+    elements.audioRecoveryNotice.hidden = false;
+}
+
+function hideAudioRecoveryNotice() {
+    elements.audioRecoveryNotice.hidden = true;
+}
+
 function requestAudioResumeFromGesture(event) {
     if (!event.isTrusted) return;
     if (event.type === "pointerup" && event.pointerType === "mouse") return;
-    if (!state.audioLifecycle || state.audioLifecycle.getSnapshot().phase === "active") return;
+    if (!state.audioLifecycle) return;
+    if (state.audioLifecycle.getSnapshot().phase === "active") {
+        const isGestureStart = event.type === "pointerdown"
+            || event.type === "mousedown"
+            || event.type === "touchstart";
+        if (isGestureStart) {
+            hideAudioRecoveryNotice();
+        }
+        return;
+    }
     usePlaybackAudioSession();
     state.audioLifecycle.retryFromGesture("gesture");
 }
@@ -398,8 +416,14 @@ async function startAudio() {
     state.audioLifecycle ??= createBrowserAudioLifecycle({
         context: state.audioContext,
         canRecover: canRecoverBrowserAudio,
-        onLeave: () => globalThis.dispatchEvent(new Event(browserAudioLeaveEvent)),
-        onRecovered: () => globalThis.dispatchEvent(new Event(browserAudioReturnEvent)),
+        onLeave: () => {
+            hideAudioRecoveryNotice();
+            globalThis.dispatchEvent(new Event(browserAudioLeaveEvent));
+        },
+        onRecovered: (reason) => {
+            globalThis.dispatchEvent(new Event(browserAudioReturnEvent));
+            if (reason === "gesture") showAudioRecoveryNotice();
+        },
     });
 }
 

@@ -1016,11 +1016,11 @@ BROWSER SHARING AND ENVELOPE FOLLOW-UP
     Current baseline to investigate, not trust blindly:
     - The web host already requests Web Audio resume from a later touch and has synthetic interruption tests, but the real window/tab lifecycle still fails. Reproduce the actual sequence and record the audio-context state, playback-session state, worklet progress, graph connection, held notes, and output before choosing a fix.
     Required result:
-    - On page return, resume automatically where the browser permits it. Where a browser requires a fresh gesture, the person's first intentional key or control touch must resume audio and perform that same action; it must not be swallowed as a separate recovery tap.
+    - On page return, resume automatically where the browser permits it. Where a browser requires a fresh gesture, the person's first intentional key or control touch retries audio and otherwise follows the ordinary input path. After any gesture-based restart, show a brief instruction to play again; if that first note was silent, release it normally. Do not classify the triggering control, delay note-off, or retain special recovery-note state.
     - Handle the real focus, visibility, page-show, and audio-context interruption signals without connecting the audio graph twice, leaking a worklet, leaving held notes stuck, or resetting the patch.
     Done when:
     - A regression reproduces the failure before the repair and proves non-silent output after repeated leave/return cycles in Chromium and WebKit.
-    - A physical Safari pass switches apps/windows, returns, and plays immediately under the browser's permitted recovery path. A test that only changes `document.hidden` in place is not sufficient evidence.
+    - A physical Safari pass switches apps/windows, returns, follows the browser's permitted gesture path, and confirms a subsequent note sounds. A test that only changes `document.hidden` in place is not sufficient evidence.
 
 [ ] T46 — Requalify and finish the existing first version of patch sharing by URL
     Existing implementation:

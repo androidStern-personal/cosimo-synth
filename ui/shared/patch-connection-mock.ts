@@ -160,9 +160,6 @@ function createKeyboardDebugState() {
         attachCalls: [] as Array<{ endpointID: string }>,
         detachCount: 0,
         handledKeys: [] as Array<{ key: string; isDown: boolean }>,
-        noteDowns: [] as number[],
-        noteUps: [] as number[],
-        soundingTouchNotes: [] as number[],
         allNotesOffCount: 0,
         refreshHTMLCount: 0,
         refreshActiveNoteElementsCount: 0,
@@ -194,8 +191,6 @@ class MockPianoKeyboard extends HTMLElement {
     notes: unknown[] = [];
     naturalWidth = 22;
     accidentalWidth = 13;
-    currentTouches = new Map<number, number>();
-    currentKeyboardNotes = new Set<number>();
     private attachedPatchConnection: PatchConnectionLike | null = null;
     private attachedEndpointID: string | null = null;
     debug = createKeyboardDebugState();
@@ -258,54 +253,8 @@ class MockPianoKeyboard extends HTMLElement {
         this.attachedPatchConnection.sendMIDIInputEvent?.(this.attachedEndpointID, shortMIDICode);
     }
 
-    sendNoteOn(note: number) {
-        this.debug.noteDowns.push(note);
-        this.dispatchEvent(new CustomEvent("note-down", { detail: { note } }));
-    }
-
-    sendNoteOff(note: number) {
-        this.debug.noteUps.push(note);
-        this.dispatchEvent(new CustomEvent("note-up", { detail: { note } }));
-    }
-
-    addKeyboardNote(note: number) {
-        if (!this.currentKeyboardNotes.has(note)) {
-            this.currentKeyboardNotes.add(note);
-            this.sendNoteOn(note);
-            this.syncSoundingTouchNotes();
-        }
-    }
-
-    removeKeyboardNote(note: number) {
-        if (this.currentKeyboardNotes.delete(note)) {
-            this.sendNoteOff(note);
-            this.syncSoundingTouchNotes();
-        }
-    }
-
-    touchStart(event: TouchEvent) {
-        for (const touch of event.changedTouches) {
-            const elementID = touch.target instanceof Element ? touch.target.id : "";
-            const note = Number(elementID.startsWith("note") ? elementID.slice(4) : Number.NaN);
-            if (!Number.isFinite(note)) continue;
-            this.currentTouches.set(touch.identifier, note);
-            this.addKeyboardNote(note);
-        }
-        event.preventDefault();
-    }
-
-    touchEnd(event: TouchEvent) {
-        for (const touch of event.changedTouches) {
-            const note = this.currentTouches.get(touch.identifier);
-            this.currentTouches.delete(touch.identifier);
-            if (note !== undefined) this.removeKeyboardNote(note);
-        }
-        event.preventDefault();
-    }
-
     allNotesOff() {
         this.debug.allNotesOffCount += 1;
-        for (const note of [...this.currentKeyboardNotes]) this.removeKeyboardNote(note);
     }
 
     attachToPatchConnection(_patchConnection: PatchConnectionLike, endpointID: string) {
@@ -331,10 +280,6 @@ class MockPianoKeyboard extends HTMLElement {
 
     refreshActiveNoteElements() {
         this.debug.refreshActiveNoteElementsCount += 1;
-    }
-
-    syncSoundingTouchNotes() {
-        this.debug.soundingTouchNotes = [...this.currentKeyboardNotes].sort((left, right) => left - right);
     }
 
     resetDebug() {
