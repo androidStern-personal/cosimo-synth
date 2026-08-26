@@ -12,14 +12,15 @@ These captures use the real composed `DesktopPatchView` interface from the T54 t
 
 The phone measurement pairs Wavetable with Warp and Voices with Semitone inside the compact wavetable graph. The plugin and desktop measurements pair the existing top and bottom controls inside the noncompact wavetable card. `geometry.json` contains the underlying rectangles.
 
-The automated regression additionally covers top, middle, and bottom requested positions at 320 x 568 and 393 x 852, both rail edges, collapsed and expanded states, dynamic Retry Load appearance, a real rail drag, and the compiled 393 x 852 desktop bundle.
+The automated regression additionally covers top, middle, and bottom requested positions at 320 x 568 and 393 x 852, both rail edges, collapsed and expanded states, dynamic Retry Load appearance, visible direct manipulation, collision-constrained no-op dragging, resize during capture, initially actionable drawer sources, real Voice page-arrow clicks, and the compiled 393 x 852 desktop bundle.
 
 ## Reviewed result
 
 - Warp and Semitone return to the same 8 px graph inset as their corresponding left-side controls.
 - All four compact controls remain fully inside the graph and the opposite controls do not intersect.
-- Unsafe Mod-bar requests project the complete visible rail into the nearest free vertical segment; expanding the drawer cannot cover a Voice graph control.
-- Layout projection does not rewrite the stored normalized request, and the rail remains draggable, edge-dockable, expandable, and collapsible.
+- Unsafe automatic Mod-bar requests project the complete visible rail into the nearest free vertical segment without rewriting the stored normalized request. Explicit dragging starts from the displayed rail, tracks the finger, and persists only movement the user can see.
+- Expanding the drawer cannot cover a Voice graph control. The 320 x 568 drawer immediately exposes an actionable source, and its Voice page paddle occupies a measured 44 px edge gutter when vertical avoidance is impossible.
+- A resize received during rail capture is replayed on release, keeping the bar inside the new viewport and above the bottom tabs. The rail remains draggable, edge-dockable, expandable, collapsible, pageable, and source-interactive.
 - The phone, plugin, and desktop wavetable graphics retain their existing bounds and remain visible behind the established overlay controls.
 - No control dimensions, labels, hit areas, bindings, gestures, or modulation behavior changed.
 

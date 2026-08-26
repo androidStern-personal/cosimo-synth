@@ -1736,9 +1736,7 @@ test("T54 projects requested Mod rail docks around every visible Voice control",
                         `${label} layout projection must not rewrite stored dock intent.`,
                     );
                     assertVoiceControlsClear(collapsed, `${label} collapsed`);
-                    if (viewport.height === 852) {
-                        assertVoicePaddlesClear(collapsed, `${label} collapsed`);
-                    }
+                    assertVoicePaddlesClear(collapsed, `${label} collapsed`);
 
                     if (viewport.width === 393 && requested.normalizedY === 0.5) {
                         if (edge === "right") {
@@ -1763,9 +1761,7 @@ test("T54 projects requested Mod rail docks around every visible Voice control",
                     const expanded = await readVoiceCollisionState(page);
                     assert.equal(expanded.expanded, "true");
                     assertVoiceControlsClear(expanded, `${label} expanded`);
-                    if (viewport.height === 852) {
-                        assertVoicePaddlesClear(expanded, `${label} expanded`);
-                    }
+                    assertVoicePaddlesClear(expanded, `${label} expanded`);
                     assert.deepEqual(
                         expanded.storedDock,
                         { version: 2, edge, normalizedY: requested.normalizedY },
@@ -1774,6 +1770,7 @@ test("T54 projects requested Mod rail docks around every visible Voice control",
                     await collapseGlobalModRail(page);
 
                     if (viewport.width === 393 && edge === "right" && requested.normalizedY === 0.5) {
+                        const beforeDrag = await readVoiceCollisionState(page);
                         const handleBounds = await rail.locator(".mobile-global-mod-rail-handle").boundingBox();
                         assert.ok(handleBounds, "The projected rail must retain its drag handle.");
                         const dragStart = {
@@ -1793,9 +1790,9 @@ test("T54 projects requested Mod rail docks around every visible Voice control",
                         assertVoiceControlsClear(dragged, `${label} after requested-position drag`);
                         assert.equal(dragged.storedDock.edge, "right");
                         assert.equal(
-                            dragged.storedDock.normalizedY > 0.55,
+                            dragged.rail.top - beforeDrag.rail.top >= 40,
                             true,
-                            "A drag must persist its requested Y rather than the collision-projected display Y.",
+                            "A direct drag must visibly move from the collision-projected display position.",
                         );
 
                         await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
@@ -1806,7 +1803,12 @@ test("T54 projects requested Mod rail docks around every visible Voice control",
                         assert.deepEqual(
                             restoredDrag.storedDock,
                             dragged.storedDock,
-                            "Leaving and returning to Voice must preserve the dragged request exactly.",
+                            "Leaving and returning to Voice must preserve the explicitly manipulated dock.",
+                        );
+                        assert.equal(
+                            Math.abs(restoredDrag.rail.top - dragged.rail.top) <= 1,
+                            true,
+                            "Returning to Voice must restore the displayed result of direct manipulation.",
                         );
                         assertVoiceControlsClear(restoredDrag, `${label} returned requested-position drag`);
                     }
@@ -1842,6 +1844,251 @@ test("T54 projects requested Mod rail docks around every visible Voice control",
                     await page.close();
                 }
             }
+        }
+    }
+});
+
+const T54_RAIL_POSITION_KEY = "cosimo.mobile-global-mod-rail.position.v1";
+
+async function openT54RailRegressionPage({
+    width,
+    height,
+    edge = "right",
+    normalizedY = 0.5,
+}) {
+    return await openHarnessPage({
+        beforeGoto: async (page) => {
+            await page.setViewportSize({ width, height });
+            await page.addInitScript(({ storageKey, storedEdge, storedY }) => {
+                const initializationKey = `${storageKey}.t54-regression-initialized`;
+                if (sessionStorage.getItem(initializationKey) === null) {
+                    localStorage.setItem(
+                        storageKey,
+                        JSON.stringify({ version: 2, edge: storedEdge, normalizedY: storedY }),
+                    );
+                    sessionStorage.setItem(initializationKey, "true");
+                }
+            }, {
+                storageKey: T54_RAIL_POSITION_KEY,
+                storedEdge: edge,
+                storedY: normalizedY,
+            });
+        },
+    });
+}
+
+async function readT54RailRegressionState(page) {
+    return await page.evaluate((storageKey) => {
+        const rectOf = (element) => {
+            if (!(element instanceof Element)) {
+                return null;
+            }
+            const bounds = element.getBoundingClientRect();
+            return {
+                left: bounds.left,
+                right: bounds.right,
+                top: bounds.top,
+                bottom: bounds.bottom,
+                width: bounds.width,
+                height: bounds.height,
+            };
+        };
+        return {
+            rail: rectOf(document.querySelector('[data-role="mobile-global-mod-rail"]')),
+            tabs: rectOf(document.querySelector('[data-role="mobile-workspace-tabs"]')),
+            storedDock: JSON.parse(localStorage.getItem(storageKey) ?? "null"),
+            viewport: { width: window.innerWidth, height: window.innerHeight },
+        };
+    }, T54_RAIL_POSITION_KEY);
+}
+
+async function moveT54RailGrip(page, deltaY, duringMove = async () => {}) {
+    const grip = page.locator('[data-role="mobile-global-mod-rail-grip"]');
+    const bounds = await grip.boundingBox();
+    assert.ok(bounds, "The T54 regression requires a visible rail grip.");
+    const start = {
+        x: bounds.x + (bounds.width / 2),
+        y: bounds.y + (bounds.height / 2),
+    };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x, start.y + deltaY, { steps: 6 });
+    await page.waitForTimeout(40);
+    const during = await readT54RailRegressionState(page);
+    await duringMove({ start, during });
+    await page.mouse.up();
+    await page.waitForFunction(() => (
+        document.querySelector('[data-role="mobile-global-mod-rail"]')
+            ?.getAttribute("data-decelerating") === "false"
+    ));
+    await page.waitForTimeout(220);
+    return { start, during, after: await readT54RailRegressionState(page) };
+}
+
+test("T54 direct rail movement visibly tracks the finger and reloads at the displayed result", async () => {
+    const page = await openT54RailRegressionPage({ width: 393, height: 852 });
+    try {
+        const before = await readT54RailRegressionState(page);
+        assert.ok(before.rail, "The rail must be visible before direct manipulation.");
+        const movement = await moveT54RailGrip(page, 60);
+        assert.ok(movement.during.rail && movement.after.rail);
+        const duringDelta = movement.during.rail.top - before.rail.top;
+        assert.equal(
+            Math.abs(duringDelta - 60) <= 3,
+            true,
+            `The displayed rail must follow the +60px finger movement; measured ${duringDelta}px.`,
+        );
+        assert.equal(
+            movement.after.rail.top - before.rail.top >= 40,
+            true,
+            "Release must not commit a hidden dock movement while leaving the rail stationary.",
+        );
+        assert.equal(
+            movement.after.storedDock.normalizedY > before.storedDock.normalizedY,
+            true,
+            "A visible downward movement must persist a corresponding downward dock.",
+        );
+
+        const persistedTop = movement.after.rail.top;
+        await page.reload({ waitUntil: "commit" });
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+        const reloaded = await readT54RailRegressionState(page);
+        assert.ok(reloaded.rail);
+        assert.equal(
+            Math.abs(reloaded.rail.top - persistedTop) <= 1,
+            true,
+            `Reload must restore the visibly manipulated rail position: ${JSON.stringify({ persistedTop, reloaded })}`,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("T54 a collision-constrained direct drag commits no invisible dock movement", async () => {
+    const page = await openT54RailRegressionPage({ width: 393, height: 852 });
+    try {
+        const before = await readT54RailRegressionState(page);
+        assert.ok(before.rail);
+        const movement = await moveT54RailGrip(page, -50);
+        assert.ok(movement.during.rail && movement.after.rail);
+        assert.equal(
+            Math.abs(movement.during.rail.top - before.rail.top) <= 1,
+            true,
+            "The Voice-control keep-out must constrain a drag that has no collision-free travel.",
+        );
+        assert.equal(
+            Math.abs(movement.after.rail.top - before.rail.top) <= 1,
+            true,
+            "A constrained release must leave the visible rail where it began.",
+        );
+        assert.deepEqual(
+            movement.after.storedDock,
+            before.storedDock,
+            "A drag with no visible movement must not rewrite the hidden requested dock.",
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("T54 the 320px expanded drawer initially exposes an actionable source on both edges", async () => {
+    for (const edge of ["left", "right"]) {
+        const page = await openT54RailRegressionPage({ width: 320, height: 568, edge });
+        try {
+            await expandGlobalModRail(page);
+            await page.waitForTimeout(160);
+            const sourceState = await page.evaluate(() => {
+                const drawer = document.querySelector('[data-role="mobile-global-mod-rail-drawer"]');
+                if (!(drawer instanceof HTMLElement)) {
+                    throw new Error("Expected the expanded Mod drawer.");
+                }
+                const drawerBounds = drawer.getBoundingClientRect();
+                return Array.from(drawer.querySelectorAll('.rack-mod-page:not([aria-hidden="true"]) .rack-mod-source'))
+                    .filter((source) => source instanceof HTMLElement)
+                    .map((source) => {
+                        const bounds = source.getBoundingClientRect();
+                        const center = {
+                            x: (bounds.left + bounds.right) / 2,
+                            y: (bounds.top + bounds.bottom) / 2,
+                        };
+                        const hit = document.elementFromPoint(center.x, center.y);
+                        return {
+                            label: source.getAttribute("aria-label"),
+                            complete: bounds.top >= drawerBounds.top - 0.5
+                                && bounds.bottom <= drawerBounds.bottom + 0.5,
+                            actionable: hit instanceof Element && source.contains(hit),
+                        };
+                    });
+            });
+            assert.equal(
+                sourceState.some(({ complete, actionable }) => complete && actionable),
+                true,
+                `${edge} 320px drawer must initially show at least one complete actionable source: ${JSON.stringify(sourceState)}`,
+            );
+        } finally {
+            await page.close();
+        }
+    }
+});
+
+test("T54 replays a viewport measurement that occurs during rail capture", async () => {
+    const page = await openT54RailRegressionPage({ width: 393, height: 852 });
+    try {
+        const movement = await moveT54RailGrip(page, 12, async () => {
+            await page.setViewportSize({ width: 393, height: 568 });
+            await page.waitForTimeout(80);
+        });
+        assert.ok(movement.after.rail && movement.after.tabs);
+        assert.deepEqual(movement.after.viewport, { width: 393, height: 568 });
+        assert.equal(
+            movement.after.rail.bottom <= movement.after.viewport.height + 0.5,
+            true,
+            `The post-drag rail must be inside the resized viewport: ${JSON.stringify(movement.after)}`,
+        );
+        assert.equal(
+            movement.after.rail.bottom <= movement.after.tabs.top - 8.5,
+            true,
+            `The deferred measurement must move the rail clear of the bottom tabs: ${JSON.stringify(movement.after)}`,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("T54 the real 320px Voice page arrow advances on both Mod-rail edges", async () => {
+    for (const edge of ["left", "right"]) {
+        const page = await openT54RailRegressionPage({ width: 320, height: 568, edge });
+        try {
+            const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+            const arrow = page.locator('[data-role="mobile-voice-page-next"]');
+            await rail.waitFor();
+            await arrow.waitFor();
+            await page.waitForTimeout(240);
+            const railBounds = await rail.boundingBox();
+            const arrowBounds = await arrow.boundingBox();
+            assert.ok(railBounds && arrowBounds);
+            const arrowCenter = {
+                x: arrowBounds.x + (arrowBounds.width / 2),
+                y: arrowBounds.y + (arrowBounds.height / 2),
+            };
+            await page.mouse.click(arrowCenter.x, arrowCenter.y);
+            await page.waitForTimeout(100);
+            assert.equal(
+                await page.locator('[data-role="mobile-voice-page"]').getAttribute("data-page-name"),
+                "Tune",
+                `${edge} 320px arrow click must advance from Shape to Tune.`,
+            );
+            assert.equal(
+                rectsIntersect(
+                    { left: railBounds.x, right: railBounds.x + railBounds.width, top: railBounds.y, bottom: railBounds.y + railBounds.height },
+                    { left: arrowBounds.x, right: arrowBounds.x + arrowBounds.width, top: arrowBounds.y, bottom: arrowBounds.y + arrowBounds.height },
+                ),
+                false,
+                `${edge} 320px rail must not geometrically cover the page arrow.`,
+            );
+        } finally {
+            await page.close();
         }
     }
 });

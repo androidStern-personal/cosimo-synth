@@ -122,7 +122,7 @@ function validateMeasurement(measurement, scenario) {
     ))) {
         throw new Error(`${scenario.name}: rail intersects a visible Voice control.`);
     }
-    if (scenario.viewport.height >= 852 && measurement.visibleVoicePaddles.some(({ bounds }) => (
+    if (measurement.visibleVoicePaddles.some(({ bounds }) => (
         rectsIntersect(measurement.rail, bounds)
     ))) {
         throw new Error(`${scenario.name}: rail intersects a visible Voice page paddle.`);

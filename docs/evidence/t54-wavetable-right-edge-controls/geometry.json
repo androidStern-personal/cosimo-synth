@@ -252,8 +252,8 @@
       {
         "role": "mobile-voice-page-previous",
         "bounds": {
-          "left": 2,
-          "right": 40,
+          "left": 46,
+          "right": 84,
           "top": 231,
           "bottom": 270,
           "width": 38,
