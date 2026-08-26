@@ -643,7 +643,16 @@ export function SubwayMapColumn({
     }
     flushGroup();
 
-    return <>{rendered}</>;
+    return (
+        <>
+            {rendered}
+            <span
+                className="subway-trunk-tail-fill"
+                data-role="rack-trunk-tail-fill"
+                aria-hidden="true"
+            />
+        </>
+    );
 }
 
 function SubwayFork({

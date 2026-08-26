@@ -1279,10 +1279,11 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
     const handlersRef = useRef(callbacks);
     handlersRef.current = callbacks;
     const autoScrollRef = useRef<{
+        clientX: number;
         clientY: number;
         frame: number | null;
         referenceElement: HTMLElement | null;
-    }>({ clientY: 0, frame: null, referenceElement: null });
+    }>({ clientX: 0, clientY: 0, frame: null, referenceElement: null });
     const dragRef = useRef<{
         pointerId: number;
         pointerType: string;
@@ -1386,7 +1387,33 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         if (autoScrollRef.current.frame !== null) {
             cancelAnimationFrame(autoScrollRef.current.frame);
         }
-        autoScrollRef.current = { clientY: 0, frame: null, referenceElement: null };
+        autoScrollRef.current = { clientX: 0, clientY: 0, frame: null, referenceElement: null };
+    }, []);
+
+    const sourceAutoScrollDelta = useCallback((surface: HTMLElement, clientY: number) => {
+        const bounds = surface.getBoundingClientRect();
+        const edgeZone = Math.min(52, bounds.height * 0.18);
+        const distanceFromTop = clientY - bounds.top;
+        const distanceFromBottom = bounds.bottom - clientY;
+        const topStrength = distanceFromTop < edgeZone
+            ? clamp((edgeZone - Math.max(0, distanceFromTop)) / edgeZone, 0, 1)
+            : 0;
+        const bottomStrength = distanceFromBottom < edgeZone
+            ? clamp((edgeZone - Math.max(0, distanceFromBottom)) / edgeZone, 0, 1)
+            : 0;
+        return (bottomStrength - topStrength) * 7;
+    }, []);
+
+    const graphScrollSurfaceAtPoint = useCallback((
+        referenceElement: HTMLElement,
+        clientX: number,
+        clientY: number,
+    ) => {
+        const graph = elementAtPointInRenderRoot(referenceElement, clientX, clientY)
+            ?.closest<HTMLElement>('[data-role="rack-module-list"]') ?? null;
+        return graph !== null && graph.scrollHeight > graph.clientHeight + 1
+            ? graph
+            : null;
     }, []);
 
     const runSourceAutoScroll = useCallback(() => {
@@ -1397,37 +1424,43 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             return;
         }
 
-        const renderRoot = referenceElement.getRootNode();
-        const activePanel = (renderRoot instanceof Document || renderRoot instanceof ShadowRoot)
-            ? renderRoot.querySelector<HTMLElement>('[data-role^="mobile-workspace-panel-"]:not([hidden])')
-            : null;
-        if (activePanel) {
-            const bounds = activePanel.getBoundingClientRect();
-            const edgeZone = Math.min(52, bounds.height * 0.18);
-            const distanceFromTop = state.clientY - bounds.top;
-            const distanceFromBottom = bounds.bottom - state.clientY;
-            const topStrength = distanceFromTop < edgeZone
-                ? clamp((edgeZone - Math.max(0, distanceFromTop)) / edgeZone, 0, 1)
-                : 0;
-            const bottomStrength = distanceFromBottom < edgeZone
-                ? clamp((edgeZone - Math.max(0, distanceFromBottom)) / edgeZone, 0, 1)
-                : 0;
-            const delta = (bottomStrength - topStrength) * 7;
-            if (Math.abs(delta) > 0.2) {
-                activePanel.scrollTop += delta;
+        const graphSurface = graphScrollSurfaceAtPoint(
+            referenceElement,
+            state.clientX,
+            state.clientY,
+        );
+        const graphDelta = graphSurface === null
+            ? 0
+            : sourceAutoScrollDelta(graphSurface, state.clientY);
+        if (graphSurface !== null && Math.abs(graphDelta) > 0.2) {
+            graphSurface.scrollTop += graphDelta;
+        } else {
+            const renderRoot = referenceElement.getRootNode();
+            const activePanel = (renderRoot instanceof Document || renderRoot instanceof ShadowRoot)
+                ? renderRoot.querySelector<HTMLElement>('[data-role^="mobile-workspace-panel-"]:not([hidden])')
+                : null;
+            if (activePanel) {
+                const panelDelta = sourceAutoScrollDelta(activePanel, state.clientY);
+                if (Math.abs(panelDelta) > 0.2) {
+                    activePanel.scrollTop += panelDelta;
+                }
             }
         }
 
         autoScrollRef.current.frame = requestAnimationFrame(runSourceAutoScroll);
-    }, [stopSourceAutoScroll]);
+    }, [graphScrollSurfaceAtPoint, sourceAutoScrollDelta, stopSourceAutoScroll]);
 
-    const updateSourceAutoScroll = useCallback((referenceElement: HTMLElement, clientY: number) => {
-        autoScrollRef.current.clientY = clientY;
+    const updateSourceAutoScroll = useCallback((referenceElement: HTMLElement, dragPoint: ClientPoint) => {
+        autoScrollRef.current.clientX = dragPoint.x;
+        autoScrollRef.current.clientY = dragPoint.y;
         autoScrollRef.current.referenceElement = referenceElement;
         if (autoScrollRef.current.frame === null) {
             autoScrollRef.current.frame = requestAnimationFrame(runSourceAutoScroll);
         }
-    }, [runSourceAutoScroll]);
+        const graphSurface = graphScrollSurfaceAtPoint(referenceElement, dragPoint.x, dragPoint.y);
+        return graphSurface !== null
+            && Math.abs(sourceAutoScrollDelta(graphSurface, dragPoint.y)) > 0.2;
+    }, [graphScrollSurfaceAtPoint, runSourceAutoScroll, sourceAutoScrollDelta]);
 
     const finishSourceGesture = useCallback((
         pointerId: number,
@@ -1584,21 +1617,34 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
                     drag.lastDragPoint,
                     { x: event.clientX, y: event.clientY },
                 );
+                const previousDragPoint = drag.lastDragPoint;
+                drag.lastPointerPoint = { x: event.clientX, y: event.clientY };
+                drag.lastDragPoint = dragPoint;
+                const graphEdgeOwnsPreview = updateSourceAutoScroll(event.currentTarget, dragPoint);
+                if (graphEdgeOwnsPreview) {
+                    updateHoveredTarget(null, drag.source);
+                    clearDwellTracker();
+                    handlersRef.current.onSourceDragChange?.({
+                        source: drag.source,
+                        clientX: dragPoint.x,
+                        clientY: dragPoint.y,
+                        targetCaptured: false,
+                    });
+                    handlersRef.current.onHoverTarget(drag.source, null);
+                    return;
+                }
                 const target = resolveModulationTargetForDrag(
                     event.currentTarget,
                     dragPoint,
-                    drag.lastDragPoint,
+                    previousDragPoint,
                     drag.hoveredTarget,
                 );
-                drag.lastPointerPoint = { x: event.clientX, y: event.clientY };
-                drag.lastDragPoint = dragPoint;
                 handlersRef.current.onSourceDragChange?.({
                     source: drag.source,
                     clientX: dragPoint.x,
                     clientY: dragPoint.y,
                     targetCaptured: target !== null,
                 });
-                updateSourceAutoScroll(event.currentTarget, dragPoint.y);
                 updateHoveredTarget(target?.element ?? null, drag.source);
                 updateDwellTracker(event.currentTarget, dragPoint);
                 handlersRef.current.onHoverTarget(drag.source, target?.targetKind ?? null);

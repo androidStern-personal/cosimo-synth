@@ -11,6 +11,7 @@ import { normalizeModulationState } from "../patch_gui/modulation.js";
 import {
     clearHarnessDebugLog,
     editRackParameterValue,
+    expandGlobalModRail,
     getHarnessSnapshot,
     laneParamWireLocation,
     openHarnessPage,
@@ -23,6 +24,15 @@ import { decodePng, pngPixelAt, rgbDistance } from "./helpers/png_pixels.mjs";
 
 const readStoredLaneDoc = (snapshot) => JSON.parse(String(snapshot.storedState["lane.v1"]));
 const evidenceDirectory = path.resolve(import.meta.dirname, "..", "build", "fx-graph-foundation");
+
+function emptyLaneDocJson() {
+    return JSON.stringify({
+        format: "cosimo.lane",
+        version: 2,
+        devices: {},
+        chain: [],
+    });
+}
 
 function populatedThreeBandLaneDocJson() {
     const params = createDefaultLaneState().params;
@@ -722,6 +732,175 @@ test("a maximum natural-height graph uses one root scroller with truthful cues a
         assert.equal(await page.locator('.subway-scroll-cue-top.is-visible').count(), 1);
         assert.equal(await page.locator('.subway-scroll-cue-bottom.is-visible').count(), 0);
     } finally {
+        await page.close();
+    }
+});
+
+test("empty and short racks extend the final trunk to the graph viewport bottom", async () => {
+    await fs.mkdir(evidenceDirectory, { recursive: true });
+    const cases = [
+        { name: "empty", laneDoc: emptyLaneDocJson() },
+        { name: "short", laneDoc: "fresh" },
+    ];
+
+    for (const fixture of cases) {
+        const page = await openHarnessPage({
+            laneDoc: fixture.laneDoc,
+            beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+        });
+        try {
+            await page.click('[data-role="mobile-workspace-tab-fx"]');
+            const graph = page.locator('[data-role="rack-module-list"]');
+            await graph.waitFor();
+            const layout = await graph.evaluate((element) => {
+                const bounds = element.getBoundingClientRect();
+                const trunkAnchors = Array.from(element.querySelectorAll(
+                    '[data-role="rack-ghost-add"][data-lane-path^="trunk:"]',
+                ));
+                const lastAnchorRow = trunkAnchors.at(-1)?.closest(".subway-ghost-row");
+                const lastAnchorBounds = lastAnchorRow?.getBoundingClientRect();
+                return {
+                    width: bounds.width,
+                    height: bounds.height,
+                    unfilledHeight: lastAnchorBounds === undefined
+                        ? bounds.height
+                        : bounds.bottom - lastAnchorBounds.bottom,
+                };
+            });
+            assert.equal(
+                layout.unfilledHeight > 40,
+                true,
+                `${fixture.name}: fixture must leave a meaningful short-rack tail`,
+            );
+            const png = decodePng(await graph.screenshot({ animations: "disabled" }));
+            const bottomTrunkDistance = minimumExpectedStrokeDistance(
+                png,
+                { width: layout.width, height: layout.height },
+                { x: layout.width / 2, y: layout.height - 10 },
+                [230, 225, 214],
+            );
+            assert.equal(
+                bottomTrunkDistance <= 90,
+                true,
+                `${fixture.name}: final trunk must reach the graph bottom; RGB distance ${bottomTrunkDistance}`,
+            );
+            if (fixture.name === "short") {
+                await page.screenshot({
+                    path: path.join(evidenceDirectory, "variant-c-short-tail-phone.png"),
+                    animations: "disabled",
+                });
+            }
+        } finally {
+            await page.close();
+        }
+    }
+});
+
+test("a modulation-source drag edge-scrolls the graph and still drops after leaving the edge", async () => {
+    await fs.mkdir(evidenceDirectory, { recursive: true });
+    const page = await openHarnessPage({
+        laneDoc: maximumSerialLaneDocJson(),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        const graph = page.locator('[data-role="rack-module-list"]');
+        await graph.waitFor();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-module-list"]')?.classList.contains("has-overflow")
+        ));
+        await expandGlobalModRail(page);
+        const source = page.locator('[data-role="rack-mod-source-env-1"]');
+        const sourceBox = await source.boundingBox();
+        const graphBox = await graph.boundingBox();
+        assert.ok(sourceBox && graphBox);
+        await page.mouse.move(
+            sourceBox.x + (sourceBox.width / 2),
+            sourceBox.y + (sourceBox.height / 2),
+        );
+        await page.mouse.down();
+        await page.mouse.move(graphBox.x + (graphBox.width / 2), graphBox.y + (graphBox.height / 2), {
+            steps: 5,
+        });
+        await page.locator('[data-role="mobile-global-mod-source-ghost"]').waitFor();
+
+        const bottomEdge = {
+            x: graphBox.x + (graphBox.width / 2),
+            y: graphBox.y + graphBox.height - 8,
+        };
+        await page.mouse.move(bottomEdge.x, bottomEdge.y, { steps: 4 });
+        await page.waitForFunction(() => {
+            const element = document.querySelector('[data-role="rack-module-list"]');
+            return element instanceof HTMLElement && element.scrollTop >= 48;
+        }, undefined, { timeout: 2_500 });
+        const afterBottomEdge = await graph.evaluate((element) => element.scrollTop);
+        assert.equal(
+            await page.locator('[data-role="mobile-global-mod-source-ghost"]').count(),
+            1,
+            "edge scrolling must preserve the active source drag",
+        );
+        assert.equal(
+            await page.evaluate(({ x, y }) => (
+                document.elementFromPoint(x, y)?.closest("[data-device-id], [data-role='rack-ghost-add']") !== null
+            ), bottomEdge),
+            true,
+            "a rack target under the edge pointer must not prevent navigation scrolling",
+        );
+        await page.screenshot({
+            path: path.join(evidenceDirectory, "variant-c-mod-drag-edge-scroll-phone.png"),
+            animations: "disabled",
+        });
+
+        const topEdge = {
+            x: graphBox.x + (graphBox.width / 2),
+            y: graphBox.y + 8,
+        };
+        await page.mouse.move(topEdge.x, topEdge.y, { steps: 4 });
+        await page.waitForFunction((previousScrollTop) => {
+            const element = document.querySelector('[data-role="rack-module-list"]');
+            return element instanceof HTMLElement && element.scrollTop <= previousScrollTop - 24;
+        }, afterBottomEdge, { timeout: 2_500 });
+
+        const hoverPoint = await graph.evaluate((element) => {
+            const bounds = element.getBoundingClientRect();
+            const x = bounds.left + (bounds.width / 2);
+            const y = bounds.top + (bounds.height / 2);
+            const station = document.elementFromPoint(x, y)?.closest("[data-device-id]");
+            return station instanceof HTMLElement
+                ? { x, y, effectId: station.dataset.effectId ?? null }
+                : null;
+        });
+        assert.ok(hoverPoint?.effectId);
+        await page.mouse.move(hoverPoint.x, hoverPoint.y, { steps: 3 });
+        await page.waitForFunction((effectId) => (
+            document.querySelector(`.subway-station-row.is-selected[data-effect-id="${CSS.escape(effectId)}"], .subway-station-cell.is-selected[data-effect-id="${CSS.escape(effectId)}"]`) !== null
+        ), hoverPoint.effectId, { timeout: 2_500 });
+
+        const target = page.locator(
+            '[data-role="effects-rack-card"] [data-drag-creation="creatable"]:visible',
+        ).first();
+        await target.waitFor();
+        const targetKind = await target.getAttribute("data-modulation-target-kind");
+        const targetBox = await target.boundingBox();
+        assert.ok(targetKind && targetBox);
+        await page.mouse.move(
+            targetBox.x + (targetBox.width / 2),
+            targetBox.y + (targetBox.height / 2),
+            { steps: 5 },
+        );
+        await page.mouse.up();
+        await waitForHarnessSnapshot(
+            page,
+            "edge-scrolled source drag creates the final hovered mapping",
+            (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "env"
+                && route.sourceSlot === 1
+                && route.targetKind === targetKind
+            )),
+        );
+    } finally {
+        await page.mouse.up().catch(() => {});
         await page.close();
     }
 });
