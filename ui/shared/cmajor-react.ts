@@ -57,11 +57,18 @@ export type PatchConnectionLike = {
     /** Browser/native restore bridge: the live two-phase transaction already
         committed this reference, so a stored-state echo must not reinstall it. */
     acceptCommittedBounceDocument?: (value: unknown) => unknown;
+    /** Test/bare adapters may opt in only when each hook initialValue is authoritative patch truth. */
+    parameterInitialValuesAreAuthoritative?: true;
 };
+
+/** Whether the current endpoint's pre-edit host value has been observed authoritatively. */
+export type PatchParameterHostBaseline<TValue> =
+    | { readonly _tag: "pending" }
+    | { readonly _tag: "host-confirmed"; readonly value: TValue };
 
 type ParameterBinding = {
     value: unknown;
-    hasCurrentValue: boolean;
+    hostBaseline: PatchParameterHostBaseline<unknown>;
     setValue: (nextValue: unknown) => void;
     beginGesture: () => void;
     endGesture: () => void;
@@ -124,9 +131,16 @@ export function usePatchParameter(
 ): ParameterBinding {
     const patchConnection = usePatchConnection();
     const [value, setValue] = useState<unknown>(initialValue);
-    const [currentValueSource, setCurrentValueSource] = useState<{
+    const [hostBaselineSource, setHostBaselineSource] = useState<{
         readonly patchConnection: PatchConnectionLike;
         readonly endpointID: string;
+        readonly value: unknown;
+    } | null>(null);
+    const hostBaselineSourceRef = useRef(hostBaselineSource);
+    const localWriteBeforeHostBaselineRef = useRef<{
+        readonly patchConnection: PatchConnectionLike;
+        readonly endpointID: string;
+        readonly value: unknown;
     } | null>(null);
     const initialValueRef = useRef(initialValue);
     const valueRef = useRef<unknown>(initialValue);
@@ -141,56 +155,89 @@ export function usePatchParameter(
 
         setValue(nextValue);
     }, [presentationPriority]);
-    const markCurrentValue = useCallback(() => {
-        setCurrentValueSource((previousSource) => (
+    const confirmHostBaseline = useCallback((nextValue: unknown) => {
+        const previousSource = hostBaselineSourceRef.current;
+        if (
             previousSource?.patchConnection === patchConnection
-                && previousSource.endpointID === endpointID
-                ? previousSource
-                : { patchConnection, endpointID }
-        ));
+            && previousSource.endpointID === endpointID
+        ) {
+            return;
+        }
+
+        const nextSource = { patchConnection, endpointID, value: nextValue };
+        hostBaselineSourceRef.current = nextSource;
+        localWriteBeforeHostBaselineRef.current = null;
+        setHostBaselineSource(nextSource);
     }, [endpointID, patchConnection]);
 
     useEffect(() => {
+        localWriteBeforeHostBaselineRef.current = null;
         valueRef.current = initialValueRef.current;
         setValue(initialValueRef.current);
         if (!active) {
-            markCurrentValue();
+            if (patchConnection.parameterInitialValuesAreAuthoritative === true) {
+                confirmHostBaseline(initialValueRef.current);
+            }
             return undefined;
         }
 
         let listening = true;
         const listener = (nextValue: unknown) => {
-            if (listening) {
-                presentValue(nextValue);
-                markCurrentValue();
+            if (!listening) {
+                return;
+            }
+
+            const baselineSource = hostBaselineSourceRef.current;
+            const hasCurrentHostBaseline = baselineSource?.patchConnection === patchConnection
+                && baselineSource.endpointID === endpointID;
+            const pendingLocalWrite = localWriteBeforeHostBaselineRef.current;
+            const localWriteOwnsPresentation = !hasCurrentHostBaseline
+                && pendingLocalWrite?.patchConnection === patchConnection
+                && pendingLocalWrite.endpointID === endpointID;
+
+            if (localWriteOwnsPresentation) {
+                if (Object.is(nextValue, pendingLocalWrite.value)) {
+                    return;
+                }
+
+                confirmHostBaseline(nextValue);
+                return;
+            }
+
+            presentValue(nextValue);
+            if (!hasCurrentHostBaseline) {
+                confirmHostBaseline(nextValue);
             }
         };
 
         patchConnection.addParameterListener?.(endpointID, listener);
         patchConnection.requestParameterValue?.(endpointID);
-        if (
-            typeof patchConnection.addParameterListener !== "function"
-            || typeof patchConnection.requestParameterValue !== "function"
-        ) {
-            markCurrentValue();
+        if (patchConnection.parameterInitialValuesAreAuthoritative === true) {
+            confirmHostBaseline(initialValueRef.current);
         }
 
         return () => {
             listening = false;
             patchConnection.removeParameterListener?.(endpointID, listener);
         };
-    }, [active, endpointID, markCurrentValue, patchConnection, presentValue]);
+    }, [active, confirmHostBaseline, endpointID, patchConnection, presentValue]);
 
     const setParameterValue = useCallback((nextValue: unknown) => {
         // Every write through this hook is a direct user edit — programmatic
         // bulk writes (preset load, host restore) take the connection directly
         // and never construct bindings (T12 seam A).
         const changed = !Object.is(nextValue, valueRef.current);
+        const baselineSource = hostBaselineSourceRef.current;
+        if (
+            baselineSource?.patchConnection !== patchConnection
+            || baselineSource.endpointID !== endpointID
+        ) {
+            localWriteBeforeHostBaselineRef.current = { patchConnection, endpointID, value: nextValue };
+        }
         patchConnection.sendEventOrValue?.(endpointID, nextValue);
         presentValue(nextValue);
-        markCurrentValue();
         reportUserParameterEdit({ endpointID, changed });
-    }, [endpointID, markCurrentValue, patchConnection, presentValue]);
+    }, [endpointID, patchConnection, presentValue]);
 
     const beginGesture = useCallback(() => {
         gestureActiveRef.current = true;
@@ -206,12 +253,14 @@ export function usePatchParameter(
 
     return useMemo(() => ({
         value,
-        hasCurrentValue: currentValueSource?.patchConnection === patchConnection
-            && currentValueSource.endpointID === endpointID,
+        hostBaseline: hostBaselineSource?.patchConnection === patchConnection
+            && hostBaselineSource.endpointID === endpointID
+            ? { _tag: "host-confirmed" as const, value: hostBaselineSource.value }
+            : { _tag: "pending" as const },
         setValue: setParameterValue,
         beginGesture,
         endGesture,
-    }), [beginGesture, currentValueSource, endGesture, endpointID, patchConnection, setParameterValue, value]);
+    }), [beginGesture, endGesture, endpointID, hostBaselineSource, patchConnection, setParameterValue, value]);
 }
 
 export function usePatchEndpoint<TValue = unknown>(

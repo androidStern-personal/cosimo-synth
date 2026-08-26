@@ -2133,7 +2133,7 @@ test("articulation capture and recall edit only the selected oscillator", async 
     }
 });
 
-test("an articulation captured on B preserves the inherited base when C is first visited", async () => {
+test("cross-oscillator articulation bases stay authoritative through delayed host responses", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -2218,6 +2218,177 @@ test("an articulation captured on B preserves the inherited base when C is first
         );
     } finally {
         await page.close();
+    }
+
+    const delayedMutePage = await openHarnessPage();
+
+    try {
+        await delayedMutePage.getByRole("tab", { name: "Oscillator B" }).click();
+        await delayedMutePage.waitForSelector(
+            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
+        );
+        await delayedMutePage.waitForSelector('[data-role="oscillator-mute"][aria-pressed="true"]');
+        await delayedMutePage.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
+        await waitForHarnessSnapshot(
+            delayedMutePage,
+            "first articulation captured from B before delayed C mute response",
+            (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 1,
+        );
+
+        await delayedMutePage.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.deferParameterResponse("oscCMute");
+        });
+        await delayedMutePage.getByRole("tab", { name: "Oscillator C" }).click();
+        await delayedMutePage.waitForSelector(
+            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="C"]',
+        );
+        await delayedMutePage.waitForSelector('[data-role="oscillator-mute"][aria-pressed="true"]');
+        await delayedMutePage.getByRole("button", { name: "Mute selected oscillator" }).click();
+        await waitForHarnessSnapshot(
+            delayedMutePage,
+            "C local mute edit while its requested baseline is deferred",
+            (snapshot) => Number(snapshot.parameterValues.oscCMute) === 0,
+        );
+
+        const captureButton = delayedMutePage.getByRole("button", {
+            name: "Capture current parameters as a new articulation",
+        });
+        assert.equal(
+            await captureButton.isDisabled(),
+            true,
+            "capture must stay unavailable until C's pre-edit mute baseline is host-confirmed",
+        );
+        await captureButton.evaluate((button) => button.click());
+        assert.equal(
+            JSON.parse(String((await getHarnessSnapshot(delayedMutePage)).storedState[ARTICULATION_STATE_KEY])).slots.length,
+            1,
+            "a forced click cannot persist a lossy slot while the base is unknown",
+        );
+
+        await delayedMutePage.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.releaseParameterResponse("oscCMute");
+        });
+        await delayedMutePage.waitForFunction(() => (
+            document.querySelector('[data-role="articulation-capture"]')?.hasAttribute("disabled") === false
+                && document.querySelector('[data-role="oscillator-mute"]')?.getAttribute("aria-pressed") === "false"
+        ));
+        await captureButton.click();
+        const captured = await waitForHarnessSnapshot(
+            delayedMutePage,
+            "C explicit-zero articulation after delayed mute baseline",
+            (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 2,
+        );
+        const bank = JSON.parse(String(captured.storedState[ARTICULATION_STATE_KEY]));
+        assert.equal(bank.slots[1].overrides["oscC.mute"], 0);
+    } finally {
+        await delayedMutePage.close();
+    }
+
+    const delayedAllPage = await openHarnessPage();
+    const oscillatorCEndpoints = [
+        "oscCWavetablePosition",
+        "oscCPan",
+        "oscCOctave",
+        "oscCSemitone",
+        "oscCFineCents",
+        "oscCVolumeDb",
+        "oscCMute",
+        "oscCSolo",
+        "oscCWarpMode",
+        "oscCWarpAmount",
+        "oscCUnisonVoices",
+        "oscCUnisonDetune",
+        "oscCUnisonBlend",
+        "oscCUnisonWidth",
+        "oscCPhase",
+        "oscCPhaseRandom",
+        "oscCRetrigger",
+        "oscCUnisonDetuneMode",
+        "oscCUnisonStackMode",
+        "oscCUnisonPositionSpread",
+        "oscCUnisonWarpSpread",
+    ];
+
+    try {
+        await delayedAllPage.getByRole("tab", { name: "Oscillator B" }).click();
+        await delayedAllPage.waitForSelector(
+            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
+        );
+        await delayedAllPage.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
+        await waitForHarnessSnapshot(
+            delayedAllPage,
+            "first articulation captured before C has been visited",
+            (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 1,
+        );
+
+        await delayedAllPage.evaluate((endpointIDs) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("oscCVolumeDb", -9);
+            endpointIDs.forEach((endpointID) => {
+                window.__COSIMO_DESKTOP_HARNESS__.deferParameterResponse(endpointID);
+            });
+        }, oscillatorCEndpoints);
+        await delayedAllPage.getByRole("tab", { name: "Oscillator C" }).click();
+        await delayedAllPage.waitForSelector(
+            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="C"]',
+        );
+        assert.equal(
+            await delayedAllPage.locator('[data-role="oscillator-level"]').getAttribute("aria-valuenow"),
+            "0",
+            "the screen remains stale while C's authoritative values are unavailable",
+        );
+
+        await delayedAllPage.getByRole("button", { name: "Mute selected oscillator" }).click();
+        await waitForHarnessSnapshot(
+            delayedAllPage,
+            "local C mute edit while every requested C baseline is deferred",
+            (snapshot) => Number(snapshot.parameterValues.oscCMute) === 0,
+        );
+        const captureButton = delayedAllPage.getByRole("button", {
+            name: "Capture current parameters as a new articulation",
+        });
+        assert.equal(await captureButton.isDisabled(), true);
+        await captureButton.evaluate((button) => button.click());
+        assert.equal(
+            JSON.parse(String((await getHarnessSnapshot(delayedAllPage)).storedState[ARTICULATION_STATE_KEY])).slots.length,
+            1,
+            "a stale screen snapshot cannot become a new articulation base",
+        );
+
+        await delayedAllPage.evaluate((endpointIDs) => {
+            endpointIDs.forEach((endpointID) => {
+                window.__COSIMO_DESKTOP_HARNESS__.releaseParameterResponse(endpointID);
+            });
+        }, oscillatorCEndpoints);
+        await delayedAllPage.waitForFunction(() => (
+            document.querySelector('[data-role="articulation-capture"]')?.hasAttribute("disabled") === false
+                && document.querySelector('[data-role="oscillator-level"]')?.getAttribute("aria-valuenow") === "-9"
+                && document.querySelector('[data-role="oscillator-mute"]')?.getAttribute("aria-pressed") === "false"
+        ));
+
+        await captureButton.click();
+        const captured = await waitForHarnessSnapshot(
+            delayedAllPage,
+            "C articulation after its complete authoritative base arrives",
+            (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 2,
+        );
+        const bank = JSON.parse(String(captured.storedState[ARTICULATION_STATE_KEY]));
+        assert.equal(bank.slots[1].overrides["oscC.mute"], 0);
+        assert.equal(
+            Object.hasOwn(bank.slots[1].overrides, "oscC.volumeDb"),
+            false,
+            "the confirmed -9 dB host value is the base, not stale 0 dB presentation",
+        );
+
+        await delayedAllPage.locator('[data-role="articulation-card"]').first().click();
+        await delayedAllPage.waitForSelector('[data-role="oscillator-mute"][aria-pressed="true"]');
+        await delayedAllPage.locator('[data-role="articulation-card"]').nth(1).click();
+        await delayedAllPage.waitForSelector('[data-role="oscillator-mute"][aria-pressed="false"]');
+        assert.equal(
+            await delayedAllPage.locator('[data-role="oscillator-level"]').getAttribute("aria-valuenow"),
+            "-9",
+        );
+    } finally {
+        await delayedAllPage.close();
     }
 });
 

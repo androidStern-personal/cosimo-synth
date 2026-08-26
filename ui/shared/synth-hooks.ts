@@ -202,6 +202,20 @@ function requireLaneParameterDescriptor(endpointID: string) {
     return descriptor;
 }
 
+function readHostConfirmedParameterBase<TKey extends string>(
+    bindings: Readonly<Record<TKey, PatchControlBinding<number>>>,
+): Record<TKey, number> | null {
+    const values = {} as Record<TKey, number>;
+    for (const key of Object.keys(bindings) as TKey[]) {
+        const baseline = bindings[key].hostBaseline;
+        if (baseline?._tag !== "host-confirmed") {
+            return null;
+        }
+        values[key] = baseline.value;
+    }
+    return values;
+}
+
 
 export const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 export const EFFECTIVE_WARP_STATE_ENDPOINT_ID = "effectiveWarpState";
@@ -479,6 +493,7 @@ export type SynthPatchViewModel = {
         slotName: string;
     } | null;
     hasHydratedArticulations: boolean;
+    canCaptureArticulation: boolean;
     selectedMsegSlot: number;
     selectedEnvelopeSlot: number;
     selectedEnvelope: ModulationEnvelope | null;
@@ -1303,7 +1318,7 @@ function articulationStatesEqual(left: ArticulationsState, right: ArticulationsS
 function useStoredArticulationEditorState(
     modulationBridge: RefObject<ReturnType<typeof acquireModulationRuntimeBridge> | null>,
     modulationState: ModulationState | null,
-    getBaseSnapshot: () => ArticulationSnapshot,
+    getBaseSnapshot: () => ArticulationSnapshot | null,
     oscillatorID: OscillatorID,
 ) {
     const patchConnection = usePatchConnection();
@@ -1339,20 +1354,30 @@ function useStoredArticulationEditorState(
     }, []);
 
     const applyCurrentState = useCallback((nextState: ArticulationsState) => {
+        stateRef.current = nextState;
+        setState((previousState) => articulationStatesEqual(previousState, nextState) ? previousState : nextState);
+
+        const baseSnapshot = getBaseSnapshotRef.current();
+        if (baseSnapshot === null) {
+            return;
+        }
+
         const routes = modulationBridge.current?.getState().routes ?? modulationStateRef.current?.routes ?? [];
         const nextBank = projectCurrentArticulationsToEditorBank(
             nextState,
-            getBaseSnapshotRef.current(),
+            baseSnapshot,
             routes,
             oscillatorID,
         );
-        stateRef.current = nextState;
         bankRef.current = nextBank;
-        setState((previousState) => articulationStatesEqual(previousState, nextState) ? previousState : nextState);
         setBank((previousBank) => (
             articulationEditorStatesEqual(previousBank, nextBank) ? previousBank : nextBank
         ));
     }, [modulationBridge, oscillatorID, patchConnection]);
+
+    const refreshProjection = useCallback(() => {
+        applyCurrentState(stateRef.current);
+    }, [applyCurrentState]);
 
     const applyIncomingState = useCallback((
         rawValue: unknown,
@@ -1382,6 +1407,8 @@ function useStoredArticulationEditorState(
     }, [applyCurrentState, consumePendingEcho]);
 
     useEffect(() => {
+        setHasHydrated(false);
+        pendingEchoTokensRef.current.clear();
         const handleStoredStateValue = (message: unknown) => {
             if (!message || typeof message !== "object") return;
             const nextMessage = message as { key?: unknown; value?: unknown };
@@ -1460,8 +1487,9 @@ function useStoredArticulationEditorState(
         bank,
         bankRef,
         hasHydrated,
+        refreshProjection,
         setAndPersistState,
-    }), [bank, hasHydrated, setAndPersistState, state]);
+    }), [bank, hasHydrated, refreshProjection, setAndPersistState, state]);
 }
 
 function parsePresetStoredStateValue(rawValue: unknown, label: string) {
@@ -2847,22 +2875,29 @@ export function useSynthPatchViewModel({
         null,
     );
     const { state: modulationState, bridge: modulationBridge } = useModulationState();
-    const captureCurrentArticulationSnapshotRef = useRef<() => ArticulationSnapshot>(
-        createDefaultArticulationSnapshot,
-    );
     const articulationPatchBaseRef = useRef<Partial<Record<OscillatorID, ArticulationSnapshot>>>({});
-    useEffect(() => {
+    const articulationPatchBaseConnectionRef = useRef(patchConnection);
+    const [articulationPatchBaseRevision, setArticulationPatchBaseRevision] = useState(0);
+    if (articulationPatchBaseConnectionRef.current !== patchConnection) {
+        articulationPatchBaseConnectionRef.current = patchConnection;
         articulationPatchBaseRef.current = {};
+    }
+    useEffect(() => {
+        setArticulationPatchBaseRevision((revision) => revision + 1);
     }, [patchConnection]);
     const setArticulationPatchBase = useCallback((
         targetOscillatorID: OscillatorID,
         snapshot: ArticulationSnapshot,
     ) => {
+        const wasMissing = articulationPatchBaseRef.current[targetOscillatorID] === undefined;
         articulationPatchBaseRef.current[targetOscillatorID] = snapshot;
+        if (wasMissing) {
+            setArticulationPatchBaseRevision((revision) => revision + 1);
+        }
     }, []);
     const currentArticulationPatchBase = useCallback(() => (
         articulationPatchBaseRef.current[oscillatorID]
-        ?? captureCurrentArticulationSnapshotRef.current()
+        ?? null
     ), [oscillatorID]);
     const articulationBankState = useStoredArticulationEditorState(
         modulationBridge,
@@ -3210,49 +3245,96 @@ export function useSynthPatchViewModel({
         wavetablePosition.value,
     ]);
 
-    captureCurrentArticulationSnapshotRef.current = captureCurrentArticulationSnapshot;
+    const hostConfirmedSelectedOscillatorPatchBase = useMemo((): ArticulationSnapshot | null => {
+        const hostParameters = readHostConfirmedParameterBase({
+            wavetablePosition,
+            pan,
+            octave: oscillatorOctave,
+            semitone: oscillatorSemitone,
+            fineCents: oscillatorFineCents,
+            volumeDb: oscillatorVolumeDb,
+            mute: oscillatorMute,
+            solo: oscillatorSolo,
+            warpMode,
+            warpAmount,
+            unisonVoices,
+            unisonDetune,
+            unisonBlend,
+            unisonWidth,
+            unisonPhase,
+            unisonRandom,
+            unisonPhaseMode,
+            unisonDetuneMode,
+            unisonStackMode,
+            unisonWavetablePositionSpread,
+            unisonWarpSpread,
+        });
+        if (hostParameters === null) {
+            return null;
+        }
 
-    const selectedOscillatorArticulationBindingsHaveCurrentValues = [
-        wavetablePosition,
-        pan,
+        const currentSnapshot = captureCurrentArticulationSnapshot();
+        return normalizeArticulationSnapshot({
+            ...currentSnapshot,
+            parameters: {
+                ...currentSnapshot.parameters,
+                ...hostParameters,
+            },
+        });
+    }, [
+        captureCurrentArticulationSnapshot,
+        oscillatorFineCents,
+        oscillatorMute,
         oscillatorOctave,
         oscillatorSemitone,
-        oscillatorFineCents,
-        oscillatorVolumeDb,
-        oscillatorMute,
         oscillatorSolo,
-        warpMode,
-        warpAmount,
-        unisonVoices,
-        unisonDetune,
+        oscillatorVolumeDb,
+        pan,
         unisonBlend,
-        unisonWidth,
-        unisonPhase,
-        unisonRandom,
-        unisonPhaseMode,
+        unisonDetune,
         unisonDetuneMode,
+        unisonPhase,
+        unisonPhaseMode,
+        unisonRandom,
         unisonStackMode,
-        unisonWavetablePositionSpread,
+        unisonVoices,
         unisonWarpSpread,
-    ].every((binding) => binding.hasCurrentValue === true);
+        unisonWavetablePositionSpread,
+        unisonWidth,
+        warpAmount,
+        warpMode,
+        wavetablePosition,
+    ]);
 
     useEffect(() => {
-        if (!selectedOscillatorArticulationBindingsHaveCurrentValues) {
+        if (hostConfirmedSelectedOscillatorPatchBase === null) {
             return;
         }
 
-        if (
-            articulationBankState.state.slots.length === 0
-            || articulationPatchBaseRef.current[oscillatorID] === undefined
-        ) {
-            articulationPatchBaseRef.current[oscillatorID] = captureCurrentArticulationSnapshot();
+        if (articulationBankState.state.slots.length === 0) {
+            setArticulationPatchBase(oscillatorID, captureCurrentArticulationSnapshot());
+            articulationBankState.refreshProjection();
+            return;
+        }
+
+        if (articulationPatchBaseRef.current[oscillatorID] === undefined) {
+            setArticulationPatchBase(oscillatorID, hostConfirmedSelectedOscillatorPatchBase);
+            articulationBankState.refreshProjection();
         }
     }, [
+        articulationBankState,
         articulationBankState.state.slots.length,
         captureCurrentArticulationSnapshot,
+        hostConfirmedSelectedOscillatorPatchBase,
         oscillatorID,
-        selectedOscillatorArticulationBindingsHaveCurrentValues,
+        setArticulationPatchBase,
     ]);
+
+    const selectedOscillatorArticulationBaseIsReady = useMemo(() => (
+        articulationPatchBaseRef.current[oscillatorID] !== undefined
+    ), [articulationPatchBaseRevision, oscillatorID, patchConnection]);
+    const canCaptureArticulation = articulationBankState.hasHydrated
+        && selectedOscillatorArticulationBaseIsReady;
 
     const captureCurrentArticulationLayer = useCallback((): CapturedArticulationLayer => (
         projectArticulationSnapshotToVisibleV4Layer(captureCurrentArticulationSnapshot(), oscillatorID)
@@ -3366,8 +3448,10 @@ export function useSynthPatchViewModel({
     ]);
 
     const handleCaptureArticulationSlot = useCallback((_options: { autoAssign?: boolean } = {}) => {
-        const currentSnapshot = captureCurrentArticulationSnapshot();
         const baseSnapshot = currentArticulationPatchBase();
+        if (baseSnapshot === null) {
+            return;
+        }
         articulationPatchBaseRef.current[oscillatorID] = baseSnapshot;
         const layer = diffCapturedArticulationLayerV4(
             captureCurrentArticulationLayer(),
@@ -3381,7 +3465,6 @@ export function useSynthPatchViewModel({
     }, [
         articulationBankState,
         captureCurrentArticulationLayer,
-        captureCurrentArticulationSnapshot,
         currentArticulationPatchBase,
         oscillatorID,
     ]);
@@ -3395,6 +3478,11 @@ export function useSynthPatchViewModel({
         const slot = state.slots.find((candidate) => candidate.id === slotId);
 
         if (!slot) {
+            return;
+        }
+
+        const baseSnapshot = currentArticulationPatchBase();
+        if (baseSnapshot === null) {
             return;
         }
 
@@ -3413,7 +3501,6 @@ export function useSynthPatchViewModel({
             });
         }
 
-        const baseSnapshot = currentArticulationPatchBase();
         articulationPatchBaseRef.current[oscillatorID] = baseSnapshot;
         const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
         isApplyingArticulationRef.current = true;
@@ -3449,6 +3536,9 @@ export function useSynthPatchViewModel({
 
         const currentSnapshot = captureCurrentArticulationSnapshot();
         const baseSnapshot = currentArticulationPatchBase();
+        if (baseSnapshot === null) {
+            return;
+        }
         const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
         articulationBankState.setAndPersistState((previousState) => replaceVisibleArticulationSnapshotV4(
             previousState,
@@ -3477,6 +3567,11 @@ export function useSynthPatchViewModel({
             return;
         }
 
+        const baseSnapshot = currentArticulationPatchBase();
+        if (baseSnapshot === null) {
+            return;
+        }
+
         if (selectedArticulationIsDirty) {
             setDiscardedArticulationEdit({
                 slotId: slot.id,
@@ -3487,7 +3582,6 @@ export function useSynthPatchViewModel({
 
         isApplyingArticulationRef.current = true;
         setSelectedArticulationIsDirty(false);
-        const baseSnapshot = currentArticulationPatchBase();
         const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
         applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes, oscillatorID));
         setTimeout(() => {
@@ -3570,6 +3664,11 @@ export function useSynthPatchViewModel({
         articulationId: string,
         operation: "assign" | "insert",
     ) => {
+        const baseSnapshot = currentArticulationPatchBase();
+        if (baseSnapshot === null) {
+            return false;
+        }
+
         const previousState = articulationBankState.stateRef.current;
         const duplicatedState = duplicateArticulationV4(previousState, articulationId);
         const nextSlotId = duplicatedState.selectedSlotId;
@@ -3593,7 +3692,6 @@ export function useSynthPatchViewModel({
         articulationBankState.setAndPersistState(assignedState);
 
         if (nextSlot) {
-            const baseSnapshot = currentArticulationPatchBase();
             const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
@@ -3665,6 +3763,9 @@ export function useSynthPatchViewModel({
     const handleReplaceArticulationSlotWithCurrent = useCallback((slotId: string) => {
         const currentSnapshot = captureCurrentArticulationSnapshot();
         const baseSnapshot = currentArticulationPatchBase();
+        if (baseSnapshot === null) {
+            return;
+        }
         const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
         articulationBankState.setAndPersistState((previousState) => replaceVisibleArticulationSnapshotV4(
             previousState,
@@ -3688,13 +3789,17 @@ export function useSynthPatchViewModel({
     ]);
 
     const handleDuplicateArticulationSlot = useCallback((slotId: string) => {
+        const baseSnapshot = currentArticulationPatchBase();
+        if (baseSnapshot === null) {
+            return;
+        }
+
         const nextState = duplicateArticulationV4(articulationBankState.stateRef.current, slotId);
         const nextSlot = nextState.slots.find((slot) => slot.id === nextState.selectedSlotId);
 
         articulationBankState.setAndPersistState(nextState);
 
         if (nextSlot) {
-            const baseSnapshot = currentArticulationPatchBase();
             const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
@@ -3714,6 +3819,11 @@ export function useSynthPatchViewModel({
     ]);
 
     const handleDeleteArticulationSlot = useCallback((slotId: string) => {
+        const baseSnapshot = currentArticulationPatchBase();
+        if (baseSnapshot === null) {
+            return;
+        }
+
         const previousState = articulationBankState.stateRef.current;
         const nextState = deleteArticulationV4(previousState, slotId);
         const selectedChanged = nextState.selectedSlotId !== previousState.selectedSlotId;
@@ -3722,7 +3832,6 @@ export function useSynthPatchViewModel({
         articulationBankState.setAndPersistState(nextState);
 
         if (selectedChanged && nextSlot) {
-            const baseSnapshot = currentArticulationPatchBase();
             const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
@@ -4367,6 +4476,7 @@ export function useSynthPatchViewModel({
             }
             : null,
         hasHydratedArticulations: articulationBankState.hasHydrated,
+        canCaptureArticulation,
         selectedMsegSlot,
         selectedEnvelopeSlot,
         selectedEnvelope,

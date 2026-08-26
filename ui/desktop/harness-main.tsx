@@ -42,6 +42,8 @@ declare global {
                 value: unknown,
                 emitEndpoint?: boolean,
             ) => void;
+            deferParameterResponse: (endpointID: string) => void;
+            releaseParameterResponse: (endpointID: string) => void;
             emitEffectiveWavetablePosition: (position: number, voiceGeneration?: number) => void;
             emitEffectiveWarpState: (nextState: Parameters<MockPatchConnection["emitEffectiveWarpState"]>[0]) => void;
             emitEffectiveFilterState: (nextState: Parameters<MockPatchConnection["emitEffectiveFilterState"]>[0]) => void;
@@ -276,6 +278,12 @@ try {
         },
         setParameterValue: (endpointID, value, emitEndpoint = false) => {
             patchConnection.setParameterValue(endpointID, value, emitEndpoint);
+        },
+        deferParameterResponse: (endpointID) => {
+            patchConnection.deferParameterResponse(endpointID);
+        },
+        releaseParameterResponse: (endpointID) => {
+            patchConnection.releaseParameterResponse(endpointID);
         },
         emitEffectiveWavetablePosition: (position, voiceGeneration = 1) => {
             patchConnection.emitEffectiveWavetablePosition(position, voiceGeneration);

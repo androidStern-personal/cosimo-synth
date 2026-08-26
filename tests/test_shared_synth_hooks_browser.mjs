@@ -298,6 +298,58 @@ test("usePatchParameterBinding resets stale display state when the active endpoi
     }
 });
 
+test("usePatchParameterBinding keeps host baseline authority separate across writes and reconnects", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installPatchParameterHostBaselineHarness");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().first.requests.length === 1
+        ));
+        assert.deepEqual((await getHarnessSnapshot(page)).hostBaseline, { _tag: "pending" });
+
+        await invokeHarness(page, "emitResponse", "first", 0.4);
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hostBaseline?.value === 0.4
+        ));
+        await invokeHarness(page, "writeValue", 0.7);
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.value, 0.7);
+        assert.deepEqual(snapshot.hostBaseline, { _tag: "host-confirmed", value: 0.4 });
+        assert.deepEqual(snapshot.first.writes, [0.7], "a normal host echo cannot rotate the frozen baseline");
+
+        await invokeHarness(page, "selectConnection", "second");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().second.requests.length === 1
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.value, 0.1, "a new connection starts from its own presentation default");
+        assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" });
+        assert.equal(snapshot.first.listenerCount, 0);
+        assert.equal(snapshot.second.listenerCount, 1);
+
+        await invokeHarness(page, "writeValue", 0.8);
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.value, 0.8);
+        assert.deepEqual(
+            snapshot.hostBaseline,
+            { _tag: "pending" },
+            "a local write and its host echo do not certify the new connection's starting value",
+        );
+
+        await invokeHarness(page, "emitResponse", "second", 0.25);
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hostBaseline?.value === 0.25
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.value, 0.8, "the delayed baseline must not overwrite the user's local presentation");
+        assert.deepEqual(snapshot.hostBaseline, { _tag: "host-confirmed", value: 0.25 });
+        assert.deepEqual(snapshot.second.writes, [0.8]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("precision drag yields to clamped host echoes and endpoint changes without repeating unchanged values", async () => {
     const page = await openModulePage();
 

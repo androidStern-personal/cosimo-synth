@@ -3,6 +3,7 @@ import { useCallback, useMemo } from "react";
 import {
     usePatchConnection,
     usePatchParameter,
+    type PatchParameterHostBaseline,
     type PatchParameterPresentationPriority,
 } from "./cmajor-react";
 
@@ -13,8 +14,8 @@ function serializeIdentity<TValue>(value: TValue) {
 export type PatchControlBinding<TValue> = {
     endpointID: string;
     value: TValue;
-    /** Whether value belongs to endpointID on the active patch connection. */
-    hasCurrentValue?: boolean;
+    /** The authoritative pre-edit host value for the current endpoint, when observed. */
+    hostBaseline?: PatchParameterHostBaseline<TValue>;
     /** The canonical default this parameter boots with (ADR-017 base reset). */
     initialValue?: TValue;
     setValue: (nextValue: TValue) => void;
@@ -42,6 +43,11 @@ export function usePatchParameterBinding<TValue>({
 }: PatchParameterBindingOptions<TValue>): PatchControlBinding<TValue> {
     const parameter = usePatchParameter(endpointID, serialize(initialValue), active, presentationPriority);
     const value = useMemo(() => coerce(parameter.value), [coerce, parameter.value]);
+    const hostBaseline = useMemo<PatchParameterHostBaseline<TValue>>(() => (
+        parameter.hostBaseline._tag === "host-confirmed"
+            ? { _tag: "host-confirmed", value: coerce(parameter.hostBaseline.value) }
+            : { _tag: "pending" }
+    ), [coerce, parameter.hostBaseline]);
 
     const setValue = useCallback((nextValue: TValue) => {
         parameter.setValue(serialize(nextValue));
@@ -56,7 +62,7 @@ export function usePatchParameterBinding<TValue>({
     return useMemo(() => ({
         endpointID,
         value,
-        hasCurrentValue: parameter.hasCurrentValue,
+        hostBaseline,
         initialValue,
         setValue,
         commitValue,
@@ -67,7 +73,7 @@ export function usePatchParameterBinding<TValue>({
         initialValue,
         parameter.beginGesture,
         parameter.endGesture,
-        parameter.hasCurrentValue,
+        hostBaseline,
         value,
         setValue,
         commitValue,

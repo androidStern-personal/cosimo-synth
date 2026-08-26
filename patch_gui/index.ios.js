@@ -12927,7 +12927,9 @@ function useResourceClient() {
 function usePatchParameter(endpointID, initialValue = 0, active = true, presentationPriority = "immediate") {
   const patchConnection = usePatchConnection();
   const [value, setValue] = reactExports.useState(initialValue);
-  const [currentValueSource, setCurrentValueSource] = reactExports.useState(null);
+  const [hostBaselineSource, setHostBaselineSource] = reactExports.useState(null);
+  const hostBaselineSourceRef = reactExports.useRef(hostBaselineSource);
+  const localWriteBeforeHostBaselineRef = reactExports.useRef(null);
   const initialValueRef = reactExports.useRef(initialValue);
   const valueRef = reactExports.useRef(initialValue);
   const gestureActiveRef = reactExports.useRef(false);
@@ -12940,40 +12942,67 @@ function usePatchParameter(endpointID, initialValue = 0, active = true, presenta
     }
     setValue(nextValue);
   }, [presentationPriority]);
-  const markCurrentValue = reactExports.useCallback(() => {
-    setCurrentValueSource((previousSource) => previousSource?.patchConnection === patchConnection && previousSource.endpointID === endpointID ? previousSource : { patchConnection, endpointID });
+  const confirmHostBaseline = reactExports.useCallback((nextValue) => {
+    const previousSource = hostBaselineSourceRef.current;
+    if (previousSource?.patchConnection === patchConnection && previousSource.endpointID === endpointID) {
+      return;
+    }
+    const nextSource = { patchConnection, endpointID, value: nextValue };
+    hostBaselineSourceRef.current = nextSource;
+    localWriteBeforeHostBaselineRef.current = null;
+    setHostBaselineSource(nextSource);
   }, [endpointID, patchConnection]);
   reactExports.useEffect(() => {
+    localWriteBeforeHostBaselineRef.current = null;
     valueRef.current = initialValueRef.current;
     setValue(initialValueRef.current);
     if (!active) {
-      markCurrentValue();
+      if (patchConnection.parameterInitialValuesAreAuthoritative === true) {
+        confirmHostBaseline(initialValueRef.current);
+      }
       return void 0;
     }
     let listening = true;
     const listener = (nextValue) => {
-      if (listening) {
-        presentValue(nextValue);
-        markCurrentValue();
+      if (!listening) {
+        return;
+      }
+      const baselineSource = hostBaselineSourceRef.current;
+      const hasCurrentHostBaseline = baselineSource?.patchConnection === patchConnection && baselineSource.endpointID === endpointID;
+      const pendingLocalWrite = localWriteBeforeHostBaselineRef.current;
+      const localWriteOwnsPresentation = !hasCurrentHostBaseline && pendingLocalWrite?.patchConnection === patchConnection && pendingLocalWrite.endpointID === endpointID;
+      if (localWriteOwnsPresentation) {
+        if (Object.is(nextValue, pendingLocalWrite.value)) {
+          return;
+        }
+        confirmHostBaseline(nextValue);
+        return;
+      }
+      presentValue(nextValue);
+      if (!hasCurrentHostBaseline) {
+        confirmHostBaseline(nextValue);
       }
     };
     patchConnection.addParameterListener?.(endpointID, listener);
     patchConnection.requestParameterValue?.(endpointID);
-    if (typeof patchConnection.addParameterListener !== "function" || typeof patchConnection.requestParameterValue !== "function") {
-      markCurrentValue();
+    if (patchConnection.parameterInitialValuesAreAuthoritative === true) {
+      confirmHostBaseline(initialValueRef.current);
     }
     return () => {
       listening = false;
       patchConnection.removeParameterListener?.(endpointID, listener);
     };
-  }, [active, endpointID, markCurrentValue, patchConnection, presentValue]);
+  }, [active, confirmHostBaseline, endpointID, patchConnection, presentValue]);
   const setParameterValue = reactExports.useCallback((nextValue) => {
     const changed = !Object.is(nextValue, valueRef.current);
+    const baselineSource = hostBaselineSourceRef.current;
+    if (baselineSource?.patchConnection !== patchConnection || baselineSource.endpointID !== endpointID) {
+      localWriteBeforeHostBaselineRef.current = { patchConnection, endpointID, value: nextValue };
+    }
     patchConnection.sendEventOrValue?.(endpointID, nextValue);
     presentValue(nextValue);
-    markCurrentValue();
     reportUserParameterEdit({ endpointID, changed });
-  }, [endpointID, markCurrentValue, patchConnection, presentValue]);
+  }, [endpointID, patchConnection, presentValue]);
   const beginGesture = reactExports.useCallback(() => {
     gestureActiveRef.current = true;
     patchConnection.sendParameterGestureStart?.(endpointID);
@@ -12986,11 +13015,11 @@ function usePatchParameter(endpointID, initialValue = 0, active = true, presenta
   }, [endpointID, patchConnection]);
   return reactExports.useMemo(() => ({
     value,
-    hasCurrentValue: currentValueSource?.patchConnection === patchConnection && currentValueSource.endpointID === endpointID,
+    hostBaseline: hostBaselineSource?.patchConnection === patchConnection && hostBaselineSource.endpointID === endpointID ? { _tag: "host-confirmed", value: hostBaselineSource.value } : { _tag: "pending" },
     setValue: setParameterValue,
     beginGesture,
     endGesture
-  }), [beginGesture, currentValueSource, endGesture, endpointID, patchConnection, setParameterValue, value]);
+  }), [beginGesture, endGesture, endpointID, hostBaselineSource, patchConnection, setParameterValue, value]);
 }
 function usePatchEndpoint(endpointID, initialValue, active = true) {
   const patchConnection = usePatchConnection();
@@ -19437,6 +19466,7 @@ function usePatchParameterBinding({
 }) {
   const parameter2 = usePatchParameter(endpointID, serialize(initialValue), active, presentationPriority);
   const value = reactExports.useMemo(() => coerce(parameter2.value), [coerce, parameter2.value]);
+  const hostBaseline = reactExports.useMemo(() => parameter2.hostBaseline._tag === "host-confirmed" ? { _tag: "host-confirmed", value: coerce(parameter2.hostBaseline.value) } : { _tag: "pending" }, [coerce, parameter2.hostBaseline]);
   const setValue = reactExports.useCallback((nextValue) => {
     parameter2.setValue(serialize(nextValue));
   }, [parameter2.setValue, serialize]);
@@ -19448,7 +19478,7 @@ function usePatchParameterBinding({
   return reactExports.useMemo(() => ({
     endpointID,
     value,
-    hasCurrentValue: parameter2.hasCurrentValue,
+    hostBaseline,
     initialValue,
     setValue,
     commitValue,
@@ -19459,7 +19489,7 @@ function usePatchParameterBinding({
     initialValue,
     parameter2.beginGesture,
     parameter2.endGesture,
-    parameter2.hasCurrentValue,
+    hostBaseline,
     value,
     setValue,
     commitValue
@@ -25471,6 +25501,17 @@ function requireLaneParameterDescriptor(endpointID) {
   }
   return descriptor;
 }
+function readHostConfirmedParameterBase(bindings) {
+  const values = {};
+  for (const key of Object.keys(bindings)) {
+    const baseline = bindings[key].hostBaseline;
+    if (baseline?._tag !== "host-confirmed") {
+      return null;
+    }
+    values[key] = baseline.value;
+  }
+  return values;
+}
 const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 const EFFECTIVE_WARP_STATE_ENDPOINT_ID = "effectiveWarpState";
 const EFFECTIVE_UNISON_STATE_ENDPOINT_ID = "effectiveUnisonState";
@@ -26168,18 +26209,25 @@ function useStoredArticulationEditorState(modulationBridge, modulationState, get
     return true;
   }, []);
   const applyCurrentState = reactExports.useCallback((nextState) => {
+    stateRef.current = nextState;
+    setState((previousState) => articulationStatesEqual(previousState, nextState) ? previousState : nextState);
+    const baseSnapshot = getBaseSnapshotRef.current();
+    if (baseSnapshot === null) {
+      return;
+    }
     const routes = modulationBridge.current?.getState().routes ?? modulationStateRef.current?.routes ?? [];
     const nextBank = projectCurrentArticulationsToEditorBank(
       nextState,
-      getBaseSnapshotRef.current(),
+      baseSnapshot,
       routes,
       oscillatorID
     );
-    stateRef.current = nextState;
     bankRef.current = nextBank;
-    setState((previousState) => articulationStatesEqual(previousState, nextState) ? previousState : nextState);
     setBank((previousBank) => articulationEditorStatesEqual(previousBank, nextBank) ? previousBank : nextBank);
   }, [modulationBridge, oscillatorID, patchConnection]);
+  const refreshProjection = reactExports.useCallback(() => {
+    applyCurrentState(stateRef.current);
+  }, [applyCurrentState]);
   const applyIncomingState = reactExports.useCallback((rawValue, isHydration, acceptedRouteIds = acceptedRouteIdsRef.current) => {
     if (rawValue === void 0) {
       if (isHydration) {
@@ -26201,6 +26249,8 @@ function useStoredArticulationEditorState(modulationBridge, modulationState, get
     applyCurrentState(parsedState.value);
   }, [applyCurrentState, consumePendingEcho]);
   reactExports.useEffect(() => {
+    setHasHydrated(false);
+    pendingEchoTokensRef.current.clear();
     const handleStoredStateValue = (message) => {
       if (!message || typeof message !== "object") return;
       const nextMessage = message;
@@ -26236,7 +26286,7 @@ function useStoredArticulationEditorState(modulationBridge, modulationState, get
     }
     return () => patchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
   }, [applyIncomingState, patchConnection]);
-  const setAndPersistState = reactExports.useCallback((nextStateValue, acceptedRouteIds = acceptedRouteIdsRef.current, refreshProjection = false) => {
+  const setAndPersistState = reactExports.useCallback((nextStateValue, acceptedRouteIds = acceptedRouteIdsRef.current, refreshProjection2 = false) => {
     const previousState = stateRef.current;
     const candidate = typeof nextStateValue === "function" ? nextStateValue(previousState) : nextStateValue;
     const parsedState = parseArticulationsV4(
@@ -26245,7 +26295,7 @@ function useStoredArticulationEditorState(modulationBridge, modulationState, get
     );
     if (parsedState._tag === "err") return;
     if (articulationStatesEqual(previousState, parsedState.value)) {
-      if (refreshProjection) {
+      if (refreshProjection2) {
         acceptedRouteIdsRef.current = acceptedRouteIds;
         applyCurrentState(parsedState.value);
       }
@@ -26267,8 +26317,9 @@ function useStoredArticulationEditorState(modulationBridge, modulationState, get
     bank,
     bankRef,
     hasHydrated,
+    refreshProjection,
     setAndPersistState
-  }), [bank, hasHydrated, setAndPersistState, state2]);
+  }), [bank, hasHydrated, refreshProjection, setAndPersistState, state2]);
 }
 function parsePresetStoredStateValue(rawValue, label) {
   if (typeof rawValue !== "string") {
@@ -27449,17 +27500,24 @@ function useSynthPatchViewModel({
     null
   );
   const { state: modulationState, bridge: modulationBridge } = useModulationState();
-  const captureCurrentArticulationSnapshotRef = reactExports.useRef(
-    createDefaultArticulationSnapshot
-  );
   const articulationPatchBaseRef = reactExports.useRef({});
-  reactExports.useEffect(() => {
+  const articulationPatchBaseConnectionRef = reactExports.useRef(patchConnection);
+  const [articulationPatchBaseRevision, setArticulationPatchBaseRevision] = reactExports.useState(0);
+  if (articulationPatchBaseConnectionRef.current !== patchConnection) {
+    articulationPatchBaseConnectionRef.current = patchConnection;
     articulationPatchBaseRef.current = {};
+  }
+  reactExports.useEffect(() => {
+    setArticulationPatchBaseRevision((revision) => revision + 1);
   }, [patchConnection]);
   const setArticulationPatchBase = reactExports.useCallback((targetOscillatorID, snapshot) => {
+    const wasMissing = articulationPatchBaseRef.current[targetOscillatorID] === void 0;
     articulationPatchBaseRef.current[targetOscillatorID] = snapshot;
+    if (wasMissing) {
+      setArticulationPatchBaseRevision((revision) => revision + 1);
+    }
   }, []);
-  const currentArticulationPatchBase = reactExports.useCallback(() => articulationPatchBaseRef.current[oscillatorID] ?? captureCurrentArticulationSnapshotRef.current(), [oscillatorID]);
+  const currentArticulationPatchBase = reactExports.useCallback(() => articulationPatchBaseRef.current[oscillatorID] ?? null, [oscillatorID]);
   const articulationBankState = useStoredArticulationEditorState(
     modulationBridge,
     modulationState,
@@ -27754,43 +27812,88 @@ function useSynthPatchViewModel({
     warpMode.value,
     wavetablePosition.value
   ]);
-  captureCurrentArticulationSnapshotRef.current = captureCurrentArticulationSnapshot;
-  const selectedOscillatorArticulationBindingsHaveCurrentValues = [
-    wavetablePosition,
-    pan,
+  const hostConfirmedSelectedOscillatorPatchBase = reactExports.useMemo(() => {
+    const hostParameters = readHostConfirmedParameterBase({
+      wavetablePosition,
+      pan,
+      octave: oscillatorOctave,
+      semitone: oscillatorSemitone,
+      fineCents: oscillatorFineCents,
+      volumeDb: oscillatorVolumeDb,
+      mute: oscillatorMute,
+      solo: oscillatorSolo,
+      warpMode,
+      warpAmount,
+      unisonVoices,
+      unisonDetune,
+      unisonBlend,
+      unisonWidth,
+      unisonPhase,
+      unisonRandom,
+      unisonPhaseMode,
+      unisonDetuneMode,
+      unisonStackMode,
+      unisonWavetablePositionSpread,
+      unisonWarpSpread
+    });
+    if (hostParameters === null) {
+      return null;
+    }
+    const currentSnapshot = captureCurrentArticulationSnapshot();
+    return normalizeArticulationSnapshot({
+      ...currentSnapshot,
+      parameters: {
+        ...currentSnapshot.parameters,
+        ...hostParameters
+      }
+    });
+  }, [
+    captureCurrentArticulationSnapshot,
+    oscillatorFineCents,
+    oscillatorMute,
     oscillatorOctave,
     oscillatorSemitone,
-    oscillatorFineCents,
-    oscillatorVolumeDb,
-    oscillatorMute,
     oscillatorSolo,
-    warpMode,
-    warpAmount,
-    unisonVoices,
-    unisonDetune,
+    oscillatorVolumeDb,
+    pan,
     unisonBlend,
-    unisonWidth,
-    unisonPhase,
-    unisonRandom,
-    unisonPhaseMode,
+    unisonDetune,
     unisonDetuneMode,
+    unisonPhase,
+    unisonPhaseMode,
+    unisonRandom,
     unisonStackMode,
+    unisonVoices,
+    unisonWarpSpread,
     unisonWavetablePositionSpread,
-    unisonWarpSpread
-  ].every((binding) => binding.hasCurrentValue === true);
+    unisonWidth,
+    warpAmount,
+    warpMode,
+    wavetablePosition
+  ]);
   reactExports.useEffect(() => {
-    if (!selectedOscillatorArticulationBindingsHaveCurrentValues) {
+    if (hostConfirmedSelectedOscillatorPatchBase === null) {
       return;
     }
-    if (articulationBankState.state.slots.length === 0 || articulationPatchBaseRef.current[oscillatorID] === void 0) {
-      articulationPatchBaseRef.current[oscillatorID] = captureCurrentArticulationSnapshot();
+    if (articulationBankState.state.slots.length === 0) {
+      setArticulationPatchBase(oscillatorID, captureCurrentArticulationSnapshot());
+      articulationBankState.refreshProjection();
+      return;
+    }
+    if (articulationPatchBaseRef.current[oscillatorID] === void 0) {
+      setArticulationPatchBase(oscillatorID, hostConfirmedSelectedOscillatorPatchBase);
+      articulationBankState.refreshProjection();
     }
   }, [
+    articulationBankState,
     articulationBankState.state.slots.length,
     captureCurrentArticulationSnapshot,
+    hostConfirmedSelectedOscillatorPatchBase,
     oscillatorID,
-    selectedOscillatorArticulationBindingsHaveCurrentValues
+    setArticulationPatchBase
   ]);
+  const selectedOscillatorArticulationBaseIsReady = reactExports.useMemo(() => articulationPatchBaseRef.current[oscillatorID] !== void 0, [articulationPatchBaseRevision, oscillatorID, patchConnection]);
+  const canCaptureArticulation = articulationBankState.hasHydrated && selectedOscillatorArticulationBaseIsReady;
   const captureCurrentArticulationLayer = reactExports.useCallback(() => projectArticulationSnapshotToVisibleV4Layer(captureCurrentArticulationSnapshot(), oscillatorID), [captureCurrentArticulationSnapshot, oscillatorID]);
   const applyArticulationSnapshot = reactExports.useCallback((snapshotValue) => {
     const snapshot = normalizeArticulationSnapshot(snapshotValue);
@@ -27890,8 +27993,10 @@ function useSynthPatchViewModel({
     wavetablePosition
   ]);
   const handleCaptureArticulationSlot = reactExports.useCallback((_options = {}) => {
-    captureCurrentArticulationSnapshot();
     const baseSnapshot = currentArticulationPatchBase();
+    if (baseSnapshot === null) {
+      return;
+    }
     articulationPatchBaseRef.current[oscillatorID] = baseSnapshot;
     const layer = diffCapturedArticulationLayerV4(
       captureCurrentArticulationLayer(),
@@ -27903,7 +28008,6 @@ function useSynthPatchViewModel({
   }, [
     articulationBankState,
     captureCurrentArticulationLayer,
-    captureCurrentArticulationSnapshot,
     currentArticulationPatchBase,
     oscillatorID
   ]);
@@ -27916,6 +28020,10 @@ function useSynthPatchViewModel({
     if (!slot) {
       return;
     }
+    const baseSnapshot = currentArticulationPatchBase();
+    if (baseSnapshot === null) {
+      return;
+    }
     const bank = articulationBankState.bankRef.current;
     const previousSlot = bank.slots.find((candidate) => candidate.id === bank.selectedSlotId) ?? null;
     const shouldRecordDirtyDiscard = options.recordDirtyDiscard !== false && selectedArticulationIsDirty && previousSlot && previousSlot.id !== slot.id;
@@ -27926,7 +28034,6 @@ function useSynthPatchViewModel({
         snapshot: captureCurrentArticulationSnapshot()
       });
     }
-    const baseSnapshot = currentArticulationPatchBase();
     articulationPatchBaseRef.current[oscillatorID] = baseSnapshot;
     const routes2 = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
     isApplyingArticulationRef.current = true;
@@ -27957,6 +28064,9 @@ function useSynthPatchViewModel({
     }
     const currentSnapshot = captureCurrentArticulationSnapshot();
     const baseSnapshot = currentArticulationPatchBase();
+    if (baseSnapshot === null) {
+      return;
+    }
     const routes2 = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
     articulationBankState.setAndPersistState((previousState) => replaceVisibleArticulationSnapshotV4(
       previousState,
@@ -27982,6 +28092,10 @@ function useSynthPatchViewModel({
     if (!slot) {
       return;
     }
+    const baseSnapshot = currentArticulationPatchBase();
+    if (baseSnapshot === null) {
+      return;
+    }
     if (selectedArticulationIsDirty) {
       setDiscardedArticulationEdit({
         slotId: slot.id,
@@ -27991,7 +28105,6 @@ function useSynthPatchViewModel({
     }
     isApplyingArticulationRef.current = true;
     setSelectedArticulationIsDirty(false);
-    const baseSnapshot = currentArticulationPatchBase();
     const routes2 = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
     applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes2, oscillatorID));
     setTimeout(() => {
@@ -28040,6 +28153,10 @@ function useSynthPatchViewModel({
     return updateArticulationStateIfChanged((previousState) => insertArticulationPositionV4(previousState, mode, position, articulationId, preserveSide));
   }, [updateArticulationStateIfChanged]);
   const handleDuplicateAndAssignArticulationRangePosition = reactExports.useCallback((mode, position, articulationId, operation) => {
+    const baseSnapshot = currentArticulationPatchBase();
+    if (baseSnapshot === null) {
+      return false;
+    }
     const previousState = articulationBankState.stateRef.current;
     const duplicatedState = duplicateArticulationV4(previousState, articulationId);
     const nextSlotId = duplicatedState.selectedSlotId;
@@ -28053,7 +28170,6 @@ function useSynthPatchViewModel({
     const nextSlot = assignedState.slots.find((slot) => slot.id === nextSlotId);
     articulationBankState.setAndPersistState(assignedState);
     if (nextSlot) {
-      const baseSnapshot = currentArticulationPatchBase();
       const routes2 = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
       isApplyingArticulationRef.current = true;
       setSelectedArticulationIsDirty(false);
@@ -28093,6 +28209,9 @@ function useSynthPatchViewModel({
   const handleReplaceArticulationSlotWithCurrent = reactExports.useCallback((slotId) => {
     const currentSnapshot = captureCurrentArticulationSnapshot();
     const baseSnapshot = currentArticulationPatchBase();
+    if (baseSnapshot === null) {
+      return;
+    }
     const routes2 = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
     articulationBankState.setAndPersistState((previousState) => replaceVisibleArticulationSnapshotV4(
       previousState,
@@ -28114,11 +28233,14 @@ function useSynthPatchViewModel({
     oscillatorID
   ]);
   const handleDuplicateArticulationSlot = reactExports.useCallback((slotId) => {
+    const baseSnapshot = currentArticulationPatchBase();
+    if (baseSnapshot === null) {
+      return;
+    }
     const nextState = duplicateArticulationV4(articulationBankState.stateRef.current, slotId);
     const nextSlot = nextState.slots.find((slot) => slot.id === nextState.selectedSlotId);
     articulationBankState.setAndPersistState(nextState);
     if (nextSlot) {
-      const baseSnapshot = currentArticulationPatchBase();
       const routes2 = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
       isApplyingArticulationRef.current = true;
       setSelectedArticulationIsDirty(false);
@@ -28137,13 +28259,16 @@ function useSynthPatchViewModel({
     oscillatorID
   ]);
   const handleDeleteArticulationSlot = reactExports.useCallback((slotId) => {
+    const baseSnapshot = currentArticulationPatchBase();
+    if (baseSnapshot === null) {
+      return;
+    }
     const previousState = articulationBankState.stateRef.current;
     const nextState = deleteArticulationV4(previousState, slotId);
     const selectedChanged = nextState.selectedSlotId !== previousState.selectedSlotId;
     const nextSlot = nextState.slots.find((slot) => slot.id === nextState.selectedSlotId);
     articulationBankState.setAndPersistState(nextState);
     if (selectedChanged && nextSlot) {
-      const baseSnapshot = currentArticulationPatchBase();
       const routes2 = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
       isApplyingArticulationRef.current = true;
       setSelectedArticulationIsDirty(false);
@@ -28640,6 +28765,7 @@ function useSynthPatchViewModel({
       slotName: discardedArticulationEdit.slotName
     } : null,
     hasHydratedArticulations: articulationBankState.hasHydrated,
+    canCaptureArticulation,
     selectedMsegSlot,
     selectedEnvelopeSlot,
     selectedEnvelope,

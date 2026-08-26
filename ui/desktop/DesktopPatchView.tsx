@@ -4635,7 +4635,7 @@ function DesktopPatchViewBody({
                     selectedArticulationId={selectedArticulationId}
                     selectedIsDirty={synthView.selectedArticulationIsDirty}
                     discardedEditLabel={synthView.discardedArticulationEdit?.slotName ?? null}
-                    canCapture={synthView.hasHydratedArticulations}
+                    canCapture={synthView.canCaptureArticulation}
                     chainSegments={chainSegments}
                     keySegments={keySegments}
                     velocitySegments={velocitySegments}

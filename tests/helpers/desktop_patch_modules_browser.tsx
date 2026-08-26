@@ -11,7 +11,10 @@ import {
     usePatchVisualEndpoint,
     type PatchConnectionLike,
 } from "../../ui/shared/cmajor-react";
-import { usePatchParameterBinding } from "../../ui/shared/patch-controls";
+import {
+    usePatchParameterBinding,
+    type PatchControlBinding,
+} from "../../ui/shared/patch-controls";
 import {
     parameterEntrySpecForMobileVoiceControl,
     parameterEntrySpecForSeconds,
@@ -1467,6 +1470,119 @@ export async function installPatchParameterRebindingHarness(target: HTMLElement)
                 requestedParameters: [...requestedParameters],
                 renderLog: cloneValue(renderLog),
                 lastRender: cloneValue(renderLog.at(-1) ?? null),
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
+export async function installPatchParameterHostBaselineHarness(target: HTMLElement) {
+    type HarnessConnection = PatchConnectionLike & {
+        readonly id: "first" | "second";
+        readonly listeners: Set<(value: unknown) => void>;
+        readonly requests: string[];
+        readonly writes: number[];
+        emitResponse: (value: number) => void;
+    };
+
+    const createConnection = (id: HarnessConnection["id"]): HarnessConnection => {
+        const listeners = new Set<(value: unknown) => void>();
+        const requests: string[] = [];
+        const writes: number[] = [];
+        return {
+            id,
+            listeners,
+            requests,
+            writes,
+            addParameterListener(_endpointID, listener) {
+                listeners.add(listener);
+            },
+            removeParameterListener(_endpointID, listener) {
+                listeners.delete(listener);
+            },
+            requestParameterValue(endpointID) {
+                requests.push(endpointID);
+            },
+            sendEventOrValue(_endpointID, value) {
+                writes.push(Number(value));
+                listeners.forEach((listener) => listener(value));
+            },
+            emitResponse(value) {
+                listeners.forEach((listener) => listener(value));
+            },
+        };
+    };
+    const connections = {
+        first: createConnection("first"),
+        second: createConnection("second"),
+    } as const;
+    let binding: PatchControlBinding<number> | null = null;
+    let selectConnection: ((id: HarnessConnection["id"]) => void) | null = null;
+
+    const mounted = mountHarness(target, (root) => {
+        function Reader() {
+            binding = usePatchParameterBinding<number>({
+                endpointID: "parameterA",
+                initialValue: 0.1,
+                coerce: Number,
+            });
+            return null;
+        }
+
+        function Harness() {
+            const [connectionID, setConnectionID] = useState<HarnessConnection["id"]>("first");
+            selectConnection = setConnectionID;
+            return (
+                <PatchConnectionProvider patchConnection={connections[connectionID]}>
+                    <Reader />
+                </PatchConnectionProvider>
+            );
+        }
+
+        root.render(<Harness />);
+    });
+
+    const requireBinding = () => {
+        if (binding === null) {
+            throw new Error("Patch parameter baseline harness is not ready.");
+        }
+        return binding;
+    };
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        async emitResponse(connectionID: HarnessConnection["id"], value: number) {
+            connections[connectionID].emitResponse(value);
+            await waitForMicrotask();
+        },
+        async writeValue(value: number) {
+            requireBinding().setValue(value);
+            await waitForMicrotask();
+        },
+        async selectConnection(connectionID: HarnessConnection["id"]) {
+            selectConnection?.(connectionID);
+            await waitForMicrotask();
+            await waitForMicrotask();
+        },
+        getSnapshot() {
+            const currentBinding = requireBinding();
+            return {
+                value: currentBinding.value,
+                hostBaseline: cloneValue(currentBinding.hostBaseline),
+                first: {
+                    requests: [...connections.first.requests],
+                    writes: [...connections.first.writes],
+                    listenerCount: connections.first.listeners.size,
+                },
+                second: {
+                    requests: [...connections.second.requests],
+                    writes: [...connections.second.writes],
+                    listenerCount: connections.second.listeners.size,
+                },
             };
         },
         async unmount() {

@@ -638,6 +638,8 @@ export class MockPatchConnection implements PatchConnectionLike {
 
     private parameterValues = createInitialParameterValues();
     private parameterListeners = new Map<string, Set<ParameterListener>>();
+    private deferredParameterResponses = new Set<string>();
+    private pendingParameterResponses = new Map<string, unknown>();
     private endpointListeners = new Map<string, Set<EndpointListener>>();
     private statusListeners = new Set<StatusListener>();
     private storedStateListeners = new Set<StoredStateListener>();
@@ -711,8 +713,34 @@ export class MockPatchConnection implements PatchConnectionLike {
     }
 
     requestParameterValue(endpointID: string) {
+        const value = this.parameterValues.get(endpointID) ?? 0;
+        if (this.deferredParameterResponses.has(endpointID)) {
+            if (!this.pendingParameterResponses.has(endpointID)) {
+                this.pendingParameterResponses.set(endpointID, value);
+            }
+            return;
+        }
+
         queueMicrotask(() => {
-            const value = this.parameterValues.get(endpointID) ?? 0;
+            this.parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
+        });
+    }
+
+    /** Defer the next requested value so browser tests can exercise a missing host response. */
+    deferParameterResponse(endpointID: string) {
+        this.deferredParameterResponses.add(endpointID);
+    }
+
+    /** Release a deferred request with the authoritative value captured when it was requested. */
+    releaseParameterResponse(endpointID: string) {
+        this.deferredParameterResponses.delete(endpointID);
+        if (!this.pendingParameterResponses.has(endpointID)) {
+            return;
+        }
+
+        const value = this.pendingParameterResponses.get(endpointID);
+        this.pendingParameterResponses.delete(endpointID);
+        queueMicrotask(() => {
             this.parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
         });
     }
