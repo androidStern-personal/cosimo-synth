@@ -120,22 +120,24 @@ processor EnhancerNeutralAndStereoContract [[ main ]]
             }
         }
 
-        // Pure side in, side-only enhancement: the output remains algebraically
-        // anti-symmetric while the residue proves the side path actually ran.
+        // Pure side in, side-only enhancement: the output remains anti-symmetric
+        // within one float roundoff while the residue proves the path ran.
         setSettings (0.0f, 0.85f, 0.0f, 0.75f);
         enhancer.resetIn <- 1;
-        bool sideOnlyStaysSideOnly = true;
         float64 sideDifferencePower;
+        float32 maximumSideSymmetryError;
         for (int32 frame = 0; frame < 16384; ++frame)
         {
             let sample = 0.31f * float32 (std::intrinsics::sin (
                 twoPi * 9000.0f * float32 (frame) / float32 (processor.frequency)
             ));
             let rendered = render (float32<2> (sample, -sample));
-            if (frame >= 4096 && rendered[0] != -rendered[1])
-                sideOnlyStaysSideOnly = false;
             if (frame >= 4096)
             {
+                maximumSideSymmetryError = std::intrinsics::max (
+                    maximumSideSymmetryError,
+                    std::intrinsics::abs (rendered[0] + rendered[1])
+                );
                 let difference = rendered[0] - sample;
                 sideDifferencePower += float64 (difference) * float64 (difference);
             }
@@ -173,7 +175,8 @@ processor EnhancerNeutralAndStereoContract [[ main ]]
         advance();
         out <- (enhancedMonoStaysMono && monoDifferencePower > 1.0e-9) ? 1 : 0;
         advance();
-        out <- (sideOnlyStaysSideOnly && sideDifferencePower > 1.0e-9) ? 1 : 0;
+        out <- (maximumSideSymmetryError <= 1.0e-6f
+                && sideDifferencePower > 1.0e-9) ? 1 : 0;
         advance();
         out <- releasedNeutralIsBitExact ? 1 : 0;
         advance();
@@ -310,9 +313,10 @@ processor EnhancerPerBandRoutingModeContract [[ main ]]
 }
 
 //==============================================================================
-// The bus must add nonlinear residue rather than filtered fundamental, Tube must
-// remain predominantly odd, Solid must add a distinct even component, and the
-// sample-rate-aware blockers must remove Solid's DC.
+// The bus must add nonlinear residue rather than filtered fundamental. Spectre
+// 1.5.6's measured labels supersede its manual here: Solid is symmetric/odd,
+// while Tube is biased and adds a distinct even component. The sample-rate-aware
+// blockers must remove Tube's DC.
 
 ## testProcessor()
 
@@ -361,6 +365,7 @@ processor EnhancerResidueAndCharacterContract [[ main ]]
             renderNext();
 
         float64 tubePower;
+        float64 tubeSum;
         float64 tubeSecondSin, tubeSecondCos;
         float64 tubeThirdSin, tubeThirdCos;
         for (int32 frame = 0; frame < measureFrames; ++frame)
@@ -369,6 +374,7 @@ processor EnhancerResidueAndCharacterContract [[ main ]]
             let analysisPhase = twoPi * 1000.0 * float64 (frame + settleFrames)
                                 / processor.frequency;
             tubePower += float64 (residue) * float64 (residue);
+            tubeSum += float64 (residue);
             tubeSecondSin += float64 (residue) * std::intrinsics::sin (2.0 * analysisPhase);
             tubeSecondCos += float64 (residue) * std::intrinsics::cos (2.0 * analysisPhase);
             tubeThirdSin += float64 (residue) * std::intrinsics::sin (3.0 * analysisPhase);
@@ -410,15 +416,149 @@ processor EnhancerResidueAndCharacterContract [[ main ]]
         let solidThird = std::intrinsics::sqrt (
             solidThirdSin * solidThirdSin + solidThirdCos * solidThirdCos
         );
+        let tubeMean = tubeSum / float64 (measureFrames);
         let solidMean = solidSum / float64 (measureFrames);
 
         out <- (tubePower > 1.0e-9 && solidPower > 1.0e-9) ? 1 : 0;
         advance();
-        out <- (tubeThird > tubeSecond * 4.0 && tubeThird > 1.0e-5) ? 1 : 0;
+        out <- (solidThird > solidSecond * 4.0 && solidThird > 1.0e-5) ? 1 : 0;
         advance();
-        out <- (solidSecond > tubeSecond * 2.0 && solidSecond > 1.0e-5) ? 1 : 0;
+        out <- (tubeSecond > solidSecond * 2.0 && tubeSecond > 1.0e-5) ? 1 : 0;
         advance();
-        out <- (solidThird > 1.0e-5 && std::intrinsics::abs (solidMean) < 0.0001) ? 1 : 0;
+        out <- (tubeThird > 1.0e-5
+                && std::intrinsics::abs (tubeMean) < 0.0001
+                && std::intrinsics::abs (solidMean) < 0.0001) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Amount is Spectre's ordinary 0..12 dB boost control expressed as 0..1. The
+// extracted parallel-band gain is therefore 10^(12*Amount/20)-1. At a tiny
+// signal level the fixed shaper is linear enough for contribution-power ratios
+// to expose that public control law without reaching into an implementation
+// helper.
+
+## testProcessor()
+
+processor EnhancerSpectreAmountLawContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+    float64 phase;
+
+    float32 render (float32 amount)
+    {
+        let sample = 0.002f * float32 (std::intrinsics::sin (phase));
+        phase += twoPi * 1000.0 / processor.frequency;
+        enhancer.b1FreqHzIn <- 1000.0f;
+        enhancer.b1QIn <- 1.0f;
+        enhancer.b1ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b1MidAmountIn <- amount;
+        enhancer.b1SideAmountIn <- 0.0f;
+        enhancer.b1CurveIn <- float32 (wt::enhancerCurveSolid);
+        enhancer.b2MidAmountIn <- 0.0f;
+        enhancer.b2SideAmountIn <- 0.0f;
+        enhancer.deEmphasisIn <- 0.0f;
+        enhancer.in <- float32<2> (sample, sample);
+        enhancer.advance();
+        return enhancer.out[0] - sample;
+    }
+
+    float64 measurePower (float32 amount)
+    {
+        enhancer.resetIn <- 1;
+        phase = 0.0;
+        for (int32 frame = 0; frame < 16384; ++frame)
+            render (amount);
+
+        float64 power;
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            let contribution = render (amount);
+            power += float64 (contribution) * float64 (contribution);
+        }
+        return power;
+    }
+
+    void main()
+    {
+        let quarterPower = measurePower (0.25f);
+        let halfPower = measurePower (0.5f);
+        let fullPower = measurePower (1.0f);
+        let fullToHalfPower = fullPower / halfPower;
+        let halfToQuarterPower = halfPower / quarterPower;
+
+        out <- (fullToHalfPower > 8.5 && fullToHalfPower < 9.5) ? 1 : 0;
+        advance();
+        out <- (halfToQuarterPower > 5.4 && halfToQuarterPower < 6.3) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Cmajor's TPT band output has centre gain Q. The production division by Q must
+// therefore leave the public Enhancer contribution constant-peak as Q changes,
+// matching a parametric bell's parallel difference rather than making narrow
+// bands silently weaker or stronger.
+
+## testProcessor()
+
+processor EnhancerQPeakNormalizationContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+    float64 phase;
+
+    float32 render (float32 q)
+    {
+        let sample = 0.002f * float32 (std::intrinsics::sin (phase));
+        phase += twoPi * 1000.0 / processor.frequency;
+        enhancer.b1FreqHzIn <- 1000.0f;
+        enhancer.b1QIn <- q;
+        enhancer.b1ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b1MidAmountIn <- 0.5f;
+        enhancer.b1SideAmountIn <- 0.0f;
+        enhancer.b1CurveIn <- float32 (wt::enhancerCurveSolid);
+        enhancer.b2MidAmountIn <- 0.0f;
+        enhancer.b2SideAmountIn <- 0.0f;
+        enhancer.deEmphasisIn <- 0.0f;
+        enhancer.in <- float32<2> (sample, sample);
+        enhancer.advance();
+        return enhancer.out[0] - sample;
+    }
+
+    float64 measurePower (float32 q)
+    {
+        enhancer.resetIn <- 1;
+        phase = 0.0;
+        for (int32 frame = 0; frame < 16384; ++frame)
+            render (q);
+
+        float64 power;
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            let contribution = render (q);
+            power += float64 (contribution) * float64 (contribution);
+        }
+        return power;
+    }
+
+    void main()
+    {
+        let widePower = measurePower (0.3f);
+        let referencePower = measurePower (1.0f);
+        let narrowPower = measurePower (8.0f);
+        let wideRatio = widePower / referencePower;
+        let narrowRatio = narrowPower / referencePower;
+
+        out <- (wideRatio > 0.99 && wideRatio < 1.01) ? 1 : 0;
+        advance();
+        out <- (narrowRatio > 0.99 && narrowRatio < 1.01) ? 1 : 0;
         advance();
         out <- -1;
         advance();
@@ -939,9 +1079,12 @@ processor EnhancerMusicalMaterialContract [[ main ]]
         }
 
         let differenceMean = differenceSum / float64 (measureFrames);
+        let differenceRms = std::intrinsics::sqrt (
+            differencePower / float64 (measureFrames)
+        );
         if (differencePower / float64 (measureFrames) <= 1.0e-10)
             allChanged = false;
-        if (std::intrinsics::abs (differenceMean) > 0.0001)
+        if (std::intrinsics::abs (differenceMean) / differenceRms > 0.0025)
             allDcControlled = false;
     }
 

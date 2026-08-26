@@ -1,6 +1,7 @@
 # Enhancer Design (Spectre-style, two-band)
 
-Status: **corrected locked design, 2026-08-26** (Andrew clarification), companion to
+Status: **measurement-corrected locked design, 2026-08-26** (Andrew clarification +
+activated Spectre 1.5.6 black-box corpus), companion to
 `DISTORTION_QUALITY_DESIGN.md`. Integration resolved same day: this module is a
 member of the fixed, non-modulatable end-of-chain polish section — see
 `POLISH_CHAIN_DESIGN.md`. Same ground rules: this specifies what to build and
@@ -103,19 +104,20 @@ No global mix (the four amounts are the mix), no output trim or hidden residue t
 
 ## 3. The two curves
 
-Per the Spectre manual's own characterizations, mapped to our vocabulary:
+Direct Spectre 1.5.6 renders supersede the manual's reversed character descriptions.
+For the fixed **Subtle** target, the measured transfer functions are:
 
-- **Tube** — symmetric soft clip (the clipped rational tanh approximation already
-  cited in `DISTORTION_QUALITY_DESIGN.md` §9): odd harmonics, "presence." Default for
-  band 2 (the 9 kHz default position).
-- **Solid** — *asymmetric* soft clip (bias-offset tanh variant): even + odd
-  harmonics, "thickness." Default for band 1. Asymmetry ⇒ DC in the residue ⇒ the
-  per-path DC blocker in §1 is mandatory, reusing the existing
-  `std::filters::dcblocker` idiom.
+- **Solid** — `tanh(3x) / sqrt(2)`: symmetric, predominantly odd harmonics.
+- **Tube** — `(tanh(3x + 0.125) - tanh(0.125)) / sqrt(2)`: biased, even + odd
+  harmonics. Default for band 2. Its signal-dependent DC makes the per-path,
+  sample-rate-aware residue blocker mandatory.
 
-Both memoryless. No envelope-driven bias here — this module is a subtle finisher, and
-the "alive" machinery belongs to the saturator module. If the two ever share a curve
-library, these are the same kernels.
+These fits reproduce the measured harmonics across the retained level/Amount sweep;
+the small-signal gains are approximately +6.53 dB (Solid) and +6.40 dB (Tube).
+Spectre does **not** normalize either curve back to unity fundamental gain and does
+not run an RMS/correlation follower. That retained positive fundamental contribution
+is part of its sound. Both curves are fixed, memoryless, and stateless; there is no
+envelope-driven bias or hidden gain compensation.
 
 ## 4. Anti-aliasing and alignment
 
@@ -137,17 +139,25 @@ requirements:
 
 ## 5. Voicing
 
-- Amount→drive mapping per band brings the nonlinear onset forward from the rejected
-  squared curve while retaining zero contribution at zero Amount:
-  `driven = band · amount · gain(24 dB · amount · (0.5 + 0.5 · amount))`.
-  The shaped contribution is not attenuated afterward. The rejected builds multiplied
-  it by `0.035`, then `0.08`/`0.094`; both violated the signal flow and buried the effect.
+- Spectre's Amount is an ordinary 0..+12 dB boost. The signal extracted from its
+  parallel bell is therefore:
+  `driven = band · (gain(12 dB · amount) − 1)`.
+  Twenty-five measured gain/input pairs fit this law with 0.0000063 dB RMS error
+  (0.000018 dB maximum). It is exactly zero at Amount 0 and reaches 2.981x at 100%.
+- The contribution is exactly
+  `DCblock(shape(driven) − deEmphasis · driven)` and is added to dry. There is no
+  second Amount multiply, post-shaper attenuation, static unity-fundamental matcher,
+  RMS follower, correlation matcher, or output trim. The rejected `0.035`
+  (approximately −29.1 dB), `0.08`, and `0.094` multipliers buried the effect and are
+  not part of the design.
 - Low-position voicing target: kick/bass weight on small speakers (2nd/3rd harmonic
   of 40–130 Hz content landing 80–400 Hz). High-position: acoustic guitar / vocal
   sheen and the side-widener use.
-- Voicing target is Spectre itself at Subtle/Medium on matching material (same
-  render-and-compare method as the saturator doc §5; the harmonic-profile scripts in
-  `scripts/drum_buss_*` extend directly).
+- Voicing target is Spectre **Subtle** on matching material. The bus has no Mode
+  control, so Medium/Aggressive are not silently folded into the Amount law.
+  `scripts/measure_spectre_reference.py` regenerates the reference corpus and exact
+  inferred-model validation; retained raw and level-matched audition files live under
+  ignored `build/t26-spectre-reference/`.
 
 ## 6. Placement and rack integration
 
@@ -161,49 +171,21 @@ oversampling history so a smoothed mode change crossfades coherent decoded resid
 instead of briefly reinterpreting one channel basis as the other. Reset semantics
 follow the polish chain's single-instance rules.
 
-## 7. Per-voice variant (feasibility)
+## 7. Per-voice variant (separate product decision)
 
 Question on the table (Andrew, 2026-08-25): a single-band instance per synth voice,
-band frequency tracking MIDI pitch (center = note frequency × harmonic ratio). How
-cheap can it get? **Verdict: cheap enough to run on every voice** — but only by
-changing two implementation choices relative to the bus module: drop mid/side (a
-voice is one signal), and replace oversampling with first-order ADAA. Costed:
+with center frequency tracking MIDI pitch. **Recommendation: DEFER.** T26 explicitly
+does not implement it, and the previous 30–40 MFLOP/s estimate assumed inexpensive
+algebraic substitute curves that the Spectre measurements have now invalidated.
+Spectre consistency would require the measured tanh transfers above; first-order ADAA
+for tanh uses a log-cosh antiderivative and needs a real prototype before its native
+and mobile cost or audible equivalence can be claimed.
 
-- **Filter**: one TPT SVF bandpass per voice ≈ a dozen flops/sample. MIDI tracking
-  is control-rate work, not audio-rate: recompute the `tan()` coefficient only on
-  note/bend/glide events (or per block) and smooth the *coefficient*, never call
-  `tan` per sample. Cheaper filter structures (cascaded one-poles) save almost
-  nothing and lose the clean bell — the SVF is already the floor.
-- **Shaper**: ADAA the residue function directly. `r(x) = f(x) − x` is itself a
-  waveshaper with antiderivative `R(x) = F(x) − x²/2`, so ONE guarded-divide ADAA
-  evaluation of `r` yields the aligned residue with no oversampling, no resampler,
-  no thru-path — the §4 alignment problem *disappears* instead of being solved.
-  Choose algebraic kernels so antiderivatives are closed-form and sqrt-cheap:
-  tube = `x/√(1+x²)` (R = `√(1+x²) − x²/2` + const), solid = the same curve
-  bias-shifted, with its static DC removed exactly by subtracting the constant
-  `r(0)` instead of running a per-voice DC blocker. (`x/√(1+x²)` is the k = 2 case
-  of the saturator's existing knee curve — shared kernel.)
-- **Post-sum, once, not per voice**: a single DC blocker on the summed voice
-  residues (the DC blocker is linear, so it commutes with the sum) catches the
-  signal-dependent DC of the solid curve.
-- **Budget**: ≈ 40–50 flops and 4 state floats per voice per sample. Sixteen voices
-  at 48 kHz ≈ 30–40 MFLOP/s — well under a percent of one mobile core, on the order
-  of one extra filter per voice, far less than an extra oscillator. The bus module's
-  four ×4-oversampled paths cost roughly as much as ten of these voices.
-- **SIMD**: two levels. Inside Cmajor: keep the kernel branch-free (the ADAA
-  ill-conditioning guard as a select, not a branch) and let the JIT vectorize. On
-  the native renderer path: batch voices across SIMD lanes exactly as the surveyed
-  code does — sst-waveshapers' `Quad*` functions process four voices per 128-bit
-  register with ADAA state in per-lane registers (that is what "Quad" means), and
-  Vital packs voices into `poly_float`. The xsimd dependency already vendored under
-  `native/three_oscillator_renderer/` is the right tool; lane-batching cuts the
-  effective per-voice cost to roughly a quarter.
-- **Aliasing**: the tracked narrow band makes this *safer* than the bus case — the
-  shaper sees a near-sinusoid at a known f₀, harmonics land at exact multiples with
-  fast soft-curve rolloff, and first-order ADAA mops up the fold-back. Voicing can
-  taper drive above ~2 kHz fundamentals rather than paying for more anti-aliasing.
-- Precedent that per-voice tracked-filter-into-shaper is a shipped pattern, not an
-  experiment: Vital routes a keytrackable filter around its per-voice distortion.
+If Andrew later approves a prototype, retain one TPT bell per voice, control-rate
+coefficient updates, no M/S controls, the documented continuous ratio, and one
+post-sum DC blocker. Compare exact 4x oversampling against a measured ADAA or
+approximation before choosing the production anti-aliasing path. Do not silently
+substitute a cheaper curve and call it the same Enhancer.
 
 **Harmonic ratio control (locked, Andrew 2026-08-25): continuous, no detents, wide.**
 Pinned as: ratio 0.5× to 32× the note frequency — i.e. a continuous tracking offset
@@ -219,8 +201,7 @@ Q ≈ 0.7 smooths into a continuous tilt of where the energy lands. Voicing keep
 default Q on the low side for smooth sweeps; high Q remains available for the
 surgical sound.
 
-Status: feasibility locked; ratio control locked as above. Whether to build the
-per-voice variant at all remains a product decision for later.
+Status: ratio concept retained; build/defer/reject remains Andrew's decision.
 
 ## 8. Ship criteria
 
@@ -230,7 +211,7 @@ per-voice variant at all remains a product decision for later.
    No scalar, output matcher, or loudness-equivalence gate follows that operation.
 3. With −18 dBFS pink input and 100% de-emphasis, either band at full Stereo Amount
    contributes no less than −6 dB relative to dry. This is a burial-prevention gate,
-   not an output-equivalence target; Andrew's audition remains the audible authority.
+   not an output-equivalence target. No dynamic level follower is permitted.
 4. Mono input remains mono in Stereo and M/S. In M/S, mono with only Side raised is
    exact dry, and a pure-side signal with only Side raised remains pure side.
 5. Each band can select Stereo or M/S without changing the other band's routing.
@@ -254,3 +235,11 @@ de-emphasis and per-band saturation to v1.5, June 2019); the developer's KVR pos
 (signal-flow description; pre-1.5 confirmation that without de-emphasis "you'll get
 the actual volume increase"); Sound On Sound / MusicRadar / Computer Music reviews.
 Manual PDF: https://www.wavesfactory.com/audio-plugins/manuals/Spectre-User-Manual.pdf
+
+Algorithm constants and label behavior come from 742 deterministic black-box cases
+captured from the locally activated Spectre 1.5.6 AU/VST3. The corpus covers Amount,
+input level, character, de-emphasis, routing, Q/frequency, quality, parallel
+additivity, sample rates, and musical fixtures. AU and VST3 renders were bit-identical;
+fresh-instance determinism was exact. See `scripts/measure_spectre_reference.py` and
+ignored `build/t26-spectre-reference/report.json`. The manual's Tube/Solid prose is
+retained only as provenance because the measured plugin labels are reversed.

@@ -33,18 +33,25 @@ namespace wt
     let enhancerCoefficientUpdateFrames = 16;
     let enhancerCoefficientEpsilon = 0.000001f;
 
-    // Amount gates the band and raises drive progressively toward +24 dB.
-    // Amount also gates the band before the shaper, so amount 0 makes the core
-    // input and aligned contribution exactly zero. There is deliberately no
-    // hidden post-shaper attenuation: Amount owns the contribution level.
-    let enhancerDriveRangeDb = 24.0f;
+    // Spectre's boost-only EQ gain runs from 0 to +12 dB. In a parallel bell,
+    // the signal sent to the shaper is the boost difference A-1, not A itself.
+    // This law is zero exactly at Amount 0 and reaches 2.981x at Amount 1.
+    let enhancerBandGainRangeDb = 12.0f;
+
+    // Spectre 1.5.6 Subtle-mode transfer laws, recovered from 742 deterministic
+    // black-box renders. The product's labels contradict its manual: its Solid
+    // output is symmetric, while its Tube output uses the static bias below.
+    let enhancerSpectreSubtleDrive = 3.0f;
+    let enhancerSpectreSubtleOutput = 0.7071067811865476f;
+    let enhancerSpectreTubeBias = 0.125f;
 
     // A sample-rate-aware version of the standard x[n]-x[n-1]+R*y[n-1]
     // DC-blocker idiom. std::filters::dcblocker fixes R at 0.996, making its
     // cutoff rise fourfold from 48 to 192 kHz; that would materially thin the
-    // 130 Hz band's residue at high sample rates. Ten hertz removes asymmetric
-    // curve bias without making the Enhancer's voicing sample-rate-dependent.
-    let enhancerDcBlockerCutoffHz = 10.0f;
+    // 130 Hz band's residue at high sample rates. A direct Spectre startup-decay
+    // probe places its blocker in roughly the 10-15 Hz range; use the upper edge
+    // to remove Tube bias without making the low-band voicing sample-rate-dependent.
+    let enhancerDcBlockerCutoffHz = 15.0f;
 
     namespace enhancerFilters = std::filters (float32<2>, float64, 32);
 
@@ -80,10 +87,7 @@ namespace wt
     float32 enhancerAmountDrive (float32 amount)
     {
         let amount01 = clampEnhancerAmount (amount);
-        let driveDb = enhancerDriveRangeDb
-                      * amount01
-                      * (0.5f + 0.5f * amount01);
-        return amount01 * std::levels::dBtoGain (driveDb);
+        return std::levels::dBtoGain (enhancerBandGainRangeDb * amount01) - 1.0f;
     }
 
     float32 smoothEnhancerControl (
@@ -132,19 +136,26 @@ namespace wt
         output stream float32<2> out;
         output stream float32<2> thru;
 
-        // Clipped rational tanh approximation: unity slope at the origin,
-        // monotonic soft saturation, and exact +/-1 endpoints at +/-3.
-        float32 tubeShape (float32 sample)
-        {
-            let x = std::intrinsics::clamp (sample, -3.0f, 3.0f);
-            let squared = x * x;
-            return x * (27.0f + squared) / (27.0f + 9.0f * squared);
-        }
-
         float32 solidShape (float32 sample)
         {
-            let bias = 0.08f;
-            return tubeShape (sample + bias) - tubeShape (bias);
+            return enhancerSpectreSubtleOutput * std::intrinsics::tanh (
+                enhancerSpectreSubtleDrive * sample
+            );
+        }
+
+        float32 tubeShape (float32 sample)
+        {
+            // The runtime/vector tanh and the compiler-folded bias constant can
+            // differ by a few ulps. Preserve the required f(0)=0 identity rather
+            // than letting that rounding difference excite the DC blocker.
+            if (sample == 0.0f)
+                return 0.0f;
+
+            return enhancerSpectreSubtleOutput * (
+                std::intrinsics::tanh (
+                    enhancerSpectreSubtleDrive * sample + enhancerSpectreTubeBias
+                ) - std::intrinsics::tanh (enhancerSpectreTubeBias)
+            );
         }
 
         float32 shape (float32 sample, float32 solidWeight)
