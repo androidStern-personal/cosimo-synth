@@ -5,9 +5,12 @@ import {
     collapseGlobalModRail,
     expandGlobalModRail,
     openBuiltDesktopBundlePage,
+    reachableGlobalModRailGripPoint,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 const PHONE_VIEWPORT = { width: 393, height: 852 };
+const SHORT_PHONE_VIEWPORT = { width: 320, height: 568 };
+const MOD_RAIL_POSITION_KEY = "cosimo.mobile-global-mod-rail.position.v1";
 
 async function readBuiltVoicePopoverOpen(page) {
     return page.evaluate(() => Boolean(
@@ -76,6 +79,158 @@ async function touchDragHorizontally(page, cdp, locator, deltaX) {
     }
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
 }
+
+test("compiled 320px Voice overlap keeps controls actionable while the Mod rail moves and expands", async () => {
+    const page = await openBuiltDesktopBundlePage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize(SHORT_PHONE_VIEWPORT);
+            await nextPage.addInitScript(({ positionKey }) => {
+                localStorage.setItem(positionKey, JSON.stringify({
+                    version: 2,
+                    edge: "right",
+                    normalizedY: 0,
+                }));
+            }, { positionKey: MOD_RAIL_POSITION_KEY });
+        },
+    });
+    let pointerDown = false;
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+        const warp = page.locator('[data-role="mobile-voice-warp-mode"]');
+        await rail.waitFor();
+        await warp.waitFor();
+        await page.waitForFunction(() => (
+            document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="mobile-voice-warp-mode"]')
+                ?.getAttribute("data-host-state") === "ready"
+        ));
+        await page.waitForTimeout(240);
+
+        const overlap = await page.evaluate(() => {
+            const host = document.querySelector("cosimo-desktop-react-view");
+            const root = host?.shadowRoot;
+            const railElement = root?.querySelector('[data-role="mobile-global-mod-rail"]');
+            const warpElement = root?.querySelector('[data-role="mobile-voice-warp-mode"]');
+            const toolbar = root?.querySelector('[data-role="mobile-voice-toolbar"]');
+            const previous = root?.querySelector('[data-role="mobile-voice-page-previous"]');
+            const next = root?.querySelector('[data-role="mobile-voice-page-next"]');
+            if (
+                !(root instanceof ShadowRoot)
+                || !(railElement instanceof HTMLElement)
+                || !(warpElement instanceof HTMLElement)
+                || !(toolbar instanceof HTMLElement)
+                || !(previous instanceof HTMLElement)
+                || !(next instanceof HTMLElement)
+            ) {
+                return null;
+            }
+            const railBounds = railElement.getBoundingClientRect();
+            const warpBounds = warpElement.getBoundingClientRect();
+            const toolbarBounds = toolbar.getBoundingClientRect();
+            const previousBounds = previous.getBoundingClientRect();
+            const nextBounds = next.getBoundingClientRect();
+            const intersection = {
+                left: Math.max(railBounds.left, warpBounds.left),
+                right: Math.min(railBounds.right, warpBounds.right),
+                top: Math.max(railBounds.top, warpBounds.top),
+                bottom: Math.min(railBounds.bottom, warpBounds.bottom),
+            };
+            const overlapPoint = {
+                x: (intersection.left + intersection.right) / 2,
+                y: (intersection.top + intersection.bottom) / 2,
+            };
+            const hit = root.elementFromPoint(overlapPoint.x, overlapPoint.y);
+            return {
+                viewport: { width: window.innerWidth, height: window.innerHeight },
+                expanded: railElement.getAttribute("data-expanded"),
+                railTop: railBounds.top,
+                intersectionWidth: intersection.right - intersection.left,
+                intersectionHeight: intersection.bottom - intersection.top,
+                overlapPoint,
+                overlapOwnedByWarp: hit instanceof Element && warpElement.contains(hit),
+                toolbarLeft: toolbarBounds.left,
+                toolbarRight: toolbarBounds.right,
+                previousLeft: previousBounds.left,
+                nextRight: nextBounds.right,
+            };
+        });
+        assert.ok(overlap, "The compiled Voice surface must expose its rail, Warp chip, and toolbar.");
+        assert.deepEqual(overlap.viewport, SHORT_PHONE_VIEWPORT);
+        assert.equal(overlap.expanded, "false");
+        assert.equal(overlap.intersectionWidth >= 8, true, "The collapsed rail must genuinely overlap the Warp chip.");
+        assert.equal(overlap.intersectionHeight >= 8, true, "The collapsed rail must genuinely overlap the Warp chip.");
+        assert.equal(overlap.overlapOwnedByWarp, true, "The overlapped Warp pixels must retain Voice pointer priority.");
+        assert.equal(Math.abs(overlap.previousLeft - overlap.toolbarLeft) <= 0.5, true);
+        assert.equal(Math.abs(overlap.nextRight - overlap.toolbarRight) <= 0.5, true);
+
+        const initialWarpLabel = await warp.getAttribute("aria-label");
+        await page.mouse.click(overlap.overlapPoint.x, overlap.overlapPoint.y);
+        assert.notEqual(
+            await warp.getAttribute("aria-label"),
+            initialWarpLabel,
+            "Clicking the actual rail/chip intersection must cycle Warp.",
+        );
+
+        const gripPoint = await reachableGlobalModRailGripPoint(page);
+        await page.mouse.move(gripPoint.x, gripPoint.y);
+        await page.mouse.down();
+        pointerDown = true;
+        let previousRailTop = overlap.railTop;
+        for (let step = 1; step <= 5; step += 1) {
+            const fingerDelta = step * 20;
+            await page.mouse.move(gripPoint.x, gripPoint.y + fingerDelta);
+            await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+            const railBounds = await rail.boundingBox();
+            assert.ok(railBounds, "The compiled Mod rail must stay rendered during capture.");
+            assert.equal(
+                Math.abs((railBounds.y - overlap.railTop) - fingerDelta) <= 3,
+                true,
+                `The compiled rail must follow the finger at ${fingerDelta}px; measured ${railBounds.y - overlap.railTop}px.`,
+            );
+            assert.equal(railBounds.y > previousRailTop, true, "Every downward finger step must advance the rail.");
+            previousRailTop = railBounds.y;
+        }
+        await page.mouse.up();
+        pointerDown = false;
+        await page.waitForFunction(() => (
+            document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="mobile-global-mod-rail"]')
+                ?.getAttribute("data-decelerating") === "false"
+        ));
+        assert.equal(await rail.getAttribute("data-expanded"), "false", "Dragging must not toggle the rail.");
+
+        await expandGlobalModRail(page);
+        const drawer = page.locator('[data-role="mobile-global-mod-rail-drawer"]');
+        const sourcePage = drawer.locator('.rack-mod-page:not([aria-hidden="true"])');
+        const sources = sourcePage.locator(".rack-mod-source");
+        const drawerGeometry = await drawer.evaluate((element) => {
+            const activePage = element.querySelector('.rack-mod-page:not([aria-hidden="true"])');
+            return {
+                drawerHeight: element.getBoundingClientRect().height,
+                sourcePageHeight: activePage?.getBoundingClientRect().height ?? 0,
+            };
+        });
+        assert.equal(await sources.count(), 3, "The compiled drawer must retain all three sources.");
+        assert.equal(
+            drawerGeometry.drawerHeight >= drawerGeometry.sourcePageHeight - 0.5,
+            true,
+            `The compiled drawer must expose one complete source page: ${JSON.stringify(drawerGeometry)}`,
+        );
+        for (let index = 0; index < 3; index += 1) {
+            await sources.nth(index).click({ trial: true });
+        }
+        const autoToggle = drawer.locator('[data-role="mobile-global-mod-rail-auto-toggle"]');
+        const beforePressed = await autoToggle.getAttribute("aria-pressed");
+        await autoToggle.click();
+        assert.notEqual(await autoToggle.getAttribute("aria-pressed"), beforePressed);
+    } finally {
+        if (pointerDown) {
+            await page.mouse.up().catch(() => undefined);
+        }
+        await page.close();
+    }
+});
 
 test("compiled shadow-root Voice popover accepts touch controls and preserves dismissal", async () => {
     const page = await openBuiltDesktopBundlePage({
