@@ -19,7 +19,6 @@ import {
     useMemo,
     useRef,
     useState,
-    type CSSProperties,
     type PointerEvent as ReactPointerEvent,
 } from "react";
 
@@ -39,6 +38,7 @@ import { hexToRgbTriplet } from "../shared/parameter-hud";
 import type { ParameterMenuRequest } from "../shared/parameter-context-menu";
 import type { SynthCallbackControlReadiness } from "../shared/synth-hooks";
 import { MsegEditorControlStrip } from "./mseg-editor-controls";
+import { MsegEditorShell } from "./mseg-editor-shell";
 import {
     parameterEntrySpecForScalar,
     parameterEntrySpecForSeconds,
@@ -359,128 +359,127 @@ export function MobileQuickSourceSheet({
         return null;
     })();
 
+    const headerActions = (
+        <>
+            <button
+                type="button"
+                data-role="quick-source-sheet-full-editor"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={onOpenFullEditor}
+            >
+                Full editor
+            </button>
+            <button
+                type="button"
+                data-role="quick-source-sheet-close"
+                aria-label="Close quick editor"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={onClose}
+            >
+                ×
+            </button>
+        </>
+    );
+    const controls = source.sourceKind === "mseg" ? (
+        <MsegEditorControlStrip
+            slotIndex={slot - 1}
+            rateSeconds={msegRateSeconds}
+            rateReady={msegRateReady}
+            morphBinding={msegMorphBinding}
+            routes={routes}
+            armedSource={stripSource}
+            hudContainer={hudContainer}
+            rolePrefix="quick-source-sheet"
+            dataRole="quick-source-sheet-strip"
+            variant="drawer"
+            className="quick-source-sheet-strip"
+            onRateChange={onMsegRateChange}
+            resolveScrollLockTargets={resolveScrollLockTargets}
+            onRequestHaptic={onRequestHaptic}
+            onRequestParameterMenu={onRequestParameterMenu}
+        />
+    ) : (
+        <div
+            data-role="quick-source-sheet-strip"
+            className="quick-source-sheet-strip"
+            style={{ gridTemplateColumns: `repeat(${cells.length}, minmax(0, 1fr))` }}
+        >
+            <ParameterReadoutStrip
+                cells={cells}
+                bindings={bindings}
+                routes={routes}
+                armedSource={stripSource}
+                hudContainer={hudContainer}
+                gestureController={gestureController}
+                ownerAccent={identity.accent}
+                ownerAccentRgb={hexToRgbTriplet(identity.accent)}
+                rolePrefix="quick-source-sheet"
+                resolveScrollLockTargets={resolveScrollLockTargets}
+                onRequestHaptic={onRequestHaptic}
+                onRequestParameterMenu={onRequestParameterMenu === undefined
+                    ? undefined
+                    : (cellId, clientX, clientY) => {
+                        const cell = cells.find((candidate) => candidate.id === cellId);
+                        const binding = bindings[cellId];
+                        if (cell === undefined || binding === undefined) {
+                            throw new Error(`Quick sheet cell ${cellId} has no spec.`);
+                        }
+                        const percentSpec = () => parameterEntrySpecForScalar({
+                            min: cell.display.min,
+                            max: cell.display.max,
+                            step: cell.display.step,
+                            unit: "%",
+                            canonicalPerDisplayedUnit: 0.01,
+                            digits: 0,
+                        });
+                        const secondsSpec = () => parameterEntrySpecForSeconds({
+                            minSeconds: cell.display.min,
+                            maxSeconds: cell.display.max,
+                            stepSeconds: cell.display.step,
+                            currentSeconds: binding.value,
+                        });
+                        const baseSpec = cell.formatValue === formatSecondsValue
+                            ? secondsSpec()
+                            : percentSpec();
+                        onRequestParameterMenu({
+                            controlKey: `quick-${source.sourceKind}${source.sourceSlot}-${cellId}`,
+                            label: cell.fullLabel,
+                            targetKind: cell.targetKind,
+                            baseSpec,
+                            baseValue: binding.value,
+                            defaultValue: binding.initialValue ?? null,
+                            commitBase: (value) => binding.commitValue(value),
+                            clientX,
+                            clientY,
+                        });
+                    }}
+            />
+        </div>
+    );
+
     return (
-        <section
-            data-role="quick-source-sheet"
-            data-source-kind={source.sourceKind}
-            data-source-slot={source.sourceSlot}
-            data-detent={dragHeight !== null ? "dragging" : detent}
-            className={`quick-source-sheet${source.sourceKind === "mseg" ? " mseg-editor-shell" : ""}`}
+        <MsegEditorShell
+            variant="drawer"
+            useMsegVisualLanguage={source.sourceKind === "mseg"}
+            label={identity.label}
+            accent={identity.accent}
+            dataRole="quick-source-sheet"
+            dataSourceKind={source.sourceKind}
+            dataSourceSlot={source.sourceSlot}
+            dataDetent={dragHeight !== null ? "dragging" : detent}
+            rootClassName={dragHeight !== null ? "is-resizing" : undefined}
             style={{
                 height: `${sheetHeight}px`,
-                "--quick-sheet-accent": identity.accent,
                 transition: dragHeight !== null ? "none" : undefined,
-            } as CSSProperties}
-            aria-label={`${identity.label} quick editor`}
-        >
-            <header
-                data-role="quick-source-sheet-grip"
-                className={`quick-source-sheet-top${source.sourceKind === "mseg" ? " mseg-editor-shell-top" : ""}`}
-                aria-label="Resize or dismiss the quick editor"
-                onPointerDown={gripPointerDown}
-            >
-                <strong>{identity.label}</strong>
-                <span className="quick-source-sheet-grip-pill" aria-hidden="true" />
-                <button
-                    type="button"
-                    data-role="quick-source-sheet-full-editor"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={onOpenFullEditor}
-                >
-                    Full editor
-                </button>
-                <button
-                    type="button"
-                    data-role="quick-source-sheet-close"
-                    aria-label="Close quick editor"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={onClose}
-                >
-                    ×
-                </button>
-            </header>
-            {source.sourceKind === "mseg" ? (
-                <MsegEditorControlStrip
-                    slotIndex={slot - 1}
-                    rateSeconds={msegRateSeconds}
-                    rateReady={msegRateReady}
-                    morphBinding={msegMorphBinding}
-                    routes={routes}
-                    armedSource={stripSource}
-                    hudContainer={hudContainer}
-                    rolePrefix="quick-source-sheet"
-                    dataRole="quick-source-sheet-strip"
-                    variant="drawer"
-                    className="quick-source-sheet-strip"
-                    onRateChange={onMsegRateChange}
-                    resolveScrollLockTargets={resolveScrollLockTargets}
-                    onRequestHaptic={onRequestHaptic}
-                    onRequestParameterMenu={onRequestParameterMenu}
-                />
-            ) : (
-                <div
-                    data-role="quick-source-sheet-strip"
-                    className="quick-source-sheet-strip"
-                    style={{ gridTemplateColumns: `repeat(${cells.length}, minmax(0, 1fr))` }}
-                >
-                    <ParameterReadoutStrip
-                        cells={cells}
-                        bindings={bindings}
-                        routes={routes}
-                        armedSource={stripSource}
-                        hudContainer={hudContainer}
-                        gestureController={gestureController}
-                        ownerAccent={identity.accent}
-                        ownerAccentRgb={hexToRgbTriplet(identity.accent)}
-                        rolePrefix="quick-source-sheet"
-                        resolveScrollLockTargets={resolveScrollLockTargets}
-                        onRequestHaptic={onRequestHaptic}
-                        onRequestParameterMenu={onRequestParameterMenu === undefined
-                            ? undefined
-                            : (cellId, clientX, clientY) => {
-                                const cell = cells.find((candidate) => candidate.id === cellId);
-                                const binding = bindings[cellId];
-                                if (cell === undefined || binding === undefined) {
-                                    throw new Error(`Quick sheet cell ${cellId} has no spec.`);
-                                }
-                                const percentSpec = () => parameterEntrySpecForScalar({
-                                    min: cell.display.min,
-                                    max: cell.display.max,
-                                    step: cell.display.step,
-                                    unit: "%",
-                                    canonicalPerDisplayedUnit: 0.01,
-                                    digits: 0,
-                                });
-                                const secondsSpec = () => parameterEntrySpecForSeconds({
-                                    minSeconds: cell.display.min,
-                                    maxSeconds: cell.display.max,
-                                    stepSeconds: cell.display.step,
-                                    currentSeconds: binding.value,
-                                });
-                                const baseSpec = cell.formatValue === formatSecondsValue
-                                    ? secondsSpec()
-                                    : percentSpec();
-                                onRequestParameterMenu({
-                                    controlKey: `quick-${source.sourceKind}${source.sourceSlot}-${cellId}`,
-                                    label: cell.fullLabel,
-                                    targetKind: cell.targetKind,
-                                    baseSpec,
-                                    baseValue: binding.value,
-                                    defaultValue: binding.initialValue ?? null,
-                                    commitBase: (value) => binding.commitValue(value),
-                                    clientX,
-                                    clientY,
-                                });
-                            }}
-                    />
-                </div>
-            )}
-            <div
-                data-role="quick-source-sheet-graphic"
-                className={`quick-source-sheet-graphic${source.sourceKind === "mseg" ? " mseg-editor-shell-graphic" : ""}`}
-            >
-                {graphic}
-            </div>
-        </section>
+            }}
+            ariaLabel={`${identity.label} quick editor`}
+            headerAriaLabel="Resize or dismiss the quick editor"
+            showGrip
+            onHeaderPointerDown={gripPointerDown}
+            headerActions={headerActions}
+            controls={controls}
+            graphic={graphic}
+            graphicDataRole="quick-source-sheet-graphic"
+        />
     );
 }

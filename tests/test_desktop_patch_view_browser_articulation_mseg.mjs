@@ -2953,7 +2953,7 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
     }
 });
 
-test("mobile MSEG editor is a contained synth surface with a dominant graph and recovery controls", async () => {
+test("mobile MSEG editor expands the drawer into a dominant graph with working recovery controls", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -2972,17 +2972,17 @@ test("mobile MSEG editor is a contained synth surface with a dominant graph and 
 
         const layout = await dialog.evaluate((element) => {
             const graph = element.querySelector('[data-role="mseg-editor-graph"]');
-            const footer = element.querySelector('[data-role="mseg-editor-controls"]');
+            const controls = element.querySelector('[data-role="mseg-editor-controls"]');
             const bounds = element.getBoundingClientRect();
-            if (!(graph instanceof HTMLElement) || !(footer instanceof HTMLElement)) {
+            if (!(graph instanceof HTMLElement) || !(controls instanceof HTMLElement)) {
                 return null;
             }
             const graphBounds = graph.getBoundingClientRect();
-            const footerBounds = footer.getBoundingClientRect();
+            const controlsBounds = controls.getBoundingClientRect();
             return {
                 bounds: { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom, height: bounds.height },
                 graphHeight: graphBounds.height,
-                footerHeight: footerBounds.height,
+                controlsHeight: controlsBounds.height,
                 documentScrollWidth: document.documentElement.scrollWidth,
                 bodyScrollWidth: document.body.scrollWidth,
                 activeRole: document.activeElement?.getAttribute("data-role") ?? "",
@@ -2992,7 +2992,7 @@ test("mobile MSEG editor is a contained synth surface with a dominant graph and 
         assert.equal(layout.bounds.left >= 0 && layout.bounds.right <= 393, true);
         assert.equal(layout.bounds.top >= 0 && layout.bounds.bottom <= 852, true);
         assert.equal(layout.documentScrollWidth <= 393 && layout.bodyScrollWidth <= 393, true);
-        assert.equal(layout.graphHeight > layout.footerHeight * 1.5, true);
+        assert.equal(layout.graphHeight > layout.controlsHeight * 1.5, true);
         assert.equal(layout.graphHeight >= layout.bounds.height * 0.48, true);
         assert.equal(layout.activeRole, "mseg-editor-done");
 
@@ -3000,7 +3000,11 @@ test("mobile MSEG editor is a contained synth surface with a dominant graph and 
             const target = dialog.locator(`[data-role="${role}"]`);
             const box = await target.boundingBox();
             assert.ok(box, `${role} should be visible`);
-            assert.equal(box.width >= 44 && box.height >= 44, true, `${role} must be touchable`);
+            assert.equal(box.width >= 26 && box.height >= 26, true, `${role} must remain usable in the drawer-height rows`);
+            assert.equal(await target.evaluate((element, point) => {
+                const hit = document.elementFromPoint(point.x, point.y);
+                return hit === element || (hit !== null && element.contains(hit));
+            }, { x: box.x + (box.width / 2), y: box.y + (box.height / 2) }), true, `${role} must own its visible hit point`);
         }
         assert.equal(await dialog.locator('[data-role="mseg-editor-undo"]').isDisabled(), true);
         assert.equal(await dialog.locator('[data-role="mseg-rate-readout"]').count(), 1);
@@ -3015,7 +3019,7 @@ test("mobile MSEG editor is a contained synth surface with a dominant graph and 
             (snapshot) => readStoredMsegShape(snapshot).points.length === 3,
         );
         assert.equal(await dialog.locator('[data-role="mseg-editor-undo"]').isEnabled(), true);
-        assert.match(await dialog.locator('[data-role="mseg-coordinate-hud"]').innerText(), /T\s+\d+\.\d{3}\s+·\s+V\s+[+-]?\d+\.\d{3}/);
+        assert.equal(await dialog.locator('[data-role="mseg-coordinate-hud"]').count(), 0);
 
         await dialog.locator('[data-role="mseg-editor-undo"]').click();
         await waitForHarnessSnapshot(
@@ -3053,6 +3057,7 @@ test("drawer and full-screen MSEG editors share one lightweight expanded-shell l
                 borderTopColor: style.borderTopColor,
                 borderTopStyle: style.borderTopStyle,
                 borderTopWidth: style.borderTopWidth,
+                position: style.position,
             };
         });
         assert.match(await drawerHeader.getAttribute("class") ?? "", /mseg-editor-shell-top/);
@@ -3098,6 +3103,76 @@ test("drawer and full-screen MSEG editors share one lightweight expanded-shell l
         assert.equal(drawerPresentation.borderTopWidth, "1px");
         assert.equal(drawerPresentation.borderTopStyle, "solid");
         assert.notEqual(drawerPresentation.borderTopColor, "rgba(0, 0, 0, 0)");
+        assert.equal(drawerPresentation.position, "fixed", "Sharing the shell must not pull the drawer out of its fixed bottom-sheet layer.");
+    } finally {
+        await page.close();
+    }
+});
+
+test("the full-screen MSEG editor is the drawer's title-controls-graph composition expanded", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const measureRows = async (root, headerSelector, controlsSelector, graphicSelector) => root.evaluate((element, selectors) => {
+        const header = element.querySelector(selectors.header);
+        const controls = element.querySelector(selectors.controls);
+        const graphic = element.querySelector(selectors.graphic);
+        if (!(header instanceof HTMLElement) || !(controls instanceof HTMLElement) || !(graphic instanceof HTMLElement)) {
+            throw new Error("The MSEG editor's title, controls, or graph row is missing.");
+        }
+        const rootBounds = element.getBoundingClientRect();
+        const headerBounds = header.getBoundingClientRect();
+        const controlsBounds = controls.getBoundingClientRect();
+        const graphicBounds = graphic.getBoundingClientRect();
+        return {
+            headerTop: headerBounds.top - rootBounds.top,
+            headerBottom: headerBounds.bottom - rootBounds.top,
+            headerHeight: headerBounds.height,
+            controlsTop: controlsBounds.top - rootBounds.top,
+            controlsBottom: controlsBounds.bottom - rootBounds.top,
+            controlsHeight: controlsBounds.height,
+            graphicTop: graphicBounds.top - rootBounds.top,
+            coordinateHudCount: element.querySelectorAll('[data-role="mseg-coordinate-hud"]').length,
+        };
+    }, {
+        header: headerSelector,
+        controls: controlsSelector,
+        graphic: graphicSelector,
+    });
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+
+        const drawer = page.locator('[data-role="quick-source-sheet"]');
+        await drawer.waitFor();
+        const drawerRows = await measureRows(
+            drawer,
+            '[data-role="quick-source-sheet-grip"]',
+            '[data-role="quick-source-sheet-strip"]',
+            '[data-role="quick-source-sheet-graphic"]',
+        );
+
+        await drawer.locator('[data-role="quick-source-sheet-full-editor"]').click();
+        const full = page.locator('[data-role="mseg-editor-dialog"]');
+        await full.waitFor();
+        const fullRows = await measureRows(
+            full,
+            'header',
+            '[data-role="mseg-editor-controls"]',
+            '[data-role="mseg-editor-graph"]',
+        );
+
+        assert.equal(drawerRows.headerTop <= 1, true, "The drawer's established 1px top border remains part of its geometry.");
+        assert.equal(drawerRows.controlsTop, drawerRows.headerBottom);
+        assert.equal(drawerRows.graphicTop, drawerRows.controlsBottom);
+        assert.equal(fullRows.headerTop, 0);
+        assert.equal(fullRows.controlsTop, fullRows.headerBottom);
+        assert.equal(fullRows.graphicTop, fullRows.controlsBottom);
+        assert.equal(Math.abs(fullRows.headerHeight - drawerRows.headerHeight) <= 1, true);
+        assert.equal(Math.abs(fullRows.controlsHeight - drawerRows.controlsHeight) <= 1, true);
+        assert.equal(fullRows.coordinateHudCount, 0, "The expanded drawer must not retain the old modal coordinate decoration.");
     } finally {
         await page.close();
     }
@@ -3281,6 +3356,217 @@ test("the full-screen MSEG timing and morph knobs share the compact row without 
             (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg1Rate)) <= 0.001,
         );
     } finally {
+        await page.close();
+    }
+});
+
+test("the full-screen Rate knob shows its live precision HUD above the expanded drawer", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('button[aria-label="Open MSEG editor"]');
+
+        const dialog = page.locator('[data-role="mseg-editor-dialog"]');
+        const rateKnob = dialog.locator('[data-role="mseg-editor-cell-rate"]');
+        await rateKnob.focus();
+        await page.keyboard.press("Home");
+        const knobBounds = await rateKnob.boundingBox();
+        assert.ok(knobBounds);
+        const start = {
+            x: knobBounds.x + (knobBounds.width / 2),
+            y: knobBounds.y + (knobBounds.height / 2),
+        };
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        await page.mouse.move(start.x + 36, start.y, { steps: 5 });
+
+        const hudLayer = dialog.locator('[data-role="mseg-editor-hud-layer"]');
+        const hud = hudLayer.locator('[data-role="mobile-voice-hud"].is-visible');
+        await hud.waitFor();
+        const liveValueText = await rateKnob.getAttribute("aria-valuetext");
+        assert.notEqual(liveValueText, "0.000 s");
+        assert.equal(await hud.locator('[data-role="mobile-voice-hud-base"]').textContent(), liveValueText);
+        assert.match(await hud.textContent(), /MSEG rate/);
+        const [dialogBounds, hudBounds] = await Promise.all([dialog.boundingBox(), hud.boundingBox()]);
+        assert.ok(dialogBounds);
+        assert.ok(hudBounds);
+        assert.equal(hudBounds.y >= dialogBounds.y, true);
+        assert.equal(hudBounds.y + hudBounds.height <= dialogBounds.y + dialogBounds.height, true);
+
+        await page.mouse.up();
+    } finally {
+        await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
+test("the full-screen Morph knob visibly reshapes the primary envelope while it moves", async () => {
+    const modulationState = createDefaultModulationState();
+    modulationState.msegSlots[0] = {
+        ...modulationState.msegSlots[0],
+        shapeB: {
+            ...modulationState.msegSlots[0].shapeB,
+            points: [
+                { x: 0, y: 1, curvePower: 0 },
+                { x: 0.38, y: 0.12, curvePower: 2.5 },
+                { x: 1, y: 0.45, curvePower: -1.5 },
+            ],
+        },
+    };
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(({ stateKey, serializedState }) => {
+                const initial = window.__COSIMO_DESKTOP_HARNESS_INITIAL__ ?? {};
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    ...initial,
+                    storedState: {
+                        ...initial.storedState,
+                        [stateKey]: serializedState,
+                    },
+                };
+            }, {
+                stateKey: MODULATION_STATE_KEY,
+                serializedState: JSON.stringify(modulationState),
+            });
+        },
+    });
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('button[aria-label="Open MSEG editor"]');
+
+        const dialog = page.locator('[data-role="mseg-editor-dialog"]');
+        const surface = dialog.locator('[data-role="mseg-editor-surface"]');
+        const morphKnob = dialog.locator('[data-role="mseg-editor-cell-morph"]');
+        await morphKnob.focus();
+        await page.keyboard.press("Home");
+        const storedShapeBefore = readStoredMsegShape(await getHarnessSnapshot(page));
+        const baseCurveBefore = await surface.locator('[data-role="mseg-base-curve"]').getAttribute("d");
+        assert.match(baseCurveBefore ?? "", /^M /);
+
+        const knobBounds = await morphKnob.boundingBox();
+        assert.ok(knobBounds);
+        const start = {
+            x: knobBounds.x + (knobBounds.width / 2),
+            y: knobBounds.y + (knobBounds.height / 2),
+        };
+        assert.equal(await morphKnob.evaluate((element, point) => {
+            const hit = document.elementFromPoint(point.x, point.y);
+            return hit !== null && element.contains(hit);
+        }, start), true, "The visible Morph knob must own its physical hit point above the floating Mod rail.");
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        await page.mouse.move(start.x + 56, start.y, { steps: 8 });
+        await page.waitForFunction(() => (
+            Number(document.querySelector('[data-role="mseg-editor-cell-morph"]')?.getAttribute("aria-valuenow")) > 0.1
+        ));
+
+        const livePresentation = await surface.evaluate((element) => ({
+            presentation: element.getAttribute("data-morph-presentation"),
+            baseCurve: element.querySelector('[data-role="mseg-base-curve"]')?.getAttribute("d") ?? "",
+            effectiveOverlayCount: element.querySelectorAll('[data-role="mseg-effective-curve"]').length,
+            referenceOverlayCount: element.querySelectorAll(
+                '[data-role="mseg-reference-curve"], [data-role="mseg-reference-fill"]',
+            ).length,
+            pointCount: element.querySelectorAll('[data-role="mseg-point"]').length,
+        }));
+        assert.equal(livePresentation.presentation, "primary");
+        assert.notEqual(livePresentation.baseCurve, baseCurveBefore);
+        assert.equal(livePresentation.effectiveOverlayCount, 0);
+        assert.equal(livePresentation.referenceOverlayCount, 0);
+        assert.equal(livePresentation.pointCount, 0, "A morphed result must not show handles belonging to only shape A or B.");
+
+        await page.mouse.up();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mseg-editor-surface"]')?.getAttribute("data-morph-presentation") === "edit-shape"
+        ));
+        assert.deepEqual(readStoredMsegShape(await getHarnessSnapshot(page)), storedShapeBefore);
+        assert.equal(await surface.locator('[data-role="mseg-point"]').count() > 0, true);
+    } finally {
+        await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
+test("the drawer Morph knob shows its changing amount in the shared precision HUD", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+
+        const drawer = page.locator('[data-role="quick-source-sheet"]');
+        const morphKnob = drawer.locator('[data-role="quick-source-sheet-cell-morph"]');
+        await morphKnob.focus();
+        await page.keyboard.press("Home");
+        const knobBounds = await morphKnob.boundingBox();
+        assert.ok(knobBounds);
+        const start = {
+            x: knobBounds.x + (knobBounds.width / 2),
+            y: knobBounds.y + (knobBounds.height / 2),
+        };
+        assert.equal(await morphKnob.evaluate((element, point) => {
+            const hit = document.elementFromPoint(point.x, point.y);
+            return hit !== null && element.contains(hit);
+        }, start), true, "The drawer Morph knob must own its visible hit point.");
+        await morphKnob.dispatchEvent("pointerdown", {
+            pointerId: 222,
+            pointerType: "touch",
+            isPrimary: true,
+            button: 0,
+            buttons: 1,
+            clientX: start.x,
+            clientY: start.y,
+        });
+        for (const progress of [0.25, 0.6, 1]) {
+            await page.evaluate(({ x, y, progressValue }) => {
+                window.dispatchEvent(new PointerEvent("pointermove", {
+                    bubbles: true,
+                    cancelable: true,
+                    pointerId: 222,
+                    pointerType: "touch",
+                    isPrimary: true,
+                    button: 0,
+                    buttons: 0,
+                    clientX: x + (56 * progressValue),
+                    clientY: y,
+                }));
+            }, { ...start, progressValue: progress });
+        }
+        await page.waitForFunction(() => (
+            Number(document.querySelector('[data-role="quick-source-sheet-cell-morph"]')?.getAttribute("aria-valuenow")) > 0.1
+        ));
+
+        const hud = page.locator('[data-role="mobile-voice-hud-layer"] [data-role="mobile-voice-hud"].is-visible');
+        await hud.waitFor();
+        const liveValueText = await morphKnob.getAttribute("aria-valuetext");
+        assert.notEqual(liveValueText, "0%");
+        assert.equal(await hud.locator('[data-role="mobile-voice-hud-base"]').textContent(), liveValueText);
+        assert.match(await hud.textContent(), /MSEG morph/);
+
+        await page.evaluate(({ x, y }) => {
+            window.dispatchEvent(new PointerEvent("pointerup", {
+                bubbles: true,
+                pointerId: 222,
+                pointerType: "touch",
+                isPrimary: true,
+                button: 0,
+                buttons: 0,
+                clientX: x + 56,
+                clientY: y,
+            }));
+        }, start);
+    } finally {
+        await page.mouse.up().catch(() => {});
         await page.close();
     }
 });

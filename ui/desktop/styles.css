@@ -162,9 +162,42 @@
 }
 
 .mseg-editor-shell {
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    grid-template-rows: 34px 40px minmax(0, 1fr);
+    overflow: hidden;
     background:
         linear-gradient(180deg, color-mix(in srgb, var(--quick-sheet-accent) 7%, transparent), transparent 30%),
         rgb(var(--cosimo-ground-rgb) / 0.97);
+}
+
+.mseg-editor-shell-full {
+    position: relative;
+}
+
+.mseg-editor-shell-top {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+}
+
+.mseg-editor-shell-top > strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--quick-sheet-accent);
+    font-family: "Departure Mono", "SFMono-Regular", ui-monospace, monospace;
+    font-size: var(--cosimo-type-label);
+    letter-spacing: var(--cosimo-track);
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.mseg-editor-shell-full .mseg-editor-shell-top > strong {
+    margin-right: auto;
 }
 
 .mseg-editor-shell-graphic {
@@ -183,41 +216,12 @@
 }
 
 .mseg-editor-frame {
-    position: relative;
-    display: grid;
     width: 100%;
     height: 100%;
-    min-width: 0;
-    min-height: 0;
-    grid-template-rows: auto minmax(0, 1fr) auto;
-    gap: 0;
-    overflow: hidden;
     padding: 0;
     border: 0;
     border-radius: 0;
     box-shadow: none;
-}
-
-.mseg-editor-header {
-    display: flex;
-    height: 44px;
-    min-width: 0;
-    align-items: center;
-    gap: 8px;
-    padding: 0 10px;
-}
-
-.mseg-editor-title {
-    min-width: 0;
-    margin-right: auto;
-    overflow: hidden;
-    color: var(--quick-sheet-accent);
-    font-family: "Departure Mono", "SFMono-Regular", ui-monospace, monospace;
-    font-size: var(--cosimo-type-label);
-    letter-spacing: var(--cosimo-track);
-    text-overflow: ellipsis;
-    text-transform: uppercase;
-    white-space: nowrap;
 }
 
 .mseg-editor-shapes {
@@ -225,23 +229,22 @@
     flex: none;
     gap: 2px;
     padding: 1px;
-    border: 1px solid rgb(255 255 255 / 0.08);
-    border-radius: 10px;
-    background: rgb(255 255 255 / 0.03);
+    border: 1px solid var(--cosimo-line);
+    border-radius: var(--cosimo-radius-sm);
+    background: var(--cosimo-wash);
 }
 
 .mseg-editor-action {
     display: grid;
-    min-width: 44px;
-    height: 44px;
+    min-width: 34px;
+    height: 26px;
     place-items: center;
-    padding: 0 7px;
-    border-radius: 9px;
-    color: rgb(203 213 225 / 0.72);
-    font-size: 9px;
-    font-weight: 650;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    padding: 0 6px;
+    border: 1px solid var(--cosimo-line);
+    border-radius: var(--cosimo-radius-sm);
+    background: var(--cosimo-wash);
+    color: var(--cosimo-ink);
+    font-size: var(--cosimo-type-label);
 }
 
 .mseg-editor-action:disabled {
@@ -253,21 +256,6 @@
     border: 0;
     border-radius: 0;
     background: transparent;
-}
-
-.mseg-coordinate-hud {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    padding: 4px 7px;
-    border: 1px solid rgb(var(--section-accent-rgb) / 0.28);
-    border-radius: var(--cosimo-radius-sm);
-    background: rgb(var(--cosimo-ground-rgb) / 0.86);
-    color: var(--section-accent);
-    font-family: var(--font-mono, ui-monospace, monospace);
-    font-size: 9px;
-    letter-spacing: 0.06em;
-    pointer-events: none;
 }
 
 .mseg-control-strip {
@@ -305,7 +293,9 @@
 }
 
 .mseg-control-strip[data-variant="full"] {
-    min-height: 50px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
     border-top: 1px solid var(--cosimo-line);
     border-right: 0;
     border-bottom: 1px solid var(--cosimo-line);
@@ -317,7 +307,7 @@
 .mseg-control-strip-loop {
     width: 62px;
     min-width: 62px;
-    height: 44px;
+    height: 32px;
     padding: 0 5px;
     border-radius: 10px;
     font-size: 9px;
@@ -332,11 +322,6 @@
         border-radius: 0;
     }
 
-    .mseg-editor-title {
-        font-size: 10px;
-        letter-spacing: 0.13em;
-    }
-
     .mseg-editor-action {
         padding-inline: 5px;
         font-size: 8px;
@@ -344,7 +329,6 @@
 
     .mseg-control-strip {
         gap: 0 5px;
-        padding: 3px 5px;
     }
 }
 

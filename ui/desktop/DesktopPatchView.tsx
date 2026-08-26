@@ -133,6 +133,7 @@ import {
 } from "../shared/mobile-voice-editor";
 import { MobileQuickSourceSheet } from "./mobile-quick-source-sheet";
 import { MsegEditorControlStrip } from "./mseg-editor-controls";
+import { MsegEditorShell } from "./mseg-editor-shell";
 import { useDesktopCurveLab } from "./desktop-curve-lab";
 import {
     DesktopOscillatorConnectionBoundary,
@@ -466,7 +467,6 @@ type MsegEditorModalProps = {
     orientation: MsegSurfaceOrientation;
     onOrientationChange: (orientation: MsegSurfaceOrientation) => void;
     routes: ReadonlyArray<ModulationRoute>;
-    hudContainer: Element | null;
     resolveScrollLockTargets: () => ReadonlyArray<HTMLElement>;
     onRequestParameterMenu: (request: ParameterMenuRequest) => void;
 };
@@ -2890,11 +2890,11 @@ function MsegEditorModal({
     orientation,
     onOrientationChange,
     routes,
-    hudContainer,
     resolveScrollLockTargets,
     onRequestParameterMenu,
 }: MsegEditorModalProps) {
     const [isMorphAdjusting, setIsMorphAdjusting] = useState(false);
+    const [modalHudContainer, setModalHudContainer] = useState<Element | null>(null);
     const backdropRef = useRef<HTMLDivElement | null>(null);
     const doneButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -2959,59 +2959,78 @@ function MsegEditorModal({
 
     return (
         <div ref={backdropRef} className="synth-modal-backdrop mseg-editor-backdrop fixed inset-0 z-50 flex items-center justify-center">
-            <div
+            <MsegEditorShell
+                variant="full"
+                label={slotLabel}
+                accent={findRackModulationSource("mseg", slotIndex + 1).accent}
+                dataRole="mseg-editor-dialog"
+                dataSectionAccent="mint"
                 role="dialog"
-                aria-modal="true"
-                aria-label={`${slotLabel} editor`}
-                data-role="mseg-editor-dialog"
-                data-section-accent="mint"
-                className="mseg-editor-shell mseg-editor-frame"
-                style={{
-                    "--quick-sheet-accent": findRackModulationSource("mseg", slotIndex + 1).accent,
-                } as CSSProperties}
-            >
-                <header className="mseg-editor-shell-top mseg-editor-header">
-                    <strong className="mseg-editor-title">{slotLabel}</strong>
-                    <div className="mseg-editor-shapes" role="group" aria-label="MSEG shape">
-                        {[0, 1].map((shapeIndex) => (
-                            <button
-                                key={`mseg-editor-shape-${shapeIndex}`}
-                                type="button"
-                                aria-label={`Edit shape ${shapeIndex === 0 ? "A" : "B"}`}
-                                aria-pressed={msegState.editShapeIndex === shapeIndex}
-                                data-role={shapeIndex === 0 ? "mseg-shape-a" : "mseg-shape-b"}
-                                className={`mseg-editor-action ${
-                                    msegState.editShapeIndex === shapeIndex
-                                        ? "synth-accent-active-button"
-                                        : "text-slate-300/55 hover:bg-white/[0.05] hover:text-slate-100"
-                                }`}
-                                onClick={() => onSelectShape(shapeIndex)}
-                            >
-                                {shapeIndex === 0 ? "A" : "B"}
-                            </button>
-                        ))}
-                    </div>
-                    <button
-                        type="button"
-                        data-role="mseg-editor-undo"
-                        className="mseg-editor-action"
-                        disabled={!canUndo}
-                        onClick={onUndo}
-                    >
-                        Undo
-                    </button>
-                    <button
-                        ref={doneButtonRef}
-                        type="button"
-                        data-role="mseg-editor-done"
-                        className="cosimo-button mseg-editor-action"
-                        onClick={onClose}
-                    >
-                        Done
-                    </button>
-                </header>
-
-                <div className="mseg-editor-shell-graphic mseg-editor-graph" data-role="mseg-editor-graph">
+                ariaModal
+                ariaLabel={`${slotLabel} editor`}
+                headerActions={(
+                    <>
+                        <div className="mseg-editor-shapes" role="group" aria-label="MSEG shape">
+                            {[0, 1].map((shapeIndex) => (
+                                <button
+                                    key={`mseg-editor-shape-${shapeIndex}`}
+                                    type="button"
+                                    aria-label={`Edit shape ${shapeIndex === 0 ? "A" : "B"}`}
+                                    aria-pressed={msegState.editShapeIndex === shapeIndex}
+                                    data-role={shapeIndex === 0 ? "mseg-shape-a" : "mseg-shape-b"}
+                                    className={`mseg-editor-action ${
+                                        msegState.editShapeIndex === shapeIndex
+                                            ? "synth-accent-active-button"
+                                            : "text-slate-300/55 hover:bg-white/[0.05] hover:text-slate-100"
+                                    }`}
+                                    onClick={() => onSelectShape(shapeIndex)}
+                                >
+                                    {shapeIndex === 0 ? "A" : "B"}
+                                </button>
+                            ))}
+                        </div>
+                        <button
+                            type="button"
+                            data-role="mseg-editor-undo"
+                            className="mseg-editor-action"
+                            disabled={!canUndo}
+                            onClick={onUndo}
+                        >
+                            Undo
+                        </button>
+                        <button
+                            ref={doneButtonRef}
+                            type="button"
+                            data-role="mseg-editor-done"
+                            className="cosimo-button mseg-editor-action"
+                            onClick={onClose}
+                        >
+                            Done
+                        </button>
+                    </>
+                )}
+                controls={(
+                    <MsegEditorControlStrip
+                        slotIndex={slotIndex}
+                        rateSeconds={msegState.playback.rate.seconds}
+                        rateReady={rateReady}
+                        morphBinding={morphBinding}
+                        routes={routes}
+                        armedSource={null}
+                        hudContainer={modalHudContainer}
+                        rolePrefix="mseg-editor"
+                        dataRole="mseg-editor-controls"
+                        variant="full"
+                        onRateChange={onRateChange}
+                        resolveScrollLockTargets={resolveScrollLockTargets}
+                        onRequestParameterMenu={onRequestParameterMenu}
+                        rateFocusBindings={rateFocusBindings}
+                        onMorphAdjustingChange={setIsMorphAdjusting}
+                        loopEnabled={msegState.playback.loop !== null}
+                        onToggleLoop={onToggleLoop}
+                    />
+                )}
+                graphic={(
                     <EditableMsegSurface
                         surfaceRef={surfaceRef}
                         points={msegState.shape.points}
@@ -3020,6 +3039,7 @@ function MsegEditorModal({
                         morphShapeBPoints={msegState.shapeB?.points ?? null}
                         morphValue={morphBinding.value}
                         showMorphCurve={isMorphAdjusting}
+                        morphPresentation="primary"
                         selectedPointIndex={selectedPointIndex}
                         hoveredSegmentIndex={hoveredSegmentIndex}
                         activeSegmentIndex={activeSegmentIndex}
@@ -3032,33 +3052,17 @@ function MsegEditorModal({
                         className="h-full w-full"
                         dataRole="mseg-editor-surface"
                     />
-                    <output className="mseg-coordinate-hud" data-role="mseg-coordinate-hud">
-                        T {msegState.shape.points[selectedPointIndex]?.x.toFixed(3) ?? "0.000"}
-                        {" · "}
-                        V {msegState.shape.points[selectedPointIndex]?.y.toFixed(3) ?? "0.000"}
-                    </output>
-                </div>
-
-                <MsegEditorControlStrip
-                    slotIndex={slotIndex}
-                    rateSeconds={msegState.playback.rate.seconds}
-                    rateReady={rateReady}
-                    morphBinding={morphBinding}
-                    routes={routes}
-                    armedSource={null}
-                    hudContainer={hudContainer}
-                    rolePrefix="mseg-editor"
-                    dataRole="mseg-editor-controls"
-                    variant="full"
-                    onRateChange={onRateChange}
-                    resolveScrollLockTargets={resolveScrollLockTargets}
-                    onRequestParameterMenu={onRequestParameterMenu}
-                    rateFocusBindings={rateFocusBindings}
-                    onMorphAdjustingChange={setIsMorphAdjusting}
-                    loopEnabled={msegState.playback.loop !== null}
-                    onToggleLoop={onToggleLoop}
-                />
-            </div>
+                )}
+                graphicDataRole="mseg-editor-graph"
+                overlay={(
+                    <div
+                        ref={setModalHudContainer}
+                        data-role="mseg-editor-hud-layer"
+                        className="pointer-events-none absolute inset-0 z-40"
+                        aria-hidden={false}
+                    />
+                )}
+            />
         </div>
     );
 }
@@ -5541,7 +5545,6 @@ function DesktopPatchViewBody({
                 orientation={msegSurfaceOrientation}
                 onOrientationChange={setMsegSurfaceOrientation}
                 routes={synthView.routes}
-                hudContainer={mobileVoiceHudLayer}
                 resolveScrollLockTargets={resolveMobileVoiceScrollLocks}
                 onRequestParameterMenu={openShellParameterMenu}
             />

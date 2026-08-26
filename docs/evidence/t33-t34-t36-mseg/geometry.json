@@ -39,15 +39,15 @@
     },
     "surface": {
       "x": 8,
-      "y": 48,
+      "y": 78,
       "width": 377,
-      "height": 746
+      "height": 768
     },
     "controls": {
       "x": 0,
-      "y": 800,
+      "y": 34,
       "width": 393,
-      "height": 52
+      "height": 40
     },
     "timeAxis": "vertical",
     "rootBorderTop": "0px none rgb(232, 236, 239)",
@@ -60,19 +60,19 @@
     },
     "root": {
       "x": 0,
-      "y": 364,
+      "y": 260,
       "width": 600,
-      "height": 156
+      "height": 260
     },
     "surface": {
       "x": 8,
-      "y": 443,
+      "y": 339,
       "width": 584,
-      "height": 71
+      "height": 175
     },
     "controls": {
       "x": 0,
-      "y": 399,
+      "y": 295,
       "width": 600,
       "height": 40
     },
@@ -93,15 +93,15 @@
     },
     "surface": {
       "x": 8,
-      "y": 48,
+      "y": 78,
       "width": 884,
-      "height": 490
+      "height": 516
     },
     "controls": {
       "x": 0,
-      "y": 544,
+      "y": 34,
       "width": 900,
-      "height": 56
+      "height": 40
     },
     "timeAxis": "horizontal",
     "rootBorderTop": "0px none rgb(232, 236, 239)",
@@ -120,15 +120,15 @@
     },
     "surface": {
       "x": 8,
-      "y": 48,
+      "y": 78,
       "width": 1264,
-      "height": 790
+      "height": 816
     },
     "controls": {
       "x": 0,
-      "y": 844,
+      "y": 34,
       "width": 1280,
-      "height": 56
+      "height": 40
     },
     "timeAxis": "horizontal",
     "rootBorderTop": "0px none rgb(232, 236, 239)",
