@@ -184,6 +184,33 @@ requirements:
   Raw and level-matched audition files live under ignored
   `build/t26-spectre-reference/`.
 
+### Remaining Spectre-Good fidelity gap (measured 2026-08-26)
+
+The retained curves and ordinary bell law survive a separate uncertainty pass, but
+the current production waveform is **not** yet a close complex-response match to
+Spectre Good. A 97 + 137 Hz two-tone confirms all four retained shapers across
+58–210 harmonic/intermodulation bins with at most 0.058 dB RMS error. Hot-history
+probes become bit-identical after 500 ms silence; there is no measured envelope or
+program-dependent shaper state beyond the known Tube residue-DC decay.
+
+The large mismatch is the 4x wrapper. Across six different broad bells, the
+Spectre/Cosimo transfer ratio is invariant to within 0.0071 dB and 0.0251 degrees
+from 500 Hz–20 kHz, and one common correction leaves ordinary held-out EQ cases
+within 0.019 dB / 0.197 degrees RMS. That common ratio is mostly phase: Spectre is
+equivalent to about 4.85 samples earlier over 500 Hz–8 kHz, Spectre Good has a
+measured low-level pre-response, and the current Cmajor node-oversampling path does
+not. On musical holdouts, an offline output-only correction improves effect
+correlation from 0.497 to 0.949 (pink) and 0.927 to 0.996 (bright poly). Remaining
+transient/high-frequency error proves that matching only an output delay/filter is
+not sufficient; the full upsample/nonlinear/downsample wrapper must be prototyped.
+
+Decision: retain the EQ and shaper laws. Do not change production DSP in this pass.
+Prototype a Spectre-Good-matched custom 4x wrapper next. Exact matching may require
+relaxing the current zero-declared-latency contract because the observed target has
+pre-response; Andrew owns that product tradeoff. Full evidence and inference
+boundaries are in `ENHANCER_MATCHING_FINDINGS.md` and
+`scripts/measure_spectre_enhancer_uncertainty.py`.
+
 ## 6. Placement and rack integration
 
 Position: **inside the fixed polish chain** (`POLISH_CHAIN_DESIGN.md`) — after all
@@ -279,3 +306,9 @@ exact. See `scripts/measure_spectre_reference.py`,
 ignored under `build/`. The focused shaper pass contains 25 input/gain pairs for each
 Subtle/Medium × Tube/Solid combination. The manual's Tube/Solid prose is retained only
 as provenance because the measured plugin labels are reversed.
+
+A third pass, `scripts/measure_spectre_enhancer_uncertainty.py`, adds multitone
+intermodulation, hot-history, complex impulse, quality, high-frequency, and musical
+holdout comparisons against the installed Cosimo VST3. Its raw report and A/B audio
+remain ignored under `build/t26-spectre-uncertainty/`; the evidence-backed conclusion
+is recorded in `ENHANCER_MATCHING_FINDINGS.md`.
