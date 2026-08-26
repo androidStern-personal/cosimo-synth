@@ -395,6 +395,9 @@ function ParameterKnobSurface({
     }, []);
 
     const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+        if (!bindingRef.current.isReady) {
+            return;
+        }
         if (event.pointerType === "mouse" && event.button !== 0) {
             return;
         }
@@ -569,18 +572,21 @@ function ParameterKnobSurface({
             type="button"
             role="slider"
             data-role={dataRole}
+            data-host-state={binding.isReady ? "ready" : "loading"}
             value={String(binding.value)}
             aria-label={descriptor.label}
             aria-valuemin={descriptor.min}
             aria-valuemax={descriptor.max}
             aria-valuenow={binding.value}
             aria-valuetext={formatValue(binding.value)}
+            aria-busy={!binding.isReady}
+            disabled={!binding.isReady}
             data-detented={detentStep === null ? "false" : "true"}
             data-route-state={!sourceIsSelected ? "no-source" : route === null ? "unmapped" : route.enabled ? "mapped" : "bypassed"}
             data-route-effectiveness={effectiveness}
             data-modulation-target-kind={modulationTargetKind}
             data-dragging={draggingMode ?? undefined}
-            className={className}
+            className={`${className} disabled:cursor-wait disabled:opacity-45`}
             style={style}
             onPointerDown={handlePointerDown}
             onContextMenu={(event) => {

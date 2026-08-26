@@ -70,6 +70,7 @@ function documentValueBinding(
     return {
         endpointID,
         value,
+        isReady: true,
         setValue: write,
         commitValue: write,
         beginGesture: () => undefined,
@@ -86,14 +87,18 @@ function MacroValueBar({
     accent: string;
 }) {
     const applyFromEvent = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (!binding.isReady) return;
         const rect = event.currentTarget.getBoundingClientRect();
         binding.setValue(clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1));
     };
     return (
         <div
             data-role="quick-source-sheet-macro"
-            className="quick-source-sheet-macro"
+            data-host-state={binding.isReady ? "ready" : "loading"}
+            aria-busy={!binding.isReady}
+            className={`quick-source-sheet-macro${binding.isReady ? "" : " is-loading"}`}
             onPointerDown={(event) => {
+                if (!binding.isReady) return;
                 if (event.pointerType === "mouse" && event.button !== 0) {
                     return;
                 }

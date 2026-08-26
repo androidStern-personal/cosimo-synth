@@ -298,7 +298,7 @@ test("usePatchParameterBinding resets stale display state when the active endpoi
     }
 });
 
-test("usePatchParameterBinding keeps host baseline authority separate across writes and reconnects", async () => {
+test("host readiness blocks ambiguous parameter writes and stale stored-state hydration", async () => {
     const page = await openModulePage();
 
     try {
@@ -306,17 +306,56 @@ test("usePatchParameterBinding keeps host baseline authority separate across wri
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().first.requests.length === 1
         ));
-        assert.deepEqual((await getHarnessSnapshot(page)).hostBaseline, { _tag: "pending" });
-
-        await invokeHarness(page, "emitResponse", "first", 0.4);
-        await page.waitForFunction(() => (
-            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hostBaseline?.value === 0.4
-        ));
-        await invokeHarness(page, "writeValue", 0.7);
         let snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, 0.7);
-        assert.deepEqual(snapshot.hostBaseline, { _tag: "host-confirmed", value: 0.4 });
-        assert.deepEqual(snapshot.first.writes, [0.7], "a normal host echo cannot rotate the frozen baseline");
+        assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" });
+        assert.equal(snapshot.controlDisabled, true);
+
+        await invokeHarness(page, "beginGesture");
+        await invokeHarness(page, "writeValue", 0.2);
+        await invokeHarness(page, "writeValue", 0.3);
+        await invokeHarness(page, "endGesture");
+        await invokeHarness(page, "commitValue", 0.4);
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.value, 0.1, "rapid pre-baseline writes cannot change presentation");
+        assert.deepEqual(snapshot.first.writes, [], "rapid pre-baseline writes cannot reach the host");
+        assert.deepEqual(snapshot.first.gestures, [], "a pre-baseline gesture cannot reach the host");
+
+        await invokeHarness(page, "emitResponse", "first", "parameterA", 0.2);
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hostBaseline?.value === 0.2
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.value, 0.2);
+        assert.equal(snapshot.controlDisabled, false);
+        assert.deepEqual(snapshot.hostBaseline, { _tag: "host-confirmed", value: 0.2 });
+
+        await invokeHarness(page, "writeValue", 0.3);
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.value, 0.3);
+        assert.deepEqual(snapshot.hostBaseline, { _tag: "host-confirmed", value: 0.2 });
+        assert.deepEqual(snapshot.first.writes, [{ endpointID: "parameterA", value: 0.3 }]);
+
+        await invokeHarness(page, "selectEndpoint", "parameterB");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().first.requests.length === 2
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.value, 0.1);
+        assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" });
+        assert.equal(snapshot.controlDisabled, true);
+        assert.deepEqual(snapshot.first.listenerCounts, { parameterA: 0, parameterB: 1 });
+
+        await invokeHarness(page, "writeValue", 0.8);
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.value, 0.1, "an exact-value echo cannot exist when the pre-baseline write is blocked");
+        assert.deepEqual(snapshot.first.writes, [{ endpointID: "parameterA", value: 0.3 }]);
+        await invokeHarness(page, "emitResponse", "first", "parameterB", 0.8);
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hostBaseline?.value === 0.8
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.value, 0.8, "an authoritative value equal to the attempted edit must still enable the endpoint");
+        assert.equal(snapshot.controlDisabled, false);
 
         await invokeHarness(page, "selectConnection", "second");
         await page.waitForFunction(() => (
@@ -325,28 +364,101 @@ test("usePatchParameterBinding keeps host baseline authority separate across wri
         snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.value, 0.1, "a new connection starts from its own presentation default");
         assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" });
-        assert.equal(snapshot.first.listenerCount, 0);
-        assert.equal(snapshot.second.listenerCount, 1);
+        assert.equal(snapshot.controlDisabled, true);
+        assert.deepEqual(snapshot.first.listenerCounts, { parameterA: 0, parameterB: 0 });
+        assert.deepEqual(snapshot.second.listenerCounts, { parameterB: 1 });
 
         await invokeHarness(page, "writeValue", 0.8);
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, 0.8);
-        assert.deepEqual(
-            snapshot.hostBaseline,
-            { _tag: "pending" },
-            "a local write and its host echo do not certify the new connection's starting value",
-        );
+        assert.equal(snapshot.value, 0.1);
+        assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" });
+        assert.deepEqual(snapshot.second.writes, []);
 
-        await invokeHarness(page, "emitResponse", "second", 0.25);
+        await invokeHarness(page, "emitResponse", "first", "parameterB", 0.6);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" }, "a detached connection response must be ignored");
+
+        await invokeHarness(page, "emitResponse", "second", "parameterB", 0.25);
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hostBaseline?.value === 0.25
         ));
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, 0.8, "the delayed baseline must not overwrite the user's local presentation");
+        assert.equal(snapshot.value, 0.25);
         assert.deepEqual(snapshot.hostBaseline, { _tag: "host-confirmed", value: 0.25 });
-        assert.deepEqual(snapshot.second.writes, [0.8]);
+        assert.equal(snapshot.controlDisabled, false);
+
+        await invokeHarness(page, "writeValue", 0.8);
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.value, 0.8);
+        assert.deepEqual(snapshot.second.writes, [{ endpointID: "parameterB", value: 0.8 }]);
+        await invokeHarness(page, "emitResponse", "second", "parameterB", Math.fround(0.8));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.value, Math.fround(0.8), "float32 host echoes work normally after readiness");
+        assert.deepEqual(snapshot.hostBaseline, { _tag: "host-confirmed", value: 0.25 });
+
+        await invokeHarness(page, "selectConnection", "fallback");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hostBaseline?._tag === "host-confirmed"
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.hostBaseline,
+            { _tag: "host-confirmed", value: 0.1 },
+            "a bare adapter must explicitly declare its initial value authoritative",
+        );
+        assert.equal(snapshot.controlDisabled, false);
+        await invokeHarness(page, "writeValue", 0.4);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.fallback.writes, [{ endpointID: "parameterB", value: 0.4 }]);
+
+        await invokeHarness(page, "selectConnection", "untrusted");
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" });
+        assert.equal(snapshot.controlDisabled, true);
+        await invokeHarness(page, "writeValue", 0.9);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.untrusted.writes,
+            [],
+            "an adapter with no response protocol and no explicit fallback cannot certify readiness",
+        );
     } finally {
         await page.close();
+    }
+
+    const hydrationPage = await openModulePage();
+    try {
+        await installHarness(hydrationPage, "installArticulationReconnectHydrationHarness");
+        await hydrationPage.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.first > 0
+        ));
+        let hydrationSnapshot = await getHarnessSnapshot(hydrationPage);
+        assert.equal(hydrationSnapshot.hasHydrated, false);
+        assert.equal(hydrationSnapshot.canCapture, false);
+        assert.equal(hydrationSnapshot.captureDisabled, true);
+
+        await invokeHarness(hydrationPage, "selectConnection", "second");
+        await hydrationPage.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.second > 0
+        ));
+        await invokeHarness(hydrationPage, "releaseFullStoredState", "first");
+        hydrationSnapshot = await getHarnessSnapshot(hydrationPage);
+        assert.equal(hydrationSnapshot.hasHydrated, false, "the disconnected callback cannot hydrate the active editor");
+        assert.equal(hydrationSnapshot.canCapture, false);
+        assert.equal(hydrationSnapshot.captureDisabled, true);
+        assert.equal(hydrationSnapshot.slotCount, 0, "the disconnected callback cannot replace the visible bank");
+
+        await invokeHarness(hydrationPage, "releaseFullStoredState", "second");
+        await hydrationPage.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return snapshot?.hasHydrated === true && snapshot?.slotCount === 2;
+        });
+        hydrationSnapshot = await getHarnessSnapshot(hydrationPage);
+        assert.equal(hydrationSnapshot.canCapture, true);
+        assert.equal(hydrationSnapshot.captureDisabled, false);
+        assert.equal(hydrationSnapshot.slotCount, 2, "only the active connection may hydrate the visible bank");
+    } finally {
+        await hydrationPage.close();
     }
 });
 

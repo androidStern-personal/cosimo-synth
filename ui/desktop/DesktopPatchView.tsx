@@ -888,12 +888,14 @@ function OverlayIconChip({
     title,
     dataRole,
     onClick,
+    disabled = false,
     children,
 }: {
     ariaLabel: string;
     title: string;
     dataRole?: string;
     onClick: () => void;
+    disabled?: boolean;
     children: ReactNode;
 }) {
     return (
@@ -902,7 +904,8 @@ function OverlayIconChip({
             type="button"
             aria-label={ariaLabel}
             title={title}
-            className={`flex h-5 w-5 items-center justify-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} text-[var(--section-accent)] opacity-80 transition hover:opacity-100`}
+            disabled={disabled}
+            className={`flex h-5 w-5 items-center justify-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} text-[var(--section-accent)] opacity-80 transition hover:opacity-100 disabled:cursor-wait disabled:opacity-40`}
             onClick={onClick}
         >
             {children}
@@ -937,7 +940,7 @@ function MsegMorphRail({
 
     const updateFromClientX = useCallback((clientX: number) => {
         const rail = railRef.current;
-        if (!rail) {
+        if (!rail || !bindingRef.current.isReady) {
             return;
         }
 
@@ -1007,13 +1010,16 @@ function MsegMorphRail({
 
     return (
         <div
-            className={`cosimo-mseg-morph-control flex items-center gap-2 rounded-[8px] border px-2.5 py-2 ${className ?? ""}`}
+            className={`cosimo-mseg-morph-control flex items-center gap-2 rounded-[8px] border px-2.5 py-2 ${binding.isReady ? "" : "opacity-45"} ${className ?? ""}`}
             data-role="mseg-morph-control"
+            data-host-state={binding.isReady ? "ready" : "loading"}
+            aria-busy={!binding.isReady}
         >
             <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-300/55">Morph</span>
             <div
                 ref={railRef}
                 role="slider"
+                aria-disabled={!binding.isReady}
                 aria-label="MSEG morph"
                 aria-valuemin={0}
                 aria-valuemax={1}
@@ -1021,9 +1027,9 @@ function MsegMorphRail({
                 aria-valuetext={`${Math.round(value * 100)}%`}
                 data-role="mseg-morph-slider"
                 data-modulation-target-kind={modulationTargetKind}
-                className="relative h-5 min-w-[132px] flex-1 cursor-ew-resize touch-none rounded-full outline-none"
+                className={`relative h-5 min-w-[132px] flex-1 touch-none rounded-full outline-none ${binding.isReady ? "cursor-ew-resize" : "cursor-wait"}`}
                 onPointerDown={(event) => {
-                    if (event.button !== 0) {
+                    if (!bindingRef.current.isReady || event.button !== 0) {
                         return;
                     }
 
@@ -1096,7 +1102,9 @@ function WarpControlCluster({
                 type="button"
                 aria-label={`Cycle warp mode (currently ${modeLabel})`}
                 title={`Warp mode: ${modeLabel}`}
-                className="flex h-5 min-w-[72px] items-center gap-1 rounded-[4px] px-1 text-left transition hover:bg-white/[0.06]"
+                data-host-state={warpMode.isReady ? "ready" : "loading"}
+                disabled={!warpMode.isReady}
+                className="flex h-5 min-w-[72px] items-center gap-1 rounded-[4px] px-1 text-left transition hover:bg-white/[0.06] disabled:cursor-wait disabled:opacity-45"
                 onClick={() => warpMode.commitValue(cycleWarpMode(warpMode.value))}
             >
                 <span className="text-[7px] font-bold uppercase tracking-[0.10em] text-slate-300/45">Warp</span>
@@ -1279,7 +1287,9 @@ function UnisonModeButton({
         <button
             type="button"
             data-role={dataRole}
-            className="grid h-10 min-w-0 rounded-[10px] border border-white/[0.07] bg-black/28 px-2 py-1 text-left transition hover:bg-white/[0.045]"
+            data-host-state={binding.isReady ? "ready" : "loading"}
+            disabled={!binding.isReady}
+            className="grid h-10 min-w-0 rounded-[10px] border border-white/[0.07] bg-black/28 px-2 py-1 text-left transition hover:bg-white/[0.045] disabled:cursor-wait disabled:opacity-45"
             onClick={() => cycleDiscreteValue(binding, max)}
             title={`${label}: ${value}`}
         >
@@ -1368,6 +1378,8 @@ function UnisonControlSurface({
                     <button
                         type="button"
                         data-role="unison-voices-down"
+                        data-host-state={unisonVoices.isReady ? "ready" : "loading"}
+                        disabled={!unisonVoices.isReady}
                         className="grid size-7 place-items-center rounded-[9px] border border-white/[0.07] bg-black/30 text-slate-200/80 hover:bg-white/[0.045]"
                         onClick={() => unisonVoices.commitValue(clamp(unisonVoices.value - 1, 1, 8))}
                         aria-label="Decrease unison voices"
@@ -1386,6 +1398,8 @@ function UnisonControlSurface({
                     <button
                         type="button"
                         data-role="unison-voices-up"
+                        data-host-state={unisonVoices.isReady ? "ready" : "loading"}
+                        disabled={!unisonVoices.isReady}
                         className="grid size-7 place-items-center rounded-[9px] border border-white/[0.07] bg-black/30 text-slate-200/80 hover:bg-white/[0.045]"
                         onClick={() => unisonVoices.commitValue(clamp(unisonVoices.value + 1, 1, 8))}
                         aria-label="Increase unison voices"
@@ -2316,7 +2330,12 @@ function FilterSection({
                     data-modulation-target-kind="filterCutoffOctaves"
                     data-modulation-target-companions="filterQ"
                 >
-                <div className="mobile-filter-graph" data-disabled={filterOff}>
+                <div
+                    className={`mobile-filter-graph ${filterCutoff.isReady && filterQ.isReady ? "" : "pointer-events-none opacity-45"}`}
+                    data-disabled={filterOff}
+                    data-host-state={filterCutoff.isReady && filterQ.isReady ? "ready" : "loading"}
+                    aria-busy={!filterCutoff.isReady || !filterQ.isReady}
+                >
                     <FilterResponseGraph
                         baseMode={filterMode.value}
                         baseCutoffHz={filterCutoff.value}
@@ -2354,6 +2373,7 @@ function FilterSection({
                         dataRole="filter-mode-chip"
                         ariaLabel={`Cycle filter mode (currently ${getFilterModeLabel(filterMode.value)})`}
                         title={`Filter mode: ${getFilterModeLabel(filterMode.value)}`}
+                        disabled={!filterMode.isReady}
                         onClick={() => filterMode.commitValue(cycleFilterMode(filterMode.value))}
                     >
                         <FilterModeGlyph mode={filterMode.value} />
@@ -2404,7 +2424,11 @@ function FilterSection({
         >
             <div className={SYNTH_GRID_CARD_INSET_SHADOW_CLASS} />
 
-            <div className="absolute inset-0 p-1.5">
+            <div
+                className={`absolute inset-0 p-1.5 ${filterCutoff.isReady && filterQ.isReady ? "" : "pointer-events-none opacity-45"}`}
+                data-host-state={filterCutoff.isReady && filterQ.isReady ? "ready" : "loading"}
+                aria-busy={!filterCutoff.isReady || !filterQ.isReady}
+            >
                 <FilterResponseGraph
                     baseMode={filterMode.value}
                     baseCutoffHz={filterCutoff.value}
@@ -2437,6 +2461,7 @@ function FilterSection({
                     dataRole="filter-mode-chip"
                     ariaLabel={`Cycle filter mode (currently ${getFilterModeLabel(filterMode.value)})`}
                     title={`Filter mode: ${getFilterModeLabel(filterMode.value)}`}
+                    disabled={!filterMode.isReady}
                     onClick={() => filterMode.commitValue(cycleFilterMode(filterMode.value))}
                 >
                     <FilterModeGlyph mode={filterMode.value} />
@@ -2493,6 +2518,7 @@ function FilterSection({
                     <select
                         aria-label="Filter mode"
                         value={String(filterMode.value)}
+                        disabled={!filterMode.isReady}
                         onChange={(event) => filterMode.commitValue(Number(event.target.value))}
                     >
                         {FILTER_MODE_OPTIONS.map((option) => (
@@ -2582,7 +2608,9 @@ function OscillatorPerformanceControls({
                 aria-label="Mute selected oscillator"
                 aria-pressed={mute.value >= 0.5}
                 data-role="oscillator-mute"
-                className={`h-7 rounded-[8px] border px-2 text-[10px] font-bold uppercase tracking-[0.12em] ${
+                data-host-state={mute.isReady ? "ready" : "loading"}
+                disabled={inactive || !mute.isReady}
+                className={`h-7 rounded-[8px] border px-2 text-[10px] font-bold uppercase tracking-[0.12em] disabled:cursor-wait disabled:opacity-45 ${
                     mute.value >= 0.5
                         ? "border-amber-300/30 bg-amber-300/16 text-amber-100"
                         : "border-white/[0.07] bg-black/25 text-slate-300/70"
@@ -2596,7 +2624,9 @@ function OscillatorPerformanceControls({
                 aria-label="Solo selected oscillator"
                 aria-pressed={solo.value >= 0.5}
                 data-role="oscillator-solo"
-                className={`h-7 rounded-[8px] border px-2 text-[10px] font-bold uppercase tracking-[0.12em] ${
+                data-host-state={solo.isReady ? "ready" : "loading"}
+                disabled={inactive || !solo.isReady}
+                className={`h-7 rounded-[8px] border px-2 text-[10px] font-bold uppercase tracking-[0.12em] disabled:cursor-wait disabled:opacity-45 ${
                     solo.value >= 0.5
                         ? "border-cyan-300/30 bg-cyan-300/16 text-cyan-100"
                         : "border-white/[0.07] bg-black/25 text-slate-300/70"
@@ -4635,7 +4665,7 @@ function DesktopPatchViewBody({
                     selectedArticulationId={selectedArticulationId}
                     selectedIsDirty={synthView.selectedArticulationIsDirty}
                     discardedEditLabel={synthView.discardedArticulationEdit?.slotName ?? null}
-                    canCapture={synthView.canCaptureArticulation}
+                    isBaseReady={synthView.isArticulationBaseReady}
                     chainSegments={chainSegments}
                     keySegments={keySegments}
                     velocitySegments={velocitySegments}

@@ -2234,7 +2234,6 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
             "first articulation captured from B before delayed C mute response",
             (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 1,
         );
-
         await delayedMutePage.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.deferParameterResponse("oscCMute");
         });
@@ -2242,22 +2241,66 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         await delayedMutePage.waitForSelector(
             '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="C"]',
         );
-        await delayedMutePage.waitForSelector('[data-role="oscillator-mute"][aria-pressed="true"]');
-        await delayedMutePage.getByRole("button", { name: "Mute selected oscillator" }).click();
-        await waitForHarnessSnapshot(
-            delayedMutePage,
-            "C local mute edit while its requested baseline is deferred",
-            (snapshot) => Number(snapshot.parameterValues.oscCMute) === 0,
+        const muteButton = delayedMutePage.getByRole("button", { name: "Mute selected oscillator" });
+        await delayedMutePage.waitForSelector('[data-role="oscillator-mute"][data-host-state="loading"]:disabled');
+        assert.equal(
+            Number((await getHarnessSnapshot(delayedMutePage)).parameterValues.oscCMute),
+            1,
+            "the canonical muted host state remains untouched while its first reply is pending",
+        );
+        await clearHarnessDebugLog(delayedMutePage);
+        await muteButton.evaluate((button) => button.click());
+        let pendingSnapshot = await getHarnessSnapshot(delayedMutePage);
+        assert.equal(Number(pendingSnapshot.parameterValues.oscCMute), 1);
+        assert.equal(
+            pendingSnapshot.sentMessages.some(({ endpointID }) => endpointID === "oscCMute"),
+            false,
+            "a forced pre-baseline click cannot reach the host",
         );
 
         const captureButton = delayedMutePage.getByRole("button", {
             name: "Capture current parameters as a new articulation",
         });
+        const articulationSurface = delayedMutePage.locator('[data-role="articulation-control-surface"]');
+        assert.equal(await articulationSurface.getAttribute("data-base-state"), "loading");
+        assert.equal(await articulationSurface.getAttribute("aria-busy"), "true");
+        assert.equal(
+            await delayedMutePage.locator('[data-role="articulation-card"]').first().getAttribute("aria-disabled"),
+            "true",
+        );
         assert.equal(
             await captureButton.isDisabled(),
             true,
             "capture must stay unavailable until C's pre-edit mute baseline is host-confirmed",
         );
+        assert.equal(await delayedMutePage.locator('[data-role="articulation-update"]').isDisabled(), true);
+        assert.equal(await delayedMutePage.locator('[data-role="articulation-revert"]').isDisabled(), true);
+        await delayedMutePage.locator('[data-role="articulation-card"]').first().click({ button: "right", force: true });
+        const cardMenu = delayedMutePage.locator('[data-role="articulation-card-menu"]');
+        await cardMenu.waitFor();
+        assert.equal(await cardMenu.locator('[data-action="rename"]').isDisabled(), false);
+        for (const action of ["duplicate", "replace", "delete"]) {
+            const item = cardMenu.locator(`[data-action="${action}"]`);
+            assert.equal(await item.isDisabled(), true, `${action} must be visibly disabled while the base loads`);
+            assert.equal(await item.getAttribute("data-disabled-reason"), "base-loading");
+        }
+        await delayedMutePage.keyboard.press("Escape");
+        await delayedMutePage.getByRole("button", { name: "Expand articulation editor" }).click();
+        const rangeSegment = delayedMutePage.locator('[data-role="articulation-range-segment"]').first();
+        await rangeSegment.click({ button: "right", force: true });
+        const rangeMenu = delayedMutePage.locator('[data-role="articulation-range-menu"]');
+        await rangeMenu.waitFor();
+        const duplicateAfter = rangeMenu.locator('[data-action="duplicate-after"]');
+        assert.equal(await duplicateAfter.isDisabled(), true);
+        assert.equal(await duplicateAfter.getAttribute("data-disabled-reason"), "base-loading");
+        for (const action of ["replace", "insert-after", "delete"]) {
+            assert.equal(
+                await rangeMenu.locator(`[data-action="${action}"]`).isDisabled(),
+                false,
+                `${action} remains available because it only edits trigger ranges`,
+            );
+        }
+        await delayedMutePage.keyboard.press("Escape");
         await captureButton.evaluate((button) => button.click());
         assert.equal(
             JSON.parse(String((await getHarnessSnapshot(delayedMutePage)).storedState[ARTICULATION_STATE_KEY])).slots.length,
@@ -2270,8 +2313,20 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         });
         await delayedMutePage.waitForFunction(() => (
             document.querySelector('[data-role="articulation-capture"]')?.hasAttribute("disabled") === false
-                && document.querySelector('[data-role="oscillator-mute"]')?.getAttribute("aria-pressed") === "false"
+                && document.querySelector('[data-role="oscillator-mute"]')?.hasAttribute("disabled") === false
+                && document.querySelector('[data-role="oscillator-mute"]')?.getAttribute("aria-pressed") === "true"
         ));
+        assert.equal(await articulationSurface.getAttribute("data-base-state"), "ready");
+        await rangeSegment.click({ button: "right" });
+        await rangeMenu.waitFor();
+        assert.equal(await rangeMenu.locator('[data-action="duplicate-after"]').isDisabled(), false);
+        await delayedMutePage.keyboard.press("Escape");
+        await muteButton.click();
+        await waitForHarnessSnapshot(
+            delayedMutePage,
+            "C mute edit after its first authoritative response",
+            (snapshot) => Number(snapshot.parameterValues.oscCMute) === 0,
+        );
         await captureButton.click();
         const captured = await waitForHarnessSnapshot(
             delayedMutePage,
@@ -2336,12 +2391,21 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
             "0",
             "the screen remains stale while C's authoritative values are unavailable",
         );
-
-        await delayedAllPage.getByRole("button", { name: "Mute selected oscillator" }).click();
-        await waitForHarnessSnapshot(
-            delayedAllPage,
-            "local C mute edit while every requested C baseline is deferred",
-            (snapshot) => Number(snapshot.parameterValues.oscCMute) === 0,
+        const levelControl = delayedAllPage.getByRole("slider", { name: "Oscillator level" });
+        const muteButton = delayedAllPage.getByRole("button", { name: "Mute selected oscillator" });
+        assert.equal(await levelControl.isDisabled(), true);
+        assert.equal(await levelControl.getAttribute("data-host-state"), "loading");
+        assert.equal(await muteButton.isDisabled(), true);
+        await clearHarnessDebugLog(delayedAllPage);
+        await levelControl.evaluate((control) => control.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })));
+        await muteButton.evaluate((button) => button.click());
+        const blockedWriteSnapshot = await getHarnessSnapshot(delayedAllPage);
+        assert.equal(Number(blockedWriteSnapshot.parameterValues.oscCMute), 1);
+        assert.equal(Number(blockedWriteSnapshot.parameterValues.oscCVolumeDb), -9);
+        assert.equal(
+            blockedWriteSnapshot.sentMessages.some(({ endpointID }) => endpointID.startsWith("oscC")),
+            false,
+            "no C edit may reach the host before all corresponding first values arrive",
         );
         const captureButton = delayedAllPage.getByRole("button", {
             name: "Capture current parameters as a new articulation",
@@ -2362,9 +2426,16 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         await delayedAllPage.waitForFunction(() => (
             document.querySelector('[data-role="articulation-capture"]')?.hasAttribute("disabled") === false
                 && document.querySelector('[data-role="oscillator-level"]')?.getAttribute("aria-valuenow") === "-9"
-                && document.querySelector('[data-role="oscillator-mute"]')?.getAttribute("aria-pressed") === "false"
+                && document.querySelector('[data-role="oscillator-mute"]')?.hasAttribute("disabled") === false
+                && document.querySelector('[data-role="oscillator-mute"]')?.getAttribute("aria-pressed") === "true"
         ));
 
+        await muteButton.click();
+        await waitForHarnessSnapshot(
+            delayedAllPage,
+            "C mute edit after every authoritative baseline arrives",
+            (snapshot) => Number(snapshot.parameterValues.oscCMute) === 0,
+        );
         await captureButton.click();
         const captured = await waitForHarnessSnapshot(
             delayedAllPage,

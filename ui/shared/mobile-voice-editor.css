@@ -92,6 +92,15 @@
     opacity: 0.38;
 }
 
+.mobile-voice-graph.is-loading,
+.mobile-voice-chip.is-loading,
+.mobile-voice-cell.is-loading,
+.mobile-voice-tab-solo:disabled,
+.cosimo-tab.is-loading {
+    cursor: wait;
+    opacity: 0.45;
+}
+
 /* Corner overlay chips: compact glass controls floating on the drawing. */
 .mobile-voice-chip {
     position: absolute;

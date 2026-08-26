@@ -493,6 +493,8 @@ export type SynthPatchViewModel = {
         slotName: string;
     } | null;
     hasHydratedArticulations: boolean;
+    /** All state needed to diff/apply the selected oscillator has an authoritative base. */
+    isArticulationBaseReady: boolean;
     canCaptureArticulation: boolean;
     selectedMsegSlot: number;
     selectedEnvelopeSlot: number;
@@ -1332,6 +1334,7 @@ function useStoredArticulationEditorState(
     const acceptedRouteIdsRef = useRef<ReadonlySet<string>>(new Set());
     const getBaseSnapshotRef = useRef(getBaseSnapshot);
     const pendingEchoTokensRef = useRef(new Map<string, number>());
+    const activeStoredStateConnectionRef = useRef<typeof patchConnection | null>(patchConnection);
 
     getBaseSnapshotRef.current = getBaseSnapshot;
     modulationStateRef.current = modulationState;
@@ -1407,18 +1410,27 @@ function useStoredArticulationEditorState(
     }, [applyCurrentState, consumePendingEcho]);
 
     useEffect(() => {
+        const effectPatchConnection = patchConnection;
+        let effectIsLive = true;
+        activeStoredStateConnectionRef.current = effectPatchConnection;
+        const isCurrentConnection = () => (
+            effectIsLive
+            && activeStoredStateConnectionRef.current === effectPatchConnection
+        );
         setHasHydrated(false);
         pendingEchoTokensRef.current.clear();
         const handleStoredStateValue = (message: unknown) => {
+            if (!isCurrentConnection()) return;
             if (!message || typeof message !== "object") return;
             const nextMessage = message as { key?: unknown; value?: unknown };
             if (nextMessage.key !== ARTICULATIONS_V4_STATE_KEY) return;
             applyIncomingState(nextMessage.value, false);
         };
 
-        patchConnection.addStoredStateValueListener?.(handleStoredStateValue);
-        if (typeof patchConnection.requestFullStoredState === "function") {
-            patchConnection.requestFullStoredState((storedState) => {
+        effectPatchConnection.addStoredStateValueListener?.(handleStoredStateValue);
+        if (typeof effectPatchConnection.requestFullStoredState === "function") {
+            effectPatchConnection.requestFullStoredState((storedState) => {
+                if (!isCurrentConnection()) return;
                 const parsedSnapshot = parseArticulationStateFromFullStoredState(
                     storedState,
                     modulationBridge.current?.getState().routes ?? modulationStateRef.current?.routes ?? [],
@@ -1438,13 +1450,19 @@ function useStoredArticulationEditorState(
                     parsedSnapshot.acceptedRouteIds,
                 );
             });
-        } else if (typeof patchConnection.requestStoredStateValue === "function") {
-            patchConnection.requestStoredStateValue(ARTICULATIONS_V4_STATE_KEY);
+        } else if (typeof effectPatchConnection.requestStoredStateValue === "function") {
+            effectPatchConnection.requestStoredStateValue(ARTICULATIONS_V4_STATE_KEY);
         } else {
             applyIncomingState(undefined, true);
         }
 
-        return () => patchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
+        return () => {
+            effectIsLive = false;
+            effectPatchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
+            if (activeStoredStateConnectionRef.current === effectPatchConnection) {
+                activeStoredStateConnectionRef.current = null;
+            }
+        };
     }, [applyIncomingState, patchConnection]);
 
     const setAndPersistState = useCallback((
@@ -3268,21 +3286,104 @@ export function useSynthPatchViewModel({
             unisonStackMode,
             unisonWavetablePositionSpread,
             unisonWarpSpread,
+            filterMode,
+            filterCutoff,
+            filterQ,
+            mseg1Morph,
+            mseg2Morph,
+            mseg3Morph,
+            env1Attack,
+            env1Decay,
+            env1Sustain,
+            env1Release,
+            env2Attack,
+            env2Decay,
+            env2Sustain,
+            env2Release,
+            env3Attack,
+            env3Decay,
+            env3Sustain,
+            env3Release,
         });
-        if (hostParameters === null) {
+        if (hostParameters === null || modulationState === null) {
             return null;
         }
 
+        const {
+            mseg1Morph: confirmedMseg1Morph,
+            mseg2Morph: confirmedMseg2Morph,
+            mseg3Morph: confirmedMseg3Morph,
+            env1Attack: confirmedEnv1Attack,
+            env1Decay: confirmedEnv1Decay,
+            env1Sustain: confirmedEnv1Sustain,
+            env1Release: confirmedEnv1Release,
+            env2Attack: confirmedEnv2Attack,
+            env2Decay: confirmedEnv2Decay,
+            env2Sustain: confirmedEnv2Sustain,
+            env2Release: confirmedEnv2Release,
+            env3Attack: confirmedEnv3Attack,
+            env3Decay: confirmedEnv3Decay,
+            env3Sustain: confirmedEnv3Sustain,
+            env3Release: confirmedEnv3Release,
+            ...confirmedParameters
+        } = hostParameters;
         const currentSnapshot = captureCurrentArticulationSnapshot();
         return normalizeArticulationSnapshot({
             ...currentSnapshot,
             parameters: {
                 ...currentSnapshot.parameters,
-                ...hostParameters,
+                ...confirmedParameters,
+                msegMorphs: [
+                    confirmedMseg1Morph,
+                    confirmedMseg2Morph,
+                    confirmedMseg3Morph,
+                ],
             },
+            envelopes: [
+                {
+                    ...currentSnapshot.envelopes[0],
+                    attackSeconds: confirmedEnv1Attack,
+                    decaySeconds: confirmedEnv1Decay,
+                    sustain: confirmedEnv1Sustain,
+                    releaseSeconds: confirmedEnv1Release,
+                },
+                {
+                    ...currentSnapshot.envelopes[1],
+                    attackSeconds: confirmedEnv2Attack,
+                    decaySeconds: confirmedEnv2Decay,
+                    sustain: confirmedEnv2Sustain,
+                    releaseSeconds: confirmedEnv2Release,
+                },
+                {
+                    ...currentSnapshot.envelopes[2],
+                    attackSeconds: confirmedEnv3Attack,
+                    decaySeconds: confirmedEnv3Decay,
+                    sustain: confirmedEnv3Sustain,
+                    releaseSeconds: confirmedEnv3Release,
+                },
+            ],
         });
     }, [
         captureCurrentArticulationSnapshot,
+        env1Attack,
+        env1Decay,
+        env1Release,
+        env1Sustain,
+        env2Attack,
+        env2Decay,
+        env2Release,
+        env2Sustain,
+        env3Attack,
+        env3Decay,
+        env3Release,
+        env3Sustain,
+        filterCutoff,
+        filterMode,
+        filterQ,
+        modulationState,
+        mseg1Morph,
+        mseg2Morph,
+        mseg3Morph,
         oscillatorFineCents,
         oscillatorMute,
         oscillatorOctave,
@@ -3333,8 +3434,9 @@ export function useSynthPatchViewModel({
     const selectedOscillatorArticulationBaseIsReady = useMemo(() => (
         articulationPatchBaseRef.current[oscillatorID] !== undefined
     ), [articulationPatchBaseRevision, oscillatorID, patchConnection]);
-    const canCaptureArticulation = articulationBankState.hasHydrated
+    const isArticulationBaseReady = articulationBankState.hasHydrated
         && selectedOscillatorArticulationBaseIsReady;
+    const canCaptureArticulation = isArticulationBaseReady;
 
     const captureCurrentArticulationLayer = useCallback((): CapturedArticulationLayer => (
         projectArticulationSnapshotToVisibleV4Layer(captureCurrentArticulationSnapshot(), oscillatorID)
@@ -4476,6 +4578,7 @@ export function useSynthPatchViewModel({
             }
             : null,
         hasHydratedArticulations: articulationBankState.hasHydrated,
+        isArticulationBaseReady,
         canCaptureArticulation,
         selectedMsegSlot,
         selectedEnvelopeSlot,

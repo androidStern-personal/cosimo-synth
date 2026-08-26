@@ -54,6 +54,12 @@ import {
     useSynthKeyboardRouting,
     useSynthPatchViewModel,
 } from "../../ui/shared/synth-hooks";
+import {
+    ARTICULATIONS_V4_STATE_KEY,
+    createEmptyArticulationsState,
+    serializeArticulationsV4,
+} from "../../ui/shared/articulation-image";
+import { addCapturedArticulationV4 } from "../../ui/shared/articulation-v4-editor";
 import { MockPatchConnection } from "../../ui/shared/patch-connection-mock";
 import { useModulationRouteAmountBinding } from "../../ui/shared/modulation-route-amount";
 import type { SynthKeyboardInputMode } from "../../ui/shared/synth-input-router";
@@ -768,6 +774,7 @@ export async function installNexusNumberFieldHarness(target: HTMLElement) {
             const binding = useMemo(() => ({
                 endpointID: "glideTime",
                 value: bindingValue,
+                isReady: true,
                 setValue(nextValue: number) {
                     setValueCalls.push(nextValue);
                     setBindingValue(nextValue);
@@ -1483,63 +1490,96 @@ export async function installPatchParameterRebindingHarness(target: HTMLElement)
 
 export async function installPatchParameterHostBaselineHarness(target: HTMLElement) {
     type HarnessConnection = PatchConnectionLike & {
-        readonly id: "first" | "second";
-        readonly listeners: Set<(value: unknown) => void>;
+        readonly id: "first" | "second" | "fallback" | "untrusted";
+        readonly listeners: Map<string, Set<(value: unknown) => void>>;
         readonly requests: string[];
-        readonly writes: number[];
-        emitResponse: (value: number) => void;
+        readonly writes: Array<{ endpointID: string; value: number }>;
+        readonly gestures: string[];
+        emitResponse: (endpointID: string, value: number) => void;
     };
 
-    const createConnection = (id: HarnessConnection["id"]): HarnessConnection => {
-        const listeners = new Set<(value: unknown) => void>();
+    const createConnection = (
+        id: HarnessConnection["id"],
+        protocol: "listener" | "authoritative-initial" | "none" = "listener",
+    ): HarnessConnection => {
+        const listeners = new Map<string, Set<(value: unknown) => void>>();
         const requests: string[] = [];
-        const writes: number[] = [];
-        return {
+        const writes: Array<{ endpointID: string; value: number }> = [];
+        const gestures: string[] = [];
+        const connection: HarnessConnection = {
             id,
             listeners,
             requests,
             writes,
-            addParameterListener(_endpointID, listener) {
-                listeners.add(listener);
+            gestures,
+            sendEventOrValue(endpointID, value) {
+                writes.push({ endpointID, value: Number(value) });
+                listeners.get(endpointID)?.forEach((listener) => listener(value));
             },
-            removeParameterListener(_endpointID, listener) {
-                listeners.delete(listener);
+            sendParameterGestureStart(endpointID) {
+                gestures.push(`start:${endpointID}`);
             },
-            requestParameterValue(endpointID) {
-                requests.push(endpointID);
+            sendParameterGestureEnd(endpointID) {
+                gestures.push(`end:${endpointID}`);
             },
-            sendEventOrValue(_endpointID, value) {
-                writes.push(Number(value));
-                listeners.forEach((listener) => listener(value));
-            },
-            emitResponse(value) {
-                listeners.forEach((listener) => listener(value));
+            emitResponse(endpointID, value) {
+                listeners.get(endpointID)?.forEach((listener) => listener(value));
             },
         };
+        if (protocol === "listener") {
+            connection.addParameterListener = (endpointID, listener) => {
+                const endpointListeners = listeners.get(endpointID) ?? new Set();
+                endpointListeners.add(listener);
+                listeners.set(endpointID, endpointListeners);
+            };
+            connection.removeParameterListener = (endpointID, listener) => {
+                listeners.get(endpointID)?.delete(listener);
+            };
+            connection.requestParameterValue = (endpointID) => {
+                requests.push(endpointID);
+            };
+        } else if (protocol === "authoritative-initial") {
+            connection.parameterInitialValuesAreAuthoritative = true;
+        }
+        return connection;
     };
     const connections = {
         first: createConnection("first"),
         second: createConnection("second"),
+        fallback: createConnection("fallback", "authoritative-initial"),
+        untrusted: createConnection("untrusted", "none"),
     } as const;
     let binding: PatchControlBinding<number> | null = null;
     let selectConnection: ((id: HarnessConnection["id"]) => void) | null = null;
+    let selectEndpoint: ((endpointID: string) => void) | null = null;
 
     const mounted = mountHarness(target, (root) => {
-        function Reader() {
+        function Reader({ endpointID }: { endpointID: string }) {
             binding = usePatchParameterBinding<number>({
-                endpointID: "parameterA",
+                endpointID,
                 initialValue: 0.1,
                 coerce: Number,
             });
-            return null;
+            return (
+                <button
+                    type="button"
+                    data-role="host-baseline-control"
+                    disabled={binding.hostBaseline?._tag !== "host-confirmed"}
+                    onClick={() => binding?.commitValue(0.6)}
+                >
+                    Parameter
+                </button>
+            );
         }
 
         function Harness() {
             const [connectionID, setConnectionID] = useState<HarnessConnection["id"]>("first");
+            const [endpointID, setEndpointID] = useState("parameterA");
             selectConnection = setConnectionID;
+            selectEndpoint = setEndpointID;
             return (
                 <PatchConnectionProvider patchConnection={connections[connectionID]}>
-                    <Reader />
+                    <Reader endpointID={endpointID} />
                 </PatchConnectionProvider>
             );
         }
@@ -1555,12 +1595,16 @@ export async function installPatchParameterHostBaselineHarness(target: HTMLEleme
     };
 
     window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
-        async emitResponse(connectionID: HarnessConnection["id"], value: number) {
-            connections[connectionID].emitResponse(value);
+        async emitResponse(connectionID: HarnessConnection["id"], endpointID: string, value: number) {
+            connections[connectionID].emitResponse(endpointID, value);
             await waitForMicrotask();
         },
         async writeValue(value: number) {
             requireBinding().setValue(value);
+            await waitForMicrotask();
+        },
+        async commitValue(value: number) {
+            requireBinding().commitValue(value);
             await waitForMicrotask();
         },
         async selectConnection(connectionID: HarnessConnection["id"]) {
@@ -1568,20 +1612,171 @@ export async function installPatchParameterHostBaselineHarness(target: HTMLEleme
             await waitForMicrotask();
             await waitForMicrotask();
         },
+        async selectEndpoint(endpointID: string) {
+            selectEndpoint?.(endpointID);
+            await waitForMicrotask();
+            await waitForMicrotask();
+        },
+        async beginGesture() {
+            requireBinding().beginGesture();
+            await waitForMicrotask();
+        },
+        async endGesture() {
+            requireBinding().endGesture();
+            await waitForMicrotask();
+        },
         getSnapshot() {
             const currentBinding = requireBinding();
             return {
                 value: currentBinding.value,
                 hostBaseline: cloneValue(currentBinding.hostBaseline),
+                controlDisabled: (target.querySelector('[data-role="host-baseline-control"]') as HTMLButtonElement | null)?.disabled ?? null,
                 first: {
                     requests: [...connections.first.requests],
-                    writes: [...connections.first.writes],
-                    listenerCount: connections.first.listeners.size,
+                    writes: cloneValue(connections.first.writes),
+                    gestures: [...connections.first.gestures],
+                    listenerCounts: Object.fromEntries([...connections.first.listeners].map(([endpointID, listeners]) => [endpointID, listeners.size])),
                 },
                 second: {
                     requests: [...connections.second.requests],
-                    writes: [...connections.second.writes],
-                    listenerCount: connections.second.listeners.size,
+                    writes: cloneValue(connections.second.writes),
+                    gestures: [...connections.second.gestures],
+                    listenerCounts: Object.fromEntries([...connections.second.listeners].map(([endpointID, listeners]) => [endpointID, listeners.size])),
+                },
+                fallback: {
+                    requests: [...connections.fallback.requests],
+                    writes: cloneValue(connections.fallback.writes),
+                },
+                untrusted: {
+                    requests: [...connections.untrusted.requests],
+                    writes: cloneValue(connections.untrusted.writes),
+                },
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
+export async function installArticulationReconnectHydrationHarness(target: HTMLElement) {
+    class DeferredFullStatePatchConnection extends MockPatchConnection {
+        private pendingFullStateCallbacks: Array<(state: Record<string, unknown>) => void> | undefined;
+        private responseState: Record<string, unknown> = {};
+
+        constructor(label: string, slotCount: number) {
+            super({ name: label });
+            let articulations = createEmptyArticulationsState();
+            for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
+                articulations = addCapturedArticulationV4(articulations, {
+                    overrides: {},
+                    routeAmounts: {},
+                });
+            }
+            this.responseState = {
+                [MODULATION_STATE_KEY]: serializeModulationState(createDefaultModulationState()),
+                [ARTICULATIONS_V4_STATE_KEY]: serializeArticulationsV4(articulations),
+            };
+        }
+
+        override requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
+            const callbacks = this.pendingFullStateCallbacks ?? [];
+            callbacks.push(callback);
+            this.pendingFullStateCallbacks = callbacks;
+        }
+
+        releaseFullStoredState() {
+            const callbacks = this.pendingFullStateCallbacks ?? [];
+            this.pendingFullStateCallbacks = [];
+            callbacks.forEach((callback) => callback(cloneValue(this.responseState)));
+        }
+
+        get pendingFullStateRequestCount() {
+            return this.pendingFullStateCallbacks?.length ?? 0;
+        }
+    }
+
+    const connections = {
+        first: new DeferredFullStatePatchConnection("Old articulation connection", 1),
+        second: new DeferredFullStatePatchConnection("New articulation connection", 2),
+    } as const;
+    let synthView: ReturnType<typeof useSynthPatchViewModel> | null = null;
+    let selectConnection: ((connectionID: keyof typeof connections) => void) | null = null;
+
+    const mounted = mountHarness(target, (root) => {
+        function Reader() {
+            const stageRef = useRef<HTMLDivElement | null>(null);
+            const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
+            const keyboardRef = useRef(null);
+            synthView = useSynthPatchViewModel({
+                stageRef,
+                msegEditorSurfaceRef,
+                keyboardRef,
+                voiceModeCount: 3,
+                observeFilterSpectrum: false,
+                observeDistortionVisuals: false,
+                observeMsegPlayhead: false,
+            });
+            return (
+                <div>
+                    <div ref={stageRef} />
+                    <svg ref={msegEditorSurfaceRef} />
+                    <button
+                        type="button"
+                        data-role="reconnect-articulation-capture"
+                        disabled={!synthView.canCaptureArticulation}
+                    >
+                        Capture
+                    </button>
+                </div>
+            );
+        }
+
+        function Harness() {
+            const [connectionID, setConnectionID] = useState<keyof typeof connections>("first");
+            selectConnection = setConnectionID;
+            return (
+                <PatchConnectionProvider patchConnection={connections[connectionID]}>
+                    <Reader />
+                </PatchConnectionProvider>
+            );
+        }
+
+        root.render(<Harness />);
+    });
+
+    const requireSynthView = () => {
+        if (synthView === null) {
+            throw new Error("Articulation reconnect harness is not ready.");
+        }
+        return synthView;
+    };
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        async selectConnection(connectionID: keyof typeof connections) {
+            selectConnection?.(connectionID);
+            await waitForMicrotask();
+            await waitForMicrotask();
+        },
+        async releaseFullStoredState(connectionID: keyof typeof connections) {
+            connections[connectionID].releaseFullStoredState();
+            await waitForMicrotask();
+            await waitForMicrotask();
+        },
+        getSnapshot() {
+            const currentSynthView = requireSynthView();
+            return {
+                hasHydrated: currentSynthView.hasHydratedArticulations,
+                canCapture: currentSynthView.canCaptureArticulation,
+                slotCount: currentSynthView.articulationSlots.length,
+                slotNames: currentSynthView.articulationSlots.map((slot) => slot.name),
+                captureDisabled: (target.querySelector('[data-role="reconnect-articulation-capture"]') as HTMLButtonElement | null)?.disabled ?? null,
+                pendingRequests: {
+                    first: connections.first.pendingFullStateRequestCount,
+                    second: connections.second.pendingFullStateRequestCount,
                 },
             };
         },
@@ -1606,6 +1801,7 @@ export async function installPrecisionOptimisticEchoHarness(target: HTMLElement)
             const binding = useMemo<PatchControlBinding<number>>(() => ({
                 endpointID: hostModel.endpointID,
                 value: hostModel.value,
+                isReady: true,
                 setValue(nextValue) {
                     sentValues.push(nextValue);
                 },

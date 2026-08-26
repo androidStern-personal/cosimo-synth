@@ -109,7 +109,7 @@ export type ArticulationControlSurfaceProps = {
     selectedArticulationId: string | null;
     selectedIsDirty: boolean;
     discardedEditLabel?: string | null;
-    canCapture: boolean;
+    isBaseReady: boolean;
     chainSegments: ArticulationRangeSegmentView[];
     keySegments: ArticulationRangeSegmentView[];
     velocitySegments: ArticulationRangeSegmentView[];
@@ -292,6 +292,7 @@ type ArticulationRangeMenuAction = "delete" | "insert-after" | "duplicate-after"
 type ArticulationCardMenuState = {
     articulationId: string;
     canDelete: boolean;
+    baseReady: boolean;
     x: number;
     y: number;
 };
@@ -384,7 +385,13 @@ function ArticulationCardContextMenu({
         >
             {ARTICULATION_CARD_MENU_ITEMS.map((item) => {
                 const isDelete = item.action === "delete";
-                const isDisabled = isDelete && !state.canDelete;
+                const needsBase = item.action !== "rename";
+                const isDisabled = (needsBase && !state.baseReady) || (isDelete && !state.canDelete);
+                const disabledReason = needsBase && !state.baseReady
+                    ? "base-loading"
+                    : isDelete && !state.canDelete
+                        ? "last-card"
+                        : undefined;
                 return (
                     <button
                         key={item.action}
@@ -394,6 +401,7 @@ function ArticulationCardContextMenu({
                         aria-disabled={isDisabled}
                         data-role="articulation-card-menu-item"
                         data-action={item.action}
+                        data-disabled-reason={disabledReason}
                         onClick={() => {
                             if (isDisabled) {
                                 return;
@@ -432,11 +440,13 @@ const ARTICULATION_RANGE_MENU_ITEMS: ReadonlyArray<{
 function ArticulationRangeContextMenu({
     state,
     hasSelectedArticulation,
+    canDuplicate,
     onClose,
     onSelectAction,
 }: {
     state: ArticulationRangeMenuState;
     hasSelectedArticulation: boolean;
+    canDuplicate: boolean;
     onClose: () => void;
     onSelectAction: (action: ArticulationRangeMenuAction) => void;
 }) {
@@ -502,7 +512,13 @@ function ArticulationRangeContextMenu({
             className="synth-menu-surface z-50 min-w-[180px] rounded-[6px] p-0.5"
         >
             {ARTICULATION_RANGE_MENU_ITEMS.map((item) => {
-                const isDisabled = Boolean(item.requiresSelection && !hasSelectedArticulation);
+                const isDisabled = Boolean(item.requiresSelection && !hasSelectedArticulation)
+                    || (item.action === "duplicate-after" && !canDuplicate);
+                const disabledReason = item.action === "duplicate-after" && !canDuplicate
+                    ? "base-loading"
+                    : item.requiresSelection && !hasSelectedArticulation
+                        ? "no-selection"
+                        : undefined;
                 return (
                     <button
                         key={item.action}
@@ -512,6 +528,7 @@ function ArticulationRangeContextMenu({
                         aria-disabled={isDisabled}
                         data-role="articulation-range-menu-item"
                         data-action={item.action}
+                        data-disabled-reason={disabledReason}
                         onClick={() => {
                             if (isDisabled) {
                                 return;
@@ -701,6 +718,7 @@ function GainEnvelopeThumbnail({ envelope, color }: { envelope: GainEnvelopeView
 type ArticulationCardProps = {
     card: ArticulationCardView;
     activeMode: ArticulationTriggerMode;
+    canApply: boolean;
     onSelect: (articulationId: string) => void;
     onDragStart: (articulationId: string) => void;
     onDragEnd: () => void;
@@ -712,6 +730,7 @@ type ArticulationCardProps = {
 function ArticulationCard({
     card,
     activeMode,
+    canApply,
     onSelect,
     onDragStart,
     onDragEnd,
@@ -842,12 +861,15 @@ function ArticulationCard({
             role="button"
             tabIndex={0}
             aria-pressed={card.isSelected}
+            aria-disabled={!canApply}
             aria-label={`Articulation ${card.name}`}
             data-role="articulation-card"
             data-articulation-id={card.id}
             data-runtime-slot={String(card.runtimeSlot)}
             data-selected={card.isSelected ? "true" : "false"}
             data-dirty={card.isDirty ? "true" : "false"}
+            data-apply-state={canApply ? "ready" : "loading"}
+            title={canApply ? undefined : "Loading the current sound before articulation recall is available"}
             draggable
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
@@ -857,7 +879,7 @@ function ArticulationCard({
             onPointerCancel={clearLongPressTimer}
             onClick={() => {
                 activeArticulationDragId = null;
-                onSelect(card.id);
+                if (canApply) onSelect(card.id);
             }}
             onContextMenu={(event) => {
                 event.preventDefault();
@@ -866,7 +888,7 @@ function ArticulationCard({
             onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
-                    onSelect(card.id);
+                    if (canApply) onSelect(card.id);
                 }
             }}
             className={containerClass}
@@ -937,6 +959,7 @@ function ArticulationCard({
 type ArticulationCardCarouselProps = {
     cards: ArticulationCardView[];
     activeMode: ArticulationTriggerMode;
+    canApply: boolean;
     onSelectCard: (articulationId: string) => void;
     onCardDragStart: (articulationId: string) => void;
     onCardDragEnd: () => void;
@@ -948,6 +971,7 @@ type ArticulationCardCarouselProps = {
 function ArticulationCardCarousel({
     cards,
     activeMode,
+    canApply,
     onSelectCard,
     onCardDragStart,
     onCardDragEnd,
@@ -970,6 +994,7 @@ function ArticulationCardCarousel({
                     key={card.id}
                     card={card}
                     activeMode={activeMode}
+                    canApply={canApply}
                     onSelect={onSelectCard}
                     onDragStart={onCardDragStart}
                     onDragEnd={onCardDragEnd}
@@ -1022,6 +1047,7 @@ type ArticulationRangeLaneProps = {
     segments: ArticulationRangeSegmentView[];
     selectedArticulationId: string | null;
     draggedArticulationId: string | null;
+    isBaseReady: boolean;
     heldInput?: ArticulationHeldInputView;
     onSelectSegment: (mode: ArticulationTriggerMode, segment: ArticulationRangeSegmentView) => void;
     onAssignAtPosition: (mode: ArticulationTriggerMode, position: number, articulationId: string) => boolean;
@@ -1442,6 +1468,7 @@ function ArticulationRangeLane({
     segments,
     selectedArticulationId,
     draggedArticulationId,
+    isBaseReady,
     heldInput,
     onSelectSegment,
     onAssignAtPosition,
@@ -1577,6 +1604,10 @@ function ArticulationRangeLane({
         duplicate: boolean,
         options: { preferMoveExisting?: boolean } = {},
     ) => {
+        if (duplicate && !isBaseReady) {
+            showToast("Loading current sound before duplication is available");
+            return;
+        }
         const preview = previewFromPosition(position, articulationId, {
             preferMoveExisting: !duplicate && options.preferMoveExisting,
         });
@@ -1596,6 +1627,7 @@ function ArticulationRangeLane({
         );
     }, [
         mode,
+        isBaseReady,
         onAssignAtPosition,
         onDuplicateAndAssignAtPosition,
         onInsertAtPosition,
@@ -1639,9 +1671,9 @@ function ArticulationRangeLane({
         const preview = previewFromPosition(positionFromDragEvent(event), articulationId, {
             preferMoveExisting: Boolean(draggedId) && !event.altKey,
         });
-        event.dataTransfer.dropEffect = event.altKey ? "copy" : "move";
+        event.dataTransfer.dropEffect = event.altKey && !isBaseReady ? "none" : event.altKey ? "copy" : "move";
         setPlacementPreview(preview);
-    }, [draggedArticulationId, positionFromDragEvent, previewFromPosition, selectedArticulationId]);
+    }, [draggedArticulationId, isBaseReady, positionFromDragEvent, previewFromPosition, selectedArticulationId]);
 
     const handleDragLeave = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
         const nextTarget = event.relatedTarget;
@@ -1660,6 +1692,10 @@ function ArticulationRangeLane({
         if (!articulationId) {
             return;
         }
+        if (event.altKey && !isBaseReady) {
+            showToast("Loading current sound before duplication is available");
+            return;
+        }
         placeArticulationAtPosition(position, articulationId, event.altKey, {
             preferMoveExisting: Boolean(draggedId),
         });
@@ -1667,7 +1703,9 @@ function ArticulationRangeLane({
         placeArticulationAtPosition,
         positionFromDragEvent,
         draggedArticulationId,
+        isBaseReady,
         selectedArticulationId,
+        showToast,
     ]);
 
     const finishPointerEdit = useCallback((clientX: number, cancelled = false) => {
@@ -1689,7 +1727,7 @@ function ArticulationRangeLane({
                 ? dragState.originalSegment
                 : dragState.segment;
             setFocusedSegmentId(selectedDragSegment.id);
-            onSelectSegment(mode, selectedDragSegment);
+            if (isBaseReady) onSelectSegment(mode, selectedDragSegment);
             return;
         }
 
@@ -1703,6 +1741,7 @@ function ArticulationRangeLane({
                 : onMoveSegment(mode, dragState.segment, position),
         );
     }, [
+        isBaseReady,
         mode,
         onMoveSegment,
         onResizeSegment,
@@ -2199,6 +2238,7 @@ function ArticulationRangeLane({
                                 key={segment.id}
                                 type="button"
                                 aria-label={`Edit ${label} segment ${segment.label}`}
+                                aria-disabled={!isBaseReady}
                                 data-role="articulation-range-segment"
                                 data-segment-id={segment.id}
                                 data-articulation-id={segment.articulationId}
@@ -2210,6 +2250,7 @@ function ArticulationRangeLane({
                                 data-preview-affected={isPreviewAffected ? "true" : "false"}
                                 data-selected={segment.isSelected ? "true" : "false"}
                                 data-tier={tier}
+                                data-apply-state={isBaseReady ? "ready" : "loading"}
                                 onPointerDown={(event) => handleSegmentPointerDown(event, segment)}
                                 onPointerMove={handleSegmentPointerMove}
                                 onPointerUp={handleSegmentPointerUp}
@@ -2217,7 +2258,9 @@ function ArticulationRangeLane({
                                 onPointerEnter={() => handleSegmentPointerEnter(segment)}
                                 onPointerLeave={() => handleSegmentPointerLeave(segment)}
                                 onContextMenu={(event) => openRangeMenu(event, segment)}
-                                title={`${segment.label} ${valueLabel}`}
+                                title={isBaseReady
+                                    ? `${segment.label} ${valueLabel}`
+                                    : `${segment.label} ${valueLabel} · loading current sound before recall`}
                                 className={joinClasses(
                                     "group pointer-events-auto absolute inset-y-0.5 flex touch-none cursor-grab items-center overflow-hidden rounded-[3px] text-[#0a0d18] transition active:cursor-grabbing focus-visible:outline-none",
                                     isPreview
@@ -2495,6 +2538,7 @@ function ArticulationRangeLane({
                 <ArticulationRangeContextMenu
                     state={rangeMenu}
                     hasSelectedArticulation={Boolean(selectedArticulationId)}
+                    canDuplicate={isBaseReady}
                     onClose={() => setRangeMenu(null)}
                     onSelectAction={handleRangeMenuAction}
                 />
@@ -2508,6 +2552,7 @@ function MappingEditor(props: {
     cards: ArticulationCardView[];
     selectedArticulationId: string | null;
     draggedArticulationId: string | null;
+    isBaseReady: boolean;
     heldInput?: ArticulationHeldInputView;
     chainSegments: ArticulationRangeSegmentView[];
     keySegments: ArticulationRangeSegmentView[];
@@ -2578,6 +2623,7 @@ function MappingEditor(props: {
             segments={config.segments}
             selectedArticulationId={props.selectedArticulationId}
             draggedArticulationId={props.draggedArticulationId}
+            isBaseReady={props.isBaseReady}
             heldInput={props.heldInput}
             onSelectSegment={props.onSelectRangeSegment}
             onAssignAtPosition={props.onAssignRangePosition}
@@ -2599,38 +2645,48 @@ function MappingEditor(props: {
 function HeaderActions({
     selectedIsDirty,
     selectedName,
-    canCapture,
+    isBaseReady,
     onCapture,
     onUpdate,
     onRevert,
 }: {
     selectedIsDirty: boolean;
     selectedName: string | null;
-    canCapture: boolean;
+    isBaseReady: boolean;
     onCapture: () => void;
     onUpdate: () => void;
     onRevert: () => void;
 }) {
     return (
         <div className="flex shrink-0 items-center gap-1.5">
+            {!isBaseReady ? (
+                <span
+                    role="status"
+                    data-role="articulation-base-loading"
+                    className="font-mono text-[9px] tracking-[0.04em] text-cyan-100/55"
+                >
+                    Loading sound…
+                </span>
+            ) : null}
             <button
                 type="button"
                 aria-label="Capture current parameters as a new articulation"
                 data-role="articulation-capture"
                 onClick={onCapture}
-                disabled={!canCapture}
+                disabled={!isBaseReady}
                 className={joinClasses(PILL_BASE, PILL_CYAN, "disabled:opacity-40")}
             >
                 Capture
             </button>
-            {selectedIsDirty ? (
+            {selectedIsDirty || !isBaseReady ? (
                 <>
                     <button
                         type="button"
                         aria-label="Update selected articulation from current parameters"
                         data-role="articulation-update"
                         onClick={onUpdate}
-                        className={joinClasses(PILL_BASE, PILL_AMBER_ACTIVE, "border-amber-200/40 hover:bg-amber-300/16")}
+                        disabled={!isBaseReady}
+                        className={joinClasses(PILL_BASE, PILL_AMBER_ACTIVE, "border-amber-200/40 hover:bg-amber-300/16 disabled:cursor-wait disabled:opacity-40")}
                     >
                         {selectedName ? `Update ${selectedName}` : "Update"}
                     </button>
@@ -2639,7 +2695,8 @@ function HeaderActions({
                         aria-label="Revert current parameters to selected articulation"
                         data-role="articulation-revert"
                         onClick={onRevert}
-                        className={joinClasses(PILL_BASE, PILL_PINK)}
+                        disabled={!isBaseReady}
+                        className={joinClasses(PILL_BASE, PILL_PINK, "disabled:cursor-wait disabled:opacity-40")}
                     >
                         Revert
                     </button>
@@ -2653,6 +2710,7 @@ function FloatingArticulationToolbar({
     selectedIsDirty,
     selectedName,
     discardedEditLabel,
+    isBaseReady,
     onUpdate,
     onRevert,
     onUndoDiscard,
@@ -2660,6 +2718,7 @@ function FloatingArticulationToolbar({
     selectedIsDirty: boolean;
     selectedName: string | null;
     discardedEditLabel?: string | null;
+    isBaseReady: boolean;
     onUpdate: () => void;
     onRevert: () => void;
     onUndoDiscard?: () => void;
@@ -2683,7 +2742,8 @@ function FloatingArticulationToolbar({
                         aria-label="Update selected articulation from current parameters"
                         data-role="articulation-update-floating"
                         onClick={onUpdate}
-                        className={joinClasses(PILL_BASE, PILL_AMBER_ACTIVE, "h-5 rounded-[4px] px-1.5")}
+                        disabled={!isBaseReady}
+                        className={joinClasses(PILL_BASE, PILL_AMBER_ACTIVE, "h-5 rounded-[4px] px-1.5 disabled:cursor-wait disabled:opacity-40")}
                     >
                         Save
                     </button>
@@ -2692,7 +2752,8 @@ function FloatingArticulationToolbar({
                         aria-label="Revert current parameters to selected articulation"
                         data-role="articulation-revert-floating"
                         onClick={onRevert}
-                        className={joinClasses(PILL_BASE, PILL_NEUTRAL, "h-5 rounded-[4px] px-1.5")}
+                        disabled={!isBaseReady}
+                        className={joinClasses(PILL_BASE, PILL_NEUTRAL, "h-5 rounded-[4px] px-1.5 disabled:cursor-wait disabled:opacity-40")}
                     >
                         Revert
                     </button>
@@ -2758,7 +2819,7 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
         selectedArticulationId,
         selectedIsDirty,
         discardedEditLabel,
-        canCapture,
+        isBaseReady,
         chainSegments,
         keySegments,
         velocitySegments,
@@ -2804,11 +2865,12 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
             setCardMenu({
                 articulationId,
                 canDelete: card?.canDelete ?? false,
+                baseReady: isBaseReady,
                 x,
                 y,
             });
         },
-        [cards],
+        [cards, isBaseReady],
     );
 
     const closeCardMenu = useCallback(() => {
@@ -2822,6 +2884,9 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
             }
             const id = cardMenu.articulationId;
             setCardMenu(null);
+            if (action !== "rename" && !isBaseReady) {
+                return;
+            }
             switch (action) {
                 case "rename":
                     onRequestRename(id);
@@ -2837,7 +2902,7 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
                     return;
             }
         },
-        [cardMenu, onRequestRename, onRequestDuplicate, onRequestReplace, onRequestDelete],
+        [cardMenu, isBaseReady, onRequestRename, onRequestDuplicate, onRequestReplace, onRequestDelete],
     );
 
     const handleSurfaceKeyDown = useCallback((event: ReactKeyboardEvent<HTMLElement>) => {
@@ -2851,7 +2916,7 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
 
         if (usesCommandModifier && event.key.toLowerCase() === "v" && copiedArticulationId) {
             event.preventDefault();
-            onRequestDuplicate(copiedArticulationId);
+            if (isBaseReady) onRequestDuplicate(copiedArticulationId);
             return;
         }
 
@@ -2861,13 +2926,13 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
             && selectedCard.canDelete
         ) {
             event.preventDefault();
-            onRequestDelete(selectedCard.id);
+            if (isBaseReady) onRequestDelete(selectedCard.id);
         }
-    }, [copiedArticulationId, onRequestDelete, onRequestDuplicate, selectedCard]);
+    }, [copiedArticulationId, isBaseReady, onRequestDelete, onRequestDuplicate, selectedCard]);
 
     const cardMenuOverlay = cardMenu ? (
         <ArticulationCardContextMenu
-            state={cardMenu}
+            state={{ ...cardMenu, baseReady: isBaseReady }}
             onClose={closeCardMenu}
             onSelectAction={handleMenuAction}
         />
@@ -2877,6 +2942,7 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
         <ArticulationCardCarousel
             cards={cards}
             activeMode={activeMode}
+            canApply={isBaseReady}
             onSelectCard={onSelectCard}
             onCardDragStart={setDraggedArticulationId}
             onCardDragEnd={() => setDraggedArticulationId(null)}
@@ -2893,7 +2959,9 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
                 data-state="collapsed"
                 data-section-accent="amber"
                 data-liquid-detail="section-tab"
+                data-base-state={isBaseReady ? "ready" : "loading"}
                 aria-label="Articulations"
+                aria-busy={!isBaseReady}
                 onKeyDown={handleSurfaceKeyDown}
                 className="synth-grid-card-shell relative flex min-h-[100px] min-w-0 shrink-0 items-stretch gap-2 overflow-hidden rounded-[12px] border px-2.5 py-2"
             >
@@ -2903,7 +2971,7 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
                     <HeaderActions
                         selectedIsDirty={selectedIsDirty}
                         selectedName={selectedCard?.name ?? null}
-                        canCapture={canCapture}
+                        isBaseReady={isBaseReady}
                         onCapture={onCapture}
                         onUpdate={onUpdate}
                         onRevert={onRevert}
@@ -2924,7 +2992,9 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
             data-state="expanded"
             data-section-accent="amber"
             data-liquid-detail="section-tab"
+            data-base-state={isBaseReady ? "ready" : "loading"}
             aria-label="Articulations"
+            aria-busy={!isBaseReady}
             onKeyDown={handleSurfaceKeyDown}
             className="synth-grid-card-shell relative flex min-w-0 shrink-0 flex-col gap-2 overflow-hidden rounded-[12px] border px-2.5 py-2"
         >
@@ -2934,7 +3004,7 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
                     <HeaderActions
                         selectedIsDirty={selectedIsDirty}
                         selectedName={selectedCard?.name ?? null}
-                        canCapture={canCapture}
+                        isBaseReady={isBaseReady}
                         onCapture={onCapture}
                         onUpdate={onUpdate}
                         onRevert={onRevert}
@@ -2946,10 +3016,11 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
             <MappingEditor
                 activeMode={activeMode}
                 cards={cards}
-                        selectedArticulationId={selectedArticulationId}
-                        draggedArticulationId={draggedArticulationId}
-                        heldInput={heldInput}
-                        chainSegments={chainSegments}
+                selectedArticulationId={selectedArticulationId}
+                draggedArticulationId={draggedArticulationId}
+                isBaseReady={isBaseReady}
+                heldInput={heldInput}
+                chainSegments={chainSegments}
                 keySegments={keySegments}
                 velocitySegments={velocitySegments}
                 keyboardMinNote={keyboardMinNote}
@@ -2968,6 +3039,7 @@ export function ArticulationControlSurface(props: ArticulationControlSurfaceProp
                 selectedIsDirty={selectedIsDirty}
                 selectedName={selectedCard?.name ?? null}
                 discardedEditLabel={discardedEditLabel}
+                isBaseReady={isBaseReady}
                 onUpdate={onUpdate}
                 onRevert={onRevert}
                 onUndoDiscard={onUndoDiscard}

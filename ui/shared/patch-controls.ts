@@ -14,6 +14,8 @@ function serializeIdentity<TValue>(value: TValue) {
 export type PatchControlBinding<TValue> = {
     endpointID: string;
     value: TValue;
+    /** Whether the current endpoint's first authoritative value has arrived. */
+    isReady: boolean;
     /** The authoritative pre-edit host value for the current endpoint, when observed. */
     hostBaseline?: PatchParameterHostBaseline<TValue>;
     /** The canonical default this parameter boots with (ADR-017 base reset). */
@@ -62,6 +64,7 @@ export function usePatchParameterBinding<TValue>({
     return useMemo(() => ({
         endpointID,
         value,
+        isReady: parameter.isReady,
         hostBaseline,
         initialValue,
         setValue,
@@ -73,6 +76,7 @@ export function usePatchParameterBinding<TValue>({
         initialValue,
         parameter.beginGesture,
         parameter.endGesture,
+        parameter.isReady,
         hostBaseline,
         value,
         setValue,

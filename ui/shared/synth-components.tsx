@@ -2621,12 +2621,16 @@ export function VerticalSlider({
         : { height: `${normalized * 100}%` };
 
     return (
-        <div className={`flex shrink-0 flex-col items-center gap-1 py-2 ${className ?? ""}`}>
+        <div
+            data-host-state={binding.isReady ? "ready" : "loading"}
+            aria-busy={!binding.isReady}
+            className={`flex shrink-0 flex-col items-center gap-1 py-2 ${binding.isReady ? "" : "opacity-45"} ${className ?? ""}`}
+        >
             <span className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-400/45">{label}</span>
             <div
                 ref={trackRef}
                 data-role={trackDataRole}
-                className="relative w-1.5 flex-1 cursor-ns-resize rounded-full bg-white/[0.04]"
+                className={`relative w-1.5 flex-1 rounded-full bg-white/[0.04] ${binding.isReady ? "cursor-ns-resize" : "cursor-wait"}`}
                 onPointerDown={(e) => handlePointerDown(
                     e,
                     trackRef.current,
@@ -2664,6 +2668,7 @@ export function VerticalSlider({
                 max={max}
                 step={0.001}
                 value={binding.value}
+                disabled={!binding.isReady}
                 className="sr-only"
                 tabIndex={-1}
                 onInput={(event) => binding.setValue(Number(event.currentTarget.value))}

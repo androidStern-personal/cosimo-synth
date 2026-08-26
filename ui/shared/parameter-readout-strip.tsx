@@ -308,6 +308,9 @@ export function useReadoutCells({
     }, [activeAmountBinding.value, activeRoute, armedSource, bindings, routes]);
 
     const cellPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>, cellId: string) => {
+        if (!bindingsRef.current[cellId].isReady) {
+            return;
+        }
         if (gestureController.isGestureActive()) {
             return;
         }
@@ -479,6 +482,7 @@ export function useReadoutCells({
             throw new Error(`Unknown readout cell ${cellId}`);
         }
         const binding = bindingsRef.current[cellId];
+        if (!binding.isReady) return;
         if (cell.normalizeValue !== undefined && cell.denormalizeValue !== undefined) {
             // Display-scale cells nudge 1% of the TRACK, matching the drag.
             const travel = 0.01 * (coarse ? 10 : 1) * direction;
@@ -500,6 +504,7 @@ export function useReadoutCells({
             && event.key !== "ArrowUp" && event.key !== "ArrowDown") {
             return;
         }
+        if (!bindingsRef.current[cellId].isReady) return;
         event.preventDefault();
         const direction = event.key === "ArrowRight" || event.key === "ArrowUp" ? 1 : -1;
         adjustBaseByStep(cellId, direction, event.shiftKey);
@@ -512,6 +517,7 @@ export function useReadoutCells({
         }
         const display = cell.display;
         const binding = bindingsRef.current[cellId];
+        if (!binding.isReady) return;
         const count = (display.choices?.length ?? 0) || (display.max - display.min + 1);
         const next = display.min + (((Math.round(binding.value) - display.min) + 1) % count);
         binding.commitValue(next);
@@ -712,14 +718,17 @@ export function ReadoutCell({
     if (cell.kind === "choice") {
         const display = cell.display;
         const choices = display.choices ?? [];
-        const index = clamp(Math.round(bindings[cell.id].value), display.min, display.max);
+        const binding = bindings[cell.id];
+        const index = clamp(Math.round(binding.value), display.min, display.max);
         const label = choices[index - display.min] ?? String(index);
         return (
             <button
                 type="button"
                 data-role={`${rolePrefix}-cell-${cell.id}`}
+                data-host-state={binding.isReady ? "ready" : "loading"}
                 className="mobile-voice-cell is-choice"
                 aria-label={`${cell.fullLabel}: ${label}`}
+                disabled={!binding.isReady}
                 onClick={() => api.cycleChoice(cell.id)}
             >
                 <span className="cosimo-label">{cell.shortLabel}</span>
@@ -729,24 +738,28 @@ export function ReadoutCell({
     }
 
     const display = cell.display;
+    const binding = bindings[cell.id];
     const presentation = api.presentCell(cell.id);
-    const value = clamp(bindings[cell.id].value, display.min, display.max);
+    const value = clamp(binding.value, display.min, display.max);
     const dragging = api.draggingCell !== null && api.draggingCell.cellId === cell.id
         ? api.draggingCell.mode
         : undefined;
     return (
         <div
             role="slider"
-            tabIndex={0}
+            tabIndex={binding.isReady ? 0 : -1}
+            aria-disabled={!binding.isReady}
+            aria-busy={!binding.isReady}
             aria-label={cell.fullLabel}
             aria-valuemin={display.min}
             aria-valuemax={display.max}
             aria-valuenow={value}
             aria-valuetext={cell.formatValue(value)}
             data-role={`${rolePrefix}-cell-${cell.id}`}
+            data-host-state={binding.isReady ? "ready" : "loading"}
             data-modulation-target-kind={cell.targetKind ?? undefined}
             data-dragging={dragging}
-            className="mobile-voice-cell is-readout"
+            className={`mobile-voice-cell is-readout${binding.isReady ? "" : " is-loading"}`}
             style={{ "--mobile-voice-source-accent": api.sourceAccent } as CSSProperties}
             onPointerDown={(event) => api.cellPointerDown(event, cell.id)}
             onKeyDown={(event) => api.handleReadoutKeyDown(event, cell.id)}

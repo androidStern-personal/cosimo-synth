@@ -429,6 +429,9 @@ export function MobileVoiceFocusedEditor({
     }, [armedSource, gestureController]);
 
     const graphPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+        if (!bindingsRef.current.framePosition.isReady || !bindingsRef.current.warpAmount.isReady) {
+            return;
+        }
         if (gestureController.isGestureActive()) {
             return;
         }
@@ -503,7 +506,8 @@ export function MobileVoiceFocusedEditor({
         const spec = getMobileVoiceControlSpec(controlID);
         const display = DISPLAY_DESCRIPTORS[controlID];
         const presentation = cellApi.presentCell(controlID);
-        const value = clamp(bindings[controlID].value, display.min, display.max);
+        const binding = bindings[controlID];
+        const value = clamp(binding.value, display.min, display.max);
         const format = spec.format ?? "percent";
         const modulationTargetKind = spec.modulationParameterKind !== null
             ? targetKindFor(spec.modulationParameterKind)
@@ -512,15 +516,18 @@ export function MobileVoiceFocusedEditor({
         return (
             <div
                 role="slider"
-                tabIndex={0}
+                tabIndex={binding.isReady ? 0 : -1}
+                aria-disabled={!binding.isReady}
+                aria-busy={!binding.isReady}
                 aria-label={spec.fullLabel}
                 aria-valuemin={display.min}
                 aria-valuemax={display.max}
                 aria-valuenow={value}
                 aria-valuetext={formatMobileVoiceValue(format, value)}
                 data-role={`mobile-voice-chip-${controlID}`}
+                data-host-state={binding.isReady ? "ready" : "loading"}
                 data-modulation-target-kind={modulationTargetKind}
-                className="mobile-voice-chip is-readout"
+                className={`mobile-voice-chip is-readout${binding.isReady ? "" : " is-loading"}`}
                 data-corner={spec.placements.includes("graph-overlay-bottom-left")
                     ? "bottom-left"
                     : "bottom-right"}
@@ -598,14 +605,18 @@ export function MobileVoiceFocusedEditor({
                             : `Select oscillator ${oscillator.id}`,
                         dataRole: `mobile-voice-tab-${oscillator.id.toLowerCase()}`,
                         dataDragDwell: `oscillator-tab:${oscillator.id}`,
-                        stateClassName: oscillatorMuted ? " is-muted" : "",
-                        onActiveTap: () => toggles.mute.commitValue(oscillatorMuted ? 0 : 1),
+                        stateClassName: `${oscillatorMuted ? " is-muted" : ""}${toggles.mute.isReady ? "" : " is-loading"}`,
+                        onActiveTap: toggles.mute.isReady
+                            ? () => toggles.mute.commitValue(oscillatorMuted ? 0 : 1)
+                            : undefined,
                         accessory: (
                             <button
                                 type="button"
                                 aria-label={`Solo oscillator ${oscillator.id}`}
                                 aria-pressed={oscillatorSoloed}
                                 data-role={`mobile-voice-solo-${oscillator.id.toLowerCase()}`}
+                                data-host-state={toggles.solo.isReady ? "ready" : "loading"}
+                                disabled={!toggles.solo.isReady}
                                 className={`mobile-voice-tab-solo${oscillatorSoloed ? " is-active" : ""}`}
                                 onClick={(event) => {
                                     event.stopPropagation();
@@ -634,7 +645,9 @@ export function MobileVoiceFocusedEditor({
             <div className="mobile-voice-unit">
                 <div
                     data-role="mobile-voice-graph"
-                    className={`mobile-voice-graph${isMuted ? " is-muted" : ""}`}
+                    data-host-state={bindings.framePosition.isReady && bindings.warpAmount.isReady ? "ready" : "loading"}
+                    aria-busy={!bindings.framePosition.isReady || !bindings.warpAmount.isReady}
+                    className={`mobile-voice-graph${isMuted ? " is-muted" : ""}${bindings.framePosition.isReady && bindings.warpAmount.isReady ? "" : " is-loading"}`}
                     data-modulation-target-kind={targetKindFor("wavetablePosition")}
                     onPointerDown={graphPointerDown}
                 >
@@ -718,6 +731,8 @@ export function MobileVoiceFocusedEditor({
                         className="mobile-voice-chip"
                         data-corner="top-right"
                         aria-label={`Warp mode: ${WARP_MODE_LABELS[warpModeIndex]}. Cycle warp mode`}
+                        data-host-state={bindings.warpMode.isReady ? "ready" : "loading"}
+                        disabled={!bindings.warpMode.isReady}
                         onPointerDown={stopOverlayPointer}
                         onClick={() => cellApi.cycleChoice("warpMode")}
                     >

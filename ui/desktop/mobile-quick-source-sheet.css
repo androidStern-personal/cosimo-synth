@@ -101,6 +101,11 @@
         background: var(--cosimo-wash);
     }
 
+    .quick-source-sheet-macro.is-loading {
+        cursor: wait;
+        opacity: 0.45;
+    }
+
     .quick-source-sheet-macro-fill {
         position: absolute;
         inset: 0 auto 0 0;

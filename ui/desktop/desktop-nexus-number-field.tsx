@@ -200,9 +200,14 @@ export function NexusNumberField({
         widget.element.setAttribute("aria-label", label);
         styleNexusNumberInput(widget.element, host, { variant, width, height });
         const handleMouseDown = () => {
+            if (!bindingRef.current.isReady) return;
             callbackRef.current.onActivate?.();
         };
         const handleFocus = () => {
+            if (!bindingRef.current.isReady) {
+                widget.element.blur();
+                return;
+            }
             entrySpecRef.current = activeEntrySpec;
             textEntryActiveRef.current = true;
             setIsTextEntryActive(true);
@@ -227,6 +232,7 @@ export function NexusNumberField({
             callbackRef.current.onEndTextEntry?.();
         };
         const handleWidgetChange = (nextValue?: number) => {
+            if (!bindingRef.current.isReady) return;
             const entryText = nextValue === undefined ? widget.element.value : String(nextValue);
             const result = parseParameterEntry(entrySpecRef.current, entryText);
             if (result._tag === "rejected") {
@@ -264,6 +270,16 @@ export function NexusNumberField({
 
     useEffect(() => {
         const widget = widgetRef.current;
+        const host = hostRef.current;
+        if (!widget || !host) return;
+        widget.element.disabled = !binding.isReady;
+        widget.element.setAttribute("data-host-state", binding.isReady ? "ready" : "loading");
+        host.style.cursor = binding.isReady ? (variant === "default" ? "ns-resize" : "ew-resize") : "wait";
+        host.style.opacity = binding.isReady ? "1" : "0.45";
+    }, [binding.isReady, variant]);
+
+    useEffect(() => {
+        const widget = widgetRef.current;
 
         if (!widget) {
             return;
@@ -285,8 +301,10 @@ export function NexusNumberField({
         <label
             className="grid gap-2"
             data-role={dataRole}
+            data-host-state={binding.isReady ? "ready" : "loading"}
             data-modulation-target-kind={modulationTargetKind}
-            {...longPressMenu}
+            aria-busy={!binding.isReady}
+            {...(binding.isReady ? longPressMenu : {})}
         >
             {showLabel ? (
                 <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">{label}</span>

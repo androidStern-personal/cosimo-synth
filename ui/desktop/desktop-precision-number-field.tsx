@@ -214,6 +214,9 @@ export function PrecisionNumberField({
     }, []);
 
     const beginTextEntry = useCallback(() => {
+        if (!bindingRef.current.isReady) {
+            return;
+        }
         editingSpecRef.current = entrySpec;
         editingSuffixRef.current = suffix;
         updateDraftValue(formatParameterEntry(entrySpec, readPresentedBindingValue()).draft);
@@ -344,6 +347,9 @@ export function PrecisionNumberField({
     }, [isEditing]);
 
     const commitTextEntry = (rawText: string) => {
+        if (!bindingRef.current.isReady) {
+            return false;
+        }
         const result = parseParameterEntry(editingSpecRef.current, rawText);
         if (result._tag === "rejected") {
             setEntryError(result.message);
@@ -391,7 +397,7 @@ export function PrecisionNumberField({
 
         const timerRef = wheelCursorTimerRef;
         const handler = (event: WheelEvent) => {
-            if (isEditing || event.deltaY === 0) {
+            if (!bindingRef.current.isReady || isEditing || event.deltaY === 0) {
                 return;
             }
 
@@ -442,12 +448,14 @@ export function PrecisionNumberField({
         <label
             ref={fieldRef}
             data-role={isInlineDark ? dataRole : undefined}
+            data-host-state={binding.isReady ? "ready" : "loading"}
             data-modulation-target-kind={modulationTargetKind}
-            {...longPressMenu}
-            className={isInlineDark
+            aria-busy={!binding.isReady}
+            {...(binding.isReady ? longPressMenu : {})}
+            className={`${isInlineDark
                 ? "inline-flex h-6 min-w-0 items-center gap-1 rounded-[5px] border border-[rgb(var(--cosimo-edge-rgb)/0.34)] bg-[rgb(var(--cosimo-raised-rgb)/0.58)] px-1 text-[var(--cosimo-ink)] shadow-[var(--cosimo-shadow-raised)]"
                 : "grid gap-1"
-            }
+            } ${binding.isReady ? "" : "cursor-wait opacity-45"}`}
         >
             <span className={shouldShowLeadingLabel
                 ? "shrink-0 text-[7px] font-bold uppercase tracking-[0.10em] text-slate-300/45"
@@ -474,6 +482,7 @@ export function PrecisionNumberField({
                     inputMode="decimal"
                     autoComplete="off"
                     spellCheck={false}
+                    disabled={!binding.isReady}
                     readOnly={!isEditing}
                     value={displayValue}
                     style={isWheelCursorHidden && !isEditing ? { cursor: "none" } : undefined}
@@ -489,7 +498,7 @@ export function PrecisionNumberField({
                         }`
                     }
                     onPointerDown={(event) => {
-                        if (event.button !== 0 || isEditing) {
+                        if (!binding.isReady || event.button !== 0 || isEditing) {
                             return;
                         }
 

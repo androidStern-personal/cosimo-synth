@@ -127,7 +127,7 @@ export function useSliderDrag() {
         axis: "vertical" | "horizontal" | "horizontal-relative",
         onChange?: (normalized: number, pointer: SliderDragPointer) => void,
     ) => {
-        if (!trackElement || (event.pointerType === "mouse" && event.button !== 0)) {
+        if (!binding.isReady || !trackElement || (event.pointerType === "mouse" && event.button !== 0)) {
             return;
         }
 

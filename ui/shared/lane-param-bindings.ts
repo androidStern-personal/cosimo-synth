@@ -271,6 +271,7 @@ export function useLaneParameterBinding(
     return useMemo(() => ({
         endpointID: descriptor.endpointID,
         value,
+        isReady: true,
         initialValue: descriptor.initial,
         setValue,
         commitValue,

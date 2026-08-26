@@ -83,6 +83,7 @@ function createStaticBinding(parameter: RackParameterDescriptor, value: number):
     return {
         endpointID: parameter.endpointID,
         value,
+        isReady: true,
         setValue: noOp,
         commitValue: noOp,
         beginGesture: noOp,
