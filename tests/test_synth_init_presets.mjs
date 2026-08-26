@@ -23,6 +23,12 @@ const synthStatus = {
             parameter("oscBWavetableSelect", { init: 1, min: 0, max: 237, integer: true }),
             parameter("oscCWavetableSelect", { init: 2, min: 0, max: 237, integer: true }),
             parameter("oscAFramePosition", { init: 0.25, min: 0, max: 1 }),
+            parameter("oscAVolumeDb", { init: 0, min: -48, max: 6 }),
+            parameter("oscBVolumeDb", { init: 0, min: -48, max: 6 }),
+            parameter("oscCVolumeDb", { init: 0, min: -48, max: 6 }),
+            parameter("oscAMute", { init: 0, min: 0, max: 1, discrete: true }),
+            parameter("oscBMute", { init: 1, min: 0, max: 1, discrete: true }),
+            parameter("oscCMute", { init: 1, min: 0, max: 1, discrete: true }),
             parameter("filterMix", { init: 1, min: 0, max: 1 }),
             parameter("delayMix", { init: 0.5, min: 0, max: 1 }),
             parameter("reverbMix", { init: 0.5, min: 0, max: 1 }),
@@ -39,19 +45,29 @@ async function productionSynthStatus() {
         throw new Error("Production synth parameter block is missing.");
     }
     const parameterText = source.slice(graphStart, rackStructureStart);
-    const pattern = /^\s*input (?:(?:value\s+[^\s]+\s+([A-Za-z_][A-Za-z0-9_]*)\s+\[\[[^\]]*\]\])|(?:rack\.([A-Za-z_][A-Za-z0-9_]*)))\s*;/gm;
-    const endpointIDs = Array.from(parameterText.matchAll(pattern), ([, directID, rackID]) => directID ?? rackID);
+    const pattern = /^\s*input (?:(?:value\s+[^\s]+\s+([A-Za-z_][A-Za-z0-9_]*)\s+\[\[([^\]]*)\]\])|(?:rack\.([A-Za-z_][A-Za-z0-9_]*)))\s*;/gm;
+    const declarations = Array.from(parameterText.matchAll(pattern), ([, directID, annotationText, rackID]) => ({
+        endpointID: directID ?? rackID,
+        annotationText: annotationText ?? "",
+    }));
+    const endpointIDs = declarations.map(({ endpointID }) => endpointID);
+    const annotationNumber = (annotationText, field, fallback) => {
+        const match = annotationText.match(new RegExp(`(?:^|,)\\s*${field}:\\s*(-?[0-9]+(?:\\.[0-9]+)?)(?:f)?(?:\\s*,|$)`));
+        return match ? Number(match[1]) : fallback;
+    };
 
     return {
         endpointIDs,
         status: {
             details: {
-                inputs: endpointIDs.map((endpointID, index) => parameter(endpointID, {
-                    hidden: endpointID === "hostSlot0Guard",
-                    init: endpointID.endsWith("WavetableSelect") ? 34 : index / 100,
-                    min: -1_000,
-                    max: 1_000,
-                    discrete: endpointID.endsWith("WavetableSelect"),
+                inputs: declarations.map(({ endpointID, annotationText }, index) => parameter(endpointID, {
+                    hidden: /(?:^|,)\s*hidden:\s*true(?:\s*,|$)/.test(annotationText)
+                        || endpointID === "hostSlot0Guard",
+                    init: annotationNumber(annotationText, "init", index / 100),
+                    min: annotationNumber(annotationText, "min", -1_000),
+                    max: annotationNumber(annotationText, "max", 1_000),
+                    step: annotationNumber(annotationText, "step", undefined),
+                    discrete: /(?:^|,)\s*discrete:\s*true(?:\s*,|$)/.test(annotationText),
                 })),
             },
         },
@@ -519,6 +535,20 @@ test("Init writes the default for every current production public parameter, inc
     const initResult = synthMutations(fixture.controller).initSound();
     assert.equal(initResult.ok, true, initResult.message);
     assert.deepEqual(fixture.patchConnection.parameterValues, fixture.defaults);
+    assert.deepEqual(
+        Object.fromEntries([
+            "oscAVolumeDb", "oscBVolumeDb", "oscCVolumeDb",
+            "oscAMute", "oscBMute", "oscCMute",
+        ].map((endpointID) => [endpointID, fixture.patchConnection.parameterValues[endpointID]])),
+        {
+            oscAVolumeDb: 0,
+            oscBVolumeDb: 0,
+            oscCVolumeDb: 0,
+            oscAMute: 0,
+            oscBMute: 1,
+            oscCMute: 1,
+        },
+    );
     assert.equal(fixture.controller.getState().dirty, false);
 });
 
@@ -954,6 +984,12 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     source.patchConnection.emitParameterValue("oscAFramePosition", 0.37);
     source.patchConnection.emitParameterValue("filterMix", 0.28);
     source.patchConnection.emitParameterValue("globalTune", 12.37);
+    source.patchConnection.emitParameterValue("oscAVolumeDb", -3.25);
+    source.patchConnection.emitParameterValue("oscBVolumeDb", -12.5);
+    source.patchConnection.emitParameterValue("oscCVolumeDb", 2.75);
+    source.patchConnection.emitParameterValue("oscAMute", 1);
+    source.patchConnection.emitParameterValue("oscBMute", 0);
+    source.patchConnection.emitParameterValue("oscCMute", 0);
     source.modulationHarness.adapter.apply({
         ...source.defaultModulation,
         routes: [{
@@ -996,6 +1032,20 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     assert.equal(loaded.ok, true, loaded.message);
     assert.deepEqual(target.patchConnection.parameterValues, source.patchConnection.parameterValues);
     assert.equal(target.patchConnection.parameterValues.globalTune, 12.37);
+    assert.deepEqual(
+        Object.fromEntries([
+            "oscAVolumeDb", "oscBVolumeDb", "oscCVolumeDb",
+            "oscAMute", "oscBMute", "oscCMute",
+        ].map((endpointID) => [endpointID, target.patchConnection.parameterValues[endpointID]])),
+        {
+            oscAVolumeDb: -3.25,
+            oscBVolumeDb: -12.5,
+            oscCVolumeDb: 2.75,
+            oscAMute: 1,
+            oscBMute: 0,
+            oscCMute: 0,
+        },
+    );
     assert.deepEqual(target.modulationHarness.value, source.modulationHarness.value);
     assert.deepEqual(target.articulationHarness.value, source.articulationHarness.value);
     assert.deepEqual(target.rackHarness.value, source.rackHarness.value);

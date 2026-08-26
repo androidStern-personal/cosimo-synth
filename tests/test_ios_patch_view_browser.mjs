@@ -669,7 +669,13 @@ test("mounted iPhone oscillator tabs route table and control edits only to the s
         assert.equal(await oscillatorA.getAttribute("aria-selected"), "true");
 
         await clearIOSHarnessDebugLog(page);
-        await (await getShadowLocator(page, '[data-role="mobile-voice-tab-b"]')).click();
+        const oscillatorB = await getShadowLocator(page, '[data-role="mobile-voice-tab-b"]');
+        assert.equal((await oscillatorB.getAttribute("class")).includes("is-muted"), true);
+        await oscillatorB.click();
+        assert.equal(
+            await (await getShadowLocator(page, '[data-role="mobile-voice-cell-volumeDb"]')).getAttribute("aria-valuenow"),
+            "0",
+        );
         await selectShadowOption(page, 'select[aria-label="Select wavetable"]', 1);
         await dispatchShadowInputValueChange(page, '[data-role="oscillator-pan-slider"]', "0.25");
 
@@ -683,7 +689,7 @@ test("mounted iPhone oscillator tabs route table and control edits only to the s
         await page.keyboard.press("ArrowLeft");
 
         // Mute is the second tap on the active tab; Solo is the tab badge.
-        await (await getShadowLocator(page, '[data-role="mobile-voice-tab-b"]')).click();
+        await oscillatorB.click();
         await (await getShadowLocator(page, '[data-role="mobile-voice-solo-b"]')).click();
 
         const snapshot = await waitForSnapshot(
@@ -695,7 +701,7 @@ test("mounted iPhone oscillator tabs route table and control edits only to the s
                 endpointID === "oscBPan" && Math.abs(Number(value) - 0.25) < 0.0001
             )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBOctave" && Number(value) === 1)
                 && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBSemitone" && Number(value) === -1)
-                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBMute" && Number(value) === 1)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBMute" && Number(value) === 0)
                 && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBSolo" && Number(value) === 1),
         );
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => (

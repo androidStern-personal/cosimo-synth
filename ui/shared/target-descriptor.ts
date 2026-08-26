@@ -38,6 +38,7 @@ import {
     GLOBAL_TUNE_MODULATION_MIN_SEMITONES,
     GLOBAL_TUNE_TARGET_KIND,
 } from "./global-tune";
+import { OSCILLATOR_DEFAULT_VOLUME_NORMALIZED } from "./oscillator-defaults";
 
 /** The eight fixed rack effects (ADR-006 v1 inventory; identity ≠ position). */
 export type EffectModuleId =
@@ -373,7 +374,7 @@ ReadonlyArray<OscillatorModulationDescriptorDefinition> = [
     { targetIdSuffix: "framePosition", parameterKind: "wavetablePosition", label: "Index", initialPercent: 44, defaultPercent: 0, format: "percent", isQuick: true },
     { targetIdSuffix: "warpAmount", parameterKind: "warpAmount", label: "Warp", initialPercent: 58, defaultPercent: 50, format: "percent" },
     { targetIdSuffix: "pitchSemitones", parameterKind: "pitchSemitones", label: "Tune", initialPercent: 50, defaultPercent: 50, format: "semitone" },
-    { targetIdSuffix: "volumeDb", parameterKind: "ampGainDb", label: "Level", initialPercent: 80, defaultPercent: 80, format: "percent" },
+    { targetIdSuffix: "volumeDb", parameterKind: "ampGainDb", label: "Level", initialPercent: OSCILLATOR_DEFAULT_VOLUME_NORMALIZED * 100, defaultPercent: OSCILLATOR_DEFAULT_VOLUME_NORMALIZED * 100, format: "percent" },
     { targetIdSuffix: "pan", parameterKind: "pan", label: "Pan", initialPercent: 50, defaultPercent: 50, format: "signed" },
     { targetIdSuffix: "unisonDetune", parameterKind: "unisonDetune", label: "Unison", initialPercent: 35, defaultPercent: 0, format: "percent" },
     { targetIdSuffix: "unisonBlend", parameterKind: "unisonBlend", label: "Uni Blend", initialPercent: 75, defaultPercent: 75, format: "percent" },

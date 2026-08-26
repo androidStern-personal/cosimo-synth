@@ -53,6 +53,7 @@ import {
     type OscillatorModulationTargetKind,
     type ModulationTargetKind,
 } from "../shared/modulation-targets";
+import { OSCILLATOR_DEFAULT_VOLUME_DB } from "../shared/oscillator-defaults";
 import type { EffectModuleId } from "../shared/target-descriptor";
 import {
     type SynthFocusBindings,
@@ -2528,7 +2529,7 @@ function OscillatorPerformanceControls({
         { label: "Oscillator octave", shortLabel: "OCT", role: "oscillator-octave", binding: octave, min: -4, max: 4, initial: 0, step: 1, detentStep: 1, suffix: "oct", modulationParameterKind: null },
         { label: "Oscillator semitone", shortLabel: "SEMI", role: "oscillator-semitone", binding: semitone, min: -12, max: 12, initial: 0, step: 1, detentStep: 1, suffix: "st", modulationParameterKind: "pitchSemitones" },
         { label: "Oscillator fine tune", shortLabel: "FINE", role: "oscillator-fine", binding: fineCents, min: -100, max: 100, initial: 0, step: 0.1, detentStep: null, suffix: "ct", modulationParameterKind: null },
-        { label: "Oscillator level", shortLabel: "LEVEL", role: "oscillator-level", binding: volumeDb, min: -48, max: 6, initial: -9.542425, step: 0.1, detentStep: null, suffix: "dB", modulationParameterKind: "ampGainDb" },
+        { label: "Oscillator level", shortLabel: "LEVEL", role: "oscillator-level", binding: volumeDb, min: -48, max: 6, initial: OSCILLATOR_DEFAULT_VOLUME_DB, step: 0.1, detentStep: null, suffix: "dB", modulationParameterKind: "ampGainDb" },
     ] as const;
 
     return (

@@ -197,12 +197,12 @@ processor Core03TableAndControlSchedule
         aFineCentsOut <- 0.0f;
         bFineCentsOut <- 0.0f;
         cFineCentsOut <- -12.0f;
-        aVolumeDbOut <- -9.542425f;
-        bVolumeDbOut <- -9.542425f;
-        cVolumeDbOut <- -9.542425f;
+        aVolumeDbOut <- 0.0f;
+        bVolumeDbOut <- 0.0f;
+        cVolumeDbOut <- 0.0f;
         aMuteOut <- 0.0f;
-        bMuteOut <- 0.0f;
-        cMuteOut <- 0.0f;
+        bMuteOut <- 1.0f;
+        cMuteOut <- 1.0f;
         aSoloOut <- 1.0f;
         bSoloOut <- 0.0f;
         cSoloOut <- 0.0f;
@@ -294,7 +294,7 @@ processor Core03TableAndControlSchedule
         upload.phases = float32[3] (0.10f, 0.20f, 0.60f);
         upload.phaseRandoms = float32[3] (0.0f, 0.15f, 0.45f);
         upload.retriggers = int32[3] (1, 1, 1);
-        upload.volumeDbs = float32[3] (-9.542425f, -12.0f, -6.0f);
+        upload.volumeDbs = float32[3] (0.0f, -12.0f, -6.0f);
         upload.mutes = int32[3] (0, 0, 0);
         upload.solos = int32[3] (0, 0, 0);
         upload.warpModes = int32[3] (0, 3, 4);
@@ -359,10 +359,12 @@ processor Core03TableAndControlSchedule
             }
             else if (frameCounter == 1088)
             {
+                bMuteOut <- 0.0f;
                 selectSolo (wt::oscillatorB);
             }
             else if (frameCounter == 2112)
             {
+                cMuteOut <- 0.0f;
                 selectSolo (wt::oscillatorC);
             }
             else if (frameCounter == 3136)
@@ -411,7 +413,7 @@ processor Core03TableAndControlSchedule
             }
             else if (frameCounter == 6912)
             {
-                bVolumeDbOut <- -9.542425f;
+                bVolumeDbOut <- 0.0f;
                 bPanOut <- 0.65f;
             }
             else if (frameCounter == 7424)
@@ -432,7 +434,7 @@ processor Core03TableAndControlSchedule
             else if (frameCounter == 8960)
             {
                 selectSolo (wt::oscillatorB);
-                bVolumeDbOut <- -9.542425f;
+                bVolumeDbOut <- 0.0f;
                 modulationProgramOut <- emptyModulationProgram();
             }
             else if (frameCounter == 8961)

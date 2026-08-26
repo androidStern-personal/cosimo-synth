@@ -1243,7 +1243,7 @@ graph WavetableSynth [[ main ]]
     input value float32 oscAPhase [[ name: "Oscillator A Phase", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 oscAPhaseRandom [[ name: "Oscillator A Phase Random", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 oscARetrigger [[ name: "Oscillator A Retrigger", min: 0.0f, max: 1.0f, init: 1.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
-    input value float32 oscAVolumeDb [[ name: "Oscillator A Volume", min: -48.0f, max: 6.0f, init: -9.542425f, unit: "dB", rampFrames: 64 ]];
+    input value float32 oscAVolumeDb [[ name: "Oscillator A Volume", min: -48.0f, max: 6.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
     input value float32 oscAMute [[ name: "Oscillator A Mute", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
     input value float32 oscASolo [[ name: "Oscillator A Solo", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
     input value float32 oscAWarpMode [[ name: "Oscillator A Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
@@ -1266,8 +1266,8 @@ graph WavetableSynth [[ main ]]
     input value float32 oscBPhase [[ name: "Oscillator B Phase", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 oscBPhaseRandom [[ name: "Oscillator B Phase Random", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 oscBRetrigger [[ name: "Oscillator B Retrigger", min: 0.0f, max: 1.0f, init: 1.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
-    input value float32 oscBVolumeDb [[ name: "Oscillator B Volume", min: -48.0f, max: 6.0f, init: -9.542425f, unit: "dB", rampFrames: 64 ]];
-    input value float32 oscBMute [[ name: "Oscillator B Mute", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+    input value float32 oscBVolumeDb [[ name: "Oscillator B Volume", min: -48.0f, max: 6.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+    input value float32 oscBMute [[ name: "Oscillator B Mute", min: 0.0f, max: 1.0f, init: 1.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
     input value float32 oscBSolo [[ name: "Oscillator B Solo", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
     input value float32 oscBWarpMode [[ name: "Oscillator B Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 oscBWarpAmount [[ name: "Oscillator B Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
@@ -1289,8 +1289,8 @@ graph WavetableSynth [[ main ]]
     input value float32 oscCPhase [[ name: "Oscillator C Phase", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 oscCPhaseRandom [[ name: "Oscillator C Phase Random", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 oscCRetrigger [[ name: "Oscillator C Retrigger", min: 0.0f, max: 1.0f, init: 1.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
-    input value float32 oscCVolumeDb [[ name: "Oscillator C Volume", min: -48.0f, max: 6.0f, init: -9.542425f, unit: "dB", rampFrames: 64 ]];
-    input value float32 oscCMute [[ name: "Oscillator C Mute", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+    input value float32 oscCVolumeDb [[ name: "Oscillator C Volume", min: -48.0f, max: 6.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+    input value float32 oscCMute [[ name: "Oscillator C Mute", min: 0.0f, max: 1.0f, init: 1.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
     input value float32 oscCSolo [[ name: "Oscillator C Solo", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
     input value float32 oscCWarpMode [[ name: "Oscillator C Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 oscCWarpAmount [[ name: "Oscillator C Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];

@@ -56,7 +56,7 @@ const B = Object.freeze({
   modulationTargetIndex: s.modulationTargetIndex ?? null,
   modulationApplication: s.modulationApplication ?? (s.modulationTargetIndex === void 0 || s.modulationTargetIndex === null ? null : "linear"),
   modulationDragStyle: s.modulationDragStyle
-}), Or = ["4/1", "2/1", "1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16"], kr = ["1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/8.", "1/4T", "1/8", "1/16.", "1/8T", "1/16", "1/16T"], Dr = [
+}), Dr = ["4/1", "2/1", "1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16"], Nr = ["1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/8.", "1/4T", "1/8", "1/16.", "1/8T", "1/16", "1/16T"], Cr = [
   {
     id: "filter",
     label: "Filter",
@@ -151,7 +151,7 @@ const B = Object.freeze({
     parameters: [
       m("phaser", "phaserRateMode", "Rate Mode", "Mode", 0, 1, 0, { step: 1, choices: [O("Free", 0), O("Sync", 1)] }),
       m("phaser", "phaserRate", "Rate", "Rate", 0.02, 8, 0.3, { unit: "Hz", scale: "log", quick: !0, modulationTargetIndex: 22 }),
-      m("phaser", "phaserRateDivision", "Division", "Div", 0, 12, 2, { step: 1, choices: Or.map(O) }),
+      m("phaser", "phaserRateDivision", "Division", "Div", 0, 12, 2, { step: 1, choices: Dr.map(O) }),
       m("phaser", "phaserDepth", "Depth", "Dpt", 0, 1, 0.7, { modulationTargetIndex: 23 }),
       m("phaser", "phaserFrequency", "Frequency", "Freq", 60, 8e3, 600, { unit: "Hz", scale: "log", modulationTargetIndex: 24, modulationApplication: "octaves" }),
       m("phaser", "phaserFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 25 }),
@@ -170,7 +170,7 @@ const B = Object.freeze({
     parameters: [
       m("delay", "delayTimeMode", "Timing", "Mode", 0, 1, 0, { step: 1, choices: [O("Free", 0), O("Sync", 1)] }),
       m("delay", "delayTime", "Time", "Time", 1, 2e3, 375, { unit: "ms", scale: "log", quick: !0, modulationTargetIndex: 28, modulationApplication: "octaves" }),
-      m("delay", "delayDivision", "Division", "Div", 0, 12, 8, { step: 1, choices: kr.map(O) }),
+      m("delay", "delayDivision", "Division", "Div", 0, 12, 8, { step: 1, choices: Nr.map(O) }),
       m("delay", "delayFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0.35, { modulationTargetIndex: 29 }),
       m("delay", "delayFilter", "Filter", "Filt", 200, 18e3, 6e3, { unit: "Hz", scale: "log", modulationTargetIndex: 30, modulationApplication: "octaves" }),
       m("delay", "delayMix", "Mix", "Mix", 0, 1, 0.5, { quick: !0, modulationTargetIndex: 31 })
@@ -191,22 +191,22 @@ const B = Object.freeze({
       m("reverb", "reverbMix", "Mix", "Mix", 0, 1, 0.5, { modulationTargetIndex: 35 })
     ]
   }
-], Ce = Dr, Rn = Object.freeze(
+], Ce = Cr, xn = Object.freeze(
   Ce.flatMap((t) => t.parameters)
 );
 new Map(
-  Rn.map((t) => [t.endpointID, t])
+  xn.map((t) => [t.endpointID, t])
 );
-function Tn(t) {
+function Mn(t) {
   const e = Ce.find((n) => n.id === t);
   if (e === void 0)
     throw new Error(`Unknown rack effect: ${t}`);
   return e;
 }
-function xn() {
-  return Rn;
+function wn() {
+  return xn;
 }
-const v = ["A", "B", "C"], En = [
+const v = ["A", "B", "C"], _n = [
   "wavetablePosition",
   "warpAmount",
   "pitchSemitones",
@@ -217,7 +217,7 @@ const v = ["A", "B", "C"], En = [
   "unisonWidth",
   "unisonWavetablePositionSpread",
   "unisonWarpSpread"
-], Lr = [
+], Pr = [
   "filterCutoffOctaves",
   "filterQ",
   "mseg1Morph",
@@ -254,20 +254,20 @@ const v = ["A", "B", "C"], En = [
   { id: "velocity", sourceKind: "velocity", sourceSlot: null, group: "voice", runtimeIndex: 6 },
   { id: "pressure", sourceKind: "pressure", sourceSlot: null, group: "voice", runtimeIndex: 7 },
   { id: "slide", sourceKind: "slide", sourceSlot: null, group: "voice", runtimeIndex: 8 }
-]), Nr = Object.freeze([
-  ...v.flatMap((t) => En.map(
+]), Fr = Object.freeze([
+  ...v.flatMap((t) => _n.map(
     (e) => `osc${t}.${e}`
   )),
-  ...Lr
+  ...Pr
 ]);
 new Set(
-  v.flatMap((t) => En.map(
+  v.flatMap((t) => _n.map(
     (e) => `osc${t}.${e}`
   ))
 );
-const Mn = Object.freeze(
-  Nr.map((t, e) => ({ kind: t, group: "voice", runtimeIndex: e }))
-), Cr = xn().filter((t) => t.modulationTargetIndex !== null), Pr = [
+const On = Object.freeze(
+  Fr.map((t, e) => ({ kind: t, group: "voice", runtimeIndex: e }))
+), Ur = wn().filter((t) => t.modulationTargetIndex !== null), $r = [
   "globalFilter",
   "distortion",
   "ott",
@@ -278,17 +278,17 @@ const Mn = Object.freeze(
   "reverb"
 ];
 function ft(t) {
-  const e = Fr(t);
+  const e = Br(t);
   if (e === null)
     throw new Error(`Effect endpoint has no device-type prefix: ${t}`);
   return e;
 }
-function Fr(t) {
-  const e = Pr.find((n) => t.startsWith(n));
+function Br(t) {
+  const e = $r.find((n) => t.startsWith(n));
   return e === void 0 ? null : `lane.${e}#1.${t}`;
 }
-const wn = Object.freeze(
-  Cr.map((t) => ({
+const kn = Object.freeze(
+  Ur.map((t) => ({
     // SAFETY: The preceding filter proves the authored index is non-null; endpoint IDs
     // and indexes are both minted only by the rack descriptor catalog.
     kind: ft(t.endpointID),
@@ -296,14 +296,14 @@ const wn = Object.freeze(
     runtimeIndex: t.modulationTargetIndex
   })).sort((t, e) => t.runtimeIndex - e.runtimeIndex)
 ), z = Object.freeze([
-  ...Mn,
-  ...wn
-]), Ee = X.length, _n = Mn.length, Pe = wn.length, Ur = Ee * z.length, $r = new Map(X.map((t) => [t.id, t])), On = new Map(X.map((t) => [
+  ...On,
+  ...kn
+]), xe = X.length, Ln = On.length, Pe = kn.length, Vr = xe * z.length, Kr = new Map(X.map((t) => [t.id, t])), Dn = new Map(X.map((t) => [
   `${t.sourceKind}:${t.sourceSlot ?? 0}`,
   t
 ])), ae = new Map(z.map((t) => [t.kind, t]));
-function Br() {
-  if (Ee !== 13 || _n !== 52 || Pe !== 36 || Ur !== 1144)
+function zr() {
+  if (xe !== 13 || Ln !== 52 || Pe !== 36 || Vr !== 1144)
     throw new Error("Unexpected modulation domain size");
   for (const [t, e] of [["voice", 9], ["macro", 4]]) {
     const n = X.filter((r) => r.group === t);
@@ -315,12 +315,12 @@ function Br() {
     if (n.length !== e || n.some((r, i) => r.runtimeIndex !== i))
       throw new Error(`Bad modulation ${t} target indexes`);
   }
-  if ($r.size !== Ee || On.size !== Ee || ae.size !== z.length)
+  if (Kr.size !== xe || Dn.size !== xe || ae.size !== z.length)
     throw new Error("Modulation identities must be unique");
 }
-Br();
-function kn(t, e) {
-  const n = On.get(`${t}:${e ?? 0}`);
+zr();
+function Nn(t, e) {
+  const n = Dn.get(`${t}:${e ?? 0}`);
   if (n === void 0)
     throw new Error(`Unknown modulation source: ${t}:${e ?? 0}`);
   return n;
@@ -328,29 +328,29 @@ function kn(t, e) {
 function ht(t) {
   return typeof t != "string" ? null : ae.has(t) ? t : null;
 }
-function Vr(t) {
+function Wr(t) {
   const e = ht(t);
   return e !== null && ae.get(e)?.group === "voice" ? e : null;
 }
-function Dn(t) {
+function Cn(t) {
   const e = ht(t);
   return e !== null && ae.get(e)?.group === "rack" ? e : null;
 }
-function Kr(t) {
+function jr(t) {
   const e = ae.get(t);
   if (e?.group !== "voice") throw new Error(`Unknown voice modulation target: ${t}`);
   return e.runtimeIndex;
 }
-function Ln(t) {
+function Pn(t) {
   const e = ae.get(t);
   if (e?.group !== "rack") throw new Error(`Unknown rack modulation target: ${t}`);
   return e.runtimeIndex;
 }
-function zr(t) {
+function Gr(t) {
   const e = t.indexOf(".");
   return e >= 0 ? t.slice(e + 1) : t;
 }
-const Nn = 4, Wr = Nn * Pe, jr = /* @__PURE__ */ new Map([
+const Fn = 4, Hr = Fn * Pe, qr = /* @__PURE__ */ new Map([
   ["globalFilter", ["globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"]],
   ["distortion", ["distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"]],
   ["ott", ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"]],
@@ -359,14 +359,14 @@ const Nn = 4, Wr = Nn * Pe, jr = /* @__PURE__ */ new Map([
   ["phaser", ["phaserRate", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix"]],
   ["delay", ["delayTime", "delayFeedback", "delayFilter", "delayMix"]],
   ["reverb", ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"]]
-]), Gr = /^lane\.([a-zA-Z]+)#([1-9][0-9]*)\.([A-Za-z0-9]+)$/;
+]), Jr = /^lane\.([a-zA-Z]+)#([1-9][0-9]*)\.([A-Za-z0-9]+)$/;
 function se(t) {
   if (typeof t != "string")
     return null;
-  const e = Gr.exec(t);
+  const e = Jr.exec(t);
   if (e === null)
     return null;
-  const n = e[1], r = jr.get(n);
+  const n = e[1], r = qr.get(n);
   if (r === void 0)
     return null;
   const i = e[3];
@@ -379,16 +379,16 @@ function se(t) {
 function pt(t) {
   return `lane.${t.deviceType}#1.${t.endpointID}`;
 }
-function Cn(t) {
+function Un(t) {
   return Number(t.instanceId.slice(t.instanceId.indexOf("#") + 1));
 }
-function Pn(t) {
+function $n(t) {
   if (t === null)
     return null;
-  const e = Cn(t) - 1;
-  return e > Nn ? null : e * Pe + Ln(pt(t));
+  const e = Un(t) - 1;
+  return e > Fn ? null : e * Pe + Pn(pt(t));
 }
-const K = 2048, Hr = K + 3, Dt = 20, Fn = "MSEG 1", qr = 0, H = 2, Jr = /* @__PURE__ */ new Set([
+const K = 2048, Qr = K + 3, Dt = 20, Bn = "MSEG 1", Xr = 0, H = 2, Yr = /* @__PURE__ */ new Set([
   "finish_loop",
   "immediate",
   "ignore"
@@ -399,13 +399,13 @@ function gt(t, e, n) {
 function oe(t, e, n = 1e-12) {
   return Math.abs(t - e) <= n;
 }
-function Qr(t) {
+function Zr(t) {
   return gt(Number.isFinite(t) ? t : 0, -Dt, Dt);
 }
 function Q(t) {
   return gt(Number.isFinite(t) ? t : 0, 0, 1);
 }
-function Un(t = Fn) {
+function Vn(t = Bn) {
   return {
     format: "cosimo.mseg.shape",
     version: 1,
@@ -431,15 +431,15 @@ function nt() {
     holdFinalValue: !0
   };
 }
-function Xr(t) {
+function ei(t) {
   const e = Number(t);
   return gt(
     Number.isFinite(e) ? e : 1,
-    qr,
+    Xr,
     H
   );
 }
-function Yr(t) {
+function ti(t) {
   if (!t || typeof t != "object")
     return null;
   const e = t, n = Q(Number(e.startX)), r = Q(Number(e.endX));
@@ -448,35 +448,35 @@ function Yr(t) {
     endX: n
   } : { startX: n, endX: r };
 }
-function Zr(t = nt()) {
-  const e = t && typeof t == "object" ? t : {}, n = e.rate && typeof e.rate == "object" ? e.rate : {}, r = Number(n.seconds), i = e.noteOffPolicy, o = Jr.has(i) ? i : "finish_loop";
+function ni(t = nt()) {
+  const e = t && typeof t == "object" ? t : {}, n = e.rate && typeof e.rate == "object" ? e.rate : {}, r = Number(n.seconds), i = e.noteOffPolicy, o = Yr.has(i) ? i : "finish_loop";
   return {
     format: "cosimo.mseg.playback",
     version: 1,
     rate: {
       kind: "seconds",
-      seconds: Xr(Number.isFinite(r) ? r : 1)
+      seconds: ei(Number.isFinite(r) ? r : 1)
     },
-    loop: Yr(e.loop),
+    loop: ti(e.loop),
     noteOffPolicy: o,
     legatoRestarts: !!e.legatoRestarts,
     holdFinalValue: e.holdFinalValue !== !1
   };
 }
-function ei(t, e, n) {
+function ri(t, e, n) {
   const r = t && typeof t == "object" ? t : {};
   let i = Number(r.x);
   return Number.isFinite(i) || (i = e === 0 ? 0 : e === n - 1 ? 1 : 0), e !== 0 && e !== n - 1 && (i = Q(i)), {
     x: i,
     y: Q(Number(r.y)),
-    curvePower: Qr(Number(r.curvePower))
+    curvePower: Zr(Number(r.curvePower))
   };
 }
-function pe(t = Un()) {
+function pe(t = Vn()) {
   const e = t && typeof t == "object" ? t : {}, n = Array.isArray(e.points) ? e.points : [];
   if (n.length < 2)
     throw new Error("MSEG shapes require at least two points");
-  const r = n.map((i, o) => ei(i, o, n.length));
+  const r = n.map((i, o) => ri(i, o, n.length));
   if (!oe(r[0].x, 0) || !oe(r[r.length - 1].x, 1))
     throw new Error("MSEG shapes must start at x = 0 and end at x = 1");
   for (let i = 1; i < r.length; i += 1)
@@ -485,21 +485,21 @@ function pe(t = Un()) {
   return {
     format: "cosimo.mseg.shape",
     version: 1,
-    name: typeof e.name == "string" && e.name.trim() ? e.name : Fn,
+    name: typeof e.name == "string" && e.name.trim() ? e.name : Bn,
     globalSmooth: !!e.globalSmooth,
     points: r
   };
 }
-function Lt(t) {
+function Nt(t) {
   return JSON.stringify(pe(t));
 }
-function ti(t, e) {
+function ii(t, e) {
   if (Math.abs(e) < 0.01)
     return t;
   const n = Math.exp(e * t) - 1, r = Math.exp(e) - 1;
   return n / r;
 }
-function ni(t, e) {
+function oi(t, e) {
   if (e <= t[0].x)
     return { from: t[0], to: t[0], laterPointWins: !1 };
   for (let n = 0; n < t.length - 1; n += 1) {
@@ -523,44 +523,44 @@ function ni(t, e) {
     laterPointWins: !1
   };
 }
-function ri(t, e) {
-  const n = Q(Number(e)), r = ni(t, n);
+function ai(t, e) {
+  const n = Q(Number(e)), r = oi(t, n);
   if (r.laterPointWins || oe(r.from.x, r.to.x))
     return r.to.y;
-  const i = r.to.x - r.from.x, o = i <= 0 ? 1 : (n - r.from.x) / i, a = Q(ti(o, r.from.curvePower));
+  const i = r.to.x - r.from.x, o = i <= 0 ? 1 : (n - r.from.x) / i, a = Q(ii(o, r.from.curvePower));
   return r.from.y + (r.to.y - r.from.y) * a;
 }
-function ii(t, e) {
-  return ri(pe(t).points, e);
+function si(t, e) {
+  return ai(pe(t).points, e);
 }
-function oi(t) {
+function li(t) {
   const e = pe(t), n = new Float32Array(K);
   for (let i = 0; i < K; i += 1) {
     const o = i / (K - 1);
-    n[i] = ii(e, o);
+    n[i] = si(e, o);
   }
-  const r = new Float32Array(Hr);
+  const r = new Float32Array(Qr);
   return r[0] = n[0], r.set(n, 1), r[K + 1] = n[K - 1], r[K + 2] = n[K - 1], r;
 }
-function Nt(t, e) {
-  return Lt(t) === Lt(e);
+function Ct(t, e) {
+  return Nt(t) === Nt(e);
 }
-const Ue = "modulationProgram", ai = "modulationAmount", $n = X.filter((t) => t.group === "voice").length, Bn = X.filter((t) => t.group === "macro").length, we = _n, si = Pe, _e = si + Wr, q = $n * we, Z = Bn * we, li = $n * _e, ci = Bn * _e, j = 512, Y = 256, Vn = q + Z;
-function ui(t) {
-  const e = kn(t.sourceKind, t.sourceSlot);
+const Ue = "modulationProgram", ci = "modulationAmount", Kn = X.filter((t) => t.group === "voice").length, zn = X.filter((t) => t.group === "macro").length, we = Ln, ui = Pe, _e = ui + Hr, q = Kn * we, Z = zn * we, di = Kn * _e, mi = zn * _e, j = 512, Y = 256, Wn = q + Z;
+function fi(t) {
+  const e = Nn(t.sourceKind, t.sourceSlot);
   if (e.group !== "voice")
     throw new Error("Macro is not a per-voice modulation source");
   return e.runtimeIndex;
 }
-function di(t) {
-  const e = Vr(t);
-  return e === null ? null : Kr(e);
+function hi(t) {
+  const e = Wr(t);
+  return e === null ? null : jr(e);
 }
-function Kn(t) {
-  const e = di(t.targetKind), n = Dn(t.targetKind);
-  let r = n === null ? void 0 : Ln(n);
+function jn(t) {
+  const e = hi(t.targetKind), n = Cn(t.targetKind);
+  let r = n === null ? void 0 : Pn(n);
   if (r === void 0) {
-    const a = Pn(
+    const a = $n(
       se(t.targetKind)
     );
     a !== null && (r = a);
@@ -568,7 +568,7 @@ function Kn(t) {
   if (e === null && r === void 0)
     throw new Error(`Unknown modulation target: ${t.targetKind}`);
   if (t.sourceKind === "macro") {
-    const a = kn(t.sourceKind, t.sourceSlot);
+    const a = Nn(t.sourceKind, t.sourceSlot);
     if (a.group !== "macro")
       throw new Error(`Invalid macro modulation source: ${t.sourceKind}:${String(t.sourceSlot)}`);
     const s = a.runtimeIndex;
@@ -591,7 +591,7 @@ function Kn(t) {
       articulationCellIndex: null
     };
   }
-  const i = ui(t);
+  const i = fi(t);
   if (e !== null) {
     const a = i * we + e;
     return {
@@ -612,24 +612,24 @@ function Kn(t) {
   };
 }
 function It(t) {
-  return se(t.targetKind) !== null ? null : Kn(t).articulationCellIndex;
+  return se(t.targetKind) !== null ? null : jn(t).articulationCellIndex;
 }
-function mi(t) {
-  if (Dn(t.targetKind) !== null)
+function pi(t) {
+  if (Cn(t.targetKind) !== null)
     return !1;
   const e = se(t.targetKind);
-  return e !== null && Pn(e) === null;
+  return e !== null && $n(e) === null;
 }
-function fi(t) {
+function gi(t) {
   return {
-    ...Kn(t),
+    ...jn(t),
     enabled: t.enabled,
     polarity: t.polarity === "bipolar" ? 1 : 0,
     reducer: t.reducer === "mean" ? 2 : 1,
     amount: t.amount
   };
 }
-function zn(t) {
+function Gn(t) {
   const e = {
     voice: /* @__PURE__ */ new Map(),
     macroVoice: /* @__PURE__ */ new Map(),
@@ -637,20 +637,20 @@ function zn(t) {
     macroRack: /* @__PURE__ */ new Map()
   };
   for (const n of t) {
-    if (mi(n))
+    if (pi(n))
       continue;
-    const r = fi(n), i = e[r.path];
+    const r = gi(n), i = e[r.path];
     if (i.has(r.cellIndex))
       throw new Error(`Duplicate modulation route cell ${r.path}:${r.cellIndex}`);
     i.set(r.cellIndex, r);
   }
   return e;
 }
-function hi(t) {
+function Ii(t) {
   return t.enabled ? t.path === "voiceRack" || t.path === "macroRack" ? t.amount !== 0 : !0 : !1;
 }
 function ee(t) {
-  return [...t.values()].filter(hi).sort((e, n) => e.cellIndex - n.cellIndex);
+  return [...t.values()].filter(Ii).sort((e, n) => e.cellIndex - n.cellIndex);
 }
 function ve(t, e, n, r, i) {
   for (let o = 0; o < t.length; o += 1) {
@@ -661,7 +661,7 @@ function ve(t, e, n, r, i) {
   }
 }
 function $e(t) {
-  const e = zn(t), n = ee(e.voice), r = ee(e.macroVoice), i = ee(e.voiceRack), o = ee(e.macroRack), a = Array.from({ length: q }, () => 0), s = Array.from({ length: q }, () => 0), l = Array.from({ length: q }, () => 0), c = Array.from({ length: q }, () => 0), u = Array.from({ length: q }, () => 0);
+  const e = Gn(t), n = ee(e.voice), r = ee(e.macroVoice), i = ee(e.voiceRack), o = ee(e.macroRack), a = Array.from({ length: q }, () => 0), s = Array.from({ length: q }, () => 0), l = Array.from({ length: q }, () => 0), c = Array.from({ length: q }, () => 0), u = Array.from({ length: q }, () => 0);
   ve(n, a, s, l, c);
   const d = Array.from({ length: Z }, () => 0), h = Array.from({ length: Z }, () => 0), f = Array.from({ length: Z }, () => 0), p = Array.from({ length: Z }, () => 0), I = Array.from({ length: Z }, () => 0);
   if (ve(
@@ -674,30 +674,30 @@ function $e(t) {
     throw new Error(
       `Modulation program exceeds the rack route capacity: ${i.length} voice-rack (max ${j}), ${o.length} macro-rack (max ${Y})`
     );
-  const D = Array.from({ length: j }, () => 0), N = Array.from({ length: j }, () => 0), S = Array.from({ length: j }, () => 0), A = Array.from({ length: j }, () => 0), k = Array.from({ length: j }, () => 0), L = Array.from({ length: li }, () => 0);
+  const L = Array.from({ length: j }, () => 0), N = Array.from({ length: j }, () => 0), S = Array.from({ length: j }, () => 0), A = Array.from({ length: j }, () => 0), k = Array.from({ length: j }, () => 0), D = Array.from({ length: di }, () => 0);
   ve(
     i,
-    D,
+    L,
     N,
     S,
     A
   );
-  const W = Array.from({ length: Y }, () => 0), Mt = Array.from({ length: Y }, () => 0), wt = Array.from({ length: Y }, () => 0), _t = Array.from({ length: Y }, () => 0), Ot = Array.from({ length: ci }, () => 0);
+  const W = Array.from({ length: Y }, () => 0), wt = Array.from({ length: Y }, () => 0), _t = Array.from({ length: Y }, () => 0), Ot = Array.from({ length: Y }, () => 0), kt = Array.from({ length: mi }, () => 0);
   ve(
     o,
     W,
-    Mt,
     wt,
-    _t
+    _t,
+    Ot
   );
   for (const M of e.voice.values()) u[M.cellIndex] = M.amount;
   for (const M of e.macroVoice.values()) I[M.cellIndex] = M.amount;
-  for (const M of e.voiceRack.values()) L[M.cellIndex] = M.amount;
-  for (const M of e.macroRack.values()) Ot[M.cellIndex] = M.amount;
+  for (const M of e.voiceRack.values()) D[M.cellIndex] = M.amount;
+  for (const M of e.macroRack.values()) kt[M.cellIndex] = M.amount;
   for (let M = 0; M < i.length; M += 1) {
-    const kt = i[M];
-    if (kt === void 0) throw new Error(`Missing compiled voice-rack route at index ${M}`);
-    k[M] = kt.reducer;
+    const Lt = i[M];
+    if (Lt === void 0) throw new Error(`Missing compiled voice-rack route at index ${M}`);
+    k[M] = Lt.reducer;
   }
   return {
     voiceRouteCount: n.length,
@@ -713,48 +713,48 @@ function $e(t) {
     macroVoiceRoutePolarities: p,
     macroVoiceRouteAmounts: I,
     voiceRackRouteCount: i.length,
-    voiceRackRouteCells: D,
+    voiceRackRouteCells: L,
     voiceRackRouteSources: N,
     voiceRackRouteTargets: S,
     voiceRackRoutePolarities: A,
     voiceRackRouteReducers: k,
-    voiceRackRouteAmounts: L,
+    voiceRackRouteAmounts: D,
     macroRackRouteCount: o.length,
     macroRackRouteCells: W,
-    macroRackRouteSources: Mt,
-    macroRackRouteTargets: wt,
-    macroRackRoutePolarities: _t,
-    macroRackRouteAmounts: Ot
+    macroRackRouteSources: wt,
+    macroRackRouteTargets: _t,
+    macroRackRoutePolarities: Ot,
+    macroRackRouteAmounts: kt
   };
 }
-const pi = ["voice", "macroVoice", "voiceRack", "macroRack"], gi = {
+const vi = ["voice", "macroVoice", "voiceRack", "macroRack"], Si = {
   voice: 1,
   macroVoice: 2,
   voiceRack: 3,
   macroRack: 4
 };
-function Ct(t) {
-  return zn(t);
+function Pt(t) {
+  return Gn(t);
 }
-function Ii(t, e) {
+function bi(t, e) {
   return t.cellIndex === e.cellIndex && t.sourceIndex === e.sourceIndex && t.targetIndex === e.targetIndex && t.polarity === e.polarity && t.reducer === e.reducer;
 }
-function vi(t, e) {
+function yi(t, e) {
   if (t === null)
     return [{ endpointID: Ue, value: $e(e) }];
-  const n = Ct(t), r = Ct(e), i = [];
-  for (const o of pi) {
+  const n = Pt(t), r = Pt(e), i = [];
+  for (const o of vi) {
     const a = ee(n[o]), s = ee(r[o]);
     if (a.length !== s.length)
       return [{ endpointID: Ue, value: $e(e) }];
     for (let l = 0; l < s.length; l += 1) {
       const c = a[l], u = s[l];
-      if (c === void 0 || u === void 0 || !Ii(c, u))
+      if (c === void 0 || u === void 0 || !bi(c, u))
         return [{ endpointID: Ue, value: $e(e) }];
       c.amount !== u.amount && i.push({
-        endpointID: ai,
+        endpointID: ci,
         value: {
-          pathKind: gi[o],
+          pathKind: Si[o],
           cellIndex: u.cellIndex,
           amount: u.amount
         }
@@ -769,17 +769,17 @@ function le(t) {
 function fe(t) {
   return { _tag: "err", error: t };
 }
-function Si(t) {
+function Ai(t) {
   throw new Error(`Unhandled case: ${JSON.stringify(t)}`);
 }
-function bi(t) {
+function Ri(t) {
   throw new Error(t ?? "Invariant violated");
 }
-const yi = "globalTune", Ai = "globalTuneSemitones", V = -24, ce = 24, Pt = 0, Wn = -48, jn = 48;
+const Ti = "globalTune", Ei = "globalTuneSemitones", V = -24, ce = 24, Ft = 0, Hn = -48, qn = 48, Ut = -48, xi = 6, vt = 0, $t = (vt - Ut) / (xi - Ut);
 function Se(t, e, n, r, i = "percent", o = null) {
   return { id: t, label: e, initialPercent: n, defaultPercent: r, format: i, compound: o };
 }
-const Ri = [
+const Mi = [
   {
     moduleId: "voice-filter",
     workspace: "voice",
@@ -796,9 +796,9 @@ const Ri = [
       Se("drive", "Drive", 15, 0)
     ]
   }
-], Ft = 1e-6;
+], Bt = 1e-6;
 function U(t, e) {
-  if (!Number.isFinite(t) || t < -Ft || t > 1 + Ft)
+  if (!Number.isFinite(t) || t < -Bt || t > 1 + Bt)
     throw new RangeError(`${e} produced non-normalized value ${t}`);
   return Math.min(1, Math.max(0, t));
 }
@@ -810,44 +810,44 @@ function Fe(t, e) {
     throw new Error(`Invalid catalog parameter id "${e}"`);
   return `${t}.${e}`;
 }
-function Ti(t) {
+function wi(t) {
   return 20 * 1e3 ** t;
 }
-function xi(t) {
+function _i(t) {
   return U(Math.log(t / 20) / Math.log(1e3), "filterCutoff endpoint conversion");
 }
-function Ei(t) {
+function Oi(t) {
   return 0.1 * 200 ** t;
 }
-function Mi(t) {
+function ki(t) {
   return U(Math.log(t / 0.1) / Math.log(200), "filterQ endpoint conversion");
 }
-function wi(t) {
+function Li(t) {
   return t;
 }
-function _i(t) {
+function Di(t) {
   return U(t, "filterMix endpoint conversion");
 }
 function he(t, e, n) {
   return { _tag: "endpoint", endpointId: t, toEngine: e, fromEngine: n };
 }
-function Oi(t, e) {
+function Ni(t, e) {
   switch (t) {
     case "voice-filter.cutoff":
       return {
-        binding: he("filterCutoff", Ti, xi),
+        binding: he("filterCutoff", wi, _i),
         articulationParameterId: "filterCutoffHz",
         modulationTargetKind: "filterCutoffOctaves"
       };
     case "voice-filter.resonance":
       return {
-        binding: he("filterQ", Ei, Mi),
+        binding: he("filterQ", Oi, ki),
         articulationParameterId: "filterQ",
         modulationTargetKind: "filterQ"
       };
     case "voice-filter.mix":
       return {
-        binding: he("filterMix", wi, _i),
+        binding: he("filterMix", Li, Di),
         // T05 scope: articulations do not own Mix yet — capturing it
         // would extend the persisted articulation schema.
         articulationParameterId: null,
@@ -864,7 +864,7 @@ function Oi(t, e) {
       };
   }
 }
-function Gn(t) {
+function Jn(t) {
   switch (t) {
     case "percent":
       return { kind: "percent" };
@@ -879,14 +879,14 @@ function Gn(t) {
     case "semitone":
       return { kind: "semitone", span: 50 };
     default:
-      return Si(t);
+      return Ai(t);
   }
 }
-function ki(t) {
+function Ci(t) {
   return t.kind === "frequency" ? { min: -6, max: 6, unit: "oct", digits: 1 } : t.kind === "semitone" ? { min: -48, max: 48, unit: "st", digits: 0 } : { min: -100, max: 100, unit: "%", digits: 0 };
 }
-function Di(t, e) {
-  const n = Fe(t.moduleId, e.id), r = Gn(e.format), i = Oi(n, t.workspace);
+function Pi(t, e) {
+  const n = Fe(t.moduleId, e.id), r = Jn(e.format), i = Ni(n, t.workspace);
   return Object.freeze({
     targetId: n,
     moduleId: t.moduleId,
@@ -895,7 +895,7 @@ function Di(t, e) {
     defaultValue: Oe(e.defaultPercent, n),
     initialValue: Oe(e.initialPercent, n),
     format: r,
-    modAmount: ki(r),
+    modAmount: Ci(r),
     binding: i.binding,
     isQuick: t.quickParameterId === e.id,
     compound: e.compound,
@@ -903,11 +903,11 @@ function Di(t, e) {
     modulationTargetKind: i.modulationTargetKind
   });
 }
-const Li = [
+const Fi = [
   { targetIdSuffix: "framePosition", parameterKind: "wavetablePosition", label: "Index", initialPercent: 44, defaultPercent: 0, format: "percent", isQuick: !0 },
   { targetIdSuffix: "warpAmount", parameterKind: "warpAmount", label: "Warp", initialPercent: 58, defaultPercent: 50, format: "percent" },
   { targetIdSuffix: "pitchSemitones", parameterKind: "pitchSemitones", label: "Tune", initialPercent: 50, defaultPercent: 50, format: "semitone" },
-  { targetIdSuffix: "volumeDb", parameterKind: "ampGainDb", label: "Level", initialPercent: 80, defaultPercent: 80, format: "percent" },
+  { targetIdSuffix: "volumeDb", parameterKind: "ampGainDb", label: "Level", initialPercent: $t * 100, defaultPercent: $t * 100, format: "percent" },
   { targetIdSuffix: "pan", parameterKind: "pan", label: "Pan", initialPercent: 50, defaultPercent: 50, format: "signed" },
   { targetIdSuffix: "unisonDetune", parameterKind: "unisonDetune", label: "Unison", initialPercent: 35, defaultPercent: 0, format: "percent" },
   { targetIdSuffix: "unisonBlend", parameterKind: "unisonBlend", label: "Uni Blend", initialPercent: 75, defaultPercent: 75, format: "percent" },
@@ -915,10 +915,10 @@ const Li = [
   { targetIdSuffix: "unisonWavetablePositionSpread", parameterKind: "unisonWavetablePositionSpread", label: "Uni WT Spread", initialPercent: 0, defaultPercent: 0, format: "percent" },
   { targetIdSuffix: "unisonWarpSpread", parameterKind: "unisonWarpSpread", label: "Uni Warp Spread", initialPercent: 0, defaultPercent: 0, format: "percent" }
 ];
-function Ni(t) {
+function Ui(t) {
   return t === "pitchSemitones" ? { min: -48, max: 48, unit: "st", digits: 0 } : t === "ampGainDb" ? { min: -48, max: 6, unit: "dB", digits: 0 } : t === "pan" ? { min: -100, max: 100, unit: "pan", digits: 0 } : { min: -100, max: 100, unit: "%", digits: 0 };
 }
-function Ci(t, e) {
+function $i(t, e) {
   const n = `osc${t}`, r = Fe(n, e.targetIdSuffix);
   return Object.freeze({
     targetId: r,
@@ -927,8 +927,8 @@ function Ci(t, e) {
     label: e.label,
     defaultValue: Oe(e.defaultPercent, r),
     initialValue: Oe(e.initialPercent, r),
-    format: Gn(e.format),
-    modAmount: Ni(e.parameterKind),
+    format: Jn(e.format),
+    modAmount: Ui(e.parameterKind),
     binding: { _tag: "unbacked", reason: "no-endpoint" },
     isQuick: e.isQuick === !0,
     compound: null,
@@ -936,30 +936,30 @@ function Ci(t, e) {
     modulationTargetKind: `${n}.${e.parameterKind}`
   });
 }
-const Pi = Object.freeze(
-  v.flatMap((t) => Li.map((e) => Ci(t, e)))
-), Fi = Object.freeze({
+const Bi = Object.freeze(
+  v.flatMap((t) => Fi.map((e) => $i(t, e)))
+), Vi = Object.freeze({
   targetId: Fe("voice", "globalTune"),
   moduleId: "voice",
   workspace: "voice",
   label: "Global Tune",
   defaultValue: U(
-    (Pt - V) / (ce - V),
+    (Ft - V) / (ce - V),
     "Global Tune default"
   ),
   initialValue: U(
-    (Pt - V) / (ce - V),
+    (Ft - V) / (ce - V),
     "Global Tune initial value"
   ),
   format: { kind: "semitone", span: ce },
   modAmount: {
-    min: Wn,
-    max: jn,
+    min: Hn,
+    max: qn,
     unit: "st",
     digits: 2
   },
   binding: he(
-    yi,
+    Ti,
     (t) => V + (ce - V) * t,
     (t) => U(
       (t - V) / (ce - V),
@@ -969,8 +969,8 @@ const Pi = Object.freeze(
   isQuick: !1,
   compound: null,
   articulationParameterId: null,
-  modulationTargetKind: Ai
-}), Ui = Object.freeze([
+  modulationTargetKind: Ei
+}), Ki = Object.freeze([
   { moduleId: "mseg1", targetIdSuffix: "morph", endpointID: "mseg1Morph", targetKind: "mseg1Morph", label: "MSEG 1 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph1" },
   { moduleId: "mseg2", targetIdSuffix: "morph", endpointID: "mseg2Morph", targetKind: "mseg2Morph", label: "MSEG 2 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph2" },
   { moduleId: "mseg3", targetIdSuffix: "morph", endpointID: "mseg3Morph", targetKind: "mseg3Morph", label: "MSEG 3 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph3" },
@@ -990,7 +990,7 @@ const Pi = Object.freeze(
   { moduleId: "env3", targetIdSuffix: "sustain", endpointID: "env3Sustain", targetKind: "env3Sustain", label: "ENV 3 Sustain", min: 0, max: 1, initial: 0.5, format: "percent", articulationParameterId: "env3.sustain" },
   { moduleId: "env3", targetIdSuffix: "release", endpointID: "env3Release", targetKind: "env3Release", label: "ENV 3 Release", min: 1e-3, max: 10, initial: 0.2, format: "time", articulationParameterId: "env3.releaseSeconds" }
 ]);
-function $i(t) {
+function zi(t) {
   const e = Fe(t.moduleId, t.targetIdSuffix), n = t.max - t.min, r = (o) => t.min + n * o, i = (o) => U(
     (o - t.min) / n,
     `${t.endpointID} endpoint conversion`
@@ -1011,23 +1011,23 @@ function $i(t) {
     modulationTargetKind: t.targetKind
   });
 }
-const Bi = Object.freeze(
-  Ui.map($i)
+const Wi = Object.freeze(
+  Ki.map(zi)
 );
-function Vi(t) {
+function ji(t) {
   return `${t.effectId}.${t.endpointID}`;
 }
 function Be(t, e) {
   const n = t.scale === "log" ? Math.log(e / t.min) / Math.log(t.max / t.min) : (e - t.min) / (t.max - t.min);
   return U(n, `${t.endpointID} endpoint conversion`);
 }
-function Ki(t, e) {
+function Gi(t, e) {
   return t.scale === "log" ? t.min * (t.max / t.min) ** e : t.min + (t.max - t.min) * e;
 }
-function zi(t) {
+function Hi(t) {
   return t.unit === "Hz" ? { kind: "frequency", minHz: t.min, maxHz: t.max } : t.unit === "deg" ? { kind: "phase" } : t.unit === "st" ? { kind: "semitone", span: Math.max(Math.abs(t.min), Math.abs(t.max)) } : t.min < 0 && t.max > 0 ? { kind: "signed-percent" } : { kind: "percent" };
 }
-function Wi(t) {
+function qi(t) {
   if (t.scale === "log")
     return { min: -6, max: 6, unit: "oct", digits: 2 };
   if (t.unit === "st") {
@@ -1041,8 +1041,8 @@ function Wi(t) {
   const e = t.max - t.min;
   return { min: -e, max: e, unit: "%", digits: e <= 2 ? 3 : 1 };
 }
-function ji(t) {
-  const e = Vi(t);
+function Ji(t) {
+  const e = ji(t);
   return Object.freeze({
     targetId: e,
     moduleId: t.effectId,
@@ -1050,12 +1050,12 @@ function ji(t) {
     label: t.label,
     defaultValue: Be(t, t.initial),
     initialValue: Be(t, t.initial),
-    format: zi(t),
-    modAmount: Wi(t),
+    format: Hi(t),
+    modAmount: qi(t),
     binding: {
       _tag: "endpoint",
       endpointId: t.endpointID,
-      toEngine: (n) => Ki(t, n),
+      toEngine: (n) => Gi(t, n),
       fromEngine: (n) => Be(t, n)
     },
     isQuick: t.quick,
@@ -1064,41 +1064,41 @@ function ji(t) {
     modulationTargetKind: t.modulationTargetIndex === null ? null : ft(t.endpointID)
   });
 }
-const vt = Object.freeze(
+const St = Object.freeze(
   [
-    ...Ce.flatMap((t) => t.parameters.map(ji)),
-    Fi,
-    ...Pi,
+    ...Ce.flatMap((t) => t.parameters.map(Ji)),
+    Vi,
     ...Bi,
-    ...Ri.flatMap(
+    ...Wi,
+    ...Mi.flatMap(
       (t) => t.parameters.map(
-        (e) => Di(t, e)
+        (e) => Pi(t, e)
       )
     )
   ]
-), Gi = new Map(
-  vt.map((t) => [t.targetId, t])
-), Hn = vt.filter(
+), Qi = new Map(
+  St.map((t) => [t.targetId, t])
+), Qn = St.filter(
   (t) => t.modulationTargetKind !== null
 ), rt = new Map(
-  Hn.flatMap((t) => t.modulationTargetKind === null ? [] : [[t.modulationTargetKind, t]])
+  Qn.flatMap((t) => t.modulationTargetKind === null ? [] : [[t.modulationTargetKind, t]])
 );
-if (Gi.size !== vt.length)
+if (Qi.size !== St.length)
   throw new Error("Target descriptor IDs must be unique");
-if (Hn.length !== z.length || rt.size !== z.length || z.some((t) => rt.get(t.kind)?.modulationTargetKind !== t.kind))
+if (Qn.length !== z.length || rt.size !== z.length || z.some((t) => rt.get(t.kind)?.modulationTargetKind !== t.kind))
   throw new Error("Every canonical modulation target must have one exact display descriptor");
 function Ve(t) {
   const e = rt.get(t);
-  return e === void 0 ? bi(`Modulation target "${t}" has no display descriptor`) : e;
+  return e === void 0 ? Ri(`Modulation target "${t}" has no display descriptor`) : e;
 }
 new Map(
   Ce.map((t) => [t.id, t.label])
 );
-function Hi(t) {
-  const e = Cn(t);
+function Xi(t) {
+  const e = Un(t);
   return e === 1 ? "" : ` ${e}`;
 }
-function qi(t) {
+function Yi(t) {
   const e = /^osc([ABC])\.(.+)$/.exec(t);
   if (e !== null) {
     const r = Ve(t);
@@ -1107,20 +1107,20 @@ function qi(t) {
   const n = se(t);
   if (n !== null) {
     const r = Ve(pt(n));
-    return `${r.moduleId.toUpperCase()}${Hi(n)} ${r.label.toUpperCase()}`;
+    return `${r.moduleId.toUpperCase()}${Xi(n)} ${r.label.toUpperCase()}`;
   }
   return Ve(t).label.toUpperCase();
 }
-const te = "modulation.v6", qn = 6, ge = 3, J = 3, Ut = "modulationMsegBuffer", Ji = "modulationMsegPlayback", Jn = 4, Qi = ["MSEG 1", "MSEG 2", "MSEG 3"], Qn = ["Macro 1", "Macro 2", "Macro 3", "Macro 4"], Xi = ["Env 1", "Env 2", "Env 3"], Yi = 1e-3, T = 10, Zi = 0.1, eo = 20, to = {
+const te = "modulation.v6", Xn = 6, ge = 3, J = 3, Vt = "modulationMsegBuffer", Zi = "modulationMsegPlayback", Yn = 4, eo = ["MSEG 1", "MSEG 2", "MSEG 3"], Zn = ["Macro 1", "Macro 2", "Macro 3", "Macro 4"], to = ["Env 1", "Env 2", "Env 3"], no = 1e-3, T = 10, ro = 0.1, io = 20, oo = {
   wavetablePosition: { min: -1, max: 1 },
   warpAmount: { min: -1, max: 1 },
   filterCutoffOctaves: { min: -6, max: 6 },
-  filterQ: { min: -19.9, max: eo - Zi },
+  filterQ: { min: -19.9, max: io - ro },
   filterMix: { min: -1, max: 1 },
   pitchSemitones: { min: -48, max: 48 },
   globalTuneSemitones: {
-    min: Wn,
-    max: jn
+    min: Hn,
+    max: qn
   },
   // Additive dB offset over the full parameter span; the engine clamps base + offset.
   ampGainDb: { min: -54, max: 54 },
@@ -1148,13 +1148,13 @@ const te = "modulation.v6", qn = 6, ge = 3, J = 3, Ut = "modulationMsegBuffer", 
   env3Decay: { min: -T, max: T },
   env3Sustain: { min: -1, max: 1 },
   env3Release: { min: -T, max: T }
-}, no = xn().filter((t) => t.modulationTargetIndex !== null), Xn = new Map(
-  no.map((t) => [ft(t.endpointID), t])
+}, ao = wn().filter((t) => t.modulationTargetIndex !== null), er = new Map(
+  ao.map((t) => [ft(t.endpointID), t])
 );
 class Ke extends Error {
   name = "ModulationStateParseError";
 }
-const ro = {
+const so = {
   "mseg-1": "MSEG 1",
   "mseg-2": "MSEG 2",
   "mseg-3": "MSEG 3",
@@ -1171,86 +1171,86 @@ const ro = {
 };
 X.map((t) => ({
   value: t.id,
-  label: ro[t.id],
+  label: so[t.id],
   sourceKind: t.sourceKind,
   sourceSlot: t.sourceSlot
 }));
-const io = z.map((t) => ({
+const lo = z.map((t) => ({
   value: t.kind,
-  label: qi(t.kind)
+  label: Yi(t.kind)
 }));
-io.filter((t) => !ao(t.value));
-function oo(t, e) {
+lo.filter((t) => !uo(t.value));
+function co(t, e) {
   return Object.prototype.hasOwnProperty.call(t, e);
 }
-function St(t, e, n) {
+function bt(t, e, n) {
   return Math.min(Math.max(t, e), n);
 }
 function ze(t, e) {
   const n = Number(t);
-  return St(Number.isFinite(n) ? n : e, Yi, T);
+  return bt(Number.isFinite(n) ? n : e, no, T);
 }
-function ao(t) {
-  return Xn.has(t);
+function uo(t) {
+  return er.has(t);
 }
-function so(t) {
+function mo(t) {
   if (t.modulationApplication === "octaves")
     return { min: -6, max: 6 };
   const e = t.max - t.min;
   return { min: -e, max: e };
 }
-function lo(t) {
+function fo(t) {
   const e = se(t);
   return e !== null ? pt(e) : t;
 }
-function co(t) {
-  const e = lo(t), n = Xn.get(e);
-  return n !== void 0 ? so(n) : to[zr(e)];
+function ho(t) {
+  const e = fo(t), n = er.get(e);
+  return n !== void 0 ? mo(n) : oo[Gr(e)];
 }
-function uo(t, e) {
+function po(t, e) {
   return typeof t == "string" && t.trim() ? t : `mod-route-${e + 1}`;
 }
-function mo(t) {
+function go(t) {
   return t === "bipolar" ? "bipolar" : "unipolar";
 }
-function fo(t, e) {
-  const n = co(t), r = Number(e);
-  return St(Number.isFinite(r) ? r : 0, n.min, n.max);
+function Io(t, e) {
+  const n = ho(t), r = Number(e);
+  return bt(Number.isFinite(r) ? r : 0, n.min, n.max);
 }
-function ho(t) {
+function vo(t) {
   return t === "mseg" || t === "env" || t === "velocity" || t === "pressure" || t === "slide" || t === "macro" ? t : null;
 }
-function po(t) {
-  return ho(t) ?? "mseg";
+function So(t) {
+  return vo(t) ?? "mseg";
 }
-function go(t) {
+function bo(t) {
   const e = ht(t);
   return e !== null ? e : se(t) !== null ? t : null;
 }
-function Io(t) {
-  return go(t) ?? "oscA.wavetablePosition";
+function yo(t) {
+  return bo(t) ?? "oscA.wavetablePosition";
 }
-function vo(t, e) {
-  const n = Qn[e] ?? `Macro ${e + 1}`;
+function Ao(t, e) {
+  const n = Zn[e] ?? `Macro ${e + 1}`;
   return typeof t == "string" && t.trim() ? t.trim() : n;
 }
-function So(t, e) {
+function Ro(t, e) {
   const n = Math.round(Number(e));
   if (t === "velocity" || t === "pressure" || t === "slide")
     return null;
-  const r = t === "mseg" ? ge : t === "macro" ? Jn : J;
-  return St(Number.isFinite(n) ? n : 1, 1, r);
+  const r = t === "mseg" ? ge : t === "macro" ? Yn : J;
+  return bt(Number.isFinite(n) ? n : 1, 1, r);
 }
 function ne(t) {
   return {
-    name: Xi[t] ?? `Env ${t + 1}`,
+    name: to[t] ?? `Env ${t + 1}`,
     attackSeconds: 0.01,
     decaySeconds: 0.25,
     sustain: 0.5,
     releaseSeconds: 0.2
   };
 }
-function Yn(t, e = 0) {
+function tr(t, e = 0) {
   const n = t && typeof t == "object" ? t : {}, r = ne(e);
   return {
     name: typeof n.name == "string" && n.name.trim() ? n.name : r.name,
@@ -1260,36 +1260,36 @@ function Yn(t, e = 0) {
     releaseSeconds: ze(n.releaseSeconds ?? r.releaseSeconds, r.releaseSeconds)
   };
 }
-function bo(t, e = 0) {
-  return { name: Yn(t, e).name };
+function To(t, e = 0) {
+  return { name: tr(t, e).name };
 }
-function yo(t, e, n, r) {
+function Eo(t, e, n, r) {
   const i = Number(t.amount);
   return {
-    id: uo(t.id, e),
+    id: po(t.id, e),
     enabled: t.enabled !== !1,
     sourceKind: n,
-    sourceSlot: So(n, t.sourceSlot),
-    polarity: mo(t.polarity),
+    sourceSlot: Ro(n, t.sourceSlot),
+    polarity: go(t.polarity),
     targetKind: r,
-    amount: fo(r, i),
+    amount: Io(r, i),
     reducer: t.reducer === "mean" ? "mean" : "max"
   };
 }
-function Ao(t, e = 0) {
-  const r = t !== null && typeof t == "object" ? t : {}, i = po(r.sourceKind), o = Io(r.targetKind);
-  return yo(r, e, i, o);
+function xo(t, e = 0) {
+  const r = t !== null && typeof t == "object" ? t : {}, i = So(r.sourceKind), o = yo(r.targetKind);
+  return Eo(r, e, i, o);
 }
-function Ro(t) {
+function Mo(t) {
   return `${t.sourceKind}:${t.sourceSlot ?? 0}->${t.targetKind}`;
 }
-function To(t) {
-  return (Array.isArray(t) ? t : []).map((n, r) => Ao(n, r));
+function wo(t) {
+  return (Array.isArray(t) ? t : []).map((n, r) => xo(n, r));
 }
-function xo(t) {
+function _o(t) {
   const e = /* @__PURE__ */ new Set(), n = /* @__PURE__ */ new Set();
   for (const r of t) {
-    const i = Ro(r);
+    const i = Mo(r);
     if (e.has(r.id) || n.has(i))
       return !1;
     e.add(r.id), n.add(i);
@@ -1302,10 +1302,10 @@ function it(t, e) {
   if (Array.isArray(t) || Array.isArray(e))
     return !Array.isArray(t) || !Array.isArray(e) || t.length !== e.length ? !1 : t.every((a, s) => it(a, e[s]));
   const n = t, r = e, i = Object.keys(n), o = Object.keys(r);
-  return i.length === o.length && i.every((a) => oo(r, a) && it(n[a], r[a]));
+  return i.length === o.length && i.every((a) => co(r, a) && it(n[a], r[a]));
 }
-function Zn(t, e) {
-  const n = t && typeof t == "object" ? t : {}, r = Un(Qi[e] ?? `MSEG ${e + 1}`), i = pe(n.shapeA ?? r), o = Zr({
+function nr(t, e) {
+  const n = t && typeof t == "object" ? t : {}, r = Vn(eo[e] ?? `MSEG ${e + 1}`), i = pe(n.shapeA ?? r), o = ni({
     ...nt(),
     ...n.playback ?? {},
     rate: nt().rate
@@ -1319,30 +1319,30 @@ function Zn(t, e) {
 function ot() {
   return {
     format: "cosimo.modulation",
-    version: qn,
-    msegSlots: Array.from({ length: ge }, (t, e) => Zn({}, e)),
+    version: Xn,
+    msegSlots: Array.from({ length: ge }, (t, e) => nr({}, e)),
     envelopeSlots: Array.from({ length: J }, (t, e) => ({
       name: ne(e).name
     })),
     routes: [],
-    macroNames: Qn.slice()
+    macroNames: Zn.slice()
   };
 }
-function Eo(t = ot()) {
+function Oo(t = ot()) {
   const e = t && typeof t == "object" ? t : {}, n = Array.isArray(e.msegSlots) ? e.msegSlots : [], r = Array.isArray(e.envelopeSlots) ? e.envelopeSlots : [], i = Array.isArray(e.macroNames) ? e.macroNames : [];
   return {
     format: "cosimo.modulation",
-    version: qn,
-    msegSlots: Array.from({ length: ge }, (o, a) => Zn(n[a], a)),
-    envelopeSlots: Array.from({ length: J }, (o, a) => bo(r[a], a)),
-    routes: To(e.routes),
+    version: Xn,
+    msegSlots: Array.from({ length: ge }, (o, a) => nr(n[a], a)),
+    envelopeSlots: Array.from({ length: J }, (o, a) => To(r[a], a)),
+    routes: wo(e.routes),
     macroNames: Array.from(
-      { length: Jn },
-      (o, a) => vo(i[a], a)
+      { length: Yn },
+      (o, a) => Ao(i[a], a)
     )
   };
 }
-function $t(t) {
+function Kt(t) {
   let e = t;
   if (typeof t == "string") {
     if (t.trim() === "")
@@ -1353,10 +1353,10 @@ function $t(t) {
       return fe(new Ke("Expected valid modulation JSON"));
     }
   }
-  const n = Eo(e);
-  return !it(e, n) || !xo(n.routes) ? fe(new Ke("Expected the current modulation schema")) : le(n);
+  const n = Oo(e);
+  return !it(e, n) || !_o(n.routes) ? fe(new Ke("Expected the current modulation schema")) : le(n);
 }
-function Mo(t, e) {
+function ko(t, e) {
   return {
     slot: t + 1,
     holdFinalValue: e.holdFinalValue !== !1,
@@ -1368,34 +1368,34 @@ function Mo(t, e) {
     legatoRestarts: !!e.legatoRestarts
   };
 }
-function Bt(t, e, n) {
+function zt(t, e, n) {
   return {
     slot: t + 1,
     shapeIndex: e,
-    buffer: Array.from(oi(n))
+    buffer: Array.from(li(n))
   };
 }
-function wo(t, e) {
+function Lo(t, e) {
   return t.holdFinalValue === e.holdFinalValue && t.noteOffPolicy === e.noteOffPolicy && t.legatoRestarts === e.legatoRestarts && JSON.stringify(t.loop) === JSON.stringify(e.loop);
 }
-function er(t, e = null) {
+function rr(t, e = null) {
   const n = [];
   for (let r = 0; r < ge; r += 1) {
     const i = t.msegSlots[r], o = e?.msegSlots[r];
-    (o === void 0 || !Nt(o.shapeA, i.shapeA)) && n.push({
-      endpointID: Ut,
-      value: Bt(r, 0, i.shapeA)
-    }), (o === void 0 || !Nt(o.shapeB, i.shapeB)) && n.push({
-      endpointID: Ut,
-      value: Bt(r, 1, i.shapeB)
-    }), (o === void 0 || !wo(o.playback, i.playback)) && n.push({
-      endpointID: Ji,
-      value: Mo(r, i.playback)
+    (o === void 0 || !Ct(o.shapeA, i.shapeA)) && n.push({
+      endpointID: Vt,
+      value: zt(r, 0, i.shapeA)
+    }), (o === void 0 || !Ct(o.shapeB, i.shapeB)) && n.push({
+      endpointID: Vt,
+      value: zt(r, 1, i.shapeB)
+    }), (o === void 0 || !Lo(o.playback, i.playback)) && n.push({
+      endpointID: Zi,
+      value: ko(r, i.playback)
     });
   }
-  return n.push(...vi(e?.routes ?? null, t.routes)), n;
+  return n.push(...yi(e?.routes ?? null, t.routes)), n;
 }
-const We = "articulationSnapshot", y = 128, Vt = 48, _o = 1e6, E = -1, je = [
+const We = "articulationSnapshot", y = 128, Wt = 48, Do = 1e6, x = -1, je = [
   "Bow Forte",
   "Bow Pianissimo",
   "Pluck Round",
@@ -1413,37 +1413,37 @@ const We = "articulationSnapshot", y = 128, Vt = 48, _o = 1e6, E = -1, je = [
   "Tin Halo",
   "Sugar Gate"
 ];
-function bt(t, e, n) {
+function yt(t, e, n) {
   return Math.min(Math.max(t, e), n);
 }
 function Ge(t) {
-  return bt(Number.isFinite(t) ? t : 0, 0, 1);
+  return yt(Number.isFinite(t) ? t : 0, 0, 1);
 }
 function _(t, e, n = -Number.MAX_VALUE, r = Number.MAX_VALUE) {
   const i = Number(t);
-  return bt(Number.isFinite(i) ? i : e, n, r);
+  return yt(Number.isFinite(i) ? i : e, n, r);
 }
-function x(t, e, n, r) {
-  return bt(Math.round(_(t, e)), n, r);
+function E(t, e, n, r) {
+  return yt(Math.round(_(t, e)), n, r);
 }
-function tr(t) {
+function ir(t) {
   return t === "key" || t === "vel" || t === "chain" ? t : "chain";
 }
 function He() {
-  return Array.from({ length: y }, () => E);
+  return Array.from({ length: y }, () => x);
 }
-function Oo(t) {
-  const e = x(t, 0, 0, y - 1), n = je[e % je.length], r = Math.floor(e / je.length);
+function No(t) {
+  const e = E(t, 0, 0, y - 1), n = je[e % je.length], r = Math.floor(e / je.length);
   return r === 0 ? n : `${n} ${r + 1}`;
 }
-function ko() {
+function Co() {
   return {
     wavetablePosition: 0,
     pan: 0,
     octave: 0,
     semitone: 0,
     fineCents: 0,
-    volumeDb: -9.542425,
+    volumeDb: vt,
     mute: 0,
     solo: 0,
     warpMode: 0,
@@ -1465,31 +1465,31 @@ function ko() {
     msegMorphs: [0, 0, 0]
   };
 }
-function Do(t) {
-  const e = ko(), n = t && typeof t == "object" ? t : {}, r = Array.isArray(n.msegMorphs) ? n.msegMorphs : [];
+function Po(t) {
+  const e = Co(), n = t && typeof t == "object" ? t : {}, r = Array.isArray(n.msegMorphs) ? n.msegMorphs : [];
   return {
     wavetablePosition: _(n.wavetablePosition, e.wavetablePosition, 0, 1),
     pan: _(n.pan, e.pan, -1, 1),
-    octave: x(n.octave, e.octave, -4, 4),
-    semitone: x(n.semitone, e.semitone, -12, 12),
+    octave: E(n.octave, e.octave, -4, 4),
+    semitone: E(n.semitone, e.semitone, -12, 12),
     fineCents: _(n.fineCents, e.fineCents, -100, 100),
     volumeDb: _(n.volumeDb, e.volumeDb, -48, 6),
-    mute: x(n.mute, e.mute, 0, 1),
-    solo: x(n.solo, e.solo, 0, 1),
-    warpMode: x(n.warpMode, e.warpMode, 0, 4),
+    mute: E(n.mute, e.mute, 0, 1),
+    solo: E(n.solo, e.solo, 0, 1),
+    warpMode: E(n.warpMode, e.warpMode, 0, 4),
     warpAmount: _(n.warpAmount, e.warpAmount, 0, 1),
-    filterMode: x(n.filterMode, e.filterMode, 0, 5),
+    filterMode: E(n.filterMode, e.filterMode, 0, 5),
     filterCutoff: _(n.filterCutoff, e.filterCutoff, 20, 2e4),
     filterQ: _(n.filterQ, e.filterQ, 0.1, 20),
-    unisonVoices: x(n.unisonVoices, e.unisonVoices, 1, 8),
+    unisonVoices: E(n.unisonVoices, e.unisonVoices, 1, 8),
     unisonDetune: _(n.unisonDetune, e.unisonDetune, 0, 1),
     unisonBlend: _(n.unisonBlend, e.unisonBlend, 0, 1),
     unisonWidth: _(n.unisonWidth, e.unisonWidth, 0, 1),
     unisonPhase: _(n.unisonPhase, e.unisonPhase, 0, 1),
     unisonRandom: _(n.unisonRandom, e.unisonRandom, 0, 1),
-    unisonPhaseMode: x(n.unisonPhaseMode, e.unisonPhaseMode, 0, 1),
-    unisonDetuneMode: x(n.unisonDetuneMode, e.unisonDetuneMode, 0, 4),
-    unisonStackMode: x(n.unisonStackMode, e.unisonStackMode, 0, 4),
+    unisonPhaseMode: E(n.unisonPhaseMode, e.unisonPhaseMode, 0, 1),
+    unisonDetuneMode: E(n.unisonDetuneMode, e.unisonDetuneMode, 0, 4),
+    unisonStackMode: E(n.unisonStackMode, e.unisonStackMode, 0, 4),
     unisonWavetablePositionSpread: _(
       n.unisonWavetablePositionSpread,
       e.unisonWavetablePositionSpread,
@@ -1504,7 +1504,7 @@ function Do(t) {
     ]
   };
 }
-function Lo(t) {
+function Fo(t) {
   if (!t || typeof t != "object")
     return null;
   const e = t, n = typeof e.routeId == "string" ? e.routeId.trim() : "";
@@ -1513,48 +1513,48 @@ function Lo(t) {
     amount: _(e.amount, 0, -48, 48)
   } : null;
 }
-function No(t) {
-  const e = t && typeof t == "object" ? t : {}, n = Array.isArray(e.modRouteAmounts) ? e.modRouteAmounts.map(Lo).filter((i) => i !== null) : [], r = /* @__PURE__ */ new Map();
+function Uo(t) {
+  const e = t && typeof t == "object" ? t : {}, n = Array.isArray(e.modRouteAmounts) ? e.modRouteAmounts.map(Fo).filter((i) => i !== null) : [], r = /* @__PURE__ */ new Map();
   for (const i of n)
     r.set(i.routeId, i);
   return {
     format: "cosimo.articulation.snapshot",
     version: 1,
-    parameters: Do(e.parameters),
-    envelopes: [0, 1, 2].map((i) => Yn(
+    parameters: Po(e.parameters),
+    envelopes: [0, 1, 2].map((i) => tr(
       Array.isArray(e.envelopes) ? e.envelopes[i] : void 0,
       i
     )),
     modRouteAmounts: [...r.values()]
   };
 }
-function Co(t, e) {
+function $o(t, e) {
   if (!t || typeof t != "object")
     return null;
-  const n = t, r = x(n.runtimeSlot, e, 0, y - 1), i = typeof n.id == "string" && n.id.trim() ? n.id.trim() : `articulation-${r}`, o = typeof n.name == "string" && n.name.trim() ? n.name.trim() : Oo(r);
+  const n = t, r = E(n.runtimeSlot, e, 0, y - 1), i = typeof n.id == "string" && n.id.trim() ? n.id.trim() : `articulation-${r}`, o = typeof n.name == "string" && n.name.trim() ? n.name.trim() : No(r);
   return {
     id: i,
     runtimeSlot: r,
     name: o,
-    snapshot: No(n.snapshot)
+    snapshot: Uo(n.snapshot)
   };
 }
-function Po(t, e) {
+function Bo(t, e) {
   if (!t || typeof t != "object")
     return null;
   const n = t, r = typeof n.articulationId == "string" ? n.articulationId.trim() : "";
   return e.has(r) ? {
-    note: x(n.note, 0, 0, y - 1),
+    note: E(n.note, 0, 0, y - 1),
     articulationId: r
   } : null;
 }
-function Fo(t, e, n, r, i) {
+function Vo(t, e, n, r, i) {
   if (!t || typeof t != "object")
     return null;
   const o = t, a = typeof o.articulationId == "string" ? o.articulationId.trim() : "";
   if (!e.has(a))
     return null;
-  let s = x(o.min, i, i, y - 1), l = x(o.max, s, i, y - 1);
+  let s = E(o.min, i, i, y - 1), l = E(o.max, s, i, y - 1);
   return l < s && ([s, l] = [l, s]), {
     id: typeof o.id == "string" && o.id.trim() ? o.id.trim() : `${r}-${n}`,
     articulationId: a,
@@ -1562,10 +1562,10 @@ function Fo(t, e, n, r, i) {
     max: l
   };
 }
-function Kt(t, e, n, r) {
+function jt(t, e, n, r) {
   const i = Array.isArray(t) ? t : [], o = /* @__PURE__ */ new Set(), a = [];
   for (let s = 0; s < i.length; s += 1) {
-    const l = Fo(
+    const l = Vo(
       i[s],
       e,
       s,
@@ -1576,31 +1576,31 @@ function Kt(t, e, n, r) {
   }
   return a;
 }
-function Uo(t, e) {
+function Ko(t, e) {
   const n = Array.isArray(t) ? t : [], r = /* @__PURE__ */ new Set(), i = [];
   for (const o of n) {
-    const a = Po(o, e);
+    const a = Bo(o, e);
     !a || r.has(a.note) || (r.add(a.note), i.push(a));
   }
   return i;
 }
-function $o(t) {
+function zo(t) {
   const e = t && typeof t == "object" ? t : {}, n = Array.isArray(e.slots) ? e.slots : [], r = /* @__PURE__ */ new Set(), i = /* @__PURE__ */ new Set(), o = [];
   for (let l = 0; l < n.length && o.length < y; l += 1) {
-    const c = Co(n[l], l);
+    const c = $o(n[l], l);
     !c || r.has(c.runtimeSlot) || i.has(c.id) || (r.add(c.runtimeSlot), i.add(c.id), o.push(c));
   }
   const a = typeof e.selectedSlotId == "string" && o.some((l) => l.id === e.selectedSlotId) ? e.selectedSlotId : null, s = new Set(o.map((l) => l.id));
   return {
     selectedSlotId: a,
-    activeTriggerMode: tr(e.activeTriggerMode),
+    activeTriggerMode: ir(e.activeTriggerMode),
     slots: o,
-    chainAssignments: Kt(e.chainAssignments, s, "chain", 0),
-    keyAssignments: Uo(e.keyAssignments, s),
-    velocityAssignments: Kt(e.velocityAssignments, s, "velocity", 1)
+    chainAssignments: jt(e.chainAssignments, s, "chain", 0),
+    keyAssignments: Ko(e.keyAssignments, s),
+    velocityAssignments: jt(e.velocityAssignments, s, "velocity", 1)
   };
 }
-function zt(t) {
+function Gt(t) {
   const e = (n) => v.map(() => n);
   return {
     selectorA: t,
@@ -1615,7 +1615,7 @@ function zt(t) {
     phases: e(0),
     phaseRandoms: e(0),
     retriggers: e(1),
-    volumeDbs: e(-9.542425),
+    volumeDbs: e(vt),
     mutes: e(0),
     solos: e(0),
     warpModes: e(0),
@@ -1632,29 +1632,29 @@ function zt(t) {
     unisonWavetablePositionSpreads: e(0),
     unisonWarpSpreads: e(0),
     msegMorphs: Array.from({ length: ge }, () => 0),
-    routeAmounts: Array.from({ length: Vn }, () => 0),
+    routeAmounts: Array.from({ length: Wn }, () => 0),
     envelopeAttackSeconds: Array.from({ length: J }, (n, r) => ne(r).attackSeconds),
     envelopeDecaySeconds: Array.from({ length: J }, (n, r) => ne(r).decaySeconds),
     envelopeSustain: Array.from({ length: J }, (n, r) => ne(r).sustain),
     envelopeReleaseSeconds: Array.from({ length: J }, (n, r) => ne(r).releaseSeconds)
   };
 }
-function Wt(t, e, n) {
+function Ht(t, e, n) {
   for (const r of e) {
     const i = n.get(r.articulationId);
     if (i !== void 0)
       for (let o = r.min; o <= r.max; o += 1)
-        t[o] === E && (t[o] = i);
+        t[o] === x && (t[o] = i);
   }
 }
-function Bo(t) {
-  const e = $o(t), n = new Map(e.slots.map((a) => [a.id, a.runtimeSlot])), r = He(), i = He(), o = He();
-  Wt(r, e.chainAssignments, n), Wt(o, e.velocityAssignments, n);
+function Wo(t) {
+  const e = zo(t), n = new Map(e.slots.map((a) => [a.id, a.runtimeSlot])), r = He(), i = He(), o = He();
+  Ht(r, e.chainAssignments, n), Ht(o, e.velocityAssignments, n);
   for (const a of e.keyAssignments) {
     const s = n.get(a.articulationId);
-    s === void 0 || i[a.note] !== E || (i[a.note] = s);
+    s === void 0 || i[a.note] !== x || (i[a.note] = s);
   }
-  return o[0] = E, {
+  return o[0] = x, {
     format: "cosimo.articulation.triggerConfig",
     version: 1,
     activeMode: e.activeTriggerMode,
@@ -1663,24 +1663,24 @@ function Bo(t) {
     velocity: o
   };
 }
-function Vo(t) {
-  const e = t && typeof t == "object" && t.format === "cosimo.articulation.triggerConfig" ? t : Bo(t);
+function jo(t) {
+  const e = t && typeof t == "object" && t.format === "cosimo.articulation.triggerConfig" ? t : Wo(t);
   return JSON.stringify({
     format: "cosimo.articulation.triggerConfig",
     version: 1,
-    activeMode: tr(e.activeMode),
-    chain: Array.from({ length: y }, (n, r) => x(e.chain?.[r], E, E, y - 1)),
-    key: Array.from({ length: y }, (n, r) => x(e.key?.[r], E, E, y - 1)),
-    velocity: Array.from({ length: y }, (n, r) => r === 0 ? E : x(e.velocity?.[r], E, E, y - 1))
+    activeMode: ir(e.activeMode),
+    chain: Array.from({ length: y }, (n, r) => E(e.chain?.[r], x, x, y - 1)),
+    key: Array.from({ length: y }, (n, r) => E(e.key?.[r], x, x, y - 1)),
+    velocity: Array.from({ length: y }, (n, r) => r === 0 ? x : E(e.velocity?.[r], x, x, y - 1))
   });
 }
-function Ko(t, e) {
-  const n = Vo(t);
+function Go(t, e) {
+  const n = jo(t);
   e?.sendNativeArticulationTriggerConfig?.(n);
   const r = globalThis;
   typeof r.cosimo_set_articulation_trigger_config == "function" && r.cosimo_set_articulation_trigger_config(n);
 }
-const re = "articulations.v4", yt = [
+const re = "articulations.v4", At = [
   "framePosition",
   "pan",
   "octave",
@@ -1702,7 +1702,7 @@ const re = "articulations.v4", yt = [
   "unisonStackMode",
   "unisonWavetablePositionSpread",
   "unisonWarpSpread"
-], At = [
+], Rt = [
   "filterMode",
   "filterCutoffHz",
   "filterQ",
@@ -1721,13 +1721,13 @@ const re = "articulations.v4", yt = [
   "env3.decaySeconds",
   "env3.sustain",
   "env3.releaseSeconds"
-], zo = [
-  ...v.flatMap((t) => yt.map(
+], Ho = [
+  ...v.flatMap((t) => At.map(
     (e) => `osc${t}.${e}`
   )),
-  ...At
+  ...Rt
 ];
-class nr extends Error {
+class or extends Error {
   /**
    * `reason` distinguishes the deliberate hard cut from other malformed input;
    * `detail` names the offending field or slot.
@@ -1738,12 +1738,12 @@ class nr extends Error {
   _tag = "ArticulationsParseError";
 }
 function g(t) {
-  return fe(new nr("malformed", t));
+  return fe(new or("malformed", t));
 }
 function Ie(t) {
   return typeof t == "object" && t !== null && !Array.isArray(t);
 }
-function Rt(t, e, n) {
+function Tt(t, e, n) {
   const r = new Set(e);
   for (const i of e)
     if (!Object.hasOwn(t, i))
@@ -1759,26 +1759,26 @@ function Rt(t, e, n) {
 function ke(t) {
   return typeof t == "number" && Number.isInteger(t) && t >= 0 && t < y;
 }
-function Wo(t) {
+function qo(t) {
   return t === "chain" || t === "key" || t === "vel";
 }
-function jo(t) {
-  return zo.some((e) => e === t);
+function Jo(t) {
+  return Ho.some((e) => e === t);
 }
-function jt(t, e) {
+function qt(t, e) {
   if (!Ie(t))
     return g(`${e} must be an object`);
-  const n = Rt(t, ["min", "max"], e);
+  const n = Tt(t, ["min", "max"], e);
   return n !== null ? g(n) : ke(t.min) ? ke(t.max) ? t.min > t.max ? g(`${e}.min must be less than or equal to ${e}.max`) : le({ min: t.min, max: t.max }) : g(`${e}.max must be an integer in 0..127`) : g(`${e}.min must be an integer in 0..127`);
 }
-function Go(t, e) {
+function Qo(t, e) {
   if (!Ie(t))
     return g(`${e} must be an object`);
   const n = {};
   for (const r of Reflect.ownKeys(t)) {
     if (typeof r != "string")
       return g(`${e} has a non-string parameter id`);
-    if (!jo(r))
+    if (!Jo(r))
       return g(`${e} has unknown parameter id "${r}"`);
     const i = t[r];
     if (typeof i != "number" || !Number.isFinite(i))
@@ -1787,7 +1787,7 @@ function Go(t, e) {
   }
   return le(n);
 }
-function Ho(t, e, n) {
+function Xo(t, e, n) {
   Object.defineProperty(t, e, {
     configurable: !0,
     enumerable: !0,
@@ -1795,32 +1795,32 @@ function Ho(t, e, n) {
     writable: !0
   });
 }
-function qo() {
+function Yo() {
   return {};
 }
-function Jo(t, e, n) {
+function Zo(t, e, n) {
   if (!Ie(t))
     return g(`${e} must be an object`);
-  const r = qo();
+  const r = Yo();
   for (const i of Reflect.ownKeys(t)) {
     if (typeof i != "string")
       return g(`${e} has a non-string route id`);
     const o = t[i];
-    if (typeof o != "number" || !Number.isFinite(o) || Math.abs(o) > Vt)
+    if (typeof o != "number" || !Number.isFinite(o) || Math.abs(o) > Wt)
       return g(
-        `${e}.${i} must be a finite route amount within ±${Vt}`
+        `${e}.${i} must be a finite route amount within ±${Wt}`
       );
     if (!n.has(i))
       return g(`${e}.${i} does not name a current articulable mapping`);
-    Ho(r, i, o);
+    Xo(r, i, o);
   }
   return le(r);
 }
-function Qo(t, e, n) {
+function ea(t, e, n) {
   const r = `slots[${e}]`;
   if (!Ie(t))
     return g(`${r} must be an object`);
-  const i = Rt(
+  const i = Tt(
     t,
     ["id", "runtimeSlot", "name", "color", "key", "velRange", "chainRange", "overrides", "routeAmounts"],
     r
@@ -1837,16 +1837,16 @@ function Qo(t, e, n) {
     return g(`${r}.color must be a string`);
   if (!ke(t.key))
     return g(`${r}.key must be an integer in 0..127`);
-  const o = jt(t.velRange, `${r}.velRange`);
+  const o = qt(t.velRange, `${r}.velRange`);
   if (o._tag === "err")
     return o;
-  const a = jt(t.chainRange, `${r}.chainRange`);
+  const a = qt(t.chainRange, `${r}.chainRange`);
   if (a._tag === "err")
     return a;
-  const s = Go(t.overrides, `${r}.overrides`);
+  const s = Qo(t.overrides, `${r}.overrides`);
   if (s._tag === "err")
     return s;
-  const l = Jo(
+  const l = Zo(
     t.routeAmounts,
     `${r}.routeAmounts`,
     n
@@ -1863,24 +1863,24 @@ function Qo(t, e, n) {
     routeAmounts: l.value
   });
 }
-const Xo = Object.fromEntries(
-  yt.map((t, e) => [t, 2 ** e])
-), Yo = Object.fromEntries(
+const ta = Object.fromEntries(
   At.map((t, e) => [t, 2 ** e])
+), na = Object.fromEntries(
+  Rt.map((t, e) => [t, 2 ** e])
 );
-function Gt(t, e) {
+function Jt(t, e) {
   return Object.hasOwn(t.overrides, e) ? t.overrides[e] ?? 0 : 0;
 }
-function Zo(t, e) {
-  return yt.reduce((n, r) => Object.hasOwn(t.overrides, `osc${e}.${r}`) ? n | Xo[r] : n, 0);
+function ra(t, e) {
+  return At.reduce((n, r) => Object.hasOwn(t.overrides, `osc${e}.${r}`) ? n | ta[r] : n, 0);
 }
-function ea(t) {
-  return At.reduce((e, n) => Object.hasOwn(t.overrides, n) ? e | Yo[n] : e, 0);
+function ia(t) {
+  return Rt.reduce((e, n) => Object.hasOwn(t.overrides, n) ? e | na[n] : e, 0);
 }
-function ta(t, e) {
-  const n = (o, a) => Gt(t, `osc${o}.${a}`), r = (o) => Gt(t, o), i = Array.from(
-    { length: Vn },
-    () => _o
+function oa(t, e) {
+  const n = (o, a) => Jt(t, `osc${o}.${a}`), r = (o) => Jt(t, o), i = Array.from(
+    { length: Wn },
+    () => Do
   );
   for (const [o, a] of Object.entries(t.routeAmounts)) {
     const s = e[o];
@@ -1889,8 +1889,8 @@ function ta(t, e) {
   return {
     selectorA: t.runtimeSlot,
     enabled: !0,
-    oscillatorOverrideMasks: v.map((o) => Zo(t, o)),
-    sharedOverrideMask: ea(t),
+    oscillatorOverrideMasks: v.map((o) => ra(t, o)),
+    sharedOverrideMask: ia(t),
     framePositions: v.map((o) => n(o, "framePosition")),
     pans: v.map((o) => n(o, "pan")),
     octaves: v.map((o) => n(o, "octave")),
@@ -1943,20 +1943,20 @@ function ta(t, e) {
     ]
   };
 }
-function rr(t, e) {
-  return t.slots.map((n) => ta(n, e));
+function ar(t, e) {
+  return t.slots.map((n) => oa(n, e));
 }
-function na(t, e) {
+function aa(t, e) {
   if (!Ie(t))
     return g("payload must be an object");
   if (t.format !== "cosimo.articulations")
     return g('format must be exactly "cosimo.articulations"');
   if (t.version !== 4)
-    return fe(new nr(
+    return fe(new or(
       "unsupported-version",
       "version must be exactly 4; earlier articulation formats are deliberately unsupported"
     ));
-  const n = Rt(
+  const n = Tt(
     t,
     ["format", "version", "selectedSlotId", "activeTriggerMode", "slots"],
     "payload"
@@ -1965,7 +1965,7 @@ function na(t, e) {
     return g(n);
   if (t.selectedSlotId !== null && typeof t.selectedSlotId != "string")
     return g("selectedSlotId must be null or a string");
-  if (!Wo(t.activeTriggerMode))
+  if (!qo(t.activeTriggerMode))
     return g('activeTriggerMode must be "chain", "key", or "vel"');
   if (!Array.isArray(t.slots))
     return g("slots must be an array");
@@ -1973,7 +1973,7 @@ function na(t, e) {
     return g(`slots must contain at most ${y} entries`);
   const r = [], i = /* @__PURE__ */ new Set(), o = /* @__PURE__ */ new Set();
   for (let a = 0; a < t.slots.length; a += 1) {
-    const s = Qo(t.slots[a], a, e);
+    const s = ea(t.slots[a], a, e);
     if (s._tag === "err")
       return s;
     const l = s.value;
@@ -1991,7 +1991,7 @@ function na(t, e) {
     slots: r
   });
 }
-function ir() {
+function sr() {
   return {
     format: "cosimo.articulations",
     version: 4,
@@ -2000,16 +2000,16 @@ function ir() {
     slots: []
   };
 }
-function ra(t) {
-  const e = Array.from({ length: y }, () => E), n = Array.from({ length: y }, () => E), r = Array.from({ length: y }, () => E);
+function sa(t) {
+  const e = Array.from({ length: y }, () => x), n = Array.from({ length: y }, () => x), r = Array.from({ length: y }, () => x);
   for (const i of t.slots) {
-    n[i.key] === E && (n[i.key] = i.runtimeSlot);
+    n[i.key] === x && (n[i.key] = i.runtimeSlot);
     for (let o = i.chainRange.min; o <= i.chainRange.max; o += 1)
-      e[o] === E && (e[o] = i.runtimeSlot);
+      e[o] === x && (e[o] = i.runtimeSlot);
     for (let o = i.velRange.min; o <= i.velRange.max; o += 1)
-      r[o] === E && (r[o] = i.runtimeSlot);
+      r[o] === x && (r[o] = i.runtimeSlot);
   }
-  return r[0] = E, {
+  return r[0] = x, {
     format: "cosimo.articulation.triggerConfig",
     version: 1,
     activeMode: t.activeTriggerMode,
@@ -2018,7 +2018,7 @@ function ra(t) {
     velocity: r
   };
 }
-const or = 8, Tt = 5, ar = 8, ia = Object.freeze({
+const lr = 8, Et = 5, cr = 8, la = Object.freeze({
   globalFilter: 0,
   distortion: 1,
   ott: 2,
@@ -2027,7 +2027,7 @@ const or = 8, Tt = 5, ar = 8, ia = Object.freeze({
   phaser: 5,
   delay: 6,
   reverb: 7
-}), sr = Object.freeze({
+}), ur = Object.freeze({
   globalFilter: ["globalFilterMode", "globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"],
   distortion: ["distortionMode", "distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz", "distortionType"],
   ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
@@ -2037,28 +2037,28 @@ const or = 8, Tt = 5, ar = 8, ia = Object.freeze({
   delay: ["delayTime", "delayFeedback", "delayFilter", "delayMix", "delayTimeMode", "delayDivision"],
   reverb: ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"]
 });
-function lr(t) {
-  return sr[t];
+function dr(t) {
+  return ur[t];
 }
-function oa(t, e) {
-  if (!Number.isInteger(e) || e < 0 || e >= Tt)
+function ca(t, e) {
+  if (!Number.isInteger(e) || e < 0 || e >= Et)
     throw new Error(`Lane ordinal out of range: ${e}`);
-  return e * ar + ia[t];
+  return e * cr + la[t];
 }
-function aa(t, e) {
-  const n = new Array(or).fill(0);
-  return sr[t].forEach((r, i) => {
+function ua(t, e) {
+  const n = new Array(lr).fill(0);
+  return ur[t].forEach((r, i) => {
     const o = e[r];
     if (typeof o != "number" || !Number.isFinite(o))
       throw new Error(`Missing lane parameter value: ${t}.${r}`);
     n[i] = o;
   }), n;
 }
-const w = "lane.v1", sa = "laneTopology", Ht = "laneSlotParams", at = 16, la = 8, cr = 4, ca = 3, ur = Tt * ar, dr = 4, ua = 4, da = ur, ma = ur + dr, fa = 0, ha = 1;
-function pa(t, e) {
-  if (!Number.isInteger(e) || e < 0 || e > cr)
+const w = "lane.v1", da = "laneTopology", Qt = "laneSlotParams", at = 16, ma = 8, mr = 4, fa = 3, fr = Et * cr, hr = 4, ha = 4, pa = fr, ga = fr + hr, Ia = 0, va = 1;
+function Sa(t, e) {
+  if (!Number.isInteger(e) || e < 0 || e > mr)
     throw new Error(`Invalid lane branch tag: ${String(e)}`);
-  return t | e << la;
+  return t | e << ma;
 }
 const C = Object.freeze([
   "filter",
@@ -2069,7 +2069,7 @@ const C = Object.freeze([
   "phaser",
   "delay",
   "reverb"
-]), De = Object.freeze({
+]), Le = Object.freeze({
   filter: "globalFilter",
   drive: "distortion",
   ott: "ott",
@@ -2080,9 +2080,9 @@ const C = Object.freeze([
   reverb: "reverb"
 });
 new Map(
-  Object.entries(De).map(([t, e]) => [e, t])
+  Object.entries(Le).map(([t, e]) => [e, t])
 );
-const ga = Object.freeze({
+const ba = Object.freeze({
   filter: 0,
   drive: 1,
   ott: 2,
@@ -2093,9 +2093,9 @@ const ga = Object.freeze({
   reverb: 7
 });
 new Map(
-  C.map((t) => [ga[t], t])
+  C.map((t) => [ba[t], t])
 );
-function mr() {
+function pr() {
   return {
     filter: !1,
     drive: !1,
@@ -2107,23 +2107,23 @@ function mr() {
     reverb: !1
   };
 }
-function Ia(t) {
+function ya(t) {
   return Object.fromEntries(
-    Tn(t).parameters.map((e) => [e.endpointID, e.initial])
+    Mn(t).parameters.map((e) => [e.endpointID, e.initial])
   );
 }
-function va() {
+function Aa() {
   return {
     format: "cosimo.lane",
     version: 1,
     order: [...C],
-    enabled: mr(),
+    enabled: pr(),
     params: Object.fromEntries(
-      C.map((t) => [t, Ia(t)])
+      C.map((t) => [t, ya(t)])
     )
   };
 }
-function Sa(t) {
+function Ra(t) {
   if (typeof t != "string")
     return { _tag: "json", value: t };
   if (t.trim().length === 0)
@@ -2138,11 +2138,11 @@ function Sa(t) {
 function be(t) {
   return typeof t == "object" && t !== null && !Array.isArray(t);
 }
-function ba(t) {
+function Ta(t) {
   return typeof t != "string" ? null : C.find((e) => e === t) ?? null;
 }
-function ya(t) {
-  const e = Sa(t);
+function Ea(t) {
+  const e = Ra(t);
   if (e._tag === "err")
     return e;
   if (!be(e.value))
@@ -2157,7 +2157,7 @@ function ya(t) {
     return { _tag: "err", message: `${w}.order must contain every effect once` };
   const r = [], i = /* @__PURE__ */ new Set();
   for (const s of e.value.order) {
-    const l = ba(s);
+    const l = Ta(s);
     if (l === null || i.has(l))
       return { _tag: "err", message: `${w}.order is not a complete permutation` };
     i.add(l), r.push(l);
@@ -2166,7 +2166,7 @@ function ya(t) {
     return { _tag: "err", message: `${w}.enabled must be an object` };
   if (Reflect.ownKeys(e.value.enabled).length !== C.length)
     return { _tag: "err", message: `${w}.enabled must contain every effect once` };
-  const o = mr();
+  const o = pr();
   for (const s of C) {
     const l = e.value.enabled[s];
     if (typeof l != "boolean")
@@ -2182,7 +2182,7 @@ function ya(t) {
     const l = e.value.params[s];
     if (!be(l))
       return { _tag: "err", message: `${w}.params.${s} must be an object` };
-    const c = Tn(s).parameters;
+    const c = Mn(s).parameters;
     if (Reflect.ownKeys(l).length !== c.length)
       return { _tag: "err", message: `${w}.params.${s} must contain every parameter once` };
     const u = {};
@@ -2199,45 +2199,45 @@ function ya(t) {
     value: { format: "cosimo.lane", version: 1, order: r, enabled: o, params: a }
   };
 }
-const fr = 40, hr = 18e3, st = C.map((t) => De[t]), Aa = /^([a-zA-Z]+)#([1-9][0-9]*)$/, Ra = /^(parallel|split)#([1-9][0-9]*)$/;
+const gr = 40, Ir = 18e3, st = C.map((t) => Le[t]), xa = /^([a-zA-Z]+)#([1-9][0-9]*)$/, Ma = /^(parallel|split)#([1-9][0-9]*)$/;
 function xt(t) {
   if (typeof t != "string")
     return null;
-  const e = Aa.exec(t);
+  const e = xa.exec(t);
   if (e === null)
     return null;
   const n = st.find((i) => i === e[1]);
   if (n === void 0)
     return null;
   const r = Number(e[2]);
-  return r > Tt ? null : { deviceType: n, instanceNumber: r };
+  return r > Et ? null : { deviceType: n, instanceNumber: r };
 }
-function pr(t) {
+function vr(t) {
   if (typeof t != "string")
     return null;
-  const e = Ra.exec(t);
+  const e = Ma.exec(t);
   if (e === null)
     return null;
   const n = e[1], r = Number(e[2]);
-  return r > (n === "parallel" ? dr : ua) ? null : { groupKind: n, unitNumber: r };
+  return r > (n === "parallel" ? hr : ha) ? null : { groupKind: n, unitNumber: r };
 }
 function ie(t) {
   return typeof t == "object" && t !== null && !Array.isArray(t);
 }
-function Le(t, e) {
+function De(t, e) {
   const n = Reflect.ownKeys(t);
   return n.length === e.length && n.every((r) => typeof r == "string" && e.includes(r));
 }
 function b(t) {
   return { _tag: "err", message: `lane.v2 ${t}` };
 }
-function Ta(t, e) {
+function wa(t, e) {
   const n = xt(t);
   if (n === null)
     return { failure: b(`device id ${t} is not a pool instance`) };
-  if (!ie(e) || !Le(e, ["params"]) || !ie(e.params))
+  if (!ie(e) || !De(e, ["params"]) || !ie(e.params))
     return { failure: b(`device ${t} must be { params }`) };
-  const r = lr(n.deviceType);
+  const r = dr(n.deviceType);
   if (Reflect.ownKeys(e.params).length !== r.length)
     return { failure: b(`device ${t} must carry every parameter once`) };
   const i = {};
@@ -2249,13 +2249,13 @@ function Ta(t, e) {
   }
   return { record: { params: i } };
 }
-function xa(t, e) {
-  return !ie(t) || t.kind !== "device" ? { failure: b("branches may hold device placements only") } : Le(t, ["kind", "deviceId", "enabled"]) ? typeof t.deviceId != "string" || !e.has(t.deviceId) ? { failure: b(`placement references unknown device ${String(t.deviceId)}`) } : typeof t.enabled != "boolean" ? { failure: b(`placement of ${t.deviceId} needs a boolean enable`) } : { placement: { kind: "device", deviceId: t.deviceId, enabled: t.enabled } } : { failure: b("a device placement is { kind, deviceId, enabled }") };
+function _a(t, e) {
+  return !ie(t) || t.kind !== "device" ? { failure: b("branches may hold device placements only") } : De(t, ["kind", "deviceId", "enabled"]) ? typeof t.deviceId != "string" || !e.has(t.deviceId) ? { failure: b(`placement references unknown device ${String(t.deviceId)}`) } : typeof t.enabled != "boolean" ? { failure: b(`placement of ${t.deviceId} needs a boolean enable`) } : { placement: { kind: "device", deviceId: t.deviceId, enabled: t.enabled } } : { failure: b("a device placement is { kind, deviceId, enabled }") };
 }
-function qt(t) {
-  return typeof t == "number" && Number.isFinite(t) && t >= fr && t <= hr;
+function Xt(t) {
+  return typeof t == "number" && Number.isFinite(t) && t >= gr && t <= Ir;
 }
-function Ea(t) {
+function Oa(t) {
   let e = t;
   if (typeof t == "string")
     try {
@@ -2264,7 +2264,7 @@ function Ea(t) {
       const u = c instanceof Error ? c.message : String(c);
       return b(`is not valid JSON: ${u}`);
     }
-  if (!ie(e) || !Le(e, ["format", "version", "devices", "chain"]))
+  if (!ie(e) || !De(e, ["format", "version", "devices", "chain"]))
     return b("must be { format, version, devices, chain }");
   if (e.format !== "cosimo.lane" || e.version !== 2)
     return b("must be cosimo.lane version 2");
@@ -2276,7 +2276,7 @@ function Ea(t) {
   for (const c of Reflect.ownKeys(e.devices)) {
     if (typeof c != "string")
       return b("device ids must be strings");
-    const u = Ta(c, e.devices[c]);
+    const u = wa(c, e.devices[c]);
     if ("failure" in u)
       return u.failure;
     n[c] = u.record;
@@ -2284,7 +2284,7 @@ function Ea(t) {
   const r = new Set(Object.keys(n)), i = /* @__PURE__ */ new Map(), o = /* @__PURE__ */ new Set(), a = [];
   let s = 0;
   const l = (c) => {
-    const u = xa(c, r);
+    const u = _a(c, r);
     return "placement" in u && (i.set(
       u.placement.deviceId,
       (i.get(u.placement.deviceId) ?? 0) + 1
@@ -2303,33 +2303,33 @@ function Ea(t) {
     if (c.kind !== "parallel" && c.kind !== "split")
       return b(`unknown chain node kind ${String(c.kind)}`);
     const u = c.kind === "split", d = u ? ["kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz", "branches"] : ["kind", "groupId", "enabled", "branches"];
-    if (!Le(c, d))
+    if (!De(c, d))
       return b(`a ${c.kind} group is { ${d.join(", ")} }`);
-    const h = pr(c.groupId);
+    const h = vr(c.groupId);
     if (h === null || h.groupKind !== c.kind)
       return b(`group id ${String(c.groupId)} does not name a ${c.kind} unit`);
     if (o.has(String(c.groupId)))
       return b(`group ${String(c.groupId)} is used twice`);
     if (o.add(String(c.groupId)), typeof c.enabled != "boolean")
       return b(`group ${String(c.groupId)} needs a boolean enable`);
-    const f = u ? ca : cr;
+    const f = u ? fa : mr;
     if (!Array.isArray(c.branches) || c.branches.length < 2 || c.branches.length > f)
       return b(`group ${String(c.groupId)} needs 2..${f} branches`);
-    if (u && (!qt(c.xoverLowHz) || !qt(c.xoverHighHz)))
-      return b(`group ${String(c.groupId)} crossovers must sit in ${fr}..${hr} Hz`);
+    if (u && (!Xt(c.xoverLowHz) || !Xt(c.xoverHighHz)))
+      return b(`group ${String(c.groupId)} crossovers must sit in ${gr}..${Ir} Hz`);
     s += 1;
     const p = [];
     for (const I of c.branches) {
       if (!Array.isArray(I))
         return b(`group ${String(c.groupId)} branches must be arrays`);
-      const D = [];
+      const L = [];
       for (const N of I) {
         const S = l(N);
         if ("failure" in S)
           return S.failure;
-        D.push(S.placement);
+        L.push(S.placement);
       }
-      p.push(D);
+      p.push(L);
     }
     a.push(u ? {
       kind: "split",
@@ -2350,12 +2350,12 @@ function Ea(t) {
       return b(`device ${c} must be placed exactly once`);
   return s > at ? b(`flattens to ${s} wire entries; the topology upload holds ${at}`) : { _tag: "ok", value: { format: "cosimo.lane", version: 2, devices: n, chain: a } };
 }
-function gr(t) {
+function Sr(t) {
   const e = {};
   for (const n of C) {
-    const r = De[n];
+    const r = Le[n];
     e[`${r}#1`] = {
-      params: Object.fromEntries(lr(r).map((i) => [
+      params: Object.fromEntries(dr(r).map((i) => [
         i,
         t.params[n][i] ?? 0
       ]))
@@ -2367,15 +2367,15 @@ function gr(t) {
     devices: e,
     chain: t.order.map((n) => ({
       kind: "device",
-      deviceId: `${De[n]}#1`,
+      deviceId: `${Le[n]}#1`,
       enabled: t.enabled[n]
     }))
   };
 }
-const Jt = ["distortion#1", "delay#1", "reverb#1"];
-function Qt() {
-  const t = gr(va()), e = {};
-  for (const n of Jt) {
+const Yt = ["distortion#1", "delay#1", "reverb#1"];
+function Zt() {
+  const t = Sr(Aa()), e = {};
+  for (const n of Yt) {
     const r = t.devices[n];
     if (r === void 0)
       throw new Error(`The v1 default is missing starter device ${n}`);
@@ -2385,19 +2385,19 @@ function Qt() {
     format: "cosimo.lane",
     version: 2,
     devices: e,
-    chain: t.chain.filter((n) => n.kind === "device" && Jt.includes(n.deviceId))
+    chain: t.chain.filter((n) => n.kind === "device" && Yt.includes(n.deviceId))
   };
 }
-function Ma(t) {
+function ka(t) {
   if (t === void 0)
-    return Qt();
-  const e = Ea(t);
+    return Zt();
+  const e = Oa(t);
   if (e._tag === "ok")
     return e.value;
-  const n = ya(t);
-  return n._tag === "ok" ? gr(n.value) : Qt();
+  const n = Ea(t);
+  return n._tag === "ok" ? Sr(n.value) : Zt();
 }
-function wa(t) {
+function La(t) {
   return Object.keys(t.devices).map((e) => {
     const n = xt(e);
     if (n === null)
@@ -2409,46 +2409,46 @@ function lt(t) {
   const e = xt(t);
   if (e === null)
     throw new Error(`Invalid lane instance id in state: ${t}`);
-  return oa(e.deviceType, e.instanceNumber - 1);
+  return ca(e.deviceType, e.instanceNumber - 1);
 }
-function Ir(t) {
-  const e = pr(t.groupId);
+function br(t) {
+  const e = vr(t.groupId);
   if (e === null)
     throw new Error(`Invalid lane group id in state: ${t.groupId}`);
-  return (e.groupKind === "parallel" ? da : ma) + (e.unitNumber - 1);
+  return (e.groupKind === "parallel" ? pa : ga) + (e.unitNumber - 1);
 }
-function vr(t) {
+function yr(t) {
   const e = new Array(at).fill(0);
   let n = 0, r = 0;
   const i = (o, a, s) => {
-    e[r] = pa(o, a), s && (n |= 1 << r), r += 1;
+    e[r] = Sa(o, a), s && (n |= 1 << r), r += 1;
   };
   for (const o of t.chain) {
     if (o.kind === "device") {
       i(lt(o.deviceId), 0, o.enabled);
       continue;
     }
-    i(Ir(o), o.branches.length, o.enabled), o.branches.forEach((a, s) => {
+    i(br(o), o.branches.length, o.enabled), o.branches.forEach((a, s) => {
       for (const l of a)
         i(lt(l.deviceId), s + 1, l.enabled);
     });
   }
   return { chainLength: r, slotIds: e, enabledMask: n };
 }
-function _a(t) {
-  const e = new Array(or).fill(0);
-  return e[fa] = t.xoverLowHz, e[ha] = t.xoverHighHz, e;
+function Da(t) {
+  const e = new Array(lr).fill(0);
+  return e[Ia] = t.xoverLowHz, e[va] = t.xoverHighHz, e;
 }
-function Sr(t) {
+function Ar(t) {
   const e = [];
   let n = 0;
-  for (const r of wa(t))
+  for (const r of La(t))
     n += 1, e.push({
-      endpointID: Ht,
+      endpointID: Qt,
       value: {
         slotId: lt(r.instanceId),
         deliverySerial: n,
-        values: aa(
+        values: ua(
           r.deviceType,
           t.devices[r.instanceId].params
         )
@@ -2456,19 +2456,19 @@ function Sr(t) {
     });
   for (const r of t.chain)
     r.kind === "split" && (n += 1, e.push({
-      endpointID: Ht,
+      endpointID: Qt,
       value: {
-        slotId: Ir(r),
+        slotId: br(r),
         deliverySerial: n,
-        values: _a(r)
+        values: Da(r)
       }
     }));
   return e.push({
-    endpointID: sa,
-    value: vr(t)
+    endpointID: da,
+    value: yr(t)
   }), e;
 }
-class Oa {
+class Na {
   connection;
   serviceFactories;
   services = [];
@@ -2511,41 +2511,41 @@ class Oa {
     return [...this.services];
   }
 }
-function ka(t, e) {
-  return new Oa(t, e);
+function Ca(t, e) {
+  return new Na(t, e);
 }
-async function Da(t, e) {
-  const n = ka(t, e);
+async function Pa(t, e) {
+  const n = Ca(t, e);
   return await n.start(), n;
 }
 const ct = "runtimeState";
-function br(t) {
+function Rr(t) {
   if (typeof t != "object" || t === null || Array.isArray(t))
     return 0;
   const e = Number(Reflect.get(t, "dspSessionId"));
   return Number.isFinite(e) ? Math.trunc(e) : 0;
 }
-const La = {
+const Fa = {
   endpointID: ct,
   required: !0,
-  mapValue: br
-}, Xt = "runtimeInstallAck", Na = "runtimeSyncRequest", Yt = 0, Ca = 8e3, Ne = /* @__PURE__ */ new WeakMap(), yr = 1e9;
-let ye = (Date.now() & 1073741823 ^ Math.floor(Math.random() * 1073741823)) % yr;
-function Pa(t) {
-  return ye = ye % yr + 1, t === "modulation" ? -1e9 - ye : 1e9 + ye;
+  mapValue: Rr
+}, en = "runtimeInstallAck", Ua = "runtimeSyncRequest", tn = 0, $a = 8e3, Ne = /* @__PURE__ */ new WeakMap(), Tr = 1e9;
+let ye = (Date.now() & 1073741823 ^ Math.floor(Math.random() * 1073741823)) % Tr;
+function Ba(t) {
+  return ye = ye % Tr + 1, t === "modulation" ? -1e9 - ye : 1e9 + ye;
 }
-function Fa(t, e) {
+function Va(t, e) {
   const n = t, r = Ne.get(n) ?? /* @__PURE__ */ new Set();
   if (r.has(e))
     throw new Error(`A ${e} runtime install lane is already active for this connection.`);
   r.add(e), Ne.set(n, r);
 }
-function Zt(t, e) {
+function nn(t, e) {
   const n = t, r = Ne.get(n);
   r?.delete(e), r?.size === 0 && Ne.delete(n);
 }
-const Ua = [100, 250, 500, 1e3], Ae = { _tag: "accepted" }, $a = { _tag: "superseded" }, Ba = { _tag: "stopped" }, en = { _tag: "transport-timeout" };
-function Va(t) {
+const Ka = [100, 250, 500, 1e3], Ae = { _tag: "accepted" }, za = { _tag: "superseded" }, Wa = { _tag: "stopped" }, rn = { _tag: "transport-timeout" };
+function ja(t) {
   const e = t && typeof t == "object" && "event" in t ? t.event : t, n = e && typeof e == "object" && "value" in e ? e.value : e;
   if (!n || typeof n != "object")
     return null;
@@ -2566,7 +2566,7 @@ function Va(t) {
     syncSerial: c
   };
 }
-function Ka(t, e, n) {
+function Ga(t, e, n) {
   if (!t || typeof t != "object" || Array.isArray(t))
     throw new Error("Runtime install commands require an object payload.");
   return {
@@ -2575,7 +2575,7 @@ function Ka(t, e, n) {
     deliverySerial: n
   };
 }
-class tn {
+class on {
   #i;
   #e;
   #c;
@@ -2595,23 +2595,23 @@ class tn {
   constructor(e, n) {
     this.#i = e, this.#e = n.laneKind;
     const r = n.probeDelaysMilliseconds?.map((i) => Math.max(0, Math.trunc(i))).filter((i) => Number.isFinite(i));
-    this.#c = r && r.length > 0 ? r : [...Ua], this.#u = Math.max(
+    this.#c = r && r.length > 0 ? r : [...Ka], this.#u = Math.max(
       1,
-      Math.trunc(n.healthTimeoutMilliseconds ?? Ca)
+      Math.trunc(n.healthTimeoutMilliseconds ?? $a)
     );
   }
   start() {
     if (!this.#r) {
-      Fa(this.#i, this.#e);
+      Va(this.#i, this.#e);
       try {
-        this.#m += 1, this.#r = !0, this.#a = null, this.#l.clear(), this.#i.addEndpointListener?.(Xt, this.#y);
+        this.#m += 1, this.#r = !0, this.#a = null, this.#l.clear(), this.#i.addEndpointListener?.(en, this.#y);
       } catch (e) {
-        throw this.#r = !1, Zt(this.#i, this.#e), e;
+        throw this.#r = !1, nn(this.#i, this.#e), e;
       }
     }
   }
   stop() {
-    this.#r && (this.#r = !1, this.#i.removeEndpointListener?.(Xt, this.#y), Zt(this.#i, this.#e), this.#o.clear(), this.#a = null, this.#l.clear(), this.#b());
+    this.#r && (this.#r = !1, this.#i.removeEndpointListener?.(en, this.#y), nn(this.#i, this.#e), this.#o.clear(), this.#a = null, this.#l.clear(), this.#b());
   }
   observeRuntime(e) {
     const n = Math.trunc(Number(e) || 0);
@@ -2683,18 +2683,18 @@ class tn {
   #T(e) {
     return this.#e === "modulation" ? e.acceptedModulationSerial : e.acceptedArticulationSerial;
   }
-  #x(e, n) {
+  #E(e, n) {
     const r = this.#T(e);
     return this.#e === "modulation" ? r >= n : r <= n;
   }
-  #E() {
+  #x() {
     const e = this.getAcceptedFrontier();
     return this.#e === "modulation" ? e + 1 : e - 1;
   }
   async #A(e, n) {
     if (this.#a === e)
       return Ae;
-    const r = Pa(this.#e);
+    const r = Ba(this.#e);
     this.#l.add(r);
     const i = Date.now() + this.#u;
     let o = 0;
@@ -2707,7 +2707,7 @@ class tn {
           return Ae;
         const s = i - Date.now();
         if (s <= 0)
-          return en;
+          return rn;
         const l = this.#s;
         this.#v(r), await this.#S(
           l,
@@ -2719,7 +2719,7 @@ class tn {
     }
   }
   async #M(e, n, r) {
-    const i = this.#E(), o = Ka(e.value, n, i);
+    const i = this.#x(), o = Ga(e.value, n, i);
     let a = 0, s = 0, l = this.#d;
     for (this.#R(e.endpointID, o); ; ) {
       const c = this.#g(n, r);
@@ -2748,16 +2748,16 @@ class tn {
         const I = await this.#S(
           f,
           this.#I(a)
-        ), D = this.#p(
+        ), L = this.#p(
           n,
           i,
           l
         );
-        if (D !== null)
-          return D;
+        if (L !== null)
+          return L;
         if (I && this.#n?.dspSessionId === n && this.#n.syncSerial === i) {
           if (s >= 1)
-            return en;
+            return rn;
           l = this.#d, this.#R(e.endpointID, o), s += 1, a += 1;
           break;
         }
@@ -2777,10 +2777,10 @@ class tn {
     return o !== void 0 && o.version > r && o.acknowledgement.dspSessionId === e ? (this.#o.delete(n), {
       _tag: "rejected",
       acknowledgement: { ...o.acknowledgement }
-    }) : this.#x(i, n) ? (this.#o.delete(n), Ae) : null;
+    }) : this.#E(i, n) ? (this.#o.delete(n), Ae) : null;
   }
   #g(e, n) {
-    return !this.#r || this.#m !== n ? Ba : this.#t !== e ? $a : null;
+    return !this.#r || this.#m !== n ? Wa : this.#t !== e ? za : null;
   }
   #I(e) {
     return this.#c[Math.min(
@@ -2794,7 +2794,7 @@ class tn {
         e,
         n,
         void 0,
-        Yt
+        tn
       );
     } catch {
     }
@@ -2803,16 +2803,16 @@ class tn {
     if (this.#r)
       try {
         this.#i.sendEventOrValue?.(
-          Na,
+          Ua,
           e,
           void 0,
-          Yt
+          tn
         );
       } catch {
       }
   }
   #w(e) {
-    const n = Va(e);
+    const n = ja(e);
     if (!n || this.#t !== null && n.dspSessionId !== this.#t)
       return;
     if (this.#l.has(n.syncSerial) && (this.#a = n.dspSessionId), this.#n = n, this.#d += 1, this.#e === "modulation" ? n.rejectedSerial > 0 : n.rejectedSerial < 0)
@@ -2843,17 +2843,17 @@ class tn {
       e.finish(!0);
   }
 }
-const za = 1e3, qe = [te, re];
-function nn(t, e) {
+const Ha = 1e3, qe = [te, re];
+function an(t, e) {
   return Object.prototype.hasOwnProperty.call(t, e);
 }
 function Je(t, e) {
   const n = t && typeof t == "object" ? t : {}, r = n.values && typeof n.values == "object" ? n.values : {};
-  if (nn(r, e)) return r[e];
-  if (nn(n, e)) return n[e];
+  if (an(r, e)) return r[e];
+  if (an(n, e)) return n[e];
 }
 function Qe(t, e) {
-  if (t === void 0) return ir();
+  if (t === void 0) return sr();
   let n = t;
   if (typeof n == "string")
     try {
@@ -2861,25 +2861,25 @@ function Qe(t, e) {
     } catch {
       return null;
     }
-  const r = na(n, e);
+  const r = aa(n, e);
   return r._tag === "ok" ? r.value : null;
 }
-function rn(t) {
+function sn(t) {
   return new Set(t.routes.flatMap((e) => It(e) === null ? [] : [e.id]));
 }
-function on(t) {
+function ln(t) {
   try {
     return JSON.stringify(t);
   } catch {
     return String(t);
   }
 }
-class Wa {
+class qa {
   constructor(e) {
-    this.connection = e, this.modulationLane = new tn(e, { laneKind: "modulation" }), this.articulationLane = new tn(e, { laneKind: "articulation" });
+    this.connection = e, this.modulationLane = new on(e, { laneKind: "modulation" }), this.articulationLane = new on(e, { laneKind: "articulation" });
   }
   modulationState = ot();
-  articulationBank = ir();
+  articulationBank = sr();
   hasModulationState = !1;
   hasArticulationState = !1;
   hasRuntimeState = !1;
@@ -2932,7 +2932,7 @@ class Wa {
     this.applyRuntimeStateIfReady();
   }
   applyBootState(e) {
-    const n = Je(e, te), r = n === void 0 ? { _tag: "ok", value: ot() } : $t(n);
+    const n = Je(e, te), r = n === void 0 ? { _tag: "ok", value: ot() } : Kt(n);
     if (r._tag === "err") {
       console.error(`[runtime-state-worker] ${te} is invalid; boot state was not installed.`);
       const a = Je(e, re), s = Qe(a, /* @__PURE__ */ new Set());
@@ -2942,7 +2942,7 @@ class Wa {
     this.modulationState = r.value, this.hasModulationState = !0;
     const i = Je(e, re), o = Qe(
       i,
-      rn(r.value)
+      sn(r.value)
     );
     if (o === null) {
       console.error(`[runtime-state-worker] ${re} is invalid; boot state was not installed.`);
@@ -2970,7 +2970,7 @@ class Wa {
   }
   applyLiveStoredState(e, n) {
     if (e === te) {
-      const i = $t(n);
+      const i = Kt(n);
       if (i._tag === "err") {
         console.error(`[runtime-state-worker] Rejected invalid ${te}.`);
         return;
@@ -2978,7 +2978,7 @@ class Wa {
       this.modulationState = i.value, this.hasModulationState = !0, this.applyRuntimeStateIfReady();
       return;
     }
-    const r = Qe(n, rn(this.modulationState));
+    const r = Qe(n, sn(this.modulationState));
     if (r === null) {
       console.error(`[runtime-state-worker] Rejected invalid ${re}.`);
       return;
@@ -2987,7 +2987,7 @@ class Wa {
   }
   handleRuntimeState(e) {
     if (!this.started) return;
-    const n = br(e);
+    const n = Rr(e);
     if (this.modulationLane.observeRuntime(n), this.articulationLane.observeRuntime(n), !this.hasRuntimeState) {
       this.hasRuntimeState = !0, this.dspSessionId = n, this.applyRuntimeStateIfReady();
       return;
@@ -3006,7 +3006,7 @@ class Wa {
     }
   }
   async deliverRuntimeState() {
-    const e = this.runtimeGeneration, n = this.modulationState, r = this.articulationBank, i = this.lastAppliedModulationGeneration !== e, o = er(
+    const e = this.runtimeGeneration, n = this.modulationState, r = this.articulationBank, i = this.lastAppliedModulationGeneration !== e, o = rr(
       n,
       i ? null : this.lastAppliedModulationState
     ), a = await this.modulationLane.sendBatch(o);
@@ -3020,21 +3020,21 @@ class Wa {
     }
     const s = this.buildUploadsBySelector(n, r), l = Array.from({ length: y }, (f, p) => {
       const I = s.get(p);
-      return I ? on(I) : null;
+      return I ? ln(I) : null;
     }), c = this.lastAppliedArticulationGeneration !== e, u = c && this.articulationLane.getAcceptedFrontier() !== 0, d = [];
     for (let f = 0; f < y; f += 1) {
       const p = s.get(f), I = l[f] !== this.lastAppliedArticulationTokens[f];
       u ? d.push({
         endpointID: We,
-        value: p ?? zt(f)
+        value: p ?? Gt(f)
       }) : c ? p && d.push({ endpointID: We, value: p }) : I && d.push({
         endpointID: We,
-        value: p ?? zt(f)
+        value: p ?? Gt(f)
       });
     }
     const h = await this.articulationLane.sendBatch(d);
-    this.acceptOutcome("articulation", h, l) && (this.lastAppliedArticulationGeneration = e, this.lastAppliedArticulationTokens = l, Ko(
-      ra(r),
+    this.acceptOutcome("articulation", h, l) && (this.lastAppliedArticulationGeneration = e, this.lastAppliedArticulationTokens = l, Go(
+      sa(r),
       this.connection
     ), this.clearRecoveryTimer(), this.lastRejectedToken.clear()), this.finishDelivery();
   }
@@ -3047,19 +3047,19 @@ class Wa {
       return o === null ? [] : [[i.id, o]];
     }));
     return new Map(
-      rr(n, r).map((i) => [i.selectorA, i])
+      ar(n, r).map((i) => [i.selectorA, i])
     );
   }
   acceptOutcome(e, n, r) {
     if (n._tag === "accepted") return !0;
     if (n._tag === "superseded" || n._tag === "stopped") return !1;
-    const i = on(r), o = n._tag !== "rejected" || this.lastRejectedToken.get(e) !== i;
+    const i = ln(r), o = n._tag !== "rejected" || this.lastRejectedToken.get(e) !== i;
     return n._tag === "rejected" && this.lastRejectedToken.set(e, i), console.error(`[runtime-state-worker] ${e} delivery was not accepted.`, { outcome: n._tag }), o && this.scheduleRecovery(), !1;
   }
   scheduleRecovery() {
     !this.started || this.recoveryTimer !== null || (this.recoveryTimer = setTimeout(() => {
       this.recoveryTimer = null, this.applyRuntimeStateIfReady();
-    }, za));
+    }, Ha));
   }
   clearRecoveryTimer() {
     this.recoveryTimer !== null && (clearTimeout(this.recoveryTimer), this.recoveryTimer = null);
@@ -3070,19 +3070,19 @@ class Wa {
     this.deliveryRefreshPending = !1, e && this.applyRuntimeStateIfReady();
   }
 }
-function ja(t) {
-  return new Wa(t);
+function Ja(t) {
+  return new qa(t);
 }
-const Ga = 2e3;
-function an(t, e) {
+const Qa = 2e3;
+function cn(t, e) {
   return Object.prototype.hasOwnProperty.call(t, e);
 }
-function Ha(t, e) {
+function Xa(t, e) {
   const n = t && typeof t == "object" ? t : {}, r = n.values && typeof n.values == "object" ? n.values : {};
-  return an(r, e) ? {
+  return cn(r, e) ? {
     found: !0,
     value: r[e]
-  } : an(n, e) ? {
+  } : cn(n, e) ? {
     found: !0,
     value: n[e]
   } : {
@@ -3090,14 +3090,14 @@ function Ha(t, e) {
     value: void 0
   };
 }
-function sn(t) {
+function un(t) {
   try {
     return JSON.stringify(t);
   } catch {
     return String(t);
   }
 }
-class qa {
+class Ya {
   connection;
   options;
   parameterEndpointIDs;
@@ -3116,7 +3116,7 @@ class qa {
   lastAppliedRuntimeEndpointsToken = null;
   lastAppliedSnapshot = null;
   constructor(e, n) {
-    this.connection = e, this.options = n, this.parameterEndpointIDs = [...new Set(n.parameterEndpointIDs ?? [])], this.runtimeEndpointDependencies = Ja(n.runtimeEndpointDependencies ?? []), this.handleStoredStateValue = this.handleStoredStateValue.bind(this);
+    this.connection = e, this.options = n, this.parameterEndpointIDs = [...new Set(n.parameterEndpointIDs ?? [])], this.runtimeEndpointDependencies = Za(n.runtimeEndpointDependencies ?? []), this.handleStoredStateValue = this.handleStoredStateValue.bind(this);
   }
   start() {
     if (!this.started) {
@@ -3144,7 +3144,7 @@ class qa {
   requestStoredState() {
     if (typeof this.connection.requestFullStoredState == "function") {
       this.connection.requestFullStoredState((e) => {
-        const n = Ha(e, this.options.stateKey);
+        const n = Xa(e, this.options.stateKey);
         if (n.found) {
           this.applyStoredValue(n.value);
           return;
@@ -3214,7 +3214,7 @@ class qa {
       state: this.state,
       parameters: e,
       runtimeEndpoints: n
-    }, i = sn(n), o = !this.forceFullReplay && i === this.lastAppliedRuntimeEndpointsToken ? this.lastAppliedSnapshot : null, a = this.options.buildRuntimeEvents(r, o), s = sn({
+    }, i = un(n), o = !this.forceFullReplay && i === this.lastAppliedRuntimeEndpointsToken ? this.lastAppliedSnapshot : null, a = this.options.buildRuntimeEvents(r, o), s = un({
       runtimeEndpoints: n,
       events: a
     });
@@ -3247,27 +3247,27 @@ class qa {
         l.endpointID,
         l.value,
         void 0,
-        this.options.sendTimeoutMilliseconds ?? Ga
+        this.options.sendTimeoutMilliseconds ?? Qa
       );
     this.lastAppliedToken = s, this.lastAppliedRuntimeEndpointsToken = i, this.lastAppliedSnapshot = r;
   }
 }
-function Ja(t) {
+function Za(t) {
   const e = /* @__PURE__ */ new Map();
   for (const n of t)
     e.has(n.endpointID) || e.set(n.endpointID, n);
   return [...e.values()];
 }
-function Qa(t, e) {
-  return new qa(t, e);
+function es(t, e) {
+  return new Ya(t, e);
 }
-function Xa(t) {
-  return Qa(t, {
+function ts(t) {
+  return es(t, {
     stateKey: w,
-    runtimeEndpointDependencies: [La],
+    runtimeEndpointDependencies: [Fa],
     applyDefaultRuntimeStateWhenMissing: !0,
-    deserializeStoredState: Ma,
-    buildRuntimeEvents: ({ state: e }) => [...Sr(e)]
+    deserializeStoredState: ka,
+    buildRuntimeEvents: ({ state: e }) => [...Ar(e)]
   });
 }
 function P(t, e) {
@@ -3280,13 +3280,13 @@ function Xe(t, e, n) {
     r += String.fromCharCode(t.getUint8(e + i));
   return r;
 }
-function Ya(t) {
+function ns(t) {
   return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(t);
 }
 function ut(t) {
   return typeof TextEncoder == "function" ? new TextEncoder().encode(t) : Uint8Array.from(t, (e) => e.charCodeAt(0));
 }
-function Ar(t) {
+function Er(t) {
   if (t === null)
     return "null";
   if (t === void 0)
@@ -3297,7 +3297,7 @@ function Ar(t) {
   const r = Object.keys(t).slice(0, 6), i = r.length > 0 ? ` keys=${r.join(",")}` : "";
   return n ? `${e}:${n}${i}` : `${e}${i}`;
 }
-function Za() {
+function rs() {
   const t = globalThis.location?.href;
   if (typeof t == "string" && t.length > 0)
     return new URL("/", t);
@@ -3305,18 +3305,18 @@ function Za() {
   return n.includes("/patch_gui/desktop/") ? (e.pathname = n.replace(/\/patch_gui\/desktop\/[^/]+$/, "/"), e) : n.includes("/patch_gui/") ? (e.pathname = n.replace(/\/patch_gui\/[^/]+$/, "/"), e) : n.includes("/ui/shared/") ? (e.pathname = n.replace(/\/ui\/shared\/[^/]+$/, "/"), e) : (e.pathname = n.replace(/\/[^/]+$/, "/"), e);
 }
 function Ye(t, e) {
-  const n = Za();
+  const n = rs();
   if (e instanceof URL)
     return e;
   if (typeof e == "string" && e.length > 0) {
-    if (Ya(e))
+    if (ns(e))
       return new URL(e);
     const r = e.startsWith("/") ? e.slice(1) : e;
     return new URL(r, n);
   }
   return new URL(t, n);
 }
-async function ln(t) {
+async function dn(t) {
   if (typeof t == "string")
     return t;
   if (t && typeof t.text == "function")
@@ -3331,9 +3331,9 @@ async function ln(t) {
     const e = Uint8Array.from(t);
     return typeof TextDecoder == "function" ? new TextDecoder().decode(e) : String.fromCharCode(...e);
   }
-  throw new Error(`Unsupported text resource payload (${Ar(t)})`);
+  throw new Error(`Unsupported text resource payload (${Er(t)})`);
 }
-function es(t) {
+function is(t) {
   if (t instanceof ArrayBuffer)
     return new Uint8Array(t.slice(0));
   if (ArrayBuffer.isView(t))
@@ -3342,9 +3342,9 @@ function es(t) {
     return Uint8Array.from(t);
   if (typeof t == "string")
     return ut(t);
-  throw new Error(`Unsupported binary resource payload (${Ar(t)})`);
+  throw new Error(`Unsupported binary resource payload (${Er(t)})`);
 }
-function ts(t) {
+function os(t) {
   const e = t?.frames;
   P(
     Array.isArray(e) || ArrayBuffer.isView(e),
@@ -3369,7 +3369,7 @@ function ts(t) {
     samples: r
   };
 }
-function Rr(t) {
+function xr(t) {
   const e = new DataView(t);
   P(Xe(e, 0, 4) === "RIFF", "Expected a RIFF wave file"), P(Xe(e, 8, 4) === "WAVE", "Expected a WAVE file");
   let n = null, r = null, i = null, o = null, a = null, s = null, l = null, c = 12;
@@ -3397,7 +3397,7 @@ function Rr(t) {
     samples: u
   };
 }
-async function cn(t) {
+async function mn(t) {
   P(typeof fetch == "function", `Could not fetch ${t}: global fetch is unavailable`);
   const e = await fetch(t.toString());
   return P(e.ok, `Failed to fetch resource from ${t}`), e.arrayBuffer();
@@ -3405,66 +3405,66 @@ async function cn(t) {
 function dt(t) {
   return typeof TextDecoder == "function" ? new TextDecoder().decode(t) : String.fromCharCode(...t);
 }
-function Tr(t) {
-  const e = new Uint8Array(t).buffer, n = Rr(e);
+function Mr(t) {
+  const e = new Uint8Array(t).buffer, n = xr(e);
   return {
     sampleRate: n.sampleRate,
     samples: n.samples
   };
 }
-function ns(t, {
+function as(t, {
   textPreference: e = "bridge",
   audioPreference: n = "url"
 } = {}) {
   const r = async (l) => (P(typeof t.readResource == "function", `Resource bridge cannot read ${l}`), t.readResource(l)), i = async (l) => {
     P(typeof t.readResourceAsAudioData == "function", `Audio resource bridge cannot read ${l}`);
     const c = await t.readResourceAsAudioData(l);
-    return ts(c);
+    return os(c);
   }, o = (l) => {
     const c = t.getResourceAddress?.(l);
     return c ?? null;
   }, a = async (l, c = t.getResourceAddress?.(l)) => {
-    const u = Ye(l, c), d = await cn(u), h = Rr(d);
+    const u = Ye(l, c), d = await mn(u), h = xr(d);
     return {
       sampleRate: h.sampleRate,
       samples: h.samples
     };
   }, s = async (l, c = t.getResourceAddress?.(l)) => {
     const u = Ye(l, c);
-    return new Uint8Array(await cn(u));
+    return new Uint8Array(await mn(u));
   };
   return {
     async readText(l) {
       if (e === "bridge" && typeof t.readResource == "function")
-        return ln(await r(l));
+        return dn(await r(l));
       const c = o(l);
-      return e === "url" && c !== null ? dt(await s(l, c)) : typeof t.readResource == "function" ? ln(await r(l)) : dt(await s(l, c));
+      return e === "url" && c !== null ? dt(await s(l, c)) : typeof t.readResource == "function" ? dn(await r(l)) : dt(await s(l, c));
     },
     async readJSON(l) {
       return JSON.parse(await this.readText(l));
     },
     async readBytes(l) {
-      return typeof t.readResource == "function" ? es(await r(l)) : s(l);
+      return typeof t.readResource == "function" ? is(await r(l)) : s(l);
     },
     async readAudio(l) {
       if (n === "bridge" && typeof t.readResourceAsAudioData == "function")
         return i(l);
       const c = o(l);
-      return n === "url" && c !== null ? a(l, c) : typeof t.readResourceAsAudioData == "function" ? i(l) : Tr(await this.readBytes(l));
+      return n === "url" && c !== null ? a(l, c) : typeof t.readResourceAsAudioData == "function" ? i(l) : Mr(await this.readBytes(l));
     },
     getURL(l) {
       return Ye(l, t.getResourceAddress?.(l));
     }
   };
 }
-function rs(t) {
+function ss(t) {
   const e = t ?? {}, n = !!e.prefersAudioResourceReadBridge;
-  return ns(e, {
+  return as(e, {
     textPreference: "bridge",
     audioPreference: n ? "bridge" : "url"
   });
 }
-function is(t) {
+function ls(t) {
   const e = typeof t.readText == "function" ? t.readText.bind(t) : null, n = typeof t.readJSON == "function" ? t.readJSON.bind(t) : null, r = typeof t.readBytes == "function" ? t.readBytes.bind(t) : null, i = typeof t.readAudio == "function" ? t.readAudio.bind(t) : null, o = typeof t.getURL == "function" ? t.getURL.bind(t) : null;
   return {
     async readText(a) {
@@ -3489,25 +3489,25 @@ function is(t) {
       throw new Error(`Resource client cannot read bytes ${a}`);
     },
     async readAudio(a) {
-      return i ? i(a) : Tr(await this.readBytes(a));
+      return i ? i(a) : Mr(await this.readBytes(a));
     },
     getURL(a) {
       return o ? o(a) : null;
     }
   };
 }
-function os(t) {
+function cs(t) {
   return typeof t?.readText == "function" || typeof t?.readJSON == "function" || typeof t?.readBytes == "function" || typeof t?.readAudio == "function";
 }
-function as(t) {
-  return os(t) ? is(t) : rs(t);
+function us(t) {
+  return cs(t) ? ls(t) : ss(t);
 }
 const Me = 2048;
 function ue(t, e) {
   if (!t)
     throw new Error(e);
 }
-function ss(t) {
+function ds(t) {
   ue(
     Array.isArray(t?.tables),
     "Factory bank catalog must provide a tables array"
@@ -3529,17 +3529,17 @@ function ss(t) {
     );
   }), e;
 }
-const ls = 2048, xr = 11, cs = 256;
+const ms = 2048, wr = 11, fs = 256;
 function F(t, e) {
   if (!t)
     throw new Error(e);
 }
-function us(t) {
+function hs(t) {
   return t > 0 && (t & t - 1) === 0;
 }
-const un = /* @__PURE__ */ new Map();
-function ds(t) {
-  const e = un.get(t);
+const fn = /* @__PURE__ */ new Map();
+function ps(t) {
+  const e = fn.get(t);
   if (e)
     return e;
   const n = Math.round(Math.log2(t)), r = new Uint32Array(t);
@@ -3549,12 +3549,12 @@ function ds(t) {
       o = o << 1 | a & 1, a >>= 1;
     r[i] = o;
   }
-  return un.set(t, r), r;
+  return fn.set(t, r), r;
 }
-function Er(t, e, n = !1) {
+function _r(t, e, n = !1) {
   const r = t.length;
-  F(r === e.length, "FFT real and imaginary buffers must have the same length"), F(us(r), "FFT input length must be a power of two");
-  const i = ds(r);
+  F(r === e.length, "FFT real and imaginary buffers must have the same length"), F(hs(r), "FFT input length must be a power of two");
+  const i = ps(r);
   for (let o = 0; o < r; o += 1) {
     const a = i[o];
     if (a <= o)
@@ -3569,8 +3569,8 @@ function Er(t, e, n = !1) {
     for (let u = 0; u < r; u += o) {
       let d = 1, h = 0;
       for (let f = 0; f < a; f += 1) {
-        const p = u + f, I = p + a, D = t[I], N = e[I], S = d * D - h * N, A = d * N + h * D, k = t[p], L = e[p];
-        t[p] = k + S, e[p] = L + A, t[I] = k - S, e[I] = L - A;
+        const p = u + f, I = p + a, L = t[I], N = e[I], S = d * L - h * N, A = d * N + h * L, k = t[p], D = e[p];
+        t[p] = k + S, e[p] = D + A, t[I] = k - S, e[I] = D - A;
         const W = d * l - h * c;
         h = d * c + h * l, d = W;
       }
@@ -3580,7 +3580,7 @@ function Er(t, e, n = !1) {
     for (let o = 0; o < r; o += 1)
       t[o] /= r, e[o] /= r;
 }
-function Mr(t) {
+function Or(t) {
   const e = ArrayBuffer.isView(t) ? t : Float32Array.from(t);
   let n = 0;
   for (let o = 0; o < e.length; o += 1)
@@ -3590,10 +3590,10 @@ function Mr(t) {
     i[o] = (Number(e[o]) || 0) - r;
   return i;
 }
-function ms(t, {
+function gs(t, {
   expectedFrameCount: e,
-  samplesPerFrame: n = ls,
-  maxFramesPerTable: r = cs
+  samplesPerFrame: n = ms,
+  maxFramesPerTable: r = fs
 } = {}) {
   const i = Float32Array.from(t);
   F(i.length % n === 0, `Source wavetable files must contain a whole number of ${n}-sample frames`);
@@ -3602,22 +3602,22 @@ function ms(t, {
   const a = [];
   for (let s = 0; s < o; s += 1) {
     const l = s * n, c = l + n;
-    a.push(Mr(i.slice(l, c)));
+    a.push(Or(i.slice(l, c)));
   }
   return {
     frameCount: o,
     frames: a
   };
 }
-function dn(t) {
-  const e = Mr(t), n = Float64Array.from(e), r = new Float64Array(n.length);
-  return Er(n, r, !1), n[0] = 0, r[0] = 0, {
+function hn(t) {
+  const e = Or(t), n = Float64Array.from(e), r = new Float64Array(n.length);
+  return _r(n, r, !1), n[0] = 0, r[0] = 0, {
     real: n,
     imaginary: r
   };
 }
-function fs(t, e, {
-  mipLevelCount: n = xr
+function Is(t, e, {
+  mipLevelCount: n = wr
 } = {}) {
   const r = t?.real?.length ?? 0;
   F(r > 0, "Spectrum must contain real samples"), F(r === t.imaginary.length, "Spectrum real and imaginary buffers must have the same length"), F(e >= 0 && e < n, `Mip index must stay inside [0, ${n - 1}]`);
@@ -3627,10 +3627,10 @@ function fs(t, e, {
     const l = (r - s) % r;
     l !== s && (o[l] = t.real[l], a[l] = t.imaginary[l]);
   }
-  return Er(o, a, !0), Float32Array.from(o);
+  return _r(o, a, !0), Float32Array.from(o);
 }
-const hs = "runtimeSyncRequest", ps = 2147483647, gs = "runtimeState", Is = "retryDesiredTableRequest", vs = "workerLoadFailure", Ss = "serviceLoadAbort", bs = "wavetableLoadBegin", ys = "wavetableMipFrame", As = "wavetableUploadAck", Rs = "wavetableMipRequest", Ts = "wavetablePrewarmRequest", xs = "wavetablePrewarmNotification", Es = "assets/factory-bank-catalog.json", mt = 3, Ms = 1, ws = mt * Me, _s = 1, Os = 2, ks = 3, Ds = 1, Ls = 2, Ns = 2e4, Re = _s, Cs = Os, mn = ks, G = Ds, fn = Ls, Ps = 48 * 1024 * 1024, Ze = 3;
-function hn(t, e) {
+const vs = "runtimeSyncRequest", Ss = 2147483647, bs = "runtimeState", ys = "retryDesiredTableRequest", As = "workerLoadFailure", Rs = "serviceLoadAbort", Ts = "wavetableLoadBegin", Es = "wavetableMipFrame", xs = "wavetableUploadAck", Ms = "wavetableMipRequest", ws = "wavetablePrewarmRequest", _s = "wavetablePrewarmNotification", Os = "assets/factory-bank-catalog.json", mt = 3, ks = 1, Ls = mt * Me, Ds = 1, Ns = 2, Cs = 3, Ps = 1, Fs = 2, Us = 2e4, Re = Ds, $s = Ns, pn = Cs, G = Ps, gn = Fs, Bs = 48 * 1024 * 1024, Ze = 3;
+function In(t, e) {
   const n = Math.round(Number(t));
   return Number.isFinite(n) && n > 0 ? n : e;
 }
@@ -3644,7 +3644,7 @@ function R(t, e, n = null) {
     r(`[wavetable-worker] ${e}`);
   }
 }
-function pn(t) {
+function vn(t) {
   return {
     dspSessionId: t.dspSessionId,
     oscillatorIndex: t.oscillatorIndex,
@@ -3669,21 +3669,21 @@ function pn(t) {
     } : null
   };
 }
-function gn(t, e, n) {
+function Sn(t, e, n) {
   const r = t + e;
   return t === 0 || r === n || r % 16 === 0;
 }
-function In(t, e) {
+function bn(t, e) {
   if (!t)
     throw new Error(e);
 }
-function Fs(t, e, n) {
+function Vs(t, e, n) {
   return Math.min(Math.max(t, e), n);
 }
-async function Us(t, e) {
-  return ss(await t.readJSON(e));
+async function Ks(t, e) {
+  return ds(await t.readJSON(e));
 }
-function $s(t) {
+function zs(t) {
   return {
     dspSessionId: Math.trunc(Number(t?.dspSessionId) || 0),
     oscillatorIndex: Math.trunc(Number(t?.oscillatorIndex) || 0),
@@ -3705,14 +3705,14 @@ function $s(t) {
     failureReasonCode: Math.trunc(Number(t?.failureReasonCode) || 0)
   };
 }
-function Bs(t, e) {
+function Ws(t, e) {
   const n = Math.round(Number(t) || 0);
-  return Fs(n, 0, Math.max(0, e - 1));
+  return Vs(n, 0, Math.max(0, e - 1));
 }
 function et(t, e, n, r, i) {
   return `${t}:${e}:${n}:${r}:${i}`;
 }
-function Vs(t, e, n) {
+function js(t, e, n) {
   return [
     t.tableId,
     t.sourceWav,
@@ -3720,7 +3720,7 @@ function Vs(t, e, n) {
     n
   ].join("|");
 }
-function vn(t) {
+function yn(t) {
   let e = 0;
   for (const n of t.frames)
     e += n.byteLength;
@@ -3728,7 +3728,7 @@ function vn(t) {
     n && (e += n.real.byteLength + n.imaginary.byteLength);
   return e;
 }
-function Sn(t) {
+function An(t) {
   return {
     nextFrameIndex: 0,
     ackedFrames: new Uint8Array(t),
@@ -3736,17 +3736,17 @@ function Sn(t) {
     inFlightBatchBases: /* @__PURE__ */ new Set()
   };
 }
-function bn() {
+function Rn() {
   return typeof globalThis.performance?.now == "function" ? globalThis.performance.now() : Date.now();
 }
-function Ks(t) {
+function Gs(t) {
   if (typeof globalThis.queueMicrotask == "function") {
     globalThis.queueMicrotask(t);
     return;
   }
   Promise.resolve().then(t);
 }
-class zs {
+class Hs {
   connection;
   resourceClient;
   catalogPath;
@@ -3775,10 +3775,10 @@ class zs {
   tableCacheBytes = 0;
   cacheUseSerial = 1;
   constructor(e, n = {}) {
-    this.connection = e, this.resourceClient = as(n.resourceClient ?? e), this.catalogPath = n.catalogPath ?? Es, this.maxBatchesInFlight = hn(
+    this.connection = e, this.resourceClient = us(n.resourceClient ?? e), this.catalogPath = n.catalogPath ?? Os, this.maxBatchesInFlight = In(
       n.maxFramesInFlight,
-      Ms
-    ), this.mipLevelCount = n.mipLevelCount ?? xr, this.cacheBudgetBytes = Math.max(0, Math.round(Number(n.cacheBudgetBytes ?? Ps) || 0)), this.serviceLoadTimeoutMs = hn(n.serviceLoadTimeoutMs, Ns), this.setTimeoutFn = typeof n.setTimeoutFn == "function" ? n.setTimeoutFn : globalThis.setTimeout?.bind(globalThis) ?? null, this.clearTimeoutFn = typeof n.clearTimeoutFn == "function" ? n.clearTimeoutFn : globalThis.clearTimeout?.bind(globalThis) ?? null, this.handleRuntimeState = this.handleRuntimeState.bind(this), this.handleUploadAck = this.handleUploadAck.bind(this), this.handleMipRequest = this.handleMipRequest.bind(this), this.handlePrewarmRequest = this.handlePrewarmRequest.bind(this);
+      ks
+    ), this.mipLevelCount = n.mipLevelCount ?? wr, this.cacheBudgetBytes = Math.max(0, Math.round(Number(n.cacheBudgetBytes ?? Bs) || 0)), this.serviceLoadTimeoutMs = In(n.serviceLoadTimeoutMs, Us), this.setTimeoutFn = typeof n.setTimeoutFn == "function" ? n.setTimeoutFn : globalThis.setTimeout?.bind(globalThis) ?? null, this.clearTimeoutFn = typeof n.clearTimeoutFn == "function" ? n.clearTimeoutFn : globalThis.clearTimeout?.bind(globalThis) ?? null, this.handleRuntimeState = this.handleRuntimeState.bind(this), this.handleUploadAck = this.handleUploadAck.bind(this), this.handleMipRequest = this.handleMipRequest.bind(this), this.handlePrewarmRequest = this.handlePrewarmRequest.bind(this);
   }
   async start() {
     return this.started ? this : (this.started = !0, R("info", "Starting wavetable worker controller", {
@@ -3787,13 +3787,13 @@ class zs {
       mipLevelCount: this.mipLevelCount,
       cacheBudgetBytes: this.cacheBudgetBytes,
       serviceLoadTimeoutMs: this.serviceLoadTimeoutMs
-    }), this.connection.addEndpointListener?.(gs, this.handleRuntimeState), this.connection.addEndpointListener?.(As, this.handleUploadAck), this.connection.addEndpointListener?.(Rs, this.handleMipRequest), this.connection.addEndpointListener?.(Ts, this.handlePrewarmRequest), this.connection.addEndpointListener?.(xs, this.handlePrewarmRequest), this.connection.sendEventOrValue?.(
-      hs,
-      ps
+    }), this.connection.addEndpointListener?.(bs, this.handleRuntimeState), this.connection.addEndpointListener?.(xs, this.handleUploadAck), this.connection.addEndpointListener?.(Ms, this.handleMipRequest), this.connection.addEndpointListener?.(ws, this.handlePrewarmRequest), this.connection.addEndpointListener?.(_s, this.handlePrewarmRequest), this.connection.sendEventOrValue?.(
+      vs,
+      Ss
     ), this);
   }
   async ensureCatalogLoaded() {
-    return this.catalog || (this.catalog = await Us(this.resourceClient, this.catalogPath), R("info", "Loaded wavetable catalog", {
+    return this.catalog || (this.catalog = await Ks(this.resourceClient, this.catalogPath), R("info", "Loaded wavetable catalog", {
       catalogPath: this.catalogPath,
       tableCount: this.catalog.tables.length
     })), this.catalog;
@@ -3811,7 +3811,7 @@ class zs {
     this.cancelServiceLoadWatchdog(), this.mipJobs.clear(), this.activeUploadKey = null;
   }
   refreshCacheEntryByteCount(e) {
-    this.tableCacheBytes -= e.byteCount, e.byteCount = vn(e), e.lastUsedSerial = this.cacheUseSerial++, this.tableCacheBytes += e.byteCount, this.evictCacheIfNeeded();
+    this.tableCacheBytes -= e.byteCount, e.byteCount = yn(e), e.lastUsedSerial = this.cacheUseSerial++, this.tableCacheBytes += e.byteCount, this.evictCacheIfNeeded();
   }
   getPinnedCacheKeys() {
     const e = /* @__PURE__ */ new Set();
@@ -3836,7 +3836,7 @@ class zs {
       return n.lastUsedSerial = this.cacheUseSerial++, n;
     const r = {
       ...e,
-      byteCount: vn(e),
+      byteCount: yn(e),
       lastUsedSerial: this.cacheUseSerial++
     };
     return this.tableCache.set(r.cacheKey, r), this.tableCacheBytes += r.byteCount, this.evictCacheIfNeeded(), r;
@@ -3859,7 +3859,7 @@ class zs {
           tableIndex: this.serviceTable.tableIndex,
           mipIndex: n,
           urgencyLevel: e,
-          ...Sn(this.serviceTable.frameCount),
+          ...An(this.serviceTable.frameCount),
           completed: !1
         });
       }
@@ -3897,8 +3897,8 @@ class zs {
           tableIndex: i
         },
         {
-          failurePhase: mn,
-          failureReasonCode: fn
+          failurePhase: pn,
+          failureReasonCode: gn
         }
       ), this.serviceTable = null, this.clearMipTransferState(), this.scheduleRuntimeStateDrain());
     }, this.serviceLoadTimeoutMs), this.serviceLoadWatchdogHandle?.unref?.();
@@ -3925,7 +3925,7 @@ class zs {
     return `${e.dspSessionId}:${e.oscillatorIndex}:${e.desiredTableIndex}`;
   }
   shouldAutomaticallyRetryTimeoutFailure(e) {
-    return !e.hasFailure || e.failedTableIndex !== e.desiredTableIndex || e.failurePhase !== mn || e.failureReasonCode !== fn ? !1 : this.autoRetryConsumedKeys[e.oscillatorIndex] !== this.getDesiredRetryKey(e);
+    return !e.hasFailure || e.failedTableIndex !== e.desiredTableIndex || e.failurePhase !== pn || e.failureReasonCode !== gn ? !1 : this.autoRetryConsumedKeys[e.oscillatorIndex] !== this.getDesiredRetryKey(e);
   }
   emitWorkerLoadFailure({
     dspSessionId: e,
@@ -3936,7 +3936,7 @@ class zs {
     failurePhase: a = Re,
     failureReasonCode: s = G
   }) {
-    this.connection.sendEventOrValue?.(vs, {
+    this.connection.sendEventOrValue?.(As, {
       dspSessionId: e,
       oscillatorIndex: n,
       tableIndex: r,
@@ -3953,7 +3953,7 @@ class zs {
     tableIndex: i,
     failureReasonCode: o = G
   }) {
-    this.connection.sendEventOrValue?.(Ss, {
+    this.connection.sendEventOrValue?.(Rs, {
       dspSessionId: e,
       oscillatorIndex: n,
       generation: r,
@@ -3963,13 +3963,13 @@ class zs {
   }
   emitRetryDesiredTableRequest(e) {
     R("warn", "Requesting retry for failed desired wavetable load", {
-      latestRuntimeState: this.latestRuntimeStates[e] ? pn(this.latestRuntimeStates[e]) : null
-    }), this.connection.sendEventOrValue?.(Is, e);
+      latestRuntimeState: this.latestRuntimeStates[e] ? vn(this.latestRuntimeStates[e]) : null
+    }), this.connection.sendEventOrValue?.(ys, e);
   }
   async loadTableSource(e, n) {
-    const r = await this.ensureCatalogLoaded(), i = Bs(e, r.tables.length), o = r.tables[i];
-    In(o, `Could not resolve table ${i}`);
-    const a = Vs(o, Me, this.mipLevelCount), s = this.tableCache.get(a);
+    const r = await this.ensureCatalogLoaded(), i = Ws(e, r.tables.length), o = r.tables[i];
+    bn(o, `Could not resolve table ${i}`);
+    const a = js(o, Me, this.mipLevelCount), s = this.tableCache.get(a);
     if (s)
       return s.lastUsedSerial = this.cacheUseSerial++, R("info", "Using cached wavetable source table", {
         tableIndex: i,
@@ -3979,7 +3979,7 @@ class zs {
         frameCount: s.frameCount,
         cacheBytes: this.tableCacheBytes
       }), s;
-    const l = bn();
+    const l = Rn();
     R("info", "Reading wavetable source", {
       tableIndex: i,
       tableId: o.tableId,
@@ -3988,7 +3988,7 @@ class zs {
       loaderMode: "resource-client",
       expectedFrameCount: n === void 0 ? Number(o.frameCount) : n
     });
-    const c = await this.resourceClient.readAudio(o.sourceWav), u = ms(c.samples, {
+    const c = await this.resourceClient.readAudio(o.sourceWav), u = gs(c.samples, {
       expectedFrameCount: n === void 0 ? Number(o.frameCount) : n,
       samplesPerFrame: Me
     });
@@ -3998,7 +3998,7 @@ class zs {
       tableName: o.name,
       sourceWav: o.sourceWav,
       frameCount: u.frameCount,
-      loadDurationMs: Math.round(bn() - l)
+      loadDurationMs: Math.round(Rn() - l)
     }), this.rememberLoadedTable({
       cacheKey: a,
       tableIndex: i,
@@ -4033,7 +4033,7 @@ class zs {
       tableIndex: e.desiredTableIndex,
       desiredIntentSerial: e.desiredIntentSerial,
       generation: n
-    }, this.nextLoadGenerations[e.oscillatorIndex] = n + 1, this.clearMipTransferState(), this.connection.sendEventOrValue?.(bs, {
+    }, this.nextLoadGenerations[e.oscillatorIndex] = n + 1, this.clearMipTransferState(), this.connection.sendEventOrValue?.(Ts, {
       dspSessionId: e.dspSessionId,
       oscillatorIndex: e.oscillatorIndex,
       generation: n,
@@ -4157,7 +4157,7 @@ class zs {
     return null;
   }
   scheduleRuntimeStateDrain() {
-    !this.started || this.runtimeStateDrainRunning || this.runtimeStateDrainScheduled || this.selectPendingRuntimeStateOscillator() === null || (this.runtimeStateDrainScheduled = !0, Ks(() => {
+    !this.started || this.runtimeStateDrainRunning || this.runtimeStateDrainScheduled || this.selectPendingRuntimeStateOscillator() === null || (this.runtimeStateDrainScheduled = !0, Gs(() => {
       this.runtimeStateDrainScheduled = !1, this.drainRuntimeStates().catch((e) => {
         console.error(e);
       });
@@ -4220,8 +4220,8 @@ class zs {
     e.serviceState !== 0 || this.shouldStayIdleOnFailure(e) || await this.prepareDesiredLoad(e);
   }
   handleRuntimeState(e) {
-    const n = $s(e ?? {});
-    if (R("info", "Received runtime state", pn(n)), n.dspSessionId <= 0 || n.oscillatorIndex < 0 || n.oscillatorIndex >= Ze)
+    const n = zs(e ?? {});
+    if (R("info", "Received runtime state", vn(n)), n.dspSessionId <= 0 || n.oscillatorIndex < 0 || n.oscillatorIndex >= Ze)
       return;
     const r = n.dspSessionId !== this.knownSessionId;
     r && this.resetSessionState(n);
@@ -4237,7 +4237,7 @@ class zs {
       try {
         const i = await this.loadTableSource(r);
         for (let a = 0; a < i.frameCount; a += 1)
-          i.spectra[a] || (i.spectra[a] = dn(i.frames[a]));
+          i.spectra[a] || (i.spectra[a] = hn(i.frames[a]));
         const o = this.tableCache.get(i.cacheKey);
         o && this.refreshCacheEntryByteCount(o), R("info", "Prewarmed wavetable source table", {
           tableIndex: i.tableIndex,
@@ -4274,7 +4274,7 @@ class zs {
       tableIndex: o,
       mipIndex: a,
       urgencyLevel: s,
-      ...Sn(this.serviceTable.frameCount),
+      ...An(this.serviceTable.frameCount),
       completed: !1
     }, this.mipJobs.set(l, c), c);
   }
@@ -4307,7 +4307,7 @@ class zs {
         const I = l + p;
         d.ackedFrames[I] || (d.ackedFrames[I] = 1, d.ackedFrameCount += 1);
       }
-      d.ackedFrameCount === h && d.nextFrameIndex >= h && d.inFlightBatchBases.size === 0 && (d.completed = !0, this.activeUploadKey === d.key && (this.activeUploadKey = null)), gn(l, c, h) && R("info", "Acknowledged wavetable mip batch", {
+      d.ackedFrameCount === h && d.nextFrameIndex >= h && d.inFlightBatchBases.size === 0 && (d.completed = !0, this.activeUploadKey === d.key && (this.activeUploadKey = null)), Sn(l, c, h) && R("info", "Acknowledged wavetable mip batch", {
         dspSessionId: r,
         oscillatorIndex: i,
         generation: o,
@@ -4322,8 +4322,8 @@ class zs {
     }
   }
   getSpectrumForFrame(e) {
-    if (In(this.serviceTable, "Current table must exist before building a spectrum"), !this.serviceTable.spectra[e]) {
-      this.serviceTable.spectra[e] = dn(this.serviceTable.frames[e]);
+    if (bn(this.serviceTable, "Current table must exist before building a spectrum"), !this.serviceTable.spectra[e]) {
+      this.serviceTable.spectra[e] = hn(this.serviceTable.frames[e]);
       const n = this.tableCache.get(this.serviceTable.cacheKey);
       n && this.refreshCacheEntryByteCount(n);
     }
@@ -4355,10 +4355,10 @@ class zs {
       const n = e.nextFrameIndex, r = Math.min(
         mt,
         this.serviceTable.frameCount - n
-      ), i = new Float32Array(ws);
+      ), i = new Float32Array(Ls);
       try {
         for (let o = 0; o < r; o += 1) {
-          const a = n + o, s = this.getSpectrumForFrame(a), l = fs(s, e.mipIndex);
+          const a = n + o, s = this.getSpectrumForFrame(a), l = Is(s, e.mipIndex);
           i.set(l, o * Me);
         }
       } catch {
@@ -4371,13 +4371,13 @@ class zs {
             tableIndex: e.tableIndex
           },
           {
-            failurePhase: Cs,
+            failurePhase: $s,
             failureReasonCode: G
           }
         ), this.serviceTable = null, this.clearMipTransferState(), this.scheduleRuntimeStateDrain();
         return;
       }
-      this.connection.sendEventOrValue?.(ys, {
+      this.connection.sendEventOrValue?.(Es, {
         dspSessionId: e.dspSessionId,
         oscillatorIndex: e.oscillatorIndex,
         generation: e.generation,
@@ -4386,7 +4386,7 @@ class zs {
         frameIndexBase: n,
         frameCount: r,
         samples: Array.from(i)
-      }), gn(n, r, this.serviceTable.frameCount) && R("info", "Sent wavetable mip batch", {
+      }), Sn(n, r, this.serviceTable.frameCount) && R("info", "Sent wavetable mip batch", {
         dspSessionId: e.dspSessionId,
         oscillatorIndex: e.oscillatorIndex,
         generation: e.generation,
@@ -4408,10 +4408,10 @@ function tt(t) {
   }
   return String(t);
 }
-function Ws(t, e = {}) {
-  return new zs(t, e);
+function qs(t, e = {}) {
+  return new Hs(t, e);
 }
-function js(t, e, n) {
+function Js(t, e, n) {
   if (!Number.isFinite(t.durationSec) || t.durationSec <= 0)
     throw new Error("Speedrun performance duration must be positive and finite.");
   const r = Math.max(1, Math.round(t.durationSec * n)), i = t.events.map((a) => ({
@@ -4425,7 +4425,7 @@ function js(t, e, n) {
     }
   return o;
 }
-const Te = 1600, Gs = /* @__PURE__ */ new Set([
+const Te = 1600, Qs = /* @__PURE__ */ new Set([
   "runtimeState",
   "runtimeInstallAck",
   "effectiveRackState"
@@ -4436,10 +4436,10 @@ function de(t, e, n) {
     throw new Error(`Offline performer is missing ${r}().`);
   return i.bind(t);
 }
-function Hs(t) {
+function Xs(t) {
   return t && typeof t == "object" && "event" in t ? t.event : t;
 }
-function qs(t) {
+function Ys(t) {
   return {
     values: {
       [te]: t.modulation,
@@ -4448,7 +4448,7 @@ function qs(t) {
     }
   };
 }
-class Js {
+class Zs {
   performer;
   #i;
   #e;
@@ -4516,7 +4516,7 @@ class Js {
       for (const r of this.#u.get(e) ?? []) r(n);
   }
   requestFullStoredState(e) {
-    e(qs(this.#n));
+    e(Ys(this.#n));
   }
   getResourceAddress(e) {
     return new URL(e, this.#d);
@@ -4568,7 +4568,7 @@ class Js {
   }
   drainOutputEvents() {
     const e = /* @__PURE__ */ new Set([
-      ...Gs,
+      ...Qs,
       ...this.#c.keys()
     ]);
     for (const n of e) {
@@ -4584,7 +4584,7 @@ class Js {
         this.performer,
         "getOutputEvent",
         n
-      ), a = Array.from({ length: i }, (s, l) => Hs(o(l)));
+      ), a = Array.from({ length: i }, (s, l) => Xs(o(l)));
       de(
         this.performer,
         "resetOutputEventCount",
@@ -4608,15 +4608,15 @@ class Js {
     } else e === "runtimeInstallAck" ? this.#o = r : e === "effectiveRackState" && (this.#m = r);
   }
 }
-const yn = "assets/factory-bank-catalog.json";
-function Qs(t) {
+const Tn = "assets/factory-bank-catalog.json";
+function el(t) {
   return {
     async readText(e) {
-      if (e !== yn) throw new Error(`Speedrun resource bundle has no text ${e}.`);
+      if (e !== Tn) throw new Error(`Speedrun resource bundle has no text ${e}.`);
       return JSON.stringify(t.catalog);
     },
     async readJSON(e) {
-      if (e !== yn) throw new Error(`Speedrun resource bundle has no JSON ${e}.`);
+      if (e !== Tn) throw new Error(`Speedrun resource bundle has no JSON ${e}.`);
       return t.catalog;
     },
     async readBytes(e) {
@@ -4632,7 +4632,7 @@ function Qs(t) {
     }
   };
 }
-const Xs = [
+const tl = [
   "runtimeState",
   "effectiveWavetablePosition",
   "effectiveWarpState",
@@ -4649,23 +4649,23 @@ class me extends Error {
     super(`${e} install failed: ${n}`, r), this.lane = e, this.name = "SpeedrunInstallError";
   }
 }
-function Ys(t) {
+function nl(t) {
   const e = Object.fromEntries(t.modulation.routes.flatMap((r) => {
     const i = It(r);
     return i === null ? [] : [[r.id, i]];
-  })), n = Sr(t.lane);
+  })), n = Ar(t.lane);
   return {
     tableIndices: v.map((r) => Math.round(Number(t.parameters[`osc${r}WavetableSelect`]) || 0)),
-    modulationFrontier: er(t.modulation, null).length,
-    articulationFrontier: rr(
+    modulationFrontier: rr(t.modulation, null).length,
+    articulationFrontier: ar(
       t.articulations,
       e
     ).length,
-    rackChainLength: vr(t.lane).chainLength,
+    rackChainLength: yr(t.lane).chainLength,
     rackParamSerial: Math.max(0, n.length - 1)
   };
 }
-function Zs(t, e) {
+function rl(t, e) {
   for (let i = 0; i < e.tableIndices.length; i += 1) {
     const o = t.runtimeStates.get(i);
     if (o && o.hasFailure && Number(o.failedTableIndex) === e.tableIndices[i])
@@ -4684,35 +4684,35 @@ function Zs(t, e) {
   );
   return r > 0 ? new me("rack", `${r} topology upload(s) were rejected.`) : null;
 }
-function An(t, e) {
+function En(t, e) {
   const n = e.tableIndices.every((a, s) => {
     const l = t.runtimeStates.get(s);
     return !!l?.hasActive && Number(l?.activeTableIndex) === a;
   }), r = e.modulationFrontier === 0 || Number(t.runtimeInstallAck?.acceptedModulationSerial) >= e.modulationFrontier, i = e.articulationFrontier === 0 || Number(t.runtimeInstallAck?.acceptedArticulationSerial) <= -e.articulationFrontier, o = Number(t.effectiveRackState?.laneCommittedChainLength) === e.rackChainLength && Number(t.effectiveRackState?.laneParamsAcknowledgedSerial) >= e.rackParamSerial;
   return n && r && i && o;
 }
-function el(t, e) {
+function il(t, e) {
   return e.tableIndices.every((n, r) => {
     const i = t.runtimeStates.get(r);
     return !!i?.hasActive && Number(i?.activeTableIndex) === n;
   }) ? e.modulationFrontier > 0 && Number(t.runtimeInstallAck?.acceptedModulationSerial) < e.modulationFrontier ? "modulation" : e.articulationFrontier > 0 && Number(t.runtimeInstallAck?.acceptedArticulationSerial) > -e.articulationFrontier ? "articulation" : "rack" : "wavetable";
 }
-function tl(t) {
+function ol(t) {
   return `${[0, 1, 2].map((n) => {
     const r = t.runtimeStates.get(n);
     return r ? `${n}:${Number(r.activeGeneration) || 0}/${Number(r.generationFrontier) || 0} load=${Number(r.loadingGeneration) || 0} active=${!!r.hasActive}` : `${n}:missing`;
   }).join(", ")}; mod=${Number(t.runtimeInstallAck?.acceptedModulationSerial) || 0} art=${Number(t.runtimeInstallAck?.acceptedArticulationSerial) || 0} rack=${Number(t.effectiveRackState?.laneCommittedChainLength) || 0} params=${Number(t.effectiveRackState?.laneParamsAcknowledgedSerial) || 0} mipSent=${t.inputEventCounts.get("wavetableMipFrame") ?? 0} mipAck=${t.outputEventCounts.get("wavetableUploadAck") ?? 0}`;
 }
-function wr(t) {
+function kr(t) {
   return t >>> 16 & 255;
 }
-function _r(t) {
+function Lr(t) {
   return t >>> 8 & 127;
 }
-function Et(t) {
+function Mt(t) {
   return t & 127;
 }
-function nl(t, e, n) {
+function al(t, e, n) {
   if (t === null) return null;
   let r;
   try {
@@ -4722,16 +4722,16 @@ function nl(t, e, n) {
   }
   const i = r.activeMode, o = i === "key" ? r.key : i === "vel" ? r.velocity : r.chain;
   if (!Array.isArray(o)) return null;
-  const a = i === "key" ? _r(e) : i === "vel" ? Et(e) : n % 128, s = Math.trunc(Number(o[a]));
+  const a = i === "key" ? Lr(e) : i === "vel" ? Mt(e) : n % 128, s = Math.trunc(Number(o[a]));
   return s >= 0 && s <= 127 ? s : null;
 }
-function rl(t, e, n, r) {
-  const i = wr(e);
-  if ((i & 240) === 144 && Et(e) > 0) {
-    const o = nl(n, e, r);
+function sl(t, e, n, r) {
+  const i = kr(e);
+  if ((i & 240) === 144 && Mt(e) > 0) {
+    const o = al(n, e, r);
     o !== null && t.sendEventOrValue("articulationNoteMeta", {
       channel: i & 15,
-      noteNumber: _r(e),
+      noteNumber: Lr(e),
       selectorA: o,
       selectorB: 0,
       durationSamples: 0,
@@ -4740,59 +4740,59 @@ function rl(t, e, n, r) {
   }
   t.sendMIDIInputEvent("midiIn", e);
 }
-async function il() {
+async function ll() {
   await new Promise((t) => setTimeout(t, 0));
 }
-async function ol(t, e) {
-  const n = globalThis.performance?.now?.() ?? 0, r = new Js(t, {
+async function cl(t, e) {
+  const n = globalThis.performance?.now?.() ?? 0, r = new Zs(t, {
     modulation: e.state.modulation,
     lane: e.state.lane,
     articulations: e.state.articulations
   }, e.resourceBaseURL);
   await r.initialise(e.sessionID, e.sampleRate), r.setInitialParameters(e.state.parameters), r.sendEventOrValue("tempo", { bpm: 120 });
-  const i = await Da(r, [
-    ja,
-    Xa,
-    () => Ws(r, {
+  const i = await Pa(r, [
+    Ja,
+    ts,
+    () => qs(r, {
       maxFramesInFlight: 1,
       serviceLoadTimeoutMs: 2e4,
-      ...e.resourceBundle ? { resourceClient: Qs(e.resourceBundle) } : {}
+      ...e.resourceBundle ? { resourceClient: el(e.resourceBundle) } : {}
     })
-  ]), o = Ys(e.state), a = e.maxInstallFrames ?? e.sampleRate * 4;
+  ]), o = nl(e.state), a = e.maxInstallFrames ?? e.sampleRate * 4;
   let s = 0;
   try {
     for (; s < a; ) {
       await r.pump(128), s += 128;
-      const A = r.getInstallationState(), k = Zs(A, o);
+      const A = r.getInstallationState(), k = rl(A, o);
       if (k) throw k;
-      if (An(A, o)) break;
-      s / 128 % 8 === 0 && await il();
+      if (En(A, o)) break;
+      s / 128 % 8 === 0 && await ll();
     }
     const S = r.getInstallationState();
-    if (!An(S, o)) {
-      const A = el(S, o);
+    if (!En(S, o)) {
+      const A = il(S, o);
       throw new me(
         A,
-        `timed out after ${s} virtual frames (${tl(S)}).`
+        `timed out after ${s} virtual frames (${ol(S)}).`
       );
     }
   } finally {
     await i.stop();
   }
-  const l = new Float32Array(e.frameCount * 2), c = js(e.performance, e.frameCount, e.sampleRate), u = r.getInstallationState().articulationTriggerConfig, d = e.recordTelemetry === !0, h = /* @__PURE__ */ new Map();
+  const l = new Float32Array(e.frameCount * 2), c = Js(e.performance, e.frameCount, e.sampleRate), u = r.getInstallationState().articulationTriggerConfig, d = e.recordTelemetry === !0, h = /* @__PURE__ */ new Map();
   let f = 0, p = 0, I = 0;
-  const D = d ? Xs.map((S) => {
+  const L = d ? tl.map((S) => {
     const A = (k) => {
-      const L = Math.floor(p / Te), W = h.get(L) ?? {};
-      W[S] = structuredClone(k), h.set(L, W);
+      const D = Math.floor(p / Te), W = h.get(D) ?? {};
+      W[S] = structuredClone(k), h.set(D, W);
     };
     return r.addEndpointListener(S, A), { endpointID: S, listener: A };
   }) : [];
   try {
     for (; p < e.frameCount; ) {
       for (; f < c.length && c[f].sample === p; ) {
-        const L = c[f];
-        rl(r, L.code, u, I), (wr(L.code) & 240) === 144 && Et(L.code) > 0 && (I += 1), f += 1;
+        const D = c[f];
+        sl(r, D.code, u, I), (kr(D.code) & 240) === 144 && Mt(D.code) > 0 && (I += 1), f += 1;
       }
       const S = c[f]?.sample ?? e.frameCount, A = (Math.floor(p / Te) + 1) * Te, k = Math.min(
         128,
@@ -4805,7 +4805,7 @@ async function ol(t, e) {
       r.render(k, l, p), p += k;
     }
   } finally {
-    for (const { endpointID: S, listener: A } of D)
+    for (const { endpointID: S, listener: A } of L)
       r.removeEndpointListener(S, A);
   }
   const N = (globalThis.performance?.now?.() ?? n) - n;
@@ -4827,33 +4827,33 @@ async function ol(t, e) {
     }
   };
 }
-const xe = self;
-function al(t) {
+const Ee = self;
+function ul(t) {
   return {
     name: t instanceof Error ? t.name : "Error",
     message: t instanceof Error ? t.message : String(t),
     stack: t instanceof Error ? t.stack : void 0
   };
 }
-xe.addEventListener("message", (t) => {
+Ee.addEventListener("message", (t) => {
   const e = t.data;
   (async () => {
     if (e.type !== "render-root" || typeof e.engineModuleURL != "string")
       throw new Error("Speedrun checkpoint worker received an unsupported request.");
-    const r = await import(new URL(e.engineModuleURL, xe.location.href).href), i = r.default ?? r.WavetableSynth, o = await ol(
+    const r = await import(new URL(e.engineModuleURL, Ee.location.href).href), i = r.default ?? r.WavetableSynth, o = await cl(
       i,
       e.job
     );
-    xe.postMessage({
+    Ee.postMessage({
       type: "render-root-complete",
       requestID: e.requestID,
       result: o
     }, [o.samples.buffer]);
   })().catch((n) => {
-    xe.postMessage({
+    Ee.postMessage({
       type: "render-root-failed",
       requestID: e.requestID,
-      error: al(n)
+      error: ul(n)
     }, []);
   });
 });

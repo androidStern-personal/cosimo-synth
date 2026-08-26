@@ -187,6 +187,12 @@ test("preset transaction rotates the sparse comparison base with parameters and 
     assert.equal(nextBase.parameters.filterQ, 2);
     assert.equal(nextBase.parameters.msegMorphs[0], 0.4);
     assert.equal(nextBase.modRouteAmounts[0].amount, 0.25);
+    const oscillatorBDefaults = synthHooks.buildPresetArticulationBaseSnapshot({
+        parameters: {},
+        storedState: {},
+    }, modulationState, "B");
+    assert.equal(oscillatorBDefaults.parameters.volumeDb, 0);
+    assert.equal(oscillatorBDefaults.parameters.mute, 1);
 
     const next = synthHooks.replaceVisibleArticulationSnapshotV4(
         state,

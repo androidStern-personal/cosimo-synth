@@ -87,7 +87,7 @@ processor ArticulationRouteExecutionSource
             upload.phases[oscillator] = 0.0f;
             upload.phaseRandoms[oscillator] = 0.0f;
             upload.retriggers[oscillator] = 1;
-            upload.volumeDbs[oscillator] = -9.542425f;
+            upload.volumeDbs[oscillator] = 0.0f;
             upload.mutes[oscillator] = 0;
             upload.solos[oscillator] = 0;
             upload.warpModes[oscillator] = 0;

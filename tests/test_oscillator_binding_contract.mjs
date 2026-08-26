@@ -8,6 +8,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const bindingModulePromise = loadUIModule(repoRoot, "ui/shared/oscillator-binding.ts");
 const articulationModulePromise = loadUIModule(repoRoot, "ui/shared/articulation-image.ts");
+const articulationStateModulePromise = loadUIModule(repoRoot, "ui/shared/articulations.ts");
 const targetDescriptorModulePromise = loadUIModule(repoRoot, "ui/shared/target-descriptor.ts");
 
 const expectedEndpointSuffixes = new Map([
@@ -146,4 +147,43 @@ test("the source contract permits only numeric oscillator control writes", async
 test("oscillator selection is session-local UI state", async () => {
     const binding = await bindingModulePromise;
     assert.equal(binding.DEFAULT_SELECTED_OSCILLATOR_ID, "A");
+});
+
+test("Init oscillator defaults agree across the UI contract, DSP declarations, and articulation fixtures", async () => {
+    const [binding, articulations, descriptors, synthSource] = await Promise.all([
+        bindingModulePromise,
+        articulationStateModulePromise,
+        targetDescriptorModulePromise,
+        fs.readFile(path.join(repoRoot, "cmajor/WavetableSynth.cmajor"), "utf8"),
+    ]);
+    const endpointInit = (endpointID) => {
+        const declaration = synthSource.match(new RegExp(
+            `input value [^\\s]+ ${endpointID} \\[\\[[^\\]]*init:\\s*(-?[0-9]+(?:\\.[0-9]+)?)f?`,
+        ));
+        assert.ok(declaration, `Missing ${endpointID} init annotation`);
+        return Number(declaration[1]);
+    };
+
+    assert.equal(binding.OSCILLATOR_DEFAULT_VOLUME_DB, 0);
+    assert.equal(binding.OSCILLATOR_DEFAULT_VOLUME_NORMALIZED, 48 / 54);
+    assert.deepEqual(binding.OSCILLATOR_DEFAULT_MUTE_BY_ID, { A: 0, B: 1, C: 1 });
+
+    for (const oscillatorID of ["A", "B", "C"]) {
+        assert.equal(endpointInit(`osc${oscillatorID}VolumeDb`), binding.OSCILLATOR_DEFAULT_VOLUME_DB);
+        assert.equal(endpointInit(`osc${oscillatorID}Mute`), binding.getOscillatorDefaultMute(oscillatorID));
+        const descriptor = descriptors.allTargetDescriptors().find(
+            ({ targetId }) => targetId === `osc${oscillatorID}.volumeDb`,
+        );
+        assert.equal(descriptor?.initialValue, binding.OSCILLATOR_DEFAULT_VOLUME_NORMALIZED);
+        assert.equal(descriptor?.defaultValue, binding.OSCILLATOR_DEFAULT_VOLUME_NORMALIZED);
+    }
+
+    assert.equal(
+        articulations.createDefaultArticulationParameterSnapshot().volumeDb,
+        binding.OSCILLATOR_DEFAULT_VOLUME_DB,
+    );
+    assert.deepEqual(
+        articulations.createDisabledArticulationRuntimeUpload(0).volumeDbs,
+        [0, 0, 0],
+    );
 });

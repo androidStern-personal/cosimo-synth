@@ -14,6 +14,10 @@ import {
     type OscillatorControlID,
 } from "./oscillator-binding";
 import {
+    OSCILLATOR_DEFAULT_VOLUME_DB,
+    getOscillatorDefaultMute,
+} from "./oscillator-defaults";
+import {
     GLOBAL_TUNE_ENDPOINT_ID,
     GLOBAL_TUNE_INITIAL_SEMITONES,
     GLOBAL_TUNE_MAX_SEMITONES,
@@ -84,7 +88,7 @@ const oscillatorParameterAnnotations: Record<OscillatorControlID, OscillatorPara
     phase: { name: "Phase", min: 0, max: 1, init: 0 },
     phaseRandom: { name: "Phase Random", min: 0, max: 1, init: 0 },
     retrigger: { name: "Retrigger", min: 0, max: 1, init: 1, discrete: true, step: 1 },
-    volumeDb: { name: "Volume", min: -48, max: 6, init: -9.542425, unit: "dB" },
+    volumeDb: { name: "Volume", min: -48, max: 6, init: OSCILLATOR_DEFAULT_VOLUME_DB, unit: "dB" },
     mute: { name: "Mute", min: 0, max: 1, init: 0, discrete: true, step: 1 },
     solo: { name: "Solo", min: 0, max: 1, init: 0, discrete: true, step: 1 },
     warpMode: { name: "Warp Mode", min: 0, max: 4, init: 0, discrete: true, step: 1 },
@@ -122,11 +126,15 @@ function buildAdditionalOscillatorStatusInputs() {
     return OSCILLATOR_BINDING_CONTRACTS.flatMap((contract) => contract.controls.flatMap((control) => {
         if (manuallyDeclaredOscillatorEndpoints.has(control.endpointID)) return [];
         const annotation = oscillatorParameterAnnotations[control.controlID];
+        const init = control.controlID === "mute"
+            ? getOscillatorDefaultMute(contract.id)
+            : annotation.init;
         return [{
             endpointID: control.endpointID,
             purpose: "parameter",
             annotation: {
                 ...annotation,
+                init,
                 name: `Oscillator ${contract.id} ${annotation.name}`,
             },
         }];
@@ -361,7 +369,12 @@ function createInitialParameterValues(): Map<string, unknown> {
     for (const contract of OSCILLATOR_BINDING_CONTRACTS) {
         for (const control of contract.controls) {
             if (!values.has(control.endpointID)) {
-                values.set(control.endpointID, oscillatorParameterAnnotations[control.controlID].init);
+                values.set(
+                    control.endpointID,
+                    control.controlID === "mute"
+                        ? getOscillatorDefaultMute(contract.id)
+                        : oscillatorParameterAnnotations[control.controlID].init,
+                );
             }
         }
     }

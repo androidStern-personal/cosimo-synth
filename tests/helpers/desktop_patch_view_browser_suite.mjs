@@ -942,6 +942,12 @@ export async function openBuiltDesktopBundlePage({
             ["oscAWavetableSelect", 0],
             ["playMode", 0],
             ["glideTime", 0.15],
+            ["oscAVolumeDb", 0],
+            ["oscBVolumeDb", 0],
+            ["oscCVolumeDb", 0],
+            ["oscAMute", 0],
+            ["oscBMute", 1],
+            ["oscCMute", 1],
         ]);
         const resourceReads = [];
         const sentMessages = [];
@@ -1102,6 +1108,12 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
             ["oscAWavetableSelect", 0],
             ["playMode", 0],
             ["glideTime", 0.15],
+            ["oscAVolumeDb", 0],
+            ["oscBVolumeDb", 0],
+            ["oscCVolumeDb", 0],
+            ["oscAMute", 0],
+            ["oscBMute", 1],
+            ["oscCMute", 1],
         ]);
         const resourceReads = [];
         const sentMessages = [];

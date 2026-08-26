@@ -7,6 +7,7 @@ import {
 } from "./modulation";
 import { MODULATION_ARTICULATION_ROUTE_CELL_COUNT } from "./modulation-runtime-program";
 import { OSCILLATOR_IDS } from "./modulation-targets";
+import { OSCILLATOR_DEFAULT_VOLUME_DB } from "./oscillator-defaults";
 
 export const ARTICULATION_SNAPSHOT_ENDPOINT_ID = "articulationSnapshot";
 export const ARTICULATION_MAX_SLOTS = 128;
@@ -261,7 +262,7 @@ export function createDefaultArticulationParameterSnapshot(): ArticulationParame
         octave: 0,
         semitone: 0,
         fineCents: 0,
-        volumeDb: -9.542425,
+        volumeDb: OSCILLATOR_DEFAULT_VOLUME_DB,
         mute: 0,
         solo: 0,
         warpMode: 0,
@@ -1331,7 +1332,7 @@ export function createDisabledArticulationRuntimeUpload(selectorA: number): Arti
         phases: perOscillator(0),
         phaseRandoms: perOscillator(0),
         retriggers: perOscillator(1),
-        volumeDbs: perOscillator(-9.542425),
+        volumeDbs: perOscillator(OSCILLATOR_DEFAULT_VOLUME_DB),
         mutes: perOscillator(0),
         solos: perOscillator(0),
         warpModes: perOscillator(0),

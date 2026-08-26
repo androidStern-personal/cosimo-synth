@@ -131,8 +131,8 @@ std::int32_t render (FloatSlice packedFloats,
         else
             fail (104);
 
-        if (floats[oscillatorGainOffset + b] > 0.30f
-            && floats[oscillatorGainOffset + b] < 0.36f
+        if (floats[oscillatorGainOffset + b] > 0.95f
+            && floats[oscillatorGainOffset + b] < 1.05f
             && near (floats[basePanOffset + b], -0.65f)
             && floats[oscillatorGainOffset + c] == 0.0f)
             invariantMask |= levelAndPan;
@@ -162,7 +162,7 @@ std::int32_t render (FloatSlice packedFloats,
     if (frame == 2624)
     {
         if (floats[oscillatorGainOffset + b] == 0.0f
-            && floats[oscillatorGainOffset + c] > 0.30f
+            && floats[oscillatorGainOffset + c] > 0.95f
             && sawBWarpAndScan
             && near (floats[basePositionOffset + c], 0.80f)
             && near (floats[baseWarpAmountOffset + c], 0.65f)
@@ -205,7 +205,7 @@ std::int32_t render (FloatSlice packedFloats,
     else if (frame == 7104)
     {
         if (near (floats[basePanOffset + b], 0.65f)
-            && floats[oscillatorGainOffset + b] > 0.30f)
+            && floats[oscillatorGainOffset + b] > 0.95f)
             invariantMask |= panTransition;
         else
             fail (113);
@@ -223,7 +223,7 @@ std::int32_t render (FloatSlice packedFloats,
 
         // B: -18 dB base + 18 dB route offset reaches unity, so the offset
         // must not be clamped to the +6 dB parameter ceiling on its own.
-        // C: -9.54 dB base + 18 dB offset exceeds the ceiling, so the sum
+        // C: 0 dB base + 18 dB offset exceeds the ceiling, so the sum
         // must clamp to +6 dB.
         if (floats[oscillatorGainOffset + b] > 0.95f
             && floats[oscillatorGainOffset + b] < 1.05f

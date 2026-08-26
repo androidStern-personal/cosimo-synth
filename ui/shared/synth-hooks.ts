@@ -187,6 +187,10 @@ import {
     type OscillatorRuntimeIndex,
     type OscillatorSelectionViewModel,
 } from "./oscillator-binding";
+import {
+    OSCILLATOR_DEFAULT_VOLUME_DB,
+    getOscillatorDefaultMute,
+} from "./oscillator-defaults";
 
 function requireLaneParameterDescriptor(endpointID: string) {
     const descriptor = getRackParameterDescriptor(endpointID);
@@ -1522,7 +1526,11 @@ export function buildPresetArticulationBaseSnapshot(
             semitone: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "semitone").endpointID, parameters.semitone),
             fineCents: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "fineCents").endpointID, parameters.fineCents),
             volumeDb: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "volumeDb").endpointID, parameters.volumeDb),
-            mute: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "mute").endpointID, parameters.mute),
+            mute: presetParameterNumber(
+                context,
+                getOscillatorControlAddress(oscillatorID, "mute").endpointID,
+                getOscillatorDefaultMute(oscillatorID),
+            ),
             solo: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "solo").endpointID, parameters.solo),
             warpMode: presetParameterNumber(
                 context,
@@ -2561,12 +2569,12 @@ export function useSynthPatchViewModel({
     });
     const oscillatorVolumeDb = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("volumeDb"),
-        initialValue: -9.542425,
+        initialValue: OSCILLATOR_DEFAULT_VOLUME_DB,
         coerce: (value) => clamp(Number(value) || 0, -48, 6),
     });
     const oscillatorMute = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("mute"),
-        initialValue: 0,
+        initialValue: getOscillatorDefaultMute(oscillatorID),
         coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 1),
     });
     const oscillatorSolo = usePatchParameterBinding<number>({

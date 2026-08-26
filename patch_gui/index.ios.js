@@ -15664,6 +15664,18 @@ function formatSemitonesAndCents(value, signed = true) {
   const sign = !signed || Math.abs(numeric) < 5e-3 ? "" : numeric > 0 ? "+" : "-";
   return `${sign}${semitones} st ${String(cents).padStart(2, "0")} ct`;
 }
+const OSCILLATOR_VOLUME_MIN_DB = -48;
+const OSCILLATOR_VOLUME_MAX_DB = 6;
+const OSCILLATOR_DEFAULT_VOLUME_DB = 0;
+const OSCILLATOR_DEFAULT_VOLUME_NORMALIZED = (OSCILLATOR_DEFAULT_VOLUME_DB - OSCILLATOR_VOLUME_MIN_DB) / (OSCILLATOR_VOLUME_MAX_DB - OSCILLATOR_VOLUME_MIN_DB);
+const OSCILLATOR_DEFAULT_MUTE_BY_ID = Object.freeze({
+  A: 0,
+  B: 1,
+  C: 1
+});
+function getOscillatorDefaultMute(oscillatorID) {
+  return OSCILLATOR_DEFAULT_MUTE_BY_ID[oscillatorID];
+}
 function parameter(id, label, initialPercent, defaultPercent, format = "percent", compound = null) {
   return { id, label, initialPercent, defaultPercent, format, compound };
 }
@@ -15809,7 +15821,7 @@ const OSCILLATOR_MODULATION_DESCRIPTOR_DEFINITIONS = [
   { targetIdSuffix: "framePosition", parameterKind: "wavetablePosition", label: "Index", initialPercent: 44, defaultPercent: 0, format: "percent", isQuick: true },
   { targetIdSuffix: "warpAmount", parameterKind: "warpAmount", label: "Warp", initialPercent: 58, defaultPercent: 50, format: "percent" },
   { targetIdSuffix: "pitchSemitones", parameterKind: "pitchSemitones", label: "Tune", initialPercent: 50, defaultPercent: 50, format: "semitone" },
-  { targetIdSuffix: "volumeDb", parameterKind: "ampGainDb", label: "Level", initialPercent: 80, defaultPercent: 80, format: "percent" },
+  { targetIdSuffix: "volumeDb", parameterKind: "ampGainDb", label: "Level", initialPercent: OSCILLATOR_DEFAULT_VOLUME_NORMALIZED * 100, defaultPercent: OSCILLATOR_DEFAULT_VOLUME_NORMALIZED * 100, format: "percent" },
   { targetIdSuffix: "pan", parameterKind: "pan", label: "Pan", initialPercent: 50, defaultPercent: 50, format: "signed" },
   { targetIdSuffix: "unisonDetune", parameterKind: "unisonDetune", label: "Unison", initialPercent: 35, defaultPercent: 0, format: "percent" },
   { targetIdSuffix: "unisonBlend", parameterKind: "unisonBlend", label: "Uni Blend", initialPercent: 75, defaultPercent: 75, format: "percent" },
@@ -23730,7 +23742,7 @@ function createDefaultArticulationParameterSnapshot() {
     octave: 0,
     semitone: 0,
     fineCents: 0,
-    volumeDb: -9.542425,
+    volumeDb: OSCILLATOR_DEFAULT_VOLUME_DB,
     mute: 0,
     solo: 0,
     warpMode: 0,
@@ -26277,7 +26289,11 @@ function buildPresetArticulationBaseSnapshot(context, modulationState, oscillato
       semitone: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "semitone").endpointID, parameters.semitone),
       fineCents: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "fineCents").endpointID, parameters.fineCents),
       volumeDb: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "volumeDb").endpointID, parameters.volumeDb),
-      mute: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "mute").endpointID, parameters.mute),
+      mute: presetParameterNumber(
+        context,
+        getOscillatorControlAddress(oscillatorID, "mute").endpointID,
+        getOscillatorDefaultMute(oscillatorID)
+      ),
       solo: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "solo").endpointID, parameters.solo),
       warpMode: presetParameterNumber(
         context,
@@ -27139,12 +27155,12 @@ function useSynthPatchViewModel({
   });
   const oscillatorVolumeDb = usePatchParameterBinding({
     endpointID: oscillatorEndpointID("volumeDb"),
-    initialValue: -9.542425,
+    initialValue: OSCILLATOR_DEFAULT_VOLUME_DB,
     coerce: (value) => clamp$3(Number(value) || 0, -48, 6)
   });
   const oscillatorMute = usePatchParameterBinding({
     endpointID: oscillatorEndpointID("mute"),
-    initialValue: 0,
+    initialValue: getOscillatorDefaultMute(oscillatorID),
     coerce: (value) => clamp$3(Math.round(Number(value) || 0), 0, 1)
   });
   const oscillatorSolo = usePatchParameterBinding({

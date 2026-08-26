@@ -2,6 +2,7 @@
 import { MODULATION_ENV_SLOT_COUNT, MODULATION_MSEG_SLOT_COUNT, createDefaultEnvelope, normalizeEnvelope, } from "./modulation.js";
 import { MODULATION_ARTICULATION_ROUTE_CELL_COUNT } from "./modulation-runtime-program.js";
 import { OSCILLATOR_IDS } from "./modulation-targets.js";
+import { OSCILLATOR_DEFAULT_VOLUME_DB } from "./oscillator-defaults.js";
 export const ARTICULATION_SNAPSHOT_ENDPOINT_ID = "articulationSnapshot";
 export const ARTICULATION_MAX_SLOTS = 128;
 /** Largest legal absolute route amount in Cosimo's target domain. */
@@ -103,7 +104,7 @@ export function createDefaultArticulationParameterSnapshot() {
         octave: 0,
         semitone: 0,
         fineCents: 0,
-        volumeDb: -9.542425,
+        volumeDb: OSCILLATOR_DEFAULT_VOLUME_DB,
         mute: 0,
         solo: 0,
         warpMode: 0,
@@ -864,7 +865,7 @@ export function createDisabledArticulationRuntimeUpload(selectorA) {
         phases: perOscillator(0),
         phaseRandoms: perOscillator(0),
         retriggers: perOscillator(1),
-        volumeDbs: perOscillator(-9.542425),
+        volumeDbs: perOscillator(OSCILLATOR_DEFAULT_VOLUME_DB),
         mutes: perOscillator(0),
         solos: perOscillator(0),
         warpModes: perOscillator(0),

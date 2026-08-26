@@ -25,6 +25,12 @@ export function createIOSHarnessInitScript(baseUrl) {
             ["glideTime", 0.15],
             ["globalTune", 0],
             ["oscAPan", 0],
+            ["oscAVolumeDb", 0],
+            ["oscBVolumeDb", 0],
+            ["oscCVolumeDb", 0],
+            ["oscAMute", 0],
+            ["oscBMute", 1],
+            ["oscCMute", 1],
             ["distortionDriveDb", 12],
             ["distortionKnee", 0.35],
             ["distortionWet", 0.5],
@@ -145,6 +151,25 @@ export function createIOSHarnessInitScript(baseUrl) {
                         purpose: "parameter",
                         annotation: { name: "Pan", min: -1, max: 1, init: 0 },
                     },
+                    ...["A", "B", "C"].flatMap((oscillatorID) => ([
+                        {
+                            endpointID: `osc${oscillatorID}VolumeDb`,
+                            purpose: "parameter",
+                            annotation: { name: `Oscillator ${oscillatorID} Volume`, min: -48, max: 6, init: 0, unit: "dB" },
+                        },
+                        {
+                            endpointID: `osc${oscillatorID}Mute`,
+                            purpose: "parameter",
+                            annotation: {
+                                name: `Oscillator ${oscillatorID} Mute`,
+                                min: 0,
+                                max: 1,
+                                init: oscillatorID === "A" ? 0 : 1,
+                                discrete: true,
+                                step: 1,
+                            },
+                        },
+                    ])),
                     {
                         endpointID: "distortionDriveDb",
                         purpose: "parameter",

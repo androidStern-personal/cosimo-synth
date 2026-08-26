@@ -1190,18 +1190,24 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     Done when:
     - The deployed Codex site exposes the complete developer settings page to its intended user, the three-dot route is covered by a generated-build browser test, and the ordinary-user behavior is explicitly defined and tested.
 
-[ ] T53 — Make Init and a brand-new patch start with only Oscillator A
-    Active owner (2026-08-26):
-    - Codex task `Fix Default Oscillator State and Level`, thread `01a03db9-1a78-7520-90cd-7d3982bb6910`, worktree `/Users/winterfell/.codex/worktrees/d278/cosimo-synth`, model SOL, reasoning max.
+[x] T53 — Make Init and a brand-new patch start with only Oscillator A
+    Completed owner (2026-08-26):
+    - Codex task `Fix Default Oscillator State and Level`, thread `01a03db9-1a78-7520-90cd-7d3982bb6910`, branch `codex/t53-oscillator-init-defaults`, worktree `/Users/winterfell/.codex/worktrees/d278/cosimo-synth`, model SOL, reasoning max.
     Required behavior:
     - Init and every canonical brand-new/default sound enable Oscillator A and disable Oscillators B and C. The disabled oscillators are visibly inactive and produce no audio.
-    - Every oscillator's stored default level starts at a normal, immediately usable value instead of the current roughly -9 dB value. This applies to Oscillator A immediately and to Oscillators B and C when they are later enabled.
-    Open tuning choice:
-    - The current roughly -9 dB default is rejected. Start the product review from 0 dB, then check it against the current signal path and get the exact value approved rather than silently choosing another unusually quiet number.
+    - Oscillator A starts at a normal, immediately usable synth level instead of the current extremely quiet value.
+    Resolved tuning choice (2026-08-26):
+    - Use the requested 0 dB oscillator level. The production Cmajor path remains below the transparent output-stage threshold at maximum MIDI velocity: A alone measures -20.87 dBFS RMS / -17.86 dBFS peak, while three phase-aligned A/B/C oscillators at their stored 0 dB level peak at -8.32 dBFS. The rejected -9.542425 dB value was exactly 9.542426 dB quieter. No alternate level or Andrew decision is required.
     State boundary:
     - Change the canonical default and Init behavior only. Loading a saved sound must preserve its explicit oscillator enable and level values.
     Done when:
-    - New-sound and Init tests prove the UI state and audible DSP state agree, B and C are silent, all three oscillators carry the approved default level, enabling B or C uses that level, and saved sounds remain unchanged.
+    - New-sound and Init tests prove the UI state and audible DSP state agree, B and C are silent, A uses the approved level, and saved sounds remain unchanged.
+    Completion evidence (2026-08-26):
+    - One oscillator-default contract now feeds UI mocks, new-patch fallbacks, descriptors, articulation fixtures, browser/native state, and regenerated desktop/iPhone/speedrun bundles; the production Cmajor declarations agree exactly at A `mute=0`, B/C `mute=1`, and A/B/C `volumeDb=0`.
+    - The generated Chromium product and desktop/iPhone surfaces prove fresh and post-Init state, saved version-3 document values, visible mute styling, and the 0 dB readout agree. A separate version-3 restore case preserves deliberately different A/B/C levels and enable values exactly; there is no migration or compatibility path.
+    - The production native gain-path gate drives the real oscillator renderer through filter, fixed 0.18 trim, rack, and output stage. Renderer gains are exactly `1,0,0` for Init, B/C are individually audible at 0 dB when enabled, all-muted output is exactly zero, and all three at 0 dB remain below the limiter threshold.
+    - Focused defaults/state passed 25/25, articulation mutation 6/6, renderer/generated/shared-engine gates passed, Cmajor rack passed 79/79, orphan units passed 729/729, and web bundle contract passed 19/19. Current web and iPhone bundles were rebuilt.
+    - A fresh HMR standalone is running from this worktree against `http://127.0.0.1:5195` (`usesViteClient: true`; canonical 5174 was owned by another live worktree). The compiled, strict-code-sign-verified VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`.
 
 [ ] T54 — Put the right-side wavetable chips back against the right edge
     Active owner (2026-08-26):

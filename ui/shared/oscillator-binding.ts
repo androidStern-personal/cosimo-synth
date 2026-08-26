@@ -12,6 +12,14 @@ import {
 } from "./modulation-targets";
 
 export type { OscillatorID } from "./modulation-targets";
+export {
+    OSCILLATOR_DEFAULT_MUTE_BY_ID,
+    OSCILLATOR_DEFAULT_VOLUME_DB,
+    OSCILLATOR_DEFAULT_VOLUME_NORMALIZED,
+    OSCILLATOR_VOLUME_MAX_DB,
+    OSCILLATOR_VOLUME_MIN_DB,
+    getOscillatorDefaultMute,
+} from "./oscillator-defaults";
 
 /** The three stable oscillator slots shared by DSP, state, and presentation. */
 export type OscillatorRuntimeIndex = 0 | 1 | 2;

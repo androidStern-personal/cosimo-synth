@@ -1046,7 +1046,7 @@ test("selected oscillator table and pan controls write only that oscillator", as
     }
 });
 
-test("selected oscillator tuning level mute and solo controls write only that oscillator", async () => {
+test("selected oscillator tuning level enable and solo controls write only that oscillator", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -1076,7 +1076,7 @@ test("selected oscillator tuning level mute and solo controls write only that os
                 && Number(values.oscBSemitone) === -3
                 && Math.abs(Number(values.oscBFineCents) - 0.1) < 0.0001
                 && Number(values.oscBVolumeDb) === 6
-                && Number(values.oscBMute) === 1
+                && Number(values.oscBMute) === 0
                 && Number(values.oscBSolo) === 1;
         });
 
@@ -1090,7 +1090,7 @@ test("selected oscillator tuning level mute and solo controls write only that os
             { endpointID: "oscBSemitone", value: -3 },
             { endpointID: "oscBFineCents", value: 0.1 },
             { endpointID: "oscBVolumeDb", value: 6 },
-            { endpointID: "oscBMute", value: 1 },
+            { endpointID: "oscBMute", value: 0 },
             { endpointID: "oscBSolo", value: 1 },
         ]);
     } finally {
@@ -4211,60 +4211,147 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
     }
 });
 
-test("mobile voice tabs mute on active tap and per-tab solo badges write exact endpoints", async () => {
+test("fresh and Init desktop state show only oscillator A enabled at 0 dB", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
 
     try {
         await page.waitForSelector('[data-role="mobile-voice-editor"][data-selected-oscillator-id="A"]');
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "fresh oscillator defaults",
+            (candidate) => Number(candidate.parameterValues.oscAVolumeDb) === 0
+                && Number(candidate.parameterValues.oscBVolumeDb) === 0
+                && Number(candidate.parameterValues.oscCVolumeDb) === 0
+                && Number(candidate.parameterValues.oscAMute) === 0
+                && Number(candidate.parameterValues.oscBMute) === 1
+                && Number(candidate.parameterValues.oscCMute) === 1,
+        );
+        assert.deepEqual(
+            Object.fromEntries([
+                "oscAVolumeDb", "oscBVolumeDb", "oscCVolumeDb",
+                "oscAMute", "oscBMute", "oscCMute",
+            ].map((endpointID) => [endpointID, snapshot.parameterValues[endpointID]])),
+            {
+                oscAVolumeDb: 0,
+                oscBVolumeDb: 0,
+                oscCVolumeDb: 0,
+                oscAMute: 0,
+                oscBMute: 1,
+                oscCMute: 1,
+            },
+        );
+        assert.equal(
+            (await page.locator('[data-role="mobile-voice-tab-a"]').getAttribute("class")).includes("is-muted"),
+            false,
+        );
+        for (const oscillatorID of ["b", "c"]) {
+            assert.equal(
+                (await page.locator(`[data-role="mobile-voice-tab-${oscillatorID}"]`).getAttribute("class")).includes("is-muted"),
+                true,
+            );
+        }
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-cell-volumeDb"]').getAttribute("aria-valuenow"),
+            "0",
+        );
         await clearHarnessDebugLog(page);
 
         await page.locator('[data-role="mobile-voice-tab-b"]').click();
         await page.waitForSelector('[data-role="mobile-voice-editor"][data-selected-oscillator-id="B"]');
-        let snapshot = await getHarnessSnapshot(page);
+        snapshot = await getHarnessSnapshot(page);
         assert.equal(
             snapshot.sentMessages.some(({ endpointID }) => endpointID === "oscBMute"),
             false,
             "Selecting an inactive tab must not toggle Mute.",
         );
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-cell-volumeDb"]').getAttribute("aria-valuenow"),
+            "0",
+            "A disabled sibling retains the normal 0 dB level it will use when enabled.",
+        );
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-graph"]').evaluate((element) => getComputedStyle(element).opacity),
+            "0.38",
+            "The selected disabled oscillator must look disabled while remaining editable.",
+        );
 
         await page.locator('[data-role="mobile-voice-tab-b"]').click();
         snapshot = await waitForHarnessSnapshot(
             page,
-            "active-tab mute toggle",
-            (candidate) => Number(candidate.parameterValues.oscBMute) === 1,
+            "active-tab enable toggle",
+            (candidate) => Number(candidate.parameterValues.oscBMute) === 0,
         );
         assert.equal(
             await page.locator('[data-role="mobile-voice-editor"]').getAttribute("data-selected-oscillator-id"),
             "B",
-            "Muting must not change the selection.",
+            "Enabling must not change the selection.",
+        );
+        assert.equal(
+            (await page.locator('[data-role="mobile-voice-tab-b"]').getAttribute("class")).includes("is-muted"),
+            false,
+        );
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-toolbar"]').isVisible(),
+            true,
+            "An enabled oscillator remains editable.",
+        );
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => (
+                /^osc[ABC](Octave|Semitone|FineCents|VolumeDb|WavetablePosition|WarpAmount)$/.test(endpointID)
+            )),
+            [],
+            "Tab actions write only the selected oscillator's Mute endpoint.",
+        );
+
+        await clickPresetBarAction(page, "init");
+        await page.evaluate(() => {
+            const discard = document
+                .querySelector("cosimo-preset-bar")
+                ?.shadowRoot
+                ?.querySelector('[data-action="sound-replacement-discard"]');
+            if (!(discard instanceof HTMLButtonElement)) {
+                throw new Error("Discard and Init action is missing.");
+            }
+            discard.click();
+        });
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "Init oscillator defaults",
+            (candidate) => Number(candidate.parameterValues.oscAVolumeDb) === 0
+                && Number(candidate.parameterValues.oscBVolumeDb) === 0
+                && Number(candidate.parameterValues.oscCVolumeDb) === 0
+                && Number(candidate.parameterValues.oscAMute) === 0
+                && Number(candidate.parameterValues.oscBMute) === 1
+                && Number(candidate.parameterValues.oscCMute) === 1,
+        );
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-editor"]').getAttribute("data-selected-oscillator-id"),
+            "B",
+            "Init must not replace session-local oscillator selection.",
         );
         assert.equal(
             (await page.locator('[data-role="mobile-voice-tab-b"]').getAttribute("class")).includes("is-muted"),
             true,
         );
         assert.equal(
-            await page.locator('[data-role="mobile-voice-toolbar"]').isVisible(),
-            true,
-            "A muted oscillator remains editable.",
+            await page.locator('[data-role="mobile-voice-cell-volumeDb"]').getAttribute("aria-valuenow"),
+            "0",
         );
-
-        await page.locator('[data-role="mobile-voice-solo-c"]').click();
-        snapshot = await waitForHarnessSnapshot(
-            page,
-            "per-tab solo toggle",
-            (candidate) => Number(candidate.parameterValues.oscCSolo) === 1,
-        );
-        assert.equal(
-            await page.locator('[data-role="mobile-voice-editor"]').getAttribute("data-selected-oscillator-id"),
-            "B",
-            "Soloing another oscillator must not select it.",
-        );
-        const strayWrites = snapshot.sentMessages.filter(({ endpointID }) => (
-            /^osc[ABC](Octave|Semitone|FineCents|VolumeDb|WavetablePosition|WarpAmount)$/.test(endpointID)
-        ));
-        assert.deepEqual(strayWrites, [], "Tab actions write only Mute/Solo endpoints.");
+        for (const [endpointID, expectedValue] of Object.entries({
+            oscAVolumeDb: 0,
+            oscBVolumeDb: 0,
+            oscCVolumeDb: 0,
+            oscAMute: 0,
+            oscBMute: 1,
+            oscCMute: 1,
+        })) {
+            const latestWrite = [...snapshot.sentMessages]
+                .reverse()
+                .find((message) => message.endpointID === endpointID);
+            assert.equal(Number(latestWrite?.value), expectedValue, `${endpointID} Init write`);
+        }
     } finally {
         await page.close();
     }

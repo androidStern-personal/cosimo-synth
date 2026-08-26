@@ -64,6 +64,7 @@
     "warp:reference:update": "PYTHONPATH=. uv run --extra debug python tests/helpers/generate_warp_reference_assets.py",
     "warp:update-reference": "npm run warp:fixtures:update-inputs && npm run warp:reference:update",
     "test:synth:engine": "tests/native/run_three_oscillator_renderer_oracle.sh && tests/native/run_three_oscillator_generated_integration.sh && tests/native/run_three_oscillator_shared_voice_engine.sh",
+    "test:synth:defaults": "node --test tests/test_oscillator_binding_contract.mjs tests/test_synth_init_presets.mjs && tests/native/run_oscillator_default_gain_path.sh",
     "test:cmajor:warp": "npm run test:python:warp-alias && npm run test:synth:engine",
     "test:cmajor:filter": "npm run test:python:filter-stability && npm run test:synth:engine",
     "test:browser:orphans": "node --test --test-concurrency=1 tests/test_desktop_oscillator_presentation_browser.mjs tests/test_desktop_widget_adapters_browser.mjs tests/test_effects_rack_xy_visual.mjs tests/test_oscillator_selection_browser.mjs tests/test_patch_view_layout.mjs tests/test_seqfx_patch_view_browser.mjs tests/test_shared_synth_components_browser.mjs tests/test_spectral_production_view_browser.mjs tests/test_synth_init_preset_bar_browser.mjs tests/test_voice_popover_compiled_browser.mjs tests/test_web_renderer_audio_worklet.mjs tests/test_desktop_native_keyboard_probe.mjs",

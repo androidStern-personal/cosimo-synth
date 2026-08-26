@@ -1621,8 +1621,12 @@ test("mobile product stays realtime with four-way unison and one MSEG filter rou
         modulationStateKey: MODULATION_STATE_KEY,
         parameters: {
             oscAUnisonVoices: 4,
-            oscBVolumeDb: -48,
-            oscCVolumeDb: -48,
+            oscAVolumeDb: -3.25,
+            oscBVolumeDb: -12.5,
+            oscCVolumeDb: 2.75,
+            oscAMute: 1,
+            oscBMute: 0,
+            oscCMute: 0,
         },
     });
 
@@ -1638,8 +1642,12 @@ test("mobile product stays realtime with four-way unison and one MSEG filter rou
             return snapshot.phase === "running"
                 && snapshot.hasActiveTable
                 && snapshot.parameterValues.oscAUnisonVoices === 4
-                && snapshot.parameterValues.oscBVolumeDb === -48
-                && snapshot.parameterValues.oscCVolumeDb === -48
+                && snapshot.parameterValues.oscAVolumeDb === -3.25
+                && snapshot.parameterValues.oscBVolumeDb === -12.5
+                && snapshot.parameterValues.oscCVolumeDb === 2.75
+                && snapshot.parameterValues.oscAMute === 1
+                && snapshot.parameterValues.oscBMute === 0
+                && snapshot.parameterValues.oscCMute === 0
                 && Number(acknowledgement?.installedVoiceRouteCount)
                     + Number(acknowledgement?.installedMacroVoiceRouteCount)
                     + Number(acknowledgement?.installedVoiceRackRouteCount)
@@ -2680,6 +2688,15 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
         });
+        await page.waitForFunction(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            const tab = (id) => root?.querySelector(`[data-role="mobile-voice-tab-${id}"]`);
+            const level = root?.querySelector('[data-role="mobile-voice-cell-volumeDb"]');
+            return tab("a")?.classList.contains("is-muted") === false
+                && tab("b")?.classList.contains("is-muted") === true
+                && tab("c")?.classList.contains("is-muted") === true
+                && level?.getAttribute("aria-valuenow") === "0";
+        }, null, { timeout: 30_000 });
 
         const initialState = await page.evaluate(async () => {
             const storedState = await globalThis.__COSIMO_WEB_POC__.storedState();
@@ -2687,6 +2704,13 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
             return {
                 rack: typeof rawRack === "string" ? JSON.parse(rawRack) : rawRack,
                 oscBPan: globalThis.__COSIMO_WEB_POC__.getSnapshot().parameterValues.oscBPan,
+                oscillatorDefaults: Object.fromEntries([
+                    "oscAVolumeDb", "oscBVolumeDb", "oscCVolumeDb",
+                    "oscAMute", "oscBMute", "oscCMute",
+                ].map((endpointID) => [
+                    endpointID,
+                    globalThis.__COSIMO_WEB_POC__.getSnapshot().parameterValues[endpointID],
+                ])),
             };
         });
 
@@ -2702,6 +2726,15 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
             const hasError = (bar?.shadowRoot?.querySelectorAll(".cpb-toast.error").length ?? 0) > 0;
             return resetCompleted || hasError;
         }, JSON.stringify(expectedRack));
+        await page.waitForFunction(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            const tab = (id) => root?.querySelector(`[data-role="mobile-voice-tab-${id}"]`);
+            const level = root?.querySelector('[data-role="mobile-voice-cell-volumeDb"]');
+            return tab("a")?.classList.contains("is-muted") === false
+                && tab("b")?.classList.contains("is-muted") === true
+                && tab("c")?.classList.contains("is-muted") === true
+                && level?.getAttribute("aria-valuenow") === "0";
+        }, null, { timeout: 30_000 });
 
         const result = await page.evaluate(() => {
             const saved = JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}");
@@ -2713,6 +2746,16 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
                 version: saved?.version ?? null,
                 rack: typeof rawRack === "string" ? JSON.parse(rawRack) : rawRack,
                 oscBPan: saved?.sound?.parameters?.oscBPan ?? null,
+                oscillatorDefaults: Object.fromEntries([
+                    "oscAVolumeDb", "oscBVolumeDb", "oscCVolumeDb",
+                    "oscAMute", "oscBMute", "oscCMute",
+                ].map((endpointID) => [endpointID, saved?.sound?.parameters?.[endpointID]])),
+                visibleDefaults: {
+                    aMuted: view?.shadowRoot?.querySelector('[data-role="mobile-voice-tab-a"]')?.classList.contains("is-muted") ?? null,
+                    bMuted: view?.shadowRoot?.querySelector('[data-role="mobile-voice-tab-b"]')?.classList.contains("is-muted") ?? null,
+                    cMuted: view?.shadowRoot?.querySelector('[data-role="mobile-voice-tab-c"]')?.classList.contains("is-muted") ?? null,
+                    level: view?.shadowRoot?.querySelector('[data-role="mobile-voice-cell-volumeDb"]')?.getAttribute("aria-valuenow") ?? null,
+                },
                 presetName: shadow?.querySelector('[data-el="preset-name"]')?.textContent?.trim() ?? null,
                 dirty: shadow?.querySelector('[data-el="dirty-dot"]')?.classList.contains("visible") ?? null,
                 errorMessages: Array.from(shadow?.querySelectorAll(".cpb-toast.error") ?? [])
@@ -2723,12 +2766,100 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
         t.diagnostic(JSON.stringify({ initialState, result }));
         assert.equal(initialState.rack, undefined);
         assert.equal(initialState.oscBPan, 0);
+        assert.deepEqual(initialState.oscillatorDefaults, {
+            oscAVolumeDb: 0,
+            oscBVolumeDb: 0,
+            oscCVolumeDb: 0,
+            oscAMute: 0,
+            oscBMute: 1,
+            oscCMute: 1,
+        });
         assert.equal(result.version, 3);
         assert.deepEqual(result.rack, expectedRack);
         assert.equal(result.oscBPan, 0);
+        assert.deepEqual(result.oscillatorDefaults, initialState.oscillatorDefaults);
+        assert.deepEqual(result.visibleDefaults, {
+            aMuted: false,
+            bMuted: true,
+            cMuted: true,
+            level: "0",
+        });
         assert.equal(result.presetName, "INIT");
         assert.equal(result.dirty, false);
         assert.deepEqual(result.errorMessages, []);
+    } finally {
+        await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v2")).catch(() => {});
+        await page.close();
+    }
+});
+
+test("generated product preserves explicit version-3 oscillator enable and level values", async () => {
+    const page = await browser.newPage({ ...devices["iPhone 13"] });
+    const pageFailures = observePageFailures(page);
+    const explicitOscillatorState = {
+        oscAVolumeDb: -3.25,
+        oscBVolumeDb: -12.5,
+        oscCVolumeDb: 2.75,
+        oscAMute: 1,
+        oscBMute: 0,
+        oscCMute: 0,
+    };
+    await page.addInitScript((parameters) => {
+        localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
+            format: "cosimo.browserPatchState",
+            version: 3,
+            sound: { parameters, storedState: {} },
+            auxiliary: {},
+        }));
+    }, explicitOscillatorState);
+
+    try {
+        await page.goto(`${baseUrl}?test=1&t53-explicit-oscillators=1`, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction((expected) => {
+            const values = globalThis.__COSIMO_WEB_POC__?.getSnapshot().parameterValues;
+            return values !== undefined
+                && Object.entries(expected).every(([endpointID, value]) => values[endpointID] === value);
+        }, explicitOscillatorState, { timeout: 30_000 });
+
+        await page.waitForFunction(() => {
+            const view = document.querySelector("cosimo-desktop-react-view");
+            const root = view?.shadowRoot;
+            const oscillatorA = root?.querySelector('[data-role="mobile-voice-tab-a"]');
+            const oscillatorB = root?.querySelector('[data-role="mobile-voice-tab-b"]');
+            const oscillatorC = root?.querySelector('[data-role="mobile-voice-tab-c"]');
+            return oscillatorA?.classList.contains("is-muted") === true
+                && oscillatorB?.classList.contains("is-muted") === false
+                && oscillatorC?.classList.contains("is-muted") === false;
+        }, null, { timeout: 30_000 });
+
+        const oscillatorA = page.locator('[data-role="mobile-voice-tab-a"]');
+        const oscillatorB = page.locator('[data-role="mobile-voice-tab-b"]');
+        const oscillatorC = page.locator('[data-role="mobile-voice-tab-c"]');
+        assert.equal((await oscillatorA.getAttribute("class")).includes("is-muted"), true);
+        assert.equal((await oscillatorB.getAttribute("class")).includes("is-muted"), false);
+        assert.equal((await oscillatorC.getAttribute("class")).includes("is-muted"), false);
+        await page.locator("#cosimo-start-overlay").click();
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "running", null, {
+            timeout: 30_000,
+        });
+        await oscillatorB.click();
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-cell-volumeDb"]').getAttribute("aria-valuenow"),
+            "-12.5",
+        );
+
+        const preserved = await page.evaluate(() => {
+            const saved = JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}");
+            return {
+                version: saved.version,
+                parameters: Object.fromEntries([
+                    "oscAVolumeDb", "oscBVolumeDb", "oscCVolumeDb",
+                    "oscAMute", "oscBMute", "oscCMute",
+                ].map((endpointID) => [endpointID, saved.sound?.parameters?.[endpointID]])),
+            };
+        });
+        assert.deepEqual(preserved, { version: 3, parameters: explicitOscillatorState });
+        pageFailures.assertClean();
     } finally {
         await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v2")).catch(() => {});
         await page.close();
