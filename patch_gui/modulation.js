@@ -591,7 +591,7 @@ function canonicalJsonValuesEqual(left, right) {
     return leftKeys.length === rightKeys.length && leftKeys.every((key) => (hasOwnValue(rightRecord, key)
         && canonicalJsonValuesEqual(leftRecord[key], rightRecord[key])));
 }
-/** Pick the first unused cell in the closed 1131-pair domain for generic Add. */
+/** Pick the first unused cell in the closed 1144-pair domain for generic Add. */
 export function createFirstAvailableModulationRoute(routes, targetOptions = MODULATION_TARGET_OPTIONS) {
     const usedPairs = new Set(routes.map(modulationRoutePairKey));
     for (const source of MODULATION_SOURCE_OPTIONS) {

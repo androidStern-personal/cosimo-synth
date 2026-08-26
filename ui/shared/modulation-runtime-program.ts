@@ -82,7 +82,7 @@ export const MODULATION_ARTICULATION_ROUTE_CELL_COUNT = MODULATION_VOICE_ROUTE_C
     + MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT;
 
 /** Number of legal source/target pairs in the closed STATIC modulation
-    domain (1,131). Lane-pool pairs are per-patch dynamic and deliberately
+    domain (1,144). Lane-pool pairs are per-patch dynamic and deliberately
     excluded: they exist only while their device instance does. */
 export const MODULATION_MAPPING_CELL_COUNT = MODULATION_VOICE_ROUTE_CELL_COUNT
     + MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT
