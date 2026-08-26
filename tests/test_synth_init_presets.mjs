@@ -26,6 +26,7 @@ const synthStatus = {
             parameter("filterMix", { init: 1, min: 0, max: 1 }),
             parameter("delayMix", { init: 0.5, min: 0, max: 1 }),
             parameter("reverbMix", { init: 0.5, min: 0, max: 1 }),
+            parameter("globalTune", { init: 0, min: -24, max: 24 }),
         ],
     },
 };
@@ -338,6 +339,7 @@ async function createSynthFixture({ includeFactoryPreset = false, synthEnabled =
         filterMix: 0.4,
         delayMix: 0.6,
         reverbMix: 0.8,
+        globalTune: 7.25,
     };
     for (const [endpointID, value] of Object.entries(representativeEdits)) {
         if (Object.hasOwn(initialValues, endpointID)) {
@@ -422,6 +424,7 @@ test("clean synth Init applies every canonical sound default and clears only the
     assert.equal(state.activeLabel, "INIT");
     assert.equal(state.dirty, false);
     assert.deepEqual(patchConnection.parameterValues, defaults);
+    assert.equal(patchConnection.parameterValues.globalTune, 0);
     assert.deepEqual(modulationHarness.value, defaultModulation);
     assert.deepEqual(articulationHarness.value, defaultArticulations);
     assert.deepEqual(rackHarness.value, defaultRack);
@@ -493,6 +496,7 @@ test("Init writes the default for every current production public parameter, inc
         "oscBWavetableSelect",
         "oscCWavetableSelect",
         "filterMix",
+        "globalTune",
     ]) {
         assert.equal(publicEndpointIDs.includes(requiredEndpointID), true, requiredEndpointID);
     }
@@ -949,9 +953,20 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     const source = await createSynthFixture();
     source.patchConnection.emitParameterValue("oscAFramePosition", 0.37);
     source.patchConnection.emitParameterValue("filterMix", 0.28);
+    source.patchConnection.emitParameterValue("globalTune", 12.37);
     source.modulationHarness.adapter.apply({
         ...source.defaultModulation,
-        routes: [{ id: "shared-route", sourceId: "macro-2", targetId: "voice-filter.cutoff", amount: 0.62 }],
+        routes: [{
+            id: "shared-global-tune-route",
+            sourceId: "macro-2",
+            sourceKind: "macro",
+            sourceSlot: 2,
+            polarity: "bipolar",
+            targetId: "voice.globalTune",
+            targetKind: "globalTuneSemitones",
+            amount: 31.25,
+            enabled: true,
+        }],
     });
     source.articulationHarness.adapter.apply({
         ...source.defaultArticulations,
@@ -969,6 +984,7 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     const captured = synthMutations(source.controller).captureSharedSound();
     assert.equal(captured.ok, true, captured.message);
     assert.deepEqual(captured.value.preset.parameters, source.patchConnection.parameterValues);
+    assert.equal(captured.value.preset.parameters.globalTune, 12.37);
     assert.deepEqual(captured.value.preset.storedState["modulation.v6"], source.modulationHarness.value);
     assert.deepEqual(captured.value.preset.storedState["articulations.v4"], source.articulationHarness.value);
     assert.deepEqual(captured.value.supplementalStoredState["lane.v1"], source.rackHarness.value);
@@ -979,6 +995,7 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     const loaded = synthMutations(target.controller).loadSharedSound(captured.value);
     assert.equal(loaded.ok, true, loaded.message);
     assert.deepEqual(target.patchConnection.parameterValues, source.patchConnection.parameterValues);
+    assert.equal(target.patchConnection.parameterValues.globalTune, 12.37);
     assert.deepEqual(target.modulationHarness.value, source.modulationHarness.value);
     assert.deepEqual(target.articulationHarness.value, source.articulationHarness.value);
     assert.deepEqual(target.rackHarness.value, source.rackHarness.value);

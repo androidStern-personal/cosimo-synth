@@ -49,6 +49,7 @@ const voiceTargets = [
     "env3Sustain",
     "env3Release",
     "filterMix",
+    "globalTuneSemitones",
 ];
 
 const runtimeLaneSpecifications = [
@@ -272,20 +273,20 @@ test("a deliberate 101st final-legal sentinel survives in its active prefix", as
     });
 });
 
-test("all 1131 legal mappings publish exact deterministic lane tails without truncation", async () => {
+test("all 1144 legal mappings publish exact deterministic lane tails without truncation", async () => {
     const runtime = await programModulePromise;
     const routes = await createAllLegalRoutes();
     const program = runtime.compileModulationRuntimeProgram(routes);
 
     assert.equal(routes.length, runtime.MODULATION_MAPPING_CELL_COUNT);
-    assert.deepEqual(runtimeLaneCounts(program), [459, 204, 324, 144]);
+    assert.deepEqual(runtimeLaneCounts(program), [468, 208, 324, 144]);
     // Rack-path cell indices run at the BUS width (static + lane pool):
     // source*TOTAL + target. Voice-path indices are untouched by the pool.
     assert.deepEqual(
         runtimeLaneSpecifications.map((specification) => runtimeLaneTail(program, specification)),
         [
-            { cellIndex: 458, sourceIndex: 8, targetIndex: 50, polarity: 0, amount: 0.25, reducer: null },
-            { cellIndex: 203, sourceIndex: 3, targetIndex: 50, polarity: 1, amount: 0.25, reducer: null },
+            { cellIndex: 467, sourceIndex: 8, targetIndex: 51, polarity: 1, amount: 0.25, reducer: null },
+            { cellIndex: 207, sourceIndex: 3, targetIndex: 51, polarity: 0, amount: 0.25, reducer: null },
             { cellIndex: (8 * runtime.MODULATION_RACK_TARGET_TOTAL) + 35, sourceIndex: 8, targetIndex: 35, polarity: 1, amount: 0.25, reducer: 2 },
             { cellIndex: (3 * runtime.MODULATION_RACK_TARGET_TOTAL) + 35, sourceIndex: 3, targetIndex: 35, polarity: 0, amount: 0.25, reducer: null },
         ],
@@ -297,7 +298,7 @@ test("all 1131 legal mappings publish exact deterministic lane tails without tru
     );
 });
 
-test("1131 stored mappings with the same 100 active mappings publish identical execution lanes", async () => {
+test("1144 stored mappings with the same 100 active mappings publish identical execution lanes", async () => {
     const runtime = await programModulePromise;
     const allRoutes = await createAllLegalRoutes();
     const activeRoutes = selectActiveRoutesByLane(
@@ -311,7 +312,7 @@ test("1131 stored mappings with the same 100 active mappings publish identical e
     ));
 
     assert.equal(activeRoutes.length, 100);
-    assert.equal(storedDomain.length, 1131);
+    assert.equal(storedDomain.length, 1144);
     assert.deepEqual(
         projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(storedDomain)),
         projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(activeRoutes)),
@@ -386,18 +387,49 @@ test("filter Mix routes compile from their stable name at the appended Voice tar
     assert.equal(targets.getVoiceModulationTargetIndex("filterMix"), 50);
     assert.deepEqual(mixCell, {
         path: "voice",
-        cellIndex: (6 * 51) + 50,
+        cellIndex: (6 * 52) + 50,
         sourceIndex: 6,
         targetIndex: 50,
-        articulationCellIndex: (6 * 51) + 50,
+        articulationCellIndex: (6 * 52) + 50,
     });
     assert.equal(
         existingCell.cellIndex,
-        (6 * 51) + 31,
+        (6 * 52) + 31,
         "derived route-cell addresses must be rebuilt from the stable filterQ name using the current target stride",
     );
     assert.equal(program.voiceRouteCount, 2);
     assert.equal(program.voiceRouteAmounts[mixCell.cellIndex], 1);
+});
+
+test("Global Tune routes compile at the append-only shared pitch target with a 48-semitone span", async () => {
+    const [modulation, runtime, targets] = await Promise.all([
+        modulationModulePromise,
+        programModulePromise,
+        targetsModulePromise,
+    ]);
+    const route = modulation.createDefaultRoute({
+        id: "velocity-global-tune",
+        sourceKind: "velocity",
+        sourceSlot: null,
+        targetKind: "globalTuneSemitones",
+        amount: 48,
+    });
+    const cell = runtime.getModulationRuntimeCell(route);
+
+    assert.equal(targets.getVoiceModulationTargetIndex("filterMix"), 50, "existing target index moved");
+    assert.equal(targets.getVoiceModulationTargetIndex("globalTuneSemitones"), 51);
+    assert.deepEqual(cell, {
+        path: "voice",
+        cellIndex: (6 * 52) + 51,
+        sourceIndex: 6,
+        targetIndex: 51,
+        articulationCellIndex: (6 * 52) + 51,
+    });
+    assert.deepEqual(modulation.getModulationAmountBounds("globalTuneSemitones"), {
+        min: -48,
+        max: 48,
+        step: 0.01,
+    });
 });
 
 test("the Cmajor consumer resolves Filter Mix from its appended route target and clamps base plus offset", async () => {
@@ -417,6 +449,20 @@ test("the Cmajor consumer resolves Filter Mix from its appended route target and
         source,
         /effectiveFilterMix\s*=\s*resolveVoiceFilterMix\s*\(\s*filterMixIn,\s*routeFilterMix\s*\)/,
         "the engine must clamp base Mix plus the modulation offset at application",
+    );
+});
+
+test("the Cmajor consumer appends Global Tune and resolves shared played pitch before oscillator tuning", async () => {
+    const source = await fs.readFile(path.join(repoRoot, "cmajor/FixedFrameOscillator.cmajor"), "utf8");
+
+    assert.match(source, /modulationTargetGlobalTuneSemitones\s*=\s*modulationTargetFilterMix\s*\+\s*1/);
+    assert.match(
+        source,
+        /resolveSharedPlayedPitchSemitones[\s\S]*voiceCurrentPitch[\s\S]*voiceBendSemitones[\s\S]*globalTuneIn[\s\S]*modulationTargetGlobalTuneSemitones/,
+    );
+    assert.match(
+        source,
+        /effectivePitchSemitones\s*=\s*sharedPlayedPitchSemitones\s*\+\s*voiceOscillatorTuningSemitones[\s\S]*voiceOscillatorModulationOffset/,
     );
 });
 

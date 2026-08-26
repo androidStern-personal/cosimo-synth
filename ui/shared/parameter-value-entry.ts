@@ -383,6 +383,7 @@ function voiceAmountSpec(
         case "filterQ":
             return amountSpec({ ...bounds, defaultUnit: "Q", canonicalPerDisplayedUnit: 1, digits: 3, percentMeaning: "depth", baseValue: null, physicalIntervalUnit: null });
         case "pitchSemitones":
+        case "globalTuneSemitones":
             return amountSpec({ ...bounds, defaultUnit: "st", canonicalPerDisplayedUnit: 1, digits: 3, percentMeaning: "depth", baseValue: null, physicalIntervalUnit: null });
         case "ampGainDb":
             return amountSpec({ ...bounds, defaultUnit: "dB", canonicalPerDisplayedUnit: 1, digits: 3, percentMeaning: "depth", baseValue: null, physicalIntervalUnit: null });

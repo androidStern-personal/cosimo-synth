@@ -1341,6 +1341,9 @@ graph WavetableSynth [[ main ]]
     // pre-Bounce parameter surface so existing host automation slots stay put.
     input value float32 ampRelease [[ name: "Amp Release", min: 0.005f, max: 10.0f, init: 0.2f, unit: "s", rampFrames: 0 ]];
     input value float32 sourceMode [[ name: "Source Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Oscillator|Bounce", rampFrames: 0 ]];
+    // Host parameters are append-only: Global Tune follows every established
+    // slot so existing automation numbers remain unchanged.
+    input value float32 globalTune [[ name: "Global Tune", min: -24.0f, max: 24.0f, init: 0.0f, unit: "st", rampFrames: 64 ]];
     // Rack structure is patch state, not host automation (ADR-007). These are struct
     // events, which carry no parameter purpose, so they are structurally
     // non-automatable rather than non-automatable by convention.
@@ -1461,6 +1464,7 @@ graph WavetableSynth [[ main ]]
         env3Release -> sharedEngine.envelopeReleaseIn[2];
         ampRelease -> sharedEngine.ampReleaseIn;
         sourceMode -> sharedEngine.sourceModeIn;
+        globalTune -> sharedEngine.globalTuneIn;
         oscAWavetableSelect -> desiredTableMonitorA.tableSelectIn;
         oscBWavetableSelect -> desiredTableMonitorB.tableSelectIn;
         oscCWavetableSelect -> desiredTableMonitorC.tableSelectIn;

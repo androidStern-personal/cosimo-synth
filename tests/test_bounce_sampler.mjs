@@ -257,21 +257,21 @@ function syntheticMipSamples(mipIndex) {
     return samples;
 }
 
-function renderOscillatorRegression(performer, sessionID) {
+function installSyntheticWavetable(performer, sessionID, oscillatorIndex) {
     performer.sendInputEvent_wavetableLoadBegin({
         dspSessionId: sessionID,
-        oscillatorIndex: 0,
+        oscillatorIndex,
         generation: 1,
-        tableIndex: 0,
+        tableIndex: oscillatorIndex,
         frameCount: 1,
     });
     performer.advance(1);
     for (let mipIndex = 0; mipIndex < 11; mipIndex += 1) {
         performer.sendInputEvent_wavetableMipFrame({
             dspSessionId: sessionID,
-            oscillatorIndex: 0,
+            oscillatorIndex,
             generation: 1,
-            tableIndex: 0,
+            tableIndex: oscillatorIndex,
             mipIndex,
             frameIndexBase: 0,
             frameCount: 1,
@@ -279,6 +279,10 @@ function renderOscillatorRegression(performer, sessionID) {
         });
         performer.advance(1);
     }
+}
+
+function renderOscillatorRegression(performer, sessionID) {
+    installSyntheticWavetable(performer, sessionID, 0);
     performer.setInputValue_oscAVolumeDb(0, 0);
     performer.setInputValue_oscBVolumeDb(-48, 0);
     performer.setInputValue_oscCVolumeDb(-48, 0);
@@ -296,27 +300,89 @@ function renderOscillatorRegression(performer, sessionID) {
         .digest("hex");
 }
 
-test("Source Mode is append-only and oscillator mode retains the M1 render bit-for-bit", async () => {
+async function measureOscillatorGlobalTune(CmajorClass, oscillatorIndex, sessionID) {
+    const oscillatorID = ["A", "B", "C"][oscillatorIndex];
+    const neighbourID = ["B", "C", "A"][oscillatorIndex];
+    const performer = new CmajorClass();
+    await performer.initialise(sessionID, sampleRate);
+    performer.setInputValue_sourceMode(0, 0);
+    performer.setInputValue_filterMode(0, 0);
+    performer.setInputValue_ampRelease(0.005, 0);
+    performer[`setInputValue_osc${oscillatorID}Solo`](1, 0);
+    performer[`setInputValue_osc${oscillatorID}VolumeDb`](0, 0);
+    installSyntheticWavetable(performer, sessionID, oscillatorIndex);
+    performer.advance(128);
+
+    const measureHeldFrequency = () => {
+        noteOn(performer, 60, 100);
+        const audio = channel(renderFrames(performer, 12_000), 0);
+        noteOff(performer, 60);
+        renderFrames(performer, 2_000);
+        return estimateFrequency(audio, 3_000, 11_000);
+    };
+
+    const neutralHz = measureHeldFrequency();
+    performer[`setInputValue_osc${neighbourID}Octave`](1, 0);
+    performer[`setInputValue_osc${neighbourID}Semitone`](7, 0);
+    performer[`setInputValue_osc${neighbourID}FineCents`](50, 0);
+    performer.advance(128);
+    const afterPrivateNeighbourTuneHz = measureHeldFrequency();
+    performer.setInputValue_globalTune(12, 0);
+    performer.advance(128);
+    const globalOctaveHz = measureHeldFrequency();
+
+    return { oscillatorID, neutralHz, afterPrivateNeighbourTuneHz, globalOctaveHz };
+}
+
+test("Source Mode and Global Tune are append-only and neutral tune retains the M1 render bit-for-bit", async () => {
     const CmajorClass = await loadGeneratedClass();
     const parameterEndpoints = CmajorClass.prototype.getInputEndpoints()
         .filter(({ purpose }) => purpose === "parameter");
     assert.deepEqual(
-        parameterEndpoints.slice(-3).map(({ endpointID }) => endpointID),
-        ["filterMix", "ampRelease", "sourceMode"],
+        parameterEndpoints.slice(-4).map(({ endpointID }) => endpointID),
+        ["filterMix", "ampRelease", "sourceMode", "globalTune"],
     );
-    const endpoint = parameterEndpoints.at(-1);
+    const endpoint = parameterEndpoints.find(({ endpointID }) => endpointID === "sourceMode");
+    assert.ok(endpoint);
     assert.equal(endpoint.annotation?.text, "Oscillator|Bounce");
     assert.equal(endpoint.annotation?.init, 0);
+    const globalTuneEndpoint = parameterEndpoints.find(({ endpointID }) => endpointID === "globalTune");
+    assert.ok(globalTuneEndpoint);
+    assert.equal(globalTuneEndpoint.annotation?.min, -24);
+    assert.equal(globalTuneEndpoint.annotation?.max, 24);
+    assert.equal(globalTuneEndpoint.annotation?.init, 0);
+    assert.notEqual(globalTuneEndpoint.annotation?.discrete, true);
 
     const sessionID = 42_201;
     const performer = new CmajorClass();
     await performer.initialise(sessionID, sampleRate);
     performer.setInputValue_sourceMode(0, 0);
+    performer.setInputValue_globalTune(0, 0);
     assert.equal(
         renderOscillatorRegression(performer, sessionID),
         "8d930510bc1f7e522b999a94cb36159bc2787a99844295838ae581f36a935561",
         "sourceMode=oscillator must match the committed pre-M2 performer",
     );
+});
+
+test("Global Tune +12 doubles every oscillator while neighbouring private tune remains private", async () => {
+    const CmajorClass = await loadGeneratedClass();
+    for (const oscillatorIndex of [0, 1, 2]) {
+        const result = await measureOscillatorGlobalTune(
+            CmajorClass,
+            oscillatorIndex,
+            42_220 + oscillatorIndex,
+        );
+        assert.ok(result.neutralHz > 20, `${result.oscillatorID} must produce a measurable pitch`);
+        assert.ok(
+            Math.abs((result.afterPrivateNeighbourTuneHz / result.neutralHz) - 1) < 0.02,
+            `${result.oscillatorID} moved when another oscillator's private tune changed`,
+        );
+        assert.ok(
+            Math.abs((result.globalOctaveHz / result.neutralHz) - 2) < 0.03,
+            `${result.oscillatorID} Global Tune ratio was ${result.globalOctaveHz / result.neutralHz}`,
+        );
+    }
 });
 
 test("staging is silent until commit and an aborted replacement preserves the active bank", async () => {
@@ -434,6 +500,21 @@ test("nearest-root selection, rate repitch, and polyphony are voice-correct", as
     const measuredHz = estimateFrequency(pitched, 1_500, 7_500);
     const expectedHz = 440 * (2 ** (2 / 12));
     assert.ok(Math.abs(measuredHz - expectedHz) < 5, `${measuredHz} Hz should be ${expectedHz} Hz`);
+
+    const tunedSessionID = 42_215;
+    const tunedPerformer = await createSamplerPerformer(CmajorClass, tunedSessionID);
+    installBank(tunedPerformer, tunedSessionID, 1, buildUpload([
+        { note: 60, samples: makeSineStereo(24_000, 440) },
+    ]));
+    tunedPerformer.setInputValue_globalTune(12, 0);
+    tunedPerformer.advance(128);
+    noteOn(tunedPerformer, 62, captureVelocity);
+    const octavePitched = channel(renderFrames(tunedPerformer, 8_000), 0);
+    const octaveMeasuredHz = estimateFrequency(octavePitched, 1_500, 7_500);
+    assert.ok(
+        Math.abs(octaveMeasuredHz - (expectedHz * 2)) < 10,
+        `Global Tune +12 measured ${octaveMeasuredHz} Hz instead of ${expectedHz * 2} Hz`,
+    );
 });
 
 test("live velocity scales loudness and early note-off follows Amp Release", async () => {

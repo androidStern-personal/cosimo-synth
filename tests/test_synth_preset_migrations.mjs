@@ -33,6 +33,7 @@ test("the derived synth migration applies a pre-Mix preset with filterMix at ful
         parameters: [
             ...LEGACY_PARAMETERS,
             { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
+            { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
         ],
         storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
     });
@@ -60,6 +61,7 @@ test("the derived synth migration applies a pre-Mix preset with filterMix at ful
     });
 
     assert.equal(normalized.parameters.filterMix, 1);
+    assert.equal(normalized.parameters.globalTune, 0);
     assert.deepEqual(
         writes.filter(({ endpointID }) => endpointID === "filterMix"),
         [{ endpointID: "filterMix", value: 1 }],
@@ -82,7 +84,10 @@ test("the derived synth migration adds an oscillator-mode bounce reference to pr
     });
     const currentContract = contractModule.buildCanonicalPluginStateContract({
         effectID: "wavetable-synth",
-        parameters,
+        parameters: [
+            ...parameters,
+            { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
+        ],
         storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
     });
     const normalized = presetModule.normalizeEffectPresetV2({
@@ -101,17 +106,77 @@ test("the derived synth migration adds an oscillator-mode bounce reference to pr
 
     assert.equal(normalized.storedState["bounce.v1"], null);
     assert.equal(normalized.parameters.filterMix, 0.5);
+    assert.equal(normalized.parameters.globalTune, 0);
+});
+
+test("the newest synth migration restores pre-Global-Tune presets at neutral zero", async () => {
+    const { contractModule, presetModule, migrationsModule } = await loadModules();
+    const previousParameters = [
+        ...LEGACY_PARAMETERS,
+        { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
+    ];
+    const storedState = [{ key: "bounce.v1", schemaVersion: 1, required: true }];
+    const previousContract = contractModule.buildCanonicalPluginStateContract({
+        effectID: "wavetable-synth",
+        parameters: previousParameters,
+        storedState,
+    });
+    const currentContract = contractModule.buildCanonicalPluginStateContract({
+        effectID: "wavetable-synth",
+        parameters: [
+            ...previousParameters,
+            { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
+        ],
+        storedState,
+    });
+    const normalized = presetModule.normalizeEffectPresetV2({
+        kind: "cosimo.effectPreset",
+        version: 2,
+        effectID: "wavetable-synth",
+        presetID: "user.pre-global-tune",
+        label: "Pre Global Tune",
+        contract: previousContract,
+        parameters: { filterMode: 1, filterCutoff: 2_400, filterQ: 4, filterMix: 0.63 },
+        storedState: { "bounce.v1": null },
+    }, {
+        currentContract,
+        migrations: migrationsModule.buildSynthPresetMigrations(currentContract),
+    });
+
+    assert.equal(normalized.parameters.globalTune, 0);
+    assert.equal(normalized.parameters.filterMix, 0.63);
 });
 
 test("the migration builder rejects a contract that lacks the filterMix parameter", async () => {
     const { contractModule, migrationsModule } = await loadModules();
     const contractWithoutMix = contractModule.buildCanonicalPluginStateContract({
         effectID: "wavetable-synth",
-        parameters: LEGACY_PARAMETERS,
+        parameters: [
+            ...LEGACY_PARAMETERS,
+            { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
+        ],
+        storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
     });
 
     assert.throws(
         () => migrationsModule.buildSynthPresetMigrations(contractWithoutMix),
         /filterMix/,
+    );
+});
+
+test("the migration builder rejects a contract that lacks Global Tune", async () => {
+    const { contractModule, migrationsModule } = await loadModules();
+    const contractWithoutGlobalTune = contractModule.buildCanonicalPluginStateContract({
+        effectID: "wavetable-synth",
+        parameters: [
+            ...LEGACY_PARAMETERS,
+            { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
+        ],
+        storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
+    });
+
+    assert.throws(
+        () => migrationsModule.buildSynthPresetMigrations(contractWithoutGlobalTune),
+        /globalTune/,
     );
 });

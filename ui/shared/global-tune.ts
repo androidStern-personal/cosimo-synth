@@ -1,0 +1,36 @@
+/** The one shared pitch-offset parameter, in semitones. */
+export const GLOBAL_TUNE_ENDPOINT_ID = "globalTune";
+export const GLOBAL_TUNE_TARGET_KIND = "globalTuneSemitones";
+export const GLOBAL_TUNE_MIN_SEMITONES = -24;
+export const GLOBAL_TUNE_MAX_SEMITONES = 24;
+export const GLOBAL_TUNE_INITIAL_SEMITONES = 0;
+/** One cent of parameter travel; this is continuous pitch, not a semitone detent. */
+export const GLOBAL_TUNE_STEP_SEMITONES = 0.01;
+export const GLOBAL_TUNE_MODULATION_MIN_SEMITONES = -48;
+export const GLOBAL_TUNE_MODULATION_MAX_SEMITONES = 48;
+
+function finiteSemitones(value: unknown): number {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : GLOBAL_TUNE_INITIAL_SEMITONES;
+}
+
+export function clampGlobalTuneSemitones(value: unknown): number {
+    return Math.min(
+        GLOBAL_TUNE_MAX_SEMITONES,
+        Math.max(GLOBAL_TUNE_MIN_SEMITONES, finiteSemitones(value)),
+    );
+}
+
+/** A pitch readout that keeps the continuous cent component visible at all times. */
+export function formatSemitonesAndCents(value: number, signed = true): string {
+    const numeric = finiteSemitones(value);
+    const absolute = Math.abs(numeric);
+    let semitones = Math.floor(absolute + 1e-9);
+    let cents = Math.round((absolute - semitones) * 100);
+    if (cents === 100) {
+        semitones += 1;
+        cents = 0;
+    }
+    const sign = !signed || Math.abs(numeric) < 0.005 ? "" : numeric > 0 ? "+" : "-";
+    return `${sign}${semitones} st ${String(cents).padStart(2, "0")} ct`;
+}

@@ -966,8 +966,8 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - Bounce, velocity, voice stealing, release tails, old-sound migration, Init, preset and URL recall, and host state all reproduce the expected loudness shape.
     - Modulation tests prove Amp Envelope is always connected to note amplitude and can simultaneously modulate another eligible parameter like a normal envelope.
 
-[ ] T39 — Add one modulatable Global Tune control
-    Active owner (2026-08-26):
+[x] T39 — Add one modulatable Global Tune control
+    Completed (2026-08-26):
     - Codex task `Implement Global Tune`, thread `01a03b80-6fc6-7cf1-b9c6-b77f17f435c6`, branch `codex/t39-global-tune`, worktree `/Users/winterfell/.codex/worktrees/b054cfa6-fe72-4fd4-9a5f-0c5571aea806/cosimo-synth`, model SOL, reasoning max.
     Code-backed starting point:
     - There is no synth-wide tune parameter today. Tuning and pitch modulation are oscillator-specific, and the pitch sent to effects currently inherits Oscillator A's private tuning and modulation.

@@ -31,6 +31,7 @@ import { MOBILE_VOICE_PAGES, getMobileVoiceControlSpec } from "./mobile-voice-pa
 import {
     parameterEntrySpecForMobileVoiceControl,
     parameterEntrySpecForRackParameter,
+    parameterEntrySpecForScalar,
     type ParameterEntrySpec,
 } from "./parameter-value-entry";
 import type { MobileVoiceBindableControlID } from "./mobile-voice-display-descriptors";
@@ -40,6 +41,14 @@ import {
     type MobileVoiceRailBand,
 } from "./mobile-voice-rail-projection";
 import type { ModulationRoute } from "./modulation";
+import {
+    GLOBAL_TUNE_ENDPOINT_ID,
+    GLOBAL_TUNE_INITIAL_SEMITONES,
+    GLOBAL_TUNE_MAX_SEMITONES,
+    GLOBAL_TUNE_MIN_SEMITONES,
+    GLOBAL_TUNE_STEP_SEMITONES,
+    GLOBAL_TUNE_TARGET_KIND,
+} from "./global-tune";
 
 export type ModulationTargetRailProjection = {
     /** Value -> [0,1] track position in the parameter's own display scale. */
@@ -212,6 +221,28 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
     const binding = descriptor.binding;
     if (binding._tag !== "endpoint") {
         return null;
+    }
+    if (targetKind === GLOBAL_TUNE_TARGET_KIND) {
+        const entrySpec = parameterEntrySpecForScalar({
+            min: GLOBAL_TUNE_MIN_SEMITONES,
+            max: GLOBAL_TUNE_MAX_SEMITONES,
+            step: GLOBAL_TUNE_STEP_SEMITONES,
+            unit: "st",
+            digits: 2,
+        });
+        return {
+            endpointID: GLOBAL_TUNE_ENDPOINT_ID,
+            entrySpec,
+            label: descriptor.label,
+            initialValue: GLOBAL_TUNE_INITIAL_SEMITONES,
+            railProjection: buildRailProjection({
+                min: GLOBAL_TUNE_MIN_SEMITONES,
+                max: GLOBAL_TUNE_MAX_SEMITONES,
+                scale: "linear",
+                application: "linear",
+            }),
+            amountDragStyle: "amount-span",
+        };
     }
     const voiceFilterDescriptor = Object.values(VOICE_FILTER_KNOB_DESCRIPTORS)
         .find((candidate) => candidate.endpointID === binding.endpointId);

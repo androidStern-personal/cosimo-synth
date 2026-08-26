@@ -33,6 +33,7 @@ function currentContract(buildCanonicalPluginStateContract) {
             { endpointID: "sourceMode", type: "number", min: 0, max: 1, defaultValue: 0 },
             { endpointID: "oscAWavetableSelect", type: "number", min: 0, max: 237, defaultValue: 0 },
             { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
+            { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
             { endpointID: "voiceEnabled", type: "boolean", defaultValue: true },
         ],
         storedState: [
@@ -45,11 +46,12 @@ function currentContract(buildCanonicalPluginStateContract) {
 const soundDocumentArbitrary = fc.record({
     wavetable: fc.integer({ min: 0, max: 237 }),
     filterMix: fc.integer({ min: 0, max: 1_000 }).map((value) => value / 1_000),
+    globalTune: fc.integer({ min: -2_400, max: 2_400 }).map((value) => value / 100),
     voiceEnabled: fc.boolean(),
     routes: fc.array(fc.record({
         id: fc.string({ minLength: 1, maxLength: 16 }),
         amount: fc.integer({ min: -1_000, max: 1_000 }).map((value) => value / 1_000),
-        target: fc.constantFrom("oscA.framePosition", "voice-filter.cutoff", "chorus.mix"),
+        target: fc.constantFrom("oscA.framePosition", "voice-filter.cutoff", "chorus.mix", "voice.globalTune"),
     }), { maxLength: 8 }),
     laneOrder: fc.shuffledSubarray(["distortion", "chorus", "delay", "reverb"], {
         minLength: 4,
@@ -73,6 +75,7 @@ test("random valid complete sounds survive deflate/base64url round trips exactly
                 sourceMode: 0,
                 oscAWavetableSelect: document.wavetable,
                 filterMix: document.filterMix,
+                globalTune: document.globalTune,
                 voiceEnabled: document.voiceEnabled,
             },
             storedState: {
@@ -118,6 +121,7 @@ test("version skew uses the existing synth preset migrations after link decode",
         parameters: [
             ...legacyParameters,
             { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
+            { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
         ],
         storedState: [
             { key: "modulation.v6", schemaVersion: 6, required: true },
@@ -149,6 +153,7 @@ test("version skew uses the existing synth preset migrations after link decode",
         migrations: migrations.buildSynthPresetMigrations(nextContract),
     });
     assert.equal(normalized.parameters.filterMix, 1);
+    assert.equal(normalized.parameters.globalTune, 0);
     assert.equal(normalized.storedState["bounce.v1"], null);
     assert.deepEqual(normalized.storedState["modulation.v6"], legacyPreset.storedState["modulation.v6"]);
 });

@@ -8,7 +8,7 @@ const repoRoot = path.resolve(import.meta.dirname, "..");
 
 // Effects Lane target kinds (M1 slice 3): `lane.<instanceId>.<endpointID>`
 // names one pool device's parameter. Lane kinds are per-patch dynamic — they
-// never join the static 1,131-pair domain — and they speak their device
+// never join the static 1,144-pair domain — and they speak their device
 // type's canonical modulation language (the base module's units and limits).
 
 test("lane kind grammar accepts real device params and rejects everything else", async () => {

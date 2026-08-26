@@ -38,6 +38,7 @@ export const SHARED_VOICE_MODULATION_TARGET_KINDS = [
     "env3Sustain",
     "env3Release",
     "filterMix",
+    "globalTuneSemitones",
 ];
 /** The complete source domain; display names live with presentation metadata. */
 export const MODULATION_SOURCE_IDENTITIES = Object.freeze([
@@ -121,9 +122,9 @@ const sourceIdentityByAddress = new Map(MODULATION_SOURCE_IDENTITIES.map((identi
 const targetIdentityByKind = new Map(MODULATION_TARGET_IDENTITIES.map((identity) => [identity.kind, identity]));
 function assertCanonicalIdentities() {
     if (MODULATION_SOURCE_COUNT !== 13
-        || MODULATION_VOICE_TARGET_COUNT !== 51
+        || MODULATION_VOICE_TARGET_COUNT !== 52
         || MODULATION_RACK_TARGET_COUNT !== 36
-        || MODULATION_LEGAL_PAIR_COUNT !== 1131) {
+        || MODULATION_LEGAL_PAIR_COUNT !== 1144) {
         throw new Error("Unexpected modulation domain size");
     }
     for (const [group, expectedCount] of [["voice", 9], ["macro", 4]]) {
@@ -133,7 +134,7 @@ function assertCanonicalIdentities() {
             throw new Error(`Bad modulation ${group} source indexes`);
         }
     }
-    for (const [group, expectedCount] of [["voice", 51], ["rack", 36]]) {
+    for (const [group, expectedCount] of [["voice", 52], ["rack", 36]]) {
         const identities = MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
         if (identities.length !== expectedCount
             || identities.some((identity, position) => identity.runtimeIndex !== position)) {

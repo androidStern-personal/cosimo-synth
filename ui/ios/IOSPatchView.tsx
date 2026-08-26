@@ -37,9 +37,23 @@ import {
     type ModulationRoute,
     type ModulationRouteUpdate,
 } from "../shared/modulation";
+import {
+    GLOBAL_TUNE_ENDPOINT_ID,
+    GLOBAL_TUNE_INITIAL_SEMITONES,
+    GLOBAL_TUNE_MAX_SEMITONES,
+    GLOBAL_TUNE_MIN_SEMITONES,
+    GLOBAL_TUNE_STEP_SEMITONES,
+    GLOBAL_TUNE_TARGET_KIND,
+    formatSemitonesAndCents,
+} from "../shared/global-tune";
 import { usePatchModulationTargetOptions } from "../shared/lane-param-bindings";
 import { getModulationTargetDisplayLabel } from "../shared/target-descriptor";
-import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
+import {
+    presentRouteWithCanonicalAmount,
+    useModulationRouteAmountBinding,
+} from "../shared/modulation-route-amount";
+import { findRackModulationSource } from "../shared/rack-modulation-sources";
+import type { PatchControlBinding } from "../shared/patch-controls";
 import {
     formatParameterEntry,
     parameterEntrySpecForFrequency,
@@ -48,11 +62,12 @@ import {
 } from "../shared/parameter-value-entry";
 import {
     MobileVoiceFocusedEditor,
+    MOBILE_VOICE_OWNER_ACCENT,
     type MobileVoiceArmedSource,
     type MobileVoiceEditorBindings,
 } from "../shared/mobile-voice-editor";
 import { ParameterHudLayerContext } from "../shared/parameter-hud";
-import { ParameterMenuContext } from "../shared/parameter-context-menu";
+import { ParameterMenuContext, useParameterMenu } from "../shared/parameter-context-menu";
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import {
     clampDisplayPosition,
@@ -65,6 +80,10 @@ import {
     IOSKeyboardDock,
     type IOSPianoKeyboardElement,
 } from "./ios-keyboard-adapter";
+import {
+    ModulatedParameterKnob,
+    type ParameterKnobDescriptor,
+} from "../desktop/rack-parameter-knob";
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
@@ -81,6 +100,23 @@ const IOS_PERCENT_ENTRY_SPEC = parameterEntrySpecForScalar({
     unit: "%",
     canonicalPerDisplayedUnit: 0.01,
     digits: 0,
+});
+const IOS_GLOBAL_TUNE_ENTRY_SPEC = parameterEntrySpecForScalar({
+    min: GLOBAL_TUNE_MIN_SEMITONES,
+    max: GLOBAL_TUNE_MAX_SEMITONES,
+    step: GLOBAL_TUNE_STEP_SEMITONES,
+    unit: "st",
+    digits: 2,
+});
+const IOS_GLOBAL_TUNE_KNOB_DESCRIPTOR: ParameterKnobDescriptor = Object.freeze({
+    endpointID: GLOBAL_TUNE_ENDPOINT_ID,
+    label: "Global Tune",
+    shortLabel: "Global Tune",
+    min: GLOBAL_TUNE_MIN_SEMITONES,
+    max: GLOBAL_TUNE_MAX_SEMITONES,
+    initial: GLOBAL_TUNE_INITIAL_SEMITONES,
+    step: GLOBAL_TUNE_STEP_SEMITONES,
+    scale: "linear",
 });
 const IOS_FREQUENCY_ENTRY_SPEC = parameterEntrySpecForFrequency({
     minHz: DISTORTION_WET_HP_MIN_HZ,
@@ -122,6 +158,9 @@ type IOSPlayPanelProps = {
     glideValue: number;
     onGlideChange: (nextValue: number) => void;
     glideFocusTarget: ReturnType<typeof useSynthPatchViewModel>["keyboardRouting"]["glideFocusTarget"];
+    globalTune: PatchControlBinding<number>;
+    routes: ReadonlyArray<ModulationRoute>;
+    armedSource: MobileVoiceArmedSource;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -226,7 +265,67 @@ function arePlayPanelPropsEqual(previousProps: IOSPlayPanelProps, nextProps: IOS
         && previousProps.onGlideChange === nextProps.onGlideChange
         && previousProps.glideFocusTarget.onActivate === nextProps.glideFocusTarget.onActivate
         && previousProps.glideFocusTarget.onBeginTextEntry === nextProps.glideFocusTarget.onBeginTextEntry
-        && previousProps.glideFocusTarget.onEndTextEntry === nextProps.glideFocusTarget.onEndTextEntry;
+        && previousProps.glideFocusTarget.onEndTextEntry === nextProps.glideFocusTarget.onEndTextEntry
+        && previousProps.globalTune.value === nextProps.globalTune.value
+        && previousProps.globalTune.commitValue === nextProps.globalTune.commitValue
+        && previousProps.routes === nextProps.routes
+        && previousProps.armedSource.sourceKind === nextProps.armedSource.sourceKind
+        && previousProps.armedSource.sourceSlot === nextProps.armedSource.sourceSlot;
+}
+
+function IOSGlobalTuneKnob({
+    binding,
+    routes,
+    armedSource,
+}: {
+    binding: PatchControlBinding<number>;
+    routes: ReadonlyArray<ModulationRoute>;
+    armedSource: MobileVoiceArmedSource;
+}) {
+    const route = routes.find((candidate) => (
+        candidate.targetKind === GLOBAL_TUNE_TARGET_KIND
+        && candidate.sourceKind === armedSource.sourceKind
+        && candidate.sourceSlot === armedSource.sourceSlot
+    )) ?? null;
+    const amountBinding = useModulationRouteAmountBinding(route);
+    const presentedRoute = presentRouteWithCanonicalAmount(route, amountBinding);
+    const sourceDescriptor = findRackModulationSource(armedSource.sourceKind, armedSource.sourceSlot);
+    const openParameterMenu = useParameterMenu();
+
+    return (
+        <div className="ios-global-tune-field global-tune-knob-cell">
+            <ModulatedParameterKnob
+                descriptor={IOS_GLOBAL_TUNE_KNOB_DESCRIPTOR}
+                binding={binding}
+                modulationApplication="linear"
+                modulationTargetKind={GLOBAL_TUNE_TARGET_KIND}
+                formatValue={formatSemitonesAndCents}
+                ownerAccent={MOBILE_VOICE_OWNER_ACCENT}
+                route={presentedRoute}
+                sourceIsSelected
+                sourceAccent={sourceDescriptor.accent}
+                effectiveness="active"
+                dataRole="ios-global-tune-knob"
+                trackDataRole="ios-global-tune-knob-track"
+                handleDataRole="ios-global-tune-knob-handle"
+                onSelect={() => {}}
+                onModulationAmountChange={amountBinding.setValue}
+                onRequestContextMenu={(clientX, clientY) => {
+                    openParameterMenu?.({
+                        controlKey: GLOBAL_TUNE_ENDPOINT_ID,
+                        label: "Global Tune",
+                        targetKind: GLOBAL_TUNE_TARGET_KIND,
+                        baseSpec: IOS_GLOBAL_TUNE_ENTRY_SPEC,
+                        baseValue: binding.value,
+                        defaultValue: GLOBAL_TUNE_INITIAL_SEMITONES,
+                        commitBase: binding.commitValue,
+                        clientX,
+                        clientY,
+                    });
+                }}
+            />
+        </div>
+    );
 }
 
 const IOSPlayPanel = memo(function IOSPlayPanel({
@@ -236,6 +335,9 @@ const IOSPlayPanel = memo(function IOSPlayPanel({
     glideValue,
     onGlideChange,
     glideFocusTarget,
+    globalTune,
+    routes,
+    armedSource,
 }: IOSPlayPanelProps) {
     return (
         <div className="play-panel ios-section-panel" data-section-accent="lime" data-liquid-detail="section-tab">
@@ -253,6 +355,7 @@ const IOSPlayPanel = memo(function IOSPlayPanel({
                         ))}
                     </select>
                 </label>
+                <IOSGlobalTuneKnob binding={globalTune} routes={routes} armedSource={armedSource} />
                 <label className="play-field" aria-label="Glide time">
                     <div className="glide-field-body">
                         <input
@@ -1333,6 +1436,9 @@ function IOSPatchViewBody() {
                                 glideValue={synthView.glideTime.value}
                                 onGlideChange={synthView.glideTime.commitValue}
                                 glideFocusTarget={synthView.keyboardRouting.glideFocusTarget}
+                                globalTune={synthView.globalTune}
+                                routes={synthView.routes}
+                                armedSource={armedSource}
                             />
 
                             <IOSDistortionPanel

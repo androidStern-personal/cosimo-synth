@@ -44,6 +44,11 @@ import {
 import { buildModulationRuntimeProgramEvents } from "./modulation-runtime-program";
 import { err, ok, type Result } from "./result";
 import { getModulationTargetDisplayLabel } from "./target-descriptor";
+import {
+    GLOBAL_TUNE_MODULATION_MAX_SEMITONES,
+    GLOBAL_TUNE_MODULATION_MIN_SEMITONES,
+    formatSemitonesAndCents,
+} from "./global-tune";
 
 /** Persisted-state key for the hard-forked modulation contract. */
 export const MODULATION_STATE_KEY = "modulation.v6";
@@ -69,6 +74,10 @@ const ROUTE_AMOUNT_LIMITS = {
     filterQ: { min: -(FILTER_Q_MAX - FILTER_Q_MIN), max: FILTER_Q_MAX - FILTER_Q_MIN },
     filterMix: { min: -1.0, max: 1.0 },
     pitchSemitones: { min: -48.0, max: 48.0 },
+    globalTuneSemitones: {
+        min: GLOBAL_TUNE_MODULATION_MIN_SEMITONES,
+        max: GLOBAL_TUNE_MODULATION_MAX_SEMITONES,
+    },
     // Additive dB offset over the full parameter span; the engine clamps base + offset.
     ampGainDb: { min: -54.0, max: 54.0 },
     pan: { min: -1.0, max: 1.0 },
@@ -103,6 +112,7 @@ const ROUTE_AMOUNT_STEPS = {
     filterQ: 0.001,
     filterMix: 0.001,
     pitchSemitones: 0.01,
+    globalTuneSemitones: 0.01,
     ampGainDb: 0.1,
     pan: 0.001,
     unisonDetune: 0.001,
@@ -573,6 +583,8 @@ export function formatModulationAmountReadout(
             return `${prefix}${formatMagnitude(clampedAmount, 2)} Q`;
         case "pitchSemitones":
             return `${prefix}${formatMagnitude(clampedAmount, 1)} st`;
+        case "globalTuneSemitones":
+            return `${polarity === "bipolar" && Math.abs(clampedAmount) > 1e-9 ? "±" : prefix}${formatSemitonesAndCents(clampedAmount, false)}`;
         case "ampGainDb":
             return `${prefix}${formatMagnitude(clampedAmount, 1)} dB`;
         case "pan": {
@@ -613,6 +625,8 @@ export function getModulationTargetClampHint(targetKind: ModulationTargetKind) {
             return "Mix clamps to 0-100%.";
         case "pitchSemitones":
             return "Pitch depth adds on top of note, glide, and bend.";
+        case "globalTuneSemitones":
+            return "Global Tune depth joins note, glide, bend, and the Global Tune knob before oscillator tuning.";
         case "ampGainDb":
             return "Amplitude still clamps to the synth's gain range.";
         case "pan":

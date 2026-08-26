@@ -3,6 +3,7 @@
 @source "../shared";
 @import "../shared/synth-style-guide.css";
 @import "../shared/mobile-voice-editor.css";
+@import "../desktop/rack-parameter-knob.css";
 
 :host {
     display: block;
@@ -467,9 +468,26 @@ select {
 .play-grid {
     display: grid;
     min-width: 0;
-    grid-template-columns: minmax(132px, 160px) minmax(0, 1fr);
+    grid-template-columns: minmax(104px, 132px) minmax(84px, 104px) minmax(0, 1fr);
     gap: 10px;
     align-items: center;
+}
+
+.ios-global-tune-field {
+    width: 100%;
+    height: 88px;
+    min-height: 88px;
+    --editor-accent: var(--section-accent);
+}
+
+.ios-global-tune-field .rack-parameter-knob {
+    min-height: 88px;
+    padding-block: 0;
+}
+
+.ios-global-tune-field .rack-knob-art {
+    width: 52px;
+    height: 52px;
 }
 
 .play-field {
