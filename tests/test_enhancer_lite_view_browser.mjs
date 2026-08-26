@@ -39,11 +39,16 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts")
     await page.evaluate(async ({ values, sourceModulePath }) => {
         const parameterValues = new Map(Object.entries(values));
         const listeners = new Map();
+        const endpointListeners = new Map();
         const sent = [];
 
         const emit = (endpointID, value) => {
             parameterValues.set(endpointID, value);
             for (const listener of listeners.get(endpointID) ?? [])
+                listener(value);
+        };
+        const emitEndpoint = (endpointID, value) => {
+            for (const listener of endpointListeners.get(endpointID) ?? [])
                 listener(value);
         };
 
@@ -59,6 +64,14 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts")
             requestParameterValue(endpointID) {
                 queueMicrotask(() => emit(endpointID, parameterValues.get(endpointID)));
             },
+            addEndpointListener(endpointID, listener) {
+                const listenersForEndpoint = endpointListeners.get(endpointID) ?? new Set();
+                listenersForEndpoint.add(listener);
+                endpointListeners.set(endpointID, listenersForEndpoint);
+            },
+            removeEndpointListener(endpointID, listener) {
+                endpointListeners.get(endpointID)?.delete(listener);
+            },
             sendEventOrValue(endpointID, value) {
                 sent.push({ endpointID, value });
                 emit(endpointID, value);
@@ -69,8 +82,11 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts")
         document.querySelector("#mount").replaceChildren(module.default(patchConnection));
         window.__ENHANCER_LITE_TEST__ = {
             emit,
+            emitEndpoint,
             sent,
             clearSent: () => sent.splice(0),
+            endpointListenerCount: (endpointID) => endpointListeners.get(endpointID)?.size ?? 0,
+            disconnect: () => document.querySelector("#mount").replaceChildren(),
         };
     }, { values: initialValues, sourceModulePath: modulePath });
     await page.locator("cosimo-enhancer-lite-view").waitFor();
@@ -176,6 +192,137 @@ test("the plotted bell narrows as Q rises and tracks the actual 12 dB amount law
     }
 });
 
+test("input and output spectra share the bell's frequency grid and aligned dB rows", async () => {
+    const page = await openEnhancerLite();
+
+    try {
+        await page.evaluate(() => {
+            window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000);
+            window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 1);
+            const inputMagnitudes = new Array(2048).fill(0);
+            const outputMagnitudes = new Array(2048).fill(0);
+            const bin = Math.round(1000 * 4096 / 48_000);
+            inputMagnitudes[bin] = 0.25;
+            outputMagnitudes[bin] = 0.5;
+            window.__ENHANCER_LITE_TEST__.emitEndpoint("inputSpectrum", {
+                sampleRateHz: 48_000,
+                magnitudes: inputMagnitudes,
+            });
+            window.__ENHANCER_LITE_TEST__.emitEndpoint("outputSpectrum", {
+                event: {
+                    sampleRateHz: 48_000,
+                    magnitudes: outputMagnitudes,
+                },
+            });
+        });
+
+        const inputPath = await shadow(page, "[data-spectrum-role='input']").getAttribute("d");
+        const outputPath = await shadow(page, "[data-spectrum-role='output']").getAttribute("d");
+        assert.ok(inputPath.length > 1000);
+        assert.ok(outputPath.length > 1000);
+        assert.notEqual(inputPath, outputPath);
+        assert.equal(await shadow(page, "[data-spectrum-peak='input']").textContent(), "-12.0 dB");
+        assert.equal(await shadow(page, "[data-spectrum-peak='output']").textContent(), "-6.0 dB");
+
+        const parsePoints = (pathValue) => [...pathValue.matchAll(/[ML] ([\d.]+) ([\d.]+)/g)]
+            .map((match) => ({ x: Number(match[1]), y: Number(match[2]) }));
+        const inputPeak = parsePoints(inputPath).reduce((peak, point) => (
+            point.y < peak.y ? point : peak
+        ));
+        const outputPeak = parsePoints(outputPath).reduce((peak, point) => (
+            point.y < peak.y ? point : peak
+        ));
+        const handleX = Number(await shadow(page, "[data-response-role='primary-handle']").getAttribute("cx"));
+        const oneKhzTickX = Number(await shadow(page, "[data-frequency-hz='1000']").getAttribute("x"));
+        assert.equal(handleX, oneKhzTickX);
+        assert.ok(Math.abs(inputPeak.x - handleX) <= 5, `${inputPeak.x} vs ${handleX}`);
+        assert.ok(Math.abs(outputPeak.x - handleX) <= 5, `${outputPeak.x} vs ${handleX}`);
+        assert.ok(outputPeak.y < inputPeak.y);
+
+        const gainRowY = await shadow(page, "[data-gain-db='6']").getAttribute("y");
+        const levelRowY = await shadow(page, "[data-level-dbfs='-36']").getAttribute("y");
+        assert.equal(gainRowY, levelRowY);
+        if (process.env.ENHANCER_LITE_SCREENSHOT_PATH) {
+            await page.screenshot({
+                path: process.env.ENHANCER_LITE_SCREENSHOT_PATH,
+                fullPage: true,
+            });
+        }
+    } finally {
+        await page.close();
+    }
+});
+
+test("the editor enables live analysis only while its view is connected", async () => {
+    const page = await openEnhancerLite();
+
+    try {
+        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent[0]), {
+            endpointID: "analyzerEnabledIn",
+            value: 1,
+        });
+        assert.equal(
+            await page.evaluate(() => window.__ENHANCER_LITE_TEST__.endpointListenerCount("inputSpectrum")),
+            1,
+        );
+        assert.equal(
+            await page.evaluate(() => window.__ENHANCER_LITE_TEST__.endpointListenerCount("outputSpectrum")),
+            1,
+        );
+
+        await page.evaluate(() => window.__ENHANCER_LITE_TEST__.disconnect());
+        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.at(-1)), {
+            endpointID: "analyzerEnabledIn",
+            value: 0,
+        });
+        assert.equal(
+            await page.evaluate(() => window.__ENHANCER_LITE_TEST__.endpointListenerCount("inputSpectrum")),
+            0,
+        );
+        assert.equal(
+            await page.evaluate(() => window.__ENHANCER_LITE_TEST__.endpointListenerCount("outputSpectrum")),
+            0,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("the generated white wordmark replaces the plain-text product heading", async () => {
+    const source = await readFile(sourcePath, "utf8");
+    assert.doesNotMatch(source, /<h1>Enhancer Lite<\/h1>/);
+
+    for (const modulePath of [
+        "/fx/enhancer_lite/view/source.ts",
+        "/build/fx/enhancer_lite_runtime/view/app.js",
+    ]) {
+        const page = await openEnhancerLite(modulePath);
+        try {
+            const wordmark = shadow(page, "img.wordmark");
+            await wordmark.evaluate((image) => image.decode());
+            const rendered = await wordmark.evaluate((image) => ({
+                alt: image.alt,
+                complete: image.complete,
+                naturalWidth: image.naturalWidth,
+                naturalHeight: image.naturalHeight,
+                sourcePath: new URL(image.currentSrc).pathname,
+            }));
+            assert.deepEqual(rendered, {
+                alt: "Enhancer Lite",
+                complete: true,
+                naturalWidth: 1024,
+                naturalHeight: 78,
+                sourcePath: modulePath.startsWith("/build/")
+                    ? "/build/fx/enhancer_lite_runtime/assets/enhancer-lite-wordmark.png"
+                    : "/fx/enhancer_lite/assets/enhancer-lite-wordmark.png",
+            });
+            assert.equal(await shadow(page, "h1").textContent(), "");
+        } finally {
+            await page.close();
+        }
+    }
+});
+
 test("the surface is solid black, neon, and free of the removed de-emphasis UI", async () => {
     const source = await readFile(sourcePath, "utf8");
     assert.doesNotMatch(source, /gradient/i);
@@ -198,6 +345,8 @@ test("the surface is solid black, neon, and free of the removed de-emphasis UI",
             shell: "rgb(0, 0, 0)",
             primary: "rgb(0, 240, 255)",
         });
+        assert.equal(await shadow(page, "[data-spectrum-role='input']").count(), 1);
+        assert.equal(await shadow(page, "[data-spectrum-role='output']").count(), 1);
         assert.equal(await shadow(page, "[data-endpoint-id='deEmphasisIn']").count(), 0);
     } finally {
         await page.close();

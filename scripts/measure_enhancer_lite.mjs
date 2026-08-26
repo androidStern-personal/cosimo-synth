@@ -346,6 +346,98 @@ async function benchmark(runtime, settings) {
     return samples[Math.floor(samples.length / 2)];
 }
 
+async function measureLiteAnalyzer(RuntimeClass, sampleRate) {
+    const performer = new RuntimeClass();
+    await performer.initialise(nextSessionID, sampleRate);
+    nextSessionID += 1;
+    for (const [endpointID, value] of Object.entries({
+        ...liteDefaults,
+        freqHzIn: 1000,
+        qIn: 0.71,
+        modeIn: 1,
+        midAmountIn: 0,
+        sideAmountIn: 1,
+        curveIn: 1,
+        saturationModeIn: 1,
+    })) {
+        performer[`setInputValue_${endpointID}`](value, 0);
+    }
+
+    let renderedFrames = 0;
+    const processFrames = (frameCount) => {
+        for (let blockStart = 0; blockStart < frameCount; blockStart += 512) {
+            const blockFrames = Math.min(512, frameCount - blockStart);
+            const left = new Float32Array(blockFrames);
+            const right = new Float32Array(blockFrames);
+            for (let frame = 0; frame < blockFrames; frame += 1) {
+                const sample = 0.5 * Math.sin(
+                    2 * Math.PI * 1000 * (renderedFrames + frame) / sampleRate,
+                );
+                left[frame] = sample;
+                right[frame] = -sample;
+            }
+            performer.setInputStreamFrames_audioIn([left, right], blockFrames, 0);
+            performer.advance(blockFrames);
+            performer.getOutputFrames_audioOut([
+                new Float32Array(blockFrames),
+                new Float32Array(blockFrames),
+            ], blockFrames, 0);
+            renderedFrames += blockFrames;
+        }
+    };
+
+    processFrames(Math.ceil(sampleRate * 0.05 / 512) * 512);
+    const disabledInputEvents = performer.getOutputEventCount_inputSpectrum();
+    const disabledOutputEvents = performer.getOutputEventCount_outputSpectrum();
+    performer.resetOutputEventCount_inputSpectrum();
+    performer.resetOutputEventCount_outputSpectrum();
+
+    performer.sendInputEvent_analyzerEnabledIn(1);
+    processFrames(1536);
+    const inputEventCount = performer.getOutputEventCount_inputSpectrum();
+    const outputEventCount = performer.getOutputEventCount_outputSpectrum();
+    const inputFrame = inputEventCount > 0
+        ? performer.getOutputEvent_inputSpectrum(inputEventCount - 1).event
+        : null;
+    const outputFrame = outputEventCount > 0
+        ? performer.getOutputEvent_outputSpectrum(outputEventCount - 1).event
+        : null;
+
+    if (!inputFrame || !outputFrame)
+        throw new Error(`Enhancer Lite analyser did not emit at ${sampleRate} Hz`);
+    if (inputFrame.magnitudes.length !== 2048 || outputFrame.magnitudes.length !== 2048)
+        throw new Error(`Enhancer Lite analyser returned the wrong bin count at ${sampleRate} Hz`);
+
+    let inputPeakIndex = 0;
+    let maximumBeforeAfterDifference = 0;
+    for (let bin = 0; bin < inputFrame.magnitudes.length; bin += 1) {
+        const inputMagnitude = inputFrame.magnitudes[bin];
+        const outputMagnitude = outputFrame.magnitudes[bin];
+        if (!Number.isFinite(inputMagnitude) || !Number.isFinite(outputMagnitude))
+            throw new Error(`Enhancer Lite analyser returned non-finite data at ${sampleRate} Hz`);
+        if (inputMagnitude > inputFrame.magnitudes[inputPeakIndex])
+            inputPeakIndex = bin;
+        maximumBeforeAfterDifference = Math.max(
+            maximumBeforeAfterDifference,
+            Math.abs(outputMagnitude - inputMagnitude),
+        );
+    }
+
+    const peakFrequencyHz = inputPeakIndex * sampleRate / 4096;
+    const targetBin = Math.round(1000 * 4096 / sampleRate);
+    return {
+        sampleRate,
+        disabledInputEvents,
+        disabledOutputEvents,
+        inputEventCount,
+        outputEventCount,
+        peakFrequencyHz,
+        inputFundamentalMagnitude: inputFrame.magnitudes[targetBin],
+        outputFundamentalMagnitude: outputFrame.magnitudes[targetBin],
+        maximumBeforeAfterDifference,
+    };
+}
+
 const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "cosimo-enhancer-lite-"));
 
 try {
@@ -569,6 +661,12 @@ try {
     for (const row of sampleRateRows)
         row.liteDeltaFrom48Db = dbRatio(row.litePeak, lite48Peak);
 
+    const analyzerRows = await Promise.all(
+        [44_100, 48_000, 96_000, 192_000].map((sampleRate) => (
+            measureLiteAnalyzer(LiteRuntime, sampleRate)
+        )),
+    );
+
     await fs.mkdir(reviewDirectory, { recursive: true });
     const musicalContext = context(48_000, 0.3, 1.5);
     const musicalFixtures = [
@@ -712,6 +810,7 @@ try {
             deEmphasis: "absent",
             programDependentGainCompensation: false,
             declaredLatencySamples: 3,
+            analyzer: "editor-gated stereo-power input/output FFT",
         },
         thresholds: {
             maximumResponseErrorDb: 0.5,
@@ -722,6 +821,9 @@ try {
             maximumRelevantAliasRegressionDb: 12,
             maximumDeepLiteAliasDbc: -75,
             minimumBenchmarkSpeedup: 1.5,
+            maximumAnalyzerPeakFrequencyErrorHz: 50,
+            minimumAnalyzerFundamentalMagnitude: 0.3,
+            minimumAnalyzerBeforeAfterDifference: 0.0001,
         },
         summary: {
             worstResponseErrorDb,
@@ -739,6 +841,7 @@ try {
         responseRows,
         aliasRows,
         sampleRateRows,
+        analyzerRows,
         musicalRows,
     };
     await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
@@ -763,6 +866,21 @@ try {
         failures.push(`deep alias floor ${worstDeepLiteAliasDbc.toFixed(2)} dBc`);
     if (speedup < report.thresholds.minimumBenchmarkSpeedup)
         failures.push(`benchmark speedup ${speedup.toFixed(2)}x`);
+    for (const row of analyzerRows) {
+        if (row.disabledInputEvents !== 0 || row.disabledOutputEvents !== 0)
+            failures.push(`analyser emitted while disabled at ${row.sampleRate} Hz`);
+        if (row.inputEventCount === 0 || row.outputEventCount === 0)
+            failures.push(`analyser endpoint missing at ${row.sampleRate} Hz`);
+        if (Math.abs(row.peakFrequencyHz - 1000)
+            > report.thresholds.maximumAnalyzerPeakFrequencyErrorHz)
+            failures.push(`analyser peak frequency ${row.peakFrequencyHz.toFixed(1)} Hz at ${row.sampleRate} Hz`);
+        if (row.inputFundamentalMagnitude
+            < report.thresholds.minimumAnalyzerFundamentalMagnitude)
+            failures.push(`analyser lost Side signal at ${row.sampleRate} Hz`);
+        if (row.maximumBeforeAfterDifference
+            < report.thresholds.minimumAnalyzerBeforeAfterDifference)
+            failures.push(`analyser input/output traces matched at ${row.sampleRate} Hz`);
+    }
     if (failures.length > 0) {
         throw new Error(
             `Enhancer Lite evidence failed: ${failures.join("; ")}. Report: ${reportPath}`,

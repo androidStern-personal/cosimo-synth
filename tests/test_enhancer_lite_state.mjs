@@ -98,6 +98,10 @@ test("the isolated Lite DSP keeps the accepted laws while removing de-emphasis",
         path.join(repoRoot, "fx/enhancer_lite/EnhancerLitePlugin.cmajor"),
         "utf8",
     );
+    const analyzer = await fs.readFile(
+        path.join(repoRoot, "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor"),
+        "utf8",
+    );
     const desktopManifest = JSON.parse(await fs.readFile(
         path.join(repoRoot, "WavetableSynth.cmajorpatch"),
         "utf8",
@@ -121,6 +125,11 @@ test("the isolated Lite DSP keeps the accepted laws while removing de-emphasis",
     assert.doesNotMatch(source, /EnhancerFir/);
     assert.doesNotMatch(source, /selectedDownsampler|unprocessed/i);
     assert.doesNotMatch(graph, /deEmphasis/i);
+    assert.match(graph, /input event int32 analyzerEnabledIn \[\[ name: "Analyzer Enable", hidden: true \]\];/);
+    assert.match(graph, /output event wt::EnhancerLiteSpectrumFrame inputSpectrum/);
+    assert.match(graph, /output event wt::EnhancerLiteSpectrumFrame outputSpectrum/);
+    assert.match(analyzer, /let stereoPower = 0\.5f/);
+    assert.doesNotMatch(analyzer, /StereoToMonoAverage/);
 
     const smoothingSection = source.slice(
         source.indexOf("void smoothControls()"),

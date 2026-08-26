@@ -61,6 +61,7 @@ export const effectPlugins = {
         generatedHostLatencySamples: 3,
         runtimeSources: [
             { repoPath: "cmajor/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
+            { repoPath: "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor", runtimePath: "EnhancerLiteSpectrumAnalyzer.cmajor" },
             { repoPath: "fx/enhancer_lite/EnhancerLitePlugin.cmajor", runtimePath: "EnhancerLitePlugin.cmajor" },
         ],
     },

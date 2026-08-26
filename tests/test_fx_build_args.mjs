@@ -50,13 +50,22 @@ test("the Enhancer production plugin packages the canonical T26 DSP instead of a
 
 test("the Enhancer Lite plugin packages its isolated one-band prototype", async () => {
     const { buildModule } = await loadBuildModules();
+    const manifest = JSON.parse(await readFile(
+        path.join(repoRoot, "fx/enhancer_lite/EnhancerLite.cmajorpatch"),
+        "utf8",
+    ));
 
     assert.deepEqual(buildModule.effectPlugins["enhancer-lite"].runtimeSources, [
         { repoPath: "cmajor/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
+        {
+            repoPath: "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
+            runtimePath: "EnhancerLiteSpectrumAnalyzer.cmajor",
+        },
         { repoPath: "fx/enhancer_lite/EnhancerLitePlugin.cmajor", runtimePath: "EnhancerLitePlugin.cmajor" },
     ]);
     assert.equal(buildModule.effectPlugins["enhancer-lite"].generatedHostLatencySamples, 3);
     assert.equal(buildModule.effectPlugins["enhancer-lite"].productName, "CosimoEnhancerLite");
+    assert.deepEqual(manifest.resources, ["assets/enhancer-lite-wordmark.png"]);
 });
 
 test("the generated Enhancer plugin host latency is corrected at the narrow Cmajor seam", async () => {

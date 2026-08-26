@@ -17,9 +17,13 @@
     "height": 520,
     "resizable": true
   },
+  "resources": [
+    "assets/enhancer-lite-wordmark.png"
+  ],
   "isInstrument": false,
   "source": [
     "../../cmajor/EnhancerLite.cmajor",
+    "../../cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
     "EnhancerLitePlugin.cmajor"
   ]
 }
