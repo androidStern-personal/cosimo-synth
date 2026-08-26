@@ -10,6 +10,7 @@
     "ui:desktop:build": "node ui/build.mjs --desktop",
     "web:build": "node web/build.mjs",
     "sites:build": "node web/build-sites.mjs",
+    "test:developer-settings:generated": "node tests/tools/build_developer_settings_generated_artifacts.mjs && node --test tests/test_developer_settings_generated_browser.mjs",
     "web:serve": "python3 -m http.server 8123 --bind 127.0.0.1 --directory build/web",
     "test:web:audio-recovery": "npm run web:build && npm run test:web:audio-recovery:built",
     "test:web:audio-recovery:built": "node --test tests/test_browser_audio_lifecycle.mjs && node --test tests/test_browser_audio_recovery.mjs",

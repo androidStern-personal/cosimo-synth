@@ -1286,7 +1286,7 @@ class PresetBar extends HTMLElement {
         (this._els["shell-back"] as HTMLButtonElement).disabled = !available;
     }
 
-    /** Dev builds only: reveals the shell menu's Performance tuning row. */
+    /** Developer builds only: reveals the shell menu's Performance tuning row. */
     set perfTuningAvailable(available: boolean) {
         this._els["menu-perf-tuning"].toggleAttribute("hidden", !available);
     }

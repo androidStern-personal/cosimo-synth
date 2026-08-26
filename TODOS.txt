@@ -938,9 +938,11 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     Done when:
     - Browser coverage exercises both aspect ratios and a live resize across the boundary, proving that drawing, adding, selecting, and dragging points all use the visible time axis and preserve the same underlying envelope.
 
-[ ] T37 — Add one button that copies every Performance tuning setting
-    Active owner (2026-08-26):
-    - Codex task `Restore Developer Settings and Copy`, thread `01a03db8-dc75-71b3-b910-2389fcaf3567`, worktree `/Users/winterfell/.codex/worktrees/5f3e/cosimo-synth`, model SOL, reasoning max.
+[x] T37 — Add one button that copies every Performance tuning setting
+    Completed (2026-08-26):
+    - Codex task `Implement T52 and T37 Developer Settings`, thread `01a03db8-dc75-71b3-b910-2389fcaf3567`, branch `codex/t52-t37-developer-settings`, worktree `/Users/winterfell/.codex/worktrees/5f3e/cosimo-synth`, model SOL, reasoning max.
+    - The page now has one `Copy settings` action with pending, success, and rejected-write feedback. Its deterministic text projection covers every current Auto-preview algorithm and Mod drag feel value, and exhaustive typed projections make an added top-level or nested setting a compile-time obligation for the export.
+    - Generated-build browser proof edits every value in both current sections, exact-compares the clipboard payload in stable order, and proves a rejected write never reports success.
     Required result:
     - Add a `Copy settings` button to the developer `Performance tuning` page. It copies the complete current tuning state—not only the MSEG controls—as one deterministic, readable text block suitable for pasting into a message or source change.
     - Include every nested value after live edits, and keep the export tied to the tuning-state definition so new settings cannot be silently omitted.
@@ -1173,9 +1175,11 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     Done when:
     - Browser tests cover replacement and cancellation in the trunk, a Parallel branch, and a Frequency Split band, and prove the resulting rack matches the pictured graph without changing unrelated nodes.
 
-[ ] T52 — Restore the developer settings menu on the deployed Codex site
-    Active owner (2026-08-26):
-    - Codex task `Restore Developer Settings and Copy`, thread `01a03db8-dc75-71b3-b910-2389fcaf3567`, worktree `/Users/winterfell/.codex/worktrees/5f3e/cosimo-synth`, model SOL, reasoning max.
+[x] T52 — Restore the developer settings menu on the deployed Codex site
+    Completed (2026-08-26):
+    - Codex task `Implement T52 and T37 Developer Settings`, thread `01a03db8-dc75-71b3-b910-2389fcaf3567`, branch `codex/t52-t37-developer-settings`, worktree `/Users/winterfell/.codex/worktrees/5f3e/cosimo-synth`, model SOL, reasoning max.
+    - Root cause: the existing preset-menu entry was gated only by Vite's development mode, while Codex Sites uses a production Vite build. `sites:build` now explicitly opts into developer settings; ordinary web, standalone, and plugin production bundles remain opted out and tree-shake the page and menu entry.
+    - Generated-build browser proof exercises the actual ordinary and Sites artifacts at phone size: preset actions remain present, the ordinary bundle cannot expose the page, the Sites bundle reaches the complete current Performance tuning page, and the restored dialog remains within the responsive viewport. Deployment was intentionally not performed by this task.
     Reported failure:
     - The developer settings page previously reached through the preset bar's three-dot menu is absent from the deployed Codex site.
     Required work:

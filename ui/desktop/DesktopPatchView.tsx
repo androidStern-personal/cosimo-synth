@@ -155,7 +155,8 @@ import {
     formatSemitonesAndCents,
 } from "../shared/global-tune";
 
-// Code-split so release builds (flag false) never fetch the tuning page chunk.
+// Compile-time split so ordinary production builds (flag false) never contain
+// the tuning page; Vite dev and the opted-in Codex Sites build do.
 const PerfTuningPage = PERF_TUNING_AVAILABLE
     ? lazy(() => import("./perf-tuning-page"))
     : null;
@@ -1834,7 +1835,7 @@ function SynthPresetBarHost({
     compactSynth?: boolean;
     backAvailable?: boolean;
     onShellBack?: () => void;
-    /** Dev builds only: reveals the shell menu's Performance tuning row. */
+    /** Developer builds only: reveals the shell menu's Performance tuning row. */
     perfTuningAvailable?: boolean;
     onOpenPerfTuning?: () => void;
     onBounceGuardReady?: (
@@ -4276,8 +4277,8 @@ function DesktopPatchViewBody({
             // A private-browsing storage failure must not break the toggle.
         }
     }, [autoPreviewEnabled]);
-    // Dev builds only (perf-tuning.ts): the shell menu's Performance tuning
-    // page; release builds never reveal the row nor load the chunk.
+    // Developer builds only (perf-tuning.ts): the shell menu's Performance
+    // tuning page; ordinary production never reveals the row or loads it.
     const [perfTuningOpen, setPerfTuningOpen] = useState(false);
     const openPerfTuning = useCallback(() => setPerfTuningOpen(true), []);
     const closePerfTuning = useCallback(() => setPerfTuningOpen(false), []);

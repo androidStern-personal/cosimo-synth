@@ -1,15 +1,16 @@
 /**
- * The dev-build Performance tuning page (preset bar → shell menu → Performance
- * tuning). Two live tuning surfaces: which auto-preview algorithm the running
- * synth uses (with its numbers), and the mod-source drag outrun feel. Values
- * persist in localStorage via the perf-tuning store; release builds never
- * load this module.
+ * The developer-build Performance tuning page (preset bar → shell menu →
+ * Performance tuning). Two live tuning surfaces: which auto-preview algorithm
+ * the running synth uses (with its numbers), and the mod-source drag outrun
+ * feel. Values persist in localStorage via the perf-tuning store; ordinary
+ * production builds never load this module.
  */
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import {
     PERF_TUNING_DEFAULTS,
+    formatPerfTuningSettings,
     getPerfTuningState,
     subscribePerfTuning,
     updatePerfTuning,
@@ -62,6 +63,7 @@ function TuningSlider({
     step,
     format,
     onChange,
+    settingKey,
 }: {
     label: string;
     detail?: string;
@@ -71,6 +73,7 @@ function TuningSlider({
     step: number;
     format: (value: number) => string;
     onChange: (value: number) => void;
+    settingKey: string;
 }) {
     return (
         <label className="flex flex-col gap-1.5">
@@ -87,6 +90,8 @@ function TuningSlider({
                 max={max}
                 step={step}
                 value={value}
+                aria-label={label}
+                data-perf-tuning-key={settingKey}
                 onChange={(event) => onChange(Number(event.target.value))}
                 className={SLIDER_TRACK_CLASS}
                 style={{ accentColor: "#87d7f5" }}
@@ -112,7 +117,30 @@ function SectionHeading({ title, onReset }: { title: string; onReset: () => void
 
 export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
     const state = useSyncExternalStore(subscribePerfTuning, getPerfTuningState);
+    const [copyStatus, setCopyStatus] = useState<"idle" | "copying" | "success" | "failure">("idle");
     const setDrag = (next: Partial<ModSourceTouchTuning>) => updatePerfTuning({ drag: next });
+    const copySettings = async () => {
+        setCopyStatus("copying");
+
+        try {
+            const writeText = globalThis.navigator.clipboard?.writeText?.bind(globalThis.navigator.clipboard);
+            if (!writeText) {
+                setCopyStatus("failure");
+                return;
+            }
+            await writeText(formatPerfTuningSettings(state));
+            setCopyStatus("success");
+        } catch {
+            setCopyStatus("failure");
+        }
+    };
+    const copyFeedback = copyStatus === "copying"
+        ? "Copying settings…"
+        : copyStatus === "success"
+            ? "Settings copied."
+            : copyStatus === "failure"
+                ? "Copy failed. Check clipboard permission and try again."
+                : "";
 
     return (
         <div
@@ -158,6 +186,7 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                                         type="button"
                                         role="radio"
                                         aria-checked={selected}
+                                        data-perf-tuning-algorithm={row.id}
                                         onClick={() => updatePerfTuning({ algorithm: row.id })}
                                         className={`flex flex-col gap-0.5 rounded-xl border px-3 py-2 text-left ${
                                             selected
@@ -180,6 +209,7 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                             min={40}
                             max={400}
                             step={10}
+                            settingKey="settleMs"
                             format={(v) => `${v}ms`}
                             onChange={(settleMs) => updatePerfTuning({ settleMs })}
                         />
@@ -190,6 +220,7 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                             min={100}
                             max={600}
                             step={25}
+                            settingKey="minGapMs"
                             format={(v) => `${v}ms`}
                             onChange={(minGapMs) => updatePerfTuning({ minGapMs })}
                         />
@@ -200,6 +231,7 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                             min={1000}
                             max={10000}
                             step={500}
+                            settingKey="holdMs"
                             format={(v) => `${(v / 1000).toFixed(1)}s`}
                             onChange={(holdMs) => updatePerfTuning({ holdMs })}
                         />
@@ -212,6 +244,8 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                             </span>
                             <input
                                 type="checkbox"
+                                aria-label="Loop sync"
+                                data-perf-tuning-key="loopSync"
                                 checked={state.loopSync}
                                 onChange={(event) => updatePerfTuning({ loopSync: event.target.checked })}
                                 className="h-5 w-5"
@@ -233,6 +267,7 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                             min={0}
                             max={30}
                             step={1}
+                            settingKey="drag.activationPx"
                             format={(v) => `${v}px`}
                             onChange={(activationPx) => setDrag({ activationPx })}
                         />
@@ -242,6 +277,7 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                             min={16}
                             max={200}
                             step={4}
+                            settingKey="drag.rampPx"
                             format={(v) => `${v}px`}
                             onChange={(rampPx) => setDrag({ rampPx })}
                         />
@@ -251,6 +287,7 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                             min={1}
                             max={4}
                             step={0.05}
+                            settingKey="drag.gainMin"
                             format={(v) => `${v.toFixed(2)}×`}
                             onChange={(gainMin) => setDrag({ gainMin })}
                         />
@@ -260,6 +297,7 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                             min={1}
                             max={6}
                             step={0.05}
+                            settingKey="drag.gainMax"
                             format={(v) => `${v.toFixed(2)}×`}
                             onChange={(gainMax) => setDrag({ gainMax })}
                         />
@@ -269,6 +307,7 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                             min={80}
                             max={600}
                             step={4}
+                            settingKey="drag.referenceTravelPx"
                             format={(v) => `${v}px`}
                             onChange={(referenceTravelPx) => setDrag({ referenceTravelPx })}
                         />
@@ -280,6 +319,29 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                         </p>
                     </section>
                 </div>
+
+                <footer className="flex min-h-[72px] items-center gap-3 border-t border-white/[0.07] px-4 py-3">
+                    <button
+                        type="button"
+                        data-action="copy-perf-tuning-settings"
+                        onClick={() => void copySettings()}
+                        disabled={copyStatus === "copying"}
+                        className="shrink-0 rounded-lg border border-[#87d7f5]/45 bg-[#87d7f5]/10 px-3 py-2 text-xs font-semibold text-[#b8e6fa] hover:bg-[#87d7f5]/15 disabled:cursor-wait disabled:opacity-60"
+                    >
+                        {copyStatus === "copying" ? "Copying…" : "Copy settings"}
+                    </button>
+                    <p
+                        role={copyStatus === "failure" ? "alert" : "status"}
+                        aria-live={copyStatus === "failure" ? "assertive" : "polite"}
+                        data-role="perf-tuning-copy-feedback"
+                        data-state={copyStatus}
+                        className={`min-w-0 text-[11.5px] leading-snug ${
+                            copyStatus === "failure" ? "text-[#ff9a7d]" : "text-slate-400"
+                        }`}
+                    >
+                        {copyFeedback}
+                    </p>
+                </footer>
             </div>
         </div>
     );

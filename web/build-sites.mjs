@@ -11,10 +11,10 @@ const webBuildDirectory = path.join(repoRoot, "build", "web");
 const distDirectory = path.join(repoRoot, "dist");
 const sitesDefaultTableName = "PWM MedicineHat";
 
-function run(command, args) {
+function run(command, args, environment = process.env) {
     const result = spawnSync(command, args, {
         cwd: repoRoot,
-        env: process.env,
+        env: environment,
         stdio: "inherit",
     });
 
@@ -65,7 +65,12 @@ async function curateFactoryBank(assetsDirectory) {
 }
 
 await fs.rm(distDirectory, { recursive: true, force: true });
-run("npm", ["run", "web:build"]);
+run("npm", ["run", "web:build"], {
+    ...process.env,
+    // This deployment is Andrew's Codex development site. Ordinary web,
+    // standalone, and plugin production builds do not receive this opt-in.
+    VITE_COSIMO_DEVELOPER_SETTINGS: "1",
+});
 await fs.mkdir(path.join(distDirectory, "server"), { recursive: true });
 const assetsDirectory = path.join(distDirectory, "assets");
 await fs.cp(webBuildDirectory, assetsDirectory, { recursive: true });

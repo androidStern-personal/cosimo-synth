@@ -1,9 +1,10 @@
 /**
- * The dev-build performance tuning store: which auto-preview algorithm the
- * running synth uses, that algorithm's numbers, and the mod-source drag-feel
- * overrides. The page that edits this lives behind PERF_TUNING_AVAILABLE and
- * is reachable from the preset bar's shell menu in dev builds only; release
- * builds always run the shipped algorithm with shipped drag feel.
+ * The developer-build performance tuning store: which auto-preview algorithm
+ * the running synth uses, that algorithm's numbers, and the mod-source
+ * drag-feel overrides. The page that edits this lives behind
+ * PERF_TUNING_AVAILABLE and is reachable from the preset bar's shell menu in
+ * Vite development or an explicitly opted-in developer deployment. Ordinary
+ * production builds always run the shipped algorithm with shipped drag feel.
  */
 
 import {
@@ -13,12 +14,17 @@ import {
 } from "./mod-source-touch-geometry";
 
 /**
- * Compile-time dev gate. Vite dev serves import.meta.env.DEV === true (the
- * LAN phone session included); vite production builds serve false; non-vite
- * loads (node tests, raw module hosts) have no env object and read false.
+ * Compile-time developer-surface gate. Vite dev serves import.meta.env.DEV ===
+ * true (the LAN phone session included); the Codex Sites build opts in with
+ * VITE_COSIMO_DEVELOPER_SETTINGS=1. Ordinary Vite production and non-Vite
+ * loads remain false.
  */
-const importMetaEnv = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env;
-export const PERF_TUNING_AVAILABLE = importMetaEnv?.DEV === true;
+const viteEnvironmentAvailable = typeof import.meta.env !== "undefined";
+export const PERF_TUNING_AVAILABLE = viteEnvironmentAvailable
+    && (
+        import.meta.env.DEV === true
+        || import.meta.env.VITE_COSIMO_DEVELOPER_SETTINGS === "1"
+    );
 
 export type AutoPreviewAlgorithm = "shipped" | "morph" | "settle" | "wrap" | "paced";
 
@@ -43,6 +49,56 @@ export const PERF_TUNING_DEFAULTS: PerfTuningState = {
     loopSync: true,
     drag: MOD_SOURCE_TOUCH_TUNING_DEFAULTS,
 };
+
+type PreviewTuningState = Omit<PerfTuningState, "drag">;
+type ExportScalar = string | number | boolean;
+
+function formatExportScalar(value: ExportScalar): string {
+    return typeof value === "string" ? JSON.stringify(value) : String(value);
+}
+
+function formatExportSection(
+    title: string,
+    pathPrefix: string,
+    values: Readonly<Record<string, ExportScalar>>,
+): ReadonlyArray<string> {
+    return [
+        `[${title}]`,
+        ...Object.entries(values).map(([key, value]) => (
+            `${pathPrefix}${key}: ${formatExportScalar(value)}`
+        )),
+    ];
+}
+
+/**
+ * Formats every current Performance tuning value in deterministic source-field
+ * order. The exhaustive `satisfies` projections make additions to either
+ * tuning section fail type-checking until the export contract is updated.
+ */
+export function formatPerfTuningSettings(current: PerfTuningState): string {
+    const previewValues = {
+        algorithm: current.algorithm,
+        settleMs: current.settleMs,
+        minGapMs: current.minGapMs,
+        holdMs: current.holdMs,
+        loopSync: current.loopSync,
+    } satisfies PreviewTuningState;
+    const dragValues = {
+        activationPx: current.drag.activationPx,
+        rampPx: current.drag.rampPx,
+        gainMin: current.drag.gainMin,
+        gainMax: current.drag.gainMax,
+        referenceTravelPx: current.drag.referenceTravelPx,
+    } satisfies ModSourceTouchTuning;
+
+    return [
+        "Cosimo Performance tuning",
+        "",
+        ...formatExportSection("Auto-preview algorithm", "", previewValues),
+        "",
+        ...formatExportSection("Mod drag feel", "drag.", dragValues),
+    ].join("\n");
+}
 
 const STORAGE_KEY = "cosimo.perf-tuning.v1";
 const ALGORITHMS: ReadonlyArray<AutoPreviewAlgorithm> = ["shipped", "morph", "settle", "wrap", "paced"];

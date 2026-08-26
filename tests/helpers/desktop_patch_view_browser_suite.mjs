@@ -877,6 +877,7 @@ export async function showVoiceControls(page) {
 
 export async function openBuiltDesktopBundlePage({
     beforeGoto = null,
+    compiledModuleUrl = "/patch_gui/desktop/index.js",
 } = {}) {
     const page = await browser.newPage();
 
@@ -894,7 +895,7 @@ export async function openBuiltDesktopBundlePage({
         </html>
     `);
 
-    await page.evaluate(async () => {
+    await page.evaluate(async (entryModuleUrl) => {
         class TestPianoKeyboard extends HTMLElement {
             notes = [];
             naturalWidth = 22;
@@ -1022,7 +1023,7 @@ export async function openBuiltDesktopBundlePage({
             },
         };
 
-        const createPatchView = (await import("/patch_gui/desktop/index.js")).default;
+        const createPatchView = (await import(entryModuleUrl)).default;
         const {
             createStoredStateRuntimeMirror,
         } = await import("/patch_gui/stored-state-runtime-mirror.js");
@@ -1061,7 +1062,7 @@ export async function openBuiltDesktopBundlePage({
         };
 
         mountPoint.replaceChildren(patchView);
-    });
+    }, compiledModuleUrl);
 
     return page;
 }
