@@ -28,15 +28,16 @@ struct Arguments
     std::string mode;
     std::string color;
     float deEmphasis = 1.0f;
+    float dcCutoffHz = 15.0f;
 };
 
 Arguments parseArguments (int argc, char** argv)
 {
-    if (argc != 13)
+    if (argc != 13 && argc != 14)
         throw std::runtime_error (
             "usage: enhancer_wrapper_probe input.raw output.raw iir|fir "
             "maximumQuality integerLatency sampleRate frequency q gainDb "
-            "Subtle|Medium Clean|Solid|Tube|Dry deEmphasis");
+            "Subtle|Medium Clean|Solid|Tube|Dry deEmphasis [dcCutoffHz]");
 
     return {
         argv[1],
@@ -51,6 +52,7 @@ Arguments parseArguments (int argc, char** argv)
         argv[10],
         argv[11],
         std::stof (argv[12]),
+        argc == 14 ? std::stof (argv[13]) : 15.0f,
     };
 }
 
@@ -127,9 +129,9 @@ private:
 class DcBlocker
 {
 public:
-    explicit DcBlocker (double sampleRate)
+    DcBlocker (double sampleRate, double cutoffHz)
         : pole (static_cast<float> (
-              std::exp (-juce::MathConstants<double>::twoPi * 15.0 / sampleRate)))
+              std::exp (-juce::MathConstants<double>::twoPi * cutoffHz / sampleRate)))
     {
     }
 
@@ -221,11 +223,14 @@ int main (int argc, char** argv)
             }
 
             oversampling.processSamplesDown (block);
-            DcBlocker dcBlocker (arguments.sampleRate);
-            for (auto* sample = buffer.getWritePointer (0);
-                 sample != buffer.getWritePointer (0) + buffer.getNumSamples();
-                 ++sample)
-                *sample = dcBlocker.process (*sample);
+            if (arguments.dcCutoffHz > 0.0f)
+            {
+                DcBlocker dcBlocker (arguments.sampleRate, arguments.dcCutoffHz);
+                for (auto* sample = buffer.getWritePointer (0);
+                     sample != buffer.getWritePointer (0) + buffer.getNumSamples();
+                     ++sample)
+                    *sample = dcBlocker.process (*sample);
+            }
         }
 
         std::copy (
@@ -238,7 +243,8 @@ int main (int argc, char** argv)
                   << "\",\"maximum_quality\":"
                   << (arguments.maximumQuality ? "true" : "false")
                   << ",\"integer_latency\":"
-                  << (arguments.integerLatency ? "true" : "false") << "}\n";
+                  << (arguments.integerLatency ? "true" : "false")
+                  << ",\"dc_cutoff_hz\":" << arguments.dcCutoffHz << "}\n";
         return 0;
     }
     catch (const std::exception& error)

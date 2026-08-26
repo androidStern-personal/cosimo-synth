@@ -220,10 +220,11 @@ def render_probe(
     color: str,
     de_emphasis: float,
     tag: str,
+    dc_cutoff_hz: float = 15.0,
 ) -> tuple[np.ndarray, float]:
     RAW_ROOT.mkdir(parents=True, exist_ok=True)
     invocation_id = safe_id(
-        f"{candidate.id}-{tag}-{frequency_hz:g}-{q:g}-{gain_db:g}-{mode}-{color}-{de_emphasis:g}"
+        f"{candidate.id}-{tag}-{frequency_hz:g}-{q:g}-{gain_db:g}-{mode}-{color}-{de_emphasis:g}-dc-{dc_cutoff_hz:g}"
     )
     input_path = RAW_ROOT / f"{invocation_id}-input.raw"
     output_path = RAW_ROOT / f"{invocation_id}-output.raw"
@@ -244,6 +245,7 @@ def render_probe(
             mode,
             color,
             str(de_emphasis),
+            str(dc_cutoff_hz),
         ],
         capture=True,
     )

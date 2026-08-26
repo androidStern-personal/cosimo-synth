@@ -1,5 +1,12 @@
 # Enhancer Spectre-Good Wrapper Prototype
 
+> Superseding low-frequency result, 2026-08-26: the 100 Hz exception below was
+> caused by the wrong de-emphasis/DC ordering, not by the selected FIR wrapper.
+> A training-only follow-up identifies Spectre's equivalent as a fixed 20 Hz
+> Butterworth high-pass on the shaped path followed by an unfiltered de-emphasis
+> subtraction. With that order, 100 Hz errors improve to -50.87 through -71.22 dB
+> across both modes and characters. See `ENHANCER_DEEMPHASIS_FINDINGS.md`.
+
 Date: 2026-08-26
 
 Checkpoint: `0e07f4230667c04f4f52dac31e9a4bb9eda9f8a4`

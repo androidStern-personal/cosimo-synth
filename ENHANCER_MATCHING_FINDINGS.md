@@ -5,7 +5,9 @@
 > endpoint carries fractional-latency phase, so those tables are useful full-path
 > diagnostics but are not isolated wet-endpoint comparisons. The corrected wet-only
 > topology experiment and superseding metrics are in
-> `ENHANCER_WRAPPER_PROTOTYPE_FINDINGS.md`.
+> `ENHANCER_WRAPPER_PROTOTYPE_FINDINGS.md`. The subsequent de-emphasis endpoint pass
+> resolves the remaining low-frequency mismatch and is authoritative for the final
+> signal order: `ENHANCER_DEEMPHASIS_FINDINGS.md`.
 
 Date: 2026-08-26
 
