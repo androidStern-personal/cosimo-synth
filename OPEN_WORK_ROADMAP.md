@@ -23,9 +23,9 @@ dependency order, safe parallel work, and integration gates.
 - The five distortion and output-polish documents are checked in at the repository
   root. They came from `claude/cosimo-distortion-quality-x0rx9c` at
   `63dd431b15f7ebfd27e9f54406892391a42fd6d7`.
-- The Performance tuning page is compiled into development builds only. Phone tuning
-  must use a reachable development build unless a separate protected-access product
-  decision is made.
+- Andrew explicitly approved public access to Performance tuning on the public Cosimo
+  Sites deployment on 2026-08-26. Ordinary web, standalone, and plugin production
+  builds still hide the menu row and exclude the page code.
 
 ## Sequencing decisions
 

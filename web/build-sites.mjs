@@ -10,6 +10,12 @@ const repoRoot = path.resolve(webDirectory, "..");
 const webBuildDirectory = path.join(repoRoot, "build", "web");
 const distDirectory = path.join(repoRoot, "dist");
 const sitesDefaultTableName = "PWM MedicineHat";
+const ordinaryBuildEnvironment = { ...process.env };
+delete ordinaryBuildEnvironment.VITE_COSIMO_DEVELOPER_SETTINGS;
+const sitesBuildEnvironment = {
+    ...ordinaryBuildEnvironment,
+    VITE_COSIMO_DEVELOPER_SETTINGS: "1",
+};
 
 function run(command, args, environment = process.env) {
     const result = spawnSync(command, args, {
@@ -64,21 +70,20 @@ async function curateFactoryBank(assetsDirectory) {
     );
 }
 
-await fs.rm(distDirectory, { recursive: true, force: true });
-run("npm", ["run", "web:build"], {
-    ...process.env,
-    // This deployment is Andrew's Codex development site. Ordinary web,
-    // standalone, and plugin production builds do not receive this opt-in.
-    VITE_COSIMO_DEVELOPER_SETTINGS: "1",
-});
-await fs.mkdir(path.join(distDirectory, "server"), { recursive: true });
-const assetsDirectory = path.join(distDirectory, "assets");
-await fs.cp(webBuildDirectory, assetsDirectory, { recursive: true });
-await curateFactoryBank(assetsDirectory);
-await enforcePublicAssetPolicy(assetsDirectory);
-await fs.writeFile(
-    path.join(distDirectory, "server", "index.js"),
-    `const worker = {
+let sitesBuildFailure;
+try {
+    await fs.rm(distDirectory, { recursive: true, force: true });
+    // Andrew explicitly approved public Developer Settings on this Sites
+    // deployment. Other production targets do not receive this opt-in.
+    run("npm", ["run", "web:build"], sitesBuildEnvironment);
+    await fs.mkdir(path.join(distDirectory, "server"), { recursive: true });
+    const assetsDirectory = path.join(distDirectory, "assets");
+    await fs.cp(webBuildDirectory, assetsDirectory, { recursive: true });
+    await curateFactoryBank(assetsDirectory);
+    await enforcePublicAssetPolicy(assetsDirectory);
+    await fs.writeFile(
+        path.join(distDirectory, "server", "index.js"),
+        `const worker = {
     async fetch(request, env) {
         const url = new URL(request.url);
         if (url.pathname === "/" || url.pathname === "/favicon.ico") {
@@ -91,6 +96,28 @@ await fs.writeFile(
 
 export default worker;
 `,
-);
+    );
+} catch (cause) {
+    sitesBuildFailure = cause;
+} finally {
+    try {
+        // web:build writes the generated desktop bundle in place. Restore the
+        // checked-in ordinary production artifact after dist has captured the
+        // Sites-specific build, including when the Sites build fails.
+        run("npm", ["run", "ui:desktop:build"], ordinaryBuildEnvironment);
+    } catch (restoreCause) {
+        if (sitesBuildFailure) {
+            throw new AggregateError(
+                [sitesBuildFailure, restoreCause],
+                "Sites build and ordinary desktop-bundle restore both failed.",
+            );
+        }
+        throw restoreCause;
+    }
+}
+
+if (sitesBuildFailure) {
+    throw sitesBuildFailure;
+}
 
 console.log(`Cosimo Sites bundle built at ${distDirectory}`);

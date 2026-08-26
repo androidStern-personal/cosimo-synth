@@ -1178,7 +1178,8 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
 [x] T52 — Restore the developer settings menu on the deployed Codex site
     Completed (2026-08-26):
     - Codex task `Implement T52 and T37 Developer Settings`, thread `01a03db8-dc75-71b3-b910-2389fcaf3567`, branch `codex/t52-t37-developer-settings`, worktree `/Users/winterfell/.codex/worktrees/5f3e/cosimo-synth`, model SOL, reasoning max.
-    - Root cause: the existing preset-menu entry was gated only by Vite's development mode, while Codex Sites uses a production Vite build. `sites:build` now explicitly opts into developer settings; ordinary web, standalone, and plugin production bundles remain opted out and tree-shake the page and menu entry.
+    - Root cause: the existing preset-menu entry was gated only by Vite's development mode, while Codex Sites uses a production Vite build. `sites:build` now explicitly opts into developer settings; ordinary web, standalone, and plugin production bundles keep the row hidden and exclude the page code.
+    - Andrew explicitly approved public access to the developer controls on the public Cosimo Sites deployment on 2026-08-26. This is a deliberate product decision, not an access-control boundary.
     - Generated-build browser proof exercises the actual ordinary and Sites artifacts at phone size: preset actions remain present, the ordinary bundle cannot expose the page, the Sites bundle reaches the complete current Performance tuning page, and the restored dialog remains within the responsive viewport. Deployment was intentionally not performed by this task.
     Reported failure:
     - The developer settings page previously reached through the preset bar's three-dot menu is absent from the deployed Codex site.

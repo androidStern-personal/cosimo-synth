@@ -1,6 +1,6 @@
 T52/T37 Developer Settings complete — 2026-08-26
 - Owner: thread `01a03db8-dc75-71b3-b910-2389fcaf3567`, branch `codex/t52-t37-developer-settings`, worktree `/Users/winterfell/.codex/worktrees/5f3e/cosimo-synth`.
-- Codex Sites is now the explicit developer-settings production-build boundary: `sites:build` sets `VITE_COSIMO_DEVELOPER_SETTINGS=1`, while ordinary web/standalone/plugin production keeps the preset-menu row and page compiled out. No deployment was performed.
+- Andrew explicitly approved public Developer Settings on the public Cosimo Sites deployment. `sites:build` opts that artifact in, while ordinary web/standalone/plugin production keeps the row hidden and excludes the page code. The Sites build restores the checked-in ordinary desktop artifact before returning. No deployment was performed.
 - Performance tuning exports every current Auto-preview algorithm and Mod drag feel value in one stable readable payload, with exhaustive typed projections guarding both levels of state and honest clipboard success/failure feedback. Generated ordinary-vs-Sites coverage edits all values, checks the exact payload, preserves preset actions, and checks 393x852 layout.
 - Focused browser/state proof is green (generated developer settings 1/1, affected shared/menu suites 34/34, compiled Voice surface 1/1). The HMR standalone is live from this worktree at `http://127.0.0.1:5183` because another worktree owns 5174; the compiled, strictly codesign-valid VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`.
 
