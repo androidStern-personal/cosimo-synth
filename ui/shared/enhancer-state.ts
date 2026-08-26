@@ -2,7 +2,7 @@
 export const ENHANCER_STATE_FORMAT = "cosimo.enhancer";
 
 /** Current persisted Enhancer state version. */
-export const ENHANCER_STATE_VERSION = 2;
+export const ENHANCER_STATE_VERSION = 3;
 
 /** The two locked nonlinear character choices. */
 export const ENHANCER_CURVES = ["tube", "solid"] as const;
@@ -16,10 +16,10 @@ export const ENHANCER_MODES = ["stereo", "mid-side"] as const;
 /** A saved Enhancer band routing domain. */
 export type EnhancerMode = typeof ENHANCER_MODES[number];
 
-/** Ten sound settings plus two routing modes, all preset-persisted. */
+/** Ten band settings, two routing modes, and global de-emphasis, all persisted. */
 export type EnhancerState = {
     readonly format: typeof ENHANCER_STATE_FORMAT;
-    readonly version: 2;
+    readonly version: 3;
     readonly b1FreqHz: number;
     readonly b1Q: number;
     readonly b1Mode: EnhancerMode;
@@ -32,6 +32,7 @@ export type EnhancerState = {
     readonly b2MidAmount: number;
     readonly b2SideAmount: number;
     readonly b2Curve: EnhancerCurve;
+    readonly deEmphasis: number;
 };
 
 /** A setting identity in the stable T26 persistence contract. */
@@ -100,6 +101,7 @@ export type EnhancerDspSettings = {
     readonly b2MidAmountIn: number;
     readonly b2SideAmountIn: number;
     readonly b2CurveIn: 0 | 1;
+    readonly deEmphasisIn: number;
 };
 
 /** Stable descriptors for all static, saved, non-modulatable settings. */
@@ -216,6 +218,16 @@ export const ENHANCER_SETTING_DESCRIPTORS = [
         choices: ENHANCER_CURVES,
         exposure: "static-preset",
     },
+    {
+        kind: "number",
+        id: "deEmphasis",
+        dspEndpointID: "deEmphasisIn",
+        min: 0,
+        max: 1,
+        initial: 1,
+        unit: "",
+        exposure: "static-preset",
+    },
 ] as const satisfies ReadonlyArray<EnhancerSettingDescriptor>;
 
 const ENHANCER_STATE_KEYS = [
@@ -228,7 +240,15 @@ const ENHANCER_V1_STATE_KEYS = [
     "format",
     "version",
     ...ENHANCER_SETTING_DESCRIPTORS
-        .filter(({ kind }) => kind !== "mode")
+        .filter(({ kind, id }) => kind !== "mode" && id !== "deEmphasis")
+        .map(({ id }) => id),
+] as const;
+
+const ENHANCER_V2_STATE_KEYS = [
+    "format",
+    "version",
+    ...ENHANCER_SETTING_DESCRIPTORS
+        .filter(({ id }) => id !== "deEmphasis")
         .map(({ id }) => id),
 ] as const;
 
@@ -307,6 +327,7 @@ export function createDefaultEnhancerState(): EnhancerState {
         b2MidAmount: 0,
         b2SideAmount: 0,
         b2Curve: "tube",
+        deEmphasis: 1,
     };
 }
 
@@ -328,16 +349,21 @@ export function parseEnhancerState(input: unknown): EnhancerStateParseOutcome {
         return { _tag: "err", message: `Enhancer state format must be ${ENHANCER_STATE_FORMAT}.` };
     }
     const isLegacyV1 = document.version === 1;
-    if (!isLegacyV1 && document.version !== ENHANCER_STATE_VERSION) {
-        return { _tag: "err", message: `Enhancer state version must be 1 or ${ENHANCER_STATE_VERSION}.` };
+    const isLegacyV2 = document.version === 2;
+    if (!isLegacyV1 && !isLegacyV2 && document.version !== ENHANCER_STATE_VERSION) {
+        return { _tag: "err", message: `Enhancer state version must be 1, 2, or ${ENHANCER_STATE_VERSION}.` };
     }
-    const expectedKeys = isLegacyV1 ? ENHANCER_V1_STATE_KEYS : ENHANCER_STATE_KEYS;
+    const expectedKeys = isLegacyV1
+        ? ENHANCER_V1_STATE_KEYS
+        : (isLegacyV2 ? ENHANCER_V2_STATE_KEYS : ENHANCER_STATE_KEYS);
     if (!hasExactlyKeys(document, expectedKeys)) {
         return {
             _tag: "err",
             message: isLegacyV1
                 ? "Enhancer v1 state must contain exactly format, version, and its ten sound settings."
-                : "Enhancer state must contain exactly format, version, ten sound settings, and two routing modes.",
+                : (isLegacyV2
+                    ? "Enhancer v2 state must contain exactly format, version, ten band settings, and two routing modes."
+                    : "Enhancer state must contain exactly format, version, ten band settings, two routing modes, and de-emphasis."),
         };
     }
 
@@ -349,6 +375,9 @@ export function parseEnhancerState(input: unknown): EnhancerStateParseOutcome {
     const b2Q = parseNumberInRange(document, "b2Q", 0.3, 8);
     const b2MidAmount = parseNumberInRange(document, "b2MidAmount", 0, 1);
     const b2SideAmount = parseNumberInRange(document, "b2SideAmount", 0, 1);
+    const deEmphasis = isLegacyV1 || isLegacyV2
+        ? { _tag: "ok" as const, value: 1 }
+        : parseNumberInRange(document, "deEmphasis", 0, 1);
     const numberOutcomes = [
         b1FreqHz,
         b1Q,
@@ -358,6 +387,7 @@ export function parseEnhancerState(input: unknown): EnhancerStateParseOutcome {
         b2Q,
         b2MidAmount,
         b2SideAmount,
+        deEmphasis,
     ];
     const numberFailure = numberOutcomes.find((outcome) => outcome._tag === "err");
     if (numberFailure !== undefined && numberFailure._tag === "err") {
@@ -384,7 +414,8 @@ export function parseEnhancerState(input: unknown): EnhancerStateParseOutcome {
     if (b1FreqHz._tag === "err" || b1Q._tag === "err"
         || b1MidAmount._tag === "err" || b1SideAmount._tag === "err"
         || b2FreqHz._tag === "err" || b2Q._tag === "err"
-        || b2MidAmount._tag === "err" || b2SideAmount._tag === "err") {
+        || b2MidAmount._tag === "err" || b2SideAmount._tag === "err"
+        || deEmphasis._tag === "err") {
         return { _tag: "err", message: "Enhancer numeric state parsing failed." };
     }
 
@@ -405,6 +436,7 @@ export function parseEnhancerState(input: unknown): EnhancerStateParseOutcome {
             b2MidAmount: b2MidAmount.value,
             b2SideAmount: b2SideAmount.value,
             b2Curve,
+            deEmphasis: deEmphasis.value,
         },
     };
 }
@@ -426,6 +458,7 @@ export function serializeEnhancerState(state: EnhancerState): string {
         b2MidAmount: state.b2MidAmount,
         b2SideAmount: state.b2SideAmount,
         b2Curve: state.b2Curve,
+        deEmphasis: state.deEmphasis,
     });
 }
 
@@ -444,5 +477,6 @@ export function toEnhancerDspSettings(state: EnhancerState): EnhancerDspSettings
         b2MidAmountIn: state.b2MidAmount,
         b2SideAmountIn: state.b2SideAmount,
         b2CurveIn: state.b2Curve === "solid" ? 1 : 0,
+        deEmphasisIn: state.deEmphasis,
     };
 }

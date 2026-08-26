@@ -9,7 +9,7 @@ const patchPath = path.join(repoRoot, "tools/enhancer_calibration/EnhancerCalibr
 const reviewDirectory = path.join(repoRoot, "build/t26-enhancer-review");
 const reportPath = path.join(reviewDirectory, "report.json");
 const requestedMode = process.argv[2] ?? "--check";
-const minimumFullAmountResidueRmsDbfs = -35;
+const minimumFullAmountContributionRelativeDb = -6;
 
 if (requestedMode !== "--check") {
     throw new Error("usage: measure_enhancer.mjs [--check]");
@@ -28,6 +28,7 @@ const defaultSettings = Object.freeze({
     b2MidAmountIn: 0,
     b2SideAmountIn: 0,
     b2CurveIn: 0,
+    deEmphasisIn: 1,
 });
 
 function run(command, args) {
@@ -221,6 +222,10 @@ function rmsDifferenceDb(dry, wet) {
     );
 }
 
+function rmsDbfs(stereo) {
+    return 10 * Math.log10(Math.max(stereoPower(stereo, 0, stereo.left.length), 1e-30));
+}
+
 function residueRmsDbfs(dry, wet) {
     let power = 0;
     for (let frame = 0; frame < dry.left.length; frame += 1) {
@@ -241,18 +246,19 @@ function maximumDcMean(dry, wet) {
     return Math.max(Math.abs(leftSum / dry.left.length), Math.abs(rightSum / dry.left.length));
 }
 
-function assertLoudnessBudget(row) {
-    if (!Number.isFinite(row.lufsDelta) || Math.abs(row.lufsDelta) > 0.5) {
-        throw new Error(`${row.name} changed integrated loudness by ${row.lufsDelta.toFixed(3)} LU`);
-    }
-    if (!Number.isFinite(row.rmsDeltaDb) || Math.abs(row.rmsDeltaDb) > 0.5) {
-        throw new Error(`${row.name} changed RMS by ${row.rmsDeltaDb.toFixed(3)} dB`);
+function assertMeasurementIntegrity(row) {
+    if (!Number.isFinite(row.lufsDelta) || !Number.isFinite(row.rmsDeltaDb)) {
+        throw new Error(`${row.name} produced a non-finite level measurement`);
     }
     if (!Number.isFinite(row.residueRmsDbfs) || row.residueRmsDbfs <= -120) {
-        throw new Error(`${row.name} did not produce measurable harmonic residue`);
+        throw new Error(`${row.name} did not produce a measurable contribution`);
     }
-    if (!Number.isFinite(row.maximumResidueDcMean) || row.maximumResidueDcMean > 0.0001) {
-        throw new Error(`${row.name} left DC in its residue: ${row.maximumResidueDcMean}`);
+    if (!Number.isFinite(row.dcMeanRelativeToContribution)
+        || row.dcMeanRelativeToContribution > 0.002) {
+        throw new Error(
+            `${row.name} left excessive DC relative to its contribution: `
+            + row.dcMeanRelativeToContribution,
+        );
     }
 }
 
@@ -340,9 +346,13 @@ try {
 
     const pinkProbes = [
         ["band-1-stereo-full", { b1ModeIn: 0, b1MidAmountIn: 1 }],
+        ["band-1-stereo-full-half-de-emphasis", { b1ModeIn: 0, b1MidAmountIn: 1, deEmphasisIn: 0.5 }],
+        ["band-1-stereo-full-no-de-emphasis", { b1ModeIn: 0, b1MidAmountIn: 1, deEmphasisIn: 0 }],
         ["band-1-mid-full", { b1ModeIn: 1, b1MidAmountIn: 1 }],
         ["band-1-side-full", { b1ModeIn: 1, b1SideAmountIn: 1 }],
         ["band-2-stereo-full", { b2ModeIn: 0, b2MidAmountIn: 1 }],
+        ["band-2-stereo-full-half-de-emphasis", { b2ModeIn: 0, b2MidAmountIn: 1, deEmphasisIn: 0.5 }],
+        ["band-2-stereo-full-no-de-emphasis", { b2ModeIn: 0, b2MidAmountIn: 1, deEmphasisIn: 0 }],
         ["band-2-mid-full", { b2ModeIn: 1, b2MidAmountIn: 1 }],
         ["band-2-side-full", { b2ModeIn: 1, b2SideAmountIn: 1 }],
     ];
@@ -361,16 +371,23 @@ try {
         const wet = measuredSlice(rendered, baseContext);
         const dryLufs = integratedLufs(dry, baseContext.sampleRate);
         const wetLufs = integratedLufs(wet, baseContext.sampleRate);
+        const dryRmsDbfs = rmsDbfs(dry);
+        const contributionRmsDbfs = residueRmsDbfs(dry, wet);
+        const maximumResidueDcMean = maximumDcMean(dry, wet);
         const row = {
             name,
             dryLufs,
             wetLufs,
             lufsDelta: wetLufs - dryLufs,
             rmsDeltaDb: rmsDifferenceDb(dry, wet),
-            residueRmsDbfs: residueRmsDbfs(dry, wet),
-            maximumResidueDcMean: maximumDcMean(dry, wet),
+            dryRmsDbfs,
+            residueRmsDbfs: contributionRmsDbfs,
+            contributionRelativeToDryDb: contributionRmsDbfs - dryRmsDbfs,
+            maximumResidueDcMean,
+            dcMeanRelativeToContribution: maximumResidueDcMean
+                / Math.max(10 ** (contributionRmsDbfs / 20), 1e-30),
         };
-        assertLoudnessBudget(row);
+        assertMeasurementIntegrity(row);
         return { row, dry, wet };
     }
 
@@ -382,12 +399,42 @@ try {
 
     for (const name of ["band-1-stereo-full", "band-2-stereo-full"]) {
         const row = pinkRows.find((candidate) => candidate.name === name);
-        if (!row || row.residueRmsDbfs < minimumFullAmountResidueRmsDbfs) {
+        if (!row || row.contributionRelativeToDryDb < minimumFullAmountContributionRelativeDb) {
             throw new Error(
-                `${name} residue ${row?.residueRmsDbfs.toFixed(3) ?? "missing"} dBFS `
-                + `is below the ${minimumFullAmountResidueRmsDbfs} dBFS audible floor`,
+                `${name} contribution ${row?.contributionRelativeToDryDb.toFixed(3) ?? "missing"} dB relative to dry `
+                + `is below the ${minimumFullAmountContributionRelativeDb} dB full-Amount floor`,
             );
         }
+    }
+
+    const deEmphasisRenders = await Promise.all([0, 0.5, 1].map((deEmphasisIn) => (
+        render(pink, baseContext, {
+            b1ModeIn: 0,
+            b1MidAmountIn: 1,
+            deEmphasisIn,
+        })
+    )));
+    let deEmphasisMidpointErrorPower = 0;
+    let deEmphasisMidpointReferencePower = 0;
+    let deEmphasisEndpointDifferencePower = 0;
+    for (const channel of ["left", "right"]) {
+        for (let frame = baseContext.settleFrames; frame < baseContext.totalFrames; frame += 1) {
+            const noSubtraction = deEmphasisRenders[0][channel][frame];
+            const halfSubtraction = deEmphasisRenders[1][channel][frame];
+            const fullSubtraction = deEmphasisRenders[2][channel][frame];
+            const expectedMidpoint = 0.5 * (noSubtraction + fullSubtraction);
+            deEmphasisMidpointErrorPower += (halfSubtraction - expectedMidpoint) ** 2;
+            deEmphasisMidpointReferencePower += expectedMidpoint ** 2;
+            deEmphasisEndpointDifferencePower += (fullSubtraction - noSubtraction) ** 2;
+        }
+    }
+    const deEmphasisMidpointErrorRatio = deEmphasisMidpointErrorPower
+        / Math.max(deEmphasisMidpointReferencePower, 1e-30);
+    if (deEmphasisEndpointDifferencePower <= 1e-12 || deEmphasisMidpointErrorRatio > 1e-8) {
+        throw new Error(
+            `De-emphasis law failed: endpoint power ${deEmphasisEndpointDifferencePower}, `
+            + `midpoint error ratio ${deEmphasisMidpointErrorRatio}`,
+        );
     }
 
     await fs.mkdir(reviewDirectory, { recursive: true });
@@ -417,8 +464,10 @@ try {
             residueRmsDbfs: residueRmsDbfs(dry, wet),
             maximumResidueDcMean: maximumDcMean(dry, wet),
         };
-        if (Math.abs(row.rmsDeltaDb) > 0.5 || row.residueRmsDbfs <= -120
-            || row.maximumResidueDcMean > 0.0001) {
+        row.dcMeanRelativeToContribution = row.maximumResidueDcMean
+            / Math.max(10 ** (row.residueRmsDbfs / 20), 1e-30);
+        if (!Number.isFinite(row.rmsDeltaDb) || row.residueRmsDbfs <= -120
+            || row.dcMeanRelativeToContribution > 0.002) {
             throw new Error(`${sampleRate} Hz sample-rate probe failed: ${JSON.stringify(row)}`);
         }
         sampleRateRows.push(row);
@@ -439,6 +488,11 @@ try {
         measureSeconds: 2,
         neutralBitExact: true,
         settings: { pinkProbes, musical: musicalSettings },
+        deEmphasisLaw: {
+            zeroPercent: "shaped bell",
+            hundredPercent: "shaped bell minus aligned unprocessed bell",
+            midpointErrorRatio: deEmphasisMidpointErrorRatio,
+        },
         pinkRows,
         musicalRows,
         sampleRateRows,
@@ -450,9 +504,13 @@ try {
         ),
     };
     await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    const fullRows = pinkRows.filter(({ name }) => (
+        name === "band-1-stereo-full" || name === "band-2-stereo-full"
+    ));
     process.stdout.write(
-        `Enhancer evidence passed; LUFS worst ${report.worstAbsoluteLufsDelta.toFixed(3)} LU, `
-        + `RMS worst ${report.worstAbsoluteRmsDeltaDb.toFixed(3)} dB; review bundle ${reviewDirectory}\n`,
+        `Enhancer evidence passed; full contributions ${fullRows.map(({ contributionRelativeToDryDb }) => (
+            `${contributionRelativeToDryDb.toFixed(2)} dB`
+        )).join(" / ")} relative to dry; review bundle ${reviewDirectory}\n`,
     );
 } finally {
     await fs.rm(temporaryDirectory, { recursive: true, force: true });

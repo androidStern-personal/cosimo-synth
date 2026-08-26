@@ -2,9 +2,9 @@ namespace wt
 {
     // Fixed end-of-chain two-band Enhancer. T28 will compose this processor into
     // the Polish chain; T26 deliberately leaves it out of WavetableSynth and the
-    // Effects Lane. The ten sound settings plus two per-band routing modes are
-    // non-automatable value endpoints: saved voicing controls, never modulation
-    // destinations.
+    // Effects Lane. The ten band settings, two per-band routing modes, and one
+    // global de-emphasis control are non-automatable value endpoints: saved
+    // voicing controls, never modulation destinations.
 
     let enhancerOversampleFactor = 4;
     let enhancerBandCount = 2;
@@ -14,6 +14,7 @@ namespace wt
     let enhancerQMax = 8.0f;
     let enhancerAmountMin = 0.0f;
     let enhancerAmountMax = 1.0f;
+    let enhancerDeEmphasisDefault = 1.0f;
     let enhancerCurveTube = 0;
     let enhancerCurveSolid = 1;
     let enhancerModeStereo = 0;
@@ -34,12 +35,9 @@ namespace wt
 
     // Amount gates the band and raises drive progressively toward +24 dB.
     // Amount also gates the band before the shaper, so amount 0 makes the core
-    // input and aligned residue exactly zero. The post trim keeps full-Amount
-    // residue clearly audible while retaining the design's <= 0.5 dB loudness
-    // budget on the retained musical fixtures.
+    // input and aligned contribution exactly zero. There is deliberately no
+    // hidden post-shaper attenuation: Amount owns the contribution level.
     let enhancerDriveRangeDb = 24.0f;
-    let enhancerBand1ResidueTrim = 0.08f;
-    let enhancerBand2ResidueTrim = 0.094f;
 
     // A sample-rate-aware version of the standard x[n]-x[n-1]+R*y[n-1]
     // DC-blocker idiom. std::filters::dcblocker fixes R at 0.996, making its
@@ -190,6 +188,8 @@ namespace wt
         input value float32 b2SideAmountIn [[ name: "Enhancer Band 2 Side Amount", min: enhancerAmountMin, max: enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
         input value float32 b2CurveIn [[ name: "Enhancer Band 2 Character", min: 0.0f, max: 1.0f, init: float32 (enhancerB2CurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: false, rampFrames: 0 ]];
 
+        input value float32 deEmphasisIn [[ name: "Enhancer De-emphasis", min: 0.0f, max: 1.0f, init: enhancerDeEmphasisDefault, automatable: false, rampFrames: 0 ]];
+
         // Audio-history reset for the future single resident Polish instance.
         // This is lifecycle plumbing, not a saved/user setting.
         input event int32 resetIn;
@@ -218,6 +218,7 @@ namespace wt
         float32 b2MidAmount;
         float32 b2SideAmount;
         float32 b2SolidWeight = float32 (enhancerB2CurveDefault);
+        float32 deEmphasis = enhancerDeEmphasisDefault;
         float32 tunedB1FreqHz;
         float32 tunedB1Q;
         float32 tunedB2FreqHz;
@@ -344,6 +345,12 @@ namespace wt
                 smoothingAmount,
                 enhancerCoefficientEpsilon
             );
+            deEmphasis = smoothEnhancerControl (
+                deEmphasis,
+                clampEnhancerAmount (deEmphasisIn),
+                smoothingAmount,
+                enhancerCoefficientEpsilon
+            );
         }
 
         void updateBandCoefficients()
@@ -415,34 +422,37 @@ namespace wt
                 band2MidSideCore.solidWeightIn <- b2SolidWeight;
                 band2MidSideCore.advance();
 
-                let band1StereoResidue = residueDcBlockers[0].process (
-                    band1StereoCore.out - band1StereoCore.thru
-                ) * enhancerBand1ResidueTrim;
-                let band1MidSideResidue = residueDcBlockers[1].process (
-                    band1MidSideCore.out - band1MidSideCore.thru
-                ) * enhancerBand1ResidueTrim;
-                let band2StereoResidue = residueDcBlockers[2].process (
-                    band2StereoCore.out - band2StereoCore.thru
-                ) * enhancerBand2ResidueTrim;
-                let band2MidSideResidue = residueDcBlockers[3].process (
-                    band2MidSideCore.out - band2MidSideCore.thru
-                ) * enhancerBand2ResidueTrim;
-                let band1DecodedMidSideResidue = float32<2> (
-                    band1MidSideResidue[0] + band1MidSideResidue[1],
-                    band1MidSideResidue[0] - band1MidSideResidue[1]
+                // 0% de-emphasis adds the complete shaped bell. 100% subtracts
+                // the aligned unprocessed bell. Intermediate values interpolate
+                // only that subtraction; no output trim or gain matcher follows.
+                let band1StereoContribution = residueDcBlockers[0].process (
+                    band1StereoCore.out - band1StereoCore.thru * deEmphasis
                 );
-                let band2DecodedMidSideResidue = float32<2> (
-                    band2MidSideResidue[0] + band2MidSideResidue[1],
-                    band2MidSideResidue[0] - band2MidSideResidue[1]
+                let band1MidSideContribution = residueDcBlockers[1].process (
+                    band1MidSideCore.out - band1MidSideCore.thru * deEmphasis
                 );
-                let band1Residue = b1MidSideWeight == 0.0f ? band1StereoResidue
-                    : (b1MidSideWeight == 1.0f ? band1DecodedMidSideResidue
-                       : band1StereoResidue
-                         + (band1DecodedMidSideResidue - band1StereoResidue) * b1MidSideWeight);
-                let band2Residue = b2MidSideWeight == 0.0f ? band2StereoResidue
-                    : (b2MidSideWeight == 1.0f ? band2DecodedMidSideResidue
-                       : band2StereoResidue
-                         + (band2DecodedMidSideResidue - band2StereoResidue) * b2MidSideWeight);
+                let band2StereoContribution = residueDcBlockers[2].process (
+                    band2StereoCore.out - band2StereoCore.thru * deEmphasis
+                );
+                let band2MidSideContribution = residueDcBlockers[3].process (
+                    band2MidSideCore.out - band2MidSideCore.thru * deEmphasis
+                );
+                let band1DecodedMidSideContribution = float32<2> (
+                    band1MidSideContribution[0] + band1MidSideContribution[1],
+                    band1MidSideContribution[0] - band1MidSideContribution[1]
+                );
+                let band2DecodedMidSideContribution = float32<2> (
+                    band2MidSideContribution[0] + band2MidSideContribution[1],
+                    band2MidSideContribution[0] - band2MidSideContribution[1]
+                );
+                let band1Contribution = b1MidSideWeight == 0.0f ? band1StereoContribution
+                    : (b1MidSideWeight == 1.0f ? band1DecodedMidSideContribution
+                       : band1StereoContribution
+                         + (band1DecodedMidSideContribution - band1StereoContribution) * b1MidSideWeight);
+                let band2Contribution = b2MidSideWeight == 0.0f ? band2StereoContribution
+                    : (b2MidSideWeight == 1.0f ? band2DecodedMidSideContribution
+                       : band2StereoContribution
+                         + (band2DecodedMidSideContribution - band2StereoContribution) * b2MidSideWeight);
                 // Keep the neutral path literally untouched. This also prevents
                 // a signed-zero or M/S round-trip from weakening the bit-identity
                 // contract when all four smoothed amounts have reached zero.
@@ -453,7 +463,7 @@ namespace wt
                 }
                 else
                 {
-                    out <- dry + band1Residue + band2Residue;
+                    out <- dry + band1Contribution + band2Contribution;
                 }
 
                 advance();

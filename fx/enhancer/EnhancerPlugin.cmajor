@@ -17,6 +17,8 @@ processor CosimoEnhancer [[ main ]]
     input value float32 b2SideAmountIn [[ name: "Band 2 Side", group: "Band 2", min: wt::enhancerAmountMin, max: wt::enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
     input value float32 b2CurveIn [[ name: "Band 2 Character", group: "Band 2", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerB2CurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: false, rampFrames: 0 ]];
 
+    input value float32 deEmphasisIn [[ name: "De-emphasis", group: "Global", min: 0.0f, max: 1.0f, init: wt::enhancerDeEmphasisDefault, automatable: false, rampFrames: 0 ]];
+
     node enhancer = wt::EnhancerBus;
 
     void main()
@@ -35,6 +37,7 @@ processor CosimoEnhancer [[ main ]]
             enhancer.b2MidAmountIn <- b2MidAmountIn;
             enhancer.b2SideAmountIn <- b2SideAmountIn;
             enhancer.b2CurveIn <- b2CurveIn;
+            enhancer.deEmphasisIn <- deEmphasisIn;
             enhancer.in <- audioIn;
             enhancer.advance();
             audioOut <- enhancer.out;

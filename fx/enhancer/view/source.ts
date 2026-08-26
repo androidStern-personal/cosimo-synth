@@ -37,6 +37,17 @@ const formatFrequency = (value: number): string => (
 const formatQ = (value: number): string => value.toFixed(2);
 const formatAmount = (value: number): string => `${Math.round(value * 100)}%`;
 
+const deEmphasisControl: NumberControl = {
+    endpointID: "deEmphasisIn",
+    label: "De-emphasis",
+    min: 0,
+    max: 1,
+    initial: 1,
+    step: 0.001,
+    scale: "linear",
+    format: formatAmount,
+};
+
 const bandDefinitions: ReadonlyArray<BandDefinition> = [
     {
         number: 1,
@@ -134,14 +145,16 @@ const bandDefinitions: ReadonlyArray<BandDefinition> = [
     },
 ];
 
-const endpointInitialValues = new Map<string, number>(bandDefinitions.flatMap((band) => [
-    [band.frequency.endpointID, band.frequency.initial],
-    [band.q.endpointID, band.q.initial],
-    [band.modeEndpointID, 0],
-    [band.primaryAmount.endpointID, band.primaryAmount.initial],
-    [band.sideAmount.endpointID, band.sideAmount.initial],
-    [band.curveEndpointID, band.initialCurve],
-]));
+const endpointInitialValues = new Map<string, number>();
+for (const band of bandDefinitions) {
+    endpointInitialValues.set(band.frequency.endpointID, band.frequency.initial);
+    endpointInitialValues.set(band.q.endpointID, band.q.initial);
+    endpointInitialValues.set(band.modeEndpointID, 0);
+    endpointInitialValues.set(band.primaryAmount.endpointID, band.primaryAmount.initial);
+    endpointInitialValues.set(band.sideAmount.endpointID, band.sideAmount.initial);
+    endpointInitialValues.set(band.curveEndpointID, band.initialCurve);
+}
+endpointInitialValues.set(deEmphasisControl.endpointID, deEmphasisControl.initial);
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -208,17 +221,8 @@ class EnhancerView extends HTMLElement {
 
     bindControls(): void {
         for (const band of bandDefinitions) {
-            for (const control of [band.frequency, band.q, band.primaryAmount, band.sideAmount]) {
-                const host = this.shadowRoot!.querySelector<HTMLElement>(`[data-endpoint-id='${control.endpointID}']`)!;
-                const input = host.querySelector<HTMLInputElement>("input")!;
-                input.addEventListener("input", () => {
-                    const value = fromSliderValue(control, Number(input.value));
-                    this.patchConnection.sendEventOrValue(control.endpointID, value, 0);
-                });
-                input.addEventListener("dblclick", () => {
-                    this.patchConnection.sendEventOrValue(control.endpointID, control.initial, 0);
-                });
-            }
+            for (const control of [band.frequency, band.q, band.primaryAmount, band.sideAmount])
+                this.bindNumberControl(control);
 
             for (const button of this.shadowRoot!.querySelectorAll<HTMLButtonElement>(`[data-band='${band.number}'] [data-mode]`)) {
                 button.addEventListener("click", () => {
@@ -234,6 +238,20 @@ class EnhancerView extends HTMLElement {
                 });
             }
         }
+
+        this.bindNumberControl(deEmphasisControl);
+    }
+
+    bindNumberControl(control: NumberControl): void {
+        const host = this.shadowRoot!.querySelector<HTMLElement>(`[data-endpoint-id='${control.endpointID}']`)!;
+        const input = host.querySelector<HTMLInputElement>("input")!;
+        input.addEventListener("input", () => {
+            const value = fromSliderValue(control, Number(input.value));
+            this.patchConnection.sendEventOrValue(control.endpointID, value, 0);
+        });
+        input.addEventListener("dblclick", () => {
+            this.patchConnection.sendEventOrValue(control.endpointID, control.initial, 0);
+        });
     }
 
     renderAll(): void {
@@ -242,6 +260,9 @@ class EnhancerView extends HTMLElement {
     }
 
     renderEndpoint(endpointID: string): void {
+        if (endpointID === deEmphasisControl.endpointID)
+            this.renderNumberControl(deEmphasisControl);
+
         for (const band of bandDefinitions) {
             const numberControl = [band.frequency, band.q, band.primaryAmount, band.sideAmount]
                 .find((candidate) => candidate.endpointID === endpointID);
@@ -389,8 +410,11 @@ class EnhancerView extends HTMLElement {
                 h1, p { margin: 0; }
                 h1 { font: 600 27px/1.1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: 0.16em; }
                 .subtitle { margin-top: 8px; color: rgba(244, 239, 230, 0.58); font-size: 11px; line-height: 1.5; letter-spacing: 0.04em; }
+                .top-controls { width: min(360px, 42%); display: grid; gap: 10px; --band-accent: #d8d3c8; }
                 .badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
                 .badge { border: 1px solid rgba(255,255,255,0.10); border-radius: 999px; padding: 7px 10px; color: rgba(244,239,230,0.72); background: rgba(255,255,255,0.035); font-size: 9px; letter-spacing: 0.09em; text-transform: uppercase; }
+                .de-emphasis-panel { border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; padding: 11px 12px 9px; background: rgba(255,255,255,0.035); }
+                .de-emphasis-panel p { margin-top: 7px; color: rgba(244,239,230,0.48); font-size: 8px; line-height: 1.4; text-align: right; }
                 .bands { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
                 .band { min-width: 0; border: 1px solid rgba(255,255,255,0.09); border-radius: 18px; padding: 17px; background: rgba(255,255,255,0.035); box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 18px 44px rgba(0,0,0,0.18); }
                 .band-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -418,6 +442,7 @@ class EnhancerView extends HTMLElement {
                     :host { width: 100%; }
                     .bands { grid-template-columns: 1fr; }
                     .topline { align-items: stretch; flex-direction: column; }
+                    .top-controls { width: 100%; }
                     .badges { justify-content: flex-start; }
                 }
             </style>
@@ -427,16 +452,21 @@ class EnhancerView extends HTMLElement {
                         <h1>Enhancer</h1>
                         <p class="subtitle">Two parametric harmonic bands. Each band routes in linked Stereo or independent Mid/Side.</p>
                     </div>
-                    <div class="badges" aria-label="Fixed processing">
-                        <span class="badge">4× oversampling</span>
-                        <span class="badge">De-emphasis on</span>
-                        <span class="badge">Dry + residue</span>
+                    <div class="top-controls">
+                        <div class="badges" aria-label="Fixed processing">
+                            <span class="badge">4× oversampling</span>
+                            <span class="badge">Dry + shaped bands</span>
+                        </div>
+                        <div class="de-emphasis-panel">
+                            ${this.numberControlMarkup(deEmphasisControl)}
+                            <p>0% keeps the shaped bell · 100% subtracts the unprocessed bell</p>
+                        </div>
                     </div>
                 </header>
                 <div class="bands">
                     ${bandDefinitions.map((band) => this.bandMarkup(band)).join("")}
                 </div>
-                <p class="footnote">Stereo uses the Amount control for both channels. M/S relabels it Mid and reveals a separately saved Side amount. Double-click a slider to reset it.</p>
+                <p class="footnote">Stereo uses the Amount control for both channels. M/S relabels it Mid and reveals a separately saved Side amount. De-emphasis changes only the bell subtraction. Double-click a slider to reset it.</p>
             </main>
         `;
     }

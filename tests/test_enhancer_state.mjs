@@ -16,20 +16,21 @@ async function loadEnhancerState() {
     return loadUIModule(repoRoot, "ui/shared/enhancer-state.ts");
 }
 
-test("the Enhancer saves ten sound settings plus two independent band modes", async () => {
+test("the Enhancer saves both bands, their independent modes, and global de-emphasis", async () => {
     const enhancer = await loadEnhancerState();
     const defaults = enhancer.createDefaultEnhancerState();
 
     assert.equal(enhancer.ENHANCER_STATE_FORMAT, "cosimo.enhancer");
-    assert.equal(enhancer.ENHANCER_STATE_VERSION, 2);
+    assert.equal(enhancer.ENHANCER_STATE_VERSION, 3);
     assert.deepEqual(enhancer.ENHANCER_CURVES, ["tube", "solid"]);
     assert.deepEqual(enhancer.ENHANCER_MODES, ["stereo", "mid-side"]);
-    assert.equal(enhancer.ENHANCER_SETTING_DESCRIPTORS.length, 12);
+    assert.equal(enhancer.ENHANCER_SETTING_DESCRIPTORS.length, 13);
     assert.deepEqual(
         enhancer.ENHANCER_SETTING_DESCRIPTORS.map(({ id }) => id),
         [
             "b1FreqHz", "b1Q", "b1Mode", "b1MidAmount", "b1SideAmount", "b1Curve",
             "b2FreqHz", "b2Q", "b2Mode", "b2MidAmount", "b2SideAmount", "b2Curve",
+            "deEmphasis",
         ],
     );
     assert.deepEqual(
@@ -47,11 +48,12 @@ test("the Enhancer saves ten sound settings plus two independent band modes", as
             { id: "b2Q", dspEndpointID: "b2QIn", min: 0.3, max: 8, initial: 0.71, unit: "" },
             { id: "b2MidAmount", dspEndpointID: "b2MidAmountIn", min: 0, max: 1, initial: 0, unit: "" },
             { id: "b2SideAmount", dspEndpointID: "b2SideAmountIn", min: 0, max: 1, initial: 0, unit: "" },
+            { id: "deEmphasis", dspEndpointID: "deEmphasisIn", min: 0, max: 1, initial: 1, unit: "" },
         ],
     );
     assert.deepEqual(defaults, {
         format: "cosimo.enhancer",
-        version: 2,
+        version: 3,
         b1FreqHz: 130,
         b1Q: 0.71,
         b1Mode: "stereo",
@@ -64,6 +66,7 @@ test("the Enhancer saves ten sound settings plus two independent band modes", as
         b2MidAmount: 0,
         b2SideAmount: 0,
         b2Curve: "tube",
+        deEmphasis: 1,
     });
     assert.ok(enhancer.ENHANCER_SETTING_DESCRIPTORS.every(
         ({ exposure }) => exposure === "static-preset",
@@ -92,6 +95,7 @@ test("the Enhancer saves ten sound settings plus two independent band modes", as
         b2MidAmount: 1,
         b2SideAmount: 0.5,
         b2Curve: "solid",
+        deEmphasis: 0.42,
     };
     assert.deepEqual(enhancer.parseEnhancerState(edited), { _tag: "ok", value: edited });
     assert.deepEqual(enhancer.toEnhancerDspSettings(edited), {
@@ -107,6 +111,7 @@ test("the Enhancer saves ten sound settings plus two independent band modes", as
         b2MidAmountIn: 1,
         b2SideAmountIn: 0.5,
         b2CurveIn: 1,
+        deEmphasisIn: 0.42,
     });
 });
 
@@ -131,10 +136,23 @@ test("the unpublished always-M/S v1 document migrates without changing its sound
         _tag: "ok",
         value: {
             ...legacy,
-            version: 2,
+            version: 3,
             b1Mode: "mid-side",
             b2Mode: "mid-side",
+            deEmphasis: 1,
         },
+    });
+});
+
+test("the prior two-mode v2 document migrates to full de-emphasis", async () => {
+    const enhancer = await loadEnhancerState();
+    const current = enhancer.createDefaultEnhancerState();
+    const { deEmphasis: ignored, ...withoutDeEmphasis } = current;
+    const legacy = { ...withoutDeEmphasis, version: 2 };
+
+    assert.deepEqual(enhancer.parseEnhancerState(legacy), {
+        _tag: "ok",
+        value: current,
     });
 });
 
@@ -146,13 +164,15 @@ test("malformed or partial Enhancer state is rejected at the persistence boundar
         [],
         "not json",
         { ...defaults, format: "cosimo.polish" },
-        { ...defaults, version: 3 },
+        { ...defaults, version: 4 },
         { ...defaults, b1FreqHz: 29.999 },
         { ...defaults, b2FreqHz: 16_001 },
         { ...defaults, b1Q: Number.NaN },
         { ...defaults, b2Q: Number.POSITIVE_INFINITY },
         { ...defaults, b1MidAmount: -0.001 },
         { ...defaults, b2SideAmount: 1.001 },
+        { ...defaults, deEmphasis: -0.001 },
+        { ...defaults, deEmphasis: 1.001 },
         { ...defaults, b1Mode: "left-right" },
         { ...defaults, b2Mode: 1 },
         { ...defaults, b1Curve: "tape" },
@@ -210,16 +230,17 @@ test("the isolated DSP metadata and composition fence encode the T26 ownership b
     assert.match(source, /band1MidSideCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
     assert.match(source, /band2StereoCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
     assert.match(source, /band2MidSideCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
-    assert.match(source, /band1StereoCore\.out - band1StereoCore\.thru/);
-    assert.match(source, /band1MidSideCore\.out - band1MidSideCore\.thru/);
-    assert.match(source, /band2StereoCore\.out - band2StereoCore\.thru/);
-    assert.match(source, /band2MidSideCore\.out - band2MidSideCore\.thru/);
+    assert.match(source, /band1StereoCore\.out - band1StereoCore\.thru \* deEmphasis/);
+    assert.match(source, /band1MidSideCore\.out - band1MidSideCore\.thru \* deEmphasis/);
+    assert.match(source, /band2StereoCore\.out - band2StereoCore\.thru \* deEmphasis/);
+    assert.match(source, /band2MidSideCore\.out - band2MidSideCore\.thru \* deEmphasis/);
+    assert.doesNotMatch(source, /ResidueTrim/);
 
     const smoothingSection = source.slice(
         source.indexOf("void smoothControls()"),
         source.indexOf("void updateBandCoefficients()"),
     );
-    assert.equal([...smoothingSection.matchAll(/smoothEnhancerControl/g)].length, 12);
+    assert.equal([...smoothingSection.matchAll(/smoothEnhancerControl/g)].length, 13);
 
     for (const { dspEndpointID } of enhancer.ENHANCER_SETTING_DESCRIPTORS) {
         const declaration = source.split("\n").find((line) => line.includes(` ${dspEndpointID} `));

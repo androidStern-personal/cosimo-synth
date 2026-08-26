@@ -6,7 +6,7 @@ member of the fixed, non-modulatable end-of-chain polish section — see
 `POLISH_CHAIN_DESIGN.md`. Same ground rules: this specifies what to build and
 why; implementation is a separate effort. This module is **separate from and
 orthogonal to** the saturator redesign — that module makes a sound *driven*; this one
-adds presence/weight/air at constant level, at the end of the chain.
+adds frequency-selected presence/weight/air at the end of the chain.
 
 Reference product: Wavesfactory Spectre (2018, DSP by Jesús Ginard and Ivan Cohen) —
 a five-band parallel EQ where the *difference* between the EQ'd and dry signal is
@@ -38,18 +38,20 @@ in (stereo) ──┬───────────────────�
               │                                                  │
               │  each nonlinear path:                            │
               │    [ ×4 oversampled core ]                       │
-              │      r = DCblock(curve(d) − aligned_thru(d))     │
+              │      c = DCblock(curve(d)                       │
+              │                  − deEmphasis·aligned_thru(d))   │
               │                                                  │
               │  decode M/S residue; smooth-crossfade by mode    │
               └── out = dry + band1 residue + band2 residue      │
 ```
 
-De-emphasis is **always on** (the `− thru` subtraction): it removes the linear bell
-contribution and adds only the shaper's nonlinear difference. That difference contains
-new harmonics and may also contain the saturation-induced change to the selected
-band's fundamental; the loudness ceiling in §8 prevents that component from becoming
-an unintended EQ cut. There is no non-de-emphasized mode — that would be a parallel EQ
-with distortion, which the rack's existing EQ/filter modules already cover.
+De-emphasis is one global continuous control. At **0%**, no inverse bell is applied:
+the contribution is the complete shaped bell. At **100%**, the aligned unprocessed
+bell is fully inverted and summed with the shaped bell. Intermediate values scale only
+that subtraction. There is no post-shaper trim, gain matcher, or level compensation.
+The 100% result contains new harmonics and may also contain saturation-induced change
+to the selected band's fundamental; that is the literal shaped-minus-unprocessed
+algorithm rather than a promise of mathematically isolated harmonics.
 
 The bands are **two full parametric bells, Spectre-style** (Andrew, 2026-08-25:
 bands, not LP/HP halves): each freely steerable across the audible range with its own
@@ -60,7 +62,7 @@ approximates shelf-like reach when wanted. The parallel topology keeps the resid
 subtraction phase-clean by construction — the reason Spectre's EQ is boost-only and
 parallel rather than serial biquads.
 
-## 2. Parameters (10 sound settings + 2 routing modes, all static)
+## 2. Parameters (10 band settings + 2 routing modes + de-emphasis, all static)
 
 | Param | Range | Default | Meaning |
 |---|---|---|---|
@@ -76,15 +78,18 @@ parallel rather than serial biquads.
 | `b2MidAmount` | 0..1 | 0 | Stereo Amount, relabelled Mid in M/S mode |
 | `b2SideAmount` | 0..1 | 0 | band 2 Side drive, active only in M/S mode |
 | `b2Curve` | Tube / Solid | Tube | band 2 curve |
+| `deEmphasis` | 0..1 | 1 | 0 = shaped bell; 1 = shaped bell minus aligned unprocessed bell |
 
 The primary amount has one stable stored identity: it is labelled Amount and drives
 both L/R channels in Stereo mode, then is relabelled Mid in M/S mode. Side remains
 stored while Stereo is selected but is inactive. This preserves the original ten
-sound settings and adds only the two saved routing modes; switching mode does not
-silently overwrite either M/S amount. The two modes default to Stereo. The unpublished
-always-M/S v1 state migrates both modes to Mid/Side so its sound is preserved.
+band settings and adds only the two saved routing modes plus the requested global
+de-emphasis value; switching mode does not silently overwrite either M/S amount. The
+two modes default to Stereo and de-emphasis defaults to 100%. The unpublished
+always-M/S v1 state migrates both modes to Mid/Side, while both v1 and v2 states migrate
+to 100% de-emphasis so their previous signal law is preserved.
 
-All twelve values are smoothed, preset/host-state persisted, non-automatable, absent
+All thirteen values are smoothed, preset/host-state persisted, non-automatable, absent
 from modulation catalogs, and unavailable as an Effects Lane device. The isolated
 audition VST exposes them only through its own GUI; T28 owns the final Polish UI.
 
@@ -92,8 +97,8 @@ All amounts default 0 ⇒ the module is born silent-by-contribution: `curve(0) =
 residue = 0, `out = dry` **bit-exact**. The rack's hard-bypass invariant (ADR-005)
 holds with no special casing.
 
-No global mix (the four amounts are the mix), no output trim (rack gain staging owns
-that), no oversampling quality switch (fixed ×4 — one less way to sound bad; Spectre's
+No global mix (the four amounts are the mix), no output trim or hidden residue trim
+(rack gain staging owns that), no oversampling quality switch (fixed ×4 — one less way to sound bad; Spectre's
 16x tier is a CPU luxury this design doesn't need at two gentle bands).
 
 ## 3. The two curves
@@ -135,9 +140,8 @@ requirements:
 - Amount→drive mapping per band brings the nonlinear onset forward from the rejected
   squared curve while retaining zero contribution at zero Amount:
   `driven = band · amount · gain(24 dB · amount · (0.5 + 0.5 · amount))`.
-  The low/high residue gains are `0.08`/`0.094`; separate calibration accounts for
-  the much greater program energy under the low default bell. The rejected build used
-  one `0.035` gain, which buried full-Amount residue below the audible acceptance floor.
+  The shaped contribution is not attenuated afterward. The rejected builds multiplied
+  it by `0.035`, then `0.08`/`0.094`; both violated the signal flow and buried the effect.
 - Low-position voicing target: kick/bass weight on small speakers (2nd/3rd harmonic
   of 40–130 Hz content landing 80–400 Hz). High-position: acoustic guitar / vocal
   sheen and the side-widener use.
@@ -221,20 +225,21 @@ per-voice variant at all remains a product decision for later.
 ## 8. Ship criteria
 
 1. All Mid/Amount and Side amounts 0 ⇒ output bit-exact dry in either mode (ADR-005 proof unchanged).
-2. De-emphasized-residue guarantee: enabling any band changes pink-noise LUFS and RMS
-   by ≤ 0.5 dB while visibly adding harmonic lines on a sine. With a −18 dBFS pink
-   input, each band at full Stereo Amount produces at least −35 dBFS residue, so the
-   level budget cannot be passed merely by burying the effect.
-3. Mono input remains mono in Stereo and M/S. In M/S, mono with only Side raised is
+2. De-emphasis is exact and affine: 0% adds the shaped bell, 100% subtracts the full
+   aligned unprocessed bell, and 50% is the sample-accurate midpoint after smoothing.
+   No scalar, output matcher, or loudness-equivalence gate follows that operation.
+3. With −18 dBFS pink input and 100% de-emphasis, either band at full Stereo Amount
+   contributes no less than −6 dB relative to dry. This is a burial-prevention gate,
+   not an output-equivalence target; Andrew's audition remains the audible authority.
+4. Mono input remains mono in Stereo and M/S. In M/S, mono with only Side raised is
    exact dry, and a pure-side signal with only Side raised remains pure side.
-4. Each band can select Stereo or M/S without changing the other band's routing.
-5. Andrew's ears against Spectre at Subtle/Medium on the same stems.
+5. Each band can select Stereo or M/S without changing the other band's routing.
+6. Andrew's ears on the installed VST remain the final sound gate.
 
 ## 9. Open decisions (defaults apply unless overridden)
 
-1. **De-emphasis always-on, no toggle.** Default: yes (rationale in §1). Overriding
-   means adding a "boost mode" that duplicates parallel EQ — argue for it before
-   spending a param on it.
+1. **De-emphasis amount.** ~~Always-on~~ **Resolved 2026-08-26 by Andrew**: one global
+   continuous 0..100% control, default 100%, with the exact law in §1.
 2. **Rack integration form.** ~~Open~~ **Resolved 2026-08-25**: a fixed member of
    the static polish chain (`POLISH_CHAIN_DESIGN.md`) — not a pool module, not
    modulatable.

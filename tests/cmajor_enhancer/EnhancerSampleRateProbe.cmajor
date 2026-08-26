@@ -19,6 +19,7 @@ processor EnhancerSampleRateProbe
         enhancer.b2MidAmountIn <- 0.0f;
         enhancer.b2SideAmountIn <- 0.0f;
         enhancer.b2CurveIn <- 0.0f;
+        enhancer.deEmphasisIn <- 1.0f;
     }
 
     float64 measureResiduePower (float32 frequencyHz)
@@ -54,10 +55,6 @@ processor EnhancerSampleRateProbe
     {
         let inBandPower = measureResiduePower (1200.0f);
         let outOfBandPower = measureResiduePower (7000.0f);
-        let dryPower = 0.5f * 0.3f * 0.3f;
-        let maximumAddedDb = std::levels::gainTodB (float32 (std::intrinsics::sqrt (
-            (dryPower + inBandPower) / dryPower
-        )));
         let finite = inBandPower == inBandPower && outOfBandPower == outOfBandPower;
 
         out <- (processor.frequency == 44100.0 || processor.frequency == 48000.0
@@ -66,8 +63,6 @@ processor EnhancerSampleRateProbe
         out <- (finite && inBandPower > 1.0e-10) ? 1 : 0;
         advance();
         out <- (inBandPower > outOfBandPower * 4.0) ? 1 : 0;
-        advance();
-        out <- (maximumAddedDb <= 0.5f) ? 1 : 0;
         advance();
         out <- -1;
         advance();

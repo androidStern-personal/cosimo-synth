@@ -17,6 +17,7 @@ graph EnhancerCalibration [[ main ]]
     input value float32 b2MidAmountIn [[ init: 0.0f ]];
     input value float32 b2SideAmountIn [[ init: 0.0f ]];
     input value float32 b2CurveIn [[ init: 0.0f ]];
+    input value float32 deEmphasisIn [[ init: 1.0f ]];
 
     output stream float32<2> audioOut;
 
@@ -37,6 +38,7 @@ graph EnhancerCalibration [[ main ]]
         b2MidAmountIn -> enhancer.b2MidAmountIn;
         b2SideAmountIn -> enhancer.b2SideAmountIn;
         b2CurveIn -> enhancer.b2CurveIn;
+        deEmphasisIn -> enhancer.deEmphasisIn;
         enhancer.out -> audioOut;
     }
 }

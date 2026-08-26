@@ -21,6 +21,7 @@ const initialValues = {
     b2MidAmountIn: 0,
     b2SideAmountIn: 0,
     b2CurveIn: 0,
+    deEmphasisIn: 1,
 };
 
 let server;
@@ -117,10 +118,39 @@ test("each band independently switches between Stereo Amount and Mid/Side amount
     }
 });
 
+test("de-emphasis is a real global control from no subtraction to full subtraction", async () => {
+    const page = await openEnhancer();
+
+    try {
+        const control = shadow(page, "[data-endpoint-id='deEmphasisIn']");
+        assert.equal(await control.locator("output").textContent(), "100%");
+
+        await control.locator("input").evaluate((input) => {
+            input.value = "0";
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_TEST__.sent.slice(-1)), [
+            { endpointID: "deEmphasisIn", value: 0 },
+        ]);
+        assert.equal(await control.locator("output").textContent(), "0%");
+
+        await page.evaluate(() => window.__ENHANCER_TEST__.emit("deEmphasisIn", 0.37));
+        assert.equal(await control.locator("output").textContent(), "37%");
+
+        await control.locator("input").dblclick();
+        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_TEST__.sent.slice(-1)), [
+            { endpointID: "deEmphasisIn", value: 1 },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("the compiled production view used by the VST renders the same independent routing controls", async () => {
     const page = await openEnhancer("/build/fx/enhancer_runtime/view/app.js");
 
     try {
+        assert.equal(await shadow(page, "[data-endpoint-id='deEmphasisIn']").count(), 1);
         await shadow(page, "[data-band='2'] [data-mode='mid-side']").click();
         assert.equal(await shadow(page, "[data-band='1'] [data-role='side-control']").isHidden(), true);
         assert.equal(await shadow(page, "[data-band='2'] [data-role='side-control']").isVisible(), true);
