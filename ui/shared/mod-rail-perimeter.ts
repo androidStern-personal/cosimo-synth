@@ -8,6 +8,115 @@
  * Everything here is side-effect free so the interaction layer stays thin.
  */
 
+/** T42's one proportional scale for the complete floating Mod rail. */
+export const MOBILE_MOD_RAIL_SCALE = 1.1;
+
+/** Measurable rail geometry in CSS pixels before or after proportional scaling. */
+export type MobileModRailGeometry = {
+    readonly safeGap: number;
+    readonly dragThreshold: number;
+    readonly snapDistance: number;
+    readonly width: number;
+    readonly shoulder: number;
+    readonly corner: number;
+    readonly tabContentHeight: number;
+    readonly drawerFallbackHeight: number;
+    readonly module: number;
+    readonly gap: number;
+    readonly outline: number;
+    readonly icon: number;
+    readonly secondaryIcon: number;
+    readonly label: number;
+    readonly sourceNumberWidth: number;
+    readonly sourceNumberHeight: number;
+    readonly badge: number;
+    readonly activityWidth: number;
+    readonly activityHeight: number;
+    readonly handleDot: number;
+    readonly handleGap: number;
+    readonly noteDot: number;
+    readonly chevron: number;
+    readonly chevronStroke: number;
+    readonly drawerPaddleTapHeight: number;
+    readonly voiceToggleWidth: number;
+    readonly ghost: number;
+    readonly ghostArt: number;
+};
+
+/** The measured pre-T42 geometry retained as the before side of the scale contract. */
+export const MOBILE_MOD_RAIL_BASE_GEOMETRY: MobileModRailGeometry = {
+    safeGap: 8,
+    dragThreshold: 7,
+    snapDistance: 28,
+    width: 40,
+    shoulder: 12,
+    corner: 12,
+    tabContentHeight: 128,
+    drawerFallbackHeight: 234,
+    module: 28,
+    gap: 10,
+    outline: 1,
+    icon: 16,
+    secondaryIcon: 15,
+    label: 8,
+    sourceNumberWidth: 9,
+    sourceNumberHeight: 11,
+    badge: 13,
+    activityWidth: 14,
+    activityHeight: 2,
+    handleDot: 2,
+    handleGap: 3,
+    noteDot: 4,
+    chevron: 7,
+    chevronStroke: 1.5,
+    drawerPaddleTapHeight: 20,
+    voiceToggleWidth: 34,
+    ghost: 42,
+    ghostArt: 36,
+};
+
+function scaleMobileModRailGeometry(
+    base: MobileModRailGeometry,
+    scale: number,
+): MobileModRailGeometry {
+    return {
+        safeGap: base.safeGap * scale,
+        dragThreshold: base.dragThreshold * scale,
+        snapDistance: base.snapDistance * scale,
+        width: base.width * scale,
+        shoulder: base.shoulder * scale,
+        corner: base.corner * scale,
+        tabContentHeight: base.tabContentHeight * scale,
+        drawerFallbackHeight: base.drawerFallbackHeight * scale,
+        module: base.module * scale,
+        gap: base.gap * scale,
+        outline: base.outline * scale,
+        icon: base.icon * scale,
+        secondaryIcon: base.secondaryIcon * scale,
+        label: base.label * scale,
+        sourceNumberWidth: base.sourceNumberWidth * scale,
+        sourceNumberHeight: base.sourceNumberHeight * scale,
+        badge: base.badge * scale,
+        activityWidth: base.activityWidth * scale,
+        activityHeight: base.activityHeight * scale,
+        handleDot: base.handleDot * scale,
+        handleGap: base.handleGap * scale,
+        noteDot: base.noteDot * scale,
+        chevron: base.chevron * scale,
+        chevronStroke: base.chevronStroke * scale,
+        drawerPaddleTapHeight: base.drawerPaddleTapHeight * scale,
+        voiceToggleWidth: base.voiceToggleWidth * scale,
+        ghost: base.ghost * scale,
+        ghostArt: base.ghostArt * scale,
+    };
+}
+
+/** Shipping T42 geometry, derived once from the measured baseline. */
+export const MOBILE_MOD_RAIL_GEOMETRY = scaleMobileModRailGeometry(
+    MOBILE_MOD_RAIL_BASE_GEOMETRY,
+    MOBILE_MOD_RAIL_SCALE,
+);
+
 export type RailEdge = "left" | "right";
 
 /** A persisted rail position: which edge, and where along it (0=top, 1=bottom). */
@@ -40,6 +149,13 @@ export type RailDrawerMetrics = {
 export type RailDrawerPlacement = {
     readonly direction: RailDrawerDirection;
     readonly extent: number;
+};
+
+/** Safe initial rail position and the drawer projection available from it. */
+export type RailDefaultPlacement = {
+    readonly top: number;
+    readonly normalizedY: number;
+    readonly drawer: RailDrawerPlacement;
 };
 
 export type RailSilhouetteSpec = {
@@ -124,6 +240,52 @@ export function projectRailDrawerPlacement(tabTop: number, metrics: RailDrawerMe
     return {
         direction,
         extent: Math.min(metrics.desiredHeight, direction === "up" ? spaceAbove : spaceBelow),
+    };
+}
+
+/**
+ * Project the preferred initial dock into a safe expanded placement. When the
+ * viewport can fit the full drawer, move only as far as needed to make that
+ * true; cramped phones retain the preferred dock and receive the largest safe
+ * scrollable drawer extent instead.
+ */
+export function projectRailDefaultPlacement(
+    preferredNormalizedY: number,
+    bounds: RailVerticalBounds,
+    metrics: RailDrawerMetrics,
+): RailDefaultPlacement {
+    const preferredTop = projectRailTop(preferredNormalizedY, bounds);
+    const preferredDrawer = projectRailDrawerPlacement(preferredTop, metrics);
+    if (preferredDrawer.extent >= metrics.desiredHeight) {
+        return {
+            top: preferredTop,
+            normalizedY: normalizeRailTop(preferredTop, bounds),
+            drawer: preferredDrawer,
+        };
+    }
+
+    const candidates: number[] = [];
+    const latestDownwardTop = metrics.safeBottom - metrics.collapsedHeight - metrics.desiredHeight;
+    if (latestDownwardTop >= bounds.min) {
+        candidates.push(clamp(preferredTop, bounds.min, Math.min(bounds.max, latestDownwardTop)));
+    }
+
+    const earliestUpwardTop = metrics.safeTop + metrics.desiredHeight;
+    if (earliestUpwardTop <= bounds.max) {
+        candidates.push(clamp(preferredTop, Math.max(bounds.min, earliestUpwardTop), bounds.max));
+    }
+
+    let top = candidates[0] ?? preferredTop;
+    for (const candidate of candidates.slice(1)) {
+        if (Math.abs(candidate - preferredTop) < Math.abs(top - preferredTop)) {
+            top = candidate;
+        }
+    }
+
+    return {
+        top,
+        normalizedY: normalizeRailTop(top, bounds),
+        drawer: projectRailDrawerPlacement(top, metrics),
     };
 }
 

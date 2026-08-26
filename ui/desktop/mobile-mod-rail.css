@@ -1,5 +1,7 @@
 /* The perimeter-docked mobile Mod rail (T10B, approved design "B2 · Linear
-   Glass · Shouldered"): a 40px bar of 28px modules on a 10px rhythm, docked
+   Glass · Shouldered"): T42 applies one 1.10 scale to the complete 40px /
+   28px / 10px baseline geometry instead of resizing individual descendants.
+   The result is a 44px bar with 30.8px modules on an 11px rhythm, docked
    flush against the left or right screen edge with a tab-with-shoulders
    silhouette in a translucent glass material. Route count is a corner badge on
    the selected-source module, live activity is the thin bar inside it, and the
@@ -28,16 +30,26 @@
     }
 
     .mobile-global-mod-rail {
-        --rail-shoulder: 12px;
-        --rail-corner: 12px;
-        --rail-tab-w: 40px;
-        --rail-tab-content-h: 128px;
-        --rail-drawer-size: 234px;
-        --rail-module: 28px;
-        --rail-gap: 10px;
+        --rail-scale: 1;
+        --rail-shoulder: calc(12px * var(--rail-scale));
+        --rail-corner: calc(12px * var(--rail-scale));
+        --rail-tab-w: calc(40px * var(--rail-scale));
+        --rail-tab-content-h: calc(128px * var(--rail-scale));
+        --rail-drawer-size: calc(234px * var(--rail-scale));
+        --rail-module: calc(28px * var(--rail-scale));
+        --rail-gap: calc(10px * var(--rail-scale));
+        --rail-outline: calc(1px * var(--rail-scale));
+        --rail-module-radius: calc(8px * var(--rail-scale));
+        --rail-icon: calc(16px * var(--rail-scale));
+        --rail-secondary-icon: calc(15px * var(--rail-scale));
+        --rail-caption: calc(var(--cosimo-type-caption) * var(--rail-scale));
+        --rail-label: calc(var(--cosimo-type-label) * var(--rail-scale));
+        --rail-chevron-size: calc(7px * var(--rail-scale));
+        --rail-chevron-stroke: calc(1.5px * var(--rail-scale));
+        --rail-page-h: calc((var(--rail-module) * 3) + (var(--rail-gap) * 2));
         --rail-hairline: var(--cosimo-line);
         --rail-top-duration: 180ms;
-        --rail-dodge-distance: calc(var(--rail-tab-w) + 18px);
+        --rail-dodge-distance: calc(var(--rail-tab-w) + (18px * var(--rail-scale)));
         --rail-dodge-duration: 120ms;
         --rail-settle-x-duration: 220ms;
         position: absolute;
@@ -57,11 +69,21 @@
        the rail would make it the backdrop root and the glass blur would
        sample an empty backdrop instead of the app behind it. */
     .mobile-global-mod-rail[data-edge="right"] .mobile-global-mod-rail-silhouette {
-        filter: drop-shadow(-6px 10px 22px var(--cosimo-cast-shadow));
+        filter: drop-shadow(
+            calc(-6px * var(--rail-scale))
+            calc(10px * var(--rail-scale))
+            calc(22px * var(--rail-scale))
+            var(--cosimo-cast-shadow)
+        );
     }
 
     .mobile-global-mod-rail[data-edge="left"] .mobile-global-mod-rail-silhouette {
-        filter: drop-shadow(6px 10px 22px var(--cosimo-cast-shadow));
+        filter: drop-shadow(
+            calc(6px * var(--rail-scale))
+            calc(10px * var(--rail-scale))
+            calc(22px * var(--rail-scale))
+            var(--cosimo-cast-shadow)
+        );
     }
 
     .mobile-global-mod-rail[data-settling-x="true"] {
@@ -92,8 +114,8 @@
         position: absolute;
         inset: 0;
         z-index: 0;
-        backdrop-filter: blur(14px) saturate(1.25);
-        -webkit-backdrop-filter: blur(14px) saturate(1.25);
+        backdrop-filter: blur(calc(14px * var(--rail-scale))) saturate(1.25);
+        -webkit-backdrop-filter: blur(calc(14px * var(--rail-scale))) saturate(1.25);
         pointer-events: none;
     }
 
@@ -110,7 +132,7 @@
 
     .mobile-global-mod-rail-silhouette path {
         stroke: var(--rail-hairline);
-        stroke-width: 1px;
+        stroke-width: var(--rail-outline);
         stroke-linejoin: round;
         shape-rendering: geometricPrecision;
     }
@@ -177,18 +199,18 @@
 
     .mobile-global-mod-rail-handle {
         position: absolute;
-        top: 12px;
+        top: calc(12px * var(--rail-scale));
         left: 50%;
         display: grid;
-        grid-template-columns: repeat(2, 2px);
-        gap: 3px;
+        grid-template-columns: repeat(2, calc(2px * var(--rail-scale)));
+        gap: calc(3px * var(--rail-scale));
         transform: translateX(-50%);
         pointer-events: none;
     }
 
     .mobile-global-mod-rail-handle > span {
-        width: 2px;
-        height: 2px;
+        width: calc(2px * var(--rail-scale));
+        height: calc(2px * var(--rail-scale));
         border-radius: 50%;
         background: var(--cosimo-stroke);
     }
@@ -203,8 +225,8 @@
         place-items: center;
         box-sizing: border-box;
         padding: 0;
-        border: 1px solid transparent;
-        border-radius: 8px;
+        border: var(--rail-outline) solid transparent;
+        border-radius: var(--rail-module-radius);
         background: transparent;
         box-shadow: none;
         transform: translateX(-50%);
@@ -214,7 +236,7 @@
     }
 
     .mobile-global-mod-rail-selected {
-        top: 34px;
+        top: calc(34px * var(--rail-scale));
         border-color: color-mix(in srgb, var(--source-color) 38%, transparent);
         background: color-mix(in srgb, var(--source-color) 14%, transparent);
         cursor: grab;
@@ -226,45 +248,45 @@
     .mobile-global-mod-rail-selected:focus-visible,
     .mobile-global-mod-rail-note:focus-visible,
     .mobile-global-mod-rail-toggle:focus-visible {
-        outline: 2px solid var(--cosimo-raised);
-        outline-offset: -2px;
+        outline: calc(2px * var(--rail-scale)) solid var(--cosimo-raised);
+        outline-offset: calc(-2px * var(--rail-scale));
     }
 
     /* Inside the rail, source art is the bare 16px glyph; the module supplies
        the container. The slot number stays as a small corner chip because the
        source's identity includes it. */
     .mobile-global-mod-rail .rack-mod-art {
-        width: 16px;
-        height: 16px;
+        width: var(--rail-icon);
+        height: var(--rail-icon);
         border-radius: 0;
         background: none;
         box-shadow: none;
     }
 
     .mobile-global-mod-rail .rack-mod-glyph {
-        width: 16px;
-        height: 16px;
+        width: var(--rail-icon);
+        height: var(--rail-icon);
     }
 
     .mobile-global-mod-rail .rack-mod-number {
         top: auto;
-        right: -3px;
-        bottom: -3px;
-        width: 9px;
-        height: 11px;
-        border-radius: var(--cosimo-radius-xs);
+        right: calc(-3px * var(--rail-scale));
+        bottom: calc(-3px * var(--rail-scale));
+        width: calc(9px * var(--rail-scale));
+        height: calc(11px * var(--rail-scale));
+        border-radius: calc(var(--cosimo-radius-xs) * var(--rail-scale));
         background: var(--cosimo-ground);
-        font-size: var(--cosimo-type-caption);
+        font-size: var(--rail-caption);
     }
 
     .mobile-global-mod-rail-activity {
         position: absolute;
-        bottom: 3px;
+        bottom: calc(3px * var(--rail-scale));
         left: 50%;
-        width: 14px;
-        height: 2px;
+        width: calc(14px * var(--rail-scale));
+        height: calc(2px * var(--rail-scale));
         overflow: hidden;
-        border-radius: 1px;
+        border-radius: var(--rail-outline);
         background: var(--cosimo-line);
         transform: translateX(-50%);
         pointer-events: none;
@@ -274,9 +296,9 @@
         display: block;
         width: 100%;
         height: 100%;
-        border-radius: 1px;
+        border-radius: var(--rail-outline);
         background: var(--source-color);
-        box-shadow: 0 0 5px color-mix(in srgb, var(--source-color) 80%, transparent);
+        box-shadow: 0 0 calc(5px * var(--rail-scale)) color-mix(in srgb, var(--source-color) 80%, transparent);
         transform: scaleX(var(--source-activity));
         transform-origin: left center;
         transition: transform 60ms linear;
@@ -284,27 +306,27 @@
 
     .mobile-global-mod-rail-route-count {
         position: absolute;
-        top: 30px;
-        right: 2px;
+        top: calc(30px * var(--rail-scale));
+        right: calc(2px * var(--rail-scale));
         z-index: 3;
         display: grid;
-        min-width: 13px;
-        height: 13px;
+        min-width: calc(13px * var(--rail-scale));
+        height: calc(13px * var(--rail-scale));
         box-sizing: border-box;
         place-items: center;
-        padding-inline: 3px;
-        border: 1px solid var(--cosimo-line);
-        border-radius: var(--cosimo-radius-sm);
+        padding-inline: calc(3px * var(--rail-scale));
+        border: var(--rail-outline) solid var(--cosimo-line);
+        border-radius: calc(var(--cosimo-radius-sm) * var(--rail-scale));
         background: var(--cosimo-surface);
         color: var(--cosimo-stroke);
         font-family: "Departure Mono", "SFMono-Regular", ui-monospace, monospace;
-        font-size: var(--cosimo-type-caption);
+        font-size: var(--rail-caption);
         line-height: 1;
         pointer-events: none;
     }
 
     .mobile-global-mod-rail-note {
-        top: 72px;
+        top: calc(72px * var(--rail-scale));
         border-color: var(--cosimo-line);
         background: var(--cosimo-line);
         color: var(--cosimo-ink);
@@ -315,27 +337,38 @@
         background: var(--cosimo-line);
     }
 
+    .mobile-global-mod-rail-note > svg,
+    .mobile-global-mod-rail-toggle > svg {
+        width: var(--rail-icon);
+        height: var(--rail-icon);
+    }
+
+    .mobile-global-mod-rail-toggle.is-auto > svg {
+        width: var(--rail-secondary-icon);
+        height: var(--rail-secondary-icon);
+    }
+
     .mobile-global-mod-rail-note-dot {
         position: absolute;
-        top: 3px;
-        right: 3px;
-        width: 4px;
-        height: 4px;
+        top: calc(3px * var(--rail-scale));
+        right: calc(3px * var(--rail-scale));
+        width: calc(4px * var(--rail-scale));
+        height: calc(4px * var(--rail-scale));
         border-radius: 50%;
         background: var(--cosimo-accent-violet);
-        box-shadow: 0 0 5px rgb(var(--cosimo-accent-violet-rgb) / 0.9);
+        box-shadow: 0 0 calc(5px * var(--rail-scale)) rgb(var(--cosimo-accent-violet-rgb) / 0.9);
         pointer-events: none;
     }
 
     .mobile-global-mod-rail-chevron {
         position: absolute;
-        top: 110px;
+        top: calc(110px * var(--rail-scale));
         left: 50%;
-        width: 7px;
-        height: 7px;
+        width: var(--rail-chevron-size);
+        height: var(--rail-chevron-size);
         /* Only right+bottom edges: the global reset gives every side a solid
            border style, so a shorthand width would paint a diamond. */
-        border-width: 0 1.5px 1.5px 0;
+        border-width: 0 var(--rail-chevron-stroke) var(--rail-chevron-stroke) 0;
         color: var(--cosimo-stroke);
         transform-origin: center;
         pointer-events: none;
@@ -370,10 +403,10 @@
     .mobile-global-mod-rail[data-expanded="true"] .mobile-global-mod-rail-drawer::before {
         position: absolute;
         top: 0;
-        right: 10px;
-        left: 10px;
+        right: var(--rail-gap);
+        left: var(--rail-gap);
         z-index: 2;
-        height: 1px;
+        height: var(--rail-outline);
         background: var(--cosimo-line);
         content: "";
         pointer-events: none;
@@ -397,7 +430,7 @@
     .mobile-global-mod-rail-drawer .rack-mod-dock {
         width: 100%;
         box-sizing: border-box;
-        padding: 4px 0;
+        padding: calc(4px * var(--rail-scale)) 0;
         border: 0;
         border-radius: 0;
         background: transparent;
@@ -415,23 +448,23 @@
     .mobile-global-mod-rail-drawer .rack-mod-dock.is-vertical .rack-mod-paddle {
         width: var(--rail-tab-w);
         min-width: var(--rail-tab-w);
-        height: 20px;
-        min-height: 20px;
+        height: calc(20px * var(--rail-scale));
+        min-height: calc(20px * var(--rail-scale));
         border-radius: 0;
         color: var(--cosimo-stroke);
     }
 
     .mobile-global-mod-rail-drawer .rack-mod-chevron {
-        width: 7px;
-        height: 7px;
-        border-width: 0 1.5px 1.5px 0;
+        width: var(--rail-chevron-size);
+        height: var(--rail-chevron-size);
+        border-width: 0 var(--rail-chevron-stroke) var(--rail-chevron-stroke) 0;
     }
 
     .mobile-global-mod-rail-drawer .rack-mod-dock.is-vertical .rack-mod-viewport,
     .mobile-global-mod-rail-drawer .rack-mod-dock.is-vertical .rack-mod-track {
         width: var(--rail-tab-w);
-        height: 104px;
-        flex-basis: 104px;
+        height: var(--rail-page-h);
+        flex-basis: var(--rail-page-h);
     }
 
     /* B2 modules carry no glow, so the viewport clips hard: the base clip
@@ -442,8 +475,8 @@
 
     .mobile-global-mod-rail-drawer .rack-mod-dock.is-vertical .rack-mod-page {
         width: var(--rail-tab-w);
-        min-height: 104px;
-        flex-basis: 104px;
+        min-height: var(--rail-page-h);
+        flex-basis: var(--rail-page-h);
         grid-template-columns: var(--rail-tab-w);
         grid-template-rows: repeat(3, var(--rail-module));
         gap: var(--rail-gap) 0;
@@ -453,7 +486,7 @@
         width: var(--rail-tab-w);
         height: var(--rail-module);
         padding: 0;
-        border-radius: 8px;
+        border-radius: var(--rail-module-radius);
     }
 
     /* The source's module look lives on its art container so the full-width
@@ -461,8 +494,8 @@
     .mobile-global-mod-rail-drawer .rack-mod-source .rack-mod-art {
         width: var(--rail-module);
         height: var(--rail-module);
-        border-radius: 8px;
-        border: 1px solid transparent;
+        border-radius: var(--rail-module-radius);
+        border: var(--rail-outline) solid transparent;
         box-sizing: border-box;
         display: grid;
         place-items: center;
@@ -484,12 +517,12 @@
         flex-direction: column;
         align-items: center;
         gap: var(--rail-gap);
-        padding: 10px 0 12px;
+        padding: var(--rail-gap) 0 var(--rail-shoulder);
     }
 
     .mobile-global-mod-rail-toggles::before {
-        width: 20px;
-        height: 1px;
+        width: calc(20px * var(--rail-scale));
+        height: var(--rail-outline);
         background: var(--cosimo-line);
         content: "";
     }
@@ -503,8 +536,8 @@
         place-items: center;
         box-sizing: border-box;
         padding: 0;
-        border: 1px solid transparent;
-        border-radius: 8px;
+        border: var(--rail-outline) solid transparent;
+        border-radius: var(--rail-module-radius);
         background: transparent;
         box-shadow: none;
         color: var(--cosimo-ink-muted);
@@ -528,9 +561,9 @@
        play mode (T04: the keyboard menu button was rejected; this placement
        is provisional). */
     .mobile-global-mod-rail-toggle.is-voice {
-        width: 34px;
+        width: calc(34px * var(--rail-scale));
         font-family: var(--cosimo-font-label, sans-serif);
-        font-size: var(--cosimo-type-caption);
+        font-size: var(--rail-caption);
         font-weight: 700;
         letter-spacing: var(--cosimo-track-tight);
         text-transform: uppercase;
@@ -543,41 +576,45 @@
         bottom: var(--rail-shoulder);
         z-index: 1;
         display: grid;
-        width: 176px;
-        gap: 8px;
+        width: calc(176px * var(--rail-scale));
+        gap: calc(8px * var(--rail-scale));
         box-sizing: border-box;
-        padding: 10px;
-        border: 1px solid var(--cosimo-line);
-        border-radius: 12px;
+        padding: var(--rail-gap);
+        border: var(--rail-outline) solid var(--cosimo-line);
+        border-radius: var(--rail-corner);
         background: rgb(var(--cosimo-ground-rgb) / 0.97);
-        box-shadow: 0 12px 28px var(--cosimo-cast-shadow);
+        box-shadow:
+            0
+            calc(12px * var(--rail-scale))
+            calc(28px * var(--rail-scale))
+            var(--cosimo-cast-shadow);
     }
 
     .mobile-global-mod-rail[data-edge="right"] .mobile-global-mod-rail-voice-popover {
-        right: calc(100% + 10px);
+        right: calc(100% + var(--rail-gap));
     }
 
     .mobile-global-mod-rail[data-edge="left"] .mobile-global-mod-rail-voice-popover {
-        left: calc(100% + 10px);
+        left: calc(100% + var(--rail-gap));
     }
 
     .mobile-global-mod-rail-voice-modes {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 4px;
+        gap: calc(4px * var(--rail-scale));
     }
 
     .mobile-global-mod-rail-voice-mode {
-        height: 26px;
+        height: calc(26px * var(--rail-scale));
         padding: 0;
-        border: 1px solid transparent;
-        border-radius: var(--cosimo-radius-sm);
+        border: var(--rail-outline) solid transparent;
+        border-radius: calc(var(--cosimo-radius-sm) * var(--rail-scale));
         background: var(--cosimo-wash);
         box-shadow: none;
         color: var(--cosimo-ink-muted);
         cursor: pointer;
         font-family: var(--cosimo-font-label, sans-serif);
-        font-size: var(--cosimo-type-label);
+        font-size: var(--rail-label);
         font-weight: 600;
         letter-spacing: var(--cosimo-track);
         text-transform: uppercase;
@@ -605,23 +642,23 @@
         position: absolute;
         z-index: 100;
         display: grid;
-        width: 42px;
-        height: 42px;
+        width: calc(42px * var(--rail-scale));
+        height: calc(42px * var(--rail-scale));
         place-items: center;
         border-radius: var(--cosimo-radius-full);
         background: rgb(var(--cosimo-ground-rgb) / 0.72);
         box-shadow:
-            0 0 0 2px var(--source-color),
-            0 0 14px var(--source-color),
-            0 6px 16px var(--cosimo-cast-shadow);
+            0 0 0 calc(2px * var(--rail-scale)) var(--source-color),
+            0 0 calc(14px * var(--rail-scale)) var(--source-color),
+            0 calc(6px * var(--rail-scale)) calc(16px * var(--rail-scale)) var(--cosimo-cast-shadow);
         opacity: 0.92;
         pointer-events: none;
         transform: translate(-50%, -50%) scale(1.06);
     }
 
     .mobile-global-mod-source-ghost .rack-mod-art {
-        width: 36px;
-        height: 36px;
+        width: calc(36px * var(--rail-scale));
+        height: calc(36px * var(--rail-scale));
         border-radius: var(--cosimo-radius-full);
     }
 
@@ -641,7 +678,9 @@
    source color when a creation is authoritatively confirmed. */
 @keyframes mobile-mod-rail-count-pulse {
     0% {
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--source-color) 55%, transparent);
+        box-shadow:
+            0 0 0 calc(3px * var(--rail-scale))
+            color-mix(in srgb, var(--source-color) 55%, transparent);
         background: color-mix(in srgb, var(--source-color) 45%, transparent);
     }
     100% {
