@@ -120,9 +120,6 @@
     --cosimo-panel-radius: 0px;
     --cosimo-panel-border: transparent;
     --cosimo-panel-bg: var(--cosimo-ground);
-    /* The global Mod rail is a fixed overlay docked to a screen edge;
-       content on that edge must clear it. */
-    --cosimo-rail-dock: 40px;
     /* A bare card by default; a skin that wants cards back sets this. */
     --cosimo-card-bg: transparent;
     /* Cast-shadow COLOUR (for drop-shadow filters), not a shadow definition. */

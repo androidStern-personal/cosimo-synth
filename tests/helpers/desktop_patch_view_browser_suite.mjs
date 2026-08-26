@@ -1419,6 +1419,7 @@ export async function readGlobalModRailGeometry(page) {
             return null;
         }
         const body = rail.querySelector('[data-role="mobile-global-mod-rail-body"]');
+        const drawer = rail.querySelector('[data-role="mobile-global-mod-rail-drawer"]');
         return {
             rail: rectOf(rail),
             body: rectOf(body),
@@ -1426,7 +1427,10 @@ export async function readGlobalModRailGeometry(page) {
             art: rectOf(rail.querySelector('[data-role="mobile-global-mod-rail-selected"] .rack-mod-art')),
             routeCount: rectOf(rail.querySelector('[data-role="mobile-global-mod-rail-route-count"]')),
             chevron: rectOf(rail.querySelector(".mobile-global-mod-rail-chevron")),
-            drawer: rectOf(rail.querySelector('[data-role="mobile-global-mod-rail-drawer"]')),
+            drawer: rectOf(drawer),
+            drawerClientHeight: drawer instanceof HTMLElement ? drawer.clientHeight : null,
+            drawerScrollHeight: drawer instanceof HTMLElement ? drawer.scrollHeight : null,
+            drawerOverflowY: drawer instanceof HTMLElement ? getComputedStyle(drawer).overflowY : null,
             track: rectOf(rail.querySelector('[data-role="rack-mod-source-track"]')),
             amount: rectOf(rail.querySelector(".rack-mod-amount")),
             keyboard: rectOf(document.querySelector('[data-role="sticky-keyboard"]')),

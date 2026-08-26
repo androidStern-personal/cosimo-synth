@@ -113,6 +113,41 @@ test("drawer placement opens downward when there is room and upward when below i
     assert.equal(cramped.extent, 100);
 });
 
+test("T54 projects the visible rail and its drawer into the nearest control-free segment", async () => {
+    const { projectRailVisiblePlacement } = await loadPerimeterModule();
+    const bounds = { min: 40, max: 510 };
+    const metrics = {
+        safeTop: 40,
+        safeBottom: 660,
+        collapsedHeight: 150,
+        desiredHeight: 230,
+    };
+    const keepOuts = [
+        { top: 170, bottom: 200 },
+        { top: 330, bottom: 360 },
+    ];
+
+    const topRequest = projectRailVisiblePlacement(40, bounds, metrics, keepOuts);
+    assert.equal(topRequest.top, 360, "No upper segment fits the tab, so top intent projects just below the controls.");
+    assert.deepEqual(topRequest.drawer, { direction: "down", extent: 150 });
+    assert.equal(topRequest.collisionFree, true);
+
+    const bottomRequest = projectRailVisiblePlacement(510, bounds, metrics, keepOuts);
+    assert.equal(bottomRequest.top, 510, "A free requested position must remain unchanged.");
+    assert.deepEqual(bottomRequest.drawer, { direction: "up", extent: 150 });
+
+    const merged = projectRailVisiblePlacement(180, bounds, metrics, [
+        { top: 170, bottom: 190 },
+        { top: 185, bottom: 360 },
+    ]);
+    assert.equal(merged.top, 360, "Overlapping keep-outs must behave as one obstruction.");
+
+    const impossible = projectRailVisiblePlacement(180, bounds, metrics, [
+        { top: 40, bottom: 660 },
+    ]);
+    assert.equal(impossible.collisionFree, false, "The caller must be able to fall back from optional obstructions.");
+});
+
 test("T42 default placement fits the full scaled drawer when possible and clamps cramped phones safely", async () => {
     const {
         MOBILE_MOD_RAIL_GEOMETRY,

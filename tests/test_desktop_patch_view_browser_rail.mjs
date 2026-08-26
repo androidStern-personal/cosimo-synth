@@ -1370,7 +1370,6 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
             };
         };
         const rail = document.querySelector('[data-role="mobile-global-mod-rail"]');
-        const surface = document.querySelector(".cosimo-surface");
         const tab = rail?.querySelector('[data-role="mobile-global-mod-rail-tab"]');
         const selected = rail?.querySelector('[data-role="mobile-global-mod-rail-selected"]');
         const selectedArt = selected?.querySelector(".rack-mod-art");
@@ -1395,6 +1394,15 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
         const preset = document.querySelector('[data-role="synth-preset-bar-host"]');
         const tabs = document.querySelector('[data-role="mobile-workspace-tabs"]');
         const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
+        const visibleVoiceControls = Array.from(document.querySelectorAll(".mobile-voice-chip"))
+            .filter((element) => {
+                const bounds = element.getBoundingClientRect();
+                const style = getComputedStyle(element);
+                return bounds.width > 0
+                    && bounds.height > 0
+                    && style.display !== "none"
+                    && style.visibility !== "hidden";
+            });
         const railStyle = rail ? getComputedStyle(rail) : null;
         const handleStyle = handle ? getComputedStyle(handle) : null;
         const chevronStyle = chevron ? getComputedStyle(chevron) : null;
@@ -1406,7 +1414,6 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
             edge: rail?.getAttribute("data-edge"),
             expanded: rail?.getAttribute("data-expanded"),
             drawerDirection: rail?.getAttribute("data-drawer-direction"),
-            surfaceEdge: surface instanceof HTMLElement ? surface.dataset.modRailEdge ?? null : null,
             rail: rectOf(rail),
             tab: rectOf(tab),
             selected: rectOf(selected),
@@ -1437,6 +1444,10 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
             preset: rectOf(preset),
             tabs: rectOf(tabs),
             keyboard: rectOf(keyboard),
+            visibleVoiceControls: visibleVoiceControls.map((control) => ({
+                role: control.getAttribute("data-role") ?? control.getAttribute("data-corner") ?? "voice-chip",
+                bounds: rectOf(control),
+            })),
             scale: railStyle ? Number.parseFloat(railStyle.getPropertyValue("--rail-scale")) : null,
             viewport: { width: window.innerWidth, height: window.innerHeight },
             documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -1450,8 +1461,13 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
     };
     const assertSafe = (geometry, label) => {
         assert.ok(geometry.rail && geometry.preset && geometry.tabs, `${label} requires rail and shell chrome.`);
-        // T54 keeps Voice corner controls on fixed, mirrored graph insets. This
-        // movable overlay owns its screen/chrome safety, not their placement.
+        for (const control of geometry.visibleVoiceControls) {
+            assert.equal(
+                rectsIntersect(geometry.rail, control.bounds),
+                false,
+                `${label} must clear visible Voice control ${control.role}.`,
+            );
+        }
         assert.equal(geometry.documentFits, true, `${label} must not create horizontal overflow.`);
         assert.equal(
             geometry.rail.top >= geometry.preset.bottom + 8.5,
@@ -1498,7 +1514,6 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
         await measuredPage.waitForTimeout(240);
         const collapsed = await readGeometry(measuredPage);
         assert.equal(collapsed.scale, SCALE);
-        assert.equal(collapsed.surfaceEdge, "right");
         closeToScaled(collapsed.rail.width, BASE.railWidth, "rail width");
         closeToScaled(collapsed.rail.height, BASE.railCollapsedHeight, "collapsed rail height");
         closeToScaled(collapsed.tab.height, BASE.tabHeight, "tab and grip tap height");
@@ -1572,7 +1587,6 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
                 await page.waitForTimeout(240);
                 const collapsed = await readGeometry(page);
                 assert.equal(collapsed.edge, edge);
-                assert.equal(collapsed.surfaceEdge, edge);
                 assertSafe(collapsed, `${viewport.width}x${viewport.height} collapsed ${edge} rail`);
                 await expandGlobalModRail(page);
                 await page.waitForTimeout(160);
@@ -1586,6 +1600,247 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
                 );
             } finally {
                 await page.close();
+            }
+        }
+    }
+});
+
+test("T54 projects requested Mod rail docks around every visible Voice control", async () => {
+    const POSITION_KEY = "cosimo.mobile-global-mod-rail.position.v1";
+    const viewports = [
+        { width: 320, height: 568 },
+        { width: 393, height: 852 },
+    ];
+    const requestedPositions = [
+        { label: "top", normalizedY: 0 },
+        { label: "middle", normalizedY: 0.5 },
+        { label: "bottom", normalizedY: 1 },
+    ];
+
+    const readVoiceCollisionState = async (page) => await page.evaluate((storageKey) => {
+        const rectOf = (element) => {
+            const bounds = element.getBoundingClientRect();
+            return {
+                left: bounds.left,
+                right: bounds.right,
+                top: bounds.top,
+                bottom: bounds.bottom,
+                width: bounds.width,
+                height: bounds.height,
+            };
+        };
+        const isVisible = (element) => {
+            const style = getComputedStyle(element);
+            const bounds = element.getBoundingClientRect();
+            return style.display !== "none"
+                && style.visibility !== "hidden"
+                && Number(style.opacity) > 0
+                && bounds.width > 0
+                && bounds.height > 0;
+        };
+        const rail = document.querySelector('[data-role="mobile-global-mod-rail"]');
+        if (!(rail instanceof HTMLElement)) {
+            throw new Error("Expected the mobile Mod rail.");
+        }
+        const readControls = (selector) => Array.from(document.querySelectorAll(selector))
+            .filter((element) => element instanceof HTMLElement && isVisible(element))
+            .map((element) => {
+                const bounds = rectOf(element);
+                const center = {
+                    x: (bounds.left + bounds.right) / 2,
+                    y: (bounds.top + bounds.bottom) / 2,
+                };
+                const hit = document.elementFromPoint(center.x, center.y);
+                return {
+                    role: element.getAttribute("data-role") ?? element.getAttribute("data-corner") ?? "voice-chip",
+                    bounds,
+                    centerHit: hit instanceof Element && element.contains(hit),
+                    hitRole: hit instanceof Element
+                        ? hit.getAttribute("data-role") ?? hit.getAttribute("aria-label") ?? hit.tagName
+                        : null,
+                };
+            });
+        return {
+            rail: rectOf(rail),
+            expanded: rail.getAttribute("data-expanded"),
+            edge: rail.getAttribute("data-edge"),
+            chips: readControls(".mobile-voice-chip"),
+            paddles: readControls(".mobile-voice-paddle"),
+            storedDock: JSON.parse(localStorage.getItem(storageKey) ?? "null"),
+        };
+    }, POSITION_KEY);
+
+    const assertVoiceControlsClear = (state, label) => {
+        assert.ok(state.chips.length >= 4, `${label} must expose the four Voice graph controls.`);
+        for (const chip of state.chips) {
+            assert.equal(
+                rectsIntersect(state.rail, chip.bounds),
+                false,
+                `${label} Mod rail covers visible Voice control ${chip.role}: ${JSON.stringify({ rail: state.rail, chip: chip.bounds })}`,
+            );
+            assert.equal(
+                chip.centerHit,
+                true,
+                `${label} ${chip.role} must remain pointer reachable; center hit ${chip.hitRole}.`,
+            );
+        }
+    };
+    const assertVoicePaddlesClear = (state, label) => {
+        assert.equal(state.paddles.length, 2, `${label} must expose both Voice page paddles.`);
+        for (const paddle of state.paddles) {
+            assert.equal(
+                rectsIntersect(state.rail, paddle.bounds),
+                false,
+                `${label} Mod rail covers Voice paging control ${paddle.role}.`,
+            );
+            assert.equal(
+                paddle.centerHit,
+                true,
+                `${label} ${paddle.role} must remain pointer reachable; center hit ${paddle.hitRole}.`,
+            );
+        }
+    };
+
+    for (const viewport of viewports) {
+        for (const edge of ["left", "right"]) {
+            for (const requested of requestedPositions) {
+                const label = `${viewport.width}x${viewport.height} ${edge} ${requested.label}`;
+                const page = await openHarnessPage({
+                    beforeGoto: async (nextPage) => {
+                        await nextPage.setViewportSize(viewport);
+                        await nextPage.addInitScript(({ storageKey, storedEdge, normalizedY }) => {
+                            localStorage.setItem(
+                                storageKey,
+                                JSON.stringify({ version: 2, edge: storedEdge, normalizedY }),
+                            );
+                        }, {
+                            storageKey: POSITION_KEY,
+                            storedEdge: edge,
+                            normalizedY: requested.normalizedY,
+                        });
+                    },
+                });
+
+                try {
+                    const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+                    await rail.waitFor();
+                    await page.locator('[data-role="mobile-voice-graph"]').waitFor();
+                    await page.waitForTimeout(240);
+
+                    const collapsed = await readVoiceCollisionState(page);
+                    assert.equal(collapsed.edge, edge, `${label} must retain its requested edge.`);
+                    assert.equal(collapsed.expanded, "false");
+                    assert.deepEqual(
+                        collapsed.storedDock,
+                        { version: 2, edge, normalizedY: requested.normalizedY },
+                        `${label} layout projection must not rewrite stored dock intent.`,
+                    );
+                    assertVoiceControlsClear(collapsed, `${label} collapsed`);
+                    if (viewport.height === 852) {
+                        assertVoicePaddlesClear(collapsed, `${label} collapsed`);
+                    }
+
+                    if (viewport.width === 393 && requested.normalizedY === 0.5) {
+                        if (edge === "right") {
+                            const warp = page.locator('[data-role="mobile-voice-warp-mode"]');
+                            const beforeLabel = await warp.getAttribute("aria-label");
+                            await warp.click();
+                            assert.notEqual(
+                                await warp.getAttribute("aria-label"),
+                                beforeLabel,
+                                "The repaired right edge must leave Warp genuinely clickable.",
+                            );
+                        } else {
+                            const wavetable = page.locator('select[aria-label="Select wavetable"]');
+                            await wavetable.selectOption("1");
+                            await page.waitForFunction(() => (
+                                Number(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().runtimeState.desiredTableIndex) === 1
+                            ));
+                        }
+                    }
+
+                    await expandGlobalModRail(page);
+                    const expanded = await readVoiceCollisionState(page);
+                    assert.equal(expanded.expanded, "true");
+                    assertVoiceControlsClear(expanded, `${label} expanded`);
+                    if (viewport.height === 852) {
+                        assertVoicePaddlesClear(expanded, `${label} expanded`);
+                    }
+                    assert.deepEqual(
+                        expanded.storedDock,
+                        { version: 2, edge, normalizedY: requested.normalizedY },
+                        `${label} expansion must preserve requested dock intent.`,
+                    );
+                    await collapseGlobalModRail(page);
+
+                    if (viewport.width === 393 && edge === "right" && requested.normalizedY === 0.5) {
+                        const handleBounds = await rail.locator(".mobile-global-mod-rail-handle").boundingBox();
+                        assert.ok(handleBounds, "The projected rail must retain its drag handle.");
+                        const dragStart = {
+                            x: handleBounds.x + (handleBounds.width / 2),
+                            y: handleBounds.y + (handleBounds.height / 2),
+                        };
+                        await page.mouse.move(dragStart.x, dragStart.y);
+                        await page.mouse.down();
+                        await page.mouse.move(dragStart.x, dragStart.y + 60, { steps: 6 });
+                        await page.mouse.up();
+                        await page.waitForFunction(() => (
+                            document.querySelector('[data-role="mobile-global-mod-rail"]')
+                                ?.getAttribute("data-decelerating") === "false"
+                        ));
+                        await page.waitForTimeout(220);
+                        const dragged = await readVoiceCollisionState(page);
+                        assertVoiceControlsClear(dragged, `${label} after requested-position drag`);
+                        assert.equal(dragged.storedDock.edge, "right");
+                        assert.equal(
+                            dragged.storedDock.normalizedY > 0.55,
+                            true,
+                            "A drag must persist its requested Y rather than the collision-projected display Y.",
+                        );
+
+                        await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
+                        await page.locator('[data-role="mobile-workspace-tab-voice"]').click();
+                        await page.locator('[data-role="mobile-voice-graph"]').waitFor();
+                        await page.waitForTimeout(240);
+                        const restoredDrag = await readVoiceCollisionState(page);
+                        assert.deepEqual(
+                            restoredDrag.storedDock,
+                            dragged.storedDock,
+                            "Leaving and returning to Voice must preserve the dragged request exactly.",
+                        );
+                        assertVoiceControlsClear(restoredDrag, `${label} returned requested-position drag`);
+                    }
+
+                    if (viewport.width === 393 && edge === "left" && requested.normalizedY === 0) {
+                        await setHarnessRuntimeState(page, {
+                            desiredTableIndex: 0,
+                            desiredIntentSerial: 4,
+                            hasActive: true,
+                            activeTableIndex: 0,
+                            activeGeneration: 11,
+                            hasLoading: false,
+                            hasFailure: true,
+                            failedTableIndex: 0,
+                            failedGeneration: 11,
+                            failureScope: 1,
+                            failurePhase: 3,
+                            failureReasonCode: 2,
+                        });
+                        const retry = page.locator('[data-role="mobile-voice-retry-load"]');
+                        await retry.waitFor();
+                        await page.waitForTimeout(160);
+                        const withRetry = await readVoiceCollisionState(page);
+                        assertVoiceControlsClear(withRetry, `${label} with Retry Load`);
+                        await clearHarnessDebugLog(page);
+                        await retry.click();
+                        await page.waitForFunction(() => (
+                            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().sentMessages
+                                .some(({ endpointID }) => endpointID === "retryDesiredTableRequest")
+                        ));
+                    }
+                } finally {
+                    await page.close();
+                }
             }
         }
     }
@@ -1678,14 +1933,22 @@ test("the global modulation rail keeps a fixed tab and opens its source drawer t
             true,
             `The source drawer must begin beneath the tab: ${JSON.stringify(expanded.drawer)} vs ${JSON.stringify(expanded.tab)}.`,
         );
-        for (const [label, part] of Object.entries({ drawer: expanded.drawer, track: expanded.track })) {
-            if (part === null) {
-                continue;
-            }
+        assert.equal(
+            rectContains(expanded.rail, expanded.drawer),
+            true,
+            `The expanded drawer viewport must live inside the tab surface: ${JSON.stringify(expanded.drawer)} vs ${JSON.stringify(expanded.rail)}`,
+        );
+        assert.equal(
+            expanded.track.left >= expanded.rail.left - 0.5 && expanded.track.right <= expanded.rail.right + 0.5,
+            true,
+            "Expanded drawer content must stay horizontally inside the rail.",
+        );
+        if (!rectContains(expanded.rail, expanded.track)) {
+            assert.equal(expanded.drawerOverflowY, "auto");
             assert.equal(
-                rectContains(expanded.rail, part),
+                expanded.drawerScrollHeight > expanded.drawerClientHeight,
                 true,
-                `Expanded ${label} must live inside the tab surface, not a detached popup: ${JSON.stringify(part)} vs ${JSON.stringify(expanded.rail)}`,
+                "A control-constrained drawer must scroll instead of painting over the Voice surface.",
             );
         }
         if (expanded.keyboard) {
@@ -1716,16 +1979,22 @@ test("the global modulation rail keeps a fixed tab and opens its source drawer t
         assert.ok(narrow?.rail && narrow.tab && narrow.drawer && narrow.track, "The expanded rail must survive a 320px viewport.");
         assert.equal(Math.abs(narrow.rail.right - narrow.viewportWidth) <= 0.5, true, "The tab must stay flush at 320px.");
         assert.equal(Math.abs(narrow.rail.width - narrow.tab.width) <= 1, true, "The drawer must retain the tab's narrow width at 320px.");
-        for (const [label, part] of Object.entries({ drawer: narrow.drawer, track: narrow.track })) {
-            if (part === null) {
-                continue;
-            }
-            assert.equal(
-                rectContains(narrow.rail, part),
-                true,
-                `Expanded ${label} must stay inside the tab at 320px: ${JSON.stringify(part)} vs ${JSON.stringify(narrow.rail)}`,
-            );
-        }
+        assert.equal(
+            rectContains(narrow.rail, narrow.drawer),
+            true,
+            `The cramped drawer viewport must stay inside the rail: ${JSON.stringify(narrow.drawer)} vs ${JSON.stringify(narrow.rail)}`,
+        );
+        assert.equal(
+            narrow.track.left >= narrow.rail.left - 0.5 && narrow.track.right <= narrow.rail.right + 0.5,
+            true,
+            "Scrollable drawer content must stay horizontally inside the narrow rail.",
+        );
+        assert.equal(narrow.drawerOverflowY, "auto", "The cramped drawer must retain its production scroller.");
+        assert.equal(
+            narrow.drawerScrollHeight > narrow.drawerClientHeight,
+            true,
+            "A collision-constrained 320px drawer must scroll rather than paint over Voice controls.",
+        );
         assert.equal(narrow.documentFits, true, "The expanded tab must not overflow a 320px viewport.");
 
     } finally {
@@ -1975,7 +2244,7 @@ test("rail flick keeps moving after touch release and faster releases travel far
             await nextPage.addInitScript(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 0.5 }),
+                    JSON.stringify({ normalizedY: 0.9 }),
                 );
             });
         },
@@ -1988,11 +2257,11 @@ test("rail flick keeps moving after touch release and faster releases travel far
         const rail = page.locator('[data-role="mobile-global-mod-rail"]');
         const handle = rail.locator(".mobile-global-mod-rail-handle");
 
-        const resetRailToMiddle = async () => {
+        const resetRailToFreeLowerBand = async () => {
             await page.evaluate(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 0.5 }),
+                    JSON.stringify({ normalizedY: 0.9 }),
                 );
             });
             await page.reload({ waitUntil: "commit" });
@@ -2056,7 +2325,7 @@ test("rail flick keeps moving after touch release and faster releases travel far
         await page.waitForTimeout(140);
         const fast = await measureFlickUp(8, 16);
 
-        await resetRailToMiddle();
+        await resetRailToFreeLowerBand();
         const slow = await measureFlickUp(70, 120);
 
         assert.equal(
@@ -2070,7 +2339,7 @@ test("rail flick keeps moving after touch release and faster releases travel far
             `Release speed must increase momentum travel: ${JSON.stringify({ fast, slow })}`,
         );
 
-        await resetRailToMiddle();
+        await resetRailToFreeLowerBand();
         await page.evaluate(() => {
             const nativeRequestAnimationFrame = window.requestAnimationFrame.bind(window);
             window.requestAnimationFrame = (callback) => nativeRequestAnimationFrame((timeStamp) => {

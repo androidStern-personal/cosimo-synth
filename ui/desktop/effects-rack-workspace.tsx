@@ -86,8 +86,8 @@ import {
     normalizeRailTop,
     parseStoredRailDock,
     projectRailDefaultPlacement,
-    projectRailDrawerPlacement,
     projectRailTop,
+    projectRailVisiblePlacement,
     railVerticalBounds,
     serializeRailDock,
     settleRailEdge,
@@ -96,6 +96,7 @@ import {
     type RailDrawerMetrics,
     type RailDrawerPlacement,
     type RailEdge,
+    type RailVerticalKeepOut,
     type RailVerticalBounds,
 } from "../shared/mod-rail-perimeter";
 import { presentRouteWithCanonicalAmount, useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
@@ -1869,6 +1870,68 @@ const MOBILE_MOD_RAIL_STOP_VELOCITY_PX_PER_MS = 0.02;
 const MOBILE_MOD_RAIL_DECELERATION_RATE_PER_MS = 0.99;
 const MOBILE_MOD_RAIL_SETTLE_X_MS = 220;
 const MOBILE_MOD_RAIL_DEFAULT_DOCK: RailDock = { edge: "right", normalizedY: 0.42 };
+const MOBILE_MOD_RAIL_MIN_USABLE_DRAWER_EXTENT = (3 * MOBILE_MOD_RAIL_GEOMETRY.module)
+    + (2 * MOBILE_MOD_RAIL_GEOMETRY.gap);
+const MOBILE_VOICE_RAIL_REQUIRED_KEEP_OUT_SELECTOR = ".mobile-voice-chip";
+const MOBILE_VOICE_RAIL_PREFERRED_KEEP_OUT_SELECTOR = ".mobile-voice-paddle";
+
+type EdgeVoiceRailKeepOuts = {
+    readonly required: ReadonlyArray<RailVerticalKeepOut>;
+    readonly preferred: ReadonlyArray<RailVerticalKeepOut>;
+};
+
+type VoiceRailKeepOuts = Readonly<Record<RailEdge, EdgeVoiceRailKeepOuts>>;
+
+function measureVisibleVoiceRailKeepOuts(
+    surface: Element | null,
+    layerBounds: DOMRect,
+): VoiceRailKeepOuts {
+    const keepOuts: Record<RailEdge, {
+        required: RailVerticalKeepOut[];
+        preferred: RailVerticalKeepOut[];
+    }> = {
+        left: { required: [], preferred: [] },
+        right: { required: [], preferred: [] },
+    };
+    if (!surface) {
+        return keepOuts;
+    }
+
+    const leftRailRight = layerBounds.left + MOBILE_MOD_RAIL_GEOMETRY.width;
+    const rightRailLeft = layerBounds.right - MOBILE_MOD_RAIL_GEOMETRY.width;
+    const controls = surface.querySelectorAll<HTMLElement>([
+        MOBILE_VOICE_RAIL_REQUIRED_KEEP_OUT_SELECTOR,
+        MOBILE_VOICE_RAIL_PREFERRED_KEEP_OUT_SELECTOR,
+    ].join(", "));
+    for (const control of controls) {
+        const style = getComputedStyle(control);
+        const bounds = control.getBoundingClientRect();
+        if (
+            style.display === "none"
+            || style.visibility === "hidden"
+            || Number(style.opacity) === 0
+            || bounds.width <= 0
+            || bounds.height <= 0
+        ) {
+            continue;
+        }
+
+        const verticalKeepOut = {
+            top: bounds.top - layerBounds.top - MOBILE_MOD_RAIL_GEOMETRY.outline,
+            bottom: bounds.bottom - layerBounds.top + MOBILE_MOD_RAIL_GEOMETRY.outline,
+        };
+        const priority = control.matches(MOBILE_VOICE_RAIL_REQUIRED_KEEP_OUT_SELECTOR)
+            ? "required"
+            : "preferred";
+        if (bounds.left < leftRailRight && bounds.right > layerBounds.left) {
+            keepOuts.left[priority].push(verticalKeepOut);
+        }
+        if (bounds.right > rightRailLeft && bounds.left < layerBounds.right) {
+            keepOuts.right[priority].push(verticalKeepOut);
+        }
+    }
+    return keepOuts;
+}
 
 type RailMotionSample = {
     readonly clientY: number;
@@ -2001,7 +2064,9 @@ function MobileGlobalModRail({
     const railRef = useRef<HTMLElement | null>(null);
     const tabRef = useRef<HTMLDivElement | null>(null);
     const drawerRef = useRef<HTMLDivElement | null>(null);
-    const positionRef = useRef(0);
+    // Requested position is user intent; React state `top` is the separately
+    // projected collision-free position currently displayed.
+    const requestedPositionRef = useRef(0);
     const normalizedPositionRef = useRef<number | null>(null);
     const boundsRef = useRef<RailVerticalBounds>({
         min: MOBILE_MOD_RAIL_GEOMETRY.safeGap,
@@ -2029,6 +2094,10 @@ function MobileGlobalModRail({
             + (2 * MOBILE_MOD_RAIL_GEOMETRY.shoulder),
         desiredHeight: MOBILE_MOD_RAIL_GEOMETRY.drawerFallbackHeight,
     });
+    const voiceKeepOutsRef = useRef<VoiceRailKeepOuts>({
+        left: { required: [], preferred: [] },
+        right: { required: [], preferred: [] },
+    });
     const decelerationFrameRef = useRef<number | null>(null);
     const gestureRef = useRef<{
         pointerId: number;
@@ -2036,7 +2105,7 @@ function MobileGlobalModRail({
         startClientY: number;
         lastClientX: number;
         startNormalizedY: number;
-        startTop: number;
+        startRequestedTop: number;
         startEdge: RailEdge;
         moved: boolean;
         interruptedDeceleration: boolean;
@@ -2075,32 +2144,34 @@ function MobileGlobalModRail({
         setDragX(nextDragX);
     }, []);
 
-    const updateDrawerPlacement = useCallback((nextTop: number) => {
-        setDrawerPlacement(projectRailDrawerPlacement(nextTop, drawerMetricsRef.current));
+    const applyRequestedRailPosition = useCallback((nextRequestedTop: number, nextEdge = edgeRef.current) => {
+        const bounds = boundsRef.current;
+        const requestedTop = clamp(nextRequestedTop, bounds.min, bounds.max);
+        const edgeKeepOuts = voiceKeepOutsRef.current[nextEdge];
+        const requiredPlacement = projectRailVisiblePlacement(
+            requestedTop,
+            bounds,
+            drawerMetricsRef.current,
+            edgeKeepOuts.required,
+        );
+        const preferredPlacement = projectRailVisiblePlacement(
+            requestedTop,
+            bounds,
+            drawerMetricsRef.current,
+            [...edgeKeepOuts.required, ...edgeKeepOuts.preferred],
+        );
+        // Graph chips are the non-negotiable T54 keep-outs. Keep the paging
+        // paddles clear too whenever the chrome-bounded band can still fit the
+        // complete tab plus one usable three-source drawer page; the 320x568
+        // layout has no such second free segment.
+        const placement = preferredPlacement.collisionFree
+            && preferredPlacement.drawer.extent >= MOBILE_MOD_RAIL_MIN_USABLE_DRAWER_EXTENT
+            ? preferredPlacement
+            : requiredPlacement;
+        requestedPositionRef.current = requestedTop;
+        setTop(placement.top);
+        setDrawerPlacement(placement.drawer);
     }, []);
-
-    useLayoutEffect(() => {
-        const surface = layerRef.current?.closest(".cosimo-surface");
-        if (!(surface instanceof HTMLElement)) {
-            return;
-        }
-        const previousEdge = surface.dataset.modRailEdge;
-        const previousDockWidth = surface.style.getPropertyValue("--cosimo-rail-dock");
-        surface.dataset.modRailEdge = edge;
-        surface.style.setProperty("--cosimo-rail-dock", `${MOBILE_MOD_RAIL_GEOMETRY.width}px`);
-        return () => {
-            if (previousEdge === undefined) {
-                delete surface.dataset.modRailEdge;
-            } else {
-                surface.dataset.modRailEdge = previousEdge;
-            }
-            if (previousDockWidth) {
-                surface.style.setProperty("--cosimo-rail-dock", previousDockWidth);
-            } else {
-                surface.style.removeProperty("--cosimo-rail-dock");
-            }
-        };
-    }, [edge]);
 
     // The voice-settings popover belongs to the open drawer; whatever hides
     // the drawer (collapse, mapping drag) takes the popover with it.
@@ -2193,6 +2264,7 @@ function MobileGlobalModRail({
             desiredHeight: drawerHeight,
         };
         drawerMetricsRef.current = nextDrawerMetrics;
+        voiceKeepOutsRef.current = measureVisibleVoiceRailKeepOuts(surface, layerBounds);
 
         if (!dockInitializedRef.current) {
             dockInitializedRef.current = true;
@@ -2214,11 +2286,9 @@ function MobileGlobalModRail({
                 ).normalizedY;
         }
         normalizedPositionRef.current ??= MOBILE_MOD_RAIL_DEFAULT_DOCK.normalizedY;
-        const nextTop = projectRailTop(normalizedPositionRef.current, nextBounds);
-        positionRef.current = nextTop;
-        setTop(nextTop);
-        updateDrawerPlacement(nextTop);
-    }, [updateDrawerPlacement]);
+        const nextRequestedTop = projectRailTop(normalizedPositionRef.current, nextBounds);
+        applyRequestedRailPosition(nextRequestedTop, edgeRef.current);
+    }, [applyRequestedRailPosition]);
 
     useLayoutEffect(() => {
         measureAndClamp();
@@ -2227,6 +2297,7 @@ function MobileGlobalModRail({
         const keyboard = surface?.querySelector<HTMLElement>('[data-role="sticky-keyboard"]');
         const workspaceTabs = surface?.querySelector<HTMLElement>('[data-role="mobile-workspace-tabs"]');
         const presetBar = surface?.querySelector<HTMLElement>('[data-role="synth-preset-bar-host"]');
+        const voicePanel = surface?.querySelector<HTMLElement>('[data-role="mobile-workspace-panel-voice"]');
         const observer = typeof ResizeObserver === "function"
             ? new ResizeObserver(measureAndClamp)
             : null;
@@ -2248,11 +2319,32 @@ function MobileGlobalModRail({
         if (presetBar) {
             observer?.observe(presetBar);
         }
+        if (voicePanel) {
+            observer?.observe(voicePanel);
+            for (const control of voicePanel.querySelectorAll<HTMLElement>([
+                MOBILE_VOICE_RAIL_REQUIRED_KEEP_OUT_SELECTOR,
+                MOBILE_VOICE_RAIL_PREFERRED_KEEP_OUT_SELECTOR,
+            ].join(", "))) {
+                observer?.observe(control);
+            }
+        }
+        const mutationObserver = voicePanel && typeof MutationObserver === "function"
+            ? new MutationObserver(measureAndClamp)
+            : null;
+        mutationObserver?.observe(voicePanel, {
+            attributes: true,
+            childList: true,
+            subtree: true,
+            attributeFilter: ["aria-hidden", "class", "hidden", "style"],
+        });
+        surface?.addEventListener("scroll", measureAndClamp, true);
         window.addEventListener("resize", measureAndClamp);
         window.visualViewport?.addEventListener("resize", measureAndClamp);
         window.visualViewport?.addEventListener("scroll", measureAndClamp);
         return () => {
             observer?.disconnect();
+            mutationObserver?.disconnect();
+            surface?.removeEventListener("scroll", measureAndClamp, true);
             window.removeEventListener("resize", measureAndClamp);
             window.visualViewport?.removeEventListener("resize", measureAndClamp);
             window.visualViewport?.removeEventListener("scroll", measureAndClamp);
@@ -2310,8 +2402,9 @@ function MobileGlobalModRail({
         };
     }, [mappingActive, selectedSource.accent]);
 
-    const persistRailDock = useCallback((nextTop: number) => {
-        const normalizedY = normalizeRailTop(nextTop, boundsRef.current);
+    const persistRailDock = useCallback((nextRequestedTop: number) => {
+        const normalizedY = normalizeRailTop(nextRequestedTop, boundsRef.current);
+        requestedPositionRef.current = projectRailTop(normalizedY, boundsRef.current);
         normalizedPositionRef.current = normalizedY;
         try {
             localStorage.setItem(
@@ -2323,22 +2416,20 @@ function MobileGlobalModRail({
         }
     }, []);
 
-    const settleRailPosition = useCallback((unsettledTop: number) => {
+    const settleRailPosition = useCallback((unsettledRequestedTop: number) => {
         const bounds = boundsRef.current;
-        const clampedTop = clamp(unsettledTop, bounds.min, bounds.max);
-        const { top: settledTop } = snapRailTop(
-            clampedTop,
+        const clampedRequestedTop = clamp(unsettledRequestedTop, bounds.min, bounds.max);
+        const { top: settledRequestedTop } = snapRailTop(
+            clampedRequestedTop,
             bounds,
             MOBILE_MOD_RAIL_GEOMETRY.snapDistance,
         );
-        if (settledTop !== clampedTop) {
+        if (settledRequestedTop !== clampedRequestedTop) {
             triggerLightHaptic();
         }
-        positionRef.current = settledTop;
-        setTop(settledTop);
-        updateDrawerPlacement(settledTop);
-        persistRailDock(settledTop);
-    }, [persistRailDock, updateDrawerPlacement]);
+        applyRequestedRailPosition(settledRequestedTop, edgeRef.current);
+        persistRailDock(settledRequestedTop);
+    }, [applyRequestedRailPosition, persistRailDock]);
 
     const stopRailDeceleration = useCallback(() => {
         const frameID = decelerationFrameRef.current;
@@ -2377,18 +2468,16 @@ function MobileGlobalModRail({
             const nextVelocity = velocity * attenuation;
             const displacement = decayLog > 0 ? (velocity - nextVelocity) / decayLog : 0;
             const bounds = boundsRef.current;
-            const projectedTop = positionRef.current + displacement;
-            const nextTop = clamp(projectedTop, bounds.min, bounds.max);
-            const reachedBound = nextTop !== projectedTop;
+            const projectedRequestedTop = requestedPositionRef.current + displacement;
+            const nextRequestedTop = clamp(projectedRequestedTop, bounds.min, bounds.max);
+            const reachedBound = nextRequestedTop !== projectedRequestedTop;
 
-            positionRef.current = nextTop;
-            normalizedPositionRef.current = normalizeRailTop(nextTop, bounds);
-            setTop(nextTop);
-            updateDrawerPlacement(nextTop);
+            normalizedPositionRef.current = normalizeRailTop(nextRequestedTop, bounds);
+            applyRequestedRailPosition(nextRequestedTop, edgeRef.current);
 
             if (reachedBound || Math.abs(nextVelocity) <= MOBILE_MOD_RAIL_STOP_VELOCITY_PX_PER_MS) {
                 setDecelerating(false);
-                settleRailPosition(nextTop);
+                settleRailPosition(nextRequestedTop);
                 return;
             }
 
@@ -2398,7 +2487,7 @@ function MobileGlobalModRail({
 
         decelerationFrameRef.current = requestAnimationFrame(step);
         return true;
-    }, [settleRailPosition, updateDrawerPlacement]);
+    }, [applyRequestedRailPosition, settleRailPosition]);
 
     const settleDragXHome = useCallback(() => {
         // Paint the compensated offset first, then glide the bar flush against
@@ -2440,11 +2529,9 @@ function MobileGlobalModRail({
         if (cancelled) {
             stopRailDeceleration();
             normalizedPositionRef.current = gesture.startNormalizedY;
-            positionRef.current = gesture.startTop;
-            setTop(gesture.startTop);
-            updateDrawerPlacement(gesture.startTop);
             edgeRef.current = gesture.startEdge;
             setEdge(gesture.startEdge);
+            applyRequestedRailPosition(gesture.startRequestedTop, gesture.startEdge);
             setSettlingX(false);
             applyDragX(0);
             return;
@@ -2465,6 +2552,7 @@ function MobileGlobalModRail({
             const edgeSpan = Math.max(0, layerWidth - MOBILE_MOD_RAIL_GEOMETRY.width);
             edgeRef.current = nextEdge;
             setEdge(nextEdge);
+            applyRequestedRailPosition(requestedPositionRef.current, nextEdge);
             applyDragX(nextEdge === "left"
                 ? dragXRef.current + edgeSpan
                 : dragXRef.current - edgeSpan);
@@ -2476,9 +2564,9 @@ function MobileGlobalModRail({
             prefersReducedRailMotion()
             || !startRailDeceleration(releaseVelocity)
         ) {
-            settleRailPosition(positionRef.current);
+            settleRailPosition(requestedPositionRef.current);
         }
-    }, [applyDragX, settleDragXHome, settleRailPosition, startRailDeceleration, stopRailDeceleration, updateDrawerPlacement]);
+    }, [applyDragX, applyRequestedRailPosition, settleDragXHome, settleRailPosition, startRailDeceleration, stopRailDeceleration]);
 
     const releaseNoteKey = useCallback((pointerId: number) => {
         if (noteKeyPointerRef.current !== pointerId) {
@@ -2513,7 +2601,7 @@ function MobileGlobalModRail({
                 finishRailGesture(gesture.pointerId, true);
             }
             if (stopRailDeceleration()) {
-                settleRailPosition(positionRef.current);
+                settleRailPosition(requestedPositionRef.current);
             }
             abortNoteKey();
         };
@@ -2672,7 +2760,7 @@ function MobileGlobalModRail({
                                 if (interruptedDeceleration) {
                                     // Like touching a coasting scroll view, a new touch stops
                                     // it exactly where it is before beginning the next gesture.
-                                    persistRailDock(positionRef.current);
+                                    persistRailDock(requestedPositionRef.current);
                                 }
                                 const motionSamples: RailMotionSample[] = [];
                                 appendRailMotionSample(motionSamples, event.clientY, event.timeStamp);
@@ -2683,7 +2771,7 @@ function MobileGlobalModRail({
                                     lastClientX: event.clientX,
                                     startNormalizedY: normalizedPositionRef.current
                                         ?? MOBILE_MOD_RAIL_DEFAULT_DOCK.normalizedY,
-                                    startTop: positionRef.current,
+                                    startRequestedTop: requestedPositionRef.current,
                                     startEdge: edgeRef.current,
                                     moved: false,
                                     interruptedDeceleration,
@@ -2722,11 +2810,13 @@ function MobileGlobalModRail({
                                     return;
                                 }
                                 const bounds = boundsRef.current;
-                                const nextTop = clamp(gesture.startTop + deltaY, bounds.min, bounds.max);
-                                positionRef.current = nextTop;
-                                normalizedPositionRef.current = normalizeRailTop(nextTop, bounds);
-                                setTop(nextTop);
-                                updateDrawerPlacement(nextTop);
+                                const nextRequestedTop = clamp(
+                                    gesture.startRequestedTop + deltaY,
+                                    bounds.min,
+                                    bounds.max,
+                                );
+                                normalizedPositionRef.current = normalizeRailTop(nextRequestedTop, bounds);
+                                applyRequestedRailPosition(nextRequestedTop, gesture.startEdge);
                                 // The bar follows the finger horizontally inside the layer;
                                 // release settles it against the nearest edge.
                                 const edgeSpan = Math.max(
