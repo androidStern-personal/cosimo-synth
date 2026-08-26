@@ -2,8 +2,9 @@ namespace wt
 {
     // Fixed end-of-chain two-band Enhancer. T28 will compose this processor into
     // the Polish chain; T26 deliberately leaves it out of WavetableSynth and the
-    // Effects Lane. The ten settings are non-automatable value endpoints because
-    // they are preset-persisted voicing controls, never modulation destinations.
+    // Effects Lane. The ten sound settings plus two per-band routing modes are
+    // non-automatable value endpoints: saved voicing controls, never modulation
+    // destinations.
 
     let enhancerOversampleFactor = 4;
     let enhancerBandCount = 2;
@@ -15,6 +16,8 @@ namespace wt
     let enhancerAmountMax = 1.0f;
     let enhancerCurveTube = 0;
     let enhancerCurveSolid = 1;
+    let enhancerModeStereo = 0;
+    let enhancerModeMidSide = 1;
     let enhancerB1FrequencyDefaultHz = 130.0f;
     let enhancerB1QDefault = 0.71f;
     let enhancerB1CurveDefault = enhancerCurveSolid;
@@ -66,6 +69,11 @@ namespace wt
     }
 
     float32 resolveEnhancerSolidWeight (float32 value)
+    {
+        return value >= 0.5f ? 1.0f : 0.0f;
+    }
+
+    float32 resolveEnhancerMidSideWeight (float32 value)
     {
         return value >= 0.5f ? 1.0f : 0.0f;
     }
@@ -167,12 +175,14 @@ namespace wt
 
         input value float32 b1FreqHzIn [[ name: "Enhancer Band 1 Frequency", min: enhancerFrequencyMinHz, max: enhancerFrequencyMaxHz, init: enhancerB1FrequencyDefaultHz, unit: "Hz", automatable: false, rampFrames: 0 ]];
         input value float32 b1QIn [[ name: "Enhancer Band 1 Q", min: enhancerQMin, max: enhancerQMax, init: enhancerB1QDefault, automatable: false, rampFrames: 0 ]];
+        input value float32 b1ModeIn [[ name: "Enhancer Band 1 Mode", min: 0.0f, max: 1.0f, init: float32 (enhancerModeStereo), discrete: true, step: 1.0f, text: "Stereo|Mid/Side", automatable: false, rampFrames: 0 ]];
         input value float32 b1MidAmountIn [[ name: "Enhancer Band 1 Mid Amount", min: enhancerAmountMin, max: enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
         input value float32 b1SideAmountIn [[ name: "Enhancer Band 1 Side Amount", min: enhancerAmountMin, max: enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
         input value float32 b1CurveIn [[ name: "Enhancer Band 1 Character", min: 0.0f, max: 1.0f, init: float32 (enhancerB1CurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: false, rampFrames: 0 ]];
 
         input value float32 b2FreqHzIn [[ name: "Enhancer Band 2 Frequency", min: enhancerFrequencyMinHz, max: enhancerFrequencyMaxHz, init: enhancerB2FrequencyDefaultHz, unit: "Hz", automatable: false, rampFrames: 0 ]];
         input value float32 b2QIn [[ name: "Enhancer Band 2 Q", min: enhancerQMin, max: enhancerQMax, init: enhancerB2QDefault, automatable: false, rampFrames: 0 ]];
+        input value float32 b2ModeIn [[ name: "Enhancer Band 2 Mode", min: 0.0f, max: 1.0f, init: float32 (enhancerModeStereo), discrete: true, step: 1.0f, text: "Stereo|Mid/Side", automatable: false, rampFrames: 0 ]];
         input value float32 b2MidAmountIn [[ name: "Enhancer Band 2 Mid Amount", min: enhancerAmountMin, max: enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
         input value float32 b2SideAmountIn [[ name: "Enhancer Band 2 Side Amount", min: enhancerAmountMin, max: enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
         input value float32 b2CurveIn [[ name: "Enhancer Band 2 Character", min: 0.0f, max: 1.0f, init: float32 (enhancerB2CurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: false, rampFrames: 0 ]];
@@ -185,18 +195,23 @@ namespace wt
 
         static_assert (processor.latency == 0, "The isolated Enhancer must remain zero latency");
 
-        enhancerFilters::tpt::svf::Implementation[enhancerBandCount] bandFilters;
-        EnhancerDcBlocker[enhancerBandCount] residueDcBlockers;
-        node band1Core = wt::EnhancerShaperCore * enhancerOversampleFactor;
-        node band2Core = wt::EnhancerShaperCore * enhancerOversampleFactor;
+        enhancerFilters::tpt::svf::Implementation[enhancerBandCount] stereoBandFilters;
+        enhancerFilters::tpt::svf::Implementation[enhancerBandCount] midSideBandFilters;
+        EnhancerDcBlocker[enhancerBandCount * 2] residueDcBlockers;
+        node band1StereoCore = wt::EnhancerShaperCore * enhancerOversampleFactor;
+        node band1MidSideCore = wt::EnhancerShaperCore * enhancerOversampleFactor;
+        node band2StereoCore = wt::EnhancerShaperCore * enhancerOversampleFactor;
+        node band2MidSideCore = wt::EnhancerShaperCore * enhancerOversampleFactor;
 
         float32 b1FreqHz = enhancerB1FrequencyDefaultHz;
         float32 b1Q = enhancerB1QDefault;
+        float32 b1MidSideWeight;
         float32 b1MidAmount;
         float32 b1SideAmount;
         float32 b1SolidWeight = float32 (enhancerB1CurveDefault);
         float32 b2FreqHz = enhancerB2FrequencyDefaultHz;
         float32 b2Q = enhancerB2QDefault;
+        float32 b2MidSideWeight;
         float32 b2MidAmount;
         float32 b2SideAmount;
         float32 b2SolidWeight = float32 (enhancerB2CurveDefault);
@@ -216,25 +231,33 @@ namespace wt
         {
             for (wrap<enhancerBandCount> band)
             {
-                bandFilters[band].setMode (enhancerFilters::tpt::svf::Mode::bandPass);
-                residueDcBlockers[band].setSampleRate (processor.frequency);
+                stereoBandFilters[band].setMode (enhancerFilters::tpt::svf::Mode::bandPass);
+                midSideBandFilters[band].setMode (enhancerFilters::tpt::svf::Mode::bandPass);
             }
+
+            for (wrap<enhancerBandCount * 2> path)
+                residueDcBlockers[path].setSampleRate (processor.frequency);
         }
 
         event resetIn (int32 ignored)
         {
             for (wrap<enhancerBandCount> band)
             {
-                bandFilters[band].reset();
-                residueDcBlockers[band].reset();
+                stereoBandFilters[band].reset();
+                midSideBandFilters[band].reset();
             }
+
+            for (wrap<enhancerBandCount * 2> path)
+                residueDcBlockers[path].reset();
 
             // A node reset clears both oversampling resamplers as well as the
             // stateless shaper child.
-            band1Core.reset();
-            band2Core.reset();
+            band1StereoCore.reset();
+            band1MidSideCore.reset();
+            band2StereoCore.reset();
+            band2MidSideCore.reset();
             // Smoothed settings are deliberately preserved. resetIn owns audio
-            // history only; preset/state recall owns the ten control values.
+            // history only; preset/state recall owns the sound and routing values.
             tunedB1FreqHz = 0.0f;
             tunedB1Q = 0.0f;
             tunedB2FreqHz = 0.0f;
@@ -254,6 +277,12 @@ namespace wt
             b1Q = smoothEnhancerControl (
                 b1Q,
                 clampEnhancerQ (b1QIn),
+                smoothingAmount,
+                enhancerCoefficientEpsilon
+            );
+            b1MidSideWeight = smoothEnhancerControl (
+                b1MidSideWeight,
+                resolveEnhancerMidSideWeight (b1ModeIn),
                 smoothingAmount,
                 enhancerCoefficientEpsilon
             );
@@ -285,6 +314,12 @@ namespace wt
             b2Q = smoothEnhancerControl (
                 b2Q,
                 clampEnhancerQ (b2QIn),
+                smoothingAmount,
+                enhancerCoefficientEpsilon
+            );
+            b2MidSideWeight = smoothEnhancerControl (
+                b2MidSideWeight,
+                resolveEnhancerMidSideWeight (b2ModeIn),
                 smoothingAmount,
                 enhancerCoefficientEpsilon
             );
@@ -321,7 +356,8 @@ namespace wt
             if (std::intrinsics::abs (b1FreqHz - tunedB1FreqHz) > enhancerCoefficientEpsilon
                 || std::intrinsics::abs (b1Q - tunedB1Q) > enhancerCoefficientEpsilon)
             {
-                bandFilters[0].setFrequency (processor.frequency, b1FreqHz, b1Q);
+                stereoBandFilters[0].setFrequency (processor.frequency, b1FreqHz, b1Q);
+                midSideBandFilters[0].setFrequency (processor.frequency, b1FreqHz, b1Q);
                 tunedB1FreqHz = b1FreqHz;
                 tunedB1Q = b1Q;
             }
@@ -329,7 +365,8 @@ namespace wt
             if (std::intrinsics::abs (b2FreqHz - tunedB2FreqHz) > enhancerCoefficientEpsilon
                 || std::intrinsics::abs (b2Q - tunedB2Q) > enhancerCoefficientEpsilon)
             {
-                bandFilters[1].setFrequency (processor.frequency, b2FreqHz, b2Q);
+                stereoBandFilters[1].setFrequency (processor.frequency, b2FreqHz, b2Q);
+                midSideBandFilters[1].setFrequency (processor.frequency, b2FreqHz, b2Q);
                 tunedB2FreqHz = b2FreqHz;
                 tunedB2Q = b2Q;
             }
@@ -343,38 +380,66 @@ namespace wt
                 updateBandCoefficients();
 
                 let dry = in;
-                let midSide = float32<2> (
+                let dryMidSide = float32<2> (
                     0.5f * (dry[0] + dry[1]),
                     0.5f * (dry[0] - dry[1])
                 );
-
                 // The TPT band's centre gain is Q. Dividing by Q makes this
                 // the constant-peak bandpass residue of a parallel bell boost.
-                let band1 = bandFilters[0].process (midSide) / b1Q;
-                let band2 = bandFilters[1].process (midSide) / b2Q;
-                let band1Drive = float32<2> (
-                    enhancerAmountDrive (b1MidAmount),
-                    enhancerAmountDrive (b1SideAmount)
-                );
-                let band2Drive = float32<2> (
-                    enhancerAmountDrive (b2MidAmount),
-                    enhancerAmountDrive (b2SideAmount)
-                );
+                let band1Stereo = stereoBandFilters[0].process (dry) / b1Q;
+                let band2Stereo = stereoBandFilters[1].process (dry) / b2Q;
+                let band1MidSide = midSideBandFilters[0].process (dryMidSide) / b1Q;
+                let band2MidSide = midSideBandFilters[1].process (dryMidSide) / b2Q;
+                let band1PrimaryDrive = enhancerAmountDrive (b1MidAmount);
+                let band1SideDrive = enhancerAmountDrive (b1SideAmount);
+                let band2PrimaryDrive = enhancerAmountDrive (b2MidAmount);
+                let band2SideDrive = enhancerAmountDrive (b2SideAmount);
+                let band1StereoDrive = float32<2> (band1PrimaryDrive, band1PrimaryDrive);
+                let band1MidSideDrive = float32<2> (band1PrimaryDrive, band1SideDrive);
+                let band2StereoDrive = float32<2> (band2PrimaryDrive, band2PrimaryDrive);
+                let band2MidSideDrive = float32<2> (band2PrimaryDrive, band2SideDrive);
 
-                band1Core.in <- band1 * band1Drive;
-                band1Core.solidWeightIn <- b1SolidWeight;
-                band1Core.advance();
-                band2Core.in <- band2 * band2Drive;
-                band2Core.solidWeightIn <- b2SolidWeight;
-                band2Core.advance();
+                band1StereoCore.in <- band1Stereo * band1StereoDrive;
+                band1StereoCore.solidWeightIn <- b1SolidWeight;
+                band1StereoCore.advance();
+                band1MidSideCore.in <- band1MidSide * band1MidSideDrive;
+                band1MidSideCore.solidWeightIn <- b1SolidWeight;
+                band1MidSideCore.advance();
+                band2StereoCore.in <- band2Stereo * band2StereoDrive;
+                band2StereoCore.solidWeightIn <- b2SolidWeight;
+                band2StereoCore.advance();
+                band2MidSideCore.in <- band2MidSide * band2MidSideDrive;
+                band2MidSideCore.solidWeightIn <- b2SolidWeight;
+                band2MidSideCore.advance();
 
-                let band1Residue = residueDcBlockers[0].process (
-                    band1Core.out - band1Core.thru
+                let band1StereoResidue = residueDcBlockers[0].process (
+                    band1StereoCore.out - band1StereoCore.thru
                 ) * enhancerResidueTrim;
-                let band2Residue = residueDcBlockers[1].process (
-                    band2Core.out - band2Core.thru
+                let band1MidSideResidue = residueDcBlockers[1].process (
+                    band1MidSideCore.out - band1MidSideCore.thru
                 ) * enhancerResidueTrim;
-                let residueMidSide = band1Residue + band2Residue;
+                let band2StereoResidue = residueDcBlockers[2].process (
+                    band2StereoCore.out - band2StereoCore.thru
+                ) * enhancerResidueTrim;
+                let band2MidSideResidue = residueDcBlockers[3].process (
+                    band2MidSideCore.out - band2MidSideCore.thru
+                ) * enhancerResidueTrim;
+                let band1DecodedMidSideResidue = float32<2> (
+                    band1MidSideResidue[0] + band1MidSideResidue[1],
+                    band1MidSideResidue[0] - band1MidSideResidue[1]
+                );
+                let band2DecodedMidSideResidue = float32<2> (
+                    band2MidSideResidue[0] + band2MidSideResidue[1],
+                    band2MidSideResidue[0] - band2MidSideResidue[1]
+                );
+                let band1Residue = b1MidSideWeight == 0.0f ? band1StereoResidue
+                    : (b1MidSideWeight == 1.0f ? band1DecodedMidSideResidue
+                       : band1StereoResidue
+                         + (band1DecodedMidSideResidue - band1StereoResidue) * b1MidSideWeight);
+                let band2Residue = b2MidSideWeight == 0.0f ? band2StereoResidue
+                    : (b2MidSideWeight == 1.0f ? band2DecodedMidSideResidue
+                       : band2StereoResidue
+                         + (band2DecodedMidSideResidue - band2StereoResidue) * b2MidSideWeight);
 
                 // Keep the neutral path literally untouched. This also prevents
                 // a signed-zero or M/S round-trip from weakening the bit-identity
@@ -386,11 +451,7 @@ namespace wt
                 }
                 else
                 {
-                    let residue = float32<2> (
-                        residueMidSide[0] + residueMidSide[1],
-                        residueMidSide[0] - residueMidSide[1]
-                    );
-                    out <- dry + residue;
+                    out <- dry + band1Residue + band2Residue;
                 }
 
                 advance();

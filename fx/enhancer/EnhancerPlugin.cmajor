@@ -1,0 +1,44 @@
+processor CosimoEnhancer [[ main ]]
+{
+    input stream float32<2> audioIn [[ name: "Input" ]];
+    output stream float32<2> audioOut [[ name: "Output" ]];
+
+    input value float32 b1FreqHzIn [[ name: "Band 1 Frequency", group: "Band 1", min: wt::enhancerFrequencyMinHz, max: wt::enhancerFrequencyMaxHz, init: wt::enhancerB1FrequencyDefaultHz, unit: "Hz", automatable: false, rampFrames: 0 ]];
+    input value float32 b1QIn [[ name: "Band 1 Q", group: "Band 1", min: wt::enhancerQMin, max: wt::enhancerQMax, init: wt::enhancerB1QDefault, automatable: false, rampFrames: 0 ]];
+    input value float32 b1ModeIn [[ name: "Band 1 Mode", group: "Band 1", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerModeStereo), discrete: true, step: 1.0f, text: "Stereo|Mid/Side", automatable: false, rampFrames: 0 ]];
+    input value float32 b1MidAmountIn [[ name: "Band 1 Amount / Mid", group: "Band 1", min: wt::enhancerAmountMin, max: wt::enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
+    input value float32 b1SideAmountIn [[ name: "Band 1 Side", group: "Band 1", min: wt::enhancerAmountMin, max: wt::enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
+    input value float32 b1CurveIn [[ name: "Band 1 Character", group: "Band 1", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerB1CurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: false, rampFrames: 0 ]];
+
+    input value float32 b2FreqHzIn [[ name: "Band 2 Frequency", group: "Band 2", min: wt::enhancerFrequencyMinHz, max: wt::enhancerFrequencyMaxHz, init: wt::enhancerB2FrequencyDefaultHz, unit: "Hz", automatable: false, rampFrames: 0 ]];
+    input value float32 b2QIn [[ name: "Band 2 Q", group: "Band 2", min: wt::enhancerQMin, max: wt::enhancerQMax, init: wt::enhancerB2QDefault, automatable: false, rampFrames: 0 ]];
+    input value float32 b2ModeIn [[ name: "Band 2 Mode", group: "Band 2", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerModeStereo), discrete: true, step: 1.0f, text: "Stereo|Mid/Side", automatable: false, rampFrames: 0 ]];
+    input value float32 b2MidAmountIn [[ name: "Band 2 Amount / Mid", group: "Band 2", min: wt::enhancerAmountMin, max: wt::enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
+    input value float32 b2SideAmountIn [[ name: "Band 2 Side", group: "Band 2", min: wt::enhancerAmountMin, max: wt::enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
+    input value float32 b2CurveIn [[ name: "Band 2 Character", group: "Band 2", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerB2CurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: false, rampFrames: 0 ]];
+
+    node enhancer = wt::EnhancerBus;
+
+    void main()
+    {
+        loop
+        {
+            enhancer.b1FreqHzIn <- b1FreqHzIn;
+            enhancer.b1QIn <- b1QIn;
+            enhancer.b1ModeIn <- b1ModeIn;
+            enhancer.b1MidAmountIn <- b1MidAmountIn;
+            enhancer.b1SideAmountIn <- b1SideAmountIn;
+            enhancer.b1CurveIn <- b1CurveIn;
+            enhancer.b2FreqHzIn <- b2FreqHzIn;
+            enhancer.b2QIn <- b2QIn;
+            enhancer.b2ModeIn <- b2ModeIn;
+            enhancer.b2MidAmountIn <- b2MidAmountIn;
+            enhancer.b2SideAmountIn <- b2SideAmountIn;
+            enhancer.b2CurveIn <- b2CurveIn;
+            enhancer.in <- audioIn;
+            enhancer.advance();
+            audioOut <- enhancer.out;
+            advance();
+        }
+    }
+}

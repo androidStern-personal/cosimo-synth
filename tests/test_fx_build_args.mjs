@@ -15,7 +15,7 @@ async function loadBuildModules() {
 
 test("fx_build_all_expands_to_every_known_effect_plugin_in_manifest_order", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
-    const expectedPluginNames = ["ott", "chorus", "seqfx", "spectral"];
+    const expectedPluginNames = ["ott", "chorus", "seqfx", "spectral", "enhancer"];
 
     assert.deepEqual(buildModule.effectPluginNames(), expectedPluginNames);
     assert.deepEqual(buildModule.resolvePluginNames("all"), expectedPluginNames);
@@ -27,13 +27,23 @@ test("fx_build_single_plugin_still_resolves_to_only_that_plugin", async () => {
 
     assert.deepEqual(buildModule.resolvePluginNames("seqfx"), ["seqfx"]);
     assert.deepEqual(prodModule.resolveProdPluginNames("chorus"), ["chorus"]);
+    assert.deepEqual(buildModule.resolvePluginNames("enhancer"), ["enhancer"]);
 });
 
 test("fx_build_unknown_plugin_reports_all_as_an_available_target", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
 
-    assert.throws(() => buildModule.resolvePluginNames("wat"), /Available plugins: all, ott, chorus, seqfx, spectral/);
-    assert.throws(() => prodModule.resolveProdPluginNames("wat"), /Available plugins: all, ott, chorus, seqfx, spectral/);
+    assert.throws(() => buildModule.resolvePluginNames("wat"), /Available plugins: all, ott, chorus, seqfx, spectral, enhancer/);
+    assert.throws(() => prodModule.resolveProdPluginNames("wat"), /Available plugins: all, ott, chorus, seqfx, spectral, enhancer/);
+});
+
+test("the Enhancer production plugin packages the canonical T26 DSP instead of a copy", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    assert.deepEqual(buildModule.effectPlugins.enhancer.runtimeSources, [
+        { repoPath: "cmajor/Enhancer.cmajor", runtimePath: "Enhancer.cmajor" },
+        { repoPath: "fx/enhancer/EnhancerPlugin.cmajor", runtimePath: "EnhancerPlugin.cmajor" },
+    ]);
 });
 
 test("fx_prod_install_accepts_all_with_dry_run_without_swallowing_unknown_flags", async () => {

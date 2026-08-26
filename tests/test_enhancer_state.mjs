@@ -16,19 +16,20 @@ async function loadEnhancerState() {
     return loadUIModule(repoRoot, "ui/shared/enhancer-state.ts");
 }
 
-test("the Enhancer owns one strict, versioned ten-setting document", async () => {
+test("the Enhancer saves ten sound settings plus two independent band modes", async () => {
     const enhancer = await loadEnhancerState();
     const defaults = enhancer.createDefaultEnhancerState();
 
     assert.equal(enhancer.ENHANCER_STATE_FORMAT, "cosimo.enhancer");
-    assert.equal(enhancer.ENHANCER_STATE_VERSION, 1);
+    assert.equal(enhancer.ENHANCER_STATE_VERSION, 2);
     assert.deepEqual(enhancer.ENHANCER_CURVES, ["tube", "solid"]);
-    assert.equal(enhancer.ENHANCER_SETTING_DESCRIPTORS.length, 10);
+    assert.deepEqual(enhancer.ENHANCER_MODES, ["stereo", "mid-side"]);
+    assert.equal(enhancer.ENHANCER_SETTING_DESCRIPTORS.length, 12);
     assert.deepEqual(
         enhancer.ENHANCER_SETTING_DESCRIPTORS.map(({ id }) => id),
         [
-            "b1FreqHz", "b1Q", "b1MidAmount", "b1SideAmount", "b1Curve",
-            "b2FreqHz", "b2Q", "b2MidAmount", "b2SideAmount", "b2Curve",
+            "b1FreqHz", "b1Q", "b1Mode", "b1MidAmount", "b1SideAmount", "b1Curve",
+            "b2FreqHz", "b2Q", "b2Mode", "b2MidAmount", "b2SideAmount", "b2Curve",
         ],
     );
     assert.deepEqual(
@@ -50,14 +51,16 @@ test("the Enhancer owns one strict, versioned ten-setting document", async () =>
     );
     assert.deepEqual(defaults, {
         format: "cosimo.enhancer",
-        version: 1,
+        version: 2,
         b1FreqHz: 130,
         b1Q: 0.71,
+        b1Mode: "stereo",
         b1MidAmount: 0,
         b1SideAmount: 0,
         b1Curve: "solid",
         b2FreqHz: 9000,
         b2Q: 0.71,
+        b2Mode: "stereo",
         b2MidAmount: 0,
         b2SideAmount: 0,
         b2Curve: "tube",
@@ -79,11 +82,13 @@ test("the Enhancer owns one strict, versioned ten-setting document", async () =>
         ...defaults,
         b1FreqHz: 47.5,
         b1Q: 8,
+        b1Mode: "mid-side",
         b1MidAmount: 0.75,
         b1SideAmount: 0.25,
         b1Curve: "tube",
         b2FreqHz: 15_999.5,
         b2Q: 0.3,
+        b2Mode: "stereo",
         b2MidAmount: 1,
         b2SideAmount: 0.5,
         b2Curve: "solid",
@@ -92,14 +97,44 @@ test("the Enhancer owns one strict, versioned ten-setting document", async () =>
     assert.deepEqual(enhancer.toEnhancerDspSettings(edited), {
         b1FreqHzIn: 47.5,
         b1QIn: 8,
+        b1ModeIn: 1,
         b1MidAmountIn: 0.75,
         b1SideAmountIn: 0.25,
         b1CurveIn: 0,
         b2FreqHzIn: 15_999.5,
         b2QIn: 0.3,
+        b2ModeIn: 0,
         b2MidAmountIn: 1,
         b2SideAmountIn: 0.5,
         b2CurveIn: 1,
+    });
+});
+
+test("the unpublished always-M/S v1 document migrates without changing its sound", async () => {
+    const enhancer = await loadEnhancerState();
+    const legacy = {
+        format: "cosimo.enhancer",
+        version: 1,
+        b1FreqHz: 310,
+        b1Q: 1.2,
+        b1MidAmount: 0.7,
+        b1SideAmount: 0.2,
+        b1Curve: "tube",
+        b2FreqHz: 7500,
+        b2Q: 0.8,
+        b2MidAmount: 0.3,
+        b2SideAmount: 0.9,
+        b2Curve: "solid",
+    };
+
+    assert.deepEqual(enhancer.parseEnhancerState(legacy), {
+        _tag: "ok",
+        value: {
+            ...legacy,
+            version: 2,
+            b1Mode: "mid-side",
+            b2Mode: "mid-side",
+        },
     });
 });
 
@@ -111,13 +146,15 @@ test("malformed or partial Enhancer state is rejected at the persistence boundar
         [],
         "not json",
         { ...defaults, format: "cosimo.polish" },
-        { ...defaults, version: 2 },
+        { ...defaults, version: 3 },
         { ...defaults, b1FreqHz: 29.999 },
         { ...defaults, b2FreqHz: 16_001 },
         { ...defaults, b1Q: Number.NaN },
         { ...defaults, b2Q: Number.POSITIVE_INFINITY },
         { ...defaults, b1MidAmount: -0.001 },
         { ...defaults, b2SideAmount: 1.001 },
+        { ...defaults, b1Mode: "left-right" },
+        { ...defaults, b2Mode: 1 },
         { ...defaults, b1Curve: "tape" },
         { ...defaults, b2Curve: 1 },
         { ...defaults, extra: true },
@@ -133,7 +170,7 @@ test("malformed or partial Enhancer state is rejected at the persistence boundar
     }
 });
 
-test("the ten saved settings cannot enter host automation, modulation, or Effects Lane catalogs", async () => {
+test("the saved sound and routing settings cannot enter host automation, modulation, or Effects Lane catalogs", async () => {
     const [enhancer, rack, modulation, lanes] = await Promise.all([
         loadEnhancerState(),
         loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts"),
@@ -169,16 +206,20 @@ test("the isolated DSP metadata and composition fence encode the T26 ownership b
     ]);
 
     assert.match(source, /let enhancerOversampleFactor = 4;/);
-    assert.match(source, /band1Core = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
-    assert.match(source, /band2Core = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
-    assert.match(source, /band1Core\.out - band1Core\.thru/);
-    assert.match(source, /band2Core\.out - band2Core\.thru/);
+    assert.match(source, /band1StereoCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
+    assert.match(source, /band1MidSideCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
+    assert.match(source, /band2StereoCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
+    assert.match(source, /band2MidSideCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
+    assert.match(source, /band1StereoCore\.out - band1StereoCore\.thru/);
+    assert.match(source, /band1MidSideCore\.out - band1MidSideCore\.thru/);
+    assert.match(source, /band2StereoCore\.out - band2StereoCore\.thru/);
+    assert.match(source, /band2MidSideCore\.out - band2MidSideCore\.thru/);
 
     const smoothingSection = source.slice(
         source.indexOf("void smoothControls()"),
         source.indexOf("void updateBandCoefficients()"),
     );
-    assert.equal([...smoothingSection.matchAll(/smoothEnhancerControl/g)].length, 10);
+    assert.equal([...smoothingSection.matchAll(/smoothEnhancerControl/g)].length, 12);
 
     for (const { dspEndpointID } of enhancer.ENHANCER_SETTING_DESCRIPTORS) {
         const declaration = source.split("\n").find((line) => line.includes(` ${dspEndpointID} `));

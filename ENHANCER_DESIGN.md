@@ -1,6 +1,6 @@
 # Enhancer Design (Spectre-style, two-band)
 
-Status: **locked design, 2026-08-25** (Andrew + assistant session), companion to
+Status: **corrected locked design, 2026-08-26** (Andrew clarification), companion to
 `DISTORTION_QUALITY_DESIGN.md`. Integration resolved same day: this module is a
 member of the fixed, non-modulatable end-of-chain polish section — see
 `POLISH_CHAIN_DESIGN.md`. Same ground rules: this specifies what to build and
@@ -16,30 +16,32 @@ high-pass → distort → blend a little back; Spectre generalizes the fixed hig
 EQ-shaped regions. Cosimo already ships the core trick: the distortion module's
 "harmonics" mode (`dry + residue`) is this architecture with one band.
 
-Andrew's scope decisions (2026-08-25): **two bands, not five. Tube and Solid curves
-only. Per-band mid/side targeting with independent amounts. Lives at the end of the
-signal chain.**
+Andrew's scope decisions: **two bands, not five. Tube and Solid curves only. Each
+band independently switches between regular Stereo and Mid/Side. Stereo uses one
+linked Amount for L/R; Mid/Side exposes independent Mid and Side amounts. Lives at
+the end of the signal chain.** The earlier claim that independent M/S amounts
+eliminated the routing selector was wrong and is superseded by this correction.
 
 ---
 
 ## 1. Signal flow
 
 ```
-in (stereo) ──┬────────────────────────────────────────────────┐ (dry, bit-exact)
-              │ M/S encode:  M = (L+R)/2,  S = (L−R)/2         │
-              │                                                │
-              │  band 1:  b = SVF-BP(freq1, Q1)  of M and S    │
-              │  band 2:  b = SVF-BP(freq2, Q2)  of M and S    │
-              │                                                │
-              │  per band, per channel (M, S):                 │
-              │     d   = amount(band, channel) · b            │
-              │     [ ×4 oversampled core ]                    │
-              │        s    = curve(band)(d)     Tube | Solid  │
-              │        thru = d (same round trip)              │
-              │     r   = DCblock(s − thru)      residue only  │
-              │                                                │
-              │  M/S decode residues → stereo residue          │
-              └── out = dry + residue                          │
+in (stereo) ──┬──────────────────────────────────────────────────┐ (dry, bit-exact)
+              │ per band:                                       │
+              │                                                  │
+              │  Stereo branch: SVF-BP on L/R                    │
+              │    shared Amount drives both channels            │
+              │                                                  │
+              │  M/S branch: encode M=(L+R)/2, S=(L−R)/2         │
+              │    SVF-BP on M/S; Mid and Side drive separately  │
+              │                                                  │
+              │  each nonlinear path:                            │
+              │    [ ×4 oversampled core ]                       │
+              │      r = DCblock(curve(d) − aligned_thru(d))     │
+              │                                                  │
+              │  decode M/S residue; smooth-crossfade by mode    │
+              └── out = dry + band1 residue + band2 residue      │
 ```
 
 De-emphasis is **always on** (the `− thru` subtraction): only newly generated
@@ -58,27 +60,33 @@ approximates shelf-like reach when wanted. The parallel topology keeps the resid
 subtraction phase-clean by construction — the reason Spectre's EQ is boost-only and
 parallel rather than serial biquads.
 
-## 2. Parameters (10, static — dialed in, not modulatable, per the polish-chain rule)
+## 2. Parameters (10 sound settings + 2 routing modes, all static)
 
 | Param | Range | Default | Meaning |
 |---|---|---|---|
 | `b1FreqHz` | 30..16k | 130 | band 1 bell center |
 | `b1Q` | 0.3..8 | 0.71 | band 1 bell width |
-| `b1MidAmount` | 0..1 | 0 | band 1 drive into the curve, mid channel |
-| `b1SideAmount` | 0..1 | 0 | band 1 drive, side channel |
+| `b1Mode` | Stereo / Mid-Side | Stereo | band 1 routing domain |
+| `b1MidAmount` | 0..1 | 0 | Stereo Amount, relabelled Mid in M/S mode |
+| `b1SideAmount` | 0..1 | 0 | band 1 Side drive, active only in M/S mode |
 | `b1Curve` | Tube / Solid | Solid | band 1 curve |
 | `b2FreqHz` | 30..16k | 9k | band 2 bell center |
 | `b2Q` | 0.3..8 | 0.71 | band 2 bell width |
-| `b2MidAmount` | 0..1 | 0 | band 2 drive, mid |
-| `b2SideAmount` | 0..1 | 0 | band 2 drive, side |
+| `b2Mode` | Stereo / Mid-Side | Stereo | band 2 routing domain |
+| `b2MidAmount` | 0..1 | 0 | Stereo Amount, relabelled Mid in M/S mode |
+| `b2SideAmount` | 0..1 | 0 | band 2 Side drive, active only in M/S mode |
 | `b2Curve` | Tube / Solid | Tube | band 2 curve |
 
-Independent mid and side amounts per band subsume Spectre's per-band channel routing
-selector (mid-only = side amount 0, and so on) without an enum, and directly support
-the two marquee uses at the default band positions: a low bell driven into the mid
-for weight that stays mono-solid, a high bell driven into the side as a natural
-widener (Spectre's own manual headlines this use case). Mono input ⇒ S = 0 ⇒ side
-amounts do nothing, correctly.
+The primary amount has one stable stored identity: it is labelled Amount and drives
+both L/R channels in Stereo mode, then is relabelled Mid in M/S mode. Side remains
+stored while Stereo is selected but is inactive. This preserves the original ten
+sound settings and adds only the two saved routing modes; switching mode does not
+silently overwrite either M/S amount. The two modes default to Stereo. The unpublished
+always-M/S v1 state migrates both modes to Mid/Side so its sound is preserved.
+
+All twelve values are smoothed, preset/host-state persisted, non-automatable, absent
+from modulation catalogs, and unavailable as an Effects Lane device. The isolated
+audition VST exposes them only through its own GUI; T28 owns the final Polish UI.
 
 All amounts default 0 ⇒ the module is born silent-by-contribution: `curve(0) = 0`,
 residue = 0, `out = dry` **bit-exact**. The rack's hard-bypass invariant (ADR-005)
@@ -109,7 +117,7 @@ library, these are the same kernels.
 Identical stance to `DISTORTION_QUALITY_DESIGN.md` §3.4–3.5, same idiom, same
 requirements:
 
-- The four shaper paths run in ×4 oversampled cores with the **unity thru-path**
+- Every Stereo and M/S shaper branch runs in a ×4 oversampled core with the **unity thru-path**
   trick, so `s − thru` compares two signals that took the same round trip — the
   residue is aligned by construction, zero measurement needed. This matters *more*
   here than in the saturator: the module's entire output contribution is a residue.
@@ -142,7 +150,9 @@ rack modules and the global filter, between the SAFE BASS stage and the final
 comp/clipper. A single always-resident instance: no pool membership, no
 `poolResetIn` lifecycle, no modulation-table rows, no lane-state schema growth. Zero
 declared latency (SVFs + memoryless curves + the §4 oversampling stance), no
-allocation. State is four SVFs, four DC blockers, and the OS cores; reset semantics
+allocation. Stereo and M/S branches keep independent filter, DC-blocker, and
+oversampling history so a smoothed mode change crossfades coherent decoded residues
+instead of briefly reinterpreting one channel basis as the other. Reset semantics
 follow the polish chain's single-instance rules.
 
 ## 7. Per-voice variant (feasibility)
@@ -208,12 +218,14 @@ per-voice variant at all remains a product decision for later.
 
 ## 8. Ship criteria
 
-1. All amounts 0 ⇒ output bit-exact dry (ADR-005 proof unchanged).
+1. All Mid/Amount and Side amounts 0 ⇒ output bit-exact dry in either mode (ADR-005 proof unchanged).
 2. Harmonics-only guarantee: enabling any band at default voicing changes pink-noise
    LUFS by ≤ 0.5 dB while visibly adding harmonic lines on a sine — the de-emphasis
    contract, testable.
-3. Mono input with only side amounts raised ⇒ output identical to input.
-4. Andrew's ears against Spectre at Subtle/Medium on the same stems.
+3. Mono input remains mono in Stereo and M/S. In M/S, mono with only Side raised is
+   exact dry, and a pure-side signal with only Side raised remains pure side.
+4. Each band can select Stereo or M/S without changing the other band's routing.
+5. Andrew's ears against Spectre at Subtle/Medium on the same stems.
 
 ## 9. Open decisions (defaults apply unless overridden)
 

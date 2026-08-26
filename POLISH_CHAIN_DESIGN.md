@@ -55,8 +55,9 @@ no-op. Open: fixed frequency vs one knob.
 
 ### 2.2 ENHANCER
 
-As `ENHANCER_DESIGN.md` (two parametric bells, Tube/Solid, independent mid/side
-amounts, always-on de-emphasis), params static per §1.
+As `ENHANCER_DESIGN.md` (two parametric bells, Tube/Solid, independent per-band
+Stereo/Mid-Side routing with separate Mid and Side drive in M/S, always-on
+de-emphasis), params static per §1.
 
 ### 2.3 COMP/CLIP (the finisher)
 

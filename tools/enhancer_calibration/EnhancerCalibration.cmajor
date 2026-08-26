@@ -7,11 +7,13 @@ graph EnhancerCalibration [[ main ]]
     input stream float32<2> audioIn;
     input value float32 b1FreqHzIn [[ init: 130.0f ]];
     input value float32 b1QIn [[ init: 0.71f ]];
+    input value float32 b1ModeIn [[ init: 0.0f ]];
     input value float32 b1MidAmountIn [[ init: 0.0f ]];
     input value float32 b1SideAmountIn [[ init: 0.0f ]];
     input value float32 b1CurveIn [[ init: 1.0f ]];
     input value float32 b2FreqHzIn [[ init: 9000.0f ]];
     input value float32 b2QIn [[ init: 0.71f ]];
+    input value float32 b2ModeIn [[ init: 0.0f ]];
     input value float32 b2MidAmountIn [[ init: 0.0f ]];
     input value float32 b2SideAmountIn [[ init: 0.0f ]];
     input value float32 b2CurveIn [[ init: 0.0f ]];
@@ -25,11 +27,13 @@ graph EnhancerCalibration [[ main ]]
         audioIn -> enhancer.in;
         b1FreqHzIn -> enhancer.b1FreqHzIn;
         b1QIn -> enhancer.b1QIn;
+        b1ModeIn -> enhancer.b1ModeIn;
         b1MidAmountIn -> enhancer.b1MidAmountIn;
         b1SideAmountIn -> enhancer.b1SideAmountIn;
         b1CurveIn -> enhancer.b1CurveIn;
         b2FreqHzIn -> enhancer.b2FreqHzIn;
         b2QIn -> enhancer.b2QIn;
+        b2ModeIn -> enhancer.b2ModeIn;
         b2MidAmountIn -> enhancer.b2MidAmountIn;
         b2SideAmountIn -> enhancer.b2SideAmountIn;
         b2CurveIn -> enhancer.b2CurveIn;

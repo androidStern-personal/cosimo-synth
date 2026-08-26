@@ -9,11 +9,13 @@ processor EnhancerSampleRateProbe
     {
         enhancer.b1FreqHzIn <- 1200.0f;
         enhancer.b1QIn <- 4.0f;
+        enhancer.b1ModeIn <- float32 (wt::enhancerModeStereo);
         enhancer.b1MidAmountIn <- 0.85f;
         enhancer.b1SideAmountIn <- 0.0f;
         enhancer.b1CurveIn <- 1.0f;
         enhancer.b2FreqHzIn <- 9000.0f;
         enhancer.b2QIn <- 0.71f;
+        enhancer.b2ModeIn <- float32 (wt::enhancerModeStereo);
         enhancer.b2MidAmountIn <- 0.0f;
         enhancer.b2SideAmountIn <- 0.0f;
         enhancer.b2CurveIn <- 0.0f;

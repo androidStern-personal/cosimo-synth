@@ -17,11 +17,13 @@ if (requestedMode !== "--check") {
 const defaultSettings = Object.freeze({
     b1FreqHzIn: 130,
     b1QIn: 0.71,
+    b1ModeIn: 0,
     b1MidAmountIn: 0,
     b1SideAmountIn: 0,
     b1CurveIn: 1,
     b2FreqHzIn: 9000,
     b2QIn: 0.71,
+    b2ModeIn: 0,
     b2MidAmountIn: 0,
     b2SideAmountIn: 0,
     b2CurveIn: 0,
@@ -336,14 +338,18 @@ try {
     }
 
     const pinkProbes = [
-        ["band-1-mid-full", { b1MidAmountIn: 1 }],
-        ["band-1-side-full", { b1SideAmountIn: 1 }],
-        ["band-2-mid-full", { b2MidAmountIn: 1 }],
-        ["band-2-side-full", { b2SideAmountIn: 1 }],
+        ["band-1-stereo-full", { b1ModeIn: 0, b1MidAmountIn: 1 }],
+        ["band-1-mid-full", { b1ModeIn: 1, b1MidAmountIn: 1 }],
+        ["band-1-side-full", { b1ModeIn: 1, b1SideAmountIn: 1 }],
+        ["band-2-stereo-full", { b2ModeIn: 0, b2MidAmountIn: 1 }],
+        ["band-2-mid-full", { b2ModeIn: 1, b2MidAmountIn: 1 }],
+        ["band-2-side-full", { b2ModeIn: 1, b2SideAmountIn: 1 }],
     ];
     const musicalSettings = {
+        b1ModeIn: 0,
         b1MidAmountIn: 0.7,
         b1SideAmountIn: 0.35,
+        b2ModeIn: 1,
         b2MidAmountIn: 0.35,
         b2SideAmountIn: 0.7,
     };
