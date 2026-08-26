@@ -15,7 +15,7 @@ async function loadBuildModules() {
 
 test("fx_build_all_expands_to_every_known_effect_plugin_in_manifest_order", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
-    const expectedPluginNames = ["ott", "chorus", "seqfx", "spectral", "enhancer"];
+    const expectedPluginNames = ["ott", "chorus", "seqfx", "spectral", "enhancer", "enhancer-lite"];
 
     assert.deepEqual(buildModule.effectPluginNames(), expectedPluginNames);
     assert.deepEqual(buildModule.resolvePluginNames("all"), expectedPluginNames);
@@ -28,13 +28,14 @@ test("fx_build_single_plugin_still_resolves_to_only_that_plugin", async () => {
     assert.deepEqual(buildModule.resolvePluginNames("seqfx"), ["seqfx"]);
     assert.deepEqual(prodModule.resolveProdPluginNames("chorus"), ["chorus"]);
     assert.deepEqual(buildModule.resolvePluginNames("enhancer"), ["enhancer"]);
+    assert.deepEqual(buildModule.resolvePluginNames("enhancer-lite"), ["enhancer-lite"]);
 });
 
 test("fx_build_unknown_plugin_reports_all_as_an_available_target", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
 
-    assert.throws(() => buildModule.resolvePluginNames("wat"), /Available plugins: all, ott, chorus, seqfx, spectral, enhancer/);
-    assert.throws(() => prodModule.resolveProdPluginNames("wat"), /Available plugins: all, ott, chorus, seqfx, spectral, enhancer/);
+    assert.throws(() => buildModule.resolvePluginNames("wat"), /Available plugins: all, ott, chorus, seqfx, spectral, enhancer, enhancer-lite/);
+    assert.throws(() => prodModule.resolveProdPluginNames("wat"), /Available plugins: all, ott, chorus, seqfx, spectral, enhancer, enhancer-lite/);
 });
 
 test("the Enhancer production plugin packages the canonical T26 DSP instead of a copy", async () => {
@@ -45,6 +46,17 @@ test("the Enhancer production plugin packages the canonical T26 DSP instead of a
         { repoPath: "fx/enhancer/EnhancerPlugin.cmajor", runtimePath: "EnhancerPlugin.cmajor" },
     ]);
     assert.equal(buildModule.effectPlugins.enhancer.generatedHostLatencySamples, 60);
+});
+
+test("the Enhancer Lite plugin packages its isolated one-band prototype", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    assert.deepEqual(buildModule.effectPlugins["enhancer-lite"].runtimeSources, [
+        { repoPath: "cmajor/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
+        { repoPath: "fx/enhancer_lite/EnhancerLitePlugin.cmajor", runtimePath: "EnhancerLitePlugin.cmajor" },
+    ]);
+    assert.equal(buildModule.effectPlugins["enhancer-lite"].generatedHostLatencySamples, 3);
+    assert.equal(buildModule.effectPlugins["enhancer-lite"].productName, "CosimoEnhancerLite");
 });
 
 test("the generated Enhancer plugin host latency is corrected at the narrow Cmajor seam", async () => {

@@ -52,6 +52,18 @@ export const effectPlugins = {
             { repoPath: "fx/enhancer/EnhancerPlugin.cmajor", runtimePath: "EnhancerPlugin.cmajor" },
         ],
     },
+    "enhancer-lite": {
+        patch: "fx/enhancer_lite/EnhancerLite.cmajorpatch",
+        runtimeOut: "build/fx/enhancer_lite_runtime",
+        juceOut: "build/enhancer_lite_juce",
+        cmakeTarget: "CosimoEnhancerLite",
+        productName: "CosimoEnhancerLite",
+        generatedHostLatencySamples: 3,
+        runtimeSources: [
+            { repoPath: "cmajor/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
+            { repoPath: "fx/enhancer_lite/EnhancerLitePlugin.cmajor", runtimePath: "EnhancerLitePlugin.cmajor" },
+        ],
+    },
 };
 
 export function effectPluginNames() {

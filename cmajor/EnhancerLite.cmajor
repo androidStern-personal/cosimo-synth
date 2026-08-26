@@ -1,0 +1,722 @@
+namespace wt
+{
+    // Experimental one-band Enhancer for evaluating a voice-affordable signal
+    // path. It deliberately remains separate from the accepted two-band
+    // EnhancerBus. The bell, Amount/Q laws, routing, and four measured Spectre
+    // transfers are preserved; only the oversampling implementation and tanh
+    // evaluation are approximated. There is no de-emphasis path.
+
+    let enhancerLiteOversampleFactor = 4;
+    let enhancerLiteFrequencyMinHz = 20.0f;
+    let enhancerLiteFrequencyMaxHz = 20000.0f;
+    let enhancerLiteFrequencyDefaultHz = 130.0f;
+    let enhancerLiteQMin = 0.1f;
+    let enhancerLiteQMax = 10.0f;
+    let enhancerLiteQDefault = 0.71f;
+    let enhancerLiteAmountMin = 0.0f;
+    let enhancerLiteAmountMax = 1.0f;
+    let enhancerLiteCurveTube = 0;
+    let enhancerLiteCurveSolid = 1;
+    let enhancerLiteCurveDefault = enhancerLiteCurveSolid;
+    let enhancerLiteModeStereo = 0;
+    let enhancerLiteModeMidSide = 1;
+    let enhancerLiteSaturationModeSubtle = 0;
+    let enhancerLiteSaturationModeMedium = 1;
+    let enhancerLiteSaturationModeDefault = enhancerLiteSaturationModeSubtle;
+    let enhancerLiteLatencySamples = 3;
+
+    let enhancerLiteControlSmoothingMs = 15.0f;
+    let enhancerLiteCoefficientUpdateFrames = 16;
+    let enhancerLiteCoefficientEpsilon = 0.000001f;
+    let enhancerLiteBandGainRangeDb = 12.0f;
+
+    let enhancerLiteSubtleDrive = 3.0f;
+    let enhancerLiteSubtleOutput = 0.7071067811865476f;
+    let enhancerLiteSubtleTubeBias = 0.125f;
+    let enhancerLiteMediumDrive = 6.0f;
+    let enhancerLiteMediumOutput = 0.5f;
+    let enhancerLiteMediumTubeBias = 0.3125f;
+
+    let enhancerLiteHighpassCutoffHz = 20.01631809314913f;
+    let enhancerLiteHighpassQ = 0.7071067811865475f;
+    let enhancerLiteHighpassGain = 1.0023994109214078f;
+
+    // JUCE's normal-quality 4x polyphase-IIR design uses two cascaded 2x
+    // half-band stages. These are the direct-path coefficients followed by the
+    // delayed-path coefficients, generated from JUCE's public elliptic design
+    // method. The complete wrapper needs only sixteen allpass states per lane
+    // and never shifts history, so a ring buffer would add work rather than
+    // remove it.
+    let enhancerLiteIirStage0Up = float32[] (
+        0.0747229789332324f, 0.4880179630612405f, 0.8991664385623703f,
+        0.2619463552554830f, 0.7023829512909278f
+    );
+    let enhancerLiteIirStage0Down = float32[] (
+        0.0956943757722826f, 0.5956373717869378f,
+        0.3269691984950376f, 0.8596268314186788f
+    );
+    let enhancerLiteIirStage1Up = float32[] (
+        0.0707659489761845f, 0.5131675747487928f,
+        0.2578530785134526f, 0.8173173544171368f
+    );
+    let enhancerLiteIirStage1Down = float32[] (
+        0.0988618856841852f, 0.7437546430357680f,
+        0.3603636828837870f
+    );
+
+    namespace enhancerLiteFilters = std::filters (float32, float64, 32);
+
+    float32 clampEnhancerLiteFrequencyHz (float32 value, float32 sampleRateHz)
+    {
+        let safeMaximum = std::intrinsics::min (
+            enhancerLiteFrequencyMaxHz,
+            sampleRateHz * 0.49f
+        );
+        return std::intrinsics::clamp (
+            value,
+            enhancerLiteFrequencyMinHz,
+            safeMaximum
+        );
+    }
+
+    float32 clampEnhancerLiteQ (float32 value)
+    {
+        return std::intrinsics::clamp (value, enhancerLiteQMin, enhancerLiteQMax);
+    }
+
+    float32 clampEnhancerLiteAmount (float32 value)
+    {
+        return std::intrinsics::clamp (
+            value,
+            enhancerLiteAmountMin,
+            enhancerLiteAmountMax
+        );
+    }
+
+    float32 enhancerLiteAmountDrive (float32 amount)
+    {
+        let amount01 = clampEnhancerLiteAmount (amount);
+        return std::levels::dBtoGain (enhancerLiteBandGainRangeDb * amount01) - 1.0f;
+    }
+
+    float32 enhancerLiteEffectiveBellQ (float32 q, float32 amount)
+    {
+        let amount01 = clampEnhancerLiteAmount (amount);
+        return clampEnhancerLiteQ (q) * std::levels::dBtoGain (
+            0.5f * enhancerLiteBandGainRangeDb * amount01
+        );
+    }
+
+    float32 smoothEnhancerLiteControl (
+        float32 current,
+        float32 target,
+        float32 smoothingAmount,
+        float32 snapEpsilon
+    )
+    {
+        let next = current + (target - current) * smoothingAmount;
+        return std::intrinsics::abs (target - next) <= snapEpsilon ? target : next;
+    }
+
+    float32 resolveEnhancerLiteWeight (float32 value)
+    {
+        return value >= 0.5f ? 1.0f : 0.0f;
+    }
+
+    float32 enhancerLiteFastTanh (float32 value)
+    {
+        // Odd rational tanh approximation. It has the exact origin and slope,
+        // reaches +/-1 at +/-3, and is clamped outside that useful interval.
+        // The measured maximum absolute transfer error is below 0.02353.
+        let x = std::intrinsics::clamp (value, -3.0f, 3.0f);
+        let x2 = x * x;
+        return x * (27.0f + x2) / (27.0f + 9.0f * x2);
+    }
+
+    struct EnhancerLiteIirUpsampleStage0
+    {
+        float32<2>[5] state;
+        float32<2>[2] samples;
+
+        void reset()
+        {
+            this.state = ();
+            this.samples = ();
+        }
+
+        void process (float32<2> sampleFrame)
+        {
+            var direct = sampleFrame;
+            for (int32 stage = 0; stage < 3; ++stage)
+            {
+                let coefficient = enhancerLiteIirStage0Up.at (stage);
+                let result = coefficient * direct + this.state.at (stage);
+                this.state.at (stage) = direct - coefficient * result;
+                direct = result;
+            }
+
+            var delayed = sampleFrame;
+            for (int32 stage = 3; stage < 5; ++stage)
+            {
+                let coefficient = enhancerLiteIirStage0Up.at (stage);
+                let result = coefficient * delayed + this.state.at (stage);
+                this.state.at (stage) = delayed - coefficient * result;
+                delayed = result;
+            }
+
+            this.samples[0] = direct;
+            this.samples[1] = delayed;
+        }
+    }
+
+    struct EnhancerLiteIirUpsampleStage1
+    {
+        float32<2>[4] state;
+        float32<2>[2] samples;
+
+        void reset()
+        {
+            this.state = ();
+            this.samples = ();
+        }
+
+        void process (float32<2> sampleFrame)
+        {
+            var direct = sampleFrame;
+            for (int32 stage = 0; stage < 2; ++stage)
+            {
+                let coefficient = enhancerLiteIirStage1Up.at (stage);
+                let result = coefficient * direct + this.state.at (stage);
+                this.state.at (stage) = direct - coefficient * result;
+                direct = result;
+            }
+
+            var delayed = sampleFrame;
+            for (int32 stage = 2; stage < 4; ++stage)
+            {
+                let coefficient = enhancerLiteIirStage1Up.at (stage);
+                let result = coefficient * delayed + this.state.at (stage);
+                this.state.at (stage) = delayed - coefficient * result;
+                delayed = result;
+            }
+
+            this.samples[0] = direct;
+            this.samples[1] = delayed;
+        }
+    }
+
+    struct EnhancerLiteIirUpsampler4x
+    {
+        EnhancerLiteIirUpsampleStage0 stage0;
+        EnhancerLiteIirUpsampleStage1 stage1;
+        float32<2>[4] samples;
+
+        void reset()
+        {
+            this.stage0.reset();
+            this.stage1.reset();
+            this.samples = ();
+        }
+
+        void process (float32<2> sampleFrame)
+        {
+            this.stage0.process (sampleFrame);
+            this.stage1.process (this.stage0.samples[0]);
+            this.samples[0] = this.stage1.samples[0];
+            this.samples[1] = this.stage1.samples[1];
+            this.stage1.process (this.stage0.samples[1]);
+            this.samples[2] = this.stage1.samples[0];
+            this.samples[3] = this.stage1.samples[1];
+        }
+    }
+
+    struct EnhancerLiteIirDownsampleStage1
+    {
+        float32<2>[3] state;
+        float32<2> delayedPath;
+
+        void reset()
+        {
+            this.state = ();
+            this.delayedPath = ();
+        }
+
+        float32<2> process (float32<2> evenInput, float32<2> oddInput)
+        {
+            var direct = evenInput;
+            for (int32 stage = 0; stage < 2; ++stage)
+            {
+                let coefficient = enhancerLiteIirStage1Down.at (stage);
+                let result = coefficient * direct + this.state.at (stage);
+                this.state.at (stage) = direct - coefficient * result;
+                direct = result;
+            }
+
+            var delayed = oddInput;
+            let coefficient = enhancerLiteIirStage1Down[2];
+            let delayedResult = coefficient * delayed + this.state[2];
+            this.state[2] = delayed - coefficient * delayedResult;
+
+            let downsampled = 0.5f * (this.delayedPath + direct);
+            this.delayedPath = delayedResult;
+            return downsampled;
+        }
+    }
+
+    struct EnhancerLiteIirDownsampleStage0
+    {
+        float32<2>[4] state;
+        float32<2> delayedPath;
+
+        void reset()
+        {
+            this.state = ();
+            this.delayedPath = ();
+        }
+
+        float32<2> process (float32<2> evenInput, float32<2> oddInput)
+        {
+            var direct = evenInput;
+            for (int32 stage = 0; stage < 2; ++stage)
+            {
+                let coefficient = enhancerLiteIirStage0Down.at (stage);
+                let result = coefficient * direct + this.state.at (stage);
+                this.state.at (stage) = direct - coefficient * result;
+                direct = result;
+            }
+
+            var delayed = oddInput;
+            for (int32 stage = 2; stage < 4; ++stage)
+            {
+                let coefficient = enhancerLiteIirStage0Down.at (stage);
+                let result = coefficient * delayed + this.state.at (stage);
+                this.state.at (stage) = delayed - coefficient * result;
+                delayed = result;
+            }
+
+            let downsampled = 0.5f * (this.delayedPath + direct);
+            this.delayedPath = delayed;
+            return downsampled;
+        }
+    }
+
+    struct EnhancerLiteIirDownsampler4x
+    {
+        EnhancerLiteIirDownsampleStage1 stage1;
+        EnhancerLiteIirDownsampleStage0 stage0;
+
+        void reset()
+        {
+            this.stage1.reset();
+            this.stage0.reset();
+        }
+
+        float32<2> process (
+            float32<2> sample0,
+            float32<2> sample1,
+            float32<2> sample2,
+            float32<2> sample3
+        )
+        {
+            let half0 = this.stage1.process (sample0, sample1);
+            let half1 = this.stage1.process (sample2, sample3);
+            return this.stage0.process (half0, half1);
+        }
+    }
+
+    struct EnhancerLiteShapedHighpass
+    {
+        float32<2> state1;
+        float32<2> state2;
+        float32 b0;
+        float32 b1;
+        float32 b2;
+        float32 a1;
+        float32 a2;
+
+        void setSampleRate (float64 sampleRate)
+        {
+            let omega = twoPi * float64 (enhancerLiteHighpassCutoffHz) / sampleRate;
+            let cosine = std::intrinsics::cos (omega);
+            let alpha = std::intrinsics::sin (omega)
+                        / (2.0 * float64 (enhancerLiteHighpassQ));
+            let a0 = 1.0 + alpha;
+            this.b0 = float32 ((1.0 + cosine) * 0.5 / a0);
+            this.b1 = float32 (-(1.0 + cosine) / a0);
+            this.b2 = this.b0;
+            this.a1 = float32 (-2.0 * cosine / a0);
+            this.a2 = float32 ((1.0 - alpha) / a0);
+        }
+
+        void reset()
+        {
+            this.state1 = ();
+            this.state2 = ();
+        }
+
+        float32<2> process (float32<2> sampleFrame)
+        {
+            let result = sampleFrame * this.b0 + this.state1;
+            this.state1 = sampleFrame * this.b1 - result * this.a1 + this.state2;
+            this.state2 = sampleFrame * this.b2 - result * this.a2;
+            return result * enhancerLiteHighpassGain;
+        }
+    }
+
+    struct EnhancerLiteBandCore
+    {
+        enhancerLiteFilters::tpt::svf::Implementation[2] bandFilters;
+        float32 tunedFrequencyHz0;
+        float32 tunedFrequencyHz1;
+        float32 tunedQ0;
+        float32 tunedQ1;
+        int32 framesUntilCoefficientUpdate;
+        float64 sampleRate;
+
+        void prepare (float64 oversampledSampleRate)
+        {
+            for (wrap<2> lane)
+                this.bandFilters[lane].setMode (
+                    enhancerLiteFilters::tpt::svf::Mode::bandPass
+                );
+            this.sampleRate = oversampledSampleRate;
+        }
+
+        void reset()
+        {
+            for (wrap<2> lane)
+                this.bandFilters[lane].reset();
+
+            this.tunedFrequencyHz0 = 0.0f;
+            this.tunedFrequencyHz1 = 0.0f;
+            this.tunedQ0 = 0.0f;
+            this.tunedQ1 = 0.0f;
+            this.framesUntilCoefficientUpdate = 0;
+        }
+
+        void updateBandCoefficients (float32 frequencyHz, float32 q0, float32 q1)
+        {
+            if (this.framesUntilCoefficientUpdate > 0)
+            {
+                this.framesUntilCoefficientUpdate -= 1;
+                return;
+            }
+
+            this.framesUntilCoefficientUpdate = enhancerLiteCoefficientUpdateFrames
+                                                * enhancerLiteOversampleFactor - 1;
+
+            if (std::intrinsics::abs (frequencyHz - this.tunedFrequencyHz0)
+                    > enhancerLiteCoefficientEpsilon
+                || std::intrinsics::abs (q0 - this.tunedQ0)
+                    > enhancerLiteCoefficientEpsilon)
+            {
+                this.bandFilters[0].setFrequency (this.sampleRate, frequencyHz, q0);
+                this.tunedFrequencyHz0 = frequencyHz;
+                this.tunedQ0 = q0;
+            }
+
+            if (std::intrinsics::abs (frequencyHz - this.tunedFrequencyHz1)
+                    > enhancerLiteCoefficientEpsilon
+                || std::intrinsics::abs (q1 - this.tunedQ1)
+                    > enhancerLiteCoefficientEpsilon)
+            {
+                this.bandFilters[1].setFrequency (this.sampleRate, frequencyHz, q1);
+                this.tunedFrequencyHz1 = frequencyHz;
+                this.tunedQ1 = q1;
+            }
+        }
+
+        float32 subtleSolidShape (float32 sample)
+        {
+            return enhancerLiteSubtleOutput * enhancerLiteFastTanh (
+                enhancerLiteSubtleDrive * sample
+            );
+        }
+
+        float32 subtleTubeShape (float32 sample)
+        {
+            if (sample == 0.0f)
+                return 0.0f;
+
+            return enhancerLiteSubtleOutput * (
+                enhancerLiteFastTanh (
+                    enhancerLiteSubtleDrive * sample + enhancerLiteSubtleTubeBias
+                ) - enhancerLiteFastTanh (enhancerLiteSubtleTubeBias)
+            );
+        }
+
+        float32 mediumSolidShape (float32 sample)
+        {
+            return enhancerLiteMediumOutput * enhancerLiteFastTanh (
+                enhancerLiteMediumDrive * sample
+            );
+        }
+
+        float32 mediumTubeShape (float32 sample)
+        {
+            if (sample == 0.0f)
+                return 0.0f;
+
+            return enhancerLiteMediumOutput * (
+                enhancerLiteFastTanh (
+                    enhancerLiteMediumDrive * sample + enhancerLiteMediumTubeBias
+                ) - enhancerLiteFastTanh (enhancerLiteMediumTubeBias)
+            );
+        }
+
+        float32 subtleShape (float32 sample, float32 solidWeight)
+        {
+            if (solidWeight == 0.0f)
+                return this.subtleTubeShape (sample);
+            if (solidWeight == 1.0f)
+                return this.subtleSolidShape (sample);
+
+            let tube = this.subtleTubeShape (sample);
+            let solid = this.subtleSolidShape (sample);
+            return tube + (solid - tube) * solidWeight;
+        }
+
+        float32 mediumShape (float32 sample, float32 solidWeight)
+        {
+            if (solidWeight == 0.0f)
+                return this.mediumTubeShape (sample);
+            if (solidWeight == 1.0f)
+                return this.mediumSolidShape (sample);
+
+            let tube = this.mediumTubeShape (sample);
+            let solid = this.mediumSolidShape (sample);
+            return tube + (solid - tube) * solidWeight;
+        }
+
+        float32 shape (float32 sample, float32 solidWeight, float32 mediumWeight)
+        {
+            if (mediumWeight == 0.0f)
+                return this.subtleShape (sample, solidWeight);
+            if (mediumWeight == 1.0f)
+                return this.mediumShape (sample, solidWeight);
+
+            let subtle = this.subtleShape (sample, solidWeight);
+            let medium = this.mediumShape (sample, solidWeight);
+            return subtle + (medium - subtle) * mediumWeight;
+        }
+
+        float32<2> process (
+            float32<2> sampleFrame,
+            float32 frequencyHz,
+            float32 q0,
+            float32 q1,
+            float32 drive0,
+            float32 drive1,
+            float32 solidWeight,
+            float32 mediumWeight
+        )
+        {
+            let qMaximum = enhancerLiteQMax * std::levels::dBtoGain (
+                0.5f * enhancerLiteBandGainRangeDb
+            );
+            let safeFrequencyHz = std::intrinsics::clamp (
+                frequencyHz,
+                enhancerLiteFrequencyMinHz,
+                enhancerLiteFrequencyMaxHz
+            );
+            let safeQ0 = std::intrinsics::clamp (q0, enhancerLiteQMin, qMaximum);
+            let safeQ1 = std::intrinsics::clamp (q1, enhancerLiteQMin, qMaximum);
+            let safeDrive0 = std::intrinsics::clamp (
+                drive0,
+                0.0f,
+                enhancerLiteAmountDrive (1.0f)
+            );
+            let safeDrive1 = std::intrinsics::clamp (
+                drive1,
+                0.0f,
+                enhancerLiteAmountDrive (1.0f)
+            );
+            let safeSolidWeight = std::intrinsics::clamp (solidWeight, 0.0f, 1.0f);
+            let safeMediumWeight = std::intrinsics::clamp (mediumWeight, 0.0f, 1.0f);
+            this.updateBandCoefficients (safeFrequencyHz, safeQ0, safeQ1);
+
+            let selected0 = this.bandFilters[0].process (sampleFrame[0])
+                            * safeDrive0 / safeQ0;
+            let selected1 = this.bandFilters[1].process (sampleFrame[1])
+                            * safeDrive1 / safeQ1;
+            return float32<2> (
+                this.shape (selected0, safeSolidWeight, safeMediumWeight),
+                this.shape (selected1, safeSolidWeight, safeMediumWeight)
+            );
+        }
+    }
+
+    processor EnhancerLiteBus
+    {
+        input stream float32<2> in;
+
+        input value float32 freqHzIn [[ name: "Enhancer Lite Frequency", min: enhancerLiteFrequencyMinHz, max: enhancerLiteFrequencyMaxHz, init: enhancerLiteFrequencyDefaultHz, unit: "Hz", automatable: false, rampFrames: 0 ]];
+        input value float32 qIn [[ name: "Enhancer Lite Q", min: enhancerLiteQMin, max: enhancerLiteQMax, init: enhancerLiteQDefault, automatable: false, rampFrames: 0 ]];
+        input value float32 modeIn [[ name: "Enhancer Lite Mode", min: 0.0f, max: 1.0f, init: float32 (enhancerLiteModeStereo), discrete: true, step: 1.0f, text: "Stereo|Mid/Side", automatable: false, rampFrames: 0 ]];
+        input value float32 midAmountIn [[ name: "Enhancer Lite Amount / Mid", min: enhancerLiteAmountMin, max: enhancerLiteAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
+        input value float32 sideAmountIn [[ name: "Enhancer Lite Side", min: enhancerLiteAmountMin, max: enhancerLiteAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
+        input value float32 curveIn [[ name: "Enhancer Lite Character", min: 0.0f, max: 1.0f, init: float32 (enhancerLiteCurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: false, rampFrames: 0 ]];
+        input value float32 saturationModeIn [[ name: "Enhancer Lite Saturation Mode", min: 0.0f, max: 1.0f, init: float32 (enhancerLiteSaturationModeDefault), discrete: true, step: 1.0f, text: "Subtle|Medium", automatable: false, rampFrames: 0 ]];
+
+        input event int32 resetIn;
+        output stream float32<2> out;
+
+        processor.latency = 3;
+        static_assert (enhancerLiteLatencySamples == 3,
+                       "Update EnhancerLiteBus latency with its IIR wrapper contract");
+
+        EnhancerLiteIirUpsampler4x inputOversampler;
+        EnhancerLiteIirDownsampler4x outputDownsampler;
+        EnhancerLiteBandCore stereoCore;
+        EnhancerLiteBandCore midSideCore;
+        EnhancerLiteShapedHighpass shapedHighpass;
+
+        float32 frequencyHz = enhancerLiteFrequencyDefaultHz;
+        float32 q = enhancerLiteQDefault;
+        float32 midSideWeight;
+        float32 midAmount;
+        float32 sideAmount;
+        float32 solidWeight = float32 (enhancerLiteCurveDefault);
+        float32 mediumWeight = float32 (enhancerLiteSaturationModeDefault);
+        var smoothingAmount = 1.0f - std::intrinsics::exp (
+            -1.0f / (
+                enhancerLiteControlSmoothingMs * 0.001f * float32 (processor.frequency)
+            )
+        );
+
+        void init()
+        {
+            let oversampledSampleRate = processor.frequency
+                                        * float64 (enhancerLiteOversampleFactor);
+            stereoCore.prepare (oversampledSampleRate);
+            midSideCore.prepare (oversampledSampleRate);
+            shapedHighpass.setSampleRate (oversampledSampleRate);
+        }
+
+        event resetIn (int32 ignored)
+        {
+            inputOversampler.reset();
+            outputDownsampler.reset();
+            stereoCore.reset();
+            midSideCore.reset();
+            shapedHighpass.reset();
+        }
+
+        void smoothControls()
+        {
+            let sampleRate = float32 (processor.frequency);
+            frequencyHz = smoothEnhancerLiteControl (
+                frequencyHz,
+                clampEnhancerLiteFrequencyHz (freqHzIn, sampleRate),
+                smoothingAmount,
+                0.001f
+            );
+            q = smoothEnhancerLiteControl (
+                q,
+                clampEnhancerLiteQ (qIn),
+                smoothingAmount,
+                enhancerLiteCoefficientEpsilon
+            );
+            midSideWeight = smoothEnhancerLiteControl (
+                midSideWeight,
+                resolveEnhancerLiteWeight (modeIn),
+                smoothingAmount,
+                enhancerLiteCoefficientEpsilon
+            );
+            midAmount = smoothEnhancerLiteControl (
+                midAmount,
+                clampEnhancerLiteAmount (midAmountIn),
+                smoothingAmount,
+                enhancerLiteCoefficientEpsilon
+            );
+            sideAmount = smoothEnhancerLiteControl (
+                sideAmount,
+                clampEnhancerLiteAmount (sideAmountIn),
+                smoothingAmount,
+                enhancerLiteCoefficientEpsilon
+            );
+            solidWeight = smoothEnhancerLiteControl (
+                solidWeight,
+                resolveEnhancerLiteWeight (curveIn),
+                smoothingAmount,
+                enhancerLiteCoefficientEpsilon
+            );
+            mediumWeight = smoothEnhancerLiteControl (
+                mediumWeight,
+                resolveEnhancerLiteWeight (saturationModeIn),
+                smoothingAmount,
+                enhancerLiteCoefficientEpsilon
+            );
+        }
+
+        void main()
+        {
+            loop
+            {
+                smoothControls();
+
+                let dry = in;
+                let primaryDrive = enhancerLiteAmountDrive (midAmount);
+                let sideDrive = enhancerLiteAmountDrive (sideAmount);
+                let primaryQ = enhancerLiteEffectiveBellQ (q, midAmount);
+                let sideQ = enhancerLiteEffectiveBellQ (q, sideAmount);
+                inputOversampler.process (dry);
+                float32<2>[4] combinedFrames;
+
+                for (int32 oversampleFrame = 0;
+                     oversampleFrame < enhancerLiteOversampleFactor;
+                     ++oversampleFrame)
+                {
+                    let oversampledDry = inputOversampler.samples.at (oversampleFrame);
+                    let oversampledMidSide = float32<2> (
+                        0.5f * (oversampledDry[0] + oversampledDry[1]),
+                        0.5f * (oversampledDry[0] - oversampledDry[1])
+                    );
+                    let stereoShaped = stereoCore.process (
+                        oversampledDry,
+                        frequencyHz,
+                        primaryQ,
+                        primaryQ,
+                        primaryDrive,
+                        primaryDrive,
+                        solidWeight,
+                        mediumWeight
+                    );
+                    let midSideShaped = midSideCore.process (
+                        oversampledMidSide,
+                        frequencyHz,
+                        primaryQ,
+                        sideQ,
+                        primaryDrive,
+                        sideDrive,
+                        solidWeight,
+                        mediumWeight
+                    );
+                    let decodedMidSideShaped = float32<2> (
+                        midSideShaped[0] + midSideShaped[1],
+                        midSideShaped[0] - midSideShaped[1]
+                    );
+                    let shaped = midSideWeight == 0.0f ? stereoShaped
+                        : (midSideWeight == 1.0f ? decodedMidSideShaped
+                           : stereoShaped
+                             + (decodedMidSideShaped - stereoShaped) * midSideWeight);
+
+                    // DC conditioning stays on the shaped contribution, but is
+                    // moved into the 4x cluster so dry plus contribution can use
+                    // one shared reconstruction path.
+                    combinedFrames.at (oversampleFrame) = oversampledDry
+                        + shapedHighpass.process (shaped);
+                }
+
+                out <- outputDownsampler.process (
+                    combinedFrames[0],
+                    combinedFrames[1],
+                    combinedFrames[2],
+                    combinedFrames[3]
+                );
+
+                advance();
+            }
+        }
+    }
+}

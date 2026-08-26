@@ -1,0 +1,28 @@
+graph CosimoEnhancerLite [[ main ]]
+{
+    input stream float32<2> audioIn [[ name: "Input" ]];
+    output stream float32<2> audioOut [[ name: "Output" ]];
+
+    input value float32 freqHzIn [[ name: "Frequency", group: "Band", min: wt::enhancerLiteFrequencyMinHz, max: wt::enhancerLiteFrequencyMaxHz, init: wt::enhancerLiteFrequencyDefaultHz, unit: "Hz", automatable: false, rampFrames: 0 ]];
+    input value float32 qIn [[ name: "Q", group: "Band", min: wt::enhancerLiteQMin, max: wt::enhancerLiteQMax, init: wt::enhancerLiteQDefault, automatable: false, rampFrames: 0 ]];
+    input value float32 modeIn [[ name: "Routing", group: "Band", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerLiteModeStereo), discrete: true, step: 1.0f, text: "Stereo|Mid/Side", automatable: false, rampFrames: 0 ]];
+    input value float32 midAmountIn [[ name: "Amount / Mid", group: "Band", min: wt::enhancerLiteAmountMin, max: wt::enhancerLiteAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
+    input value float32 sideAmountIn [[ name: "Side", group: "Band", min: wt::enhancerLiteAmountMin, max: wt::enhancerLiteAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
+    input value float32 curveIn [[ name: "Character", group: "Band", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerLiteCurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: false, rampFrames: 0 ]];
+    input value float32 saturationModeIn [[ name: "Intensity", group: "Band", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerLiteSaturationModeDefault), discrete: true, step: 1.0f, text: "Subtle|Medium", automatable: false, rampFrames: 0 ]];
+
+    node enhancer = wt::EnhancerLiteBus;
+
+    connection
+    {
+        audioIn -> enhancer.in;
+        freqHzIn -> enhancer.freqHzIn;
+        qIn -> enhancer.qIn;
+        modeIn -> enhancer.modeIn;
+        midAmountIn -> enhancer.midAmountIn;
+        sideAmountIn -> enhancer.sideAmountIn;
+        curveIn -> enhancer.curveIn;
+        saturationModeIn -> enhancer.saturationModeIn;
+        enhancer.out -> audioOut;
+    }
+}
