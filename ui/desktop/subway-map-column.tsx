@@ -1,6 +1,8 @@
 import {
     useCallback,
+    useEffect,
     useRef,
+    useState,
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
@@ -27,8 +29,11 @@ import {
     SUBWAY_LANE_GUTTER_PERCENT,
     SUBWAY_LANE_SPAN_PERCENT,
     SUBWAY_MERGE_TRUNK_PATH,
+    subwayCompactLaneAllocation,
     subwayForkBranchPath,
+    subwayForkBranchPathAt,
     subwayMergeBranchPath,
+    subwayMergeBranchPathAt,
 } from "../shared/subway-connector-geometry";
 
 /**
@@ -54,6 +59,7 @@ import {
 
 const STATION_DRAG_THRESHOLD_PX = 7;
 const STATION_LONG_PRESS_MS = 550;
+const PHONE_GRAPH_QUERY = "(max-width: 639px)";
 
 export type SubwayStationMenuRequest = {
     readonly deviceId: string;
@@ -72,9 +78,11 @@ type SubwayMapColumnProps = {
     readonly selectedDeviceId: string;
     readonly selectedGroupId: string | null;
     readonly reorderingDeviceId: string | null;
+    readonly focusedBranchIndices: Readonly<Record<string, number>>;
     readonly accents: Readonly<Record<EffectModuleId, string>>;
     readonly onSelect: (deviceId: string) => void;
     readonly onSelectGroup: (groupId: string) => void;
+    readonly onFocusBranch: (groupId: string, branchIndex: number) => void;
     readonly onOpenStationMenu: (request: SubwayStationMenuRequest) => void;
     readonly onOpenGroupMenu: (request: SubwayGroupMenuRequest) => void;
     /** Called once a station drag crosses the reorder threshold. */
@@ -83,6 +91,33 @@ type SubwayMapColumnProps = {
     /** A ghost add-stub was tapped: open the type picker for its path. */
     readonly onRequestAdd: (path: LaneDevicePathV2, clientX: number, clientY: number) => void;
 };
+
+type SubwayBranchContext = {
+    readonly groupId: string;
+    readonly branchIndex: number;
+    readonly laneCount: number;
+    readonly focused: boolean;
+};
+
+function usePhoneGraphLayout(): boolean {
+    const [phoneLayout, setPhoneLayout] = useState(() => window.matchMedia(PHONE_GRAPH_QUERY).matches);
+    useEffect(() => {
+        const query = window.matchMedia(PHONE_GRAPH_QUERY);
+        const update = () => setPhoneLayout(query.matches);
+        update();
+        query.addEventListener("change", update);
+        return () => query.removeEventListener("change", update);
+    }, []);
+    return phoneLayout;
+}
+
+function requiredLaneCenter(laneCenters: ReadonlyArray<number>, laneIndex: number): number {
+    const center = laneCenters[laneIndex];
+    if (center === undefined) {
+        throw new RangeError(`Missing compact subway lane center ${laneIndex}`);
+    }
+    return center;
+}
 
 type StationPointerState = {
     pointerId: number;
@@ -182,11 +217,47 @@ function usePressableGestures({
     return { handlePointerDown, handlePointerMove, handlePointerEnd, handleClick, handleContextMenu };
 }
 
-function StationBody({ station }: { readonly station: SubwayStationCell }) {
+function StationIcon({ effectId, className }: {
+    readonly effectId: EffectModuleId;
+    readonly className: string;
+}) {
+    const effect = getRackEffectDescriptor(effectId);
+    return (
+        <span
+            className={className}
+            style={{ "--station-icon-url": `url("${effect.iconUrl}")` } as CSSProperties}
+            aria-hidden="true"
+        />
+    );
+}
+
+function StationBody({ station, effectId }: {
+    readonly station: SubwayStationCell;
+    readonly effectId: EffectModuleId;
+}) {
     return (
         <span className="subway-station-pill" aria-hidden="true">
-            <span className="subway-station-code">{station.code}</span>
-            <span className="subway-station-number">{station.instanceNumber}</span>
+            <span className="subway-station-detail">
+                <span className="subway-station-icon-well">
+                    <StationIcon effectId={effectId} className="subway-station-icon subway-station-icon-detail" />
+                </span>
+                <span className="subway-station-label">{station.code} {station.instanceNumber}</span>
+            </span>
+            <span className="subway-station-compact" aria-hidden="true">
+                <span className="subway-station-compact-well">
+                    <StationIcon effectId={effectId} className="subway-station-icon subway-station-icon-compact" />
+                </span>
+            </span>
+        </span>
+    );
+}
+
+function StationSummary({ effectId }: { readonly effectId: EffectModuleId }) {
+    return (
+        <span className="subway-station-summary" aria-hidden="true">
+            <span className="subway-station-summary-well">
+                <StationIcon effectId={effectId} className="subway-station-icon subway-station-icon-summary" />
+            </span>
         </span>
     );
 }
@@ -202,14 +273,17 @@ function SubwayStation({
     onOpenStationMenu,
     onArmReorder,
     onKeyboardMove,
+    onFocusBranch,
+    branchContext = null,
 }: {
     readonly station: SubwayStationCell;
     readonly position: number;
     /** Trunk stations are list-child ROWS; branch stations are lane CELLS. */
     readonly asCell: boolean;
+    readonly branchContext?: SubwayBranchContext | null;
 } & Pick<SubwayMapColumnProps,
     "accents" | "selectedDeviceId" | "reorderingDeviceId"
-    | "onSelect" | "onOpenStationMenu" | "onArmReorder" | "onKeyboardMove">) {
+    | "onSelect" | "onOpenStationMenu" | "onArmReorder" | "onKeyboardMove" | "onFocusBranch">) {
     const effectId = LANE_TYPE_TO_EFFECT_ID.get(station.deviceType);
     if (effectId === undefined) {
         throw new Error(`Unknown lane device type on the map: ${station.deviceType}`);
@@ -221,7 +295,12 @@ function SubwayStation({
     const selected = selectedDeviceId === station.deviceId;
     const reordering = reorderingDeviceId === station.deviceId;
     const gestures = usePressableGestures({
-        onTap: () => onSelect(station.deviceId),
+        onTap: () => {
+            if (branchContext !== null) {
+                onFocusBranch(branchContext.groupId, branchContext.branchIndex);
+            }
+            onSelect(station.deviceId);
+        },
         onLongPress: (clientX, clientY) => onOpenStationMenu({ deviceId: station.deviceId, clientX, clientY }),
         onDragArm: (event) => onArmReorder(station.deviceId, event),
     });
@@ -237,7 +316,10 @@ function SubwayStation({
             data-drag-dwell={`rack-effect:${effectId}`}
             data-lane-path={encodeLaneDevicePath(station.path)}
             data-lane-tint={station.tint}
-            className={`${asCell ? "subway-station-cell" : "subway-station-row"}${selected ? " is-selected" : ""}${station.enabled ? "" : " is-disabled"}${reordering ? " is-reordering" : ""}`}
+            data-branch-index={branchContext?.branchIndex}
+            data-branch-lane-count={branchContext?.laneCount}
+            data-focused-branch={branchContext === null ? undefined : branchContext.focused ? "true" : "false"}
+            className={`${asCell ? "subway-station-cell" : "subway-station-row"}${branchContext === null ? "" : branchContext.focused ? " is-focused-branch" : " is-context-branch"}${selected ? " is-selected" : ""}${station.enabled ? "" : " is-disabled"}${reordering ? " is-reordering" : ""}`}
             style={{ "--station-accent": accents[effectId] } as CSSProperties}
         >
             <button
@@ -261,8 +343,9 @@ function SubwayStation({
                     }
                 }}
             >
-                <StationBody station={station} />
+                <StationBody station={station} effectId={effectId} />
             </button>
+            {branchContext === null ? null : <StationSummary effectId={effectId} />}
         </div>
     );
 }
@@ -271,24 +354,56 @@ function SubwayGhost({
     cell,
     asCell,
     onRequestAdd,
+    onFocusBranch,
+    branchContext = null,
 }: {
     readonly cell: SubwayGhostCell;
     /** Branch ghosts are lane CELLS; the trunk's trailing ghost is a ROW. */
     readonly asCell: boolean;
     readonly onRequestAdd: SubwayMapColumnProps["onRequestAdd"];
+    readonly onFocusBranch: SubwayMapColumnProps["onFocusBranch"];
+    readonly branchContext?: SubwayBranchContext | null;
 }) {
+    const requestAdd = (clientX: number, clientY: number) => {
+        if (branchContext !== null) {
+            onFocusBranch(branchContext.groupId, branchContext.branchIndex);
+        }
+        onRequestAdd(cell.path, clientX, clientY);
+    };
+    if (asCell) {
+        return (
+            <div
+                className={`subway-ghost-cell${cell.dashed ? " is-dashed" : ""}${branchContext?.focused ? " is-focused-branch" : " is-context-branch"}`}
+                data-lane-tint={cell.tint}
+                data-branch-index={branchContext?.branchIndex}
+                data-branch-lane-count={branchContext?.laneCount}
+                data-focused-branch={branchContext?.focused ? "true" : "false"}
+            >
+                <button
+                    type="button"
+                    data-role="rack-ghost-add"
+                    data-insertion-anchor="path-tail"
+                    aria-label="Add a device here"
+                    className="subway-ghost-button"
+                    data-lane-path={encodeLaneDevicePath(cell.path)}
+                    onClick={(event) => requestAdd(event.clientX, event.clientY)}
+                >
+                    <span className="subway-ghost-pill" aria-hidden="true">+</span>
+                </button>
+                <span className="subway-ghost-summary" aria-hidden="true">+</span>
+            </div>
+        );
+    }
     return (
         <button
             type="button"
             data-role="rack-ghost-add"
             data-insertion-anchor="path-tail"
             aria-label="Add a device here"
-            className={asCell
-                ? `subway-ghost-cell${cell.dashed ? " is-dashed" : ""}`
-                : "subway-ghost-row"}
+            className="subway-ghost-row"
             data-lane-path={encodeLaneDevicePath(cell.path)}
             data-lane-tint={cell.tint}
-            onClick={(event) => onRequestAdd(cell.path, event.clientX, event.clientY)}
+            onClick={(event) => requestAdd(event.clientX, event.clientY)}
         >
             <span className="subway-ghost-pill" aria-hidden="true">+</span>
         </button>
@@ -297,10 +412,12 @@ function SubwayGhost({
 
 function laneCells(
     cells: ReadonlyArray<SubwayCell>,
+    groupId: string,
+    focusedBranchIndex: number,
     positionOf: (cell: SubwayStationCell) => number,
     stationProps: Pick<SubwayMapColumnProps,
         "accents" | "selectedDeviceId" | "reorderingDeviceId"
-        | "onSelect" | "onOpenStationMenu" | "onArmReorder" | "onKeyboardMove">,
+        | "onSelect" | "onOpenStationMenu" | "onArmReorder" | "onKeyboardMove" | "onFocusBranch">,
     onRequestAdd: SubwayMapColumnProps["onRequestAdd"],
 ): ReactNode[] {
     return cells.map((cell, laneIndex) => {
@@ -311,20 +428,41 @@ function laneCells(
                     station={cell}
                     position={positionOf(cell)}
                     asCell
+                    branchContext={{
+                        groupId,
+                        branchIndex: laneIndex,
+                        laneCount: cells.length,
+                        focused: laneIndex === focusedBranchIndex,
+                    }}
                     {...stationProps}
                 />
             );
         }
         if (cell.kind === "ghost") {
             return (
-                <SubwayGhost key={`ghost-${laneIndex}`} cell={cell} asCell onRequestAdd={onRequestAdd} />
+                <SubwayGhost
+                    key={`ghost-${laneIndex}`}
+                    cell={cell}
+                    asCell
+                    branchContext={{
+                        groupId,
+                        branchIndex: laneIndex,
+                        laneCount: cells.length,
+                        focused: laneIndex === focusedBranchIndex,
+                    }}
+                    onRequestAdd={onRequestAdd}
+                    onFocusBranch={stationProps.onFocusBranch}
+                />
             );
         }
         return (
             <div
                 key={`line-${laneIndex}`}
-                className={`subway-line-cell${cell.dashed ? " is-dashed" : ""}`}
+                className={`subway-line-cell${cell.dashed ? " is-dashed" : ""}${laneIndex === focusedBranchIndex ? " is-focused-branch" : " is-context-branch"}`}
                 data-lane-tint={cell.tint}
+                data-branch-index={laneIndex}
+                data-branch-lane-count={cells.length}
+                data-focused-branch={laneIndex === focusedBranchIndex ? "true" : "false"}
             />
         );
     });
@@ -335,9 +473,11 @@ export function SubwayMapColumn({
     selectedDeviceId,
     selectedGroupId,
     reorderingDeviceId,
+    focusedBranchIndices,
     accents,
     onSelect,
     onSelectGroup,
+    onFocusBranch,
     onOpenStationMenu,
     onOpenGroupMenu,
     onArmReorder,
@@ -345,6 +485,7 @@ export function SubwayMapColumn({
     onRequestAdd,
 }: SubwayMapColumnProps) {
     const layout = buildSubwayLayout(laneState);
+    const phoneGraphLayout = usePhoneGraphLayout();
 
     // Chain-walk positions for the data-rack-position contract: stations
     // number consecutively in dispatch order whatever their lane.
@@ -368,6 +509,7 @@ export function SubwayMapColumn({
         onOpenStationMenu,
         onArmReorder,
         onKeyboardMove,
+        onFocusBranch,
     };
     const positionOf = (cell: SubwayStationCell) => stationPositions.get(cell.deviceId) ?? 0;
 
@@ -375,12 +517,21 @@ export function SubwayMapColumn({
     // section so bypass dimming and lane alignment stay coherent.
     const rendered: ReactNode[] = [];
     let groupRows: ReactNode[] = [];
-    let openGroup: { groupId: string; bypassed: boolean; laneCount: number } | null = null;
+    let openGroup: {
+        groupId: string;
+        bypassed: boolean;
+        laneCount: number;
+        focusedBranchIndex: number;
+    } | null = null;
 
     const flushGroup = () => {
         if (openGroup === null) {
             return;
         }
+        const compactAllocation = subwayCompactLaneAllocation(
+            openGroup.laneCount,
+            openGroup.focusedBranchIndex,
+        );
         rendered.push(
             <div
                 key={openGroup.groupId}
@@ -388,10 +539,15 @@ export function SubwayMapColumn({
                 data-role={`rack-group-${openGroup.groupId}`}
                 data-group-id={openGroup.groupId}
                 data-lane-count={openGroup.laneCount}
+                data-focused-branch-index={openGroup.focusedBranchIndex}
                 style={{
                     "--subway-lane-count": openGroup.laneCount,
                     "--subway-lane-gutter": `${SUBWAY_LANE_GUTTER_PERCENT}%`,
                     "--subway-lane-span": `${SUBWAY_LANE_SPAN_PERCENT}%`,
+                    "--subway-compact-lane-template": compactAllocation.gridTemplate,
+                    "--subway-compact-badge-template": openGroup.laneCount === 4
+                        ? "repeat(4, 25%)"
+                        : compactAllocation.gridTemplate,
                 } as CSSProperties}
             >
                 {groupRows}
@@ -403,13 +559,28 @@ export function SubwayMapColumn({
 
     for (const [rowIndex, row] of layout.rows.entries()) {
         if (row.kind === "terminus") {
-            continue; // The list's own decor draws the termini.
+            continue; // Variant C uses clean cut route ends, not terminal glyphs.
         }
         if (row.kind === "fork") {
             flushGroup();
-            openGroup = { groupId: row.groupId, bypassed: row.bypassed, laneCount: row.lanes.length };
+            const requestedFocus = focusedBranchIndices[row.groupId] ?? 0;
+            const focusedBranchIndex = Math.min(Math.max(requestedFocus, 0), row.lanes.length - 1);
+            openGroup = {
+                groupId: row.groupId,
+                bypassed: row.bypassed,
+                laneCount: row.lanes.length,
+                focusedBranchIndex,
+            };
             groupRows.push(
-                <SubwayFork key={`fork-${row.groupId}`} row={row} onSelectGroup={onSelectGroup} onOpenGroupMenu={onOpenGroupMenu} />,
+                <SubwayFork
+                    key={`fork-${row.groupId}`}
+                    row={row}
+                    focusedBranchIndex={focusedBranchIndex}
+                    phoneGraphLayout={phoneGraphLayout}
+                    onSelectGroup={onSelectGroup}
+                    onFocusBranch={onFocusBranch}
+                    onOpenGroupMenu={onOpenGroupMenu}
+                />,
             );
             continue;
         }
@@ -418,7 +589,13 @@ export function SubwayMapColumn({
                 throw new Error("Subway merge row has no open group");
             }
             groupRows.push(
-                <SubwayMerge key={`merge-${rowIndex}`} groupId={openGroup.groupId} row={row} />,
+                <SubwayMerge
+                    key={`merge-${rowIndex}`}
+                    groupId={openGroup.groupId}
+                    row={row}
+                    focusedBranchIndex={openGroup.focusedBranchIndex}
+                    phoneGraphLayout={phoneGraphLayout}
+                />,
             );
             flushGroup();
             continue;
@@ -428,7 +605,14 @@ export function SubwayMapColumn({
         if (openGroup !== null) {
             groupRows.push(
                 <div key={`body-${rowIndex}`} className="subway-lane-row">
-                    {laneCells(row.cells, positionOf, stationProps, onRequestAdd)}
+                    {laneCells(
+                        row.cells,
+                        openGroup.groupId,
+                        openGroup.focusedBranchIndex,
+                        positionOf,
+                        stationProps,
+                        onRequestAdd,
+                    )}
                 </div>,
             );
             continue;
@@ -447,7 +631,13 @@ export function SubwayMapColumn({
         }
         if (cell !== undefined && cell.kind === "ghost") {
             rendered.push(
-                <SubwayGhost key={`trunk-ghost-${rowIndex}`} cell={cell} asCell={false} onRequestAdd={onRequestAdd} />,
+                <SubwayGhost
+                    key={`trunk-ghost-${rowIndex}`}
+                    cell={cell}
+                    asCell={false}
+                    onRequestAdd={onRequestAdd}
+                    onFocusBranch={onFocusBranch}
+                />,
             );
         }
     }
@@ -458,11 +648,17 @@ export function SubwayMapColumn({
 
 function SubwayFork({
     row,
+    focusedBranchIndex,
+    phoneGraphLayout,
     onSelectGroup,
+    onFocusBranch,
     onOpenGroupMenu,
 }: {
     readonly row: Extract<SubwayRow, { kind: "fork" }>;
+    readonly focusedBranchIndex: number;
+    readonly phoneGraphLayout: boolean;
     readonly onSelectGroup: (groupId: string) => void;
+    readonly onFocusBranch: (groupId: string, branchIndex: number) => void;
     readonly onOpenGroupMenu: (request: SubwayGroupMenuRequest) => void;
 }) {
     const gestures = usePressableGestures({
@@ -470,19 +666,42 @@ function SubwayFork({
         onLongPress: (clientX, clientY) => onOpenGroupMenu({ groupId: row.groupId, clientX, clientY }),
     });
     const readout = row.crossovers === null
-        ? null
+        ? "PAR"
         : row.crossovers.highHz === null
             ? formatCrossoverHz(row.crossovers.lowHz)
             : `${formatCrossoverHz(row.crossovers.lowHz)} · ${formatCrossoverHz(row.crossovers.highHz)}`;
 
     return (
         <div className="subway-fork" data-fork-kind={row.groupKind}>
-            <SubwayForkConnections row={row} />
+            <SubwayForkConnections
+                row={row}
+                focusedBranchIndex={focusedBranchIndex}
+                phoneGraphLayout={phoneGraphLayout}
+            />
+            <span className="subway-fork-glyph" aria-hidden="true" />
+            <div className="subway-fork-lanes">
+                {row.lanes.map((lane, branchIndex) => (
+                    <button
+                        type="button"
+                        key={lane.label}
+                        data-role={`rack-branch-focus-${row.groupId}-${branchIndex}`}
+                        data-focus-group-id={row.groupId}
+                        data-focus-branch-index={branchIndex}
+                        aria-label={`Focus ${lane.label} branch`}
+                        aria-pressed={branchIndex === focusedBranchIndex}
+                        className={`subway-fork-lane${lane.empty ? " is-empty" : ""}${branchIndex === focusedBranchIndex ? " is-focused" : ""}`}
+                        data-lane-tint={lane.tint}
+                        onClick={() => onFocusBranch(row.groupId, branchIndex)}
+                    >
+                        <span>{lane.label}</span>
+                    </button>
+                ))}
+            </div>
             <button
                 type="button"
+                className="subway-fork-readout"
                 data-role={`rack-fork-${row.groupId}`}
                 aria-label={`${row.groupKind === "split" ? "Frequency split" : "Parallel"} group${row.bypassed ? " (bypassed)" : ""}`}
-                className="subway-fork-glyph"
                 onPointerDown={gestures.handlePointerDown}
                 onPointerMove={gestures.handlePointerMove}
                 onPointerUp={gestures.handlePointerEnd}
@@ -491,31 +710,21 @@ function SubwayFork({
                 onContextMenu={gestures.handleContextMenu}
             >
                 <span className={row.groupKind === "split" ? "subway-glyph-diamond" : "subway-glyph-dot"} aria-hidden="true" />
+                <span data-role={`rack-fork-readout-${row.groupId}`}>{readout}</span>
             </button>
-            <div className="subway-fork-lanes" aria-hidden="true">
-                {row.lanes.map((lane) => (
-                    <span
-                        key={lane.label}
-                        className={`subway-fork-lane${lane.empty ? " is-empty" : ""}`}
-                        data-lane-tint={lane.tint}
-                    >
-                        {lane.label}
-                    </span>
-                ))}
-            </div>
-            {readout === null ? null : (
-                <span className="subway-fork-readout" data-role={`rack-fork-readout-${row.groupId}`}>
-                    {readout}
-                </span>
-            )}
         </div>
     );
 }
 
-function SubwayForkConnections({ row }: {
+function SubwayForkConnections({ row, focusedBranchIndex, phoneGraphLayout }: {
     readonly row: Extract<SubwayRow, { kind: "fork" }>;
+    readonly focusedBranchIndex: number;
+    readonly phoneGraphLayout: boolean;
 }) {
     const laneCount = row.lanes.length;
+    const compactAllocation = phoneGraphLayout
+        ? subwayCompactLaneAllocation(laneCount, focusedBranchIndex)
+        : null;
     return (
         <svg
             className="subway-connector-svg subway-fork-connectors"
@@ -528,11 +737,13 @@ function SubwayForkConnections({ row }: {
             {row.lanes.map((lane, laneIndex) => (
                 <path
                     key={laneIndex}
-                    className={`subway-connector-branch${lane.empty ? " is-dashed" : ""}`}
+                    className={`subway-connector-branch${lane.empty ? " is-dashed" : ""}${laneIndex === focusedBranchIndex ? " is-focused" : ""}`}
                     data-connector-segment="branch"
                     data-lane-index={laneIndex}
                     data-lane-tint={lane.tint}
-                    d={subwayForkBranchPath(laneIndex, laneCount)}
+                    d={compactAllocation === null
+                        ? subwayForkBranchPath(laneIndex, laneCount)
+                        : subwayForkBranchPathAt(requiredLaneCenter(compactAllocation.laneCenters, laneIndex))}
                 />
             ))}
         </svg>
@@ -542,11 +753,18 @@ function SubwayForkConnections({ row }: {
 function SubwayMerge({
     groupId,
     row,
+    focusedBranchIndex,
+    phoneGraphLayout,
 }: {
     readonly groupId: string;
     readonly row: Extract<SubwayRow, { kind: "merge" }>;
+    readonly focusedBranchIndex: number;
+    readonly phoneGraphLayout: boolean;
 }) {
     const laneCount = row.lanes.length;
+    const compactAllocation = phoneGraphLayout
+        ? subwayCompactLaneAllocation(laneCount, focusedBranchIndex)
+        : null;
     return (
         <div className="subway-merge" aria-hidden="true">
             <svg
@@ -558,11 +776,13 @@ function SubwayMerge({
                 {row.lanes.map((lane, laneIndex) => (
                     <path
                         key={laneIndex}
-                        className={`subway-connector-branch${lane.dashed ? " is-dashed" : ""}`}
+                        className={`subway-connector-branch${lane.dashed ? " is-dashed" : ""}${laneIndex === focusedBranchIndex ? " is-focused" : ""}`}
                         data-connector-segment="branch"
                         data-lane-index={laneIndex}
                         data-lane-tint={lane.tint}
-                        d={subwayMergeBranchPath(laneIndex, laneCount)}
+                        d={compactAllocation === null
+                            ? subwayMergeBranchPath(laneIndex, laneCount)
+                            : subwayMergeBranchPathAt(requiredLaneCenter(compactAllocation.laneCenters, laneIndex))}
                     />
                 ))}
                 <path className="subway-connector-trunk" data-connector-segment="trunk" d={SUBWAY_MERGE_TRUNK_PATH} />

@@ -2858,7 +2858,7 @@ test("rack no-op release adopts authoritative stored order received during the g
     }
 });
 
-test("mobile FX subpage keeps all eight stations on the line and confines modulation controls to the editor", async () => {
+test("mobile FX subpage keeps eight readable stations on the line and confines modulation controls to the editor", async () => {
     for (const width of [320, 375, 390, 430]) {
         const page = await openHarnessPage({
             beforeGoto: (nextPage) => nextPage.setViewportSize({ width, height: 667 }),
@@ -2906,10 +2906,17 @@ test("mobile FX subpage keeps all eight stations on the line and confines modula
                     amount: amount instanceof HTMLElement ? rectOf(amount) : null,
                     keyboard: rectOf(keyboard),
                     stations: stations.map(rectOf),
-                    pillsAreSingleLine: pills.every((pill) => {
-                        const style = getComputedStyle(pill);
-                        return style.whiteSpace === "nowrap"
-                            && pill.getBoundingClientRect().height <= 24;
+                    pillsHaveReadableAnatomy: pills.every((pill) => {
+                        const detail = pill.querySelector(".subway-station-detail");
+                        const label = pill.querySelector(".subway-station-label");
+                        if (!(detail instanceof HTMLElement) || !(label instanceof HTMLElement)) {
+                            return false;
+                        }
+                        const detailRect = detail.getBoundingClientRect();
+                        return getComputedStyle(detail).whiteSpace === "nowrap"
+                            && detailRect.width === 76
+                            && detailRect.height === 32
+                            && Number.parseFloat(getComputedStyle(label).fontSize) >= 13;
                     }),
                     rawRangesAreVisuallyHidden: rawRanges.every((range) => {
                         const style = getComputedStyle(range);
@@ -2934,8 +2941,8 @@ test("mobile FX subpage keeps all eight stations on the line and confines modula
                 assert.equal(layout.amount.right <= layout.editor.right + 0.5, true, `Amount control escapes editor at ${width}px.`);
                 assert.equal(layout.amount.left >= layout.list.right - 0.5, true, `Amount control steals rack width at ${width}px.`);
             }
-            // Station rows keep the 44px touch floor while the pills stay
-            // compact single-line badges (the whole point of station scale).
+            // Station rows keep the 44px touch floor while every serial chip
+            // keeps the accepted readable Variant C anatomy.
             assert.equal(
                 layout.units.every((unit) => unit.height >= 43.5),
                 true,
@@ -2946,7 +2953,11 @@ test("mobile FX subpage keeps all eight stations on the line and confines modula
                 true,
                 `Station hit areas are not touchable at ${width}px.`,
             );
-            assert.equal(layout.pillsAreSingleLine, true, `Station pills wrapped or grew at ${width}px.`);
+            assert.equal(
+                layout.pillsHaveReadableAnatomy,
+                true,
+                `Station chips lost fixed readable anatomy at ${width}px.`,
+            );
             assert.equal(layout.rawRangesAreVisuallyHidden, true, `Native rack ranges leaked visually at ${width}px.`);
         } finally {
             await page.close();

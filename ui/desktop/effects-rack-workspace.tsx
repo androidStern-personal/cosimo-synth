@@ -216,6 +216,8 @@ type ReorderGesture = {
     readonly captureElement: HTMLDivElement;
 };
 
+const REORDER_BRANCH_FOCUS_DWELL_MS = 400;
+
 const EFFECT_ACCENTS: Readonly<Record<EffectModuleId, string>> = {
     filter: "#c6db3f",
     drive: "#ff6a27",
@@ -3177,8 +3179,102 @@ export function EffectsRackWorkspace({
     const [previewDoc, setPreviewDoc] = useState<LaneStateV2>(rackState);
     const previewDocRef = useRef<LaneStateV2>(rackState);
     const rackListRef = useRef<HTMLDivElement | null>(null);
+    const [rackScrollPresentation, setRackScrollPresentation] = useState({
+        overflow: false,
+        atTop: true,
+        atBottom: true,
+    });
+    const updateRackScrollPresentation = useCallback(() => {
+        const list = rackListRef.current;
+        if (list === null) {
+            return;
+        }
+        const overflow = list.scrollHeight > list.clientHeight + 2;
+        const atTop = !overflow || list.scrollTop <= 2;
+        const atBottom = !overflow
+            || list.scrollTop + list.clientHeight >= list.scrollHeight - 2;
+        setRackScrollPresentation((current) => (
+            current.overflow === overflow
+                && current.atTop === atTop
+                && current.atBottom === atBottom
+                ? current
+                : { overflow, atTop, atBottom }
+        ));
+    }, []);
     const reorderRef = useRef<ReorderGesture | null>(null);
+    const reorderBranchDwellRef = useRef<{ key: string; timer: number } | null>(null);
     const [reorderingDeviceId, setReorderingDeviceId] = useState<string | null>(null);
+    const [focusedBranchIndices, setFocusedBranchIndices] = useState<Readonly<Record<string, number>>>({});
+    const focusRackBranch = useCallback((groupId: string, branchIndex: number) => {
+        setFocusedBranchIndices((current) => (
+            current[groupId] === branchIndex
+                ? current
+                : { ...current, [groupId]: branchIndex }
+        ));
+    }, []);
+    useEffect(() => {
+        // The non-nested lane.v2 model owns groups directly in the chain.
+        // Reconcile presentation state after dissolve, preset restore, or a
+        // legal branch-count reduction so a later reused id cannot inherit a
+        // focus that belonged to a different topology.
+        const branchCountByGroup = new Map(
+            rackState.chain.flatMap((node) => (
+                node.kind === "device" ? [] : [[node.groupId, node.branches.length] as const]
+            )),
+        );
+        setFocusedBranchIndices((current) => {
+            let changed = false;
+            const reconciled: Record<string, number> = {};
+            for (const [groupId, branchIndex] of Object.entries(current)) {
+                const branchCount = branchCountByGroup.get(groupId);
+                if (branchCount === undefined) {
+                    changed = true;
+                    continue;
+                }
+                const nextBranchIndex = Math.min(Math.max(branchIndex, 0), branchCount - 1);
+                reconciled[groupId] = nextBranchIndex;
+                changed ||= nextBranchIndex !== branchIndex;
+            }
+            return changed ? reconciled : current;
+        });
+    }, [rackState.chain]);
+    const clearReorderBranchDwell = useCallback(() => {
+        const dwell = reorderBranchDwellRef.current;
+        if (dwell !== null) {
+            clearUiTimeout(dwell.timer);
+            reorderBranchDwellRef.current = null;
+        }
+    }, []);
+    const updateReorderBranchDwell = useCallback((
+        referenceElement: Element,
+        clientX: number,
+        clientY: number,
+    ): boolean => {
+        const badge = elementAtPointInRenderRoot(referenceElement, clientX, clientY)
+            ?.closest<HTMLElement>("[data-focus-group-id][data-focus-branch-index]") ?? null;
+        const groupId = badge?.dataset.focusGroupId;
+        const branchIndex = Number(badge?.dataset.focusBranchIndex);
+        if (badge === null || groupId === undefined || !Number.isInteger(branchIndex)) {
+            clearReorderBranchDwell();
+            return false;
+        }
+
+        const dwellKey = `${groupId}:${branchIndex}`;
+        if ((focusedBranchIndices[groupId] ?? 0) === branchIndex
+                || reorderBranchDwellRef.current?.key === dwellKey) {
+            return true;
+        }
+        clearReorderBranchDwell();
+        const timer = uiTimeout(() => {
+            if (reorderRef.current === null || reorderBranchDwellRef.current?.key !== dwellKey) {
+                return;
+            }
+            reorderBranchDwellRef.current = null;
+            focusRackBranch(groupId, branchIndex);
+        }, REORDER_BRANCH_FOCUS_DWELL_MS);
+        reorderBranchDwellRef.current = { key: dwellKey, timer };
+        return true;
+    }, [clearReorderBranchDwell, focusRackBranch, focusedBranchIndices]);
     const [selectedSource, setSelectedSource] = useState<SelectedSource>({ sourceKind: "mseg", sourceSlot: 1 });
     // T14 one-selection: the Mod page's selectors arm the bar. This state is
     // the real selection owner; onGlobalModRailStateChange re-reports it.
@@ -3285,6 +3381,27 @@ export function EffectsRackWorkspace({
         }
     }, [onSelectedEffectChange, rackState, selectedDeviceId]);
 
+    // Selection and branch focus are separate presentation state. A newly
+    // selected device reveals its owner, while a later badge tap may inspect
+    // a sibling without stealing the effect editor selection.
+    const selectedDevicePath = findLaneDevicePath(rackState, selectedDeviceId);
+    const selectedBranchGroupId = selectedDevicePath?.kind === "branch"
+        ? selectedDevicePath.groupId
+        : null;
+    const selectedBranchIndex = selectedDevicePath?.kind === "branch"
+        ? selectedDevicePath.branchIndex
+        : null;
+    useEffect(() => {
+        if (selectedBranchGroupId !== null && selectedBranchIndex !== null) {
+            focusRackBranch(selectedBranchGroupId, selectedBranchIndex);
+        }
+    }, [
+        focusRackBranch,
+        selectedBranchGroupId,
+        selectedBranchIndex,
+        selectedDeviceId,
+    ]);
+
     const selectedEffect = getRackEffectDescriptor(selectedEffectId);
     const selectedDeviceExists = rackState.devices[selectedDeviceId] !== undefined;
     const selectedInstanceNumber = parseLaneInstanceId(selectedDeviceId)?.instanceNumber ?? 1;
@@ -3305,6 +3422,49 @@ export function EffectsRackWorkspace({
         }
         return doc;
     }, [previewDoc, rackState]);
+
+    useLayoutEffect(() => {
+        const list = rackListRef.current;
+        if (list === null) {
+            return;
+        }
+        const animationFrame = window.requestAnimationFrame(updateRackScrollPresentation);
+        const resizeObserver = new ResizeObserver(updateRackScrollPresentation);
+        resizeObserver.observe(list);
+        for (const child of list.children) {
+            resizeObserver.observe(child);
+        }
+        window.addEventListener("resize", updateRackScrollPresentation);
+        return () => {
+            window.cancelAnimationFrame(animationFrame);
+            resizeObserver.disconnect();
+            window.removeEventListener("resize", updateRackScrollPresentation);
+        };
+    }, [mapDoc, updateRackScrollPresentation]);
+
+    useLayoutEffect(() => {
+        const list = rackListRef.current;
+        if (list === null) {
+            return;
+        }
+        const animationFrame = window.requestAnimationFrame(() => {
+            const selected = list.querySelector<HTMLElement>(
+                `[data-device-id="${CSS.escape(selectedDeviceId)}"]`,
+            );
+            if (selected === null) {
+                return;
+            }
+            const listRect = list.getBoundingClientRect();
+            const selectedRect = selected.getBoundingClientRect();
+            if (selectedRect.top < listRect.top) {
+                list.scrollTop -= listRect.top - selectedRect.top;
+            } else if (selectedRect.bottom > listRect.bottom) {
+                list.scrollTop += selectedRect.bottom - listRect.bottom;
+            }
+            updateRackScrollPresentation();
+        });
+        return () => window.cancelAnimationFrame(animationFrame);
+    }, [mapDoc, selectedDeviceId, updateRackScrollPresentation]);
     const selectedGroup = selectedGroupId === null
         ? null
         : rackState.chain.find((node) => node.kind !== "device" && node.groupId === selectedGroupId) ?? null;
@@ -3491,6 +3651,7 @@ export function EffectsRackWorkspace({
         }
 
         reorderRef.current = null;
+        clearReorderBranchDwell();
         setReorderingDeviceId(null);
         try {
             if (gesture.captureElement.hasPointerCapture(pointerId)) {
@@ -3508,7 +3669,7 @@ export function EffectsRackWorkspace({
             previewDocRef.current = currentDoc;
             setPreviewDoc(currentDoc);
         }
-    }, [commit, rackStateRef]);
+    }, [clearReorderBranchDwell, commit, rackStateRef]);
 
     const updateReorderPreview = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         const gesture = reorderRef.current;
@@ -3528,6 +3689,13 @@ export function EffectsRackWorkspace({
             return;
         }
 
+        // A folded four-lane branch deliberately has no direct body target.
+        // Deliberately dwelling its full-size badge opens that branch without
+        // moving the device to a nearby visible rail while the badge is held.
+        if (updateReorderBranchDwell(event.currentTarget, event.clientX, event.clientY)) {
+            return;
+        }
+
         // Pick the drop target in BOTH axes: lanes sit side by side, so a
         // Y-only walk lands in the wrong band. A containing rect wins over
         // distance, the SMALLEST containing rect wins over an enclosing row
@@ -3539,7 +3707,16 @@ export function EffectsRackWorkspace({
         let targetUnit: HTMLElement | null = null;
         let targetScore = Number.POSITIVE_INFINITY;
         for (const unit of rackUnits) {
+            const stationControl = unit.querySelector<HTMLElement>(":scope > .subway-station");
+            const ownerWindow = unit.ownerDocument.defaultView;
+            if (stationControl !== null
+                    && ownerWindow?.getComputedStyle(stationControl).display === "none") {
+                continue;
+            }
             const rect = unit.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) {
+                continue;
+            }
             const contains = event.clientX >= rect.left && event.clientX <= rect.right
                 && event.clientY >= rect.top && event.clientY <= rect.bottom;
             const centerX = rect.left + (rect.width / 2);
@@ -3563,7 +3740,7 @@ export function EffectsRackWorkspace({
             previewDocRef.current = nextDoc;
             setPreviewDoc(nextDoc);
         }
-    }, [finishReorder]);
+    }, [finishReorder, updateReorderBranchDwell]);
 
     useEffect(() => {
         const handlePointerUp = (event: PointerEvent) => finishReorder(event.pointerId, true);
@@ -4189,8 +4366,9 @@ export function EffectsRackWorkspace({
                 <div className="rack-stack" aria-label="Ordered effects rack">
                     <div
                         ref={rackListRef}
-                        className="rack-list subway-map"
+                        className={`rack-list subway-map${rackScrollPresentation.overflow ? " has-overflow" : ""}${rackScrollPresentation.atTop ? " is-at-top" : ""}${rackScrollPresentation.atBottom ? " is-at-bottom" : ""}`}
                         data-role="rack-module-list"
+                        onScroll={updateRackScrollPresentation}
                         onPointerMove={updateReorderPreview}
                         onPointerUp={(event) => finishReorder(event.pointerId, true)}
                         onPointerCancel={(event) => finishReorder(event.pointerId, false)}
@@ -4212,9 +4390,11 @@ export function EffectsRackWorkspace({
                             selectedDeviceId={selectedDeviceId}
                             selectedGroupId={selectedGroupId}
                             reorderingDeviceId={reorderingDeviceId}
+                            focusedBranchIndices={focusedBranchIndices}
                             accents={EFFECT_ACCENTS}
                             onSelect={selectDevice}
                             onSelectGroup={(groupId) => setSelectedGroupId(groupId)}
+                            onFocusBranch={focusRackBranch}
                             onOpenStationMenu={setStationMenu}
                             onOpenGroupMenu={setGroupMenu}
                             onArmReorder={armStationReorder}
@@ -4222,6 +4402,14 @@ export function EffectsRackWorkspace({
                             onRequestAdd={(path, clientX, clientY) => setAddSheet({ path, clientX, clientY })}
                         />
                     </div>
+                    <span
+                        className={`subway-scroll-cue subway-scroll-cue-top${rackScrollPresentation.overflow && !rackScrollPresentation.atTop ? " is-visible" : ""}`}
+                        aria-hidden="true"
+                    >⌃</span>
+                    <span
+                        className={`subway-scroll-cue subway-scroll-cue-bottom${rackScrollPresentation.overflow && !rackScrollPresentation.atBottom ? " is-visible" : ""}`}
+                        aria-hidden="true"
+                    >⌄</span>
                 </div>
 
                 {selectedGroup !== null && selectedGroup.kind !== "device" ? (

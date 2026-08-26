@@ -63,6 +63,61 @@ function populatedThreeBandLaneDocJson() {
     });
 }
 
+function populatedFourWayParallelLaneDocJson() {
+    const params = createDefaultLaneState().params;
+    return JSON.stringify({
+        format: "cosimo.lane",
+        version: 2,
+        devices: {
+            "distortion#1": { params: { ...params.drive } },
+            "chorus#1": { params: { ...params.chorus } },
+            "ott#1": { params: { ...params.ott } },
+            "flanger#1": { params: { ...params.flanger } },
+            "phaser#1": { params: { ...params.phaser } },
+            "delay#1": { params: { ...params.delay } },
+            "reverb#1": { params: { ...params.reverb } },
+        },
+        chain: [{
+            kind: "parallel",
+            groupId: "parallel#1",
+            enabled: true,
+            branches: [
+                [
+                    { kind: "device", deviceId: "distortion#1", enabled: true },
+                    { kind: "device", deviceId: "chorus#1", enabled: true },
+                ],
+                [{ kind: "device", deviceId: "ott#1", enabled: true }],
+                [
+                    { kind: "device", deviceId: "flanger#1", enabled: true },
+                    { kind: "device", deviceId: "phaser#1", enabled: true },
+                    { kind: "device", deviceId: "delay#1", enabled: true },
+                ],
+                [{ kind: "device", deviceId: "reverb#1", enabled: true }],
+            ],
+        }],
+    });
+}
+
+function maximumSerialLaneDocJson() {
+    const params = createDefaultLaneState().params;
+    const devices = {};
+    const chain = [];
+    const types = [
+        { deviceType: "distortion", params: params.drive, count: 1 },
+        { deviceType: "delay", params: params.delay, count: 5 },
+        { deviceType: "reverb", params: params.reverb, count: 5 },
+        { deviceType: "chorus", params: params.chorus, count: 5 },
+    ];
+    for (const type of types) {
+        for (let instance = 1; instance <= type.count; instance += 1) {
+            const deviceId = `${type.deviceType}#${instance}`;
+            devices[deviceId] = { params: { ...type.params } };
+            chain.push({ kind: "device", deviceId, enabled: true });
+        }
+    }
+    return JSON.stringify({ format: "cosimo.lane", version: 2, devices, chain });
+}
+
 function branchTailLaneDocJson(groupKind) {
     const params = createDefaultLaneState().params;
     const group = groupKind === "parallel"
@@ -225,7 +280,10 @@ async function readRenderedConnector(page, role) {
             const segment = path.getAttribute("data-connector-segment") ?? "";
             const fractions = segment === "trunk"
                 ? (fork ? [0.1, 0.25, 0.4] : [0.72, 0.84, 0.96])
-                : (fork ? [0.68, 0.82, 0.96] : [0.04, 0.16, 0.3]);
+                // Branch badges deliberately sit on the latter half of the
+                // fork curves. Sample the visibly emerging curve here; exact
+                // endpoint-to-rail ownership is asserted separately below.
+                : (fork ? [0.14, 0.34, 0.54] : [0.04, 0.16, 0.3]);
             return {
                 segment,
                 laneIndex: Number(path.getAttribute("data-lane-index")),
@@ -259,6 +317,414 @@ async function wrapStationInGroup(page, effectId, groupKind) {
     await page.click(`[data-role="rack-station-wrap-${groupKind}-${effectId}"]`);
     await page.waitForSelector('[data-role="rack-station-menu"]', { state: "detached" });
 }
+
+test("mobile Variant C focuses one readable branch without coupling focus to selection", async () => {
+    const page = await openHarnessPage({
+        laneDoc: populatedThreeBandLaneDocJson(),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        const group = page.locator('[data-role="rack-group-split#1"]');
+        await group.waitFor();
+        const naturalHeight = await group.evaluate((element) => element.getBoundingClientRect().height);
+
+        assert.equal(await group.getAttribute("data-focused-branch-index"), "0");
+        assert.equal(
+            await page.locator('[data-device-id="distortion#1"] .subway-station-detail:visible').count(),
+            1,
+        );
+        assert.equal(
+            await page.locator('[data-device-id="delay#1"] .subway-station-compact:visible').count(),
+            1,
+        );
+
+        await page.click('[data-device-id="delay#1"] [data-role="rack-station-delay"]');
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-group-split#1"]')
+                ?.getAttribute("data-focused-branch-index") === "2"
+        ));
+        const anatomy = await page.locator(
+            '[data-device-id="delay#1"] .subway-station-detail:visible',
+        ).evaluate((chip) => {
+            const chipRect = chip.getBoundingClientRect();
+            const well = chip.querySelector(".subway-station-icon-well");
+            const icon = chip.querySelector(".subway-station-icon");
+            const label = chip.querySelector(".subway-station-label");
+            if (!(well instanceof HTMLElement)
+                    || !(icon instanceof HTMLElement)
+                    || !(label instanceof HTMLElement)) {
+                return null;
+            }
+            const wellRect = well.getBoundingClientRect();
+            const iconRect = icon.getBoundingClientRect();
+            const iconStyle = getComputedStyle(icon);
+            return {
+                chip: { width: chipRect.width, height: chipRect.height },
+                well: { width: wellRect.width, height: wellRect.height },
+                icon: {
+                    width: iconRect.width,
+                    height: iconRect.height,
+                    maskImage: iconStyle.maskImage || iconStyle.webkitMaskImage,
+                    backgroundColor: iconStyle.backgroundColor,
+                },
+                fontSize: Number.parseFloat(getComputedStyle(label).fontSize),
+            };
+        });
+        assert.deepEqual(anatomy?.chip, { width: 76, height: 32 });
+        assert.deepEqual(anatomy?.well, { width: 24, height: 26 });
+        assert.deepEqual(anatomy?.icon.width, 20);
+        assert.deepEqual(anatomy?.icon.height, 20);
+        assert.notEqual(anatomy?.icon.maskImage, "none");
+        assert.notEqual(anatomy?.icon.backgroundColor, "rgba(0, 0, 0, 0)");
+        assert.equal((anatomy?.fontSize ?? 0) >= 13, true);
+
+        // Branch focus is navigation context, not effect selection.
+        await page.click('[data-role="rack-branch-focus-split#1-1"]');
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-group-split#1"]')
+                ?.getAttribute("data-focused-branch-index") === "1"
+        ));
+        assert.equal(
+            await page.locator('[data-role="rack-editor-delay"][data-device-id="delay#1"]').count(),
+            1,
+        );
+        assert.equal(
+            await group.evaluate((element) => element.getBoundingClientRect().height),
+            naturalHeight,
+        );
+
+        // The readout is a first-class route to the existing utility editor.
+        await page.click('[data-role="rack-fork-readout-split#1"]');
+        assert.equal(await page.locator('[data-role="rack-group-editor-split#1"]').count(), 1);
+        assert.equal(await page.locator('[data-role="rack-split-low-split#1"]').count(), 1);
+        assert.equal(await page.locator('[data-role="rack-split-high-split#1"]').count(), 1);
+        await page.click('[data-role="rack-group-power"]');
+        await page.waitForSelector('[data-role="rack-group-split#1"].is-bypassed');
+        assert.equal(
+            await group.getAttribute("data-focused-branch-index"),
+            "1",
+            "an unrelated rack mutation must not snap focus back to the selected device",
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("a four-way mobile Parallel folds context lanes without shrinking or overlapping targets", async () => {
+    const page = await openHarnessPage({
+        laneDoc: populatedFourWayParallelLaneDocJson(),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 700 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        const group = page.locator('[data-role="rack-group-parallel#1"]');
+        await group.waitFor();
+        assert.equal(await group.getAttribute("data-focused-branch-index"), "0");
+
+        const presentation = await group.evaluate((element) => {
+            const isVisible = (node) => {
+                const style = getComputedStyle(node);
+                const rect = node.getBoundingClientRect();
+                return style.display !== "none" && style.visibility !== "hidden"
+                    && rect.width > 0 && rect.height > 0;
+            };
+            const rectOf = (node) => {
+                const rect = node.getBoundingClientRect();
+                return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+            };
+            return {
+                detailDeviceIds: Array.from(
+                    element.querySelectorAll(".subway-station-detail"),
+                ).filter(isVisible).map((node) => node.closest("[data-device-id]")?.getAttribute("data-device-id")),
+                summaryDeviceIds: Array.from(
+                    element.querySelectorAll(".subway-station-summary"),
+                ).filter(isVisible).map((node) => node.closest("[data-device-id]")?.getAttribute("data-device-id")),
+                visibleTailPaths: Array.from(
+                    element.querySelectorAll('[data-role="rack-ghost-add"]'),
+                ).filter(isVisible).map((node) => node.getAttribute("data-lane-path")),
+                badgeRects: Array.from(
+                    element.querySelectorAll(".subway-fork-lane"),
+                    rectOf,
+                ),
+            };
+        });
+        assert.deepEqual(presentation.detailDeviceIds, ["distortion#1", "chorus#1"]);
+        assert.deepEqual(
+            presentation.summaryDeviceIds.toSorted(),
+            ["ott#1", "flanger#1", "phaser#1", "delay#1", "reverb#1"].toSorted(),
+        );
+        assert.deepEqual(presentation.visibleTailPaths, ["branch:parallel#1:0:2"]);
+        assert.equal(
+            presentation.badgeRects.every((rect) => (
+                rect.right - rect.left >= 43.5 && rect.bottom - rect.top >= 43.5
+            )),
+            true,
+        );
+        for (let index = 1; index < presentation.badgeRects.length; index += 1) {
+            assert.equal(
+                rectanglesIntersect(presentation.badgeRects[index - 1], presentation.badgeRects[index]),
+                false,
+            );
+        }
+
+        await page.click('[data-role="rack-branch-focus-parallel#1-2"]');
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-group-parallel#1"]')
+                ?.getAttribute("data-focused-branch-index") === "2"
+        ));
+        assert.equal(
+            await page.locator('[data-device-id="delay#1"] .subway-station-detail:visible').count(),
+            1,
+        );
+        assert.equal(
+            await page.locator('[data-device-id="distortion#1"] .subway-station-summary:visible').count(),
+            1,
+        );
+        assert.equal(
+            await page.locator('[data-role="rack-ghost-add"][data-lane-path="branch:parallel#1:2:3"]:visible').count(),
+            1,
+        );
+        assert.equal(
+            await page.locator('[data-role="rack-editor-drive"][data-device-id="distortion#1"]').count(),
+            1,
+        );
+
+        await fs.mkdir(evidenceDirectory, { recursive: true });
+        await page.locator('[data-role="effects-rack-card"]').screenshot({
+            path: path.join(evidenceDirectory, "variant-c-parallel-4-phone-focus-c.png"),
+            animations: "disabled",
+        });
+
+        // At plugin width there is enough allocation for every fixed-anatomy
+        // chip, so the focus model becomes additive rather than destructive.
+        await page.setViewportSize({ width: 640, height: 700 });
+        await page.waitForFunction(() => {
+            const details = Array.from(document.querySelectorAll(
+                '[data-role="rack-group-parallel#1"] .subway-station-detail',
+            ));
+            return details.length === 7 && details.every((element) => {
+                const rect = element.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+            });
+        });
+        const widePresentation = await group.evaluate((element) => {
+            const isVisible = (node) => {
+                const style = getComputedStyle(node);
+                const rect = node.getBoundingClientRect();
+                return style.display !== "none" && style.visibility !== "hidden"
+                    && rect.width > 0 && rect.height > 0;
+            };
+            const chips = Array.from(element.querySelectorAll(".subway-station-detail"))
+                .filter(isVisible)
+                .map((node) => {
+                    const rect = node.getBoundingClientRect();
+                    return {
+                        left: rect.left,
+                        right: rect.right,
+                        top: rect.top,
+                        bottom: rect.bottom,
+                        width: rect.width,
+                        height: rect.height,
+                    };
+                });
+            return {
+                chips,
+                summaryCount: Array.from(element.querySelectorAll(".subway-station-summary"))
+                    .filter(isVisible).length,
+                tailCount: Array.from(element.querySelectorAll('[data-role="rack-ghost-add"]'))
+                    .filter(isVisible).length,
+            };
+        });
+        assert.equal(widePresentation.chips.length, 7);
+        assert.equal(widePresentation.summaryCount, 0);
+        assert.equal(widePresentation.tailCount, 4);
+        assert.equal(
+            widePresentation.chips.every((chip) => chip.width === 76 && chip.height === 32),
+            true,
+        );
+        for (let leftIndex = 0; leftIndex < widePresentation.chips.length; leftIndex += 1) {
+            for (let rightIndex = leftIndex + 1; rightIndex < widePresentation.chips.length; rightIndex += 1) {
+                assert.equal(
+                    rectanglesIntersect(
+                        widePresentation.chips[leftIndex],
+                        widePresentation.chips[rightIndex],
+                    ),
+                    false,
+                );
+            }
+        }
+        await page.locator('[data-role="effects-rack-card"]').screenshot({
+            path: path.join(evidenceDirectory, "variant-c-parallel-4-plugin.png"),
+            animations: "disabled",
+        });
+    } finally {
+        await page.close();
+    }
+});
+
+test("a reorder dwell opens a folded branch before the exact drop commits", async () => {
+    const page = await openHarnessPage({
+        laneDoc: populatedFourWayParallelLaneDocJson(),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 700 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await page.waitForSelector('[data-role="rack-group-parallel#1"]');
+        await clearHarnessDebugLog(page);
+
+        const stationBox = await page.locator(
+            '[data-device-id="distortion#1"] [data-role="rack-station-drive"]',
+        ).boundingBox();
+        const branchBadgeBox = await page.locator(
+            '[data-role="rack-branch-focus-parallel#1-2"]',
+        ).boundingBox();
+        assert.ok(stationBox && branchBadgeBox);
+
+        await page.mouse.move(
+            stationBox.x + (stationBox.width / 2),
+            stationBox.y + (stationBox.height / 2),
+        );
+        await page.mouse.down();
+        await page.mouse.move(
+            branchBadgeBox.x + (branchBadgeBox.width / 2),
+            branchBadgeBox.y + (branchBadgeBox.height / 2),
+        );
+        // The threshold-crossing move transfers pointer capture from the chip
+        // to the list. One subsequent physical move begins the badge dwell.
+        await page.mouse.move(
+            branchBadgeBox.x + (branchBadgeBox.width / 2) + 1,
+            branchBadgeBox.y + (branchBadgeBox.height / 2),
+        );
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-group-parallel#1"]')
+                ?.getAttribute("data-focused-branch-index") === "2"
+        ));
+
+        const targetBox = await page.locator(
+            '[data-role="rack-ghost-add"][data-lane-path="branch:parallel#1:2:3"]:visible',
+        ).boundingBox();
+        assert.ok(targetBox);
+        await page.mouse.move(
+            targetBox.x + (targetBox.width / 2),
+            targetBox.y + (targetBox.height / 2),
+        );
+        await page.mouse.up();
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "folded-branch dwell drop",
+            (nextSnapshot) => {
+                const rawState = nextSnapshot.storedState["lane.v1"];
+                if (rawState === undefined) {
+                    return false;
+                }
+                const parallel = JSON.parse(String(rawState)).chain
+                    .find((node) => node.kind === "parallel");
+                return parallel?.branches[2]?.at(-1)?.deviceId === "distortion#1";
+            },
+        );
+        const parallel = readStoredLaneDoc(snapshot).chain
+            .find((node) => node.kind === "parallel");
+        assert.deepEqual(
+            parallel.branches.map((branch) => branch.map((placement) => placement.deviceId)),
+            [
+                ["chorus#1"],
+                ["ott#1"],
+                ["flanger#1", "phaser#1", "delay#1", "distortion#1"],
+                ["reverb#1"],
+            ],
+        );
+        assert.equal(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").length,
+            1,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("a maximum natural-height graph uses one root scroller with truthful cues and selection reveal", async () => {
+    const page = await openHarnessPage({
+        laneDoc: maximumSerialLaneDocJson(),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        const graph = page.locator('[data-role="rack-module-list"]');
+        await graph.waitFor();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-module-list"]')?.classList.contains("has-overflow")
+        ));
+        const initial = await graph.evaluate((element) => ({
+            scrollHeight: element.scrollHeight,
+            clientHeight: element.clientHeight,
+            scrollTop: element.scrollTop,
+            classes: element.className,
+        }));
+        assert.equal(initial.scrollHeight > initial.clientHeight, true);
+        assert.equal(initial.scrollTop, 0);
+        assert.match(initial.classes, /is-at-top/);
+        assert.doesNotMatch(initial.classes, /is-at-bottom/);
+        assert.equal(await page.locator('.subway-scroll-cue-top.is-visible').count(), 0);
+        assert.equal(await page.locator('.subway-scroll-cue-bottom.is-visible').count(), 1);
+
+        // Programmatic selection does not get the browser's implicit click
+        // scrolling; the rack itself must reveal the newly selected station.
+        await page.evaluate(() => {
+            const station = document.querySelector('[data-device-id="chorus#5"] [data-role="rack-station-chorus"]');
+            if (station instanceof HTMLButtonElement) {
+                station.click();
+            }
+        });
+        await page.waitForFunction(() => {
+            const element = document.querySelector('[data-role="rack-module-list"]');
+            return element instanceof HTMLElement && element.scrollTop > 0;
+        });
+        const revealed = await graph.evaluate((element) => {
+            const selected = element.querySelector('[data-device-id="chorus#5"]');
+            const listRect = element.getBoundingClientRect();
+            const selectedRect = selected?.getBoundingClientRect();
+            return {
+                scrollTop: element.scrollTop,
+                selectedIsVisible: selectedRect !== undefined
+                    && selectedRect.top >= listRect.top
+                    && selectedRect.bottom <= listRect.bottom,
+            };
+        });
+        assert.equal(revealed.scrollTop > 0, true);
+        assert.equal(revealed.selectedIsVisible, true);
+        assert.equal(await page.locator('.subway-scroll-cue-top.is-visible').count(), 1);
+        // The selected effect still has its insertion tail below it, so the
+        // lower cue remains truthful until the user reaches the real end.
+        assert.equal(await page.locator('.subway-scroll-cue-bottom.is-visible').count(), 1);
+        assert.equal(
+            await page.locator('[data-role="rack-editor-chorus"][data-device-id="chorus#5"]').count(),
+            1,
+        );
+        await fs.mkdir(evidenceDirectory, { recursive: true });
+        await page.locator('[data-role="effects-rack-card"]').screenshot({
+            path: path.join(evidenceDirectory, "variant-c-natural-height-phone.png"),
+            animations: "disabled",
+        });
+
+        await graph.evaluate((element) => {
+            element.scrollTop = element.scrollHeight;
+            element.dispatchEvent(new Event("scroll"));
+        });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-module-list"]')?.classList.contains("is-at-bottom")
+        ));
+        assert.equal(await page.locator('.subway-scroll-cue-top.is-visible').count(), 1);
+        assert.equal(await page.locator('.subway-scroll-cue-bottom.is-visible').count(), 0);
+    } finally {
+        await page.close();
+    }
+});
 
 test("a populated three-band split stays inside the graph without intersecting effect pills", async () => {
     const laneDoc = populatedThreeBandLaneDocJson();
@@ -296,7 +762,12 @@ test("a populated three-band split stays inside the graph without intersecting e
                     ".subway-station-pill",
                     ".subway-ghost-pill",
                     ".subway-merge-dot",
-                ].join(","))).map((element) => {
+                ].join(","))).filter((element) => {
+                    const style = getComputedStyle(element);
+                    const rect = element.getBoundingClientRect();
+                    return style.display !== "none" && style.visibility !== "hidden"
+                        && rect.width > 0 && rect.height > 0;
+                }).map((element) => {
                     const rect = element.getBoundingClientRect();
                     return {
                         className: element.className,
@@ -530,7 +1001,12 @@ test("rendered pixels connect every supported split and merge at narrow and wide
                             top: graphRect.top,
                             bottom: graphRect.bottom,
                         },
-                        pills: Array.from(element.querySelectorAll(".subway-station-pill"), (pill) => {
+                        pills: Array.from(element.querySelectorAll(".subway-station-pill")).filter((pill) => {
+                            const style = getComputedStyle(pill);
+                            const rect = pill.getBoundingClientRect();
+                            return style.display !== "none" && style.visibility !== "hidden"
+                                && rect.width > 0 && rect.height > 0;
+                        }).map((pill) => {
                             const rect = pill.getBoundingClientRect();
                             return {
                                 text: pill.textContent?.trim() ?? "",
@@ -749,9 +1225,11 @@ test("dragging a station into the empty band crosses lanes and commits once", as
         await page.waitForSelector('[data-role="rack-group-split#1"]');
         await clearHarnessDebugLog(page);
 
-        // The whole map fits one viewport once the card is scrolled to, so
-        // both drag endpoints stay on screen for the pointer stream.
+        // Natural-height rows may overflow the one root scroller. Reveal the
+        // drag source inside that scroller; the adjacent split target remains
+        // visible, so this still exercises one uninterrupted pointer stream.
         await page.locator('[data-role="effects-rack-card"]').scrollIntoViewIfNeeded();
+        await page.locator('[data-role="rack-station-reverb"]').scrollIntoViewIfNeeded();
         const reverbBox = await page.locator('[data-role="rack-station-reverb"]').boundingBox();
         const ghostBox = await page.locator('[data-lane-path="branch:split#1:1:0"]').boundingBox();
         assert.ok(reverbBox && ghostBox);

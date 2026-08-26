@@ -114,7 +114,7 @@
 
 .rack-effects-grid {
     display: grid;
-    grid-template-columns: minmax(88px, 24%) minmax(0, 1fr);
+    grid-template-columns: minmax(324px, 32%) minmax(0, 1fr);
     height: 476px;
     gap: 7px;
     align-items: stretch;
@@ -126,41 +126,71 @@
     min-height: 0;
 }
 
-/* The map fills the whole column: the line runs terminus to terminus. */
+/* The map fills the whole column from one clean cut route end to the other. */
 .rack-stack {
+    position: relative;
     display: grid;
+    overflow: hidden;
+    border-radius: 10px;
 }
 
 .rack-list.subway-map {
     position: relative;
     display: grid;
-    grid-auto-rows: minmax(44px, 1fr);
-    align-content: stretch;
+    grid-auto-rows: max-content;
+    align-content: start;
     padding: 13px 0;
-    overflow: hidden;
-    border: 1px solid rgb(105 213 197 / 0.2);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: none;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid #2c2e31;
     border-radius: 10px;
-    background: linear-gradient(180deg, rgb(16 22 24 / 0.9), rgb(9 13 15 / 0.96));
+    background: #101113;
     box-shadow: inset 0 1px rgb(255 255 255 / 0.03);
 }
 
-/* The line's termini are the list's own decor - the rows stay pure stations
-   so position-based selectors keep their contract. */
-.rack-list.subway-map::before,
-.rack-list.subway-map::after {
-    position: absolute;
-    left: 50%;
-    width: 7px;
-    height: 7px;
-    border: 2px solid #69d5c5;
-    border-radius: 999px;
-    background: #0b0f11;
-    transform: translateX(-50%);
-    content: "";
+.rack-list.subway-map::-webkit-scrollbar {
+    display: none;
 }
 
-.rack-list.subway-map::before { top: 4px; }
-.rack-list.subway-map::after { bottom: 4px; }
+.subway-scroll-cue {
+    position: absolute;
+    z-index: 12;
+    right: 0;
+    left: 0;
+    display: grid;
+    height: 24px;
+    place-items: center;
+    color: rgb(232 228 220 / 0.86);
+    font: 400 13px/1 "Departure Mono", ui-monospace, monospace;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 100ms linear;
+}
+
+.subway-scroll-cue.is-visible {
+    opacity: 1;
+}
+
+.subway-scroll-cue-top {
+    top: 0;
+    background: linear-gradient(#101113 35%, transparent);
+}
+
+.subway-scroll-cue-bottom {
+    bottom: 0;
+    background: linear-gradient(transparent, #101113 65%);
+}
+
+/* Variant C has cut route ends, not decorative terminal rings. Keep these
+   selectors explicit so a future terminus treatment cannot silently return. */
+.rack-list.subway-map::before,
+.rack-list.subway-map::after {
+    display: none;
+}
 
 .subway-station-row {
     position: relative;
@@ -169,14 +199,14 @@
     place-items: center;
 }
 
-/* The infra-teal line runs through every station row. */
+/* The focused route runs through every trunk station row. */
 .subway-station-row::before {
     position: absolute;
     top: 0;
     bottom: 0;
     left: 50%;
-    width: 3px;
-    background: rgb(105 213 197 / 0.72);
+    width: 2px;
+    background: #e6e1d6;
     transform: translateX(-50%);
     content: "";
 }
@@ -206,54 +236,129 @@
 .subway-station:active { cursor: grabbing; }
 
 .subway-station-pill {
-    box-sizing: border-box;
-    display: inline-flex;
-    width: 37px;
-    height: 20px;
+    position: relative;
+    display: grid;
     align-items: center;
-    justify-content: center;
-    gap: 3px;
-    padding: 0 4px;
-    border: 1px solid color-mix(in srgb, var(--station-accent, #69d5c5) 85%, transparent);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--station-accent, #69d5c5) 26%, rgb(9 13 15 / 0.95));
-    color: #f2f4f5;
-    font-size: 10px;
-    letter-spacing: 0.08em;
+    justify-items: center;
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5));
+    transition: filter 120ms ease, transform 120ms ease;
+}
+
+.subway-station-detail {
+    box-sizing: border-box;
+    display: grid;
+    width: 76px;
+    height: 32px;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: center;
+    gap: 5px;
+    padding: 3px 5px 3px 3px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0 7px 7px 0;
+    background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.055), transparent 35%),
+        linear-gradient(0deg, rgb(0 0 0 / 0.32), transparent 28%),
+        #1a1b1d;
+    color: #e8e4dc;
     white-space: nowrap;
-    box-shadow: 0 1px 4px rgb(0 0 0 / 0.5);
-    transition: box-shadow 120ms ease, background 120ms ease, transform 120ms ease;
 }
 
-.subway-station-number {
-    color: color-mix(in srgb, var(--station-accent, #69d5c5) 80%, #f2f4f5);
-    font-size: 9px;
+.subway-station-icon-well,
+.subway-station-compact-well,
+.subway-station-summary-well {
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    background: #121315;
 }
 
-/* Hollow pill = bypassed. */
-.subway-station-row.is-disabled .subway-station-pill {
-    border-style: dashed;
-    background: rgb(9 13 15 / 0.92);
-    color: rgb(199 210 208 / 0.72);
+.subway-station-icon-well {
+    width: 24px;
+    height: 26px;
+    border-radius: 13px;
 }
 
-/* Amber ring = selected (the settled selection tier). */
-.subway-station-row.is-selected .subway-station-pill {
-    box-shadow:
-        0 0 0 2px rgb(237 180 90 / 0.9),
-        0 0 12px rgb(237 180 90 / 0.28),
-        0 1px 4px rgb(0 0 0 / 0.5);
+.subway-station-label {
+    min-width: 0;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.012em;
+    line-height: 1;
+    text-overflow: clip;
 }
 
-.subway-station-row.is-reordering .subway-station-pill {
-    transform: scale(1.12);
-    box-shadow:
-        0 0 0 2px rgb(237 180 90 / 0.9),
-        0 6px 16px rgb(0 0 0 / 0.6);
+.subway-station-icon {
+    display: block;
+    background: var(--station-accent, #69d5c5);
+    pointer-events: none;
+    -webkit-mask: var(--station-icon-url) center / contain no-repeat;
+    mask: var(--station-icon-url) center / contain no-repeat;
 }
 
-.subway-station:focus-visible .subway-station-pill {
-    outline: 2px solid #69d5c5;
+.subway-station-icon-detail {
+    width: 20px;
+    height: 20px;
+}
+
+.subway-station-compact,
+.subway-station-summary {
+    display: none;
+}
+
+.subway-station-compact-well {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+}
+
+.subway-station-icon-compact {
+    width: 28px;
+    height: 28px;
+}
+
+.subway-station-summary-well {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    opacity: 0.58;
+}
+
+.subway-station-icon-summary {
+    width: 20px;
+    height: 20px;
+}
+
+/* Bypass dims the identity without changing its geometry. */
+.subway-station-row.is-disabled .subway-station-pill,
+.subway-station-cell.is-disabled .subway-station-pill {
+    opacity: 0.48;
+    filter: saturate(0.25) drop-shadow(0 1px 3px rgb(0 0 0 / 0.5));
+}
+
+/* Variant C selection lives on the icon well; chip dimensions never change. */
+.subway-station-row.is-selected .subway-station-icon-well,
+.subway-station-cell.is-selected .subway-station-icon-well,
+.subway-station-row.is-selected .subway-station-compact-well,
+.subway-station-cell.is-selected .subway-station-compact-well {
+    border-color: #c79a4e;
+    box-shadow: 0 0 10px rgb(199 154 78 / 0.25);
+}
+
+.subway-station-row.is-reordering .subway-station-pill,
+.subway-station-cell.is-reordering .subway-station-pill {
+    z-index: 4;
+    transform: scale(1.06);
+    filter: drop-shadow(0 7px 14px rgb(0 0 0 / 0.72));
+}
+
+.subway-station:focus-visible .subway-station-detail,
+.subway-station:focus-visible .subway-station-compact-well {
+    outline: 2px solid #e6e1d6;
     outline-offset: 2px;
 }
 
@@ -286,9 +391,9 @@
 
 /* Band tints are the one semantic color exception on the infra-teal map. */
 [data-lane-tint="infra"] { --lane-tint: #69d5c5; }
-[data-lane-tint="lo"] { --lane-tint: #7fd0a1; }
-[data-lane-tint="mid"] { --lane-tint: #f2ca00; }
-[data-lane-tint="hi"] { --lane-tint: #ff8b4a; }
+[data-lane-tint="lo"] { --lane-tint: #78b99a; }
+[data-lane-tint="mid"] { --lane-tint: #c0aa52; }
+[data-lane-tint="hi"] { --lane-tint: #c8794b; }
 
 .subway-group {
     display: grid;
@@ -305,46 +410,15 @@
     filter: saturate(0.6);
 }
 
-.subway-group.is-selected .subway-fork-glyph > span {
-    box-shadow:
-        0 0 0 2px rgb(237 180 90 / 0.9),
-        0 0 10px rgb(237 180 90 / 0.35);
-}
-
 .subway-fork {
     position: relative;
     display: grid;
-    min-height: 40px;
+    min-height: 88px;
     place-items: center;
 }
 
 .subway-fork-glyph {
-    position: relative;
-    z-index: 2;
-    display: grid;
-    min-width: var(--cosimo-hit-min);
-    min-height: 40px;
-    place-items: center;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    cursor: pointer;
-}
-
-.subway-glyph-dot {
-    width: 11px;
-    height: 11px;
-    border: 3px solid #69d5c5;
-    border-radius: 999px;
-    background: #0b0f11;
-}
-
-.subway-glyph-diamond {
-    width: 11px;
-    height: 11px;
-    border: 3px solid #69d5c5;
-    background: #0b0f11;
-    transform: rotate(45deg);
+    display: none;
 }
 
 .subway-fork-lanes {
@@ -352,30 +426,70 @@
     right: var(--subway-lane-gutter, 14%);
     bottom: -1px;
     left: var(--subway-lane-gutter, 14%);
-    z-index: 1;
+    z-index: 3;
     display: grid;
     grid-template-columns: repeat(var(--subway-lane-count, 2), minmax(0, 1fr));
     justify-items: center;
-    pointer-events: none;
 }
 
 .subway-fork-lane {
+    display: grid;
+    min-width: var(--cosimo-hit-min);
+    min-height: var(--cosimo-hit-min);
+    place-items: end center;
+    padding: 0 0 1px;
+    border: 0;
+    background: transparent;
     color: var(--lane-tint, #69d5c5);
-    font-size: 7px;
-    letter-spacing: 0.1em;
+    cursor: pointer;
+    font: 400 10px/1 "Departure Mono", ui-monospace, monospace;
+    letter-spacing: 0.045em;
+}
+
+.subway-fork-lane > span {
+    display: grid;
+    min-width: 22px;
+    height: 18px;
+    place-items: center;
+    padding-inline: 4px;
+    border: 1px solid #3a3a38;
+    border-radius: 5px;
+    background: #101113;
+    color: #8d8981;
 }
 
 .subway-fork-lane.is-empty {
     opacity: 0.55;
 }
 
+.subway-fork-lane.is-focused > span {
+    border-color: #c79a4e;
+    color: #e8e4dc;
+}
+
 .subway-fork-readout {
     position: absolute;
-    top: 4px;
-    right: 6px;
-    color: #8fb6b0;
-    font-size: 8px;
+    z-index: 3;
+    top: 0;
+    left: 50%;
+    display: grid;
+    min-width: 76px;
+    min-height: var(--cosimo-hit-min);
+    grid-template-columns: 1fr;
+    place-items: center;
+    padding: 0 7px;
+    border: 0;
+    background: transparent;
+    color: #8d8981;
+    cursor: pointer;
+    font-size: 9px;
     letter-spacing: 0.06em;
+    transform: translateX(-50%);
+}
+
+.subway-fork-readout > .subway-glyph-dot,
+.subway-fork-readout > .subway-glyph-diamond {
+    display: none;
 }
 
 .subway-lane-row {
@@ -403,9 +517,9 @@
     top: 0;
     bottom: 0;
     left: 50%;
-    width: 3px;
-    background: var(--lane-tint, #69d5c5);
-    opacity: 0.72;
+    width: 2px;
+    background: #343638;
+    opacity: 0.82;
     transform: translateX(-50%);
     content: "";
 }
@@ -430,7 +544,18 @@
     transform: translate(-50%, -50%) translateY(var(--subway-cell-offset-y, 0));
 }
 
-.subway-ghost-cell > .subway-ghost-pill {
+.subway-station-cell.is-focused-branch::before {
+    background: #e6e1d6;
+    opacity: 1;
+}
+
+.subway-line-cell.is-focused-branch::before,
+.subway-ghost-cell.is-focused-branch::before {
+    background: #e6e1d6;
+    opacity: 1;
+}
+
+.subway-ghost-cell > .subway-ghost-button {
     position: absolute;
     left: 50%;
     top: 50%;
@@ -441,20 +566,20 @@
     position: relative;
     z-index: 2;
     display: grid;
-    width: 22px;
-    height: 18px;
+    width: 24px;
+    height: 24px;
     place-items: center;
-    border: 1px dashed color-mix(in srgb, var(--lane-tint, #69d5c5) 75%, transparent);
-    border-radius: 999px;
-    background: rgb(9 13 15 / 0.9);
-    color: color-mix(in srgb, var(--lane-tint, #69d5c5) 85%, #f2f4f5);
-    font-size: 11px;
-    opacity: 0.7;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 7px;
+    background: transparent;
+    color: #8d8981;
+    font-size: 13px;
+    opacity: 0.68;
 }
 
 /* Ghosts are buttons (a tap opens the type picker); the trunk's trailing
    ghost is a full row on the line, branch ghosts stay lane cells. */
-.subway-ghost-cell,
+.subway-ghost-button,
 .subway-ghost-row {
     padding: 0;
     border: 0;
@@ -462,6 +587,18 @@
     color: inherit;
     cursor: pointer;
     font: inherit;
+}
+
+.subway-ghost-button {
+    z-index: 2;
+    display: grid;
+    min-width: var(--cosimo-hit-min);
+    min-height: var(--cosimo-hit-min);
+    place-items: center;
+}
+
+.subway-ghost-summary {
+    display: none;
 }
 
 .subway-ghost-row {
@@ -476,15 +613,15 @@
     top: 0;
     bottom: 0;
     left: 50%;
-    width: 3px;
-    background: rgb(105 213 197 / 0.72);
+    width: 2px;
+    background: #e6e1d6;
     transform: translateX(-50%);
     content: "";
 }
 
-.subway-ghost-cell:focus-visible .subway-ghost-pill,
+.subway-ghost-button:focus-visible .subway-ghost-pill,
 .subway-ghost-row:focus-visible .subway-ghost-pill {
-    outline: 2px solid #69d5c5;
+    outline: 2px solid #e6e1d6;
     outline-offset: 2px;
 }
 
@@ -496,58 +633,6 @@
     grid-template-columns: repeat(var(--subway-lane-count, 2), minmax(0, 1fr));
     min-height: 26px;
     padding-inline: var(--subway-lane-gutter, 14%);
-}
-
-/* In the narrow graph column, neighboring pills cannot always share a row.
-   Move them only far enough to clear one another while their branch rails
-   and insertion paths remain fixed. */
-@container (max-width: 106px) {
-    .subway-group[data-lane-count="2"] .subway-lane-row > :nth-child(1) {
-        --subway-cell-offset-y: -11px;
-    }
-
-    .subway-group[data-lane-count="2"] .subway-lane-row > :nth-child(2) {
-        --subway-cell-offset-y: 11px;
-    }
-}
-
-@container (max-width: 159px) {
-    .subway-group[data-lane-count="3"] .subway-lane-row {
-        min-height: 48px;
-    }
-
-    .subway-group[data-lane-count="3"] .subway-lane-row > :nth-child(odd) {
-        --subway-cell-offset-y: -10px;
-    }
-
-    .subway-group[data-lane-count="3"] .subway-lane-row > :nth-child(2) {
-        --subway-cell-offset-y: 10px;
-    }
-}
-
-@container (max-width: 212px) {
-    /* Four parallel rails are closer together than one pill width. Give
-       each lane its own compact vertical step while keeping every effect
-       and its tail add anchored to the same rail. */
-    .subway-group[data-lane-count="4"] .subway-lane-row {
-        min-height: 88px;
-    }
-
-    .subway-group[data-lane-count="4"] .subway-lane-row > :nth-child(1) {
-        --subway-cell-offset-y: -33px;
-    }
-
-    .subway-group[data-lane-count="4"] .subway-lane-row > :nth-child(2) {
-        --subway-cell-offset-y: -11px;
-    }
-
-    .subway-group[data-lane-count="4"] .subway-lane-row > :nth-child(3) {
-        --subway-cell-offset-y: 11px;
-    }
-
-    .subway-group[data-lane-count="4"] .subway-lane-row > :nth-child(4) {
-        --subway-cell-offset-y: 33px;
-    }
 }
 
 .subway-merge-lane {
@@ -566,19 +651,24 @@
 
 .subway-connector-svg path {
     fill: none;
-    stroke-linecap: round;
+    stroke-linecap: butt;
     stroke-linejoin: round;
-    stroke-width: 3px;
+    stroke-width: 2px;
     vector-effect: non-scaling-stroke;
 }
 
 .subway-connector-trunk {
-    stroke: rgb(105 213 197 / 0.72);
+    stroke: #e6e1d6;
 }
 
 .subway-connector-branch {
-    stroke: var(--lane-tint, #69d5c5);
-    opacity: 0.72;
+    stroke: #343638;
+    opacity: 0.9;
+}
+
+.subway-connector-branch.is-focused {
+    stroke: #e6e1d6;
+    opacity: 1;
 }
 
 .subway-connector-branch.is-dashed {
@@ -587,16 +677,89 @@
 }
 
 .subway-merge-dot {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    z-index: 2;
-    width: 9px;
-    height: 9px;
-    border: 3px solid #69d5c5;
-    border-radius: 999px;
-    background: #0b0f11;
-    transform: translate(-50%, -50%);
+    display: none;
+}
+
+/* Variant C removes decorative split/merge circles. The junction remains a
+   44px semantic button, while the continuous routes carry the topology. */
+.subway-glyph-dot,
+.subway-glyph-diamond {
+    width: 0;
+    height: 0;
+    border: 0;
+    background: transparent;
+}
+
+@container (max-width: 239px) {
+    .subway-group[data-lane-count="2"] .subway-lane-row,
+    .subway-group[data-lane-count="2"] .subway-merge,
+    .subway-group[data-lane-count="3"] .subway-lane-row,
+    .subway-group[data-lane-count="3"] .subway-merge {
+        right: 0;
+        left: 0;
+        width: 100%;
+        grid-template-columns: var(--subway-compact-lane-template);
+        padding-inline: 0;
+    }
+
+    .subway-group[data-lane-count="2"] .subway-fork-lanes,
+    .subway-group[data-lane-count="3"] .subway-fork-lanes {
+        right: 0;
+        left: 0;
+        width: 100%;
+        grid-template-columns: var(--subway-compact-badge-template);
+        padding-inline: 0;
+    }
+
+    .subway-group[data-lane-count="3"] .subway-station-cell.is-context-branch .subway-station-detail {
+        display: none;
+    }
+
+    .subway-group[data-lane-count="3"] .subway-station-cell.is-context-branch .subway-station-compact {
+        display: grid;
+    }
+}
+
+@container (max-width: 319px) {
+    .subway-group[data-lane-count="4"] .subway-lane-row,
+    .subway-group[data-lane-count="4"] .subway-merge {
+        width: 100%;
+        grid-template-columns: var(--subway-compact-lane-template);
+        padding-inline: 0;
+    }
+
+    .subway-group[data-lane-count="4"] .subway-fork-lanes {
+        right: 0;
+        left: 0;
+        grid-template-columns: var(--subway-compact-badge-template);
+    }
+
+    .subway-group[data-lane-count="4"] .subway-station-cell.is-context-branch > .subway-station,
+    .subway-group[data-lane-count="4"] .subway-ghost-cell.is-context-branch > .subway-ghost-button {
+        display: none;
+    }
+
+    .subway-group[data-lane-count="4"] .subway-station-cell.is-context-branch > .subway-station-summary,
+    .subway-group[data-lane-count="4"] .subway-ghost-cell.is-context-branch > .subway-ghost-summary {
+        position: absolute;
+        z-index: 2;
+        left: 50%;
+        top: 50%;
+        display: grid;
+        place-items: center;
+        transform: translate(-50%, -50%);
+    }
+
+    .subway-group[data-lane-count="4"] .subway-ghost-cell.is-context-branch > .subway-ghost-summary {
+        width: 24px;
+        height: 24px;
+        border: 1px solid rgb(255 255 255 / 0.08);
+        border-radius: 7px;
+        background: #101113;
+        color: #5e6063;
+        font-size: 12px;
+        opacity: 0.42;
+    }
 }
 
 /* ---- The group editor pane. ---- */
@@ -1302,6 +1465,16 @@
         margin-inline: 0;
     }
 
+    .rack-effects-grid {
+        grid-template-columns: clamp(176px, 45vw, 184px) minmax(0, 1fr);
+        gap: 5px;
+    }
+
+    .rack-list.subway-map {
+        border-right: 0;
+        border-left: 0;
+    }
+
     .is-mobile-effects-page [data-role="sticky-keyboard"] {
         padding-top: 3px;
     }
@@ -1356,7 +1529,7 @@
 
 @media (max-width: 349px) {
     .rack-effects-grid {
-        grid-template-columns: minmax(80px, 26%) minmax(0, 1fr);
+        grid-template-columns: 176px minmax(0, 1fr);
         gap: 5px;
     }
 
@@ -1368,7 +1541,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .rack-mod-track {
+    .rack-mod-track,
+    .subway-station-pill,
+    .subway-scroll-cue {
         transition-duration: 1ms !important;
     }
 }

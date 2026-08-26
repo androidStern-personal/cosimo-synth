@@ -8,6 +8,11 @@ const repoRoot = path.resolve(import.meta.dirname, "..");
 const laneV1Promise = loadUIModule(repoRoot, "ui/shared/lane-state.ts");
 const laneV2Promise = loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
 const layoutPromise = loadUIModule(repoRoot, "ui/shared/lane-subway-layout.ts");
+const connectorGeometryPromise = loadUIModule(repoRoot, "ui/shared/subway-connector-geometry.ts");
+
+function assertApproximately(actual, expected, tolerance = 1e-9) {
+    assert.equal(Math.abs(actual - expected) <= tolerance, true, `${actual} ~= ${expected}`);
+}
 
 async function parseDoc(chainAndDevices) {
     const laneV2 = await laneV2Promise;
@@ -20,6 +25,28 @@ async function defaultParams(effectId) {
     const laneV1 = await laneV1Promise;
     return { ...laneV1.createDefaultLaneState().params[effectId] };
 }
+
+test("compact branch allocation owns both responsive tracks and connector anchors", async () => {
+    const geometry = await connectorGeometryPromise;
+    const threeLane = geometry.subwayCompactLaneAllocation(3, 1);
+    assert.deepEqual(threeLane.trackPercentages, [25, 50, 25]);
+    assert.deepEqual(threeLane.laneCenters, [12.5, 50, 87.5]);
+    assert.equal(threeLane.gridTemplate, "25% 50% 25%");
+
+    const fourLane = geometry.subwayCompactLaneAllocation(4, 2);
+    assert.equal(fourLane.trackPercentages.length, 4);
+    assertApproximately(fourLane.trackPercentages.reduce((sum, value) => sum + value, 0), 100);
+    assertApproximately(fourLane.trackPercentages[2], (98 / 176) * 100);
+    assertApproximately(fourLane.laneCenters[2], (101 / 176) * 100);
+    assert.equal(
+        geometry.subwayForkBranchPathAt(fourLane.laneCenters[2]).endsWith(
+            `${fourLane.laneCenters[2]} 40`,
+        ),
+        true,
+    );
+    assert.throws(() => geometry.subwayCompactLaneAllocation(5, 0), RangeError);
+    assert.throws(() => geometry.subwayCompactLaneAllocation(3, 3), RangeError);
+});
 
 test("a serial document is a single teal line of stations between termini", async () => {
     const laneV2 = await laneV2Promise;
