@@ -1,11 +1,15 @@
+import {
+    OSCILLATOR_VOLUME_MAX_DB,
+    OSCILLATOR_VOLUME_MIN_DB,
+} from "../../patch_gui/oscillator-defaults.js";
 import { startStaticRepoServer } from "./desktop_harness_browser.mjs";
 
 export async function startIOSHarnessServer() {
     return startStaticRepoServer();
 }
 
-export function createIOSHarnessInitScript(baseUrl) {
-    return ({ rootUrl }) => {
+export function createIOSHarnessInitScript() {
+    return ({ rootUrl, oscillatorVolumeMinDb, oscillatorVolumeMaxDb }) => {
         const originalFetch = globalThis.fetch.bind(globalThis);
         const fetchedUrls = [];
         const resourceReads = [];
@@ -155,7 +159,13 @@ export function createIOSHarnessInitScript(baseUrl) {
                         {
                             endpointID: `osc${oscillatorID}VolumeDb`,
                             purpose: "parameter",
-                            annotation: { name: `Oscillator ${oscillatorID} Volume`, min: -48, max: 6, init: 0, unit: "dB" },
+                            annotation: {
+                                name: `Oscillator ${oscillatorID} Volume`,
+                                min: oscillatorVolumeMinDb,
+                                max: oscillatorVolumeMaxDb,
+                                init: 0,
+                                unit: "dB",
+                            },
                         },
                         {
                             endpointID: `osc${oscillatorID}Mute`,
@@ -952,7 +962,11 @@ export async function openIOSHarnessPage(browser, baseUrl, { viewportSize = null
     });
     const page = await context.newPage();
 
-    await page.addInitScript(createIOSHarnessInitScript(baseUrl), { rootUrl: baseUrl });
+    await page.addInitScript(createIOSHarnessInitScript(), {
+        rootUrl: baseUrl,
+        oscillatorVolumeMinDb: OSCILLATOR_VOLUME_MIN_DB,
+        oscillatorVolumeMaxDb: OSCILLATOR_VOLUME_MAX_DB,
+    });
     await page.goto(new URL("patch_gui/index.ios.html", baseUrl).toString(), {
         waitUntil: "load",
     });

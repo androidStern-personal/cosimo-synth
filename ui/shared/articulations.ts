@@ -7,7 +7,11 @@ import {
 } from "./modulation";
 import { MODULATION_ARTICULATION_ROUTE_CELL_COUNT } from "./modulation-runtime-program";
 import { OSCILLATOR_IDS } from "./modulation-targets";
-import { OSCILLATOR_DEFAULT_VOLUME_DB } from "./oscillator-defaults";
+import {
+    OSCILLATOR_DEFAULT_VOLUME_DB,
+    OSCILLATOR_VOLUME_MAX_DB,
+    OSCILLATOR_VOLUME_MIN_DB,
+} from "./oscillator-defaults";
 
 export const ARTICULATION_SNAPSHOT_ENDPOINT_ID = "articulationSnapshot";
 export const ARTICULATION_MAX_SLOTS = 128;
@@ -298,7 +302,12 @@ export function normalizeArticulationParameterSnapshot(value: unknown): Articula
         octave: normalizeInteger(nextValue.octave, defaults.octave, -4, 4),
         semitone: normalizeInteger(nextValue.semitone, defaults.semitone, -12, 12),
         fineCents: normalizeNumber(nextValue.fineCents, defaults.fineCents, -100, 100),
-        volumeDb: normalizeNumber(nextValue.volumeDb, defaults.volumeDb, -48, 6),
+        volumeDb: normalizeNumber(
+            nextValue.volumeDb,
+            defaults.volumeDb,
+            OSCILLATOR_VOLUME_MIN_DB,
+            OSCILLATOR_VOLUME_MAX_DB,
+        ),
         mute: normalizeInteger(nextValue.mute, defaults.mute, 0, 1),
         solo: normalizeInteger(nextValue.solo, defaults.solo, 0, 1),
         warpMode: normalizeInteger(nextValue.warpMode, defaults.warpMode, 0, 4),

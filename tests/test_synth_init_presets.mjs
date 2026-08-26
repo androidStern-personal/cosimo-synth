@@ -6,6 +6,11 @@ import path from "node:path";
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
+const {
+    OSCILLATOR_DEFAULT_VOLUME_DB,
+    OSCILLATOR_VOLUME_MAX_DB,
+    OSCILLATOR_VOLUME_MIN_DB,
+} = await loadUIModule(repoRoot, "ui/shared/oscillator-defaults.ts");
 
 function parameter(endpointID, annotation = {}) {
     return {
@@ -23,9 +28,21 @@ const synthStatus = {
             parameter("oscBWavetableSelect", { init: 1, min: 0, max: 237, integer: true }),
             parameter("oscCWavetableSelect", { init: 2, min: 0, max: 237, integer: true }),
             parameter("oscAFramePosition", { init: 0.25, min: 0, max: 1 }),
-            parameter("oscAVolumeDb", { init: 0, min: -48, max: 6 }),
-            parameter("oscBVolumeDb", { init: 0, min: -48, max: 6 }),
-            parameter("oscCVolumeDb", { init: 0, min: -48, max: 6 }),
+            parameter("oscAVolumeDb", {
+                init: OSCILLATOR_DEFAULT_VOLUME_DB,
+                min: OSCILLATOR_VOLUME_MIN_DB,
+                max: OSCILLATOR_VOLUME_MAX_DB,
+            }),
+            parameter("oscBVolumeDb", {
+                init: OSCILLATOR_DEFAULT_VOLUME_DB,
+                min: OSCILLATOR_VOLUME_MIN_DB,
+                max: OSCILLATOR_VOLUME_MAX_DB,
+            }),
+            parameter("oscCVolumeDb", {
+                init: OSCILLATOR_DEFAULT_VOLUME_DB,
+                min: OSCILLATOR_VOLUME_MIN_DB,
+                max: OSCILLATOR_VOLUME_MAX_DB,
+            }),
             parameter("oscAMute", { init: 0, min: 0, max: 1, discrete: true }),
             parameter("oscBMute", { init: 1, min: 0, max: 1, discrete: true }),
             parameter("oscCMute", { init: 1, min: 0, max: 1, discrete: true }),

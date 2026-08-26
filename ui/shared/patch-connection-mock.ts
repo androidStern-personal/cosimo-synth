@@ -15,6 +15,8 @@ import {
 } from "./oscillator-binding";
 import {
     OSCILLATOR_DEFAULT_VOLUME_DB,
+    OSCILLATOR_VOLUME_MAX_DB,
+    OSCILLATOR_VOLUME_MIN_DB,
     getOscillatorDefaultMute,
 } from "./oscillator-defaults";
 import {
@@ -88,7 +90,13 @@ const oscillatorParameterAnnotations: Record<OscillatorControlID, OscillatorPara
     phase: { name: "Phase", min: 0, max: 1, init: 0 },
     phaseRandom: { name: "Phase Random", min: 0, max: 1, init: 0 },
     retrigger: { name: "Retrigger", min: 0, max: 1, init: 1, discrete: true, step: 1 },
-    volumeDb: { name: "Volume", min: -48, max: 6, init: OSCILLATOR_DEFAULT_VOLUME_DB, unit: "dB" },
+    volumeDb: {
+        name: "Volume",
+        min: OSCILLATOR_VOLUME_MIN_DB,
+        max: OSCILLATOR_VOLUME_MAX_DB,
+        init: OSCILLATOR_DEFAULT_VOLUME_DB,
+        unit: "dB",
+    },
     mute: { name: "Mute", min: 0, max: 1, init: 0, discrete: true, step: 1 },
     solo: { name: "Solo", min: 0, max: 1, init: 0, discrete: true, step: 1 },
     warpMode: { name: "Warp Mode", min: 0, max: 4, init: 0, discrete: true, step: 1 },

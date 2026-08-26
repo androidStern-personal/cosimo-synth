@@ -7,8 +7,10 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const bindingModulePromise = loadUIModule(repoRoot, "ui/shared/oscillator-binding.ts");
+const defaultsModulePromise = loadUIModule(repoRoot, "ui/shared/oscillator-defaults.ts");
 const articulationModulePromise = loadUIModule(repoRoot, "ui/shared/articulation-image.ts");
 const articulationStateModulePromise = loadUIModule(repoRoot, "ui/shared/articulations.ts");
+const mobileDisplayModulePromise = loadUIModule(repoRoot, "ui/shared/mobile-voice-display-descriptors.ts");
 const targetDescriptorModulePromise = loadUIModule(repoRoot, "ui/shared/target-descriptor.ts");
 
 const expectedEndpointSuffixes = new Map([
@@ -150,37 +152,72 @@ test("oscillator selection is session-local UI state", async () => {
 });
 
 test("Init oscillator defaults agree across the UI contract, DSP declarations, and articulation fixtures", async () => {
-    const [binding, articulations, descriptors, synthSource] = await Promise.all([
-        bindingModulePromise,
+    const [defaults, articulations, mobileDisplay, descriptors, synthSource] = await Promise.all([
+        defaultsModulePromise,
         articulationStateModulePromise,
+        mobileDisplayModulePromise,
         targetDescriptorModulePromise,
         fs.readFile(path.join(repoRoot, "cmajor/WavetableSynth.cmajor"), "utf8"),
     ]);
-    const endpointInit = (endpointID) => {
+    const endpointAnnotation = (endpointID, annotationName) => {
         const declaration = synthSource.match(new RegExp(
-            `input value [^\\s]+ ${endpointID} \\[\\[[^\\]]*init:\\s*(-?[0-9]+(?:\\.[0-9]+)?)f?`,
+            `input value [^\\s]+ ${endpointID} \\[\\[([^\\]]*)\\]\\]`,
         ));
-        assert.ok(declaration, `Missing ${endpointID} init annotation`);
-        return Number(declaration[1]);
+        assert.ok(declaration, `Missing ${endpointID} declaration`);
+        const annotation = declaration[1].match(new RegExp(
+            `(?:^|,\\s*)${annotationName}:\\s*(-?[0-9]+(?:\\.[0-9]+)?)f?(?:,|$)`,
+        ));
+        assert.ok(annotation, `Missing ${endpointID} ${annotationName} annotation`);
+        return Number(annotation[1]);
     };
 
-    assert.equal(binding.OSCILLATOR_DEFAULT_VOLUME_DB, 0);
-    assert.equal(binding.OSCILLATOR_DEFAULT_VOLUME_NORMALIZED, 48 / 54);
-    assert.deepEqual(binding.OSCILLATOR_DEFAULT_MUTE_BY_ID, { A: 0, B: 1, C: 1 });
+    assert.equal(defaults.OSCILLATOR_VOLUME_MIN_DB, -48);
+    assert.equal(defaults.OSCILLATOR_VOLUME_MAX_DB, 6);
+    assert.equal(defaults.OSCILLATOR_DEFAULT_VOLUME_DB, 0);
+    assert.equal(defaults.OSCILLATOR_DEFAULT_VOLUME_NORMALIZED, 48 / 54);
+    assert.deepEqual(defaults.OSCILLATOR_DEFAULT_MUTE_BY_ID, { A: 0, B: 1, C: 1 });
+    assert.deepEqual(mobileDisplay.MOBILE_VOICE_DISPLAY_DESCRIPTORS.volumeDb, {
+        min: defaults.OSCILLATOR_VOLUME_MIN_DB,
+        max: defaults.OSCILLATOR_VOLUME_MAX_DB,
+        step: 0.1,
+    });
+    assert.equal(
+        articulations.normalizeArticulationParameterSnapshot({ volumeDb: -100 }).volumeDb,
+        defaults.OSCILLATOR_VOLUME_MIN_DB,
+    );
+    assert.equal(
+        articulations.normalizeArticulationParameterSnapshot({ volumeDb: 100 }).volumeDb,
+        defaults.OSCILLATOR_VOLUME_MAX_DB,
+    );
 
     for (const oscillatorID of ["A", "B", "C"]) {
-        assert.equal(endpointInit(`osc${oscillatorID}VolumeDb`), binding.OSCILLATOR_DEFAULT_VOLUME_DB);
-        assert.equal(endpointInit(`osc${oscillatorID}Mute`), binding.getOscillatorDefaultMute(oscillatorID));
+        const volumeEndpointID = `osc${oscillatorID}VolumeDb`;
+        assert.equal(
+            endpointAnnotation(volumeEndpointID, "min"),
+            defaults.OSCILLATOR_VOLUME_MIN_DB,
+        );
+        assert.equal(
+            endpointAnnotation(volumeEndpointID, "max"),
+            defaults.OSCILLATOR_VOLUME_MAX_DB,
+        );
+        assert.equal(
+            endpointAnnotation(volumeEndpointID, "init"),
+            defaults.OSCILLATOR_DEFAULT_VOLUME_DB,
+        );
+        assert.equal(
+            endpointAnnotation(`osc${oscillatorID}Mute`, "init"),
+            defaults.getOscillatorDefaultMute(oscillatorID),
+        );
         const descriptor = descriptors.allTargetDescriptors().find(
             ({ targetId }) => targetId === `osc${oscillatorID}.volumeDb`,
         );
-        assert.equal(descriptor?.initialValue, binding.OSCILLATOR_DEFAULT_VOLUME_NORMALIZED);
-        assert.equal(descriptor?.defaultValue, binding.OSCILLATOR_DEFAULT_VOLUME_NORMALIZED);
+        assert.equal(descriptor?.initialValue, defaults.OSCILLATOR_DEFAULT_VOLUME_NORMALIZED);
+        assert.equal(descriptor?.defaultValue, defaults.OSCILLATOR_DEFAULT_VOLUME_NORMALIZED);
     }
 
     assert.equal(
         articulations.createDefaultArticulationParameterSnapshot().volumeDb,
-        binding.OSCILLATOR_DEFAULT_VOLUME_DB,
+        defaults.OSCILLATOR_DEFAULT_VOLUME_DB,
     );
     assert.deepEqual(
         articulations.createDisabledArticulationRuntimeUpload(0).volumeDbs,

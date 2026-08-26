@@ -1,5 +1,10 @@
 // PROTOTYPE — four throwaway mobile Voice layouts, switchable with ?variant=A|B|C|D.
 
+import {
+    OSCILLATOR_VOLUME_MAX_DB,
+    OSCILLATOR_VOLUME_MIN_DB,
+} from "../../shared/oscillator-defaults.ts";
+
 const VARIANTS = {
     A: {
         name: "Visual + quick deck",
@@ -352,7 +357,7 @@ function variantA() {
             <div class="knob-row five">
                 ${rangeControl({ key: "index", label: "Index", oscillatorID: id })}
                 ${rangeControl({ key: "warp", label: "Warp", oscillatorID: id })}
-                ${rangeControl({ key: "level", label: "Level", min: -48, max: 6, step: 0.1, oscillatorID: id })}
+                ${rangeControl({ key: "level", label: "Level", min: OSCILLATOR_VOLUME_MIN_DB, max: OSCILLATOR_VOLUME_MAX_DB, step: 0.1, oscillatorID: id })}
                 ${rangeControl({ key: "voices", label: "Voices", min: 1, max: 8, step: 1, oscillatorID: id })}
                 ${rangeControl({ key: "detune", label: "Detune", oscillatorID: id })}
             </div>
@@ -380,7 +385,7 @@ function variantB() {
             <div class="horizontal-grid">
                 ${horizontalField("index", "Index", { oscillatorID: id })}
                 ${horizontalField("warp", "Warp", { oscillatorID: id })}
-                ${horizontalField("level", "Level", { min: -48, max: 6, step: 0.1, oscillatorID: id })}
+                ${horizontalField("level", "Level", { min: OSCILLATOR_VOLUME_MIN_DB, max: OSCILLATOR_VOLUME_MAX_DB, step: 0.1, oscillatorID: id })}
                 ${horizontalField("cutoff", "Cutoff", { min: 20, max: 20000, step: 1 })}
             </div>
             <div class="compact-modes">
@@ -433,7 +438,7 @@ function oscillatorControlPage(id, presentation = "strip") {
             controls = [
                 rangeControl({ key: "index", label: label("Index", "Idx"), oscillatorID: id, shape: controlShape }),
                 rangeControl({ key: "warp", label: label("Warp", "Warp"), oscillatorID: id, shape: controlShape }),
-                rangeControl({ key: "level", label: label("Level", "Level"), min: -48, max: 6, step: 0.1, oscillatorID: id, shape: controlShape }),
+                rangeControl({ key: "level", label: label("Level", "Level"), min: OSCILLATOR_VOLUME_MIN_DB, max: OSCILLATOR_VOLUME_MAX_DB, step: 0.1, oscillatorID: id, shape: controlShape }),
                 rangeControl({ key: "detune", label: label("Detune", "Det"), oscillatorID: id, shape: controlShape }),
             ];
             break;

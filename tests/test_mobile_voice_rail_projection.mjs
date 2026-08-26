@@ -7,6 +7,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const railModulePromise = loadUIModule(repoRoot, "ui/shared/mobile-voice-rail-projection.ts");
+const oscillatorDefaultsPromise = loadUIModule(repoRoot, "ui/shared/oscillator-defaults.ts");
 
 test("rail state truth table", async () => {
     const { resolveMobileVoiceRailState } = await railModulePromise;
@@ -157,7 +158,14 @@ test("an amp route in dB units can lift any base to the +6 dB rail", async () =>
     // froze at -14.1 dB because the OFFSET was capped at the parameter's own
     // +6 maximum. Amounts are additive dB offsets over the full 54 dB span.
     const { projectMobileVoiceRailBand } = await railModulePromise;
-    const domain = { min: -48, max: 6 };
+    const {
+        OSCILLATOR_VOLUME_MAX_DB,
+        OSCILLATOR_VOLUME_MIN_DB,
+    } = await oscillatorDefaultsPromise;
+    const domain = {
+        min: OSCILLATOR_VOLUME_MIN_DB,
+        max: OSCILLATOR_VOLUME_MAX_DB,
+    };
 
     const reachesTop = projectMobileVoiceRailBand(
         domain,

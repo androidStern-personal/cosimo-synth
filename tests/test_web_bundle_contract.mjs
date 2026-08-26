@@ -84,6 +84,24 @@ test("the generated modulation module ships its canonical identity dependency", 
     assert.match(generatedTargets, /^\/\/ Generated from ui\/shared\/modulation-targets\.ts /);
 });
 
+test("the generated oscillator contract ships only the runtime defaults module", async () => {
+    const [buildScript, generatedDefaults] = await Promise.all([
+        fs.readFile(path.join(repoRoot, "ui", "build.mjs"), "utf8"),
+        fs.readFile(path.join(repoRoot, "patch_gui", "oscillator-defaults.js"), "utf8"),
+    ]);
+
+    assert.match(
+        buildScript,
+        /emitGeneratedPatchGuiModule\("ui\/shared\/oscillator-defaults\.ts", "patch_gui\/oscillator-defaults\.js"\)/,
+    );
+    assert.doesNotMatch(buildScript, /patch_gui\/oscillator-binding\.js/);
+    assert.match(generatedDefaults, /^\/\/ Generated from ui\/shared\/oscillator-defaults\.ts /);
+    await assert.rejects(
+        fs.access(path.join(repoRoot, "patch_gui", "oscillator-binding.js")),
+        { code: "ENOENT" },
+    );
+});
+
 test("the product web build uses the renderer-aware generator", async () => {
     const buildSource = await fs.readFile(path.join(repoRoot, "web", "build.mjs"), "utf8");
 

@@ -1,4 +1,8 @@
 import type { OscillatorControlID } from "./oscillator-binding";
+import {
+    OSCILLATOR_VOLUME_MAX_DB,
+    OSCILLATOR_VOLUME_MIN_DB,
+} from "./oscillator-defaults";
 
 /** A Voice control with a numeric or discrete display domain. */
 export type MobileVoiceBindableControlID = Exclude<OscillatorControlID, "wavetableSelect">;
@@ -30,7 +34,7 @@ export const MOBILE_VOICE_DISPLAY_DESCRIPTORS: Readonly<
     octave: { min: -4, max: 4, step: 1 },
     semitone: { min: -12, max: 12, step: 1 },
     fineCents: { min: -100, max: 100, step: 1 },
-    volumeDb: { min: -48, max: 6, step: 0.1 },
+    volumeDb: { min: OSCILLATOR_VOLUME_MIN_DB, max: OSCILLATOR_VOLUME_MAX_DB, step: 0.1 },
     mute: { min: 0, max: 1, step: 1 },
     solo: { min: 0, max: 1, step: 1 },
     unisonVoices: { min: 1, max: 8, step: 1 },

@@ -2,7 +2,7 @@
   "format": "cosimo.speedrunRecipe",
   "version": 1,
   "label": "Split Space Lead",
-  "contractHash": "sha256:bbb42552e29cee8acc9b8449c02277896675e931a027fd84e5878370378f62f1",
+  "contractHash": "sha256:fe79a52c9635699d2ed67ee73f879d253367c1dcde33577f6d113d03c0053c5c",
   "prelude": [
     {
       "kind": "installLaneBaseline",
@@ -256,22 +256,6 @@
           "Macro 4"
         ]
       }
-    },
-    {
-      "kind": "setParam",
-      "endpointID": "oscBMute",
-      "from": 0,
-      "to": 1,
-      "surface": "speedrun-prelude-oscBMute",
-      "weight": "normal"
-    },
-    {
-      "kind": "setParam",
-      "endpointID": "oscCMute",
-      "from": 0,
-      "to": 1,
-      "surface": "speedrun-prelude-oscCMute",
-      "weight": "normal"
     }
   ],
   "sections": [
@@ -670,6 +654,7 @@
       "filterMode",
       "filterQ",
       "glideTime",
+      "globalTune",
       "macro1",
       "macro3",
       "macro4",
@@ -698,6 +683,7 @@
       "oscAUnisonWidth",
       "oscAVolumeDb",
       "oscBFineCents",
+      "oscBMute",
       "oscBOctave",
       "oscBPan",
       "oscBPhase",
@@ -719,6 +705,7 @@
       "oscBWavetablePosition",
       "oscBWavetableSelect",
       "oscCFineCents",
+      "oscCMute",
       "oscCOctave",
       "oscCPan",
       "oscCPhase",

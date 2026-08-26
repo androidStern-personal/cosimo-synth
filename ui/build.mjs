@@ -107,7 +107,6 @@ if (shouldBuild("--desktop") || shouldBuild("--desktop-runtime") || shouldBuild(
     await emitGeneratedPatchGuiModule("ui/shared/cosimo-ids.ts", "patch_gui/cosimo-ids.js");
     await emitGeneratedPatchGuiModule("ui/shared/global-tune.ts", "patch_gui/global-tune.js");
     await emitGeneratedPatchGuiModule("ui/shared/oscillator-defaults.ts", "patch_gui/oscillator-defaults.js");
-    await emitGeneratedPatchGuiModule("ui/shared/oscillator-binding.ts", "patch_gui/oscillator-binding.js");
     await emitGeneratedPatchGuiModule("ui/shared/target-descriptor.ts", "patch_gui/target-descriptor.js");
     await emitGeneratedPatchGuiModule("ui/shared/modulation-runtime-program.ts", "patch_gui/modulation-runtime-program.js");
     await emitGeneratedPatchGuiModule("ui/shared/modulation-targets.ts", "patch_gui/modulation-targets.js");

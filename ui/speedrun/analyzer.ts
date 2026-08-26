@@ -20,6 +20,7 @@ import {
     type ModulationSourceId,
     type OscillatorID,
 } from "../shared/modulation-targets";
+import { OSCILLATOR_VOLUME_MIN_DB } from "../shared/oscillator-defaults";
 import {
     getRackEffectDescriptor,
     type RackParameterDescriptor,
@@ -191,7 +192,9 @@ function oscillatorIsAudible(
     const volume = document.parameters[`${prefix}VolumeDb`] ?? -60;
     const volumeAnnotation = defaults.annotations[`${prefix}VolumeDb`];
     const epsilon = volumeAnnotation ? parameterEpsilon(volumeAnnotation) : 0;
-    return mute === 0 && volume > -48 + epsilon && (!anySolo || solo === 1);
+    return mute === 0
+        && volume > OSCILLATOR_VOLUME_MIN_DB + epsilon
+        && (!anySolo || solo === 1);
 }
 
 function sourceIdForRoute(route: ModulationRoute): ModulationSourceId {
@@ -388,4 +391,3 @@ export function analyzePatch(document: PatchDocument, defaults: DefaultsSnapshot
         },
     };
 }
-

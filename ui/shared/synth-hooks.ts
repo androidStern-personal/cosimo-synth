@@ -189,6 +189,8 @@ import {
 } from "./oscillator-binding";
 import {
     OSCILLATOR_DEFAULT_VOLUME_DB,
+    OSCILLATOR_VOLUME_MAX_DB,
+    OSCILLATOR_VOLUME_MIN_DB,
     getOscillatorDefaultMute,
 } from "./oscillator-defaults";
 
@@ -2570,7 +2572,11 @@ export function useSynthPatchViewModel({
     const oscillatorVolumeDb = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("volumeDb"),
         initialValue: OSCILLATOR_DEFAULT_VOLUME_DB,
-        coerce: (value) => clamp(Number(value) || 0, -48, 6),
+        coerce: (value) => clamp(
+            Number(value) || 0,
+            OSCILLATOR_VOLUME_MIN_DB,
+            OSCILLATOR_VOLUME_MAX_DB,
+        ),
     });
     const oscillatorMute = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("mute"),

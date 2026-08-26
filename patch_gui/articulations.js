@@ -2,7 +2,7 @@
 import { MODULATION_ENV_SLOT_COUNT, MODULATION_MSEG_SLOT_COUNT, createDefaultEnvelope, normalizeEnvelope, } from "./modulation.js";
 import { MODULATION_ARTICULATION_ROUTE_CELL_COUNT } from "./modulation-runtime-program.js";
 import { OSCILLATOR_IDS } from "./modulation-targets.js";
-import { OSCILLATOR_DEFAULT_VOLUME_DB } from "./oscillator-defaults.js";
+import { OSCILLATOR_DEFAULT_VOLUME_DB, OSCILLATOR_VOLUME_MAX_DB, OSCILLATOR_VOLUME_MIN_DB, } from "./oscillator-defaults.js";
 export const ARTICULATION_SNAPSHOT_ENDPOINT_ID = "articulationSnapshot";
 export const ARTICULATION_MAX_SLOTS = 128;
 /** Largest legal absolute route amount in Cosimo's target domain. */
@@ -138,7 +138,7 @@ export function normalizeArticulationParameterSnapshot(value) {
         octave: normalizeInteger(nextValue.octave, defaults.octave, -4, 4),
         semitone: normalizeInteger(nextValue.semitone, defaults.semitone, -12, 12),
         fineCents: normalizeNumber(nextValue.fineCents, defaults.fineCents, -100, 100),
-        volumeDb: normalizeNumber(nextValue.volumeDb, defaults.volumeDb, -48, 6),
+        volumeDb: normalizeNumber(nextValue.volumeDb, defaults.volumeDb, OSCILLATOR_VOLUME_MIN_DB, OSCILLATOR_VOLUME_MAX_DB),
         mute: normalizeInteger(nextValue.mute, defaults.mute, 0, 1),
         solo: normalizeInteger(nextValue.solo, defaults.solo, 0, 1),
         warpMode: normalizeInteger(nextValue.warpMode, defaults.warpMode, 0, 4),
