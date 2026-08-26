@@ -6,6 +6,11 @@ import {
 } from "./modulation";
 import type { RackParameterDescriptor } from "./rack-parameter-descriptors";
 
+export type ModulatedParameterProjectionDescriptor = Pick<
+    RackParameterDescriptor,
+    "min" | "max" | "scale" | "modulationApplication"
+>;
+
 export type RackRouteSource = {
     readonly sourceKind: ModulationSourceKind;
     readonly sourceSlot: number | null;
@@ -135,7 +140,7 @@ function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
 }
 
-function normalizeDisplayedValue(descriptor: RackParameterDescriptor, value: number) {
+function normalizeDisplayedValue(descriptor: ModulatedParameterProjectionDescriptor, value: number) {
     const clamped = clamp(value, descriptor.min, descriptor.max);
     if (descriptor.scale === "log") {
         return Math.log(clamped / descriptor.min) / Math.log(descriptor.max / descriptor.min);
@@ -143,7 +148,7 @@ function normalizeDisplayedValue(descriptor: RackParameterDescriptor, value: num
     return (clamped - descriptor.min) / (descriptor.max - descriptor.min);
 }
 
-function applyRouteOffset(descriptor: RackParameterDescriptor, baseValue: number, offset: number) {
+function applyRouteOffset(descriptor: ModulatedParameterProjectionDescriptor, baseValue: number, offset: number) {
     const rawValue = descriptor.modulationApplication === "octaves"
         ? baseValue * (2 ** offset)
         : baseValue + offset;
@@ -157,7 +162,7 @@ function applyRouteOffset(descriptor: RackParameterDescriptor, baseValue: number
  * to the descriptor range before log/linear display normalization.
  */
 export function projectRackRouteLiveNormalized(
-    descriptor: RackParameterDescriptor,
+    descriptor: ModulatedParameterProjectionDescriptor,
     baseValue: number,
     route: Pick<ModulationRoute, "amount" | "polarity">,
     sourceValue01: number,
@@ -178,7 +183,7 @@ export type RackRouteTravel = {
 
 /** Compute one route's full source-domain contribution exactly as the rack DSP applies it. */
 export function projectRackRouteTravel(
-    descriptor: RackParameterDescriptor,
+    descriptor: ModulatedParameterProjectionDescriptor,
     baseValue: number,
     route: Pick<ModulationRoute, "amount" | "polarity">,
 ): RackRouteTravel {

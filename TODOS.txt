@@ -950,16 +950,25 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     Done when:
     - A short design record and reviewed UI proposal settle the signal location, behavior, control set, and screen location strongly enough to create an implementation task with no remaining product guesswork.
 
-[?] T39 — Design and add a modulatable Global Tune offset
+[x] T39 — Add one modulatable Global Tune control
+    Completed (2026-08-26):
+    - Codex task `Implement Global Tune`, thread `01a03b80-6fc6-7cf1-b9c6-b77f17f435c6`, worktree `/Users/winterfell/.codex/worktrees/b054cfa6-fe72-4fd4-9a5f-0c5571aea806/cosimo-synth`, branch `codex/t39-global-tune`.
     Code-backed starting point:
-    - There is no synth-wide tune parameter today. Tuning and pitch modulation are oscillator-specific, and the pitch-tracking signal sent to effects is derived later from that oscillator pitch.
+    - There is no synth-wide tune parameter today. Tuning and pitch modulation are oscillator-specific, and the pitch sent to effects currently inherits Oscillator A's private tuning and modulation.
     Locked behavior:
-    - Global Tune is an offset applied to the whole synthesizer before each oscillator's own octave, semitone, fine, and pitch modulation. A zero value changes nothing.
-    - It is a modulation destination for MSEGs and envelopes. Every consumer that follows pitch—including the pitch value sent to effects—must follow the globally shifted pitch as well.
-    Decisions required before implementation:
-    - Settle its range, units, modulation-depth limits, host/preset representation, and visible UI location. Confirm how Bounce playback participates.
+    - Put one continuous Global Tune control in the top-level Voice interface, outside the individual oscillators. Its knob runs from -24 to +24 semitones, is centered at zero, and is displayed in semitones/cents without snapping.
+    - Make Global Tune a modulation destination. A route may contribute up to +/-48 semitones, using the existing unipolar or bipolar source behavior.
+    - Define the shared played pitch as the MIDI note after glide, plus pitch bend, the Global Tune knob, and every current modulation contribution routed to Global Tune.
+    - Apply each oscillator's own octave, semitone, fine tuning, and oscillator-local pitch modulation only after that shared pitch is established. Those private oscillator settings must never change the pitch followed by another control.
+    - Transpose Bounce playback with Global Tune. A zero value remains completely neutral.
+    State and integration:
+    - Save and restore the knob, modulation routes, and modulation amounts through presets, URL sharing, Init, undo, and host state. Init sets the knob to zero.
+    - Add the host parameter without renumbering existing host parameter slots.
+    - Replace the Oscillator A-derived effects pitch feed with this shared played pitch so T50 has one correct source for Key Track.
     Done when:
-    - The product decisions are recorded and the implementation proves that +12 semitones doubles every included sound source's frequency, Bounce follows the recorded decision, oscillator-local offsets remain relative, MSEG/envelope modulation reaches Global Tune, zero is neutral, and every pitch-tracked effect receives the same shift.
+    - Tests prove that +12 semitones doubles the pitch of every oscillator and Bounce playback; pitch bend, glide, knob movement, and modulation routed to Global Tune all reach the shared played pitch.
+    - Oscillator-local tuning and pitch modulation remain relative to Global Tune but do not leak into the pitch followed by filters or effects.
+    - Zero is neutral, the full knob and modulation ranges work continuously, and complete sound save/restore reproduces the same setting and routes.
 
 [ ] T40 — Make the drag heads-up display match the parameter being changed
     Required result:

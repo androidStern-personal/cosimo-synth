@@ -105,6 +105,7 @@ if (shouldBuild("--desktop") || shouldBuild("--desktop-runtime") || shouldBuild(
     await emitGeneratedPatchGuiModule("ui/shared/rack-parameter-descriptors.ts", "patch_gui/rack-parameter-descriptors.js");
     await emitGeneratedPatchGuiModule("ui/shared/result.ts", "patch_gui/result.js");
     await emitGeneratedPatchGuiModule("ui/shared/cosimo-ids.ts", "patch_gui/cosimo-ids.js");
+    await emitGeneratedPatchGuiModule("ui/shared/global-tune.ts", "patch_gui/global-tune.js");
     await emitGeneratedPatchGuiModule("ui/shared/target-descriptor.ts", "patch_gui/target-descriptor.js");
     await emitGeneratedPatchGuiModule("ui/shared/modulation-runtime-program.ts", "patch_gui/modulation-runtime-program.js");
     await emitGeneratedPatchGuiModule("ui/shared/modulation-targets.ts", "patch_gui/modulation-targets.js");

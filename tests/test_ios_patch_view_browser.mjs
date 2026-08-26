@@ -921,7 +921,7 @@ test("mounted iPhone shell names the pending table, exposes retry on failure, an
     }
 });
 
-test("mounted iPhone play mode and glide controls sync parameter updates and emit user edits", async () => {
+test("mounted iPhone play, glide, and continuous Global Tune controls sync and emit undoable user edits", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
     });
@@ -930,35 +930,58 @@ test("mounted iPhone play mode and glide controls sync parameter updates and emi
         await waitForIOSHarnessReady(page);
         await setIOSHarnessParameterValue(page, "playMode", 2);
         await setIOSHarnessParameterValue(page, "glideTime", 1.5);
+        await setIOSHarnessParameterValue(page, "globalTune", 12.37);
 
         let renderedState = await waitForRenderedState(
             page,
-            "parameter-synced play and glide controls",
-            (nextState) => nextState.playModeValue === "2" && nextState.glideReadout === "1.500 s",
+            "parameter-synced play, glide, and Global Tune controls",
+            (nextState) => nextState.playModeValue === "2"
+                && nextState.glideReadout === "1.500 s"
+                && nextState.globalTuneReadout === "+12 st 37 ct",
         );
         assert.equal(renderedState.glideValue, "1");
+        assert.equal(renderedState.globalTuneValue, "12.37");
+
+        const globalTuneKnob = await getShadowLocator(page, '[data-role="ios-global-tune-knob"]');
+        assert.equal(await globalTuneKnob.getAttribute("data-detented"), "false");
 
         await clearIOSHarnessDebugLog(page);
         await selectShadowOption(page, ".play-mode-select", 1);
         await fillShadowInput(page, ".glide-time-slider", "0.375");
+        const globalTuneRect = await getShadowElementRect(page, '[data-role="ios-global-tune-knob"]');
+        await dragAcrossShadowElement(
+            page,
+            '[data-role="ios-global-tune-knob"]',
+            { x: globalTuneRect.width * 0.35, y: globalTuneRect.height * 0.5 },
+            { x: globalTuneRect.width * 0.75, y: globalTuneRect.height * 0.5 },
+        );
 
         const snapshot = await waitForSnapshot(
             page,
-            "play and glide user edits",
+            "play, glide, and Global Tune user edits",
             (nextSnapshot) => {
                 const sentPairs = nextSnapshot.sentMessages.map((message) => `${message.endpointID}:${message.value}`);
-                return sentPairs.includes("playMode:1") && sentPairs.includes("glideTime:0.375");
+                return sentPairs.includes("playMode:1")
+                    && sentPairs.includes("glideTime:0.375")
+                    && nextSnapshot.sentMessages.some((message) => (
+                        message.endpointID === "globalTune"
+                        && Math.abs(Number(message.value) - 12.37) > 0.01
+                        && !Number.isInteger(Number(message.value))
+                    ));
             },
         );
         renderedState = await getIOSHarnessRenderedState(page);
         assert.equal(renderedState.playModeValue, "1");
         assert.equal(renderedState.glideReadout, "0.375 s");
+        assert.match(renderedState.globalTuneReadout, /^[+-]?\d+ st \d{2} ct$/);
         assert.ok(snapshot.sentMessages.some((message) => (
             message.endpointID === "playMode" && message.value === 1
         )));
         assert.ok(snapshot.sentMessages.some((message) => (
             message.endpointID === "glideTime" && Number(message.value) === 0.375
         )));
+        assert.deepEqual(snapshot.gestureStarts.filter((endpointID) => endpointID === "globalTune"), ["globalTune"]);
+        assert.deepEqual(snapshot.gestureEnds.filter((endpointID) => endpointID === "globalTune"), ["globalTune"]);
     } finally {
         await closeIOSHarnessPage(page);
     }

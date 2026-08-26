@@ -125,8 +125,8 @@ test("Amp Release is appended with the locked 0.2 second default and range", asy
     const parameterEndpoints = CmajorClass.prototype.getInputEndpoints()
         .filter(({ purpose }) => purpose === "parameter");
     assert.deepEqual(
-        parameterEndpoints.slice(-2).map(({ endpointID }) => endpointID),
-        ["ampRelease", "sourceMode"],
+        parameterEndpoints.slice(-3).map(({ endpointID }) => endpointID),
+        ["ampRelease", "sourceMode", "globalTune"],
     );
 });
 

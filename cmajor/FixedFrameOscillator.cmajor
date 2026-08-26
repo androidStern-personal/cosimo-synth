@@ -54,11 +54,12 @@ namespace wt
     let modulationMacroSourceCount = 4;
     // Runtime order matches ui/shared/modulation-targets.ts: ten local targets
     // for each oscillator, the two established shared filter targets, the
-    // continuous MSEG/envelope controls, then append-only Filter Mix.
+    // continuous MSEG/envelope controls, then append-only Filter Mix and
+    // Global Tune.
     let modulationOscillatorTargetCount = 10;
-    let modulationVoiceTargetCount = (oscillatorCount * modulationOscillatorTargetCount) + 21;
-    // Keep the established 32-wide SIMD block intact and place the appended
-    // appended destinations in a second padded SIMD block. A single 51-wide
+    let modulationVoiceTargetCount = (oscillatorCount * modulationOscillatorTargetCount) + 22;
+    // Keep the established 32-wide SIMD block intact and place appended
+    // destinations in a second padded SIMD block. A single 52-wide
     // vector scalarises in the pinned browser backend and cannot meet the
     // production AudioWorklet deadline.
     let modulationVoiceCoreLaneCount = 32;
@@ -95,7 +96,7 @@ namespace wt
     // 68KB, and cmaj::Patch's native performer event FIFO is a fixed 64KB —
     // the event could never be delivered on the native (iPhone) transport.
     // The budget covers the ENTIRE 36-target static domain active at once
-    // (the shipping 1,131-route stress contract needs 324 voice-rack and 144
+    // (the shipping 1,144-route stress contract needs 324 voice-rack and 144
     // macro-rack routes) with lane-pool routes on top. The per-CELL amount
     // tables keep the full cell space: cell indexes, live amount edits and
     // the reducer vocabulary are untouched by this budget.
@@ -205,6 +206,7 @@ namespace wt
     let modulationTargetEnv3Sustain = modulationTargetEnv3Decay + 1;
     let modulationTargetEnv3Release = modulationTargetEnv3Sustain + 1;
     let modulationTargetFilterMix = modulationTargetEnv3Release + 1;
+    let modulationTargetGlobalTuneSemitones = modulationTargetFilterMix + 1;
     let articulationSlotCount = 128;
     let articulationSelectorNone = -1;
     // Frozen Cmajor/native address book for the 16-note, three-oscillator
@@ -1408,6 +1410,7 @@ namespace wt
         input value float32 envelopeReleaseIn[modulationEnvSlotCount];
         input value float32 ampReleaseIn [[ name: "Amp Release", min: 0.005f, max: 10.0f, init: 0.2f, unit: "s", rampFrames: 0 ]];
         input value float32 sourceModeIn [[ name: "Source Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Oscillator|Bounce", rampFrames: 0 ]];
+        input value float32 globalTuneIn [[ name: "Global Tune", min: -24.0f, max: 24.0f, init: 0.0f, unit: "st", rampFrames: 64 ]];
         output event OscillatorWavetableUploadAck oscillatorWavetableUploadAckOut;
         output event OscillatorWavetableMipRequest oscillatorWavetableMipRequestOut;
         output event OscillatorRuntimeServiceState oscillatorRuntimeServiceStateOut;
@@ -3306,6 +3309,18 @@ namespace wt
             );
         }
 
+        // One shared pitch authority for oscillator playback, Bounce playback,
+        // and pitch-following effects. Oscillator-local tuning is deliberately
+        // applied only after this value has been resolved.
+        float32 resolveSharedPlayedPitchSemitones (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            return voiceCurrentPitch.at (voice)
+                + voiceBendSemitones.at (voice)
+                + std::intrinsics::clamp (globalTuneIn, -24.0f, 24.0f)
+                + voiceTargetOffset (voiceIndex, modulationTargetGlobalTuneSemitones);
+        }
+
         void updateVoiceGeneratorModulationTargets (int32 voiceIndex)
         {
             voiceEffectiveMsegMorphs.at (voiceArticulationMsegIndex (voiceIndex, 0))
@@ -3682,7 +3697,7 @@ namespace wt
             );
 
             let rootNote = bounceSlotRootNotes.at (metadataIndex);
-            let pitchSemitones = voiceCurrentPitch.at (voice) + voiceBendSemitones.at (voice);
+            let pitchSemitones = resolveSharedPlayedPitchSemitones (voiceIndex);
             let pitchRate = std::intrinsics::pow (
                 2.0f, (pitchSemitones - float32 (rootNote)) / 12.0f);
             let sampleRateRatio = float32 (bounceSlotSampleRates.at (slotIndex))
@@ -5471,6 +5486,14 @@ namespace wt
                     updateVoiceGeneratorModulationTargets (voiceIndex);
                     accumulateVoiceRackSources (voiceIndex);
 
+                    let sharedPlayedPitchSemitones = resolveSharedPlayedPitchSemitones (voiceIndex);
+                    let voiceSerial = voiceTrackingSerial.at (voice);
+                    if (voiceActive.at (voice) != 0 && voiceSerial > trackingSerial)
+                    {
+                        trackingSerial = voiceSerial;
+                        trackingPitchHz = std::notes::noteToFrequency (sharedPlayedPitchSemitones);
+                    }
+
                     let processorFrequency = float32 (processor.frequency);
                     let routeFilterCutoffOctaves = voiceTargetOffset (
                         voiceIndex, modulationTargetFilterCutoffOctaves);
@@ -5515,8 +5538,7 @@ namespace wt
                                     voiceIndex, oscillator, modulationTargetWarpAmount),
                             0.0f,
                             1.0f);
-                        let effectivePitchSemitones = voiceCurrentPitch.at (voice)
-                            + voiceBendSemitones.at (voice)
+                        let effectivePitchSemitones = sharedPlayedPitchSemitones
                             + voiceOscillatorTuningSemitones (voiceIndex, oscillator)
                             + voiceOscillatorModulationOffset (
                                 voiceIndex, oscillator, modulationTargetPitchSemitones);
@@ -5596,15 +5618,6 @@ namespace wt
                                 = effectivePositionSpread;
                             voiceEffectiveUnisonWarpSpread.at (voice) = effectiveWarpSpread;
 
-                            let voiceSerial = voiceTrackingSerial.at (voice);
-                            if (voiceActive.at (voice) != 0 && voiceSerial > trackingSerial)
-                            {
-                                trackingSerial = voiceSerial;
-                                trackingPitchHz = std::notes::noteToFrequency (
-                                    isBounceSource
-                                        ? voiceCurrentPitch.at (voice) + voiceBendSemitones.at (voice)
-                                        : effectivePitchSemitones);
-                            }
                         }
                     }
                 }

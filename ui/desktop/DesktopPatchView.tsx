@@ -90,7 +90,12 @@ import {
 } from "./desktop-keyboard-adapter";
 import { NexusNumberField } from "./desktop-nexus-number-field";
 import { PrecisionNumberField } from "./desktop-precision-number-field";
-import { BaseParameterKnob, RackParameterKnob } from "./rack-parameter-knob";
+import {
+    BaseParameterKnob,
+    ModulatedParameterKnob,
+    RackParameterKnob,
+    type ParameterKnobDescriptor,
+} from "./rack-parameter-knob";
 import { ParameterHudLayerContext } from "../shared/parameter-hud";
 import {
     formatParameterEntry,
@@ -140,6 +145,15 @@ import {
     serializeAutoPreviewEnabled,
 } from "../shared/audition-preferences";
 import { PERF_TUNING_AVAILABLE } from "../shared/perf-tuning";
+import {
+    GLOBAL_TUNE_ENDPOINT_ID,
+    GLOBAL_TUNE_INITIAL_SEMITONES,
+    GLOBAL_TUNE_MAX_SEMITONES,
+    GLOBAL_TUNE_MIN_SEMITONES,
+    GLOBAL_TUNE_STEP_SEMITONES,
+    GLOBAL_TUNE_TARGET_KIND,
+    formatSemitonesAndCents,
+} from "../shared/global-tune";
 
 // Code-split so release builds (flag false) never fetch the tuning page chunk.
 const PerfTuningPage = PERF_TUNING_AVAILABLE
@@ -258,6 +272,23 @@ const FILTER_RESONANCE_ENTRY_SPEC = parameterEntrySpecForScalar({
     digits: 2,
 });
 const PAN_ENTRY_SPEC = parameterEntrySpecForMobileVoiceControl("pan");
+const GLOBAL_TUNE_ENTRY_SPEC = parameterEntrySpecForScalar({
+    min: GLOBAL_TUNE_MIN_SEMITONES,
+    max: GLOBAL_TUNE_MAX_SEMITONES,
+    step: GLOBAL_TUNE_STEP_SEMITONES,
+    unit: "st",
+    digits: 2,
+});
+const GLOBAL_TUNE_KNOB_DESCRIPTOR: ParameterKnobDescriptor = Object.freeze({
+    endpointID: GLOBAL_TUNE_ENDPOINT_ID,
+    label: "Global Tune",
+    shortLabel: "Global Tune",
+    min: GLOBAL_TUNE_MIN_SEMITONES,
+    max: GLOBAL_TUNE_MAX_SEMITONES,
+    initial: GLOBAL_TUNE_INITIAL_SEMITONES,
+    step: GLOBAL_TUNE_STEP_SEMITONES,
+    scale: "linear",
+});
 
 function getArticulationColor(runtimeSlot: number) {
     return ARTICULATION_CARD_COLORS[Math.abs(runtimeSlot) % ARTICULATION_CARD_COLORS.length];
@@ -1980,6 +2011,77 @@ function VoiceFilterKnob({
                         baseSpec: parameterEntrySpecForRackParameter(descriptor, binding.value),
                         baseValue: binding.value,
                         defaultValue: descriptor.initial,
+                        commitBase: binding.commitValue,
+                        clientX,
+                        clientY,
+                    });
+                }}
+            />
+        </div>
+    );
+}
+
+function GlobalTuneKnob({
+    binding,
+    routes,
+    armedSource,
+}: {
+    binding: PatchControlBinding<number>;
+    routes: ModulationRoute[];
+    armedSource: MobileModSource;
+}) {
+    const armedRoute = routes.find((route) => (
+        route.targetKind === GLOBAL_TUNE_TARGET_KIND
+        && route.sourceKind === armedSource.sourceKind
+        && route.sourceSlot === armedSource.sourceSlot
+    )) ?? null;
+    const amountBinding = useModulationRouteAmountBinding(armedRoute);
+    const presentedRoute = presentRouteWithCanonicalAmount(armedRoute, amountBinding);
+    const sourceDescriptor = findRackModulationSource(armedSource.sourceKind, armedSource.sourceSlot);
+    const targetRouteCount = routes.filter((route) => route.targetKind === GLOBAL_TUNE_TARGET_KIND).length;
+    const anyTargetRouteEnabled = routes.some((route) => (
+        route.targetKind === GLOBAL_TUNE_TARGET_KIND && route.enabled
+    ));
+    const openParameterMenu = useParameterMenu();
+
+    return (
+        <div
+            className="global-tune-knob-cell"
+            data-modulation-target-kind={GLOBAL_TUNE_TARGET_KIND}
+        >
+            {targetRouteCount > 0 ? (
+                <span
+                    className={`rack-route-count-badge ${anyTargetRouteEnabled ? "is-solid" : "is-hollow"}`}
+                    data-role="global-tune-route-count"
+                    aria-label={`${targetRouteCount} modulation ${targetRouteCount === 1 ? "route" : "routes"} target Global Tune`}
+                >
+                    {targetRouteCount}
+                </span>
+            ) : null}
+            <ModulatedParameterKnob
+                descriptor={GLOBAL_TUNE_KNOB_DESCRIPTOR}
+                binding={binding}
+                modulationApplication="linear"
+                modulationTargetKind={GLOBAL_TUNE_TARGET_KIND}
+                formatValue={formatSemitonesAndCents}
+                ownerAccent={MOBILE_VOICE_OWNER_ACCENT}
+                route={presentedRoute}
+                sourceIsSelected
+                sourceAccent={sourceDescriptor.accent}
+                effectiveness="active"
+                dataRole="global-tune-knob"
+                trackDataRole="global-tune-knob-track"
+                handleDataRole="global-tune-knob-handle"
+                onSelect={() => {}}
+                onModulationAmountChange={(amount) => amountBinding.setValue(amount)}
+                onRequestContextMenu={(clientX, clientY) => {
+                    openParameterMenu?.({
+                        controlKey: GLOBAL_TUNE_ENDPOINT_ID,
+                        label: "Global Tune",
+                        targetKind: GLOBAL_TUNE_TARGET_KIND,
+                        baseSpec: GLOBAL_TUNE_ENTRY_SPEC,
+                        baseValue: binding.value,
+                        defaultValue: GLOBAL_TUNE_INITIAL_SEMITONES,
                         commitBase: binding.commitValue,
                         clientX,
                         clientY,
@@ -4810,6 +4912,15 @@ function DesktopPatchViewBody({
             className="mobile-voice-grid grid min-h-0 grid-cols-1 items-stretch gap-4"
         >
             {isCompactViewport ? (
+                <div data-role="global-tune-control" className="mobile-global-tune-row">
+                    <GlobalTuneKnob
+                        binding={synthView.globalTune}
+                        routes={synthView.routes}
+                        armedSource={globalModRailState.selectedSource}
+                    />
+                </div>
+            ) : null}
+            {isCompactViewport ? (
                 <DesktopOscillatorConnectionBoundary
                     selectedOscillator={oscillatorSelection.selectedOscillator}
                     content={(
@@ -4947,7 +5058,19 @@ function DesktopPatchViewBody({
                 data-liquid-detail="edge-rail"
                 className={`${SYNTH_GRID_CARD_SHELL_CLASS} min-w-0 border p-3`}
             >
-                {keyboardToolbarOverride}
+                <div className="grid min-w-0 grid-cols-[104px_minmax(0,1fr)] gap-3">
+                    <div
+                        data-role="global-tune-control"
+                        className="relative min-w-0 rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5"
+                    >
+                        <GlobalTuneKnob
+                            binding={synthView.globalTune}
+                            routes={synthView.routes}
+                            armedSource={globalModRailState.selectedSource}
+                        />
+                    </div>
+                    {keyboardToolbarOverride}
+                </div>
             </section>
         )}
         </>

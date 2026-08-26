@@ -43,6 +43,7 @@ import {
 import {
     projectRackRouteLiveNormalized,
     projectRackRouteTravel,
+    type ModulatedParameterProjectionDescriptor,
     type RackRouteEffectiveness,
 } from "../shared/rack-route-presentation";
 import { useModSourceLight, type ModSourceLightPlacement } from "../shared/mod-source-live";
@@ -114,6 +115,15 @@ export type RackParameterKnobProps = {
      * direction's effect into a few pixels and leaves the rest dead.
      */
     readonly modulationDragStyle?: "amount-span" | "effective-value";
+};
+
+export type ModulatedParameterKnobProps = Omit<
+    RackParameterKnobProps,
+    "descriptor" | "formatValue"
+> & {
+    readonly descriptor: ParameterKnobDescriptor;
+    readonly modulationApplication: "linear" | "octaves";
+    readonly formatValue: (value: number) => string;
 };
 
 export type RackParameterHudAnchor = {
@@ -229,7 +239,7 @@ function annularSectorPath(
 
 type ParameterKnobSurfaceProps = {
     readonly descriptor: ParameterKnobDescriptor;
-    readonly rackDescriptor: RackParameterDescriptor | null;
+    readonly rackDescriptor: ModulatedParameterProjectionDescriptor | null;
     readonly binding: PatchControlBinding<number>;
     readonly route: ModulationRoute | null;
     readonly sourceIsSelected: boolean;
@@ -714,6 +724,27 @@ export function RackParameterKnob(props: RackParameterKnobProps) {
             className="rack-parameter-knob"
             detentStep={null}
             formatValue={props.formatValue ?? ((value) => formatRackParameterValue(props.descriptor, value))}
+            enableModulationGesture
+            enableContextMenu
+        />
+    );
+}
+
+/** The production dual-ring knob for a modulatable non-rack parameter. */
+export function ModulatedParameterKnob({
+    descriptor,
+    modulationApplication,
+    formatValue,
+    ...props
+}: ModulatedParameterKnobProps) {
+    return (
+        <ParameterKnobSurface
+            {...props}
+            descriptor={descriptor}
+            rackDescriptor={{ ...descriptor, modulationApplication }}
+            className="rack-parameter-knob"
+            detentStep={null}
+            formatValue={formatValue}
             enableModulationGesture
             enableContextMenu
         />

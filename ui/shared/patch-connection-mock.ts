@@ -13,6 +13,12 @@ import {
     OSCILLATOR_BINDING_CONTRACTS,
     type OscillatorControlID,
 } from "./oscillator-binding";
+import {
+    GLOBAL_TUNE_ENDPOINT_ID,
+    GLOBAL_TUNE_INITIAL_SEMITONES,
+    GLOBAL_TUNE_MAX_SEMITONES,
+    GLOBAL_TUNE_MIN_SEMITONES,
+} from "./global-tune";
 
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "oscAWavetablePosition";
@@ -409,6 +415,17 @@ function buildHarnessStatus(manifest: unknown) {
                         min: 0,
                         max: 2,
                         init: 0,
+                    },
+                },
+                {
+                    endpointID: GLOBAL_TUNE_ENDPOINT_ID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Global Tune",
+                        min: GLOBAL_TUNE_MIN_SEMITONES,
+                        max: GLOBAL_TUNE_MAX_SEMITONES,
+                        init: GLOBAL_TUNE_INITIAL_SEMITONES,
+                        unit: "st",
                     },
                 },
                 {

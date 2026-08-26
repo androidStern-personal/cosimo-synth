@@ -23,6 +23,7 @@ export function createIOSHarnessInitScript(baseUrl) {
             ["oscAWavetableSelect", 0],
             ["playMode", 0],
             ["glideTime", 0.15],
+            ["globalTune", 0],
             ["oscAPan", 0],
             ["distortionDriveDb", 12],
             ["distortionKnee", 0.35],
@@ -133,6 +134,11 @@ export function createIOSHarnessInitScript(baseUrl) {
                         endpointID: "glideTime",
                         purpose: "parameter",
                         annotation: { name: "Glide Time", min: 0, max: 2, init: 0 },
+                    },
+                    {
+                        endpointID: "globalTune",
+                        purpose: "parameter",
+                        annotation: { name: "Global Tune", min: -24, max: 24, init: 0, unit: "st" },
                     },
                     {
                         endpointID: "oscAPan",
@@ -378,6 +384,7 @@ export function createIOSHarnessInitScript(baseUrl) {
                     || oscillatorPanMatch
                     || endpointID === "playMode"
                     || endpointID === "glideTime"
+                    || endpointID === "globalTune"
                     || endpointID === "chorusMix"
                     || endpointID === "chorusMotionMode"
                     || endpointID === "chorusBloomMode"
@@ -819,6 +826,8 @@ export function createIOSHarnessInitScript(baseUrl) {
                     playModeValue: shadowRoot?.querySelector(".play-mode-select")?.value ?? null,
                     glideValue: shadowRoot?.querySelector(".glide-time-slider")?.value ?? null,
                     glideReadout: shadowRoot?.querySelector("[data-role='glide-time-readout']")?.textContent?.trim() ?? null,
+                    globalTuneValue: shadowRoot?.querySelector("[data-role='ios-global-tune-knob']")?.getAttribute("aria-valuenow") ?? null,
+                    globalTuneReadout: shadowRoot?.querySelector("[data-role='ios-global-tune-knob']")?.getAttribute("aria-valuetext") ?? null,
                     keyboardRootNote: keyboard?.getAttribute("root-note") ?? null,
                     keyboardNoteCount: keyboard?.getAttribute("note-count") ?? null,
                     keyboardAttachedEndpoint: keyboardCallback?.midiInputEndpointID ?? null,

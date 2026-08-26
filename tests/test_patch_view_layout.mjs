@@ -339,21 +339,22 @@ test("desktop synth reserves Cmajor host parameter slot 0 away from musical cont
     );
 });
 
-test("Bounce parameters are append-only additions to the frozen synth host-parameter order", async () => {
+test("Bounce and Global Tune are append-only additions to the frozen synth host-parameter order", async () => {
     const synthSource = await fs.readFile(path.join(repoRoot, "cmajor", "WavetableSynth.cmajor"), "utf8");
     const parameterOrder = parseGraphHostParameterIdentifiers(synthSource, "WavetableSynth");
     const inputValues = parseGraphInputValues(synthSource, "WavetableSynth");
     const filterMix = inputValues.find(({ identifier }) => identifier === "filterMix");
     const ampRelease = inputValues.find(({ identifier }) => identifier === "ampRelease");
     const sourceMode = inputValues.find(({ identifier }) => identifier === "sourceMode");
+    const globalTune = inputValues.find(({ identifier }) => identifier === "globalTune");
 
     assert.deepEqual(
-        parameterOrder.slice(0, -3),
+        parameterOrder.slice(0, -4),
         EXISTING_SYNTH_HOST_PARAMETER_ORDER,
         "appending Bounce controls must not move any existing DAW automation slot",
     );
-    assert.deepEqual(parameterOrder.slice(-3), ["filterMix", "ampRelease", "sourceMode"]);
-    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 3);
+    assert.deepEqual(parameterOrder.slice(-4), ["filterMix", "ampRelease", "sourceMode", "globalTune"]);
+    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 4);
     assert.notEqual(filterMix, undefined);
     assert.equal(filterMix.type, "float32");
     assert.match(filterMix.annotation, /name:\s*"Filter Mix"/);
@@ -378,6 +379,15 @@ test("Bounce parameters are append-only additions to the frozen synth host-param
     assert.match(sourceMode.annotation, /discrete:\s*true/);
     assert.match(sourceMode.annotation, /text:\s*"Oscillator\|Bounce"/);
     assert.match(sourceMode.annotation, /rampFrames:\s*0/);
+    assert.notEqual(globalTune, undefined);
+    assert.equal(globalTune.type, "float32");
+    assert.match(globalTune.annotation, /name:\s*"Global Tune"/);
+    assert.match(globalTune.annotation, /min:\s*-24(?:\.0)?f?/);
+    assert.match(globalTune.annotation, /max:\s*24(?:\.0)?f?/);
+    assert.match(globalTune.annotation, /init:\s*0(?:\.0)?f?/);
+    assert.match(globalTune.annotation, /unit:\s*"st"/);
+    assert.match(globalTune.annotation, /rampFrames:\s*64/);
+    assert.doesNotMatch(globalTune.annotation, /discrete:\s*true/);
 });
 
 test("legacy synth presets resolve an omitted Filter Mix to fully wet through an exact-contract migration", async () => {

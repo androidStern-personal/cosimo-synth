@@ -29,6 +29,15 @@ import {
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 import { casesHandled, err, ok, shouldNeverHappen, type Result } from "./result";
+import {
+    GLOBAL_TUNE_ENDPOINT_ID,
+    GLOBAL_TUNE_INITIAL_SEMITONES,
+    GLOBAL_TUNE_MAX_SEMITONES,
+    GLOBAL_TUNE_MIN_SEMITONES,
+    GLOBAL_TUNE_MODULATION_MAX_SEMITONES,
+    GLOBAL_TUNE_MODULATION_MIN_SEMITONES,
+    GLOBAL_TUNE_TARGET_KIND,
+} from "./global-tune";
 
 /** The eight fixed rack effects (ADR-006 v1 inventory; identity ≠ position). */
 export type EffectModuleId =
@@ -42,7 +51,7 @@ export type EffectModuleId =
     | "reverb";
 
 /** The per-note voice modules. */
-export type VoiceModuleId = `osc${OscillatorID}` | "voice-filter";
+export type VoiceModuleId = `osc${OscillatorID}` | "voice" | "voice-filter";
 
 /** The six modulation-generator modules shown in the voice workspace. */
 export type ModulationGeneratorModuleId = `mseg${1 | 2 | 3}` | `env${1 | 2 | 3}`;
@@ -144,6 +153,7 @@ type ModuleDefinition = {
 };
 
 type BoundEndpointId =
+    | typeof GLOBAL_TUNE_ENDPOINT_ID
     | "filterCutoff"
     | "filterQ"
     | "filterMix"
@@ -417,6 +427,44 @@ const OSCILLATOR_MODULATION_DESCRIPTORS: ReadonlyArray<TargetDescriptor> = Objec
     )),
 );
 
+const GLOBAL_TUNE_TARGET_DESCRIPTOR: TargetDescriptor = Object.freeze({
+    targetId: catalogTargetId("voice", "globalTune"),
+    moduleId: "voice",
+    workspace: "voice",
+    label: "Global Tune",
+    defaultValue: normalized(
+        (GLOBAL_TUNE_INITIAL_SEMITONES - GLOBAL_TUNE_MIN_SEMITONES)
+            / (GLOBAL_TUNE_MAX_SEMITONES - GLOBAL_TUNE_MIN_SEMITONES),
+        "Global Tune default",
+    ),
+    initialValue: normalized(
+        (GLOBAL_TUNE_INITIAL_SEMITONES - GLOBAL_TUNE_MIN_SEMITONES)
+            / (GLOBAL_TUNE_MAX_SEMITONES - GLOBAL_TUNE_MIN_SEMITONES),
+        "Global Tune initial value",
+    ),
+    format: { kind: "semitone", span: GLOBAL_TUNE_MAX_SEMITONES },
+    modAmount: {
+        min: GLOBAL_TUNE_MODULATION_MIN_SEMITONES,
+        max: GLOBAL_TUNE_MODULATION_MAX_SEMITONES,
+        unit: "st",
+        digits: 2,
+    },
+    binding: boundEndpoint(
+        GLOBAL_TUNE_ENDPOINT_ID,
+        (value) => GLOBAL_TUNE_MIN_SEMITONES
+            + ((GLOBAL_TUNE_MAX_SEMITONES - GLOBAL_TUNE_MIN_SEMITONES) * value),
+        (value) => normalized(
+            (value - GLOBAL_TUNE_MIN_SEMITONES)
+                / (GLOBAL_TUNE_MAX_SEMITONES - GLOBAL_TUNE_MIN_SEMITONES),
+            "Global Tune endpoint conversion",
+        ),
+    ),
+    isQuick: false,
+    compound: null,
+    articulationParameterId: null,
+    modulationTargetKind: GLOBAL_TUNE_TARGET_KIND,
+});
+
 type GeneratorTargetDefinition = {
     readonly moduleId: ModulationGeneratorModuleId;
     readonly targetIdSuffix: string;
@@ -566,6 +614,7 @@ function createRackTargetDescriptor(parameter: RackParameterDescriptor): TargetD
 const TARGET_DESCRIPTORS: ReadonlyArray<TargetDescriptor> = Object.freeze(
     [
         ...RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters.map(createRackTargetDescriptor)),
+        GLOBAL_TUNE_TARGET_DESCRIPTOR,
         ...OSCILLATOR_MODULATION_DESCRIPTORS,
         ...GENERATOR_TARGET_DESCRIPTORS,
         ...MODULE_DEFINITIONS.flatMap((moduleDefinition) =>

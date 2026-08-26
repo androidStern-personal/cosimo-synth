@@ -15,7 +15,7 @@ bool testReducerWireValuesKeepZeroInvalid()
 
 bool testCompleteMappingDomainCellCountsArePinned()
 {
-    // 1,131 static legal pairs (the enumerable UI domain, unchanged) plus the
+    // 1,144 static legal pairs (the enumerable UI domain) plus the
     // Effects Lane pool block's cells: 4 pool destinations x 13 sources = 52.
     // Pool PAIRS are per-patch dynamic (they exist only while a lane device
     // does), so they widen the cell tables without joining the static domain.
@@ -23,8 +23,8 @@ bool testCompleteMappingDomainCellCountsArePinned()
             + wt::modulationMacroVoiceRouteCellCount
             + wt::modulationVoiceRackRouteCellCount
             + wt::modulationMacroRackRouteCellCount
-        == 1131 + ((wt::modulationVoiceSourceCount + wt::modulationMacroSourceCount) * wt::laneModPoolTargetCount);
-    // (13 sources x 144 mirror lanes = 1,872 pool cells; static pairs stay 1,131.)
+        == 1144 + ((wt::modulationVoiceSourceCount + wt::modulationMacroSourceCount) * wt::laneModPoolTargetCount);
+    // (13 sources x 144 mirror lanes = 1,872 pool cells; static pairs are 1,144.)
 }
 
 bool testRackDestinationVocabularyIsCompleteAndContiguous()

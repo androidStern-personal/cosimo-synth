@@ -68,6 +68,11 @@ import {
     type MsegEditorControllerLike,
 } from "./modulation";
 import { isOscillatorModulationTargetKind } from "./modulation-targets";
+import {
+    GLOBAL_TUNE_ENDPOINT_ID,
+    GLOBAL_TUNE_INITIAL_SEMITONES,
+    clampGlobalTuneSemitones,
+} from "./global-tune";
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
 import type {
     EffectStoredStateAdapter,
@@ -403,6 +408,7 @@ export type SynthPatchViewModel = {
     wavetablePosition: PatchControlBinding<number>;
     playMode: PatchControlBinding<number>;
     glideTime: PatchControlBinding<number>;
+    globalTune: PatchControlBinding<number>;
     pan: PatchControlBinding<number>;
     oscillatorOctave: PatchControlBinding<number>;
     oscillatorSemitone: PatchControlBinding<number>;
@@ -2524,6 +2530,11 @@ export function useSynthPatchViewModel({
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, GLIDE_TIME_MIN_SECONDS, GLIDE_TIME_MAX_SECONDS),
     });
+    const globalTune = usePatchParameterBinding<number>({
+        endpointID: GLOBAL_TUNE_ENDPOINT_ID,
+        initialValue: GLOBAL_TUNE_INITIAL_SEMITONES,
+        coerce: clampGlobalTuneSemitones,
+    });
     const pan = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("pan"),
         initialValue: 0,
@@ -4222,6 +4233,7 @@ export function useSynthPatchViewModel({
         wavetablePosition,
         playMode,
         glideTime,
+        globalTune,
         pan,
         oscillatorOctave,
         oscillatorSemitone,

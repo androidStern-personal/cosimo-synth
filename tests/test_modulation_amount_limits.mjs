@@ -35,6 +35,7 @@ const VOICE_TARGET_KINDS_BY_PARAMETER = {
     filterQ: "filterQ",
     filterMix: "filterMix",
     pitchSemitones: "oscA.pitchSemitones",
+    globalTuneSemitones: "globalTuneSemitones",
     ampGainDb: "oscA.ampGainDb",
     pan: "oscA.pan",
     unisonDetune: "oscA.unisonDetune",
@@ -98,6 +99,7 @@ test("deliberately narrower musical offset caps are pinned exactly", async () =>
     const { getModulationAmountBounds } = await modulationModulePromise;
     const pinned = [
         { parameterKind: "pitchSemitones", min: -48, max: 48 },
+        { parameterKind: "globalTuneSemitones", min: -48, max: 48 },
         { parameterKind: "filterCutoffOctaves", min: -6, max: 6 },
         { parameterKind: "pan", min: -1, max: 1 },
     ];

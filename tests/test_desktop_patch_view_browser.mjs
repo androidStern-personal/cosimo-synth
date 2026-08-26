@@ -178,6 +178,46 @@ test("design-system typography preserves utility intent and active knob labels r
     }
 });
 
+test("Global Tune stays continuous, brackets edits for host undo, and accepts host-restored values", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await showVoiceControls(page);
+        const knob = page.locator('[data-role="global-tune-knob"]');
+        await knob.waitFor({ state: "visible" });
+        assert.equal(await knob.getAttribute("aria-valuemin"), "-24");
+        assert.equal(await knob.getAttribute("aria-valuemax"), "24");
+        assert.equal(await knob.getAttribute("aria-valuetext"), "0 st 00 ct");
+        assert.equal(await knob.getAttribute("data-detented"), "false");
+
+        await clearHarnessDebugLog(page);
+        await knob.press("ArrowRight");
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "continuous Global Tune host gesture",
+            (nextSnapshot) => nextSnapshot.gestureStarts.includes("globalTune")
+                && nextSnapshot.gestureEnds.includes("globalTune")
+                && Math.abs(Number(nextSnapshot.parameterValues.globalTune)) > 0.01,
+        );
+        assert.deepEqual(snapshot.gestureStarts, ["globalTune"]);
+        assert.deepEqual(snapshot.gestureEnds, ["globalTune"]);
+        assert.notEqual(Number.isInteger(Number(snapshot.parameterValues.globalTune)), true);
+        assert.match(await knob.getAttribute("aria-valuetext"), /^[+-]?\d+ st \d{2} ct$/);
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("globalTune", -3.45);
+        });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="global-tune-knob"]')?.getAttribute("aria-valuenow") === "-3.45"
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.parameterValues.globalTune, -3.45);
+        assert.equal(await knob.getAttribute("aria-valuetext"), "-3 st 45 ct");
+    } finally {
+        await page.close();
+    }
+});
+
 test("desktop Vite harness installs React Grab and registers the official MCP plugin in dev mode", async () => {
     const page = await openHarnessPage();
 

@@ -17,6 +17,7 @@ from bench import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MSEG_SOURCE = REPO_ROOT / "cmajor" / "Mseg.cmajor"
 FIXED_FRAME_SOURCE = REPO_ROOT / "cmajor" / "FixedFrameOscillator.cmajor"
+NOOP_RENDERER_SOURCE = REPO_ROOT / "tests" / "cmajor_rack" / "NoopThreeOscillatorRenderer.cmajor"
 VOICE_REDUCER_SOURCE = REPO_ROOT / "cmajor" / "VoiceReducer.cmajor"
 CHORUS_SOURCE = REPO_ROOT / "cmajor" / "Chorus.cmajor"
 WAVETABLE_SYNTH_SOURCE = REPO_ROOT / "cmajor" / "WavetableSynth.cmajor"
@@ -50,7 +51,12 @@ def _wavetable_synth_support_source() -> str:
     return note_dispatcher_source + "\n}\n"
 
 
-def _build_scheduler_source(scheduled_events: list[tuple[int, str]]) -> str:
+def _build_scheduler_source(
+    scheduled_events: list[tuple[int, str]],
+    *,
+    global_tune_modulation_amount: float = 0.0,
+    global_tune_modulation_polarity: int = 0,
+) -> str:
     statements = [
         "            if (frameCounter == "
         + str(int(frame_index))
@@ -70,11 +76,30 @@ def _build_scheduler_source(scheduled_events: list[tuple[int, str]]) -> str:
         + "                  std::notes::Slide,\n"
         + "                  std::notes::Pressure,\n"
         + "                  std::notes::Control) noteEventOut;\n"
+        + "    output event wt::ModulationProgramUpload modulationProgramOut;\n"
         + "    int32 frameCounter = 0;\n"
+        + "    wt::ModulationProgramUpload globalTuneProgram()\n"
+        + "    {\n"
+        + "        wt::ModulationProgramUpload upload;\n"
+        + "        upload.dspSessionId = int32 (processor.session);\n"
+        + "        upload.deliverySerial = 1;\n"
+        + "        let sourceIndex = 6;\n"
+        + "        let targetIndex = wt::modulationTargetGlobalTuneSemitones;\n"
+        + "        let cellIndex = (sourceIndex * wt::modulationVoiceTargetCount) + targetIndex;\n"
+        + "        upload.voiceRouteCount = 1;\n"
+        + "        upload.voiceRouteCells[0] = cellIndex;\n"
+        + "        upload.voiceRouteSources[0] = sourceIndex;\n"
+        + "        upload.voiceRouteTargets[0] = targetIndex;\n"
+        + f"        upload.voiceRoutePolarities[0] = {int(global_tune_modulation_polarity)};\n"
+        + f"        upload.voiceRouteAmounts[cellIndex] = {float(global_tune_modulation_amount):.6f}f;\n"
+        + "        return upload;\n"
+        + "    }\n"
         + "    void main()\n"
         + "    {\n"
         + "        loop\n"
         + "        {\n"
+        + "            if (frameCounter == 0)\n"
+        + "                modulationProgramOut <- globalTuneProgram();\n"
         + "\n".join(statements)
         + "\n"
         + "            frameCounter += 1;\n"
@@ -85,9 +110,16 @@ def _build_scheduler_source(scheduled_events: list[tuple[int, str]]) -> str:
     )
 
 
-def _build_tracking_pitch_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
+def _build_tracking_pitch_probe_source(
+    scheduled_events: list[tuple[int, str]],
+    *,
+    global_tune_modulation_amount: float = 0.0,
+    global_tune_modulation_polarity: int = 0,
+) -> str:
     return (
         MSEG_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + NOOP_RENDERER_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
         + "\n"
@@ -95,11 +127,17 @@ def _build_tracking_pitch_probe_source(scheduled_events: list[tuple[int, str]]) 
         + "\n"
         + _wavetable_synth_support_source()
         + "\n"
-        + _build_scheduler_source(scheduled_events)
+        + _build_scheduler_source(
+            scheduled_events,
+            global_tune_modulation_amount=global_tune_modulation_amount,
+            global_tune_modulation_polarity=global_tune_modulation_polarity,
+        )
         + "graph TrackingPitchProbe [[ main ]]\n"
         + "{\n"
         + "    input value float32 playMode [[ init: 0.0f ]];\n"
         + "    input value float32 glideTime [[ init: 0.0f ]];\n"
+        + "    input value float32 globalTune [[ init: 0.0f ]];\n"
+        + "    input value float32 oscAOctave [[ init: 0.0f ]];\n"
         + "    output stream float trackingHz;\n"
         + "    node scheduler = TrackingPitchScheduler;\n"
         + "    node dispatcher = wt::NoteDispatcher (4);\n"
@@ -107,10 +145,13 @@ def _build_tracking_pitch_probe_source(scheduled_events: list[tuple[int, str]]) 
         + "    connection\n"
         + "    {\n"
         + "        scheduler.noteEventOut -> dispatcher.eventIn;\n"
+        + "        scheduler.modulationProgramOut -> engine.modulationProgramIn;\n"
         + "        playMode -> dispatcher.playModeIn;\n"
         + "        dispatcher.voiceEventOut -> engine.voiceEventIn;\n"
         + "        dispatcher.voiceRetuneOut -> engine.voiceRetuneIn;\n"
         + "        glideTime -> engine.glideTimeIn;\n"
+        + "        globalTune -> engine.globalTuneIn;\n"
+        + "        oscAOctave -> engine.oscillatorOctaveIn[wt::oscillatorA];\n"
         + "        engine.trackingPitchHzOut -> trackingHz;\n"
         + "    }\n"
         + "}\n"
@@ -166,6 +207,8 @@ def _build_chorus_tracking_probe_source(scheduled_events: list[tuple[int, str]])
     return (
         MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
+        + NOOP_RENDERER_SOURCE.read_text(encoding="utf-8")
+        + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + VOICE_REDUCER_SOURCE.read_text(encoding="utf-8")
@@ -181,6 +224,8 @@ def _build_chorus_tracking_probe_source(scheduled_events: list[tuple[int, str]])
         + "{\n"
         + "    input value float32 playMode [[ init: 0.0f ]];\n"
         + "    input value float32 glideTime [[ init: 0.0f ]];\n"
+        + "    input value float32 globalTune [[ init: 0.0f ]];\n"
+        + "    input value float32 oscAOctave [[ init: 0.0f ]];\n"
         + "    input value float32 sourceFrequencyHz [[ init: 1100.0f ]];\n"
         + "    input value float32 sourceAmplitude [[ init: 0.75f ]];\n"
         + "    input value float32 chorusEnabled [[ init: 1.0f ]];\n"
@@ -200,10 +245,13 @@ def _build_chorus_tracking_probe_source(scheduled_events: list[tuple[int, str]])
         + "    connection\n"
         + "    {\n"
         + "        scheduler.noteEventOut -> dispatcher.eventIn;\n"
+        + "        scheduler.modulationProgramOut -> engine.modulationProgramIn;\n"
         + "        playMode -> dispatcher.playModeIn;\n"
         + "        dispatcher.voiceEventOut -> engine.voiceEventIn;\n"
         + "        dispatcher.voiceRetuneOut -> engine.voiceRetuneIn;\n"
         + "        glideTime -> engine.glideTimeIn;\n"
+        + "        globalTune -> engine.globalTuneIn;\n"
+        + "        oscAOctave -> engine.oscillatorOctaveIn[wt::oscillatorA];\n"
         + "        sourceFrequencyHz -> source.frequencyHzIn;\n"
         + "        sourceAmplitude -> source.amplitudeIn;\n"
         + "        source.out -> chorus.in;\n"
@@ -239,6 +287,10 @@ def _render_tracking_pitch(
     *,
     play_mode: int,
     glide_time: float = 0.0,
+    global_tune: float = 0.0,
+    osc_a_octave: float = 0.0,
+    global_tune_modulation_amount: float = 0.0,
+    global_tune_modulation_polarity: int = 0,
     num_samples: int,
 ) -> np.ndarray:
     with tempfile.TemporaryDirectory(prefix="tracking_pitch_probe_") as temp_dir_name:
@@ -247,7 +299,11 @@ def _render_tracking_pitch(
         patch_path = temp_dir / "TrackingPitchProbe.cmajorpatch"
 
         probe_source_path.write_text(
-            _build_tracking_pitch_probe_source(scheduled_events),
+            _build_tracking_pitch_probe_source(
+                scheduled_events,
+                global_tune_modulation_amount=global_tune_modulation_amount,
+                global_tune_modulation_polarity=global_tune_modulation_polarity,
+            ),
             encoding="utf-8",
         )
         patch_path.write_text(
@@ -259,6 +315,8 @@ def _render_tracking_pitch(
             [
                 f"patch.setInputValue_playMode({float(play_mode):.1f}, 0);",
                 f"patch.setInputValue_glideTime({float(glide_time):.6f}, 0);",
+                f"patch.setInputValue_globalTune({float(global_tune):.6f}, 0);",
+                f"patch.setInputValue_oscAOctave({float(osc_a_octave):.6f}, 0);",
             ]
         )
 
@@ -276,6 +334,8 @@ def _render_chorus_tracking_audio(
     *,
     play_mode: int,
     glide_time: float = 0.0,
+    global_tune: float = 0.0,
+    osc_a_octave: float = 0.0,
     source_frequency_hz: float = 1100.0,
     num_samples: int,
 ) -> np.ndarray:
@@ -297,6 +357,8 @@ def _render_chorus_tracking_audio(
             [
                 f"patch.setInputValue_playMode({float(play_mode):.1f}, 0);",
                 f"patch.setInputValue_glideTime({float(glide_time):.6f}, 0);",
+                f"patch.setInputValue_globalTune({float(global_tune):.6f}, 0);",
+                f"patch.setInputValue_oscAOctave({float(osc_a_octave):.6f}, 0);",
                 f"patch.setInputValue_sourceFrequencyHz({float(source_frequency_hz):.6f}, 0);",
                 "patch.setInputValue_sourceAmplitude(0.75, 0);",
                 "patch.setInputValue_chorusEnabled(1.0, 0);",
@@ -386,6 +448,79 @@ def test_tracking_pitch_follows_pitch_bend() -> None:
 
 
 @pytest.mark.cmajor
+def test_global_tune_is_neutral_at_zero_doubles_at_twelve_and_accepts_cents() -> None:
+    events = [(1024, _note_on_expr(1, 60.0))]
+    neutral = _render_tracking_pitch(
+        events,
+        play_mode=PLAY_MODE_POLY,
+        global_tune=0.0,
+        num_samples=6144,
+    )
+    octave = _render_tracking_pitch(
+        events,
+        play_mode=PLAY_MODE_POLY,
+        global_tune=12.0,
+        num_samples=6144,
+    )
+    cents = _render_tracking_pitch(
+        events,
+        play_mode=PLAY_MODE_POLY,
+        global_tune=0.25,
+        num_samples=6144,
+    )
+
+    neutral_hz = _median_window(neutral, 3072, 4096)
+    octave_hz = _median_window(octave, 3072, 4096)
+    cents_hz = _median_window(cents, 3072, 4096)
+    assert neutral_hz == pytest.approx(_note_to_frequency(60.0), abs=1.0)
+    assert octave_hz / neutral_hz == pytest.approx(2.0, abs=0.01)
+    assert cents_hz / neutral_hz == pytest.approx(2.0 ** (0.25 / 12.0), abs=0.002)
+
+
+@pytest.mark.cmajor
+def test_global_tune_modulation_keeps_unipolar_and_bipolar_source_laws() -> None:
+    quarter_velocity_note = [(1024, _note_on_expr(1, 60.0, 0.25))]
+    unipolar = _render_tracking_pitch(
+        quarter_velocity_note,
+        play_mode=PLAY_MODE_POLY,
+        global_tune_modulation_amount=12.0,
+        global_tune_modulation_polarity=0,
+        num_samples=6144,
+    )
+    bipolar = _render_tracking_pitch(
+        quarter_velocity_note,
+        play_mode=PLAY_MODE_POLY,
+        global_tune_modulation_amount=12.0,
+        global_tune_modulation_polarity=1,
+        num_samples=6144,
+    )
+
+    assert _median_window(unipolar, 3072, 4096) == pytest.approx(
+        _note_to_frequency(63.0),
+        abs=1.5,
+    )
+    assert _median_window(bipolar, 3072, 4096) == pytest.approx(
+        _note_to_frequency(54.0),
+        abs=1.0,
+    )
+
+
+@pytest.mark.cmajor
+def test_oscillator_a_private_tuning_does_not_move_shared_tracking_pitch() -> None:
+    tracking = _render_tracking_pitch(
+        [(1024, _note_on_expr(1, 60.0))],
+        play_mode=PLAY_MODE_POLY,
+        osc_a_octave=1.0,
+        num_samples=6144,
+    )
+
+    assert _median_window(tracking, 3072, 4096) == pytest.approx(
+        _note_to_frequency(60.0),
+        abs=1.0,
+    )
+
+
+@pytest.mark.cmajor
 def test_chorus_ring_uses_realized_voice_engine_pitch_for_sidebands() -> None:
     source_hz = 1100.0
     c4_sideband_hz = source_hz - (_note_to_frequency(60.0) * CHORUS_RING_OFFSET_RATIO)
@@ -405,3 +540,23 @@ def test_chorus_ring_uses_realized_voice_engine_pitch_for_sidebands() -> None:
 
     assert _band_energy_around(before_bend, c4_sideband_hz) > _band_energy_around(before_bend, c5_sideband_hz) * 2.0
     assert _band_energy_around(after_bend, c5_sideband_hz) > _band_energy_around(after_bend, c4_sideband_hz) * 2.0
+
+
+@pytest.mark.cmajor
+def test_chorus_tracks_global_tune_but_not_oscillator_a_private_octave() -> None:
+    source_hz = 1100.0
+    shared_c5_sideband_hz = source_hz - (_note_to_frequency(72.0) * CHORUS_RING_OFFSET_RATIO)
+    leaked_c4_sideband_hz = source_hz - (_note_to_frequency(60.0) * CHORUS_RING_OFFSET_RATIO)
+    audio = _render_chorus_tracking_audio(
+        [(1024, _note_on_expr(1, 60.0))],
+        play_mode=PLAY_MODE_POLY,
+        global_tune=12.0,
+        osc_a_octave=-1.0,
+        source_frequency_hz=source_hz,
+        num_samples=32_768,
+    )
+    settled = audio[12_000:28_000]
+
+    assert _band_energy_around(settled, shared_c5_sideband_hz) > (
+        _band_energy_around(settled, leaked_c4_sideband_hz) * 2.0
+    )

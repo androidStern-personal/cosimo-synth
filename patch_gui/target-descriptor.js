@@ -12,6 +12,7 @@ import { laneInstanceNumber, laneMirrorRackKind, parseLaneModulationTargetKind, 
 import { MODULATION_TARGET_IDENTITIES, OSCILLATOR_IDS, laneBaseKindForRackEndpoint, } from "./modulation-targets.js";
 import { RACK_EFFECT_DESCRIPTORS, } from "./rack-parameter-descriptors.js";
 import { casesHandled, err, ok, shouldNeverHappen } from "./result.js";
+import { GLOBAL_TUNE_ENDPOINT_ID, GLOBAL_TUNE_INITIAL_SEMITONES, GLOBAL_TUNE_MAX_SEMITONES, GLOBAL_TUNE_MIN_SEMITONES, GLOBAL_TUNE_MODULATION_MAX_SEMITONES, GLOBAL_TUNE_MODULATION_MIN_SEMITONES, GLOBAL_TUNE_TARGET_KIND, } from "./global-tune.js";
 function parameter(id, label, initialPercent, defaultPercent, format = "percent", compound = null) {
     return { id, label, initialPercent, defaultPercent, format, compound };
 }
@@ -212,6 +213,30 @@ function createOscillatorModulationDescriptor(oscillatorID, definition) {
     });
 }
 const OSCILLATOR_MODULATION_DESCRIPTORS = Object.freeze(OSCILLATOR_IDS.flatMap((oscillatorID) => (OSCILLATOR_MODULATION_DESCRIPTOR_DEFINITIONS.map((definition) => (createOscillatorModulationDescriptor(oscillatorID, definition))))));
+const GLOBAL_TUNE_TARGET_DESCRIPTOR = Object.freeze({
+    targetId: catalogTargetId("voice", "globalTune"),
+    moduleId: "voice",
+    workspace: "voice",
+    label: "Global Tune",
+    defaultValue: normalized((GLOBAL_TUNE_INITIAL_SEMITONES - GLOBAL_TUNE_MIN_SEMITONES)
+        / (GLOBAL_TUNE_MAX_SEMITONES - GLOBAL_TUNE_MIN_SEMITONES), "Global Tune default"),
+    initialValue: normalized((GLOBAL_TUNE_INITIAL_SEMITONES - GLOBAL_TUNE_MIN_SEMITONES)
+        / (GLOBAL_TUNE_MAX_SEMITONES - GLOBAL_TUNE_MIN_SEMITONES), "Global Tune initial value"),
+    format: { kind: "semitone", span: GLOBAL_TUNE_MAX_SEMITONES },
+    modAmount: {
+        min: GLOBAL_TUNE_MODULATION_MIN_SEMITONES,
+        max: GLOBAL_TUNE_MODULATION_MAX_SEMITONES,
+        unit: "st",
+        digits: 2,
+    },
+    binding: boundEndpoint(GLOBAL_TUNE_ENDPOINT_ID, (value) => GLOBAL_TUNE_MIN_SEMITONES
+        + ((GLOBAL_TUNE_MAX_SEMITONES - GLOBAL_TUNE_MIN_SEMITONES) * value), (value) => normalized((value - GLOBAL_TUNE_MIN_SEMITONES)
+        / (GLOBAL_TUNE_MAX_SEMITONES - GLOBAL_TUNE_MIN_SEMITONES), "Global Tune endpoint conversion")),
+    isQuick: false,
+    compound: null,
+    articulationParameterId: null,
+    modulationTargetKind: GLOBAL_TUNE_TARGET_KIND,
+});
 const GENERATOR_TARGET_DEFINITIONS = Object.freeze([
     { moduleId: "mseg1", targetIdSuffix: "morph", endpointID: "mseg1Morph", targetKind: "mseg1Morph", label: "MSEG 1 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph1" },
     { moduleId: "mseg2", targetIdSuffix: "morph", endpointID: "mseg2Morph", targetKind: "mseg2Morph", label: "MSEG 2 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph2" },
@@ -332,6 +357,7 @@ function createRackTargetDescriptor(parameter) {
 }
 const TARGET_DESCRIPTORS = Object.freeze([
     ...RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters.map(createRackTargetDescriptor)),
+    GLOBAL_TUNE_TARGET_DESCRIPTOR,
     ...OSCILLATOR_MODULATION_DESCRIPTORS,
     ...GENERATOR_TARGET_DESCRIPTORS,
     ...MODULE_DEFINITIONS.flatMap((moduleDefinition) => moduleDefinition.parameters.map((parameterDefinition) => createDescriptor(moduleDefinition, parameterDefinition))),
