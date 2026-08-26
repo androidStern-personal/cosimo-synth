@@ -1251,6 +1251,21 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Post-rebase combined master verification passed the full rail suite 56/56, pure rail geometry 12/12, and the complete desktop UI suite 262/263. Its sole failure is the established React Grab `navigator.webdriver` development-harness assertion; all product tests pass. Desktop and iPhone generated output were rebuilt from the final combined source. Five reviewed captures plus measured rectangles remain in `docs/evidence/t54-wavetable-right-edge-controls/`.
     - The combined compiled VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` and passes strict codesign. A fresh HMR wrapper/app is running from master against `http://127.0.0.1:5199` with `usesViteClient: true`; physical iPhone finger-comfort review remains manual acceptance.
 
+[ ] T54A — Restore free Mod-bar movement, usable expansion, and the full-width wavetable parameter row
+    Active owner (2026-08-27):
+    - Codex task `Fix wavetable Mod bar regression`, thread `01a04027-1528-7083-ae49-f16ec0eb5e3c`, branch `codex/t54a-wavetable-mod-bar-regression`, worktree `/Users/winterfell/.codex/worktrees/63ff/cosimo-synth`, model SOL, reasoning max.
+    Reproduced regression:
+    - On the real 320 x 568 composed browser surface, the right-docked Mod bar reserves a blank 44 px column in the wavetable parameter row; a 100 px upward grip drag moves the bar 0 px; and Expand produces only a 35 px drawer sliver.
+    Actual cause:
+    - T54 follow-up commits `5d10370b` and `24fd1d60` turned the wavetable corner chips and page arrows into vertical Mod-bar keep-outs, projected every pointer move into the nearest permitted segment, clipped the drawer to that segment, and added a Mod-bar-width toolbar column when the segment was too small.
+    Required result:
+    - Keep all four wavetable corner chips at the accepted mirrored 8 px graph inset.
+    - Keep the bottom wavetable parameter row full width on both Mod-bar edges; never reserve a blank Mod-bar-width column.
+    - Let the floating Mod bar follow vertical drags continuously through its normal fixed-chrome travel range on the Voice page. Wavetable chips and page arrows must not trap it in one segment.
+    - Expansion must expose a genuinely usable drawer on short phones, not a one-source sliver. Preserve the 10% Mod-bar scale, edge docking, source tap toggle, page-arrow interaction, and chip hit areas.
+    Done when:
+    - Real composed browser regressions at 320 x 568 and 393 x 852, on both rail edges, prove the row reaches both wavetable edges, vertical dragging remains continuous, expansion is usable, all four chips remain at 8 px and clickable, and both page arrows remain clickable.
+
 [ ] T55 — Add exclusive branch Solo to Frequency Split and Parallel groups
     Required behavior:
     - Give every Frequency Split band and every Parallel branch a small Solo control so one branch can be heard by itself.
