@@ -32,13 +32,14 @@ namespace wt
     let enhancerCoefficientUpdateFrames = 16;
     let enhancerCoefficientEpsilon = 0.000001f;
 
-    // ENHANCER_DESIGN.md starts the Amount voicing at +24 dB * amount^2.
+    // Amount gates the band and raises drive progressively toward +24 dB.
     // Amount also gates the band before the shaper, so amount 0 makes the core
-    // input and aligned residue exactly zero. The conservative post trim keeps
-    // the additive residue inside the design's <= 0.5 dB loudness budget on the
-    // retained musical fixtures while leaving its harmonic lines measurable.
+    // input and aligned residue exactly zero. The post trim keeps full-Amount
+    // residue clearly audible while retaining the design's <= 0.5 dB loudness
+    // budget on the retained musical fixtures.
     let enhancerDriveRangeDb = 24.0f;
-    let enhancerResidueTrim = 0.035f;
+    let enhancerBand1ResidueTrim = 0.08f;
+    let enhancerBand2ResidueTrim = 0.094f;
 
     // A sample-rate-aware version of the standard x[n]-x[n-1]+R*y[n-1]
     // DC-blocker idiom. std::filters::dcblocker fixes R at 0.996, making its
@@ -81,7 +82,9 @@ namespace wt
     float32 enhancerAmountDrive (float32 amount)
     {
         let amount01 = clampEnhancerAmount (amount);
-        let driveDb = enhancerDriveRangeDb * amount01 * amount01;
+        let driveDb = enhancerDriveRangeDb
+                      * amount01
+                      * (0.5f + 0.5f * amount01);
         return amount01 * std::levels::dBtoGain (driveDb);
     }
 
@@ -414,16 +417,16 @@ namespace wt
 
                 let band1StereoResidue = residueDcBlockers[0].process (
                     band1StereoCore.out - band1StereoCore.thru
-                ) * enhancerResidueTrim;
+                ) * enhancerBand1ResidueTrim;
                 let band1MidSideResidue = residueDcBlockers[1].process (
                     band1MidSideCore.out - band1MidSideCore.thru
-                ) * enhancerResidueTrim;
+                ) * enhancerBand1ResidueTrim;
                 let band2StereoResidue = residueDcBlockers[2].process (
                     band2StereoCore.out - band2StereoCore.thru
-                ) * enhancerResidueTrim;
+                ) * enhancerBand2ResidueTrim;
                 let band2MidSideResidue = residueDcBlockers[3].process (
                     band2MidSideCore.out - band2MidSideCore.thru
-                ) * enhancerResidueTrim;
+                ) * enhancerBand2ResidueTrim;
                 let band1DecodedMidSideResidue = float32<2> (
                     band1MidSideResidue[0] + band1MidSideResidue[1],
                     band1MidSideResidue[0] - band1MidSideResidue[1]
@@ -440,7 +443,6 @@ namespace wt
                     : (b2MidSideWeight == 1.0f ? band2DecodedMidSideResidue
                        : band2StereoResidue
                          + (band2DecodedMidSideResidue - band2StereoResidue) * b2MidSideWeight);
-
                 // Keep the neutral path literally untouched. This also prevents
                 // a signed-zero or M/S round-trip from weakening the bit-identity
                 // contract when all four smoothed amounts have reached zero.

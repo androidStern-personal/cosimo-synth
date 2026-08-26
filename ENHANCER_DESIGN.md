@@ -44,12 +44,12 @@ in (stereo) ──┬───────────────────�
               └── out = dry + band1 residue + band2 residue      │
 ```
 
-De-emphasis is **always on** (the `− thru` subtraction): only newly generated
-harmonics are ever added; the band's own level never changes. There is no
-non-de-emphasized mode — that would be a parallel EQ with distortion, which the rack's
-existing EQ/filter modules already cover. Consequence: each amount knob is pure
-*drive*, and the knob-to-drive mapping is voiced so the onset of audible harmonics is
-progressive (see §5).
+De-emphasis is **always on** (the `− thru` subtraction): it removes the linear bell
+contribution and adds only the shaper's nonlinear difference. That difference contains
+new harmonics and may also contain the saturation-induced change to the selected
+band's fundamental; the loudness ceiling in §8 prevents that component from becoming
+an unintended EQ cut. There is no non-de-emphasized mode — that would be a parallel EQ
+with distortion, which the rack's existing EQ/filter modules already cover.
 
 The bands are **two full parametric bells, Spectre-style** (Andrew, 2026-08-25:
 bands, not LP/HP halves): each freely steerable across the audible range with its own
@@ -132,10 +132,12 @@ requirements:
 
 ## 5. Voicing
 
-- Amount→drive mapping per band, voiced so the audible-harmonics onset is spread
-  across the knob (compensating the de-emphasis dead zone at low drive), with the
-  residue level roughly loudness-linear in the knob. Starting shape:
-  `drive = 24 dB · amount²`, residue post-gain trimmed by ear.
+- Amount→drive mapping per band brings the nonlinear onset forward from the rejected
+  squared curve while retaining zero contribution at zero Amount:
+  `driven = band · amount · gain(24 dB · amount · (0.5 + 0.5 · amount))`.
+  The low/high residue gains are `0.08`/`0.094`; separate calibration accounts for
+  the much greater program energy under the low default bell. The rejected build used
+  one `0.035` gain, which buried full-Amount residue below the audible acceptance floor.
 - Low-position voicing target: kick/bass weight on small speakers (2nd/3rd harmonic
   of 40–130 Hz content landing 80–400 Hz). High-position: acoustic guitar / vocal
   sheen and the side-widener use.
@@ -219,9 +221,10 @@ per-voice variant at all remains a product decision for later.
 ## 8. Ship criteria
 
 1. All Mid/Amount and Side amounts 0 ⇒ output bit-exact dry in either mode (ADR-005 proof unchanged).
-2. Harmonics-only guarantee: enabling any band at default voicing changes pink-noise
-   LUFS by ≤ 0.5 dB while visibly adding harmonic lines on a sine — the de-emphasis
-   contract, testable.
+2. De-emphasized-residue guarantee: enabling any band changes pink-noise LUFS and RMS
+   by ≤ 0.5 dB while visibly adding harmonic lines on a sine. With a −18 dBFS pink
+   input, each band at full Stereo Amount produces at least −35 dBFS residue, so the
+   level budget cannot be passed merely by burying the effect.
 3. Mono input remains mono in Stereo and M/S. In M/S, mono with only Side raised is
    exact dry, and a pure-side signal with only Side raised remains pure side.
 4. Each band can select Stereo or M/S without changing the other band's routing.

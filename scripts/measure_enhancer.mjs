@@ -9,6 +9,7 @@ const patchPath = path.join(repoRoot, "tools/enhancer_calibration/EnhancerCalibr
 const reviewDirectory = path.join(repoRoot, "build/t26-enhancer-review");
 const reportPath = path.join(reviewDirectory, "report.json");
 const requestedMode = process.argv[2] ?? "--check";
+const minimumFullAmountResidueRmsDbfs = -35;
 
 if (requestedMode !== "--check") {
     throw new Error("usage: measure_enhancer.mjs [--check]");
@@ -377,6 +378,16 @@ try {
     for (const [name, settings] of pinkProbes) {
         const { row } = await measure(name, pink, settings);
         pinkRows.push(row);
+    }
+
+    for (const name of ["band-1-stereo-full", "band-2-stereo-full"]) {
+        const row = pinkRows.find((candidate) => candidate.name === name);
+        if (!row || row.residueRmsDbfs < minimumFullAmountResidueRmsDbfs) {
+            throw new Error(
+                `${name} residue ${row?.residueRmsDbfs.toFixed(3) ?? "missing"} dBFS `
+                + `is below the ${minimumFullAmountResidueRmsDbfs} dBFS audible floor`,
+            );
+        }
     }
 
     await fs.mkdir(reviewDirectory, { recursive: true });
