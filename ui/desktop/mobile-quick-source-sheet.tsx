@@ -161,8 +161,12 @@ export type MobileQuickSourceSheetProps = {
     readonly envelopeSurface: ReactNode | null;
     readonly msegRateSeconds: number;
     readonly msegRateReady: boolean;
+    readonly msegEditShapeIndex: 0 | 1;
+    readonly onSelectMsegShape: (shapeIndex: 0 | 1) => void;
     readonly onMsegRateChange: (next: number) => void;
     readonly msegMorphBinding: PatchControlBinding<number>;
+    readonly msegLoopEnabled: boolean;
+    readonly onToggleMsegLoop: () => void;
     readonly envelope: QuickSheetEnvelope | null;
     readonly envelopeReadiness: SynthCallbackControlReadiness["envelope"];
     readonly onEnvelopeChange: (
@@ -186,8 +190,12 @@ export function MobileQuickSourceSheet({
     envelopeSurface,
     msegRateSeconds,
     msegRateReady,
+    msegEditShapeIndex,
+    onSelectMsegShape,
     onMsegRateChange,
     msegMorphBinding,
+    msegLoopEnabled,
+    onToggleMsegLoop,
     envelope,
     envelopeReadiness,
     onEnvelopeChange,
@@ -393,10 +401,14 @@ export function MobileQuickSourceSheet({
             dataRole="quick-source-sheet-strip"
             variant="drawer"
             className="quick-source-sheet-strip"
+            editShapeIndex={msegEditShapeIndex}
+            onSelectShape={onSelectMsegShape}
             onRateChange={onMsegRateChange}
             resolveScrollLockTargets={resolveScrollLockTargets}
             onRequestHaptic={onRequestHaptic}
             onRequestParameterMenu={onRequestParameterMenu}
+            loopEnabled={msegLoopEnabled}
+            onToggleLoop={onToggleMsegLoop}
         />
     ) : (
         <div

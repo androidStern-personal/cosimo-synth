@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useMemo, type CSSProperties } from "react";
 
 import { hexToRgbTriplet } from "../shared/parameter-hud";
 import { useParameterGesture } from "../shared/parameter-gesture";
@@ -25,6 +25,7 @@ import { findRackModulationSource } from "../shared/rack-modulation-sources";
 
 /** Leaves 12px for the shared >8px touch activation so total travel fits in 100px. */
 const MSEG_COMPACT_KNOB_ACTIVE_TRAVEL_PX = 88;
+const MSEG_SHAPE_INDICES = [0, 1] as const;
 
 function formatSecondsValue(value: number): string {
     return `${value.toFixed(3)} s`;
@@ -58,7 +59,7 @@ function documentRateBinding(
     };
 }
 
-/** Shared compact MSEG Rate/Morph row used by the quick drawer and full editor. */
+/** Shared compact MSEG toolbar used by the quick drawer and full editor. */
 export type MsegEditorControlStripProps = {
     readonly slotIndex: number;
     readonly rateSeconds: number;
@@ -71,18 +72,19 @@ export type MsegEditorControlStripProps = {
     readonly dataRole: string;
     readonly variant: "drawer" | "full";
     readonly className?: string;
-    readonly leadingActions?: ReactNode;
+    readonly editShapeIndex: 0 | 1;
+    readonly onSelectShape: (shapeIndex: 0 | 1) => void;
     readonly onRateChange: (next: number) => void;
     readonly resolveScrollLockTargets?: () => ReadonlyArray<HTMLElement>;
     readonly onRequestHaptic?: () => void;
     readonly onRequestParameterMenu?: (request: ParameterMenuRequest) => void;
     readonly rateFocusBindings?: SynthFocusBindings;
     readonly onMorphAdjustingChange?: (isAdjusting: boolean) => void;
-    readonly loopEnabled?: boolean;
-    readonly onToggleLoop?: () => void;
+    readonly loopEnabled: boolean;
+    readonly onToggleLoop: () => void;
 };
 
-/** Render one shared compact control row without owning MSEG document state. */
+/** Render one shared A/B, Rate, Morph, Loop toolbar without owning MSEG document state. */
 export function MsegEditorControlStrip({
     slotIndex,
     rateSeconds,
@@ -95,7 +97,8 @@ export function MsegEditorControlStrip({
     dataRole,
     variant,
     className,
-    leadingActions,
+    editShapeIndex,
+    onSelectShape,
     onRateChange,
     resolveScrollLockTargets,
     onRequestHaptic,
@@ -202,7 +205,25 @@ export function MsegEditorControlStrip({
                 "--mobile-voice-owner-accent-rgb": hexToRgbTriplet(identity.accent),
             } as CSSProperties}
         >
-            {leadingActions}
+            <div className="mseg-editor-shapes" role="group" aria-label="MSEG shape">
+                {MSEG_SHAPE_INDICES.map((shapeIndex) => (
+                    <button
+                        key={`mseg-editor-shape-${shapeIndex}`}
+                        type="button"
+                        aria-label={`Edit shape ${shapeIndex === 0 ? "A" : "B"}`}
+                        aria-pressed={editShapeIndex === shapeIndex}
+                        data-role={shapeIndex === 0 ? "mseg-shape-a" : "mseg-shape-b"}
+                        className={`mseg-editor-action ${
+                            editShapeIndex === shapeIndex
+                                ? "synth-accent-active-button"
+                                : "text-slate-300/55 hover:bg-white/[0.05] hover:text-slate-100"
+                        }`}
+                        onClick={() => onSelectShape(shapeIndex)}
+                    >
+                        {shapeIndex === 0 ? "A" : "B"}
+                    </button>
+                ))}
+            </div>
             <ParameterReadoutStrip
                 cells={cells}
                 bindings={bindings}
@@ -219,17 +240,15 @@ export function MsegEditorControlStrip({
                 {...(onRequestHaptic === undefined ? {} : { onRequestHaptic })}
                 {...(onRequestParameterMenu === undefined ? {} : { onRequestParameterMenu: requestParameterMenu })}
             />
-            {onToggleLoop === undefined ? null : (
-                <button
-                    type="button"
-                    data-role="mseg-loop-toggle"
-                    className="cosimo-button mseg-control-strip-loop"
-                    aria-pressed={loopEnabled === true}
-                    onClick={onToggleLoop}
-                >
-                    {loopEnabled === true ? "Loop" : "1 Shot"}
-                </button>
-            )}
+            <button
+                type="button"
+                data-role="mseg-loop-toggle"
+                className="cosimo-button mseg-control-strip-loop"
+                aria-pressed={loopEnabled}
+                onClick={onToggleLoop}
+            >
+                {loopEnabled ? "Loop" : "1 Shot"}
+            </button>
         </div>
     );
 }

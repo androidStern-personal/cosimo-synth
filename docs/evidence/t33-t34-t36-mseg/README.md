@@ -3,7 +3,7 @@
 These captures mount the production desktop patch view against the repository's Cmajor connection harness; they are not replica markup.
 Every surface uses the same seeded MSEG: shape A is the default rise and shape B is a distinct three-point curve, so the live Morph capture has an unambiguous visual result.
 
-- `phone-393x852-drawer.png` and `phone-393x852-full.png` cover the phone surfaces.
+- `phone-393x852-drawer.png` and `phone-393x852-full.png` cover the phone surfaces and show the identical balanced A/B, Rate, Morph, Loop toolbar in both contexts.
 - `phone-393x852-drawer-morph-hud.png` proves the drawer's live Morph amount is visible in the shared precision HUD.
 - `phone-393x852-full-rate-hud.png` proves the full editor's live Rate HUD is above the editor rather than hidden behind it.
 - `plugin-compact-600x520-drawer.png` covers the drawer at a narrow plug-in window.

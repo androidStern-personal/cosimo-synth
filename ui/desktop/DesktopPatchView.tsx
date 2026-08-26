@@ -2957,28 +2957,6 @@ function MsegEditorModal({
         return null;
     }
 
-    const shapeSelector = (
-        <div className="mseg-editor-shapes" role="group" aria-label="MSEG shape">
-            {[0, 1].map((shapeIndex) => (
-                <button
-                    key={`mseg-editor-shape-${shapeIndex}`}
-                    type="button"
-                    aria-label={`Edit shape ${shapeIndex === 0 ? "A" : "B"}`}
-                    aria-pressed={msegState.editShapeIndex === shapeIndex}
-                    data-role={shapeIndex === 0 ? "mseg-shape-a" : "mseg-shape-b"}
-                    className={`mseg-editor-action ${
-                        msegState.editShapeIndex === shapeIndex
-                            ? "synth-accent-active-button"
-                            : "text-slate-300/55 hover:bg-white/[0.05] hover:text-slate-100"
-                    }`}
-                    onClick={() => onSelectShape(shapeIndex)}
-                >
-                    {shapeIndex === 0 ? "A" : "B"}
-                </button>
-            ))}
-        </div>
-    );
-
     return (
         <div ref={backdropRef} className="synth-modal-backdrop mseg-editor-backdrop fixed inset-0 z-50 flex items-center justify-center">
             <MsegEditorShell
@@ -3024,7 +3002,8 @@ function MsegEditorModal({
                         rolePrefix="mseg-editor"
                         dataRole="mseg-editor-controls"
                         variant="full"
-                        leadingActions={shapeSelector}
+                        editShapeIndex={msegState.editShapeIndex ?? 0}
+                        onSelectShape={onSelectShape}
                         onRateChange={onRateChange}
                         resolveScrollLockTargets={resolveScrollLockTargets}
                         onRequestParameterMenu={onRequestParameterMenu}
@@ -5506,8 +5485,12 @@ function DesktopPatchViewBody({
                     )}
                     msegRateSeconds={clampMsegRateSeconds(Number(synthView.msegState?.playback.rate.seconds ?? 1))}
                     msegRateReady={synthView.callbackControlReadiness.mseg.rate}
+                    msegEditShapeIndex={synthView.msegState?.editShapeIndex ?? 0}
+                    onSelectMsegShape={synthView.handleSelectMsegShape}
                     onMsegRateChange={synthView.handleMsegRateChange}
                     msegMorphBinding={synthView.selectedMsegMorph}
+                    msegLoopEnabled={synthView.msegState?.playback.loop !== null}
+                    onToggleMsegLoop={synthView.handleToggleMsegLoop}
                     envelope={synthView.selectedEnvelope}
                     envelopeReadiness={synthView.callbackControlReadiness.envelope}
                     onEnvelopeChange={synthView.handleEnvelopeChange}

@@ -3109,6 +3109,132 @@ test("drawer and full-screen MSEG editors share one lightweight expanded-shell l
     }
 });
 
+test("drawer and full-screen expose one MSEG toolbar control set and preserve its state", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const readToolbarRoles = (toolbar) => toolbar.locator(
+        '[data-role="mseg-shape-a"], [data-role="mseg-shape-b"], [data-role$="cell-rate"], [data-role$="cell-morph"], [data-role="mseg-loop-toggle"]',
+    ).evaluateAll((elements) => elements.map((element) => element.getAttribute("data-role")));
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+
+        const drawer = page.locator('[data-role="quick-source-sheet"]');
+        const drawerToolbar = drawer.locator('[data-role="quick-source-sheet-strip"]');
+        await drawer.waitFor();
+        assert.deepEqual(await readToolbarRoles(drawerToolbar), [
+            "mseg-shape-a",
+            "mseg-shape-b",
+            "quick-source-sheet-cell-rate",
+            "quick-source-sheet-cell-morph",
+            "mseg-loop-toggle",
+        ]);
+
+        const initialLoopState = await drawerToolbar.locator('[data-role="mseg-loop-toggle"]').getAttribute("aria-pressed");
+        await drawerToolbar.locator('[data-role="mseg-shape-b"]').click();
+        await drawerToolbar.locator('[data-role="mseg-loop-toggle"]').click();
+        assert.equal(await drawerToolbar.locator('[data-role="mseg-shape-a"]').getAttribute("aria-pressed"), "false");
+        assert.equal(await drawerToolbar.locator('[data-role="mseg-shape-b"]').getAttribute("aria-pressed"), "true");
+        assert.notEqual(await drawerToolbar.locator('[data-role="mseg-loop-toggle"]').getAttribute("aria-pressed"), initialLoopState);
+
+        await drawer.locator('[data-role="quick-source-sheet-full-editor"]').click();
+        const dialog = page.locator('[data-role="mseg-editor-dialog"]');
+        const fullToolbar = dialog.locator('[data-role="mseg-editor-controls"]');
+        await dialog.waitFor();
+        assert.deepEqual(await readToolbarRoles(fullToolbar), [
+            "mseg-shape-a",
+            "mseg-shape-b",
+            "mseg-editor-cell-rate",
+            "mseg-editor-cell-morph",
+            "mseg-loop-toggle",
+        ]);
+        assert.equal(await fullToolbar.locator('[data-role="mseg-shape-b"]').getAttribute("aria-pressed"), "true");
+        assert.notEqual(await fullToolbar.locator('[data-role="mseg-loop-toggle"]').getAttribute("aria-pressed"), initialLoopState);
+    } finally {
+        await page.close();
+    }
+});
+
+test("the shared MSEG toolbar is a balanced four-tool band in drawer and full-screen", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const measureToolbar = (toolbar) => toolbar.evaluate((element) => {
+        const tools = [
+            element.querySelector('.mseg-editor-shapes'),
+            element.querySelector('[data-role$="cell-rate"]'),
+            element.querySelector('[data-role$="cell-morph"]'),
+            element.querySelector('[data-role="mseg-loop-toggle"]'),
+        ];
+        if (tools.some((tool) => !(tool instanceof HTMLElement))) {
+            throw new Error("The shared MSEG toolbar is missing a tool group.");
+        }
+        const stripBounds = element.getBoundingClientRect();
+        const rectangles = tools.map((tool) => {
+            const bounds = tool.getBoundingClientRect();
+            return {
+                left: bounds.left,
+                right: bounds.right,
+                top: bounds.top,
+                width: bounds.width,
+                height: bounds.height,
+                borderRadius: getComputedStyle(tool).borderRadius,
+            };
+        });
+        return {
+            stripBackground: getComputedStyle(element).backgroundColor,
+            stripBorderTopWidth: getComputedStyle(element).borderTopWidth,
+            stripBorderBottomWidth: getComputedStyle(element).borderBottomWidth,
+            widths: rectangles.map(({ width }) => width),
+            heights: rectangles.map(({ height }) => height),
+            tops: rectangles.map(({ top }) => top),
+            radii: rectangles.map(({ borderRadius }) => borderRadius),
+            gaps: rectangles.slice(1).map((rectangle, index) => rectangle.left - rectangles[index].right),
+            leftInset: rectangles[0].left - stripBounds.left,
+            rightInset: stripBounds.right - rectangles.at(-1).right,
+        };
+    });
+    const assertBalancedToolbar = (geometry) => {
+        assert.equal(Math.abs(geometry.widths[0] - geometry.widths[3]) <= 1, true, JSON.stringify(geometry));
+        assert.equal(Math.abs(geometry.widths[1] - geometry.widths[2]) <= 1, true, JSON.stringify(geometry));
+        assert.equal(Math.max(...geometry.gaps) - Math.min(...geometry.gaps) <= 1, true, JSON.stringify(geometry));
+        assert.equal(Math.max(...geometry.heights) - Math.min(...geometry.heights) <= 1, true, JSON.stringify(geometry));
+        assert.equal(Math.max(...geometry.tops) - Math.min(...geometry.tops) <= 1, true, JSON.stringify(geometry));
+        assert.equal(Math.abs(geometry.leftInset - geometry.rightInset) <= 1, true, JSON.stringify(geometry));
+        assert.equal(new Set(geometry.radii).size, 1, JSON.stringify(geometry));
+        assert.notEqual(geometry.stripBackground, "rgba(0, 0, 0, 0)");
+        assert.equal(geometry.stripBorderTopWidth, "1px");
+        assert.equal(geometry.stripBorderBottomWidth, "1px");
+    };
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+
+        const drawer = page.locator('[data-role="quick-source-sheet"]');
+        const drawerToolbar = drawer.locator('[data-role="quick-source-sheet-strip"]');
+        await drawer.waitFor();
+        const drawerGeometry = await measureToolbar(drawerToolbar);
+        assertBalancedToolbar(drawerGeometry);
+
+        await drawer.locator('[data-role="quick-source-sheet-full-editor"]').click();
+        const fullToolbar = page.locator('[data-role="mseg-editor-controls"]');
+        await fullToolbar.waitFor();
+        const fullGeometry = await measureToolbar(fullToolbar);
+        assertBalancedToolbar(fullGeometry);
+        assert.deepEqual(fullGeometry.widths, drawerGeometry.widths);
+        assert.deepEqual(fullGeometry.gaps, drawerGeometry.gaps);
+        assert.equal(fullGeometry.leftInset, drawerGeometry.leftInset);
+        assert.equal(fullGeometry.rightInset, drawerGeometry.rightInset);
+    } finally {
+        await page.close();
+    }
+});
+
 test("the full-screen MSEG editor keeps the graph dominant above one bottom control row", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
