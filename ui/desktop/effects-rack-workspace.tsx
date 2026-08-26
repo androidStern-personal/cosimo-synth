@@ -81,8 +81,11 @@ import {
 } from "../shared/mod-source-touch-geometry";
 import {
     buildRailSilhouettePath,
+    MOBILE_MOD_RAIL_GEOMETRY,
+    MOBILE_MOD_RAIL_SCALE,
     normalizeRailTop,
     parseStoredRailDock,
+    projectRailDefaultPlacement,
     projectRailDrawerPlacement,
     projectRailTop,
     railVerticalBounds,
@@ -1786,9 +1789,6 @@ function boundingHudRect(element: Element | null): HudRect | null {
 }
 
 const MOBILE_MOD_RAIL_POSITION_KEY = "cosimo.mobile-global-mod-rail.position.v1";
-const MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX = 7;
-const MOBILE_MOD_RAIL_SNAP_DISTANCE_PX = 28;
-const MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX = 234;
 const MOBILE_MOD_RAIL_VELOCITY_WINDOW_MS = 100;
 const MOBILE_MOD_RAIL_MIN_RELEASE_VELOCITY_PX_PER_MS = 0.08;
 const MOBILE_MOD_RAIL_MAX_RELEASE_VELOCITY_PX_PER_MS = 1.35;
@@ -1797,10 +1797,6 @@ const MOBILE_MOD_RAIL_STOP_VELOCITY_PX_PER_MS = 0.02;
 // millisecond decay gives this short rail speed-sensitive travel without the
 // long coast that feels right for a full scroll view.
 const MOBILE_MOD_RAIL_DECELERATION_RATE_PER_MS = 0.99;
-const MOBILE_MOD_RAIL_WIDTH_PX = 40;
-const MOBILE_MOD_RAIL_SHOULDER_PX = 12;
-const MOBILE_MOD_RAIL_CORNER_PX = 12;
-const MOBILE_MOD_RAIL_TAB_CONTENT_HEIGHT_PX = 128;
 const MOBILE_MOD_RAIL_SETTLE_X_MS = 220;
 const MOBILE_MOD_RAIL_DEFAULT_DOCK: RailDock = { edge: "right", normalizedY: 0.42 };
 
@@ -1937,7 +1933,10 @@ function MobileGlobalModRail({
     const drawerRef = useRef<HTMLDivElement | null>(null);
     const positionRef = useRef(0);
     const normalizedPositionRef = useRef<number | null>(null);
-    const boundsRef = useRef<RailVerticalBounds>({ min: 12, max: 12 });
+    const boundsRef = useRef<RailVerticalBounds>({
+        min: MOBILE_MOD_RAIL_GEOMETRY.safeGap,
+        max: MOBILE_MOD_RAIL_GEOMETRY.safeGap,
+    });
     const layerWidthRef = useRef(0);
     const edgeRef = useRef<RailEdge>(MOBILE_MOD_RAIL_DEFAULT_DOCK.edge);
     const dockInitializedRef = useRef(false);
@@ -1954,10 +1953,11 @@ function MobileGlobalModRail({
         return () => clearUiTimeout(timeout);
     }, [countPulseSerial]);
     const drawerMetricsRef = useRef<RailDrawerMetrics>({
-        safeTop: 12,
-        safeBottom: 12,
-        collapsedHeight: MOBILE_MOD_RAIL_TAB_CONTENT_HEIGHT_PX + (2 * MOBILE_MOD_RAIL_SHOULDER_PX),
-        desiredHeight: MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX,
+        safeTop: MOBILE_MOD_RAIL_GEOMETRY.safeGap,
+        safeBottom: MOBILE_MOD_RAIL_GEOMETRY.safeGap,
+        collapsedHeight: MOBILE_MOD_RAIL_GEOMETRY.tabContentHeight
+            + (2 * MOBILE_MOD_RAIL_GEOMETRY.shoulder),
+        desiredHeight: MOBILE_MOD_RAIL_GEOMETRY.drawerFallbackHeight,
     });
     const decelerationFrameRef = useRef<number | null>(null);
     const gestureRef = useRef<{
@@ -1974,7 +1974,7 @@ function MobileGlobalModRail({
         captureElement: HTMLButtonElement;
     } | null>(null);
     const [expanded, setExpanded] = useState(false);
-    const [top, setTop] = useState(12);
+    const [top, setTop] = useState(MOBILE_MOD_RAIL_GEOMETRY.safeGap);
     const [edge, setEdge] = useState<RailEdge>(MOBILE_MOD_RAIL_DEFAULT_DOCK.edge);
     const [dragX, setDragX] = useState(0);
     const [settlingX, setSettlingX] = useState(false);
@@ -1982,7 +1982,7 @@ function MobileGlobalModRail({
     const [noteHeld, setNoteHeld] = useState(false);
     const [drawerPlacement, setDrawerPlacement] = useState<RailDrawerPlacement>({
         direction: "down",
-        extent: MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX,
+        extent: MOBILE_MOD_RAIL_GEOMETRY.drawerFallbackHeight,
     });
     const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
     const voicePopoverRef = useRef<HTMLDivElement | null>(null);
@@ -2008,6 +2008,29 @@ function MobileGlobalModRail({
     const updateDrawerPlacement = useCallback((nextTop: number) => {
         setDrawerPlacement(projectRailDrawerPlacement(nextTop, drawerMetricsRef.current));
     }, []);
+
+    useLayoutEffect(() => {
+        const surface = layerRef.current?.closest(".cosimo-surface");
+        if (!(surface instanceof HTMLElement)) {
+            return;
+        }
+        const previousEdge = surface.dataset.modRailEdge;
+        const previousDockWidth = surface.style.getPropertyValue("--cosimo-rail-dock");
+        surface.dataset.modRailEdge = edge;
+        surface.style.setProperty("--cosimo-rail-dock", `${MOBILE_MOD_RAIL_GEOMETRY.width}px`);
+        return () => {
+            if (previousEdge === undefined) {
+                delete surface.dataset.modRailEdge;
+            } else {
+                surface.dataset.modRailEdge = previousEdge;
+            }
+            if (previousDockWidth) {
+                surface.style.setProperty("--cosimo-rail-dock", previousDockWidth);
+            } else {
+                surface.style.removeProperty("--cosimo-rail-dock");
+            }
+        };
+    }, [edge]);
 
     // The voice-settings popover belongs to the open drawer; whatever hides
     // the drawer (collapse, mapping drag) takes the popover with it.
@@ -2063,11 +2086,16 @@ function MobileGlobalModRail({
             ? measuredTabsBounds
             : undefined;
         const presetBarBounds = presetBar?.getBoundingClientRect();
-        const safeTopInset = 8 + (Number.parseFloat(layerStyle.paddingTop) || 0);
+        const safeTopInset = MOBILE_MOD_RAIL_GEOMETRY.safeGap
+            + (Number.parseFloat(layerStyle.paddingTop) || 0);
         const safeTop = presetBarBounds
-            ? Math.max(safeTopInset, presetBarBounds.bottom - layerBounds.top + 8)
+            ? Math.max(
+                safeTopInset,
+                presetBarBounds.bottom - layerBounds.top + MOBILE_MOD_RAIL_GEOMETRY.safeGap,
+            )
             : safeTopInset;
-        const safeBottom = 8 + (Number.parseFloat(layerStyle.paddingBottom) || 0);
+        const safeBottom = MOBILE_MOD_RAIL_GEOMETRY.safeGap
+            + (Number.parseFloat(layerStyle.paddingBottom) || 0);
         const chromeTop = Math.min(
             keyboardBounds ? keyboardBounds.top : Number.POSITIVE_INFINITY,
             tabsBounds ? tabsBounds.top : Number.POSITIVE_INFINITY,
@@ -2077,22 +2105,24 @@ function MobileGlobalModRail({
             : layerBounds.height;
         const railStyle = getComputedStyle(rail);
         const shoulderHeight = Number.parseFloat(railStyle.getPropertyValue("--rail-shoulder"))
-            || MOBILE_MOD_RAIL_SHOULDER_PX;
+            || MOBILE_MOD_RAIL_GEOMETRY.shoulder;
         const tabHeight = tabRef.current?.getBoundingClientRect().height
-            || MOBILE_MOD_RAIL_TAB_CONTENT_HEIGHT_PX;
+            || MOBILE_MOD_RAIL_GEOMETRY.tabContentHeight;
         const railHeight = tabHeight + (2 * shoulderHeight);
         const nextBounds = railVerticalBounds(
             { height: availableBottom, insetTop: safeTop, insetBottom: safeBottom },
             railHeight,
         );
         boundsRef.current = nextBounds;
-        const drawerHeight = drawerRef.current?.scrollHeight || MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX;
-        drawerMetricsRef.current = {
+        const drawerHeight = drawerRef.current?.scrollHeight
+            || MOBILE_MOD_RAIL_GEOMETRY.drawerFallbackHeight;
+        const nextDrawerMetrics = {
             safeTop,
             safeBottom: availableBottom - safeBottom,
             collapsedHeight: railHeight,
             desiredHeight: drawerHeight,
         };
+        drawerMetricsRef.current = nextDrawerMetrics;
 
         if (!dockInitializedRef.current) {
             dockInitializedRef.current = true;
@@ -2105,7 +2135,13 @@ function MobileGlobalModRail({
             const dock = storedDock ?? MOBILE_MOD_RAIL_DEFAULT_DOCK;
             edgeRef.current = dock.edge;
             setEdge(dock.edge);
-            normalizedPositionRef.current = dock.normalizedY;
+            normalizedPositionRef.current = storedDock
+                ? dock.normalizedY
+                : projectRailDefaultPlacement(
+                    dock.normalizedY,
+                    nextBounds,
+                    nextDrawerMetrics,
+                ).normalizedY;
         }
         normalizedPositionRef.current ??= MOBILE_MOD_RAIL_DEFAULT_DOCK.normalizedY;
         const nextTop = projectRailTop(normalizedPositionRef.current, nextBounds);
@@ -2220,7 +2256,11 @@ function MobileGlobalModRail({
     const settleRailPosition = useCallback((unsettledTop: number) => {
         const bounds = boundsRef.current;
         const clampedTop = clamp(unsettledTop, bounds.min, bounds.max);
-        const { top: settledTop } = snapRailTop(clampedTop, bounds, MOBILE_MOD_RAIL_SNAP_DISTANCE_PX);
+        const { top: settledTop } = snapRailTop(
+            clampedTop,
+            bounds,
+            MOBILE_MOD_RAIL_GEOMETRY.snapDistance,
+        );
         if (settledTop !== clampedTop) {
             triggerLightHaptic();
         }
@@ -2352,7 +2392,7 @@ function MobileGlobalModRail({
         const currentEdge = edgeRef.current;
         const nextEdge = settleRailEdge(gesture.lastClientX, layerWidth, currentEdge);
         if (nextEdge !== currentEdge) {
-            const edgeSpan = Math.max(0, layerWidth - MOBILE_MOD_RAIL_WIDTH_PX);
+            const edgeSpan = Math.max(0, layerWidth - MOBILE_MOD_RAIL_GEOMETRY.width);
             edgeRef.current = nextEdge;
             setEdge(nextEdge);
             applyDragX(nextEdge === "left"
@@ -2447,13 +2487,13 @@ function MobileGlobalModRail({
         stepSeconds: GLIDE_TIME_STEP_SECONDS,
         currentSeconds: voiceSettings.glideTime.value,
     });
-    const silhouetteHeight = MOBILE_MOD_RAIL_TAB_CONTENT_HEIGHT_PX
-        + (2 * MOBILE_MOD_RAIL_SHOULDER_PX)
+    const silhouetteHeight = MOBILE_MOD_RAIL_GEOMETRY.tabContentHeight
+        + (2 * MOBILE_MOD_RAIL_GEOMETRY.shoulder)
         + (drawerOpen ? drawerPlacement.extent : 0);
     const silhouettePath = buildRailSilhouettePath({
-        width: MOBILE_MOD_RAIL_WIDTH_PX,
-        shoulder: MOBILE_MOD_RAIL_SHOULDER_PX,
-        corner: MOBILE_MOD_RAIL_CORNER_PX,
+        width: MOBILE_MOD_RAIL_GEOMETRY.width,
+        shoulder: MOBILE_MOD_RAIL_GEOMETRY.shoulder,
+        corner: MOBILE_MOD_RAIL_GEOMETRY.corner,
         height: silhouetteHeight,
     }, edge);
     const upwardDrawerOffset = drawerOpen && drawerPlacement.direction === "up" ? -drawerPlacement.extent : 0;
@@ -2480,7 +2520,12 @@ function MobileGlobalModRail({
     })();
 
     return (
-        <div ref={layerRef} data-role="mobile-global-mod-rail-layer" className="mobile-global-mod-rail-layer">
+        <div
+            ref={layerRef}
+            data-role="mobile-global-mod-rail-layer"
+            className="mobile-global-mod-rail-layer"
+            style={{ "--rail-scale": MOBILE_MOD_RAIL_SCALE } as CSSProperties}
+        >
             <aside
                 ref={railRef}
                 data-role="mobile-global-mod-rail"
@@ -2496,6 +2541,7 @@ function MobileGlobalModRail({
                     transform: `translate(${dragX}px, ${upwardDrawerOffset}px)`,
                     "--source-color": selectedSource.accent,
                     "--editor-accent": accent,
+                    "--rail-scale": MOBILE_MOD_RAIL_SCALE,
                     "--rail-drawer-size": `${drawerPlacement.extent}px`,
                 } as CSSProperties}
                 aria-label="Global modulation bar"
@@ -2509,7 +2555,7 @@ function MobileGlobalModRail({
                 <svg
                     data-role="mobile-global-mod-rail-silhouette"
                     className="mobile-global-mod-rail-silhouette"
-                    viewBox={`0 0 ${MOBILE_MOD_RAIL_WIDTH_PX} ${silhouetteHeight}`}
+                    viewBox={`0 0 ${MOBILE_MOD_RAIL_GEOMETRY.width} ${silhouetteHeight}`}
                     preserveAspectRatio="none"
                     focusable="false"
                     aria-hidden="true"
@@ -2600,8 +2646,8 @@ function MobileGlobalModRail({
                                 gesture.lastClientX = event.clientX;
                                 const deltaY = event.clientY - gesture.startClientY;
                                 const deltaX = event.clientX - gesture.startClientX;
-                                gesture.moved ||= Math.abs(deltaY) > MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX
-                                    || Math.abs(deltaX) > MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX;
+                                gesture.moved ||= Math.abs(deltaY) > MOBILE_MOD_RAIL_GEOMETRY.dragThreshold
+                                    || Math.abs(deltaX) > MOBILE_MOD_RAIL_GEOMETRY.dragThreshold;
                                 if (!gesture.moved) {
                                     return;
                                 }
@@ -2613,7 +2659,10 @@ function MobileGlobalModRail({
                                 updateDrawerPlacement(nextTop);
                                 // The bar follows the finger horizontally inside the layer;
                                 // release settles it against the nearest edge.
-                                const edgeSpan = Math.max(0, layerWidthRef.current - MOBILE_MOD_RAIL_WIDTH_PX);
+                                const edgeSpan = Math.max(
+                                    0,
+                                    layerWidthRef.current - MOBILE_MOD_RAIL_GEOMETRY.width,
+                                );
                                 const dragRange: readonly [number, number] = gesture.startEdge === "right"
                                     ? [-edgeSpan, 0]
                                     : [0, edgeSpan];
@@ -2794,8 +2843,8 @@ function MobileGlobalModRail({
                                 leadingLabel="Glide"
                                 variant="inlineDark"
                                 dataRole="mobile-global-mod-rail-glide-field"
-                                width={64}
-                                height={22}
+                                width={64 * MOBILE_MOD_RAIL_SCALE}
+                                height={22 * MOBILE_MOD_RAIL_SCALE}
                             />
                         </div>
                     </div>

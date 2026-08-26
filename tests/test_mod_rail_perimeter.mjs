@@ -10,6 +10,34 @@ async function loadPerimeterModule() {
     return await loadUIModule(repoRoot, "ui/shared/mod-rail-perimeter.ts");
 }
 
+test("T42 scales every measured Mod rail geometry value through one 1.10 contract", async () => {
+    const {
+        MOBILE_MOD_RAIL_BASE_GEOMETRY,
+        MOBILE_MOD_RAIL_GEOMETRY,
+        MOBILE_MOD_RAIL_SCALE,
+    } = await loadPerimeterModule();
+
+    assert.equal(MOBILE_MOD_RAIL_SCALE, 1.1);
+    assert.deepEqual(
+        Object.keys(MOBILE_MOD_RAIL_GEOMETRY).sort(),
+        Object.keys(MOBILE_MOD_RAIL_BASE_GEOMETRY).sort(),
+    );
+    for (const [name, before] of Object.entries(MOBILE_MOD_RAIL_BASE_GEOMETRY)) {
+        const after = MOBILE_MOD_RAIL_GEOMETRY[name];
+        assert.ok(
+            Math.abs((after / before) - MOBILE_MOD_RAIL_SCALE) <= 1e-12,
+            `${name} must scale once: ${before} -> ${after}`,
+        );
+    }
+
+    const beforeCollapsedHeight = MOBILE_MOD_RAIL_BASE_GEOMETRY.tabContentHeight
+        + (2 * MOBILE_MOD_RAIL_BASE_GEOMETRY.shoulder);
+    const afterCollapsedHeight = MOBILE_MOD_RAIL_GEOMETRY.tabContentHeight
+        + (2 * MOBILE_MOD_RAIL_GEOMETRY.shoulder);
+    assert.equal(beforeCollapsedHeight, 152);
+    assert.ok(Math.abs(afterCollapsedHeight - 167.2) <= 1e-12);
+});
+
 test("vertical bounds clamp to the keep-out insets and never invert", async () => {
     const { railVerticalBounds } = await loadPerimeterModule();
 
@@ -83,6 +111,62 @@ test("drawer placement opens downward when there is room and upward when below i
     });
     assert.equal(cramped.direction, "up");
     assert.equal(cramped.extent, 100);
+});
+
+test("T42 default placement fits the full scaled drawer when possible and clamps cramped phones safely", async () => {
+    const {
+        MOBILE_MOD_RAIL_GEOMETRY,
+        MOBILE_MOD_RAIL_SCALE,
+        projectRailDefaultPlacement,
+        railVerticalBounds,
+    } = await loadPerimeterModule();
+    const collapsedHeight = MOBILE_MOD_RAIL_GEOMETRY.tabContentHeight
+        + (2 * MOBILE_MOD_RAIL_GEOMETRY.shoulder);
+    const measuredFullDrawerHeight = 309 * MOBILE_MOD_RAIL_SCALE;
+
+    const assertInsideBand = (placement, metrics) => {
+        const expandedTop = placement.drawer.direction === "up"
+            ? placement.top - placement.drawer.extent
+            : placement.top;
+        const expandedBottom = placement.drawer.direction === "down"
+            ? placement.top + metrics.collapsedHeight + placement.drawer.extent
+            : placement.top + metrics.collapsedHeight;
+        assert.ok(expandedTop >= metrics.safeTop - 1e-9, `${expandedTop} clears ${metrics.safeTop}`);
+        assert.ok(expandedBottom <= metrics.safeBottom + 1e-9, `${expandedBottom} clears ${metrics.safeBottom}`);
+    };
+
+    // 430x932 composed interface: there is enough room for the complete
+    // scaled drawer, so the preferred 42% dock moves only as far as needed.
+    const tallBand = { height: 799, insetTop: 49, insetBottom: 8 };
+    const tallBounds = railVerticalBounds(tallBand, collapsedHeight);
+    const tallMetrics = {
+        safeTop: tallBand.insetTop,
+        safeBottom: tallBand.height - tallBand.insetBottom,
+        collapsedHeight,
+        desiredHeight: measuredFullDrawerHeight,
+    };
+    const tallPreferredTop = tallBounds.min + ((tallBounds.max - tallBounds.min) * 0.42);
+    const tall = projectRailDefaultPlacement(0.42, tallBounds, tallMetrics);
+    assert.ok(tall.top < tallPreferredTop, "The tall default shifts upward just enough to fit the drawer.");
+    assert.ok(Math.abs(tall.drawer.extent - measuredFullDrawerHeight) <= 1e-9);
+    assertInsideBand(tall, tallMetrics);
+
+    // 320x568 composed interface: the whole drawer cannot fit, so the bar
+    // keeps its preferred dock and exposes the largest safe scrollable extent.
+    const narrowBand = { height: 435, insetTop: 49, insetBottom: 8 };
+    const narrowBounds = railVerticalBounds(narrowBand, collapsedHeight);
+    const narrowMetrics = {
+        safeTop: narrowBand.insetTop,
+        safeBottom: narrowBand.height - narrowBand.insetBottom,
+        collapsedHeight,
+        desiredHeight: measuredFullDrawerHeight,
+    };
+    const narrowPreferredTop = narrowBounds.min + ((narrowBounds.max - narrowBounds.min) * 0.42);
+    const narrow = projectRailDefaultPlacement(0.42, narrowBounds, narrowMetrics);
+    assert.ok(Math.abs(narrow.top - narrowPreferredTop) <= 1e-9);
+    assert.ok(narrow.drawer.extent < measuredFullDrawerHeight);
+    assert.ok(narrow.drawer.extent > 0);
+    assertInsideBand(narrow, narrowMetrics);
 });
 
 test("stored docks round-trip and legacy right-edge values migrate", async () => {

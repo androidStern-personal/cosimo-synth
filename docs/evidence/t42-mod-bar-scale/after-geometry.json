@@ -1,0 +1,2306 @@
+[
+  {
+    "name": "after-320x568-right-collapsed",
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "edge": "right",
+    "expanded": false,
+    "drawerDirection": "down",
+    "rail": {
+      "left": 276,
+      "right": 320,
+      "top": 137.65625,
+      "bottom": 304.828125,
+      "width": 44,
+      "height": 167.171875
+    },
+    "tab": {
+      "left": 276,
+      "right": 320,
+      "top": 150.84375,
+      "bottom": 291.640625,
+      "width": 44,
+      "height": 140.796875
+    },
+    "selectedTap": {
+      "left": 282.6015625,
+      "right": 313.3984375,
+      "top": 188.234375,
+      "bottom": 219.03125,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "selectedArt": {
+      "left": 289.1953125,
+      "right": 306.7890625,
+      "top": 194.828125,
+      "bottom": 212.421875,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "routeBadge": {
+      "left": 303.515625,
+      "right": 317.8125,
+      "top": 183.84375,
+      "bottom": 198.140625,
+      "width": 14.296875,
+      "height": 14.296875
+    },
+    "noteTap": {
+      "left": 282.6015625,
+      "right": 313.3984375,
+      "top": 230.03125,
+      "bottom": 260.828125,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "noteIcon": {
+      "left": 289.1953125,
+      "right": 306.7890625,
+      "top": 236.625,
+      "bottom": 254.21875,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "handle": {
+      "left": 294.1640625,
+      "right": 301.8359375,
+      "top": 164.03125,
+      "bottom": 177.1875,
+      "width": 7.671875,
+      "height": 13.15625
+    },
+    "drawer": {
+      "left": 276,
+      "right": 320,
+      "top": 291.640625,
+      "bottom": 291.640625,
+      "width": 44,
+      "height": 0
+    },
+    "drawerScrollHeight": 340,
+    "paddleTap": {
+      "left": 276,
+      "right": 320,
+      "top": 296.03125,
+      "bottom": 318.03125,
+      "width": 44,
+      "height": 22
+    },
+    "sourceTaps": [
+      {
+        "left": 276,
+        "right": 320,
+        "top": 329.03125,
+        "bottom": 359.828125,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 276,
+        "right": 320,
+        "top": 370.828125,
+        "bottom": 401.625,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 276,
+        "right": 320,
+        "top": 412.625,
+        "bottom": 443.421875,
+        "width": 44,
+        "height": 30.796875
+      }
+    ],
+    "keyboardToggle": {
+      "left": 282.59375,
+      "right": 313.390625,
+      "top": 503.90625,
+      "bottom": 534.703125,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "autoToggle": {
+      "left": 282.59375,
+      "right": 313.390625,
+      "top": 545.703125,
+      "bottom": 576.5,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "voiceToggle": {
+      "left": 279.296875,
+      "right": 316.6875,
+      "top": 587.5,
+      "bottom": 618.296875,
+      "width": 37.390625,
+      "height": 30.796875
+    },
+    "preset": {
+      "left": 1,
+      "right": 319,
+      "top": 1,
+      "bottom": 41,
+      "width": 318,
+      "height": 40
+    },
+    "tabs": {
+      "left": 1,
+      "right": 319,
+      "top": 435,
+      "bottom": 475,
+      "width": 318,
+      "height": 40
+    },
+    "keyboard": {
+      "left": 1,
+      "right": 319,
+      "top": 479,
+      "bottom": 567,
+      "width": 318,
+      "height": 88
+    },
+    "visibleVoiceChips": [
+      {
+        "left": 10,
+        "right": 141.765625,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 198.921875,
+        "right": 266,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 10,
+        "right": 81.6875,
+        "top": 162,
+        "bottom": 186
+      },
+      {
+        "left": 198.921875,
+        "right": 266,
+        "top": 162,
+        "bottom": 186
+      }
+    ],
+    "documentFits": true
+  },
+  {
+    "name": "after-320x568-right-expanded",
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "edge": "right",
+    "expanded": true,
+    "drawerDirection": "down",
+    "rail": {
+      "left": 276,
+      "right": 320,
+      "top": 137.65625,
+      "bottom": 426.15625,
+      "width": 44,
+      "height": 288.5
+    },
+    "tab": {
+      "left": 276,
+      "right": 320,
+      "top": 150.84375,
+      "bottom": 291.640625,
+      "width": 44,
+      "height": 140.796875
+    },
+    "selectedTap": {
+      "left": 282.6015625,
+      "right": 313.3984375,
+      "top": 188.234375,
+      "bottom": 219.03125,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "selectedArt": {
+      "left": 289.1953125,
+      "right": 306.7890625,
+      "top": 194.828125,
+      "bottom": 212.421875,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "routeBadge": {
+      "left": 303.515625,
+      "right": 317.8125,
+      "top": 183.84375,
+      "bottom": 198.140625,
+      "width": 14.296875,
+      "height": 14.296875
+    },
+    "noteTap": {
+      "left": 282.6015625,
+      "right": 313.3984375,
+      "top": 230.03125,
+      "bottom": 260.828125,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "noteIcon": {
+      "left": 289.1953125,
+      "right": 306.7890625,
+      "top": 236.625,
+      "bottom": 254.21875,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "handle": {
+      "left": 294.1640625,
+      "right": 301.8359375,
+      "top": 164.03125,
+      "bottom": 177.1875,
+      "width": 7.671875,
+      "height": 13.15625
+    },
+    "drawer": {
+      "left": 276,
+      "right": 320,
+      "top": 291.640625,
+      "bottom": 412.96875,
+      "width": 44,
+      "height": 121.328125
+    },
+    "drawerScrollHeight": 340,
+    "paddleTap": {
+      "left": 276,
+      "right": 320,
+      "top": 296.03125,
+      "bottom": 318.03125,
+      "width": 44,
+      "height": 22
+    },
+    "sourceTaps": [
+      {
+        "left": 276,
+        "right": 320,
+        "top": 329.03125,
+        "bottom": 359.828125,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 276,
+        "right": 320,
+        "top": 370.828125,
+        "bottom": 401.625,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 276,
+        "right": 320,
+        "top": 412.625,
+        "bottom": 443.421875,
+        "width": 44,
+        "height": 30.796875
+      }
+    ],
+    "keyboardToggle": {
+      "left": 282.59375,
+      "right": 313.390625,
+      "top": 503.90625,
+      "bottom": 534.703125,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "autoToggle": {
+      "left": 282.59375,
+      "right": 313.390625,
+      "top": 545.703125,
+      "bottom": 576.5,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "voiceToggle": {
+      "left": 279.296875,
+      "right": 316.6875,
+      "top": 587.5,
+      "bottom": 618.296875,
+      "width": 37.390625,
+      "height": 30.796875
+    },
+    "preset": {
+      "left": 1,
+      "right": 319,
+      "top": 1,
+      "bottom": 41,
+      "width": 318,
+      "height": 40
+    },
+    "tabs": {
+      "left": 1,
+      "right": 319,
+      "top": 435,
+      "bottom": 475,
+      "width": 318,
+      "height": 40
+    },
+    "keyboard": {
+      "left": 1,
+      "right": 319,
+      "top": 479,
+      "bottom": 567,
+      "width": 318,
+      "height": 88
+    },
+    "visibleVoiceChips": [
+      {
+        "left": 10,
+        "right": 141.765625,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 198.921875,
+        "right": 266,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 10,
+        "right": 81.6875,
+        "top": 162,
+        "bottom": 186
+      },
+      {
+        "left": 198.921875,
+        "right": 266,
+        "top": 162,
+        "bottom": 186
+      }
+    ],
+    "documentFits": true
+  },
+  {
+    "name": "after-320x568-left-collapsed",
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "edge": "left",
+    "expanded": false,
+    "drawerDirection": "down",
+    "rail": {
+      "left": 0,
+      "right": 44,
+      "top": 154.390625,
+      "bottom": 321.5625,
+      "width": 44,
+      "height": 167.171875
+    },
+    "tab": {
+      "left": 0,
+      "right": 44,
+      "top": 167.578125,
+      "bottom": 308.375,
+      "width": 44,
+      "height": 140.796875
+    },
+    "selectedTap": {
+      "left": 6.6015625,
+      "right": 37.3984375,
+      "top": 204.96875,
+      "bottom": 235.765625,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "selectedArt": {
+      "left": 13.1953125,
+      "right": 30.7890625,
+      "top": 211.5625,
+      "bottom": 229.15625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "routeBadge": {
+      "left": 27.515625,
+      "right": 41.8125,
+      "top": 200.578125,
+      "bottom": 214.875,
+      "width": 14.296875,
+      "height": 14.296875
+    },
+    "noteTap": {
+      "left": 6.6015625,
+      "right": 37.3984375,
+      "top": 246.765625,
+      "bottom": 277.5625,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "noteIcon": {
+      "left": 13.1953125,
+      "right": 30.7890625,
+      "top": 253.359375,
+      "bottom": 270.953125,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "handle": {
+      "left": 18.1640625,
+      "right": 25.8359375,
+      "top": 180.765625,
+      "bottom": 193.921875,
+      "width": 7.671875,
+      "height": 13.15625
+    },
+    "drawer": {
+      "left": 0,
+      "right": 44,
+      "top": 308.375,
+      "bottom": 308.375,
+      "width": 44,
+      "height": 0
+    },
+    "drawerScrollHeight": 340,
+    "paddleTap": {
+      "left": 0,
+      "right": 44,
+      "top": 312.765625,
+      "bottom": 334.765625,
+      "width": 44,
+      "height": 22
+    },
+    "sourceTaps": [
+      {
+        "left": 0,
+        "right": 44,
+        "top": 345.765625,
+        "bottom": 376.5625,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 0,
+        "right": 44,
+        "top": 387.5625,
+        "bottom": 418.359375,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 0,
+        "right": 44,
+        "top": 429.359375,
+        "bottom": 460.15625,
+        "width": 44,
+        "height": 30.796875
+      }
+    ],
+    "keyboardToggle": {
+      "left": 6.59375,
+      "right": 37.390625,
+      "top": 520.640625,
+      "bottom": 551.4375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "autoToggle": {
+      "left": 6.59375,
+      "right": 37.390625,
+      "top": 562.4375,
+      "bottom": 593.234375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "voiceToggle": {
+      "left": 3.296875,
+      "right": 40.6875,
+      "top": 604.234375,
+      "bottom": 635.03125,
+      "width": 37.390625,
+      "height": 30.796875
+    },
+    "preset": {
+      "left": 1,
+      "right": 319,
+      "top": 1,
+      "bottom": 41,
+      "width": 318,
+      "height": 40
+    },
+    "tabs": {
+      "left": 1,
+      "right": 319,
+      "top": 435,
+      "bottom": 475,
+      "width": 318,
+      "height": 40
+    },
+    "keyboard": {
+      "left": 1,
+      "right": 319,
+      "top": 479,
+      "bottom": 567,
+      "width": 318,
+      "height": 88
+    },
+    "visibleVoiceChips": [
+      {
+        "left": 54,
+        "right": 185.765625,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 242.921875,
+        "right": 310,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 54,
+        "right": 125.6875,
+        "top": 162,
+        "bottom": 186
+      },
+      {
+        "left": 242.921875,
+        "right": 310,
+        "top": 162,
+        "bottom": 186
+      }
+    ],
+    "documentFits": true
+  },
+  {
+    "name": "after-320x568-left-expanded",
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "edge": "left",
+    "expanded": true,
+    "drawerDirection": "down",
+    "rail": {
+      "left": 0,
+      "right": 44,
+      "top": 154.390625,
+      "bottom": 426.15625,
+      "width": 44,
+      "height": 271.765625
+    },
+    "tab": {
+      "left": 0,
+      "right": 44,
+      "top": 167.578125,
+      "bottom": 308.375,
+      "width": 44,
+      "height": 140.796875
+    },
+    "selectedTap": {
+      "left": 6.6015625,
+      "right": 37.3984375,
+      "top": 204.96875,
+      "bottom": 235.765625,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "selectedArt": {
+      "left": 13.1953125,
+      "right": 30.7890625,
+      "top": 211.5625,
+      "bottom": 229.15625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "routeBadge": {
+      "left": 27.515625,
+      "right": 41.8125,
+      "top": 200.578125,
+      "bottom": 214.875,
+      "width": 14.296875,
+      "height": 14.296875
+    },
+    "noteTap": {
+      "left": 6.6015625,
+      "right": 37.3984375,
+      "top": 246.765625,
+      "bottom": 277.5625,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "noteIcon": {
+      "left": 13.1953125,
+      "right": 30.7890625,
+      "top": 253.359375,
+      "bottom": 270.953125,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "handle": {
+      "left": 18.1640625,
+      "right": 25.8359375,
+      "top": 180.765625,
+      "bottom": 193.921875,
+      "width": 7.671875,
+      "height": 13.15625
+    },
+    "drawer": {
+      "left": 0,
+      "right": 44,
+      "top": 308.375,
+      "bottom": 412.96875,
+      "width": 44,
+      "height": 104.59375
+    },
+    "drawerScrollHeight": 340,
+    "paddleTap": {
+      "left": 0,
+      "right": 44,
+      "top": 312.765625,
+      "bottom": 334.765625,
+      "width": 44,
+      "height": 22
+    },
+    "sourceTaps": [
+      {
+        "left": 0,
+        "right": 44,
+        "top": 345.765625,
+        "bottom": 376.5625,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 0,
+        "right": 44,
+        "top": 387.5625,
+        "bottom": 418.359375,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 0,
+        "right": 44,
+        "top": 429.359375,
+        "bottom": 460.15625,
+        "width": 44,
+        "height": 30.796875
+      }
+    ],
+    "keyboardToggle": {
+      "left": 6.59375,
+      "right": 37.390625,
+      "top": 520.640625,
+      "bottom": 551.4375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "autoToggle": {
+      "left": 6.59375,
+      "right": 37.390625,
+      "top": 562.4375,
+      "bottom": 593.234375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "voiceToggle": {
+      "left": 3.296875,
+      "right": 40.6875,
+      "top": 604.234375,
+      "bottom": 635.03125,
+      "width": 37.390625,
+      "height": 30.796875
+    },
+    "preset": {
+      "left": 1,
+      "right": 319,
+      "top": 1,
+      "bottom": 41,
+      "width": 318,
+      "height": 40
+    },
+    "tabs": {
+      "left": 1,
+      "right": 319,
+      "top": 435,
+      "bottom": 475,
+      "width": 318,
+      "height": 40
+    },
+    "keyboard": {
+      "left": 1,
+      "right": 319,
+      "top": 479,
+      "bottom": 567,
+      "width": 318,
+      "height": 88
+    },
+    "visibleVoiceChips": [
+      {
+        "left": 54,
+        "right": 185.765625,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 242.921875,
+        "right": 310,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 54,
+        "right": 125.6875,
+        "top": 162,
+        "bottom": 186
+      },
+      {
+        "left": 242.921875,
+        "right": 310,
+        "top": 162,
+        "bottom": 186
+      }
+    ],
+    "documentFits": true
+  },
+  {
+    "name": "after-393x852-right-collapsed",
+    "viewport": {
+      "width": 393,
+      "height": 852
+    },
+    "edge": "right",
+    "expanded": false,
+    "drawerDirection": "down",
+    "rail": {
+      "left": 349,
+      "right": 393,
+      "top": 203,
+      "bottom": 370.171875,
+      "width": 44,
+      "height": 167.171875
+    },
+    "tab": {
+      "left": 349,
+      "right": 393,
+      "top": 216.1875,
+      "bottom": 356.984375,
+      "width": 44,
+      "height": 140.796875
+    },
+    "selectedTap": {
+      "left": 355.6015625,
+      "right": 386.3984375,
+      "top": 253.578125,
+      "bottom": 284.375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "selectedArt": {
+      "left": 362.1953125,
+      "right": 379.7890625,
+      "top": 260.171875,
+      "bottom": 277.765625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "routeBadge": {
+      "left": 376.515625,
+      "right": 390.8125,
+      "top": 249.1875,
+      "bottom": 263.484375,
+      "width": 14.296875,
+      "height": 14.296875
+    },
+    "noteTap": {
+      "left": 355.6015625,
+      "right": 386.3984375,
+      "top": 295.375,
+      "bottom": 326.171875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "noteIcon": {
+      "left": 362.1953125,
+      "right": 379.7890625,
+      "top": 301.96875,
+      "bottom": 319.5625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "handle": {
+      "left": 367.1640625,
+      "right": 374.8359375,
+      "top": 229.375,
+      "bottom": 242.53125,
+      "width": 7.671875,
+      "height": 13.15625
+    },
+    "drawer": {
+      "left": 349,
+      "right": 393,
+      "top": 356.984375,
+      "bottom": 356.984375,
+      "width": 44,
+      "height": 0
+    },
+    "drawerScrollHeight": 340,
+    "paddleTap": {
+      "left": 349,
+      "right": 393,
+      "top": 361.375,
+      "bottom": 383.375,
+      "width": 44,
+      "height": 22
+    },
+    "sourceTaps": [
+      {
+        "left": 349,
+        "right": 393,
+        "top": 394.375,
+        "bottom": 425.171875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 349,
+        "right": 393,
+        "top": 436.171875,
+        "bottom": 466.96875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 349,
+        "right": 393,
+        "top": 477.96875,
+        "bottom": 508.765625,
+        "width": 44,
+        "height": 30.796875
+      }
+    ],
+    "keyboardToggle": {
+      "left": 355.59375,
+      "right": 386.390625,
+      "top": 569.25,
+      "bottom": 600.046875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "autoToggle": {
+      "left": 355.59375,
+      "right": 386.390625,
+      "top": 611.046875,
+      "bottom": 641.84375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "voiceToggle": {
+      "left": 352.296875,
+      "right": 389.6875,
+      "top": 652.84375,
+      "bottom": 683.640625,
+      "width": 37.390625,
+      "height": 30.796875
+    },
+    "preset": {
+      "left": 1,
+      "right": 392,
+      "top": 1,
+      "bottom": 41,
+      "width": 391,
+      "height": 40
+    },
+    "tabs": {
+      "left": 1,
+      "right": 392,
+      "top": 719,
+      "bottom": 759,
+      "width": 391,
+      "height": 40
+    },
+    "keyboard": {
+      "left": 1,
+      "right": 392,
+      "top": 763,
+      "bottom": 851,
+      "width": 391,
+      "height": 88
+    },
+    "visibleVoiceChips": [
+      {
+        "left": 10,
+        "right": 141.765625,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 271.921875,
+        "right": 339,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 10,
+        "right": 81.6875,
+        "top": 304,
+        "bottom": 328
+      },
+      {
+        "left": 271.921875,
+        "right": 339,
+        "top": 304,
+        "bottom": 328
+      }
+    ],
+    "documentFits": true
+  },
+  {
+    "name": "after-393x852-right-expanded",
+    "viewport": {
+      "width": 393,
+      "height": 852
+    },
+    "edge": "right",
+    "expanded": true,
+    "drawerDirection": "down",
+    "rail": {
+      "left": 349,
+      "right": 393,
+      "top": 203,
+      "bottom": 710.171875,
+      "width": 44,
+      "height": 507.171875
+    },
+    "tab": {
+      "left": 349,
+      "right": 393,
+      "top": 216.1875,
+      "bottom": 356.984375,
+      "width": 44,
+      "height": 140.796875
+    },
+    "selectedTap": {
+      "left": 355.6015625,
+      "right": 386.3984375,
+      "top": 253.578125,
+      "bottom": 284.375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "selectedArt": {
+      "left": 362.1953125,
+      "right": 379.7890625,
+      "top": 260.171875,
+      "bottom": 277.765625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "routeBadge": {
+      "left": 376.515625,
+      "right": 390.8125,
+      "top": 249.1875,
+      "bottom": 263.484375,
+      "width": 14.296875,
+      "height": 14.296875
+    },
+    "noteTap": {
+      "left": 355.6015625,
+      "right": 386.3984375,
+      "top": 295.375,
+      "bottom": 326.171875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "noteIcon": {
+      "left": 362.1953125,
+      "right": 379.7890625,
+      "top": 301.96875,
+      "bottom": 319.5625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "handle": {
+      "left": 367.1640625,
+      "right": 374.8359375,
+      "top": 229.375,
+      "bottom": 242.53125,
+      "width": 7.671875,
+      "height": 13.15625
+    },
+    "drawer": {
+      "left": 349,
+      "right": 393,
+      "top": 356.984375,
+      "bottom": 696.984375,
+      "width": 44,
+      "height": 340
+    },
+    "drawerScrollHeight": 340,
+    "paddleTap": {
+      "left": 349,
+      "right": 393,
+      "top": 361.375,
+      "bottom": 383.375,
+      "width": 44,
+      "height": 22
+    },
+    "sourceTaps": [
+      {
+        "left": 349,
+        "right": 393,
+        "top": 394.375,
+        "bottom": 425.171875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 349,
+        "right": 393,
+        "top": 436.171875,
+        "bottom": 466.96875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 349,
+        "right": 393,
+        "top": 477.96875,
+        "bottom": 508.765625,
+        "width": 44,
+        "height": 30.796875
+      }
+    ],
+    "keyboardToggle": {
+      "left": 355.59375,
+      "right": 386.390625,
+      "top": 569.25,
+      "bottom": 600.046875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "autoToggle": {
+      "left": 355.59375,
+      "right": 386.390625,
+      "top": 611.046875,
+      "bottom": 641.84375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "voiceToggle": {
+      "left": 352.296875,
+      "right": 389.6875,
+      "top": 652.84375,
+      "bottom": 683.640625,
+      "width": 37.390625,
+      "height": 30.796875
+    },
+    "preset": {
+      "left": 1,
+      "right": 392,
+      "top": 1,
+      "bottom": 41,
+      "width": 391,
+      "height": 40
+    },
+    "tabs": {
+      "left": 1,
+      "right": 392,
+      "top": 719,
+      "bottom": 759,
+      "width": 391,
+      "height": 40
+    },
+    "keyboard": {
+      "left": 1,
+      "right": 392,
+      "top": 763,
+      "bottom": 851,
+      "width": 391,
+      "height": 88
+    },
+    "visibleVoiceChips": [
+      {
+        "left": 10,
+        "right": 141.765625,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 271.921875,
+        "right": 339,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 10,
+        "right": 81.6875,
+        "top": 304,
+        "bottom": 328
+      },
+      {
+        "left": 271.921875,
+        "right": 339,
+        "top": 304,
+        "bottom": 328
+      }
+    ],
+    "documentFits": true
+  },
+  {
+    "name": "after-393x852-left-collapsed",
+    "viewport": {
+      "width": 393,
+      "height": 852
+    },
+    "edge": "left",
+    "expanded": false,
+    "drawerDirection": "down",
+    "rail": {
+      "left": 0,
+      "right": 44,
+      "top": 203,
+      "bottom": 370.171875,
+      "width": 44,
+      "height": 167.171875
+    },
+    "tab": {
+      "left": 0,
+      "right": 44,
+      "top": 216.1875,
+      "bottom": 356.984375,
+      "width": 44,
+      "height": 140.796875
+    },
+    "selectedTap": {
+      "left": 6.6015625,
+      "right": 37.3984375,
+      "top": 253.578125,
+      "bottom": 284.375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "selectedArt": {
+      "left": 13.1953125,
+      "right": 30.7890625,
+      "top": 260.171875,
+      "bottom": 277.765625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "routeBadge": {
+      "left": 27.515625,
+      "right": 41.8125,
+      "top": 249.1875,
+      "bottom": 263.484375,
+      "width": 14.296875,
+      "height": 14.296875
+    },
+    "noteTap": {
+      "left": 6.6015625,
+      "right": 37.3984375,
+      "top": 295.375,
+      "bottom": 326.171875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "noteIcon": {
+      "left": 13.1953125,
+      "right": 30.7890625,
+      "top": 301.96875,
+      "bottom": 319.5625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "handle": {
+      "left": 18.1640625,
+      "right": 25.8359375,
+      "top": 229.375,
+      "bottom": 242.53125,
+      "width": 7.671875,
+      "height": 13.15625
+    },
+    "drawer": {
+      "left": 0,
+      "right": 44,
+      "top": 356.984375,
+      "bottom": 356.984375,
+      "width": 44,
+      "height": 0
+    },
+    "drawerScrollHeight": 340,
+    "paddleTap": {
+      "left": 0,
+      "right": 44,
+      "top": 361.375,
+      "bottom": 383.375,
+      "width": 44,
+      "height": 22
+    },
+    "sourceTaps": [
+      {
+        "left": 0,
+        "right": 44,
+        "top": 394.375,
+        "bottom": 425.171875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 0,
+        "right": 44,
+        "top": 436.171875,
+        "bottom": 466.96875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 0,
+        "right": 44,
+        "top": 477.96875,
+        "bottom": 508.765625,
+        "width": 44,
+        "height": 30.796875
+      }
+    ],
+    "keyboardToggle": {
+      "left": 6.59375,
+      "right": 37.390625,
+      "top": 569.25,
+      "bottom": 600.046875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "autoToggle": {
+      "left": 6.59375,
+      "right": 37.390625,
+      "top": 611.046875,
+      "bottom": 641.84375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "voiceToggle": {
+      "left": 3.296875,
+      "right": 40.6875,
+      "top": 652.84375,
+      "bottom": 683.640625,
+      "width": 37.390625,
+      "height": 30.796875
+    },
+    "preset": {
+      "left": 1,
+      "right": 392,
+      "top": 1,
+      "bottom": 41,
+      "width": 391,
+      "height": 40
+    },
+    "tabs": {
+      "left": 1,
+      "right": 392,
+      "top": 719,
+      "bottom": 759,
+      "width": 391,
+      "height": 40
+    },
+    "keyboard": {
+      "left": 1,
+      "right": 392,
+      "top": 763,
+      "bottom": 851,
+      "width": 391,
+      "height": 88
+    },
+    "visibleVoiceChips": [
+      {
+        "left": 54,
+        "right": 185.765625,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 315.921875,
+        "right": 383,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 54,
+        "right": 125.6875,
+        "top": 304,
+        "bottom": 328
+      },
+      {
+        "left": 315.921875,
+        "right": 383,
+        "top": 304,
+        "bottom": 328
+      }
+    ],
+    "documentFits": true
+  },
+  {
+    "name": "after-393x852-left-expanded",
+    "viewport": {
+      "width": 393,
+      "height": 852
+    },
+    "edge": "left",
+    "expanded": true,
+    "drawerDirection": "down",
+    "rail": {
+      "left": 0,
+      "right": 44,
+      "top": 203,
+      "bottom": 710.171875,
+      "width": 44,
+      "height": 507.171875
+    },
+    "tab": {
+      "left": 0,
+      "right": 44,
+      "top": 216.1875,
+      "bottom": 356.984375,
+      "width": 44,
+      "height": 140.796875
+    },
+    "selectedTap": {
+      "left": 6.6015625,
+      "right": 37.3984375,
+      "top": 253.578125,
+      "bottom": 284.375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "selectedArt": {
+      "left": 13.1953125,
+      "right": 30.7890625,
+      "top": 260.171875,
+      "bottom": 277.765625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "routeBadge": {
+      "left": 27.515625,
+      "right": 41.8125,
+      "top": 249.1875,
+      "bottom": 263.484375,
+      "width": 14.296875,
+      "height": 14.296875
+    },
+    "noteTap": {
+      "left": 6.6015625,
+      "right": 37.3984375,
+      "top": 295.375,
+      "bottom": 326.171875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "noteIcon": {
+      "left": 13.1953125,
+      "right": 30.7890625,
+      "top": 301.96875,
+      "bottom": 319.5625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "handle": {
+      "left": 18.1640625,
+      "right": 25.8359375,
+      "top": 229.375,
+      "bottom": 242.53125,
+      "width": 7.671875,
+      "height": 13.15625
+    },
+    "drawer": {
+      "left": 0,
+      "right": 44,
+      "top": 356.984375,
+      "bottom": 696.984375,
+      "width": 44,
+      "height": 340
+    },
+    "drawerScrollHeight": 340,
+    "paddleTap": {
+      "left": 0,
+      "right": 44,
+      "top": 361.375,
+      "bottom": 383.375,
+      "width": 44,
+      "height": 22
+    },
+    "sourceTaps": [
+      {
+        "left": 0,
+        "right": 44,
+        "top": 394.375,
+        "bottom": 425.171875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 0,
+        "right": 44,
+        "top": 436.171875,
+        "bottom": 466.96875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 0,
+        "right": 44,
+        "top": 477.96875,
+        "bottom": 508.765625,
+        "width": 44,
+        "height": 30.796875
+      }
+    ],
+    "keyboardToggle": {
+      "left": 6.59375,
+      "right": 37.390625,
+      "top": 569.25,
+      "bottom": 600.046875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "autoToggle": {
+      "left": 6.59375,
+      "right": 37.390625,
+      "top": 611.046875,
+      "bottom": 641.84375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "voiceToggle": {
+      "left": 3.296875,
+      "right": 40.6875,
+      "top": 652.84375,
+      "bottom": 683.640625,
+      "width": 37.390625,
+      "height": 30.796875
+    },
+    "preset": {
+      "left": 1,
+      "right": 392,
+      "top": 1,
+      "bottom": 41,
+      "width": 391,
+      "height": 40
+    },
+    "tabs": {
+      "left": 1,
+      "right": 392,
+      "top": 719,
+      "bottom": 759,
+      "width": 391,
+      "height": 40
+    },
+    "keyboard": {
+      "left": 1,
+      "right": 392,
+      "top": 763,
+      "bottom": 851,
+      "width": 391,
+      "height": 88
+    },
+    "visibleVoiceChips": [
+      {
+        "left": 54,
+        "right": 185.765625,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 315.921875,
+        "right": 383,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 54,
+        "right": 125.6875,
+        "top": 304,
+        "bottom": 328
+      },
+      {
+        "left": 315.921875,
+        "right": 383,
+        "top": 304,
+        "bottom": 328
+      }
+    ],
+    "documentFits": true
+  },
+  {
+    "name": "after-430x932-right-collapsed",
+    "viewport": {
+      "width": 430,
+      "height": 932
+    },
+    "edge": "right",
+    "expanded": false,
+    "drawerDirection": "down",
+    "rail": {
+      "left": 386,
+      "right": 430,
+      "top": 283,
+      "bottom": 450.171875,
+      "width": 44,
+      "height": 167.171875
+    },
+    "tab": {
+      "left": 386,
+      "right": 430,
+      "top": 296.1875,
+      "bottom": 436.984375,
+      "width": 44,
+      "height": 140.796875
+    },
+    "selectedTap": {
+      "left": 392.6015625,
+      "right": 423.3984375,
+      "top": 333.578125,
+      "bottom": 364.375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "selectedArt": {
+      "left": 399.1953125,
+      "right": 416.7890625,
+      "top": 340.171875,
+      "bottom": 357.765625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "routeBadge": {
+      "left": 413.515625,
+      "right": 427.8125,
+      "top": 329.1875,
+      "bottom": 343.484375,
+      "width": 14.296875,
+      "height": 14.296875
+    },
+    "noteTap": {
+      "left": 392.6015625,
+      "right": 423.3984375,
+      "top": 375.375,
+      "bottom": 406.171875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "noteIcon": {
+      "left": 399.1953125,
+      "right": 416.7890625,
+      "top": 381.96875,
+      "bottom": 399.5625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "handle": {
+      "left": 404.1640625,
+      "right": 411.8359375,
+      "top": 309.375,
+      "bottom": 322.53125,
+      "width": 7.671875,
+      "height": 13.15625
+    },
+    "drawer": {
+      "left": 386,
+      "right": 430,
+      "top": 436.984375,
+      "bottom": 436.984375,
+      "width": 44,
+      "height": 0
+    },
+    "drawerScrollHeight": 340,
+    "paddleTap": {
+      "left": 386,
+      "right": 430,
+      "top": 441.375,
+      "bottom": 463.375,
+      "width": 44,
+      "height": 22
+    },
+    "sourceTaps": [
+      {
+        "left": 386,
+        "right": 430,
+        "top": 474.375,
+        "bottom": 505.171875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 386,
+        "right": 430,
+        "top": 516.171875,
+        "bottom": 546.96875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 386,
+        "right": 430,
+        "top": 557.96875,
+        "bottom": 588.765625,
+        "width": 44,
+        "height": 30.796875
+      }
+    ],
+    "keyboardToggle": {
+      "left": 392.59375,
+      "right": 423.390625,
+      "top": 649.25,
+      "bottom": 680.046875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "autoToggle": {
+      "left": 392.59375,
+      "right": 423.390625,
+      "top": 691.046875,
+      "bottom": 721.84375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "voiceToggle": {
+      "left": 389.296875,
+      "right": 426.6875,
+      "top": 732.84375,
+      "bottom": 763.640625,
+      "width": 37.390625,
+      "height": 30.796875
+    },
+    "preset": {
+      "left": 1,
+      "right": 429,
+      "top": 1,
+      "bottom": 41,
+      "width": 428,
+      "height": 40
+    },
+    "tabs": {
+      "left": 1,
+      "right": 429,
+      "top": 799,
+      "bottom": 839,
+      "width": 428,
+      "height": 40
+    },
+    "keyboard": {
+      "left": 1,
+      "right": 429,
+      "top": 843,
+      "bottom": 931,
+      "width": 428,
+      "height": 88
+    },
+    "visibleVoiceChips": [
+      {
+        "left": 10,
+        "right": 141.765625,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 308.921875,
+        "right": 376,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 10,
+        "right": 81.6875,
+        "top": 344,
+        "bottom": 368
+      },
+      {
+        "left": 308.921875,
+        "right": 376,
+        "top": 344,
+        "bottom": 368
+      }
+    ],
+    "documentFits": true
+  },
+  {
+    "name": "after-430x932-right-expanded",
+    "viewport": {
+      "width": 430,
+      "height": 932
+    },
+    "edge": "right",
+    "expanded": true,
+    "drawerDirection": "down",
+    "rail": {
+      "left": 386,
+      "right": 430,
+      "top": 283,
+      "bottom": 790.171875,
+      "width": 44,
+      "height": 507.171875
+    },
+    "tab": {
+      "left": 386,
+      "right": 430,
+      "top": 296.1875,
+      "bottom": 436.984375,
+      "width": 44,
+      "height": 140.796875
+    },
+    "selectedTap": {
+      "left": 392.6015625,
+      "right": 423.3984375,
+      "top": 333.578125,
+      "bottom": 364.375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "selectedArt": {
+      "left": 399.1953125,
+      "right": 416.7890625,
+      "top": 340.171875,
+      "bottom": 357.765625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "routeBadge": {
+      "left": 413.515625,
+      "right": 427.8125,
+      "top": 329.1875,
+      "bottom": 343.484375,
+      "width": 14.296875,
+      "height": 14.296875
+    },
+    "noteTap": {
+      "left": 392.6015625,
+      "right": 423.3984375,
+      "top": 375.375,
+      "bottom": 406.171875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "noteIcon": {
+      "left": 399.1953125,
+      "right": 416.7890625,
+      "top": 381.96875,
+      "bottom": 399.5625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "handle": {
+      "left": 404.1640625,
+      "right": 411.8359375,
+      "top": 309.375,
+      "bottom": 322.53125,
+      "width": 7.671875,
+      "height": 13.15625
+    },
+    "drawer": {
+      "left": 386,
+      "right": 430,
+      "top": 436.984375,
+      "bottom": 776.984375,
+      "width": 44,
+      "height": 340
+    },
+    "drawerScrollHeight": 340,
+    "paddleTap": {
+      "left": 386,
+      "right": 430,
+      "top": 441.375,
+      "bottom": 463.375,
+      "width": 44,
+      "height": 22
+    },
+    "sourceTaps": [
+      {
+        "left": 386,
+        "right": 430,
+        "top": 474.375,
+        "bottom": 505.171875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 386,
+        "right": 430,
+        "top": 516.171875,
+        "bottom": 546.96875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 386,
+        "right": 430,
+        "top": 557.96875,
+        "bottom": 588.765625,
+        "width": 44,
+        "height": 30.796875
+      }
+    ],
+    "keyboardToggle": {
+      "left": 392.59375,
+      "right": 423.390625,
+      "top": 649.25,
+      "bottom": 680.046875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "autoToggle": {
+      "left": 392.59375,
+      "right": 423.390625,
+      "top": 691.046875,
+      "bottom": 721.84375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "voiceToggle": {
+      "left": 389.296875,
+      "right": 426.6875,
+      "top": 732.84375,
+      "bottom": 763.640625,
+      "width": 37.390625,
+      "height": 30.796875
+    },
+    "preset": {
+      "left": 1,
+      "right": 429,
+      "top": 1,
+      "bottom": 41,
+      "width": 428,
+      "height": 40
+    },
+    "tabs": {
+      "left": 1,
+      "right": 429,
+      "top": 799,
+      "bottom": 839,
+      "width": 428,
+      "height": 40
+    },
+    "keyboard": {
+      "left": 1,
+      "right": 429,
+      "top": 843,
+      "bottom": 931,
+      "width": 428,
+      "height": 88
+    },
+    "visibleVoiceChips": [
+      {
+        "left": 10,
+        "right": 141.765625,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 308.921875,
+        "right": 376,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 10,
+        "right": 81.6875,
+        "top": 344,
+        "bottom": 368
+      },
+      {
+        "left": 308.921875,
+        "right": 376,
+        "top": 344,
+        "bottom": 368
+      }
+    ],
+    "documentFits": true
+  },
+  {
+    "name": "after-430x932-left-collapsed",
+    "viewport": {
+      "width": 430,
+      "height": 932
+    },
+    "edge": "left",
+    "expanded": false,
+    "drawerDirection": "down",
+    "rail": {
+      "left": 0,
+      "right": 44,
+      "top": 283,
+      "bottom": 450.171875,
+      "width": 44,
+      "height": 167.171875
+    },
+    "tab": {
+      "left": 0,
+      "right": 44,
+      "top": 296.1875,
+      "bottom": 436.984375,
+      "width": 44,
+      "height": 140.796875
+    },
+    "selectedTap": {
+      "left": 6.6015625,
+      "right": 37.3984375,
+      "top": 333.578125,
+      "bottom": 364.375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "selectedArt": {
+      "left": 13.1953125,
+      "right": 30.7890625,
+      "top": 340.171875,
+      "bottom": 357.765625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "routeBadge": {
+      "left": 27.515625,
+      "right": 41.8125,
+      "top": 329.1875,
+      "bottom": 343.484375,
+      "width": 14.296875,
+      "height": 14.296875
+    },
+    "noteTap": {
+      "left": 6.6015625,
+      "right": 37.3984375,
+      "top": 375.375,
+      "bottom": 406.171875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "noteIcon": {
+      "left": 13.1953125,
+      "right": 30.7890625,
+      "top": 381.96875,
+      "bottom": 399.5625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "handle": {
+      "left": 18.1640625,
+      "right": 25.8359375,
+      "top": 309.375,
+      "bottom": 322.53125,
+      "width": 7.671875,
+      "height": 13.15625
+    },
+    "drawer": {
+      "left": 0,
+      "right": 44,
+      "top": 436.984375,
+      "bottom": 436.984375,
+      "width": 44,
+      "height": 0
+    },
+    "drawerScrollHeight": 340,
+    "paddleTap": {
+      "left": 0,
+      "right": 44,
+      "top": 441.375,
+      "bottom": 463.375,
+      "width": 44,
+      "height": 22
+    },
+    "sourceTaps": [
+      {
+        "left": 0,
+        "right": 44,
+        "top": 474.375,
+        "bottom": 505.171875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 0,
+        "right": 44,
+        "top": 516.171875,
+        "bottom": 546.96875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 0,
+        "right": 44,
+        "top": 557.96875,
+        "bottom": 588.765625,
+        "width": 44,
+        "height": 30.796875
+      }
+    ],
+    "keyboardToggle": {
+      "left": 6.59375,
+      "right": 37.390625,
+      "top": 649.25,
+      "bottom": 680.046875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "autoToggle": {
+      "left": 6.59375,
+      "right": 37.390625,
+      "top": 691.046875,
+      "bottom": 721.84375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "voiceToggle": {
+      "left": 3.296875,
+      "right": 40.6875,
+      "top": 732.84375,
+      "bottom": 763.640625,
+      "width": 37.390625,
+      "height": 30.796875
+    },
+    "preset": {
+      "left": 1,
+      "right": 429,
+      "top": 1,
+      "bottom": 41,
+      "width": 428,
+      "height": 40
+    },
+    "tabs": {
+      "left": 1,
+      "right": 429,
+      "top": 799,
+      "bottom": 839,
+      "width": 428,
+      "height": 40
+    },
+    "keyboard": {
+      "left": 1,
+      "right": 429,
+      "top": 843,
+      "bottom": 931,
+      "width": 428,
+      "height": 88
+    },
+    "visibleVoiceChips": [
+      {
+        "left": 54,
+        "right": 185.765625,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 352.921875,
+        "right": 420,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 54,
+        "right": 125.6875,
+        "top": 344,
+        "bottom": 368
+      },
+      {
+        "left": 352.921875,
+        "right": 420,
+        "top": 344,
+        "bottom": 368
+      }
+    ],
+    "documentFits": true
+  },
+  {
+    "name": "after-430x932-left-expanded",
+    "viewport": {
+      "width": 430,
+      "height": 932
+    },
+    "edge": "left",
+    "expanded": true,
+    "drawerDirection": "down",
+    "rail": {
+      "left": 0,
+      "right": 44,
+      "top": 283,
+      "bottom": 790.171875,
+      "width": 44,
+      "height": 507.171875
+    },
+    "tab": {
+      "left": 0,
+      "right": 44,
+      "top": 296.1875,
+      "bottom": 436.984375,
+      "width": 44,
+      "height": 140.796875
+    },
+    "selectedTap": {
+      "left": 6.6015625,
+      "right": 37.3984375,
+      "top": 333.578125,
+      "bottom": 364.375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "selectedArt": {
+      "left": 13.1953125,
+      "right": 30.7890625,
+      "top": 340.171875,
+      "bottom": 357.765625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "routeBadge": {
+      "left": 27.515625,
+      "right": 41.8125,
+      "top": 329.1875,
+      "bottom": 343.484375,
+      "width": 14.296875,
+      "height": 14.296875
+    },
+    "noteTap": {
+      "left": 6.6015625,
+      "right": 37.3984375,
+      "top": 375.375,
+      "bottom": 406.171875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "noteIcon": {
+      "left": 13.1953125,
+      "right": 30.7890625,
+      "top": 381.96875,
+      "bottom": 399.5625,
+      "width": 17.59375,
+      "height": 17.59375
+    },
+    "handle": {
+      "left": 18.1640625,
+      "right": 25.8359375,
+      "top": 309.375,
+      "bottom": 322.53125,
+      "width": 7.671875,
+      "height": 13.15625
+    },
+    "drawer": {
+      "left": 0,
+      "right": 44,
+      "top": 436.984375,
+      "bottom": 776.984375,
+      "width": 44,
+      "height": 340
+    },
+    "drawerScrollHeight": 340,
+    "paddleTap": {
+      "left": 0,
+      "right": 44,
+      "top": 441.375,
+      "bottom": 463.375,
+      "width": 44,
+      "height": 22
+    },
+    "sourceTaps": [
+      {
+        "left": 0,
+        "right": 44,
+        "top": 474.375,
+        "bottom": 505.171875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 0,
+        "right": 44,
+        "top": 516.171875,
+        "bottom": 546.96875,
+        "width": 44,
+        "height": 30.796875
+      },
+      {
+        "left": 0,
+        "right": 44,
+        "top": 557.96875,
+        "bottom": 588.765625,
+        "width": 44,
+        "height": 30.796875
+      }
+    ],
+    "keyboardToggle": {
+      "left": 6.59375,
+      "right": 37.390625,
+      "top": 649.25,
+      "bottom": 680.046875,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "autoToggle": {
+      "left": 6.59375,
+      "right": 37.390625,
+      "top": 691.046875,
+      "bottom": 721.84375,
+      "width": 30.796875,
+      "height": 30.796875
+    },
+    "voiceToggle": {
+      "left": 3.296875,
+      "right": 40.6875,
+      "top": 732.84375,
+      "bottom": 763.640625,
+      "width": 37.390625,
+      "height": 30.796875
+    },
+    "preset": {
+      "left": 1,
+      "right": 429,
+      "top": 1,
+      "bottom": 41,
+      "width": 428,
+      "height": 40
+    },
+    "tabs": {
+      "left": 1,
+      "right": 429,
+      "top": 799,
+      "bottom": 839,
+      "width": 428,
+      "height": 40
+    },
+    "keyboard": {
+      "left": 1,
+      "right": 429,
+      "top": 843,
+      "bottom": 931,
+      "width": 428,
+      "height": 88
+    },
+    "visibleVoiceChips": [
+      {
+        "left": 54,
+        "right": 185.765625,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 352.921875,
+        "right": 420,
+        "top": 94,
+        "bottom": 118
+      },
+      {
+        "left": 54,
+        "right": 125.6875,
+        "top": 344,
+        "bottom": 368
+      },
+      {
+        "left": 352.921875,
+        "right": 420,
+        "top": 344,
+        "bottom": 368
+      }
+    ],
+    "documentFits": true
+  }
+]

@@ -111,8 +111,8 @@
 }
 
 /* Corner placement. These were inline `style={{ bottom: 8, right: 8 }}`
-   literals in the TSX, unreachable by any token. Right-docked chips also
-   clear the global Mod rail, which the shell gutter used to hide. */
+   literals in the TSX, unreachable by any token. T42 publishes the rail's
+   live edge and scaled width so only chips on that edge move inward. */
 .mobile-voice-chip[data-corner="top-left"] {
     top: var(--cosimo-space-2);
     left: var(--cosimo-space-2);
@@ -120,7 +120,7 @@
 
 .mobile-voice-chip[data-corner="top-right"] {
     top: var(--cosimo-space-2);
-    right: calc(var(--cosimo-space-2) + var(--cosimo-rail-dock));
+    right: var(--cosimo-space-2);
 }
 
 .mobile-voice-chip[data-corner="bottom-left"] {
@@ -130,13 +130,24 @@
 
 .mobile-voice-chip[data-corner="bottom-right"] {
     bottom: var(--cosimo-space-2);
-    right: calc(var(--cosimo-space-2) + var(--cosimo-rail-dock));
+    right: var(--cosimo-space-2);
 }
 
 /* Stacked beneath the top-left chip. */
 .mobile-voice-chip[data-corner="top-left-stacked"] {
     top: calc((var(--cosimo-space-2) * 2) + var(--cosimo-module-sm));
     left: var(--cosimo-space-2);
+}
+
+.cosimo-surface[data-mod-rail-edge="right"] .mobile-voice-chip[data-corner="top-right"],
+.cosimo-surface[data-mod-rail-edge="right"] .mobile-voice-chip[data-corner="bottom-right"] {
+    right: calc(var(--cosimo-space-2) + var(--cosimo-rail-dock));
+}
+
+.cosimo-surface[data-mod-rail-edge="left"] .mobile-voice-chip[data-corner="top-left"],
+.cosimo-surface[data-mod-rail-edge="left"] .mobile-voice-chip[data-corner="bottom-left"],
+.cosimo-surface[data-mod-rail-edge="left"] .mobile-voice-chip[data-corner="top-left-stacked"] {
+    left: calc(var(--cosimo-space-2) + var(--cosimo-rail-dock));
 }
 
 .mobile-voice-chip.is-readout {

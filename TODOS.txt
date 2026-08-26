@@ -1006,6 +1006,8 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - A test creates and resets every mix-bearing effect, verifies the visible value and the value delivered to DSP are both 50%, and guards future effects from silently choosing a different Mix/Wet default.
 
 [ ] T42 — Scale the floating Mod bar up by about 10% without disturbing its geometry
+    Active owner (2026-08-26):
+    - Codex task `T42 Scale Floating Mod Bar`, thread `01a03bb7-9856-78d1-b2ca-781e3847eba0`, branch `codex/t42-floating-mod-bar-scale`, worktree `/Users/winterfell/.codex/worktrees/3a0a3eb6-5f1b-4c2d-935e-50f01a90c88f/cosimo-synth`, model SOL, reasoning max.
     Required result:
     - Increase the icons, modules, gaps, labels, badges, activity marks, arrows, outline, and real tap areas as one proportional system, using roughly a 1.10 scale as the starting point.
     - Preserve the current even spacing, visual centering, alignment, and left/right symmetry. Do not independently enlarge a few icons and leave the surrounding geometry behind.

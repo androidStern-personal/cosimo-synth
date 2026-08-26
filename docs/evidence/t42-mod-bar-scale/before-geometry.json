@@ -1,0 +1,40 @@
+{
+  "source": "Measured from the real composed interface at local master 6c518a92 before T42 implementation.",
+  "393x852-collapsed": {
+    "rail": { "width": 40, "height": 152 },
+    "tab": { "width": 40, "height": 128 },
+    "selectedTap": { "width": 28, "height": 28 },
+    "selectedArt": { "width": 16, "height": 16 },
+    "routeBadge": { "width": 13.09375, "height": 13 },
+    "noteTap": { "width": 28, "height": 28 },
+    "noteIcon": { "width": 16, "height": 16 },
+    "handle": { "width": 7, "height": 12 },
+    "outline": 1,
+    "moduleGap": 10
+  },
+  "393x852-expanded": {
+    "rail": { "width": 40, "height": 447.796875 },
+    "drawer": { "width": 40, "height": 295.796875 },
+    "sourceTap": { "width": 40, "height": 28 },
+    "paddleTap": { "width": 40, "height": 20 },
+    "keyboardToggle": { "width": 28, "height": 28 },
+    "autoToggle": { "width": 28, "height": 28 },
+    "voiceToggle": { "width": 34, "height": 28 }
+  },
+  "320x568": {
+    "collapsedRail": { "top": 143.9140625, "bottom": 295.9140625, "width": 40, "height": 152 },
+    "expandedRail": { "bottom": 426.9921875, "height": 283.078125 },
+    "expandedDrawerHeight": 131.078125,
+    "presetBottom": 41,
+    "tabsTop": 435,
+    "keyboardTop": 479
+  },
+  "430x932": {
+    "collapsedRail": { "top": 314.6484375, "width": 40, "height": 152 },
+    "expandedRail": { "bottom": 775.6484375, "height": 461 },
+    "expandedDrawerHeight": 309,
+    "presetBottom": 41,
+    "tabsTop": 799,
+    "keyboardTop": 843
+  }
+}

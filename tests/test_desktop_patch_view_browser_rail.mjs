@@ -1307,7 +1307,7 @@ test("the global modulation rail owns one continuous SVG silhouette", async () =
         assert.match(collapsed.pathData, /Z\s*$/i, "The silhouette must be one closed contour.");
         assert.notEqual(collapsed.pathFill, "none", "The silhouette path must own the tab fill.");
         assert.notEqual(collapsed.pathStroke, "none", "The silhouette path must own the complete outline.");
-        assert.equal(collapsed.pathStrokeWidth, "1px");
+        assert.equal(collapsed.pathStrokeWidth, "1.1px");
         assert.equal(collapsed.fragmentShoulderCount, 0, "Separate shoulder fragments must not paint the outline.");
         assert.equal(collapsed.gripBackground, "rgba(0, 0, 0, 0)", "The grip must not cover the silhouette stroke.");
         assert.equal(collapsed.bodyBoxShadow, "none", "The body must not draw a competing outline.");
@@ -1322,6 +1322,281 @@ test("the global modulation rail owns one continuous SVG silhouette", async () =
         assert.deepEqual(expanded.silhouetteBounds, expanded.railBounds, "The expanded contour must cover the full rail bounds.");
     } finally {
         await page.close();
+    }
+});
+
+test("T42 scales the complete Mod rail geometry and keeps both edges inside real phone chrome", async () => {
+    const SCALE = 1.1;
+    const BASE = {
+        railWidth: 40,
+        railCollapsedHeight: 152,
+        tabHeight: 128,
+        module: 28,
+        icon: 16,
+        badge: 13,
+        label: 8,
+        sourceNumberWidth: 9,
+        sourceNumberHeight: 11,
+        activityWidth: 14,
+        activityHeight: 2,
+        handleDot: 2,
+        handleGap: 3,
+        chevron: 7,
+        outline: 1,
+        gap: 10,
+        paddleHeight: 20,
+        voiceToggleWidth: 34,
+    };
+    const closeToScaled = (actual, before, label, tolerance = 0.3) => {
+        assert.equal(
+            Math.abs(actual - (before * SCALE)) <= tolerance,
+            true,
+            `${label} must scale ${before}px -> ${before * SCALE}px; measured ${actual}px.`,
+        );
+    };
+    const readGeometry = async (page) => await page.evaluate(() => {
+        const rectOf = (element) => {
+            if (!(element instanceof Element)) {
+                return null;
+            }
+            const bounds = element.getBoundingClientRect();
+            return {
+                left: bounds.left,
+                right: bounds.right,
+                top: bounds.top,
+                bottom: bounds.bottom,
+                width: bounds.width,
+                height: bounds.height,
+            };
+        };
+        const rail = document.querySelector('[data-role="mobile-global-mod-rail"]');
+        const surface = document.querySelector(".cosimo-surface");
+        const tab = rail?.querySelector('[data-role="mobile-global-mod-rail-tab"]');
+        const selected = rail?.querySelector('[data-role="mobile-global-mod-rail-selected"]');
+        const selectedArt = selected?.querySelector(".rack-mod-art");
+        const sourceNumber = selectedArt?.querySelector(".rack-mod-number");
+        const badge = rail?.querySelector('[data-role="mobile-global-mod-rail-route-count"]');
+        const activity = rail?.querySelector(".mobile-global-mod-rail-activity");
+        const note = rail?.querySelector('[data-role="mobile-global-mod-rail-note"]');
+        const noteIcon = note?.querySelector("svg");
+        const noteDot = note?.querySelector('[data-role="mobile-global-mod-rail-note-dot"]');
+        const handle = rail?.querySelector(".mobile-global-mod-rail-handle");
+        const handleDot = handle?.querySelector("span");
+        const chevron = rail?.querySelector(".mobile-global-mod-rail-chevron");
+        const silhouettePath = rail?.querySelector('[data-role="mobile-global-mod-rail-silhouette"] path');
+        const drawer = rail?.querySelector('[data-role="mobile-global-mod-rail-drawer"]');
+        const paddle = drawer?.querySelector(".rack-mod-paddle");
+        const sourceButtons = Array.from(drawer?.querySelectorAll(".rack-mod-page:not([aria-hidden=true]) .rack-mod-source") ?? []);
+        const sourceArt = sourceButtons[0]?.querySelector(".rack-mod-art");
+        const sourceGlyph = sourceButtons[0]?.querySelector(".rack-mod-glyph");
+        const keyboardToggle = drawer?.querySelector('[data-role="mobile-global-mod-rail-keyboard-toggle"]');
+        const autoToggle = drawer?.querySelector('[data-role="mobile-global-mod-rail-auto-toggle"]');
+        const voiceToggle = drawer?.querySelector('[data-role="mobile-global-mod-rail-voice-toggle"]');
+        const preset = document.querySelector('[data-role="synth-preset-bar-host"]');
+        const tabs = document.querySelector('[data-role="mobile-workspace-tabs"]');
+        const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
+        const railStyle = rail ? getComputedStyle(rail) : null;
+        const handleStyle = handle ? getComputedStyle(handle) : null;
+        const chevronStyle = chevron ? getComputedStyle(chevron) : null;
+        const pathStyle = silhouettePath ? getComputedStyle(silhouettePath) : null;
+        const sourceNumberStyle = sourceNumber ? getComputedStyle(sourceNumber) : null;
+        const badgeStyle = badge ? getComputedStyle(badge) : null;
+        const voiceToggleStyle = voiceToggle ? getComputedStyle(voiceToggle) : null;
+        const visibleChips = Array.from(document.querySelectorAll(".mobile-voice-chip"))
+            .filter((chip) => {
+                const style = getComputedStyle(chip);
+                const bounds = chip.getBoundingClientRect();
+                return style.display !== "none" && style.visibility !== "hidden" && bounds.width > 0 && bounds.height > 0;
+            })
+            .map(rectOf);
+        return {
+            edge: rail?.getAttribute("data-edge"),
+            expanded: rail?.getAttribute("data-expanded"),
+            drawerDirection: rail?.getAttribute("data-drawer-direction"),
+            surfaceEdge: surface instanceof HTMLElement ? surface.dataset.modRailEdge ?? null : null,
+            rail: rectOf(rail),
+            tab: rectOf(tab),
+            selected: rectOf(selected),
+            selectedArt: rectOf(selectedArt),
+            sourceNumber: rectOf(sourceNumber),
+            sourceNumberFontSize: sourceNumberStyle ? Number.parseFloat(sourceNumberStyle.fontSize) : null,
+            badge: rectOf(badge),
+            badgeFontSize: badgeStyle ? Number.parseFloat(badgeStyle.fontSize) : null,
+            activity: rectOf(activity),
+            note: rectOf(note),
+            noteIcon: rectOf(noteIcon),
+            noteDot: rectOf(noteDot),
+            handle: rectOf(handle),
+            handleDot: rectOf(handleDot),
+            chevronSize: chevronStyle ? Number.parseFloat(chevronStyle.width) : null,
+            outline: pathStyle ? Number.parseFloat(pathStyle.strokeWidth) : null,
+            handleColumnGap: handleStyle ? Number.parseFloat(handleStyle.columnGap) : null,
+            drawer: rectOf(drawer),
+            drawerScrollHeight: drawer instanceof HTMLElement ? drawer.scrollHeight : null,
+            paddle: rectOf(paddle),
+            sources: sourceButtons.map(rectOf),
+            sourceArt: rectOf(sourceArt),
+            sourceGlyph: rectOf(sourceGlyph),
+            keyboardToggle: rectOf(keyboardToggle),
+            autoToggle: rectOf(autoToggle),
+            voiceToggle: rectOf(voiceToggle),
+            voiceToggleFontSize: voiceToggleStyle ? Number.parseFloat(voiceToggleStyle.fontSize) : null,
+            preset: rectOf(preset),
+            tabs: rectOf(tabs),
+            keyboard: rectOf(keyboard),
+            visibleChips,
+            scale: railStyle ? Number.parseFloat(railStyle.getPropertyValue("--rail-scale")) : null,
+            viewport: { width: window.innerWidth, height: window.innerHeight },
+            documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        };
+    });
+    const assertCentered = (outer, inner, label) => {
+        assert.ok(outer && inner, `${label} bounds must exist.`);
+        const outerCenter = (outer.left + outer.right) / 2;
+        const innerCenter = (inner.left + inner.right) / 2;
+        assert.equal(Math.abs(outerCenter - innerCenter) <= 0.5, true, `${label} must stay centered.`);
+    };
+    const assertSafe = (geometry, label) => {
+        assert.ok(geometry.rail && geometry.preset && geometry.tabs, `${label} requires rail and shell chrome.`);
+        assert.equal(geometry.documentFits, true, `${label} must not create horizontal overflow.`);
+        assert.equal(
+            geometry.rail.top >= geometry.preset.bottom + 8.5,
+            true,
+            `${label} must clear the preset bar by the scaled safe gap.`,
+        );
+        const lowerChromeTop = Math.min(
+            geometry.tabs.top,
+            geometry.keyboard?.top ?? Number.POSITIVE_INFINITY,
+        );
+        assert.equal(
+            geometry.rail.bottom <= lowerChromeTop - 8.5,
+            true,
+            `${label} must clear tabs/keyboard by the scaled safe gap.`,
+        );
+        if (geometry.edge === "right") {
+            assert.equal(Math.abs(geometry.rail.right - geometry.viewport.width) <= 0.5, true, `${label} must dock flush right.`);
+        } else {
+            assert.equal(Math.abs(geometry.rail.left) <= 0.5, true, `${label} must dock flush left.`);
+        }
+        for (const chip of geometry.visibleChips) {
+            assert.equal(rectsIntersect(geometry.rail, chip), false, `${label} overlaps a Voice chip: ${JSON.stringify(chip)}.`);
+        }
+    };
+
+    const measuredPage = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.removeItem("cosimo.mobile-global-mod-rail.position.v1");
+            });
+        },
+    });
+    try {
+        await measuredPage.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await measuredPage.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.emitEffectiveMsegState({
+                voiceGeneration: 42,
+                hasActive: 1,
+                positions: [0.42, 0, 0],
+            });
+        });
+        await measuredPage.locator(".mobile-global-mod-rail-activity").waitFor();
+        await expandGlobalModRail(measuredPage);
+        await measuredPage.locator('[data-role="mobile-global-mod-rail-auto-toggle"]').click();
+        await collapseGlobalModRail(measuredPage);
+        await measuredPage.waitForTimeout(240);
+        const collapsed = await readGeometry(measuredPage);
+        assert.equal(collapsed.scale, SCALE);
+        assert.equal(collapsed.surfaceEdge, "right");
+        closeToScaled(collapsed.rail.width, BASE.railWidth, "rail width");
+        closeToScaled(collapsed.rail.height, BASE.railCollapsedHeight, "collapsed rail height");
+        closeToScaled(collapsed.tab.height, BASE.tabHeight, "tab and grip tap height");
+        closeToScaled(collapsed.selected.width, BASE.module, "selected-source tap width");
+        closeToScaled(collapsed.selected.height, BASE.module, "selected-source tap height");
+        closeToScaled(collapsed.selectedArt.width, BASE.icon, "selected-source icon");
+        closeToScaled(collapsed.sourceNumber.width, BASE.sourceNumberWidth, "source-number label width");
+        closeToScaled(collapsed.sourceNumber.height, BASE.sourceNumberHeight, "source-number label height");
+        closeToScaled(collapsed.sourceNumberFontSize, BASE.label, "source-number label type");
+        closeToScaled(collapsed.badge.height, BASE.badge, "route badge");
+        closeToScaled(collapsed.badgeFontSize, BASE.label, "route badge label type");
+        closeToScaled(collapsed.activity.width, BASE.activityWidth, "activity mark width");
+        closeToScaled(collapsed.activity.height, BASE.activityHeight, "activity mark height");
+        closeToScaled(collapsed.note.width, BASE.module, "note tap width");
+        closeToScaled(collapsed.note.height, BASE.module, "note tap height");
+        closeToScaled(collapsed.noteIcon.width, BASE.icon, "note icon");
+        closeToScaled(collapsed.noteDot.width, 4, "note activity dot");
+        closeToScaled(collapsed.handleDot.width, BASE.handleDot, "handle dots");
+        closeToScaled(collapsed.handleColumnGap, BASE.handleGap, "handle spacing");
+        closeToScaled(collapsed.chevronSize, BASE.chevron, "disclosure arrow");
+        closeToScaled(collapsed.outline, BASE.outline, "continuous outline", 0.05);
+        assertCentered(collapsed.rail, collapsed.selected, "selected source");
+        assertCentered(collapsed.rail, collapsed.note, "note module");
+        assertCentered(collapsed.rail, collapsed.handle, "drag handle");
+        closeToScaled(collapsed.note.top - collapsed.selected.bottom, BASE.gap, "module spacing");
+        assertSafe(collapsed, "393x852 collapsed right rail");
+
+        await expandGlobalModRail(measuredPage);
+        await measuredPage.waitForTimeout(160);
+        const expanded = await readGeometry(measuredPage);
+        assert.ok(expanded.drawer && expanded.paddle && expanded.sources.length === 3);
+        closeToScaled(expanded.paddle.height, BASE.paddleHeight, "paging tap height");
+        closeToScaled(expanded.sources[0].height, BASE.module, "drawer source tap height");
+        closeToScaled(expanded.sources[0].width, BASE.railWidth, "drawer source tap width");
+        closeToScaled(expanded.sourceArt.width, BASE.module, "drawer source art module");
+        closeToScaled(expanded.sourceGlyph.width, BASE.icon, "drawer source icon");
+        closeToScaled(expanded.sources[1].top - expanded.sources[0].bottom, BASE.gap, "drawer source gap");
+        closeToScaled(expanded.keyboardToggle.width, BASE.module, "keyboard toggle tap");
+        closeToScaled(expanded.autoToggle.height, BASE.module, "auto toggle tap");
+        closeToScaled(expanded.voiceToggle.width, BASE.voiceToggleWidth, "voice toggle tap");
+        closeToScaled(expanded.voiceToggleFontSize, BASE.label, "voice toggle label type");
+        assertSafe(expanded, "393x852 expanded right rail");
+
+        const visiblePageBefore = await measuredPage.locator(".rack-mod-page").evaluateAll((pages) => (
+            pages.findIndex((page) => page.getAttribute("aria-hidden") === "false")
+        ));
+        await measuredPage.getByRole("button", { name: "Next modulation-source group" }).click();
+        const visiblePageAfter = await measuredPage.locator(".rack-mod-page").evaluateAll((pages) => (
+            pages.findIndex((page) => page.getAttribute("aria-hidden") === "false")
+        ));
+        assert.equal(visiblePageAfter, (visiblePageBefore + 1) % 3, "Scaled paging taps must still advance exactly one group.");
+    } finally {
+        await measuredPage.close();
+    }
+
+    for (const viewport of [{ width: 320, height: 568 }, { width: 430, height: 932 }]) {
+        for (const edge of ["left", "right"]) {
+            const page = await openHarnessPage({
+                beforeGoto: async (nextPage) => {
+                    await nextPage.setViewportSize(viewport);
+                    await nextPage.addInitScript(({ storedEdge }) => {
+                        localStorage.setItem(
+                            "cosimo.mobile-global-mod-rail.position.v1",
+                            JSON.stringify({ version: 2, edge: storedEdge, normalizedY: 0.42 }),
+                        );
+                    }, { storedEdge: edge });
+                },
+            });
+            try {
+                await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+                await page.waitForTimeout(240);
+                const collapsed = await readGeometry(page);
+                assert.equal(collapsed.edge, edge);
+                assert.equal(collapsed.surfaceEdge, edge);
+                assertSafe(collapsed, `${viewport.width}x${viewport.height} collapsed ${edge} rail`);
+                await expandGlobalModRail(page);
+                await page.waitForTimeout(160);
+                const expanded = await readGeometry(page);
+                assert.equal(expanded.edge, edge);
+                assertSafe(expanded, `${viewport.width}x${viewport.height} expanded ${edge} rail`);
+                assert.equal(
+                    expanded.drawer.height <= expanded.drawerScrollHeight + 0.5,
+                    true,
+                    "Cramped drawers may scroll but must never exceed their content height.",
+                );
+            } finally {
+                await page.close();
+            }
+        }
     }
 });
 
@@ -1932,10 +2207,16 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
         assert.equal(visualContract.sources.every(Boolean), true);
         assert.deepEqual(visualContract.sources.map((source) => source.number), ["1", "1", "1"]);
         assert.deepEqual(visualContract.sources.map((source) => source.accent), ["#cc59d2", "#b8e236", "#ff6428"]);
-        // The B2 module skeleton (T10B): a full-width 40px hit area around a
-        // 28px source module, on the rail's 10px rhythm.
-        assert.equal(visualContract.sources.every((source) => source.buttonWidth === 40 && source.buttonHeight === 28), true);
-        assert.equal(visualContract.sources.every((source) => source.artWidth === 28 && source.artHeight === 28), true);
+        // T42 scales the complete B2 skeleton: a full-width 44px hit area
+        // around a 30.8px source module, on the rail's 11px rhythm.
+        assert.equal(visualContract.sources.every((source) => (
+            Math.abs(source.buttonWidth - 44) <= 0.1
+            && Math.abs(source.buttonHeight - 30.8) <= 0.1
+        )), true);
+        assert.equal(visualContract.sources.every((source) => (
+            Math.abs(source.artWidth - 30.8) <= 0.1
+            && Math.abs(source.artHeight - 30.8) <= 0.1
+        )), true);
         assert.equal(visualContract.sources.every((source) => source.background === "rgba(0, 0, 0, 0)"), true);
         assert.equal(visualContract.sources.every((source) => source.boxShadow === "none"), true);
         assert.equal(visualContract.sources.every((source) => source.overflow === "visible"), true);
@@ -1963,13 +2244,15 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
         );
         assert.equal(
             visualContract.sources.slice(1).every((source, index) => (
-                Math.abs(source.top - visualContract.sources[index].bottom - 10) <= 0.5
+                Math.abs(source.top - visualContract.sources[index].bottom - 11) <= 0.5
             )),
             true,
-            "Source rows must sit on the rail's single 10px rhythm.",
+            "Source rows must sit on the rail's single scaled 11px rhythm.",
         );
-        assert.deepEqual(visualContract.previous, { width: 40, height: 20 });
-        assert.deepEqual(visualContract.next, { width: 40, height: 20 });
+        for (const paddle of [visualContract.previous, visualContract.next]) {
+            assert.equal(Math.abs(paddle.width - 44) <= 0.1, true);
+            assert.equal(Math.abs(paddle.height - 22) <= 0.1, true);
+        }
 
         await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-mseg-1"]');
         const selectedVisual = await page.locator('[data-role="rack-mod-source-mseg-1"]').evaluate((button) => {
