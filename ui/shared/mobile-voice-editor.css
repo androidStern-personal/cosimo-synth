@@ -207,27 +207,6 @@
     border-bottom: 1px solid var(--cosimo-line);
 }
 
-/* When a short phone has no vertical segment tall enough for the fixed Mod
- * rail and a Voice paging paddle, the rail owns one explicit edge gutter.
- * Taller surfaces avoid the paddles vertically and keep the original grid. */
-@media (max-width: 639px) {
-    .cosimo-surface[data-mod-rail-edge="right"] .mobile-voice-toolbar {
-        grid-template-columns: 38px minmax(0, 1fr) 30px var(--cosimo-rail-dock);
-    }
-
-    .cosimo-surface[data-mod-rail-edge="right"] .mobile-voice-paddle.is-previous { grid-column: 1; }
-    .cosimo-surface[data-mod-rail-edge="right"] .mobile-voice-page { grid-column: 2; }
-    .cosimo-surface[data-mod-rail-edge="right"] .mobile-voice-paddle.is-next { grid-column: 3; }
-
-    .cosimo-surface[data-mod-rail-edge="left"] .mobile-voice-toolbar {
-        grid-template-columns: var(--cosimo-rail-dock) 38px minmax(0, 1fr) 30px;
-    }
-
-    .cosimo-surface[data-mod-rail-edge="left"] .mobile-voice-paddle.is-previous { grid-column: 2; }
-    .cosimo-surface[data-mod-rail-edge="left"] .mobile-voice-page { grid-column: 3; }
-    .cosimo-surface[data-mod-rail-edge="left"] .mobile-voice-paddle.is-next { grid-column: 4; }
-}
-
 .mobile-voice-paddle {
     display: grid;
     min-width: 0;
@@ -247,6 +226,21 @@
 
 .mobile-voice-paddle.is-next {
     border-left: 1px solid var(--cosimo-line);
+}
+
+/* The collapsed Mod bar is free to traverse the Voice page, including these
+ * edge controls. At an actual overlap the Voice control paints and receives
+ * the pointer above the bar; opening the drawer deliberately restores the Mod
+ * surface as the foreground interaction layer. */
+@media (max-width: 639px) {
+    .cosimo-surface:has(.mobile-global-mod-rail[data-expanded="false"]) .mobile-voice-chip {
+        z-index: 61;
+    }
+
+    .cosimo-surface:has(.mobile-global-mod-rail[data-expanded="false"]) .mobile-voice-paddle {
+        position: relative;
+        z-index: 61;
+    }
 }
 
 .mobile-voice-page {

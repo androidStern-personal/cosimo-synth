@@ -1,3 +1,8 @@
+T54A Voice / floating Mod-bar overlap contract — 2026-08-27
+- Compact Voice keeps mirrored 8 px wavetable corners and a full-width three-part parameter row. Do not restore Voice controls as rail keep-outs or reserve a Mod-bar-width edge gutter; fixed chrome is the rail's only vertical travel bound.
+- Resolve real overlap by interaction state: collapsed Voice chips and page arrows own visual/pointer priority while the bar traverses behind them; the expanded drawer owns foreground priority. Expansion may temporarily project the displayed top far enough for one complete scaled three-source page, but must not rewrite the stored requested dock, which returns on collapse.
+- The regression authority is the composed 320 x 568 / 393 x 852 matrix on both rail edges. Physical iPhone finger comfort and Ableton interaction remain separate manual acceptance gates.
+
 T54 plus T33/T34/T36 integrated and requalified on master — 2026-08-26
 - `codex/t54-wavetable-right-edge-controls` was rebased first, then `codex/t33-t34-t36-mseg-editor` was rebased onto that exact result. The integration preserved the current host-readiness rules and the drawer's existing top-border color. Generated desktop and iPhone bundles were rebuilt from the final source rather than conflict-edited.
 - Adversarial re-review passed after the compact MSEG Rate control was wired to the real host binding. Release and window-blur cancellation each produce exactly one host gesture end, and no value changes after cancellation. The effects-rack integration change is only the required null guard for an optional measured Voice panel.

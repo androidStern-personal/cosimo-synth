@@ -465,11 +465,46 @@ export async function toggleRackEffectEnabled(page, effectId) {
     await page.waitForSelector('[data-role="rack-station-menu"]', { state: "detached" });
 }
 
+export async function reachableGlobalModRailGripPoint(page) {
+    const grip = page.locator('[data-role="mobile-global-mod-rail-grip"]');
+    await grip.waitFor();
+    const point = await grip.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        const center = {
+            x: (bounds.left + bounds.right) / 2,
+            y: (bounds.top + bounds.bottom) / 2,
+        };
+        const candidates = [center];
+        for (let y = bounds.top + 2; y <= bounds.bottom - 2; y += 2) {
+            for (let x = bounds.left + 2; x <= bounds.right - 2; x += 2) {
+                candidates.push({ x, y });
+            }
+        }
+        candidates.sort((left, right) => (
+            Math.hypot(left.x - center.x, left.y - center.y)
+            - Math.hypot(right.x - center.x, right.y - center.y)
+        ));
+        const root = element.getRootNode();
+        for (const candidate of candidates) {
+            const hit = root instanceof ShadowRoot
+                ? root.elementFromPoint(candidate.x, candidate.y)
+                : document.elementFromPoint(candidate.x, candidate.y);
+            if (hit instanceof Element && element.contains(hit)) {
+                return candidate;
+            }
+        }
+        return null;
+    });
+    assert.ok(point, "The global Mod rail must retain a reachable grip point.");
+    return point;
+}
+
 export async function expandGlobalModRail(page) {
     const grip = page.locator('[data-role="mobile-global-mod-rail-grip"]');
     await grip.waitFor();
     if (await grip.getAttribute("aria-expanded") !== "true") {
-        await grip.click({ position: { x: 28, y: 12 } });
+        const point = await reachableGlobalModRailGripPoint(page);
+        await page.mouse.click(point.x, point.y);
     }
     await page.locator('[data-role="mobile-global-mod-rail"][data-expanded="true"]').waitFor();
     await page.waitForTimeout(220);
@@ -479,7 +514,8 @@ export async function collapseGlobalModRail(page) {
     const grip = page.locator('[data-role="mobile-global-mod-rail-grip"]');
     await grip.waitFor();
     if (await grip.getAttribute("aria-expanded") === "true") {
-        await grip.click({ position: { x: 28, y: 12 } });
+        const point = await reachableGlobalModRailGripPoint(page);
+        await page.mouse.click(point.x, point.y);
     }
     await page.locator('[data-role="mobile-global-mod-rail"][data-expanded="false"]').waitFor();
     await page.waitForTimeout(240);

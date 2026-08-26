@@ -1251,11 +1251,11 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Post-rebase combined master verification passed the full rail suite 56/56, pure rail geometry 12/12, and the complete desktop UI suite 262/263. Its sole failure is the established React Grab `navigator.webdriver` development-harness assertion; all product tests pass. Desktop and iPhone generated output were rebuilt from the final combined source. Five reviewed captures plus measured rectangles remain in `docs/evidence/t54-wavetable-right-edge-controls/`.
     - The combined compiled VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` and passes strict codesign. A fresh HMR wrapper/app is running from master against `http://127.0.0.1:5199` with `usesViteClient: true`; physical iPhone finger-comfort review remains manual acceptance.
 
-[ ] T54A — Restore free Mod-bar movement, usable expansion, and the full-width wavetable parameter row
-    Active owner (2026-08-27):
+[x] T54A — Restore free Mod-bar movement, usable expansion, and the full-width wavetable parameter row
+    Completed owner (2026-08-27):
     - Codex task `Fix wavetable Mod bar regression`, thread `01a04027-1528-7083-ae49-f16ec0eb5e3c`, branch `codex/t54a-wavetable-mod-bar-regression`, worktree `/Users/winterfell/.codex/worktrees/63ff/cosimo-synth`, model SOL, reasoning max.
     Reproduced regression:
-    - On the real 320 x 568 composed browser surface, the right-docked Mod bar reserves a blank 44 px column in the wavetable parameter row; a 100 px upward grip drag moves the bar 0 px; and Expand produces only a 35 px drawer sliver.
+    - On the real 320 x 568 composed browser surface, the right-docked Mod bar reserved a blank 44 px column in the wavetable parameter row; a 100 px upward grip drag moved the bar 0 px; and Expand produced only a 35 px drawer sliver.
     Actual cause:
     - T54 follow-up commits `5d10370b` and `24fd1d60` turned the wavetable corner chips and page arrows into vertical Mod-bar keep-outs, projected every pointer move into the nearest permitted segment, clipped the drawer to that segment, and added a Mod-bar-width toolbar column when the segment was too small.
     Required result:
@@ -1263,8 +1263,12 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Keep the bottom wavetable parameter row full width on both Mod-bar edges; never reserve a blank Mod-bar-width column.
     - Let the floating Mod bar follow vertical drags continuously through its normal fixed-chrome travel range on the Voice page. Wavetable chips and page arrows must not trap it in one segment.
     - Expansion must expose a genuinely usable drawer on short phones, not a one-source sliver. Preserve the 10% Mod-bar scale, edge docking, source tap toggle, page-arrow interaction, and chip hit areas.
-    Done when:
-    - Real composed browser regressions at 320 x 568 and 393 x 852, on both rail edges, prove the row reaches both wavetable edges, vertical dragging remains continuous, expansion is usable, all four chips remain at 8 px and clickable, and both page arrows remain clickable.
+    Completion evidence (2026-08-27):
+    - Removed Voice-control keep-outs and the short-phone 44 px edge gutter. The rail now follows the finger through the fixed-chrome vertical band while the parameter row remains full-width; all four wavetable chips keep their mirrored 8 px graph insets.
+    - Overlap priority is stateful: collapsed Voice chips and page arrows paint and receive pointers above the freely moving bar, while an expanded drawer owns the foreground. Expansion may shift only the displayed rail position enough to expose one complete three-source page; the stored dock remains unchanged and returns on collapse.
+    - The real composed harness proves 320 x 568 and 393 x 852 on both edges: full-width parameter row, continuous -100 px drag, usable/reachable expanded sources and controls, four clickable corner chips, and clickable previous/next page arrows. Focused motion/coast proof passes 3/3; pure perimeter geometry passes 11/11; the complete desktop UI suite passes 263/264 with only the established automated React Grab assertion failing under `navigator.webdriver`. TypeScript reports only the established 27 Bounce/share errors and none in T54A files.
+    - Desktop and iPhone generated UI outputs were rebuilt, and the compiled shadow-root Voice smoke passes 1/1. The compiled, strict-code-sign-valid VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` (arm64 UUID `BB89434C-27D5-3CCA-9701-D677547CD876`, executable SHA-256 `19dde590eb057e435a716a6a8cadce2fd242ad3c2f87b15b21e5408d59f0d72d`). A fresh HMR standalone is running from this worktree at `http://127.0.0.1:5200` with `usesViteClient: true`; port 5174 remains owned by worktree `9acf0081-2413-41b0-b3a5-0abc11458d94`.
+    - Physical iPhone finger-comfort and occlusion review, plus Ableton host interaction, remain manual acceptance; neither was claimed from the browser harness or bundle install.
 
 [ ] T55 — Add exclusive branch Solo to Frequency Split and Parallel groups
     Required behavior:

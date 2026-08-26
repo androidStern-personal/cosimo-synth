@@ -2,7 +2,7 @@
  * Pure geometry for the perimeter-docked mobile Mod rail (T10B).
  *
  * The rail docks flush against the left or right screen edge, travels
- * vertically inside a keep-out band (safe areas plus fixed chrome), snaps to
+ * vertically inside a fixed-chrome band (safe areas plus persistent chrome), snaps to
  * three vertical anchors, opens its drawer toward the larger free side, and
  * persists its dock (edge + normalized vertical position) between uses.
  * Everything here is side-effect free so the interaction layer stays thin.
@@ -151,19 +151,6 @@ export type RailDrawerPlacement = {
     readonly extent: number;
 };
 
-/** One visible control band the rail must not cover on its current edge. */
-export type RailVerticalKeepOut = {
-    readonly top: number;
-    readonly bottom: number;
-};
-
-/** The displayed tab position plus the drawer that fits beside it. */
-export type RailVisiblePlacement = {
-    readonly top: number;
-    readonly drawer: RailDrawerPlacement;
-    readonly collisionFree: boolean;
-};
-
 /** Safe initial rail position and the drawer projection available from it. */
 export type RailDefaultPlacement = {
     readonly top: number;
@@ -254,85 +241,6 @@ export function projectRailDrawerPlacement(tabTop: number, metrics: RailDrawerMe
         direction,
         extent: Math.min(metrics.desiredHeight, direction === "up" ? spaceAbove : spaceBelow),
     };
-}
-
-/**
- * Preserve the requested dock while displaying the rail in the nearest free
- * vertical segment. The drawer is clipped to that same segment, so expanding
- * cannot re-cover a control the collapsed tab avoided.
- */
-export function projectRailVisiblePlacement(
-    requestedTop: number,
-    bounds: RailVerticalBounds,
-    metrics: RailDrawerMetrics,
-    keepOuts: ReadonlyArray<RailVerticalKeepOut>,
-): RailVisiblePlacement {
-    const collapsedHeight = Math.max(0, metrics.collapsedHeight);
-    const safeTop = Math.max(bounds.min, metrics.safeTop);
-    const safeBottom = Math.min(bounds.max + collapsedHeight, metrics.safeBottom);
-    const mergedKeepOuts: RailVerticalKeepOut[] = [];
-
-    for (const keepOut of [...keepOuts].sort((left, right) => left.top - right.top)) {
-        const top = clamp(keepOut.top, safeTop, safeBottom);
-        const bottom = clamp(keepOut.bottom, safeTop, safeBottom);
-        if (bottom <= top) {
-            continue;
-        }
-        const previous = mergedKeepOuts.at(-1);
-        if (previous && top <= previous.bottom) {
-            mergedKeepOuts[mergedKeepOuts.length - 1] = {
-                top: previous.top,
-                bottom: Math.max(previous.bottom, bottom),
-            };
-        } else {
-            mergedKeepOuts.push({ top, bottom });
-        }
-    }
-
-    const freeSegments: RailVerticalKeepOut[] = [];
-    let segmentTop = safeTop;
-    for (const keepOut of mergedKeepOuts) {
-        if (keepOut.top > segmentTop) {
-            freeSegments.push({ top: segmentTop, bottom: keepOut.top });
-        }
-        segmentTop = Math.max(segmentTop, keepOut.bottom);
-    }
-    if (segmentTop < safeBottom) {
-        freeSegments.push({ top: segmentTop, bottom: safeBottom });
-    }
-
-    const candidates = freeSegments.flatMap((segment) => {
-        const minimumTop = Math.max(bounds.min, segment.top);
-        const maximumTop = Math.min(bounds.max, segment.bottom - collapsedHeight);
-        if (maximumTop < minimumTop) {
-            return [];
-        }
-        const top = clamp(requestedTop, minimumTop, maximumTop);
-        const drawer = projectRailDrawerPlacement(top, {
-            ...metrics,
-            safeTop: segment.top,
-            safeBottom: segment.bottom,
-        });
-        return [{ top, drawer, collisionFree: true }];
-    });
-
-    const fallbackTop = clamp(requestedTop, bounds.min, bounds.max);
-    let placement: RailVisiblePlacement = candidates[0] ?? {
-        top: fallbackTop,
-        drawer: projectRailDrawerPlacement(fallbackTop, metrics),
-        collisionFree: keepOuts.length === 0,
-    };
-    for (const candidate of candidates.slice(1)) {
-        const candidateDistance = Math.abs(candidate.top - requestedTop);
-        const placementDistance = Math.abs(placement.top - requestedTop);
-        if (
-            candidateDistance < placementDistance
-            || (candidateDistance === placementDistance && candidate.drawer.extent > placement.drawer.extent)
-        ) {
-            placement = candidate;
-        }
-    }
-    return placement;
 }
 
 /**
