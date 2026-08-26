@@ -2048,10 +2048,16 @@ test("articulation capture and recall edit only the selected oscillator", async 
         );
         await page.waitForSelector('[data-role="oscillator-mute"][aria-pressed="true"]');
         await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
-        await waitForHarnessSnapshot(
+        const baseline = await waitForHarnessSnapshot(
             page,
             "baseline B articulation",
             (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 1,
+        );
+        const baselineBank = JSON.parse(String(baseline.storedState[ARTICULATION_STATE_KEY]));
+        assert.equal(
+            Object.hasOwn(baselineBank.slots[0].overrides, "oscB.mute"),
+            false,
+            "untouched B mute must inherit the patch base's canonical disabled value",
         );
 
         for (const [label, keys] of [
@@ -2091,19 +2097,16 @@ test("articulation capture and recall edit only the selected oscillator", async 
             semitone: overrides["oscB.semitone"],
             fineCents: overrides["oscB.fineCents"],
             volumeDb: overrides["oscB.volumeDb"],
+            mute: overrides["oscB.mute"],
             solo: overrides["oscB.solo"],
         }, {
             octave: 1,
             semitone: -3,
             fineCents: 0.1,
             volumeDb: 6,
+            mute: 0,
             solo: 1,
         });
-        assert.equal(
-            Object.hasOwn(overrides, "oscB.mute"),
-            false,
-            "enabling B inherits the patch base's zero instead of storing a redundant override",
-        );
         assert.equal(Object.keys(overrides).some((key) => key.startsWith("oscA.")), false);
         assert.equal(Object.keys(overrides).some((key) => key.startsWith("oscC.")), false);
 

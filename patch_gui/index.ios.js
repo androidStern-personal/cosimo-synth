@@ -27735,10 +27735,10 @@ function useSynthPatchViewModel({
   ]);
   captureCurrentArticulationSnapshotRef.current = captureCurrentArticulationSnapshot;
   reactExports.useEffect(() => {
-    if (articulationPatchBaseRef.current[oscillatorID] === void 0) {
+    if (articulationBankState.state.slots.length === 0) {
       articulationPatchBaseRef.current[oscillatorID] = captureCurrentArticulationSnapshot();
     }
-  }, [captureCurrentArticulationSnapshot, oscillatorID]);
+  }, [articulationBankState.state.slots.length, captureCurrentArticulationSnapshot, oscillatorID]);
   const captureCurrentArticulationLayer = reactExports.useCallback(() => projectArticulationSnapshotToVisibleV4Layer(captureCurrentArticulationSnapshot(), oscillatorID), [captureCurrentArticulationSnapshot, oscillatorID]);
   const applyArticulationSnapshot = reactExports.useCallback((snapshotValue) => {
     const snapshot = normalizeArticulationSnapshot(snapshotValue);

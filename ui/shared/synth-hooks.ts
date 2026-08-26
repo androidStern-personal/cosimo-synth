@@ -3213,10 +3213,10 @@ export function useSynthPatchViewModel({
     captureCurrentArticulationSnapshotRef.current = captureCurrentArticulationSnapshot;
 
     useEffect(() => {
-        if (articulationPatchBaseRef.current[oscillatorID] === undefined) {
+        if (articulationBankState.state.slots.length === 0) {
             articulationPatchBaseRef.current[oscillatorID] = captureCurrentArticulationSnapshot();
         }
-    }, [captureCurrentArticulationSnapshot, oscillatorID]);
+    }, [articulationBankState.state.slots.length, captureCurrentArticulationSnapshot, oscillatorID]);
 
     const captureCurrentArticulationLayer = useCallback((): CapturedArticulationLayer => (
         projectArticulationSnapshotToVisibleV4Layer(captureCurrentArticulationSnapshot(), oscillatorID)
