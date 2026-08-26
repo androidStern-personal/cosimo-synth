@@ -939,6 +939,8 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - Browser coverage exercises both aspect ratios and a live resize across the boundary, proving that drawing, adding, selecting, and dragging points all use the visible time axis and preserve the same underlying envelope.
 
 [ ] T37 — Add one button that copies every Performance tuning setting
+    Active owner (2026-08-26):
+    - Codex task `Restore Developer Settings and Copy`, thread `01a03db8-dc75-71b3-b910-2389fcaf3567`, worktree `/Users/winterfell/.codex/worktrees/5f3e/cosimo-synth`, model SOL, reasoning max.
     Required result:
     - Add a `Copy settings` button to the developer `Performance tuning` page. It copies the complete current tuning state—not only the MSEG controls—as one deterministic, readable text block suitable for pasting into a message or source change.
     - Include every nested value after live edits, and keep the export tied to the tuning-state definition so new settings cannot be silently omitted.
@@ -986,6 +988,20 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - Oscillator-local tuning and pitch modulation remain relative to Global Tune but do not leak into the pitch followed by filters or effects.
     - Zero is neutral, the full knob and modulation ranges work continuously, and complete sound save/restore reproduces the same setting and routes.
 
+[ ] T39A — Choose the right home for Global Tune, then move the existing control there
+    Reported problem (2026-08-26):
+    - The Global Tune control works, but its current location in the top-level Voice layout is wrong and is not accepted as the product design.
+    Design before implementation:
+    - Review the real phone, desktop, and plugin layouts and decide where a synth-wide tuning control belongs in Cosimo's control hierarchy.
+    - Show the proposed location in the real composed interface and get Andrew's approval before moving it. Do not treat the current location or another guessed empty space as accepted.
+    Move, do not redesign the feature:
+    - Move the existing Global Tune control to the approved location and remove its old presentation completely. Keep one Global Tune control, not two synchronized copies.
+    - Preserve all accepted T39 behavior unchanged: the -24 to +24 semitone knob, continuous cents, modulation up to +/-48 semitones, shared played-pitch math, Bounce and effects tracking, host parameter identity, automation, presets, URL state, Init, undo, exact entry, and modulation routes.
+    - Keep the approved location reachable and legible at representative phone, desktop, and plugin sizes without crowding neighboring controls or changing their layout accidentally.
+    Done when:
+    - Andrew approves the placement on the real interface at representative sizes.
+    - Browser and state tests prove exactly one Global Tune control appears in the approved location, the rejected location is gone, and every existing T39 interaction and saved/automated value still drives the same underlying parameter.
+
 [ ] T40 — Make the drag heads-up display match the parameter being changed
     Required result:
     - Keep the existing generic knob display for ordinary parameters, but allow the shared heads-up display to choose a purpose-built presentation for named controls.
@@ -994,6 +1010,14 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - Suppress the heads-up display only when the person is directly dragging the filter graphic, because the edited graph is already visible beneath the finger. Dragging the cutoff knob still shows the specialized display.
     Done when:
     - Browser tests select each named parameter and prove the correct graphic and current value appear, direct filter-graph dragging produces no duplicate display, and an unrelated parameter still gets the generic knob.
+
+[ ] T40A — Show the real Distortion Drive graphic instead of a knob in the heads-up display
+    Required result:
+    - While the Distortion Drive control is being adjusted, replace the generic knob picture in the heads-up display with the production Drive transfer-curve graphic.
+    - Update the curve live as Drive changes, using the selected Symmetric, Asymmetric, or Wavefold shape and the same drawing code and curve math as the Distortion editor. Do not use a decorative copy or change the sound-processing behavior.
+    - Add this to the shared heads-up display behavior described in T40; do not create a second floating display.
+    Done when:
+    - Browser tests adjust Drive with each distortion shape and prove that the correct production curve updates live, the generic knob picture is absent for Drive, and ordinary parameters still show the generic knob.
 
 [x] T41 — Make every effect Mix or Wet control start at 50%
     Completed (2026-08-26):
@@ -1150,6 +1174,8 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Browser tests cover replacement and cancellation in the trunk, a Parallel branch, and a Frequency Split band, and prove the resulting rack matches the pictured graph without changing unrelated nodes.
 
 [ ] T52 — Restore the developer settings menu on the deployed Codex site
+    Active owner (2026-08-26):
+    - Codex task `Restore Developer Settings and Copy`, thread `01a03db8-dc75-71b3-b910-2389fcaf3567`, worktree `/Users/winterfell/.codex/worktrees/5f3e/cosimo-synth`, model SOL, reasoning max.
     Reported failure:
     - The developer settings page previously reached through the preset bar's three-dot menu is absent from the deployed Codex site.
     Required work:
@@ -1160,17 +1186,21 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - The deployed Codex site exposes the complete developer settings page to its intended user, the three-dot route is covered by a generated-build browser test, and the ordinary-user behavior is explicitly defined and tested.
 
 [ ] T53 — Make Init and a brand-new patch start with only Oscillator A
+    Active owner (2026-08-26):
+    - Codex task `Fix Default Oscillator State and Level`, thread `01a03db9-1a78-7520-90cd-7d3982bb6910`, worktree `/Users/winterfell/.codex/worktrees/d278/cosimo-synth`, model SOL, reasoning max.
     Required behavior:
     - Init and every canonical brand-new/default sound enable Oscillator A and disable Oscillators B and C. The disabled oscillators are visibly inactive and produce no audio.
-    - Oscillator A starts at a normal, immediately usable synth level instead of the current extremely quiet value.
+    - Every oscillator's stored default level starts at a normal, immediately usable value instead of the current roughly -9 dB value. This applies to Oscillator A immediately and to Oscillators B and C when they are later enabled.
     Open tuning choice:
-    - Andrew floated about -6 dB but did not approve an exact number. Establish the conventional starting level against named synth references and the current signal path, then get the value approved rather than silently guessing.
+    - The current roughly -9 dB default is rejected. Start the product review from 0 dB, then check it against the current signal path and get the exact value approved rather than silently choosing another unusually quiet number.
     State boundary:
     - Change the canonical default and Init behavior only. Loading a saved sound must preserve its explicit oscillator enable and level values.
     Done when:
-    - New-sound and Init tests prove the UI state and audible DSP state agree, B and C are silent, A uses the approved level, and saved sounds remain unchanged.
+    - New-sound and Init tests prove the UI state and audible DSP state agree, B and C are silent, all three oscillators carry the approved default level, enabling B or C uses that level, and saved sounds remain unchanged.
 
 [ ] T54 — Put the right-side wavetable chips back against the right edge
+    Active owner (2026-08-26):
+    - Codex task `Restore Wavetable Right-Edge Controls`, thread `01a03db9-3d6d-7f33-a793-65284f8ec48a`, worktree `/Users/winterfell/.codex/worktrees/57a0/cosimo-synth`, model SOL, reasoning max.
     Reported regression:
     - The top-right `Warp` chip and the existing lower-right chip were pushed too far inward during refactoring. Their right inset no longer mirrors the left-side chips' left inset.
     Required result:
@@ -1210,6 +1240,22 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - The generated test failed before the version cutoff with the exact old Distortion record and `oscBPan: 0.75` still live; Init left both untouched and reported the strict missing-parameter error. After the cutoff, Chromium and WebKit both start clean and real Init writes version 3 with `distortionType: 1` and no error.
     - Focused lane-state passed 10/10, Init passed 24/24, and preset/controller/bar passed 31/31. Current version-3 restore and corrupt-state rejection remain strict; late Init failure still rolls back the complete sound. The web contract/speedrun set passed 25/25, Bounce persistence 12/12, and the rebuilt iPhone surface 20/20.
     - `npm run web:build` and `npm run ios:ui:build` rebuilt the checked-in browser and iPhone bundles. A fresh HMR standalone is running from this worktree against `http://127.0.0.1:5179`; the compiled VST3 is installed and strict-code-sign verified at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`.
+
+[ ] T57 — Remove the Create Mapping button from effect editors
+    Required result:
+    - Remove the `CREATE MAPPING +` button from the modulation area of every effect editor. Do not replace it with another button or prompt.
+    - Remove the space reserved for the button so the effect editor does not retain an empty button-shaped gap.
+    - Preserve the existing ways modulation mappings are created, edited, and removed elsewhere; this task only removes this redundant control.
+    Done when:
+    - Browser tests prove the button and its reserved space are absent for mapped and unmapped effect parameters on representative phone and desktop layouts, while existing modulation gestures still work.
+
+[ ] T58 — Show only the effect name in each effect editor header
+    Required result:
+    - Every effect editor header shows only the effect name. Remove descriptive subtitles such as `Classic clipping or harmonic-residue saturation.` and remove status text such as `FX BYPASSED`.
+    - Keep the existing power control and actual bypass behavior; bypass state must not add text back into the heading area.
+    - Apply the same rule to every effect, not only Distortion, and reclaim the removed text's vertical space.
+    Done when:
+    - Browser tests inspect every effect while active and bypassed and prove the heading area contains only its effect name, with no subtitle, bypass message, clipping, or leftover blank row at representative phone and desktop sizes.
 
 INFRASTRUCTURE AND TOOLING
 
@@ -1417,6 +1463,11 @@ Source note (2026-08-25):
 [ ] T27 — Reproduce the Sausage Fattener reference before using it to voice Cosimo's compressor and clipper
     Active owner (2026-08-26):
     - Codex task `Complete T27 — isolated polish comp/clip reference lab`, thread `01a03b9b-5ad4-7f11-aafb-53bc9db9ca6f`, branch `codex/t27-isolated-reference-lab`, worktree `/Users/winterfell/.codex/worktrees/a68e3ac6-eb15-442d-9a2e-af21dae745ad/cosimo-synth`, model SOL, reasoning max.
+    Reopened after sound-design review (2026-08-26):
+    - The installed lab exposes the values but is too difficult to dial because its compressor and clipper shapes are not directly editable. The lab is not complete as a sound-design tool until both shapes can be seen and dragged.
+    - Add one interactive compressor input/output curve using the real threshold, knee, ratio, and makeup math, with synchronized graph handles and numeric controls plus a live operating-point overlay. Keep Attack and Release outside that static curve and make them understandable through a live gain-reduction-over-time trace.
+    - Add one interactive clipper transfer curve using the real lab DSP, with synchronized draggable Drive, curve-knot, and tension/shape geometry plus a real clipped/unclipped signal overlay. Keep controls such as Mix outside the curve when they do not honestly define its geometry.
+    - Rebuild and reinstall the lab in Ableton after browser interaction, telemetry, reset, and saved-state tests prove direct manipulation reaches the exact DSP-facing values without jumps or stuck gestures.
     Reference authority: `SAUSAGE_FATTENER_ANALYSIS.md`.
     Work:
     - Preserve the provenance distinction between the closed-source original, Polarity's reported null-tested recreation, the decoded Bitwig preset values, and our own inferences.
