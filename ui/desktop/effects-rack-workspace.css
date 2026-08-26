@@ -170,7 +170,7 @@
     bottom: 0;
     left: 50%;
     width: 2px;
-    background: #e6e1d6;
+    background: #69d5c5;
     transform: translateX(-50%);
     content: "";
 }
@@ -229,7 +229,7 @@
     bottom: 0;
     left: 50%;
     width: 2px;
-    background: #e6e1d6;
+    background: #69d5c5;
     transform: translateX(-50%);
     content: "";
 }
@@ -264,6 +264,7 @@
     align-items: center;
     justify-items: center;
     filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5));
+    transform: translateX(var(--subway-chip-offset-x, 0));
     transition: filter 120ms ease, transform 120ms ease;
 }
 
@@ -367,21 +368,23 @@
 .subway-station-row.is-selected .subway-station-icon-well,
 .subway-station-cell.is-selected .subway-station-icon-well,
 .subway-station-row.is-selected .subway-station-compact-well,
-.subway-station-cell.is-selected .subway-station-compact-well {
-    border-color: #c79a4e;
-    box-shadow: 0 0 10px rgb(199 154 78 / 0.25);
+.subway-station-cell.is-selected .subway-station-compact-well,
+.subway-station-row.is-selected .subway-station-summary-well,
+.subway-station-cell.is-selected .subway-station-summary-well {
+    border-color: var(--station-accent, #69d5c5);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--station-accent, #69d5c5) 35%, transparent);
 }
 
 .subway-station-row.is-reordering .subway-station-pill,
 .subway-station-cell.is-reordering .subway-station-pill {
     z-index: 4;
-    transform: scale(1.06);
+    transform: translateX(var(--subway-chip-offset-x, 0)) scale(1.06);
     filter: drop-shadow(0 7px 14px rgb(0 0 0 / 0.72));
 }
 
 .subway-station:focus-visible .subway-station-detail,
 .subway-station:focus-visible .subway-station-compact-well {
-    outline: 2px solid #e6e1d6;
+    outline: 2px solid var(--station-accent, #69d5c5);
     outline-offset: 2px;
 }
 
@@ -412,18 +415,18 @@
 
 /* ---- Groups on the map: fork, lanes, merge (M4). ---- */
 
-/* Band tints are the one semantic color exception on the infra-teal map. */
+/* Branch identity remains semantic: Parallel uses infra teal; Frequency
+   Split keeps distinct LO/MID/HI route colors through every state. */
 [data-lane-tint="infra"] { --lane-tint: #69d5c5; }
-[data-lane-tint="lo"] { --lane-tint: #78b99a; }
-[data-lane-tint="mid"] { --lane-tint: #c0aa52; }
-[data-lane-tint="hi"] { --lane-tint: #c8794b; }
+[data-lane-tint="lo"] { --lane-tint: #7fd0a1; }
+[data-lane-tint="mid"] { --lane-tint: #f2ca00; }
+[data-lane-tint="hi"] { --lane-tint: #ff8b4a; }
 
 .subway-group {
     display: grid;
     position: relative;
     width: 100%;
     min-width: 0;
-    container-type: inline-size;
 }
 
 .subway-group.is-bypassed .subway-lane-row,
@@ -431,6 +434,17 @@
 .subway-group.is-bypassed .subway-fork-connectors {
     opacity: 0.5;
     filter: saturate(0.6);
+}
+
+.subway-group.is-bypassed .subway-fork-glyph > span {
+    opacity: 0.45;
+    filter: saturate(0.6);
+}
+
+.subway-group.is-selected .subway-fork-glyph > span {
+    box-shadow:
+        0 0 0 2px rgb(105 213 197 / 0.58),
+        0 0 10px rgb(105 213 197 / 0.42);
 }
 
 .subway-fork {
@@ -441,7 +455,34 @@
 }
 
 .subway-fork-glyph {
-    display: none;
+    position: absolute;
+    z-index: 2;
+    top: 50%;
+    left: 50%;
+    display: grid;
+    width: 20px;
+    height: 20px;
+    place-items: center;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+}
+
+.subway-glyph-dot,
+.subway-glyph-diamond {
+    box-sizing: border-box;
+    display: block;
+    width: 11px;
+    height: 11px;
+    border: 3px solid #69d5c5;
+    background: #0b0f11;
+}
+
+.subway-glyph-dot {
+    border-radius: 999px;
+}
+
+.subway-glyph-diamond {
+    transform: rotate(45deg);
 }
 
 .subway-fork-lanes {
@@ -475,10 +516,10 @@
     height: 18px;
     place-items: center;
     padding-inline: 4px;
-    border: 1px solid #3a3a38;
+    border: 1px solid color-mix(in srgb, var(--lane-tint, #69d5c5) 45%, #3a3a38);
     border-radius: 5px;
     background: #101113;
-    color: #8d8981;
+    color: color-mix(in srgb, var(--lane-tint, #69d5c5) 72%, #8d8981);
 }
 
 .subway-fork-lane.is-empty {
@@ -486,8 +527,9 @@
 }
 
 .subway-fork-lane.is-focused > span {
-    border-color: #c79a4e;
-    color: #e8e4dc;
+    border-color: var(--lane-tint, #69d5c5);
+    color: var(--lane-tint, #69d5c5);
+    box-shadow: 0 0 7px color-mix(in srgb, var(--lane-tint, #69d5c5) 28%, transparent);
 }
 
 .subway-fork-readout {
@@ -541,18 +583,24 @@
     bottom: 0;
     left: 50%;
     width: 2px;
-    background: #343638;
-    opacity: 0.82;
+    background: var(--lane-tint, #69d5c5);
+    opacity: 0.68;
     transform: translateX(-50%);
     content: "";
 }
 
 .subway-line-cell.is-dashed::before,
 .subway-ghost-cell.is-dashed::before {
-    background: repeating-linear-gradient(
-        180deg,
-        var(--lane-tint, #69d5c5) 0 5px,
-        transparent 5px 10px);
+    /* Solid 3px caps make the legal empty route meet both neighboring SVG
+       endpoints; the normalized SVG dash rhythm likewise begins and ends
+       with paint instead of depending on an arbitrary physical path length. */
+    background:
+        linear-gradient(var(--lane-tint, #69d5c5), var(--lane-tint, #69d5c5)) center top / 2px 3px no-repeat,
+        linear-gradient(var(--lane-tint, #69d5c5), var(--lane-tint, #69d5c5)) center bottom / 2px 3px no-repeat,
+        repeating-linear-gradient(
+            180deg,
+            var(--lane-tint, #69d5c5) 0 8px,
+            transparent 8px 14px) center / 2px 100% no-repeat;
     opacity: 0.5;
 }
 
@@ -568,13 +616,13 @@
 }
 
 .subway-station-cell.is-focused-branch::before {
-    background: #e6e1d6;
+    background: var(--lane-tint, #69d5c5);
     opacity: 1;
 }
 
 .subway-line-cell.is-focused-branch::before,
 .subway-ghost-cell.is-focused-branch::before {
-    background: #e6e1d6;
+    background: var(--lane-tint, #69d5c5);
     opacity: 1;
 }
 
@@ -592,10 +640,10 @@
     width: 24px;
     height: 24px;
     place-items: center;
-    border: 1px solid rgb(255 255 255 / 0.12);
+    border: 1px solid color-mix(in srgb, var(--lane-tint, #69d5c5) 62%, transparent);
     border-radius: 7px;
     background: transparent;
-    color: #8d8981;
+    color: color-mix(in srgb, var(--lane-tint, #69d5c5) 82%, #e8e4dc);
     font-size: 13px;
     opacity: 0.68;
 }
@@ -637,14 +685,14 @@
     bottom: 0;
     left: 50%;
     width: 2px;
-    background: #e6e1d6;
+    background: #69d5c5;
     transform: translateX(-50%);
     content: "";
 }
 
 .subway-ghost-button:focus-visible .subway-ghost-pill,
 .subway-ghost-row:focus-visible .subway-ghost-pill {
-    outline: 2px solid #e6e1d6;
+    outline: 2px solid var(--lane-tint, #69d5c5);
     outline-offset: 2px;
 }
 
@@ -674,115 +722,136 @@
 
 .subway-connector-svg path {
     fill: none;
-    stroke-linecap: butt;
+    stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 2px;
     vector-effect: non-scaling-stroke;
 }
 
 .subway-connector-trunk {
-    stroke: #e6e1d6;
+    stroke: #69d5c5;
 }
 
 .subway-connector-branch {
-    stroke: #343638;
-    opacity: 0.9;
+    stroke: var(--lane-tint, #69d5c5);
+    opacity: 0.68;
 }
 
 .subway-connector-branch.is-focused {
-    stroke: #e6e1d6;
+    stroke: var(--lane-tint, #69d5c5);
     opacity: 1;
 }
 
 .subway-connector-branch.is-dashed {
-    stroke-dasharray: 5 5;
+    stroke-dasharray: 8 6;
     opacity: 0.5;
 }
 
 .subway-merge-dot {
+    position: absolute;
+    z-index: 2;
+    top: 50%;
+    left: 50%;
+    box-sizing: border-box;
+    display: block;
+    width: 9px;
+    height: 9px;
+    border: 3px solid #69d5c5;
+    border-radius: 999px;
+    background: #0b0f11;
+    transform: translate(-50%, -50%);
+}
+
+.subway-group[data-compact-layout="true"][data-lane-count="2"] .subway-lane-row,
+.subway-group[data-compact-layout="true"][data-lane-count="2"] .subway-merge,
+.subway-group[data-compact-layout="true"][data-lane-count="3"] .subway-lane-row,
+.subway-group[data-compact-layout="true"][data-lane-count="3"] .subway-merge {
+    right: 0;
+    left: 0;
+    width: 100%;
+    grid-template-columns: var(--subway-compact-lane-template);
+    padding-inline: 0;
+}
+
+.subway-group[data-compact-layout="true"][data-lane-count="2"] .subway-fork-lanes,
+.subway-group[data-compact-layout="true"][data-lane-count="3"] .subway-fork-lanes {
+    right: 0;
+    left: 0;
+    width: 100%;
+    grid-template-columns: var(--subway-compact-badge-template);
+    padding-inline: 0;
+}
+
+/* Three bands keep all names. Alternating tiers are the minimum vertical
+   separation that lets 76px chips use the measured compact allocation
+   without colliding; LO and HI can safely share a tier. */
+.subway-group[data-compact-layout="true"][data-lane-count="3"] .subway-lane-row {
+    min-height: 88px;
+}
+
+.subway-group[data-compact-layout="true"][data-lane-count="3"] .subway-lane-row > :nth-child(odd) {
+    --subway-cell-offset-y: -22px;
+}
+
+.subway-group[data-compact-layout="true"][data-lane-count="3"] .subway-lane-row > :nth-child(even) {
+    --subway-cell-offset-y: 22px;
+}
+
+.subway-group[data-compact-layout="true"][data-lane-count="4"] .subway-lane-row,
+.subway-group[data-compact-layout="true"][data-lane-count="4"] .subway-merge {
+    width: 100%;
+    grid-template-columns: var(--subway-compact-lane-template);
+    padding-inline: 0;
+}
+
+.subway-group[data-compact-layout="true"][data-lane-count="4"] .subway-fork-lanes {
+    right: 0;
+    left: 0;
+    grid-template-columns: var(--subway-compact-badge-template);
+}
+
+/* Four exact action tracks alternate between two 44px tiers so no neighbor
+   steals a tap. The visible context summary stays inside its real button. */
+.subway-group[data-compact-layout="true"][data-lane-count="4"] .subway-lane-row {
+    min-height: 88px;
+}
+
+.subway-group[data-compact-layout="true"][data-lane-count="4"] .subway-lane-row > :nth-child(odd) {
+    --subway-cell-offset-y: -22px;
+}
+
+.subway-group[data-compact-layout="true"][data-lane-count="4"] .subway-lane-row > :nth-child(even) {
+    --subway-cell-offset-y: 22px;
+}
+
+.subway-group[data-compact-layout="true"][data-lane-count="4"] .subway-station-cell.is-focused-branch:nth-child(1) {
+    --subway-chip-offset-x: 16px;
+}
+
+.subway-group[data-compact-layout="true"][data-lane-count="4"] .subway-station-cell.is-focused-branch:nth-child(4) {
+    --subway-chip-offset-x: -16px;
+}
+
+.subway-group[data-compact-layout="true"][data-lane-count="4"] .subway-station-cell.is-context-branch .subway-station-detail,
+.subway-group[data-compact-layout="true"][data-lane-count="4"] .subway-ghost-cell.is-context-branch .subway-ghost-pill {
     display: none;
 }
 
-/* Variant C removes decorative split/merge circles. The junction remains a
-   44px semantic button, while the continuous routes carry the topology. */
-.subway-glyph-dot,
-.subway-glyph-diamond {
-    width: 0;
-    height: 0;
-    border: 0;
-    background: transparent;
+.subway-group[data-compact-layout="true"][data-lane-count="4"] .subway-station-cell.is-context-branch .subway-station-summary,
+.subway-group[data-compact-layout="true"][data-lane-count="4"] .subway-ghost-cell.is-context-branch .subway-ghost-summary {
+    display: grid;
+    place-items: center;
 }
 
-@container (max-width: 239px) {
-    .subway-group[data-lane-count="2"] .subway-lane-row,
-    .subway-group[data-lane-count="2"] .subway-merge,
-    .subway-group[data-lane-count="3"] .subway-lane-row,
-    .subway-group[data-lane-count="3"] .subway-merge {
-        right: 0;
-        left: 0;
-        width: 100%;
-        grid-template-columns: var(--subway-compact-lane-template);
-        padding-inline: 0;
-    }
-
-    .subway-group[data-lane-count="2"] .subway-fork-lanes,
-    .subway-group[data-lane-count="3"] .subway-fork-lanes {
-        right: 0;
-        left: 0;
-        width: 100%;
-        grid-template-columns: var(--subway-compact-badge-template);
-        padding-inline: 0;
-    }
-
-    .subway-group[data-lane-count="3"] .subway-station-cell.is-context-branch .subway-station-detail {
-        display: none;
-    }
-
-    .subway-group[data-lane-count="3"] .subway-station-cell.is-context-branch .subway-station-compact {
-        display: grid;
-    }
-}
-
-@container (max-width: 319px) {
-    .subway-group[data-lane-count="4"] .subway-lane-row,
-    .subway-group[data-lane-count="4"] .subway-merge {
-        width: 100%;
-        grid-template-columns: var(--subway-compact-lane-template);
-        padding-inline: 0;
-    }
-
-    .subway-group[data-lane-count="4"] .subway-fork-lanes {
-        right: 0;
-        left: 0;
-        grid-template-columns: var(--subway-compact-badge-template);
-    }
-
-    .subway-group[data-lane-count="4"] .subway-station-cell.is-context-branch > .subway-station,
-    .subway-group[data-lane-count="4"] .subway-ghost-cell.is-context-branch > .subway-ghost-button {
-        display: none;
-    }
-
-    .subway-group[data-lane-count="4"] .subway-station-cell.is-context-branch > .subway-station-summary,
-    .subway-group[data-lane-count="4"] .subway-ghost-cell.is-context-branch > .subway-ghost-summary {
-        position: absolute;
-        z-index: 2;
-        left: 50%;
-        top: 50%;
-        display: grid;
-        place-items: center;
-        transform: translate(-50%, -50%);
-    }
-
-    .subway-group[data-lane-count="4"] .subway-ghost-cell.is-context-branch > .subway-ghost-summary {
-        width: 24px;
-        height: 24px;
-        border: 1px solid rgb(255 255 255 / 0.08);
-        border-radius: 7px;
-        background: #101113;
-        color: #5e6063;
-        font-size: 12px;
-        opacity: 0.42;
-    }
+.subway-group[data-compact-layout="true"][data-lane-count="4"] .subway-ghost-cell.is-context-branch .subway-ghost-summary {
+    width: 24px;
+    height: 24px;
+    border: 1px solid color-mix(in srgb, var(--lane-tint, #69d5c5) 48%, transparent);
+    border-radius: 7px;
+    background: #101113;
+    color: var(--lane-tint, #69d5c5);
+    font-size: 12px;
+    opacity: 0.7;
 }
 
 /* ---- The group editor pane. ---- */

@@ -28,16 +28,21 @@ async function defaultParams(effectId) {
 
 test("compact branch allocation owns both responsive tracks and connector anchors", async () => {
     const geometry = await connectorGeometryPromise;
+    assert.equal(geometry.subwayUsesCompactLaneAllocation(176, 3), true);
+    assert.equal(geometry.subwayUsesCompactLaneAllocation(240, 3), false);
+    assert.equal(geometry.subwayUsesCompactLaneAllocation(319, 4), true);
+    assert.equal(geometry.subwayUsesCompactLaneAllocation(320, 4), false);
+    assert.equal(geometry.subwayUsesCompactLaneAllocation(0, 3), false);
+    assert.throws(() => geometry.subwayUsesCompactLaneAllocation(176, 5), RangeError);
     const threeLane = geometry.subwayCompactLaneAllocation(3, 1);
-    assert.deepEqual(threeLane.trackPercentages, [25, 50, 25]);
-    assert.deepEqual(threeLane.laneCenters, [12.5, 50, 87.5]);
-    assert.equal(threeLane.gridTemplate, "25% 50% 25%");
+    assertApproximately(threeLane.trackPercentages[0], (76 / 176) * 100);
+    assertApproximately(threeLane.trackPercentages[1], (24 / 176) * 100);
+    assertApproximately(threeLane.trackPercentages[2], (76 / 176) * 100);
+    assert.deepEqual(threeLane.laneCenters, [(38 / 176) * 100, 50, (138 / 176) * 100]);
 
     const fourLane = geometry.subwayCompactLaneAllocation(4, 2);
-    assert.equal(fourLane.trackPercentages.length, 4);
-    assertApproximately(fourLane.trackPercentages.reduce((sum, value) => sum + value, 0), 100);
-    assertApproximately(fourLane.trackPercentages[2], (98 / 176) * 100);
-    assertApproximately(fourLane.laneCenters[2], (101 / 176) * 100);
+    assert.deepEqual(fourLane.trackPercentages, [25, 25, 25, 25]);
+    assert.deepEqual(fourLane.laneCenters, [12.5, 37.5, 62.5, 87.5]);
     assert.equal(
         geometry.subwayForkBranchPathAt(fourLane.laneCenters[2]).endsWith(
             `${fourLane.laneCenters[2]} 40`,

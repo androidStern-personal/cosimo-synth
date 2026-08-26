@@ -18,6 +18,7 @@ import {
     readStoredModulationState,
     readRuntimeProgramRoute,
     selectRackEffect,
+    touchPointForModSourcePreviewTarget,
     waitForHarnessSnapshot,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 import { decodePng, pngPixelAt, rgbDistance } from "./helpers/png_pixels.mjs";
@@ -128,6 +129,57 @@ function maximumSerialLaneDocJson() {
     return JSON.stringify({ format: "cosimo.lane", version: 2, devices, chain });
 }
 
+function boundaryScrollLaneDocJson() {
+    const params = createDefaultLaneState().params;
+    return JSON.stringify({
+        format: "cosimo.lane",
+        version: 2,
+        devices: {
+            "globalFilter#1": { params: { ...params.filter } },
+            "distortion#1": { params: { ...params.drive } },
+            "ott#1": { params: { ...params.ott } },
+            "chorus#1": { params: { ...params.chorus } },
+            "flanger#1": { params: { ...params.flanger } },
+            "phaser#1": { params: { ...params.phaser } },
+            "delay#1": { params: { ...params.delay } },
+            "ott#2": { params: { ...params.ott } },
+            "chorus#2": { params: { ...params.chorus } },
+            "flanger#2": { params: { ...params.flanger } },
+            "phaser#2": { params: { ...params.phaser } },
+            "delay#2": { params: { ...params.delay } },
+            "reverb#1": { params: { ...params.reverb } },
+        },
+        chain: [
+            { kind: "device", deviceId: "globalFilter#1", enabled: true },
+            {
+                kind: "split",
+                groupId: "split#1",
+                enabled: true,
+                xoverLowHz: 320,
+                xoverHighHz: 3200,
+                branches: [
+                    [
+                        { kind: "device", deviceId: "distortion#1", enabled: true },
+                        { kind: "device", deviceId: "chorus#1", enabled: true },
+                    ],
+                    [
+                        { kind: "device", deviceId: "ott#1", enabled: true },
+                        { kind: "device", deviceId: "flanger#1", enabled: true },
+                        { kind: "device", deviceId: "phaser#1", enabled: true },
+                    ],
+                    [{ kind: "device", deviceId: "delay#1", enabled: true }],
+                ],
+            },
+            { kind: "device", deviceId: "ott#2", enabled: true },
+            { kind: "device", deviceId: "chorus#2", enabled: true },
+            { kind: "device", deviceId: "flanger#2", enabled: true },
+            { kind: "device", deviceId: "phaser#2", enabled: true },
+            { kind: "device", deviceId: "delay#2", enabled: true },
+            { kind: "device", deviceId: "reverb#1", enabled: true },
+        ],
+    });
+}
+
 function branchTailLaneDocJson(groupKind) {
     const params = createDefaultLaneState().params;
     const group = groupKind === "parallel"
@@ -222,25 +274,24 @@ function populatedConnectorLaneDocJson(groupKind, branchCount) {
     });
 }
 
-function pointDistance(left, right) {
-    return Math.hypot(left.x - right.x, left.y - right.y);
+function emptyConnectorLaneDocJson(groupKind, branchCount) {
+    const group = {
+        kind: groupKind,
+        groupId: `${groupKind}#1`,
+        enabled: true,
+        ...(groupKind === "split" ? { xoverLowHz: 320, xoverHighHz: 3200 } : {}),
+        branches: Array.from({ length: branchCount }, () => []),
+    };
+    return JSON.stringify({
+        format: "cosimo.lane",
+        version: 2,
+        devices: {},
+        chain: [group],
+    });
 }
 
-function minimumExpectedStrokeDistance(png, cssSize, point, expectedRgb, radius = 3) {
-    const scaleX = png.width / cssSize.width;
-    const scaleY = png.height / cssSize.height;
-    const centerX = point.x * scaleX;
-    const centerY = point.y * scaleY;
-    let minimum = Number.POSITIVE_INFINITY;
-    for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
-        for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
-            minimum = Math.min(
-                minimum,
-                rgbDistance(pngPixelAt(png, centerX + offsetX, centerY + offsetY), expectedRgb),
-            );
-        }
-    }
-    return minimum;
+function pointDistance(left, right) {
+    return Math.hypot(left.x - right.x, left.y - right.y);
 }
 
 async function readRenderedConnector(page, role) {
@@ -260,19 +311,6 @@ async function readRenderedConnector(page, role) {
                 return rect.left + (rect.width / 2) - rootRect.left;
             })
             : [];
-        const colorCanvas = document.createElement("canvas");
-        colorCanvas.width = 1;
-        colorCanvas.height = 1;
-        const colorContext = colorCanvas.getContext("2d", { willReadFrequently: true });
-        if (colorContext === null) {
-            return null;
-        }
-        const resolveRgb = (value) => {
-            colorContext.clearRect(0, 0, 1, 1);
-            colorContext.fillStyle = value;
-            colorContext.fillRect(0, 0, 1, 1);
-            return Array.from(colorContext.getImageData(0, 0, 1, 1).data.slice(0, 3));
-        };
         const pointOnPath = (path, fraction) => {
             const sourcePoint = path.getPointAtLength(path.getTotalLength() * fraction);
             const svgPoint = svg.createSVGPoint();
@@ -288,16 +326,18 @@ async function readRenderedConnector(page, role) {
         const fork = root.classList.contains("subway-fork");
         const paths = Array.from(svg.querySelectorAll("path"), (path) => {
             const segment = path.getAttribute("data-connector-segment") ?? "";
+            const dashed = path.classList.contains("is-dashed");
             const fractions = segment === "trunk"
-                ? (fork ? [0.1, 0.25, 0.4] : [0.72, 0.84, 0.96])
-                // Branch badges deliberately sit on the latter half of the
-                // fork curves. Sample the visibly emerging curve here; exact
-                // endpoint-to-rail ownership is asserted separately below.
-                : (fork ? [0.14, 0.34, 0.54] : [0.04, 0.16, 0.3]);
+                ? [0.08, 0.28, 0.5, 0.72, 0.92]
+                : dashed
+                    // pathLength=100 with 8/6 dashes: these fractions land
+                    // inside every visible dash, including both endpoint caps.
+                    ? [0.02, 0.16, 0.3, 0.44, 0.58, 0.72, 0.86, 0.99]
+                    : [0.12, 0.35, 0.62, 0.88];
             return {
                 segment,
                 laneIndex: Number(path.getAttribute("data-lane-index")),
-                expectedRgb: resolveRgb(getComputedStyle(path).stroke),
+                dashed,
                 start: pointOnPath(path, 0),
                 end: pointOnPath(path, 1),
                 samples: fractions.map((fraction) => pointOnPath(path, fraction)),
@@ -310,8 +350,156 @@ async function readRenderedConnector(page, role) {
         };
     });
     assert.ok(geometry, `${role}: rendered connector geometry`);
-    const png = decodePng(await connector.locator("xpath=..").screenshot({ animations: "disabled" }));
-    return { geometry, png };
+    return geometry;
+}
+
+function maximumPixelDifference(painted, bare, cssSize, point, radius = 3) {
+    const scaleX = painted.width / cssSize.width;
+    const scaleY = painted.height / cssSize.height;
+    const centerX = point.x * scaleX;
+    const centerY = point.y * scaleY;
+    let maximum = 0;
+    for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+        for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+            const x = centerX + offsetX;
+            const y = centerY + offsetY;
+            maximum = Math.max(
+                maximum,
+                rgbDistance(pngPixelAt(painted, x, y), pngPixelAt(bare, x, y)),
+            );
+        }
+    }
+    return maximum;
+}
+
+function assertPaintedAgainstLocalBackground({ painted, bare, size }, point, label) {
+    const contrast = maximumPixelDifference(painted, bare, size, point);
+    assert.equal(
+        contrast >= 18,
+        true,
+        `${label}: route must differ from its exact local background (RGB delta ${contrast})`,
+    );
+}
+
+async function captureIsolatedConnectorLayers(page, role) {
+    const connector = page.locator(`[data-role="${role}"]`);
+    const root = connector.locator("xpath=..");
+    const geometry = await readRenderedConnector(page, role);
+    await page.addStyleTag({
+        content: [
+            ".is-connector-proof-isolated > :not(.subway-connector-svg) { visibility: hidden !important; }",
+        ].join("\n"),
+    });
+    await root.evaluate((element) => element.classList.add("is-connector-proof-isolated"));
+    const priorVisibility = await connector.locator("path").evaluateAll((paths) => paths.map((path) => (
+        path.style.visibility
+    )));
+    await connector.locator("path").evaluateAll((paths) => {
+        for (const path of paths) {
+            path.style.visibility = "hidden";
+        }
+    });
+    const bare = decodePng(await root.screenshot({ animations: "disabled" }));
+    const paintedByPath = [];
+    for (let pathIndex = 0; pathIndex < geometry.paths.length; pathIndex += 1) {
+        const pathLocator = connector.locator("path").nth(pathIndex);
+        await pathLocator.evaluate((path) => { path.style.visibility = "visible"; });
+        paintedByPath.push(decodePng(await root.screenshot({ animations: "disabled" })));
+        await pathLocator.evaluate((path) => { path.style.visibility = "hidden"; });
+    }
+    await connector.locator("path").evaluateAll((paths, visibility) => {
+        paths.forEach((path, index) => { path.style.visibility = visibility[index] ?? ""; });
+    }, priorVisibility);
+    await root.evaluate((element) => element.classList.remove("is-connector-proof-isolated"));
+    return { geometry, bare, paintedByPath };
+}
+
+async function captureGroupSeamLayers(page, groupId) {
+    const group = page.locator(`[data-role="rack-group-${groupId}"]`);
+    await page.addStyleTag({
+        content: [
+            ".is-route-proof-clean .subway-station,",
+            ".is-route-proof-clean .subway-ghost-button,",
+            ".is-route-proof-clean .subway-fork-glyph,",
+            ".is-route-proof-clean .subway-fork-lanes,",
+            ".is-route-proof-clean .subway-fork-readout,",
+            ".is-route-proof-clean .subway-merge-dot { visibility: hidden !important; }",
+            ".is-route-proof-bare .subway-connector-svg path { visibility: hidden !important; }",
+            ".is-route-proof-bare .subway-station-cell::before,",
+            ".is-route-proof-bare .subway-line-cell::before,",
+            ".is-route-proof-bare .subway-ghost-cell::before { visibility: hidden !important; }",
+        ].join("\n"),
+    });
+    const geometry = await group.evaluate((element) => {
+        const groupRect = element.getBoundingClientRect();
+        const rows = Array.from(element.querySelectorAll(".subway-lane-row"));
+        const firstRow = rows[0];
+        const lastRow = rows.at(-1);
+        const fork = element.querySelector(".subway-fork-connectors");
+        const merge = element.querySelector(".subway-merge-connectors");
+        if (!(firstRow instanceof HTMLElement)
+                || !(lastRow instanceof HTMLElement)
+                || !(fork instanceof SVGSVGElement)
+                || !(merge instanceof SVGSVGElement)) {
+            return null;
+        }
+        const firstRect = firstRow.getBoundingClientRect();
+        const lastRect = lastRow.getBoundingClientRect();
+        const laneX = Array.from(firstRow.children, (cell) => {
+            const rect = cell.getBoundingClientRect();
+            return rect.left + (rect.width / 2) - groupRect.left;
+        });
+        const forkBoundaryY = fork.getBoundingClientRect().bottom - groupRect.top;
+        const mergeBoundaryY = merge.getBoundingClientRect().top - groupRect.top;
+        return {
+            size: { width: groupRect.width, height: groupRect.height },
+            forkSeams: laneX.map((x) => ({
+                svg: { x, y: forkBoundaryY - 2 },
+                body: { x, y: firstRect.top - groupRect.top + 2 },
+            })),
+            mergeSeams: laneX.map((x) => ({
+                body: { x, y: lastRect.bottom - groupRect.top - 2 },
+                svg: { x, y: mergeBoundaryY + 2 },
+            })),
+        };
+    });
+    assert.ok(geometry, `${groupId}: body seam geometry`);
+    await group.evaluate((element) => element.classList.add("is-route-proof-clean", "is-route-proof-bare"));
+    const bare = decodePng(await group.screenshot({ animations: "disabled" }));
+    await group.evaluate((element) => element.classList.remove("is-route-proof-bare"));
+    const painted = decodePng(await group.screenshot({ animations: "disabled" }));
+    await group.evaluate((element) => element.classList.remove("is-route-proof-clean"));
+    return { ...geometry, bare, painted };
+}
+
+async function captureDisconnectedConnectorMutation(page, role, pathIndex) {
+    const connector = page.locator(`[data-role="${role}"]`);
+    const root = connector.locator("xpath=..");
+    const paths = connector.locator("path");
+    await root.evaluate((element) => element.classList.add("is-connector-proof-isolated"));
+    const priorVisibility = await paths.evaluateAll((elements) => elements.map((element) => element.style.visibility));
+    await paths.evaluateAll((elements) => {
+        for (const element of elements) {
+            element.style.visibility = "hidden";
+        }
+    });
+    const target = paths.nth(pathIndex);
+    const originalD = await target.getAttribute("d");
+    await target.evaluate((path) => {
+        path.setAttribute("d", "M 0 0 L 0 1");
+        path.style.visibility = "visible";
+    });
+    const mutated = decodePng(await root.screenshot({ animations: "disabled" }));
+    await target.evaluate((path, d) => {
+        if (d !== null) {
+            path.setAttribute("d", d);
+        }
+    }, originalD);
+    await paths.evaluateAll((elements, visibility) => {
+        elements.forEach((element, index) => { element.style.visibility = visibility[index] ?? ""; });
+    }, priorVisibility);
+    await root.evaluate((element) => element.classList.remove("is-connector-proof-isolated"));
+    return mutated;
 }
 
 function rectanglesIntersect(left, right) {
@@ -328,7 +516,7 @@ async function wrapStationInGroup(page, effectId, groupKind) {
     await page.waitForSelector('[data-role="rack-station-menu"]', { state: "detached" });
 }
 
-test("mobile Variant C focuses one readable branch without coupling focus to selection", async () => {
+test("mobile three-band split keeps every readable effect label tied to LO MID or HI", async () => {
     const page = await openHarnessPage({
         laneDoc: populatedThreeBandLaneDocJson(),
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
@@ -341,14 +529,61 @@ test("mobile Variant C focuses one readable branch without coupling focus to sel
         const naturalHeight = await group.evaluate((element) => element.getBoundingClientRect().height);
 
         assert.equal(await group.getAttribute("data-focused-branch-index"), "0");
-        assert.equal(
-            await page.locator('[data-device-id="distortion#1"] .subway-station-detail:visible').count(),
-            1,
-        );
-        assert.equal(
-            await page.locator('[data-device-id="delay#1"] .subway-station-compact:visible').count(),
-            1,
-        );
+        const labels = await group.evaluate((element) => {
+            const expectedBand = ["LO", "MID", "HI"];
+            return Array.from(element.querySelectorAll(".subway-station-label")).map((label) => {
+                const station = label.closest("[data-device-id]");
+                const detail = label.closest(".subway-station-detail");
+                const branchIndex = Number(station?.getAttribute("data-branch-index"));
+                const labelRect = label.getBoundingClientRect();
+                const detailRect = detail?.getBoundingClientRect();
+                const style = getComputedStyle(label);
+                return {
+                    deviceId: station?.getAttribute("data-device-id"),
+                    branchIndex,
+                    band: expectedBand[branchIndex],
+                    tint: station?.getAttribute("data-lane-tint"),
+                    text: label.textContent?.trim(),
+                    visible: style.display !== "none" && style.visibility !== "hidden"
+                        && labelRect.width > 0 && labelRect.height > 0,
+                    fontSize: Number.parseFloat(style.fontSize),
+                    labelRect: {
+                        left: labelRect.left,
+                        right: labelRect.right,
+                        top: labelRect.top,
+                        bottom: labelRect.bottom,
+                    },
+                    detailRect: detailRect === undefined ? null : {
+                        left: detailRect.left,
+                        right: detailRect.right,
+                        top: detailRect.top,
+                        bottom: detailRect.bottom,
+                    },
+                };
+            });
+        });
+        assert.deepEqual(labels.map(({ deviceId, band, tint, text }) => ({ deviceId, band, tint, text })), [
+            { deviceId: "distortion#1", band: "LO", tint: "lo", text: "DRV 1" },
+            { deviceId: "ott#1", band: "MID", tint: "mid", text: "OTT 1" },
+            { deviceId: "delay#1", band: "HI", tint: "hi", text: "DLY 1" },
+            { deviceId: "chorus#1", band: "LO", tint: "lo", text: "CHO 1" },
+            { deviceId: "flanger#1", band: "MID", tint: "mid", text: "FLG 1" },
+            { deviceId: "reverb#1", band: "HI", tint: "hi", text: "RVB 1" },
+            { deviceId: "phaser#1", band: "MID", tint: "mid", text: "PHA 1" },
+        ]);
+        for (const label of labels) {
+            assert.equal(label.visible, true, `${label.deviceId}: readable label is visible`);
+            assert.equal(label.fontSize >= 13, true, `${label.deviceId}: readable phone type floor`);
+            assert.ok(label.detailRect, `${label.deviceId}: label belongs to a full detail chip`);
+            assert.equal(
+                label.labelRect.left >= label.detailRect.left
+                    && label.labelRect.right <= label.detailRect.right
+                    && label.labelRect.top >= label.detailRect.top
+                    && label.labelRect.bottom <= label.detailRect.bottom,
+                true,
+                `${label.deviceId}: text geometry stays inside its own chip`,
+            );
+        }
 
         await page.click('[data-device-id="delay#1"] [data-role="rack-station-delay"]');
         await page.waitForFunction(() => (
@@ -422,7 +657,123 @@ test("mobile Variant C focuses one readable branch without coupling focus to sel
     }
 });
 
-test("a four-way mobile Parallel folds context lanes without shrinking or overlapping targets", async () => {
+test("split and Parallel routes preserve owning colors symbols selection and bypass states", async () => {
+    const cases = [
+        {
+            groupKind: "parallel",
+            branchCount: 4,
+            expectedStrokes: ["rgb(105, 213, 197)", "rgb(105, 213, 197)", "rgb(105, 213, 197)", "rgb(105, 213, 197)"],
+            symbolClass: "subway-glyph-dot",
+        },
+        {
+            groupKind: "split",
+            branchCount: 3,
+            expectedStrokes: ["rgb(127, 208, 161)", "rgb(242, 202, 0)", "rgb(255, 139, 74)"],
+            symbolClass: "subway-glyph-diamond",
+        },
+    ];
+
+    for (const fixture of cases) {
+        const page = await openHarnessPage({
+            laneDoc: populatedConnectorLaneDocJson(fixture.groupKind, fixture.branchCount),
+        });
+        try {
+            const groupId = `${fixture.groupKind}#1`;
+            const group = page.locator(`[data-role="rack-group-${groupId}"]`);
+            await group.waitFor();
+            const contract = await group.evaluate((element, expectedSymbolClass) => {
+                const branches = Array.from(element.querySelectorAll(
+                    '.subway-fork-connectors [data-connector-segment="branch"]',
+                ));
+                const firstBodyRow = element.querySelector(".subway-lane-row");
+                const forkSymbol = element.querySelector(`.subway-fork-glyph > .${expectedSymbolClass}`);
+                const mergeSymbol = element.querySelector(".subway-merge-dot");
+                const symbolPresentation = (symbol) => {
+                    if (!(symbol instanceof HTMLElement)) {
+                        return null;
+                    }
+                    const rect = symbol.getBoundingClientRect();
+                    const style = getComputedStyle(symbol);
+                    return {
+                        display: style.display,
+                        width: rect.width,
+                        height: rect.height,
+                        borderColor: style.borderColor,
+                        opacity: style.opacity,
+                    };
+                };
+                return {
+                    branchStrokes: branches.map((branch) => getComputedStyle(branch).stroke),
+                    bodyStrokes: firstBodyRow === null
+                        ? []
+                        : Array.from(firstBodyRow.children, (cell) => (
+                            getComputedStyle(cell, "::before").backgroundColor
+                        )),
+                    forkSymbol: symbolPresentation(forkSymbol),
+                    mergeSymbol: symbolPresentation(mergeSymbol),
+                };
+            }, fixture.symbolClass);
+            assert.deepEqual(contract.branchStrokes, fixture.expectedStrokes);
+            assert.deepEqual(contract.bodyStrokes, fixture.expectedStrokes);
+            assert.ok(contract.forkSymbol, `${fixture.groupKind}: fork symbol exists`);
+            assert.equal(contract.forkSymbol.display === "none", false);
+            assert.equal(contract.forkSymbol.width >= 11 && contract.forkSymbol.height >= 11, true);
+            assert.equal(contract.forkSymbol.borderColor, "rgb(105, 213, 197)");
+            assert.ok(contract.mergeSymbol, `${fixture.groupKind}: merge symbol exists`);
+            assert.equal(contract.mergeSymbol.display === "none", false);
+            assert.equal(contract.mergeSymbol.width >= 9 && contract.mergeSymbol.height >= 9, true);
+            assert.equal(contract.mergeSymbol.borderColor, "rgb(105, 213, 197)");
+
+            await page.click(`[data-role="rack-fork-${groupId}"]`);
+            const selectedSymbol = group.locator(`.subway-fork-glyph > .${fixture.symbolClass}`);
+            assert.notEqual(await selectedSymbol.evaluate((symbol) => getComputedStyle(symbol).boxShadow), "none");
+
+            await page.click(`[data-role="rack-branch-focus-${groupId}-${fixture.branchCount - 1}"]`);
+            const focusedRoute = group.locator(
+                `.subway-fork-connectors [data-lane-index="${fixture.branchCount - 1}"].is-focused`,
+            );
+            assert.equal(await focusedRoute.evaluate((route) => getComputedStyle(route).stroke), fixture.expectedStrokes.at(-1));
+
+            if (fixture.groupKind === "split") {
+                await page.click('[data-device-id="chorus#1"] > .subway-station');
+                const selectedIdentity = await page.locator(
+                    '[data-role="rack-module-chorus"][data-device-id="chorus#1"]',
+                ).evaluate((station) => {
+                    const well = station.querySelector(".subway-station-icon-well");
+                    const icon = station.querySelector(".subway-station-icon-detail");
+                    if (!(well instanceof HTMLElement) || !(icon instanceof HTMLElement)) {
+                        return null;
+                    }
+                    return {
+                        borderColor: getComputedStyle(well).borderColor,
+                        iconColor: getComputedStyle(icon).backgroundColor,
+                    };
+                });
+                assert.deepEqual(selectedIdentity?.borderColor, selectedIdentity?.iconColor);
+                await page.click(`[data-role="rack-fork-${groupId}"]`);
+            }
+
+            await page.click('[data-role="rack-group-power"]');
+            await page.waitForSelector(`[data-role="rack-group-${groupId}"].is-bypassed`);
+            const bypass = await group.evaluate((element, expectedSymbolClass) => {
+                const route = element.querySelector('.subway-fork-connectors [data-lane-index="0"]');
+                const symbol = element.querySelector(`.subway-fork-glyph > .${expectedSymbolClass}`);
+                return {
+                    routeStroke: route === null ? null : getComputedStyle(route).stroke,
+                    routeOpacity: getComputedStyle(element.querySelector(".subway-fork-connectors")).opacity,
+                    symbolOpacity: symbol === null ? null : getComputedStyle(symbol).opacity,
+                };
+            }, fixture.symbolClass);
+            assert.equal(bypass.routeStroke, fixture.expectedStrokes[0]);
+            assert.equal(Number(bypass.routeOpacity) < 1, true);
+            assert.equal(Number(bypass.symbolOpacity) < 1, true);
+        } finally {
+            await page.close();
+        }
+    }
+});
+
+test("every four-way mobile Parallel summary and branch tail is one exact 44px control", async () => {
     const page = await openHarnessPage({
         laneDoc: populatedFourWayParallelLaneDocJson(),
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 700 }),
@@ -455,6 +806,16 @@ test("a four-way mobile Parallel folds context lanes without shrinking or overla
                 visibleTailPaths: Array.from(
                     element.querySelectorAll('[data-role="rack-ghost-add"]'),
                 ).filter(isVisible).map((node) => node.getAttribute("data-lane-path")),
+                summariesOwnControls: Array.from(
+                    element.querySelectorAll(".subway-station-summary, .subway-ghost-summary"),
+                ).filter(isVisible).every((node) => {
+                    const control = node.closest("button");
+                    return control instanceof HTMLButtonElement && isVisible(control);
+                }),
+                actionRects: Array.from(element.querySelectorAll([
+                    ".subway-station-cell > .subway-station",
+                    ".subway-ghost-cell > .subway-ghost-button",
+                ].join(","))).filter(isVisible).map(rectOf),
                 badgeRects: Array.from(
                     element.querySelectorAll(".subway-fork-lane"),
                     rectOf,
@@ -466,7 +827,32 @@ test("a four-way mobile Parallel folds context lanes without shrinking or overla
             presentation.summaryDeviceIds.toSorted(),
             ["ott#1", "flanger#1", "phaser#1", "delay#1", "reverb#1"].toSorted(),
         );
-        assert.deepEqual(presentation.visibleTailPaths, ["branch:parallel#1:0:2"]);
+        assert.deepEqual(presentation.visibleTailPaths.toSorted(), [
+            "branch:parallel#1:0:2",
+            "branch:parallel#1:1:1",
+            "branch:parallel#1:2:3",
+            "branch:parallel#1:3:1",
+        ]);
+        assert.equal(presentation.summariesOwnControls, true);
+        assert.equal(presentation.actionRects.length, 11);
+        assert.equal(
+            presentation.actionRects.every((rect) => (
+                rect.right - rect.left >= 43.5 && rect.bottom - rect.top >= 43.5
+            )),
+            true,
+        );
+        for (let leftIndex = 0; leftIndex < presentation.actionRects.length; leftIndex += 1) {
+            for (let rightIndex = leftIndex + 1; rightIndex < presentation.actionRects.length; rightIndex += 1) {
+                assert.equal(
+                    rectanglesIntersect(
+                        presentation.actionRects[leftIndex],
+                        presentation.actionRects[rightIndex],
+                    ),
+                    false,
+                    `mobile Parallel action controls ${leftIndex} and ${rightIndex} must not steal each other's hit area`,
+                );
+            }
+        }
         assert.equal(
             presentation.badgeRects.every((rect) => (
                 rect.right - rect.left >= 43.5 && rect.bottom - rect.top >= 43.5
@@ -480,27 +866,26 @@ test("a four-way mobile Parallel folds context lanes without shrinking or overla
             );
         }
 
-        await page.click('[data-role="rack-branch-focus-parallel#1-2"]');
-        await page.waitForFunction(() => (
-            document.querySelector('[data-role="rack-group-parallel#1"]')
-                ?.getAttribute("data-focused-branch-index") === "2"
-        ));
-        assert.equal(
-            await page.locator('[data-device-id="delay#1"] .subway-station-detail:visible').count(),
-            1,
-        );
-        assert.equal(
-            await page.locator('[data-device-id="distortion#1"] .subway-station-summary:visible').count(),
-            1,
-        );
-        assert.equal(
-            await page.locator('[data-role="rack-ghost-add"][data-lane-path="branch:parallel#1:2:3"]:visible').count(),
-            1,
-        );
-        assert.equal(
-            await page.locator('[data-role="rack-editor-drive"][data-device-id="distortion#1"]').count(),
-            1,
-        );
+        const effectBranches = [
+            ["distortion#1", 0],
+            ["chorus#1", 0],
+            ["ott#1", 1],
+            ["flanger#1", 2],
+            ["phaser#1", 2],
+            ["delay#1", 2],
+            ["reverb#1", 3],
+        ];
+        for (const [deviceId, branchIndex] of effectBranches) {
+            const station = page.locator(`[data-device-id="${deviceId}"] > .subway-station:visible`);
+            assert.equal(await station.count(), 1, `${deviceId}: its visible summary is the real station control`);
+            await station.click();
+            await page.waitForFunction(({ nextDeviceId, nextBranchIndex }) => (
+                document.querySelector('[data-role="rack-group-parallel#1"]')
+                    ?.getAttribute("data-focused-branch-index") === String(nextBranchIndex)
+                && document.querySelector(".rack-effect-editor")
+                    ?.getAttribute("data-device-id") === nextDeviceId
+            ), { nextDeviceId: deviceId, nextBranchIndex: branchIndex });
+        }
 
         await fs.mkdir(evidenceDirectory, { recursive: true });
         await page.locator('[data-role="effects-rack-card"]').screenshot({
@@ -572,6 +957,52 @@ test("a four-way mobile Parallel folds context lanes without shrinking or overla
         });
     } finally {
         await page.close();
+    }
+
+    const tails = [
+        { path: "branch:parallel#1:0:1", branchIndex: 0, insertionIndex: 1 },
+        { path: "branch:parallel#1:1:1", branchIndex: 1, insertionIndex: 1 },
+        { path: "branch:parallel#1:2:1", branchIndex: 2, insertionIndex: 1 },
+        { path: "branch:parallel#1:3:1", branchIndex: 3, insertionIndex: 1 },
+    ];
+    for (const tail of tails) {
+        const tailPage = await openHarnessPage({
+            laneDoc: populatedConnectorLaneDocJson("parallel", 4),
+            beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 700 }),
+        });
+        try {
+            await tailPage.click('[data-role="mobile-workspace-tab-fx"]');
+            await clearHarnessDebugLog(tailPage);
+            const add = tailPage.locator(
+                `[data-role="rack-ghost-add"][data-lane-path="${tail.path}"]:visible`,
+            );
+            assert.equal(await add.count(), 1, `${tail.path}: visible plus is its real button`);
+            await add.click();
+            await tailPage.waitForSelector('[data-role="rack-add-sheet"]');
+            await tailPage.click('[data-role="rack-add-flanger"]');
+            const snapshot = await waitForHarnessSnapshot(
+                tailPage,
+                `flanger inserted through ${tail.path}`,
+                (nextSnapshot) => {
+                    const rawState = nextSnapshot.storedState["lane.v1"];
+                    if (rawState === undefined) {
+                        return false;
+                    }
+                    const parallel = JSON.parse(String(rawState)).chain
+                        .find((node) => node.groupId === "parallel#1");
+                    return parallel?.branches[tail.branchIndex]?.[tail.insertionIndex]?.deviceId === "flanger#1";
+                },
+            );
+            const parallel = readStoredLaneDoc(snapshot).chain
+                .find((node) => node.groupId === "parallel#1");
+            assert.equal(
+                parallel.branches[tail.branchIndex][tail.insertionIndex].deviceId,
+                "flanger#1",
+                tail.path,
+            );
+        } finally {
+            await tailPage.close();
+        }
     }
 });
 
@@ -772,17 +1203,17 @@ test("empty and short racks extend the final trunk to the graph viewport bottom"
                 true,
                 `${fixture.name}: fixture must leave a meaningful short-rack tail`,
             );
-            const png = decodePng(await graph.screenshot({ animations: "disabled" }));
-            const bottomTrunkDistance = minimumExpectedStrokeDistance(
-                png,
-                { width: layout.width, height: layout.height },
+            await page.addStyleTag({
+                content: ".is-tail-proof-bare > .subway-trunk-tail-fill::before { visibility: hidden !important; }",
+            });
+            const painted = decodePng(await graph.screenshot({ animations: "disabled" }));
+            await graph.evaluate((element) => element.classList.add("is-tail-proof-bare"));
+            const bare = decodePng(await graph.screenshot({ animations: "disabled" }));
+            await graph.evaluate((element) => element.classList.remove("is-tail-proof-bare"));
+            assertPaintedAgainstLocalBackground(
+                { painted, bare, size: { width: layout.width, height: layout.height } },
                 { x: layout.width / 2, y: layout.height - 10 },
-                [230, 225, 214],
-            );
-            assert.equal(
-                bottomTrunkDistance <= 90,
-                true,
-                `${fixture.name}: final trunk must reach the graph bottom; RGB distance ${bottomTrunkDistance}`,
+                `${fixture.name}: final trunk reaches the graph bottom`,
             );
             if (fixture.name === "short") {
                 await page.screenshot({
@@ -901,6 +1332,137 @@ test("a modulation-source drag edge-scrolls the graph and still drops after leav
         );
     } finally {
         await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
+test("an amplified phone touch drag yields boundary edge bands to the first and last effects", async () => {
+    const page = await openHarnessPage({
+        laneDoc: boundaryScrollLaneDocJson(),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+    const touchPoint = (point) => ({ ...point, radiusX: 8, radiusY: 8, force: 1 });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        const graph = page.locator('[data-role="rack-module-list"]');
+        await graph.waitFor();
+        await page.waitForTimeout(100);
+        const graphOverflow = await graph.evaluate((element) => ({
+            scrollHeight: element.scrollHeight,
+            clientHeight: element.clientHeight,
+            childCount: element.children.length,
+            classes: element.className,
+        }));
+        assert.equal(
+            graphOverflow.scrollHeight > graphOverflow.clientHeight,
+            true,
+            `boundary fixture must overflow: ${JSON.stringify(graphOverflow)}`,
+        );
+        await expandGlobalModRail(page);
+        await clearHarnessDebugLog(page);
+
+        const source = page.locator('[data-role="rack-mod-source-env-1"]');
+        const sourceBox = await source.boundingBox();
+        assert.ok(sourceBox);
+        const sourceCenter = {
+            x: sourceBox.x + (sourceBox.width / 2),
+            y: sourceBox.y + (sourceBox.height / 2),
+        };
+        const startTouch = () => cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [touchPoint(sourceCenter)],
+        });
+        const movePreviewTo = async (previewPoint) => {
+            const finger = touchPointForModSourcePreviewTarget(sourceCenter, previewPoint, 393, 852);
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [touchPoint(finger)],
+            });
+        };
+        const endTouch = () => cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        const centerOf = (box) => ({ x: box.x + (box.width / 2), y: box.y + (box.height / 2) });
+        const dropOnSelectedEditor = async (deviceId) => {
+            const target = page.locator(
+                `.rack-effect-editor[data-device-id="${deviceId}"] [data-drag-creation="creatable"]:visible`,
+            ).first();
+            await target.waitFor();
+            const targetKind = await target.getAttribute("data-modulation-target-kind");
+            const box = await target.boundingBox();
+            assert.ok(targetKind && box);
+            await movePreviewTo(centerOf(box));
+            await endTouch();
+            await waitForHarnessSnapshot(
+                page,
+                `touch drop onto ${deviceId}`,
+                (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                    route.sourceKind === "env"
+                    && route.sourceSlot === 1
+                    && route.targetKind === targetKind
+                )),
+            );
+        };
+
+        // Start from a different selection, then pin the graph at its upper
+        // boundary. The first station sits inside the top auto-scroll band;
+        // with no upward travel left, that band must yield to dwell + drop.
+        await page.evaluate(() => {
+            document.querySelector('[data-device-id="reverb#1"] > .subway-station')?.click();
+        });
+        await page.waitForSelector('[data-role="rack-editor-reverb"][data-device-id="reverb#1"]');
+        await graph.evaluate((element) => {
+            element.scrollTop = 0;
+            element.dispatchEvent(new Event("scroll"));
+        });
+        const firstBox = await page.locator(
+            '[data-device-id="globalFilter#1"] > .subway-station',
+        ).boundingBox();
+        assert.ok(firstBox);
+        await startTouch();
+        await movePreviewTo(centerOf(firstBox));
+        await page.locator('[data-role="mobile-global-mod-source-ghost"]').waitFor({ state: "visible" });
+        await page.waitForSelector(
+            '[data-role="rack-editor-filter"][data-device-id="globalFilter#1"]',
+            { timeout: 2_500 },
+        );
+        assert.equal(await graph.evaluate((element) => element.scrollTop), 0);
+        await dropOnSelectedEditor("globalFilter#1");
+
+        // At maximum scroll, aim the amplified preview at the lower edge of
+        // the last real station. It is still inside the bottom scroll band,
+        // but no downward travel remains, so the reverb dwell and drop win.
+        await graph.evaluate((element) => {
+            element.scrollTop = element.scrollHeight;
+            element.dispatchEvent(new Event("scroll"));
+        });
+        await page.waitForFunction(() => {
+            const element = document.querySelector('[data-role="rack-module-list"]');
+            return element instanceof HTMLElement
+                && element.scrollTop + element.clientHeight >= element.scrollHeight - 1;
+        });
+        const lastBox = await page.locator(
+            '[data-device-id="reverb#1"] > .subway-station',
+        ).boundingBox();
+        assert.ok(lastBox);
+        await startTouch();
+        await movePreviewTo({
+            x: lastBox.x + (lastBox.width / 2),
+            y: lastBox.y + lastBox.height - 2,
+        });
+        await page.waitForSelector(
+            '[data-role="rack-editor-reverb"][data-device-id="reverb#1"]',
+            { timeout: 2_500 },
+        );
+        const bottom = await graph.evaluate((element) => ({
+            scrollTop: element.scrollTop,
+            maximum: element.scrollHeight - element.clientHeight,
+        }));
+        assert.equal(Math.abs(bottom.scrollTop - bottom.maximum) <= 1, true);
+        await dropOnSelectedEditor("reverb#1");
+    } finally {
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] }).catch(() => undefined);
+        await cdp.detach();
         await page.close();
     }
 });
@@ -1136,7 +1698,7 @@ test("every pictured path-tail add anchor inserts at that exact path and preserv
     }
 });
 
-test("rendered pixels connect every supported split and merge at narrow and wide widths", async () => {
+test("local-background pixels prove every populated and empty route junction and body seam", async () => {
     await fs.mkdir(evidenceDirectory, { recursive: true });
     const groups = [
         { groupKind: "parallel", branchCount: 2 },
@@ -1145,149 +1707,260 @@ test("rendered pixels connect every supported split and merge at narrow and wide
         { groupKind: "split", branchCount: 2 },
         { groupKind: "split", branchCount: 3 },
     ];
-    const surfaces = [
-        { name: "narrow", width: 320, height: 700 },
-        { name: "wide", width: 1024, height: 768 },
-    ];
+    const narrow = { name: "narrow", width: 320, height: 700 };
+    const wide = { name: "wide", width: 1024, height: 768 };
+    let mutationEvidenceCaptured = false;
 
     for (const group of groups) {
-        for (const surface of surfaces) {
-            const laneDoc = populatedConnectorLaneDocJson(group.groupKind, group.branchCount);
-            const page = await openHarnessPage({
-                laneDoc,
-                beforeGoto: (nextPage) => nextPage.setViewportSize({
-                    width: surface.width,
-                    height: surface.height,
-                }),
-            });
-            const label = `${surface.name} ${group.groupKind}-${group.branchCount}`;
-            try {
-                if (surface.width < 640) {
-                    await page.click('[data-role="mobile-workspace-tab-fx"]');
-                }
-                const groupId = `${group.groupKind}#1`;
-                await page.waitForSelector(`[data-role="rack-group-${groupId}"]`);
-                const groupLayout = await page.locator(`[data-role="rack-group-${groupId}"]`).evaluate((element) => {
-                    const graph = element.closest('[data-role="rack-module-list"]');
-                    if (!(graph instanceof HTMLElement)) {
-                        return null;
-                    }
-                    const graphRect = graph.getBoundingClientRect();
-                    return {
-                        graph: {
-                            left: graphRect.left,
-                            right: graphRect.right,
-                            top: graphRect.top,
-                            bottom: graphRect.bottom,
-                        },
-                        pills: Array.from(element.querySelectorAll(".subway-station-pill")).filter((pill) => {
-                            const style = getComputedStyle(pill);
-                            const rect = pill.getBoundingClientRect();
-                            return style.display !== "none" && style.visibility !== "hidden"
-                                && rect.width > 0 && rect.height > 0;
-                        }).map((pill) => {
-                            const rect = pill.getBoundingClientRect();
-                            return {
-                                text: pill.textContent?.trim() ?? "",
-                                left: rect.left,
-                                right: rect.right,
-                                top: rect.top,
-                                bottom: rect.bottom,
-                            };
-                        }),
-                    };
+        const variants = [
+            { name: "populated", laneDoc: populatedConnectorLaneDocJson(group.groupKind, group.branchCount), surfaces: [narrow, wide] },
+            { name: "empty", laneDoc: emptyConnectorLaneDocJson(group.groupKind, group.branchCount), surfaces: [narrow] },
+        ];
+        for (const variant of variants) {
+            for (const surface of variant.surfaces) {
+                const page = await openHarnessPage({
+                    laneDoc: variant.laneDoc,
+                    beforeGoto: (nextPage) => nextPage.setViewportSize({
+                        width: surface.width,
+                        height: surface.height,
+                    }),
                 });
-                assert.ok(groupLayout, `${label}: group layout`);
-                for (const pill of groupLayout.pills) {
-                    assert.equal(
-                        pill.left >= groupLayout.graph.left - 0.5
-                            && pill.right <= groupLayout.graph.right + 0.5
-                            && pill.top >= groupLayout.graph.top - 0.5
-                            && pill.bottom <= groupLayout.graph.bottom + 0.5,
-                        true,
-                        `${label}: ${pill.text} stays inside the graph: `
-                            + `${JSON.stringify(pill)} vs ${JSON.stringify(groupLayout.graph)}`,
-                    );
-                }
-                for (let leftIndex = 0; leftIndex < groupLayout.pills.length; leftIndex += 1) {
-                    for (let rightIndex = leftIndex + 1; rightIndex < groupLayout.pills.length; rightIndex += 1) {
+                const label = `${variant.name} ${surface.name} ${group.groupKind}-${group.branchCount}`;
+                try {
+                    if (surface.width < 640) {
+                        await page.click('[data-role="mobile-workspace-tab-fx"]');
+                    }
+                    await page.addStyleTag({
+                        content: ".subway-station-pill { transition: none !important; }",
+                    });
+                    const groupId = `${group.groupKind}#1`;
+                    const groupLocator = page.locator(`[data-role="rack-group-${groupId}"]`);
+                    await groupLocator.waitFor();
+                    await page.waitForFunction(({ role, compact }) => {
+                        const element = document.querySelector(`[data-role="${role}"]`);
+                        return Number(element?.getAttribute("data-graph-width")) > 0
+                            && element?.getAttribute("data-compact-layout") === compact;
+                    }, {
+                        role: `rack-group-${groupId}`,
+                        compact: surface.name === "narrow" ? "true" : "false",
+                    });
+
+                    const groupLayout = await groupLocator.evaluate((element) => {
+                        const graph = element.closest('[data-role="rack-module-list"]');
+                        if (!(graph instanceof HTMLElement)) {
+                            return null;
+                        }
+                        const graphRect = graph.getBoundingClientRect();
+                        return {
+                            graph: {
+                                left: graphRect.left,
+                                right: graphRect.right,
+                                top: graphRect.top,
+                                bottom: graphRect.bottom,
+                            },
+                            pills: Array.from(element.querySelectorAll(".subway-station-pill")).filter((pill) => {
+                                const style = getComputedStyle(pill);
+                                const rect = pill.getBoundingClientRect();
+                                return style.display !== "none" && style.visibility !== "hidden"
+                                    && rect.width > 0 && rect.height > 0;
+                            }).map((pill) => {
+                                const rect = pill.getBoundingClientRect();
+                                const cell = pill.closest(".subway-station-cell");
+                                return {
+                                    text: pill.textContent?.trim() ?? "",
+                                    left: rect.left,
+                                    right: rect.right,
+                                    top: rect.top,
+                                    bottom: rect.bottom,
+                                    cellClass: cell?.className ?? "",
+                                    chipOffset: getComputedStyle(pill).getPropertyValue("--subway-chip-offset-x"),
+                                    transform: getComputedStyle(pill).transform,
+                                };
+                            }),
+                        };
+                    });
+                    assert.ok(groupLayout, `${label}: group layout`);
+                    for (const pill of groupLayout.pills) {
                         assert.equal(
-                            rectanglesIntersect(groupLayout.pills[leftIndex], groupLayout.pills[rightIndex]),
-                            false,
-                            `${label}: ${groupLayout.pills[leftIndex].text} and `
-                                + `${groupLayout.pills[rightIndex].text} must not overlap`,
+                            pill.left >= groupLayout.graph.left - 0.5
+                                && pill.right <= groupLayout.graph.right + 0.5
+                                && pill.top >= groupLayout.graph.top - 0.5
+                                && pill.bottom <= groupLayout.graph.bottom + 0.5,
+                            true,
+                            `${label}: ${pill.text} stays inside the graph ${JSON.stringify({ pill, graph: groupLayout.graph })}`,
                         );
                     }
-                }
-                const fork = await readRenderedConnector(page, `rack-fork-connections-${groupId}`);
-                const merge = await readRenderedConnector(page, `rack-merge-connections-${groupId}`);
-
-                for (const [connectorKind, proof] of [["fork", fork], ["merge", merge]]) {
-                    const trunk = proof.geometry.paths.find((path) => path.segment === "trunk");
-                    const branches = proof.geometry.paths.filter((path) => path.segment === "branch");
-                    assert.ok(trunk?.start && trunk.end, `${label} ${connectorKind}: trunk geometry`);
-                    assert.equal(branches.length, group.branchCount, `${label} ${connectorKind}: branch count`);
-                    assert.equal(proof.geometry.laneCenters.length, group.branchCount);
-
-                    for (const branch of branches) {
-                        assert.ok(branch.start && branch.end, `${label} ${connectorKind}: lane ${branch.laneIndex}`);
-                        const laneCenter = proof.geometry.laneCenters[branch.laneIndex];
-                        assert.equal(Number.isFinite(laneCenter), true);
-                        if (connectorKind === "fork") {
+                    for (let leftIndex = 0; leftIndex < groupLayout.pills.length; leftIndex += 1) {
+                        for (let rightIndex = leftIndex + 1; rightIndex < groupLayout.pills.length; rightIndex += 1) {
                             assert.equal(
-                                pointDistance(trunk.end, branch.start) <= 0.25,
-                                true,
-                                `${label}: every branch leaves the fork's one junction`,
+                                rectanglesIntersect(groupLayout.pills[leftIndex], groupLayout.pills[rightIndex]),
+                                false,
+                                `${label}: ${groupLayout.pills[leftIndex].text} and ${groupLayout.pills[rightIndex].text}`,
                             );
-                            assert.equal(Math.abs(branch.end.x - laneCenter) <= 0.5, true, `${label}: fork rail x`);
-                            assert.equal(
-                                Math.abs(branch.end.y - proof.geometry.size.height) <= 0.5,
-                                true,
-                                `${label}: fork reaches the body rail`,
-                            );
-                        } else {
-                            assert.equal(
-                                pointDistance(branch.end, trunk.start) <= 0.25,
-                                true,
-                                `${label}: every branch reaches the merge's one junction`,
-                            );
-                            assert.equal(Math.abs(branch.start.x - laneCenter) <= 0.5, true, `${label}: merge rail x`);
-                            assert.equal(Math.abs(branch.start.y) <= 0.5, true, `${label}: merge starts on body rail`);
                         }
                     }
 
-                    for (const path of proof.geometry.paths) {
-                        for (const sample of path.samples) {
-                            assert.ok(sample, `${label} ${connectorKind}: sample geometry`);
-                            const distance = minimumExpectedStrokeDistance(
-                                proof.png,
-                                proof.geometry.size,
-                                sample,
-                                path.expectedRgb,
+                    const connectorProofs = [
+                        ["fork", `rack-fork-connections-${groupId}`],
+                        ["merge", `rack-merge-connections-${groupId}`],
+                    ];
+                    for (const [connectorKind, role] of connectorProofs) {
+                        const proof = await captureIsolatedConnectorLayers(page, role);
+                        const trunk = proof.geometry.paths.find((candidate) => candidate.segment === "trunk");
+                        const branches = proof.geometry.paths.filter((candidate) => candidate.segment === "branch");
+                        assert.ok(trunk?.start && trunk.end, `${label} ${connectorKind}: trunk geometry`);
+                        assert.equal(branches.length, group.branchCount, `${label} ${connectorKind}: branch count`);
+                        assert.equal(proof.geometry.laneCenters.length, group.branchCount);
+                        assert.deepEqual(
+                            branches.map((branch) => branch.dashed),
+                            Array(group.branchCount).fill(variant.name === "empty"),
+                        );
+
+                        for (const branch of branches) {
+                            assert.ok(branch.start && branch.end, `${label} ${connectorKind}: lane ${branch.laneIndex}`);
+                            const laneCenter = proof.geometry.laneCenters[branch.laneIndex];
+                            if (connectorKind === "fork") {
+                                assert.equal(pointDistance(trunk.end, branch.start) <= 0.25, true, `${label}: fork junction`);
+                                assert.equal(Math.abs(branch.end.x - laneCenter) <= 0.5, true, `${label}: fork rail x`);
+                                assert.equal(Math.abs(branch.end.y - proof.geometry.size.height) <= 0.5, true);
+                            } else {
+                                assert.equal(pointDistance(branch.end, trunk.start) <= 0.25, true, `${label}: merge junction`);
+                                assert.equal(Math.abs(branch.start.x - laneCenter) <= 0.5, true, `${label}: merge rail x`);
+                                assert.equal(Math.abs(branch.start.y) <= 0.5, true);
+                            }
+                        }
+
+                        for (const [pathIndex, renderedPath] of proof.geometry.paths.entries()) {
+                            const layer = {
+                                painted: proof.paintedByPath[pathIndex],
+                                bare: proof.bare,
+                                size: proof.geometry.size,
+                            };
+                            for (const [sampleIndex, sample] of [
+                                renderedPath.start,
+                                ...renderedPath.samples,
+                                renderedPath.end,
+                            ].entries()) {
+                                assert.ok(sample, `${label} ${connectorKind}: sample geometry`);
+                                assertPaintedAgainstLocalBackground(
+                                    layer,
+                                    sample,
+                                    `${label} ${connectorKind} ${renderedPath.segment} lane ${renderedPath.laneIndex} sample ${sampleIndex}`,
+                                );
+                            }
+                        }
+
+                        if (!mutationEvidenceCaptured && connectorKind === "fork") {
+                            const branchPathIndex = proof.geometry.paths.findIndex((candidate) => candidate.segment === "branch");
+                            const branch = proof.geometry.paths[branchPathIndex];
+                            assert.ok(branch?.start && branch.end);
+                            assert.throws(
+                                () => assertPaintedAgainstLocalBackground({
+                                    painted: proof.bare,
+                                    bare: proof.bare,
+                                    size: proof.geometry.size,
+                                }, branch.start, "removed route mutation"),
+                                /route must differ/,
                             );
-                            assert.equal(
-                                distance < 260,
-                                true,
-                                `${label} ${connectorKind} ${path.segment} lane ${path.laneIndex} `
-                                    + `must paint through its curve (RGB distance ${distance})`,
+                            const disconnected = await captureDisconnectedConnectorMutation(page, role, branchPathIndex);
+                            assert.throws(
+                                () => assertPaintedAgainstLocalBackground({
+                                    painted: disconnected,
+                                    bare: proof.bare,
+                                    size: proof.geometry.size,
+                                }, branch.end, "disconnected route mutation"),
+                                /route must differ/,
                             );
+                            mutationEvidenceCaptured = true;
                         }
                     }
+
+                    const seamProof = await captureGroupSeamLayers(page, groupId);
+                    for (const [laneIndex, seam] of seamProof.forkSeams.entries()) {
+                        assertPaintedAgainstLocalBackground(seamProof, seam.svg, `${label}: fork SVG seam lane ${laneIndex}`);
+                        assertPaintedAgainstLocalBackground(seamProof, seam.body, `${label}: fork body seam lane ${laneIndex}`);
+                    }
+                    for (const [laneIndex, seam] of seamProof.mergeSeams.entries()) {
+                        assertPaintedAgainstLocalBackground(seamProof, seam.body, `${label}: merge body seam lane ${laneIndex}`);
+                        assertPaintedAgainstLocalBackground(seamProof, seam.svg, `${label}: merge SVG seam lane ${laneIndex}`);
+                    }
+
+                    if ((group.groupKind === "parallel" && group.branchCount === 4 && surface.name === "narrow")
+                            || (group.groupKind === "split" && group.branchCount === 3 && surface.name === "wide")
+                            || (variant.name === "empty" && group.groupKind === "split" && group.branchCount === 3)) {
+                        await page.locator('[data-role="effects-rack-card"]').screenshot({
+                            path: path.join(
+                                evidenceDirectory,
+                                `connected-${variant.name}-${group.groupKind}-${group.branchCount}-${surface.name}.png`,
+                            ),
+                            animations: "disabled",
+                        });
+                    }
+                } finally {
+                    await page.close();
                 }
-                if ((group.groupKind === "parallel" && group.branchCount === 4 && surface.name === "narrow")
-                        || (group.groupKind === "split" && group.branchCount === 3 && surface.name === "wide")) {
-                    await page.locator('[data-role="effects-rack-card"]').screenshot({
-                        path: path.join(
-                            evidenceDirectory,
-                            `connected-${group.groupKind}-${group.branchCount}-${surface.name}.png`,
-                        ),
-                        animations: "disabled",
-                    });
-                }
-            } finally {
-                await page.close();
             }
         }
+    }
+    assert.equal(mutationEvidenceCaptured, true);
+});
+
+test("a narrow embedded graph in a wide viewport shares one measured lane geometry", async () => {
+    const page = await openHarnessPage({
+        laneDoc: populatedThreeBandLaneDocJson(),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 1024, height: 768 }),
+    });
+    try {
+        await page.addStyleTag({
+            content: ".rack-effects-grid { grid-template-columns: 176px minmax(0, 1fr) !important; }",
+        });
+        const group = page.locator('[data-role="rack-group-split#1"]');
+        await group.waitFor();
+        await page.waitForFunction(() => {
+            const graph = document.querySelector('[data-role="rack-module-list"]');
+            return graph instanceof HTMLElement && graph.getBoundingClientRect().width <= 177;
+        });
+        const geometry = await group.evaluate((element) => {
+            const graph = element.closest('[data-role="rack-module-list"]');
+            const fork = element.querySelector('[data-role="rack-fork-connections-split#1"]');
+            const firstRow = element.querySelector(".subway-lane-row");
+            if (!(graph instanceof HTMLElement)
+                    || !(fork instanceof SVGSVGElement)
+                    || !(firstRow instanceof HTMLElement)) {
+                return null;
+            }
+            const forkRect = fork.getBoundingClientRect();
+            const endpointX = Array.from(fork.querySelectorAll('[data-connector-segment="branch"]'), (path) => {
+                const point = path.getPointAtLength(path.getTotalLength());
+                const svgPoint = fork.createSVGPoint();
+                svgPoint.x = point.x;
+                svgPoint.y = point.y;
+                const matrix = path.getScreenCTM();
+                return matrix === null ? Number.NaN : svgPoint.matrixTransform(matrix).x;
+            });
+            const railX = Array.from(firstRow.children, (cell) => {
+                const rect = cell.getBoundingClientRect();
+                return rect.left + (rect.width / 2);
+            });
+            return {
+                viewportWidth: window.innerWidth,
+                graphWidth: graph.getBoundingClientRect().width,
+                declaredWidth: Number(element.getAttribute("data-graph-width")),
+                forkWidth: forkRect.width,
+                endpointX,
+                railX,
+            };
+        });
+        assert.ok(geometry);
+        assert.equal(geometry.viewportWidth, 1024);
+        assert.equal(Math.abs(geometry.graphWidth - 176) <= 1, true);
+        assert.equal(Math.abs(geometry.declaredWidth - geometry.forkWidth) <= 0.5, true);
+        assert.deepEqual(
+            geometry.endpointX.map((x, index) => Math.abs(x - geometry.railX[index]) <= 0.5),
+            [true, true, true],
+        );
+    } finally {
+        await page.close();
     }
 });
 
@@ -1335,7 +2008,7 @@ test("wrapping a station in a split builds the tree, the wire, and the map", asy
 
         // The map shows the diamond fork, the crossover readout, the delay
         // in the LO lane, and the empty HI band's ghost stub.
-        assert.equal(await page.locator('[data-role="rack-fork-split#1"] .subway-glyph-diamond').count(), 1);
+        assert.equal(await page.locator('[data-role="rack-group-split#1"] .subway-glyph-diamond').count(), 1);
         assert.match(await page.locator('[data-role="rack-fork-readout-split#1"]').innerText(), /800/);
         assert.equal(await page.locator('.subway-group [data-role="rack-module-delay"]').count(), 1);
         assert.equal(await page.locator('[data-lane-path="branch:split#1:1:0"]').count(), 1);

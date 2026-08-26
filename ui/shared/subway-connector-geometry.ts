@@ -1,4 +1,4 @@
-/** Variant C spends the full graph width on branch ownership. */
+/** The graph spends its full measured width on branch ownership. */
 export const SUBWAY_LANE_GUTTER_PERCENT = 0;
 
 /** Horizontal graph space occupied by the branch-rail corridor. */
@@ -18,13 +18,29 @@ export type SubwayCompactLaneAllocation = {
 };
 
 /**
+ * Decide responsive branch geometry from the rendered graph content width.
+ * This is deliberately not a viewport query: the same synth can be embedded
+ * in a narrow plugin column inside a wide host window.
+ */
+export function subwayUsesCompactLaneAllocation(graphWidth: number, laneCount: number): boolean {
+    if (!Number.isFinite(graphWidth) || graphWidth <= 0) {
+        return false;
+    }
+    if (!Number.isInteger(laneCount) || laneCount < 2 || laneCount > 4) {
+        throw new RangeError(`Invalid responsive subway lane count ${laneCount}`);
+    }
+    return graphWidth <= (laneCount === 4 ? 319 : 239);
+}
+
+/**
  * Own the phone graph's unequal branch allocation in one place.
  *
- * The fixed 176 px minimum graph makes the weights physical: two lanes get
- * 88 px each; in three lanes the focused branch gets 88 px and each compact
- * sibling 44 px; in four lanes it gets 98 px while the three context rails
- * get 26 px. Both CSS tracks and SVG endpoints consume this projection, and
- * future drag previews can consume the same lane centers.
+ * At the 176 px phone floor the weights are physical. Two lanes get 88 px
+ * each. Three readable bands reserve 76 px for each outer chip and leave a
+ * 24 px MID rail (the chips alternate vertical tiers). Four Parallel lanes
+ * get four exact 44 px action tracks while the focused detail chip alternates
+ * tiers with compact siblings. CSS tracks, SVG endpoints, and later drag
+ * previews all consume this one projection.
  *
  * @throws {RangeError} When the group or focused branch is unsupported.
  */
@@ -41,12 +57,11 @@ export function subwayCompactLaneAllocation(
         throw new RangeError(`Invalid compact subway focus ${focusedBranchIndex} of ${laneCount}`);
     }
 
-    const focusedWeight = laneCount === 4 ? 98 : 88;
-    const siblingWeight = laneCount === 4 ? 26 : laneCount === 3 ? 44 : 88;
-    const weights = Array.from(
-        { length: laneCount },
-        (_, branchIndex) => branchIndex === focusedBranchIndex ? focusedWeight : siblingWeight,
-    );
+    const weights = laneCount === 2
+        ? [88, 88]
+        : laneCount === 3
+            ? [76, 24, 76]
+            : [44, 44, 44, 44];
     const total = weights.reduce((sum, weight) => sum + weight, 0);
     let cursor = 0;
     const trackPercentages = weights.map((weight) => (weight / total) * 100);

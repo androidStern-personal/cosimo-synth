@@ -1,8 +1,6 @@
 import {
     useCallback,
-    useEffect,
     useRef,
-    useState,
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
@@ -34,6 +32,8 @@ import {
     subwayForkBranchPathAt,
     subwayMergeBranchPath,
     subwayMergeBranchPathAt,
+    subwayUsesCompactLaneAllocation,
+    type SubwayCompactLaneAllocation,
 } from "../shared/subway-connector-geometry";
 
 /**
@@ -59,7 +59,6 @@ import {
 
 const STATION_DRAG_THRESHOLD_PX = 7;
 const STATION_LONG_PRESS_MS = 550;
-const PHONE_GRAPH_QUERY = "(max-width: 639px)";
 
 export type SubwayStationMenuRequest = {
     readonly deviceId: string;
@@ -75,6 +74,8 @@ export type SubwayGroupMenuRequest = {
 
 type SubwayMapColumnProps = {
     readonly laneState: LaneStateV2;
+    /** Measured content width of the graph that owns both tracks and SVGs. */
+    readonly graphWidth: number;
     readonly selectedDeviceId: string;
     readonly selectedGroupId: string | null;
     readonly reorderingDeviceId: string | null;
@@ -98,18 +99,6 @@ type SubwayBranchContext = {
     readonly laneCount: number;
     readonly focused: boolean;
 };
-
-function usePhoneGraphLayout(): boolean {
-    const [phoneLayout, setPhoneLayout] = useState(() => window.matchMedia(PHONE_GRAPH_QUERY).matches);
-    useEffect(() => {
-        const query = window.matchMedia(PHONE_GRAPH_QUERY);
-        const update = () => setPhoneLayout(query.matches);
-        update();
-        query.addEventListener("change", update);
-        return () => query.removeEventListener("change", update);
-    }, []);
-    return phoneLayout;
-}
 
 function requiredLaneCenter(laneCenters: ReadonlyArray<number>, laneIndex: number): number {
     const center = laneCenters[laneIndex];
@@ -248,15 +237,10 @@ function StationBody({ station, effectId }: {
                     <StationIcon effectId={effectId} className="subway-station-icon subway-station-icon-compact" />
                 </span>
             </span>
-        </span>
-    );
-}
-
-function StationSummary({ effectId }: { readonly effectId: EffectModuleId }) {
-    return (
-        <span className="subway-station-summary" aria-hidden="true">
-            <span className="subway-station-summary-well">
-                <StationIcon effectId={effectId} className="subway-station-icon subway-station-icon-summary" />
+            <span className="subway-station-summary" aria-hidden="true">
+                <span className="subway-station-summary-well">
+                    <StationIcon effectId={effectId} className="subway-station-icon subway-station-icon-summary" />
+                </span>
             </span>
         </span>
     );
@@ -345,7 +329,6 @@ function SubwayStation({
             >
                 <StationBody station={station} effectId={effectId} />
             </button>
-            {branchContext === null ? null : <StationSummary effectId={effectId} />}
         </div>
     );
 }
@@ -389,8 +372,8 @@ function SubwayGhost({
                     onClick={(event) => requestAdd(event.clientX, event.clientY)}
                 >
                     <span className="subway-ghost-pill" aria-hidden="true">+</span>
+                    <span className="subway-ghost-summary" aria-hidden="true">+</span>
                 </button>
-                <span className="subway-ghost-summary" aria-hidden="true">+</span>
             </div>
         );
     }
@@ -470,6 +453,7 @@ function laneCells(
 
 export function SubwayMapColumn({
     laneState,
+    graphWidth,
     selectedDeviceId,
     selectedGroupId,
     reorderingDeviceId,
@@ -485,7 +469,6 @@ export function SubwayMapColumn({
     onRequestAdd,
 }: SubwayMapColumnProps) {
     const layout = buildSubwayLayout(laneState);
-    const phoneGraphLayout = usePhoneGraphLayout();
 
     // Chain-walk positions for the data-rack-position contract: stations
     // number consecutively in dispatch order whatever their lane.
@@ -522,16 +505,13 @@ export function SubwayMapColumn({
         bypassed: boolean;
         laneCount: number;
         focusedBranchIndex: number;
+        compactAllocation: SubwayCompactLaneAllocation | null;
     } | null = null;
 
     const flushGroup = () => {
         if (openGroup === null) {
             return;
         }
-        const compactAllocation = subwayCompactLaneAllocation(
-            openGroup.laneCount,
-            openGroup.focusedBranchIndex,
-        );
         rendered.push(
             <div
                 key={openGroup.groupId}
@@ -540,14 +520,16 @@ export function SubwayMapColumn({
                 data-group-id={openGroup.groupId}
                 data-lane-count={openGroup.laneCount}
                 data-focused-branch-index={openGroup.focusedBranchIndex}
+                data-compact-layout={openGroup.compactAllocation === null ? "false" : "true"}
+                data-graph-width={graphWidth}
                 style={{
                     "--subway-lane-count": openGroup.laneCount,
                     "--subway-lane-gutter": `${SUBWAY_LANE_GUTTER_PERCENT}%`,
                     "--subway-lane-span": `${SUBWAY_LANE_SPAN_PERCENT}%`,
-                    "--subway-compact-lane-template": compactAllocation.gridTemplate,
+                    "--subway-compact-lane-template": openGroup.compactAllocation?.gridTemplate,
                     "--subway-compact-badge-template": openGroup.laneCount === 4
                         ? "repeat(4, 25%)"
-                        : compactAllocation.gridTemplate,
+                        : openGroup.compactAllocation?.gridTemplate,
                 } as CSSProperties}
             >
                 {groupRows}
@@ -565,18 +547,22 @@ export function SubwayMapColumn({
             flushGroup();
             const requestedFocus = focusedBranchIndices[row.groupId] ?? 0;
             const focusedBranchIndex = Math.min(Math.max(requestedFocus, 0), row.lanes.length - 1);
+            const compactAllocation = subwayUsesCompactLaneAllocation(graphWidth, row.lanes.length)
+                ? subwayCompactLaneAllocation(row.lanes.length, focusedBranchIndex)
+                : null;
             openGroup = {
                 groupId: row.groupId,
                 bypassed: row.bypassed,
                 laneCount: row.lanes.length,
                 focusedBranchIndex,
+                compactAllocation,
             };
             groupRows.push(
                 <SubwayFork
                     key={`fork-${row.groupId}`}
                     row={row}
                     focusedBranchIndex={focusedBranchIndex}
-                    phoneGraphLayout={phoneGraphLayout}
+                    compactAllocation={compactAllocation}
                     onSelectGroup={onSelectGroup}
                     onFocusBranch={onFocusBranch}
                     onOpenGroupMenu={onOpenGroupMenu}
@@ -594,7 +580,7 @@ export function SubwayMapColumn({
                     groupId={openGroup.groupId}
                     row={row}
                     focusedBranchIndex={openGroup.focusedBranchIndex}
-                    phoneGraphLayout={phoneGraphLayout}
+                    compactAllocation={openGroup.compactAllocation}
                 />,
             );
             flushGroup();
@@ -658,14 +644,14 @@ export function SubwayMapColumn({
 function SubwayFork({
     row,
     focusedBranchIndex,
-    phoneGraphLayout,
+    compactAllocation,
     onSelectGroup,
     onFocusBranch,
     onOpenGroupMenu,
 }: {
     readonly row: Extract<SubwayRow, { kind: "fork" }>;
     readonly focusedBranchIndex: number;
-    readonly phoneGraphLayout: boolean;
+    readonly compactAllocation: SubwayCompactLaneAllocation | null;
     readonly onSelectGroup: (groupId: string) => void;
     readonly onFocusBranch: (groupId: string, branchIndex: number) => void;
     readonly onOpenGroupMenu: (request: SubwayGroupMenuRequest) => void;
@@ -685,9 +671,11 @@ function SubwayFork({
             <SubwayForkConnections
                 row={row}
                 focusedBranchIndex={focusedBranchIndex}
-                phoneGraphLayout={phoneGraphLayout}
+                compactAllocation={compactAllocation}
             />
-            <span className="subway-fork-glyph" aria-hidden="true" />
+            <span className="subway-fork-glyph" aria-hidden="true">
+                <span className={row.groupKind === "split" ? "subway-glyph-diamond" : "subway-glyph-dot"} />
+            </span>
             <div className="subway-fork-lanes">
                 {row.lanes.map((lane, branchIndex) => (
                     <button
@@ -718,22 +706,18 @@ function SubwayFork({
                 onClick={gestures.handleClick}
                 onContextMenu={gestures.handleContextMenu}
             >
-                <span className={row.groupKind === "split" ? "subway-glyph-diamond" : "subway-glyph-dot"} aria-hidden="true" />
                 <span data-role={`rack-fork-readout-${row.groupId}`}>{readout}</span>
             </button>
         </div>
     );
 }
 
-function SubwayForkConnections({ row, focusedBranchIndex, phoneGraphLayout }: {
+function SubwayForkConnections({ row, focusedBranchIndex, compactAllocation }: {
     readonly row: Extract<SubwayRow, { kind: "fork" }>;
     readonly focusedBranchIndex: number;
-    readonly phoneGraphLayout: boolean;
+    readonly compactAllocation: SubwayCompactLaneAllocation | null;
 }) {
     const laneCount = row.lanes.length;
-    const compactAllocation = phoneGraphLayout
-        ? subwayCompactLaneAllocation(laneCount, focusedBranchIndex)
-        : null;
     return (
         <svg
             className="subway-connector-svg subway-fork-connectors"
@@ -750,6 +734,7 @@ function SubwayForkConnections({ row, focusedBranchIndex, phoneGraphLayout }: {
                     data-connector-segment="branch"
                     data-lane-index={laneIndex}
                     data-lane-tint={lane.tint}
+                    pathLength={100}
                     d={compactAllocation === null
                         ? subwayForkBranchPath(laneIndex, laneCount)
                         : subwayForkBranchPathAt(requiredLaneCenter(compactAllocation.laneCenters, laneIndex))}
@@ -763,17 +748,14 @@ function SubwayMerge({
     groupId,
     row,
     focusedBranchIndex,
-    phoneGraphLayout,
+    compactAllocation,
 }: {
     readonly groupId: string;
     readonly row: Extract<SubwayRow, { kind: "merge" }>;
     readonly focusedBranchIndex: number;
-    readonly phoneGraphLayout: boolean;
+    readonly compactAllocation: SubwayCompactLaneAllocation | null;
 }) {
     const laneCount = row.lanes.length;
-    const compactAllocation = phoneGraphLayout
-        ? subwayCompactLaneAllocation(laneCount, focusedBranchIndex)
-        : null;
     return (
         <div className="subway-merge" aria-hidden="true">
             <svg
@@ -789,6 +771,7 @@ function SubwayMerge({
                         data-connector-segment="branch"
                         data-lane-index={laneIndex}
                         data-lane-tint={lane.tint}
+                        pathLength={100}
                         d={compactAllocation === null
                             ? subwayMergeBranchPath(laneIndex, laneCount)
                             : subwayMergeBranchPathAt(requiredLaneCenter(compactAllocation.laneCenters, laneIndex))}

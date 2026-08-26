@@ -47,7 +47,6 @@ function harnessOrphanSuicide() {
     };
 }
 const desktopPatchViewSource = path.join(repoRoot, "ui", "desktop", "patch-view-entry.tsx");
-const mobileFxGraphPrototypeRoot = path.join(repoRoot, "ui", "desktop", "fx-graph-mobile-prototype");
 const reactRefreshPreamble = createReactRefreshPreamble();
 const desktopDevServerStartedAt = new Date().toISOString();
 
@@ -86,11 +85,6 @@ ${reactRefreshPreamble}
 ${reactRefreshPreamble}
   </script>`,
         }),
-        serveHtmlEntry({
-            urlPath: "/prototypes/fx-graph-mobile/",
-            sourceFile: path.join(mobileFxGraphPrototypeRoot, "index.html"),
-        }),
-        serveStaticDirectory("/prototypes/fx-graph-mobile", mobileFxGraphPrototypeRoot),
         servePatchModuleAlias({
             urlPath: "/patch_gui/desktop/index.js",
             sourceFile: desktopPatchViewSource,

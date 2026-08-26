@@ -1392,7 +1392,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
 
     const sourceAutoScrollDelta = useCallback((surface: HTMLElement, clientY: number) => {
         const bounds = surface.getBoundingClientRect();
-        const edgeZone = Math.min(52, bounds.height * 0.18);
+        const edgeZone = Math.min(64, bounds.height * 0.18);
         const distanceFromTop = clientY - bounds.top;
         const distanceFromBottom = bounds.bottom - clientY;
         const topStrength = distanceFromTop < edgeZone
@@ -1402,6 +1402,17 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             ? clamp((edgeZone - Math.max(0, distanceFromBottom)) / edgeZone, 0, 1)
             : 0;
         return (bottomStrength - topStrength) * 7;
+    }, []);
+
+    const sourceAutoScrollCanMove = useCallback((surface: HTMLElement, delta: number) => {
+        if (delta < -0.2) {
+            return surface.scrollTop > 0.5;
+        }
+        if (delta > 0.2) {
+            const maximumScrollTop = Math.max(0, surface.scrollHeight - surface.clientHeight);
+            return surface.scrollTop < maximumScrollTop - 0.5;
+        }
+        return false;
     }, []);
 
     const graphScrollSurfaceAtPoint = useCallback((
@@ -1432,7 +1443,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         const graphDelta = graphSurface === null
             ? 0
             : sourceAutoScrollDelta(graphSurface, state.clientY);
-        if (graphSurface !== null && Math.abs(graphDelta) > 0.2) {
+        if (graphSurface !== null && sourceAutoScrollCanMove(graphSurface, graphDelta)) {
             graphSurface.scrollTop += graphDelta;
         } else {
             const renderRoot = referenceElement.getRootNode();
@@ -1441,14 +1452,14 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
                 : null;
             if (activePanel) {
                 const panelDelta = sourceAutoScrollDelta(activePanel, state.clientY);
-                if (Math.abs(panelDelta) > 0.2) {
+                if (sourceAutoScrollCanMove(activePanel, panelDelta)) {
                     activePanel.scrollTop += panelDelta;
                 }
             }
         }
 
         autoScrollRef.current.frame = requestAnimationFrame(runSourceAutoScroll);
-    }, [graphScrollSurfaceAtPoint, sourceAutoScrollDelta, stopSourceAutoScroll]);
+    }, [graphScrollSurfaceAtPoint, sourceAutoScrollCanMove, sourceAutoScrollDelta, stopSourceAutoScroll]);
 
     const updateSourceAutoScroll = useCallback((referenceElement: HTMLElement, dragPoint: ClientPoint) => {
         autoScrollRef.current.clientX = dragPoint.x;
@@ -1458,9 +1469,14 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             autoScrollRef.current.frame = requestAnimationFrame(runSourceAutoScroll);
         }
         const graphSurface = graphScrollSurfaceAtPoint(referenceElement, dragPoint.x, dragPoint.y);
-        return graphSurface !== null
-            && Math.abs(sourceAutoScrollDelta(graphSurface, dragPoint.y)) > 0.2;
-    }, [graphScrollSurfaceAtPoint, runSourceAutoScroll, sourceAutoScrollDelta]);
+        if (graphSurface === null) {
+            return false;
+        }
+        return sourceAutoScrollCanMove(
+            graphSurface,
+            sourceAutoScrollDelta(graphSurface, dragPoint.y),
+        );
+    }, [graphScrollSurfaceAtPoint, runSourceAutoScroll, sourceAutoScrollCanMove, sourceAutoScrollDelta]);
 
     const finishSourceGesture = useCallback((
         pointerId: number,
@@ -3225,6 +3241,7 @@ export function EffectsRackWorkspace({
     const [previewDoc, setPreviewDoc] = useState<LaneStateV2>(rackState);
     const previewDocRef = useRef<LaneStateV2>(rackState);
     const rackListRef = useRef<HTMLDivElement | null>(null);
+    const [rackGraphWidth, setRackGraphWidth] = useState(0);
     const [rackScrollPresentation, setRackScrollPresentation] = useState({
         overflow: false,
         atTop: true,
@@ -3235,6 +3252,10 @@ export function EffectsRackWorkspace({
         if (list === null) {
             return;
         }
+        const measuredGraphWidth = list.clientWidth;
+        setRackGraphWidth((current) => (
+            current === measuredGraphWidth ? current : measuredGraphWidth
+        ));
         const overflow = list.scrollHeight > list.clientHeight + 2;
         const atTop = !overflow || list.scrollTop <= 2;
         const atBottom = !overflow
@@ -4433,6 +4454,7 @@ export function EffectsRackWorkspace({
                     >
                         <SubwayMapColumn
                             laneState={mapDoc}
+                            graphWidth={rackGraphWidth}
                             selectedDeviceId={selectedDeviceId}
                             selectedGroupId={selectedGroupId}
                             reorderingDeviceId={reorderingDeviceId}
