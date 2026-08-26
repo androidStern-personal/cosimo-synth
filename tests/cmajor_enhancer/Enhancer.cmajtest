@@ -45,6 +45,7 @@ processor EnhancerNeutralAndStereoContract [[ main ]]
         enhancer.b2MidAmountIn <- b2Mid;
         enhancer.b2SideAmountIn <- b2Side;
         enhancer.b2CurveIn <- float32 (wt::enhancerCurveTube);
+        enhancer.saturationModeIn <- float32 (wt::enhancerSaturationModeSubtle);
         enhancer.deEmphasisIn <- 1.0f;
     }
 
@@ -74,6 +75,9 @@ processor EnhancerNeutralAndStereoContract [[ main ]]
             enhancer.b2MidAmountIn <- 0.0f;
             enhancer.b2SideAmountIn <- 0.0f;
             enhancer.b2CurveIn <- frame < 7000 ? 1.0f : 0.0f;
+            enhancer.saturationModeIn <- frame < 6500
+                ? float32 (wt::enhancerSaturationModeSubtle)
+                : float32 (wt::enhancerSaturationModeMedium);
             enhancer.deEmphasisIn <- frame < 7500 ? 0.0f : 1.0f;
 
             let dry = float32<2> (
@@ -435,6 +439,113 @@ processor EnhancerResidueAndCharacterContract [[ main ]]
 }
 
 //==============================================================================
+// Medium is a distinct measured waveshaper, not an output-gain change. It must
+// increase Solid's odd-harmonic ratio and Tube's even-harmonic ratio relative
+// to Subtle while retaining the same selected-band input and routing.
+
+## testProcessor()
+
+processor EnhancerSaturationModeContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+    float64 phase;
+
+    void configure (int32 curve, int32 saturationMode)
+    {
+        enhancer.b1FreqHzIn <- 1000.0f;
+        enhancer.b1QIn <- 1.0f;
+        enhancer.b1ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b1MidAmountIn <- 0.9f;
+        enhancer.b1SideAmountIn <- 0.0f;
+        enhancer.b1CurveIn <- float32 (curve);
+        enhancer.b2FreqHzIn <- 9000.0f;
+        enhancer.b2QIn <- 0.71f;
+        enhancer.b2ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b2MidAmountIn <- 0.0f;
+        enhancer.b2SideAmountIn <- 0.0f;
+        enhancer.b2CurveIn <- float32 (wt::enhancerCurveTube);
+        enhancer.saturationModeIn <- float32 (saturationMode);
+        enhancer.deEmphasisIn <- 0.0f;
+    }
+
+    float32 renderNext()
+    {
+        let sample = 0.31f * float32 (std::intrinsics::sin (phase));
+        phase += twoPi * 1000.0 / processor.frequency;
+        enhancer.in <- float32<2> (sample, sample);
+        enhancer.advance();
+        return enhancer.out[0] - sample;
+    }
+
+    float64 measureHarmonic (int32 curve, int32 saturationMode, int32 harmonic)
+    {
+        let settleFrames = 8192;
+        let measureFrames = 24576;
+        configure (curve, saturationMode);
+        enhancer.resetIn <- 1;
+        phase = 0.0;
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            renderNext();
+
+        float64 sine;
+        float64 cosine;
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let residue = renderNext();
+            let analysisPhase = twoPi * 1000.0 * float64 (frame + settleFrames)
+                                / processor.frequency;
+            sine += float64 (residue) * std::intrinsics::sin (
+                float64 (harmonic) * analysisPhase
+            );
+            cosine += float64 (residue) * std::intrinsics::cos (
+                float64 (harmonic) * analysisPhase
+            );
+        }
+        return std::intrinsics::sqrt (sine * sine + cosine * cosine);
+    }
+
+    void main()
+    {
+        let subtleSolidFundamental = measureHarmonic (
+            wt::enhancerCurveSolid, wt::enhancerSaturationModeSubtle, 1
+        );
+        let subtleSolidThird = measureHarmonic (
+            wt::enhancerCurveSolid, wt::enhancerSaturationModeSubtle, 3
+        );
+        let mediumSolidFundamental = measureHarmonic (
+            wt::enhancerCurveSolid, wt::enhancerSaturationModeMedium, 1
+        );
+        let mediumSolidThird = measureHarmonic (
+            wt::enhancerCurveSolid, wt::enhancerSaturationModeMedium, 3
+        );
+        let subtleTubeFundamental = measureHarmonic (
+            wt::enhancerCurveTube, wt::enhancerSaturationModeSubtle, 1
+        );
+        let subtleTubeSecond = measureHarmonic (
+            wt::enhancerCurveTube, wt::enhancerSaturationModeSubtle, 2
+        );
+        let mediumTubeFundamental = measureHarmonic (
+            wt::enhancerCurveTube, wt::enhancerSaturationModeMedium, 1
+        );
+        let mediumTubeSecond = measureHarmonic (
+            wt::enhancerCurveTube, wt::enhancerSaturationModeMedium, 2
+        );
+
+        out <- (mediumSolidThird * subtleSolidFundamental
+                > subtleSolidThird * mediumSolidFundamental * 1.25) ? 1 : 0;
+        advance();
+        out <- (mediumTubeSecond * subtleTubeFundamental
+                > subtleTubeSecond * mediumTubeFundamental * 1.25) ? 1 : 0;
+        advance();
+        out <- (mediumSolidThird > 1.0e-5 && mediumTubeSecond > 1.0e-5) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
 // Amount is Spectre's ordinary 0..12 dB boost control expressed as 0..1. The
 // extracted parallel-band gain is therefore 10^(12*Amount/20)-1. At a tiny
 // signal level the fixed shaper is linear enough for contribution-power ratios
@@ -691,6 +802,7 @@ processor EnhancerSafetyAndResetContract [[ main ]]
         enhancer.b2MidAmountIn <- 5.0f;
         enhancer.b2SideAmountIn <- 3.0f;
         enhancer.b2CurveIn <- 100.0f;
+        enhancer.saturationModeIn <- 100.0f;
         enhancer.deEmphasisIn <- 100.0f;
     }
 
@@ -708,6 +820,7 @@ processor EnhancerSafetyAndResetContract [[ main ]]
         enhancer.b2MidAmountIn <- 0.0f;
         enhancer.b2SideAmountIn <- 0.0f;
         enhancer.b2CurveIn <- 0.0f;
+        enhancer.saturationModeIn <- float32 (wt::enhancerSaturationModeMedium);
         enhancer.deEmphasisIn <- 1.0f;
     }
 
@@ -788,7 +901,8 @@ processor EnhancerSafetyAndResetContract [[ main ]]
 
 //==============================================================================
 // A simultaneous step across Frequency, Q, Amount, and Tube/Solid must emerge
-// progressively, and a later character edit may not introduce a click.
+// progressively. Later character and saturation-mode edits may not introduce
+// an instantaneous discontinuity.
 
 ## testProcessor()
 
@@ -804,7 +918,8 @@ processor EnhancerControlSmoothingContract [[ main ]]
         float32 q,
         float32 amount,
         float32 mode,
-        float32 curve
+        float32 curve,
+        float32 saturationMode
     )
     {
         let sample = 0.3f * float32 (std::intrinsics::sin (phase));
@@ -821,6 +936,7 @@ processor EnhancerControlSmoothingContract [[ main ]]
         enhancer.b2MidAmountIn <- 0.0f;
         enhancer.b2SideAmountIn <- 0.0f;
         enhancer.b2CurveIn <- 0.0f;
+        enhancer.saturationModeIn <- saturationMode;
         enhancer.deEmphasisIn <- 1.0f;
         enhancer.in <- float32<2> (sample, sample);
         enhancer.advance();
@@ -830,24 +946,24 @@ processor EnhancerControlSmoothingContract [[ main ]]
     void main()
     {
         for (int32 frame = 0; frame < 4096; ++frame)
-            render (400.0f, 0.3f, 0.0f, 0.0f, 1.0f);
+            render (400.0f, 0.3f, 0.0f, 0.0f, 1.0f, 0.0f);
 
         float32 earlyPeak;
         float32 latePeak;
         for (int32 frame = 0; frame < 8192; ++frame)
         {
-            let residue = render (1000.0f, 8.0f, 1.0f, 1.0f, 0.0f);
+            let residue = render (1000.0f, 8.0f, 1.0f, 1.0f, 0.0f, 0.0f);
             if (frame < 32)
                 earlyPeak = std::intrinsics::max (earlyPeak, std::intrinsics::abs (residue));
             if (frame >= 4096)
                 latePeak = std::intrinsics::max (latePeak, std::intrinsics::abs (residue));
         }
 
-        float32 previousResidue = render (1000.0f, 8.0f, 1.0f, 1.0f, 0.0f);
+        float32 previousResidue = render (1000.0f, 8.0f, 1.0f, 1.0f, 0.0f, 0.0f);
         float32 baselineMaxStep;
         for (int32 frame = 0; frame < 2048; ++frame)
         {
-            let residue = render (1000.0f, 8.0f, 1.0f, 1.0f, 0.0f);
+            let residue = render (1000.0f, 8.0f, 1.0f, 1.0f, 0.0f, 0.0f);
             baselineMaxStep = std::intrinsics::max (
                 baselineMaxStep,
                 std::intrinsics::abs (residue - previousResidue)
@@ -859,7 +975,7 @@ processor EnhancerControlSmoothingContract [[ main ]]
         bool transitionFinite = true;
         for (int32 frame = 0; frame < 2048; ++frame)
         {
-            let residue = render (1000.0f, 8.0f, 1.0f, 1.0f, 1.0f);
+            let residue = render (1000.0f, 8.0f, 1.0f, 1.0f, 1.0f, 0.0f);
             if (residue != residue)
                 transitionFinite = false;
             maxCharacterStep = std::intrinsics::max (
@@ -869,10 +985,36 @@ processor EnhancerControlSmoothingContract [[ main ]]
             previousResidue = residue;
         }
 
+        float32 modeBaselineMaxStep;
+        for (int32 frame = 0; frame < 2048; ++frame)
+        {
+            let residue = render (1000.0f, 8.0f, 1.0f, 1.0f, 1.0f, 0.0f);
+            modeBaselineMaxStep = std::intrinsics::max (
+                modeBaselineMaxStep,
+                std::intrinsics::abs (residue - previousResidue)
+            );
+            previousResidue = residue;
+        }
+
+        float32 firstSaturationModeStep;
+        bool saturationTransitionFinite = true;
+        for (int32 frame = 0; frame < 2048; ++frame)
+        {
+            let residue = render (1000.0f, 8.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+            if (residue != residue)
+                saturationTransitionFinite = false;
+            if (frame == 0)
+                firstSaturationModeStep = std::intrinsics::abs (residue - previousResidue);
+            previousResidue = residue;
+        }
+
         out <- (latePeak > 1.0e-5 && earlyPeak < latePeak * 0.25f) ? 1 : 0;
         advance();
         out <- (transitionFinite
                 && maxCharacterStep <= baselineMaxStep * 1.25f + 0.0001f) ? 1 : 0;
+        advance();
+        out <- (saturationTransitionFinite
+                && firstSaturationModeStep <= modeBaselineMaxStep * 1.25f + 0.0001f) ? 1 : 0;
         advance();
         out <- -1;
         advance();

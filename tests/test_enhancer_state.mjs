@@ -16,21 +16,22 @@ async function loadEnhancerState() {
     return loadUIModule(repoRoot, "ui/shared/enhancer-state.ts");
 }
 
-test("the Enhancer saves both bands, their independent modes, and global de-emphasis", async () => {
+test("the Enhancer saves both bands, routing, saturation mode, and de-emphasis", async () => {
     const enhancer = await loadEnhancerState();
     const defaults = enhancer.createDefaultEnhancerState();
 
     assert.equal(enhancer.ENHANCER_STATE_FORMAT, "cosimo.enhancer");
-    assert.equal(enhancer.ENHANCER_STATE_VERSION, 3);
+    assert.equal(enhancer.ENHANCER_STATE_VERSION, 4);
     assert.deepEqual(enhancer.ENHANCER_CURVES, ["tube", "solid"]);
     assert.deepEqual(enhancer.ENHANCER_MODES, ["stereo", "mid-side"]);
-    assert.equal(enhancer.ENHANCER_SETTING_DESCRIPTORS.length, 13);
+    assert.deepEqual(enhancer.ENHANCER_SATURATION_MODES, ["subtle", "medium"]);
+    assert.equal(enhancer.ENHANCER_SETTING_DESCRIPTORS.length, 14);
     assert.deepEqual(
         enhancer.ENHANCER_SETTING_DESCRIPTORS.map(({ id }) => id),
         [
             "b1FreqHz", "b1Q", "b1Mode", "b1MidAmount", "b1SideAmount", "b1Curve",
             "b2FreqHz", "b2Q", "b2Mode", "b2MidAmount", "b2SideAmount", "b2Curve",
-            "deEmphasis",
+            "saturationMode", "deEmphasis",
         ],
     );
     assert.deepEqual(
@@ -53,7 +54,7 @@ test("the Enhancer saves both bands, their independent modes, and global de-emph
     );
     assert.deepEqual(defaults, {
         format: "cosimo.enhancer",
-        version: 3,
+        version: 4,
         b1FreqHz: 130,
         b1Q: 0.71,
         b1Mode: "stereo",
@@ -66,6 +67,7 @@ test("the Enhancer saves both bands, their independent modes, and global de-emph
         b2MidAmount: 0,
         b2SideAmount: 0,
         b2Curve: "tube",
+        saturationMode: "subtle",
         deEmphasis: 1,
     });
     assert.ok(enhancer.ENHANCER_SETTING_DESCRIPTORS.every(
@@ -95,6 +97,7 @@ test("the Enhancer saves both bands, their independent modes, and global de-emph
         b2MidAmount: 1,
         b2SideAmount: 0.5,
         b2Curve: "solid",
+        saturationMode: "medium",
         deEmphasis: 0.42,
     };
     assert.deepEqual(enhancer.parseEnhancerState(edited), { _tag: "ok", value: edited });
@@ -111,6 +114,7 @@ test("the Enhancer saves both bands, their independent modes, and global de-emph
         b2MidAmountIn: 1,
         b2SideAmountIn: 0.5,
         b2CurveIn: 1,
+        saturationModeIn: 1,
         deEmphasisIn: 0.42,
     });
 });
@@ -136,9 +140,10 @@ test("the unpublished always-M/S v1 document migrates without changing its sound
         _tag: "ok",
         value: {
             ...legacy,
-            version: 3,
+            version: 4,
             b1Mode: "mid-side",
             b2Mode: "mid-side",
+            saturationMode: "subtle",
             deEmphasis: 1,
         },
     });
@@ -147,8 +152,27 @@ test("the unpublished always-M/S v1 document migrates without changing its sound
 test("the prior two-mode v2 document migrates to full de-emphasis", async () => {
     const enhancer = await loadEnhancerState();
     const current = enhancer.createDefaultEnhancerState();
-    const { deEmphasis: ignored, ...withoutDeEmphasis } = current;
-    const legacy = { ...withoutDeEmphasis, version: 2 };
+    const {
+        deEmphasis: ignoredDeEmphasis,
+        saturationMode: ignoredSaturationMode,
+        ...withoutNewGlobals
+    } = current;
+    void ignoredDeEmphasis;
+    void ignoredSaturationMode;
+    const legacy = { ...withoutNewGlobals, version: 2 };
+
+    assert.deepEqual(enhancer.parseEnhancerState(legacy), {
+        _tag: "ok",
+        value: current,
+    });
+});
+
+test("the prior de-emphasis v3 document migrates to Subtle intensity", async () => {
+    const enhancer = await loadEnhancerState();
+    const current = enhancer.createDefaultEnhancerState();
+    const { saturationMode: ignoredSaturationMode, ...withoutSaturationMode } = current;
+    void ignoredSaturationMode;
+    const legacy = { ...withoutSaturationMode, version: 3 };
 
     assert.deepEqual(enhancer.parseEnhancerState(legacy), {
         _tag: "ok",
@@ -164,7 +188,7 @@ test("malformed or partial Enhancer state is rejected at the persistence boundar
         [],
         "not json",
         { ...defaults, format: "cosimo.polish" },
-        { ...defaults, version: 4 },
+        { ...defaults, version: 5 },
         { ...defaults, b1FreqHz: 19.999 },
         { ...defaults, b2FreqHz: 20_001 },
         { ...defaults, b1Q: 0.099 },
@@ -179,6 +203,8 @@ test("malformed or partial Enhancer state is rejected at the persistence boundar
         { ...defaults, b2Mode: 1 },
         { ...defaults, b1Curve: "tape" },
         { ...defaults, b2Curve: 1 },
+        { ...defaults, saturationMode: "aggressive" },
+        { ...defaults, saturationMode: 1 },
         { ...defaults, extra: true },
         Object.fromEntries(Object.entries(defaults).filter(([key]) => key !== "b2Curve")),
     ];
@@ -235,6 +261,10 @@ test("the isolated DSP metadata and composition fence encode the T26 ownership b
     assert.match(source, /processor EnhancerShaperCore[\s\S]*bandFilters/);
     assert.match(source, /enhancerEffectiveBellQ \(b1Q, b1MidAmount\)/);
     assert.match(source, /enhancerEffectiveBellQ \(b1Q, b1SideAmount\)/);
+    assert.match(source, /let enhancerSpectreMediumDrive = 6\.0f;/);
+    assert.match(source, /let enhancerSpectreMediumOutput = 0\.5f;/);
+    assert.match(source, /let enhancerSpectreMediumTubeBias = 0\.3125f;/);
+    assert.match(source, /mediumWeight = smoothEnhancerControl/);
     assert.match(source, /band1StereoCore\.out - band1StereoCore\.thru \* deEmphasis/);
     assert.match(source, /band1MidSideCore\.out - band1MidSideCore\.thru \* deEmphasis/);
     assert.match(source, /band2StereoCore\.out - band2StereoCore\.thru \* deEmphasis/);
@@ -245,7 +275,7 @@ test("the isolated DSP metadata and composition fence encode the T26 ownership b
         source.indexOf("void smoothControls()"),
         source.indexOf("void main()", source.indexOf("void smoothControls()")),
     );
-    assert.equal([...smoothingSection.matchAll(/smoothEnhancerControl/g)].length, 13);
+    assert.equal([...smoothingSection.matchAll(/smoothEnhancerControl/g)].length, 14);
 
     for (const { dspEndpointID } of enhancer.ENHANCER_SETTING_DESCRIPTORS) {
         const declaration = source.split("\n").find((line) => line.includes(` ${dspEndpointID} `));

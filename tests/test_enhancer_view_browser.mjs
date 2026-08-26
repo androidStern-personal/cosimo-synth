@@ -21,6 +21,7 @@ const initialValues = {
     b2MidAmountIn: 0,
     b2SideAmountIn: 0,
     b2CurveIn: 0,
+    saturationModeIn: 0,
     deEmphasisIn: 1,
 };
 
@@ -146,6 +147,28 @@ test("de-emphasis is a real global control from no subtraction to full subtracti
     }
 });
 
+test("the global saturation mode switches between measured Subtle and Medium laws", async () => {
+    const page = await openEnhancer();
+
+    try {
+        const subtle = shadow(page, "[data-saturation-mode='subtle']");
+        const medium = shadow(page, "[data-saturation-mode='medium']");
+        assert.equal(await subtle.getAttribute("aria-pressed"), "true");
+        assert.equal(await medium.getAttribute("aria-pressed"), "false");
+
+        await medium.click();
+        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_TEST__.sent.slice(-1)), [
+            { endpointID: "saturationModeIn", value: 1 },
+        ]);
+        assert.equal(await medium.getAttribute("aria-pressed"), "true");
+
+        await page.evaluate(() => window.__ENHANCER_TEST__.emit("saturationModeIn", 0));
+        assert.equal(await subtle.getAttribute("aria-pressed"), "true");
+    } finally {
+        await page.close();
+    }
+});
+
 test("the response plot follows Frequency, Q, Amount, and independent Side drive", async () => {
     const page = await openEnhancer();
 
@@ -220,11 +243,14 @@ test("the compiled production view used by the VST renders the same independent 
 
     try {
         assert.equal(await shadow(page, "[data-endpoint-id='deEmphasisIn']").count(), 1);
+        assert.equal(await shadow(page, "[data-saturation-mode='medium']").count(), 1);
         assert.equal(await shadow(page, ".response-panel").count(), 1);
+        await shadow(page, "[data-saturation-mode='medium']").click();
         await shadow(page, "[data-band='2'] [data-mode='mid-side']").click();
         assert.equal(await shadow(page, "[data-band='1'] [data-role='side-control']").isHidden(), true);
         assert.equal(await shadow(page, "[data-band='2'] [data-role='side-control']").isVisible(), true);
-        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_TEST__.sent.slice(-1)), [
+        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_TEST__.sent.slice(-2)), [
+            { endpointID: "saturationModeIn", value: 1 },
             { endpointID: "b2ModeIn", value: 1 },
         ]);
     } finally {
@@ -241,6 +267,7 @@ test("host-restored modes and character values update the real control surface",
             window.__ENHANCER_TEST__.emit("b2ModeIn", 0);
             window.__ENHANCER_TEST__.emit("b1CurveIn", 0);
             window.__ENHANCER_TEST__.emit("b2CurveIn", 1);
+            window.__ENHANCER_TEST__.emit("saturationModeIn", 1);
         });
 
         await assert.doesNotReject(async () => {
@@ -248,6 +275,7 @@ test("host-restored modes and character values update the real control surface",
             await shadow(page, "[data-band='2'] [data-mode='stereo'][aria-pressed='true']").waitFor();
             await shadow(page, "[data-band='1'] [data-curve='tube'][aria-pressed='true']").waitFor();
             await shadow(page, "[data-band='2'] [data-curve='solid'][aria-pressed='true']").waitFor();
+            await shadow(page, "[data-saturation-mode='medium'][aria-pressed='true']").waitFor();
         });
     } finally {
         await page.close();

@@ -48,6 +48,7 @@ const deEmphasisControl: NumberControl = {
     scale: "linear",
     format: formatPercent,
 };
+const saturationModeEndpointID = "saturationModeIn";
 
 const bandDefinitions: ReadonlyArray<BandDefinition> = [
     {
@@ -156,6 +157,7 @@ for (const band of bandDefinitions) {
     endpointInitialValues.set(band.curveEndpointID, band.initialCurve);
 }
 endpointInitialValues.set(deEmphasisControl.endpointID, deEmphasisControl.initial);
+endpointInitialValues.set(saturationModeEndpointID, 0);
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -308,23 +310,34 @@ class EnhancerView extends HTMLElement {
     }
 
     bindControls(): void {
+        const root = this.shadowRoot;
+        if (!root)
+            throw new Error("Enhancer controls require an attached shadow root.");
+
         for (const band of bandDefinitions) {
             for (const control of [band.frequency, band.q, band.primaryAmount, band.sideAmount])
                 this.bindNumberControl(control);
 
-            for (const button of this.shadowRoot!.querySelectorAll<HTMLButtonElement>(`[data-band='${band.number}'] [data-mode]`)) {
+            for (const button of root.querySelectorAll<HTMLButtonElement>(`[data-band='${band.number}'] [data-mode]`)) {
                 button.addEventListener("click", () => {
                     const value = button.dataset.mode === "mid-side" ? 1 : 0;
                     this.patchConnection.sendEventOrValue(band.modeEndpointID, value, 0);
                 });
             }
 
-            for (const button of this.shadowRoot!.querySelectorAll<HTMLButtonElement>(`[data-band='${band.number}'] [data-curve]`)) {
+            for (const button of root.querySelectorAll<HTMLButtonElement>(`[data-band='${band.number}'] [data-curve]`)) {
                 button.addEventListener("click", () => {
                     const value = button.dataset.curve === "solid" ? 1 : 0;
                     this.patchConnection.sendEventOrValue(band.curveEndpointID, value, 0);
                 });
             }
+        }
+
+        for (const button of root.querySelectorAll<HTMLButtonElement>("[data-saturation-mode]")) {
+            button.addEventListener("click", () => {
+                const value = button.dataset.saturationMode === "medium" ? 1 : 0;
+                this.patchConnection.sendEventOrValue(saturationModeEndpointID, value, 0);
+            });
         }
 
         this.bindNumberControl(deEmphasisControl);
@@ -351,6 +364,8 @@ class EnhancerView extends HTMLElement {
         let affectsResponsePlot = false;
         if (endpointID === deEmphasisControl.endpointID)
             this.renderNumberControl(deEmphasisControl);
+        if (endpointID === saturationModeEndpointID)
+            this.renderSaturationMode();
 
         for (const band of bandDefinitions) {
             const numberControl = [band.frequency, band.q, band.primaryAmount, band.sideAmount]
@@ -410,6 +425,20 @@ class EnhancerView extends HTMLElement {
         const isSolid = (this.values.get(band.curveEndpointID) ?? band.initialCurve) >= 0.5;
         for (const button of card.querySelectorAll<HTMLButtonElement>("[data-curve]"))
             button.setAttribute("aria-pressed", String((button.dataset.curve === "solid") === isSolid));
+    }
+
+    renderSaturationMode(): void {
+        const root = this.shadowRoot;
+        if (!root)
+            throw new Error("Enhancer saturation mode requires an attached shadow root.");
+
+        const isMedium = (this.values.get(saturationModeEndpointID) ?? 0) >= 0.5;
+        for (const button of root.querySelectorAll<HTMLButtonElement>("[data-saturation-mode]")) {
+            button.setAttribute(
+                "aria-pressed",
+                String((button.dataset.saturationMode === "medium") === isMedium),
+            );
+        }
     }
 
     renderResponsePlot(): void {
@@ -573,7 +602,11 @@ class EnhancerView extends HTMLElement {
                 .top-controls { width: min(360px, 42%); display: grid; gap: 10px; --band-accent: #d8d3c8; }
                 .badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
                 .badge { border: 1px solid rgba(255,255,255,0.10); border-radius: 999px; padding: 7px 10px; color: rgba(244,239,230,0.72); background: rgba(255,255,255,0.035); font-size: 9px; letter-spacing: 0.09em; text-transform: uppercase; }
-                .de-emphasis-panel { border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; padding: 11px 12px 9px; background: rgba(255,255,255,0.035); }
+                .global-controls { display: grid; grid-template-columns: 1fr 1.2fr; gap: 9px; }
+                .saturation-mode-panel, .de-emphasis-panel { border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; padding: 11px 12px 9px; background: rgba(255,255,255,0.035); }
+                .saturation-mode-panel > span { display: block; margin-bottom: 8px; color: rgba(244,239,230,0.63); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
+                .saturation-mode-panel .segmented { width: 100%; }
+                .saturation-mode-panel button { flex: 1; padding: 0 7px; }
                 .de-emphasis-panel p { margin-top: 7px; color: rgba(244,239,230,0.48); font-size: 8px; line-height: 1.4; text-align: right; }
                 .response-panel { margin-bottom: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.09); border-radius: 16px; padding: 13px 14px 5px; background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.035); }
                 .response-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 0 5px 2px; }
@@ -632,9 +665,18 @@ class EnhancerView extends HTMLElement {
                             <span class="badge">4× oversampling</span>
                             <span class="badge">Dry + shaped bands</span>
                         </div>
-                        <div class="de-emphasis-panel">
-                            ${this.numberControlMarkup(deEmphasisControl)}
-                            <p>0% keeps the shaped bell · 100% subtracts the unprocessed bell</p>
+                        <div class="global-controls">
+                            <div class="saturation-mode-panel">
+                                <span>Saturation mode</span>
+                                <div class="segmented" aria-label="Saturation mode">
+                                    <button type="button" data-saturation-mode="subtle" aria-pressed="true">Subtle</button>
+                                    <button type="button" data-saturation-mode="medium" aria-pressed="false">Medium</button>
+                                </div>
+                            </div>
+                            <div class="de-emphasis-panel">
+                                ${this.numberControlMarkup(deEmphasisControl)}
+                                <p>0% keeps the shaped bell · 100% subtracts the unprocessed bell</p>
+                            </div>
                         </div>
                     </div>
                 </header>

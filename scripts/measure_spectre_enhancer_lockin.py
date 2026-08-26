@@ -3,8 +3,9 @@
 
 This focused offline research tool complements measure_spectre_reference.py. It
 measures the full linear bell response (rather than tones only at the bell
-centre) and rechecks the Subtle Tube/Solid transfer at a low fundamental where
-the oversampling reconstruction filter cannot bias the harmonic fit.
+centre) and rechecks the Subtle and Medium Tube/Solid transfers at a low
+fundamental where the oversampling reconstruction filter cannot bias the
+harmonic fit.
 
 The output under build/ is ignored. No Spectre audio or proprietary code is
 checked in; the report contains only measurements and inferred model errors.
@@ -31,6 +32,18 @@ IMPULSE_FRAMES = SAMPLE_RATE * 3
 IMPULSE_AMPLITUDE = 0.1
 FFT_SIZE = 1 << 19
 PRE_RING_FRAMES = 512
+SHAPER_MODE_MODELS = {
+    "Subtle": {
+        "drive": 3.0,
+        "output_scale": 1.0 / math.sqrt(2.0),
+        "tube_bias": 0.125,
+    },
+    "Medium": {
+        "drive": 6.0,
+        "output_scale": 0.5,
+        "tube_bias": 0.3125,
+    },
+}
 
 
 def rbj_peak_difference(
@@ -183,9 +196,13 @@ def harmonic_coefficients(signal: np.ndarray, frequency_hz: float) -> np.ndarray
     )
 
 
-def shaper_points(session: reference.SpectreSession) -> dict[str, list[dict[str, Any]]]:
+def shaper_points(
+    session: reference.SpectreSession,
+) -> dict[str, dict[str, list[dict[str, Any]]]]:
     frequency_hz = 100.0
-    results: dict[str, list[dict[str, Any]]] = {"Solid": [], "Tube": []}
+    results = {
+        mode: {"Solid": [], "Tube": []} for mode in SHAPER_MODE_MODELS
+    }
     for gain_db in (1.0, 3.0, 6.0, 9.0, 12.0):
         for input_dbfs in (-36.0, -24.0, -18.0, -12.0, -6.0):
             stimulus = reference.make_sine(
@@ -194,35 +211,51 @@ def shaper_points(session: reference.SpectreSession) -> dict[str, list[dict[str,
                 input_dbfs,
                 duration_seconds=2.0,
             )
-            rendered: dict[str, np.ndarray] = {}
-            for color in ("Clean", "Solid", "Tube"):
-                output, _ = session.process(
-                    stimulus,
-                    SAMPLE_RATE,
-                    reference.one_peak_settings(
-                        frequency_hz=frequency_hz,
-                        gain_db=gain_db,
-                        q=2.0,
-                        color=color,
-                        mode="Subtle",
-                        quality="Good",
-                        de_emphasis=False,
-                        mix=1.0,
-                    ),
-                )
-                rendered[color] = harmonic_coefficients(output, frequency_hz)
-            band_peak = float(abs(rendered["Clean"][0]))
-            for color in ("Solid", "Tube"):
-                results[color].append(
-                    {
-                        "gain_db": gain_db,
-                        "input_dbfs": input_dbfs,
-                        "band_peak": band_peak,
-                        "harmonic_peaks": [
-                            float(value) for value in abs(rendered[color])[:20]
-                        ],
-                    }
-                )
+            clean_output, _ = session.process(
+                stimulus,
+                SAMPLE_RATE,
+                reference.one_peak_settings(
+                    frequency_hz=frequency_hz,
+                    gain_db=gain_db,
+                    q=2.0,
+                    color="Clean",
+                    mode="Subtle",
+                    quality="Good",
+                    de_emphasis=False,
+                    mix=1.0,
+                ),
+            )
+            clean_harmonics = harmonic_coefficients(clean_output, frequency_hz)
+            band_peak = float(abs(clean_harmonics[0]))
+            for mode in SHAPER_MODE_MODELS:
+                rendered: dict[str, np.ndarray] = {}
+                for color in ("Solid", "Tube"):
+                    output, _ = session.process(
+                        stimulus,
+                        SAMPLE_RATE,
+                        reference.one_peak_settings(
+                            frequency_hz=frequency_hz,
+                            gain_db=gain_db,
+                            q=2.0,
+                            color=color,
+                            mode=mode,
+                            quality="Good",
+                            de_emphasis=False,
+                            mix=1.0,
+                        ),
+                    )
+                    rendered[color] = harmonic_coefficients(output, frequency_hz)
+                for color in ("Solid", "Tube"):
+                    results[mode][color].append(
+                        {
+                            "gain_db": gain_db,
+                            "input_dbfs": input_dbfs,
+                            "band_peak": band_peak,
+                            "harmonic_peaks": [
+                                float(value) for value in abs(rendered[color])[:20]
+                            ],
+                        }
+                    )
     return results
 
 
@@ -255,11 +288,18 @@ def shaper_model_errors(
     return np.asarray(errors, dtype=np.float64)
 
 
-def fit_shaper(points: list[dict[str, Any]], color: str) -> dict[str, Any]:
-    exact = (
-        np.asarray((3.0, 1.0 / math.sqrt(2.0), 0.125))
+def fit_shaper(
+    points: list[dict[str, Any]], color: str, mode: str
+) -> dict[str, Any]:
+    model = SHAPER_MODE_MODELS[mode]
+    exact = np.asarray(
+        (
+            model["drive"],
+            model["output_scale"],
+            model["tube_bias"],
+        )
         if color == "Tube"
-        else np.asarray((3.0, 1.0 / math.sqrt(2.0)))
+        else (model["drive"], model["output_scale"])
     )
     bounds = (
         (np.asarray((1.0, 0.1, -1.0)), np.asarray((8.0, 2.0, 1.0)))
@@ -326,6 +366,7 @@ def main() -> int:
             "bell_model": "RBJ peaking EQ difference evaluated at 4x host rate",
             "bell_cases": len(filter_rows),
             "shaper_fundamental_hz": 100.0,
+            "shaper_modes": list(SHAPER_MODE_MODELS),
         },
         "filter_rows": filter_rows,
         "filter_model_summary": {
@@ -346,8 +387,20 @@ def main() -> int:
             ),
         },
         "shaper_model": {
-            color: fit_shaper(color_points, color)
-            for color, color_points in points.items()
+            mode: {
+                color: fit_shaper(color_points, color, mode)
+                for color, color_points in mode_points.items()
+            }
+            for mode, mode_points in points.items()
+        },
+        "retained_medium_points": {
+            color: [
+                point
+                for point in points["Medium"][color]
+                if (point["gain_db"], point["input_dbfs"])
+                in ((3.0, -24.0), (6.0, -18.0), (9.0, -12.0), (12.0, -6.0))
+            ]
+            for color in ("Solid", "Tube")
         },
     }
     reference.write_json(output_root / "report.json", report)

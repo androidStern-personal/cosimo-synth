@@ -2,9 +2,9 @@ namespace wt
 {
     // Fixed end-of-chain two-band Enhancer. T28 will compose this processor into
     // the Polish chain; T26 deliberately leaves it out of WavetableSynth and the
-    // Effects Lane. The ten band settings, two per-band routing modes, and one
-    // global de-emphasis control are non-automatable value endpoints: saved
-    // voicing controls, never modulation destinations.
+    // Effects Lane. The ten band settings, two per-band routing modes, global
+    // saturation mode, and de-emphasis control are non-automatable value
+    // endpoints: saved voicing controls, never modulation destinations.
 
     let enhancerOversampleFactor = 4;
     let enhancerBandCount = 2;
@@ -19,6 +19,9 @@ namespace wt
     let enhancerCurveSolid = 1;
     let enhancerModeStereo = 0;
     let enhancerModeMidSide = 1;
+    let enhancerSaturationModeSubtle = 0;
+    let enhancerSaturationModeMedium = 1;
+    let enhancerSaturationModeDefault = enhancerSaturationModeSubtle;
     let enhancerB1FrequencyDefaultHz = 130.0f;
     let enhancerB1QDefault = 0.71f;
     let enhancerB1CurveDefault = enhancerCurveSolid;
@@ -38,12 +41,15 @@ namespace wt
     // This law is zero exactly at Amount 0 and reaches 2.981x at Amount 1.
     let enhancerBandGainRangeDb = 12.0f;
 
-    // Spectre 1.5.6 Subtle-mode transfer laws, recovered from 742 deterministic
-    // black-box renders. The product's labels contradict its manual: its Solid
-    // output is symmetric, while its Tube output uses the static bias below.
+    // Spectre 1.5.6 fixed transfer laws, recovered from the original 742-case
+    // corpus and a focused 100 Hz sweep. The product's labels contradict its
+    // manual: Solid is symmetric, while Tube uses the static biases below.
     let enhancerSpectreSubtleDrive = 3.0f;
     let enhancerSpectreSubtleOutput = 0.7071067811865476f;
-    let enhancerSpectreTubeBias = 0.125f;
+    let enhancerSpectreSubtleTubeBias = 0.125f;
+    let enhancerSpectreMediumDrive = 6.0f;
+    let enhancerSpectreMediumOutput = 0.5f;
+    let enhancerSpectreMediumTubeBias = 0.3125f;
 
     // A sample-rate-aware version of the standard x[n]-x[n-1]+R*y[n-1]
     // DC-blocker idiom. std::filters::dcblocker fixes R at 0.996, making its
@@ -80,6 +86,11 @@ namespace wt
     }
 
     float32 resolveEnhancerMidSideWeight (float32 value)
+    {
+        return value >= 0.5f ? 1.0f : 0.0f;
+    }
+
+    float32 resolveEnhancerMediumWeight (float32 value)
     {
         return value >= 0.5f ? 1.0f : 0.0f;
     }
@@ -150,6 +161,7 @@ namespace wt
         input value float32 drive0In [[ init: 0.0f ]];
         input value float32 drive1In [[ init: 0.0f ]];
         input value float32 solidWeightIn [[ init: 0.0f ]];
+        input value float32 mediumWeightIn [[ init: 0.0f ]];
         input event int32 resetIn;
         output stream float32<2> out;
         output stream float32<2> thru;
@@ -209,14 +221,14 @@ namespace wt
             }
         }
 
-        float32 solidShape (float32 sample)
+        float32 subtleSolidShape (float32 sample)
         {
             return enhancerSpectreSubtleOutput * std::intrinsics::tanh (
                 enhancerSpectreSubtleDrive * sample
             );
         }
 
-        float32 tubeShape (float32 sample)
+        float32 subtleTubeShape (float32 sample)
         {
             // The runtime/vector tanh and the compiler-folded bias constant can
             // differ by a few ulps. Preserve the required f(0)=0 identity rather
@@ -226,16 +238,67 @@ namespace wt
 
             return enhancerSpectreSubtleOutput * (
                 std::intrinsics::tanh (
-                    enhancerSpectreSubtleDrive * sample + enhancerSpectreTubeBias
-                ) - std::intrinsics::tanh (enhancerSpectreTubeBias)
+                    enhancerSpectreSubtleDrive * sample + enhancerSpectreSubtleTubeBias
+                ) - std::intrinsics::tanh (enhancerSpectreSubtleTubeBias)
             );
         }
 
-        float32 shape (float32 sample, float32 solidWeight)
+        float32 mediumSolidShape (float32 sample)
         {
-            let tube = tubeShape (sample);
-            let solid = solidShape (sample);
+            return enhancerSpectreMediumOutput * std::intrinsics::tanh (
+                enhancerSpectreMediumDrive * sample
+            );
+        }
+
+        float32 mediumTubeShape (float32 sample)
+        {
+            if (sample == 0.0f)
+                return 0.0f;
+
+            return enhancerSpectreMediumOutput * (
+                std::intrinsics::tanh (
+                    enhancerSpectreMediumDrive * sample + enhancerSpectreMediumTubeBias
+                ) - std::intrinsics::tanh (enhancerSpectreMediumTubeBias)
+            );
+        }
+
+        float32 subtleShape (float32 sample, float32 solidWeight)
+        {
+            if (solidWeight == 0.0f)
+                return subtleTubeShape (sample);
+
+            if (solidWeight == 1.0f)
+                return subtleSolidShape (sample);
+
+            let tube = subtleTubeShape (sample);
+            let solid = subtleSolidShape (sample);
             return tube + (solid - tube) * solidWeight;
+        }
+
+        float32 mediumShape (float32 sample, float32 solidWeight)
+        {
+            if (solidWeight == 0.0f)
+                return mediumTubeShape (sample);
+
+            if (solidWeight == 1.0f)
+                return mediumSolidShape (sample);
+
+            let tube = mediumTubeShape (sample);
+            let solid = mediumSolidShape (sample);
+            return tube + (solid - tube) * solidWeight;
+        }
+
+        float32 shape (float32 sample, float32 solidWeight, float32 mediumWeight)
+        {
+            if (mediumWeight == 0.0f)
+                return subtleShape (sample, solidWeight);
+
+            if (mediumWeight == 1.0f)
+                return mediumShape (sample, solidWeight);
+
+            let subtle = subtleShape (sample, solidWeight);
+            let medium = mediumShape (sample, solidWeight);
+            return subtle + (medium - subtle) * mediumWeight;
         }
 
         void main()
@@ -264,6 +327,7 @@ namespace wt
                     enhancerAmountDrive (1.0f)
                 );
                 let solidWeight = std::intrinsics::clamp (solidWeightIn, 0.0f, 1.0f);
+                let mediumWeight = std::intrinsics::clamp (mediumWeightIn, 0.0f, 1.0f);
                 updateBandCoefficients (frequencyHz, q0, q1);
                 let drivenBand = float32<2> (
                     bandFilters[0].process (sampleFrame[0]) * drive0 / q0,
@@ -271,8 +335,8 @@ namespace wt
                 );
                 thru <- drivenBand;
                 out <- float32<2> (
-                    shape (drivenBand[0], solidWeight),
-                    shape (drivenBand[1], solidWeight)
+                    shape (drivenBand[0], solidWeight, mediumWeight),
+                    shape (drivenBand[1], solidWeight, mediumWeight)
                 );
                 advance();
             }
@@ -297,6 +361,7 @@ namespace wt
         input value float32 b2SideAmountIn [[ name: "Enhancer Band 2 Side Amount", min: enhancerAmountMin, max: enhancerAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
         input value float32 b2CurveIn [[ name: "Enhancer Band 2 Character", min: 0.0f, max: 1.0f, init: float32 (enhancerB2CurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: false, rampFrames: 0 ]];
 
+        input value float32 saturationModeIn [[ name: "Enhancer Saturation Mode", min: 0.0f, max: 1.0f, init: float32 (enhancerSaturationModeDefault), discrete: true, step: 1.0f, text: "Subtle|Medium", automatable: false, rampFrames: 0 ]];
         input value float32 deEmphasisIn [[ name: "Enhancer De-emphasis", min: 0.0f, max: 1.0f, init: enhancerDeEmphasisDefault, automatable: false, rampFrames: 0 ]];
 
         // Audio-history reset for the future single resident Polish instance.
@@ -325,6 +390,7 @@ namespace wt
         float32 b2MidAmount;
         float32 b2SideAmount;
         float32 b2SolidWeight = float32 (enhancerB2CurveDefault);
+        float32 mediumWeight = float32 (enhancerSaturationModeDefault);
         float32 deEmphasis = enhancerDeEmphasisDefault;
         var smoothingAmount = 1.0f - std::intrinsics::exp (
             -1.0f / (
@@ -433,6 +499,12 @@ namespace wt
                 smoothingAmount,
                 enhancerCoefficientEpsilon
             );
+            mediumWeight = smoothEnhancerControl (
+                mediumWeight,
+                resolveEnhancerMediumWeight (saturationModeIn),
+                smoothingAmount,
+                enhancerCoefficientEpsilon
+            );
             deEmphasis = smoothEnhancerControl (
                 deEmphasis,
                 clampEnhancerAmount (deEmphasisIn),
@@ -468,6 +540,7 @@ namespace wt
                 band1StereoCore.drive0In <- band1PrimaryDrive;
                 band1StereoCore.drive1In <- band1PrimaryDrive;
                 band1StereoCore.solidWeightIn <- b1SolidWeight;
+                band1StereoCore.mediumWeightIn <- mediumWeight;
                 band1StereoCore.advance();
                 band1MidSideCore.in <- dryMidSide;
                 band1MidSideCore.frequencyHzIn <- b1FreqHz;
@@ -476,6 +549,7 @@ namespace wt
                 band1MidSideCore.drive0In <- band1PrimaryDrive;
                 band1MidSideCore.drive1In <- band1SideDrive;
                 band1MidSideCore.solidWeightIn <- b1SolidWeight;
+                band1MidSideCore.mediumWeightIn <- mediumWeight;
                 band1MidSideCore.advance();
                 band2StereoCore.in <- dry;
                 band2StereoCore.frequencyHzIn <- b2FreqHz;
@@ -484,6 +558,7 @@ namespace wt
                 band2StereoCore.drive0In <- band2PrimaryDrive;
                 band2StereoCore.drive1In <- band2PrimaryDrive;
                 band2StereoCore.solidWeightIn <- b2SolidWeight;
+                band2StereoCore.mediumWeightIn <- mediumWeight;
                 band2StereoCore.advance();
                 band2MidSideCore.in <- dryMidSide;
                 band2MidSideCore.frequencyHzIn <- b2FreqHz;
@@ -492,6 +567,7 @@ namespace wt
                 band2MidSideCore.drive0In <- band2PrimaryDrive;
                 band2MidSideCore.drive1In <- band2SideDrive;
                 band2MidSideCore.solidWeightIn <- b2SolidWeight;
+                band2MidSideCore.mediumWeightIn <- mediumWeight;
                 band2MidSideCore.advance();
 
                 // 0% de-emphasis adds the complete shaped bell. 100% subtracts

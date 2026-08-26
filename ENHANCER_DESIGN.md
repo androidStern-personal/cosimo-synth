@@ -20,8 +20,9 @@ EQ-shaped regions. Cosimo already ships the core trick: the distortion module's
 Andrew's scope decisions: **two bands, not five. Tube and Solid curves only. Each
 band independently switches between regular Stereo and Mid/Side. Stereo uses one
 linked Amount for L/R; Mid/Side exposes independent Mid and Side amounts. Lives at
-the end of the signal chain.** The earlier claim that independent M/S amounts
-eliminated the routing selector was wrong and is superseded by this correction.
+the end of the signal chain. One global selector chooses the measured Subtle or
+Medium saturation law for both bands.** The earlier claim that independent M/S
+amounts eliminated the routing selector was wrong and is superseded by this correction.
 
 ---
 
@@ -39,7 +40,7 @@ in (stereo) ──┬───────────────────�
               │                                                  │
               │  each [ ×4 oversampled core ]:                   │
               │    d = peakingEQ(input) − input                  │
-              │    shaped = curve(d); thru = d                   │
+              │    shaped = selectedMode(curve, d); thru = d     │
               │                                                  │
               │  c = DCblock(shaped                              │
               │              − deEmphasis·aligned_thru)          │
@@ -66,7 +67,7 @@ pole Q `Qdisplay · sqrt(G)`. The implementation uses that equivalent form insid
 as the old fixed-Q approximation. The parallel topology keeps the subtraction
 phase-clean by construction.
 
-## 2. Parameters (10 band settings + 2 routing modes + de-emphasis, all static)
+## 2. Parameters (10 band settings + 2 routing modes + 2 globals, all static)
 
 | Param | Range | Default | Meaning |
 |---|---|---|---|
@@ -82,18 +83,20 @@ phase-clean by construction.
 | `b2MidAmount` | 0..1 | 0 | Stereo Amount, relabelled Mid in M/S mode |
 | `b2SideAmount` | 0..1 | 0 | band 2 Side drive, active only in M/S mode |
 | `b2Curve` | Tube / Solid | Tube | band 2 curve |
+| `saturationMode` | Subtle / Medium | Subtle | global measured Spectre intensity law |
 | `deEmphasis` | 0..1 | 1 | 0 = shaped bell; 1 = shaped bell minus aligned unprocessed bell |
 
 The primary amount has one stable stored identity: it is labelled Amount and drives
 both L/R channels in Stereo mode, then is relabelled Mid in M/S mode. Side remains
 stored while Stereo is selected but is inactive. This preserves the original ten
-band settings and adds only the two saved routing modes plus the requested global
-de-emphasis value; switching mode does not silently overwrite either M/S amount. The
-two modes default to Stereo and de-emphasis defaults to 100%. The unpublished
-always-M/S v1 state migrates both modes to Mid/Side, while both v1 and v2 states migrate
-to 100% de-emphasis so their previous signal law is preserved.
+band settings and adds the two saved routing modes, one global saturation mode, and
+the requested global de-emphasis value; switching routing does not silently overwrite
+either M/S amount. The two routing modes default to Stereo, saturation defaults to
+Subtle, and de-emphasis defaults to 100%. The unpublished always-M/S v1 state migrates
+both routing modes to Mid/Side. V1 and v2 migrate to 100% de-emphasis, while v1–v3
+migrate to Subtle, preserving their previous signal law and approved sound.
 
-All thirteen values are smoothed, preset/host-state persisted, non-automatable, absent
+All fourteen values are smoothed, preset/host-state persisted, non-automatable, absent
 from modulation catalogs, and unavailable as an Effects Lane device. The isolated
 audition VST exposes them only through its own GUI; T28 owns the final Polish UI.
 
@@ -114,15 +117,22 @@ No global mix (the four amounts are the mix), no output trim or hidden residue t
 ## 3. The two curves
 
 Direct Spectre 1.5.6 renders supersede the manual's reversed character descriptions.
-For the fixed **Subtle** target, the measured transfer functions are:
+The measured global **Subtle** transfer functions are:
 
 - **Solid** — `tanh(3x) / sqrt(2)`: symmetric, predominantly odd harmonics.
 - **Tube** — `(tanh(3x + 0.125) - tanh(0.125)) / sqrt(2)`: biased, even + odd
   harmonics. Default for band 2. Its signal-dependent DC makes the per-path,
   sample-rate-aware residue blocker mandatory.
 
-These fits reproduce the measured harmonics across the retained level/Amount sweep;
-the small-signal gains are approximately +6.53 dB (Solid) and +6.40 dB (Tube).
+The measured global **Medium** transfer functions are:
+
+- **Solid** — `tanh(6x) / 2`: symmetric, predominantly odd harmonics.
+- **Tube** — `(tanh(6x + 0.3125) - tanh(0.3125)) / 2`: biased, even + odd
+  harmonics.
+
+These fixed laws reproduce the measured harmonics across the retained level/Amount
+sweep. Subtle's small-signal gains are approximately +6.53 dB (Solid) and +6.40 dB
+(Tube); Medium's are approximately +9.54 dB and +8.71 dB respectively.
 Spectre does **not** normalize either curve back to unity fundamental gain and does
 not run an RMS/correlation follower. That retained positive fundamental contribution
 is part of its sound. Both curves are fixed, memoryless, and stateless; there is no
@@ -165,11 +175,14 @@ requirements:
 - Low-position voicing target: kick/bass weight on small speakers (2nd/3rd harmonic
   of 40–130 Hz content landing 80–400 Hz). High-position: acoustic guitar / vocal
   sheen and the side-widener use.
-- Voicing target is Spectre **Subtle** on matching material. The bus has no Mode
-  control, so Medium/Aggressive are not silently folded into the Amount law.
-  `scripts/measure_spectre_reference.py` regenerates the reference corpus and exact
-  inferred-model validation; retained raw and level-matched audition files live under
-  ignored `build/t26-spectre-reference/`.
+- The global selector reproduces Spectre **Subtle** and **Medium** as separate fixed
+  transfer laws; it does not fold either intensity into Amount. Subtle remains the
+  default. `scripts/measure_spectre_reference.py` regenerates the broad reference
+  corpus, while `scripts/measure_spectre_enhancer_lockin.py` repeats the focused
+  low-frequency transfer sweep for both modes. The production Medium renderer is
+  guarded against 33 retained harmonic peaks; current worst error is 0.101 dB.
+  Raw and level-matched audition files live under ignored
+  `build/t26-spectre-reference/`.
 
 ## 6. Placement and rack integration
 
@@ -230,6 +243,8 @@ Status: ratio concept retained; build/defer/reject remains Andrew's decision.
 6. Andrew's ears on the installed VST remain the final sound gate.
 7. The retained Spectre bell crossings must remain within 0.02 dB in the production
    Cmajor renderer; the current worst result is 0.00154 dB.
+8. Medium Solid and Tube must match the retained Spectre harmonic peaks within 0.15
+   dB in the production renderer; the current worst result is 0.101 dB.
 
 ## 9. Open decisions (defaults apply unless overridden)
 
@@ -239,6 +254,8 @@ Status: ratio concept retained; build/defer/reject remains Andrew's decision.
    the static polish chain (`POLISH_CHAIN_DESIGN.md`) — not a pool module, not
    modulatable.
 3. **Module name.** Working name "Enhancer" (`wt::EnhancerBus`).
+4. **Saturation modes.** **Resolved 2026-08-26 by Andrew**: expose the measured
+   Subtle and Medium laws globally; keep Subtle as the backward-compatible default.
 
 ## 10. Source notes
 
@@ -259,5 +276,6 @@ character. AU and VST3 renders were bit-identical; fresh-instance determinism wa
 exact. See `scripts/measure_spectre_reference.py`,
 `scripts/measure_spectre_enhancer_lockin.py`, and the retained derived fixture
 `tests/fixtures/enhancer_spectre_lockin_v1.json`; raw audio and full reports remain
-ignored under `build/`. The manual's Tube/Solid prose is retained only as provenance
-because the measured plugin labels are reversed.
+ignored under `build/`. The focused shaper pass contains 25 input/gain pairs for each
+Subtle/Medium × Tube/Solid combination. The manual's Tube/Solid prose is retained only
+as provenance because the measured plugin labels are reversed.

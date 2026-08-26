@@ -19,6 +19,7 @@ processor EnhancerSampleRateProbe
         enhancer.b2MidAmountIn <- 0.0f;
         enhancer.b2SideAmountIn <- 0.0f;
         enhancer.b2CurveIn <- 0.0f;
+        enhancer.saturationModeIn <- float32 (wt::enhancerSaturationModeSubtle);
         enhancer.deEmphasisIn <- 1.0f;
     }
 

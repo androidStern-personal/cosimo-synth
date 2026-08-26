@@ -15,6 +15,8 @@ const spectreLockinFixturePath = path.join(
 const requestedMode = process.argv[2] ?? "--check";
 const minimumFullAmountContributionRelativeDb = -6;
 const maximumSpectreBellCrossingErrorDb = 0.02;
+const maximumSpectreMediumHarmonicErrorDb = 0.15;
+const minimumSpectreGoldenPeak = 1e-6;
 // A finite musical window is not periodic and cannot have mathematically zero
 // mean. Keep that boundary contribution below a quarter-percent of residue RMS;
 // the fixed sample-rate-aware high-pass owns actual DC rejection.
@@ -37,6 +39,7 @@ const defaultSettings = Object.freeze({
     b2MidAmountIn: 0,
     b2SideAmountIn: 0,
     b2CurveIn: 0,
+    saturationModeIn: 0,
     deEmphasisIn: 1,
 });
 
@@ -254,6 +257,21 @@ function residueRmsDbfs(dry, wet) {
     }
     const rms = Math.sqrt(power / (dry.left.length * 2));
     return 20 * Math.log10(Math.max(rms, 1e-30));
+}
+
+function residueTonePeak(dry, wet, sampleRate, frequencyHz) {
+    let real = 0;
+    let imaginary = 0;
+    for (let frame = 0; frame < dry.left.length; frame += 1) {
+        const residue = 0.5 * (
+            wet.left[frame] - dry.left[frame]
+            + wet.right[frame] - dry.right[frame]
+        );
+        const phase = 2 * Math.PI * frequencyHz * frame / sampleRate;
+        real += residue * Math.cos(phase);
+        imaginary -= residue * Math.sin(phase);
+    }
+    return 2 * Math.hypot(real, imaginary) / dry.left.length;
 }
 
 function maximumDcMean(dry, wet) {
@@ -554,6 +572,57 @@ try {
         }
     }
 
+    const spectreMediumMatchRows = [];
+    for (const point of spectreLockinFixture.mediumGoldenPoints) {
+        const frequencyHz = 100;
+        const inputPeak = Math.SQRT2 * 10 ** (point.inputDbfs / 20);
+        const fixture = makeSine(baseContext, frequencyHz, inputPeak);
+        const rendered = await render(fixture, baseContext, {
+            b1FreqHzIn: frequencyHz,
+            b1QIn: 2,
+            b1ModeIn: 0,
+            b1MidAmountIn: point.gainDb / 12,
+            b1SideAmountIn: 0,
+            b1CurveIn: point.curve,
+            b2MidAmountIn: 0,
+            b2SideAmountIn: 0,
+            saturationModeIn: 1,
+            deEmphasisIn: 0,
+        });
+        const dry = measuredSlice(fixture, baseContext);
+        const wet = measuredSlice(rendered, baseContext);
+        for (let index = 0; index < point.harmonicPeaks.length; index += 1) {
+            const expectedPeak = point.harmonicPeaks[index];
+            if (expectedPeak < minimumSpectreGoldenPeak) continue;
+            const harmonic = index + 1;
+            const measuredPeak = residueTonePeak(
+                dry,
+                wet,
+                baseContext.sampleRate,
+                frequencyHz * harmonic,
+            );
+            const errorDb = 20 * Math.log10(measuredPeak / expectedPeak);
+            const row = {
+                character: point.character,
+                gainDb: point.gainDb,
+                inputDbfs: point.inputDbfs,
+                harmonic,
+                expectedPeak,
+                measuredPeak,
+                errorDb,
+            };
+            spectreMediumMatchRows.push(row);
+            if (!Number.isFinite(errorDb)
+                || Math.abs(errorDb) > maximumSpectreMediumHarmonicErrorDb) {
+                throw new Error(
+                    `Spectre Medium mismatch for ${point.character}, ${point.gainDb} dB gain, `
+                    + `${point.inputDbfs} dBFS input, harmonic ${harmonic}: `
+                    + `${errorDb.toFixed(3)} dB error`,
+                );
+            }
+        }
+    }
+
     const allLoudnessRows = [...pinkRows, ...musicalRows];
     const report = {
         format: "cosimo.enhancerEvidence",
@@ -577,6 +646,14 @@ try {
             maximumAllowedErrorDb: maximumSpectreBellCrossingErrorDb,
             worstErrorDb: Math.max(...spectreBellMatchRows.map(({ errorDb }) => Math.abs(errorDb))),
             rows: spectreBellMatchRows,
+        },
+        spectreMediumMatch: {
+            fixture: path.relative(repoRoot, spectreLockinFixturePath),
+            maximumAllowedErrorDb: maximumSpectreMediumHarmonicErrorDb,
+            worstErrorDb: Math.max(
+                ...spectreMediumMatchRows.map(({ errorDb }) => Math.abs(errorDb)),
+            ),
+            rows: spectreMediumMatchRows,
         },
         worstAbsoluteLufsDelta: Math.max(...allLoudnessRows.map(({ lufsDelta }) => Math.abs(lufsDelta))),
         worstAbsoluteRmsDeltaDb: Math.max(

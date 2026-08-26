@@ -2,7 +2,7 @@
 export const ENHANCER_STATE_FORMAT = "cosimo.enhancer";
 
 /** Current persisted Enhancer state version. */
-export const ENHANCER_STATE_VERSION = 3;
+export const ENHANCER_STATE_VERSION = 4;
 
 /** The two locked nonlinear character choices. */
 export const ENHANCER_CURVES = ["tube", "solid"] as const;
@@ -16,10 +16,16 @@ export const ENHANCER_MODES = ["stereo", "mid-side"] as const;
 /** A saved Enhancer band routing domain. */
 export type EnhancerMode = typeof ENHANCER_MODES[number];
 
-/** Ten band settings, two routing modes, and global de-emphasis, all persisted. */
+/** The measured global Spectre intensity choices available to both bands. */
+export const ENHANCER_SATURATION_MODES = ["subtle", "medium"] as const;
+
+/** A saved global nonlinear intensity choice. */
+export type EnhancerSaturationMode = typeof ENHANCER_SATURATION_MODES[number];
+
+/** Ten band settings, two routing modes, global intensity, and de-emphasis. */
 export type EnhancerState = {
     readonly format: typeof ENHANCER_STATE_FORMAT;
-    readonly version: 3;
+    readonly version: 4;
     readonly b1FreqHz: number;
     readonly b1Q: number;
     readonly b1Mode: EnhancerMode;
@@ -32,6 +38,7 @@ export type EnhancerState = {
     readonly b2MidAmount: number;
     readonly b2SideAmount: number;
     readonly b2Curve: EnhancerCurve;
+    readonly saturationMode: EnhancerSaturationMode;
     readonly deEmphasis: number;
 };
 
@@ -70,11 +77,22 @@ export type EnhancerModeSettingDescriptor = {
     readonly exposure: "static-preset";
 };
 
+/** A discrete global Subtle/Medium intensity descriptor. */
+export type EnhancerSaturationModeSettingDescriptor = {
+    readonly kind: "saturation-mode";
+    readonly id: EnhancerSettingID;
+    readonly dspEndpointID: string;
+    readonly initial: EnhancerSaturationMode;
+    readonly choices: typeof ENHANCER_SATURATION_MODES;
+    readonly exposure: "static-preset";
+};
+
 /** One entry in the fixed Enhancer sound-and-routing contract. */
 export type EnhancerSettingDescriptor =
     | EnhancerNumberSettingDescriptor
     | EnhancerModeSettingDescriptor
-    | EnhancerCurveSettingDescriptor;
+    | EnhancerCurveSettingDescriptor
+    | EnhancerSaturationModeSettingDescriptor;
 
 /** Result of parsing unknown persisted Enhancer state. */
 export type EnhancerStateParseOutcome =
@@ -101,6 +119,7 @@ export type EnhancerDspSettings = {
     readonly b2MidAmountIn: number;
     readonly b2SideAmountIn: number;
     readonly b2CurveIn: 0 | 1;
+    readonly saturationModeIn: 0 | 1;
     readonly deEmphasisIn: number;
 };
 
@@ -219,6 +238,14 @@ export const ENHANCER_SETTING_DESCRIPTORS = [
         exposure: "static-preset",
     },
     {
+        kind: "saturation-mode",
+        id: "saturationMode",
+        dspEndpointID: "saturationModeIn",
+        initial: "subtle",
+        choices: ENHANCER_SATURATION_MODES,
+        exposure: "static-preset",
+    },
+    {
         kind: "number",
         id: "deEmphasis",
         dspEndpointID: "deEmphasisIn",
@@ -240,7 +267,12 @@ const ENHANCER_V1_STATE_KEYS = [
     "format",
     "version",
     ...ENHANCER_SETTING_DESCRIPTORS
-        .filter(({ kind, id }) => kind !== "mode" && id !== "deEmphasis")
+        .filter(({ id }) => (
+            id !== "b1Mode"
+            && id !== "b2Mode"
+            && id !== "saturationMode"
+            && id !== "deEmphasis"
+        ))
         .map(({ id }) => id),
 ] as const;
 
@@ -248,7 +280,15 @@ const ENHANCER_V2_STATE_KEYS = [
     "format",
     "version",
     ...ENHANCER_SETTING_DESCRIPTORS
-        .filter(({ id }) => id !== "deEmphasis")
+        .filter(({ id }) => id !== "saturationMode" && id !== "deEmphasis")
+        .map(({ id }) => id),
+] as const;
+
+const ENHANCER_V3_STATE_KEYS = [
+    "format",
+    "version",
+    ...ENHANCER_SETTING_DESCRIPTORS
+        .filter(({ id }) => id !== "saturationMode")
         .map(({ id }) => id),
 ] as const;
 
@@ -290,6 +330,13 @@ function parseMode(value: unknown, id: string): EnhancerMode | ParseFailure {
     return { _tag: "err", message: `${id} must be Stereo or Mid/Side.` };
 }
 
+function parseSaturationMode(value: unknown): EnhancerSaturationMode | ParseFailure {
+    if (value === "subtle" || value === "medium") {
+        return value;
+    }
+    return { _tag: "err", message: "saturationMode must be Subtle or Medium." };
+}
+
 function hasExactlyKeys(
     record: Readonly<Record<string, unknown>>,
     expectedKeys: ReadonlyArray<string>,
@@ -327,6 +374,7 @@ export function createDefaultEnhancerState(): EnhancerState {
         b2MidAmount: 0,
         b2SideAmount: 0,
         b2Curve: "tube",
+        saturationMode: "subtle",
         deEmphasis: 1,
     };
 }
@@ -350,12 +398,19 @@ export function parseEnhancerState(input: unknown): EnhancerStateParseOutcome {
     }
     const isLegacyV1 = document.version === 1;
     const isLegacyV2 = document.version === 2;
-    if (!isLegacyV1 && !isLegacyV2 && document.version !== ENHANCER_STATE_VERSION) {
-        return { _tag: "err", message: `Enhancer state version must be 1, 2, or ${ENHANCER_STATE_VERSION}.` };
+    const isLegacyV3 = document.version === 3;
+    if (!isLegacyV1 && !isLegacyV2 && !isLegacyV3
+        && document.version !== ENHANCER_STATE_VERSION) {
+        return {
+            _tag: "err",
+            message: `Enhancer state version must be 1, 2, 3, or ${ENHANCER_STATE_VERSION}.`,
+        };
     }
     const expectedKeys = isLegacyV1
         ? ENHANCER_V1_STATE_KEYS
-        : (isLegacyV2 ? ENHANCER_V2_STATE_KEYS : ENHANCER_STATE_KEYS);
+        : (isLegacyV2
+            ? ENHANCER_V2_STATE_KEYS
+            : (isLegacyV3 ? ENHANCER_V3_STATE_KEYS : ENHANCER_STATE_KEYS));
     if (!hasExactlyKeys(document, expectedKeys)) {
         return {
             _tag: "err",
@@ -363,7 +418,9 @@ export function parseEnhancerState(input: unknown): EnhancerStateParseOutcome {
                 ? "Enhancer v1 state must contain exactly format, version, and its ten sound settings."
                 : (isLegacyV2
                     ? "Enhancer v2 state must contain exactly format, version, ten band settings, and two routing modes."
-                    : "Enhancer state must contain exactly format, version, ten band settings, two routing modes, and de-emphasis."),
+                    : (isLegacyV3
+                        ? "Enhancer v3 state must contain exactly format, version, ten band settings, two routing modes, and de-emphasis."
+                        : "Enhancer state must contain exactly format, version, ten band settings, two routing modes, saturation mode, and de-emphasis.")),
         };
     }
 
@@ -410,6 +467,12 @@ export function parseEnhancerState(input: unknown): EnhancerStateParseOutcome {
     if (typeof b2Mode !== "string") {
         return b2Mode;
     }
+    const saturationMode = isLegacyV1 || isLegacyV2 || isLegacyV3
+        ? "subtle"
+        : parseSaturationMode(document.saturationMode);
+    if (typeof saturationMode !== "string") {
+        return saturationMode;
+    }
 
     if (b1FreqHz._tag === "err" || b1Q._tag === "err"
         || b1MidAmount._tag === "err" || b1SideAmount._tag === "err"
@@ -436,6 +499,7 @@ export function parseEnhancerState(input: unknown): EnhancerStateParseOutcome {
             b2MidAmount: b2MidAmount.value,
             b2SideAmount: b2SideAmount.value,
             b2Curve,
+            saturationMode,
             deEmphasis: deEmphasis.value,
         },
     };
@@ -458,6 +522,7 @@ export function serializeEnhancerState(state: EnhancerState): string {
         b2MidAmount: state.b2MidAmount,
         b2SideAmount: state.b2SideAmount,
         b2Curve: state.b2Curve,
+        saturationMode: state.saturationMode,
         deEmphasis: state.deEmphasis,
     });
 }
@@ -477,6 +542,7 @@ export function toEnhancerDspSettings(state: EnhancerState): EnhancerDspSettings
         b2MidAmountIn: state.b2MidAmount,
         b2SideAmountIn: state.b2SideAmount,
         b2CurveIn: state.b2Curve === "solid" ? 1 : 0,
+        saturationModeIn: state.saturationMode === "medium" ? 1 : 0,
         deEmphasisIn: state.deEmphasis,
     };
 }
