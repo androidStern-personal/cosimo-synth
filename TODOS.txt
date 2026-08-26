@@ -836,7 +836,7 @@ EFFECTS LANE FOLLOW-UP
 
 [ ] T24 — Draw continuous rounded splits and joins in the FX graph
     Active owner (2026-08-25):
-    - Codex task `FX Graph Foundation`, thread `01a03a79-d020-7782-98c8-5111a3c930ff`, worktree `/Users/winterfell/.codex/worktrees/9acf0081-2413-41b0-b3a5-0abc11458d94/cosimo-synth`, model SOL, reasoning max.
+    - Codex task `FX Graph Foundation`, thread `01a03a79-d020-7782-98c8-5111a3c930ff`, branch `codex/fx-graph-foundation`, worktree `/Users/winterfell/.codex/worktrees/9acf0081-2413-41b0-b3a5-0abc11458d94/cosimo-synth`, model SOL, reasoning max.
     Confirmed problem (2026-08-25):
     - In Parallel and Frequency Split groups, the incoming line stops at the split symbol. The branch lines begin lower down as disconnected rails instead of emerging from one point and visibly diverging.
     - This is a drawing bug introduced with the original map, not a rack-state or audio-routing error. The full diagnosis and browser measurements are in `FX_GRAPH_DRAWING_FINDINGS.md`.
@@ -854,7 +854,7 @@ EFFECTS LANE FOLLOW-UP
 
 [ ] T30 — Fit a three-band Frequency Split inside the graph without overlapping effects
     Active owner (2026-08-25):
-    - Codex task `FX Graph Foundation`, thread `01a03a79-d020-7782-98c8-5111a3c930ff`, worktree `/Users/winterfell/.codex/worktrees/9acf0081-2413-41b0-b3a5-0abc11458d94/cosimo-synth`, model SOL, reasoning max.
+    - Codex task `FX Graph Foundation`, thread `01a03a79-d020-7782-98c8-5111a3c930ff`, branch `codex/fx-graph-foundation`, worktree `/Users/winterfell/.codex/worktrees/9acf0081-2413-41b0-b3a5-0abc11458d94/cosimo-synth`, model SOL, reasoning max.
     Required result:
     - A LO/MID/HI split must remain completely inside the graph container. Its branch lines, labels, effect pills, and crossover readout must neither overflow nor be clipped.
     - Effects on neighboring bands must never overlap or hide one another, while the order within each band remains obvious from top to bottom.
@@ -884,7 +884,7 @@ EFFECTS LANE FOLLOW-UP
 
 [ ] T32 — Put a small add button at the tail of every FX path
     Active owner (2026-08-25):
-    - Codex task `FX Graph Foundation`, thread `01a03a79-d020-7782-98c8-5111a3c930ff`, worktree `/Users/winterfell/.codex/worktrees/9acf0081-2413-41b0-b3a5-0abc11458d94/cosimo-synth`, model SOL, reasoning max.
+    - Codex task `FX Graph Foundation`, thread `01a03a79-d020-7782-98c8-5111a3c930ff`, branch `codex/fx-graph-foundation`, worktree `/Users/winterfell/.codex/worktrees/9acf0081-2413-41b0-b3a5-0abc11458d94/cosimo-synth`, model SOL, reasoning max.
     Current gap:
     - The trunk already ends with an add button, and an empty branch has one. A populated branch currently continues directly from its last effect to the merge with no way to append another effect there.
     Required behavior:
@@ -1390,7 +1390,7 @@ Source note (2026-08-25):
 
 [ ] T26 — Build the fixed two-band Enhancer and decide separately whether to build its voice-tracked form
     Active owner (2026-08-26):
-    - Codex task `Implement fixed two-band bus Enhancer`, thread `01a03b9a-b1c0-7431-bc23-3e85da52c3d0`, worktree `/Users/winterfell/.codex/worktrees/479c3700-c222-4730-88a3-1f9ff584b411/cosimo-synth`, branch pending, model SOL, reasoning max.
+    - Codex task `Implement fixed two-band bus Enhancer`, thread `01a03b9a-b1c0-7431-bc23-3e85da52c3d0`, branch `codex/t26-enhancer`, worktree `/Users/winterfell/.codex/worktrees/479c3700-c222-4730-88a3-1f9ff584b411/cosimo-synth`, model SOL, reasoning max.
     Design authority: `ENHANCER_DESIGN.md`.
     Locked bus effect:
     - Build two parametric bell bands, each with frequency, Q, separate mid and side amounts, and Tube/Solid character. Generate only the shaped-minus-unprocessed residue, remove DC, and add that residue back to the original signal.
