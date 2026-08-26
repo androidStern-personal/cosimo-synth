@@ -110,8 +110,8 @@ drag targets, and the same browser surface:
 
 ### MSEG, ADSR, and parameter-display lane
 
-1. Make the full-screen MSEG editor an expanded version of the drawer editor and
-   remove the decorative colored drawer border.
+1. Make the full-screen MSEG editor an expanded version of the drawer editor while
+   leaving the drawer's existing top border and color unchanged.
 2. Establish one shared MSEG control and active-surface geometry implementation.
 3. In parallel, add longest-axis time orientation and replace the edge-bound timing
    slider with a compact knob that does not increase the row height.

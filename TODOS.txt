@@ -1187,6 +1187,24 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     Done when:
     - DSP and browser tests prove exactly the selected branch is heard, switching and clearing work without changing the rack, and the controls remain visible and tappable in representative phone, desktop, and plugin layouts.
 
+[ ] T56 — Make Init recover from the Distortion Type state change and show one error
+    Reported failure (2026-08-26):
+    - On the deployed mobile browser synth, choosing `Init` from the preset bar produced two identical messages: `lane.v2 device distortion#1 must carry every parameter once`.
+    Code-backed leading cause to prove before editing:
+    - Distortion gained the saved `distortionType` value, taking its effects-lane record from six values to seven. A previously saved lane.v2 document can therefore contain the exact old six-value Distortion record, which the current strict parser rejects.
+    - Init builds a current default rack, but the sound transaction first captures the current rack for rollback. That capture rejects the old Distortion record, so Init cannot replace the invalid state with the clean default.
+    - The controller both returns the failed mutation and publishes the same message as `lastError`; the preset bar currently displays both paths, which accounts for the duplicate messages in the screenshot.
+    Required repair:
+    - First add a fast red-capable test that seeds the exact pre-Type six-value Distortion record, drives the real preset-bar `Init` action, and reproduces the failed Init and duplicate message. If that fixture does not reproduce the deployed failure, compare the deployed bundle with its source before choosing another cause.
+    - Add one explicit, narrowly recognized upgrade from that exact old Distortion record to the current record, using the approved Asymmetric default (`distortionType = 1`). Do not weaken strict validation, fill arbitrary missing values, or accept any other malformed rack document.
+    - Make clean Init and `Discard and Init` complete the whole sound reset atomically after this upgrade. Valid current rack documents and unrelated saved sounds must remain byte-for-byte unchanged; genuinely corrupt state must still fail without partially resetting the sound.
+    - Show one error message for one failed action. Remove the duplicate presentation path without hiding later independent errors or suppressing useful diagnostics.
+    Coordinate with T53:
+    - T56 restores the reliability of the existing Init transaction. T53 separately changes the intended oscillator defaults and should build on the repaired path rather than editing the same Init code in parallel.
+    Done when:
+    - The failing-first test passes against the generated browser product and proves the old six-value state upgrades once, Init succeeds, the rack becomes the current clean starter rack, every other sound default is applied, and exactly one success or error message is shown.
+    - Coverage includes clean Init, unsaved-sound confirmation followed by `Discard and Init`, a valid current rack, the one accepted old Distortion record, and representative corrupt records that remain rejected. The current web and iPhone bundles are rebuilt and the focused preset/state suites remain green.
+
 INFRASTRUCTURE AND TOOLING
 
 [x] T17 — Cut the desktop browser suite's wall clock without losing coverage or stringency
