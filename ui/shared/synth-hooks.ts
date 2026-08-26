@@ -3212,11 +3212,47 @@ export function useSynthPatchViewModel({
 
     captureCurrentArticulationSnapshotRef.current = captureCurrentArticulationSnapshot;
 
+    const selectedOscillatorArticulationBindingsHaveCurrentValues = [
+        wavetablePosition,
+        pan,
+        oscillatorOctave,
+        oscillatorSemitone,
+        oscillatorFineCents,
+        oscillatorVolumeDb,
+        oscillatorMute,
+        oscillatorSolo,
+        warpMode,
+        warpAmount,
+        unisonVoices,
+        unisonDetune,
+        unisonBlend,
+        unisonWidth,
+        unisonPhase,
+        unisonRandom,
+        unisonPhaseMode,
+        unisonDetuneMode,
+        unisonStackMode,
+        unisonWavetablePositionSpread,
+        unisonWarpSpread,
+    ].every((binding) => binding.hasCurrentValue === true);
+
     useEffect(() => {
-        if (articulationBankState.state.slots.length === 0) {
+        if (!selectedOscillatorArticulationBindingsHaveCurrentValues) {
+            return;
+        }
+
+        if (
+            articulationBankState.state.slots.length === 0
+            || articulationPatchBaseRef.current[oscillatorID] === undefined
+        ) {
             articulationPatchBaseRef.current[oscillatorID] = captureCurrentArticulationSnapshot();
         }
-    }, [articulationBankState.state.slots.length, captureCurrentArticulationSnapshot, oscillatorID]);
+    }, [
+        articulationBankState.state.slots.length,
+        captureCurrentArticulationSnapshot,
+        oscillatorID,
+        selectedOscillatorArticulationBindingsHaveCurrentValues,
+    ]);
 
     const captureCurrentArticulationLayer = useCallback((): CapturedArticulationLayer => (
         projectArticulationSnapshotToVisibleV4Layer(captureCurrentArticulationSnapshot(), oscillatorID)

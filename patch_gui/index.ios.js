@@ -12927,6 +12927,7 @@ function useResourceClient() {
 function usePatchParameter(endpointID, initialValue = 0, active = true, presentationPriority = "immediate") {
   const patchConnection = usePatchConnection();
   const [value, setValue] = reactExports.useState(initialValue);
+  const [currentValueSource, setCurrentValueSource] = reactExports.useState(null);
   const initialValueRef = reactExports.useRef(initialValue);
   const valueRef = reactExports.useRef(initialValue);
   const gestureActiveRef = reactExports.useRef(false);
@@ -12939,31 +12940,40 @@ function usePatchParameter(endpointID, initialValue = 0, active = true, presenta
     }
     setValue(nextValue);
   }, [presentationPriority]);
+  const markCurrentValue = reactExports.useCallback(() => {
+    setCurrentValueSource((previousSource) => previousSource?.patchConnection === patchConnection && previousSource.endpointID === endpointID ? previousSource : { patchConnection, endpointID });
+  }, [endpointID, patchConnection]);
   reactExports.useEffect(() => {
     valueRef.current = initialValueRef.current;
     setValue(initialValueRef.current);
     if (!active) {
+      markCurrentValue();
       return void 0;
     }
     let listening = true;
     const listener = (nextValue) => {
       if (listening) {
         presentValue(nextValue);
+        markCurrentValue();
       }
     };
     patchConnection.addParameterListener?.(endpointID, listener);
     patchConnection.requestParameterValue?.(endpointID);
+    if (typeof patchConnection.addParameterListener !== "function" || typeof patchConnection.requestParameterValue !== "function") {
+      markCurrentValue();
+    }
     return () => {
       listening = false;
       patchConnection.removeParameterListener?.(endpointID, listener);
     };
-  }, [active, endpointID, patchConnection, presentValue]);
+  }, [active, endpointID, markCurrentValue, patchConnection, presentValue]);
   const setParameterValue = reactExports.useCallback((nextValue) => {
     const changed = !Object.is(nextValue, valueRef.current);
     patchConnection.sendEventOrValue?.(endpointID, nextValue);
     presentValue(nextValue);
+    markCurrentValue();
     reportUserParameterEdit({ endpointID, changed });
-  }, [endpointID, patchConnection, presentValue]);
+  }, [endpointID, markCurrentValue, patchConnection, presentValue]);
   const beginGesture = reactExports.useCallback(() => {
     gestureActiveRef.current = true;
     patchConnection.sendParameterGestureStart?.(endpointID);
@@ -12976,10 +12986,11 @@ function usePatchParameter(endpointID, initialValue = 0, active = true, presenta
   }, [endpointID, patchConnection]);
   return reactExports.useMemo(() => ({
     value,
+    hasCurrentValue: currentValueSource?.patchConnection === patchConnection && currentValueSource.endpointID === endpointID,
     setValue: setParameterValue,
     beginGesture,
     endGesture
-  }), [beginGesture, endGesture, setParameterValue, value]);
+  }), [beginGesture, currentValueSource, endGesture, endpointID, patchConnection, setParameterValue, value]);
 }
 function usePatchEndpoint(endpointID, initialValue, active = true) {
   const patchConnection = usePatchConnection();
@@ -19437,12 +19448,22 @@ function usePatchParameterBinding({
   return reactExports.useMemo(() => ({
     endpointID,
     value,
+    hasCurrentValue: parameter2.hasCurrentValue,
     initialValue,
     setValue,
     commitValue,
     beginGesture: parameter2.beginGesture,
     endGesture: parameter2.endGesture
-  }), [endpointID, initialValue, parameter2.beginGesture, parameter2.endGesture, value, setValue, commitValue]);
+  }), [
+    endpointID,
+    initialValue,
+    parameter2.beginGesture,
+    parameter2.endGesture,
+    parameter2.hasCurrentValue,
+    value,
+    setValue,
+    commitValue
+  ]);
 }
 function usePatchEventTrigger(endpointID) {
   const patchConnection = usePatchConnection();
@@ -27734,11 +27755,42 @@ function useSynthPatchViewModel({
     wavetablePosition.value
   ]);
   captureCurrentArticulationSnapshotRef.current = captureCurrentArticulationSnapshot;
+  const selectedOscillatorArticulationBindingsHaveCurrentValues = [
+    wavetablePosition,
+    pan,
+    oscillatorOctave,
+    oscillatorSemitone,
+    oscillatorFineCents,
+    oscillatorVolumeDb,
+    oscillatorMute,
+    oscillatorSolo,
+    warpMode,
+    warpAmount,
+    unisonVoices,
+    unisonDetune,
+    unisonBlend,
+    unisonWidth,
+    unisonPhase,
+    unisonRandom,
+    unisonPhaseMode,
+    unisonDetuneMode,
+    unisonStackMode,
+    unisonWavetablePositionSpread,
+    unisonWarpSpread
+  ].every((binding) => binding.hasCurrentValue === true);
   reactExports.useEffect(() => {
-    if (articulationBankState.state.slots.length === 0) {
+    if (!selectedOscillatorArticulationBindingsHaveCurrentValues) {
+      return;
+    }
+    if (articulationBankState.state.slots.length === 0 || articulationPatchBaseRef.current[oscillatorID] === void 0) {
       articulationPatchBaseRef.current[oscillatorID] = captureCurrentArticulationSnapshot();
     }
-  }, [articulationBankState.state.slots.length, captureCurrentArticulationSnapshot, oscillatorID]);
+  }, [
+    articulationBankState.state.slots.length,
+    captureCurrentArticulationSnapshot,
+    oscillatorID,
+    selectedOscillatorArticulationBindingsHaveCurrentValues
+  ]);
   const captureCurrentArticulationLayer = reactExports.useCallback(() => projectArticulationSnapshotToVisibleV4Layer(captureCurrentArticulationSnapshot(), oscillatorID), [captureCurrentArticulationSnapshot, oscillatorID]);
   const applyArticulationSnapshot = reactExports.useCallback((snapshotValue) => {
     const snapshot = normalizeArticulationSnapshot(snapshotValue);

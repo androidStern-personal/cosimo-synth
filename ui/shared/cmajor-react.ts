@@ -61,6 +61,7 @@ export type PatchConnectionLike = {
 
 type ParameterBinding = {
     value: unknown;
+    hasCurrentValue: boolean;
     setValue: (nextValue: unknown) => void;
     beginGesture: () => void;
     endGesture: () => void;
@@ -123,6 +124,10 @@ export function usePatchParameter(
 ): ParameterBinding {
     const patchConnection = usePatchConnection();
     const [value, setValue] = useState<unknown>(initialValue);
+    const [currentValueSource, setCurrentValueSource] = useState<{
+        readonly patchConnection: PatchConnectionLike;
+        readonly endpointID: string;
+    } | null>(null);
     const initialValueRef = useRef(initialValue);
     const valueRef = useRef<unknown>(initialValue);
     const gestureActiveRef = useRef(false);
@@ -136,11 +141,20 @@ export function usePatchParameter(
 
         setValue(nextValue);
     }, [presentationPriority]);
+    const markCurrentValue = useCallback(() => {
+        setCurrentValueSource((previousSource) => (
+            previousSource?.patchConnection === patchConnection
+                && previousSource.endpointID === endpointID
+                ? previousSource
+                : { patchConnection, endpointID }
+        ));
+    }, [endpointID, patchConnection]);
 
     useEffect(() => {
         valueRef.current = initialValueRef.current;
         setValue(initialValueRef.current);
         if (!active) {
+            markCurrentValue();
             return undefined;
         }
 
@@ -148,17 +162,24 @@ export function usePatchParameter(
         const listener = (nextValue: unknown) => {
             if (listening) {
                 presentValue(nextValue);
+                markCurrentValue();
             }
         };
 
         patchConnection.addParameterListener?.(endpointID, listener);
         patchConnection.requestParameterValue?.(endpointID);
+        if (
+            typeof patchConnection.addParameterListener !== "function"
+            || typeof patchConnection.requestParameterValue !== "function"
+        ) {
+            markCurrentValue();
+        }
 
         return () => {
             listening = false;
             patchConnection.removeParameterListener?.(endpointID, listener);
         };
-    }, [active, endpointID, patchConnection, presentValue]);
+    }, [active, endpointID, markCurrentValue, patchConnection, presentValue]);
 
     const setParameterValue = useCallback((nextValue: unknown) => {
         // Every write through this hook is a direct user edit — programmatic
@@ -167,8 +188,9 @@ export function usePatchParameter(
         const changed = !Object.is(nextValue, valueRef.current);
         patchConnection.sendEventOrValue?.(endpointID, nextValue);
         presentValue(nextValue);
+        markCurrentValue();
         reportUserParameterEdit({ endpointID, changed });
-    }, [endpointID, patchConnection, presentValue]);
+    }, [endpointID, markCurrentValue, patchConnection, presentValue]);
 
     const beginGesture = useCallback(() => {
         gestureActiveRef.current = true;
@@ -184,10 +206,12 @@ export function usePatchParameter(
 
     return useMemo(() => ({
         value,
+        hasCurrentValue: currentValueSource?.patchConnection === patchConnection
+            && currentValueSource.endpointID === endpointID,
         setValue: setParameterValue,
         beginGesture,
         endGesture,
-    }), [beginGesture, endGesture, setParameterValue, value]);
+    }), [beginGesture, currentValueSource, endGesture, endpointID, patchConnection, setParameterValue, value]);
 }
 
 export function usePatchEndpoint<TValue = unknown>(

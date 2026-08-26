@@ -2133,6 +2133,94 @@ test("articulation capture and recall edit only the selected oscillator", async 
     }
 });
 
+test("an articulation captured on B preserves the inherited base when C is first visited", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.getByRole("tab", { name: "Oscillator B" }).click();
+        await page.waitForSelector(
+            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
+        );
+        await page.waitForSelector('[data-role="oscillator-mute"][aria-pressed="true"]');
+        await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
+        const firstCapture = await waitForHarnessSnapshot(
+            page,
+            "first articulation captured from B",
+            (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 1,
+        );
+        const firstBank = JSON.parse(String(firstCapture.storedState[ARTICULATION_STATE_KEY]));
+        assert.equal(
+            Object.hasOwn(firstBank.slots[0].overrides, "oscB.mute"),
+            false,
+            "untouched B must inherit its canonical muted base",
+        );
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("oscCVolumeDb", -9);
+        });
+        await page.getByRole("tab", { name: "Oscillator C" }).click();
+        await page.waitForSelector(
+            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="C"]',
+        );
+        await page.waitForSelector('[data-role="oscillator-mute"][aria-pressed="true"]');
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="oscillator-level"]')?.getAttribute("aria-valuenow") === "-9"
+        ));
+        assert.equal(
+            Number((await getHarnessSnapshot(page)).parameterValues.oscCMute),
+            1,
+            "previously unvisited C must present its canonical muted patch value before editing",
+        );
+
+        await page.getByRole("button", { name: "Mute selected oscillator" }).click();
+        await waitForHarnessSnapshot(
+            page,
+            "C oscillator enabled before its first articulation capture",
+            (snapshot) => Number(snapshot.parameterValues.oscCMute) === 0,
+        );
+        await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
+        const secondCapture = await waitForHarnessSnapshot(
+            page,
+            "second articulation captured from newly visited C",
+            (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 2,
+        );
+        const secondBank = JSON.parse(String(secondCapture.storedState[ARTICULATION_STATE_KEY]));
+        assert.equal(
+            secondBank.slots[1].overrides["oscC.mute"],
+            0,
+            "enabling newly visited C must remain an explicit-zero override over its muted base",
+        );
+        assert.equal(
+            Object.hasOwn(secondBank.slots[1].overrides, "oscC.volumeDb"),
+            false,
+            "C's settled live level must be frozen as its base rather than inherited from B's stale binding",
+        );
+        assert.equal(
+            Object.keys(secondBank.slots[1].overrides).some((key) => key.startsWith("oscB.")),
+            false,
+        );
+
+        await page.locator('[data-role="articulation-card"]').first().click();
+        await page.waitForSelector('[data-role="oscillator-mute"][aria-pressed="true"]');
+        await clearHarnessDebugLog(page);
+        await page.locator('[data-role="articulation-card"]').nth(1).click();
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().sentMessages.some(({ endpointID, value }) => (
+                endpointID === "oscCMute" && Number(value) === 0
+            ))
+        ));
+        assert.equal(
+            (await getHarnessSnapshot(page)).sentMessages.some(({ endpointID, value }) => (
+                endpointID === "oscCMute" && Number(value) === 0
+            )),
+            true,
+            "recalling C's explicit-zero articulation must enable C",
+        );
+    } finally {
+        await page.close();
+    }
+});
+
 test("global modulation-source drag maps the selected oscillator level control", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
