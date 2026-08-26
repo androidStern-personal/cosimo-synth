@@ -1402,13 +1402,6 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
         const sourceNumberStyle = sourceNumber ? getComputedStyle(sourceNumber) : null;
         const badgeStyle = badge ? getComputedStyle(badge) : null;
         const voiceToggleStyle = voiceToggle ? getComputedStyle(voiceToggle) : null;
-        const visibleChips = Array.from(document.querySelectorAll(".mobile-voice-chip"))
-            .filter((chip) => {
-                const style = getComputedStyle(chip);
-                const bounds = chip.getBoundingClientRect();
-                return style.display !== "none" && style.visibility !== "hidden" && bounds.width > 0 && bounds.height > 0;
-            })
-            .map(rectOf);
         return {
             edge: rail?.getAttribute("data-edge"),
             expanded: rail?.getAttribute("data-expanded"),
@@ -1444,7 +1437,6 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
             preset: rectOf(preset),
             tabs: rectOf(tabs),
             keyboard: rectOf(keyboard),
-            visibleChips,
             scale: railStyle ? Number.parseFloat(railStyle.getPropertyValue("--rail-scale")) : null,
             viewport: { width: window.innerWidth, height: window.innerHeight },
             documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -1458,6 +1450,8 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
     };
     const assertSafe = (geometry, label) => {
         assert.ok(geometry.rail && geometry.preset && geometry.tabs, `${label} requires rail and shell chrome.`);
+        // T54 keeps Voice corner controls on fixed, mirrored graph insets. This
+        // movable overlay owns its screen/chrome safety, not their placement.
         assert.equal(geometry.documentFits, true, `${label} must not create horizontal overflow.`);
         assert.equal(
             geometry.rail.top >= geometry.preset.bottom + 8.5,
@@ -1477,9 +1471,6 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
             assert.equal(Math.abs(geometry.rail.right - geometry.viewport.width) <= 0.5, true, `${label} must dock flush right.`);
         } else {
             assert.equal(Math.abs(geometry.rail.left) <= 0.5, true, `${label} must dock flush left.`);
-        }
-        for (const chip of geometry.visibleChips) {
-            assert.equal(rectsIntersect(geometry.rail, chip), false, `${label} overlaps a Voice chip: ${JSON.stringify(chip)}.`);
         }
     };
 

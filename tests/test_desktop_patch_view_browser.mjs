@@ -861,6 +861,142 @@ test("desktop voice visuals stack full-width above the compact panel grid", asyn
     }
 });
 
+test("T54 keeps the wavetable corner controls on symmetric insets at phone, plugin, and desktop sizes", async () => {
+    const readCornerGeometry = async (page, containerSelector, roles) => (
+        await page.locator(containerSelector).evaluate((container, requestedRoles) => {
+            const serialize = (element) => {
+                const bounds = element.getBoundingClientRect();
+                return {
+                    left: bounds.left,
+                    right: bounds.right,
+                    top: bounds.top,
+                    bottom: bounds.bottom,
+                    width: bounds.width,
+                    height: bounds.height,
+                };
+            };
+            const controls = Object.fromEntries(Object.entries(requestedRoles).map(([corner, role]) => {
+                const element = container.querySelector(`[data-role="${role}"]`);
+                if (!(element instanceof Element)) {
+                    throw new Error(`Missing wavetable control: ${role}`);
+                }
+                return [corner, serialize(element)];
+            }));
+            return { container: serialize(container), ...controls };
+        }, roles)
+    );
+    const assertSymmetricPair = (container, leftControl, rightControl, label) => {
+        const leftInset = leftControl.left - container.left;
+        const rightInset = container.right - rightControl.right;
+        assert.equal(
+            Math.abs(leftInset - rightInset) <= 0.5,
+            true,
+            `${label} must mirror its left/right insets: ${JSON.stringify({ leftInset, rightInset, container, leftControl, rightControl })}`,
+        );
+        assert.equal(rectContains(container, leftControl), true, `${label} left control must stay inside its wavetable container.`);
+        assert.equal(rectContains(container, rightControl), true, `${label} right control must stay inside its wavetable container.`);
+        assert.equal(rectsIntersect(leftControl, rightControl), false, `${label} controls must not overlap.`);
+    };
+
+    for (const viewport of [
+        { label: "narrow phone with right rail", width: 320, height: 568, railEdge: null },
+        { label: "phone with right rail", width: 393, height: 852, railEdge: null },
+        { label: "phone with left rail", width: 393, height: 852, railEdge: "left" },
+    ]) {
+        const page = await openHarnessPage({
+            beforeGoto: async (nextPage) => {
+                await nextPage.setViewportSize(viewport);
+                await nextPage.addInitScript(({ railEdge }) => {
+                    if (railEdge === null) {
+                        localStorage.removeItem("cosimo.mobile-global-mod-rail.position.v1");
+                        return;
+                    }
+                    localStorage.setItem(
+                        "cosimo.mobile-global-mod-rail.position.v1",
+                        JSON.stringify({ version: 2, edge: railEdge, normalizedY: 0.42 }),
+                    );
+                }, { railEdge: viewport.railEdge });
+            },
+        });
+        try {
+            const geometry = await readCornerGeometry(page, '[data-role="mobile-voice-graph"]', {
+                topLeft: "mobile-voice-wavetable-overlay",
+                topRight: "mobile-voice-warp-mode",
+                bottomLeft: "mobile-voice-chip-unisonVoices",
+                bottomRight: "mobile-voice-chip-semitone",
+            });
+
+            assertSymmetricPair(
+                geometry.container,
+                geometry.topLeft,
+                geometry.topRight,
+                `${viewport.label} top wavetable controls`,
+            );
+            assertSymmetricPair(
+                geometry.container,
+                geometry.bottomLeft,
+                geometry.bottomRight,
+                `${viewport.label} bottom wavetable controls`,
+            );
+        } finally {
+            await page.close();
+        }
+    }
+
+    const compiledPhonePage = await openBuiltDesktopBundlePage({
+        beforeGoto: async (page) => {
+            await page.setViewportSize({ width: 393, height: 852 });
+            await page.addInitScript(() => {
+                localStorage.removeItem("cosimo.mobile-global-mod-rail.position.v1");
+            });
+        },
+    });
+    try {
+        const geometry = await readCornerGeometry(compiledPhonePage, '[data-role="mobile-voice-graph"]', {
+            topLeft: "mobile-voice-wavetable-overlay",
+            topRight: "mobile-voice-warp-mode",
+            bottomLeft: "mobile-voice-chip-unisonVoices",
+            bottomRight: "mobile-voice-chip-semitone",
+        });
+        assertSymmetricPair(geometry.container, geometry.topLeft, geometry.topRight, "compiled phone top wavetable controls");
+        assertSymmetricPair(geometry.container, geometry.bottomLeft, geometry.bottomRight, "compiled phone bottom wavetable controls");
+    } finally {
+        await compiledPhonePage.close();
+    }
+
+    for (const viewport of [
+        { label: "plugin", width: 1120, height: 680 },
+        { label: "desktop", width: 1440, height: 900 },
+    ]) {
+        const page = await openHarnessPage({
+            beforeGoto: (nextPage) => nextPage.setViewportSize(viewport),
+        });
+        try {
+            const geometry = await readCornerGeometry(page, '[data-role="wavetable-card"]', {
+                topLeft: "wavetable-select-chip",
+                topRight: "wavetable-frame-chip",
+                bottomLeft: "warp-control-cluster",
+                bottomRight: "wavetable-pan-field",
+            });
+
+            assertSymmetricPair(
+                geometry.container,
+                geometry.topLeft,
+                geometry.topRight,
+                `${viewport.label} top wavetable controls`,
+            );
+            assertSymmetricPair(
+                geometry.container,
+                geometry.bottomLeft,
+                geometry.bottomRight,
+                `${viewport.label} bottom wavetable controls`,
+            );
+        } finally {
+            await page.close();
+        }
+    }
+});
+
 test("desktop custom-element wrapper honors an explicitly injected resource client", async () => {
     const page = await openDesktopEntryPageWithInjectedResourceClient();
 

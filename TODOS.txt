@@ -1210,9 +1210,9 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - A fresh HMR standalone is running from this worktree against `http://127.0.0.1:5195` (`usesViteClient: true`; canonical 5174 was owned by another live worktree). The compiled, strict-code-sign-verified VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`.
     - Adversarial follow-up on the rebased branch single-sourced the production TypeScript base-level range, added Cmajor min/max parity coverage, and removed the unimported generated oscillator-binding module without changing Init or saved version-3 behavior.
 
-[ ] T54 — Put the right-side wavetable chips back against the right edge
-    Active owner (2026-08-26):
-    - Codex task `Restore Wavetable Right-Edge Controls`, thread `01a03db9-3d6d-7f33-a793-65284f8ec48a`, worktree `/Users/winterfell/.codex/worktrees/57a0/cosimo-synth`, model SOL, reasoning max.
+[x] T54 — Put the right-side wavetable chips back against the right edge
+    Completed owner (2026-08-26):
+    - Codex task `Restore Wavetable Right-Edge Controls`, thread `01a03db9-3d6d-7f33-a793-65284f8ec48a`, branch `codex/t54-wavetable-right-edge-controls`, worktree `/Users/winterfell/.codex/worktrees/57a0/cosimo-synth`, model SOL, reasoning max.
     Reported regression:
     - The top-right `Warp` chip and the existing lower-right chip were pushed too far inward during refactoring. Their right inset no longer mirrors the left-side chips' left inset.
     Required result:
@@ -1220,6 +1220,11 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Preserve the existing wavetable graphic, chip sizes, controls, hit areas, and interaction behavior; this is a placement repair.
     Done when:
     - Geometry checks and real-interface screenshots at representative phone, desktop, and plugin sizes prove the left and right insets match and no chip clips, overlaps, or covers important wavetable content.
+    Completion evidence (2026-08-26):
+    - The regression was the Mod rail's 44 px dock width being added to the active-edge chips' existing 8 px inset. Wavetable corners now keep the fixed 8 px token on either rail edge; no component, graph, control, hit area, binding, gesture, modulation, or rail behavior changed.
+    - Source and compiled-bundle geometry checks cover 320 x 568 and 393 x 852 phones, both rail edges, 1120 x 680 plugin, and 1440 x 900 desktop. Reviewed captures and measured rectangles are in `docs/evidence/t54-wavetable-right-edge-controls/`.
+    - The full desktop UI run passed 225/226, including T54, Warp, touch, Mod-drop, T42 rail, and compiled-bundle coverage. Its sole failure is the pre-existing React Grab Playwright expectation, which contradicts the intentional `navigator.webdriver` hermetic guard documented in `PROGRESS.txt`.
+    - `npm run synth:desktop:build` completed; the compiled, strictly codesign-valid VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`. A fresh HMR wrapper/app is running from this worktree against `http://127.0.0.1:5192`; physical iPhone finger-comfort review remains manual acceptance.
 
 [ ] T55 — Add exclusive branch Solo to Frequency Split and Parallel groups
     Required behavior:
