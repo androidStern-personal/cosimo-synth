@@ -673,9 +673,6 @@ function SubwayFork({
                 focusedBranchIndex={focusedBranchIndex}
                 compactAllocation={compactAllocation}
             />
-            <span className="subway-fork-glyph" aria-hidden="true">
-                <span className={row.groupKind === "split" ? "subway-glyph-diamond" : "subway-glyph-dot"} />
-            </span>
             <div className="subway-fork-lanes">
                 {row.lanes.map((lane, branchIndex) => (
                     <button
@@ -707,6 +704,9 @@ function SubwayFork({
                 onContextMenu={gestures.handleContextMenu}
             >
                 <span data-role={`rack-fork-readout-${row.groupId}`}>{readout}</span>
+                <span className="subway-fork-glyph" aria-hidden="true">
+                    <span className={row.groupKind === "split" ? "subway-glyph-diamond" : "subway-glyph-dot"} />
+                </span>
             </button>
         </div>
     );

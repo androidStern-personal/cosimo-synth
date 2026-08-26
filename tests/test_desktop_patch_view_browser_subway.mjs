@@ -773,6 +773,157 @@ test("split and Parallel routes preserve owning colors symbols selection and byp
     }
 });
 
+test("every visible fork-symbol pixel owns the exact group tap and long-press control", async () => {
+    const fixtures = [
+        { groupKind: "parallel", branchCount: 4 },
+        { groupKind: "split", branchCount: 3 },
+    ];
+
+    for (const fixture of fixtures) {
+        const page = await openHarnessPage({
+            laneDoc: populatedConnectorLaneDocJson(fixture.groupKind, fixture.branchCount),
+            beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 700 }),
+        });
+        const groupId = `${fixture.groupKind}#1`;
+        const groupRole = `rack-group-${groupId}`;
+        const forkRole = `rack-fork-${groupId}`;
+        try {
+            await page.click('[data-role="mobile-workspace-tab-fx"]');
+            const group = page.locator(`[data-role="${groupRole}"]`);
+            await group.waitFor();
+
+            const symbolPoints = await group.locator(".subway-fork-glyph").evaluate((symbol) => {
+                const rect = symbol.getBoundingClientRect();
+                return [
+                    { name: "top", x: rect.left + (rect.width / 2), y: rect.top + 2 },
+                    { name: "center", x: rect.left + (rect.width / 2), y: rect.top + (rect.height / 2) },
+                    { name: "bottom", x: rect.left + (rect.width / 2), y: rect.bottom - 2 },
+                ];
+            });
+            const owners = await page.evaluate((points) => points.map(({ name, x, y }) => ({
+                name,
+                role: document.elementFromPoint(x, y)?.closest("button")?.getAttribute("data-role") ?? null,
+            })), symbolPoints);
+            assert.deepEqual(
+                owners,
+                symbolPoints.map(({ name }) => ({ name, role: forkRole })),
+                `${fixture.groupKind}: top, center, and bottom must resolve to one group button`,
+            );
+
+            for (const pointName of ["top", "center", "bottom"]) {
+                const resetToFirstBranch = async () => {
+                    await page.click('[data-device-id="distortion#1"] > .subway-station');
+                    await page.waitForFunction((role) => {
+                        const element = document.querySelector(`[data-role="${role}"]`);
+                        return element instanceof HTMLElement
+                            && !element.classList.contains("is-selected")
+                            && element.getAttribute("data-focused-branch-index") === "0";
+                    }, groupRole);
+                };
+                const readPoint = async () => group.locator(".subway-fork-glyph").evaluate((symbol, name) => {
+                    const rect = symbol.getBoundingClientRect();
+                    const y = name === "top"
+                        ? rect.top + 2
+                        : name === "bottom"
+                            ? rect.bottom - 2
+                            : rect.top + (rect.height / 2);
+                    return { x: rect.left + (rect.width / 2), y };
+                }, pointName);
+
+                await resetToFirstBranch();
+                let point = await readPoint();
+                await page.mouse.click(point.x, point.y);
+                await page.waitForSelector(`[data-role="${groupRole}"].is-selected`);
+                assert.equal(await group.getAttribute("data-focused-branch-index"), "0");
+                assert.equal(await page.locator(`[data-role="rack-group-editor-${groupId}"]`).count(), 1);
+
+                await resetToFirstBranch();
+                point = await readPoint();
+                await page.mouse.move(point.x, point.y);
+                await page.mouse.down();
+                await page.waitForTimeout(625);
+                await page.mouse.up();
+                await page.waitForSelector('[data-role="rack-group-menu"]');
+                assert.equal(await page.locator(`[data-role="rack-group-enabled-${groupId}"]`).count(), 1);
+                assert.equal(await group.getAttribute("data-focused-branch-index"), "0");
+                await page.keyboard.press("Escape");
+                await page.waitForSelector('[data-role="rack-group-menu"]', { state: "detached" });
+            }
+        } finally {
+            await page.close();
+        }
+    }
+});
+
+test("omitted inline lane projection cannot separate CSS rails from SVG endpoints", async () => {
+    const page = await openHarnessPage({
+        laneDoc: populatedConnectorLaneDocJson("split", 3),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 1024, height: 768 }),
+    });
+    try {
+        const group = page.locator('[data-role="rack-group-split#1"]');
+        await group.waitFor();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-group-split#1"]')
+                ?.getAttribute("data-compact-layout") === "false"
+        ));
+        const geometry = await group.evaluate((element) => {
+            element.style.removeProperty("--subway-lane-gutter");
+            element.style.removeProperty("--subway-lane-span");
+            const fork = element.querySelector('[data-role="rack-fork-connections-split#1"]');
+            const merge = element.querySelector('[data-role="rack-merge-connections-split#1"]');
+            const rows = Array.from(element.querySelectorAll(".subway-lane-row"));
+            if (!(fork instanceof SVGSVGElement)
+                    || !(merge instanceof SVGSVGElement)
+                    || rows.length === 0) {
+                return null;
+            }
+            const pathPointX = (svg, path, fraction) => {
+                const point = path.getPointAtLength(path.getTotalLength() * fraction);
+                const svgPoint = svg.createSVGPoint();
+                svgPoint.x = point.x;
+                svgPoint.y = point.y;
+                const matrix = path.getScreenCTM();
+                return matrix === null ? Number.NaN : svgPoint.matrixTransform(matrix).x;
+            };
+            const centers = (nodes) => Array.from(nodes, (node) => {
+                const rect = node.getBoundingClientRect();
+                return rect.left + (rect.width / 2);
+            });
+            return {
+                forkEndpoints: Array.from(
+                    fork.querySelectorAll('[data-connector-segment="branch"]'),
+                    (path) => pathPointX(fork, path, 1),
+                ),
+                mergeEndpoints: Array.from(
+                    merge.querySelectorAll('[data-connector-segment="branch"]'),
+                    (path) => pathPointX(merge, path, 0),
+                ),
+                forkControls: centers(element.querySelectorAll(".subway-fork-lane")),
+                firstBodyRails: centers(rows[0].children),
+                lastBodyRails: centers(rows.at(-1).children),
+                mergeRails: centers(element.querySelectorAll(".subway-merge-lane")),
+            };
+        });
+        assert.ok(geometry);
+        for (const [name, rails] of Object.entries({
+            forkControls: geometry.forkControls,
+            firstBodyRails: geometry.firstBodyRails,
+            lastBodyRails: geometry.lastBodyRails,
+            mergeRails: geometry.mergeRails,
+        })) {
+            const endpoints = name === "mergeRails" ? geometry.mergeEndpoints : geometry.forkEndpoints;
+            assert.deepEqual(
+                endpoints.map((x, index) => Math.abs(x - rails[index]) <= 0.5),
+                [true, true, true],
+                `${name} must retain the shared full-width projection without inline variables`,
+            );
+        }
+    } finally {
+        await page.close();
+    }
+});
+
 test("every four-way mobile Parallel summary and branch tail is one exact 44px control", async () => {
     const page = await openHarnessPage({
         laneDoc: populatedFourWayParallelLaneDocJson(),

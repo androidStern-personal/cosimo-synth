@@ -448,23 +448,25 @@
 }
 
 .subway-fork {
+    --subway-fork-symbol-size: 20px;
+
     position: relative;
     display: grid;
-    min-height: 88px;
+    min-height: calc(var(--cosimo-hit-min) + var(--cosimo-hit-min) + var(--subway-fork-symbol-size));
     place-items: center;
 }
 
 .subway-fork-glyph {
     position: absolute;
     z-index: 2;
-    top: 50%;
+    bottom: 0;
     left: 50%;
     display: grid;
-    width: 20px;
-    height: 20px;
+    width: var(--subway-fork-symbol-size);
+    height: var(--subway-fork-symbol-size);
     place-items: center;
     pointer-events: none;
-    transform: translate(-50%, -50%);
+    transform: translateX(-50%);
 }
 
 .subway-glyph-dot,
@@ -487,9 +489,9 @@
 
 .subway-fork-lanes {
     position: absolute;
-    right: var(--subway-lane-gutter, 14%);
-    bottom: -1px;
-    left: var(--subway-lane-gutter, 14%);
+    right: var(--subway-lane-gutter, 0%);
+    bottom: 0;
+    left: var(--subway-lane-gutter, 0%);
     z-index: 3;
     display: grid;
     grid-template-columns: repeat(var(--subway-lane-count, 2), minmax(0, 1fr));
@@ -540,6 +542,7 @@
     display: grid;
     min-width: 76px;
     min-height: var(--cosimo-hit-min);
+    height: calc(var(--cosimo-hit-min) + var(--subway-fork-symbol-size));
     grid-template-columns: 1fr;
     place-items: center;
     padding: 0 7px;
@@ -552,14 +555,9 @@
     transform: translateX(-50%);
 }
 
-.subway-fork-readout > .subway-glyph-dot,
-.subway-fork-readout > .subway-glyph-diamond {
-    display: none;
-}
-
 .subway-lane-row {
     display: grid;
-    width: var(--subway-lane-span, 72%);
+    width: var(--subway-lane-span, 100%);
     grid-template-columns: repeat(var(--subway-lane-count, 2), minmax(0, 1fr));
     min-height: var(--cosimo-hit-min);
     margin-inline: auto;
@@ -703,7 +701,7 @@
     width: 100%;
     grid-template-columns: repeat(var(--subway-lane-count, 2), minmax(0, 1fr));
     min-height: 26px;
-    padding-inline: var(--subway-lane-gutter, 14%);
+    padding-inline: var(--subway-lane-gutter, 0%);
 }
 
 .subway-merge-lane {

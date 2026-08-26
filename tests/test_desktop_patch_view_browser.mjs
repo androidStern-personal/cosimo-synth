@@ -2046,6 +2046,7 @@ test("articulation capture and recall edit only the selected oscillator", async 
         await page.waitForSelector(
             '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
         );
+        await page.waitForSelector('[data-role="oscillator-mute"][aria-pressed="true"]');
         await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
         await waitForHarnessSnapshot(
             page,
@@ -2065,7 +2066,17 @@ test("articulation capture and recall edit only the selected oscillator", async 
             }
         }
         await page.getByRole("button", { name: "Mute selected oscillator" }).click();
+        await waitForHarnessSnapshot(
+            page,
+            "B oscillator enabled before articulation capture",
+            (snapshot) => Number(snapshot.parameterValues.oscBMute) === 0,
+        );
         await page.getByRole("button", { name: "Solo selected oscillator" }).click();
+        await waitForHarnessSnapshot(
+            page,
+            "B oscillator soloed before articulation capture",
+            (snapshot) => Number(snapshot.parameterValues.oscBSolo) === 1,
+        );
         await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
 
         const captured = await waitForHarnessSnapshot(
@@ -2080,16 +2091,19 @@ test("articulation capture and recall edit only the selected oscillator", async 
             semitone: overrides["oscB.semitone"],
             fineCents: overrides["oscB.fineCents"],
             volumeDb: overrides["oscB.volumeDb"],
-            mute: overrides["oscB.mute"],
             solo: overrides["oscB.solo"],
         }, {
             octave: 1,
             semitone: -3,
             fineCents: 0.1,
             volumeDb: 6,
-            mute: 1,
             solo: 1,
         });
+        assert.equal(
+            Object.hasOwn(overrides, "oscB.mute"),
+            false,
+            "enabling B inherits the patch base's zero instead of storing a redundant override",
+        );
         assert.equal(Object.keys(overrides).some((key) => key.startsWith("oscA.")), false);
         assert.equal(Object.keys(overrides).some((key) => key.startsWith("oscC.")), false);
 
@@ -2106,6 +2120,11 @@ test("articulation capture and recall edit only the selected oscillator", async 
         ));
         assert.equal(oscillatorWrites.length > 0, true);
         assert.equal(oscillatorWrites.every(({ endpointID }) => endpointID.startsWith("oscB")), true);
+        assert.equal(
+            oscillatorWrites.some(({ endpointID, value }) => endpointID === "oscBMute" && Number(value) === 0),
+            true,
+            "recalling the enabled articulation must still restore B's inherited unmuted state",
+        );
     } finally {
         await page.close();
     }

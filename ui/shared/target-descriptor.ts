@@ -428,7 +428,7 @@ const OSCILLATOR_MODULATION_DESCRIPTORS: ReadonlyArray<TargetDescriptor> = Objec
     )),
 );
 
-const GLOBAL_TUNE_TARGET_DESCRIPTOR: TargetDescriptor = Object.freeze({
+const GLOBAL_TUNE_TARGET_DESCRIPTOR = Object.freeze<TargetDescriptor>({
     targetId: catalogTargetId("voice", "globalTune"),
     moduleId: "voice",
     workspace: "voice",
