@@ -37,7 +37,7 @@ import {
 const BOUNCE_STATE_KEY = "bounce.v1";
 
 const BROWSER_PATCH_STATE_FORMAT = "cosimo.browserPatchState";
-const BROWSER_PATCH_STATE_VERSION = 2;
+const BROWSER_PATCH_STATE_VERSION = 3;
 const SPEEDRUN_BOUNCE_REFUSAL = "Speedrun videos for bounced sounds come later";
 
 export type EndpointAnnotation = {
@@ -557,4 +557,3 @@ export async function captureCurrentPatch(
         return { ok: false, error: errorFromUnknown(cause) };
     }
 }
-

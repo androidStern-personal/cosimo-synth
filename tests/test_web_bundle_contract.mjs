@@ -328,7 +328,7 @@ test("browser patch persistence restores once and coalesces echoed storage write
         getItem() {
             return JSON.stringify({
                 format: "cosimo.browserPatchState",
-                version: 2,
+                version: 3,
                 sound: {
                     parameters: {},
                     storedState: { "lane.v1": "restored" },
@@ -355,7 +355,7 @@ test("browser patch persistence restores once and coalesces echoed storage write
         "test.patch-state",
         JSON.stringify({
             format: "cosimo.browserPatchState",
-            version: 2,
+            version: 3,
             sound: {
                 parameters: {},
                 storedState: { "lane.v1": "updated" },
@@ -386,7 +386,7 @@ test("browser patch persistence restores distinct A/B/C parameters before struct
         getItem() {
             return JSON.stringify({
                 format: "cosimo.browserPatchState",
-                version: 2,
+                version: 3,
                 sound: {
                     parameters: { oscAPan: -0.25, oscBPan: 0.5, oscCPan: 0.75 },
                     storedState: { "lane.v1": "restored-rack" },
@@ -411,7 +411,7 @@ test("browser patch persistence restores distinct A/B/C parameters before struct
     connection.sendEventOrValue("oscBPan", -0.6);
     assert.deepEqual(JSON.parse(storageWrites.at(-1)[1]), {
         format: "cosimo.browserPatchState",
-        version: 2,
+        version: 3,
         sound: {
             parameters: { oscAPan: -0.25, oscBPan: -0.6, oscCPan: 0.75 },
             storedState: { "lane.v1": "restored-rack" },
@@ -440,7 +440,7 @@ test("deferred sampled mode ignores safety echoes until an explicit user write",
     };
     const initial = {
         format: "cosimo.browserPatchState",
-        version: 2,
+        version: 3,
         sound: {
             parameters: { sourceMode: 1 },
             storedState: { "bounce.v1": "reference" },

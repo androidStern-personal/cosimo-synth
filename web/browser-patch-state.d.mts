@@ -1,6 +1,6 @@
 export type BrowserPatchState = {
     readonly format: "cosimo.browserPatchState";
-    readonly version: 2;
+    readonly version: 3;
     readonly sound: {
         readonly parameters: Readonly<Record<string, number>>;
         readonly storedState: Readonly<Record<string, unknown>>;

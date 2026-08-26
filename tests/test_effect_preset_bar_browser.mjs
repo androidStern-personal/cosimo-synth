@@ -126,7 +126,7 @@ test("preset bar action buttons are compact icon buttons with accessible labels"
     }
 });
 
-test("preset bar does not show passive success toasts when applying presets", async () => {
+test("preset bar shows no passive success and one controller error toast per failed action", async () => {
     const page = await openModulePage();
 
     try {
@@ -153,7 +153,7 @@ test("preset bar does not show passive success toasts when applying presets", as
                 canDelete: false,
                 canExport: true,
             };
-            const state = {
+            let state = {
                 effectID: "test",
                 ready: true,
                 filter: { query: "", source: "all" },
@@ -170,6 +170,7 @@ test("preset bar does not show passive success toasts when applying presets", as
                 currentContract: null,
                 lastError: null,
             };
+            let stateListener = () => {};
             let nextApplyResult = {
                 ok: true,
                 value: {},
@@ -178,13 +179,23 @@ test("preset bar does not show passive success toasts when applying presets", as
             const appliedPresetKeys = [];
             const controller = {
                 getState: () => state,
-                subscribe: () => () => {},
+                subscribe(listener) {
+                    stateListener = listener;
+                    return () => { stateListener = () => {}; };
+                },
                 getMutations: () => ({
                     applyPreset(presetKey) {
                         appliedPresetKeys.push(presetKey);
+                        if (!nextApplyResult.ok && "error" in nextApplyResult) {
+                            state = { ...state, lastError: nextApplyResult.message };
+                            stateListener(state);
+                        }
                         return nextApplyResult;
                     },
-                    clearLastError() {},
+                    clearLastError() {
+                        state = { ...state, lastError: null };
+                        stateListener(state);
+                    },
                     setFilter() {},
                 }),
             };
@@ -224,20 +235,23 @@ test("preset bar does not show passive success toasts when applying presets", as
                 message: "Apply failed.",
             };
             openAndApply();
+            openAndApply();
 
             return {
                 appliedPresetKeys,
                 successToastCount,
-                errorToastText: shadow.querySelector(".cpb-toast")?.textContent ?? "",
+                errorToastTexts: Array.from(shadow.querySelectorAll(".cpb-toast"))
+                    .map((toast) => toast.textContent ?? ""),
             };
         });
 
         assert.deepEqual(result.appliedPresetKeys, [
             "factory:quiet-success",
             "factory:quiet-success",
+            "factory:quiet-success",
         ]);
         assert.equal(result.successToastCount, 0);
-        assert.equal(result.errorToastText, "Apply failed.");
+        assert.deepEqual(result.errorToastTexts, ["Apply failed.", "Apply failed."]);
     } finally {
         await page.close();
     }

@@ -163,7 +163,9 @@ function handleMutationResult<T>(
         return true;
     }
 
-    showToast(toastHost, result.message, "error");
+    // Controller failures are presented from StandaloneEffectPresetState.lastError.
+    // Keeping that as the sole error channel also covers asynchronous bridge errors
+    // without duplicating the returned mutation result.
     return false;
 }
 
@@ -1306,7 +1308,6 @@ class PresetBar extends HTMLElement {
             return;
         }
         if (!captured.ok) {
-            showToast(this._els["toast-host"], captured.message, "error");
             return;
         }
 
@@ -1439,7 +1440,6 @@ class PresetBar extends HTMLElement {
             return;
         }
         if (!captured.ok) {
-            showToast(this._els["toast-host"], captured.message, "error");
             return;
         }
 
@@ -1591,7 +1591,6 @@ class PresetBar extends HTMLElement {
             return;
         }
 
-        showToast(this._els["toast-host"], result.message, "error");
         if (
             this._sharedSoundReplacementPending
             && this._state?.pendingSoundReplacement?.kind !== "share"
@@ -1619,10 +1618,7 @@ class PresetBar extends HTMLElement {
     }
 
     private _cancelSoundReplacement() {
-        const result = this._synthMutations?.cancelSoundReplacement();
-        if (result && !result.ok && !("actionRequired" in result)) {
-            showToast(this._els["toast-host"], result.message, "error");
-        }
+        this._synthMutations?.cancelSoundReplacement();
         if (this._sharedSoundReplacementPending) {
             this._pendingSharedEnvelope = null;
             this._sharedSoundReplacementPending = false;
@@ -1828,7 +1824,8 @@ class PresetBar extends HTMLElement {
             void this._detectSharedSoundFragment();
         }
 
-        // Show error toast if lastError transitions to non-null
+        // Controller state is the sole presentation channel for controller errors.
+        // clearLastError makes a later identical failure a new visible occurrence.
         if (state.lastError) {
             showToast(this._els["toast-host"], state.lastError, "error");
             this._mutations?.clearLastError();

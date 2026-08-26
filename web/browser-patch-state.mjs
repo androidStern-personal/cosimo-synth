@@ -1,7 +1,8 @@
 export const BROWSER_PATCH_STATE_KEY = "cosimo.web.patch-state.v2";
 
 const BROWSER_PATCH_STATE_FORMAT = "cosimo.browserPatchState";
-const BROWSER_PATCH_STATE_VERSION = 2;
+// Distortion Type made version 2 obsolete. Earlier sounds are discarded whole.
+const BROWSER_PATCH_STATE_VERSION = 3;
 
 function resolveStorage(storage) {
     if (storage !== undefined) return storage;

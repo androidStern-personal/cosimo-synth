@@ -32,7 +32,7 @@ test("bare and browser-state patches complete, clamp, and snap public parameters
     ]);
     const result = patchIO.intakePatch({
         format: "cosimo.browserPatchState",
-        version: 2,
+        version: 3,
         sound: {
             parameters: {
                 oscAWavetablePosition: 2,

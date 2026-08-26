@@ -1189,23 +1189,27 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     Done when:
     - DSP and browser tests prove exactly the selected branch is heard, switching and clearing work without changing the rack, and the controls remain visible and tappable in representative phone, desktop, and plugin layouts.
 
-[ ] T56 — Make Init recover from the Distortion Type state change and show one error
+[x] T56 — Make Init recover from the Distortion Type state change and show one error
+    Active owner (2026-08-26):
+    - Codex task `T56 Fix Init recovery`, thread `01a03bb6-e997-7fb1-b59b-1fb2e334c46f`, branch `codex/t56-init-distortion-upgrade`, worktree `/Users/winterfell/.codex/worktrees/2cc18342-dcbc-4c28-aeb1-ab56b7df7d81/cosimo-synth`, model SOL, reasoning max.
     Reported failure (2026-08-26):
     - On the deployed mobile browser synth, choosing `Init` from the preset bar produced two identical messages: `lane.v2 device distortion#1 must carry every parameter once`.
-    Code-backed leading cause to prove before editing:
-    - Distortion gained the saved `distortionType` value, taking its effects-lane record from six values to seven. A previously saved lane.v2 document can therefore contain the exact old six-value Distortion record, which the current strict parser rejects.
-    - Init builds a current default rack, but the sound transaction first captures the current rack for rollback. That capture rejects the old Distortion record, so Init cannot replace the invalid state with the clean default.
-    - The controller both returns the failed mutation and publishes the same message as `lastError`; the preset bar currently displays both paths, which accounts for the duplicate messages in the screenshot.
-    Required repair:
-    - First add a fast red-capable test that seeds the exact pre-Type six-value Distortion record, drives the real preset-bar `Init` action, and reproduces the failed Init and duplicate message. If that fixture does not reproduce the deployed failure, compare the deployed bundle with its source before choosing another cause.
-    - Add one explicit, narrowly recognized upgrade from that exact old Distortion record to the current record, using the approved Asymmetric default (`distortionType = 1`). Do not weaken strict validation, fill arbitrary missing values, or accept any other malformed rack document.
-    - Make clean Init and `Discard and Init` complete the whole sound reset atomically after this upgrade. Valid current rack documents and unrelated saved sounds must remain byte-for-byte unchanged; genuinely corrupt state must still fail without partially resetting the sound.
-    - Show one error message for one failed action. Remove the duplicate presentation path without hiding later independent errors or suppressing useful diagnostics.
+    Actual cause:
+    - Distortion gained the required saved `distortionType` value, but the browser still restored version-2 saved sounds containing the old six-value Distortion record. Init then correctly rejected that record while capturing the current sound for atomic rollback, so the reset never began.
+    - The controller both returned the failed mutation and published the same message as `lastError`; the preset bar displayed both paths, which caused the two identical messages.
+    Accepted repair (corrected 2026-08-26 — no migration or backwards compatibility):
+    - Hard-cut the complete browser saved-sound payload from version 2 to version 3. Version-2 sounds are ignored as a whole at startup; no old field is parsed, filled, copied, or upgraded.
+    - Leave Init and the strict lane schema unchanged. Valid version-3 state restores normally; corrupt version-3 state still fails before any partial reset; the next real Init writes the complete current defaults.
+    - Use controller `lastError` as the sole visible controller-error channel so one failed action creates one message and a later independent identical failure remains visible.
     Coordinate with T53:
     - T56 restores the reliability of the existing Init transaction. T53 separately changes the intended oscillator defaults and should build on the repaired path rather than editing the same Init code in parallel.
     Done when:
-    - The failing-first test passes against the generated browser product and proves the old six-value state upgrades once, Init succeeds, the rack becomes the current clean starter rack, every other sound default is applied, and exactly one success or error message is shown.
-    - Coverage includes clean Init, unsaved-sound confirmation followed by `Discard and Init`, a valid current rack, the one accepted old Distortion record, and representative corrupt records that remain rejected. The current web and iPhone bundles are rebuilt and the focused preset/state suites remain green.
+    - The generated browser product seeds the exact version-2 six-value record, proves startup ignores it, presses the real preset-bar Init command, and ends on the complete current version-3 `INIT` sound.
+    - Clean Init, `Discard and Init`, valid current state, corrupt current state, atomic rollback, and one visible message per genuine failed action remain covered. The current web and iPhone bundles are rebuilt and the focused preset/state suites remain green.
+    Completion evidence (2026-08-26):
+    - The generated test failed before the version cutoff with the exact old Distortion record and `oscBPan: 0.75` still live; Init left both untouched and reported the strict missing-parameter error. After the cutoff, Chromium and WebKit both start clean and real Init writes version 3 with `distortionType: 1` and no error.
+    - Focused lane-state passed 10/10, Init passed 24/24, and preset/controller/bar passed 31/31. Current version-3 restore and corrupt-state rejection remain strict; late Init failure still rolls back the complete sound. The web contract/speedrun set passed 25/25, Bounce persistence 12/12, and the rebuilt iPhone surface 20/20.
+    - `npm run web:build` and `npm run ios:ui:build` rebuilt the checked-in browser and iPhone bundles. A fresh HMR standalone is running from this worktree against `http://127.0.0.1:5179`; the compiled VST3 is installed and strict-code-sign verified at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`.
 
 INFRASTRUCTURE AND TOOLING
 

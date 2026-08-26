@@ -28,6 +28,7 @@ import {
 } from "../patch_gui/articulations.js";
 import { MODULATION_TARGET_OPTIONS } from "../patch_gui/modulation.js";
 import { allTargetDescriptors } from "../patch_gui/target-descriptor.js";
+import { createDefaultLaneStateV2 } from "../patch_gui/lane-state-v2.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const browserEngine = process.env.COSIMO_WEB_BROWSER ?? "chromium";
@@ -1518,7 +1519,7 @@ test("the production worker installs the current v6 100-route rack profile end t
     await page.addInitScript(({ modulationState, modulationStateKey }) => {
         localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
             format: "cosimo.browserPatchState",
-            version: 2,
+            version: 3,
             sound: { parameters: {}, storedState: { [modulationStateKey]: modulationState } },
             auxiliary: {},
         }));
@@ -1611,7 +1612,7 @@ test("mobile product stays realtime with four-way unison and one MSEG filter rou
     await page.addInitScript(({ modulationState, modulationStateKey, parameters }) => {
         localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
             format: "cosimo.browserPatchState",
-            version: 2,
+            version: 3,
             sound: { parameters, storedState: { [modulationStateKey]: modulationState } },
             auxiliary: {},
         }));
@@ -2628,6 +2629,106 @@ test("generated product renders oscillator A, B, and C independently", async (t)
         );
         pageFailures.assertClean();
         t.diagnostic(JSON.stringify({ combinedRms, lowpassRms, oscillatorRms }));
+    } finally {
+        await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v2")).catch(() => {});
+        await page.close();
+    }
+});
+
+test("generated preset-bar Init starts clean after the pre-Type saved-sound version cutoff", async (t) => {
+    const page = await browser.newPage({ ...devices["iPhone 13"] });
+    const expectedRack = createDefaultLaneStateV2();
+    const preTypeRack = {
+        ...expectedRack,
+        devices: {
+            ...expectedRack.devices,
+            "distortion#1": {
+                params: {
+                    distortionMode: 0,
+                    distortionDriveDb: 12,
+                    distortionKnee: 0.35,
+                    distortionWet: 0.5,
+                    distortionWetHPHz: 40,
+                    distortionWetLPHz: 18_000,
+                },
+            },
+        },
+        chain: expectedRack.chain.map((node) => (
+            node.kind === "device" && node.deviceId === "distortion#1"
+                ? { ...node, enabled: true }
+                : node
+        )),
+    };
+    await page.addInitScript(({ laneState }) => {
+        localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
+            format: "cosimo.browserPatchState",
+            version: 2,
+            sound: {
+                parameters: { oscBPan: 0.75 },
+                storedState: {
+                    "lane.v1": JSON.stringify(laneState),
+                },
+            },
+            auxiliary: {},
+        }));
+    }, {
+        laneState: preTypeRack,
+    });
+
+    try {
+        await page.goto(`${baseUrl}?test=1&t56-pre-type-distortion=1`, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+
+        const initialState = await page.evaluate(async () => {
+            const storedState = await globalThis.__COSIMO_WEB_POC__.storedState();
+            const rawRack = storedState.values?.["lane.v1"];
+            return {
+                rack: typeof rawRack === "string" ? JSON.parse(rawRack) : rawRack,
+                oscBPan: globalThis.__COSIMO_WEB_POC__.getSnapshot().parameterValues.oscBPan,
+            };
+        });
+
+        const presetBar = page.locator("cosimo-preset-bar");
+        await presetBar.locator('[data-action="toggle-shell-menu"]').click();
+        await presetBar.locator('.shell-menu.open [data-action="init"]').click();
+        await page.waitForFunction((expectedRackJSON) => {
+            const saved = JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}");
+            const resetCompleted = saved?.version === 3
+                && saved?.sound?.storedState?.["lane.v1"] === expectedRackJSON;
+            const view = document.querySelector("cosimo-desktop-react-view");
+            const bar = view?.shadowRoot?.querySelector("cosimo-preset-bar");
+            const hasError = (bar?.shadowRoot?.querySelectorAll(".cpb-toast.error").length ?? 0) > 0;
+            return resetCompleted || hasError;
+        }, JSON.stringify(expectedRack));
+
+        const result = await page.evaluate(() => {
+            const saved = JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}");
+            const view = document.querySelector("cosimo-desktop-react-view");
+            const bar = view?.shadowRoot?.querySelector("cosimo-preset-bar");
+            const shadow = bar?.shadowRoot;
+            const rawRack = saved?.sound?.storedState?.["lane.v1"];
+            return {
+                version: saved?.version ?? null,
+                rack: typeof rawRack === "string" ? JSON.parse(rawRack) : rawRack,
+                oscBPan: saved?.sound?.parameters?.oscBPan ?? null,
+                presetName: shadow?.querySelector('[data-el="preset-name"]')?.textContent?.trim() ?? null,
+                dirty: shadow?.querySelector('[data-el="dirty-dot"]')?.classList.contains("visible") ?? null,
+                errorMessages: Array.from(shadow?.querySelectorAll(".cpb-toast.error") ?? [])
+                    .map((toast) => toast.textContent?.trim()),
+            };
+        });
+
+        t.diagnostic(JSON.stringify({ initialState, result }));
+        assert.equal(initialState.rack, undefined);
+        assert.equal(initialState.oscBPan, 0);
+        assert.equal(result.version, 3);
+        assert.deepEqual(result.rack, expectedRack);
+        assert.equal(result.oscBPan, 0);
+        assert.equal(result.presetName, "INIT");
+        assert.equal(result.dirty, false);
+        assert.deepEqual(result.errorMessages, []);
     } finally {
         await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v2")).catch(() => {});
         await page.close();

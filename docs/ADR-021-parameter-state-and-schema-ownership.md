@@ -837,6 +837,10 @@ Performance acceptance is behavioral, not speculative:
   epoch commit; sequentially activating the two accepted lanes is not sufficient.
 - Preserving `effects.presets.v2` from old outer containers is the sole one-time
   transition. It cannot hydrate or legitimize any pre-cut sound state.
+- Adding the required Distortion Type value hard-cuts browser saved-sound payloads from
+  version 2 to version 3. Version 2 is ignored as a whole; no field-level repair or
+  compatibility path is allowed. The existing localStorage slot name remains stable,
+  while the payload version is the authoritative saved-sound contract.
 - The wavetable selector contract is deliberately bounded to the fully occupied immutable
   range 0–237. This gives up silent in-range catalog growth in exchange for making every
   host-expressible value valid and stable; future growth needs a new reviewed selector
