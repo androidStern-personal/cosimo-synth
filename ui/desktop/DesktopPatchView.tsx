@@ -448,7 +448,7 @@ type MsegEditorModalProps = {
     slotLabel: string;
     msegState: MsegState | null;
     morphBinding: PatchControlBinding<number>;
-    rateReady: boolean;
+    rateBinding: PatchControlBinding<number>;
     surfaceRef: RefObject<SVGSVGElement | null>;
     selectedPointIndex: number;
     hoveredSegmentIndex: number;
@@ -457,7 +457,6 @@ type MsegEditorModalProps = {
     onClose: () => void;
     onUndo: () => void;
     onSelectShape: (shapeIndex: number) => void;
-    onRateChange: (nextValue: number) => void;
     onToggleLoop: () => void;
     onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
@@ -2871,7 +2870,7 @@ function MsegEditorModal({
     slotLabel,
     msegState,
     morphBinding,
-    rateReady,
+    rateBinding,
     surfaceRef,
     selectedPointIndex,
     hoveredSegmentIndex,
@@ -2880,7 +2879,6 @@ function MsegEditorModal({
     onClose,
     onUndo,
     onSelectShape,
-    onRateChange,
     onToggleLoop,
     onPointerDown,
     onPointerMove,
@@ -2993,8 +2991,7 @@ function MsegEditorModal({
                 controls={(
                     <MsegEditorControlStrip
                         slotIndex={slotIndex}
-                        rateSeconds={msegState.playback.rate.seconds}
-                        rateReady={rateReady}
+                        rateBinding={rateBinding}
                         morphBinding={morphBinding}
                         routes={routes}
                         armedSource={null}
@@ -3004,7 +3001,6 @@ function MsegEditorModal({
                         variant="full"
                         editShapeIndex={msegState.editShapeIndex ?? 0}
                         onSelectShape={onSelectShape}
-                        onRateChange={onRateChange}
                         resolveScrollLockTargets={resolveScrollLockTargets}
                         onRequestParameterMenu={onRequestParameterMenu}
                         rateFocusBindings={rateFocusBindings}
@@ -5489,11 +5485,9 @@ function DesktopPatchViewBody({
                             compact
                         />
                     )}
-                    msegRateSeconds={clampMsegRateSeconds(Number(synthView.msegState?.playback.rate.seconds ?? 1))}
-                    msegRateReady={synthView.callbackControlReadiness.mseg.rate}
+                    msegRateBinding={synthView.selectedMsegRate}
                     msegEditShapeIndex={synthView.msegState?.editShapeIndex ?? 0}
                     onSelectMsegShape={synthView.handleSelectMsegShape}
-                    onMsegRateChange={synthView.handleMsegRateChange}
                     msegMorphBinding={synthView.selectedMsegMorph}
                     onMsegMorphAdjustingChange={setIsQuickMsegMorphAdjusting}
                     msegLoopEnabled={synthView.msegState?.playback.loop !== null}
@@ -5525,7 +5519,7 @@ function DesktopPatchViewBody({
                 slotLabel={`MSEG ${synthView.selectedMsegSlot + 1}`}
                 msegState={synthView.msegState}
                 morphBinding={synthView.selectedMsegMorph}
-                rateReady={synthView.callbackControlReadiness.mseg.rate}
+                rateBinding={synthView.selectedMsegRate}
                 surfaceRef={msegEditorSurfaceRef}
                 selectedPointIndex={synthView.msegEditor.selectedPointIndex}
                 hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
@@ -5534,7 +5528,6 @@ function DesktopPatchViewBody({
                 onClose={synthView.msegEditor.closeEditor}
                 onUndo={synthView.msegEditor.undoLastEdit}
                 onSelectShape={synthView.handleSelectMsegShape}
-                onRateChange={synthView.handleMsegRateChange}
                 onToggleLoop={synthView.handleToggleMsegLoop}
                 onPointerDown={synthView.msegEditor.handlePointerDown}
                 onPointerMove={synthView.msegEditor.handlePointerMove}

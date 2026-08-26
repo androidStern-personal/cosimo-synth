@@ -2400,12 +2400,14 @@ function MobileGlobalModRail({
         const mutationObserver = voicePanel && typeof MutationObserver === "function"
             ? new MutationObserver(measureAndClamp)
             : null;
-        mutationObserver?.observe(voicePanel, {
-            attributes: true,
-            childList: true,
-            subtree: true,
-            attributeFilter: ["aria-hidden", "class", "hidden", "style"],
-        });
+        if (mutationObserver && voicePanel) {
+            mutationObserver.observe(voicePanel, {
+                attributes: true,
+                childList: true,
+                subtree: true,
+                attributeFilter: ["aria-hidden", "class", "hidden", "style"],
+            });
+        }
         surface?.addEventListener("scroll", measureAndClamp, true);
         window.addEventListener("resize", measureAndClamp);
         window.visualViewport?.addEventListener("resize", measureAndClamp);

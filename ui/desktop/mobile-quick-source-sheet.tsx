@@ -159,11 +159,9 @@ export type MobileQuickSourceSheetProps = {
     readonly msegSurface: ReactNode | null;
     /** The real draggable ADSR editor, composed by the shell. */
     readonly envelopeSurface: ReactNode | null;
-    readonly msegRateSeconds: number;
-    readonly msegRateReady: boolean;
+    readonly msegRateBinding: PatchControlBinding<number>;
     readonly msegEditShapeIndex: 0 | 1;
     readonly onSelectMsegShape: (shapeIndex: 0 | 1) => void;
-    readonly onMsegRateChange: (next: number) => void;
     readonly msegMorphBinding: PatchControlBinding<number>;
     readonly onMsegMorphAdjustingChange: (isAdjusting: boolean) => void;
     readonly msegLoopEnabled: boolean;
@@ -189,11 +187,9 @@ export function MobileQuickSourceSheet({
     onRequestHaptic,
     msegSurface,
     envelopeSurface,
-    msegRateSeconds,
-    msegRateReady,
+    msegRateBinding,
     msegEditShapeIndex,
     onSelectMsegShape,
-    onMsegRateChange,
     msegMorphBinding,
     onMsegMorphAdjustingChange,
     msegLoopEnabled,
@@ -345,7 +341,7 @@ export function MobileQuickSourceSheet({
             throw new Error(`Macro ${slot} is not available for the quick sheet.`);
         }
         return { value: macroBinding };
-    }, [envelope, envelopeReadiness, macroBinding, msegMorphBinding, msegRateReady, msegRateSeconds, onEnvelopeChange, onMsegRateChange, slot, source.sourceKind]);
+    }, [envelope, envelopeReadiness, macroBinding, onEnvelopeChange, slot, source.sourceKind]);
 
     const stripSource = useMemo<ReadoutStripSource>(() => ({
         sourceKind: identity.sourceKind,
@@ -393,8 +389,7 @@ export function MobileQuickSourceSheet({
     const controls = source.sourceKind === "mseg" ? (
         <MsegEditorControlStrip
             slotIndex={slot - 1}
-            rateSeconds={msegRateSeconds}
-            rateReady={msegRateReady}
+            rateBinding={msegRateBinding}
             morphBinding={msegMorphBinding}
             routes={routes}
             armedSource={stripSource}
@@ -405,7 +400,6 @@ export function MobileQuickSourceSheet({
             className="quick-source-sheet-strip"
             editShapeIndex={msegEditShapeIndex}
             onSelectShape={onSelectMsegShape}
-            onRateChange={onMsegRateChange}
             resolveScrollLockTargets={resolveScrollLockTargets}
             onRequestHaptic={onRequestHaptic}
             onRequestParameterMenu={onRequestParameterMenu}

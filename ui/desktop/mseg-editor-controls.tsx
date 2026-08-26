@@ -19,7 +19,6 @@ import type { SynthFocusBindings } from "../shared/synth-input-router";
 import {
     MSEG_RATE_MAX_SECONDS,
     MSEG_RATE_MIN_SECONDS,
-    clampMsegRateSeconds,
 } from "../shared/mseg";
 import { findRackModulationSource } from "../shared/rack-modulation-sources";
 
@@ -39,31 +38,10 @@ function formatPercentValue(value: number): string {
     return `${Math.round(value * 100)}%`;
 }
 
-function documentRateBinding(
-    endpointID: string,
-    value: number,
-    isReady: boolean,
-    write: (next: number) => void,
-): PatchControlBinding<number> {
-    const guardedWrite = (next: number) => {
-        if (isReady) write(next);
-    };
-    return {
-        endpointID,
-        value,
-        isReady,
-        setValue: guardedWrite,
-        commitValue: guardedWrite,
-        beginGesture: () => undefined,
-        endGesture: () => undefined,
-    };
-}
-
 /** Shared compact MSEG toolbar used by the quick drawer and full editor. */
 export type MsegEditorControlStripProps = {
     readonly slotIndex: number;
-    readonly rateSeconds: number;
-    readonly rateReady: boolean;
+    readonly rateBinding: PatchControlBinding<number>;
     readonly morphBinding: PatchControlBinding<number>;
     readonly routes: ReadonlyArray<ModulationRoute>;
     readonly armedSource: ReadoutStripSource | null;
@@ -74,7 +52,6 @@ export type MsegEditorControlStripProps = {
     readonly className?: string;
     readonly editShapeIndex: 0 | 1;
     readonly onSelectShape: (shapeIndex: 0 | 1) => void;
-    readonly onRateChange: (next: number) => void;
     readonly resolveScrollLockTargets?: () => ReadonlyArray<HTMLElement>;
     readonly onRequestHaptic?: () => void;
     readonly onRequestParameterMenu?: (request: ParameterMenuRequest) => void;
@@ -87,8 +64,7 @@ export type MsegEditorControlStripProps = {
 /** Render one shared A/B, Rate, Morph, Loop toolbar without owning MSEG document state. */
 export function MsegEditorControlStrip({
     slotIndex,
-    rateSeconds,
-    rateReady,
+    rateBinding,
     morphBinding,
     routes,
     armedSource,
@@ -99,7 +75,6 @@ export function MsegEditorControlStrip({
     className,
     editShapeIndex,
     onSelectShape,
-    onRateChange,
     resolveScrollLockTargets,
     onRequestHaptic,
     onRequestParameterMenu,
@@ -111,12 +86,6 @@ export function MsegEditorControlStrip({
     const slot = slotIndex + 1;
     const identity = findRackModulationSource("mseg", slot);
     const gestureController = useParameterGesture();
-    const rateBinding = useMemo(() => documentRateBinding(
-        `mseg${slot}Rate`,
-        clampMsegRateSeconds(rateSeconds),
-        rateReady,
-        onRateChange,
-    ), [onRateChange, rateReady, rateSeconds, slot]);
     const cells = useMemo<ReadonlyArray<ReadoutCellSpec>>(() => [
         {
             id: "rate",

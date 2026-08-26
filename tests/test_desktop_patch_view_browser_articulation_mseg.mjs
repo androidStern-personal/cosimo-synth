@@ -3528,18 +3528,24 @@ test("the drawer MSEG timing knob fits its existing row and reaches both range e
             "keyboard minimum MSEG rate",
             (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg1Rate)) <= 1e-9,
         );
+        await clearHarnessDebugLog(page);
         await dragTimingKnobBy(drawerRateKnob, 100, 131);
-        await waitForHarnessSnapshot(
+        const rightDragSnapshot = await waitForHarnessSnapshot(
             page,
             "right-dragged maximum MSEG rate",
             (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg1Rate) - 2) <= 0.001,
         );
+        assert.deepEqual(rightDragSnapshot.gestureStarts, ["mseg1Rate"]);
+        assert.deepEqual(rightDragSnapshot.gestureEnds, ["mseg1Rate"]);
+        await clearHarnessDebugLog(page);
         await dragTimingKnobBy(drawerRateKnob, -100, 132);
-        await waitForHarnessSnapshot(
+        const leftDragSnapshot = await waitForHarnessSnapshot(
             page,
             "left-dragged minimum MSEG rate",
             (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg1Rate)) <= 0.001,
         );
+        assert.deepEqual(leftDragSnapshot.gestureStarts, ["mseg1Rate"]);
+        assert.deepEqual(leftDragSnapshot.gestureEnds, ["mseg1Rate"]);
     } finally {
         await page.close();
     }
@@ -4349,27 +4355,45 @@ test("main MSEG morph touch drag survives unavailable pointer capture", async ()
 });
 
 test("MSEG rate drag stops changing values after the window blurs", async () => {
-    const page = await openHarnessPage();
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
 
     try {
-        const rateInput = page.locator('input[aria-label="MSEG rate"]').first();
-        await rateInput.scrollIntoViewIfNeeded();
-        const inputBox = await rateInput.boundingBox();
-        assert.ok(inputBox, "Expected the MSEG rate input to be visible.");
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+        const rateKnob = page.locator('[data-role="quick-source-sheet-cell-rate"]');
+        await rateKnob.scrollIntoViewIfNeeded();
+        const knobBox = await rateKnob.boundingBox();
+        assert.ok(knobBox, "Expected the compact MSEG rate knob to be visible.");
 
         await clearHarnessDebugLog(page);
-        await page.mouse.move(inputBox.x + (inputBox.width * 0.5), inputBox.y + (inputBox.height * 0.5));
+        const startX = knobBox.x + (knobBox.width * 0.5);
+        const startY = knobBox.y + (knobBox.height * 0.5);
+        await page.mouse.move(startX, startY);
         await page.mouse.down();
+        await page.mouse.move(startX + 24, startY, { steps: 4 });
+        const activeSnapshot = await waitForHarnessSnapshot(
+            page,
+            "active compact MSEG rate gesture",
+            (snapshot) => snapshot.gestureStarts.includes("mseg1Rate")
+                && snapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Rate"),
+        );
+        const valueAtBlur = Number(activeSnapshot.parameterValues.mseg1Rate);
         await page.evaluate(() => window.dispatchEvent(new Event("blur")));
-        await page.mouse.move(inputBox.x + inputBox.width + 120, inputBox.y + (inputBox.height * 0.5));
+        await waitForHarnessSnapshot(
+            page,
+            "cancelled compact MSEG rate gesture",
+            (snapshot) => snapshot.gestureEnds.includes("mseg1Rate"),
+        );
+        await page.mouse.move(startX + 140, startY);
         await page.mouse.up();
         await page.waitForTimeout(100);
 
         const snapshot = await getHarnessSnapshot(page);
-        assert.equal(
-            snapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Rate"),
-            false,
-        );
+        assert.equal(Number(snapshot.parameterValues.mseg1Rate), valueAtBlur);
+        assert.deepEqual(snapshot.gestureStarts, ["mseg1Rate"]);
+        assert.deepEqual(snapshot.gestureEnds, ["mseg1Rate"]);
     } finally {
         await page.mouse.up().catch(() => {});
         await page.close();
