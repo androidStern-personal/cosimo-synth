@@ -44,6 +44,39 @@ test("the Enhancer production plugin packages the canonical T26 DSP instead of a
         { repoPath: "cmajor/Enhancer.cmajor", runtimePath: "Enhancer.cmajor" },
         { repoPath: "fx/enhancer/EnhancerPlugin.cmajor", runtimePath: "EnhancerPlugin.cmajor" },
     ]);
+    assert.equal(buildModule.effectPlugins.enhancer.generatedHostLatencySamples, 60);
+});
+
+test("the generated Enhancer plugin host latency is corrected at the narrow Cmajor seam", async () => {
+    const { prodModule } = await loadBuildModules();
+    const latencyConstant = "static constexpr double   latency            = 0.000000;";
+    const pluginFactory = "    return new cmaj::plugin::GeneratedPlugin<::CosimoEnhancer> (std::make_shared<cmaj::Patch>());";
+    const generated = `${latencyConstant}\n${pluginFactory}`;
+    assert.equal(
+        prodModule.replaceGeneratedPluginLatency(generated, 60),
+        [
+            "static constexpr double   latency            = 60.000000;",
+            "    auto* plugin = new cmaj::plugin::GeneratedPlugin<::CosimoEnhancer> (std::make_shared<cmaj::Patch>());",
+            "    plugin->patchChangeCallback = [] (auto& changedPlugin) { changedPlugin.setLatencySamples (60); };",
+            "    plugin->setLatencySamples (60);",
+            "    return plugin;",
+        ].join("\n"),
+    );
+    assert.throws(
+        () => prodModule.replaceGeneratedPluginLatency(`no latency here\n${pluginFactory}`, 60),
+        /exactly one generated Cmajor latency constant, found 0/,
+    );
+    assert.throws(
+        () => prodModule.replaceGeneratedPluginLatency(
+            `${latencyConstant}\n${latencyConstant}\n${pluginFactory}`,
+            60,
+        ),
+        /exactly one generated Cmajor latency constant, found 2/,
+    );
+    assert.throws(
+        () => prodModule.replaceGeneratedPluginLatency(latencyConstant, 60),
+        /exactly one generated Cmajor plugin factory, found 0/,
+    );
 });
 
 test("fx_prod_install_accepts_all_with_dry_run_without_swallowing_unknown_flags", async () => {

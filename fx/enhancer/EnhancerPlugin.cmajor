@@ -1,4 +1,4 @@
-processor CosimoEnhancer [[ main ]]
+graph CosimoEnhancer [[ main ]]
 {
     input stream float32<2> audioIn [[ name: "Input" ]];
     output stream float32<2> audioOut [[ name: "Output" ]];
@@ -22,28 +22,23 @@ processor CosimoEnhancer [[ main ]]
 
     node enhancer = wt::EnhancerBus;
 
-    void main()
+    connection
     {
-        loop
-        {
-            enhancer.b1FreqHzIn <- b1FreqHzIn;
-            enhancer.b1QIn <- b1QIn;
-            enhancer.b1ModeIn <- b1ModeIn;
-            enhancer.b1MidAmountIn <- b1MidAmountIn;
-            enhancer.b1SideAmountIn <- b1SideAmountIn;
-            enhancer.b1CurveIn <- b1CurveIn;
-            enhancer.b2FreqHzIn <- b2FreqHzIn;
-            enhancer.b2QIn <- b2QIn;
-            enhancer.b2ModeIn <- b2ModeIn;
-            enhancer.b2MidAmountIn <- b2MidAmountIn;
-            enhancer.b2SideAmountIn <- b2SideAmountIn;
-            enhancer.b2CurveIn <- b2CurveIn;
-            enhancer.saturationModeIn <- saturationModeIn;
-            enhancer.deEmphasisIn <- deEmphasisIn;
-            enhancer.in <- audioIn;
-            enhancer.advance();
-            audioOut <- enhancer.out;
-            advance();
-        }
+        audioIn -> enhancer.in;
+        b1FreqHzIn -> enhancer.b1FreqHzIn;
+        b1QIn -> enhancer.b1QIn;
+        b1ModeIn -> enhancer.b1ModeIn;
+        b1MidAmountIn -> enhancer.b1MidAmountIn;
+        b1SideAmountIn -> enhancer.b1SideAmountIn;
+        b1CurveIn -> enhancer.b1CurveIn;
+        b2FreqHzIn -> enhancer.b2FreqHzIn;
+        b2QIn -> enhancer.b2QIn;
+        b2ModeIn -> enhancer.b2ModeIn;
+        b2MidAmountIn -> enhancer.b2MidAmountIn;
+        b2SideAmountIn -> enhancer.b2SideAmountIn;
+        b2CurveIn -> enhancer.b2CurveIn;
+        saturationModeIn -> enhancer.saturationModeIn;
+        deEmphasisIn -> enhancer.deEmphasisIn;
+        enhancer.out -> audioOut;
     }
 }

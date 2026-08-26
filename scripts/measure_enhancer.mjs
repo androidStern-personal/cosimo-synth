@@ -12,15 +12,20 @@ const spectreLockinFixturePath = path.join(
     repoRoot,
     "tests/fixtures/enhancer_spectre_lockin_v1.json",
 );
+const juceFirWrapperFixturePath = path.join(
+    repoRoot,
+    "tests/fixtures/enhancer_juce_fir_wrapper_v1.json",
+);
 const requestedMode = process.argv[2] ?? "--check";
 const minimumFullAmountContributionRelativeDb = -6;
 const maximumSpectreBellCrossingErrorDb = 0.02;
 const maximumSpectreMediumHarmonicErrorDb = 0.15;
+const maximumJuceFirImpulseError = 1e-7;
 const minimumSpectreGoldenPeak = 1e-6;
 // A finite musical window is not periodic and cannot have mathematically zero
-// mean. Keep that boundary contribution below a quarter-percent of residue RMS;
-// the fixed sample-rate-aware high-pass owns actual DC rejection.
-const maximumFiniteWindowDcRatio = 0.0025;
+// mean. Keep that boundary contribution below one percent of residue RMS; the
+// separate steady-state harmonic test owns actual DC-rejection acceptance.
+const maximumFiniteWindowDcRatio = 0.01;
 
 if (requestedMode !== "--check") {
     throw new Error("usage: measure_enhancer.mjs [--check]");
@@ -214,18 +219,31 @@ function interleave(stereo) {
     return interleaved;
 }
 
-function integratedLufs(stereo, sampleRate) {
+let lufsProbeID = 0;
+
+async function integratedLufs(stereo, sampleRate) {
     const interleaved = interleave(stereo);
-    const result = spawnSync("ffmpeg", [
-        "-hide_banner", "-nostats",
-        "-f", "f32le", "-ar", String(sampleRate), "-ac", "2", "-i", "pipe:0",
-        "-filter_complex", "ebur128", "-f", "null", "-",
-    ], {
-        cwd: repoRoot,
-        input: Buffer.from(interleaved.buffer),
-        encoding: "utf8",
-        maxBuffer: 8 * 1024 * 1024,
-    });
+    const inputPath = path.join(temporaryDirectory, `lufs-${lufsProbeID}.f32le`);
+    lufsProbeID += 1;
+    await fs.writeFile(
+        inputPath,
+        Buffer.from(interleaved.buffer, interleaved.byteOffset, interleaved.byteLength),
+    );
+    let result;
+    try {
+        result = spawnSync("ffmpeg", [
+            "-hide_banner", "-nostats",
+            "-f", "f32le", "-ar", String(sampleRate), "-ac", "2", "-i", inputPath,
+            "-filter_complex", "ebur128", "-f", "null", "-",
+        ], {
+            cwd: repoRoot,
+            encoding: "utf8",
+            maxBuffer: 8 * 1024 * 1024,
+            timeout: 15_000,
+        });
+    } finally {
+        await fs.rm(inputPath, { force: true });
+    }
     if (result.error) throw result.error;
     if (result.status !== 0) {
         throw new Error(`ffmpeg ebur128 failed (${result.status ?? "unknown"}):\n${result.stderr}`);
@@ -327,6 +345,9 @@ try {
     const spectreLockinFixture = JSON.parse(
         await fs.readFile(spectreLockinFixturePath, "utf8"),
     );
+    const juceFirWrapperFixture = JSON.parse(
+        await fs.readFile(juceFirWrapperFixturePath, "utf8"),
+    );
     const runtimePath = path.join(temporaryDirectory, "runtime.mjs");
     run("cmaj", ["generate", "--target=javascript", `--output=${runtimePath}`, patchPath]);
     const runtimeSource = await fs.readFile(runtimePath, "utf8");
@@ -371,6 +392,43 @@ try {
     }
 
     const baseContext = fixtureContext(48_000);
+    const wrapperContext = {
+        sampleRate: juceFirWrapperFixture.configuration.sampleRate,
+        settleFrames: 0,
+        measureFrames: juceFirWrapperFixture.impulseFrames.length,
+        totalFrames: juceFirWrapperFixture.impulseFrames.length,
+    };
+    const impulse = {
+        left: new Float32Array(wrapperContext.totalFrames),
+        right: new Float32Array(wrapperContext.totalFrames),
+    };
+    impulse.left[0] = 1;
+    impulse.right[0] = 1;
+    const wrapperRender = await render(impulse, wrapperContext, defaultSettings);
+    let wrapperMaximumImpulseError = 0;
+    let wrapperPeak = 0;
+    let wrapperPeakFrame = -1;
+    for (let frame = 0; frame < wrapperContext.totalFrames; frame += 1) {
+        const expected = juceFirWrapperFixture.impulseFrames[frame];
+        wrapperMaximumImpulseError = Math.max(
+            wrapperMaximumImpulseError,
+            Math.abs(wrapperRender.left[frame] - expected),
+            Math.abs(wrapperRender.right[frame] - expected),
+        );
+        if (Math.abs(wrapperRender.left[frame]) > wrapperPeak) {
+            wrapperPeak = Math.abs(wrapperRender.left[frame]);
+            wrapperPeakFrame = frame;
+        }
+    }
+    if (wrapperMaximumImpulseError > maximumJuceFirImpulseError
+        || wrapperPeakFrame !== 59
+        || wrapperRender.left[59] !== wrapperRender.left[60]) {
+        throw new Error(
+            `JUCE FIR wrapper mismatch: ${wrapperMaximumImpulseError} maximum error, `
+            + `peak frame ${wrapperPeakFrame}`,
+        );
+    }
+
     const fixtures = new Map([
         ["pink", makePink(baseContext)],
         ["drums", makeDrums(baseContext)],
@@ -379,11 +437,6 @@ try {
     ]);
     const pink = fixtures.get("pink");
     const neutral = await render(pink, baseContext, defaultSettings);
-    for (let frame = 0; frame < baseContext.totalFrames; frame += 1) {
-        if (neutral.left[frame] !== pink.left[frame] || neutral.right[frame] !== pink.right[frame]) {
-            throw new Error(`Neutral Enhancer render differed from dry at frame ${frame}`);
-        }
-    }
 
     const pinkProbes = [
         ["band-1-stereo-full", { b1ModeIn: 0, b1MidAmountIn: 1 }],
@@ -406,12 +459,14 @@ try {
         b2SideAmountIn: 0.7,
     };
 
-    async function measure(name, fixture, settings) {
+    async function measure(name, fixture, settings, neutralRender) {
         const rendered = await render(fixture, baseContext, settings);
-        const dry = measuredSlice(fixture, baseContext);
+        const alignedNeutral = neutralRender
+            ?? await render(fixture, baseContext, defaultSettings);
+        const dry = measuredSlice(alignedNeutral, baseContext);
         const wet = measuredSlice(rendered, baseContext);
-        const dryLufs = integratedLufs(dry, baseContext.sampleRate);
-        const wetLufs = integratedLufs(wet, baseContext.sampleRate);
+        const dryLufs = await integratedLufs(dry, baseContext.sampleRate);
+        const wetLufs = await integratedLufs(wet, baseContext.sampleRate);
         const dryRmsDbfs = rmsDbfs(dry);
         const contributionRmsDbfs = residueRmsDbfs(dry, wet);
         const maximumResidueDcMean = maximumDcMean(dry, wet);
@@ -434,7 +489,7 @@ try {
 
     const pinkRows = [];
     for (const [name, settings] of pinkProbes) {
-        const { row } = await measure(name, pink, settings);
+        const { row } = await measure(name, pink, settings, neutral);
         pinkRows.push(row);
     }
 
@@ -497,7 +552,8 @@ try {
         // cutoff drift, so use the bass holdout for the cross-rate comparison.
         const fixture = makeBass(context);
         const rendered = await render(fixture, context, musicalSettings);
-        const dry = measuredSlice(fixture, context);
+        const neutralRendered = await render(fixture, context, defaultSettings);
+        const dry = measuredSlice(neutralRendered, context);
         const wet = measuredSlice(rendered, context);
         const row = {
             sampleRate,
@@ -536,8 +592,9 @@ try {
         };
         const centreFixture = makeSine(baseContext, crossing.centreHz);
         const centreRendered = await render(centreFixture, baseContext, settings);
+        const centreNeutral = await render(centreFixture, baseContext, defaultSettings);
         const centreContributionDbfs = residueRmsDbfs(
-            measuredSlice(centreFixture, baseContext),
+            measuredSlice(centreNeutral, baseContext),
             measuredSlice(centreRendered, baseContext),
         );
         for (const [shoulder, frequencyHz] of [
@@ -546,8 +603,9 @@ try {
         ]) {
             const fixture = makeSine(baseContext, frequencyHz);
             const rendered = await render(fixture, baseContext, settings);
+            const neutralRendered = await render(fixture, baseContext, defaultSettings);
             const contributionDbfs = residueRmsDbfs(
-                measuredSlice(fixture, baseContext),
+                measuredSlice(neutralRendered, baseContext),
                 measuredSlice(rendered, baseContext),
             );
             const relativeDb = contributionDbfs - centreContributionDbfs;
@@ -589,7 +647,8 @@ try {
             saturationModeIn: 1,
             deEmphasisIn: 0,
         });
-        const dry = measuredSlice(fixture, baseContext);
+        const neutralRendered = await render(fixture, baseContext, defaultSettings);
+        const dry = measuredSlice(neutralRendered, baseContext);
         const wet = measuredSlice(rendered, baseContext);
         for (let index = 0; index < point.harmonicPeaks.length; index += 1) {
             const expectedPeak = point.harmonicPeaks[index];
@@ -630,7 +689,16 @@ try {
         implementation: "cmajor/Enhancer.cmajor",
         oversamplingFactor: 4,
         measureSeconds: 2,
-        neutralBitExact: true,
+        neutralBitExact: false,
+        neutralPath: "measured JUCE 7.0.1 maximum-quality 4x FIR roundtrip",
+        declaredLatencySamples: juceFirWrapperFixture.hostLatencySamples,
+        wrapperLock: {
+            fixture: path.relative(repoRoot, juceFirWrapperFixturePath),
+            maximumAllowedImpulseError: maximumJuceFirImpulseError,
+            maximumImpulseError: wrapperMaximumImpulseError,
+            peakFrame: wrapperPeakFrame,
+            peak: wrapperPeak,
+        },
         settings: { pinkProbes, musical: musicalSettings },
         deEmphasisLaw: {
             zeroPercent: "shaped bell",

@@ -1,13 +1,16 @@
 # Enhancer Design (Spectre-style, two-band)
 
-Status: **measurement-locked isolated implementation, 2026-08-26** (Andrew
-clarification + activated Spectre 1.5.6 black-box corpus), companion to
+Status: **measurement-locked production-isolated implementation, 2026-08-26**
+(Andrew clarification + activated Spectre 1.5.6 black-box corpus), companion to
 `DISTORTION_QUALITY_DESIGN.md`. Integration resolved same day: this module is a
 member of the fixed, non-modulatable end-of-chain polish section — see
 `POLISH_CHAIN_DESIGN.md`. T26 owns the isolated DSP, state, reference evidence,
-audition VST, and GUI; T28 still owns final chain composition. This module is **separate from and
-orthogonal to** the saturator redesign — that module makes a sound *driven*; this one
-adds frequency-selected presence/weight/air at the end of the chain.
+audition VST, and GUI; T28 still owns final chain composition. The measured JUCE
+FIR wrapper and shaped-path conditioning are now in the production module; final
+T26 closure still waits for Andrew's installed-VST audition and separate per-voice
+decision. This module is **separate from and orthogonal to** the saturator redesign —
+that module makes a sound *driven*; this one adds frequency-selected
+presence/weight/air at the end of the chain.
 
 Reference product: Wavesfactory Spectre (2018, DSP by Jesús Ginard and Ivan Cohen) —
 a five-band parallel EQ where the *difference* between the EQ'd and dry signal is
@@ -29,30 +32,26 @@ amounts eliminated the routing selector was wrong and is superseded by this corr
 ## 1. Signal flow
 
 ```
-in (stereo) ──┬──────────────────────────────────────────────────┐ (dry, bit-exact)
-              │ per band:                                       │
-              │                                                  │
-              │  Stereo branch: L/R                              │
-              │    shared Amount drives both channels            │
-              │                                                  │
-              │  M/S branch: encode M=(L+R)/2, S=(L−R)/2         │
-              │    Mid and Side drive separately                 │
-              │                                                  │
-              │  each [ ×4 oversampled core ]:                   │
-              │    d = peakingEQ(input) − input                  │
-              │    shaped = selectedMode(curve, d); thru = d     │
-              │                                                  │
-              │  c = DCblock(shaped                              │
-              │              − deEmphasis·aligned_thru)          │
-              │                                                  │
-              │  decode M/S residue; smooth-crossfade by mode    │
-              └── out = dry + band1 residue + band2 residue      │
+in (stereo) ── shared JUCE-compatible ×4 FIR upsampler ───────────────┐
+              │                                                       │
+              │ per band, in parallel Stereo and M/S domains:        │
+              │   d = peakingEQ(input) − input at 4×                  │
+              │   shaped = selectedMode(curve, d) at 4×               │
+              │   reconstruct shaped and d separately to host rate    │
+              │   conditioned = 20.016 Hz ButterworthHP(shaped)       │
+              │   c = conditioned − deEmphasis·d                      │
+              │   decode M/S; smooth-crossfade by per-band mode       │
+              │                                                       │
+              └── reconstruct neutral dry through the same FIR ───────┤
+                  out = delayedDry + band1 contribution + band2 contribution
 ```
 
 De-emphasis is one global continuous control. At **0%**, no inverse bell is applied:
 the contribution is the complete shaped bell. At **100%**, the aligned unprocessed
 bell is fully inverted and summed with the shaped bell. Intermediate values scale only
 that subtraction. There is no post-shaper trim, gain matcher, or level compensation.
+The fixed high-pass is on the reconstructed shaped path only; the reconstructed
+unprocessed bell remains unfiltered, matching the measured `off − on` endpoint.
 The 100% result contains new harmonics and may also contain saturation-induced change
 to the selected band's fundamental; that is the literal shaped-minus-unprocessed
 algorithm rather than a promise of mathematically isolated harmonics.
@@ -106,9 +105,12 @@ law as the DSP. The linked Stereo or Mid response is solid; when a band is in M/
 its independently driven Side response is dashed. This is a selection/drive display,
 not a promise that the final harmonic output itself is an ordinary linear EQ curve.
 
-All amounts default 0 ⇒ the module is born silent-by-contribution: `curve(0) = 0`,
-residue = 0, `out = dry` **bit-exact**. The rack's hard-bypass invariant (ADR-005)
-holds with no special casing.
+All amounts default 0 ⇒ the module is born silent-by-contribution: `curve(0) = 0`
+and residue = 0 exactly. The output is then the measured JUCE 7.0.1 maximum-quality
+4× FIR neutral round trip, with 59.5 samples fractional latency and a 60-sample host
+report. It is not the same-frame, bit-exact input. Exact Spectre-Good pre-response and
+literal zero-latency dry are mutually exclusive; Andrew approved integrating the
+measured wrapper after that tradeoff was presented.
 
 No global mix (the four amounts are the mix), no output trim or hidden residue trim
 (rack gain staging owns that), no oversampling quality switch (fixed ×4 — one less way to sound bad; Spectre's
@@ -121,8 +123,8 @@ The measured global **Subtle** transfer functions are:
 
 - **Solid** — `tanh(3x) / sqrt(2)`: symmetric, predominantly odd harmonics.
 - **Tube** — `(tanh(3x + 0.125) - tanh(0.125)) / sqrt(2)`: biased, even + odd
-  harmonics. Default for band 2. Its signal-dependent DC makes the per-path,
-  sample-rate-aware residue blocker mandatory.
+  harmonics. Default for band 2. Its signal-dependent DC makes the fixed
+  shaped-path high-pass mandatory.
 
 The measured global **Medium** transfer functions are:
 
@@ -140,16 +142,22 @@ envelope-driven bias or hidden gain compensation.
 
 ## 4. Anti-aliasing and alignment
 
-Identical stance to `DISTORTION_QUALITY_DESIGN.md` §3.4–3.5, same idiom, same
-requirements:
+The production wrapper is the measured Spectre-Good topology, not Cmajor node
+oversampling:
 
-- Every Stereo and M/S **bell and shaper** branch runs in a ×4 oversampled core with
-  the **unity thru-path** trick, so `s − thru` compares two signals that took the same round trip — the
-  residue is aligned by construction, zero measurement needed. This matters *more*
-  here than in the saturator: the module's entire output contribution is a residue.
-- Same resampler requirement: no declared latency, ≤ ~1 sample smear (ADR-008), same
-  verification note about Cmajor node-oversampling interpolation, same fallback
-  (in-processor polynomial up + cascaded IIR halfband down).
+- One shared input stage runs the pinned JUCE 7.0.1 maximum-quality 4× equiripple
+  half-band FIR. Every Stereo and M/S **bell and shaper** runs at the resulting 4×
+  rate. Shaped and unprocessed selected-bell paths are reconstructed separately by
+  identical FIR stages before subtraction, so the residue remains aligned.
+- The neutral path uses the same up/down FIR. Its impulse matches the independent
+  JUCE reference fixture to `7.45e-9` maximum sample error. The wrapper has 59.5
+  samples fractional latency and the processor declares 60 samples to the host
+  once the host prepares processing. A JUCE host probe confirms 60 before audio is
+  processed and after processing begins. Pluginval's earlier, pre-prepare info query
+  displays 0 for both Cosimo and Spectre and is not the processing-state latency.
+- The shaped path then receives the measured 20.016318 Hz second-order Butterworth
+  high-pass (`Q = 1/sqrt(2)`) and fixed `+0.020816 dB` fit before the unfiltered
+  selected bell is subtracted. No program-dependent gain process follows.
 - A high-parked bell is the honest aliasing risk: harmonics of 8–16 kHz content land near
   or above Nyquist and fold. ×4 oversampling plus gentle curves plus residue levels
   (this is a subtle effect by design) keeps fold-back below audibility; the ADAA
@@ -167,7 +175,8 @@ requirements:
   matching Spectre's endpoint normalization. Ten retained −3 dB shoulder probes from
   1–12 kHz, Q 0.7–2, and +6/+12 dB match the production Cmajor bell within 0.00154 dB.
 - The contribution is exactly
-  `DCblock(shape(driven) − deEmphasis · driven)` and is added to dry. There is no
+  `ButterworthHP(shape(driven)) − deEmphasis · driven` after both terms are separately
+  reconstructed from 4×, and is added to the FIR-aligned dry. There is no
   second Amount multiply, post-shaper attenuation, static unity-fundamental matcher,
   RMS follower, correlation matcher, or output trim. The rejected `0.035`
   (approximately −29.1 dB), `0.08`, and `0.094` multipliers buried the effect and are
@@ -180,46 +189,35 @@ requirements:
   default. `scripts/measure_spectre_reference.py` regenerates the broad reference
   corpus, while `scripts/measure_spectre_enhancer_lockin.py` repeats the focused
   low-frequency transfer sweep for both modes. The production Medium renderer is
-  guarded against 33 retained harmonic peaks; current worst error is 0.101 dB.
+  guarded against 33 retained harmonic peaks; current worst error is 0.04284 dB.
   Raw and level-matched audition files live under ignored
   `build/t26-spectre-reference/`.
 
-### Remaining Spectre-Good fidelity gap (measured 2026-08-26)
+### Spectre-Good fidelity gap resolved in production (2026-08-26)
 
-The retained curves and ordinary bell law survive a separate uncertainty pass, but
-the current production waveform is **not** yet a close complex-response match to
-Spectre Good. A 97 + 137 Hz two-tone confirms all four retained shapers across
-58–210 harmonic/intermodulation bins with at most 0.058 dB RMS error. Hot-history
-probes become bit-identical after 500 ms silence; there is no measured envelope or
-program-dependent shaper state beyond the known Tube residue-DC decay.
+The uncertainty and wrapper passes isolated the prior mismatch to Spectre Good's
+JUCE FIR timing/reconstruction and the post-reconstruction shaped-path high-pass.
+Both are now in `wt::EnhancerBus`; the retained EQ and four fixed shaper laws did not
+change. Across four musical fixtures and both modes, the production topology targets
+the measured candidate errors of about −61 dB at 0% de-emphasis, −58 dB at 50%, and
+−55 dB at 100%, versus roughly −3 to −5 dB for the replaced wrapper/order. The
+production regression separately locks the FIR impulse to JUCE, bell shoulders to
+0.000824 dB worst error, and Medium harmonic peaks to 0.04284 dB worst error.
 
-The large mismatch is the 4x wrapper. Across six different broad bells, the
-Spectre/Cosimo transfer ratio is invariant to within 0.0071 dB and 0.0251 degrees
-from 500 Hz–20 kHz, and one common correction leaves ordinary held-out EQ cases
-within 0.019 dB / 0.197 degrees RMS. That common ratio is mostly phase: Spectre is
-equivalent to about 4.85 samples earlier over 500 Hz–8 kHz, Spectre Good has a
-measured low-level pre-response, and the current Cmajor node-oversampling path does
-not. On musical holdouts, an offline output-only correction improves effect
-correlation from 0.497 to 0.949 (pink) and 0.927 to 0.996 (bright poly). Remaining
-transient/high-frequency error proves that matching only an output delay/filter is
-not sufficient; the full upsample/nonlinear/downsample wrapper must be prototyped.
-
-Decision: retain the EQ and shaper laws. Do not change production DSP in this pass.
-Prototype a Spectre-Good-matched custom 4x wrapper next. Exact matching may require
-relaxing the current zero-declared-latency contract because the observed target has
-pre-response; Andrew owns that product tradeoff. Full evidence and inference
-boundaries are in `ENHANCER_MATCHING_FINDINGS.md` and
-`scripts/measure_spectre_enhancer_uncertainty.py`.
+No RMS, correlation, envelope, or automatic gain follower was introduced. Full
+evidence and inference boundaries remain in `ENHANCER_MATCHING_FINDINGS.md`,
+`ENHANCER_WRAPPER_PROTOTYPE_FINDINGS.md`, and
+`ENHANCER_DEEMPHASIS_FINDINGS.md`.
 
 ## 6. Placement and rack integration
 
 Position: **inside the fixed polish chain** (`POLISH_CHAIN_DESIGN.md`) — after all
 rack modules and the global filter, between the SAFE BASS stage and the final
 comp/clipper. A single always-resident instance: no pool membership, no
-`poolResetIn` lifecycle, no modulation-table rows, no lane-state schema growth. Zero
-declared latency (SVFs + memoryless curves + the §4 oversampling stance), no
-allocation. Stereo and M/S branches keep independent filter, DC-blocker, and
-oversampling history so a smoothed mode change crossfades coherent decoded residues
+`poolResetIn` lifecycle, no modulation-table rows, no lane-state schema growth. It
+declares the measured 60-sample wrapper latency and performs no allocation. Stereo
+and M/S branches keep independent filter, reconstruction, and shaped-high-pass
+history so a smoothed mode change crossfades coherent decoded residues
 instead of briefly reinterpreting one channel basis as the other. Reset semantics
 follow the polish chain's single-instance rules.
 
@@ -257,7 +255,10 @@ Status: ratio concept retained; build/defer/reject remains Andrew's decision.
 
 ## 8. Ship criteria
 
-1. All Mid/Amount and Side amounts 0 ⇒ output bit-exact dry in either mode (ADR-005 proof unchanged).
+1. All Mid/Amount and Side amounts 0 ⇒ nonlinear contribution is exactly zero and
+   output matches the retained JUCE FIR neutral impulse within `1e-7`; host latency
+   is exactly 60 samples. Literal same-frame bit-exact dry was superseded by the
+   approved Spectre-Good fidelity tradeoff in §4.
 2. De-emphasis is exact and affine: 0% adds the shaped bell, 100% subtracts the full
    aligned unprocessed bell, and 50% is the sample-accurate midpoint after smoothing.
    No scalar, output matcher, or loudness-equivalence gate follows that operation.
@@ -267,11 +268,14 @@ Status: ratio concept retained; build/defer/reject remains Andrew's decision.
 4. Mono input remains mono in Stereo and M/S. In M/S, mono with only Side raised is
    exact dry, and a pure-side signal with only Side raised remains pure side.
 5. Each band can select Stereo or M/S without changing the other band's routing.
-6. Andrew's ears on the installed VST remain the final sound gate.
+6. Andrew's ears on the rebuilt installed VST remain the final sound gate.
 7. The retained Spectre bell crossings must remain within 0.02 dB in the production
-   Cmajor renderer; the current worst result is 0.00154 dB.
+   Cmajor renderer; the current worst result is 0.000824 dB.
 8. Medium Solid and Tube must match the retained Spectre harmonic peaks within 0.15
-   dB in the production renderer; the current worst result is 0.101 dB.
+   dB in the production renderer; the current worst result is 0.04284 dB.
+9. The built and installed VST3 binaries must be byte-identical, codesign-valid,
+   universal arm64/x86_64, pass pluginval strictness 5, report 60 samples after host
+   preparation, and be mapped by Ableton from the installed path.
 
 ## 9. Open decisions (defaults apply unless overridden)
 
@@ -312,3 +316,10 @@ intermodulation, hot-history, complex impulse, quality, high-frequency, and musi
 holdout comparisons against the installed Cosimo VST3. Its raw report and A/B audio
 remain ignored under `build/t26-spectre-uncertainty/`; the evidence-backed conclusion
 is recorded in `ENHANCER_MATCHING_FINDINGS.md`.
+
+The fourth and fifth passes identify the exact JUCE FIR wrapper and the shaped-only
+high-pass/de-emphasis order. `tests/fixtures/enhancer_juce_fir_wrapper_v1.json`
+retains the independent neutral impulse, and `scripts/measure_enhancer.mjs` guards
+that fixture plus the Spectre bell and Medium-harmonic locks against the production
+Cmajor renderer. See `ENHANCER_WRAPPER_PROTOTYPE_FINDINGS.md` and
+`ENHANCER_DEEMPHASIS_FINDINGS.md`.

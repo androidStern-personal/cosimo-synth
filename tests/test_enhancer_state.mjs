@@ -254,22 +254,26 @@ test("the isolated DSP metadata and composition fence encode the T26 ownership b
     ]);
 
     assert.match(source, /let enhancerOversampleFactor = 4;/);
-    assert.match(source, /band1StereoCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
-    assert.match(source, /band1MidSideCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
-    assert.match(source, /band2StereoCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
-    assert.match(source, /band2MidSideCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
-    assert.match(source, /processor EnhancerShaperCore[\s\S]*bandFilters/);
+    assert.match(source, /let enhancerLatencySamples = 60;/);
+    assert.match(source, /processor\.latency = 60;/);
+    assert.match(source, /static_assert \(enhancerLatencySamples == 60/);
+    assert.match(source, /struct EnhancerFirUpsampler4x[\s\S]*enhancerFirStage0Up/);
+    assert.match(source, /struct EnhancerFirDownsampler4x[\s\S]*enhancerFirStage0Down/);
+    assert.match(source, /struct EnhancerBandCore[\s\S]*bandFilters/);
+    assert.match(source, /let oversampledSampleRate = processor\.frequency \* float64 \(enhancerOversampleFactor\)/);
     assert.match(source, /enhancerEffectiveBellQ \(b1Q, b1MidAmount\)/);
     assert.match(source, /enhancerEffectiveBellQ \(b1Q, b1SideAmount\)/);
     assert.match(source, /let enhancerSpectreMediumDrive = 6\.0f;/);
     assert.match(source, /let enhancerSpectreMediumOutput = 0\.5f;/);
     assert.match(source, /let enhancerSpectreMediumTubeBias = 0\.3125f;/);
     assert.match(source, /mediumWeight = smoothEnhancerControl/);
-    assert.match(source, /band1StereoCore\.out - band1StereoCore\.thru \* deEmphasis/);
-    assert.match(source, /band1MidSideCore\.out - band1MidSideCore\.thru \* deEmphasis/);
-    assert.match(source, /band2StereoCore\.out - band2StereoCore\.thru \* deEmphasis/);
-    assert.match(source, /band2MidSideCore\.out - band2MidSideCore\.thru \* deEmphasis/);
+    assert.match(source, /shapedHighpasses\[0\]\.process \([\s\S]*band1StereoShaped[\s\S]*\) - band1StereoSelected \* deEmphasis/);
+    assert.match(source, /shapedHighpasses\[1\]\.process \([\s\S]*band1MidSideShaped[\s\S]*\) - band1MidSideSelected \* deEmphasis/);
+    assert.match(source, /shapedHighpasses\[2\]\.process \([\s\S]*band2StereoShaped[\s\S]*\) - band2StereoSelected \* deEmphasis/);
+    assert.match(source, /shapedHighpasses\[3\]\.process \([\s\S]*band2MidSideShaped[\s\S]*\) - band2MidSideSelected \* deEmphasis/);
+    assert.match(source, /out <- delayedDry \+ band1Contribution \+ band2Contribution;/);
     assert.doesNotMatch(source, /ResidueTrim/);
+    assert.doesNotMatch(source, /RMS|envelope|correlation/i);
 
     const smoothingSection = source.slice(
         source.indexOf("void smoothControls()"),

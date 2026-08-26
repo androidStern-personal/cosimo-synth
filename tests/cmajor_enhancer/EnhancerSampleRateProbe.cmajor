@@ -2,6 +2,7 @@ processor EnhancerSampleRateProbe
 {
     output stream int32 out;
     node enhancer = wt::EnhancerBus;
+    node neutral = wt::EnhancerBus;
 
     float64 phase;
 
@@ -21,12 +22,17 @@ processor EnhancerSampleRateProbe
         enhancer.b2CurveIn <- 0.0f;
         enhancer.saturationModeIn <- float32 (wt::enhancerSaturationModeSubtle);
         enhancer.deEmphasisIn <- 1.0f;
+        neutral.b1MidAmountIn <- 0.0f;
+        neutral.b1SideAmountIn <- 0.0f;
+        neutral.b2MidAmountIn <- 0.0f;
+        neutral.b2SideAmountIn <- 0.0f;
     }
 
     float64 measureResiduePower (float32 frequencyHz)
     {
         configure();
         enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
         phase = 0.0;
         let settleFrames = int32 (processor.frequency * 0.08);
         let measureFrames = int32 (processor.frequency * 0.16);
@@ -36,7 +42,9 @@ processor EnhancerSampleRateProbe
             let sample = 0.3f * float32 (std::intrinsics::sin (phase));
             phase += twoPi * float64 (frequencyHz) / processor.frequency;
             enhancer.in <- float32<2> (sample, sample);
+            neutral.in <- float32<2> (sample, sample);
             enhancer.advance();
+            neutral.advance();
         }
 
         float64 residuePower;
@@ -45,8 +53,10 @@ processor EnhancerSampleRateProbe
             let sample = 0.3f * float32 (std::intrinsics::sin (phase));
             phase += twoPi * float64 (frequencyHz) / processor.frequency;
             enhancer.in <- float32<2> (sample, sample);
+            neutral.in <- float32<2> (sample, sample);
             enhancer.advance();
-            let residue = enhancer.out[0] - sample;
+            neutral.advance();
+            let residue = enhancer.out[0] - neutral.out[0];
             residuePower += float64 (residue) * float64 (residue);
         }
         return residuePower / float64 (measureFrames);

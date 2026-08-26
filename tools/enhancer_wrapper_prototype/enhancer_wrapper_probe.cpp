@@ -209,17 +209,20 @@ int main (int argc, char** argv)
         else
         {
             auto oversampled = oversampling.processSamplesUp (block);
-            PeakDifference bell (
-                static_cast<double> (arguments.sampleRate) * 4.0,
-                arguments.frequencyHz,
-                arguments.q,
-                arguments.gainDb);
-            auto* channel = oversampled.getChannelPointer (0);
-            for (size_t frame = 0; frame < oversampled.getNumSamples(); ++frame)
+            if (arguments.color != "Roundtrip")
             {
-                const auto selected = bell.process (channel[frame]);
-                channel[frame] = shape (selected, arguments.mode, arguments.color)
-                               - arguments.deEmphasis * selected;
+                PeakDifference bell (
+                    static_cast<double> (arguments.sampleRate) * 4.0,
+                    arguments.frequencyHz,
+                    arguments.q,
+                    arguments.gainDb);
+                auto* channel = oversampled.getChannelPointer (0);
+                for (size_t frame = 0; frame < oversampled.getNumSamples(); ++frame)
+                {
+                    const auto selected = bell.process (channel[frame]);
+                    channel[frame] = shape (selected, arguments.mode, arguments.color)
+                                   - arguments.deEmphasis * selected;
+                }
             }
 
             oversampling.processSamplesDown (block);

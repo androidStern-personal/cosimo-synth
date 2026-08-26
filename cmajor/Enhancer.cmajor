@@ -51,13 +51,16 @@ namespace wt
     let enhancerSpectreMediumOutput = 0.5f;
     let enhancerSpectreMediumTubeBias = 0.3125f;
 
-    // A sample-rate-aware version of the standard x[n]-x[n-1]+R*y[n-1]
-    // DC-blocker idiom. std::filters::dcblocker fixes R at 0.996, making its
-    // cutoff rise fourfold from 48 to 192 kHz; that would materially thin the
-    // 130 Hz band's residue at high sample rates. A direct Spectre startup-decay
-    // probe places its blocker in roughly the 10-15 Hz range; use the upper edge
-    // to remove Tube bias without making the low-band voicing sample-rate-dependent.
-    let enhancerDcBlockerCutoffHz = 15.0f;
+    // Spectre Good's measured wrapper is the JUCE 7.0.1 maximum-quality 4x
+    // equiripple FIR with fractional latency: 59.5 audio samples, reported to the
+    // host as 60. After reconstruction, Spectre applies this fixed Butterworth
+    // high-pass to the shaped path only, then subtracts the unfiltered selected
+    // bell. The tiny static gain is part of the measured transfer fit; it is not
+    // program-dependent compensation.
+    let enhancerLatencySamples = 60;
+    let enhancerShapedHighpassCutoffHz = 20.01631809314913f;
+    let enhancerShapedHighpassQ = 0.7071067811865475f;
+    let enhancerShapedHighpassGain = 1.0023994109214078f;
 
     namespace enhancerFilters = std::filters (float32, float64, 32);
 
@@ -124,100 +127,279 @@ namespace wt
         return std::intrinsics::abs (target - next) <= snapEpsilon ? target : next;
     }
 
-    struct EnhancerDcBlocker
+    // Non-zero left-half coefficients from JUCE 7.0.1's four maximum-quality
+    // half-band FIRs. Half-band symmetry supplies the mirrored half and the
+    // omitted alternating coefficients are exactly zero. Regenerate these with
+    // tools/enhancer_wrapper_prototype/dump_fir_coefficients.cpp.
+    let enhancerFirStage0Up = float32[] (
+        -0.00001441364293f, 0.00002560716530f, -0.00004758974683f,
+        0.00008118036203f, -0.0001303507743f, 0.0001999001252f,
+        -0.0002955278615f, 0.0004239034024f, -0.0005927348393f,
+        0.0008108434267f, -0.001088253804f, 0.001436315128f,
+        -0.001867878251f, 0.002397564473f, -0.003042179858f,
+        0.003821358318f, -0.004758563824f, 0.005882661790f,
+        -0.007230406627f, 0.008850468323f, -0.01081011258f,
+        0.01320671570f, -0.01618859544f, 0.01999517344f,
+        -0.02504100837f, 0.03211186826f, -0.04289690405f,
+        0.06179775670f, -0.1049736291f, 0.3179250658f
+    );
+
+    let enhancerFirStage0Down = float32[] (
+        -0.0001030247731f, 0.0001857938769f, -0.0003459157888f,
+        0.0005886403378f, -0.0009401905700f, 0.001431476558f,
+        -0.002098666038f, 0.002984177088f, -0.004138472956f,
+        0.005623309873f, -0.007517615799f, 0.009928219952f,
+        -0.01300998963f, 0.01700541750f, -0.02232825570f,
+        0.02975940518f, -0.04097906128f, 0.06037589908f,
+        -0.1040913686f, 0.3175875843f
+    );
+
+    let enhancerFirStage1Up = float32[] (
+        0.00009495770064f, -0.0003065069614f, 0.0007643893478f,
+        -0.001619642251f, 0.003078897018f, -0.005412098020f,
+        0.008978303522f, -0.01429258939f, 0.02220495790f,
+        -0.03441836312f, 0.05528964475f, -0.1008740589f,
+        0.3165121078f
+    );
+
+    let enhancerFirStage1Down = float32[] (
+        0.0004214593791f, -0.001446568174f, 0.003697798122f,
+        -0.007942202501f, 0.01531123929f, -0.02773482911f,
+        0.04967261851f, -0.09711286426f, 0.3151333332f
+    );
+
+    struct EnhancerFirUpsampler4x
     {
-        float32<2> previousInput;
-        float32<2> previousOutput;
-        float32 pole;
+        float32<2>[119] stage0History;
+        float32<2>[51] stage1History;
+        float32<2>[4] samples;
+
+        void reset()
+        {
+            this.stage0History = ();
+            this.stage1History = ();
+            this.samples = ();
+        }
+
+        void processStage0 (float32<2> sampleFrame)
+        {
+            this.stage0History[118] = sampleFrame * 2.0f;
+            float32<2> even;
+            for (int32 coefficient = 0; coefficient < 30; ++coefficient)
+            {
+                let tap = coefficient * 2;
+                even += (this.stage0History.at (tap)
+                         + this.stage0History.at (118 - tap))
+                        * enhancerFirStage0Up.at (coefficient);
+            }
+            let odd = this.stage0History[60] * 0.5f;
+            for (int32 tap = 0; tap < 117; tap += 2)
+                this.stage0History.at (tap) = this.stage0History.at (tap + 2);
+
+            this.processStage1 (even, true);
+            this.processStage1 (odd, false);
+        }
+
+        void processStage1 (float32<2> sampleFrame, bool firstHalf)
+        {
+            this.stage1History[50] = sampleFrame * 2.0f;
+            float32<2> even;
+            for (int32 coefficient = 0; coefficient < 13; ++coefficient)
+            {
+                let tap = coefficient * 2;
+                even += (this.stage1History.at (tap)
+                         + this.stage1History.at (50 - tap))
+                        * enhancerFirStage1Up.at (coefficient);
+            }
+            let odd = this.stage1History[26] * 0.5f;
+            for (int32 tap = 0; tap < 49; tap += 2)
+                this.stage1History.at (tap) = this.stage1History.at (tap + 2);
+
+            if (firstHalf)
+            {
+                this.samples[0] = even;
+                this.samples[1] = odd;
+            }
+            else
+            {
+                this.samples[2] = even;
+                this.samples[3] = odd;
+            }
+        }
+
+        void process (float32<2> sampleFrame)
+        {
+            this.processStage0 (sampleFrame);
+        }
+    }
+
+    struct EnhancerFirDownsampler4x
+    {
+        float32<2>[35] stage1History;
+        float32<2>[9] stage1CentreHistory;
+        int32 stage1Position;
+        float32<2>[79] stage0History;
+        float32<2>[20] stage0CentreHistory;
+        int32 stage0Position;
+
+        void reset()
+        {
+            this.stage1History = ();
+            this.stage1CentreHistory = ();
+            this.stage1Position = 0;
+            this.stage0History = ();
+            this.stage0CentreHistory = ();
+            this.stage0Position = 0;
+        }
+
+        float32<2> processStage1 (float32<2> evenInput, float32<2> oddInput)
+        {
+            this.stage1History[34] = evenInput;
+            float32<2> result;
+            for (int32 coefficient = 0; coefficient < 9; ++coefficient)
+            {
+                let tap = coefficient * 2;
+                result += (this.stage1History.at (tap)
+                           + this.stage1History.at (34 - tap))
+                          * enhancerFirStage1Down.at (coefficient);
+            }
+            result += this.stage1CentreHistory.at (this.stage1Position) * 0.5f;
+            this.stage1CentreHistory.at (this.stage1Position) = oddInput;
+            for (int32 tap = 0; tap < 33; ++tap)
+                this.stage1History.at (tap) = this.stage1History.at (tap + 2);
+            this.stage1Position = this.stage1Position == 0 ? 8 : this.stage1Position - 1;
+            return result;
+        }
+
+        float32<2> processStage0 (float32<2> evenInput, float32<2> oddInput)
+        {
+            this.stage0History[78] = evenInput;
+            float32<2> result;
+            for (int32 coefficient = 0; coefficient < 20; ++coefficient)
+            {
+                let tap = coefficient * 2;
+                result += (this.stage0History.at (tap)
+                           + this.stage0History.at (78 - tap))
+                          * enhancerFirStage0Down.at (coefficient);
+            }
+            result += this.stage0CentreHistory.at (this.stage0Position) * 0.5f;
+            this.stage0CentreHistory.at (this.stage0Position) = oddInput;
+            for (int32 tap = 0; tap < 77; ++tap)
+                this.stage0History.at (tap) = this.stage0History.at (tap + 2);
+            this.stage0Position = this.stage0Position == 0 ? 19 : this.stage0Position - 1;
+            return result;
+        }
+
+        float32<2> process (
+            float32<2> sample0,
+            float32<2> sample1,
+            float32<2> sample2,
+            float32<2> sample3
+        )
+        {
+            let half0 = this.processStage1 (sample0, sample1);
+            let half1 = this.processStage1 (sample2, sample3);
+            return this.processStage0 (half0, half1);
+        }
+    }
+
+    struct EnhancerShapedHighpass
+    {
+        float32<2> state1;
+        float32<2> state2;
+        float32 b0;
+        float32 b1;
+        float32 b2;
+        float32 a1;
+        float32 a2;
 
         void setSampleRate (float64 sampleRate)
         {
-            this.pole = float32 (std::intrinsics::exp (
-                -twoPi * float64 (enhancerDcBlockerCutoffHz) / sampleRate
-            ));
+            let omega = twoPi * float64 (enhancerShapedHighpassCutoffHz) / sampleRate;
+            let cosine = std::intrinsics::cos (omega);
+            let alpha = std::intrinsics::sin (omega)
+                        / (2.0 * float64 (enhancerShapedHighpassQ));
+            let a0 = 1.0 + alpha;
+            this.b0 = float32 ((1.0 + cosine) * 0.5 / a0);
+            this.b1 = float32 (-(1.0 + cosine) / a0);
+            this.b2 = this.b0;
+            this.a1 = float32 (-2.0 * cosine / a0);
+            this.a2 = float32 ((1.0 - alpha) / a0);
         }
 
         void reset()
         {
-            this.previousInput = ();
-            this.previousOutput = ();
+            this.state1 = ();
+            this.state2 = ();
         }
 
         float32<2> process (float32<2> sampleFrame)
         {
-            let filtered = sampleFrame - this.previousInput + this.previousOutput * this.pole;
-            this.previousInput = sampleFrame;
-            this.previousOutput = filtered;
-            return filtered;
+            let result = sampleFrame * this.b0 + this.state1;
+            this.state1 = sampleFrame * this.b1 - result * this.a1 + this.state2;
+            this.state2 = sampleFrame * this.b2 - result * this.a2;
+            return result * enhancerShapedHighpassGain;
         }
     }
 
-    processor EnhancerShaperCore
+    struct EnhancerBandCore
     {
-        input stream float32<2> in;
-        input value float32 frequencyHzIn [[ init: 1000.0f ]];
-        input value float32 q0In [[ init: 1.0f ]];
-        input value float32 q1In [[ init: 1.0f ]];
-        input value float32 drive0In [[ init: 0.0f ]];
-        input value float32 drive1In [[ init: 0.0f ]];
-        input value float32 solidWeightIn [[ init: 0.0f ]];
-        input value float32 mediumWeightIn [[ init: 0.0f ]];
-        input event int32 resetIn;
-        output stream float32<2> out;
-        output stream float32<2> thru;
-
         enhancerFilters::tpt::svf::Implementation[2] bandFilters;
         float32 tunedFrequencyHz0;
         float32 tunedFrequencyHz1;
         float32 tunedQ0;
         float32 tunedQ1;
         int32 framesUntilCoefficientUpdate;
+        float64 sampleRate;
+        float32<2> selected;
 
-        void init()
+        void prepare (float64 oversampledSampleRate)
         {
             for (wrap<2> lane)
-                bandFilters[lane].setMode (enhancerFilters::tpt::svf::Mode::bandPass);
+                this.bandFilters[lane].setMode (enhancerFilters::tpt::svf::Mode::bandPass);
+            this.sampleRate = oversampledSampleRate;
         }
 
-        event resetIn (int32 ignored)
+        void reset()
         {
             for (wrap<2> lane)
-                bandFilters[lane].reset();
+                this.bandFilters[lane].reset();
 
-            tunedFrequencyHz0 = 0.0f;
-            tunedFrequencyHz1 = 0.0f;
-            tunedQ0 = 0.0f;
-            tunedQ1 = 0.0f;
-            framesUntilCoefficientUpdate = 0;
+            this.tunedFrequencyHz0 = 0.0f;
+            this.tunedFrequencyHz1 = 0.0f;
+            this.tunedQ0 = 0.0f;
+            this.tunedQ1 = 0.0f;
+            this.framesUntilCoefficientUpdate = 0;
+            this.selected = ();
         }
 
         void updateBandCoefficients (float32 frequencyHz, float32 q0, float32 q1)
         {
-            if (framesUntilCoefficientUpdate > 0)
+            if (this.framesUntilCoefficientUpdate > 0)
             {
-                framesUntilCoefficientUpdate -= 1;
+                this.framesUntilCoefficientUpdate -= 1;
                 return;
             }
 
-            framesUntilCoefficientUpdate = enhancerCoefficientUpdateFrames
-                                           * enhancerOversampleFactor - 1;
+            this.framesUntilCoefficientUpdate = enhancerCoefficientUpdateFrames
+                                                * enhancerOversampleFactor - 1;
 
-            if (std::intrinsics::abs (frequencyHz - tunedFrequencyHz0)
+            if (std::intrinsics::abs (frequencyHz - this.tunedFrequencyHz0)
                     > enhancerCoefficientEpsilon
-                || std::intrinsics::abs (q0 - tunedQ0) > enhancerCoefficientEpsilon)
+                || std::intrinsics::abs (q0 - this.tunedQ0) > enhancerCoefficientEpsilon)
             {
-                bandFilters[0].setFrequency (processor.frequency, frequencyHz, q0);
-                tunedFrequencyHz0 = frequencyHz;
-                tunedQ0 = q0;
+                this.bandFilters[0].setFrequency (this.sampleRate, frequencyHz, q0);
+                this.tunedFrequencyHz0 = frequencyHz;
+                this.tunedQ0 = q0;
             }
 
-            if (std::intrinsics::abs (frequencyHz - tunedFrequencyHz1)
+            if (std::intrinsics::abs (frequencyHz - this.tunedFrequencyHz1)
                     > enhancerCoefficientEpsilon
-                || std::intrinsics::abs (q1 - tunedQ1) > enhancerCoefficientEpsilon)
+                || std::intrinsics::abs (q1 - this.tunedQ1) > enhancerCoefficientEpsilon)
             {
-                bandFilters[1].setFrequency (processor.frequency, frequencyHz, q1);
-                tunedFrequencyHz1 = frequencyHz;
-                tunedQ1 = q1;
+                this.bandFilters[1].setFrequency (this.sampleRate, frequencyHz, q1);
+                this.tunedFrequencyHz1 = frequencyHz;
+                this.tunedQ1 = q1;
             }
         }
 
@@ -265,81 +447,84 @@ namespace wt
         float32 subtleShape (float32 sample, float32 solidWeight)
         {
             if (solidWeight == 0.0f)
-                return subtleTubeShape (sample);
+                return this.subtleTubeShape (sample);
 
             if (solidWeight == 1.0f)
-                return subtleSolidShape (sample);
+                return this.subtleSolidShape (sample);
 
-            let tube = subtleTubeShape (sample);
-            let solid = subtleSolidShape (sample);
+            let tube = this.subtleTubeShape (sample);
+            let solid = this.subtleSolidShape (sample);
             return tube + (solid - tube) * solidWeight;
         }
 
         float32 mediumShape (float32 sample, float32 solidWeight)
         {
             if (solidWeight == 0.0f)
-                return mediumTubeShape (sample);
+                return this.mediumTubeShape (sample);
 
             if (solidWeight == 1.0f)
-                return mediumSolidShape (sample);
+                return this.mediumSolidShape (sample);
 
-            let tube = mediumTubeShape (sample);
-            let solid = mediumSolidShape (sample);
+            let tube = this.mediumTubeShape (sample);
+            let solid = this.mediumSolidShape (sample);
             return tube + (solid - tube) * solidWeight;
         }
 
         float32 shape (float32 sample, float32 solidWeight, float32 mediumWeight)
         {
             if (mediumWeight == 0.0f)
-                return subtleShape (sample, solidWeight);
+                return this.subtleShape (sample, solidWeight);
 
             if (mediumWeight == 1.0f)
-                return mediumShape (sample, solidWeight);
+                return this.mediumShape (sample, solidWeight);
 
-            let subtle = subtleShape (sample, solidWeight);
-            let medium = mediumShape (sample, solidWeight);
+            let subtle = this.subtleShape (sample, solidWeight);
+            let medium = this.mediumShape (sample, solidWeight);
             return subtle + (medium - subtle) * mediumWeight;
         }
 
-        void main()
+        float32<2> process (
+            float32<2> sampleFrame,
+            float32 frequencyHz,
+            float32 q0,
+            float32 q1,
+            float32 drive0,
+            float32 drive1,
+            float32 solidWeight,
+            float32 mediumWeight
+        )
         {
-            loop
-            {
-                let sampleFrame = in;
-                let frequencyHz = std::intrinsics::clamp (
-                    frequencyHzIn,
-                    enhancerFrequencyMinHz,
-                    enhancerFrequencyMaxHz
-                );
-                let qMaximum = enhancerQMax * std::levels::dBtoGain (
-                    0.5f * enhancerBandGainRangeDb
-                );
-                let q0 = std::intrinsics::clamp (q0In, enhancerQMin, qMaximum);
-                let q1 = std::intrinsics::clamp (q1In, enhancerQMin, qMaximum);
-                let drive0 = std::intrinsics::clamp (
-                    drive0In,
-                    0.0f,
-                    enhancerAmountDrive (1.0f)
-                );
-                let drive1 = std::intrinsics::clamp (
-                    drive1In,
-                    0.0f,
-                    enhancerAmountDrive (1.0f)
-                );
-                let solidWeight = std::intrinsics::clamp (solidWeightIn, 0.0f, 1.0f);
-                let mediumWeight = std::intrinsics::clamp (mediumWeightIn, 0.0f, 1.0f);
-                updateBandCoefficients (frequencyHz, q0, q1);
-                let drivenBand = float32<2> (
-                    bandFilters[0].process (sampleFrame[0]) * drive0 / q0,
-                    bandFilters[1].process (sampleFrame[1]) * drive1 / q1
-                );
-                thru <- drivenBand;
-                out <- float32<2> (
-                    shape (drivenBand[0], solidWeight, mediumWeight),
-                    shape (drivenBand[1], solidWeight, mediumWeight)
-                );
-                advance();
-            }
+            let safeFrequencyHz = std::intrinsics::clamp (
+                frequencyHz,
+                enhancerFrequencyMinHz,
+                enhancerFrequencyMaxHz
+            );
+            let qMaximum = enhancerQMax * std::levels::dBtoGain (
+                0.5f * enhancerBandGainRangeDb
+            );
+            let safeQ0 = std::intrinsics::clamp (q0, enhancerQMin, qMaximum);
+            let safeQ1 = std::intrinsics::clamp (q1, enhancerQMin, qMaximum);
+            let safeDrive0 = std::intrinsics::clamp (
+                drive0,
+                0.0f,
+                enhancerAmountDrive (1.0f)
+            );
+            let safeDrive1 = std::intrinsics::clamp (
+                drive1,
+                0.0f,
+                enhancerAmountDrive (1.0f)
+            );
+            let safeSolidWeight = std::intrinsics::clamp (solidWeight, 0.0f, 1.0f);
+            let safeMediumWeight = std::intrinsics::clamp (mediumWeight, 0.0f, 1.0f);
+            this.updateBandCoefficients (safeFrequencyHz, safeQ0, safeQ1);
+            this.selected = float32<2> (
+                this.bandFilters[0].process (sampleFrame[0]) * safeDrive0 / safeQ0,
+                this.bandFilters[1].process (sampleFrame[1]) * safeDrive1 / safeQ1
+            );
+            return float32<2> (
+                this.shape (this.selected[0], safeSolidWeight, safeMediumWeight),
+                this.shape (this.selected[1], safeSolidWeight, safeMediumWeight)
+            );
         }
     }
 
@@ -370,13 +555,27 @@ namespace wt
 
         output stream float32<2> out;
 
-        static_assert (processor.latency == 0, "The isolated Enhancer must remain zero latency");
+        // Keep this literal for Cmajor 1.0.3066: its graph-latency analysis does
+        // not preserve an imported namespace constant at generated host seams.
+        processor.latency = 60;
+        static_assert (enhancerLatencySamples == 60,
+                       "Update EnhancerBus's declared latency with its FIR contract");
 
-        EnhancerDcBlocker[enhancerBandCount * 2] residueDcBlockers;
-        node band1StereoCore = wt::EnhancerShaperCore * enhancerOversampleFactor;
-        node band1MidSideCore = wt::EnhancerShaperCore * enhancerOversampleFactor;
-        node band2StereoCore = wt::EnhancerShaperCore * enhancerOversampleFactor;
-        node band2MidSideCore = wt::EnhancerShaperCore * enhancerOversampleFactor;
+        EnhancerFirUpsampler4x inputOversampler;
+        EnhancerFirDownsampler4x dryDownsampler;
+        EnhancerFirDownsampler4x band1StereoShapedDownsampler;
+        EnhancerFirDownsampler4x band1StereoSelectedDownsampler;
+        EnhancerFirDownsampler4x band1MidSideShapedDownsampler;
+        EnhancerFirDownsampler4x band1MidSideSelectedDownsampler;
+        EnhancerFirDownsampler4x band2StereoShapedDownsampler;
+        EnhancerFirDownsampler4x band2StereoSelectedDownsampler;
+        EnhancerFirDownsampler4x band2MidSideShapedDownsampler;
+        EnhancerFirDownsampler4x band2MidSideSelectedDownsampler;
+        EnhancerBandCore band1StereoCore;
+        EnhancerBandCore band1MidSideCore;
+        EnhancerBandCore band2StereoCore;
+        EnhancerBandCore band2MidSideCore;
+        EnhancerShapedHighpass[enhancerBandCount * 2] shapedHighpasses;
 
         float32 b1FreqHz = enhancerB1FrequencyDefaultHz;
         float32 b1Q = enhancerB1QDefault;
@@ -400,25 +599,34 @@ namespace wt
 
         void init()
         {
+            let oversampledSampleRate = processor.frequency * float64 (enhancerOversampleFactor);
+            band1StereoCore.prepare (oversampledSampleRate);
+            band1MidSideCore.prepare (oversampledSampleRate);
+            band2StereoCore.prepare (oversampledSampleRate);
+            band2MidSideCore.prepare (oversampledSampleRate);
             for (wrap<enhancerBandCount * 2> path)
-                residueDcBlockers[path].setSampleRate (processor.frequency);
+                shapedHighpasses[path].setSampleRate (processor.frequency);
         }
 
         event resetIn (int32 ignored)
         {
             for (wrap<enhancerBandCount * 2> path)
-                residueDcBlockers[path].reset();
+                shapedHighpasses[path].reset();
 
-            // A node reset clears both oversampling resamplers as well as the
-            // stateless shaper child.
+            inputOversampler.reset();
+            dryDownsampler.reset();
+            band1StereoShapedDownsampler.reset();
+            band1StereoSelectedDownsampler.reset();
+            band1MidSideShapedDownsampler.reset();
+            band1MidSideSelectedDownsampler.reset();
+            band2StereoShapedDownsampler.reset();
+            band2StereoSelectedDownsampler.reset();
+            band2MidSideShapedDownsampler.reset();
+            band2MidSideSelectedDownsampler.reset();
             band1StereoCore.reset();
             band1MidSideCore.reset();
             band2StereoCore.reset();
             band2MidSideCore.reset();
-            band1StereoCore.resetIn <- 1;
-            band1MidSideCore.resetIn <- 1;
-            band2StereoCore.resetIn <- 1;
-            band2MidSideCore.resetIn <- 1;
             // Smoothed settings are deliberately preserved. resetIn owns audio
             // history only; preset/state recall owns the sound and routing values.
         }
@@ -520,10 +728,6 @@ namespace wt
                 smoothControls();
 
                 let dry = in;
-                let dryMidSide = float32<2> (
-                    0.5f * (dry[0] + dry[1]),
-                    0.5f * (dry[0] - dry[1])
-                );
                 let band1PrimaryDrive = enhancerAmountDrive (b1MidAmount);
                 let band1SideDrive = enhancerAmountDrive (b1SideAmount);
                 let band2PrimaryDrive = enhancerAmountDrive (b2MidAmount);
@@ -533,58 +737,143 @@ namespace wt
                 let band2PrimaryQ = enhancerEffectiveBellQ (b2Q, b2MidAmount);
                 let band2SideQ = enhancerEffectiveBellQ (b2Q, b2SideAmount);
 
-                band1StereoCore.in <- dry;
-                band1StereoCore.frequencyHzIn <- b1FreqHz;
-                band1StereoCore.q0In <- band1PrimaryQ;
-                band1StereoCore.q1In <- band1PrimaryQ;
-                band1StereoCore.drive0In <- band1PrimaryDrive;
-                band1StereoCore.drive1In <- band1PrimaryDrive;
-                band1StereoCore.solidWeightIn <- b1SolidWeight;
-                band1StereoCore.mediumWeightIn <- mediumWeight;
-                band1StereoCore.advance();
-                band1MidSideCore.in <- dryMidSide;
-                band1MidSideCore.frequencyHzIn <- b1FreqHz;
-                band1MidSideCore.q0In <- band1PrimaryQ;
-                band1MidSideCore.q1In <- band1SideQ;
-                band1MidSideCore.drive0In <- band1PrimaryDrive;
-                band1MidSideCore.drive1In <- band1SideDrive;
-                band1MidSideCore.solidWeightIn <- b1SolidWeight;
-                band1MidSideCore.mediumWeightIn <- mediumWeight;
-                band1MidSideCore.advance();
-                band2StereoCore.in <- dry;
-                band2StereoCore.frequencyHzIn <- b2FreqHz;
-                band2StereoCore.q0In <- band2PrimaryQ;
-                band2StereoCore.q1In <- band2PrimaryQ;
-                band2StereoCore.drive0In <- band2PrimaryDrive;
-                band2StereoCore.drive1In <- band2PrimaryDrive;
-                band2StereoCore.solidWeightIn <- b2SolidWeight;
-                band2StereoCore.mediumWeightIn <- mediumWeight;
-                band2StereoCore.advance();
-                band2MidSideCore.in <- dryMidSide;
-                band2MidSideCore.frequencyHzIn <- b2FreqHz;
-                band2MidSideCore.q0In <- band2PrimaryQ;
-                band2MidSideCore.q1In <- band2SideQ;
-                band2MidSideCore.drive0In <- band2PrimaryDrive;
-                band2MidSideCore.drive1In <- band2SideDrive;
-                band2MidSideCore.solidWeightIn <- b2SolidWeight;
-                band2MidSideCore.mediumWeightIn <- mediumWeight;
-                band2MidSideCore.advance();
+                inputOversampler.process (dry);
+                float32<2>[4] band1StereoShapedFrames;
+                float32<2>[4] band1StereoSelectedFrames;
+                float32<2>[4] band1MidSideShapedFrames;
+                float32<2>[4] band1MidSideSelectedFrames;
+                float32<2>[4] band2StereoShapedFrames;
+                float32<2>[4] band2StereoSelectedFrames;
+                float32<2>[4] band2MidSideShapedFrames;
+                float32<2>[4] band2MidSideSelectedFrames;
 
-                // 0% de-emphasis adds the complete shaped bell. 100% subtracts
-                // the aligned unprocessed bell. Intermediate values interpolate
-                // only that subtraction; no output trim or gain matcher follows.
-                let band1StereoContribution = residueDcBlockers[0].process (
-                    band1StereoCore.out - band1StereoCore.thru * deEmphasis
+                for (int32 oversampleFrame = 0;
+                     oversampleFrame < enhancerOversampleFactor;
+                     ++oversampleFrame)
+                {
+                    let oversampledDry = inputOversampler.samples.at (oversampleFrame);
+                    let oversampledMidSide = float32<2> (
+                        0.5f * (oversampledDry[0] + oversampledDry[1]),
+                        0.5f * (oversampledDry[0] - oversampledDry[1])
+                    );
+
+                    band1StereoShapedFrames.at (oversampleFrame) = band1StereoCore.process (
+                        oversampledDry,
+                        b1FreqHz,
+                        band1PrimaryQ,
+                        band1PrimaryQ,
+                        band1PrimaryDrive,
+                        band1PrimaryDrive,
+                        b1SolidWeight,
+                        mediumWeight
+                    );
+                    band1StereoSelectedFrames.at (oversampleFrame) = band1StereoCore.selected;
+                    band1MidSideShapedFrames.at (oversampleFrame) = band1MidSideCore.process (
+                        oversampledMidSide,
+                        b1FreqHz,
+                        band1PrimaryQ,
+                        band1SideQ,
+                        band1PrimaryDrive,
+                        band1SideDrive,
+                        b1SolidWeight,
+                        mediumWeight
+                    );
+                    band1MidSideSelectedFrames.at (oversampleFrame) = band1MidSideCore.selected;
+                    band2StereoShapedFrames.at (oversampleFrame) = band2StereoCore.process (
+                        oversampledDry,
+                        b2FreqHz,
+                        band2PrimaryQ,
+                        band2PrimaryQ,
+                        band2PrimaryDrive,
+                        band2PrimaryDrive,
+                        b2SolidWeight,
+                        mediumWeight
+                    );
+                    band2StereoSelectedFrames.at (oversampleFrame) = band2StereoCore.selected;
+                    band2MidSideShapedFrames.at (oversampleFrame) = band2MidSideCore.process (
+                        oversampledMidSide,
+                        b2FreqHz,
+                        band2PrimaryQ,
+                        band2SideQ,
+                        band2PrimaryDrive,
+                        band2SideDrive,
+                        b2SolidWeight,
+                        mediumWeight
+                    );
+                    band2MidSideSelectedFrames.at (oversampleFrame) = band2MidSideCore.selected;
+                }
+
+                let delayedDry = dryDownsampler.process (
+                    inputOversampler.samples[0],
+                    inputOversampler.samples[1],
+                    inputOversampler.samples[2],
+                    inputOversampler.samples[3]
                 );
-                let band1MidSideContribution = residueDcBlockers[1].process (
-                    band1MidSideCore.out - band1MidSideCore.thru * deEmphasis
+                let band1StereoShaped = band1StereoShapedDownsampler.process (
+                    band1StereoShapedFrames[0],
+                    band1StereoShapedFrames[1],
+                    band1StereoShapedFrames[2],
+                    band1StereoShapedFrames[3]
                 );
-                let band2StereoContribution = residueDcBlockers[2].process (
-                    band2StereoCore.out - band2StereoCore.thru * deEmphasis
+                let band1StereoSelected = band1StereoSelectedDownsampler.process (
+                    band1StereoSelectedFrames[0],
+                    band1StereoSelectedFrames[1],
+                    band1StereoSelectedFrames[2],
+                    band1StereoSelectedFrames[3]
                 );
-                let band2MidSideContribution = residueDcBlockers[3].process (
-                    band2MidSideCore.out - band2MidSideCore.thru * deEmphasis
+                let band1MidSideShaped = band1MidSideShapedDownsampler.process (
+                    band1MidSideShapedFrames[0],
+                    band1MidSideShapedFrames[1],
+                    band1MidSideShapedFrames[2],
+                    band1MidSideShapedFrames[3]
                 );
+                let band1MidSideSelected = band1MidSideSelectedDownsampler.process (
+                    band1MidSideSelectedFrames[0],
+                    band1MidSideSelectedFrames[1],
+                    band1MidSideSelectedFrames[2],
+                    band1MidSideSelectedFrames[3]
+                );
+                let band2StereoShaped = band2StereoShapedDownsampler.process (
+                    band2StereoShapedFrames[0],
+                    band2StereoShapedFrames[1],
+                    band2StereoShapedFrames[2],
+                    band2StereoShapedFrames[3]
+                );
+                let band2StereoSelected = band2StereoSelectedDownsampler.process (
+                    band2StereoSelectedFrames[0],
+                    band2StereoSelectedFrames[1],
+                    band2StereoSelectedFrames[2],
+                    band2StereoSelectedFrames[3]
+                );
+                let band2MidSideShaped = band2MidSideShapedDownsampler.process (
+                    band2MidSideShapedFrames[0],
+                    band2MidSideShapedFrames[1],
+                    band2MidSideShapedFrames[2],
+                    band2MidSideShapedFrames[3]
+                );
+                let band2MidSideSelected = band2MidSideSelectedDownsampler.process (
+                    band2MidSideSelectedFrames[0],
+                    band2MidSideSelectedFrames[1],
+                    band2MidSideSelectedFrames[2],
+                    band2MidSideSelectedFrames[3]
+                );
+
+                // Spectre's shaped path is conditioned after FIR reconstruction.
+                // De-emphasis then subtracts the separately reconstructed,
+                // unfiltered bell. Intermediate values remain an exact affine
+                // interpolation; no gain follower or output trim follows.
+                let band1StereoContribution = shapedHighpasses[0].process (
+                    band1StereoShaped
+                ) - band1StereoSelected * deEmphasis;
+                let band1MidSideContribution = shapedHighpasses[1].process (
+                    band1MidSideShaped
+                ) - band1MidSideSelected * deEmphasis;
+                let band2StereoContribution = shapedHighpasses[2].process (
+                    band2StereoShaped
+                ) - band2StereoSelected * deEmphasis;
+                let band2MidSideContribution = shapedHighpasses[3].process (
+                    band2MidSideShaped
+                ) - band2MidSideSelected * deEmphasis;
                 let band1DecodedMidSideContribution = float32<2> (
                     band1MidSideContribution[0] + band1MidSideContribution[1],
                     band1MidSideContribution[0] - band1MidSideContribution[1]
@@ -601,18 +890,7 @@ namespace wt
                     : (b2MidSideWeight == 1.0f ? band2DecodedMidSideContribution
                        : band2StereoContribution
                          + (band2DecodedMidSideContribution - band2StereoContribution) * b2MidSideWeight);
-                // Keep the neutral path literally untouched. This also prevents
-                // a signed-zero or M/S round-trip from weakening the bit-identity
-                // contract when all four smoothed amounts have reached zero.
-                if (b1MidAmount == 0.0f && b1SideAmount == 0.0f
-                    && b2MidAmount == 0.0f && b2SideAmount == 0.0f)
-                {
-                    out <- dry;
-                }
-                else
-                {
-                    out <- dry + band1Contribution + band2Contribution;
-                }
+                out <- delayedDry + band1Contribution + band2Contribution;
 
                 advance();
             }

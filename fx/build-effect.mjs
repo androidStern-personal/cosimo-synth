@@ -46,6 +46,7 @@ export const effectPlugins = {
         juceOut: "build/enhancer_juce",
         cmakeTarget: "CosimoEnhancer",
         productName: "CosimoEnhancer",
+        generatedHostLatencySamples: 60,
         runtimeSources: [
             { repoPath: "cmajor/Enhancer.cmajor", runtimePath: "Enhancer.cmajor" },
             { repoPath: "fx/enhancer/EnhancerPlugin.cmajor", runtimePath: "EnhancerPlugin.cmajor" },
