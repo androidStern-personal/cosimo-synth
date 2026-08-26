@@ -40,12 +40,12 @@ test("the Enhancer saves both bands, their independent modes, and global de-emph
                 { id, dspEndpointID, min, max, initial, unit }
             )),
         [
-            { id: "b1FreqHz", dspEndpointID: "b1FreqHzIn", min: 30, max: 16_000, initial: 130, unit: "Hz" },
-            { id: "b1Q", dspEndpointID: "b1QIn", min: 0.3, max: 8, initial: 0.71, unit: "" },
+            { id: "b1FreqHz", dspEndpointID: "b1FreqHzIn", min: 20, max: 20_000, initial: 130, unit: "Hz" },
+            { id: "b1Q", dspEndpointID: "b1QIn", min: 0.1, max: 10, initial: 0.71, unit: "" },
             { id: "b1MidAmount", dspEndpointID: "b1MidAmountIn", min: 0, max: 1, initial: 0, unit: "" },
             { id: "b1SideAmount", dspEndpointID: "b1SideAmountIn", min: 0, max: 1, initial: 0, unit: "" },
-            { id: "b2FreqHz", dspEndpointID: "b2FreqHzIn", min: 30, max: 16_000, initial: 9_000, unit: "Hz" },
-            { id: "b2Q", dspEndpointID: "b2QIn", min: 0.3, max: 8, initial: 0.71, unit: "" },
+            { id: "b2FreqHz", dspEndpointID: "b2FreqHzIn", min: 20, max: 20_000, initial: 9_000, unit: "Hz" },
+            { id: "b2Q", dspEndpointID: "b2QIn", min: 0.1, max: 10, initial: 0.71, unit: "" },
             { id: "b2MidAmount", dspEndpointID: "b2MidAmountIn", min: 0, max: 1, initial: 0, unit: "" },
             { id: "b2SideAmount", dspEndpointID: "b2SideAmountIn", min: 0, max: 1, initial: 0, unit: "" },
             { id: "deEmphasis", dspEndpointID: "deEmphasisIn", min: 0, max: 1, initial: 1, unit: "" },
@@ -84,13 +84,13 @@ test("the Enhancer saves both bands, their independent modes, and global de-emph
     const edited = {
         ...defaults,
         b1FreqHz: 47.5,
-        b1Q: 8,
+        b1Q: 10,
         b1Mode: "mid-side",
         b1MidAmount: 0.75,
         b1SideAmount: 0.25,
         b1Curve: "tube",
-        b2FreqHz: 15_999.5,
-        b2Q: 0.3,
+        b2FreqHz: 19_999.5,
+        b2Q: 0.1,
         b2Mode: "stereo",
         b2MidAmount: 1,
         b2SideAmount: 0.5,
@@ -100,13 +100,13 @@ test("the Enhancer saves both bands, their independent modes, and global de-emph
     assert.deepEqual(enhancer.parseEnhancerState(edited), { _tag: "ok", value: edited });
     assert.deepEqual(enhancer.toEnhancerDspSettings(edited), {
         b1FreqHzIn: 47.5,
-        b1QIn: 8,
+        b1QIn: 10,
         b1ModeIn: 1,
         b1MidAmountIn: 0.75,
         b1SideAmountIn: 0.25,
         b1CurveIn: 0,
-        b2FreqHzIn: 15_999.5,
-        b2QIn: 0.3,
+        b2FreqHzIn: 19_999.5,
+        b2QIn: 0.1,
         b2ModeIn: 0,
         b2MidAmountIn: 1,
         b2SideAmountIn: 0.5,
@@ -165,8 +165,10 @@ test("malformed or partial Enhancer state is rejected at the persistence boundar
         "not json",
         { ...defaults, format: "cosimo.polish" },
         { ...defaults, version: 4 },
-        { ...defaults, b1FreqHz: 29.999 },
-        { ...defaults, b2FreqHz: 16_001 },
+        { ...defaults, b1FreqHz: 19.999 },
+        { ...defaults, b2FreqHz: 20_001 },
+        { ...defaults, b1Q: 0.099 },
+        { ...defaults, b2Q: 10.001 },
         { ...defaults, b1Q: Number.NaN },
         { ...defaults, b2Q: Number.POSITIVE_INFINITY },
         { ...defaults, b1MidAmount: -0.001 },
@@ -230,6 +232,9 @@ test("the isolated DSP metadata and composition fence encode the T26 ownership b
     assert.match(source, /band1MidSideCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
     assert.match(source, /band2StereoCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
     assert.match(source, /band2MidSideCore = wt::EnhancerShaperCore \* enhancerOversampleFactor;/);
+    assert.match(source, /processor EnhancerShaperCore[\s\S]*bandFilters/);
+    assert.match(source, /enhancerEffectiveBellQ \(b1Q, b1MidAmount\)/);
+    assert.match(source, /enhancerEffectiveBellQ \(b1Q, b1SideAmount\)/);
     assert.match(source, /band1StereoCore\.out - band1StereoCore\.thru \* deEmphasis/);
     assert.match(source, /band1MidSideCore\.out - band1MidSideCore\.thru \* deEmphasis/);
     assert.match(source, /band2StereoCore\.out - band2StereoCore\.thru \* deEmphasis/);
@@ -238,7 +243,7 @@ test("the isolated DSP metadata and composition fence encode the T26 ownership b
 
     const smoothingSection = source.slice(
         source.indexOf("void smoothControls()"),
-        source.indexOf("void updateBandCoefficients()"),
+        source.indexOf("void main()", source.indexOf("void smoothControls()")),
     );
     assert.equal([...smoothingSection.matchAll(/smoothEnhancerControl/g)].length, 13);
 

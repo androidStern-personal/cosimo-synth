@@ -8,8 +8,13 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const patchPath = path.join(repoRoot, "tools/enhancer_calibration/EnhancerCalibration.cmajorpatch");
 const reviewDirectory = path.join(repoRoot, "build/t26-enhancer-review");
 const reportPath = path.join(reviewDirectory, "report.json");
+const spectreLockinFixturePath = path.join(
+    repoRoot,
+    "tests/fixtures/enhancer_spectre_lockin_v1.json",
+);
 const requestedMode = process.argv[2] ?? "--check";
 const minimumFullAmountContributionRelativeDb = -6;
+const maximumSpectreBellCrossingErrorDb = 0.02;
 // A finite musical window is not periodic and cannot have mathematically zero
 // mean. Keep that boundary contribution below a quarter-percent of residue RMS;
 // the fixed sample-rate-aware high-pass owns actual DC rejection.
@@ -178,6 +183,17 @@ function makeBrightPoly(context) {
     return scaleToRmsDbfs({ left, right }, context, -18);
 }
 
+function makeSine(context, frequencyHz, peak = 0.0005) {
+    const left = new Float32Array(context.totalFrames);
+    const right = new Float32Array(context.totalFrames);
+    for (let frame = 0; frame < context.totalFrames; frame += 1) {
+        const sample = peak * Math.sin(2 * Math.PI * frequencyHz * frame / context.sampleRate);
+        left[frame] = sample;
+        right[frame] = sample;
+    }
+    return { left, right };
+}
+
 function measuredSlice(stereo, context) {
     const endFrame = context.settleFrames + context.measureFrames;
     return {
@@ -290,6 +306,9 @@ async function writeFloatWave(filePath, stereo, sampleRate) {
 const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "cosimo-enhancer-"));
 
 try {
+    const spectreLockinFixture = JSON.parse(
+        await fs.readFile(spectreLockinFixturePath, "utf8"),
+    );
     const runtimePath = path.join(temporaryDirectory, "runtime.mjs");
     run("cmaj", ["generate", "--target=javascript", `--output=${runtimePath}`, patchPath]);
     const runtimeSource = await fs.readFile(runtimePath, "utf8");
@@ -483,6 +502,58 @@ try {
         throw new Error(`Low-band residue drifted ${crossRateResidueSpreadDb.toFixed(3)} dB across sample rates`);
     }
 
+    const spectreBellMatchRows = [];
+    for (const crossing of spectreLockinFixture.bellCrossings) {
+        const amount = crossing.gainDb / 12;
+        const settings = {
+            b1FreqHzIn: crossing.centreHz,
+            b1QIn: crossing.q,
+            b1ModeIn: 0,
+            b1MidAmountIn: amount,
+            b1SideAmountIn: 0,
+            b1CurveIn: 1,
+            b2MidAmountIn: 0,
+            b2SideAmountIn: 0,
+            deEmphasisIn: 0,
+        };
+        const centreFixture = makeSine(baseContext, crossing.centreHz);
+        const centreRendered = await render(centreFixture, baseContext, settings);
+        const centreContributionDbfs = residueRmsDbfs(
+            measuredSlice(centreFixture, baseContext),
+            measuredSlice(centreRendered, baseContext),
+        );
+        for (const [shoulder, frequencyHz] of [
+            ["low", crossing.minus3DbLowHz],
+            ["high", crossing.minus3DbHighHz],
+        ]) {
+            const fixture = makeSine(baseContext, frequencyHz);
+            const rendered = await render(fixture, baseContext, settings);
+            const contributionDbfs = residueRmsDbfs(
+                measuredSlice(fixture, baseContext),
+                measuredSlice(rendered, baseContext),
+            );
+            const relativeDb = contributionDbfs - centreContributionDbfs;
+            const errorDb = relativeDb - (-3.010299956639812);
+            spectreBellMatchRows.push({
+                centreHz: crossing.centreHz,
+                q: crossing.q,
+                gainDb: crossing.gainDb,
+                shoulder,
+                frequencyHz,
+                relativeDb,
+                errorDb,
+            });
+            if (!Number.isFinite(errorDb)
+                || Math.abs(errorDb) > maximumSpectreBellCrossingErrorDb) {
+                throw new Error(
+                    `Spectre bell mismatch at ${crossing.centreHz} Hz, Q ${crossing.q}, `
+                    + `${crossing.gainDb} dB ${shoulder} shoulder: `
+                    + `${relativeDb.toFixed(3)} dB (${errorDb.toFixed(3)} dB error)`,
+                );
+            }
+        }
+    }
+
     const allLoudnessRows = [...pinkRows, ...musicalRows];
     const report = {
         format: "cosimo.enhancerEvidence",
@@ -501,6 +572,12 @@ try {
         musicalRows,
         sampleRateRows,
         crossRateResidueSpreadDb,
+        spectreBellMatch: {
+            fixture: path.relative(repoRoot, spectreLockinFixturePath),
+            maximumAllowedErrorDb: maximumSpectreBellCrossingErrorDb,
+            worstErrorDb: Math.max(...spectreBellMatchRows.map(({ errorDb }) => Math.abs(errorDb))),
+            rows: spectreBellMatchRows,
+        },
         worstAbsoluteLufsDelta: Math.max(...allLoudnessRows.map(({ lufsDelta }) => Math.abs(lufsDelta))),
         worstAbsoluteRmsDeltaDb: Math.max(
             ...allLoudnessRows.map(({ rmsDeltaDb }) => Math.abs(rmsDeltaDb)),

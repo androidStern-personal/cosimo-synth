@@ -35,7 +35,8 @@ const formatFrequency = (value: number): string => (
 );
 
 const formatQ = (value: number): string => value.toFixed(2);
-const formatAmount = (value: number): string => `${Math.round(value * 100)}%`;
+const formatPercent = (value: number): string => `${Math.round(value * 100)}%`;
+const formatBoost = (value: number): string => `+${(value * 12).toFixed(1)} dB`;
 
 const deEmphasisControl: NumberControl = {
     endpointID: "deEmphasisIn",
@@ -45,7 +46,7 @@ const deEmphasisControl: NumberControl = {
     initial: 1,
     step: 0.001,
     scale: "linear",
-    format: formatAmount,
+    format: formatPercent,
 };
 
 const bandDefinitions: ReadonlyArray<BandDefinition> = [
@@ -55,8 +56,8 @@ const bandDefinitions: ReadonlyArray<BandDefinition> = [
         frequency: {
             endpointID: "b1FreqHzIn",
             label: "Frequency",
-            min: 30,
-            max: 16_000,
+            min: 20,
+            max: 20_000,
             initial: 130,
             step: 0.0001,
             scale: "log",
@@ -65,11 +66,11 @@ const bandDefinitions: ReadonlyArray<BandDefinition> = [
         q: {
             endpointID: "b1QIn",
             label: "Q",
-            min: 0.3,
-            max: 8,
+            min: 0.1,
+            max: 10,
             initial: 0.71,
             step: 0.001,
-            scale: "log",
+            scale: "linear",
             format: formatQ,
         },
         primaryAmount: {
@@ -80,7 +81,7 @@ const bandDefinitions: ReadonlyArray<BandDefinition> = [
             initial: 0,
             step: 0.001,
             scale: "linear",
-            format: formatAmount,
+            format: formatBoost,
         },
         sideAmount: {
             endpointID: "b1SideAmountIn",
@@ -90,7 +91,7 @@ const bandDefinitions: ReadonlyArray<BandDefinition> = [
             initial: 0,
             step: 0.001,
             scale: "linear",
-            format: formatAmount,
+            format: formatBoost,
         },
         modeEndpointID: "b1ModeIn",
         curveEndpointID: "b1CurveIn",
@@ -102,8 +103,8 @@ const bandDefinitions: ReadonlyArray<BandDefinition> = [
         frequency: {
             endpointID: "b2FreqHzIn",
             label: "Frequency",
-            min: 30,
-            max: 16_000,
+            min: 20,
+            max: 20_000,
             initial: 9000,
             step: 0.0001,
             scale: "log",
@@ -112,11 +113,11 @@ const bandDefinitions: ReadonlyArray<BandDefinition> = [
         q: {
             endpointID: "b2QIn",
             label: "Q",
-            min: 0.3,
-            max: 8,
+            min: 0.1,
+            max: 10,
             initial: 0.71,
             step: 0.001,
-            scale: "log",
+            scale: "linear",
             format: formatQ,
         },
         primaryAmount: {
@@ -127,7 +128,7 @@ const bandDefinitions: ReadonlyArray<BandDefinition> = [
             initial: 0,
             step: 0.001,
             scale: "linear",
-            format: formatAmount,
+            format: formatBoost,
         },
         sideAmount: {
             endpointID: "b2SideAmountIn",
@@ -137,7 +138,7 @@ const bandDefinitions: ReadonlyArray<BandDefinition> = [
             initial: 0,
             step: 0.001,
             scale: "linear",
-            format: formatAmount,
+            format: formatBoost,
         },
         modeEndpointID: "b2ModeIn",
         curveEndpointID: "b2CurveIn",
@@ -174,6 +175,93 @@ function fromSliderValue(control: NumberControl, sliderValue: number): number {
 
     const normalized = clamp(sliderValue, 0, 1);
     return control.min * Math.pow(control.max / control.min, normalized);
+}
+
+const responsePlot = Object.freeze({
+    width: 936,
+    height: 168,
+    left: 44,
+    right: 12,
+    top: 12,
+    bottom: 24,
+    minimumHz: 20,
+    maximumHz: 20_000,
+    maximumDb: 12,
+    modelSampleRate: 48_000 * 4,
+});
+
+const responseGridFrequencies = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10_000, 20_000] as const;
+const responseGridLevels = [0, 3, 6, 9, 12] as const;
+
+function responseX(frequencyHz: number): number {
+    const normalized = Math.log(clamp(frequencyHz, responsePlot.minimumHz, responsePlot.maximumHz)
+        / responsePlot.minimumHz) / Math.log(responsePlot.maximumHz / responsePlot.minimumHz);
+    return responsePlot.left
+        + normalized * (responsePlot.width - responsePlot.left - responsePlot.right);
+}
+
+function responseY(gainDb: number): number {
+    const normalized = clamp(gainDb, 0, responsePlot.maximumDb) / responsePlot.maximumDb;
+    return responsePlot.height - responsePlot.bottom
+        - normalized * (responsePlot.height - responsePlot.top - responsePlot.bottom);
+}
+
+function peakingResponseDb(
+    frequencyHz: number,
+    centreHz: number,
+    q: number,
+    amount: number,
+): number {
+    // Same 4x RBJ peaking-EQ law recovered from Spectre Good. The audio path
+    // takes H(z)-1 into the shaper; a conventional EQ display shows H(z), so
+    // the peak reads as the user's 0..12 dB Amount while retaining the actual
+    // gain-dependent shoulders.
+    const gainDb = 12 * clamp(amount, 0, 1);
+    const amplitude = Math.pow(10, gainDb / 40);
+    const centreOmega = 2 * Math.PI * clamp(centreHz, 20, 20_000)
+        / responsePlot.modelSampleRate;
+    const alpha = Math.sin(centreOmega) / (2 * clamp(q, 0.1, 10));
+    const centreCosine = Math.cos(centreOmega);
+    const omega = 2 * Math.PI * clamp(frequencyHz, 20, 20_000)
+        / responsePlot.modelSampleRate;
+    const z1Real = Math.cos(omega);
+    const z1Imaginary = -Math.sin(omega);
+    const z2Real = Math.cos(2 * omega);
+    const z2Imaginary = -Math.sin(2 * omega);
+    const numeratorReal = 1 + alpha * amplitude
+        - 2 * centreCosine * z1Real
+        + (1 - alpha * amplitude) * z2Real;
+    const numeratorImaginary = -2 * centreCosine * z1Imaginary
+        + (1 - alpha * amplitude) * z2Imaginary;
+    const denominatorReal = 1 + alpha / amplitude
+        - 2 * centreCosine * z1Real
+        + (1 - alpha / amplitude) * z2Real;
+    const denominatorImaginary = -2 * centreCosine * z1Imaginary
+        + (1 - alpha / amplitude) * z2Imaginary;
+    const numeratorPower = numeratorReal * numeratorReal
+        + numeratorImaginary * numeratorImaginary;
+    const denominatorPower = denominatorReal * denominatorReal
+        + denominatorImaginary * denominatorImaginary;
+    return clamp(10 * Math.log10(Math.max(numeratorPower / denominatorPower, 1e-30)), 0, 12);
+}
+
+function responsePath(centreHz: number, q: number, amount: number, closeArea = false): string {
+    const pointCount = 241;
+    const points: string[] = [];
+    for (let index = 0; index < pointCount; index += 1) {
+        const normalized = index / (pointCount - 1);
+        const frequencyHz = responsePlot.minimumHz
+            * Math.pow(responsePlot.maximumHz / responsePlot.minimumHz, normalized);
+        const x = responseX(frequencyHz);
+        const y = responseY(peakingResponseDb(frequencyHz, centreHz, q, amount));
+        points.push(`${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`);
+    }
+    if (closeArea) {
+        const baseline = responseY(0).toFixed(2);
+        points.push(`L ${(responsePlot.width - responsePlot.right).toFixed(2)} ${baseline}`);
+        points.push(`L ${responsePlot.left.toFixed(2)} ${baseline} Z`);
+    }
+    return points.join(" ");
 }
 
 class EnhancerView extends HTMLElement {
@@ -260,6 +348,7 @@ class EnhancerView extends HTMLElement {
     }
 
     renderEndpoint(endpointID: string): void {
+        let affectsResponsePlot = false;
         if (endpointID === deEmphasisControl.endpointID)
             this.renderNumberControl(deEmphasisControl);
 
@@ -282,9 +371,12 @@ class EnhancerView extends HTMLElement {
                 band.sideAmount.endpointID,
                 band.modeEndpointID,
             ].includes(endpointID)) {
-                this.renderBandGraph(band);
+                affectsResponsePlot = true;
             }
         }
+
+        if (affectsResponsePlot)
+            this.renderResponsePlot();
     }
 
     renderNumberControl(control: NumberControl): void {
@@ -320,21 +412,50 @@ class EnhancerView extends HTMLElement {
             button.setAttribute("aria-pressed", String((button.dataset.curve === "solid") === isSolid));
     }
 
-    renderBandGraph(band: BandDefinition): void {
-        const card = this.shadowRoot!.querySelector<HTMLElement>(`[data-band='${band.number}']`)!;
-        const path = card.querySelector<SVGPathElement>("[data-role='bell-path']")!;
-        const frequency = this.values.get(band.frequency.endpointID) ?? band.frequency.initial;
-        const q = this.values.get(band.q.endpointID) ?? band.q.initial;
-        const primary = this.values.get(band.primaryAmount.endpointID) ?? 0;
-        const side = this.values.get(band.sideAmount.endpointID) ?? 0;
-        const isMidSide = (this.values.get(band.modeEndpointID) ?? 0) >= 0.5;
-        const amount = isMidSide ? Math.max(primary, side) : primary;
-        const centerX = 18 + 284 * toSliderValue(band.frequency, frequency);
-        const halfWidth = clamp(70 / Math.sqrt(q), 18, 120);
-        const peakY = 76 - 51 * clamp(amount, 0, 1);
-        const startX = clamp(centerX - halfWidth, 8, 312);
-        const endX = clamp(centerX + halfWidth, 8, 312);
-        path.setAttribute("d", `M 8 76 L ${startX.toFixed(1)} 76 Q ${centerX.toFixed(1)} ${peakY.toFixed(1)} ${endX.toFixed(1)} 76 L 312 76`);
+    renderResponsePlot(): void {
+        for (const band of bandDefinitions) {
+            const frequency = this.values.get(band.frequency.endpointID) ?? band.frequency.initial;
+            const q = this.values.get(band.q.endpointID) ?? band.q.initial;
+            const primary = this.values.get(band.primaryAmount.endpointID) ?? 0;
+            const side = this.values.get(band.sideAmount.endpointID) ?? 0;
+            const isMidSide = (this.values.get(band.modeEndpointID) ?? 0) >= 0.5;
+            const selector = `[data-response-band='${band.number}']`;
+            const primaryPath = this.shadowRoot?.querySelector<SVGPathElement>(
+                `${selector}[data-response-role='primary']`,
+            );
+            const sidePath = this.shadowRoot?.querySelector<SVGPathElement>(
+                `${selector}[data-response-role='side']`,
+            );
+            const fillPath = this.shadowRoot?.querySelector<SVGPathElement>(
+                `${selector}[data-response-role='fill']`,
+            );
+            const primaryHandle = this.shadowRoot?.querySelector<SVGCircleElement>(
+                `${selector}[data-response-role='primary-handle']`,
+            );
+            const sideHandle = this.shadowRoot?.querySelector<SVGCircleElement>(
+                `${selector}[data-response-role='side-handle']`,
+            );
+            if (!primaryPath || !sidePath || !fillPath || !primaryHandle || !sideHandle)
+                throw new Error(`Enhancer response markup is incomplete for band ${band.number}.`);
+
+            primaryPath.setAttribute("d", responsePath(frequency, q, primary));
+            sidePath.setAttribute("d", responsePath(frequency, q, side));
+            fillPath.setAttribute("d", responsePath(frequency, q, primary, true));
+            sidePath.toggleAttribute("hidden", !isMidSide);
+            sideHandle.toggleAttribute("hidden", !isMidSide);
+            primaryHandle.setAttribute("cx", responseX(frequency).toFixed(2));
+            primaryHandle.setAttribute("cy", responseY(12 * primary).toFixed(2));
+            sideHandle.setAttribute("cx", responseX(frequency).toFixed(2));
+            sideHandle.setAttribute("cy", responseY(12 * side).toFixed(2));
+            primaryPath.setAttribute(
+                "aria-label",
+                `Band ${band.number} ${isMidSide ? "Mid" : "Stereo"}: ${formatFrequency(frequency)}, Q ${formatQ(q)}, ${formatBoost(primary)}`,
+            );
+            sidePath.setAttribute(
+                "aria-label",
+                `Band ${band.number} Side: ${formatFrequency(frequency)}, Q ${formatQ(q)}, ${formatBoost(side)}`,
+            );
+        }
     }
 
     numberControlMarkup(control: NumberControl, role = ""): string {
@@ -352,6 +473,49 @@ class EnhancerView extends HTMLElement {
         `;
     }
 
+    responsePlotMarkup(): string {
+        const verticalGrid = responseGridFrequencies.map((frequencyHz) => {
+            const x = responseX(frequencyHz).toFixed(2);
+            const label = frequencyHz >= 1000
+                ? `${frequencyHz / 1000}k`
+                : String(frequencyHz);
+            return `<path class="response-grid-line" d="M ${x} ${responsePlot.top} V ${responseY(0).toFixed(2)}"></path>
+                    <text class="response-axis-label frequency-label" x="${x}" y="${responsePlot.height - 6}" text-anchor="middle">${label}</text>`;
+        }).join("");
+        const horizontalGrid = responseGridLevels.map((gainDb) => {
+            const y = responseY(gainDb).toFixed(2);
+            return `<path class="response-grid-line${gainDb === 0 ? " baseline" : ""}" d="M ${responsePlot.left} ${y} H ${responsePlot.width - responsePlot.right}"></path>
+                    <text class="response-axis-label level-label" x="${responsePlot.left - 8}" y="${Number(y) + 3}" text-anchor="end">${gainDb === 0 ? "0" : `+${gainDb}`}</text>`;
+        }).join("");
+        const bands = bandDefinitions.map((band) => `
+            <path class="response-fill" data-response-band="${band.number}" data-response-role="fill" style="--response-accent:${band.accent}"></path>
+            <path class="response-band primary" data-response-band="${band.number}" data-response-role="primary" style="--response-accent:${band.accent}"></path>
+            <path class="response-band side" data-response-band="${band.number}" data-response-role="side" style="--response-accent:${band.accent}" hidden></path>
+            <circle class="response-handle primary" data-response-band="${band.number}" data-response-role="primary-handle" style="--response-accent:${band.accent}" r="4.5"></circle>
+            <circle class="response-handle side" data-response-band="${band.number}" data-response-role="side-handle" style="--response-accent:${band.accent}" r="3.5" hidden></circle>
+        `).join("");
+        return `
+            <section class="response-panel" aria-label="Enhancer parametric response">
+                <header class="response-heading">
+                    <div>
+                        <span class="response-title">Band selection</span>
+                        <p>Measured 4× parametric shape · Amount changes both boost and shoulder width</p>
+                    </div>
+                    <div class="response-legend" aria-label="Response legend">
+                        ${bandDefinitions.map((band) => `<span style="--response-accent:${band.accent}"><i></i>Band ${band.number}</span>`).join("")}
+                        <span class="side-key"><i></i>Side in M/S</span>
+                    </div>
+                </header>
+                <svg class="response-plot" viewBox="0 0 ${responsePlot.width} ${responsePlot.height}" role="img" aria-label="Frequency versus boost plot from 20 hertz to 20 kilohertz">
+                    ${verticalGrid}
+                    ${horizontalGrid}
+                    <text class="response-axis-unit" x="9" y="17">dB</text>
+                    ${bands}
+                </svg>
+            </section>
+        `;
+    }
+
     bandMarkup(band: BandDefinition): string {
         return `
             <section class="band" data-band="${band.number}" style="--band-accent:${band.accent}">
@@ -365,10 +529,6 @@ class EnhancerView extends HTMLElement {
                         <button type="button" data-mode="mid-side" aria-pressed="false">M/S</button>
                     </div>
                 </header>
-                <svg class="bell" viewBox="0 0 320 88" role="img" aria-label="Band ${band.number} bell position and width">
-                    <path class="bell-grid" d="M 8 76 H 312 M 80 12 V 80 M 160 12 V 80 M 240 12 V 80"></path>
-                    <path data-role="bell-path" class="bell-line"></path>
-                </svg>
                 <div class="control-grid">
                     ${this.numberControlMarkup(band.frequency)}
                     ${this.numberControlMarkup(band.q)}
@@ -392,7 +552,7 @@ class EnhancerView extends HTMLElement {
                 :host {
                     display: block;
                     width: 980px;
-                    min-height: 620px;
+                    min-height: 700px;
                     color: #f4efe6;
                     background:
                         radial-gradient(circle at 8% 0%, rgba(240, 184, 103, 0.14), transparent 32%),
@@ -405,7 +565,7 @@ class EnhancerView extends HTMLElement {
                 [hidden] { display: none !important; }
                 button, input { font: inherit; }
 
-                .shell { min-height: 620px; padding: 22px; }
+                .shell { min-height: 700px; padding: 22px; }
                 .topline { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
                 h1, p { margin: 0; }
                 h1 { font: 600 27px/1.1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: 0.16em; }
@@ -415,6 +575,24 @@ class EnhancerView extends HTMLElement {
                 .badge { border: 1px solid rgba(255,255,255,0.10); border-radius: 999px; padding: 7px 10px; color: rgba(244,239,230,0.72); background: rgba(255,255,255,0.035); font-size: 9px; letter-spacing: 0.09em; text-transform: uppercase; }
                 .de-emphasis-panel { border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; padding: 11px 12px 9px; background: rgba(255,255,255,0.035); }
                 .de-emphasis-panel p { margin-top: 7px; color: rgba(244,239,230,0.48); font-size: 8px; line-height: 1.4; text-align: right; }
+                .response-panel { margin-bottom: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.09); border-radius: 16px; padding: 13px 14px 5px; background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.035); }
+                .response-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 0 5px 2px; }
+                .response-title { color: rgba(244,239,230,0.82); font: 650 10px/1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: 0.14em; text-transform: uppercase; }
+                .response-heading p { margin-top: 5px; color: rgba(244,239,230,0.46); font-size: 8px; letter-spacing: 0.025em; }
+                .response-legend { display: flex; align-items: center; justify-content: flex-end; gap: 13px; color: rgba(244,239,230,0.56); font-size: 8px; letter-spacing: 0.055em; text-transform: uppercase; }
+                .response-legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+                .response-legend i { display: inline-block; width: 16px; height: 2px; border-radius: 9px; background: var(--response-accent, rgba(244,239,230,0.62)); }
+                .response-legend .side-key i { height: 0; border-top: 1.5px dashed rgba(244,239,230,0.62); background: transparent; }
+                .response-plot { display: block; width: 100%; height: 168px; overflow: visible; }
+                .response-grid-line { fill: none; stroke: rgba(255,255,255,0.05); stroke-width: 1; vector-effect: non-scaling-stroke; }
+                .response-grid-line.baseline { stroke: rgba(255,255,255,0.17); }
+                .response-axis-label, .response-axis-unit { fill: rgba(244,239,230,0.35); font: 8px/1 "SF Mono", Menlo, monospace; }
+                .response-axis-unit { text-transform: uppercase; letter-spacing: 0.08em; }
+                .response-fill { fill: color-mix(in srgb, var(--response-accent) 10%, transparent); stroke: none; }
+                .response-band { fill: none; stroke: var(--response-accent); stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--response-accent) 35%, transparent)); }
+                .response-band.side { stroke-width: 1.5; stroke-dasharray: 6 4; opacity: 0.72; }
+                .response-handle { fill: var(--response-accent); stroke: #111318; stroke-width: 2; vector-effect: non-scaling-stroke; }
+                .response-handle.side { fill: #111318; stroke: var(--response-accent); stroke-width: 1.5; opacity: 0.9; }
                 .bands { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
                 .band { min-width: 0; border: 1px solid rgba(255,255,255,0.09); border-radius: 18px; padding: 17px; background: rgba(255,255,255,0.035); box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 18px 44px rgba(0,0,0,0.18); }
                 .band-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -424,10 +602,7 @@ class EnhancerView extends HTMLElement {
                 .segmented button { min-height: 27px; border: 0; border-radius: 6px; padding: 0 10px; color: rgba(244,239,230,0.52); background: transparent; cursor: pointer; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; }
                 .segmented button[aria-pressed="true"] { color: #111318; background: var(--band-accent); box-shadow: 0 4px 14px color-mix(in srgb, var(--band-accent) 28%, transparent); }
                 .segmented button:focus-visible, input:focus-visible { outline: 2px solid var(--band-accent); outline-offset: 2px; }
-                .bell { display: block; width: 100%; height: 104px; margin: 8px 0 4px; overflow: visible; }
-                .bell-grid { fill: none; stroke: rgba(255,255,255,0.055); stroke-width: 1; }
-                .bell-line { fill: none; stroke: var(--band-accent); stroke-width: 2.2; stroke-linecap: round; filter: drop-shadow(0 0 7px color-mix(in srgb, var(--band-accent) 45%, transparent)); }
-                .control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 15px; min-height: 148px; }
+                .control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 15px; min-height: 112px; margin-top: 18px; }
                 .control { display: grid; gap: 8px; align-content: start; }
                 .control-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: rgba(244,239,230,0.63); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
                 output { color: #f4efe6; font-variant-numeric: tabular-nums; letter-spacing: 0; text-transform: none; }
@@ -463,6 +638,7 @@ class EnhancerView extends HTMLElement {
                         </div>
                     </div>
                 </header>
+                ${this.responsePlotMarkup()}
                 <div class="bands">
                     ${bandDefinitions.map((band) => this.bandMarkup(band)).join("")}
                 </div>

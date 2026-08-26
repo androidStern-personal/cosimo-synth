@@ -62,14 +62,14 @@ processor EnhancerNeutralAndStereoContract [[ main ]]
         for (int32 frame = 0; frame < 16384; ++frame)
         {
             // Exercise every non-amount control while the contribution is zero.
-            enhancer.b1FreqHzIn <- frame < 4096 ? 30.0f : 16000.0f;
-            enhancer.b1QIn <- frame < 8192 ? 0.3f : 8.0f;
+            enhancer.b1FreqHzIn <- frame < 4096 ? 20.0f : 20000.0f;
+            enhancer.b1QIn <- frame < 8192 ? 0.1f : 10.0f;
             enhancer.b1ModeIn <- frame < 7000 ? 0.0f : 1.0f;
             enhancer.b1MidAmountIn <- 0.0f;
             enhancer.b1SideAmountIn <- 0.0f;
             enhancer.b1CurveIn <- frame < 6000 ? 0.0f : 1.0f;
-            enhancer.b2FreqHzIn <- frame < 5000 ? 16000.0f : 30.0f;
-            enhancer.b2QIn <- frame < 9000 ? 8.0f : 0.3f;
+            enhancer.b2FreqHzIn <- frame < 5000 ? 20000.0f : 20.0f;
+            enhancer.b2QIn <- frame < 9000 ? 10.0f : 0.1f;
             enhancer.b2ModeIn <- frame < 8000 ? 1.0f : 0.0f;
             enhancer.b2MidAmountIn <- 0.0f;
             enhancer.b2SideAmountIn <- 0.0f;
@@ -550,9 +550,9 @@ processor EnhancerQPeakNormalizationContract [[ main ]]
 
     void main()
     {
-        let widePower = measurePower (0.3f);
+        let widePower = measurePower (0.1f);
         let referencePower = measurePower (1.0f);
-        let narrowPower = measurePower (8.0f);
+        let narrowPower = measurePower (10.0f);
         let wideRatio = widePower / referencePower;
         let narrowRatio = narrowPower / referencePower;
 

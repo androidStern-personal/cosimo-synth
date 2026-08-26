@@ -8,10 +8,10 @@ namespace wt
 
     let enhancerOversampleFactor = 4;
     let enhancerBandCount = 2;
-    let enhancerFrequencyMinHz = 30.0f;
-    let enhancerFrequencyMaxHz = 16000.0f;
-    let enhancerQMin = 0.3f;
-    let enhancerQMax = 8.0f;
+    let enhancerFrequencyMinHz = 20.0f;
+    let enhancerFrequencyMaxHz = 20000.0f;
+    let enhancerQMin = 0.1f;
+    let enhancerQMax = 10.0f;
     let enhancerAmountMin = 0.0f;
     let enhancerAmountMax = 1.0f;
     let enhancerDeEmphasisDefault = 1.0f;
@@ -27,8 +27,8 @@ namespace wt
     let enhancerB2CurveDefault = enhancerCurveTube;
 
     // One time constant covers every continuous control and the Tube/Solid
-    // crossfade. Coefficients update at control rate: two tan() calls every 16
-    // frames while moving, then none while static.
+    // crossfade. Each 4x bell core updates coefficients every 16 host frames
+    // while moving, then leaves them untouched while static.
     let enhancerControlSmoothingMs = 15.0f;
     let enhancerCoefficientUpdateFrames = 16;
     let enhancerCoefficientEpsilon = 0.000001f;
@@ -53,13 +53,13 @@ namespace wt
     // to remove Tube bias without making the low-band voicing sample-rate-dependent.
     let enhancerDcBlockerCutoffHz = 15.0f;
 
-    namespace enhancerFilters = std::filters (float32<2>, float64, 32);
+    namespace enhancerFilters = std::filters (float32, float64, 32);
 
     float32 clampEnhancerFrequencyHz (float32 value, float32 sampleRateHz)
     {
         let safeMaximum = std::intrinsics::min (
             enhancerFrequencyMaxHz,
-            sampleRateHz * 0.45f
+            sampleRateHz * 0.49f
         );
         return std::intrinsics::clamp (value, enhancerFrequencyMinHz, safeMaximum);
     }
@@ -88,6 +88,18 @@ namespace wt
     {
         let amount01 = clampEnhancerAmount (amount);
         return std::levels::dBtoGain (enhancerBandGainRangeDb * amount01) - 1.0f;
+    }
+
+    float32 enhancerEffectiveBellQ (float32 q, float32 amount)
+    {
+        // Spectre uses a conventional boosted peaking EQ before taking the
+        // EQ-minus-dry difference. Its difference filter therefore has pole Q
+        // equal to Q_display * sqrt(linearGain), rather than a fixed width as Amount
+        // changes. Direct impulse measurements match this law at 4x.
+        let amount01 = clampEnhancerAmount (amount);
+        return clampEnhancerQ (q) * std::levels::dBtoGain (
+            0.5f * enhancerBandGainRangeDb * amount01
+        );
     }
 
     float32 smoothEnhancerControl (
@@ -132,9 +144,70 @@ namespace wt
     processor EnhancerShaperCore
     {
         input stream float32<2> in;
+        input value float32 frequencyHzIn [[ init: 1000.0f ]];
+        input value float32 q0In [[ init: 1.0f ]];
+        input value float32 q1In [[ init: 1.0f ]];
+        input value float32 drive0In [[ init: 0.0f ]];
+        input value float32 drive1In [[ init: 0.0f ]];
         input value float32 solidWeightIn [[ init: 0.0f ]];
+        input event int32 resetIn;
         output stream float32<2> out;
         output stream float32<2> thru;
+
+        enhancerFilters::tpt::svf::Implementation[2] bandFilters;
+        float32 tunedFrequencyHz0;
+        float32 tunedFrequencyHz1;
+        float32 tunedQ0;
+        float32 tunedQ1;
+        int32 framesUntilCoefficientUpdate;
+
+        void init()
+        {
+            for (wrap<2> lane)
+                bandFilters[lane].setMode (enhancerFilters::tpt::svf::Mode::bandPass);
+        }
+
+        event resetIn (int32 ignored)
+        {
+            for (wrap<2> lane)
+                bandFilters[lane].reset();
+
+            tunedFrequencyHz0 = 0.0f;
+            tunedFrequencyHz1 = 0.0f;
+            tunedQ0 = 0.0f;
+            tunedQ1 = 0.0f;
+            framesUntilCoefficientUpdate = 0;
+        }
+
+        void updateBandCoefficients (float32 frequencyHz, float32 q0, float32 q1)
+        {
+            if (framesUntilCoefficientUpdate > 0)
+            {
+                framesUntilCoefficientUpdate -= 1;
+                return;
+            }
+
+            framesUntilCoefficientUpdate = enhancerCoefficientUpdateFrames
+                                           * enhancerOversampleFactor - 1;
+
+            if (std::intrinsics::abs (frequencyHz - tunedFrequencyHz0)
+                    > enhancerCoefficientEpsilon
+                || std::intrinsics::abs (q0 - tunedQ0) > enhancerCoefficientEpsilon)
+            {
+                bandFilters[0].setFrequency (processor.frequency, frequencyHz, q0);
+                tunedFrequencyHz0 = frequencyHz;
+                tunedQ0 = q0;
+            }
+
+            if (std::intrinsics::abs (frequencyHz - tunedFrequencyHz1)
+                    > enhancerCoefficientEpsilon
+                || std::intrinsics::abs (q1 - tunedQ1) > enhancerCoefficientEpsilon)
+            {
+                bandFilters[1].setFrequency (processor.frequency, frequencyHz, q1);
+                tunedFrequencyHz1 = frequencyHz;
+                tunedQ1 = q1;
+            }
+        }
 
         float32 solidShape (float32 sample)
         {
@@ -170,11 +243,36 @@ namespace wt
             loop
             {
                 let sampleFrame = in;
+                let frequencyHz = std::intrinsics::clamp (
+                    frequencyHzIn,
+                    enhancerFrequencyMinHz,
+                    enhancerFrequencyMaxHz
+                );
+                let qMaximum = enhancerQMax * std::levels::dBtoGain (
+                    0.5f * enhancerBandGainRangeDb
+                );
+                let q0 = std::intrinsics::clamp (q0In, enhancerQMin, qMaximum);
+                let q1 = std::intrinsics::clamp (q1In, enhancerQMin, qMaximum);
+                let drive0 = std::intrinsics::clamp (
+                    drive0In,
+                    0.0f,
+                    enhancerAmountDrive (1.0f)
+                );
+                let drive1 = std::intrinsics::clamp (
+                    drive1In,
+                    0.0f,
+                    enhancerAmountDrive (1.0f)
+                );
                 let solidWeight = std::intrinsics::clamp (solidWeightIn, 0.0f, 1.0f);
-                thru <- sampleFrame;
+                updateBandCoefficients (frequencyHz, q0, q1);
+                let drivenBand = float32<2> (
+                    bandFilters[0].process (sampleFrame[0]) * drive0 / q0,
+                    bandFilters[1].process (sampleFrame[1]) * drive1 / q1
+                );
+                thru <- drivenBand;
                 out <- float32<2> (
-                    shape (sampleFrame[0], solidWeight),
-                    shape (sampleFrame[1], solidWeight)
+                    shape (drivenBand[0], solidWeight),
+                    shape (drivenBand[1], solidWeight)
                 );
                 advance();
             }
@@ -209,8 +307,6 @@ namespace wt
 
         static_assert (processor.latency == 0, "The isolated Enhancer must remain zero latency");
 
-        enhancerFilters::tpt::svf::Implementation[enhancerBandCount] stereoBandFilters;
-        enhancerFilters::tpt::svf::Implementation[enhancerBandCount] midSideBandFilters;
         EnhancerDcBlocker[enhancerBandCount * 2] residueDcBlockers;
         node band1StereoCore = wt::EnhancerShaperCore * enhancerOversampleFactor;
         node band1MidSideCore = wt::EnhancerShaperCore * enhancerOversampleFactor;
@@ -230,12 +326,6 @@ namespace wt
         float32 b2SideAmount;
         float32 b2SolidWeight = float32 (enhancerB2CurveDefault);
         float32 deEmphasis = enhancerDeEmphasisDefault;
-        float32 tunedB1FreqHz;
-        float32 tunedB1Q;
-        float32 tunedB2FreqHz;
-        float32 tunedB2Q;
-        int32 framesUntilCoefficientUpdate;
-
         var smoothingAmount = 1.0f - std::intrinsics::exp (
             -1.0f / (
                 enhancerControlSmoothingMs * 0.001f * float32 (processor.frequency)
@@ -244,24 +334,12 @@ namespace wt
 
         void init()
         {
-            for (wrap<enhancerBandCount> band)
-            {
-                stereoBandFilters[band].setMode (enhancerFilters::tpt::svf::Mode::bandPass);
-                midSideBandFilters[band].setMode (enhancerFilters::tpt::svf::Mode::bandPass);
-            }
-
             for (wrap<enhancerBandCount * 2> path)
                 residueDcBlockers[path].setSampleRate (processor.frequency);
         }
 
         event resetIn (int32 ignored)
         {
-            for (wrap<enhancerBandCount> band)
-            {
-                stereoBandFilters[band].reset();
-                midSideBandFilters[band].reset();
-            }
-
             for (wrap<enhancerBandCount * 2> path)
                 residueDcBlockers[path].reset();
 
@@ -271,13 +349,12 @@ namespace wt
             band1MidSideCore.reset();
             band2StereoCore.reset();
             band2MidSideCore.reset();
+            band1StereoCore.resetIn <- 1;
+            band1MidSideCore.resetIn <- 1;
+            band2StereoCore.resetIn <- 1;
+            band2MidSideCore.resetIn <- 1;
             // Smoothed settings are deliberately preserved. resetIn owns audio
             // history only; preset/state recall owns the sound and routing values.
-            tunedB1FreqHz = 0.0f;
-            tunedB1Q = 0.0f;
-            tunedB2FreqHz = 0.0f;
-            tunedB2Q = 0.0f;
-            framesUntilCoefficientUpdate = 0;
         }
 
         void smoothControls()
@@ -364,72 +441,56 @@ namespace wt
             );
         }
 
-        void updateBandCoefficients()
-        {
-            if (framesUntilCoefficientUpdate > 0)
-            {
-                framesUntilCoefficientUpdate -= 1;
-                return;
-            }
-
-            framesUntilCoefficientUpdate = enhancerCoefficientUpdateFrames - 1;
-
-            if (std::intrinsics::abs (b1FreqHz - tunedB1FreqHz) > enhancerCoefficientEpsilon
-                || std::intrinsics::abs (b1Q - tunedB1Q) > enhancerCoefficientEpsilon)
-            {
-                stereoBandFilters[0].setFrequency (processor.frequency, b1FreqHz, b1Q);
-                midSideBandFilters[0].setFrequency (processor.frequency, b1FreqHz, b1Q);
-                tunedB1FreqHz = b1FreqHz;
-                tunedB1Q = b1Q;
-            }
-
-            if (std::intrinsics::abs (b2FreqHz - tunedB2FreqHz) > enhancerCoefficientEpsilon
-                || std::intrinsics::abs (b2Q - tunedB2Q) > enhancerCoefficientEpsilon)
-            {
-                stereoBandFilters[1].setFrequency (processor.frequency, b2FreqHz, b2Q);
-                midSideBandFilters[1].setFrequency (processor.frequency, b2FreqHz, b2Q);
-                tunedB2FreqHz = b2FreqHz;
-                tunedB2Q = b2Q;
-            }
-        }
-
         void main()
         {
             loop
             {
                 smoothControls();
-                updateBandCoefficients();
 
                 let dry = in;
                 let dryMidSide = float32<2> (
                     0.5f * (dry[0] + dry[1]),
                     0.5f * (dry[0] - dry[1])
                 );
-                // The TPT band's centre gain is Q. Dividing by Q makes this
-                // the constant-peak bandpass residue of a parallel bell boost.
-                let band1Stereo = stereoBandFilters[0].process (dry) / b1Q;
-                let band2Stereo = stereoBandFilters[1].process (dry) / b2Q;
-                let band1MidSide = midSideBandFilters[0].process (dryMidSide) / b1Q;
-                let band2MidSide = midSideBandFilters[1].process (dryMidSide) / b2Q;
                 let band1PrimaryDrive = enhancerAmountDrive (b1MidAmount);
                 let band1SideDrive = enhancerAmountDrive (b1SideAmount);
                 let band2PrimaryDrive = enhancerAmountDrive (b2MidAmount);
                 let band2SideDrive = enhancerAmountDrive (b2SideAmount);
-                let band1StereoDrive = float32<2> (band1PrimaryDrive, band1PrimaryDrive);
-                let band1MidSideDrive = float32<2> (band1PrimaryDrive, band1SideDrive);
-                let band2StereoDrive = float32<2> (band2PrimaryDrive, band2PrimaryDrive);
-                let band2MidSideDrive = float32<2> (band2PrimaryDrive, band2SideDrive);
+                let band1PrimaryQ = enhancerEffectiveBellQ (b1Q, b1MidAmount);
+                let band1SideQ = enhancerEffectiveBellQ (b1Q, b1SideAmount);
+                let band2PrimaryQ = enhancerEffectiveBellQ (b2Q, b2MidAmount);
+                let band2SideQ = enhancerEffectiveBellQ (b2Q, b2SideAmount);
 
-                band1StereoCore.in <- band1Stereo * band1StereoDrive;
+                band1StereoCore.in <- dry;
+                band1StereoCore.frequencyHzIn <- b1FreqHz;
+                band1StereoCore.q0In <- band1PrimaryQ;
+                band1StereoCore.q1In <- band1PrimaryQ;
+                band1StereoCore.drive0In <- band1PrimaryDrive;
+                band1StereoCore.drive1In <- band1PrimaryDrive;
                 band1StereoCore.solidWeightIn <- b1SolidWeight;
                 band1StereoCore.advance();
-                band1MidSideCore.in <- band1MidSide * band1MidSideDrive;
+                band1MidSideCore.in <- dryMidSide;
+                band1MidSideCore.frequencyHzIn <- b1FreqHz;
+                band1MidSideCore.q0In <- band1PrimaryQ;
+                band1MidSideCore.q1In <- band1SideQ;
+                band1MidSideCore.drive0In <- band1PrimaryDrive;
+                band1MidSideCore.drive1In <- band1SideDrive;
                 band1MidSideCore.solidWeightIn <- b1SolidWeight;
                 band1MidSideCore.advance();
-                band2StereoCore.in <- band2Stereo * band2StereoDrive;
+                band2StereoCore.in <- dry;
+                band2StereoCore.frequencyHzIn <- b2FreqHz;
+                band2StereoCore.q0In <- band2PrimaryQ;
+                band2StereoCore.q1In <- band2PrimaryQ;
+                band2StereoCore.drive0In <- band2PrimaryDrive;
+                band2StereoCore.drive1In <- band2PrimaryDrive;
                 band2StereoCore.solidWeightIn <- b2SolidWeight;
                 band2StereoCore.advance();
-                band2MidSideCore.in <- band2MidSide * band2MidSideDrive;
+                band2MidSideCore.in <- dryMidSide;
+                band2MidSideCore.frequencyHzIn <- b2FreqHz;
+                band2MidSideCore.q0In <- band2PrimaryQ;
+                band2MidSideCore.q1In <- band2SideQ;
+                band2MidSideCore.drive0In <- band2PrimaryDrive;
+                band2MidSideCore.drive1In <- band2SideDrive;
                 band2MidSideCore.solidWeightIn <- b2SolidWeight;
                 band2MidSideCore.advance();
 

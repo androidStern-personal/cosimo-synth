@@ -110,8 +110,8 @@ export const ENHANCER_SETTING_DESCRIPTORS = [
         kind: "number",
         id: "b1FreqHz",
         dspEndpointID: "b1FreqHzIn",
-        min: 30,
-        max: 16000,
+        min: 20,
+        max: 20000,
         initial: 130,
         unit: "Hz",
         exposure: "static-preset",
@@ -120,8 +120,8 @@ export const ENHANCER_SETTING_DESCRIPTORS = [
         kind: "number",
         id: "b1Q",
         dspEndpointID: "b1QIn",
-        min: 0.3,
-        max: 8,
+        min: 0.1,
+        max: 10,
         initial: 0.71,
         unit: "",
         exposure: "static-preset",
@@ -166,8 +166,8 @@ export const ENHANCER_SETTING_DESCRIPTORS = [
         kind: "number",
         id: "b2FreqHz",
         dspEndpointID: "b2FreqHzIn",
-        min: 30,
-        max: 16000,
+        min: 20,
+        max: 20000,
         initial: 9000,
         unit: "Hz",
         exposure: "static-preset",
@@ -176,8 +176,8 @@ export const ENHANCER_SETTING_DESCRIPTORS = [
         kind: "number",
         id: "b2Q",
         dspEndpointID: "b2QIn",
-        min: 0.3,
-        max: 8,
+        min: 0.1,
+        max: 10,
         initial: 0.71,
         unit: "",
         exposure: "static-preset",
@@ -367,12 +367,12 @@ export function parseEnhancerState(input: unknown): EnhancerStateParseOutcome {
         };
     }
 
-    const b1FreqHz = parseNumberInRange(document, "b1FreqHz", 30, 16000);
-    const b1Q = parseNumberInRange(document, "b1Q", 0.3, 8);
+    const b1FreqHz = parseNumberInRange(document, "b1FreqHz", 20, 20000);
+    const b1Q = parseNumberInRange(document, "b1Q", 0.1, 10);
     const b1MidAmount = parseNumberInRange(document, "b1MidAmount", 0, 1);
     const b1SideAmount = parseNumberInRange(document, "b1SideAmount", 0, 1);
-    const b2FreqHz = parseNumberInRange(document, "b2FreqHz", 30, 16000);
-    const b2Q = parseNumberInRange(document, "b2Q", 0.3, 8);
+    const b2FreqHz = parseNumberInRange(document, "b2FreqHz", 20, 20000);
+    const b2Q = parseNumberInRange(document, "b2Q", 0.1, 10);
     const b2MidAmount = parseNumberInRange(document, "b2MidAmount", 0, 1);
     const b2SideAmount = parseNumberInRange(document, "b2SideAmount", 0, 1);
     const deEmphasis = isLegacyV1 || isLegacyV2

@@ -1,11 +1,11 @@
 # Enhancer Design (Spectre-style, two-band)
 
-Status: **measurement-corrected locked design, 2026-08-26** (Andrew clarification +
-activated Spectre 1.5.6 black-box corpus), companion to
+Status: **measurement-locked isolated implementation, 2026-08-26** (Andrew
+clarification + activated Spectre 1.5.6 black-box corpus), companion to
 `DISTORTION_QUALITY_DESIGN.md`. Integration resolved same day: this module is a
 member of the fixed, non-modulatable end-of-chain polish section — see
-`POLISH_CHAIN_DESIGN.md`. Same ground rules: this specifies what to build and
-why; implementation is a separate effort. This module is **separate from and
+`POLISH_CHAIN_DESIGN.md`. T26 owns the isolated DSP, state, reference evidence,
+audition VST, and GUI; T28 still owns final chain composition. This module is **separate from and
 orthogonal to** the saturator redesign — that module makes a sound *driven*; this one
 adds frequency-selected presence/weight/air at the end of the chain.
 
@@ -31,16 +31,18 @@ eliminated the routing selector was wrong and is superseded by this correction.
 in (stereo) ──┬──────────────────────────────────────────────────┐ (dry, bit-exact)
               │ per band:                                       │
               │                                                  │
-              │  Stereo branch: SVF-BP on L/R                    │
+              │  Stereo branch: L/R                              │
               │    shared Amount drives both channels            │
               │                                                  │
               │  M/S branch: encode M=(L+R)/2, S=(L−R)/2         │
-              │    SVF-BP on M/S; Mid and Side drive separately  │
+              │    Mid and Side drive separately                 │
               │                                                  │
-              │  each nonlinear path:                            │
-              │    [ ×4 oversampled core ]                       │
-              │      c = DCblock(curve(d)                       │
-              │                  − deEmphasis·aligned_thru(d))   │
+              │  each [ ×4 oversampled core ]:                   │
+              │    d = peakingEQ(input) − input                  │
+              │    shaped = curve(d); thru = d                   │
+              │                                                  │
+              │  c = DCblock(shaped                              │
+              │              − deEmphasis·aligned_thru)          │
               │                                                  │
               │  decode M/S residue; smooth-crossfade by mode    │
               └── out = dry + band1 residue + band2 residue      │
@@ -56,25 +58,26 @@ algorithm rather than a promise of mathematically isolated harmonics.
 
 The bands are **two full parametric bells, Spectre-style** (Andrew, 2026-08-25:
 bands, not LP/HP halves): each freely steerable across the audible range with its own
-Q. In a parallel EQ, the difference signal of a bell boost *is* bandpass-shaped
-content, so extraction is the constant-peak-gain bandpass output of a TPT/Zavalishin
-SVF per band, scaled by amount. A wide low-Q bell parked at either extreme
-approximates shelf-like reach when wanted. The parallel topology keeps the residue
-subtraction phase-clean by construction — the reason Spectre's EQ is boost-only and
-parallel rather than serial biquads.
+displayed Q. Direct impulse measurements show that Spectre first makes a conventional
+boosted peaking EQ and then takes `EQ − dry`. For `G = gain(12 dB · Amount)`, that
+difference is exactly a unity-peak bandpass multiplied by `G − 1`, with effective
+pole Q `Qdisplay · sqrt(G)`. The implementation uses that equivalent form inside the
+4× core. This gain-dependent Q is important: a +12 dB bell is about twice as narrow
+as the old fixed-Q approximation. The parallel topology keeps the subtraction
+phase-clean by construction.
 
 ## 2. Parameters (10 band settings + 2 routing modes + de-emphasis, all static)
 
 | Param | Range | Default | Meaning |
 |---|---|---|---|
-| `b1FreqHz` | 30..16k | 130 | band 1 bell center |
-| `b1Q` | 0.3..8 | 0.71 | band 1 bell width |
+| `b1FreqHz` | 20..20k | 130 | band 1 bell center |
+| `b1Q` | 0.1..10 | 0.71 | band 1 displayed Q |
 | `b1Mode` | Stereo / Mid-Side | Stereo | band 1 routing domain |
 | `b1MidAmount` | 0..1 | 0 | Stereo Amount, relabelled Mid in M/S mode |
 | `b1SideAmount` | 0..1 | 0 | band 1 Side drive, active only in M/S mode |
 | `b1Curve` | Tube / Solid | Solid | band 1 curve |
-| `b2FreqHz` | 30..16k | 9k | band 2 bell center |
-| `b2Q` | 0.3..8 | 0.71 | band 2 bell width |
+| `b2FreqHz` | 20..20k | 9k | band 2 bell center |
+| `b2Q` | 0.1..10 | 0.71 | band 2 displayed Q |
 | `b2Mode` | Stereo / Mid-Side | Stereo | band 2 routing domain |
 | `b2MidAmount` | 0..1 | 0 | Stereo Amount, relabelled Mid in M/S mode |
 | `b2SideAmount` | 0..1 | 0 | band 2 Side drive, active only in M/S mode |
@@ -93,6 +96,12 @@ to 100% de-emphasis so their previous signal law is preserved.
 All thirteen values are smoothed, preset/host-state persisted, non-automatable, absent
 from modulation catalogs, and unavailable as an Effects Lane device. The isolated
 audition VST exposes them only through its own GUI; T28 owns the final Polish UI.
+
+The audition GUI shows the two selections on one conventional logarithmic 20 Hz–20
+kHz versus 0–12 dB parametric-EQ plot. Its shoulders use the same measured 4× peaking
+law as the DSP. The linked Stereo or Mid response is solid; when a band is in M/S,
+its independently driven Side response is dashed. This is a selection/drive display,
+not a promise that the final harmonic output itself is an ordinary linear EQ curve.
 
 All amounts default 0 ⇒ the module is born silent-by-contribution: `curve(0) = 0`,
 residue = 0, `out = dry` **bit-exact**. The rack's hard-bypass invariant (ADR-005)
@@ -124,8 +133,8 @@ envelope-driven bias or hidden gain compensation.
 Identical stance to `DISTORTION_QUALITY_DESIGN.md` §3.4–3.5, same idiom, same
 requirements:
 
-- Every Stereo and M/S shaper branch runs in a ×4 oversampled core with the **unity thru-path**
-  trick, so `s − thru` compares two signals that took the same round trip — the
+- Every Stereo and M/S **bell and shaper** branch runs in a ×4 oversampled core with
+  the **unity thru-path** trick, so `s − thru` compares two signals that took the same round trip — the
   residue is aligned by construction, zero measurement needed. This matters *more*
   here than in the saturator: the module's entire output contribution is a residue.
 - Same resampler requirement: no declared latency, ≤ ~1 sample smear (ADR-008), same
@@ -141,9 +150,12 @@ requirements:
 
 - Spectre's Amount is an ordinary 0..+12 dB boost. The signal extracted from its
   parallel bell is therefore:
-  `driven = band · (gain(12 dB · amount) − 1)`.
+  `driven = band(Q · sqrt(gain(12 dB · amount))) · (gain(12 dB · amount) − 1)`.
   Twenty-five measured gain/input pairs fit this law with 0.0000063 dB RMS error
   (0.000018 dB maximum). It is exactly zero at Amount 0 and reaches 2.981x at 100%.
+- The host-facing Frequency law is logarithmic 20 Hz–20 kHz and Q is linear 0.1–10,
+  matching Spectre's endpoint normalization. Ten retained −3 dB shoulder probes from
+  1–12 kHz, Q 0.7–2, and +6/+12 dB match the production Cmajor bell within 0.00154 dB.
 - The contribution is exactly
   `DCblock(shape(driven) − deEmphasis · driven)` and is added to dry. There is no
   second Amount multiply, post-shaper attenuation, static unity-fundamental matcher,
@@ -216,6 +228,8 @@ Status: ratio concept retained; build/defer/reject remains Andrew's decision.
    exact dry, and a pure-side signal with only Side raised remains pure side.
 5. Each band can select Stereo or M/S without changing the other band's routing.
 6. Andrew's ears on the installed VST remain the final sound gate.
+7. The retained Spectre bell crossings must remain within 0.02 dB in the production
+   Cmajor renderer; the current worst result is 0.00154 dB.
 
 ## 9. Open decisions (defaults apply unless overridden)
 
@@ -239,7 +253,11 @@ Manual PDF: https://www.wavesfactory.com/audio-plugins/manuals/Spectre-User-Manu
 Algorithm constants and label behavior come from 742 deterministic black-box cases
 captured from the locally activated Spectre 1.5.6 AU/VST3. The corpus covers Amount,
 input level, character, de-emphasis, routing, Q/frequency, quality, parallel
-additivity, sample rates, and musical fixtures. AU and VST3 renders were bit-identical;
-fresh-instance determinism was exact. See `scripts/measure_spectre_reference.py` and
-ignored `build/t26-spectre-reference/report.json`. The manual's Tube/Solid prose is
-retained only as provenance because the measured plugin labels are reversed.
+additivity, sample rates, and musical fixtures. A second focused pass adds 90 full
+impulse-response bell cases plus 25 low-frequency input/gain pairs for each retained
+character. AU and VST3 renders were bit-identical; fresh-instance determinism was
+exact. See `scripts/measure_spectre_reference.py`,
+`scripts/measure_spectre_enhancer_lockin.py`, and the retained derived fixture
+`tests/fixtures/enhancer_spectre_lockin_v1.json`; raw audio and full reports remain
+ignored under `build/`. The manual's Tube/Solid prose is retained only as provenance
+because the measured plugin labels are reversed.

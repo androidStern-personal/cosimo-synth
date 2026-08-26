@@ -1,0 +1,72 @@
+{
+  "schema": "cosimo.enhancer-spectre-lockin.v1",
+  "source": {
+    "product": "Wavesfactory Spectre",
+    "version": "1.5.6",
+    "auBinarySha256": "47e926a2b59cab3264d5b411b5c99d92d4e5c927054c7012428879ab3702354d",
+    "sampleRate": 48000,
+    "quality": "Good",
+    "measurementScript": "scripts/measure_spectre_enhancer_lockin.py"
+  },
+  "bellModel": {
+    "formula": "RBJ peaking EQ difference evaluated at 4x host rate",
+    "amountDb": "12 * amount",
+    "effectiveDifferenceQ": "displayQ * 10^(amountDb/40)"
+  },
+  "bellCrossings": [
+    {
+      "centreHz": 1000,
+      "q": 0.7,
+      "gainDb": 6,
+      "peakHz": 1000.030517578125,
+      "minus3DbLowHz": 614.9674521500101,
+      "minus3DbHighHz": 1625.859888637539
+    },
+    {
+      "centreHz": 1000,
+      "q": 0.7,
+      "gainDb": 12,
+      "peakHz": 1000.030517578125,
+      "minus3DbLowHz": 704.2019823646815,
+      "minus3DbHighHz": 1419.9579085414462
+    },
+    {
+      "centreHz": 1000,
+      "q": 2,
+      "gainDb": 12,
+      "peakHz": 1000.030517578125,
+      "minus3DbLowHz": 882.5409134565778,
+      "minus3DbHighHz": 1133.0859474913311
+    },
+    {
+      "centreHz": 8000,
+      "q": 0.7,
+      "gainDb": 12,
+      "peakHz": 8001.983642578125,
+      "minus3DbLowHz": 5650.06672375582,
+      "minus3DbHighHz": 11295.916483896292
+    },
+    {
+      "centreHz": 12000,
+      "q": 0.7,
+      "gainDb": 12,
+      "peakHz": 11999.542236328125,
+      "minus3DbLowHz": 8503.698501292254,
+      "minus3DbHighHz": 16824.627693075003
+    }
+  ],
+  "subtleShaperFit": {
+    "Solid": {
+      "formula": "tanh(3*x)/sqrt(2)",
+      "measuredHarmonicPoints": 118,
+      "rmsErrorDb": 0.046977816496669926,
+      "maximumErrorDb": 0.16074441869636386
+    },
+    "Tube": {
+      "formula": "(tanh(3*x+0.125)-tanh(0.125))/sqrt(2)",
+      "measuredHarmonicPoints": 220,
+      "rmsErrorDb": 0.04967998398525694,
+      "maximumErrorDb": 0.26764805816962145
+    }
+  }
+}

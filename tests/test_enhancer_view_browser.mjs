@@ -146,11 +146,81 @@ test("de-emphasis is a real global control from no subtraction to full subtracti
     }
 });
 
+test("the response plot follows Frequency, Q, Amount, and independent Side drive", async () => {
+    const page = await openEnhancer();
+
+    try {
+        const primaryPath = shadow(page, "[data-response-band='1'][data-response-role='primary']");
+        const sidePath = shadow(page, "[data-response-band='1'][data-response-role='side']");
+        const primaryHandle = shadow(page, "[data-response-band='1'][data-response-role='primary-handle']");
+        const amountOutput = shadow(page, "[data-endpoint-id='b1MidAmountIn'] output");
+
+        const dryPath = await primaryPath.getAttribute("d");
+        assert.equal(await amountOutput.textContent(), "+0.0 dB");
+        assert.equal(await sidePath.isHidden(), true);
+
+        await page.evaluate(() => {
+            window.__ENHANCER_TEST__.emit("b1FreqHzIn", 1000);
+            window.__ENHANCER_TEST__.emit("b1MidAmountIn", 1);
+            window.__ENHANCER_TEST__.emit("b1QIn", 0.1);
+        });
+        const widePath = await primaryPath.getAttribute("d");
+        const widePointsAboveSixDb = await primaryPath.evaluate((path) => (
+            [...(path.getAttribute("d") ?? "").matchAll(/[ML] ([\d.]+) ([\d.]+)/g)]
+                .filter((match) => Number(match[2]) < 78).length
+        ));
+
+        await page.evaluate(() => window.__ENHANCER_TEST__.emit("b1QIn", 10));
+        const narrowPath = await primaryPath.getAttribute("d");
+        const narrowPointsAboveSixDb = await primaryPath.evaluate((path) => (
+            [...(path.getAttribute("d") ?? "").matchAll(/[ML] ([\d.]+) ([\d.]+)/g)]
+                .filter((match) => Number(match[2]) < 78).length
+        ));
+
+        assert.notEqual(widePath, dryPath);
+        assert.notEqual(narrowPath, widePath);
+        assert.ok(widePointsAboveSixDb > narrowPointsAboveSixDb);
+        assert.equal(await amountOutput.textContent(), "+12.0 dB");
+        assert.equal(await primaryHandle.getAttribute("cy"), "12.00");
+        assert.match(await primaryPath.getAttribute("aria-label"), /1\.00 kHz, Q 10\.00, \+12\.0 dB/);
+
+        await page.evaluate(() => {
+            window.__ENHANCER_TEST__.emit("b1ModeIn", 1);
+            window.__ENHANCER_TEST__.emit("b1SideAmountIn", 0.5);
+        });
+        assert.equal(await sidePath.isVisible(), true);
+        assert.match(await sidePath.getAttribute("aria-label"), /Band 1 Side: 1\.00 kHz, Q 10\.00, \+6\.0 dB/);
+    } finally {
+        await page.close();
+    }
+});
+
+test("the Frequency control spans Spectre's logarithmic 20 Hz to 20 kHz range", async () => {
+    const page = await openEnhancer();
+
+    try {
+        const input = shadow(page, "[data-endpoint-id='b1FreqHzIn'] input");
+        await input.evaluate((slider) => {
+            slider.value = "0";
+            slider.dispatchEvent(new Event("input", { bubbles: true }));
+            slider.value = "1";
+            slider.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_TEST__.sent.slice(-2)), [
+            { endpointID: "b1FreqHzIn", value: 20 },
+            { endpointID: "b1FreqHzIn", value: 20_000 },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("the compiled production view used by the VST renders the same independent routing controls", async () => {
     const page = await openEnhancer("/build/fx/enhancer_runtime/view/app.js");
 
     try {
         assert.equal(await shadow(page, "[data-endpoint-id='deEmphasisIn']").count(), 1);
+        assert.equal(await shadow(page, ".response-panel").count(), 1);
         await shadow(page, "[data-band='2'] [data-mode='mid-side']").click();
         assert.equal(await shadow(page, "[data-band='1'] [data-role='side-control']").isHidden(), true);
         assert.equal(await shadow(page, "[data-band='2'] [data-role='side-control']").isVisible(), true);
