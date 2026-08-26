@@ -850,7 +850,7 @@ function canonicalJsonValuesEqual(left: unknown, right: unknown): boolean {
     ));
 }
 
-/** Pick the first unused cell in the closed 1131-pair domain for generic Add. */
+/** Pick the first unused cell in the closed 1144-pair domain for generic Add. */
 export function createFirstAvailableModulationRoute(
     routes: ReadonlyArray<ModulationRoute>,
     targetOptions: ReadonlyArray<ModulationTargetOption> = MODULATION_TARGET_OPTIONS,
