@@ -16,6 +16,7 @@ import {
     usePatchEndpoint,
     usePatchVisualEndpoint,
     useResourceClient,
+    type PatchConnectionLike,
 } from "./cmajor-react";
 import {
     usePatchEventTrigger,
@@ -342,6 +343,22 @@ export type ArticulationHeldInput = {
     chain: number | null;
 };
 
+export type SynthEnvelopeField = "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds";
+
+/**
+ * Readiness for controls whose UI receives a callback instead of the binding.
+ * The callback guard and every rendered surface consume this same projection,
+ * so a pending host endpoint cannot look editable and then silently snap back.
+ */
+export type SynthCallbackControlReadiness = {
+    readonly wavetableSelection: boolean;
+    readonly mseg: {
+        readonly morph: boolean;
+        readonly rate: boolean;
+    };
+    readonly envelope: Readonly<Record<SynthEnvelopeField, boolean>>;
+};
+
 /**
  * Owns the presentation-only oscillator tab state shared by desktop and iPhone.
  * Selection changes which canonical A/B/C endpoints the shared controls bind.
@@ -496,6 +513,7 @@ export type SynthPatchViewModel = {
     /** All state needed to diff/apply the selected oscillator has an authoritative base. */
     isArticulationBaseReady: boolean;
     canCaptureArticulation: boolean;
+    callbackControlReadiness: SynthCallbackControlReadiness;
     selectedMsegSlot: number;
     selectedEnvelopeSlot: number;
     selectedEnvelope: ModulationEnvelope | null;
@@ -504,7 +522,7 @@ export type SynthPatchViewModel = {
     handleSelectMsegSlot: (slotIndex: number) => void;
     handleSelectMsegShape: (shapeIndex: number) => void;
     handleSelectEnvelopeSlot: (slotIndex: number) => void;
-    handleEnvelopeChange: (field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", nextValue: number) => void;
+    handleEnvelopeChange: (field: SynthEnvelopeField, nextValue: number) => void;
     handleAddRoute: () => void;
     handleAddRouteWithOverrides: (overrides: GeneratedModulationRouteInput) => boolean;
     handleRemoveRoute: (routeIndex: number) => void;
@@ -1398,7 +1416,11 @@ function useStoredArticulationEditorState(
 
         const parsedState = parseArticulationsV4(decodeArticulationDocument(rawValue), acceptedRouteIds);
         if (parsedState._tag === "err") {
-            if (isHydration) setHasHydrated(true);
+            if (isHydration) {
+                acceptedRouteIdsRef.current = acceptedRouteIds;
+                setHasHydrated(true);
+                applyCurrentState(createEmptyArticulationsState());
+            }
             return;
         }
 
@@ -1419,12 +1441,17 @@ function useStoredArticulationEditorState(
         );
         setHasHydrated(false);
         pendingEchoTokensRef.current.clear();
+        const usesKeyRequestFallback = typeof effectPatchConnection.requestFullStoredState !== "function"
+            && typeof effectPatchConnection.requestStoredStateValue === "function";
+        let isAwaitingKeyHydration = usesKeyRequestFallback;
         const handleStoredStateValue = (message: unknown) => {
             if (!isCurrentConnection()) return;
             if (!message || typeof message !== "object") return;
             const nextMessage = message as { key?: unknown; value?: unknown };
             if (nextMessage.key !== ARTICULATIONS_V4_STATE_KEY) return;
-            applyIncomingState(nextMessage.value, false);
+            const isHydration = isAwaitingKeyHydration;
+            isAwaitingKeyHydration = false;
+            applyIncomingState(nextMessage.value, isHydration);
         };
 
         effectPatchConnection.addStoredStateValueListener?.(handleStoredStateValue);
@@ -2938,10 +2965,14 @@ export function useSynthPatchViewModel({
     const isApplyingArticulationRef = useRef(false);
     const [selectedArticulationIsDirty, setSelectedArticulationIsDirty] = useState(false);
     const [discardedArticulationEdit, setDiscardedArticulationEdit] = useState<{
+        patchConnection: PatchConnectionLike;
         slotId: string;
         slotName: string;
         snapshot: ArticulationSnapshot;
     } | null>(null);
+    useEffect(() => {
+        setDiscardedArticulationEdit(null);
+    }, [patchConnection]);
     const presetStoredStateAdapters = useSynthPresetStoredStateAdapters({
         articulationBankState,
         modulationBridge,
@@ -3029,6 +3060,28 @@ export function useSynthPatchViewModel({
             releaseSeconds: bindings.releaseSeconds.value,
         };
     }, [envelopeBindings, modulationState, selectedEnvelopeSlot]);
+    const selectedEnvelopeBindings = envelopeBindings[selectedEnvelopeSlot] ?? null;
+    const callbackControlReadiness = useMemo<SynthCallbackControlReadiness>(() => ({
+        wavetableSelection: wavetableSelect.isReady,
+        mseg: {
+            morph: selectedMsegMorph.isReady,
+            rate: selectedMsegRate.isReady,
+        },
+        envelope: {
+            attackSeconds: selectedEnvelopeBindings?.attackSeconds.isReady ?? false,
+            decaySeconds: selectedEnvelopeBindings?.decaySeconds.isReady ?? false,
+            sustain: selectedEnvelopeBindings?.sustain.isReady ?? false,
+            releaseSeconds: selectedEnvelopeBindings?.releaseSeconds.isReady ?? false,
+        },
+    }), [
+        selectedEnvelopeBindings?.attackSeconds.isReady,
+        selectedEnvelopeBindings?.decaySeconds.isReady,
+        selectedEnvelopeBindings?.releaseSeconds.isReady,
+        selectedEnvelopeBindings?.sustain.isReady,
+        selectedMsegMorph.isReady,
+        selectedMsegRate.isReady,
+        wavetableSelect.isReady,
+    ]);
     const stageBindings = useStagePositionDrag({
         stageRef,
         observedPosition,
@@ -3081,11 +3134,17 @@ export function useSynthPatchViewModel({
     }, [catalog?.tables?.length, prewarmWavetable]);
 
     const handleSelectWavetable = useCallback((nextValue: number) => {
+        if (!wavetableSelect.isReady) {
+            return;
+        }
         wavetableSelect.commitValue(nextValue);
         prewarmWavetableNeighborhood(nextValue);
     }, [prewarmWavetableNeighborhood, wavetableSelect]);
 
     const handleStepWavetable = useCallback((direction: ArrowStepDirection) => {
+        if (!wavetableSelect.isReady) {
+            return;
+        }
         const maxTableIndex = Math.max(0, (catalog?.tables?.length ?? 1) - 1);
         const nextTableIndex = clamp(desiredTableIndex + direction, 0, maxTableIndex);
         wavetableSelect.commitValue(nextTableIndex);
@@ -3113,10 +3172,16 @@ export function useSynthPatchViewModel({
     }, []);
 
     const handleMsegRateChange = useCallback((nextValue: number) => {
+        if (!selectedMsegRate.isReady) {
+            return;
+        }
         selectedMsegRate.setValue(clampMsegRateSeconds(nextValue));
     }, [selectedMsegRate]);
 
     const handleStepMsegRate = useCallback((direction: ArrowStepDirection) => {
+        if (!selectedMsegRate.isReady) {
+            return;
+        }
         const nextRateSeconds = clampMsegRateSeconds(selectedMsegRate.value + (direction * 0.001));
         selectedMsegRate.setValue(nextRateSeconds);
     }, [selectedMsegRate]);
@@ -3136,15 +3201,18 @@ export function useSynthPatchViewModel({
     const handleMsegMorphChange = useCallback((nextValue: number) => {
         const nextMorph = clamp(Number(nextValue) || 0, 0, 1);
         const targetBinding = msegMorphBindings[selectedMsegSlot] ?? mseg1Morph;
+        if (!targetBinding.isReady) {
+            return;
+        }
         targetBinding.setValue(nextMorph);
     }, [mseg1Morph, msegMorphBindings, selectedMsegSlot]);
 
     const handleEnvelopeChange = useCallback((
-        field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds",
+        field: SynthEnvelopeField,
         nextValue: number,
     ) => {
         const selectedBindings = envelopeBindings[selectedEnvelopeSlot];
-        if (!selectedBindings) {
+        if (!selectedBindings || !selectedBindings[field].isReady) {
             return;
         }
         selectedBindings[field].setValue(nextValue);
@@ -3597,6 +3665,7 @@ export function useSynthPatchViewModel({
 
         if (shouldRecordDirtyDiscard) {
             setDiscardedArticulationEdit({
+                patchConnection,
                 slotId: previousSlot.id,
                 slotName: previousSlot.name,
                 snapshot: captureCurrentArticulationSnapshot(),
@@ -3621,6 +3690,7 @@ export function useSynthPatchViewModel({
         modulationBridge,
         modulationState?.routes,
         oscillatorID,
+        patchConnection,
         selectedArticulationIsDirty,
     ]);
 
@@ -3676,6 +3746,7 @@ export function useSynthPatchViewModel({
 
         if (selectedArticulationIsDirty) {
             setDiscardedArticulationEdit({
+                patchConnection,
                 slotId: slot.id,
                 slotName: slot.name,
                 snapshot: captureCurrentArticulationSnapshot(),
@@ -3697,13 +3768,18 @@ export function useSynthPatchViewModel({
         modulationBridge,
         modulationState?.routes,
         oscillatorID,
+        patchConnection,
         selectedArticulationIsDirty,
     ]);
 
     const handleUndoDiscardedArticulationEdit = useCallback(() => {
         const edit = discardedArticulationEdit;
 
-        if (!edit) {
+        if (
+            !edit
+            || edit.patchConnection !== patchConnection
+            || !isArticulationBaseReady
+        ) {
             return;
         }
 
@@ -3717,7 +3793,13 @@ export function useSynthPatchViewModel({
             isApplyingArticulationRef.current = false;
             setSelectedArticulationIsDirty(true);
         }, 0);
-    }, [applyArticulationSnapshot, articulationBankState, discardedArticulationEdit]);
+    }, [
+        applyArticulationSnapshot,
+        articulationBankState,
+        discardedArticulationEdit,
+        isArticulationBaseReady,
+        patchConnection,
+    ]);
 
     const handleSetArticulationTriggerMode = useCallback((mode: ArticulationTriggerMode) => {
         articulationBankState.setAndPersistState((previousState) => (
@@ -4057,13 +4139,16 @@ export function useSynthPatchViewModel({
     }, [sendMidiInputEvent]);
 
     const handleStartArticulationAudition = useCallback((slotId: string) => {
+        if (!isArticulationBaseReady) {
+            return;
+        }
         handleStopArticulationAudition();
         selectArticulationSlot(slotId);
 
         const note = clamp(Math.round(lastPlayedNoteRef.current), 0, 127);
         activeAuditionRef.current = { slotId, note };
         sendMidiInputEvent(0x90, note, 100);
-    }, [handleStopArticulationAudition, selectArticulationSlot, sendMidiInputEvent]);
+    }, [handleStopArticulationAudition, isArticulationBaseReady, selectArticulationSlot, sendMidiInputEvent]);
 
     // The Mod rail's Note key (T10B): one piano key fixed to the most recently
     // played intentional pitch. It goes through sendMidiInputEvent so it joins
@@ -4466,12 +4551,18 @@ export function useSynthPatchViewModel({
     ]);
 
     const handleStepPlayMode = useCallback((direction: ArrowStepDirection) => {
+        if (!playMode.isReady) {
+            return;
+        }
         playMode.commitValue(
             clamp(playMode.value + direction, 0, Math.max(0, voiceModeCount - 1)),
         );
     }, [playMode, voiceModeCount]);
 
     const handleStepGlideTime = useCallback((direction: ArrowStepDirection) => {
+        if (!glideTime.isReady) {
+            return;
+        }
         glideTime.commitValue(clamp(
             glideTime.value + (direction * GLIDE_TIME_STEP_SECONDS),
             GLIDE_TIME_MIN_SECONDS,
@@ -4571,7 +4662,7 @@ export function useSynthPatchViewModel({
         selectedArticulationIsDirty,
         presetStoredStateAdapters,
         articulationHeldInput,
-        discardedArticulationEdit: discardedArticulationEdit
+        discardedArticulationEdit: discardedArticulationEdit?.patchConnection === patchConnection
             ? {
                 slotId: discardedArticulationEdit.slotId,
                 slotName: discardedArticulationEdit.slotName,
@@ -4580,6 +4671,7 @@ export function useSynthPatchViewModel({
         hasHydratedArticulations: articulationBankState.hasHydrated,
         isArticulationBaseReady,
         canCaptureArticulation,
+        callbackControlReadiness,
         selectedMsegSlot,
         selectedEnvelopeSlot,
         selectedEnvelope,

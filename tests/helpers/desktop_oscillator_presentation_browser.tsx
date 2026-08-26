@@ -42,6 +42,7 @@ export function installDesktopOscillatorPresentationHarness(target: HTMLElement)
                             { name: "Basic Shapes", frameCount: 128 },
                             { name: "Acid", frameCount: 128 },
                         ]}
+                        tableSelectionReady
                         canRetry={false}
                         onTableChange={() => {
                             connectedActionCount += 1;

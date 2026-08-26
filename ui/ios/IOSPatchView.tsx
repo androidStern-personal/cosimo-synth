@@ -75,6 +75,7 @@ import {
 import {
     useSynthPatchViewModel,
     useOscillatorSelectionViewModel,
+    type SynthCallbackControlReadiness,
 } from "../shared/synth-hooks";
 import {
     IOSKeyboardDock,
@@ -153,9 +154,11 @@ type IOSResponsiveLayout = {
 
 type IOSPlayPanelProps = {
     playModeValue: number;
+    playModeReady: boolean;
     onPlayModeChange: (nextValue: number) => void;
     playModeFocusBindings: ReturnType<typeof useSynthPatchViewModel>["keyboardRouting"]["playModeFocusBindings"];
     glideValue: number;
+    glideReady: boolean;
     onGlideChange: (nextValue: number) => void;
     glideFocusTarget: ReturnType<typeof useSynthPatchViewModel>["keyboardRouting"]["glideFocusTarget"];
     globalTune: PatchControlBinding<number>;
@@ -258,15 +261,18 @@ function useIOSViewportLayout() {
 
 function arePlayPanelPropsEqual(previousProps: IOSPlayPanelProps, nextProps: IOSPlayPanelProps) {
     return previousProps.playModeValue === nextProps.playModeValue
+        && previousProps.playModeReady === nextProps.playModeReady
         && previousProps.onPlayModeChange === nextProps.onPlayModeChange
         && previousProps.playModeFocusBindings.onPointerDownCapture === nextProps.playModeFocusBindings.onPointerDownCapture
         && previousProps.playModeFocusBindings.onFocusCapture === nextProps.playModeFocusBindings.onFocusCapture
         && previousProps.glideValue === nextProps.glideValue
+        && previousProps.glideReady === nextProps.glideReady
         && previousProps.onGlideChange === nextProps.onGlideChange
         && previousProps.glideFocusTarget.onActivate === nextProps.glideFocusTarget.onActivate
         && previousProps.glideFocusTarget.onBeginTextEntry === nextProps.glideFocusTarget.onBeginTextEntry
         && previousProps.glideFocusTarget.onEndTextEntry === nextProps.glideFocusTarget.onEndTextEntry
         && previousProps.globalTune.value === nextProps.globalTune.value
+        && previousProps.globalTune.isReady === nextProps.globalTune.isReady
         && previousProps.globalTune.commitValue === nextProps.globalTune.commitValue
         && previousProps.routes === nextProps.routes
         && previousProps.armedSource.sourceKind === nextProps.armedSource.sourceKind
@@ -330,9 +336,11 @@ function IOSGlobalTuneKnob({
 
 const IOSPlayPanel = memo(function IOSPlayPanel({
     playModeValue,
+    playModeReady,
     onPlayModeChange,
     playModeFocusBindings,
     glideValue,
+    glideReady,
     onGlideChange,
     glideFocusTarget,
     globalTune,
@@ -347,6 +355,8 @@ const IOSPlayPanel = memo(function IOSPlayPanel({
                         className="play-select play-mode-select"
                         aria-label="Voice mode"
                         value={String(playModeValue)}
+                        disabled={!playModeReady}
+                        data-host-state={playModeReady ? "ready" : "loading"}
                         onChange={(event) => onPlayModeChange(Number(event.target.value))}
                         {...playModeFocusBindings}
                     >
@@ -365,6 +375,8 @@ const IOSPlayPanel = memo(function IOSPlayPanel({
                             max="1"
                             step="0.001"
                             value={Math.min(glideValue, 1).toFixed(3)}
+                            disabled={!glideReady}
+                            data-host-state={glideReady ? "ready" : "loading"}
                             aria-label="Glide time"
                             onPointerDownCapture={glideFocusTarget.onActivate}
                             onFocusCapture={glideFocusTarget.onActivate}
@@ -390,8 +402,7 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
     onToggleLoop,
     onSelectMsegShape,
     onMsegMorphChange,
-    panValue,
-    onPanChange,
+    panBinding,
     onSelectMsegSlot,
 }: {
     msegState: ReturnType<typeof useSynthPatchViewModel>["msegState"];
@@ -403,8 +414,7 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
     onToggleLoop: () => void;
     onSelectMsegShape: (shapeIndex: number) => void;
     onMsegMorphChange: (nextValue: number) => void;
-    panValue: number;
-    onPanChange: (nextValue: number) => void;
+    panBinding: PatchControlBinding<number>;
     onSelectMsegSlot: (slotIndex: number) => void;
 }) {
     return (
@@ -475,6 +485,8 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
                             max="1"
                             step="0.001"
                             value={selectedMsegMorph.value.toFixed(3)}
+                            disabled={!selectedMsegMorph.isReady}
+                            data-host-state={selectedMsegMorph.isReady ? "ready" : "loading"}
                             onChange={(event) => onMsegMorphChange(Number(event.currentTarget.value))}
                         />
                     </label>
@@ -530,12 +542,14 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
                             min="-1"
                             max="1"
                             step="0.001"
-                            value={Number(panValue).toFixed(3)}
-                            onChange={(event) => onPanChange(Number(event.target.value))}
+                            value={Number(panBinding.value).toFixed(3)}
+                            disabled={!panBinding.isReady}
+                            data-host-state={panBinding.isReady ? "ready" : "loading"}
+                            onChange={(event) => panBinding.commitValue(Number(event.target.value))}
                         />
                     </label>
                     <div className="mseg-depth-readout">
-                        {Number(panValue).toFixed(3)}
+                        {Number(panBinding.value).toFixed(3)}
                     </div>
                 </div>
             </div>
@@ -612,6 +626,7 @@ const IOSModulationRouteAmountField = memo(function IOSModulationRouteAmountFiel
 const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
     selectedEnvelopeSlot,
     selectedEnvelope,
+    envelopeReadiness,
     routes,
     onSelectEnvelopeSlot,
     onEnvelopeChange,
@@ -621,6 +636,7 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
 }: {
     selectedEnvelopeSlot: number;
     selectedEnvelope: ReturnType<typeof useSynthPatchViewModel>["selectedEnvelope"];
+    envelopeReadiness: SynthCallbackControlReadiness["envelope"];
     routes: ReturnType<typeof useSynthPatchViewModel>["routes"];
     onSelectEnvelopeSlot: (slotIndex: number) => void;
     onEnvelopeChange: (field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", nextValue: number) => void;
@@ -682,6 +698,8 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
                             max={String(max)}
                             step={String(step)}
                             value={Number(value).toFixed(3)}
+                            disabled={!envelopeReadiness[field as keyof typeof envelopeReadiness]}
+                            data-host-state={envelopeReadiness[field as keyof typeof envelopeReadiness] ? "ready" : "loading"}
                             onChange={(event) => onEnvelopeChange(field as "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", Number(event.target.value))}
                         />
                     </label>
@@ -1081,6 +1099,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
     onPointerLeave,
     onPointerUp,
     rateSeconds,
+    rateReady,
     onSelectShape,
     onMorphChange,
     onRateChange,
@@ -1103,6 +1122,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
     onPointerLeave: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
     rateSeconds: number;
+    rateReady: boolean;
     onSelectShape: (shapeIndex: number) => void;
     onMorphChange: (nextValue: number) => void;
     onRateChange: (nextValue: number) => void;
@@ -1168,6 +1188,8 @@ const IOSMsegModal = memo(function IOSMsegModal({
                                 max="1"
                                 step="0.001"
                                 value={selectedMsegMorph.value.toFixed(3)}
+                                disabled={!selectedMsegMorph.isReady}
+                                data-host-state={selectedMsegMorph.isReady ? "ready" : "loading"}
                                 onChange={(event) => onMorphChange(Number(event.currentTarget.value))}
                             />
                         </label>
@@ -1182,6 +1204,8 @@ const IOSMsegModal = memo(function IOSMsegModal({
                                 max={MSEG_RATE_MAX_SECONDS.toFixed(3)}
                                 step="0.001"
                                 value={clampMsegRateSeconds(rateSeconds).toFixed(3)}
+                                disabled={!rateReady}
+                                data-host-state={rateReady ? "ready" : "loading"}
                                 onChange={(event) => onRateChange(Number(event.target.value))}
                                 {...rateFocusBindings}
                             />
@@ -1383,6 +1407,7 @@ function IOSPatchViewBody() {
                                     pendingTableName: synthView.runtimePresentation.isPendingSelection ? synthView.desiredTableName : null,
                                     desiredTableIndex: synthView.desiredTableIndex,
                                     tableOptions: synthView.tableOptions,
+                                    tableSelectionReady: synthView.callbackControlReadiness.wavetableSelection,
                                     onTableChange: handleSelectWavetable,
                                     onTablePrewarm: synthView.handlePrewarmWavetablePicker,
                                     canRetry: synthView.canRetryDesiredTableLoad,
@@ -1432,9 +1457,11 @@ function IOSPatchViewBody() {
 
                             <IOSPlayPanel
                                 playModeValue={synthView.playMode.value}
+                                playModeReady={synthView.playMode.isReady}
                                 onPlayModeChange={synthView.playMode.commitValue}
                                 playModeFocusBindings={synthView.keyboardRouting.playModeFocusBindings}
                                 glideValue={synthView.glideTime.value}
+                                glideReady={synthView.glideTime.isReady}
                                 onGlideChange={synthView.glideTime.commitValue}
                                 glideFocusTarget={synthView.keyboardRouting.glideFocusTarget}
                                 globalTune={synthView.globalTune}
@@ -1471,14 +1498,14 @@ function IOSPatchViewBody() {
                                 onToggleLoop={synthView.handleToggleMsegLoop}
                                 onSelectMsegShape={synthView.handleSelectMsegShape}
                                 onMsegMorphChange={synthView.handleMsegMorphChange}
-                                panValue={synthView.pan.value}
-                                onPanChange={synthView.pan.commitValue}
+                                panBinding={synthView.pan}
                                 onSelectMsegSlot={synthView.handleSelectMsegSlot}
                             />
 
                             <IOSModulationMatrixPanel
                                 selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
                                 selectedEnvelope={synthView.selectedEnvelope}
+                                envelopeReadiness={synthView.callbackControlReadiness.envelope}
                                 routes={synthView.routes}
                                 onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
                                 onEnvelopeChange={synthView.handleEnvelopeChange}
@@ -1515,6 +1542,7 @@ function IOSPatchViewBody() {
                     onPointerLeave={synthView.msegEditor.handlePointerLeave}
                     onPointerUp={synthView.msegEditor.handlePointerUp}
                     rateSeconds={synthView.msegState?.playback.rate.seconds ?? 1}
+                    rateReady={synthView.callbackControlReadiness.mseg.rate}
                     onSelectShape={synthView.handleSelectMsegShape}
                     onMorphChange={synthView.handleMsegMorphChange}
                     onRateChange={synthView.handleMsegRateChange}

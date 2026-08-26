@@ -172,6 +172,7 @@ import {
     SYNTH_PRESET_EFFECT_ID,
     useOscillatorSelectionViewModel,
     useSynthPatchViewModel,
+    type SynthCallbackControlReadiness,
     type SynthPatchViewModel,
 } from "../shared/synth-hooks";
 import { createPresetBar } from "../shared/effects/preset-bar";
@@ -443,6 +444,7 @@ type MsegEditorModalProps = {
     slotLabel: string;
     msegState: MsegState | null;
     morphBinding: PatchControlBinding<number>;
+    rateReady: boolean;
     surfaceRef: RefObject<SVGSVGElement | null>;
     selectedPointIndex: number;
     hoveredSegmentIndex: number;
@@ -470,6 +472,7 @@ type ModulationMatrixSectionProps = {
     selectedMsegSlot: number;
     msegState: MsegState | null;
     selectedMsegMorph: PatchControlBinding<number>;
+    callbackControlReadiness: SynthCallbackControlReadiness;
     observedMsegPlayhead: ReturnType<typeof useSynthPatchViewModel>["observedMsegPlayhead"];
     selectedEnvelopeSlot: number;
     selectedEnvelope: {
@@ -1026,6 +1029,7 @@ function MsegMorphRail({
                 aria-valuenow={Number(value.toFixed(3))}
                 aria-valuetext={`${Math.round(value * 100)}%`}
                 data-role="mseg-morph-slider"
+                data-host-state={binding.isReady ? "ready" : "loading"}
                 data-modulation-target-kind={modulationTargetKind}
                 className={`relative h-5 min-w-[132px] flex-1 touch-none rounded-full outline-none ${binding.isReady ? "cursor-ew-resize" : "cursor-wait"}`}
                 onPointerDown={(event) => {
@@ -1542,10 +1546,12 @@ function UnisonControlSurface({
 function DesktopEnvelopeEditor({
     selectedEnvelope,
     onEnvelopeChange,
+    readiness,
     compact = false,
 }: {
     selectedEnvelope: NonNullable<ModulationMatrixSectionProps["selectedEnvelope"]>;
     onEnvelopeChange: ModulationMatrixSectionProps["onEnvelopeChange"];
+    readiness: SynthCallbackControlReadiness["envelope"];
     compact?: boolean;
 }) {
     const svgRef = useRef<SVGSVGElement | null>(null);
@@ -1553,6 +1559,15 @@ function DesktopEnvelopeEditor({
     const [activePointerId, setActivePointerId] = useState<number | null>(null);
 
     const geometry = useMemo(() => computeEnvelopeGeometry(selectedEnvelope), [selectedEnvelope]);
+    const isHandleReady = useCallback((handleName: "attack" | "decay-sustain" | "release") => {
+        if (handleName === "attack") return readiness.attackSeconds;
+        if (handleName === "decay-sustain") return readiness.decaySeconds && readiness.sustain;
+        return readiness.releaseSeconds;
+    }, [readiness]);
+    const allFieldsReady = readiness.attackSeconds
+        && readiness.decaySeconds
+        && readiness.sustain
+        && readiness.releaseSeconds;
 
     const envelopePath = useMemo(() => [
         `M ${geometry.plotLeft} ${geometry.plotBottom}`,
@@ -1608,6 +1623,10 @@ function DesktopEnvelopeEditor({
 
         const handlePointerMove = (event: PointerEvent) => {
             if (event.pointerId !== activePointerId) {
+                return;
+            }
+            if (!isHandleReady(activeHandle)) {
+                clearActiveDrag();
                 return;
             }
 
@@ -1670,17 +1689,20 @@ function DesktopEnvelopeEditor({
             window.removeEventListener("blur", clearActiveDrag);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
-    }, [activeHandle, activePointerId, geometry, onEnvelopeChange, readStagePoint]);
+    }, [activeHandle, activePointerId, geometry, isHandleReady, onEnvelopeChange, readStagePoint]);
 
     const beginHandleDrag = useCallback((
         handleName: "attack" | "decay-sustain" | "release",
         event: ReactPointerEvent<SVGCircleElement>,
     ) => {
+        if (!isHandleReady(handleName)) {
+            return;
+        }
         event.preventDefault();
         event.stopPropagation();
         setActiveHandle(handleName);
         setActivePointerId(event.pointerId);
-    }, []);
+    }, [isHandleReady]);
 
     return (
         <div className="relative h-full overflow-hidden bg-[rgb(var(--cosimo-ground-rgb)/0.92)]">
@@ -1690,6 +1712,8 @@ function DesktopEnvelopeEditor({
                     preserveAspectRatio={compact ? "none" : undefined}
                     className="relative z-10 block h-full w-full touch-none"
                     data-role="adsr-editor-surface"
+                    data-host-state={allFieldsReady ? "ready" : "loading"}
+                    aria-busy={!allFieldsReady}
                     data-active-handle={activeHandle ?? undefined}
                     aria-label="Envelope editor"
                 >
@@ -1780,7 +1804,9 @@ function DesktopEnvelopeEditor({
                         cy={geometry.plotTop}
                         r={34}
                         fill="transparent"
-                        className="cursor-ew-resize"
+                        className={readiness.attackSeconds ? "cursor-ew-resize" : "cursor-wait"}
+                        aria-disabled={!readiness.attackSeconds}
+                        style={{ pointerEvents: readiness.attackSeconds ? undefined : "none" }}
                         onPointerDown={(event) => beginHandleDrag("attack", event)}
                     />
 
@@ -1799,7 +1825,9 @@ function DesktopEnvelopeEditor({
                         cy={geometry.sustainY}
                         r={34}
                         fill="transparent"
-                        className="cursor-move"
+                        className={readiness.decaySeconds && readiness.sustain ? "cursor-move" : "cursor-wait"}
+                        aria-disabled={!readiness.decaySeconds || !readiness.sustain}
+                        style={{ pointerEvents: readiness.decaySeconds && readiness.sustain ? undefined : "none" }}
                         onPointerDown={(event) => beginHandleDrag("decay-sustain", event)}
                     />
 
@@ -1818,7 +1846,9 @@ function DesktopEnvelopeEditor({
                         cy={geometry.plotBottom}
                         r={34}
                         fill="transparent"
-                        className="cursor-ew-resize"
+                        className={readiness.releaseSeconds ? "cursor-ew-resize" : "cursor-wait"}
+                        aria-disabled={!readiness.releaseSeconds}
+                        style={{ pointerEvents: readiness.releaseSeconds ? undefined : "none" }}
                         onPointerDown={(event) => beginHandleDrag("release", event)}
                     />
                 </svg>
@@ -2684,6 +2714,7 @@ function KeyboardToolbar({
         <div className="grid gap-3 xl:grid-cols-[minmax(260px,0.76fr)_minmax(0,1.24fr)]">
             <VoiceGlideControlSurface
                 playModeValue={playMode.value}
+                playModeReady={playMode.isReady}
                 onPlayModeChange={(nextValue) => playMode.commitValue(nextValue)}
                 playModeFocusBindings={playModeFocusBindings}
                 className="grid-cols-[minmax(0,1fr)_auto] items-end"
@@ -2832,6 +2863,7 @@ function MsegEditorModal({
     slotLabel,
     msegState,
     morphBinding,
+    rateReady,
     surfaceRef,
     selectedPointIndex,
     hoveredSegmentIndex,
@@ -3016,34 +3048,50 @@ function MsegEditorModal({
                 </div>
 
                 <div className="mseg-editor-controls" data-role="mseg-editor-controls">
-                    <label className="mseg-editor-range" {...morphLongPress}>
+                    <label
+                        className="mseg-editor-range"
+                        data-host-state={morphBinding.isReady ? "ready" : "loading"}
+                        aria-busy={!morphBinding.isReady}
+                        {...(morphBinding.isReady ? morphLongPress : {})}
+                    >
                         <span>Morph</span>
                         <input
-                            className="cosimo-range"
+                            className="cosimo-range disabled:cursor-wait disabled:opacity-45"
                             type="range"
                             min={0}
                             max={1}
                             step={0.001}
                             value={morphBinding.value.toFixed(3)}
+                            disabled={!morphBinding.isReady}
+                            data-host-state={morphBinding.isReady ? "ready" : "loading"}
                             aria-label="MSEG morph"
                             data-role="mseg-morph-slider"
                             data-modulation-target-kind={`mseg${slotIndex + 1}Morph`}
                             onChange={(event) => onMorphChange(Number(event.currentTarget.value))}
-                            onPointerDown={() => setIsMorphAdjusting(true)}
+                            onPointerDown={() => {
+                                if (morphBinding.isReady) setIsMorphAdjusting(true);
+                            }}
                             onPointerUp={() => setIsMorphAdjusting(false)}
                             onPointerCancel={() => setIsMorphAdjusting(false)}
                         />
                         <output className="cosimo-readout is-caps">{formatPercent(morphBinding.value)}</output>
                     </label>
-                    <label className="mseg-editor-range mseg-editor-time" {...rateLongPress}>
+                    <label
+                        className="mseg-editor-range mseg-editor-time"
+                        data-host-state={rateReady ? "ready" : "loading"}
+                        aria-busy={!rateReady}
+                        {...(rateReady ? rateLongPress : {})}
+                    >
                         <span>Time</span>
                         <input
-                            className="cosimo-range"
+                            className="cosimo-range disabled:cursor-wait disabled:opacity-45"
                             type="range"
                             min={MSEG_RATE_MIN_SECONDS}
                             max={MSEG_RATE_MAX_SECONDS}
                             step={0.001}
                             value={clampMsegRateSeconds(msegState.playback.rate.seconds).toFixed(3)}
+                            disabled={!rateReady}
+                            data-host-state={rateReady ? "ready" : "loading"}
                             aria-label="MSEG rate"
                             data-modulation-target-kind={`mseg${slotIndex + 1}Rate`}
                             onChange={(event) => onRateChange(Number(event.currentTarget.value))}
@@ -3204,6 +3252,7 @@ function ModulationMatrixSection({
     selectedMsegSlot,
     msegState,
     selectedMsegMorph,
+    callbackControlReadiness,
     observedMsegPlayhead,
     selectedEnvelopeSlot,
     selectedEnvelope,
@@ -3363,6 +3412,15 @@ function ModulationMatrixSection({
         };
     }, [cancelMsegRateDrag]);
 
+    useEffect(() => {
+        if (callbackControlReadiness.mseg.rate) {
+            return;
+        }
+        cancelMsegRateDrag();
+        setIsEditingMsegRate(false);
+        setMsegRateEntryError("");
+    }, [callbackControlReadiness.mseg.rate, cancelMsegRateDrag]);
+
     const currentMsegRate = clampMsegRateSeconds(Number(msegState?.playback.rate.seconds ?? 1));
     const msegRateEntrySpec = parameterEntrySpecForSeconds({
         minSeconds: MSEG_RATE_MIN_SECONDS,
@@ -3372,15 +3430,18 @@ function ModulationMatrixSection({
     });
 
     const beginMsegRateTextEntry = useCallback(() => {
+        if (!callbackControlReadiness.mseg.rate) {
+            return;
+        }
         msegRateEditingSpecRef.current = msegRateEntrySpec;
         setDraftMsegRate(formatParameterEntry(msegRateEntrySpec, currentMsegRate).draft);
         setMsegRateEntryError("");
         setIsEditingMsegRate(true);
-    }, [currentMsegRate, msegRateEntrySpec]);
+    }, [callbackControlReadiness.mseg.rate, currentMsegRate, msegRateEntrySpec]);
 
     const updateMsegRateDrag = useCallback((event: Pick<PointerEvent, "pointerId" | "pointerType" | "buttons" | "clientX" | "preventDefault">) => {
         const drag = msegRateDragRef.current;
-        if (!drag || drag.pointerId !== event.pointerId || isEditingMsegRate) {
+        if (!callbackControlReadiness.mseg.rate || !drag || drag.pointerId !== event.pointerId || isEditingMsegRate) {
             return;
         }
         if (event.pointerType === "mouse" && event.buttons === 0) {
@@ -3396,7 +3457,7 @@ function ModulationMatrixSection({
         const range = MSEG_RATE_MAX_SECONDS - MSEG_RATE_MIN_SECONDS;
         const scaled = (deltaX / 120) * range;
         onMsegRateChange(clamp(drag.startValue + scaled, MSEG_RATE_MIN_SECONDS, MSEG_RATE_MAX_SECONDS));
-    }, [cancelMsegRateDrag, isEditingMsegRate, onMsegRateChange]);
+    }, [callbackControlReadiness.mseg.rate, cancelMsegRateDrag, isEditingMsegRate, onMsegRateChange]);
 
     useEffect(() => {
         const handleFallbackPointerMove = (event: PointerEvent) => {
@@ -3416,7 +3477,7 @@ function ModulationMatrixSection({
         if (!el) return;
         const timerRef = msegRateWheelCursorTimerRef;
         const handler = (event: WheelEvent) => {
-            if (isEditingMsegRate) return;
+            if (!callbackControlReadiness.mseg.rate || isEditingMsegRate) return;
             event.preventDefault();
             el.style.cursor = "none";
             clearUiTimeout(timerRef.current);
@@ -3430,9 +3491,12 @@ function ModulationMatrixSection({
             clearUiTimeout(timerRef.current);
             el.style.cursor = "";
         };
-    }, [isEditingMsegRate, currentMsegRate, onMsegRateChange]);
+    }, [callbackControlReadiness.mseg.rate, isEditingMsegRate, currentMsegRate, onMsegRateChange]);
 
     const commitMsegRateText = useCallback((text: string) => {
+        if (!callbackControlReadiness.mseg.rate) {
+            return false;
+        }
         const spec = msegRateEditingSpecRef.current ?? msegRateEntrySpec;
         const result = parseParameterEntry(spec, text);
         if (result._tag === "rejected") {
@@ -3447,7 +3511,7 @@ function ModulationMatrixSection({
         onMsegRateChange(result.commit.value);
         setIsEditingMsegRate(false);
         return true;
-    }, [msegRateEntrySpec, onMsegRateChange]);
+    }, [callbackControlReadiness.mseg.rate, msegRateEntrySpec, onMsegRateChange]);
 
     // ADSR draft state (for envelope tab top-bar inputs)
     const [draftAttack, setDraftAttack] = useState("");
@@ -3503,13 +3567,30 @@ function ModulationMatrixSection({
         selectedEnvelope?.sustain,
     ]);
 
+    useEffect(() => {
+        if (
+            activeEnvelopeDraftField === null
+            || callbackControlReadiness.envelope[activeEnvelopeDraftField]
+        ) {
+            return;
+        }
+
+        // An endpoint/connection change invalidates the old field's draft.
+        // Do not leave it visible and later commit-able once the new endpoint
+        // becomes ready.
+        skipEnvelopeBlurFieldRef.current = activeEnvelopeDraftField;
+        envelopeEditingSpecRef.current = null;
+        setEnvelopeEntryError(null);
+        setActiveEnvelopeDraftField(null);
+    }, [activeEnvelopeDraftField, callbackControlReadiness.envelope]);
+
     const commitEnvelopeEntryField = useCallback((
         field: EnvelopeEntryField,
         draftValue: string,
         currentValue: number,
         setDraft: (nextValue: string) => void,
     ) => {
-        if (!selectedEnvelope) {
+        if (!selectedEnvelope || !callbackControlReadiness.envelope[field]) {
             return false;
         }
         const activeSpec = envelopeEditingSpecRef.current;
@@ -3529,7 +3610,7 @@ function ModulationMatrixSection({
         envelopeEditingSpecRef.current = null;
         onEnvelopeChange(field, result.commit.value);
         return true;
-    }, [onEnvelopeChange, selectedEnvelope]);
+    }, [callbackControlReadiness.envelope, onEnvelopeChange, selectedEnvelope]);
 
     const handleEnvelopeFieldKeyDown = useCallback((
         event: ReactKeyboardEvent<HTMLInputElement>,
@@ -3538,7 +3619,7 @@ function ModulationMatrixSection({
         currentValue: number,
         setDraft: (nextValue: string) => void,
     ) => {
-        if (!selectedEnvelope) {
+        if (!selectedEnvelope || !callbackControlReadiness.envelope[field]) {
             return;
         }
         if (event.key === "Enter") {
@@ -3563,7 +3644,7 @@ function ModulationMatrixSection({
             setActiveEnvelopeDraftField(null);
             event.currentTarget.blur();
         }
-    }, [commitEnvelopeEntryField, selectedEnvelope]);
+    }, [callbackControlReadiness.envelope, commitEnvelopeEntryField, selectedEnvelope]);
 
     return (
         <section
@@ -3794,8 +3875,9 @@ function ModulationMatrixSection({
                             spellCheck={false}
                             readOnly={!isEditingMsegRate}
                             aria-label="MSEG rate"
+                            data-host-state={callbackControlReadiness.mseg.rate ? "ready" : "loading"}
                             data-modulation-target-kind={`mseg${selectedMsegSlot + 1}Rate`}
-                            className={`cosimo-readout is-caps w-[64px] touch-none select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-left leading-none outline-none max-[480px]:w-[68px] max-[480px]:px-2 max-[480px]:py-1 ${
+                            className={`cosimo-readout is-caps w-[64px] touch-none select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-left leading-none outline-none disabled:cursor-wait disabled:opacity-45 max-[480px]:w-[68px] max-[480px]:px-2 max-[480px]:py-1 ${
                                 isEditingMsegRate
                                     ? "cursor-text"
                                     : "cursor-ew-resize"
@@ -3803,9 +3885,10 @@ function ModulationMatrixSection({
                             value={isEditingMsegRate
                                 ? draftMsegRate
                                 : formatParameterEntry(msegRateEntrySpec, currentMsegRate).display}
+                            disabled={!callbackControlReadiness.mseg.rate}
                             tabIndex={activeEditorTab.kind === "mseg" ? 0 : -1}
                             onPointerDown={(event) => {
-                                if (event.button !== 0 || isEditingMsegRate) return;
+                                if (!callbackControlReadiness.mseg.rate || event.button !== 0 || isEditingMsegRate) return;
                                 cancelMsegRateDrag();
                                 msegRateDragRef.current = {
                                     pointerId: event.pointerId,
@@ -3907,7 +3990,12 @@ function ModulationMatrixSection({
                             envelopeEntryParameter({ label: "S", compactLabel: "Sustain", ariaLabel: "Envelope sustain value", field: "sustain", target: "Sustain", draft: draftSustain, setDraft: setDraftSustain, current: selectedEnvelope.sustain }),
                             envelopeEntryParameter({ label: "R", compactLabel: "Release", ariaLabel: "Envelope release value", field: "releaseSeconds", target: "Release", draft: draftRelease, setDraft: setDraftRelease, current: selectedEnvelope.releaseSeconds }),
                         ]).map((param) => (
-                            <label key={param.label} className="flex items-center gap-[3px]">
+                            <label
+                                key={param.label}
+                                className="flex items-center gap-[3px]"
+                                data-host-state={callbackControlReadiness.envelope[param.field] ? "ready" : "loading"}
+                                aria-busy={!callbackControlReadiness.envelope[param.field]}
+                            >
                                 <span className="text-[9px] font-semibold uppercase text-slate-400/60">
                                     {compact ? param.compactLabel : param.label}
                                 </span>
@@ -3917,7 +4005,9 @@ function ModulationMatrixSection({
                                     data-modulation-target-kind={`env${selectedEnvelopeSlot + 1}${param.target}`}
                                     type="text"
                                     inputMode="decimal"
-                                    className="cosimo-readout is-caps is-caption w-[52px] rounded border border-white/[0.06] bg-white/[0.03] py-[2px] pl-1 pr-5 text-left leading-none outline-none focus:border-[var(--section-accent)] max-[480px]:w-[56px]"
+                                    disabled={!callbackControlReadiness.envelope[param.field]}
+                                    data-host-state={callbackControlReadiness.envelope[param.field] ? "ready" : "loading"}
+                                    className="cosimo-readout is-caps is-caption w-[52px] rounded border border-white/[0.06] bg-white/[0.03] py-[2px] pl-1 pr-5 text-left leading-none outline-none focus:border-[var(--section-accent)] disabled:cursor-wait disabled:opacity-45 max-[480px]:w-[56px]"
                                     value={param.draft}
                                     onFocus={(event) => {
                                         const spec = entrySpecForEnvelopeField(param.field, param.current);
@@ -3932,6 +4022,12 @@ function ModulationMatrixSection({
                                     onBlur={(event) => {
                                         if (skipEnvelopeBlurFieldRef.current === param.field) {
                                             skipEnvelopeBlurFieldRef.current = null;
+                                            return;
+                                        }
+                                        if (!callbackControlReadiness.envelope[param.field]) {
+                                            envelopeEditingSpecRef.current = null;
+                                            setEnvelopeEntryError(null);
+                                            setActiveEnvelopeDraftField(null);
                                             return;
                                         }
                                         if (commitEnvelopeEntryField(param.field, param.draft, param.current, param.setDraft)) {
@@ -4091,6 +4187,7 @@ function ModulationMatrixSection({
                     <DesktopEnvelopeEditor
                         selectedEnvelope={selectedEnvelope}
                         onEnvelopeChange={onEnvelopeChange}
+                        readiness={callbackControlReadiness.envelope}
                         compact={compact}
                     />
                 ) : activeEditorTab.kind === "macro" ? (
@@ -4984,6 +5081,7 @@ function DesktopPatchViewBody({
                                 pendingTableName: synthView.runtimePresentation.isPendingSelection ? synthView.desiredTableName : null,
                                 desiredTableIndex: synthView.desiredTableIndex,
                                 tableOptions: synthView.tableOptions,
+                                tableSelectionReady: synthView.callbackControlReadiness.wavetableSelection,
                                 onTableChange: synthView.handleSelectWavetable,
                                 onTablePrewarm: synthView.handlePrewarmWavetablePicker,
                                 canRetry: synthView.canRetryDesiredTableLoad,
@@ -5039,6 +5137,7 @@ function DesktopPatchViewBody({
                         frameCount={synthView.displayedFrameCount}
                         desiredTableIndex={synthView.desiredTableIndex}
                         tableOptions={synthView.tableOptions}
+                        tableSelectionReady={synthView.callbackControlReadiness.wavetableSelection}
                         canRetry={synthView.canRetryDesiredTableLoad}
                         onTableChange={synthView.handleSelectWavetable}
                         onTablePrewarm={synthView.handlePrewarmWavetablePicker}
@@ -5133,6 +5232,7 @@ function DesktopPatchViewBody({
                             selectedMsegSlot={synthView.selectedMsegSlot}
                             msegState={synthView.msegState}
                             selectedMsegMorph={synthView.selectedMsegMorph}
+                            callbackControlReadiness={synthView.callbackControlReadiness}
                             observedMsegPlayhead={synthView.observedMsegPlayhead}
                             selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
                             selectedEnvelope={synthView.selectedEnvelope}
@@ -5184,6 +5284,7 @@ function DesktopPatchViewBody({
                         selectedMsegSlot={synthView.selectedMsegSlot}
                         msegState={synthView.msegState}
                         selectedMsegMorph={synthView.selectedMsegMorph}
+                        callbackControlReadiness={synthView.callbackControlReadiness}
                         observedMsegPlayhead={synthView.observedMsegPlayhead}
                         selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
                         selectedEnvelope={synthView.selectedEnvelope}
@@ -5435,13 +5536,16 @@ function DesktopPatchViewBody({
                         <DesktopEnvelopeEditor
                             selectedEnvelope={synthView.selectedEnvelope}
                             onEnvelopeChange={synthView.handleEnvelopeChange}
+                            readiness={synthView.callbackControlReadiness.envelope}
                             compact
                         />
                     )}
                     msegRateSeconds={clampMsegRateSeconds(Number(synthView.msegState?.playback.rate.seconds ?? 1))}
+                    msegRateReady={synthView.callbackControlReadiness.mseg.rate}
                     onMsegRateChange={synthView.handleMsegRateChange}
                     msegMorphBinding={synthView.selectedMsegMorph}
                     envelope={synthView.selectedEnvelope}
+                    envelopeReadiness={synthView.callbackControlReadiness.envelope}
                     onEnvelopeChange={synthView.handleEnvelopeChange}
                     macroBinding={quickEditorSource.sourceKind === "macro"
                         ? quickMacroBindings[quickEditorSource.sourceSlot - 1] ?? null
@@ -5467,6 +5571,7 @@ function DesktopPatchViewBody({
                 slotLabel={`MSEG ${synthView.selectedMsegSlot + 1}`}
                 msegState={synthView.msegState}
                 morphBinding={synthView.selectedMsegMorph}
+                rateReady={synthView.callbackControlReadiness.mseg.rate}
                 surfaceRef={msegEditorSurfaceRef}
                 selectedPointIndex={synthView.msegEditor.selectedPointIndex}
                 hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}

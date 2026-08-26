@@ -1001,6 +1001,194 @@ test("wavetable picker prewarms the current and adjacent tables without selectin
     }
 });
 
+test("callback-only wavetable, MSEG, and envelope controls share truthful host readiness", async () => {
+    const deferredEndpoints = [
+        "oscAWavetableSelect",
+        "mseg1Morph",
+        "mseg1Rate",
+        "env1Attack",
+    ];
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 1440, height: 980 });
+            await nextPage.addInitScript((endpointIDs) => {
+                const initial = window.__COSIMO_DESKTOP_HARNESS_INITIAL__ ?? {};
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    ...initial,
+                    deferredParameterResponses: endpointIDs,
+                };
+            }, deferredEndpoints);
+        },
+    });
+
+    try {
+        const wavetableSelect = page.locator('select[aria-label="Select wavetable"]');
+        const morphSlider = page.locator('[data-role="mseg-morph-slider"]:visible').first();
+        const rateInput = page.locator('input[aria-label="MSEG rate"]:visible');
+
+        await wavetableSelect.waitFor();
+        await morphSlider.waitFor();
+        await rateInput.waitFor();
+        for (const control of [wavetableSelect, morphSlider, rateInput]) {
+            assert.equal(await control.isDisabled(), true);
+            assert.equal(await control.getAttribute("data-host-state"), "loading");
+        }
+
+        await page.getByRole("button", { name: "Select envelope 1" }).click();
+        const attackInput = page.locator('input[aria-label="Envelope attack value"]:visible');
+        const attackHandle = page.locator('[data-role="adsr-attack-handle-hit-target"]:visible');
+        await attackInput.waitFor();
+        assert.equal(await attackInput.isDisabled(), true);
+        assert.equal(await attackInput.getAttribute("data-host-state"), "loading");
+        assert.equal(await attackHandle.getAttribute("aria-disabled"), "true");
+
+        await clearHarnessDebugLog(page);
+        await page.evaluate(() => {
+            const changeValue = (element, value) => {
+                if (!(element instanceof HTMLInputElement) && !(element instanceof HTMLSelectElement)) {
+                    throw new Error("Expected a callback-only input or select.");
+                }
+                const prototype = element instanceof HTMLSelectElement
+                    ? HTMLSelectElement.prototype
+                    : HTMLInputElement.prototype;
+                const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+                setter?.call(element, String(value));
+                element.dispatchEvent(new Event("input", { bubbles: true }));
+                element.dispatchEvent(new Event("change", { bubbles: true }));
+            };
+            changeValue(document.querySelector('select[aria-label="Select wavetable"]'), 1);
+            changeValue(document.querySelector('input[aria-label="MSEG rate"]'), 1.25);
+            changeValue(document.querySelector('input[aria-label="Envelope attack value"]'), 0.5);
+            const morph = document.querySelector('[data-role="mseg-morph-slider"]');
+            morph?.dispatchEvent(new PointerEvent("pointerdown", {
+                bubbles: true,
+                pointerId: 412,
+                pointerType: "mouse",
+                button: 0,
+                buttons: 1,
+                clientX: 100,
+            }));
+        });
+        const blockedSnapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            blockedSnapshot.sentMessages.some(({ endpointID }) => deferredEndpoints.includes(endpointID)),
+            false,
+            "forced events cannot make a pending callback-only control write to the host",
+        );
+
+        await page.evaluate((endpointIDs) => {
+            endpointIDs.forEach((endpointID) => {
+                window.__COSIMO_DESKTOP_HARNESS__.releaseParameterResponse(endpointID);
+            });
+        }, deferredEndpoints);
+        await page.waitForFunction(() => (
+            document.querySelector('select[aria-label="Select wavetable"]')?.hasAttribute("disabled") === false
+                && document.querySelector('input[aria-label="Envelope attack value"]')?.hasAttribute("disabled") === false
+        ));
+
+        await wavetableSelect.selectOption("1");
+        await waitForHarnessSnapshot(
+            page,
+            "wavetable callback re-enabled",
+            (snapshot) => Number(snapshot.parameterValues.oscAWavetableSelect) === 1,
+        );
+        await page.getByRole("button", { name: "Select MSEG 1" }).click();
+        await morphSlider.waitFor();
+        assert.equal(await morphSlider.isDisabled(), false);
+        assert.equal(await rateInput.isDisabled(), false);
+        const morphBox = await morphSlider.boundingBox();
+        assert.ok(morphBox);
+        await page.mouse.click(
+            morphBox.x + (morphBox.width * 0.75),
+            morphBox.y + (morphBox.height * 0.5),
+        );
+        await waitForHarnessSnapshot(
+            page,
+            "MSEG morph callback re-enabled",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg1Morph) - 0.75) < 0.02,
+        );
+        await rateInput.click();
+        await rateInput.fill("1.250");
+        await rateInput.press("Enter");
+        await waitForHarnessSnapshot(
+            page,
+            "MSEG rate callback re-enabled",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg1Rate) - 1.25) < 0.0001,
+        );
+
+        await page.getByRole("button", { name: "Select envelope 1" }).click();
+        assert.equal(await attackInput.isDisabled(), false);
+        assert.equal(await attackHandle.getAttribute("aria-disabled"), "false");
+        await dragEnvelopeHandleBy(page, "adsr-attack-handle-hit-target", 80, 0);
+        const envelopeSnapshot = await waitForHarnessSnapshot(
+            page,
+            "envelope callback re-enabled",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.env1Attack) - 0.01) > 0.0001,
+        );
+        const changedAttackSeconds = Number(envelopeSnapshot.parameterValues.env1Attack);
+
+        await waitForHarnessSnapshot(
+            page,
+            "callback-only controls write after their first authoritative values",
+            (snapshot) => (
+                Number(snapshot.parameterValues.oscAWavetableSelect) === 1
+                && Math.abs(Number(snapshot.parameterValues.mseg1Morph) - 0.75) < 0.02
+                && Math.abs(Number(snapshot.parameterValues.mseg1Rate) - 1.25) < 0.0001
+                && Math.abs(Number(snapshot.parameterValues.env1Attack) - changedAttackSeconds) < 0.0001
+            ),
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("compact mobile wavetable picker stays disabled until its host value arrives", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                const initial = window.__COSIMO_DESKTOP_HARNESS_INITIAL__ ?? {};
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    ...initial,
+                    deferredParameterResponses: ["oscAWavetableSelect"],
+                };
+            });
+        },
+    });
+
+    try {
+        const select = page.locator('.mobile-voice-table-select[aria-label="Select wavetable"]');
+        await select.waitFor();
+        assert.equal(await select.isDisabled(), true);
+        assert.equal(await select.getAttribute("data-host-state"), "loading");
+        await clearHarnessDebugLog(page);
+        await select.evaluate((element) => {
+            const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+            setter?.call(element, "1");
+            element.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        assert.equal(
+            (await getHarnessSnapshot(page)).sentMessages.some(({ endpointID }) => endpointID === "oscAWavetableSelect"),
+            false,
+        );
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.releaseParameterResponse("oscAWavetableSelect");
+        });
+        await page.waitForFunction(() => (
+            document.querySelector('.mobile-voice-table-select[aria-label="Select wavetable"]')?.hasAttribute("disabled") === false
+        ));
+        await select.selectOption("1");
+        await waitForHarnessSnapshot(
+            page,
+            "compact mobile wavetable selection after readiness",
+            (snapshot) => Number(snapshot.parameterValues.oscAWavetableSelect) === 1,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
 test("selected oscillator table and pan controls write only that oscillator", async () => {
     const page = await openHarnessPage();
 
@@ -2268,6 +2456,21 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
             await delayedMutePage.locator('[data-role="articulation-card"]').first().getAttribute("aria-disabled"),
             "true",
         );
+        const auditionButton = delayedMutePage.locator('[data-role="articulation-card-play"]').first();
+        assert.equal(await auditionButton.isDisabled(), true, "audition must not play the wrong current sound while recall is unavailable");
+        await auditionButton.dispatchEvent("pointerdown", {
+            pointerId: 311,
+            pointerType: "mouse",
+            button: 0,
+            buttons: 1,
+        });
+        const blockedAuditionSnapshot = await getHarnessSnapshot(delayedMutePage);
+        assert.equal(blockedAuditionSnapshot.midiInputEvents.length, 0);
+        assert.equal(
+            blockedAuditionSnapshot.sentMessages.some(({ endpointID }) => /^osc[ABC]/.test(endpointID)),
+            false,
+            "a forced pending audition cannot recall any articulation parameters",
+        );
         assert.equal(
             await captureButton.isDisabled(),
             true,
@@ -2287,6 +2490,11 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         await delayedMutePage.keyboard.press("Escape");
         await delayedMutePage.getByRole("button", { name: "Expand articulation editor" }).click();
         const rangeSegment = delayedMutePage.locator('[data-role="articulation-range-segment"]').first();
+        assert.equal(
+            await rangeSegment.getAttribute("aria-disabled"),
+            null,
+            "the movable/resizable range segment itself remains available while sound recall loads",
+        );
         await rangeSegment.click({ button: "right", force: true });
         const rangeMenu = delayedMutePage.locator('[data-role="articulation-range-menu"]');
         await rangeMenu.waitFor();
@@ -2317,6 +2525,25 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
                 && document.querySelector('[data-role="oscillator-mute"]')?.getAttribute("aria-pressed") === "true"
         ));
         assert.equal(await articulationSurface.getAttribute("data-base-state"), "ready");
+        assert.equal(await auditionButton.isDisabled(), false);
+        await auditionButton.dispatchEvent("pointerdown", {
+            pointerId: 312,
+            pointerType: "mouse",
+            button: 0,
+            buttons: 1,
+        });
+        await delayedMutePage.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1
+        ));
+        await auditionButton.dispatchEvent("pointerup", {
+            pointerId: 312,
+            pointerType: "mouse",
+            button: 0,
+            buttons: 0,
+        });
+        await delayedMutePage.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 2
+        ));
         await rangeSegment.click({ button: "right" });
         await rangeMenu.waitFor();
         assert.equal(await rangeMenu.locator('[data-action="duplicate-after"]').isDisabled(), false);

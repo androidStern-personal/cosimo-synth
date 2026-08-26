@@ -79,6 +79,11 @@ type ParameterBinding = {
     endGesture: () => void;
 };
 
+type ActivePatchParameterGesture = {
+    readonly patchConnection: PatchConnectionLike;
+    readonly endpointID: string;
+};
+
 export type PatchParameterPresentationPriority = "immediate" | "deferred-during-gesture";
 
 type PatchHostLike = {
@@ -144,11 +149,11 @@ export function usePatchParameter(
     const hostBaselineSourceRef = useRef(hostBaselineSource);
     const initialValueRef = useRef(initialValue);
     const valueRef = useRef<unknown>(initialValue);
-    const gestureActiveRef = useRef(false);
+    const activeGestureRef = useRef<ActivePatchParameterGesture | null>(null);
     initialValueRef.current = initialValue;
     const presentValue = useCallback((nextValue: unknown) => {
         valueRef.current = nextValue;
-        if (presentationPriority === "deferred-during-gesture" && gestureActiveRef.current) {
+        if (presentationPriority === "deferred-during-gesture" && activeGestureRef.current !== null) {
             startTransition(() => setValue(nextValue));
             return;
         }
@@ -169,8 +174,30 @@ export function usePatchParameter(
         setHostBaselineSource(nextSource);
     }, [endpointID, patchConnection]);
 
+    const closeActiveGesture = useCallback((expectedOwner?: ActivePatchParameterGesture) => {
+        const activeGesture = activeGestureRef.current;
+        if (
+            activeGesture === null
+            || (expectedOwner !== undefined && (
+                activeGesture.patchConnection !== expectedOwner.patchConnection
+                || activeGesture.endpointID !== expectedOwner.endpointID
+            ))
+        ) {
+            return;
+        }
+
+        // A gesture belongs to the connection and endpoint where it began. Clear
+        // ownership before notifying either side so cleanup and a later pointer-up
+        // cannot close it twice.
+        activeGestureRef.current = null;
+        try {
+            activeGesture.patchConnection.sendParameterGestureEnd?.(activeGesture.endpointID);
+        } finally {
+            reportUserGestureEnd();
+        }
+    }, []);
+
     useEffect(() => {
-        gestureActiveRef.current = false;
         valueRef.current = initialValueRef.current;
         setValue(initialValueRef.current);
         const hasParameterListener = typeof patchConnection.addParameterListener === "function";
@@ -208,9 +235,10 @@ export function usePatchParameter(
 
         return () => {
             listening = false;
+            closeActiveGesture({ patchConnection, endpointID });
             patchConnection.removeParameterListener?.(endpointID, listener);
         };
-    }, [active, confirmHostBaseline, endpointID, patchConnection, presentValue]);
+    }, [active, closeActiveGesture, confirmHostBaseline, endpointID, patchConnection, presentValue]);
 
     const setParameterValue = useCallback((nextValue: unknown) => {
         // Every write through this hook is a direct user edit — programmatic
@@ -237,19 +265,17 @@ export function usePatchParameter(
         )) {
             return;
         }
-        gestureActiveRef.current = true;
+        if (activeGestureRef.current !== null) {
+            return;
+        }
+        activeGestureRef.current = { patchConnection, endpointID };
         patchConnection.sendParameterGestureStart?.(endpointID);
         reportUserGestureStart();
     }, [active, endpointID, patchConnection]);
 
     const endGesture = useCallback(() => {
-        if (!gestureActiveRef.current) {
-            return;
-        }
-        gestureActiveRef.current = false;
-        patchConnection.sendParameterGestureEnd?.(endpointID);
-        reportUserGestureEnd();
-    }, [endpointID, patchConnection]);
+        closeActiveGesture({ patchConnection, endpointID });
+    }, [closeActiveGesture, endpointID, patchConnection]);
 
     return useMemo(() => ({
         value,

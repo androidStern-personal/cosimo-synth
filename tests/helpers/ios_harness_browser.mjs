@@ -9,7 +9,7 @@ export async function startIOSHarnessServer() {
 }
 
 export function createIOSHarnessInitScript() {
-    return ({ rootUrl, oscillatorVolumeMinDb, oscillatorVolumeMaxDb }) => {
+    return ({ rootUrl, oscillatorVolumeMinDb, oscillatorVolumeMaxDb, deferredParameterResponses = [] }) => {
         const originalFetch = globalThis.fetch.bind(globalThis);
         const fetchedUrls = [];
         const resourceReads = [];
@@ -49,6 +49,8 @@ export function createIOSHarnessInitScript() {
             ["chorusRingOffsetMode", 0],
             ["chorusRingFineSemitones", 0],
         ]);
+        const deferredParameters = new Set(deferredParameterResponses);
+        const pendingParameterResponses = new Map();
         let readyNotificationCount = 0;
         let bundledFallbackRequestCount = 0;
 
@@ -357,6 +359,12 @@ export function createIOSHarnessInitScript() {
                 return;
 
             case "req_param_value":
+                if (deferredParameters.has(message.id)) {
+                    if (!pendingParameterResponses.has(message.id)) {
+                        pendingParameterResponses.set(message.id, parameterValues.get(message.id) ?? 0);
+                    }
+                    return;
+                }
                 queueMicrotask(() => emitParameterValue(message.id));
                 return;
 
@@ -922,6 +930,15 @@ export function createIOSHarnessInitScript() {
                     emitEndpoint(endpointID, value);
                 }
             },
+            releaseParameterResponse(endpointID) {
+                deferredParameters.delete(endpointID);
+                if (!pendingParameterResponses.has(endpointID)) {
+                    return;
+                }
+                const value = pendingParameterResponses.get(endpointID);
+                pendingParameterResponses.delete(endpointID);
+                queueMicrotask(() => emitParameterValue(endpointID, value));
+            },
             emitDistortionScope(nextState) {
                 emitEndpoint("distortionScope", nextState);
             },
@@ -948,7 +965,10 @@ export function createIOSHarnessInitScript() {
     };
 }
 
-export async function openIOSHarnessPage(browser, baseUrl, { viewportSize = null } = {}) {
+export async function openIOSHarnessPage(browser, baseUrl, {
+    viewportSize = null,
+    deferredParameterResponses = [],
+} = {}) {
     const context = await browser.newContext({
         viewport: viewportSize ?? { width: 390, height: 844 },
         hasTouch: true,
@@ -966,6 +986,7 @@ export async function openIOSHarnessPage(browser, baseUrl, { viewportSize = null
         rootUrl: baseUrl,
         oscillatorVolumeMinDb: OSCILLATOR_VOLUME_MIN_DB,
         oscillatorVolumeMaxDb: OSCILLATOR_VOLUME_MAX_DB,
+        deferredParameterResponses,
     });
     await page.goto(new URL("patch_gui/index.ios.html", baseUrl).toString(), {
         waitUntil: "load",
@@ -1012,6 +1033,12 @@ export async function setIOSHarnessParameterValue(page, endpointID, value, emitE
         nextValue: value,
         shouldEmitEndpoint: emitEndpoint,
     });
+}
+
+export async function releaseIOSHarnessParameterResponse(page, endpointID) {
+    await page.evaluate((nextEndpointID) => {
+        window.__COSIMO_IOS_HARNESS__.releaseParameterResponse(nextEndpointID);
+    }, endpointID);
 }
 
 export async function emitIOSHarnessDistortionScope(page, nextState) {

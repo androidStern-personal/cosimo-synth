@@ -168,6 +168,7 @@ export type MobileVoiceStageProps = {
     readonly pendingTableName: string | null;
     readonly desiredTableIndex: number;
     readonly tableOptions: ReadonlyArray<FactoryTableOption>;
+    readonly tableSelectionReady: boolean;
     readonly onTableChange: (nextValue: number) => void;
     readonly onTablePrewarm: () => void;
     readonly canRetry: boolean;
@@ -663,7 +664,9 @@ export function MobileVoiceFocusedEditor({
 
                     <div
                         data-role="mobile-voice-wavetable-overlay"
-                        className="mobile-voice-chip"
+                        data-host-state={stage.tableSelectionReady ? "ready" : "loading"}
+                        aria-busy={!stage.tableSelectionReady}
+                        className={`mobile-voice-chip${stage.tableSelectionReady ? "" : " is-loading"}`}
                         data-corner="top-left"
                         style={{ minWidth: 118 }}
                         onPointerDown={stopOverlayPointer}
@@ -690,6 +693,8 @@ export function MobileVoiceFocusedEditor({
                                 className="mobile-voice-table-select"
                                 value={String(stage.desiredTableIndex)}
                                 aria-label="Select wavetable"
+                                data-host-state={stage.tableSelectionReady ? "ready" : "loading"}
+                                disabled={!stage.tableSelectionReady}
                                 onChange={(event) => stage.onTableChange(Number(event.target.value))}
                                 onFocus={stage.onTablePrewarm}
                                 onPointerEnter={stage.onTablePrewarm}

@@ -9,6 +9,7 @@ declare global {
         __COSIMO_DESKTOP_HARNESS_INITIAL__?: {
             parameterValues?: Record<string, unknown>;
             storedState?: Record<string, unknown>;
+            deferredParameterResponses?: string[];
         };
         __COSIMO_DESKTOP_HARNESS__?: {
             patchConnection: MockPatchConnection;
@@ -246,6 +247,9 @@ try {
         for (const [key, value] of Object.entries(initialHarnessState.storedState)) {
             patchConnection.setStoredStateValue(key, value);
         }
+    }
+    for (const endpointID of initialHarnessState?.deferredParameterResponses ?? []) {
+        patchConnection.deferParameterResponse(endpointID);
     }
     window.__COSIMO_DESKTOP_HARNESS__ = {
         patchConnection,

@@ -329,6 +329,11 @@ test("host readiness blocks ambiguous parameter writes and stale stored-state hy
         assert.equal(snapshot.controlDisabled, false);
         assert.deepEqual(snapshot.hostBaseline, { _tag: "host-confirmed", value: 0.2 });
 
+        await invokeHarness(page, "beginGesture");
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.first.gestures, ["start:parameterA"]);
+        assert.deepEqual(snapshot.userGestureCounts, { starts: 1, ends: 0 });
+
         await invokeHarness(page, "writeValue", 0.3);
         snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.value, 0.3);
@@ -344,6 +349,11 @@ test("host readiness blocks ambiguous parameter writes and stale stored-state hy
         assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" });
         assert.equal(snapshot.controlDisabled, true);
         assert.deepEqual(snapshot.first.listenerCounts, { parameterA: 0, parameterB: 1 });
+        assert.deepEqual(snapshot.first.gestures, ["start:parameterA", "end:parameterA"]);
+        assert.deepEqual(snapshot.userGestureCounts, { starts: 1, ends: 1 });
+        await invokeHarness(page, "endGesture");
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.first.gestures, ["start:parameterA", "end:parameterA"], "pointer-up after rebinding cannot double-end the old gesture");
 
         await invokeHarness(page, "writeValue", 0.8);
         snapshot = await getHarnessSnapshot(page);
@@ -357,6 +367,20 @@ test("host readiness blocks ambiguous parameter writes and stale stored-state hy
         assert.equal(snapshot.value, 0.8, "an authoritative value equal to the attempted edit must still enable the endpoint");
         assert.equal(snapshot.controlDisabled, false);
 
+        await invokeHarness(page, "beginGesture");
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.first.gestures.at(-1), "start:parameterB");
+        await invokeHarness(page, "endStaleGesture");
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.first.gestures.slice(-1),
+            ["start:parameterB"],
+            "a delayed pointer-up owned by parameter A cannot close parameter B's gesture",
+        );
+        assert.deepEqual(snapshot.userGestureCounts, { starts: 2, ends: 1 });
+        await invokeHarness(page, "endGesture");
+        await invokeHarness(page, "beginGesture");
+
         await invokeHarness(page, "selectConnection", "second");
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().second.requests.length === 1
@@ -367,6 +391,8 @@ test("host readiness blocks ambiguous parameter writes and stale stored-state hy
         assert.equal(snapshot.controlDisabled, true);
         assert.deepEqual(snapshot.first.listenerCounts, { parameterA: 0, parameterB: 0 });
         assert.deepEqual(snapshot.second.listenerCounts, { parameterB: 1 });
+        assert.deepEqual(snapshot.first.gestures.slice(-2), ["start:parameterB", "end:parameterB"]);
+        assert.deepEqual(snapshot.userGestureCounts, { starts: 3, ends: 3 });
 
         await invokeHarness(page, "writeValue", 0.8);
         snapshot = await getHarnessSnapshot(page);
@@ -396,6 +422,13 @@ test("host readiness blocks ambiguous parameter writes and stale stored-state hy
         assert.equal(snapshot.value, Math.fround(0.8), "float32 host echoes work normally after readiness");
         assert.deepEqual(snapshot.hostBaseline, { _tag: "host-confirmed", value: 0.25 });
 
+        await invokeHarness(page, "beginGesture");
+        await invokeHarness(page, "endGesture");
+        await invokeHarness(page, "endGesture");
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.second.gestures, ["start:parameterB", "end:parameterB"]);
+        assert.deepEqual(snapshot.userGestureCounts, { starts: 4, ends: 4 });
+
         await invokeHarness(page, "selectConnection", "fallback");
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hostBaseline?._tag === "host-confirmed"
@@ -424,6 +457,22 @@ test("host readiness blocks ambiguous parameter writes and stale stored-state hy
         );
     } finally {
         await page.close();
+    }
+
+    const unmountPage = await openModulePage();
+    try {
+        await installHarness(unmountPage, "installPatchParameterHostBaselineHarness");
+        await unmountPage.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().first.requests.length === 1
+        ));
+        await invokeHarness(unmountPage, "emitResponse", "first", "parameterA", 0.2);
+        await invokeHarness(unmountPage, "beginGesture");
+        await invokeHarness(unmountPage, "unmount");
+        const unmountSnapshot = await getHarnessSnapshot(unmountPage);
+        assert.deepEqual(unmountSnapshot.first.gestures, ["start:parameterA", "end:parameterA"]);
+        assert.deepEqual(unmountSnapshot.userGestureCounts, { starts: 1, ends: 1 });
+    } finally {
+        await unmountPage.close();
     }
 
     const hydrationPage = await openModulePage();
@@ -459,6 +508,133 @@ test("host readiness blocks ambiguous parameter writes and stale stored-state hy
         assert.equal(hydrationSnapshot.slotCount, 2, "only the active connection may hydrate the visible bank");
     } finally {
         await hydrationPage.close();
+    }
+});
+
+test("discarded articulation undo is owned by one exact patch connection", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installArticulationReconnectHydrationHarness");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.first > 0
+        ));
+        await invokeHarness(page, "releaseFullStoredState", "first");
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return snapshot?.hasHydrated === true && snapshot?.slotCount === 2;
+        });
+
+        await invokeHarness(page, "createDiscardedEdit");
+        let snapshot = await getHarnessSnapshot(page);
+        assert.ok(snapshot.discardedEdit, JSON.stringify({
+            selectedSlotId: snapshot.selectedSlotId,
+            selectedIsDirty: snapshot.selectedIsDirty,
+            slots: snapshot.slotNames,
+            sentMessages: snapshot.connectionSnapshots.first.sentMessages,
+        }));
+        assert.equal(snapshot.undoButtonCount, 1);
+        assert.equal(snapshot.undoDisabled, false);
+
+        await invokeHarness(page, "selectConnection", "second");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.second > 0
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.hasHydrated, false);
+        assert.equal(snapshot.captureDisabled, true);
+        assert.equal(snapshot.discardedEdit, null, "discard ownership cannot survive an exact connection change");
+        assert.equal(snapshot.undoButtonCount, 0, "the loading connection must not present a stale Undo action");
+
+        const secondStoredStateBefore = structuredClone(snapshot.connectionSnapshots.second.storedState);
+        await invokeHarness(page, "clearConnectionLog", "second");
+        await invokeHarness(page, "invokeUndoDiscard");
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.hasHydrated, false, "a stale Undo cannot self-mark a loading connection hydrated");
+        assert.deepEqual(snapshot.connectionSnapshots.second.sentMessages, [], "a stale Undo cannot write old sound values into the new connection");
+        assert.deepEqual(
+            snapshot.connectionSnapshots.second.storedState,
+            secondStoredStateBefore,
+            "a stale Undo cannot persist the old articulation bank into the new connection",
+        );
+
+        await invokeHarness(page, "releaseFullStoredState", "second");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hasHydrated === true
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.captureDisabled, false);
+        assert.equal(snapshot.undoButtonCount, 0);
+    } finally {
+        await page.close();
+    }
+});
+
+test("request-by-key articulation hydration accepts empty and valid replies and rejects stale reconnects", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installArticulationKeyHydrationHarness");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.undefined === 1
+        ));
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.hasHydrated, false);
+        assert.equal(snapshot.captureDisabled, true);
+
+        await invokeHarness(page, "releaseArticulationState", "undefined");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hasHydrated === true
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.slotCount, 0, "an explicit undefined initial value hydrates the default empty bank");
+        assert.equal(snapshot.captureDisabled, false);
+
+        await invokeHarness(page, "selectConnection", "malformed");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.malformed === 1
+        ));
+        assert.equal((await getHarnessSnapshot(page)).hasHydrated, false);
+        await invokeHarness(page, "releaseArticulationState", "malformed");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hasHydrated === true
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.slotCount, 0, "a malformed initial value completes hydration with the default empty bank");
+
+        await invokeHarness(page, "selectConnection", "valid");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.valid === 1
+        ));
+        await invokeHarness(page, "releaseArticulationState", "valid");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().slotCount === 1
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.hasHydrated, true);
+        assert.equal(snapshot.captureDisabled, false);
+
+        await invokeHarness(page, "selectConnection", "reconnectOld");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.reconnectOld === 1
+        ));
+        await invokeHarness(page, "selectConnection", "reconnectNew");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.reconnectNew === 1
+        ));
+        await invokeHarness(page, "releaseArticulationState", "reconnectOld");
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.hasHydrated, false, "the old key response cannot hydrate a newly selected connection");
+        assert.equal(snapshot.captureDisabled, true);
+        await invokeHarness(page, "releaseArticulationState", "reconnectNew");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().slotCount === 2
+                && window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hasHydrated === true
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.captureDisabled, false);
+    } finally {
+        await page.close();
     }
 });
 

@@ -617,6 +617,14 @@ select {
     width: 100%;
 }
 
+.play-select:disabled,
+.glide-time-slider:disabled,
+.mseg-depth-slider:disabled,
+.mseg-rate-slider:disabled {
+    cursor: wait;
+    opacity: 0.45;
+}
+
 .mseg-modal-layer {
     grid-column: 1;
     grid-row: 1;

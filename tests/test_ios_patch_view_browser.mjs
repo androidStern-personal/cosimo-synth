@@ -27,6 +27,7 @@ import {
     getIOSHarnessRenderedState,
     getIOSHarnessSnapshot,
     openIOSHarnessPage,
+    releaseIOSHarnessParameterResponse,
     setIOSHarnessFailingResource,
     setIOSHarnessParameterValue,
     setIOSHarnessRuntimeState,
@@ -988,6 +989,128 @@ test("mounted iPhone play, glide, and continuous Global Tune controls sync and e
         )));
         assert.deepEqual(snapshot.gestureStarts.filter((endpointID) => endpointID === "globalTune"), ["globalTune"]);
         assert.deepEqual(snapshot.gestureEnds.filter((endpointID) => endpointID === "globalTune"), ["globalTune"]);
+    } finally {
+        await closeIOSHarnessPage(page);
+    }
+});
+
+test("mounted iPhone callback controls stay visibly pending and re-enable after host replies", async () => {
+    const deferredEndpoints = [
+        "oscAWavetableSelect",
+        "playMode",
+        "glideTime",
+        "oscAPan",
+        "mseg1Morph",
+        "mseg1Rate",
+        "env1Attack",
+    ];
+    const page = await openIOSHarnessPage(browser, server.baseUrl, {
+        viewportSize: { width: 390, height: 844 },
+        deferredParameterResponses: deferredEndpoints,
+    });
+
+    try {
+        await waitForIOSHarnessReady(page);
+        const selectors = [
+            'select[aria-label="Select wavetable"]',
+            ".play-mode-select",
+            ".glide-time-slider",
+            '[data-role="oscillator-pan-slider"]',
+            '.ios-main-view [data-role="mseg-morph-slider"]',
+            '[data-modulation-target-kind="env1Attack"]',
+        ];
+        for (const selector of selectors) {
+            const control = await getShadowLocator(page, selector);
+            assert.equal(await control.isDisabled(), true, `${selector} should be disabled while pending`);
+            assert.equal(await control.getAttribute("data-host-state"), "loading");
+        }
+
+        await clickShadowButton(page, ".mseg-preview-button");
+        for (const selector of [
+            '.mseg-modal [data-role="mseg-morph-slider"]',
+            '.mseg-modal [data-modulation-target-kind="mseg1Rate"]',
+        ]) {
+            const control = await getShadowLocator(page, selector);
+            assert.equal(await control.isDisabled(), true, `${selector} should be disabled while pending`);
+            assert.equal(await control.getAttribute("data-host-state"), "loading");
+        }
+        await clickShadowButton(page, '[data-role="mseg-modal-close"]');
+        await page.waitForFunction(() => (
+            document.querySelector("cosimo-synth-view")?.shadowRoot
+                ?.querySelector('[data-role="mseg-modal-layer"]')
+                ?.getAttribute("data-open") === "false"
+        ));
+
+        await clearIOSHarnessDebugLog(page);
+        await page.evaluate((targetSelectors) => {
+            const root = document.querySelector("cosimo-synth-view")?.shadowRoot;
+            for (const selector of targetSelectors) {
+                const element = root?.querySelector(selector);
+                if (!(element instanceof HTMLInputElement) && !(element instanceof HTMLSelectElement)) {
+                    throw new Error(`Missing callback control ${selector}.`);
+                }
+                element.dispatchEvent(new Event("input", { bubbles: true }));
+                element.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+        }, selectors);
+        assert.equal(
+            (await getIOSHarnessSnapshot(page)).sentMessages.some(({ endpointID }) => deferredEndpoints.includes(endpointID)),
+            false,
+            "forced pre-readiness events cannot reach the iPhone host bridge",
+        );
+
+        for (const endpointID of deferredEndpoints) {
+            await releaseIOSHarnessParameterResponse(page, endpointID);
+        }
+        await page.waitForFunction(() => {
+            const root = document.querySelector("cosimo-synth-view")?.shadowRoot;
+            return root?.querySelector('select[aria-label="Select wavetable"]')?.hasAttribute("disabled") === false
+                && root?.querySelector('[data-modulation-target-kind="env1Attack"]')?.hasAttribute("disabled") === false;
+        });
+
+        await clearIOSHarnessDebugLog(page);
+        await page.evaluate(() => {
+            const root = document.querySelector("cosimo-synth-view")?.shadowRoot;
+            const changeValue = (selector, value) => {
+                const element = root?.querySelector(selector);
+                if (!(element instanceof HTMLInputElement) && !(element instanceof HTMLSelectElement)) {
+                    throw new Error(`Missing ready callback control ${selector}.`);
+                }
+                const prototype = element instanceof HTMLSelectElement
+                    ? HTMLSelectElement.prototype
+                    : HTMLInputElement.prototype;
+                Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(element, String(value));
+                element.dispatchEvent(new Event("input", { bubbles: true }));
+                element.dispatchEvent(new Event("change", { bubbles: true }));
+            };
+            changeValue('select[aria-label="Select wavetable"]', 1);
+            changeValue(".play-mode-select", 1);
+            changeValue(".glide-time-slider", 0.375);
+            changeValue('[data-role="oscillator-pan-slider"]', 0.25);
+            changeValue('.ios-main-view [data-role="mseg-morph-slider"]', 0.6);
+            changeValue('[data-modulation-target-kind="env1Attack"]', 0.5);
+            root?.querySelector(".mseg-preview-button")?.click();
+        });
+        await page.waitForFunction(() => (
+            document.querySelector("cosimo-synth-view")?.shadowRoot
+                ?.querySelector('[data-role="mseg-modal-layer"]')
+                ?.getAttribute("data-open") === "true"
+        ));
+        await page.evaluate(() => {
+            const element = document.querySelector("cosimo-synth-view")?.shadowRoot
+                ?.querySelector('.mseg-modal [data-modulation-target-kind="mseg1Rate"]');
+            if (!(element instanceof HTMLInputElement)) {
+                throw new Error("Missing ready iPhone MSEG rate control.");
+            }
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(element, "1.2");
+            element.dispatchEvent(new Event("input", { bubbles: true }));
+            element.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+
+        await waitForSnapshot(page, "re-enabled iPhone callback control writes", (snapshot) => {
+            const written = new Set(snapshot.sentMessages.map(({ endpointID }) => endpointID));
+            return deferredEndpoints.every((endpointID) => written.has(endpointID));
+        });
     } finally {
         await closeIOSHarnessPage(page);
     }

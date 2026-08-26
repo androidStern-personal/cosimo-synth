@@ -161,6 +161,7 @@ export type WavetableStageSectionProps = {
     frameCount: number;
     desiredTableIndex: number;
     tableOptions: FactoryTableOption[];
+    tableSelectionReady: boolean;
     canRetry: boolean;
     onTableChange: (nextValue: number) => void;
     onTablePrewarm: () => void;
@@ -188,6 +189,7 @@ export type MsegOverviewSectionProps = {
 
 export type VoiceGlideControlSurfaceProps = {
     playModeValue: number;
+    playModeReady?: boolean;
     onPlayModeChange: (nextValue: number) => void;
     playModeFocusBindings: SynthFocusBindings;
     glideControl: ReactNode;
@@ -2283,6 +2285,7 @@ export function VoiceModeToolbar({
     value,
     onChange,
     focusBindings,
+    ready = true,
     options = VOICE_MODE_OPTIONS,
     className,
     surfaceClassName,
@@ -2290,6 +2293,7 @@ export function VoiceModeToolbar({
     value: number;
     onChange: (nextValue: number) => void;
     focusBindings: SynthFocusBindings;
+    ready?: boolean;
     options?: VoiceModeOption[];
     className?: string;
     surfaceClassName?: string;
@@ -2305,6 +2309,8 @@ export function VoiceModeToolbar({
                     surfaceClassName,
                 )}
                 style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+                data-host-state={ready ? "ready" : "loading"}
+                aria-busy={!ready}
                 {...focusBindings}
             >
                 {options.map((option) => {
@@ -2321,6 +2327,7 @@ export function VoiceModeToolbar({
                             }`}
                             onClick={() => onChange(option.value)}
                             aria-pressed={isActive}
+                            disabled={!ready}
                         >
                             <div className="flex items-center gap-2">
                                 <VoiceModeGlyph mode={option.value} active={isActive} />
@@ -2336,6 +2343,7 @@ export function VoiceModeToolbar({
 
 export function VoiceGlideControlSurface({
     playModeValue,
+    playModeReady = true,
     onPlayModeChange,
     playModeFocusBindings,
     glideControl,
@@ -2350,6 +2358,7 @@ export function VoiceGlideControlSurface({
                 value={playModeValue}
                 onChange={onPlayModeChange}
                 focusBindings={playModeFocusBindings}
+                ready={playModeReady}
             />
             {glideControl}
         </div>
@@ -2421,6 +2430,7 @@ export function WavetableStageSection({
     frameCount,
     desiredTableIndex,
     tableOptions,
+    tableSelectionReady,
     canRetry,
     onTableChange,
     onTablePrewarm,
@@ -2474,7 +2484,9 @@ export function WavetableStageSection({
                 className="synth-display-lip-controls text-[8px] uppercase tracking-[0.10em]"
             >
                 <label
-                    className="relative inline-flex max-w-[128px] cursor-pointer items-center"
+                    className={`relative inline-flex max-w-[128px] items-center ${tableSelectionReady ? "cursor-pointer" : "cursor-wait opacity-45"}`}
+                    data-host-state={tableSelectionReady ? "ready" : "loading"}
+                    aria-busy={!tableSelectionReady}
                     onFocus={onTablePrewarm}
                     onPointerEnter={onTablePrewarm}
                 >
@@ -2499,6 +2511,8 @@ export function WavetableStageSection({
                     <select
                         className="cosimo-wavetable-native-select absolute inset-0 cursor-pointer opacity-0"
                         value={String(desiredTableIndex)}
+                        disabled={!tableSelectionReady}
+                        data-host-state={tableSelectionReady ? "ready" : "loading"}
                         onChange={(event) => onTableChange(Number(event.target.value))}
                         aria-label="Select wavetable"
                         {...tableFocusBindings}

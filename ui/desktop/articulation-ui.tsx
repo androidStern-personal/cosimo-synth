@@ -810,6 +810,9 @@ function ArticulationCard({
     const handlePlayDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
         event.preventDefault();
         event.stopPropagation();
+        if (!canApply) {
+            return;
+        }
         clearLongPressTimer();
         finishPlayPress();
         activePlayPointerRef.current = {
@@ -822,7 +825,7 @@ function ArticulationCard({
             // Window-level termination still owns unsupported or synthetic pointers.
         }
         onPlayPressStart(card.id);
-    }, [card.id, clearLongPressTimer, finishPlayPress, onPlayPressStart]);
+    }, [canApply, card.id, clearLongPressTimer, finishPlayPress, onPlayPressStart]);
 
     const handlePlayUp = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
         event.stopPropagation();
@@ -919,13 +922,15 @@ function ArticulationCard({
                     type="button"
                     aria-label={`Audition ${card.name}`}
                     data-role="articulation-card-play"
+                    data-apply-state={canApply ? "ready" : "loading"}
+                    disabled={!canApply}
                     draggable={false}
                     onPointerDown={handlePlayDown}
                     onPointerUp={handlePlayUp}
                     onPointerCancel={handlePlayUp}
                     onPointerLeave={handlePlayUp}
                     onClick={(event) => event.stopPropagation()}
-                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-cyan-300/10 text-cyan-100/90 transition hover:bg-cyan-300/22 active:scale-[0.92] active:bg-cyan-300/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45"
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-cyan-300/10 text-cyan-100/90 transition hover:bg-cyan-300/22 active:scale-[0.92] active:bg-cyan-300/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45 disabled:cursor-wait disabled:opacity-40"
                 >
                     <PlayGlyph />
                 </button>
@@ -2238,7 +2243,6 @@ function ArticulationRangeLane({
                                 key={segment.id}
                                 type="button"
                                 aria-label={`Edit ${label} segment ${segment.label}`}
-                                aria-disabled={!isBaseReady}
                                 data-role="articulation-range-segment"
                                 data-segment-id={segment.id}
                                 data-articulation-id={segment.articulationId}
@@ -2768,7 +2772,9 @@ function FloatingArticulationToolbar({
                         type="button"
                         data-role="articulation-undo-discard-floating"
                         onClick={onUndoDiscard}
-                        className={joinClasses(PILL_BASE, PILL_PINK, "h-5 rounded-[4px] px-1.5")}
+                        disabled={!isBaseReady}
+                        data-apply-state={isBaseReady ? "ready" : "loading"}
+                        className={joinClasses(PILL_BASE, PILL_PINK, "h-5 rounded-[4px] px-1.5 disabled:cursor-wait disabled:opacity-40")}
                     >
                         Undo
                     </button>

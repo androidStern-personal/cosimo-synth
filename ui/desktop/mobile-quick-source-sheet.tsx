@@ -37,6 +37,7 @@ import type { ModulationTargetKind } from "../shared/modulation-targets";
 import { findRackModulationSource, type RackModulationSourceKind } from "../shared/rack-modulation-sources";
 import { hexToRgbTriplet } from "../shared/parameter-hud";
 import type { ParameterMenuRequest } from "../shared/parameter-context-menu";
+import type { SynthCallbackControlReadiness } from "../shared/synth-hooks";
 import {
     parameterEntrySpecForScalar,
     parameterEntrySpecForSeconds,
@@ -61,18 +62,22 @@ function formatPercentValue(value: number): string {
     return `${Math.round(value * 100)}%`;
 }
 
-/** Stored-document values have no engine gesture; the brackets are no-ops. */
+/** Callback-only controls still project the authoritative endpoint readiness. */
 function documentValueBinding(
     endpointID: string,
     value: number,
+    isReady: boolean,
     write: (next: number) => void,
 ): PatchControlBinding<number> {
+    const guardedWrite = (next: number) => {
+        if (isReady) write(next);
+    };
     return {
         endpointID,
         value,
-        isReady: true,
-        setValue: write,
-        commitValue: write,
+        isReady,
+        setValue: guardedWrite,
+        commitValue: guardedWrite,
         beginGesture: () => undefined,
         endGesture: () => undefined,
     };
@@ -154,9 +159,11 @@ export type MobileQuickSourceSheetProps = {
     /** The real draggable ADSR editor, composed by the shell. */
     readonly envelopeSurface: ReactNode | null;
     readonly msegRateSeconds: number;
+    readonly msegRateReady: boolean;
     readonly onMsegRateChange: (next: number) => void;
     readonly msegMorphBinding: PatchControlBinding<number>;
     readonly envelope: QuickSheetEnvelope | null;
+    readonly envelopeReadiness: SynthCallbackControlReadiness["envelope"];
     readonly onEnvelopeChange: (
         field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds",
         next: number,
@@ -177,9 +184,11 @@ export function MobileQuickSourceSheet({
     msegSurface,
     envelopeSurface,
     msegRateSeconds,
+    msegRateReady,
     onMsegRateChange,
     msegMorphBinding,
     envelope,
+    envelopeReadiness,
     onEnvelopeChange,
     macroBinding,
     onRequestParameterMenu,
@@ -328,7 +337,7 @@ export function MobileQuickSourceSheet({
     const bindings = useMemo((): Readonly<Record<string, PatchControlBinding<number>>> => {
         if (source.sourceKind === "mseg") {
             return {
-                rate: documentValueBinding(`mseg${slot}Rate`, msegRateSeconds, onMsegRateChange),
+                rate: documentValueBinding(`mseg${slot}Rate`, msegRateSeconds, msegRateReady, onMsegRateChange),
                 morph: msegMorphBinding,
             };
         }
@@ -337,17 +346,17 @@ export function MobileQuickSourceSheet({
                 throw new Error(`Envelope ${slot} is not available for the quick sheet.`);
             }
             return {
-                attack: documentValueBinding(`env${slot}Attack`, envelope.attackSeconds, (next) => onEnvelopeChange("attackSeconds", next)),
-                decay: documentValueBinding(`env${slot}Decay`, envelope.decaySeconds, (next) => onEnvelopeChange("decaySeconds", next)),
-                sustain: documentValueBinding(`env${slot}Sustain`, envelope.sustain, (next) => onEnvelopeChange("sustain", next)),
-                release: documentValueBinding(`env${slot}Release`, envelope.releaseSeconds, (next) => onEnvelopeChange("releaseSeconds", next)),
+                attack: documentValueBinding(`env${slot}Attack`, envelope.attackSeconds, envelopeReadiness.attackSeconds, (next) => onEnvelopeChange("attackSeconds", next)),
+                decay: documentValueBinding(`env${slot}Decay`, envelope.decaySeconds, envelopeReadiness.decaySeconds, (next) => onEnvelopeChange("decaySeconds", next)),
+                sustain: documentValueBinding(`env${slot}Sustain`, envelope.sustain, envelopeReadiness.sustain, (next) => onEnvelopeChange("sustain", next)),
+                release: documentValueBinding(`env${slot}Release`, envelope.releaseSeconds, envelopeReadiness.releaseSeconds, (next) => onEnvelopeChange("releaseSeconds", next)),
             };
         }
         if (macroBinding === null) {
             throw new Error(`Macro ${slot} is not available for the quick sheet.`);
         }
         return { value: macroBinding };
-    }, [envelope, macroBinding, msegMorphBinding, msegRateSeconds, onEnvelopeChange, onMsegRateChange, slot, source.sourceKind]);
+    }, [envelope, envelopeReadiness, macroBinding, msegMorphBinding, msegRateReady, msegRateSeconds, onEnvelopeChange, onMsegRateChange, slot, source.sourceKind]);
 
     const stripSource = useMemo<ReadoutStripSource>(() => ({
         sourceKind: identity.sourceKind,

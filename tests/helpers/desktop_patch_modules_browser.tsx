@@ -22,6 +22,7 @@ import {
 import { KeyboardDock, ensureKeyboardElement, type PianoKeyboardElement } from "../../ui/desktop/desktop-keyboard-adapter";
 import { PrecisionNumberField } from "../../ui/desktop/desktop-precision-number-field";
 import { NexusNumberField, setNexusNumberConstructorForTests, type NexusNumberWidgetLike } from "../../ui/desktop/desktop-nexus-number-field";
+import { ArticulationControlSurface, type ArticulationCardView } from "../../ui/desktop/articulation-ui";
 import {
     EditableMsegSurface,
     KeyboardSectionShell,
@@ -63,6 +64,7 @@ import { addCapturedArticulationV4 } from "../../ui/shared/articulation-v4-edito
 import { MockPatchConnection } from "../../ui/shared/patch-connection-mock";
 import { useModulationRouteAmountBinding } from "../../ui/shared/modulation-route-amount";
 import type { SynthKeyboardInputMode } from "../../ui/shared/synth-input-router";
+import { subscribeToUserEdits } from "../../ui/shared/user-edit-bus";
 import {
     addMsegPoint,
     createDefaultMsegPlayback,
@@ -1550,8 +1552,18 @@ export async function installPatchParameterHostBaselineHarness(target: HTMLEleme
         untrusted: createConnection("untrusted", "none"),
     } as const;
     let binding: PatchControlBinding<number> | null = null;
+    let staleEndGesture: (() => void) | null = null;
     let selectConnection: ((id: HarnessConnection["id"]) => void) | null = null;
     let selectEndpoint: ((endpointID: string) => void) | null = null;
+    const userGestureCounts = { starts: 0, ends: 0 };
+    const unsubscribeFromUserEdits = subscribeToUserEdits({
+        onGestureStart: () => {
+            userGestureCounts.starts += 1;
+        },
+        onGestureEnd: () => {
+            userGestureCounts.ends += 1;
+        },
+    });
 
     const mounted = mountHarness(target, (root) => {
         function Reader({ endpointID }: { endpointID: string }) {
@@ -1613,6 +1625,7 @@ export async function installPatchParameterHostBaselineHarness(target: HTMLEleme
             await waitForMicrotask();
         },
         async selectEndpoint(endpointID: string) {
+            staleEndGesture = requireBinding().endGesture;
             selectEndpoint?.(endpointID);
             await waitForMicrotask();
             await waitForMicrotask();
@@ -1623,6 +1636,10 @@ export async function installPatchParameterHostBaselineHarness(target: HTMLEleme
         },
         async endGesture() {
             requireBinding().endGesture();
+            await waitForMicrotask();
+        },
+        async endStaleGesture() {
+            staleEndGesture?.();
             await waitForMicrotask();
         },
         getSnapshot() {
@@ -1651,10 +1668,12 @@ export async function installPatchParameterHostBaselineHarness(target: HTMLEleme
                     requests: [...connections.untrusted.requests],
                     writes: cloneValue(connections.untrusted.writes),
                 },
+                userGestureCounts: { ...userGestureCounts },
             };
         },
         async unmount() {
             mounted.unmount();
+            unsubscribeFromUserEdits();
             await waitForMicrotask();
         },
     };
@@ -1700,7 +1719,7 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
     }
 
     const connections = {
-        first: new DeferredFullStatePatchConnection("Old articulation connection", 1),
+        first: new DeferredFullStatePatchConnection("Old articulation connection", 2),
         second: new DeferredFullStatePatchConnection("New articulation connection", 2),
     } as const;
     let synthView: ReturnType<typeof useSynthPatchViewModel> | null = null;
@@ -1720,6 +1739,28 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
                 observeDistortionVisuals: false,
                 observeMsegPlayhead: false,
             });
+            const articulationCards = useMemo<ArticulationCardView[]>(() => (
+                synthView?.articulationSlots.map((slot) => ({
+                    id: slot.id,
+                    name: slot.name,
+                    color: "#67e8f9",
+                    runtimeSlot: slot.runtimeSlot,
+                    assignmentLabel: "",
+                    isSelected: slot.id === synthView?.selectedArticulationSlot?.id,
+                    isDirty: slot.id === synthView?.selectedArticulationSlot?.id
+                        && synthView?.selectedArticulationIsDirty === true,
+                    canDelete: (synthView?.articulationSlots.length ?? 0) > 1,
+                    msegPoints: [
+                        { x: 0, y: 0, curvePower: 1 },
+                        { x: 1, y: 1, curvePower: 1 },
+                    ],
+                    gainEnvelope: slot.snapshot.envelopes[0],
+                })) ?? []
+            ), [
+                synthView?.articulationSlots,
+                synthView?.selectedArticulationIsDirty,
+                synthView?.selectedArticulationSlot?.id,
+            ]);
             return (
                 <div>
                     <div ref={stageRef} />
@@ -1731,6 +1772,42 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
                     >
                         Capture
                     </button>
+                    <ArticulationControlSurface
+                        cards={articulationCards}
+                        activeMode="chain"
+                        isExpanded
+                        selectedArticulationId={synthView.selectedArticulationSlot?.id ?? null}
+                        selectedIsDirty={synthView.selectedArticulationIsDirty}
+                        discardedEditLabel={synthView.discardedArticulationEdit?.slotName ?? null}
+                        isBaseReady={synthView.isArticulationBaseReady}
+                        chainSegments={[]}
+                        keySegments={[]}
+                        velocitySegments={[]}
+                        keyboardMinNote={48}
+                        keyboardMaxNote={71}
+                        onToggleExpanded={() => undefined}
+                        onSelectMode={synthView.handleSetArticulationTriggerMode}
+                        onSelectCard={synthView.handleSelectArticulationSlot}
+                        onCardPlayPressStart={synthView.handleStartArticulationAudition}
+                        onCardPlayPressEnd={synthView.handleStopArticulationAudition}
+                        onCapture={synthView.handleCaptureArticulationSlot}
+                        onUpdate={synthView.handleUpdateSelectedArticulationSlot}
+                        onRevert={synthView.handleRevertSelectedArticulationSlot}
+                        onUndoDiscard={synthView.handleUndoDiscardedArticulationEdit}
+                        onSelectRangeSegment={() => undefined}
+                        onAssignRangePosition={synthView.handleAssignArticulationRangePosition}
+                        onInsertRangePosition={synthView.handleInsertArticulationRangeAtPosition}
+                        onDuplicateAndAssignRangePosition={synthView.handleDuplicateAndAssignArticulationRangePosition}
+                        onMoveRangeSegment={synthView.handleMoveArticulationRangeAssignment}
+                        onResizeRangeSegment={synthView.handleResizeArticulationRangeAssignment}
+                        onClearRangeSegment={synthView.handleClearArticulationRangeAssignment}
+                        onClearRangeMode={synthView.handleClearArticulationTriggerAssignments}
+                        onDistributeRange={synthView.handleDistributeArticulationRanges}
+                        onRequestRename={synthView.handleRenameArticulationSlot}
+                        onRequestDuplicate={synthView.handleDuplicateArticulationSlot}
+                        onRequestReplace={synthView.handleReplaceArticulationSlotWithCurrent}
+                        onRequestDelete={synthView.handleDeleteArticulationSlot}
+                    />
                 </div>
             );
         }
@@ -1766,6 +1843,33 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
             await waitForMicrotask();
             await waitForMicrotask();
         },
+        async createDiscardedEdit() {
+            const currentSynthView = requireSynthView();
+            const selectedSlot = currentSynthView.selectedArticulationSlot;
+            const otherSlot = currentSynthView.articulationSlots.find((slot) => slot.id !== selectedSlot?.id);
+            if (!selectedSlot || !otherSlot) {
+                throw new Error("The articulation reconnect harness needs two slots to create a discarded edit.");
+            }
+            currentSynthView.oscillatorVolumeDb.commitValue(6);
+            await waitForMicrotask();
+            await waitForMicrotask();
+            await new Promise<void>((resolve) => window.setTimeout(resolve, 20));
+            if (!requireSynthView().selectedArticulationIsDirty) {
+                throw new Error("The reconnect harness could not establish a dirty articulation before switching slots.");
+            }
+            requireSynthView().handleSelectArticulationSlot(otherSlot.id);
+            await waitForMicrotask();
+            await waitForMicrotask();
+        },
+        async invokeUndoDiscard() {
+            requireSynthView().handleUndoDiscardedArticulationEdit();
+            await waitForMicrotask();
+            await waitForMicrotask();
+        },
+        async clearConnectionLog(connectionID: keyof typeof connections) {
+            connections[connectionID].clearDebugLog();
+            await waitForMicrotask();
+        },
         getSnapshot() {
             const currentSynthView = requireSynthView();
             return {
@@ -1773,11 +1877,154 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
                 canCapture: currentSynthView.canCaptureArticulation,
                 slotCount: currentSynthView.articulationSlots.length,
                 slotNames: currentSynthView.articulationSlots.map((slot) => slot.name),
+                selectedSlotId: currentSynthView.selectedArticulationSlot?.id ?? null,
+                selectedIsDirty: currentSynthView.selectedArticulationIsDirty,
+                discardedEdit: cloneValue(currentSynthView.discardedArticulationEdit),
+                undoButtonCount: target.querySelectorAll('[data-role="articulation-undo-discard-floating"]').length,
+                undoDisabled: (target.querySelector('[data-role="articulation-undo-discard-floating"]') as HTMLButtonElement | null)?.disabled ?? null,
                 captureDisabled: (target.querySelector('[data-role="reconnect-articulation-capture"]') as HTMLButtonElement | null)?.disabled ?? null,
+                connectionSnapshots: {
+                    first: cloneValue(connections.first.getDebugSnapshot()),
+                    second: cloneValue(connections.second.getDebugSnapshot()),
+                },
                 pendingRequests: {
                     first: connections.first.pendingFullStateRequestCount,
                     second: connections.second.pendingFullStateRequestCount,
                 },
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
+export async function installArticulationKeyHydrationHarness(target: HTMLElement) {
+    class DeferredKeyStatePatchConnection extends MockPatchConnection {
+        private pendingArticulationRequests = 0;
+
+        constructor(
+            label: string,
+            private readonly articulationResponse: unknown,
+        ) {
+            super({ name: label });
+            // The production adapter contract allows either full-state or
+            // request-by-key hydration. Shadow the mock's full-state method so
+            // this harness exercises the declared fallback, not the preferred path.
+            Object.defineProperty(this, "requestFullStoredState", {
+                configurable: true,
+                value: undefined,
+            });
+        }
+
+        override requestStoredStateValue(key: string) {
+            if (key !== ARTICULATIONS_V4_STATE_KEY) {
+                super.requestStoredStateValue(key);
+                return;
+            }
+            this.pendingArticulationRequests += 1;
+        }
+
+        releaseArticulationState() {
+            if (this.pendingArticulationRequests <= 0) {
+                return;
+            }
+            this.pendingArticulationRequests -= 1;
+            this.setStoredStateValue(ARTICULATIONS_V4_STATE_KEY, cloneValue(this.articulationResponse));
+        }
+
+        get pendingArticulationRequestCount() {
+            return this.pendingArticulationRequests;
+        }
+    }
+
+    const stateWithSlots = (slotCount: number) => {
+        let state = createEmptyArticulationsState();
+        for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
+            state = addCapturedArticulationV4(state, { overrides: {}, routeAmounts: {} });
+        }
+        return serializeArticulationsV4(state);
+    };
+    const connections = {
+        undefined: new DeferredKeyStatePatchConnection("Undefined key response", undefined),
+        malformed: new DeferredKeyStatePatchConnection("Malformed key response", { kind: "not-articulations" }),
+        valid: new DeferredKeyStatePatchConnection("Valid key response", stateWithSlots(1)),
+        reconnectOld: new DeferredKeyStatePatchConnection("Disconnected key response", stateWithSlots(1)),
+        reconnectNew: new DeferredKeyStatePatchConnection("Current key response", stateWithSlots(2)),
+    } as const;
+    type ConnectionID = keyof typeof connections;
+    let synthView: ReturnType<typeof useSynthPatchViewModel> | null = null;
+    let selectConnection: ((connectionID: ConnectionID) => void) | null = null;
+
+    const mounted = mountHarness(target, (root) => {
+        function Reader() {
+            const stageRef = useRef<HTMLDivElement | null>(null);
+            const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
+            const keyboardRef = useRef(null);
+            synthView = useSynthPatchViewModel({
+                stageRef,
+                msegEditorSurfaceRef,
+                keyboardRef,
+                voiceModeCount: 3,
+                observeFilterSpectrum: false,
+                observeDistortionVisuals: false,
+                observeMsegPlayhead: false,
+            });
+            return (
+                <button
+                    type="button"
+                    data-role="key-hydration-capture"
+                    disabled={!synthView.canCaptureArticulation}
+                >
+                    Capture
+                </button>
+            );
+        }
+
+        function Harness() {
+            const [connectionID, setConnectionID] = useState<ConnectionID>("undefined");
+            selectConnection = setConnectionID;
+            return (
+                <PatchConnectionProvider patchConnection={connections[connectionID]}>
+                    <Reader />
+                </PatchConnectionProvider>
+            );
+        }
+
+        root.render(<Harness />);
+    });
+
+    const requireSynthView = () => {
+        if (synthView === null) {
+            throw new Error("Articulation key hydration harness is not ready.");
+        }
+        return synthView;
+    };
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        async selectConnection(connectionID: ConnectionID) {
+            selectConnection?.(connectionID);
+            await waitForMicrotask();
+            await waitForMicrotask();
+        },
+        async releaseArticulationState(connectionID: ConnectionID) {
+            connections[connectionID].releaseArticulationState();
+            await waitForMicrotask();
+            await waitForMicrotask();
+        },
+        getSnapshot() {
+            const currentSynthView = requireSynthView();
+            return {
+                hasHydrated: currentSynthView.hasHydratedArticulations,
+                canCapture: currentSynthView.canCaptureArticulation,
+                slotCount: currentSynthView.articulationSlots.length,
+                captureDisabled: (target.querySelector('[data-role="key-hydration-capture"]') as HTMLButtonElement | null)?.disabled ?? null,
+                pendingRequests: Object.fromEntries(Object.entries(connections).map(([connectionID, connection]) => (
+                    [connectionID, connection.pendingArticulationRequestCount]
+                ))),
             };
         },
         async unmount() {
@@ -2602,6 +2849,7 @@ export async function installSharedWavetableStageHarness(target: HTMLElement) {
                             sourceWav: "assets/factory_sources/saw-sweep.wav",
                         },
                     ]}
+                    tableSelectionReady
                     canRetry={true}
                     onTableChange={(nextValue) => {
                         changeLog.push(nextValue);
