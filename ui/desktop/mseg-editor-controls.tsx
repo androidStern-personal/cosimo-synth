@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type CSSProperties } from "react";
+import { useCallback, useMemo, type CSSProperties, type ReactNode } from "react";
 
 import { hexToRgbTriplet } from "../shared/parameter-hud";
 import { useParameterGesture } from "../shared/parameter-gesture";
@@ -71,6 +71,7 @@ export type MsegEditorControlStripProps = {
     readonly dataRole: string;
     readonly variant: "drawer" | "full";
     readonly className?: string;
+    readonly leadingActions?: ReactNode;
     readonly onRateChange: (next: number) => void;
     readonly resolveScrollLockTargets?: () => ReadonlyArray<HTMLElement>;
     readonly onRequestHaptic?: () => void;
@@ -94,6 +95,7 @@ export function MsegEditorControlStrip({
     dataRole,
     variant,
     className,
+    leadingActions,
     onRateChange,
     resolveScrollLockTargets,
     onRequestHaptic,
@@ -200,6 +202,7 @@ export function MsegEditorControlStrip({
                 "--mobile-voice-owner-accent-rgb": hexToRgbTriplet(identity.accent),
             } as CSSProperties}
         >
+            {leadingActions}
             <ParameterReadoutStrip
                 cells={cells}
                 bindings={bindings}

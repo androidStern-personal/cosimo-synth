@@ -21,6 +21,23 @@ const MSEG_EDITOR_MAX_SUBDIVISION_DEPTH = 12;
 
 export type MsegSurfaceOrientation = "horizontal" | "vertical";
 
+const MSEG_TIME_AXIS_QUARTERS = [0.25, 0.5, 0.75] as const;
+
+export type MsegNoteDivision = {
+    readonly numerator: number;
+    readonly denominator: number;
+};
+
+/** The unit contract for labels along the visible MSEG time axis. */
+export type MsegTimeAxisScale =
+    | { readonly kind: "seconds"; readonly totalSeconds: number }
+    | { readonly kind: "notes"; readonly totalDivision: MsegNoteDivision };
+
+export type MsegTimeAxisTick = {
+    readonly fraction: typeof MSEG_TIME_AXIS_QUARTERS[number];
+    readonly label: string;
+};
+
 const MSEG_ORIENTATION_HYSTERESIS_RATIO = 1.08;
 
 /**
@@ -116,6 +133,44 @@ export type MsegPlaybackConfigEvent = {
 
 function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
+}
+
+function greatestCommonDivisor(left: number, right: number): number {
+    let dividend = Math.abs(Math.trunc(left));
+    let divisor = Math.abs(Math.trunc(right));
+
+    while (divisor !== 0) {
+        const remainder = dividend % divisor;
+        dividend = divisor;
+        divisor = remainder;
+    }
+
+    return Math.max(1, dividend);
+}
+
+function formatMsegSecondsTick(seconds: number): string {
+    const roundedMilliseconds = Math.round(Math.max(0, Number(seconds) || 0) * 1000);
+    const roundedSeconds = roundedMilliseconds / 1000;
+    return `${roundedSeconds}s`;
+}
+
+function formatMsegNoteTick(totalDivision: MsegNoteDivision, quarterIndex: number): string {
+    const totalNumerator = Math.max(1, Math.abs(Math.trunc(Number(totalDivision.numerator) || 1)));
+    const totalDenominator = Math.max(1, Math.abs(Math.trunc(Number(totalDivision.denominator) || 1)));
+    const numerator = totalNumerator * quarterIndex;
+    const denominator = totalDenominator * 4;
+    const divisor = greatestCommonDivisor(numerator, denominator);
+    return `${numerator / divisor}/${denominator / divisor}`;
+}
+
+/** Labels the quarter, half, and three-quarter marks without changing MSEG geometry. */
+export function createMsegTimeAxisTicks(scale: MsegTimeAxisScale): ReadonlyArray<MsegTimeAxisTick> {
+    return MSEG_TIME_AXIS_QUARTERS.map((fraction, index) => ({
+        fraction,
+        label: scale.kind === "seconds"
+            ? formatMsegSecondsTick(scale.totalSeconds * fraction)
+            : formatMsegNoteTick(scale.totalDivision, index + 1),
+    }));
 }
 
 function almostEqual(left: number, right: number, epsilon = 1e-12) {

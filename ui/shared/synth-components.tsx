@@ -22,6 +22,7 @@ import {
     MSEG_RATE_MIN_SECONDS,
     MSEG_SELECTED_POINT_RADIUS_PX,
     clampMsegRateSeconds,
+    createMsegTimeAxisTicks,
     createMsegEditorMetrics,
     pointToMsegEditorCoordinates,
     renderMsegShape,
@@ -31,6 +32,7 @@ import {
     sampleMsegSegmentEditorPolyline,
     type MsegSurfaceOrientation,
     type MsegState,
+    type MsegTimeAxisScale,
 } from "./mseg";
 import { CanvasWavetableDisplay, type WavetableModulationRangeOverlay } from "./wavetable-display";
 import type { SynthFocusBindings } from "./synth-input-router";
@@ -849,6 +851,7 @@ export function EditableMsegSurface({
     hoveredSegmentIndex = -1,
     activeSegmentIndex = -1,
     orientation = "horizontal",
+    timeAxisScale,
     onOrientationChange,
     onPointerDown,
     onPointerMove,
@@ -870,6 +873,7 @@ export function EditableMsegSurface({
     hoveredSegmentIndex?: number;
     activeSegmentIndex?: number;
     orientation?: MsegSurfaceOrientation;
+    timeAxisScale?: MsegTimeAxisScale;
     onOrientationChange?: (orientation: MsegSurfaceOrientation) => void;
     onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
@@ -881,6 +885,7 @@ export function EditableMsegSurface({
     const size = useResizeObserver(surfaceRef);
     const emphasizedSegmentIndex = activeSegmentIndex >= 0 ? activeSegmentIndex : hoveredSegmentIndex;
     const hasEmphasizedSegment = emphasizedSegmentIndex >= 0;
+    const timeAxisTicks = timeAxisScale === undefined ? [] : createMsegTimeAxisTicks(timeAxisScale);
 
     useLayoutEffect(() => {
         const nextOrientation = resolveMsegSurfaceOrientation(size.width, size.height, orientation);
@@ -1053,6 +1058,51 @@ export function EditableMsegSurface({
                                 className={pointClassName}
                                 vectorEffect="non-scaling-stroke"
                             />
+                        );
+                    })}
+                </g>
+            )}
+            {timeAxisTicks.length === 0 ? null : (
+                <g
+                    data-role="mseg-time-axis"
+                    data-time-unit={timeAxisScale?.kind}
+                    className="cosimo-mseg-time-axis"
+                    aria-hidden="true"
+                >
+                    {timeAxisTicks.map((tick) => {
+                        const isVerticalTime = orientation === "vertical";
+                        const axisX = isVerticalTime
+                            ? metrics.plotLeft
+                            : metrics.plotLeft + (metrics.plotWidth * tick.fraction);
+                        const axisY = isVerticalTime
+                            ? metrics.plotTop + (metrics.plotHeight * tick.fraction)
+                            : metrics.plotBottom;
+                        const labelX = isVerticalTime ? axisX + 9 : axisX;
+                        const labelY = isVerticalTime ? axisY : axisY - 9;
+
+                        return (
+                            <g key={`mseg-time-${tick.fraction}`}>
+                                <line
+                                    data-role="mseg-time-tick"
+                                    data-axis-fraction={String(tick.fraction)}
+                                    className="cosimo-mseg-time-tick"
+                                    x1={axisX}
+                                    y1={axisY}
+                                    x2={isVerticalTime ? axisX + 6 : axisX}
+                                    y2={isVerticalTime ? axisY : axisY - 6}
+                                />
+                                <text
+                                    data-role="mseg-time-label"
+                                    data-axis-fraction={String(tick.fraction)}
+                                    className="cosimo-mseg-time-label"
+                                    x={labelX}
+                                    y={labelY}
+                                    textAnchor={isVerticalTime ? "start" : "middle"}
+                                    dominantBaseline={isVerticalTime ? "middle" : undefined}
+                                >
+                                    {tick.label}
+                                </text>
+                            </g>
                         );
                     })}
                 </g>

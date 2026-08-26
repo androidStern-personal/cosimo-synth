@@ -85,6 +85,14 @@ export function MsegEditorShell({
     const graphicShellClassName = useMsegVisualLanguage
         ? `mseg-editor-shell-graphic${variant === "drawer" ? " quick-source-sheet-graphic" : " mseg-editor-graph"}`
         : "quick-source-sheet-graphic";
+    const graphicRow = (
+        <div
+            data-role={graphicDataRole}
+            className={`${graphicShellClassName}${graphicClassName === undefined ? "" : ` ${graphicClassName}`}`}
+        >
+            {graphic}
+        </div>
+    );
 
     return (
         <section
@@ -110,13 +118,8 @@ export function MsegEditorShell({
                 {showGrip ? <span className="quick-source-sheet-grip-pill" aria-hidden="true" /> : null}
                 {headerActions}
             </header>
-            {controls}
-            <div
-                data-role={graphicDataRole}
-                className={`${graphicShellClassName}${graphicClassName === undefined ? "" : ` ${graphicClassName}`}`}
-            >
-                {graphic}
-            </div>
+            {variant === "full" ? graphicRow : controls}
+            {variant === "full" ? controls : graphicRow}
             {overlay}
         </section>
     );

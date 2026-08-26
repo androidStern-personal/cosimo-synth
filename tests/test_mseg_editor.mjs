@@ -75,6 +75,24 @@ test("MSEG orientation holds a stable near-square boundary before following the 
     assert.equal(resolveMsegSurfaceOrientation(109, 100, "vertical"), "horizontal");
 });
 
+test("MSEG time-axis quarters format seconds and reduced note subdivisions", async () => {
+    const { createMsegTimeAxisTicks } = await import("../patch_gui/mseg.js");
+
+    assert.deepEqual(createMsegTimeAxisTicks({ kind: "seconds", totalSeconds: 1 }), [
+        { fraction: 0.25, label: "0.25s" },
+        { fraction: 0.5, label: "0.5s" },
+        { fraction: 0.75, label: "0.75s" },
+    ]);
+    assert.deepEqual(createMsegTimeAxisTicks({
+        kind: "notes",
+        totalDivision: { numerator: 1, denominator: 2 },
+    }), [
+        { fraction: 0.25, label: "1/8" },
+        { fraction: 0.5, label: "1/4" },
+        { fraction: 0.75, label: "3/8" },
+    ]);
+});
+
 test("MSEG point geometry round-trips without changing its stored coordinate system", () => {
     const storedPoint = { x: 0.23, y: 0.76 };
 

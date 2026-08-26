@@ -19,6 +19,7 @@ export const MSEG_EDITOR_HORIZONTAL_PADDING_PX = 14;
 export const MSEG_EDITOR_VERTICAL_PADDING_PX = 14;
 export const MSEG_EDITOR_CURVE_TOLERANCE_PX = 0.5;
 const MSEG_EDITOR_MAX_SUBDIVISION_DEPTH = 12;
+const MSEG_TIME_AXIS_QUARTERS = [0.25, 0.5, 0.75];
 const MSEG_ORIENTATION_HYSTERESIS_RATIO = 1.08;
 /**
  * Chooses the visible MSEG time axis from the editable graph's measured shape.
@@ -44,6 +45,38 @@ const MSEG_NOTE_OFF_POLICY_VALUES = new Set([
 ]);
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
+}
+function greatestCommonDivisor(left, right) {
+    let dividend = Math.abs(Math.trunc(left));
+    let divisor = Math.abs(Math.trunc(right));
+    while (divisor !== 0) {
+        const remainder = dividend % divisor;
+        dividend = divisor;
+        divisor = remainder;
+    }
+    return Math.max(1, dividend);
+}
+function formatMsegSecondsTick(seconds) {
+    const roundedMilliseconds = Math.round(Math.max(0, Number(seconds) || 0) * 1000);
+    const roundedSeconds = roundedMilliseconds / 1000;
+    return `${roundedSeconds}s`;
+}
+function formatMsegNoteTick(totalDivision, quarterIndex) {
+    const totalNumerator = Math.max(1, Math.abs(Math.trunc(Number(totalDivision.numerator) || 1)));
+    const totalDenominator = Math.max(1, Math.abs(Math.trunc(Number(totalDivision.denominator) || 1)));
+    const numerator = totalNumerator * quarterIndex;
+    const denominator = totalDenominator * 4;
+    const divisor = greatestCommonDivisor(numerator, denominator);
+    return `${numerator / divisor}/${denominator / divisor}`;
+}
+/** Labels the quarter, half, and three-quarter marks without changing MSEG geometry. */
+export function createMsegTimeAxisTicks(scale) {
+    return MSEG_TIME_AXIS_QUARTERS.map((fraction, index) => ({
+        fraction,
+        label: scale.kind === "seconds"
+            ? formatMsegSecondsTick(scale.totalSeconds * fraction)
+            : formatMsegNoteTick(scale.totalDivision, index + 1),
+    }));
 }
 function almostEqual(left, right, epsilon = 1e-12) {
     return Math.abs(left - right) <= epsilon;

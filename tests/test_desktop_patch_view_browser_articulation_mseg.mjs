@@ -3109,7 +3109,7 @@ test("drawer and full-screen MSEG editors share one lightweight expanded-shell l
     }
 });
 
-test("the full-screen MSEG editor is the drawer's title-controls-graph composition expanded", async () => {
+test("the full-screen MSEG editor keeps the graph dominant above one bottom control row", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -3132,6 +3132,7 @@ test("the full-screen MSEG editor is the drawer's title-controls-graph compositi
             controlsBottom: controlsBounds.bottom - rootBounds.top,
             controlsHeight: controlsBounds.height,
             graphicTop: graphicBounds.top - rootBounds.top,
+            graphicBottom: graphicBounds.bottom - rootBounds.top,
             coordinateHudCount: element.querySelectorAll('[data-role="mseg-coordinate-hud"]').length,
         };
     }, {
@@ -3168,11 +3169,129 @@ test("the full-screen MSEG editor is the drawer's title-controls-graph compositi
         assert.equal(drawerRows.controlsTop, drawerRows.headerBottom);
         assert.equal(drawerRows.graphicTop, drawerRows.controlsBottom);
         assert.equal(fullRows.headerTop, 0);
-        assert.equal(fullRows.controlsTop, fullRows.headerBottom);
-        assert.equal(fullRows.graphicTop, fullRows.controlsBottom);
+        assert.equal(fullRows.graphicTop, fullRows.headerBottom);
+        assert.equal(fullRows.controlsTop, fullRows.graphicBottom);
         assert.equal(Math.abs(fullRows.headerHeight - drawerRows.headerHeight) <= 1, true);
         assert.equal(Math.abs(fullRows.controlsHeight - drawerRows.controlsHeight) <= 1, true);
         assert.equal(fullRows.coordinateHudCount, 0, "The expanded drawer must not retain the old modal coordinate decoration.");
+
+        const controls = full.locator('[data-role="mseg-editor-controls"]');
+        const header = full.locator('header');
+        assert.equal(await header.locator('[aria-label="MSEG shape"]').count(), 0);
+        assert.equal(await controls.locator('[aria-label="MSEG shape"]').count(), 1);
+        const orderedControls = await controls.locator(
+            '[data-role="mseg-shape-a"], [data-role="mseg-shape-b"], [data-role="mseg-editor-cell-rate"], [data-role="mseg-editor-cell-morph"], [data-role="mseg-loop-toggle"]',
+        ).evaluateAll((elements) => elements.map((element) => ({
+            role: element.getAttribute("data-role"),
+            left: element.getBoundingClientRect().left,
+        })));
+        assert.deepEqual(orderedControls.map(({ role }) => role), [
+            "mseg-shape-a",
+            "mseg-shape-b",
+            "mseg-editor-cell-rate",
+            "mseg-editor-cell-morph",
+            "mseg-loop-toggle",
+        ]);
+        assert.equal(orderedControls.every((control, index) => index === 0 || control.left >= orderedControls[index - 1].left), true);
+
+        await controls.locator('[data-role="mseg-shape-b"]').click();
+        assert.equal(await controls.locator('[data-role="mseg-shape-a"]').getAttribute("aria-pressed"), "false");
+        assert.equal(await controls.locator('[data-role="mseg-shape-b"]').getAttribute("aria-pressed"), "true");
+    } finally {
+        await page.close();
+    }
+});
+
+test("the MSEG time ruler labels each quarter on the active longest axis", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 600, height: 916 }),
+    });
+
+    const readRuler = async (surface) => ({
+        orientation: await surface.getAttribute("data-time-axis"),
+        labels: await surface.locator('[data-role="mseg-time-label"]').evaluateAll((elements) => elements.map((element) => ({
+            text: element.textContent,
+            fraction: Number(element.getAttribute("data-axis-fraction")),
+            x: Number(element.getAttribute("x")),
+            y: Number(element.getAttribute("y")),
+        }))),
+        tickCount: await surface.locator('[data-role="mseg-time-tick"]').count(),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('button[aria-label="Open MSEG editor"]');
+        const dialog = page.locator('[data-role="mseg-editor-dialog"]');
+        const surface = dialog.locator('[data-role="mseg-editor-surface"]');
+        await surface.waitFor();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mseg-editor-surface"]')?.getAttribute("data-time-axis") === "vertical"
+        ));
+
+        const storedShape = readStoredMsegShape(await getHarnessSnapshot(page));
+        let ruler = await readRuler(surface);
+        assert.equal(ruler.orientation, "vertical");
+        assert.equal(ruler.tickCount, 3);
+        assert.deepEqual(ruler.labels.map(({ text }) => text), ["0.25s", "0.5s", "0.75s"]);
+        assert.deepEqual(ruler.labels.map(({ fraction }) => fraction), [0.25, 0.5, 0.75]);
+        assert.equal(ruler.labels[0].y < ruler.labels[1].y && ruler.labels[1].y < ruler.labels[2].y, true);
+
+        await page.setViewportSize({ width: 916, height: 600 });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mseg-editor-surface"]')?.getAttribute("data-time-axis") === "horizontal"
+        ));
+        ruler = await readRuler(surface);
+        assert.equal(ruler.orientation, "horizontal");
+        assert.equal(ruler.labels[0].x < ruler.labels[1].x && ruler.labels[1].x < ruler.labels[2].x, true);
+
+        const rateKnob = dialog.locator('[data-role="mseg-editor-cell-rate"]');
+        await rateKnob.focus();
+        await page.keyboard.press("End");
+        await page.waitForFunction(() => (
+            document.querySelectorAll('[data-role="mseg-time-label"]')[1]?.textContent === "1s"
+        ));
+        ruler = await readRuler(surface);
+        assert.deepEqual(ruler.labels.map(({ text }) => text), ["0.5s", "1s", "1.5s"]);
+        assert.deepEqual(readStoredMsegShape(await getHarnessSnapshot(page)), storedShape);
+    } finally {
+        await page.close();
+    }
+});
+
+test("the expanded MSEG graph uses its synth identity color for curve points and restrained fill", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 600, height: 916 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('button[aria-label="Open MSEG editor"]');
+        const dialog = page.locator('[data-role="mseg-editor-dialog"]');
+        const presentation = await dialog.evaluate((element) => {
+            const title = element.querySelector("header strong");
+            const curve = element.querySelector('[data-role="mseg-base-curve"]');
+            const fill = element.querySelector('[data-role="mseg-base-fill"]');
+            const point = element.querySelector('[data-role="mseg-point"]');
+            if (!(title instanceof HTMLElement)
+                || !(curve instanceof SVGPathElement)
+                || !(fill instanceof SVGPathElement)
+                || !(point instanceof SVGCircleElement)) {
+                return null;
+            }
+            return {
+                title: getComputedStyle(title).color,
+                curve: getComputedStyle(curve).stroke,
+                fill: getComputedStyle(fill).fill,
+                point: getComputedStyle(point).fill,
+            };
+        });
+
+        assert.ok(presentation);
+        assert.equal(presentation.curve, presentation.title);
+        assert.equal(presentation.point, presentation.title);
+        assert.notEqual(presentation.fill, "none");
+        assert.notEqual(presentation.fill, presentation.title, "The graph fill should stay translucent rather than becoming a solid block.");
+        assert.doesNotMatch(`${presentation.curve} ${presentation.point} ${presentation.fill}`, /104\D+255\D+194/);
     } finally {
         await page.close();
     }

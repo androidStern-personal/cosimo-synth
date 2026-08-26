@@ -39,13 +39,13 @@
     },
     "surface": {
       "x": 8,
-      "y": 78,
+      "y": 38,
       "width": 377,
       "height": 768
     },
     "controls": {
       "x": 0,
-      "y": 34,
+      "y": 812,
       "width": 393,
       "height": 40
     },
@@ -80,6 +80,33 @@
     "rootBorderTop": "1px solid color(srgb 0.817495 0.405964 0.838966 / 0.493137)",
     "rootBoxShadow": "rgba(0, 0, 0, 0.55) 0px -14px 42px 0px"
   },
+  "plugin-tall-600x916-full.png": {
+    "viewport": {
+      "width": 600,
+      "height": 916
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 600,
+      "height": 916
+    },
+    "surface": {
+      "x": 8,
+      "y": 38,
+      "width": 584,
+      "height": 832
+    },
+    "controls": {
+      "x": 0,
+      "y": 876,
+      "width": 600,
+      "height": 40
+    },
+    "timeAxis": "vertical",
+    "rootBorderTop": "0px none rgb(232, 236, 239)",
+    "rootBoxShadow": "none"
+  },
   "plugin-900x600-full.png": {
     "viewport": {
       "width": 900,
@@ -93,13 +120,13 @@
     },
     "surface": {
       "x": 8,
-      "y": 78,
+      "y": 38,
       "width": 884,
       "height": 516
     },
     "controls": {
       "x": 0,
-      "y": 34,
+      "y": 560,
       "width": 900,
       "height": 40
     },
@@ -120,13 +147,13 @@
     },
     "surface": {
       "x": 8,
-      "y": 78,
+      "y": 38,
       "width": 1264,
       "height": 816
     },
     "controls": {
       "x": 0,
-      "y": 34,
+      "y": 860,
       "width": 1280,
       "height": 40
     },

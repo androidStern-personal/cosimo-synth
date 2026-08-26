@@ -254,6 +254,11 @@ test("capture real MSEG drawer and full-screen evidence", async () => {
             "plugin-compact-600x520-drawer.png",
             true,
         ),
+        "plugin-tall-600x916-full.png": await captureFullEditor(
+            { width: 600, height: 916 },
+            "plugin-tall-600x916-full.png",
+            true,
+        ),
         "plugin-900x600-full.png": await captureFullEditor(
             { width: 900, height: 600 },
             "plugin-900x600-full.png",
@@ -281,6 +286,7 @@ test("capture real MSEG drawer and full-screen evidence", async () => {
 
     assert.equal(captures["phone-393x852-drawer.png"].controls.height <= 40, true);
     assert.equal(captures["phone-393x852-full.png"].timeAxis, "vertical");
+    assert.equal(captures["plugin-tall-600x916-full.png"].timeAxis, "vertical");
     assert.equal(captures["plugin-900x600-full.png"].timeAxis, "horizontal");
     assert.equal(captures["desktop-1280x900-full.png"].rootBoxShadow, "none");
     await writeFile(
