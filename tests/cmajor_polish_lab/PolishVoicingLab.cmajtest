@@ -1,0 +1,220 @@
+// Direct behavioural checks for the isolated T27 design studio.
+
+## global ("../../fx/polish_lab/PolishVoicingLab.cmajor")
+
+## testProcessor()
+
+processor PolishCurveContract [[ main ]]
+{
+    output stream int32 out;
+    node core = polishlab::ClipCoreChannel;
+
+    float32 render (float32 sample)
+    {
+        core.in <- sample;
+        core.driveDb <- 0.0f;
+        core.p1x <- 0.799438202f;
+        core.p1y <- 0.717642209f;
+        core.p1t <- 0.42f;
+        core.p2x <- 0.927299703f;
+        core.p2y <- 0.893592677f;
+        core.p2t <- 0.0f;
+        core.p3x <- 0.93620178f;
+        core.p3y <- 1.0f;
+        core.p3t <- -0.72f;
+        core.advance();
+        return core.out;
+    }
+
+    bool close (float32 actual, float32 expected, float32 tolerance)
+    {
+        return std::intrinsics::abs (actual - expected) <= tolerance;
+    }
+
+    void main()
+    {
+        let tolerance = 2.0e-6f;
+        let knot1 = render (0.799438202f);
+        let knot2 = render (0.927299703f);
+        let knot3 = render (0.93620178f);
+        let plateau = render (1.2f);
+        let negative = render (-0.5f);
+        let positive = render (0.5f);
+
+        out <- close (knot1, 0.717642209f, tolerance) ? 1 : 0;
+        advance();
+        out <- close (knot2, 0.893592677f, tolerance) ? 1 : 0;
+        advance();
+        out <- close (knot3, 1.0f, tolerance) ? 1 : 0;
+        advance();
+        out <- close (plateau, 1.0f, tolerance) ? 1 : 0;
+        advance();
+        out <- close (negative, -positive, tolerance) ? 1 : 0;
+        advance();
+        out <- close (positive, 0.4311271f, 3.0e-6f) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+## testProcessor()
+
+processor PolishCompressorCurveContract [[ main ]]
+{
+    output stream int32 out;
+
+    void main()
+    {
+        let unityRatio = polishlab::desiredGainReductionDb (1.0f, -6.0f, 1.0f, 0.0f);
+        let fourToOne = polishlab::desiredGainReductionDb (1.0f, -6.0f, 4.0f, 0.0f);
+        let twentyToOne = polishlab::desiredGainReductionDb (1.0f, -6.0f, 20.0f, 0.0f);
+        let underThreshold = polishlab::desiredGainReductionDb (0.25f, -6.0f, 20.0f, 0.0f);
+        let softKneeAtThreshold = polishlab::desiredGainReductionDb (1.0f, 0.0f, 4.0f, 6.0f);
+
+        out <- std::intrinsics::abs (unityRatio) < 1.0e-6f ? 1 : 0;
+        advance();
+        out <- std::intrinsics::abs (fourToOne + 4.5f) < 1.0e-5f ? 1 : 0;
+        advance();
+        out <- twentyToOne < fourToOne ? 1 : 0;
+        advance();
+        out <- std::intrinsics::abs (underThreshold) < 1.0e-6f ? 1 : 0;
+        advance();
+        out <- std::intrinsics::abs (softKneeAtThreshold + 0.5625f) < 1.0e-5f ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+## testProcessor()
+
+processor PolishBypassContract [[ main ]]
+{
+    output stream int32 out;
+    node lab = PolishVoicingProcessor;
+
+    float32<2> signalForFrame (int32 frame)
+    {
+        return float32<2> (
+            0.41f * std::intrinsics::sin (float32 (frame) * 0.071f),
+            0.29f * std::intrinsics::sin (float32 (frame) * 0.047f + 0.7f)
+        );
+    }
+
+    void main()
+    {
+        bool exact = true;
+
+        for (int32 frame = 0; frame < 4096; ++frame)
+        {
+            let signal = signalForFrame (frame);
+            lab.in <- signal;
+            lab.bypass <- true;
+            lab.amount <- 100.0f;
+            lab.lowCutMix <- 100.0f;
+            lab.colorGainDb <- 18.0f;
+            lab.thresholdDb <- -36.0f;
+            lab.ratio <- 100.0f;
+            lab.clipDriveDb <- 36.0f;
+            lab.advance();
+
+            if (lab.out[0] != signal[0] || lab.out[1] != signal[1])
+                exact = false;
+        }
+
+        out <- exact ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+## testProcessor()
+
+processor PolishTunableSignalContract [[ main ]]
+{
+    output stream int32 out;
+    node decoded = PolishVoicingProcessor;
+    node tuned = PolishVoicingProcessor;
+
+    float32<2> signalForFrame (int32 frame)
+    {
+        let time = float32 (frame);
+        return float32<2> (
+            (0.24f * std::intrinsics::sin (time * 0.071f))
+                + (0.08f * std::intrinsics::sin (time * 0.193f)),
+            (0.21f * std::intrinsics::sin (time * 0.053f + 0.4f))
+                + (0.07f * std::intrinsics::sin (time * 0.227f))
+        );
+    }
+
+    void main()
+    {
+        float32 maxDifference;
+        bool bounded = true;
+
+        for (int32 frame = 0; frame < 8192; ++frame)
+        {
+            let signal = signalForFrame (frame);
+            decoded.in <- signal;
+            decoded.amount <- 0.0f;
+            decoded.advance();
+
+            tuned.in <- signal;
+            tuned.amount <- 100.0f;
+            tuned.macroCurve <- 0.65f;
+            tuned.lowCutMix <- 65.0f;
+            tuned.lowCutHz <- 85.0f;
+            tuned.lowCutSlope <- 2.0f;
+            tuned.colorFrequencyHz <- 1800.0f;
+            tuned.colorGainDb <- 5.0f;
+            tuned.colorQ <- 1.2f;
+            tuned.thresholdDb <- -18.0f;
+            tuned.ratio <- 32.0f;
+            tuned.kneeDb <- 9.0f;
+            tuned.attackMs <- 8.0f;
+            tuned.releaseMs <- 180.0f;
+            tuned.makeupDb <- -3.0f;
+            tuned.detectorMode <- 1.0f;
+            tuned.rmsWindowMs <- 24.0f;
+            tuned.detectorHpHz <- 120.0f;
+            tuned.stereoLink <- 70.0f;
+            tuned.compMix <- 80.0f;
+            tuned.clipDriveDb <- 12.0f;
+            tuned.clipMix <- 85.0f;
+            tuned.curveP1X <- 0.55f;
+            tuned.curveP1Y <- 0.38f;
+            tuned.curveP1T <- -0.25f;
+            tuned.curveP2X <- 0.82f;
+            tuned.curveP2Y <- 0.7f;
+            tuned.curveP2T <- 0.35f;
+            tuned.curveP3X <- 1.05f;
+            tuned.curveP3Y <- 0.92f;
+            tuned.curveP3T <- -0.4f;
+            tuned.advance();
+
+            if (frame > 2048)
+            {
+                maxDifference = std::intrinsics::max (
+                    maxDifference,
+                    std::intrinsics::max (
+                        std::intrinsics::abs (tuned.out[0] - decoded.out[0]),
+                        std::intrinsics::abs (tuned.out[1] - decoded.out[1])
+                    )
+                );
+
+                if (tuned.out[0] != tuned.out[0]
+                    || tuned.out[1] != tuned.out[1]
+                    || std::intrinsics::abs (tuned.out[0]) > 2.0f
+                    || std::intrinsics::abs (tuned.out[1]) > 2.0f)
+                    bounded = false;
+            }
+        }
+
+        out <- bounded && maxDifference > 0.05f ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}

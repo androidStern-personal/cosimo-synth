@@ -1,0 +1,340 @@
+{
+  "schema": "cosimo.polishCompClip.extractedPreset.v1",
+  "source": {
+    "sha256": "603fb6d28b1664cf352b5bb7eef288c3093c17a230ac5d63cea70916cfe2749b",
+    "byteLength": 24551,
+    "containerHeaderAscii": "BtWg0003000200",
+    "embeddedZipOffset": 18625
+  },
+  "decodedPresetFacts": {
+    "provenance": "decoded-polarity-bitwig-preset",
+    "inputToolVolume": {
+      "value": 0.967718728128794,
+      "ieee754Hex": "3feef78d442146be",
+      "valueOffset": 13627,
+      "recordOffset": 13612,
+      "recordHex": "00000006564f4c554d4500000136073feef78d442146be"
+    },
+    "compressor": {
+      "ATTACK": {
+        "value": -3.6879999999999997,
+        "ieee754Hex": "c00d810624dd2f1a",
+        "valueOffset": 14041,
+        "recordOffset": 14026,
+        "recordHex": "0000000641545441434b0000013607c00d810624dd2f1a"
+      },
+      "RELEASE": {
+        "value": -1.5720000000000016,
+        "ieee754Hex": "bff926e978d4fdfb",
+        "valueOffset": 14078,
+        "recordOffset": 14062,
+        "recordHex": "0000000752454c454153450000013607bff926e978d4fdfb"
+      },
+      "LOW_THRESHOLD": {
+        "value": -30,
+        "ieee754Hex": "c03e000000000000",
+        "valueOffset": 14347,
+        "recordOffset": 14325,
+        "recordHex": "0000000d4c4f575f5448524553484f4c440000013607c03e000000000000"
+      },
+      "LOW_RATIO": {
+        "value": 0,
+        "ieee754Hex": "0000000000000000",
+        "valueOffset": 14386,
+        "recordOffset": 14368,
+        "recordHex": "000000094c4f575f524154494f00000136070000000000000000"
+      },
+      "LOW_KNEE": {
+        "value": 6,
+        "ieee754Hex": "4018000000000000",
+        "valueOffset": 14424,
+        "recordOffset": 14407,
+        "recordHex": "000000084c4f575f4b4e454500000136074018000000000000"
+      },
+      "HIGH_THRESHOLD": {
+        "value": 0,
+        "ieee754Hex": "0000000000000000",
+        "valueOffset": 14468,
+        "recordOffset": 14445,
+        "recordHex": "0000000e484947485f5448524553484f4c4400000136070000000000000000"
+      },
+      "HIGH_RATIO": {
+        "value": 0.9124000000000048,
+        "ieee754Hex": "3fed32617c1bda7c",
+        "valueOffset": 14508,
+        "recordOffset": 14489,
+        "recordHex": "0000000a484947485f524154494f00000136073fed32617c1bda7c"
+      },
+      "HIGH_KNEE": {
+        "value": 0,
+        "ieee754Hex": "0000000000000000",
+        "valueOffset": 14547,
+        "recordOffset": 14529,
+        "recordHex": "00000009484947485f4b4e454500000136070000000000000000"
+      },
+      "OUTPUT_GAIN": {
+        "value": -0.04000000000000409,
+        "ieee754Hex": "bfa47ae147ae16c8",
+        "valueOffset": 14588,
+        "recordOffset": 14568,
+        "recordHex": "0000000b4f55545055545f4741494e0000013607bfa47ae147ae16c8"
+      },
+      "INPUT_GAIN": {
+        "value": 0,
+        "ieee754Hex": "0000000000000000",
+        "valueOffset": 14666,
+        "recordOffset": 14647,
+        "recordHex": "0000000a494e5055545f4741494e00000136070000000000000000"
+      }
+    },
+    "curve": {
+      "points": [
+        {
+          "input": {
+            "value": 0,
+            "ieee754Hex": "0000000000000000",
+            "valueOffset": 17232,
+            "recordOffset": 17227,
+            "recordHex": "000035fd070000000000000000"
+          },
+          "output": {
+            "value": 0,
+            "ieee754Hex": "0000000000000000",
+            "valueOffset": 17245,
+            "recordOffset": 17240,
+            "recordHex": "000035fe070000000000000000"
+          },
+          "tension": {
+            "value": 0,
+            "ieee754Hex": "0000000000000000",
+            "valueOffset": 17258,
+            "recordOffset": 17253,
+            "recordHex": "000035ff070000000000000000"
+          }
+        },
+        {
+          "input": {
+            "value": 0.799438202247191,
+            "ieee754Hex": "3fe994ff6cba6419",
+            "valueOffset": 17279,
+            "recordOffset": 17274,
+            "recordHex": "000035fd073fe994ff6cba6419"
+          },
+          "output": {
+            "value": 0.7176422093981863,
+            "ieee754Hex": "3fe6f6eccb730547",
+            "valueOffset": 17292,
+            "recordOffset": 17287,
+            "recordHex": "000035fe073fe6f6eccb730547"
+          },
+          "tension": {
+            "value": 0.42000000000000004,
+            "ieee754Hex": "3fdae147ae147ae2",
+            "valueOffset": 17305,
+            "recordOffset": 17300,
+            "recordHex": "000035ff073fdae147ae147ae2"
+          }
+        },
+        {
+          "input": {
+            "value": 0.9272997032640949,
+            "ieee754Hex": "3fedac706d63836b",
+            "valueOffset": 17326,
+            "recordOffset": 17321,
+            "recordHex": "000035fd073fedac706d63836b"
+          },
+          "output": {
+            "value": 0.8935926773455377,
+            "ieee754Hex": "3fec984faba49cff",
+            "valueOffset": 17339,
+            "recordOffset": 17334,
+            "recordHex": "000035fe073fec984faba49cff"
+          },
+          "tension": {
+            "value": 0,
+            "ieee754Hex": "0000000000000000",
+            "valueOffset": 17352,
+            "recordOffset": 17347,
+            "recordHex": "000035ff070000000000000000"
+          }
+        },
+        {
+          "input": {
+            "value": 0.9362017804154302,
+            "ieee754Hex": "3fedf55d6faaeb7d",
+            "valueOffset": 17373,
+            "recordOffset": 17368,
+            "recordHex": "000035fd073fedf55d6faaeb7d"
+          },
+          "output": {
+            "value": 1,
+            "ieee754Hex": "3ff0000000000000",
+            "valueOffset": 17386,
+            "recordOffset": 17381,
+            "recordHex": "000035fe073ff0000000000000"
+          },
+          "tension": {
+            "value": -0.7200000000000001,
+            "ieee754Hex": "bfe70a3d70a3d70b",
+            "valueOffset": 17399,
+            "recordOffset": 17394,
+            "recordHex": "000035ff07bfe70a3d70a3d70b"
+          }
+        }
+      ],
+      "drive": {
+        "value": -0.01920000000000002,
+        "ieee754Hex": "bf93a92a30553267",
+        "valueOffset": 17548,
+        "recordOffset": 17534,
+        "recordHex": "0000000544524956450000013607bf93a92a30553267"
+      }
+    },
+    "outputToolVolume": {
+      "value": 1.0193734859388728,
+      "ieee754Hex": "3ff04f5a92884587",
+      "valueOffset": 11041,
+      "recordOffset": 11026,
+      "recordHex": "00000006564f4c554d4500000136073ff04f5a92884587"
+    },
+    "macro": {
+      "storedValue": {
+        "value": 0,
+        "ieee754Hex": "0000000000000000",
+        "valueOffset": 8004,
+        "recordOffset": 7990,
+        "recordHex": "0000000556414c554500000136070000000000000000"
+      },
+      "mappings": [
+        {
+          "path": "CONTENTS/DEVICE_CHAIN/Chain/DEVICE_CHAIN/0:CONTENTS/PRE_FX/Chain/DEVICE_CHAIN/1:CONTENTS/AMPLITUDE",
+          "pathOffset": 8058,
+          "pathRecordHex": "00000062434f4e54454e54532f4445564943455f434841494e2f436861696e2f4445564943455f434841494e2f303a434f4e54454e54532f5052455f46582f436861696e2f4445564943455f434841494e2f313a434f4e54454e54532f414d504c4954554445",
+          "parameterMinimum": {
+            "value": -36,
+            "ieee754Hex": "c042000000000000",
+            "valueOffset": 8174,
+            "recordOffset": 8169,
+            "recordHex": "0000012407c042000000000000"
+          },
+          "parameterMaximum": {
+            "value": 36,
+            "ieee754Hex": "4042000000000000",
+            "valueOffset": 8187,
+            "recordOffset": 8182,
+            "recordHex": "00000125074042000000000000"
+          },
+          "parameterBase": {
+            "value": 0,
+            "ieee754Hex": "0000000000000000",
+            "valueOffset": 8200,
+            "recordOffset": 8195,
+            "recordHex": "0000037b070000000000000000"
+          },
+          "rawControlQuantum": {
+            "value": -1,
+            "ieee754Hex": "bff0000000000000",
+            "valueOffset": 8231,
+            "recordOffset": 8226,
+            "recordHex": "000007c407bff0000000000000"
+          },
+          "mappedAmount": {
+            "value": 35.971200000000394,
+            "ieee754Hex": "4041fc504816f03e",
+            "valueOffset": 8266,
+            "recordOffset": 8261,
+            "recordHex": "00000e32074041fc504816f03e"
+          }
+        },
+        {
+          "path": "CONTENTS/DEVICE_CHAIN/Chain/DEVICE_CHAIN/0:CONTENTS/PRE_FX/Chain/DEVICE_CHAIN/2:CONTENTS/OUTPUT_GAIN",
+          "pathOffset": 8317,
+          "pathRecordHex": "00000064434f4e54454e54532f4445564943455f434841494e2f436861696e2f4445564943455f434841494e2f303a434f4e54454e54532f5052455f46582f436861696e2f4445564943455f434841494e2f323a434f4e54454e54532f4f55545055545f4741494e",
+          "parameterMinimum": {
+            "value": -36,
+            "ieee754Hex": "c042000000000000",
+            "valueOffset": 8435,
+            "recordOffset": 8430,
+            "recordHex": "0000012407c042000000000000"
+          },
+          "parameterMaximum": {
+            "value": 36,
+            "ieee754Hex": "4042000000000000",
+            "valueOffset": 8448,
+            "recordOffset": 8443,
+            "recordHex": "00000125074042000000000000"
+          },
+          "parameterBase": {
+            "value": 0,
+            "ieee754Hex": "0000000000000000",
+            "valueOffset": 8461,
+            "recordOffset": 8456,
+            "recordHex": "0000037b070000000000000000"
+          },
+          "rawControlQuantum": {
+            "value": 0.1,
+            "ieee754Hex": "3fb999999999999a",
+            "valueOffset": 8492,
+            "recordOffset": 8487,
+            "recordHex": "000007c4073fb999999999999a"
+          },
+          "mappedAmount": {
+            "value": 4.120000000000003,
+            "ieee754Hex": "40107ae147ae147e",
+            "valueOffset": 8527,
+            "recordOffset": 8522,
+            "recordHex": "00000e320740107ae147ae147e"
+          }
+        },
+        {
+          "path": "CONTENTS/DEVICE_CHAIN/Chain/DEVICE_CHAIN/0:CONTENTS/PRE_FX/Chain/DEVICE_CHAIN/2:CONTENTS/HIGH_RATIO",
+          "pathOffset": 8578,
+          "pathRecordHex": "00000063434f4e54454e54532f4445564943455f434841494e2f436861696e2f4445564943455f434841494e2f303a434f4e54454e54532f5052455f46582f436861696e2f4445564943455f434841494e2f323a434f4e54454e54532f484947485f524154494f",
+          "parameterMinimum": {
+            "value": -1,
+            "ieee754Hex": "bff0000000000000",
+            "valueOffset": 8695,
+            "recordOffset": 8690,
+            "recordHex": "0000012407bff0000000000000"
+          },
+          "parameterMaximum": {
+            "value": 1,
+            "ieee754Hex": "3ff0000000000000",
+            "valueOffset": 8708,
+            "recordOffset": 8703,
+            "recordHex": "00000125073ff0000000000000"
+          },
+          "parameterBase": {
+            "value": 0,
+            "ieee754Hex": "0000000000000000",
+            "valueOffset": 8721,
+            "recordOffset": 8716,
+            "recordHex": "0000037b070000000000000000"
+          },
+          "rawControlQuantum": {
+            "value": 0.005,
+            "ieee754Hex": "3f747ae147ae147b",
+            "valueOffset": 8752,
+            "recordOffset": 8747,
+            "recordHex": "000007c4073f747ae147ae147b"
+          },
+          "mappedAmount": {
+            "value": -0.025200000000000014,
+            "ieee754Hex": "bf99ce075f6fd224",
+            "valueOffset": 8787,
+            "recordOffset": 8782,
+            "recordHex": "00000e3207bf99ce075f6fd224"
+          }
+        }
+      ]
+    }
+  },
+  "cosimoDerivedValues": {
+    "provenance": "cosimo-mathematical-conversion-or-inference",
+    "inputToolGainDb": -0.2850170805322976,
+    "outputToolGainDb": 0.16666666666666702,
+    "compressorAttackSeconds": 0.00020511621788255668,
+    "compressorReleaseSeconds": 0.02679168324819022,
+    "compressorRatioFromStoredSlope": 11.415525114155871
+  }
+}

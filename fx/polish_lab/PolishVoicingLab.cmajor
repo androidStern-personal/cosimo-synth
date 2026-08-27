@@ -1,0 +1,540 @@
+namespace polishlab
+{
+    let clipOversampleFactor = 4;
+    let meterFramesPerSecond = 20.0f;
+
+    struct MeterFrame
+    {
+        float32 inputPeakDb;
+        float32 outputPeakDb;
+        float32 inputRmsDb;
+        float32 outputRmsDb;
+        float32 gainReductionDb;
+        float32 clipActivityPercent;
+        float32 compressorInputDb;
+        float32 compressorOutputDb;
+        float32 clipInput;
+        float32 clipOutput;
+    }
+
+    float32 clamp01 (float32 value)
+    {
+        return std::intrinsics::clamp (value, 0.0f, 1.0f);
+    }
+
+    float32 gainToDb (float32 gain)
+    {
+        return std::levels::gainTodB (std::intrinsics::max (gain, 1.0e-6f));
+    }
+
+    float32 tensionWarp (float32 position, float32 tension)
+    {
+        let u = clamp01 (position);
+        let t = std::intrinsics::clamp (tension, -1.0f, 1.0f);
+        return u + (t * u * (1.0f - u) * (1.0f - (2.0f * u)));
+    }
+
+    float32 evaluatePositiveCurve (
+        float32 magnitude,
+        float32 p1xIn, float32 p1yIn, float32 p1t,
+        float32 p2xIn, float32 p2yIn, float32 p2t,
+        float32 p3xIn, float32 p3yIn, float32 p3t)
+    {
+        let p1x = std::intrinsics::clamp (p1xIn, 0.01f, 1.45f);
+        let p2x = std::intrinsics::clamp (p2xIn, p1x + 0.001f, 1.48f);
+        let p3x = std::intrinsics::clamp (p3xIn, p2x + 0.001f, 1.5f);
+        let p1y = std::intrinsics::clamp (p1yIn, 0.0f, 1.45f);
+        let p2y = std::intrinsics::clamp (p2yIn, p1y, 1.48f);
+        let p3y = std::intrinsics::clamp (p3yIn, p2y, 1.5f);
+        let x = std::intrinsics::max (0.0f, magnitude);
+
+        if (x >= p3x)
+            return p3y;
+
+        if (x <= p1x)
+        {
+            let u = tensionWarp (x / p1x, p1t);
+            return p1y * u;
+        }
+
+        if (x <= p2x)
+        {
+            let u = tensionWarp ((x - p1x) / (p2x - p1x), p2t);
+            return p1y + ((p2y - p1y) * u);
+        }
+
+        let u = tensionWarp ((x - p2x) / (p3x - p2x), p3t);
+        return p2y + ((p3y - p2y) * u);
+    }
+
+    float32 evaluateCurve (
+        float32 sample,
+        float32 p1x, float32 p1y, float32 p1t,
+        float32 p2x, float32 p2y, float32 p2t,
+        float32 p3x, float32 p3y, float32 p3t)
+    {
+        if (sample == 0.0f)
+            return 0.0f;
+
+        let shaped = evaluatePositiveCurve (
+            std::intrinsics::abs (sample),
+            p1x, p1y, p1t,
+            p2x, p2y, p2t,
+            p3x, p3y, p3t
+        );
+
+        return sample < 0.0f ? -shaped : shaped;
+    }
+
+    float32 desiredGainReductionDb (float32 detectorAmplitude,
+                                    float32 thresholdDb,
+                                    float32 ratio,
+                                    float32 kneeDb)
+    {
+        let levelDb = gainToDb (detectorAmplitude);
+        let safeRatio = std::intrinsics::clamp (ratio, 1.0f, 1000.0f);
+        let slope = 1.0f - (1.0f / safeRatio);
+        let distance = levelDb - thresholdDb;
+        let safeKnee = std::intrinsics::clamp (kneeDb, 0.0f, 24.0f);
+
+        if (safeKnee <= 0.0001f)
+            return distance > 0.0f ? -slope * distance : 0.0f;
+
+        let halfKnee = safeKnee * 0.5f;
+
+        if (distance <= -halfKnee)
+            return 0.0f;
+
+        if (distance >= halfKnee)
+            return -slope * distance;
+
+        let kneeDistance = distance + halfKnee;
+        return -slope * kneeDistance * kneeDistance / (2.0f * safeKnee);
+    }
+
+    processor ClipCoreChannel
+    {
+        input stream float32 in;
+        output stream float32 out;
+        output stream float32 thru;
+
+        input value float32 driveDb;
+        input value float32 p1x;
+        input value float32 p1y;
+        input value float32 p1t;
+        input value float32 p2x;
+        input value float32 p2y;
+        input value float32 p2t;
+        input value float32 p3x;
+        input value float32 p3y;
+        input value float32 p3t;
+
+        void main()
+        {
+            loop
+            {
+                let sample = in;
+                let driven = sample * std::levels::dBtoGain (
+                    std::intrinsics::clamp (driveDb, -24.0f, 36.0f)
+                );
+
+                thru <- sample;
+                out <- evaluateCurve (
+                    driven,
+                    p1x, p1y, p1t,
+                    p2x, p2y, p2t,
+                    p3x, p3y, p3t
+                );
+                advance();
+            }
+        }
+    }
+}
+
+processor PolishVoicingProcessor
+{
+    input stream float32<2> in;
+    output stream float32<2> out;
+
+    input value float32 hostSlot0Guard [[ name: "Host Slot Guard", group: "Internal", min: 0.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 0 ]];
+
+    input value bool bypass [[ name: "Bypass", group: "Master", init: false, boolean ]];
+    input value float32 amount [[ name: "Amount", group: "Master", min: 0.0f, max: 100.0f, init: 0.0f, unit: "%", rampFrames: 256 ]];
+    input value float32 macroCurve [[ name: "Amount Curve", group: "Master", min: 0.25f, max: 4.0f, init: 1.0f, rampFrames: 256 ]];
+    input value float32 inputTrimDb [[ name: "Input Trim", group: "Master", min: -24.0f, max: 24.0f, init: -0.285017081f, unit: "dB", rampFrames: 256 ]];
+    input value float32 outputTrimDb [[ name: "Output Trim", group: "Master", min: -24.0f, max: 24.0f, init: 0.166666667f, unit: "dB", rampFrames: 256 ]];
+
+    input value float32 macroInputDriveDb [[ name: "Input Range", group: "Macro Wiring", min: 0.0f, max: 48.0f, init: 35.9712f, unit: "dB", rampFrames: 256 ]];
+    input value float32 macroMakeupDb [[ name: "Makeup Range", group: "Macro Wiring", min: -12.0f, max: 24.0f, init: 4.12f, unit: "dB", rampFrames: 256 ]];
+    input value float32 macroRatioTarget [[ name: "Ratio Target", group: "Macro Wiring", min: 1.0f, max: 1000.0f, init: 1000.0f, unit: ":1", rampFrames: 256 ]];
+
+    input value float32 lowCutMix [[ name: "Low Cut Mix", group: "Tone - Pre", min: 0.0f, max: 100.0f, init: 0.0f, unit: "%", rampFrames: 256 ]];
+    input value float32 lowCutHz [[ name: "Low Cut", group: "Tone - Pre", min: 20.0f, max: 300.0f, init: 35.0f, unit: "Hz", rampFrames: 256 ]];
+    input value float32 lowCutSlope [[ name: "Slope", group: "Tone - Pre", min: 0.0f, max: 2.0f, init: 1.0f, discrete: true, step: 1.0f, text: "6 dB/oct|12 dB/oct|24 dB/oct", rampFrames: 0 ]];
+
+    input value float32 colorFrequencyHz [[ name: "Color Frequency", group: "Tone - Post", min: 80.0f, max: 12000.0f, init: 1000.0f, unit: "Hz", rampFrames: 256 ]];
+    input value float32 colorGainDb [[ name: "Color Gain", group: "Tone - Post", min: -18.0f, max: 18.0f, init: 0.0f, unit: "dB", rampFrames: 256 ]];
+    input value float32 colorQ [[ name: "Color Q", group: "Tone - Post", min: 0.1f, max: 12.0f, init: 0.707107f, rampFrames: 256 ]];
+
+    input value float32 thresholdDb [[ name: "Threshold", group: "Compressor", min: -36.0f, max: 6.0f, init: 0.0f, unit: "dB", rampFrames: 256 ]];
+    input value float32 ratio [[ name: "Ratio", group: "Compressor", min: 1.0f, max: 100.0f, init: 11.4155251f, unit: ":1", rampFrames: 256 ]];
+    input value float32 kneeDb [[ name: "Knee", group: "Compressor", min: 0.0f, max: 24.0f, init: 0.0f, unit: "dB", rampFrames: 256 ]];
+    input value float32 attackMs [[ name: "Attack", group: "Compressor", min: 0.05f, max: 100.0f, init: 0.205116218f, unit: "ms", rampFrames: 256 ]];
+    input value float32 releaseMs [[ name: "Release", group: "Compressor", min: 5.0f, max: 1000.0f, init: 26.7916832f, unit: "ms", rampFrames: 256 ]];
+    input value float32 makeupDb [[ name: "Makeup", group: "Compressor", min: -24.0f, max: 24.0f, init: -0.04f, unit: "dB", rampFrames: 256 ]];
+    input value float32 detectorMode [[ name: "Detector", group: "Compressor", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Peak|RMS", rampFrames: 0 ]];
+    input value float32 rmsWindowMs [[ name: "RMS Window", group: "Compressor", min: 1.0f, max: 100.0f, init: 10.0f, unit: "ms", rampFrames: 256 ]];
+    input value float32 detectorHpHz [[ name: "Detector HP", group: "Compressor", min: 0.0f, max: 500.0f, init: 0.0f, unit: "Hz", rampFrames: 256 ]];
+    input value float32 stereoLink [[ name: "Stereo Link", group: "Compressor", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 256 ]];
+    input value float32 compMix [[ name: "Comp Mix", group: "Compressor", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 256 ]];
+
+    input value float32 clipDriveDb [[ name: "Drive", group: "Clipper", min: -24.0f, max: 36.0f, init: -0.0192f, unit: "dB", rampFrames: 256 ]];
+    input value float32 clipMix [[ name: "Clip Mix", group: "Clipper", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 256 ]];
+    input value float32 curveP1X [[ name: "Knot 1 In", group: "Clipper", min: 0.01f, max: 1.45f, init: 0.799438202f, rampFrames: 256 ]];
+    input value float32 curveP1Y [[ name: "Knot 1 Out", group: "Clipper", min: 0.0f, max: 1.45f, init: 0.717642209f, rampFrames: 256 ]];
+    input value float32 curveP1T [[ name: "Knot 1 Tension", group: "Clipper", min: -1.0f, max: 1.0f, init: 0.42f, rampFrames: 256 ]];
+    input value float32 curveP2X [[ name: "Knot 2 In", group: "Clipper", min: 0.01f, max: 1.48f, init: 0.927299703f, rampFrames: 256 ]];
+    input value float32 curveP2Y [[ name: "Knot 2 Out", group: "Clipper", min: 0.0f, max: 1.48f, init: 0.893592677f, rampFrames: 256 ]];
+    input value float32 curveP2T [[ name: "Knot 2 Tension", group: "Clipper", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 256 ]];
+    input value float32 curveP3X [[ name: "Ceiling In", group: "Clipper", min: 0.01f, max: 1.5f, init: 0.93620178f, rampFrames: 256 ]];
+    input value float32 curveP3Y [[ name: "Ceiling Out", group: "Clipper", min: 0.0f, max: 1.5f, init: 1.0f, rampFrames: 256 ]];
+    input value float32 curveP3T [[ name: "Ceiling Tension", group: "Clipper", min: -1.0f, max: 1.0f, init: -0.72f, rampFrames: 256 ]];
+
+    output event polishlab::MeterFrame meterOut;
+
+    node leftClipper = polishlab::ClipCoreChannel * polishlab::clipOversampleFactor;
+    node rightClipper = polishlab::ClipCoreChannel * polishlab::clipOversampleFactor;
+
+    var lowCut12 = std::filters (float32<2>, float64, 32)::butterworth (2)::create (
+        1, processor.frequency, 35.0f
+    );
+    var lowCut24 = std::filters (float32<2>, float64, 32)::butterworth (4)::create (
+        1, processor.frequency, 35.0f
+    );
+    std::filters::simper::Implementation[2] colorFilters;
+
+    float32 currentLowCutHz = 35.0f;
+    float32 currentColorHz;
+    float32 currentColorQ;
+    float32<2> detectorLowState;
+    float32<2> lowCutOnePoleState;
+    float32<2> rmsPowerState;
+    float32 reductionDbLeft;
+    float32 reductionDbRight;
+    float32 currentCompressorInputDb;
+    float32 currentCompressorOutputDb;
+    float32 currentClipInput;
+    float32 currentClipOutput;
+
+    let meterFrameCount = int32 (
+        std::intrinsics::max (1.0f, float32 (processor.frequency) / polishlab::meterFramesPerSecond)
+    );
+    int32 meterCountdown = meterFrameCount;
+    int32 meterSamples;
+    int32 meterClipSamples;
+    float32 meterInputPeak;
+    float32 meterOutputPeak;
+    float64 meterInputPower;
+    float64 meterOutputPower;
+    float32 meterCompressorInputDb = -120.0f;
+    float32 meterCompressorOutputDb = -120.0f;
+    float32 meterClipInput;
+    float32 meterClipOutput;
+
+    void updateToneFilters()
+    {
+        let nextLowCutHz = std::intrinsics::clamp (
+            lowCutHz,
+            20.0f,
+            std::intrinsics::min (300.0f, float32 (processor.frequency) * 0.45f)
+        );
+
+        if (std::intrinsics::abs (nextLowCutHz - currentLowCutHz) > 0.001f)
+        {
+            lowCut12.setFrequency (processor.frequency, nextLowCutHz);
+            lowCut24.setFrequency (processor.frequency, nextLowCutHz);
+            currentLowCutHz = nextLowCutHz;
+        }
+
+        let nextColorHz = std::intrinsics::clamp (
+            colorFrequencyHz,
+            80.0f,
+            std::intrinsics::min (12000.0f, float32 (processor.frequency) * 0.45f)
+        );
+        let nextColorQ = std::intrinsics::clamp (colorQ, 0.1f, 12.0f);
+
+        if (std::intrinsics::abs (nextColorHz - currentColorHz) > 0.001f
+            || std::intrinsics::abs (nextColorQ - currentColorQ) > 0.001f)
+        {
+            for (wrap<2> channel)
+            {
+                colorFilters[channel].setMode (std::filters::simper::Mode::bandPass);
+                colorFilters[channel].setFrequency (
+                    processor.frequency,
+                    nextColorHz,
+                    nextColorQ,
+                    0.0f
+                );
+            }
+
+            currentColorHz = nextColorHz;
+            currentColorQ = nextColorQ;
+        }
+    }
+
+    float32<2> applyLowCut (float32<2> signal)
+    {
+        let onePoleCoefficient = 1.0f - float32 (std::intrinsics::exp (
+            -2.0 * pi * float64 (currentLowCutHz) / processor.frequency
+        ));
+        lowCutOnePoleState += (signal - lowCutOnePoleState) * onePoleCoefficient;
+        let filtered6 = signal - lowCutOnePoleState;
+        let filtered12 = lowCut12.process (signal);
+        let filtered24 = lowCut24.process (signal);
+        let slope = int32 (std::intrinsics::clamp (lowCutSlope, 0.0f, 2.0f) + 0.5f);
+        let filtered = slope == 0 ? filtered6 : (slope == 2 ? filtered24 : filtered12);
+        let mix = polishlab::clamp01 (lowCutMix * 0.01f);
+        return signal + ((filtered - signal) * mix);
+    }
+
+    float32<2> applyColor (float32<2> signal)
+    {
+        let band = float32<2> (
+            colorFilters[0].process (signal[0]),
+            colorFilters[1].process (signal[1])
+        );
+        let gainDelta = std::levels::dBtoGain (
+            std::intrinsics::clamp (colorGainDb, -18.0f, 18.0f)
+        ) - 1.0f;
+
+        return signal + (band * gainDelta);
+    }
+
+    float32<2> applyDetectorHighPass (float32<2> signal)
+    {
+        let cutoff = std::intrinsics::clamp (detectorHpHz, 0.0f, 500.0f);
+
+        if (cutoff <= 0.001f)
+        {
+            detectorLowState = signal;
+            return signal;
+        }
+
+        let coefficient = 1.0f - float32 (std::intrinsics::exp (
+            -2.0 * pi * float64 (cutoff) / processor.frequency
+        ));
+        detectorLowState += (signal - detectorLowState) * coefficient;
+        return signal - detectorLowState;
+    }
+
+    float32<2> compress (float32<2> signal, float32 macro01)
+    {
+        let detectorInput = applyDetectorHighPass (signal);
+        let rmsCoefficient = float32 (std::intrinsics::exp (
+            -1.0 / (float64 (std::intrinsics::clamp (rmsWindowMs, 1.0f, 100.0f))
+                    * 0.001 * processor.frequency)
+        ));
+        rmsPowerState = (rmsPowerState * rmsCoefficient)
+                        + ((detectorInput * detectorInput) * (1.0f - rmsCoefficient));
+
+        let peakDetector = float32<2> (
+            std::intrinsics::abs (detectorInput[0]),
+            std::intrinsics::abs (detectorInput[1])
+        );
+        let rmsDetector = float32<2> (
+            std::intrinsics::sqrt (std::intrinsics::max (rmsPowerState[0], 1.0e-12f)),
+            std::intrinsics::sqrt (std::intrinsics::max (rmsPowerState[1], 1.0e-12f))
+        );
+        let detector = detectorMode < 0.5f ? peakDetector : rmsDetector;
+        let linkedDetector = std::intrinsics::max (detector[0], detector[1]);
+        let effectiveRatio = std::intrinsics::clamp (
+            ratio + ((macroRatioTarget - ratio) * macro01),
+            1.0f,
+            1000.0f
+        );
+        let linkedTarget = polishlab::desiredGainReductionDb (
+            linkedDetector, thresholdDb, effectiveRatio, kneeDb
+        );
+        var leftTarget = polishlab::desiredGainReductionDb (
+            detector[0], thresholdDb, effectiveRatio, kneeDb
+        );
+        var rightTarget = polishlab::desiredGainReductionDb (
+            detector[1], thresholdDb, effectiveRatio, kneeDb
+        );
+        let link = polishlab::clamp01 (stereoLink * 0.01f);
+        leftTarget += (linkedTarget - leftTarget) * link;
+        rightTarget += (linkedTarget - rightTarget) * link;
+
+        let attackCoefficient = float32 (std::intrinsics::exp (
+            -1.0 / (float64 (std::intrinsics::clamp (attackMs, 0.05f, 100.0f))
+                    * 0.001 * processor.frequency)
+        ));
+        let releaseCoefficient = float32 (std::intrinsics::exp (
+            -1.0 / (float64 (std::intrinsics::clamp (releaseMs, 5.0f, 1000.0f))
+                    * 0.001 * processor.frequency)
+        ));
+        let leftCoefficient = leftTarget < reductionDbLeft ? attackCoefficient : releaseCoefficient;
+        let rightCoefficient = rightTarget < reductionDbRight ? attackCoefficient : releaseCoefficient;
+        reductionDbLeft = (leftCoefficient * reductionDbLeft)
+                          + ((1.0f - leftCoefficient) * leftTarget);
+        reductionDbRight = (rightCoefficient * reductionDbRight)
+                           + ((1.0f - rightCoefficient) * rightTarget);
+
+        let effectiveMakeupDb = std::intrinsics::clamp (
+            makeupDb + (macroMakeupDb * macro01),
+            -36.0f,
+            36.0f
+        );
+        let compressed = float32<2> (
+            signal[0] * std::levels::dBtoGain (reductionDbLeft + effectiveMakeupDb),
+            signal[1] * std::levels::dBtoGain (reductionDbRight + effectiveMakeupDb)
+        );
+        let mix = polishlab::clamp01 (compMix * 0.01f);
+        let telemetryReductionDb = detector[0] >= detector[1] ? reductionDbLeft : reductionDbRight;
+        let telemetryProcessedGain = std::levels::dBtoGain (
+            telemetryReductionDb + effectiveMakeupDb
+        );
+        let telemetryMixedGain = 1.0f + ((telemetryProcessedGain - 1.0f) * mix);
+        currentCompressorInputDb = polishlab::gainToDb (linkedDetector);
+        currentCompressorOutputDb = currentCompressorInputDb
+                                    + polishlab::gainToDb (telemetryMixedGain);
+        return signal + ((compressed - signal) * mix);
+    }
+
+    float32<2> clip (float32<2> signal)
+    {
+        leftClipper.in <- signal[0];
+        leftClipper.driveDb <- clipDriveDb;
+        leftClipper.p1x <- curveP1X; leftClipper.p1y <- curveP1Y; leftClipper.p1t <- curveP1T;
+        leftClipper.p2x <- curveP2X; leftClipper.p2y <- curveP2Y; leftClipper.p2t <- curveP2T;
+        leftClipper.p3x <- curveP3X; leftClipper.p3y <- curveP3Y; leftClipper.p3t <- curveP3T;
+        leftClipper.advance();
+
+        rightClipper.in <- signal[1];
+        rightClipper.driveDb <- clipDriveDb;
+        rightClipper.p1x <- curveP1X; rightClipper.p1y <- curveP1Y; rightClipper.p1t <- curveP1T;
+        rightClipper.p2x <- curveP2X; rightClipper.p2y <- curveP2Y; rightClipper.p2t <- curveP2T;
+        rightClipper.p3x <- curveP3X; rightClipper.p3y <- curveP3Y; rightClipper.p3t <- curveP3T;
+        rightClipper.advance();
+
+        let shaped = float32<2> (leftClipper.out, rightClipper.out);
+        let alignedDry = float32<2> (leftClipper.thru, rightClipper.thru);
+        let mix = polishlab::clamp01 (clipMix * 0.01f);
+        let rendered = alignedDry + ((shaped - alignedDry) * mix);
+        if (std::intrinsics::abs (signal[0]) >= std::intrinsics::abs (signal[1]))
+        {
+            currentClipInput = signal[0];
+            currentClipOutput = rendered[0];
+        }
+        else
+        {
+            currentClipInput = signal[1];
+            currentClipOutput = rendered[1];
+        }
+        return rendered;
+    }
+
+    void pushMeterSample (float32<2> inputSignal, float32<2> outputSignal, float32 clipInputMagnitude)
+    {
+        meterInputPeak = std::intrinsics::max (
+            meterInputPeak,
+            std::intrinsics::max (std::intrinsics::abs (inputSignal[0]), std::intrinsics::abs (inputSignal[1]))
+        );
+        meterOutputPeak = std::intrinsics::max (
+            meterOutputPeak,
+            std::intrinsics::max (std::intrinsics::abs (outputSignal[0]), std::intrinsics::abs (outputSignal[1]))
+        );
+        meterInputPower += 0.5 * (float64 (inputSignal[0]) * float64 (inputSignal[0])
+                                  + float64 (inputSignal[1]) * float64 (inputSignal[1]));
+        meterOutputPower += 0.5 * (float64 (outputSignal[0]) * float64 (outputSignal[0])
+                                   + float64 (outputSignal[1]) * float64 (outputSignal[1]));
+        meterSamples += 1;
+
+        if (currentCompressorInputDb >= meterCompressorInputDb)
+        {
+            meterCompressorInputDb = currentCompressorInputDb;
+            meterCompressorOutputDb = currentCompressorOutputDb;
+        }
+
+        if (std::intrinsics::abs (currentClipInput) >= std::intrinsics::abs (meterClipInput))
+        {
+            meterClipInput = currentClipInput;
+            meterClipOutput = currentClipOutput;
+        }
+
+        if (clipInputMagnitude >= std::intrinsics::clamp (curveP1X, 0.01f, 1.45f))
+            meterClipSamples += 1;
+
+        meterCountdown -= 1;
+
+        if (meterCountdown > 0)
+            return;
+
+        polishlab::MeterFrame frame;
+        let sampleCount = std::intrinsics::max (1, meterSamples);
+        frame.inputPeakDb = polishlab::gainToDb (meterInputPeak);
+        frame.outputPeakDb = polishlab::gainToDb (meterOutputPeak);
+        frame.inputRmsDb = polishlab::gainToDb (float32 (std::intrinsics::sqrt (
+            meterInputPower / float64 (sampleCount)
+        )));
+        frame.outputRmsDb = polishlab::gainToDb (float32 (std::intrinsics::sqrt (
+            meterOutputPower / float64 (sampleCount)
+        )));
+        frame.gainReductionDb = std::intrinsics::max (-reductionDbLeft, -reductionDbRight);
+        frame.clipActivityPercent = 100.0f * float32 (meterClipSamples) / float32 (sampleCount);
+        frame.compressorInputDb = meterCompressorInputDb;
+        frame.compressorOutputDb = meterCompressorOutputDb;
+        frame.clipInput = meterClipInput;
+        frame.clipOutput = meterClipOutput;
+        meterOut <- frame;
+
+        meterCountdown = meterFrameCount;
+        meterSamples = 0;
+        meterClipSamples = 0;
+        meterInputPeak = 0.0f;
+        meterOutputPeak = 0.0f;
+        meterInputPower = 0.0;
+        meterOutputPower = 0.0;
+        meterCompressorInputDb = -120.0f;
+        meterCompressorOutputDb = -120.0f;
+        meterClipInput = 0.0f;
+        meterClipOutput = 0.0f;
+    }
+
+    void main()
+    {
+        loop
+        {
+            updateToneFilters();
+
+            let dry = in;
+            let amount01 = polishlab::clamp01 (amount * 0.01f);
+            let shapedAmount = std::intrinsics::pow (
+                amount01,
+                std::intrinsics::clamp (macroCurve, 0.25f, 4.0f)
+            );
+            let lowCut = applyLowCut (dry);
+            let effectiveInputDb = std::intrinsics::clamp (
+                inputTrimDb + (macroInputDriveDb * shapedAmount),
+                -60.0f,
+                60.0f
+            );
+            let gained = lowCut * std::levels::dBtoGain (effectiveInputDb);
+            let compressed = compress (gained, shapedAmount);
+            let coloured = applyColor (compressed);
+            let clipInputMagnitude = std::intrinsics::max (
+                std::intrinsics::abs (coloured[0]),
+                std::intrinsics::abs (coloured[1])
+            ) * std::levels::dBtoGain (std::intrinsics::clamp (clipDriveDb, -24.0f, 36.0f));
+            let clipped = clip (coloured);
+            let wet = clipped * std::levels::dBtoGain (
+                std::intrinsics::clamp (outputTrimDb, -24.0f, 24.0f)
+            );
+            let rendered = bypass ? dry : wet;
+
+            out <- rendered;
+            pushMeterSample (dry, rendered, clipInputMagnitude);
+            advance();
+        }
+    }
+}

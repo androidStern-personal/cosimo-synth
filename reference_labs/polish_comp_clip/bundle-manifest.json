@@ -1,0 +1,243 @@
+{
+  "schema": "cosimo.polishCompClip.referenceBundle.v1",
+  "model": "cosimo.t27.transparentReferenceInference.v1",
+  "sourcePreset": {
+    "sha256": "603fb6d28b1664cf352b5bb7eef288c3093c17a230ac5d63cea70916cfe2749b",
+    "byteLength": 24551,
+    "containerHeaderAscii": "BtWg0003000200",
+    "embeddedZipOffset": 18625
+  },
+  "corpus": {
+    "sampleRate": 48000,
+    "durationSeconds": 1.5,
+    "frameCount": 72000,
+    "targetPeakDbfs": -3,
+    "generator": "cosimo.t27.retainedCorpus.v1"
+  },
+  "measurementWindow": {
+    "startFrame": 4800,
+    "startSeconds": 0.1,
+    "endFrame": 72000
+  },
+  "macroLevels": [
+    {
+      "value": 0,
+      "effectiveSettings": {
+        "macro": 0,
+        "decodedMacroDeltas": {
+          "inputAmplitudeDb": 0,
+          "compressorOutputGainDb": 0,
+          "highRatioNormalized": 0
+        },
+        "inputGainDb": -0.2850170805322976,
+        "compressorMakeupDb": -0.04000000000000409,
+        "compressorRatio": 11.415525114155871,
+        "inferredRatioSlope": 0.9124000000000048,
+        "decodedRatioMappingAmount": -0.025200000000000014
+      }
+    },
+    {
+      "value": 0.5,
+      "effectiveSettings": {
+        "macro": 0.5,
+        "decodedMacroDeltas": {
+          "inputAmplitudeDb": 17.985600000000197,
+          "compressorOutputGainDb": 2.0600000000000014,
+          "highRatioNormalized": -0.012600000000000007
+        },
+        "inputGainDb": 17.700582919467898,
+        "compressorMakeupDb": 2.0199999999999974,
+        "compressorRatio": 22.831050228311742,
+        "inferredRatioSlope": 0.9562000000000024,
+        "decodedRatioMappingAmount": -0.025200000000000014
+      }
+    },
+    {
+      "value": 1,
+      "effectiveSettings": {
+        "macro": 1,
+        "decodedMacroDeltas": {
+          "inputAmplitudeDb": 35.971200000000394,
+          "compressorOutputGainDb": 4.120000000000003,
+          "highRatioNormalized": -0.025200000000000014
+        },
+        "inputGainDb": 35.686182919468095,
+        "compressorMakeupDb": 4.079999999999998,
+        "compressorRatio": "Infinity",
+        "inferredRatioSlope": 1,
+        "decodedRatioMappingAmount": -0.025200000000000014
+      }
+    }
+  ],
+  "levelMatching": "one constant stereo-linked gain matching unweighted integrated RMS over the measurement window",
+  "artifacts": [
+    {
+      "kind": "corpus-input",
+      "corpusId": "drum-bus",
+      "macro": null,
+      "path": "corpus/drum-bus.wav",
+      "sha256": "498b10bd68e2639896e10b80da4676e57238b66b9ddaabf7a8c1a0240af36186",
+      "byteLength": 576044
+    },
+    {
+      "kind": "raw-render",
+      "corpusId": "drum-bus",
+      "macro": 0,
+      "path": "renders/raw/drum-bus--macro-000.wav",
+      "sha256": "c0e9939591dd7c2dba636de6f587667fddd388388780586112d4832966b499dc",
+      "byteLength": 576044
+    },
+    {
+      "kind": "level-matched-render",
+      "corpusId": "drum-bus",
+      "macro": 0,
+      "path": "renders/level-matched/drum-bus--macro-000.wav",
+      "sha256": "3fbbae848ecf6be6f7f08a6f5b810f36ec1fc1deef4a254b78f668940207eef6",
+      "byteLength": 576044
+    },
+    {
+      "kind": "raw-render",
+      "corpusId": "drum-bus",
+      "macro": 0.5,
+      "path": "renders/raw/drum-bus--macro-050.wav",
+      "sha256": "0c8bb9188355f41d1417486580e297ca0353488c9f3fcb07d9b88da36068e570",
+      "byteLength": 576044
+    },
+    {
+      "kind": "level-matched-render",
+      "corpusId": "drum-bus",
+      "macro": 0.5,
+      "path": "renders/level-matched/drum-bus--macro-050.wav",
+      "sha256": "5de8a9c4be898449499a7b5b5413c082fa6a214db5ace4981117c26ba88de3d6",
+      "byteLength": 576044
+    },
+    {
+      "kind": "raw-render",
+      "corpusId": "drum-bus",
+      "macro": 1,
+      "path": "renders/raw/drum-bus--macro-100.wav",
+      "sha256": "02075d63a8784448f4e5be843f8aacc35aaa62f2fb41a7b3e4533fb5d5274212",
+      "byteLength": 576044
+    },
+    {
+      "kind": "level-matched-render",
+      "corpusId": "drum-bus",
+      "macro": 1,
+      "path": "renders/level-matched/drum-bus--macro-100.wav",
+      "sha256": "2302061dc132a96bba9ab561af3bb20ed1fc7e0896b9773616fba730c22dab9b",
+      "byteLength": 576044
+    },
+    {
+      "kind": "corpus-input",
+      "corpusId": "bass-sequence",
+      "macro": null,
+      "path": "corpus/bass-sequence.wav",
+      "sha256": "194f4e368591c6669014fdd5f6a4bffde351bf446a8260f98492a637ae1a8699",
+      "byteLength": 576044
+    },
+    {
+      "kind": "raw-render",
+      "corpusId": "bass-sequence",
+      "macro": 0,
+      "path": "renders/raw/bass-sequence--macro-000.wav",
+      "sha256": "fc54fbcf7e879e6d775ecfedda6d313092700f012cbc19e281480fe089820479",
+      "byteLength": 576044
+    },
+    {
+      "kind": "level-matched-render",
+      "corpusId": "bass-sequence",
+      "macro": 0,
+      "path": "renders/level-matched/bass-sequence--macro-000.wav",
+      "sha256": "bd9db1519ff2af870e5ec0fd2a7a01b4ddc57ff91ac2aca4635b3c43b47493cd",
+      "byteLength": 576044
+    },
+    {
+      "kind": "raw-render",
+      "corpusId": "bass-sequence",
+      "macro": 0.5,
+      "path": "renders/raw/bass-sequence--macro-050.wav",
+      "sha256": "fdb054b44887da9704742745c220b8f1dd64994c64f1b3ed18915f8292a1b4df",
+      "byteLength": 576044
+    },
+    {
+      "kind": "level-matched-render",
+      "corpusId": "bass-sequence",
+      "macro": 0.5,
+      "path": "renders/level-matched/bass-sequence--macro-050.wav",
+      "sha256": "d7dc320a557e5fad91acf27cb13c841146d94c972626eed02637ea39fcaed8df",
+      "byteLength": 576044
+    },
+    {
+      "kind": "raw-render",
+      "corpusId": "bass-sequence",
+      "macro": 1,
+      "path": "renders/raw/bass-sequence--macro-100.wav",
+      "sha256": "79237737a83f99a9764be4e71e8a6c3dccd05c17c4d5884604eea14f8f073ba4",
+      "byteLength": 576044
+    },
+    {
+      "kind": "level-matched-render",
+      "corpusId": "bass-sequence",
+      "macro": 1,
+      "path": "renders/level-matched/bass-sequence--macro-100.wav",
+      "sha256": "788da16ba3f3121c961f1a684227e5cc2fca546d88ebb2c63617188528ebb81d",
+      "byteLength": 576044
+    },
+    {
+      "kind": "corpus-input",
+      "corpusId": "bright-poly",
+      "macro": null,
+      "path": "corpus/bright-poly.wav",
+      "sha256": "c20028d5805f3ea0f56a072c8de9dd99abda50842b645ba5186a73be9cedf493",
+      "byteLength": 576044
+    },
+    {
+      "kind": "raw-render",
+      "corpusId": "bright-poly",
+      "macro": 0,
+      "path": "renders/raw/bright-poly--macro-000.wav",
+      "sha256": "6216b064cca905b1ec00a117f2af96df51d124ceaaf074d6e9ed03126d8ae46d",
+      "byteLength": 576044
+    },
+    {
+      "kind": "level-matched-render",
+      "corpusId": "bright-poly",
+      "macro": 0,
+      "path": "renders/level-matched/bright-poly--macro-000.wav",
+      "sha256": "376e584efe98b49717e436cf68d50a9080e7a9ad1263fb2f3e2e21eae14f28db",
+      "byteLength": 576044
+    },
+    {
+      "kind": "raw-render",
+      "corpusId": "bright-poly",
+      "macro": 0.5,
+      "path": "renders/raw/bright-poly--macro-050.wav",
+      "sha256": "1d376600d52c3f9414456a298a557abfc6cfcb0ce8ea2460b8396959c07efd0b",
+      "byteLength": 576044
+    },
+    {
+      "kind": "level-matched-render",
+      "corpusId": "bright-poly",
+      "macro": 0.5,
+      "path": "renders/level-matched/bright-poly--macro-050.wav",
+      "sha256": "c5f96d8161170409afc70912fb272e33f51e8b475438a13f1d9f3f6121b95ebe",
+      "byteLength": 576044
+    },
+    {
+      "kind": "raw-render",
+      "corpusId": "bright-poly",
+      "macro": 1,
+      "path": "renders/raw/bright-poly--macro-100.wav",
+      "sha256": "dcbeb3b98d9f5e8b777ca5c2f37a13493a7ff918964d599fb5ecf52990177eed",
+      "byteLength": 576044
+    },
+    {
+      "kind": "level-matched-render",
+      "corpusId": "bright-poly",
+      "macro": 1,
+      "path": "renders/level-matched/bright-poly--macro-100.wav",
+      "sha256": "30c8b182ae81870d4403f0dedc30baf7f396f5897493c05bfa1169d13b5048e4",
+      "byteLength": 576044
+    }
+  ]
+}

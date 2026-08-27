@@ -1,0 +1,25 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.polish-voicing-lab",
+  "version": "0.1.0",
+  "name": "Polish Voicing Lab",
+  "description": "Isolated compressor, tone, macro, and transfer-curve design studio for internal tuning.",
+  "category": "effect",
+  "manufacturer": "Cosimo",
+  "plugin": {
+    "pluginCode": "CsPV",
+    "manufacturerCode": "Cosi"
+  },
+  "view": {
+    "src": "view/index.js",
+    "devModule": "/fx/polish_lab/view/source.js",
+    "width": 1180,
+    "height": 820,
+    "resizable": true
+  },
+  "isInstrument": false,
+  "source": [
+    "PolishVoicingLab.cmajor",
+    "PolishVoicingLabMain.cmajor"
+  ]
+}

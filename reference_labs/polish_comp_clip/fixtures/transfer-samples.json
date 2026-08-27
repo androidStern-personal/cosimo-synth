@@ -1,0 +1,83 @@
+{
+  "schema": "cosimo.polishCompClip.transferSamples.v1",
+  "evaluator": "cosimo.t27.transparentReferenceInference.v1",
+  "interpolationProvenance": "cosimo-inference-monotonic-cubic-perturbation",
+  "samples": [
+    {
+      "input": -1.2,
+      "output": -1
+    },
+    {
+      "input": -1,
+      "output": -1
+    },
+    {
+      "input": -0.9362017804154302,
+      "output": -1
+    },
+    {
+      "input": -0.93,
+      "output": -0.919501464347827
+    },
+    {
+      "input": -0.8,
+      "output": -0.7184153004123882
+    },
+    {
+      "input": -0.5,
+      "output": -0.43112711541007276
+    },
+    {
+      "input": 0,
+      "output": 0
+    },
+    {
+      "input": 0.25,
+      "output": 0.248685138060937
+    },
+    {
+      "input": 0.5,
+      "output": 0.43112711541007276
+    },
+    {
+      "input": 0.75,
+      "output": 0.6579383392397209
+    },
+    {
+      "input": 0.799438202247191,
+      "output": 0.7176422093981863
+    },
+    {
+      "input": 0.85,
+      "output": 0.7872204006763408
+    },
+    {
+      "input": 0.9,
+      "output": 0.8560255009402935
+    },
+    {
+      "input": 0.9272997032640949,
+      "output": 0.8935926773455377
+    },
+    {
+      "input": 0.932,
+      "output": 0.9508449658903445
+    },
+    {
+      "input": 0.9362017804154302,
+      "output": 1
+    },
+    {
+      "input": 0.94,
+      "output": 1
+    },
+    {
+      "input": 1,
+      "output": 1
+    },
+    {
+      "input": 1.2,
+      "output": 1
+    }
+  ]
+}

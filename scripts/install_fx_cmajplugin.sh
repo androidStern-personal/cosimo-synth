@@ -14,6 +14,7 @@ Usage: npm run fx:jit:install -- <plugin> [--dry-run]
 Available plugins:
   chorus
   ott
+  polish
   seqfx
   spectral
 USAGE
@@ -87,6 +88,9 @@ case "$plugin" in
   ott)
     patch_rel="fx/ott_lab/OttLab.cmajorpatch"
     ;;
+  polish)
+    patch_rel="fx/polish_lab/PolishVoicingLab.cmajorpatch"
+    ;;
   seqfx)
     patch_rel="fx/seqfx/SeqFx.cmajorpatch"
     ;;
@@ -143,13 +147,19 @@ if [[ ! -f "$repo_root/$dev_module_rel" ]]; then
   exit 1
 fi
 
-if [[ "$plugin" == "seqfx" ]]; then
-  node "$repo_root/fx/build-effect.mjs" seqfx >/dev/null
-  patch_rel="build/fx/seqfx_runtime/SeqFx.cmajorpatch"
+if [[ "$plugin" == "seqfx" || "$plugin" == "polish" ]]; then
+  node "$repo_root/fx/build-effect.mjs" "$plugin" >/dev/null
+
+  if [[ "$plugin" == "seqfx" ]]; then
+    patch_rel="build/fx/seqfx_runtime/SeqFx.cmajorpatch"
+  else
+    patch_rel="build/fx/polish_lab_runtime/PolishVoicingLab.cmajorpatch"
+  fi
+
   patch_path="$repo_root/$patch_rel"
 
   if [[ ! -f "$patch_path" ]]; then
-    printf 'Built SeqFX runtime patch was not found: %s\n' "$patch_path" >&2
+    printf 'Built runtime patch was not found: %s\n' "$patch_path" >&2
     exit 1
   fi
 fi

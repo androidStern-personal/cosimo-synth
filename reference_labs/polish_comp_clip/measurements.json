@@ -1,0 +1,725 @@
+{
+  "schema": "cosimo.polishCompClip.measurements.v1",
+  "model": "cosimo.t27.transparentReferenceInference.v1",
+  "sourcePreset": {
+    "sha256": "603fb6d28b1664cf352b5bb7eef288c3093c17a230ac5d63cea70916cfe2749b",
+    "byteLength": 24551,
+    "containerHeaderAscii": "BtWg0003000200",
+    "embeddedZipOffset": 18625
+  },
+  "provenanceBoundary": {
+    "decoded": "Stored values, target paths, ranges, map amounts, and transfer knots come from the pinned third-party preset.",
+    "inferred": "Detector/envelope law, ratio interpolation, odd symmetry, and inter-knot tension interpolation are transparent Cosimo lab choices.",
+    "notEstablished": "These renders are not a null, behavioral clone, or measurement of the closed-source original or Bitwig's proprietary DSP."
+  },
+  "definitions": {
+    "levelMatch": "one constant stereo-linked gain matching unweighted integrated RMS over the measurement window",
+    "peak": "maximum absolute sample; no true-peak oversampling",
+    "crest": "20 log10(sample peak / unweighted RMS)",
+    "curveFractions": "fraction of channel samples entering the decoded knee or plateau domains before output gain"
+  },
+  "rows": [
+    {
+      "corpusId": "drum-bus",
+      "corpusDescription": "Stereo kick, snare, and high-hat transients with deterministic independent noise.",
+      "macro": 0,
+      "effectiveSettings": {
+        "macro": 0,
+        "decodedMacroDeltas": {
+          "inputAmplitudeDb": 0,
+          "compressorOutputGainDb": 0,
+          "highRatioNormalized": 0
+        },
+        "inputGainDb": -0.2850170805322976,
+        "compressorMakeupDb": -0.04000000000000409,
+        "compressorRatio": 11.415525114155871,
+        "inferredRatioSlope": 0.9124000000000048,
+        "decodedRatioMappingAmount": -0.025200000000000014
+      },
+      "input": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.7079457640647888,
+        "samplePeakDbfs": -3.0000002493010487,
+        "rms": 0.08116212770049414,
+        "rmsDbfs": -21.8129315254127,
+        "crestDb": 18.81293127611165,
+        "channelDc": [
+          0.0008927933261496505,
+          0.0009743953528433693
+        ],
+        "stereoCorrelation": 0.8966491576840934
+      },
+      "raw": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.5953138470649719,
+        "samplePeakDbfs": -4.505080311875479,
+        "rms": 0.07993901020426662,
+        "rmsDbfs": -21.94482466855017,
+        "crestDb": 17.439744356674687,
+        "channelDc": [
+          0.0007398366004933581,
+          0.0008326301827881371
+        ],
+        "stereoCorrelation": 0.9056698654184574
+      },
+      "levelMatch": {
+        "gain": 1.015300633484229,
+        "gainDb": 0.1318931431374681,
+        "rmsDeltaDb": -2.9991227279424493e-9
+      },
+      "matched": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.6044225096702576,
+        "samplePeakDbfs": -4.37318740408095,
+        "rms": 0.08116212767246993,
+        "rmsDbfs": -21.812931528411823,
+        "crestDb": 17.439744124330872,
+        "channelDc": [
+          0.0007511565789971608,
+          0.0008453699400155864
+        ],
+        "stereoCorrelation": 0.9056698654362426
+      },
+      "telemetry": {
+        "attackCoefficient": 0.9034193513274398,
+        "releaseCoefficient": 0.9992226977606176,
+        "maximumGainReductionDb": 0,
+        "meanGainReductionDb": 0,
+        "p95GainReductionDb": 0,
+        "curveKneeSampleFraction": 0,
+        "curvePlateauSampleFraction": 0,
+        "overFullScaleSampleFraction": 0,
+        "nonFiniteSamples": 0
+      },
+      "files": {
+        "input": "corpus/drum-bus.wav",
+        "raw": "renders/raw/drum-bus--macro-000.wav",
+        "matched": "renders/level-matched/drum-bus--macro-000.wav"
+      }
+    },
+    {
+      "corpusId": "drum-bus",
+      "corpusDescription": "Stereo kick, snare, and high-hat transients with deterministic independent noise.",
+      "macro": 0.5,
+      "effectiveSettings": {
+        "macro": 0.5,
+        "decodedMacroDeltas": {
+          "inputAmplitudeDb": 17.985600000000197,
+          "compressorOutputGainDb": 2.0600000000000014,
+          "highRatioNormalized": -0.012600000000000007
+        },
+        "inputGainDb": 17.700582919467898,
+        "compressorMakeupDb": 2.0199999999999974,
+        "compressorRatio": 22.831050228311742,
+        "inferredRatioSlope": 0.9562000000000024,
+        "decodedRatioMappingAmount": -0.025200000000000014
+      },
+      "input": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.7079457640647888,
+        "samplePeakDbfs": -3.0000002493010487,
+        "rms": 0.08116212770049414,
+        "rmsDbfs": -21.8129315254127,
+        "crestDb": 18.81293127611165,
+        "channelDc": [
+          0.0008927933261496505,
+          0.0009743953528433693
+        ],
+        "stereoCorrelation": 0.8966491576840934
+      },
+      "raw": {
+        "measuredFrames": 67200,
+        "samplePeak": 1.0193735361099243,
+        "samplePeakDbfs": 0.16666709416474493,
+        "rms": 0.33635221555166717,
+        "rmsDbfs": -9.464114145489827,
+        "crestDb": 9.63078123965457,
+        "channelDc": [
+          0.001331596874750434,
+          0.00192125489116706
+        ],
+        "stereoCorrelation": 0.8747441672233859
+      },
+      "levelMatch": {
+        "gain": 0.24130100516024933,
+        "gainDb": -12.348817379922874,
+        "rmsDeltaDb": -9.972643510991475e-8
+      },
+      "matched": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.24597585201263428,
+        "samplePeakDbfs": -12.182150528861492,
+        "rms": 0.08116212676863684,
+        "rmsDbfs": -21.812931625139136,
+        "crestDb": 9.630781096277646,
+        "channelDc": [
+          0.0003213156366092076,
+          0.0004636007243650173
+        ],
+        "stereoCorrelation": 0.8747441677187666
+      },
+      "telemetry": {
+        "attackCoefficient": 0.9034193513274398,
+        "releaseCoefficient": 0.9992226977606176,
+        "maximumGainReductionDb": 12.8196297346856,
+        "meanGainReductionDb": 1.4575863488361112,
+        "p95GainReductionDb": 8.580531059080272,
+        "curveKneeSampleFraction": 0.03238194444444444,
+        "curvePlateauSampleFraction": 0.06171527777777778,
+        "overFullScaleSampleFraction": 0.062125,
+        "nonFiniteSamples": 0
+      },
+      "files": {
+        "input": "corpus/drum-bus.wav",
+        "raw": "renders/raw/drum-bus--macro-050.wav",
+        "matched": "renders/level-matched/drum-bus--macro-050.wav"
+      }
+    },
+    {
+      "corpusId": "drum-bus",
+      "corpusDescription": "Stereo kick, snare, and high-hat transients with deterministic independent noise.",
+      "macro": 1,
+      "effectiveSettings": {
+        "macro": 1,
+        "decodedMacroDeltas": {
+          "inputAmplitudeDb": 35.971200000000394,
+          "compressorOutputGainDb": 4.120000000000003,
+          "highRatioNormalized": -0.025200000000000014
+        },
+        "inputGainDb": 35.686182919468095,
+        "compressorMakeupDb": 4.079999999999998,
+        "compressorRatio": "Infinity",
+        "inferredRatioSlope": 1,
+        "decodedRatioMappingAmount": -0.025200000000000014
+      },
+      "input": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.7079457640647888,
+        "samplePeakDbfs": -3.0000002493010487,
+        "rms": 0.08116212770049414,
+        "rmsDbfs": -21.8129315254127,
+        "crestDb": 18.81293127611165,
+        "channelDc": [
+          0.0008927933261496505,
+          0.0009743953528433693
+        ],
+        "stereoCorrelation": 0.8966491576840934
+      },
+      "raw": {
+        "measuredFrames": 67200,
+        "samplePeak": 1.0193735361099243,
+        "samplePeakDbfs": 0.16666709416474493,
+        "rms": 0.5690787927437252,
+        "rmsDbfs": -4.8965519696464535,
+        "crestDb": 5.063219063811198,
+        "channelDc": [
+          0.00091157069389,
+          0.0016616784946852472
+        ],
+        "stereoCorrelation": 0.8724188983880946
+      },
+      "levelMatch": {
+        "gain": 0.1426201937857911,
+        "gainDb": -16.916379555766245,
+        "rmsDeltaDb": 9.789994948050662e-8
+      },
+      "matched": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.14538325369358063,
+        "samplePeakDbfs": -16.74971231621402,
+        "rms": 0.08116212861528455,
+        "rmsDbfs": -21.81293142751275,
+        "crestDb": 5.063219111298727,
+        "channelDc": [
+          0.00013000839310454984,
+          0.0002369889165000237
+        ],
+        "stereoCorrelation": 0.8724188984771968
+      },
+      "telemetry": {
+        "attackCoefficient": 0.9034193513274398,
+        "releaseCoefficient": 0.9992226977606176,
+        "maximumGainReductionDb": 31.36858522441854,
+        "meanGainReductionDb": 10.20887451982393,
+        "p95GainReductionDb": 26.611177523122283,
+        "curveKneeSampleFraction": 0.05417361111111111,
+        "curvePlateauSampleFraction": 0.23527777777777778,
+        "overFullScaleSampleFraction": 0.23614583333333333,
+        "nonFiniteSamples": 0
+      },
+      "files": {
+        "input": "corpus/drum-bus.wav",
+        "raw": "renders/raw/drum-bus--macro-100.wav",
+        "matched": "renders/level-matched/drum-bus--macro-100.wav"
+      }
+    },
+    {
+      "corpusId": "bass-sequence",
+      "corpusDescription": "Mono-compatible four-note bass sequence with nine harmonics and note transients.",
+      "macro": 0,
+      "effectiveSettings": {
+        "macro": 0,
+        "decodedMacroDeltas": {
+          "inputAmplitudeDb": 0,
+          "compressorOutputGainDb": 0,
+          "highRatioNormalized": 0
+        },
+        "inputGainDb": -0.2850170805322976,
+        "compressorMakeupDb": -0.04000000000000409,
+        "compressorRatio": 11.415525114155871,
+        "inferredRatioSlope": 0.9124000000000048,
+        "decodedRatioMappingAmount": -0.025200000000000014
+      },
+      "input": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.7079457640647888,
+        "samplePeakDbfs": -3.0000002493010487,
+        "rms": 0.26138044129922344,
+        "rmsDbfs": -11.65453826270076,
+        "crestDb": 8.65453801339971,
+        "channelDc": [
+          -0.0003603444947391056,
+          -0.0003603444947391056
+        ],
+        "stereoCorrelation": 1
+      },
+      "raw": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.5953138470649719,
+        "samplePeakDbfs": -4.505080311875479,
+        "rms": 0.2417255698805948,
+        "rmsDbfs": -12.333548144458897,
+        "crestDb": 7.828467832583417,
+        "channelDc": [
+          -0.00033861107047953047,
+          -0.00033861107047953047
+        ],
+        "stereoCorrelation": 1
+      },
+      "levelMatch": {
+        "gain": 1.0813106839642062,
+        "gainDb": 0.6790098817581364,
+        "rmsDeltaDb": 5.6609472665059e-10
+      },
+      "matched": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.6437191963195801,
+        "samplePeakDbfs": -3.8260707920560435,
+        "rms": 0.26138044131625876,
+        "rmsDbfs": -11.654538262134665,
+        "crestDb": 7.828467470078619,
+        "channelDc": [
+          -0.0003661437986975861,
+          -0.0003661437986975861
+        ],
+        "stereoCorrelation": 1
+      },
+      "telemetry": {
+        "attackCoefficient": 0.9034193513274398,
+        "releaseCoefficient": 0.9992226977606176,
+        "maximumGainReductionDb": 0,
+        "meanGainReductionDb": 0,
+        "p95GainReductionDb": 0,
+        "curveKneeSampleFraction": 0,
+        "curvePlateauSampleFraction": 0,
+        "overFullScaleSampleFraction": 0,
+        "nonFiniteSamples": 0
+      },
+      "files": {
+        "input": "corpus/bass-sequence.wav",
+        "raw": "renders/raw/bass-sequence--macro-000.wav",
+        "matched": "renders/level-matched/bass-sequence--macro-000.wav"
+      }
+    },
+    {
+      "corpusId": "bass-sequence",
+      "corpusDescription": "Mono-compatible four-note bass sequence with nine harmonics and note transients.",
+      "macro": 0.5,
+      "effectiveSettings": {
+        "macro": 0.5,
+        "decodedMacroDeltas": {
+          "inputAmplitudeDb": 17.985600000000197,
+          "compressorOutputGainDb": 2.0600000000000014,
+          "highRatioNormalized": -0.012600000000000007
+        },
+        "inputGainDb": 17.700582919467898,
+        "compressorMakeupDb": 2.0199999999999974,
+        "compressorRatio": 22.831050228311742,
+        "inferredRatioSlope": 0.9562000000000024,
+        "decodedRatioMappingAmount": -0.025200000000000014
+      },
+      "input": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.7079457640647888,
+        "samplePeakDbfs": -3.0000002493010487,
+        "rms": 0.26138044129922344,
+        "rmsDbfs": -11.65453826270076,
+        "crestDb": 8.65453801339971,
+        "channelDc": [
+          -0.0003603444947391056,
+          -0.0003603444947391056
+        ],
+        "stereoCorrelation": 1
+      },
+      "raw": {
+        "measuredFrames": 67200,
+        "samplePeak": 1.0193735361099243,
+        "samplePeakDbfs": 0.16666709416474493,
+        "rms": 0.7052298981710166,
+        "rmsDbfs": -3.03338568197936,
+        "crestDb": 3.2000527761441058,
+        "channelDc": [
+          -0.04421915285911133,
+          -0.04421915285911133
+        ],
+        "stereoCorrelation": 1
+      },
+      "levelMatch": {
+        "gain": 0.3706315372860714,
+        "gainDb": -8.621152580721398,
+        "rmsDeltaDb": -1.7422283704604524e-7
+      },
+      "matched": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.3778119683265686,
+        "samplePeakDbfs": -8.454485772335696,
+        "rms": 0.26138043605641664,
+        "rmsDbfs": -11.654538436923596,
+        "crestDb": 3.2000526645879,
+        "channelDc": [
+          -0.016389011630975087,
+          -0.016389011630975087
+        ],
+        "stereoCorrelation": 1
+      },
+      "telemetry": {
+        "attackCoefficient": 0.9034193513274398,
+        "releaseCoefficient": 0.9992226977606176,
+        "maximumGainReductionDb": 13.76110836319573,
+        "meanGainReductionDb": 9.605414916684477,
+        "p95GainReductionDb": 12.530643397403255,
+        "curveKneeSampleFraction": 0.1334861111111111,
+        "curvePlateauSampleFraction": 0.2994722222222222,
+        "overFullScaleSampleFraction": 0.30170833333333336,
+        "nonFiniteSamples": 0
+      },
+      "files": {
+        "input": "corpus/bass-sequence.wav",
+        "raw": "renders/raw/bass-sequence--macro-050.wav",
+        "matched": "renders/level-matched/bass-sequence--macro-050.wav"
+      }
+    },
+    {
+      "corpusId": "bass-sequence",
+      "corpusDescription": "Mono-compatible four-note bass sequence with nine harmonics and note transients.",
+      "macro": 1,
+      "effectiveSettings": {
+        "macro": 1,
+        "decodedMacroDeltas": {
+          "inputAmplitudeDb": 35.971200000000394,
+          "compressorOutputGainDb": 4.120000000000003,
+          "highRatioNormalized": -0.025200000000000014
+        },
+        "inputGainDb": 35.686182919468095,
+        "compressorMakeupDb": 4.079999999999998,
+        "compressorRatio": "Infinity",
+        "inferredRatioSlope": 1,
+        "decodedRatioMappingAmount": -0.025200000000000014
+      },
+      "input": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.7079457640647888,
+        "samplePeakDbfs": -3.0000002493010487,
+        "rms": 0.26138044129922344,
+        "rmsDbfs": -11.65453826270076,
+        "crestDb": 8.65453801339971,
+        "channelDc": [
+          -0.0003603444947391056,
+          -0.0003603444947391056
+        ],
+        "stereoCorrelation": 1
+      },
+      "raw": {
+        "measuredFrames": 67200,
+        "samplePeak": 1.0193735361099243,
+        "samplePeakDbfs": 0.16666709416474493,
+        "rms": 0.7784921098648011,
+        "rmsDbfs": -2.174915694275421,
+        "crestDb": 2.3415827884401668,
+        "channelDc": [
+          -0.04780397618040005,
+          -0.04780397618040005
+        ],
+        "stereoCorrelation": 1
+      },
+      "levelMatch": {
+        "gain": 0.3357522035061046,
+        "gainDb": -9.479622568425338,
+        "rmsDeltaDb": -1.415745014554659e-7
+      },
+      "matched": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.34225690364837646,
+        "samplePeakDbfs": -9.312955659429118,
+        "rms": 0.2613804370388878,
+        "rmsDbfs": -11.65453840427526,
+        "crestDb": 2.341582744846141,
+        "channelDc": [
+          -0.01605028957127377,
+          -0.01605028957127377
+        ],
+        "stereoCorrelation": 1
+      },
+      "telemetry": {
+        "attackCoefficient": 0.9034193513274398,
+        "releaseCoefficient": 0.9992226977606176,
+        "maximumGainReductionDb": 32.368101113172294,
+        "meanGainReductionDb": 27.645444850133448,
+        "p95GainReductionDb": 31.073103522477798,
+        "curveKneeSampleFraction": 0.09933333333333333,
+        "curvePlateauSampleFraction": 0.4517361111111111,
+        "overFullScaleSampleFraction": 0.45240277777777776,
+        "nonFiniteSamples": 0
+      },
+      "files": {
+        "input": "corpus/bass-sequence.wav",
+        "raw": "renders/raw/bass-sequence--macro-100.wav",
+        "matched": "renders/level-matched/bass-sequence--macro-100.wav"
+      }
+    },
+    {
+      "corpusId": "bright-poly",
+      "corpusDescription": "Stereo-detuned two-chord bright polyphonic hold with eleven harmonics per voice.",
+      "macro": 0,
+      "effectiveSettings": {
+        "macro": 0,
+        "decodedMacroDeltas": {
+          "inputAmplitudeDb": 0,
+          "compressorOutputGainDb": 0,
+          "highRatioNormalized": 0
+        },
+        "inputGainDb": -0.2850170805322976,
+        "compressorMakeupDb": -0.04000000000000409,
+        "compressorRatio": 11.415525114155871,
+        "inferredRatioSlope": 0.9124000000000048,
+        "decodedRatioMappingAmount": -0.025200000000000014
+      },
+      "input": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.7079457640647888,
+        "samplePeakDbfs": -3.0000002493010487,
+        "rms": 0.15894256164146636,
+        "rmsDbfs": -15.975195836727494,
+        "crestDb": 12.975195587426445,
+        "channelDc": [
+          0.00013780063712511456,
+          0.00010578478469309429
+        ],
+        "stereoCorrelation": -0.04277650951310683
+      },
+      "raw": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.5953138470649719,
+        "samplePeakDbfs": -4.505080311875479,
+        "rms": 0.15843674634340676,
+        "rmsDbfs": -16.002881696929432,
+        "crestDb": 11.497801385053954,
+        "channelDc": [
+          -0.0017059692828846917,
+          -0.002038923063143321
+        ],
+        "stereoCorrelation": -0.039248872611710686
+      },
+      "levelMatch": {
+        "gain": 1.003192537777589,
+        "gainDb": 0.027685860201940853,
+        "rmsDeltaDb": 1.596589527252945e-11
+      },
+      "matched": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.59721440076828,
+        "samplePeakDbfs": -4.477394571559319,
+        "rms": 0.1589425616417585,
+        "rmsDbfs": -15.975195836711528,
+        "crestDb": 11.497801265152209,
+        "channelDc": [
+          -0.0017114156286578467,
+          -0.002045432397023441
+        ],
+        "stereoCorrelation": -0.039248872736777206
+      },
+      "telemetry": {
+        "attackCoefficient": 0.9034193513274398,
+        "releaseCoefficient": 0.9992226977606176,
+        "maximumGainReductionDb": 0,
+        "meanGainReductionDb": 0,
+        "p95GainReductionDb": 0,
+        "curveKneeSampleFraction": 0,
+        "curvePlateauSampleFraction": 0,
+        "overFullScaleSampleFraction": 0,
+        "nonFiniteSamples": 0
+      },
+      "files": {
+        "input": "corpus/bright-poly.wav",
+        "raw": "renders/raw/bright-poly--macro-000.wav",
+        "matched": "renders/level-matched/bright-poly--macro-000.wav"
+      }
+    },
+    {
+      "corpusId": "bright-poly",
+      "corpusDescription": "Stereo-detuned two-chord bright polyphonic hold with eleven harmonics per voice.",
+      "macro": 0.5,
+      "effectiveSettings": {
+        "macro": 0.5,
+        "decodedMacroDeltas": {
+          "inputAmplitudeDb": 17.985600000000197,
+          "compressorOutputGainDb": 2.0600000000000014,
+          "highRatioNormalized": -0.012600000000000007
+        },
+        "inputGainDb": 17.700582919467898,
+        "compressorMakeupDb": 2.0199999999999974,
+        "compressorRatio": 22.831050228311742,
+        "inferredRatioSlope": 0.9562000000000024,
+        "decodedRatioMappingAmount": -0.025200000000000014
+      },
+      "input": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.7079457640647888,
+        "samplePeakDbfs": -3.0000002493010487,
+        "rms": 0.15894256164146636,
+        "rmsDbfs": -15.975195836727494,
+        "crestDb": 12.975195587426445,
+        "channelDc": [
+          0.00013780063712511456,
+          0.00010578478469309429
+        ],
+        "stereoCorrelation": -0.04277650951310683
+      },
+      "raw": {
+        "measuredFrames": 67200,
+        "samplePeak": 1.0193735361099243,
+        "samplePeakDbfs": 0.16666709416474493,
+        "rms": 0.517491237144945,
+        "rmsDbfs": -5.721939997297884,
+        "crestDb": 5.888607091462629,
+        "channelDc": [
+          -0.008189158645108196,
+          -0.010668708018543607
+        ],
+        "stereoCorrelation": -0.030488486527729012
+      },
+      "levelMatch": {
+        "gain": 0.30714058564231855,
+        "gainDb": -10.253255839429606,
+        "rmsDeltaDb": -5.5542940913255734e-8
+      },
+      "matched": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.313090980052948,
+        "samplePeakDbfs": -10.08658887887593,
+        "rms": 0.1589425606250895,
+        "rmsDbfs": -15.975195892270435,
+        "crestDb": 5.8886070133945045,
+        "channelDc": [
+          -0.002515223082656646,
+          -0.003276793346088961
+        ],
+        "stereoCorrelation": -0.030488486612765053
+      },
+      "telemetry": {
+        "attackCoefficient": 0.9034193513274398,
+        "releaseCoefficient": 0.9992226977606176,
+        "maximumGainReductionDb": 12.298162032102699,
+        "meanGainReductionDb": 8.429165552181045,
+        "p95GainReductionDb": 10.399038776614525,
+        "curveKneeSampleFraction": 0.06259027777777777,
+        "curvePlateauSampleFraction": 0.10744444444444444,
+        "overFullScaleSampleFraction": 0.10827777777777778,
+        "nonFiniteSamples": 0
+      },
+      "files": {
+        "input": "corpus/bright-poly.wav",
+        "raw": "renders/raw/bright-poly--macro-050.wav",
+        "matched": "renders/level-matched/bright-poly--macro-050.wav"
+      }
+    },
+    {
+      "corpusId": "bright-poly",
+      "corpusDescription": "Stereo-detuned two-chord bright polyphonic hold with eleven harmonics per voice.",
+      "macro": 1,
+      "effectiveSettings": {
+        "macro": 1,
+        "decodedMacroDeltas": {
+          "inputAmplitudeDb": 35.971200000000394,
+          "compressorOutputGainDb": 4.120000000000003,
+          "highRatioNormalized": -0.025200000000000014
+        },
+        "inputGainDb": 35.686182919468095,
+        "compressorMakeupDb": 4.079999999999998,
+        "compressorRatio": "Infinity",
+        "inferredRatioSlope": 1,
+        "decodedRatioMappingAmount": -0.025200000000000014
+      },
+      "input": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.7079457640647888,
+        "samplePeakDbfs": -3.0000002493010487,
+        "rms": 0.15894256164146636,
+        "rmsDbfs": -15.975195836727494,
+        "crestDb": 12.975195587426445,
+        "channelDc": [
+          0.00013780063712511456,
+          0.00010578478469309429
+        ],
+        "stereoCorrelation": -0.04277650951310683
+      },
+      "raw": {
+        "measuredFrames": 67200,
+        "samplePeak": 1.0193735361099243,
+        "samplePeakDbfs": 0.16666709416474493,
+        "rms": 0.606673686464665,
+        "rmsDbfs": -4.340896830013838,
+        "crestDb": 4.507563924178584,
+        "channelDc": [
+          -0.017202440003267847,
+          -0.019707667027433113
+        ],
+        "stereoCorrelation": -0.031241369526139942
+      },
+      "levelMatch": {
+        "gain": 0.26199020196127093,
+        "gainDb": -11.634299006713656,
+        "rmsDeltaDb": 7.435568960545424e-8
+      },
+      "matched": {
+        "measuredFrames": 67200,
+        "samplePeak": 0.2670658826828003,
+        "samplePeakDbfs": -11.467631779743318,
+        "rms": 0.15894256300209655,
+        "rmsDbfs": -15.975195762371804,
+        "crestDb": 4.507563982628488,
+        "channelDc": [
+          -0.004506870680634428,
+          -0.005163215623352154
+        ],
+        "stereoCorrelation": -0.031241369902995926
+      },
+      "telemetry": {
+        "attackCoefficient": 0.9034193513274398,
+        "releaseCoefficient": 0.9992226977606176,
+        "maximumGainReductionDb": 30.845860290393045,
+        "meanGainReductionDb": 26.501940038839603,
+        "p95GainReductionDb": 28.728793550373734,
+        "curveKneeSampleFraction": 0.07697916666666667,
+        "curvePlateauSampleFraction": 0.20143055555555556,
+        "overFullScaleSampleFraction": 0.20259027777777777,
+        "nonFiniteSamples": 0
+      },
+      "files": {
+        "input": "corpus/bright-poly.wav",
+        "raw": "renders/raw/bright-poly--macro-100.wav",
+        "matched": "renders/level-matched/bright-poly--macro-100.wav"
+      }
+    }
+  ]
+}

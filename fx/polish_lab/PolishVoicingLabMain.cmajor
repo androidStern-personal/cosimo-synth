@@ -1,0 +1,7 @@
+graph PolishVoicingLab [[ main ]]
+{
+    input lab.*;
+    output lab.*;
+
+    node lab = PolishVoicingProcessor;
+}

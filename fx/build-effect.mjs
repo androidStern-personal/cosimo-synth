@@ -22,6 +22,13 @@ export const effectPlugins = {
         cmakeTarget: "ChorusLab",
         productName: "ChorusLab",
     },
+    polish: {
+        patch: "fx/polish_lab/PolishVoicingLab.cmajorpatch",
+        runtimeOut: "build/fx/polish_lab_runtime",
+        juceOut: "build/polish_lab_juce",
+        cmakeTarget: "PolishVoicingLab",
+        productName: "PolishVoicingLab",
+    },
     seqfx: {
         patch: "fx/seqfx/SeqFx.cmajorpatch",
         runtimeOut: "build/fx/seqfx_runtime",
