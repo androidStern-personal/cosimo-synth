@@ -232,6 +232,7 @@ test("the migration builder rejects a contract that lacks one appended Amp Envel
             { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
             { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
             ...AMP_STAGE_PARAMETERS.filter(({ endpointID }) => endpointID !== "ampSustain"),
+            ...KEY_TRACK_PARAMETERS,
         ],
         storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
     });

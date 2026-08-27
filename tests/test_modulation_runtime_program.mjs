@@ -291,7 +291,7 @@ test("all 1330 legal mappings publish exact deterministic lane tails without tru
         [
             { cellIndex: 559, sourceIndex: 9, targetIndex: 55, polarity: 0, amount: 0.25, reducer: null },
             { cellIndex: 223, sourceIndex: 3, targetIndex: 55, polarity: 0, amount: 0.25, reducer: null },
-            { cellIndex: (9 * runtime.MODULATION_RACK_TARGET_TOTAL) + 38, sourceIndex: 9, targetIndex: 38, polarity: 0, amount: 0.25, reducer: 1 },
+            { cellIndex: (9 * runtime.MODULATION_RACK_TARGET_TOTAL) + 38, sourceIndex: 9, targetIndex: 38, polarity: 1, amount: 0.25, reducer: 1 },
             { cellIndex: (3 * runtime.MODULATION_RACK_TARGET_TOTAL) + 38, sourceIndex: 3, targetIndex: 38, polarity: 1, amount: 0.25, reducer: null },
         ],
     );
