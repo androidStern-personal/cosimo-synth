@@ -36,4 +36,13 @@ Ignored evidence paths:
 
 ## Host Boundary
 
-Ableton Live 11.3.43's scanner found the installed audition bundle and recorded the correct VST3 class ID, vendor, version, and path. The editor was not loaded. Computer Use could not disambiguate two `com.ableton.live` processes; the close/discard sequence reached the pre-existing unsaved AbletonMCP test session, which exited. This fails the requested “without disturbing an unrelated active set” gate. No track, device, parameter, playback, or saved `.als` file was intentionally changed, and no further host interaction was attempted.
+After Andrew explicitly cleared the host, Ableton Live 11.3.43 restarted into a blank `Untitled` set and found the unique `CosimoEnhancerLiteShelvesAudition` browser result. The host log confirms:
+
+- Name/version: `CosimoEnhancerLiteShelvesAudition` v0.2.0
+- VST3 class ID: `ABCDEF019182FAEB436F736943734C53`
+- Host parameter count: 10
+- Editor window: `CosimoEnhancerLiteShelvesAudition/2-Audio`
+
+The compiled editor rendered the packaged wordmark, response/analyzer surface, Shape, routing, character, and intensity controls. Host-WebView clicks switched Low -> High -> Bell, then Stereo -> M/S -> Stereo. M/S exposed independent Mid and Side amount readouts and two graph handles. The editor remained open and responsive with no Live crash; Bell/Stereo defaults were restored. No set was saved, no unrelated set was open, and the empty audition set/editor was left open for inspection. This is a load/editor interaction smoke, not a new musical listening sign-off.
+
+The earlier failed same-bundle multi-instance attempt remains a tooling warning: Computer Use cannot safely distinguish two `com.ableton.live` processes, so future host automation must use a user-cleared host or a PID-addressable method.
