@@ -892,7 +892,8 @@ function FilterRackVisual({
     const cutoffDescriptor = effect.parameters.find((parameter) => parameter.endpointID === "globalFilterCutoff")!;
     const resonanceDescriptor = effect.parameters.find((parameter) => parameter.endpointID === "globalFilterResonance")!;
     const mode = useRackParameterBinding(modeDescriptor);
-    const cutoff = useRackParameterBinding(cutoffDescriptor);
+    const cutoffKeyTrack = useRackKeyTrackBinding(cutoffDescriptor);
+    const cutoff = cutoffKeyTrack.ordinaryBinding;
     const resonance = useRackParameterBinding(resonanceDescriptor);
 
     return (
@@ -914,7 +915,9 @@ function FilterRackVisual({
                 cutoff.endGesture();
                 resonance.endGesture();
             }}
-            onCutoffSet={(value) => cutoff.setValue(value)}
+            onCutoffSet={(value) => {
+                if (!cutoffKeyTrack.enabled) cutoff.setValue(value);
+            }}
             onQSet={(value) => resonance.setValue(value)}
             className="h-full w-full"
         />
@@ -979,7 +982,8 @@ function GenericRackXYVisual({
         throw new Error(`The ${descriptor.id} X/Y visual is missing a parameter descriptor.`);
     }
 
-    const xBinding = useRackParameterBinding(xDescriptor);
+    const xKeyTrack = useRackKeyTrackBinding(xDescriptor);
+    const xBinding = xKeyTrack.ordinaryBinding;
     const yBinding = useRackParameterBinding(yDescriptor);
     const surfaceRef = useRef<HTMLButtonElement | null>(null);
     const {
@@ -1025,9 +1029,11 @@ function GenericRackXYVisual({
             x: pointer.x - bounds.left,
             y: pointer.y - bounds.top,
         }, plot);
-        xBinding.setValue(rackParameterValueFromNormalized(xDescriptor, nextPoint.x));
+        if (!xKeyTrack.enabled) {
+            xBinding.setValue(rackParameterValueFromNormalized(xDescriptor, nextPoint.x));
+        }
         yBinding.setValue(rackParameterValueFromNormalized(yDescriptor, nextPoint.y));
-    }, [xBinding.setValue, xDescriptor, yBinding.setValue, yDescriptor]);
+    }, [xBinding.setValue, xDescriptor, xKeyTrack.enabled, yBinding.setValue, yDescriptor]);
     const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLButtonElement>) => {
         const horizontal = event.key === "ArrowLeft" || event.key === "ArrowRight";
         const vertical = event.key === "ArrowDown" || event.key === "ArrowUp";
@@ -1036,6 +1042,10 @@ function GenericRackXYVisual({
         }
 
         event.preventDefault();
+        if (horizontal && xKeyTrack.enabled) {
+            onRecentParameter(xDescriptor.endpointID);
+            return;
+        }
         const axisDescriptor = horizontal ? xDescriptor : yDescriptor;
         const axisBinding = horizontal ? xBinding : yBinding;
         const currentNormalized = horizontal ? normalizedX : normalizedY;
@@ -1049,7 +1059,7 @@ function GenericRackXYVisual({
             ),
         ));
         onRecentParameter(axisDescriptor.endpointID);
-    }, [normalizedX, normalizedY, onRecentParameter, xBinding, xDescriptor, yBinding, yDescriptor]);
+    }, [normalizedX, normalizedY, onRecentParameter, xBinding, xDescriptor, xKeyTrack.enabled, yBinding, yDescriptor]);
 
     return (
         <button

@@ -1,0 +1,155 @@
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "ConstantThreeOscillatorRenderer.cmajor")
+
+// A one-voice steal/retrigger is a fresh allocation for filter smoothing.
+// Its first target is exact; later offset moves still traverse the 5 ms pole.
+## testProcessor (undefined, { frequency: 600 })
+
+graph VoiceFilterKeyTrackLifecycleTest [[ main ]]
+{
+    output event int32 out;
+
+    node source = VoiceFilterKeyTrackLifecycleSource;
+    node reused = wt::SharedVoiceEngine (1);
+    node fresh = wt::SharedVoiceEngine (1);
+    node witness = VoiceFilterKeyTrackLifecycleWitness;
+
+    connection
+    {
+        source.firstNoteOut -> reused.voiceEventIn[0];
+        source.secondNoteOut -> reused.voiceEventIn[0], fresh.voiceEventIn[0];
+        source.filterModeOut -> reused.filterModeIn, fresh.filterModeIn;
+        source.filterCutoffOut -> reused.filterCutoffIn, fresh.filterCutoffIn;
+        source.filterQOut -> reused.filterQIn, fresh.filterQIn;
+        source.filterMixOut -> reused.filterMixIn, fresh.filterMixIn;
+        source.keyTrackEnabledOut -> reused.filterCutoffKeyTrackEnabledIn,
+                                     fresh.filterCutoffKeyTrackEnabledIn;
+        source.keyTrackOffsetOut -> reused.filterCutoffKeyTrackOffsetSemitonesIn,
+                                    fresh.filterCutoffKeyTrackOffsetSemitonesIn;
+        reused.effectiveFilterStateOut -> witness.reusedStateIn;
+        fresh.effectiveFilterStateOut -> witness.freshStateIn;
+        witness.out -> out;
+    }
+}
+
+processor VoiceFilterKeyTrackLifecycleSource
+{
+    output event std::notes::NoteOn firstNoteOut;
+    output event std::notes::NoteOn secondNoteOut;
+    output value float32 filterModeOut;
+    output value float32 filterCutoffOut;
+    output value float32 filterQOut;
+    output value float32 filterMixOut;
+    output value float32 keyTrackEnabledOut;
+    output value float32 keyTrackOffsetOut;
+
+    std::notes::NoteOn note (float32 pitch)
+    {
+        std::notes::NoteOn noteOn;
+        noteOn.channel = 0;
+        noteOn.pitch = pitch;
+        noteOn.velocity = 1.0f;
+        return noteOn;
+    }
+
+    void main()
+    {
+        filterModeOut <- 1.0f;
+        filterCutoffOut <- 1234.5f;
+        filterQOut <- 0.707107f;
+        filterMixOut <- 0.0f;
+        keyTrackEnabledOut <- 1.0f;
+        keyTrackOffsetOut <- 0.0f;
+
+        advance();
+        firstNoteOut <- note (48.0f);
+        for (int32 frame = 0; frame < 24; ++frame)
+            advance();
+
+        keyTrackOffsetOut <- 12.0f;
+        for (int32 frame = 0; frame < 30; ++frame)
+            advance();
+
+        keyTrackOffsetOut <- -3.0f;
+        secondNoteOut <- note (36.0f);
+        for (int32 frame = 0; frame < 30; ++frame)
+            advance();
+
+        keyTrackOffsetOut <- 9.0f;
+        loop advance();
+    }
+}
+
+processor VoiceFilterKeyTrackLifecycleWitness
+{
+    input event wt::EffectiveFilterStateMonitor reusedStateIn;
+    input event wt::EffectiveFilterStateMonitor freshStateIn;
+    output event int32 out;
+
+    int32 reusedInitialGeneration = -1;
+    bool reusedSecondSeen;
+    bool freshFirstSeen;
+    bool comparedFreshStarts;
+    float32 reusedSecondFirstCutoff;
+    float32 freshFirstCutoff;
+    float32 reusedPreviousCutoff;
+    bool firstMoveSmoothed;
+    bool secondMoveSmoothed;
+
+    event reusedStateIn (wt::EffectiveFilterStateMonitor state)
+    {
+        if (state.hasActive == 0)
+            return;
+
+        if (reusedInitialGeneration < 0)
+        {
+            reusedInitialGeneration = state.voiceGeneration;
+            reusedPreviousCutoff = state.cutoffHz;
+            return;
+        }
+
+        if (state.voiceGeneration != reusedInitialGeneration && ! reusedSecondSeen)
+        {
+            reusedSecondSeen = true;
+            reusedSecondFirstCutoff = state.cutoffHz;
+            reusedPreviousCutoff = state.cutoffHz;
+            return;
+        }
+
+        if (! reusedSecondSeen
+            && state.cutoffHz > reusedPreviousCutoff)
+            firstMoveSmoothed = true;
+
+        if (reusedSecondSeen
+            && state.cutoffHz > reusedPreviousCutoff)
+            secondMoveSmoothed = true;
+
+        reusedPreviousCutoff = state.cutoffHz;
+    }
+
+    event freshStateIn (wt::EffectiveFilterStateMonitor state)
+    {
+        if (state.hasActive != 0 && ! freshFirstSeen)
+        {
+            freshFirstSeen = true;
+            freshFirstCutoff = state.cutoffHz;
+        }
+    }
+
+    void main()
+    {
+        for (int32 frame = 0; frame < 94; ++frame)
+            advance();
+
+        if (reusedSecondSeen && freshFirstSeen)
+            comparedFreshStarts = reusedSecondFirstCutoff == freshFirstCutoff;
+
+        out <- comparedFreshStarts ? 1 : 0;
+        advance();
+        out <- firstMoveSmoothed ? 1 : 0;
+        advance();
+        out <- secondMoveSmoothed ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}

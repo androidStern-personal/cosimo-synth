@@ -36,6 +36,7 @@ declare global {
                 distortionGraphState: unknown | null;
             };
             clearDebugLog: () => void;
+            undoLastParameterTransaction: () => boolean;
             setRuntimeState: (nextState: Parameters<MockPatchConnection["setRuntimeState"]>[0]) => void;
             setLaneParamValue: (endpointID: string, value: number) => void;
             setParameterValue: (
@@ -276,6 +277,7 @@ try {
             patchConnection.clearDebugLog();
             clearKeyboardDebug();
         },
+        undoLastParameterTransaction: () => patchConnection.undoLastParameterTransaction(),
         setRuntimeState: (nextState) => patchConnection.setRuntimeState(nextState),
         setLaneParamValue: (endpointID, value) => {
             patchConnection.setLaneParamValue(endpointID, value);

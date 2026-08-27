@@ -2590,6 +2590,7 @@ namespace wt
             let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
             unisonLeftFilters.at (resolvedVoice).reset();
             unisonRightFilters.at (resolvedVoice).reset();
+            voiceFilterKeyTrackSmoothedHz.at (resolvedVoice) = 0.0f;
         }
 
         void resetAllFilterState()
@@ -5786,12 +5787,12 @@ namespace wt
                         ? voiceArticulationFilterQ.at (voice)
                         : filterQIn;
                     let filterKeyTrackEnabled = filterCutoffKeyTrackEnabledIn >= 0.5f;
-                    let targetFilterCutoffHz = resolveKeyTrackedFrequencyHz (
+                    let targetFilterCutoffHz = resolveVoiceFilterKeyTrackedFrequencyHz (
                         filterKeyTrackEnabled ? 1.0f : 0.0f,
                         baseFilterCutoffHz,
                         std::notes::noteToFrequency (sharedPlayedPitchSemitones),
                         baseFilterKeyTrackOffsetSemitones,
-                        routeFilterCutoffOctaves * 12.0f,
+                        routeFilterCutoffOctaves,
                         filterCutoffMinHz,
                         std::intrinsics::min (filterCutoffMaxHz, processorFrequency * 0.48f));
                     let effectiveFilterCutoffHz = filterKeyTrackEnabled

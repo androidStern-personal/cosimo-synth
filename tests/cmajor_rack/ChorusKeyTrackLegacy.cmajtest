@@ -1,0 +1,67 @@
+## global ("../../cmajor/KeyTrack.cmajor")
+
+## testFunction()
+
+bool approximately (float32 actual, float32 expected)
+{
+    return std::intrinsics::abs (actual - expected) <= 0.0001f;
+}
+
+bool testMigratedPositiveRouteRetainsLegacyUpperClamp()
+{
+    let playedPitchHz = 220.0f;
+    let legacyFine = 0.75f;
+    let migratedBase = -5.0f + legacyFine;
+    let retainedRoute = 4.0f;
+    let current = wt::resolveChorusRingFrequencyHz (
+        1.0f, 1.0f, 28.0f, playedPitchHz,
+        migratedBase, legacyFine, retainedRoute, 0.1f, 20000.0f);
+    let legacy = wt::keyTrackFrequencyHz (
+        playedPitchHz, -5.0f + 2.0f, 0.1f, 20000.0f);
+    return approximately (current, legacy);
+}
+
+bool testMigratedNegativeRouteRetainsLegacyLowerClamp()
+{
+    let playedPitchHz = 220.0f;
+    let legacyFine = -0.5f;
+    let migratedBase = 12.0f + legacyFine;
+    let retainedRoute = -4.0f;
+    let current = wt::resolveChorusRingFrequencyHz (
+        1.0f, 1.0f, 28.0f, playedPitchHz,
+        migratedBase, legacyFine, retainedRoute, 0.1f, 20000.0f);
+    let legacy = wt::keyTrackFrequencyHz (
+        playedPitchHz, 12.0f - 2.0f, 0.1f, 20000.0f);
+    return approximately (current, legacy);
+}
+
+bool testMigratedRouteInsideClampRetainsExactLegacyLaw()
+{
+    let legacyFine = 0.75f;
+    let retainedRoute = 0.5f;
+    return wt::chorusRingTrackedOffsetSemitones (
+        1.0f, -5.0f + legacyFine, legacyFine, retainedRoute)
+        == -5.0f + std::intrinsics::clamp (
+            legacyFine + retainedRoute, -2.0f, 2.0f);
+}
+
+bool testNewStateKeepsContinuousLinearRangeBeyondLegacyClamp()
+{
+    return wt::chorusRingTrackedOffsetSemitones (
+        0.0f, 7.0f, 0.0f, 4.125f) == 11.125f
+        && wt::chorusRingTrackedOffsetSemitones (
+            0.0f, -12.0f, 1.75f, -4.375f) == -16.375f;
+}
+
+bool testKeyTrackOffKeepsTheOrdinaryFixedFrequencyPath()
+{
+    let atLowPlayedPitch = wt::resolveChorusRingFrequencyHz (
+        0.0f, 1.0f, 28.0f, 110.0f,
+        7.0f, 0.75f, 1.25f, 0.1f, 20000.0f);
+    let atHighPlayedPitch = wt::resolveChorusRingFrequencyHz (
+        0.0f, 1.0f, 28.0f, 880.0f,
+        7.0f, 0.75f, 1.25f, 0.1f, 20000.0f);
+    return atLowPlayedPitch == atHighPlayedPitch
+        && atLowPlayedPitch == wt::resolveKeyTrackedFrequencyHz (
+            0.0f, 28.0f, 440.0f, 0.0f, 1.25f, 0.1f, 20000.0f);
+}

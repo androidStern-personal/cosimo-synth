@@ -50,10 +50,16 @@ import {
     type ModulationTargetKind,
 } from "../shared/modulation-targets";
 import { parseLaneModulationTargetKind } from "../shared/lane-modulation-targets";
-import { resolveModulationTargetBase } from "../shared/modulation-target-base";
+import {
+    keyTrackModulationTargetBasePresentation,
+    resolveModulationTargetBase,
+} from "../shared/modulation-target-base";
 import { findRackModulationSource } from "../shared/rack-modulation-sources";
-import { useLaneOrHostParameterBinding, usePatchModulationTargetOptions } from "../shared/lane-param-bindings";
-import type { PatchControlBinding } from "../shared/patch-controls";
+import {
+    useLaneKeyTrackControlBinding,
+    useLaneOrHostParameterBinding,
+    usePatchModulationTargetOptions,
+} from "../shared/lane-param-bindings";
 import { formatParameterEntry } from "../shared/parameter-value-entry";
 import { useParameterGesture } from "../shared/parameter-gesture";
 import { useReadoutCells, type ReadoutCellSpec } from "../shared/parameter-readout-strip";
@@ -65,9 +71,16 @@ import {
 import { hexToRgbTriplet } from "../shared/parameter-hud";
 import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import { useSliderDrag } from "../shared/use-slider-drag";
+import { usePatchParameterBinding, type PatchControlBinding } from "../shared/patch-controls";
+import { getRackParameterDescriptor } from "../shared/rack-parameter-descriptors";
 import { sourceOptionForRoute, targetPresentation, SourceIdentity } from "./mobile-mod-matrix";
 
 export const MOD_MAPPINGS_VIEW_STORAGE_KEY = "cosimo.mod-mappings-view.v1";
+
+const FALLBACK_MAPPING_LANE_DESCRIPTOR = getRackParameterDescriptor("delayMix");
+if (FALLBACK_MAPPING_LANE_DESCRIPTOR === null) {
+    throw new Error("The mappings table is missing its fallback lane descriptor.");
+}
 
 function loadStoredViewPrefs(): MappingsViewPrefs {
     const raw = sessionStorage.getItem(MOD_MAPPINGS_VIEW_STORAGE_KEY);
@@ -286,44 +299,130 @@ function MappingRow({
         active: base !== null,
         deviceId: parseLaneModulationTargetKind(route.targetKind)?.instanceId,
     });
+    const parsedLaneTarget = parseLaneModulationTargetKind(route.targetKind);
+    const laneKeyTrackBinding = useLaneKeyTrackControlBinding(
+        base?.keyTrack?.binding.kind === "lane"
+            ? base.keyTrack.binding.descriptor
+            : FALLBACK_MAPPING_LANE_DESCRIPTOR,
+        parsedLaneTarget?.instanceId,
+    );
+    const hostKeyTrackEnabled = usePatchParameterBinding<number>({
+        endpointID: base?.keyTrack?.binding.kind === "host"
+            ? base.keyTrack.binding.enabledEndpointID
+            : "filterCutoffKeyTrackEnabled",
+        initialValue: 0,
+        coerce: (rawValue) => Number(rawValue) || 0,
+        active: base?.keyTrack?.binding.kind === "host",
+    });
+    const hostKeyTrackOffset = usePatchParameterBinding<number>({
+        endpointID: base?.keyTrack?.binding.kind === "host"
+            ? base.keyTrack.binding.offsetEndpointID
+            : "filterCutoffKeyTrackOffsetSemitones",
+        initialValue: 0,
+        coerce: (rawValue) => Number(rawValue) || 0,
+        active: base?.keyTrack?.binding.kind === "host",
+    });
+    const keyTrackEnabled = base?.keyTrack?.binding.kind === "lane"
+        ? laneKeyTrackBinding.enabled
+        : base?.keyTrack?.binding.kind === "host"
+            ? hostKeyTrackEnabled.value >= 0.5
+            : false;
+    const presentedTargetLabel = keyTrackEnabled ? "Key Track Offset" : target.parameter;
+    const keyTrackPresentation = useMemo(() => (
+        base?.keyTrack === null || base?.keyTrack === undefined
+            ? null
+            : keyTrackModulationTargetBasePresentation(base.keyTrack)
+    ), [base?.keyTrack]);
+    const presentedBaseBinding = keyTrackEnabled
+        ? base?.keyTrack?.binding.kind === "lane"
+            ? laneKeyTrackBinding.binding
+            : hostKeyTrackOffset
+        : baseBinding;
+    const entrySpec = keyTrackEnabled && keyTrackPresentation !== null
+        ? keyTrackPresentation.entrySpec
+        : base?.entrySpec;
+    const railProjection = keyTrackEnabled && keyTrackPresentation !== null
+        ? keyTrackPresentation.railProjection
+        : base?.railProjection;
+
     const gestureController = useParameterGesture();
     const openParameterMenu = useParameterMenu();
 
     const menuRequestContext = useCallback((): ParameterMenuRequestContext => {
-        if (base === null) {
+        if (base === null || entrySpec === undefined) {
             throw new Error(`Mapping ${route.id} has no base control menu.`);
         }
         return {
             controlKey: `mapping-${route.id}`,
-            label: `${target.category} · ${target.parameter}`,
+            label: keyTrackEnabled
+                ? `${target.category} · Key Track Offset`
+                : `${target.category} · ${target.parameter}`,
             targetKind: route.targetKind,
-            baseSpec: base.entrySpec,
-            baseValue: baseBinding.value,
-            defaultValue: base.initialValue,
-            commitBase: baseBinding.commitValue,
+            baseSpec: entrySpec,
+            amountSpec: keyTrackEnabled ? keyTrackPresentation?.amountSpec : undefined,
+            baseFieldLabel: keyTrackEnabled ? "Key Track Offset" : undefined,
+            routeDestinationLabel: keyTrackEnabled ? "Key Track Offset" : undefined,
+            baseValue: presentedBaseBinding.value,
+            defaultValue: keyTrackEnabled ? 0 : base.initialValue,
+            commitBase: presentedBaseBinding.commitValue,
             routeIndex,
         };
-    }, [base, baseBinding.commitValue, baseBinding.value, route.id, route.targetKind, routeIndex, target.category, target.parameter]);
+    }, [
+        base,
+        entrySpec,
+        keyTrackEnabled,
+        keyTrackPresentation?.amountSpec,
+        presentedBaseBinding.commitValue,
+        presentedBaseBinding.value,
+        route.id,
+        route.targetKind,
+        routeIndex,
+        target.category,
+        target.parameter,
+    ]);
 
-    const rowBindings = useMemo(() => ({ [route.id]: baseBinding }), [baseBinding, route.id]);
+    const rowBindings = useMemo(
+        () => ({ [route.id]: presentedBaseBinding }),
+        [presentedBaseBinding, route.id],
+    );
 
     const cellSpec = useMemo<ReadonlyArray<ReadoutCellSpec>>(() => (base === null ? [] : [{
         id: route.id,
         kind: "readout",
-        shortLabel: target.parameter,
-        fullLabel: `${target.category} ${target.parameter}`,
+        shortLabel: presentedTargetLabel,
+        fullLabel: `${target.category} ${presentedTargetLabel}`,
         display: {
-            min: base.entrySpec.min,
-            max: base.entrySpec.max,
-            step: base.entrySpec.step,
+            min: entrySpec!.min,
+            max: entrySpec!.max,
+            step: entrySpec!.step,
         },
-        formatValue: (value: number) => formatParameterEntry(base.entrySpec, value).display,
+        formatValue: (value: number) => formatParameterEntry(entrySpec!, value).display,
         targetKind: route.targetKind,
-        normalizeValue: base.railProjection.normalizeValue,
-        denormalizeValue: base.railProjection.denormalizeValue,
-        projectBand: base.railProjection.projectBand,
-        amountDragStyle: base.amountDragStyle,
-    }]), [base, route.id, route.targetKind, target.category, target.parameter]);
+        normalizeValue: railProjection!.normalizeValue,
+        denormalizeValue: railProjection!.denormalizeValue,
+        projectBand: railProjection!.projectBand,
+        amountDragStyle: keyTrackEnabled ? "amount-span" : base.amountDragStyle,
+        modulationAmountBounds: keyTrackEnabled
+            ? keyTrackPresentation?.canonicalAmountBounds
+            : undefined,
+        formatRouteAmount: keyTrackEnabled && keyTrackPresentation !== null
+            ? (candidate) => formatParameterEntry(
+                keyTrackPresentation.amountSpec,
+                candidate.amount,
+            ).display
+            : undefined,
+    }]), [
+        base,
+        entrySpec,
+        keyTrackEnabled,
+        keyTrackPresentation,
+        railProjection,
+        route.id,
+        route.targetKind,
+        target.category,
+        target.parameter,
+        presentedTargetLabel,
+    ]);
 
     const cellApi = useReadoutCells({
         cells: cellSpec,
@@ -357,7 +456,8 @@ function MappingRow({
     // Report the normalized base for unit-safe sorting/filtering.
     const normalizedBase = base === null
         ? null
-        : (baseBinding.value - base.entrySpec.min) / Math.max(1e-9, base.entrySpec.max - base.entrySpec.min);
+        : (presentedBaseBinding.value - entrySpec!.min)
+            / Math.max(1e-9, entrySpec!.max - entrySpec!.min);
     useEffect(() => {
         onBaseSample(route.id, normalizedBase);
     }, [normalizedBase, onBaseSample, route.id]);
@@ -376,7 +476,7 @@ function MappingRow({
                 <div className="mod-mappings-row-labels">
                     <span className="mod-mappings-row-source">{source.label}</span>
                     <span className="mod-mappings-row-target">
-                        <strong>{target.category}</strong> {target.parameter}
+                        <strong>{target.category}</strong> {presentedTargetLabel}
                     </span>
                 </div>
             </div>
@@ -397,7 +497,7 @@ function MappingRow({
                     <MappingLedCell
                         cell={cellSpec[0]}
                         api={cellApi}
-                        baseValue={baseBinding.value}
+                        baseValue={presentedBaseBinding.value}
                         rolePrefix={`mod-mapping-${routeIndex}`}
                     />
                 )}
@@ -416,7 +516,7 @@ function MappingRow({
             <button
                 type="button"
                 className="mod-mappings-row-power"
-                aria-label={`${route.enabled ? "Bypass" : "Enable"} ${source.label} to ${target.parameter}`}
+                aria-label={`${route.enabled ? "Bypass" : "Enable"} ${source.label} to ${presentedTargetLabel}`}
                 aria-pressed={route.enabled}
                 data-role={`mod-mappings-power-${routeIndex}`}
                 onClick={() => onRouteChange(routeIndex, { enabled: !route.enabled })}
@@ -429,7 +529,7 @@ function MappingRow({
             <button
                 type="button"
                 className="mod-mappings-row-delete"
-                aria-label={`Delete ${source.label} to ${target.parameter}`}
+                aria-label={`Delete ${source.label} to ${presentedTargetLabel}`}
                 data-role={`mod-mappings-delete-${routeIndex}`}
                 onClick={() => onRemoveRoute(routeIndex)}
             >
@@ -486,7 +586,8 @@ function MappingLedCell({ cell, api, baseValue, rolePrefix }: {
             </span>
             {route !== null ? (
                 <span className="mod-led-flag" data-role="mod-mappings-amount-flag">
-                    {formatModulationAmountReadout(route.targetKind, route.amount, route.polarity)}
+                    {cell.formatRouteAmount?.(route)
+                        ?? formatModulationAmountReadout(route.targetKind, route.amount, route.polarity)}
                 </span>
             ) : null}
             <span className="mod-led-rail" data-rail-state={presentation.railState} aria-hidden="true">

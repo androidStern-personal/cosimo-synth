@@ -1,5 +1,48 @@
 ## global ("../../cmajor/KeyTrack.cmajor")
 
+## testFunction()
+
+bool testVoiceFilterOffPathPreservesPositiveIrregularOctaveBits()
+{
+    float32 routeOctaves = 0.089837f;
+    float32 ordinaryHz = 1234.5f;
+    let legacy = std::intrinsics::clamp (
+        ordinaryHz * std::intrinsics::pow (2.0f, routeOctaves),
+        20.0f, 20000.0f);
+    let rejectedRoundTrip = wt::resolveKeyTrackedFrequencyHz (
+        0.0f, ordinaryHz, 440.0f, 0.0f, routeOctaves * 12.0f,
+        20.0f, 20000.0f);
+    return wt::resolveVoiceFilterKeyTrackedFrequencyHz (
+        0.0f, ordinaryHz, 440.0f, 0.0f, routeOctaves,
+        20.0f, 20000.0f) == legacy
+        && rejectedRoundTrip != legacy;
+}
+
+bool testVoiceFilterOffPathPreservesNegativeIrregularOctaveBits()
+{
+    float32 routeOctaves = -0.045519f;
+    float32 ordinaryHz = 6789.25f;
+    let legacy = std::intrinsics::clamp (
+        ordinaryHz * std::intrinsics::pow (2.0f, routeOctaves),
+        20.0f, 20000.0f);
+    let rejectedRoundTrip = wt::resolveKeyTrackedFrequencyHz (
+        0.0f, ordinaryHz, 440.0f, 0.0f, routeOctaves * 12.0f,
+        20.0f, 20000.0f);
+    return wt::resolveVoiceFilterKeyTrackedFrequencyHz (
+        0.0f, ordinaryHz, 440.0f, 0.0f, routeOctaves,
+        20.0f, 20000.0f) == legacy
+        && rejectedRoundTrip != legacy;
+}
+
+bool testVoiceFilterTrackedPathStillSumsContinuousSemitonesOnce()
+{
+    let actual = wt::resolveVoiceFilterKeyTrackedFrequencyHz (
+        1.0f, 1234.5f, 440.0f, 3.25f, 0.0625f,
+        20.0f, 20000.0f);
+    let expected = 440.0f * std::intrinsics::pow (2.0f, 4.0f / 12.0f);
+    return std::intrinsics::abs (actual - expected) <= 0.001f;
+}
+
 ## testProcessor()
 
 processor SharedKeyTrackMathTest [[ main ]]

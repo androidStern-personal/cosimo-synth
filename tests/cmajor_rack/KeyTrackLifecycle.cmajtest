@@ -1,0 +1,181 @@
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "../../cmajor/GlobalFilter.cmajor", "../../cmajor/Distortion.cmajor", "../../cmajor/Ott.cmajor", "../../cmajor/Chorus.cmajor", "../../cmajor/Flanger.cmajor", "../../cmajor/Phaser.cmajor", "../../cmajor/Delay.cmajor", "../../cmajor/Reverb.cmajor", "../../cmajor/EffectsRack.cmajor")
+
+// A removed/re-added Delay pool slot must be indistinguishable from a slot
+// entering for the first time at the new tracked pitch.
+## testProcessor (undefined, { frequency: 2000, maxFrequency: 48000 })
+
+processor RackDeviceKeyTrackLifecycleTest [[ main ]]
+{
+    output stream int32 out;
+
+    node reused = wt::EffectsRack;
+    node fresh = wt::EffectsRack;
+
+    wt::LaneSlotParamsUpload delayParams (int32 serial)
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::rackModuleDelay;
+        upload.deliverySerial = serial;
+        upload.values[wt::laneDelayParamTimeMs] = 375.0f;
+        upload.values[wt::laneDelayParamFeedback] = 0.0f;
+        upload.values[wt::laneDelayParamFilterHz] = 800.0f;
+        upload.values[wt::laneDelayParamMix] = 1.0f;
+        upload.values[wt::laneDelayParamTimeMode] = float32 (wt::delayTimeModeFree);
+        upload.values[wt::laneDelayParamTimeKeyTrackEnabled] = 1.0f;
+        upload.values[wt::laneDelayParamTimeKeyTrackOffsetSemitones] = 0.0f;
+        return upload;
+    }
+
+    wt::LaneTopologyUpload delayChain()
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 1;
+        upload.slotIds[0] = wt::rackModuleDelay;
+        upload.enabledMask = 0b1;
+        return upload;
+    }
+
+    wt::LaneTopologyUpload emptyChain()
+    {
+        wt::LaneTopologyUpload upload;
+        return upload;
+    }
+
+    void advanceBoth (float32 sample, float32 pitchHz)
+    {
+        reused.in <- float32<2> (sample, sample);
+        fresh.in <- float32<2> (sample, sample);
+        reused.trackingPitchHzIn <- pitchHz;
+        fresh.trackingPitchHzIn <- pitchHz;
+        reused.advance();
+        fresh.advance();
+    }
+
+    void main()
+    {
+        reused.tempoBpmIn <- 120.0f;
+        fresh.tempoBpmIn <- 120.0f;
+        reused.laneSlotParams <- delayParams (1);
+        fresh.laneSlotParams <- delayParams (1);
+        reused.laneTopology <- delayChain();
+
+        for (int32 frame = 0; frame < 160; ++frame)
+            advanceBoth (frame == 20 ? 1.0f : 0.0f, 100.0f);
+
+        reused.laneTopology <- emptyChain();
+        for (int32 frame = 0; frame < 80; ++frame)
+            advanceBoth (0.0f, 200.0f);
+
+        reused.laneTopology <- delayChain();
+        fresh.laneTopology <- delayChain();
+        for (int32 frame = 0; frame < 20; ++frame)
+            advanceBoth (0.0f, 200.0f);
+
+        bool stayedExact = true;
+        bool heardTrackedEcho;
+        for (int32 frame = 0; frame < 96; ++frame)
+        {
+            advanceBoth (frame == 0 ? 1.0f : 0.0f, 200.0f);
+            if (reused.out[0] != fresh.out[0] || reused.out[1] != fresh.out[1])
+                stayedExact = false;
+            if (frame >= 8 && frame <= 12 && std::intrinsics::abs (fresh.out[0]) > 0.02f)
+                heardTrackedEcho = true;
+        }
+
+        out <- stayedExact ? 1 : 0;
+        advance();
+        out <- heardTrackedEcho ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+// The same fresh-allocation equivalence covers a split marker. A transparent
+// disabled member makes the LR4 phase response observable without adding a
+// second effect law to the comparison.
+## testProcessor (undefined, { frequency: 2000, maxFrequency: 48000 })
+
+processor RackSplitKeyTrackLifecycleTest [[ main ]]
+{
+    output stream int32 out;
+
+    node reused = wt::EffectsRack;
+    node fresh = wt::EffectsRack;
+
+    wt::LaneSlotParamsUpload splitParams (int32 serial)
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::laneSplitSlotBase;
+        upload.deliverySerial = serial;
+        upload.values[wt::laneSplitParamXoverLowHz] = 800.0f;
+        upload.values[wt::laneSplitParamXoverHighHz] = 900.0f;
+        upload.values[wt::laneSplitParamXoverLowKeyTrackEnabled] = 1.0f;
+        upload.values[wt::laneSplitParamXoverLowKeyTrackOffsetSemitones] = 0.0f;
+        return upload;
+    }
+
+    wt::LaneTopologyUpload splitChain()
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 2;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, 2);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        upload.enabledMask = 0b01;
+        return upload;
+    }
+
+    wt::LaneTopologyUpload emptyChain()
+    {
+        wt::LaneTopologyUpload upload;
+        return upload;
+    }
+
+    void advanceBoth (float32 sample, float32 pitchHz)
+    {
+        reused.in <- float32<2> (sample, sample);
+        fresh.in <- float32<2> (sample, sample);
+        reused.trackingPitchHzIn <- pitchHz;
+        fresh.trackingPitchHzIn <- pitchHz;
+        reused.advance();
+        fresh.advance();
+    }
+
+    void main()
+    {
+        reused.laneSlotParams <- splitParams (1);
+        fresh.laneSlotParams <- splitParams (1);
+        reused.laneTopology <- splitChain();
+
+        for (int32 frame = 0; frame < 160; ++frame)
+            advanceBoth (frame == 20 ? 1.0f : 0.0f, 100.0f);
+
+        reused.laneTopology <- emptyChain();
+        for (int32 frame = 0; frame < 80; ++frame)
+            advanceBoth (0.0f, 300.0f);
+
+        reused.laneTopology <- splitChain();
+        fresh.laneTopology <- splitChain();
+        for (int32 frame = 0; frame < 20; ++frame)
+            advanceBoth (0.0f, 300.0f);
+
+        bool stayedExact = true;
+        bool heardResponse;
+        for (int32 frame = 0; frame < 96; ++frame)
+        {
+            let sample = frame == 0 ? 1.0f : 0.0f;
+            advanceBoth (sample, 300.0f);
+            if (reused.out[0] != fresh.out[0] || reused.out[1] != fresh.out[1])
+                stayedExact = false;
+            if (std::intrinsics::abs (fresh.out[0]) > 0.01f)
+                heardResponse = true;
+        }
+
+        out <- stayedExact ? 1 : 0;
+        advance();
+        out <- heardResponse ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}

@@ -233,6 +233,10 @@ export type FilterModulationTravel = {
     readonly baseHandleMode: "translate" | "start";
     /** Render the dedicated center translate grip at the travel midpoint. */
     readonly centerHandle: boolean;
+    /** Optional tracked Cutoff route language. The graph still needs Hz to
+        draw, while this label exposes the actual semitone-offset contract. */
+    readonly cutoffAmountLabel?: string;
+    readonly cutoffRouteStorageAmount?: number;
 };
 
 export type FilterResponseGraphProps = {
@@ -2151,7 +2155,24 @@ export function FilterResponseGraph({
                         pointerEvents="none"
                     />
                     {modulationTravel && travelGeometry ? (
-                        <g data-role="filter-travel-overlay">
+                        <g
+                            data-role="filter-travel-overlay"
+                            data-cutoff-route-storage={modulationTravel.cutoffRouteStorageAmount}
+                        >
+                            {modulationTravel.cutoffAmountLabel !== undefined ? (
+                                <text
+                                    data-role="filter-travel-cutoff-amount-label"
+                                    x={Math.max(8, size.width - 10)}
+                                    y="15"
+                                    textAnchor="end"
+                                    fill={modulationTravel.accent}
+                                    fontSize="10"
+                                    fontWeight="650"
+                                    pointerEvents="none"
+                                >
+                                    {modulationTravel.cutoffAmountLabel}
+                                </text>
+                            ) : null}
                             {travelGeometry.shadePath ? (
                                 <path
                                     data-role="filter-travel-shade"

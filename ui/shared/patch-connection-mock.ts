@@ -654,6 +654,15 @@ export class MockPatchConnection implements PatchConnectionLike {
     private wavetableActivationTimerID: number | null = null;
     private acceptedModulationSerial = 0;
     private acceptedArticulationSerial = 0;
+    private activeParameterTransaction: {
+        ownerEndpointIDs: string[];
+        openGestureCount: number;
+        before: Map<string, unknown>;
+    } | null = null;
+    private parameterTransactions: Array<{
+        ownerEndpointIDs: string[];
+        changes: Array<{ endpointID: string; before: unknown; after: unknown }>;
+    }> = [];
     private status: unknown;
     private readonly modulationArticulationWorkerService;
 
@@ -816,6 +825,13 @@ export class MockPatchConnection implements PatchConnectionLike {
             return;
         }
 
+        if (this.activeParameterTransaction !== null
+                && !this.activeParameterTransaction.before.has(endpointID)) {
+            this.activeParameterTransaction.before.set(
+                endpointID,
+                this.parameterValues.get(endpointID),
+            );
+        }
         this.parameterValues.set(endpointID, value);
         this.parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
 
@@ -860,10 +876,44 @@ export class MockPatchConnection implements PatchConnectionLike {
 
     sendParameterGestureStart(endpointID: string) {
         this.gestureStarts.push(endpointID);
+        if (this.activeParameterTransaction === null) {
+            this.activeParameterTransaction = {
+                ownerEndpointIDs: [endpointID],
+                openGestureCount: 1,
+                before: new Map(),
+            };
+            return;
+        }
+        this.activeParameterTransaction.ownerEndpointIDs.push(endpointID);
+        this.activeParameterTransaction.openGestureCount += 1;
     }
 
     sendParameterGestureEnd(endpointID: string) {
         this.gestureEnds.push(endpointID);
+        const active = this.activeParameterTransaction;
+        if (active === null) return;
+        active.openGestureCount = Math.max(0, active.openGestureCount - 1);
+        if (active.openGestureCount > 0) return;
+        this.parameterTransactions.push({
+            ownerEndpointIDs: [...active.ownerEndpointIDs],
+            changes: [...active.before.entries()].map(([changedEndpointID, before]) => ({
+                endpointID: changedEndpointID,
+                before,
+                after: this.parameterValues.get(changedEndpointID),
+            })),
+        });
+        this.activeParameterTransaction = null;
+    }
+
+    /** Model one host Undo of the most recently closed gesture transaction. */
+    undoLastParameterTransaction() {
+        const transaction = this.parameterTransactions.pop();
+        if (transaction === undefined) return false;
+        for (const change of transaction.changes) {
+            this.parameterValues.set(change.endpointID, change.before);
+            this.parameterListeners.get(change.endpointID)?.forEach((listener) => listener(change.before));
+        }
+        return true;
     }
 
     addEndpointListener(endpointID: string, listener: EndpointListener) {
@@ -945,6 +995,7 @@ export class MockPatchConnection implements PatchConnectionLike {
         this.gestureEnds = [];
         this.endpointMessages = [];
         this.midiInputEvents = [];
+        this.parameterTransactions = [];
     }
 
     getDebugSnapshot() {
@@ -968,6 +1019,10 @@ export class MockPatchConnection implements PatchConnectionLike {
             })),
             gestureStarts: [...this.gestureStarts],
             gestureEnds: [...this.gestureEnds],
+            parameterTransactions: this.parameterTransactions.map((transaction) => ({
+                ownerEndpointIDs: [...transaction.ownerEndpointIDs],
+                changes: transaction.changes.map((change) => ({ ...change })),
+            })),
             endpointMessages: this.endpointMessages.map((message) => ({
                 endpointID: message.endpointID,
                 value: message.value,

@@ -111,6 +111,13 @@ export type ReadoutCellSpec = {
         rule); the amount is derived storage. Requires the normalize/
         denormalize pair. Defaults to the linear amount-domain walk. */
     readonly amountDragStyle?: "amount-span" | "effective-value";
+    /** Canonical route-storage bounds when this surface presents a narrower
+        alternate domain (for example a Key Track family range). */
+    readonly modulationAmountBounds?: { readonly min: number; readonly max: number };
+    /** Route amount text override; the amount remains canonical storage. */
+    readonly formatRouteAmount?: (
+        route: Pick<ModulationRoute, "amount" | "polarity">,
+    ) => string;
     /** Tick-position override for cells whose display scale is not linear
         (e.g. a log Hz track). Defaults to linear normalization. Supply
         denormalizeValue with it: the base drag walks the display scale
@@ -352,7 +359,7 @@ export function useReadoutCells({
                 && route.sourceSlot === armedSource.sourceSlot
             )) ?? null;
         const amountBounds = topologyRoute !== null && cell.targetKind !== null
-            ? getModulationAmountBounds(cell.targetKind)
+            ? cell.modulationAmountBounds ?? getModulationAmountBounds(cell.targetKind)
             : null;
         setActiveRouteMirrored(topologyRoute);
         gestureScratchRef.current = {
@@ -578,11 +585,12 @@ export function useReadoutCells({
         let sourceLine = "";
         if (presentation.route !== null && armedSource !== null && cell.targetKind !== null) {
             const label = rackModulationSourceShortIdentity(armedSource);
-            const amountText = formatModulationAmountReadout(
-                cell.targetKind,
-                presentation.route.amount,
-                presentation.route.polarity,
-            );
+            const amountText = cell.formatRouteAmount?.(presentation.route)
+                ?? formatModulationAmountReadout(
+                    cell.targetKind,
+                    presentation.route.amount,
+                    presentation.route.polarity,
+                );
             sourceLine = `${label} · ${amountText}`;
         }
 

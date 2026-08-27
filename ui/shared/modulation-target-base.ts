@@ -29,6 +29,8 @@ import {
 import { getOscillatorControlAddress } from "./oscillator-binding";
 import { MOBILE_VOICE_PAGES, getMobileVoiceControlSpec } from "./mobile-voice-parameter-manifest";
 import {
+    parameterEntrySpecForKeyTrackModulationAmount,
+    parameterEntrySpecForKeyTrackOffset,
     parameterEntrySpecForMobileVoiceControl,
     parameterEntrySpecForRackParameter,
     parameterEntrySpecForScalar,
@@ -50,6 +52,14 @@ import {
     GLOBAL_TUNE_STEP_SEMITONES,
     GLOBAL_TUNE_TARGET_KIND,
 } from "./global-tune";
+import {
+    getKeyTrackDefinition,
+    keyTrackRouteAmountFromSemitones,
+    keyTrackRouteAmountToSemitones,
+    requireKeyTrackRange,
+    type KeyTrackControlDefinition,
+    type KeyTrackRouteStorage,
+} from "./key-track";
 
 export type ModulationTargetRailProjection = {
     /** Value -> [0,1] track position in the parameter's own display scale. */
@@ -80,6 +90,29 @@ export type ModulationTargetBase = {
         domain linearly; "effective-value" walks the MODULATED value along
         the parameter's own dial (the knobs' settled resonance rule). */
     readonly amountDragStyle: "amount-span" | "effective-value";
+    /** Optional alternate base presentation for the same canonical route
+        identity while its destination is in Key Track mode. */
+    readonly keyTrack: ModulationTargetKeyTrackBase | null;
+};
+
+export type ModulationTargetKeyTrackBase = {
+    readonly definition: KeyTrackControlDefinition;
+    readonly storage: KeyTrackRouteStorage;
+    readonly binding: {
+        readonly kind: "lane";
+        readonly descriptor: RackParameterDescriptor;
+    } | {
+        readonly kind: "host";
+        readonly enabledEndpointID: "filterCutoffKeyTrackEnabled";
+        readonly offsetEndpointID: "filterCutoffKeyTrackOffsetSemitones";
+    };
+};
+
+export type KeyTrackModulationTargetBasePresentation = {
+    readonly entrySpec: ParameterEntrySpec;
+    readonly amountSpec: ParameterEntrySpec;
+    readonly railProjection: ModulationTargetRailProjection;
+    readonly canonicalAmountBounds: { readonly min: number; readonly max: number };
 };
 
 const RAIL_EPSILON = 1e-9;
@@ -138,6 +171,55 @@ function buildRailProjection({ min, max, scale, application }: {
     return { normalizeValue, denormalizeValue, projectBand };
 }
 
+/** Present a tracked target as one continuous semitone-offset rail while
+    retaining its deployed route amount storage unchanged. */
+export function keyTrackModulationTargetBasePresentation(
+    keyTrack: ModulationTargetKeyTrackBase,
+): KeyTrackModulationTargetBasePresentation {
+    const range = requireKeyTrackRange(keyTrack.definition.family);
+    const normalizeValue = (value: number) => (
+        (Math.min(range.knobMax, Math.max(range.knobMin, value)) - range.knobMin)
+        / (range.knobMax - range.knobMin)
+    );
+    const denormalizeValue = (normalized: number) => (
+        range.knobMin
+        + (Math.min(1, Math.max(0, normalized)) * (range.knobMax - range.knobMin))
+    );
+    const projectBand: ModulationTargetRailProjection["projectBand"] = (
+        baseNormalized,
+        route,
+    ) => {
+        const clampedBase = Math.min(1, Math.max(0, baseNormalized));
+        const baseOffset = denormalizeValue(clampedBase);
+        const offsets = routeAmountOffsets(route).map((amount) => (
+            keyTrackRouteAmountToSemitones(amount, keyTrack.storage)
+        ));
+        const rawLow = baseOffset + offsets[0];
+        const rawHigh = baseOffset + offsets[1];
+        return Object.freeze({
+            baseNormalized: clampedBase,
+            lowNormalized: normalizeValue(rawLow),
+            highNormalized: normalizeValue(rawHigh),
+            clippedLow: rawLow < range.knobMin - RAIL_EPSILON,
+            clippedHigh: rawHigh > range.knobMax + RAIL_EPSILON,
+            fullyClipped: Math.abs(route.amount) > RAIL_EPSILON
+                && Math.abs(normalizeValue(rawHigh) - normalizeValue(rawLow)) <= RAIL_EPSILON,
+        });
+    };
+    return {
+        entrySpec: parameterEntrySpecForKeyTrackOffset(keyTrack.definition.family),
+        amountSpec: parameterEntrySpecForKeyTrackModulationAmount(
+            keyTrack.definition.family,
+            keyTrack.storage,
+        ),
+        railProjection: { normalizeValue, denormalizeValue, projectBand },
+        canonicalAmountBounds: {
+            min: keyTrackRouteAmountFromSemitones(range.routeMin, keyTrack.storage),
+            max: keyTrackRouteAmountFromSemitones(range.routeMax, keyTrack.storage),
+        },
+    };
+}
+
 const rackDescriptorsByEndpoint: ReadonlyMap<string, RackParameterDescriptor> = new Map(
     allRackParameterDescriptors().flatMap((descriptor: RackParameterDescriptor) => [
         [descriptor.endpointID, descriptor] as const,
@@ -189,6 +271,7 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
             throw new Error(`Rack modulation target "${targetKind}" has no rack descriptor.`);
         }
         const entrySpec = parameterEntrySpecForRackParameter(descriptor, descriptor.initial);
+        const keyTrackDefinition = getKeyTrackDefinition(`lane.${descriptor.endpointID}`);
         return {
             endpointID: descriptor.endpointID,
             entrySpec,
@@ -201,6 +284,11 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
                 application: descriptor.modulationApplication ?? "linear",
             }),
             amountDragStyle: descriptor.modulationDragStyle ?? "amount-span",
+            keyTrack: keyTrackDefinition === null ? null : {
+                definition: keyTrackDefinition,
+                storage: descriptor.modulationApplication === "semitones" ? "semitones" : "octaves",
+                binding: { kind: "lane", descriptor },
+            },
         };
     }
 
@@ -226,6 +314,7 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
                 application: "linear",
             }),
             amountDragStyle: "amount-span",
+            keyTrack: null,
         };
     }
 
@@ -292,6 +381,7 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
                 application: "linear",
             }),
             amountDragStyle: "amount-span",
+            keyTrack: null,
         };
     }
     const voiceFilterDescriptor = Object.values(VOICE_FILTER_KNOB_DESCRIPTORS)
@@ -310,6 +400,23 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
                 application: voiceFilterDescriptor.modulationApplication ?? "linear",
             }),
             amountDragStyle: voiceFilterDescriptor.modulationDragStyle ?? "amount-span",
+            keyTrack: targetKind === "filterCutoffOctaves"
+                ? (() => {
+                    const definition = getKeyTrackDefinition("voice.filterCutoff");
+                    if (definition === null) {
+                        throw new Error("Voice Filter Cutoff is missing its Key Track definition.");
+                    }
+                    return {
+                        definition,
+                        storage: "octaves" as const,
+                        binding: {
+                            kind: "host" as const,
+                            enabledEndpointID: "filterCutoffKeyTrackEnabled" as const,
+                            offsetEndpointID: "filterCutoffKeyTrackOffsetSemitones" as const,
+                        },
+                    };
+                })()
+                : null,
         };
     }
     return null;

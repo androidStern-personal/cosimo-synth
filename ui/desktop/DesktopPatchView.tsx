@@ -769,6 +769,8 @@ function buildFilterModulationTravel(args: {
     cutoffEditable: boolean;
     qEditable: boolean;
     accent: string;
+    cutoffAmountLabel?: string;
+    cutoffRouteStorageAmount?: number;
 }): FilterModulationTravel {
     const clampHz = (hz: number) => Math.min(FILTER_CUTOFF_MAX_HZ, Math.max(FILTER_CUTOFF_MIN_HZ, hz));
     const clampQ = (q: number) => Math.min(FILTER_Q_MAX, Math.max(FILTER_Q_MIN, q));
@@ -795,6 +797,8 @@ function buildFilterModulationTravel(args: {
         showStartHandle: args.cutoffBipolar || args.qBipolar,
         baseHandleMode: anyRoutedUnipolar ? "start" : "translate",
         centerHandle: anyRoutedUnipolar,
+        cutoffAmountLabel: args.cutoffAmountLabel,
+        cutoffRouteStorageAmount: args.cutoffRouteStorageAmount,
     };
 }
 
@@ -2286,13 +2290,28 @@ function FilterSection({
     const displayedCutoffDescriptor = keyTrackEnabled
         ? VOICE_FILTER_KEY_TRACK_DESCRIPTOR
         : VOICE_FILTER_KNOB_DESCRIPTORS.cutoff;
+    const graphBaseCutoffHz = keyTrackEnabled
+        ? clamp(
+            observedFilterState.cutoffHz,
+            FILTER_CUTOFF_MIN_HZ,
+            FILTER_CUTOFF_MAX_HZ,
+        )
+        : filterCutoff.value;
     const toggleKeyTrack = useCallback(() => {
         if (keyTrackEnabled) {
             filterCutoffKeyTrackEnabled.commitValue(0);
             return;
         }
-        filterCutoffKeyTrackOffsetSemitones.commitValue(0);
-        filterCutoffKeyTrackEnabled.commitValue(1);
+        // One product action: the retained offset is centred while the
+        // enabled endpoint owns a single host/user-edit transaction. Host
+        // Undo therefore cannot leave Key Track half-enabled.
+        filterCutoffKeyTrackEnabled.beginGesture();
+        try {
+            filterCutoffKeyTrackOffsetSemitones.setValue(0);
+            filterCutoffKeyTrackEnabled.setValue(1);
+        } finally {
+            filterCutoffKeyTrackEnabled.endGesture();
+        }
     }, [
         filterCutoffKeyTrackEnabled,
         filterCutoffKeyTrackOffsetSemitones,
@@ -2318,6 +2337,7 @@ function FilterSection({
         startQ: number;
         endCutoffHz: number;
         endQ: number;
+        baseOffsetSemitones: number;
     } | null>(null);
 
     if (compact) {
@@ -2328,10 +2348,10 @@ function FilterSection({
         // T04A: the travel overlay renders only while the armed source has a
         // filter mapping — color must never claim a mapping that does not
         // exist. Each axis is live only through its own route.
-        const modulationTravel = keyTrackEnabled || (armedCutoffRoute === null && armedQRoute === null)
+        const modulationTravel = armedCutoffRoute === null && armedQRoute === null
             ? null
             : buildFilterModulationTravel({
-                baseCutoffHz: filterCutoff.value,
+                baseCutoffHz: graphBaseCutoffHz,
                 baseQ: filterQ.value,
                 cutoffAmountOctaves: armedCutoffRoute === null
                     ? 0
@@ -2344,6 +2364,15 @@ function FilterSection({
                 cutoffEditable: armedCutoffRoute !== null,
                 qEditable: armedQRoute !== null,
                 accent: findRackModulationSource(armedSource.sourceKind, armedSource.sourceSlot).accent,
+                cutoffAmountLabel: keyTrackEnabled && armedCutoffRoute !== null
+                    ? `${Number(keyTrackRouteAmountToSemitones(
+                        armedCutoffAmount.value ?? armedCutoffRoute.amount,
+                        "octaves",
+                    ).toFixed(2))} st`
+                    : undefined,
+                cutoffRouteStorageAmount: keyTrackEnabled
+                    ? armedCutoffAmount.value ?? armedCutoffRoute?.amount
+                    : undefined,
             });
         const handleTravelGestureStart = (side: FilterTravelGestureSide) => {
             if (modulationTravel === null) {
@@ -2351,16 +2380,17 @@ function FilterSection({
             }
             travelDragRef.current = {
                 side,
-                baseCutoffHz: filterCutoff.value,
+                baseCutoffHz: graphBaseCutoffHz,
                 baseQ: filterQ.value,
                 startCutoffHz: modulationTravel.start.cutoffHz,
                 startQ: modulationTravel.start.q,
                 endCutoffHz: modulationTravel.end.cutoffHz,
                 endQ: modulationTravel.end.q,
+                baseOffsetSemitones: filterCutoffKeyTrackOffsetSemitones.value,
             };
             // Endpoint drags can rewrite base cutoff/Q, so they bracket host
             // gestures exactly like the base handle does.
-            filterCutoff.beginGesture();
+            displayedFilterCutoff.beginGesture();
             filterQ.beginGesture();
         };
         const handleTravelGestureEnd = () => {
@@ -2368,7 +2398,7 @@ function FilterSection({
                 return;
             }
             travelDragRef.current = null;
-            filterCutoff.endGesture();
+            displayedFilterCutoff.endGesture();
             filterQ.endGesture();
         };
         const handleTravelEndpointSet = (side: FilterTravelEndpointSide, state: FilterEndpointState) => {
@@ -2376,6 +2406,16 @@ function FilterSection({
             if (anchor === null) {
                 throw new Error("Travel endpoint edits require an open travel gesture.");
             }
+            const setCutoffBaseHz = (nextBaseHz: number) => {
+                if (keyTrackEnabled) {
+                    filterCutoffKeyTrackOffsetSemitones.setValue(
+                        anchor.baseOffsetSemitones
+                        + (12 * Math.log2(nextBaseHz / anchor.baseCutoffHz)),
+                    );
+                    return;
+                }
+                filterCutoff.setValue(nextBaseHz);
+            };
 
             // Every handle moves independently: the dragged grip follows the
             // pointer and every other grip stays planted, so base and amount
@@ -2384,20 +2424,20 @@ function FilterSection({
             const applyCutoff = () => {
                 if (armedCutoffRoute === null) {
                     if (side === "base") {
-                        filterCutoff.setValue(state.cutoffHz);
+                        setCutoffBaseHz(state.cutoffHz);
                     }
                     return;
                 }
                 if (armedCutoffRoute.polarity === "bipolar") {
                     if (side === "base") {
                         // Base is the travel center: translation, amount kept.
-                        filterCutoff.setValue(state.cutoffHz);
+                        setCutoffBaseHz(state.cutoffHz);
                         return;
                     }
                     const fixedHz = side === "end" ? anchor.startCutoffHz : anchor.endCutoffHz;
                     const nextBaseHz = Math.sqrt(fixedHz * state.cutoffHz);
                     const nextAmount = Math.log2(state.cutoffHz / nextBaseHz) * (side === "end" ? 1 : -1);
-                    filterCutoff.setValue(nextBaseHz);
+                    setCutoffBaseHz(nextBaseHz);
                     armedCutoffAmount.setValue(clampModulationRouteAmount("filterCutoffOctaves", nextAmount));
                     return;
                 }
@@ -2410,7 +2450,7 @@ function FilterSection({
                 }
                 // Unipolar start (the base handle or the mixed-polarity start
                 // grip): base follows the pointer and the end stays planted.
-                filterCutoff.setValue(state.cutoffHz);
+                setCutoffBaseHz(state.cutoffHz);
                 armedCutoffAmount.setValue(clampModulationRouteAmount(
                     "filterCutoffOctaves",
                     Math.log2(anchor.endCutoffHz / state.cutoffHz),
@@ -2447,9 +2487,20 @@ function FilterSection({
             applyQ();
         };
         const handleTravelTranslate = (start: FilterEndpointState, end: FilterEndpointState) => {
-            if (travelDragRef.current === null) {
+            const anchor = travelDragRef.current;
+            if (anchor === null) {
                 throw new Error("Travel translation requires an open travel gesture.");
             }
+            const setCutoffBaseHz = (nextBaseHz: number) => {
+                if (keyTrackEnabled) {
+                    filterCutoffKeyTrackOffsetSemitones.setValue(
+                        anchor.baseOffsetSemitones
+                        + (12 * Math.log2(nextBaseHz / anchor.baseCutoffHz)),
+                    );
+                    return;
+                }
+                filterCutoff.setValue(nextBaseHz);
+            };
             // Rigid screen-space translation: re-derive base + amounts from
             // the translated endpoint pair per each axis's polarity. Amounts
             // may breathe slightly on the nonlinear Q surface — the shape the
@@ -2457,20 +2508,20 @@ function FilterSection({
             if (armedCutoffRoute !== null) {
                 if (armedCutoffRoute.polarity === "bipolar") {
                     const nextBaseHz = Math.sqrt(start.cutoffHz * end.cutoffHz);
-                    filterCutoff.setValue(nextBaseHz);
+                    setCutoffBaseHz(nextBaseHz);
                     armedCutoffAmount.setValue(clampModulationRouteAmount(
                         "filterCutoffOctaves",
                         Math.log2(end.cutoffHz / nextBaseHz),
                     ));
                 } else {
-                    filterCutoff.setValue(start.cutoffHz);
+                    setCutoffBaseHz(start.cutoffHz);
                     armedCutoffAmount.setValue(clampModulationRouteAmount(
                         "filterCutoffOctaves",
                         Math.log2(end.cutoffHz / start.cutoffHz),
                     ));
                 }
             } else {
-                filterCutoff.setValue(start.cutoffHz);
+                setCutoffBaseHz(start.cutoffHz);
             }
             if (armedQRoute !== null) {
                 if (armedQRoute.polarity === "bipolar") {
@@ -2501,14 +2552,14 @@ function FilterSection({
                     data-modulation-target-companions="filterQ"
                 >
                 <div
-                    className={`mobile-filter-graph ${filterCutoff.isReady && filterQ.isReady ? "" : "pointer-events-none opacity-45"}`}
+                    className={`mobile-filter-graph ${displayedFilterCutoff.isReady && filterQ.isReady ? "" : "pointer-events-none opacity-45"}`}
                     data-disabled={filterOff}
-                    data-host-state={filterCutoff.isReady && filterQ.isReady ? "ready" : "loading"}
-                    aria-busy={!filterCutoff.isReady || !filterQ.isReady}
+                    data-host-state={displayedFilterCutoff.isReady && filterQ.isReady ? "ready" : "loading"}
+                    aria-busy={!displayedFilterCutoff.isReady || !filterQ.isReady}
                 >
                     <FilterResponseGraph
                         baseMode={filterMode.value}
-                        baseCutoffHz={filterCutoff.value}
+                        baseCutoffHz={graphBaseCutoffHz}
                         baseQ={filterQ.value}
                         liveMode={observedFilterState.mode}
                         liveCutoffHz={observedFilterState.cutoffHz}
@@ -2520,11 +2571,11 @@ function FilterSection({
                         resonanceQFromSurface={resonanceQFromSurface}
                         resonanceCurveDebugState={resonanceCurveDebugState}
                         onGestureStart={() => {
-                            filterCutoff.beginGesture();
+                            displayedFilterCutoff.beginGesture();
                             filterQ.beginGesture();
                         }}
                         onGestureEnd={() => {
-                            filterCutoff.endGesture();
+                            displayedFilterCutoff.endGesture();
                             filterQ.endGesture();
                         }}
                         onCutoffSet={(nextValue) => {

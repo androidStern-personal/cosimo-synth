@@ -2,6 +2,7 @@ import type { PatchConnectionLike } from "./cmajor-react";
 import type { LaneDeviceInstance, LaneDeviceType } from "./lane-modulation-targets";
 import {
     LEGACY_LANE_DEVICE_PARAM_ENDPOINTS,
+    PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS,
     LANE_SLOT_ORDINAL_COUNT,
     LANE_SLOT_PARAM_COUNT,
     buildLaneSlotParamValues,
@@ -207,6 +208,7 @@ function parseDeviceRecord(deviceId: string, input: unknown):
         && inputKeys.every((key) => expected.includes(key));
     const hasValidShape = hasShape(endpoints)
         || hasShape(legacyEndpoints)
+        || (parsedId.deviceType === "chorus" && hasShape(PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS))
         || hasShape(presentationEndpoints);
     if (!hasValidShape) {
         return { failure: err(`device ${deviceId} must carry every parameter once`) };

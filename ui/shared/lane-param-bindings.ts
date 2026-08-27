@@ -34,7 +34,11 @@ import {
     LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_ENABLED,
     LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES,
 } from "./lane-state";
-import { getLaneSlotId, getLaneSlotParamIndex } from "./lane-slot-params";
+import {
+    getLaneSlotId,
+    getLaneSlotParamIndex,
+    laneDeviceParamEndpoints,
+} from "./lane-slot-params";
 import type { EffectModuleId } from "./target-descriptor";
 import {
     buildPatchModulationTargetOptions,
@@ -181,14 +185,36 @@ export function useLaneStateDoc(): {
         if (parsedId === null || paramIndex === null) {
             throw new Error(`Unknown lane parameter: ${deviceId}.${endpointID}`);
         }
-        acceptLaneState(store, setLaneDeviceParam(store.state, deviceId, endpointID, value) ?? store.state);
-        store.deliverySerial += 1;
-        patchConnection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
-            slotId: getLaneSlotId(parsedId.deviceType, parsedId.instanceNumber - 1),
-            paramIndex,
-            deliverySerial: store.deliverySerial,
-            value,
-        });
+        const previousParams = store.state.devices[deviceId]?.params;
+        const nextState = setLaneDeviceParam(store.state, deviceId, endpointID, value) ?? store.state;
+        const nextParams = nextState.devices[deviceId]?.params;
+        acceptLaneState(store, nextState);
+        const sendField = (nextEndpointID: string, nextValue: number) => {
+            const nextParamIndex = getLaneSlotParamIndex(parsedId.deviceType, nextEndpointID);
+            if (nextParamIndex === null) return;
+            store.deliverySerial += 1;
+            patchConnection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
+                slotId: getLaneSlotId(parsedId.deviceType, parsedId.instanceNumber - 1),
+                paramIndex: nextParamIndex,
+                deliverySerial: store.deliverySerial,
+                value: nextValue,
+            });
+        };
+        // A state transition may atomically change dependent fields. Publish
+        // those first so the edited field can never expose a stale,
+        // contradictory runtime mode (Delay Sync versus Key Track).
+        if (previousParams !== undefined && nextParams !== undefined) {
+            for (const dependentEndpointID of laneDeviceParamEndpoints(parsedId.deviceType)) {
+                if (dependentEndpointID !== endpointID
+                        && !Object.is(
+                            previousParams[dependentEndpointID],
+                            nextParams[dependentEndpointID],
+                        )) {
+                    sendField(dependentEndpointID, nextParams[dependentEndpointID]);
+                }
+            }
+        }
+        sendField(endpointID, nextParams?.[endpointID] ?? value);
     }, [patchConnection, store]);
 
     const setKeyTrackEnabled = useCallback((

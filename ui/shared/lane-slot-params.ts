@@ -5,7 +5,7 @@
  * device parameter — ordinal 0 included — rides the two record events on
  * wt::EffectsRack:
  *
- *   laneSlotParams      { slotId, deliverySerial, values[11] }  bulk restore
+ *   laneSlotParams      { slotId, deliverySerial, values[12] }  bulk restore
  *   laneSlotParamValue  { slotId, paramIndex, deliverySerial, value }  live edit
  *
  * A slot's record is POSITIONAL: `values[paramIndex]` for the device type's
@@ -18,7 +18,7 @@
 import type { LaneDeviceType } from "./lane-modulation-targets";
 
 /** Engine laneSlotParamCount: every record carries this many values. */
-export const LANE_SLOT_PARAM_COUNT = 11;
+export const LANE_SLOT_PARAM_COUNT = 12;
 
 /** Engine lanePoolInstanceCount: ordinals 0..4 exist per device type. */
 export const LANE_SLOT_ORDINAL_COUNT = 5;
@@ -51,7 +51,7 @@ const LANE_DEVICE_PARAM_LAYOUT: Readonly<Record<LaneDeviceType, ReadonlyArray<st
     ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
     chorus: [
         "chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingOffsetMode", "chorusRingFineSemitones",
-        "chorusRingFrequencyHz", "chorusRingKeyTrackEnabled", "chorusRingKeyTrackOffsetSemitones",
+        "chorusRingFrequencyHz", "chorusRingKeyTrackEnabled", "chorusRingKeyTrackOffsetSemitones", "chorusRingLegacyClampEnabled",
     ],
     flanger: [
         "flangerRate", "flangerDepth", "flangerFeedback", "flangerMix",
@@ -81,6 +81,12 @@ export const LEGACY_LANE_DEVICE_PARAM_ENDPOINTS: Readonly<Record<LaneDeviceType,
     reverb: ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"],
 });
 
+/** The first T50 record shape, before the hidden Chorus compatibility bit. */
+export const PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS: ReadonlyArray<string> = Object.freeze([
+    "chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingOffsetMode", "chorusRingFineSemitones",
+    "chorusRingFrequencyHz", "chorusRingKeyTrackEnabled", "chorusRingKeyTrackOffsetSemitones",
+]);
+
 const APPENDED_LANE_PARAM_DEFAULTS: Readonly<Record<string, number>> = Object.freeze({
     globalFilterCutoffKeyTrackEnabled: 0,
     globalFilterCutoffKeyTrackOffsetSemitones: 0,
@@ -93,6 +99,7 @@ const APPENDED_LANE_PARAM_DEFAULTS: Readonly<Record<string, number>> = Object.fr
     chorusRingFrequencyHz: 28,
     chorusRingKeyTrackEnabled: 0,
     chorusRingKeyTrackOffsetSemitones: 0,
+    chorusRingLegacyClampEnabled: 0,
     flangerBaseDelayMs: 0.6,
     flangerBaseDelayKeyTrackEnabled: 0,
     flangerBaseDelayKeyTrackOffsetSemitones: 0,
@@ -134,15 +141,17 @@ export function materializeLaneDeviceParams(
         params[endpointID] = fallback;
     }
 
+    const legacyChorusEndpoints = LEGACY_LANE_DEVICE_PARAM_ENDPOINTS.chorus;
+    const inputEndpoints = Object.keys(input);
     const isLegacyChorus = deviceType === "chorus"
-        && Object.hasOwn(input, "chorusRingOffsetMode")
-        && Object.hasOwn(input, "chorusRingFineSemitones")
-        && !Object.hasOwn(input, "chorusRingFrequencyHz");
+        && inputEndpoints.length === legacyChorusEndpoints.length
+        && inputEndpoints.every((endpointID) => legacyChorusEndpoints.includes(endpointID));
     if (isLegacyChorus) {
         params.chorusRingKeyTrackEnabled = 1;
         params.chorusRingKeyTrackOffsetSemitones = legacyChorusRingOffsetSemitones(
             Number(input.chorusRingOffsetMode),
         ) + Number(input.chorusRingFineSemitones);
+        params.chorusRingLegacyClampEnabled = 1;
     }
     return params;
 }

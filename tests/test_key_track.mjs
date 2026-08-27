@@ -178,7 +178,7 @@ test("lane records append Key Track fields without moving deployed parameter ind
     assert.equal(slots.getLaneSlotParamIndex("chorus", "chorusRingFrequencyHz"), 8);
     assert.equal(slots.getLaneSlotParamIndex("flanger", "flangerBaseDelayMs"), 4);
     assert.equal(slots.getLaneSlotParamIndex("delay", "delayFilterKeyTrackOffsetSemitones"), 9);
-    assert.equal(slots.LANE_SLOT_PARAM_COUNT, 11);
+    assert.equal(slots.LANE_SLOT_PARAM_COUNT, 12);
 });
 
 test("legacy lane records migrate Key Track off while preserving every ordinary value", async () => {
@@ -251,6 +251,89 @@ test("legacy Chorus Ring migrates to the same tracked pitch without changing rou
     assert.equal(params.chorusRingKeyTrackEnabled, 1);
     assert.equal(params.chorusRingKeyTrackOffsetSemitones, -4.25);
     assert.equal(params.chorusRingFineSemitones, 0.75, "the deployed route/slot identity remains stored");
+    assert.equal(params.chorusRingLegacyClampEnabled, 1);
+
+    const reparsed = lane.parseLaneStateV2(lane.serializeLaneStateV2(parsed.value));
+    assert.equal(reparsed._tag, "ok");
+    assert.equal(reparsed.value.devices["chorus#1"].params.chorusRingLegacyClampEnabled, 1);
+});
+
+test("legacy Chorus mode-zero/fine-zero remains distinguishable from new linear state", async () => {
+    const slots = await loadUIModule(repoRoot, "ui/shared/lane-slot-params.ts");
+    const legacyInput = {
+        chorusMix: 0.5,
+        chorusMotionMode: 1,
+        chorusBloomMode: 0,
+        chorusTone: 0.5,
+        chorusFeedback: 0.42,
+        chorusRingAmount: 0,
+        chorusRingOffsetMode: 0,
+        chorusRingFineSemitones: 0,
+    };
+    const legacy = slots.materializeLaneDeviceParams("chorus", legacyInput);
+    const nonExactLegacyLookalike = slots.materializeLaneDeviceParams("chorus", {
+        ...legacyInput,
+        unknownFutureField: 1,
+    });
+    const current = slots.materializeLaneDeviceParams("chorus", {
+        ...legacy,
+        chorusRingFrequencyHz: 28,
+        chorusRingKeyTrackEnabled: 1,
+        chorusRingKeyTrackOffsetSemitones: 7,
+        chorusRingLegacyClampEnabled: 0,
+    });
+
+    assert.equal(legacy.chorusRingKeyTrackOffsetSemitones, 7);
+    assert.equal(legacy.chorusRingLegacyClampEnabled, 1);
+    assert.equal(nonExactLegacyLookalike.chorusRingLegacyClampEnabled, 0);
+    assert.equal(current.chorusRingKeyTrackOffsetSemitones, 7);
+    assert.equal(current.chorusRingLegacyClampEnabled, 0);
+    assert.equal(slots.getLaneSlotParamIndex("chorus", "chorusRingLegacyClampEnabled"), 11);
+    assert.equal(slots.LANE_SLOT_PARAM_COUNT, 12);
+});
+
+test("pre-compatibility T50 Chorus records default to the new linear law", async () => {
+    const lane = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
+    const slots = await loadUIModule(repoRoot, "ui/shared/lane-slot-params.ts");
+    const currentParams = Object.fromEntries(
+        slots.PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS.map((endpointID) => [endpointID, ({
+            chorusMix: 0.5,
+            chorusMotionMode: 1,
+            chorusBloomMode: 0,
+            chorusTone: 0.5,
+            chorusFeedback: 0.42,
+            chorusRingAmount: 0,
+            chorusRingOffsetMode: 0,
+            chorusRingFineSemitones: 0,
+            chorusRingFrequencyHz: 28,
+            chorusRingKeyTrackEnabled: 1,
+            chorusRingKeyTrackOffsetSemitones: 7,
+        })[endpointID]]),
+    );
+    const parsed = lane.parseLaneStateV2({
+        format: "cosimo.lane",
+        version: 2,
+        devices: { "chorus#1": { params: currentParams } },
+        chain: [{ kind: "device", deviceId: "chorus#1", enabled: true }],
+    });
+
+    assert.equal(parsed._tag, "ok");
+    assert.equal(parsed.value.devices["chorus#1"].params.chorusRingLegacyClampEnabled, 0);
+});
+
+test("Chorus legacy clamp metadata is absent from public UI and modulation inventories", async () => {
+    const descriptors = await loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts");
+    const targets = await loadUIModule(repoRoot, "ui/shared/lane-modulation-targets.ts");
+    const synthSource = await readFile(path.join(repoRoot, "cmajor/WavetableSynth.cmajor"), "utf8");
+    const chorusEndpoints = descriptors.getRackEffectDescriptor("chorus").parameters
+        .map((descriptor) => descriptor.endpointID);
+
+    assert.equal(chorusEndpoints.includes("chorusRingLegacyClampEnabled"), false);
+    assert.equal(targets.getLaneDeviceModulationTargetKinds({
+        instanceId: "chorus#1",
+        deviceType: "chorus",
+    }).some((kind) => kind.includes("chorusRingLegacyClampEnabled")), false);
+    assert.doesNotMatch(synthSource, /chorusRingLegacyClampEnabled/);
 });
 
 test("fresh lane devices start Key Track off and Flanger gets its new ordinary base delay", async () => {
@@ -264,6 +347,7 @@ test("fresh lane devices start Key Track off and Flanger gets its new ordinary b
     assert.equal(chorus.chorusRingFrequencyHz, 28);
     assert.equal(chorus.chorusRingKeyTrackEnabled, 0);
     assert.equal(chorus.chorusRingKeyTrackOffsetSemitones, 0);
+    assert.equal(chorus.chorusRingLegacyClampEnabled, 0);
 });
 
 test("lane Key Track transitions preserve ordinary values and make Delay modes exclusive", async () => {
@@ -403,7 +487,7 @@ test("the compiled source wires every current eligible control and no named excl
     ]) {
         assert.match(engine, new RegExp(fragment));
     }
-    assert.match(chorus, /resolveKeyTrackedFrequencyHz/);
+    assert.match(chorus, /resolveChorusRingFrequencyHz/);
     assert.match(flanger, /baseDelayMsIn/);
     assert.match(desktop, /data-role={`key-track-\$\{descriptor\.endpointID\}`}/);
     assert.match(desktop, /data-role={`key-track-frequencySplit-\$\{which\}-\$\{groupId\}`}/);
@@ -421,4 +505,36 @@ test("the compiled source wires every current eligible control and no named excl
     ]) {
         assert.doesNotMatch(engine, new RegExp(excludedFragment));
     }
+});
+
+test("Effects Rack enters tracked conversions only when Key Track is enabled", async () => {
+    const engine = await readFile(path.join(repoRoot, "cmajor/EffectsRack.cmajor"), "utf8");
+    const section = (start, end) => {
+        const startIndex = engine.indexOf(start);
+        const endIndex = engine.indexOf(end, startIndex + start.length);
+        assert.ok(startIndex >= 0 && endIndex > startIndex, `missing source section ${start}`);
+        return engine.slice(startIndex, endIndex);
+    };
+
+    const split = section("let lowKeyTrackEnabled", "if (lowHz != splitTunedLowHz");
+    assert.match(split, /let lowTargetHz = lowKeyTrackEnabled\s*\? resolveKeyTrackedFrequencyHz/);
+    assert.match(split, /let highTargetHz = highKeyTrackEnabled\s*\? resolveKeyTrackedFrequencyHz/);
+    assert.match(split, /rackOctaveScale \(splitOctaveScalers\[unit, 0\]/);
+    assert.match(split, /rackOctaveScale \(splitOctaveScalers\[unit, 1\]/);
+    assert.doesNotMatch(split, /resolveKeyTrackedFrequencyHz \(\s*lowKeyTrackEnabled \?/);
+    assert.doesNotMatch(split, /resolveKeyTrackedFrequencyHz \(\s*highKeyTrackEnabled \?/);
+
+    const wetLp = section("let wetLPKeyTrackEnabled", "distortionPool[ordinal].modeIn");
+    assert.match(wetLp, /let wetLPHzTarget = wetLPKeyTrackEnabled\s*\? resolveKeyTrackedFrequencyHz/);
+    assert.match(wetLp, /laneOctaveScalerDistortionWetLP/);
+
+    const flanger = section("let baseDelayKeyTrackEnabled", "flangerPool[ordinal].rateIn");
+    assert.match(flanger, /let baseDelayTargetMs = baseDelayKeyTrackEnabled\s*\? resolveKeyTrackedPeriodMilliseconds/);
+    assert.match(flanger, /laneOctaveScalerFlangerBaseDelay/);
+    assert.doesNotMatch(flanger, /resolveKeyTrackedPeriodMilliseconds \(\s*baseDelayKeyTrackEnabled \?/);
+
+    const scaler = section("float32 rackOctaveScale", "//==============================================================================",);
+    assert.match(scaler, /abs \(offsetOctaves - scaler\.offsetOctaves\) > rackOctaveEpsilon/);
+    assert.match(scaler, /scaler\.scale = std::intrinsics::pow/);
+    assert.match(engine, /splitOctaveScalers\[unit, crossover\]\.scale = 1\.0f/);
 });

@@ -129,6 +129,9 @@ namespace wt
         input value float32 ringKeyTrackEnabledIn [[ name: "Chorus Ring Key Track", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
         input value float32 ringKeyTrackOffsetSemitonesIn [[ name: "Chorus Ring Key Track Offset", min: -48.0f, max: 48.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
         input value float32 ringRouteOffsetSemitonesIn [[ name: "Chorus Ring Route Offset", min: -60.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
+        // Positional lane-record compatibility metadata only. This endpoint
+        // is unannotated and is never exposed as UI, host, or modulation state.
+        input value float32 ringLegacyClampEnabledIn [[ init: 0.0f ]];
         // Deprecated internal endpoints remain so old test graphs and compiled
         // child wiring keep their identities; lane-state migration folds their
         // values into ringKeyTrackOffsetSemitonesIn.
@@ -482,11 +485,13 @@ namespace wt
                 let lowCoeff = chorusCoefficientForCutoff (sampleRate, lpCutoff);
                 let highCoeff = chorusCoefficientForCutoff (sampleRate, hpCutoff);
 
-                let targetRingHz = resolveKeyTrackedFrequencyHz (
+                let targetRingHz = resolveChorusRingFrequencyHz (
                     ringKeyTrackEnabledIn,
+                    ringLegacyClampEnabledIn,
                     ringFrequencyHzIn,
                     trackingPitchHzIn,
                     ringKeyTrackOffsetSemitonesIn,
+                    ringFineSemitonesIn,
                     ringRouteOffsetSemitonesIn,
                     0.1f,
                     sampleRate * 0.45f);
