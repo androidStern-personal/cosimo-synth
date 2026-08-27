@@ -56,13 +56,15 @@ const EXPECTED_VOICE_BINDINGS = {
     "voice-filter.drive": ["unbacked", "no-endpoint", null],
 };
 
-test("the catalog is the complete eight-effect DSP inventory plus the voice surface", async () => {
+test("the catalog is the complete eight-effect, Frequency Split, and voice surface", async () => {
     const catalog = await catalogPromise;
     const rackCatalog = await rackCatalogPromise;
     const modulationTargets = await modulationTargetsPromise;
     const all = catalog.allTargetDescriptors();
     const rackParameters = rackCatalog.allRackParameterDescriptors();
-    const rackTargets = all.filter((descriptor) => descriptor.workspace === "effects");
+    const effectsTargets = all.filter((descriptor) => descriptor.workspace === "effects");
+    const rackTargets = effectsTargets.filter((descriptor) => descriptor.moduleId !== "frequency-split");
+    const frequencySplitTargets = effectsTargets.filter((descriptor) => descriptor.moduleId === "frequency-split");
     const voiceTargets = all.filter((descriptor) => descriptor.workspace === "voice");
     const describedVoiceModulationKinds = voiceTargets.flatMap((descriptor) => (
         descriptor.modulationTargetKind === null ? [] : [descriptor.modulationTargetKind]
@@ -79,6 +81,10 @@ test("the catalog is the complete eight-effect DSP inventory plus the voice surf
     assert.deepEqual(
         rackTargets.map((descriptor) => descriptor.targetId),
         rackParameters.map((parameter) => `${parameter.effectId}.${parameter.endpointID}`),
+    );
+    assert.deepEqual(
+        frequencySplitTargets.map((descriptor) => descriptor.targetId),
+        ["frequency-split.low", "frequency-split.high"],
     );
     assert.equal(new Set(all.map((descriptor) => descriptor.targetId)).size, all.length);
 });
@@ -126,7 +132,9 @@ test("every rack target is bound to its real Cmajor endpoint", async () => {
             descriptor.modulationTargetKind,
             parameter.modulationTargetIndex === null
                 ? null
-                : (await import("../patch_gui/modulation-targets.js")).laneBaseKindForRackEndpoint(parameter.endpointID),
+                : (await import("../patch_gui/modulation-targets.js")).laneBaseKindForRackEndpoint(
+                    rackCatalog.rackModulationIdentityEndpointID(parameter),
+                ),
             parameter.endpointID,
         );
         assert.ok(Math.abs(descriptor.binding.toEngine(descriptor.initialValue) - parameter.initial) < 1e-6);

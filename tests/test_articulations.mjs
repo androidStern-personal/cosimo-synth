@@ -256,6 +256,7 @@ test("articulation snapshots normalize parameter bounds and dedupe route amounts
         warpAmount: 1,
         filterMode: 5,
         filterCutoff: 20,
+        filterKeyTrackOffsetSemitones: 0,
         filterQ: 20,
         unisonVoices: 8,
         unisonDetune: 1,

@@ -192,7 +192,7 @@ test("rack base families round-trip through descriptor-owned units", async () =>
     const cases = [
         ["distortionDriveDb", 12.5, "12.5 dB", "dB"],
         ["phaserPhase", -90, "-90 deg", "°"],
-        ["chorusRingFineSemitones", 1.25, "1.25 st", "st"],
+        ["chorusRingFrequencyHz", 440, "440 Hz", "Hz"],
         ["chorusMix", 0.375, "37.5%", "%"],
         ["ottMix", 37.5, "37.5 %", "%"],
     ];
