@@ -1388,6 +1388,13 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - One setting changes placement without losing the selected source, open editor/popout, mapping gesture, or audition state. The coefficient scales each placement without overlap, clipping, uneven spacing, or changing the parked row's required height.
     - Hide/show animation leaves no permanent blank row, the tiny restore tab remains usable, and neither state blocks page content or the bottom navigation.
     - Scale, placement, and parked visibility survive relaunch as application preferences, do not change a saved patch's sound, and are covered at representative phone, desktop, and plugin sizes.
+    Coordinator integration checkpoint (2026-08-27):
+    - The reviewed implementation and two focused repairs are integrated from owner tips `d9ac2108`, `9286a573`, and `68c48b48`. Scale, explicit floating-left/floating-right/parked placement, parked visibility, source-page continuity, editor/popout continuity, and application-only persistence are present without entering sound, preset, URL, host, or modulation state.
+    - The final 320 px matrix proves every parked source/tool target is at least 44 px wide and 40 px high with owned inset hit probes. Hiding/restoring preserves the same quick-sheet and full-MSEG DOM instances, while a live floating-to-parked change preserves a real drag through route creation.
+    - Moving-master review caught and repaired an already-selected MSEG tap that silently moved the visible source page and prevented T66's MSEG 1 -> MSEG 2 Rate drag from starting. The exact composed T66 route/create/edit case and T60 live-placement drag case both pass after repair.
+    - The complete desktop UI run was 272/274 before that focused repair: all seven T60 cases passed, the established React Grab `navigator.webdriver` assertion remained red, and the T66 composed regression was repaired and passed in isolated rerun as required by the integration protocol. Generated Developer Settings/Sites proof passes 1/1; source-map provenance and focused strict TypeScript are clean.
+    - Fresh HMR was verified from coordinator worktree `74e4` at `http://127.0.0.1:5174` with `usesViteClient: true`, then stopped. A final compiled-mode build installed and strict-code-sign verified `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`; installed executable SHA-256 is `59555f776e70712c51a0ce8a2a02338a68d0d948ac72629d2b7d48317e28c7a5`.
+    - T60 remains open only for Andrew's real composed floating/parked visual approval and shipped-default coefficient decision. No Ableton interaction/listening or physical iPhone/touch acceptance is claimed.
 
 [ ] T61 — Package Enhancer Lite as a shippable free VST3 and iOS AUv3 product
     Existing starting point:
