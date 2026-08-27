@@ -11,6 +11,12 @@ are marked **locked**; everything else is direction, not commitment.
   end of the signal path. Not a lane module, not pooled, not reorderable, **not
   modulatable** — parameters are dialed in and preset-persisted only (control-rate
   smoothed against zipper noise). The polish chain is the frame, not the painting.
+- **Locked — no backward compatibility**: adding Polish creates a new complete
+  saved-sound version. Older presets, automatic browser state, shared URLs, and
+  host state are ignored or rejected as whole documents. Do not infer missing
+  Polish values, migrate old documents, or add a hidden legacy bypass. Retained
+  factory sounds are rebuilt in the new format; obsolete old-format copies may be
+  deleted after they are inventoried.
 - **Locked — lookahead is permitted here, up to 4 ms** (Andrew, 2026-08-25),
   deliberately unlike the rack. Engineering consequences:
   - The chain is a top-level fixed stage, not a rack module, so ADR-008 still binds
