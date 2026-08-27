@@ -29,6 +29,8 @@ export const LANE_SOLO_ENDPOINT_ID = "laneSolo";
 export const LANE_SLOT_PARAMS_ENDPOINT_ID = "laneSlotParams";
 /** DSP endpoint receiving one live-edited parameter field. */
 export const LANE_SLOT_PARAM_VALUE_ENDPOINT_ID = "laneSlotParamValue";
+/** DSP endpoint receiving the whole-lane Mix and Bypass state. */
+export const LANE_OUTPUT_CONTROL_ENDPOINT_ID = "laneOutputControl";
 /** DSP endpoint reporting the committed structure after its transition. */
 export const EFFECTIVE_RACK_STATE_ENDPOINT_ID = "effectiveRackState";
 

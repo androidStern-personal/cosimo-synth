@@ -95,7 +95,13 @@ test("every Effects Lane mix creates and resets at 50% in state and audio-engine
         "Every main-synth Mix control must be included in this create/reset/audio test.",
     );
 
-    let created = { format: "cosimo.lane", version: 2, devices: {}, chain: [] };
+    let created = {
+        format: "cosimo.lane",
+        version: 2,
+        output: { mix: 1, bypassed: false },
+        devices: {},
+        chain: [],
+    };
     for (const testCase of MIX_DEFAULT_CASES) {
         created = laneV2.addLaneDevice(
             created,
@@ -206,6 +212,43 @@ test("lane.v2 default document is the compact starter trio and round-trips", asy
     const reparsed = laneV2.parseLaneStateV2(laneV2.serializeLaneStateV2(state));
     assert.equal(reparsed._tag, "ok");
     assert.deepEqual(reparsed.value, state);
+});
+
+test("lane output defaults, legacy migration, editing, and runtime replay keep Mix independent from Bypass", async () => {
+    const laneV2 = await laneV2Promise;
+    const state = laneV2.createDefaultLaneStateV2();
+
+    assert.deepEqual(state.output, { mix: 1, bypassed: false });
+
+    const legacyV2 = JSON.parse(laneV2.serializeLaneStateV2(state));
+    delete legacyV2.output;
+    const migrated = laneV2.parseLaneStateV2(legacyV2);
+    assert.equal(migrated._tag, "ok");
+    assert.deepEqual(migrated.value.output, { mix: 1, bypassed: false });
+
+    const mixed = laneV2.setLaneOutputMix(state, 0.37);
+    const bypassed = laneV2.setLaneOutputBypassed(mixed, true);
+    assert.deepEqual(bypassed.output, { mix: 0.37, bypassed: true });
+    assert.deepEqual(laneV2.setLaneOutputBypassed(bypassed, false).output,
+                     { mix: 0.37, bypassed: false });
+    assert.equal(laneV2.setLaneOutputMix(state, -0.01), null);
+    assert.equal(laneV2.setLaneOutputMix(state, Number.NaN), null);
+
+    const reparsed = laneV2.parseLaneStateV2(laneV2.serializeLaneStateV2(bypassed));
+    assert.equal(reparsed._tag, "ok");
+    assert.deepEqual(reparsed.value.output, { mix: 0.37, bypassed: true });
+    assert.equal(laneV2.parseLaneStateV2({ ...reparsed.value, output: { mix: 1 } })._tag, "err");
+    assert.equal(laneV2.parseLaneStateV2({ ...reparsed.value, output: { mix: 2, bypassed: false } })._tag, "err");
+    assert.equal(laneV2.parseLaneStateV2({
+        ...reparsed.value,
+        output: { mix: 1, bypassed: false, unknown: true },
+    })._tag, "err");
+
+    const [outputEvent] = laneV2.buildLaneRuntimeEventsV2(bypassed);
+    assert.deepEqual(outputEvent, {
+        endpointID: "laneOutputControl",
+        value: { mix: 0.37, bypassed: true },
+    });
 });
 
 test("lane.v2 upgrades any v1 document, preserving order, enables, and params", async () => {
@@ -392,16 +435,21 @@ test("the compiled wire matches lane.v1 exactly for an upgraded serial document"
     const v1Events = laneV1.buildLaneRuntimeEvents(edited);
     const v2Events = laneV2.buildLaneRuntimeEventsV2(laneV2.upgradeLaneStateV1(edited));
 
-    // Same shape: eight records then one topology; the topology is identical
-    // bit for bit (all-trunk entries, same slots, same mask).
-    assert.equal(v2Events.length, v1Events.length);
+    // v2 adds the whole-lane output-control event; the legacy device records
+    // and topology remain identical bit for bit.
+    assert.deepEqual(v2Events[0], {
+        endpointID: "laneOutputControl",
+        value: { mix: 1, bypassed: false },
+    });
+    assert.equal(v2Events.length, v1Events.length + 1);
     assert.deepEqual(v2Events[v2Events.length - 1], v1Events[v1Events.length - 1]);
-    for (const event of v2Events.slice(0, -1)) {
+    for (const event of v2Events.slice(1, -1)) {
         assert.equal(event.endpointID, "laneSlotParams");
     }
     // Records cover the same slots with the same values (order may differ).
     const recordBySlot = (events) => new Map(
-        events.slice(0, -1).map((event) => [event.value.slotId, event.value.values]));
+        events.filter((event) => event.endpointID === "laneSlotParams")
+            .map((event) => [event.value.slotId, event.value.values]));
     assert.deepEqual(recordBySlot(v2Events), recordBySlot(v1Events));
 });
 

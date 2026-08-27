@@ -110,18 +110,24 @@ test("the Init-only rack adapter strictly hydrates, applies runtime and stored s
 
     assert.deepEqual(adapter.capture(), upgradedInitial);
     assert.deepEqual(adapter.createDefaultValue(), laneV2.createDefaultLaneStateV2());
+    assert.deepEqual(adapter.createDefaultValue().output, { mix: 1, bypassed: false });
     assert.deepEqual(
         adapter.normalizeForTransaction(rack.serializeLaneState(initialRack)),
         upgradedInitial,
     );
 
-    const nextRack = laneV2.createDefaultLaneStateV2();
+    const nextRack = laneV2.setLaneOutputBypassed(
+        laneV2.setLaneOutputMix(laneV2.createDefaultLaneStateV2(), 0.37),
+        true,
+    );
     adapter.apply(nextRack);
-    // The fresh default is the starter trio: three records, one topology.
+    // The output control lands before the starter trio's records/topology, so
+    // a bypassed or partial-Mix preset cannot flash full-wet while it restores.
     assert.deepEqual(
         connection.events.map((event) => event.endpointID),
-        [...Array(3).fill("laneSlotParams"), "laneTopology"],
+        ["laneOutputControl", ...Array(3).fill("laneSlotParams"), "laneTopology"],
     );
+    assert.deepEqual(connection.events[0].value, { mix: 0.37, bypassed: true });
     assert.equal(connection.storedWrites.length, 1);
     assert.deepEqual(JSON.parse(connection.storedWrites[0].value), nextRack);
     assert.equal(notifications, 0);

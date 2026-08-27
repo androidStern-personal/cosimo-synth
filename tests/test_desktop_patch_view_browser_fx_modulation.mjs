@@ -3417,9 +3417,9 @@ test("mobile FX subpage keeps eight readable stations on the line and confines m
                 const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
                 const stations = Array.from(document.querySelectorAll(".subway-station"));
                 const pills = Array.from(document.querySelectorAll(".subway-station-pill"));
-                const rawRanges = Array.from(document.querySelectorAll(
+                const perEffectRanges = Array.from(document.querySelectorAll(
                     '[data-role="effects-rack-card"] input[type="range"]',
-                ));
+                )).filter((range) => range.getAttribute("data-role") !== "rack-lane-mix-slider");
 
                 if (!(list instanceof HTMLElement)
                     || !(editor instanceof HTMLElement)
@@ -3448,7 +3448,7 @@ test("mobile FX subpage keeps eight readable stations on the line and confines m
                             && detailRect.height === 32
                             && Number.parseFloat(getComputedStyle(label).fontSize) >= 13;
                     }),
-                    rawRangesAreVisuallyHidden: rawRanges.every((range) => {
+                    perEffectRangesAreVisuallyHidden: perEffectRanges.every((range) => {
                         const style = getComputedStyle(range);
                         return style.position === "absolute"
                             && (style.clip !== "auto" || style.clipPath !== "none")
@@ -3488,7 +3488,8 @@ test("mobile FX subpage keeps eight readable stations on the line and confines m
                 true,
                 `Station chips lost fixed readable anatomy at ${width}px.`,
             );
-            assert.equal(layout.rawRangesAreVisuallyHidden, true, `Native rack ranges leaked visually at ${width}px.`);
+            assert.equal(layout.perEffectRangesAreVisuallyHidden, true,
+                `Native per-effect ranges leaked visually at ${width}px.`);
         } finally {
             await page.close();
         }

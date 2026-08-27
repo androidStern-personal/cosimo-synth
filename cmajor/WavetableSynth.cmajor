@@ -1360,6 +1360,7 @@ graph WavetableSynth [[ main ]]
     input rack.laneSlotParams;
     input rack.laneSlotParamValue;
     input rack.laneSolo;
+    input rack.laneOutputControl;
     // Host transport, not a user parameter: no `name:`, so it never becomes an
     // automation slot. See wt::TempoMonitor.
     input event std::timeline::Tempo tempo;

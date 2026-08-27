@@ -1,0 +1,261 @@
+// Whole Effects Lane output contract (T63). Mix and Bypass wrap every editable
+// topology while the fixed output/Polish path remains downstream. The rack keeps
+// advancing internally under outer bypass. ADR-008 keeps every legal creative-rack
+// layout zero-latency, so the outer Mix combines the current dry and wet frames.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "../../cmajor/GlobalFilter.cmajor", "../../cmajor/Distortion.cmajor", "../../cmajor/Ott.cmajor", "../../cmajor/Chorus.cmajor", "../../cmajor/Flanger.cmajor", "../../cmajor/Phaser.cmajor", "../../cmajor/Delay.cmajor", "../../cmajor/Reverb.cmajor", "../../cmajor/EffectsRack.cmajor")
+
+//==============================================================================
+// Empty, serial, Parallel, and Frequency Split layouts share one outer blend.
+// Bypass ramps cleanly to dry and releasing it returns to the exact stored Mix.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor LaneOutputLayoutsAndRestorationTest [[ main ]]
+{
+    output stream int32 out;
+
+    node rack = wt::EffectsRack;
+
+    let dryLevel = 0.25f;
+    let settleFrames = 2048;
+    let tolerance = 0.003f;
+
+    bool near (float32 actual, float32 expected)
+    {
+        return std::intrinsics::abs (actual - expected) <= tolerance;
+    }
+
+    wt::LaneOutputControlUpload control (float32 mix, bool bypassed)
+    {
+        wt::LaneOutputControlUpload upload;
+        upload.mix = mix;
+        upload.bypassed = bypassed;
+        return upload;
+    }
+
+    wt::LaneTopologyUpload emptyChain()
+    {
+        wt::LaneTopologyUpload upload;
+        return upload;
+    }
+
+    wt::LaneTopologyUpload serialChain()
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 1;
+        upload.slotIds[0] = wt::rackModuleDistortion;
+        upload.enabledMask = 0b1;
+        return upload;
+    }
+
+    wt::LaneTopologyUpload parallelChain()
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 2;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 2);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDistortion, 1);
+        upload.enabledMask = 0b11;
+        return upload;
+    }
+
+    wt::LaneTopologyUpload splitChain()
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 2;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, 2);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDistortion, 1);
+        upload.enabledMask = 0b11;
+        return upload;
+    }
+
+    void configureDistortion()
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::rackModuleDistortion;
+        upload.deliverySerial = 1;
+        upload.values[wt::laneDistortionParamDriveDb] = 30.0f;
+        upload.values[wt::laneDistortionParamKnee] = 0.35f;
+        upload.values[wt::laneDistortionParamWet] = 1.0f;
+        upload.values[wt::laneDistortionParamWetHPHz] = 1000.0f;
+        upload.values[wt::laneDistortionParamWetLPHz] = 18000.0f;
+        rack.laneSlotParams <- upload;
+
+        wt::LaneSlotParamsUpload split;
+        split.slotId = wt::laneSplitSlotBase;
+        split.deliverySerial = 2;
+        split.values[wt::laneSplitParamXoverLowHz] = 800.0f;
+        split.values[wt::laneSplitParamXoverHighHz] = 2500.0f;
+        rack.laneSlotParams <- split;
+    }
+
+    float32 render()
+    {
+        rack.in <- float32<2> (dryLevel, dryLevel);
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+        return rack.out[0];
+    }
+
+    void settle()
+    {
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            render();
+    }
+
+    void main()
+    {
+        configureDistortion();
+        rack.laneTopology <- serialChain();
+        rack.laneOutputControl <- control (1.0f, false);
+        settle();
+
+        let serialWet = render();
+        out <- (std::intrinsics::abs (serialWet - dryLevel) > 0.05f ? 1 : 0);
+        advance();
+
+        // A stored zero is continuous Mix, not the Bypass latch. The 3 ms
+        // transition has a bounded per-frame step instead of a hard jump.
+        rack.laneOutputControl <- control (0.0f, false);
+        var previous = serialWet;
+        var maximumStep = 0.0f;
+
+        for (int32 frame = 0; frame < 256; ++frame)
+        {
+            let current = render();
+            maximumStep = std::intrinsics::max (maximumStep,
+                                                std::intrinsics::abs (current - previous));
+            previous = current;
+        }
+
+        out <- (maximumStep < 0.01f && near (render(), dryLevel) ? 1 : 0);
+        advance();
+
+        rack.laneOutputControl <- control (0.37f, false);
+        settle();
+        let storedMixOutput = render();
+        out <- (near (storedMixOutput, dryLevel + ((serialWet - dryLevel) * 0.37f)) ? 1 : 0);
+        advance();
+
+        rack.laneOutputControl <- control (0.37f, true);
+        settle();
+        out <- (near (render(), dryLevel) ? 1 : 0);
+        advance();
+
+        rack.laneOutputControl <- control (0.37f, false);
+        settle();
+        out <- (near (render(), storedMixOutput) ? 1 : 0);
+        advance();
+
+        // Empty is dry at every Mix value.
+        rack.laneTopology <- emptyChain();
+        rack.laneOutputControl <- control (0.61f, false);
+        settle();
+        out <- (near (render(), dryLevel) ? 1 : 0);
+        advance();
+
+        // Parallel and Frequency Split both consume the same one outer Mix.
+        rack.laneTopology <- parallelChain();
+        rack.laneOutputControl <- control (1.0f, false);
+        settle();
+        let parallelWet = render();
+        rack.laneOutputControl <- control (0.5f, false);
+        settle();
+        out <- (near (render(), (dryLevel + parallelWet) * 0.5f) ? 1 : 0);
+        advance();
+
+        rack.laneTopology <- splitChain();
+        rack.laneOutputControl <- control (1.0f, false);
+        settle();
+        let splitWet = render();
+        rack.laneOutputControl <- control (0.5f, false);
+        settle();
+        out <- (near (render(), (dryLevel + splitWet) * 0.5f) ? 1 : 0);
+        advance();
+
+        loop { out <- -1; advance(); }
+    }
+}
+
+//==============================================================================
+// Outer bypass never suspends the lane. A feedback delay tail advances on the
+// original clock while the output is dry and returns at its original times.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor LaneOutputBypassKeepsTailClockTest [[ main ]]
+{
+    output stream int32 out;
+
+    node rack = wt::EffectsRack;
+
+    let firstEchoFrame = 4410;
+    let secondEchoFrame = 8820;
+    let recordFrames = 9400;
+    let peakWindow = 12;
+    float32[9400] recorded;
+
+    wt::LaneOutputControlUpload control (bool bypassed)
+    {
+        wt::LaneOutputControlUpload upload;
+        upload.mix = 1.0f;
+        upload.bypassed = bypassed;
+        return upload;
+    }
+
+    float32 peakNear (int32 center)
+    {
+        var peak = 0.0f;
+        for (int32 offset = -peakWindow; offset <= peakWindow; ++offset)
+            peak = std::intrinsics::max (peak,
+                std::intrinsics::abs (recorded.at (center + offset)));
+        return peak;
+    }
+
+    void render (float32 sample)
+    {
+        rack.in <- float32<2> (sample, sample);
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+    }
+
+    void main()
+    {
+        wt::LaneSlotParamsUpload delay;
+        delay.slotId = wt::rackModuleDelay;
+        delay.deliverySerial = 1;
+        delay.values[wt::laneDelayParamTimeMs] = 100.0f;
+        delay.values[wt::laneDelayParamFeedback] = 0.5f;
+        delay.values[wt::laneDelayParamFilterHz] = 18000.0f;
+        delay.values[wt::laneDelayParamMix] = 1.0f;
+        rack.laneSlotParams <- delay;
+
+        wt::LaneTopologyUpload topology;
+        topology.chainLength = 1;
+        topology.slotIds[0] = wt::rackModuleDelay;
+        topology.enabledMask = 0b1;
+        rack.laneTopology <- topology;
+        rack.laneOutputControl <- control (false);
+
+        for (int32 frame = 0; frame < 1024; ++frame)
+            render (0.0f);
+
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            if (frame == 512)
+                rack.laneOutputControl <- control (true);
+            if (frame == 3000)
+                rack.laneOutputControl <- control (false);
+
+            render (frame == 0 ? 1.0f : 0.0f);
+            recorded.at (frame) = rack.out[0];
+        }
+
+        out <- (peakNear (firstEchoFrame) > 0.08f ? 1 : 0);
+        advance();
+        out <- (peakNear (secondEchoFrame) > 0.03f ? 1 : 0);
+        advance();
+
+        loop { out <- -1; advance(); }
+    }
+}

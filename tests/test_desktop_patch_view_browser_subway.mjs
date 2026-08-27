@@ -27,6 +27,7 @@ import { decodePng, pngPixelAt, rgbDistance } from "./helpers/png_pixels.mjs";
 
 const readStoredLaneDoc = (snapshot) => JSON.parse(String(snapshot.storedState["lane.v1"]));
 const evidenceDirectory = path.resolve(import.meta.dirname, "..", "build", "fx-graph-foundation");
+const laneOutputEvidenceDirectory = path.resolve(import.meta.dirname, "..", "build", "t63-lane-output");
 
 async function assertEditorControlIsVisibleAndOwned(control, label) {
     await control.scrollIntoViewIfNeeded();
@@ -697,6 +698,299 @@ function rectanglesIntersect(left, right) {
         && left.top < right.bottom
         && left.bottom > right.top;
 }
+
+test("whole-lane Mix and Bypass use the lane document/event path and restore an exact stored Mix", async () => {
+    const laneDoc = JSON.parse(populatedThreeBandLaneDocJson());
+    laneDoc.output = { mix: 0.37, bypassed: false };
+    const page = await openHarnessPage({
+        laneDoc: JSON.stringify(laneDoc),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        const graph = page.locator('[data-role="rack-module-list"]');
+        await graph.evaluate((element) => {
+            element.scrollTop = element.scrollHeight;
+            element.dispatchEvent(new Event("scroll"));
+        });
+        const slider = page.locator('[data-role="rack-lane-mix-slider"]');
+        const bypass = page.locator('[data-role="rack-lane-bypass"]');
+        await slider.waitFor();
+        assert.equal(await slider.inputValue(), "0.37");
+        assert.equal(await page.locator('[data-role="rack-lane-mix-value"]').textContent(), "37%");
+
+        await clearHarnessDebugLog(page);
+        await slider.fill("0");
+        const liveZero = await waitForHarnessSnapshot(
+            page,
+            "zero Mix live event",
+            (snapshot) => snapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "laneOutputControl" && value?.mix === 0 && value?.bypassed === false
+            )),
+        );
+        assert.deepEqual(liveZero.sentMessages, [{
+            endpointID: "laneOutputControl",
+            value: { mix: 0, bypassed: false },
+        }]);
+        assert.equal(readStoredLaneDoc(liveZero).output.mix, 0.37,
+            "the live audible path must not persist mid-gesture");
+        assert.deepEqual(liveZero.gestureStarts, []);
+        assert.deepEqual(liveZero.gestureEnds, []);
+
+        await slider.press("Tab");
+        await waitForHarnessSnapshot(
+            page,
+            "zero Mix persisted as a continuous value",
+            (snapshot) => readStoredLaneDoc(snapshot).output.mix === 0,
+        );
+
+        await slider.fill("0.37");
+        await slider.press("Tab");
+        await waitForHarnessSnapshot(
+            page,
+            "whole-lane Mix persisted",
+            (snapshot) => readStoredLaneDoc(snapshot).output.mix === 0.37,
+        );
+
+        await clearHarnessDebugLog(page);
+        await bypass.click();
+        const bypassed = await waitForHarnessSnapshot(
+            page,
+            "whole lane bypassed without changing Mix",
+            (snapshot) => {
+                const output = readStoredLaneDoc(snapshot).output;
+                return output.bypassed === true && output.mix === 0.37;
+            },
+        );
+        assert.ok(bypassed.sentMessages.some(({ endpointID, value }) => (
+            endpointID === "laneOutputControl" && value?.mix === 0.37 && value?.bypassed === true
+        )));
+        assert.equal(bypassed.sentMessages.some(({ endpointID }) => endpointID === "laneSlotParamValue"), false);
+        assert.deepEqual(bypassed.gestureStarts, []);
+        assert.deepEqual(bypassed.gestureEnds, []);
+        assert.equal(await slider.isDisabled(), true);
+        assert.equal(await slider.inputValue(), "0.37");
+
+        await bypass.click();
+        const restored = await waitForHarnessSnapshot(
+            page,
+            "whole lane restored to its exact Mix",
+            (snapshot) => {
+                const output = readStoredLaneDoc(snapshot).output;
+                return output.bypassed === false && output.mix === 0.37;
+            },
+        );
+        assert.ok(restored.sentMessages.some(({ endpointID, value }) => (
+            endpointID === "laneOutputControl" && value?.mix === 0.37 && value?.bypassed === false
+        )));
+        assert.equal(await slider.isDisabled(), false);
+        assert.equal(await slider.inputValue(), "0.37");
+    } finally {
+        await page.close();
+    }
+});
+
+test("lane output controls stay inside the composed graph without covering its interactions", async () => {
+    const cases = [
+        { name: "empty-phone", width: 320, height: 568, laneDoc: emptyLaneDocJson() },
+        { name: "serial-phone", width: 320, height: 568, laneDoc: "fresh" },
+        { name: "split-phone", width: 320, height: 568, laneDoc: populatedThreeBandLaneDocJson() },
+        { name: "parallel-phone", width: 320, height: 568, laneDoc: populatedFourWayParallelLaneDocJson() },
+        { name: "split-plugin", width: 640, height: 700, laneDoc: populatedThreeBandLaneDocJson() },
+        { name: "split-desktop", width: 1024, height: 768, laneDoc: populatedThreeBandLaneDocJson() },
+    ];
+    await fs.mkdir(laneOutputEvidenceDirectory, { recursive: true });
+
+    for (const fixture of cases) {
+        const page = await openHarnessPage({
+            laneDoc: fixture.laneDoc,
+            beforeGoto: (nextPage) => nextPage.setViewportSize({
+                width: fixture.width,
+                height: fixture.height,
+            }),
+        });
+        try {
+            if (fixture.width < 640) {
+                await page.click('[data-role="mobile-workspace-tab-fx"]');
+            }
+            const graph = page.locator('[data-role="rack-module-list"]');
+            await graph.waitFor();
+            await page.locator('[data-role="rack-lane-bypass"]').scrollIntoViewIfNeeded();
+            const topGeometry = await graph.evaluate((element) => {
+                const rectOf = (node) => {
+                    const rect = node.getBoundingClientRect();
+                    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+                };
+                const intersects = (left, right) => left.left < right.right && left.right > right.left
+                    && left.top < right.bottom && left.bottom > right.top;
+                const graphRect = rectOf(element);
+                const stack = element.closest(".rack-stack");
+                const grid = element.closest(".rack-effects-grid");
+                const bypass = element.querySelector('[data-role="rack-lane-bypass"]');
+                if (!(stack instanceof HTMLElement) || !(grid instanceof HTMLElement)
+                        || !(bypass instanceof HTMLButtonElement)) {
+                    return null;
+                }
+                const bypassRect = rectOf(bypass);
+                const interactive = Array.from(element.querySelectorAll([
+                    "button.subway-station",
+                    "button.subway-ghost-button",
+                    "button.subway-fork-lane",
+                    "button.subway-fork-readout",
+                ].join(","))).filter((node) => {
+                    const rect = node.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0
+                        && rect.top >= graphRect.top && rect.bottom <= graphRect.bottom;
+                });
+                const connectorCovered = Array.from(element.querySelectorAll(".subway-connector-svg path"))
+                    .some((path) => {
+                        const matrix = path.getScreenCTM();
+                        if (matrix === null) return false;
+                        const length = path.getTotalLength();
+                        return Array.from({ length: 41 }, (_, index) => index / 40).some((fraction) => {
+                            const source = path.getPointAtLength(length * fraction);
+                            const point = new DOMPoint(source.x, source.y).matrixTransform(matrix);
+                            return point.x > bypassRect.left && point.x < bypassRect.right
+                                && point.y > bypassRect.top && point.y < bypassRect.bottom;
+                        });
+                    });
+                const bypassCenterHit = document.elementFromPoint(
+                    (bypassRect.left + bypassRect.right) / 2,
+                    (bypassRect.top + bypassRect.bottom) / 2,
+                );
+                return {
+                    graph: graphRect,
+                    stack: rectOf(stack),
+                    grid: rectOf(grid),
+                    bypass: bypassRect,
+                    bypassCenterReachable: bypass.contains(bypassCenterHit),
+                    bypassCenterHit: bypassCenterHit instanceof HTMLElement
+                        ? `${bypassCenterHit.tagName.toLowerCase()}.${bypassCenterHit.className}`
+                        : String(bypassCenterHit),
+                    viewport: { width: window.innerWidth, height: window.innerHeight },
+                    bypassIntersections: interactive.filter((node) => intersects(bypassRect, rectOf(node))).length,
+                    connectorCovered,
+                    gridChildCount: grid.children.length,
+                    modulationAttributes: bypass.querySelectorAll("[data-modulation-target-kind]").length,
+                };
+            });
+            assert.ok(topGeometry, fixture.name);
+            assert.equal(Math.abs((topGeometry.graph.bottom - topGeometry.graph.top)
+                - (topGeometry.stack.bottom - topGeometry.stack.top)) <= 1, true, `${fixture.name}: graph owns stack height`);
+            assert.equal(Math.abs((topGeometry.grid.bottom - topGeometry.grid.top)
+                - (topGeometry.stack.bottom - topGeometry.stack.top)) <= 1, true, `${fixture.name}: no new grid height`);
+            if (fixture.width >= 640) {
+                assert.equal(Math.abs((topGeometry.grid.bottom - topGeometry.grid.top) - 476) <= 1, true,
+                    `${fixture.name}: desktop/plugin graph retains its 476px contract`);
+            }
+            assert.equal(topGeometry.gridChildCount, 2, `${fixture.name}: controls did not add a grid row/column`);
+            assert.equal(topGeometry.bypass.right - topGeometry.bypass.left >= 43.5, true,
+                `${fixture.name}: Bypass keeps a touch-sized width`);
+            assert.equal(topGeometry.bypass.bottom - topGeometry.bypass.top >= 43.5, true,
+                `${fixture.name}: Bypass keeps a touch-sized height`);
+            assert.equal(
+                topGeometry.bypassCenterReachable,
+                true,
+                `${fixture.name}: bypass hit target reachable; ${JSON.stringify({
+                    hit: topGeometry.bypassCenterHit,
+                    bypass: topGeometry.bypass,
+                    graph: topGeometry.graph,
+                    viewport: topGeometry.viewport,
+                })}`,
+            );
+            assert.equal(topGeometry.bypassIntersections, 0, `${fixture.name}: bypass clears graph controls`);
+            assert.equal(topGeometry.connectorCovered, false, `${fixture.name}: bypass clears connector paths`);
+            assert.equal(topGeometry.modulationAttributes, 0, `${fixture.name}: bypass is not a modulation target`);
+            await graph.screenshot({
+                path: path.join(laneOutputEvidenceDirectory, `${fixture.name}-top.png`),
+                animations: "disabled",
+            });
+
+            await graph.evaluate((element) => {
+                element.scrollTop = element.scrollHeight;
+                element.dispatchEvent(new Event("scroll"));
+            });
+            await page.locator('[data-role="rack-lane-mix-slider"]').scrollIntoViewIfNeeded();
+            const bottomGeometry = await graph.evaluate((element) => {
+                const rectOf = (node) => {
+                    const rect = node.getBoundingClientRect();
+                    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+                };
+                const intersects = (left, right) => left.left < right.right && left.right > right.left
+                    && left.top < right.bottom && left.bottom > right.top;
+                const graphRect = rectOf(element);
+                const mix = element.querySelector('[data-role="rack-lane-mix"]');
+                const slider = element.querySelector('[data-role="rack-lane-mix-slider"]');
+                if (!(mix instanceof HTMLElement) || !(slider instanceof HTMLInputElement)) return null;
+                const mixRect = rectOf(mix);
+                const sliderRect = rectOf(slider);
+                const interactive = Array.from(element.querySelectorAll([
+                    "button.subway-station",
+                    "button.subway-ghost-button",
+                    "button.subway-fork-lane",
+                    "button.subway-fork-readout",
+                ].join(","))).filter((node) => {
+                    const rect = node.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0
+                        && rect.top >= graphRect.top && rect.bottom <= graphRect.bottom;
+                });
+                const sliderHit = document.elementFromPoint(
+                    sliderRect.left + (sliderRect.right - sliderRect.left) / 2,
+                    sliderRect.top + (sliderRect.bottom - sliderRect.top) / 2,
+                );
+                return {
+                    graph: graphRect,
+                    mix: mixRect,
+                    mixIntersections: interactive.filter((node) => intersects(mixRect, rectOf(node))).length,
+                    sliderReachable: slider.contains(sliderHit),
+                    sliderTouchAction: getComputedStyle(slider).touchAction,
+                    scrollAtBottom: element.scrollTop + element.clientHeight >= element.scrollHeight - 1,
+                    modulationAttributes: mix.querySelectorAll("[data-modulation-target-kind]").length,
+                };
+            });
+            assert.ok(bottomGeometry, fixture.name);
+            assert.equal(bottomGeometry.mix.bottom <= bottomGeometry.graph.bottom + 1, true);
+            assert.equal(bottomGeometry.mix.top >= bottomGeometry.graph.top - 1, true);
+            assert.equal(Math.abs(bottomGeometry.mix.bottom - bottomGeometry.graph.bottom) <= 2, true,
+                `${fixture.name}: Mix hugs the inside bottom edge`);
+            assert.equal(bottomGeometry.mix.bottom - bottomGeometry.mix.top >= 43.5, true,
+                `${fixture.name}: Mix keeps a touch-sized row`);
+            assert.equal(bottomGeometry.mixIntersections, 0, `${fixture.name}: Mix clears graph interactions`);
+            assert.equal(bottomGeometry.sliderReachable, true, `${fixture.name}: Mix slider reachable`);
+            assert.equal(bottomGeometry.sliderTouchAction, "pan-y",
+                `${fixture.name}: vertical graph scrolling remains available over Mix`);
+            assert.equal(bottomGeometry.scrollAtBottom, true, `${fixture.name}: graph still scrolls to its true bottom`);
+            assert.equal(bottomGeometry.modulationAttributes, 0, `${fixture.name}: Mix is not a modulation target`);
+
+            await graph.screenshot({
+                path: path.join(laneOutputEvidenceDirectory, `${fixture.name}-bottom.png`),
+                animations: "disabled",
+            });
+
+            const graphTargets = graph.locator([
+                "button.subway-station:visible",
+                "button.subway-ghost-button:visible",
+                "button.subway-fork-lane:visible",
+                "button.subway-fork-readout:visible",
+            ].join(","));
+            for (let index = 0; index < await graphTargets.count(); index += 1) {
+                const target = graphTargets.nth(index);
+                await target.scrollIntoViewIfNeeded();
+                assert.equal(await target.evaluate((node) => {
+                    const rect = node.getBoundingClientRect();
+                    const hit = document.elementFromPoint(
+                        rect.left + (rect.width / 2),
+                        rect.top + (rect.height / 2),
+                    );
+                    return node.contains(hit);
+                }), true, `${fixture.name}: graph target ${index} remains reachable`);
+            }
+        } finally {
+            await page.close();
+        }
+    }
+});
 
 async function wrapStationInGroup(page, effectId, groupKind) {
     await page.click(`[data-role="rack-station-${effectId}"]`, { button: "right" });
@@ -1754,7 +2048,7 @@ test("a maximum natural-height graph uses one root scroller with truthful cues a
     }
 });
 
-test("empty and short racks extend the final trunk to the graph viewport bottom", async () => {
+test("empty and short racks extend the final trunk to the inside-bottom Mix rail", async () => {
     await fs.mkdir(evidenceDirectory, { recursive: true });
     const cases = [
         { name: "empty", laneDoc: emptyLaneDocJson() },
@@ -1777,12 +2071,15 @@ test("empty and short racks extend the final trunk to the graph viewport bottom"
                 ));
                 const lastAnchorRow = trunkAnchors.at(-1)?.closest(".subway-ghost-row");
                 const lastAnchorBounds = lastAnchorRow?.getBoundingClientRect();
+                const mixBounds = element.querySelector('[data-role="rack-lane-mix"]')
+                    ?.getBoundingClientRect();
                 return {
                     width: bounds.width,
                     height: bounds.height,
-                    unfilledHeight: lastAnchorBounds === undefined
+                    mixTop: mixBounds === undefined ? bounds.bottom : mixBounds.top - bounds.top,
+                    unfilledHeight: lastAnchorBounds === undefined || mixBounds === undefined
                         ? bounds.height
-                        : bounds.bottom - lastAnchorBounds.bottom,
+                        : mixBounds.top - lastAnchorBounds.bottom,
                 };
             });
             assert.equal(
@@ -1799,8 +2096,8 @@ test("empty and short racks extend the final trunk to the graph viewport bottom"
             await graph.evaluate((element) => element.classList.remove("is-tail-proof-bare"));
             assertPaintedAgainstLocalBackground(
                 { painted, bare, size: { width: layout.width, height: layout.height } },
-                { x: layout.width / 2, y: layout.height - 10 },
-                `${fixture.name}: final trunk reaches the graph bottom`,
+                { x: layout.width / 2, y: layout.mixTop - 10 },
+                `${fixture.name}: final trunk reaches the Mix rail`,
             );
             if (fixture.name === "short") {
                 await page.screenshot({

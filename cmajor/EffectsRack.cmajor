@@ -418,6 +418,15 @@ namespace wt
         float32 value;
     }
 
+    // Whole-lane output controls are patch state, not host parameters. Mix is
+    // stored independently from Bypass so releasing Bypass restores the exact
+    // continuous value rather than replacing it with a binary surrogate.
+    struct LaneOutputControlUpload
+    {
+        float32 mix;
+        bool bypassed;
+    }
+
     //==============================================================================
     // Structure validation. A malformed upload is a bug at the adapter boundary, not a
     // runtime state the rack may occupy, so both of these fail fast and the caller
@@ -562,6 +571,28 @@ namespace wt
     // only a constant expression in a graph that is actually INSTANTIATED, and this
     // rack must not pay for eight extra module instances just to hold an assertion.
 
+    // ADR-008 keeps every legal creative-rack layout zero-latency. This outer
+    // blend therefore combines the current dry and wet frames directly. A future
+    // latency-producing lane effect requires a separate rack/host architecture
+    // decision; this processor deliberately does not pretend to align one.
+    processor EffectsLaneOutputBlend
+    {
+        input stream float32<rackChannelCount> dryIn;
+        input stream float32<rackChannelCount> wetIn;
+        input stream float32 mixDepthIn;
+        output stream float32<rackChannelCount> out;
+
+        void main()
+        {
+            loop
+            {
+                let depth = std::intrinsics::clamp (mixDepthIn, 0.0f, 1.0f);
+                out <- dryIn + ((wetIn - dryIn) * depth);
+                advance();
+            }
+        }
+    }
+
     //==============================================================================
 
     processor EffectsRack
@@ -593,6 +624,7 @@ namespace wt
         input event LaneSoloUpload laneSolo;
         input event LaneSlotParamsUpload laneSlotParams;
         input event LaneSlotParamValueUpload laneSlotParamValue;
+        input event LaneOutputControlUpload laneOutputControl;
 
 
         //----------------------------------------------------------------------
@@ -641,6 +673,10 @@ namespace wt
         node delayPool        = wt::DelayBus[lanePoolInstanceCount];
         node reverbPool       = wt::ReverbBus[lanePoolInstanceCount];
 
+        // Every currently legal lane child and split layout is zero-latency
+        // (ADR-008), so the whole-lane dry/wet blend is same-frame.
+        node laneOutputBlend = EffectsLaneOutputBlend;
+
         // NO processor.latency DECLARATION HERE, and there must never be one: every dry
         // path through the rack is bit-exact and no module has lookahead (ADR-008). It
         // cannot be pinned with a static_assert on this processor - `processor.latency`
@@ -656,6 +692,13 @@ namespace wt
         float32 transitionGain = 1.0f;
         int32 currentPositionMask;
         int32 pendingPositionMask;
+
+        float32 laneStoredMix = 1.0f;
+        bool laneOutputBypassed;
+        float32 laneOutputMixCurrent = 1.0f;
+        float32 laneOutputMixTarget = 1.0f;
+        float32 laneOutputMixStep;
+        int32 laneOutputMixFramesRemaining;
 
         // Lane chain state. Once a topology commits, the lane chain drives the
         // dispatch instead of the legacy order permutation. The slot domain
@@ -950,6 +993,34 @@ namespace wt
             laneRejectedCount += 1;
         }
 
+        event laneOutputControl (LaneOutputControlUpload upload)
+        {
+            // Validate the transport exactly; NaN also fails these ordered
+            // comparisons. The stored Mix changes only when an accepted event
+            // carries a new Mix — Bypass merely selects an effective target of 0.
+            if (! (upload.mix >= 0.0f && upload.mix <= 1.0f))
+            {
+                laneRejectedCount += 1;
+                return;
+            }
+
+            laneStoredMix = upload.mix;
+            laneOutputBypassed = upload.bypassed;
+            laneOutputMixTarget = laneOutputBypassed ? 0.0f : laneStoredMix;
+
+            if (laneOutputMixTarget == laneOutputMixCurrent)
+            {
+                laneOutputMixStep = 0.0f;
+                laneOutputMixFramesRemaining = 0;
+            }
+            else
+            {
+                laneOutputMixStep = (laneOutputMixTarget - laneOutputMixCurrent)
+                                      / float32 (transitionFrames);
+                laneOutputMixFramesRemaining = transitionFrames;
+            }
+        }
+
         // Topology is compared against the RUNNING structure, never the previous
         // upload, so a redundant restore cannot cancel a real pending change. Solo
         // instead replaces its pending audition choice so a rapid toggle can cancel.
@@ -1127,6 +1198,24 @@ namespace wt
             }
 
             return transitionGain;
+        }
+
+        // Every accepted Mix or Bypass edge gets a complete 3 ms linear ramp.
+        // Retargeting mid-ramp starts another ramp from the current sample, so
+        // rapid UI traffic never creates a discontinuity.
+        float32 nextLaneOutputMix()
+        {
+            if (laneOutputMixFramesRemaining <= 0)
+                return laneOutputMixCurrent;
+
+            laneOutputMixFramesRemaining -= 1;
+
+            if (laneOutputMixFramesRemaining == 0)
+                laneOutputMixCurrent = laneOutputMixTarget;
+            else
+                laneOutputMixCurrent += laneOutputMixStep;
+
+            return laneOutputMixCurrent;
         }
 
         //----------------------------------------------------------------------
@@ -1795,10 +1884,12 @@ namespace wt
                     chain = mergeOpenGroup();
 
                 let transition = nextTransitionGain();
-                out <- float32<2> (
-                    in[0] + ((chain[0] - in[0]) * transition),
-                    in[1] + ((chain[1] - in[1]) * transition)
-                );
+                let laneMix = nextLaneOutputMix();
+                laneOutputBlend.dryIn <- in;
+                laneOutputBlend.wetIn <- chain;
+                laneOutputBlend.mixDepthIn <- transition * laneMix;
+                laneOutputBlend.advance();
+                out <- laneOutputBlend.out;
 
                 previewInputLeft <- distortionPool[wrap<lanePoolInstanceCount> (0)].previewInputLeft;
                 previewInputRight <- distortionPool[wrap<lanePoolInstanceCount> (0)].previewInputRight;

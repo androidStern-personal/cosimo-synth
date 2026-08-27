@@ -27,6 +27,31 @@ test("lane kind grammar accepts real device params and rejects everything else",
     assert.equal(lanes.parseLaneModulationTargetKind("lane.delay.delayTime"), null);
     assert.equal(lanes.parseLaneModulationTargetKind("rack.delayTime"), null);
     assert.equal(lanes.parseLaneModulationTargetKind("lane.distortion#1.distortionType"), null);
+    assert.equal(lanes.parseLaneModulationTargetKind("lane.output.mix"), null);
+    assert.equal(lanes.parseLaneModulationTargetKind("lane.output.bypass"), null);
+    assert.equal(lanes.parseLaneModulationTargetKind("laneMix"), null);
+});
+
+test("whole-lane output controls never enter the modulation destination inventory", async () => {
+    const [laneState, modulation, descriptors] = await Promise.all([
+        loadUIModule(repoRoot, "ui/shared/lane-state.ts"),
+        loadUIModule(repoRoot, "ui/shared/modulation.ts"),
+        loadUIModule(repoRoot, "ui/shared/target-descriptor.ts"),
+    ]);
+    const options = modulation.buildPatchModulationTargetOptions(
+        laneState.listLaneDeviceInstances(laneState.createDefaultLaneState()),
+    );
+
+    assert.equal(options.some(({ value }) => [
+        "lane.output.mix",
+        "lane.output.bypass",
+        "laneOutputControl",
+        "laneMix",
+        "laneBypass",
+    ].includes(value)), false);
+    assert.equal(descriptors.allTargetDescriptors().some(({ binding }) => (
+        binding._tag === "endpoint" && binding.endpointId === "laneOutputControl"
+    )), false);
 });
 
 test("lane targets resolve STATICALLY: instance #n is slot ordinal n-1", async () => {

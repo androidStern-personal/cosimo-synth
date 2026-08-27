@@ -8,6 +8,7 @@ import {
 } from "./user-edit-bus";
 import {
     EFFECT_ID_TO_LANE_TYPE,
+    LANE_OUTPUT_CONTROL_ENDPOINT_ID,
     LANE_SLOT_PARAM_VALUE_ENDPOINT_ID,
     LANE_STATE_KEY,
 } from "./lane-state";
@@ -25,6 +26,8 @@ import {
     serializeLaneStateV2,
     setLaneDeviceParam,
     setLaneKeyTrackEnabled as transitionLaneKeyTrackEnabled,
+    setLaneOutputBypassed,
+    setLaneOutputMix,
     setLaneSplitCrossoverHz,
     setLaneSplitKeyTrackEnabled as transitionLaneSplitKeyTrackEnabled,
     setLaneSplitKeyTrackOffset as transitionLaneSplitKeyTrackOffset,
@@ -68,10 +71,11 @@ import type { LaneSoloState } from "./lane-solo-state";
  * One shared lane-document store per patch connection.
  *
  * Since the B3 parameter cut, effect parameters have no host endpoints: the
- * lane.v1 document owns every value durably, and live edits ride the
- * laneSlotParamValue field event. Every binding surface (the desktop rack
- * workspace, the iOS view) reads and writes THIS store, so the document
- * cannot fork between surfaces sharing a connection.
+ * lane.v1 stored-state document owns every value durably. Live device edits
+ * ride the laneSlotParamValue field event; whole-lane output edits ride the
+ * laneOutputControl event. Every binding surface (the desktop rack workspace,
+ * the iOS view) reads and writes THIS store, so the document cannot fork
+ * between surfaces sharing a connection.
  *
  * Write discipline: setValue is the low-latency audible path (optimistic
  * store update + one field event, no document write); endGesture persists
@@ -180,6 +184,9 @@ export function useLaneStateDoc(): {
         ordinaryEndpointID: string,
         enabled: boolean,
     ) => void;
+    /** Low-latency whole-lane output edits; persistence remains gesture-scoped. */
+    readonly setOutputMix: (mix: number) => void;
+    readonly setOutputBypassed: (bypassed: boolean) => void;
     /** The split editor's hot path: optimistic doc update + the acked
         marker-record field upload. */
     readonly setSplitCrossover: (groupId: string, which: "low" | "high", hz: number) => void;
@@ -364,6 +371,24 @@ export function useLaneStateDoc(): {
             : LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_OFFSET_SEMITONES, value);
     }, [sendSplitField, store]);
 
+    const setOutputMix = useCallback((mix: number) => {
+        const next = setLaneOutputMix(store.state, mix);
+        if (next === null) {
+            return;
+        }
+        acceptLaneState(store, next);
+        patchConnection.sendEventOrValue?.(LANE_OUTPUT_CONTROL_ENDPOINT_ID, next.output);
+    }, [patchConnection, store]);
+
+    const setOutputBypassed = useCallback((bypassed: boolean) => {
+        const next = setLaneOutputBypassed(store.state, bypassed);
+        if (next === null) {
+            return;
+        }
+        acceptLaneState(store, next);
+        patchConnection.sendEventOrValue?.(LANE_OUTPUT_CONTROL_ENDPOINT_ID, next.output);
+    }, [patchConnection, store]);
+
     const persist = useCallback(() => {
         patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(store.state));
     }, [patchConnection, store]);
@@ -373,6 +398,8 @@ export function useLaneStateDoc(): {
         commit,
         setParamValue,
         setKeyTrackEnabled,
+        setOutputMix,
+        setOutputBypassed,
         setSplitCrossover,
         setSplitKeyTrackEnabled,
         setSplitKeyTrackOffset,
@@ -382,6 +409,8 @@ export function useLaneStateDoc(): {
         commit,
         setParamValue,
         setKeyTrackEnabled,
+        setOutputMix,
+        setOutputBypassed,
         setSplitCrossover,
         setSplitKeyTrackEnabled,
         setSplitKeyTrackOffset,

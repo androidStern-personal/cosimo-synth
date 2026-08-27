@@ -164,6 +164,83 @@
     pointer-events: none;
 }
 
+/* T63: lane-wide controls live inside the graph's existing rectangle. The
+   bypass button occupies the unused top-left pocket; the Mix rail is a real
+   final flow row, so it never covers stations, connectors, add targets, or
+   scrollable content. */
+.rack-lane-bypass {
+    position: absolute;
+    z-index: 10;
+    top: 5px;
+    left: 4px;
+    display: grid;
+    width: 64px;
+    min-width: var(--cosimo-hit-min);
+    height: var(--cosimo-hit-min);
+    place-items: center;
+    padding: 0 5px;
+    border: 1px solid rgb(105 213 197 / 0.28);
+    border-radius: 7px;
+    background: rgb(16 17 19 / 0.94);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.32);
+    color: rgb(197 218 216 / 0.76);
+    cursor: pointer;
+    font: 500 9px/1 "Departure Mono", ui-monospace, monospace;
+    letter-spacing: 0.055em;
+}
+
+.rack-lane-bypass.is-bypassed {
+    border-color: rgb(255 139 74 / 0.72);
+    background: rgb(45 28 20 / 0.96);
+    color: #ffad78;
+    box-shadow: 0 0 9px rgb(255 106 39 / 0.22);
+}
+
+.rack-lane-bypass:focus-visible {
+    outline: 2px solid #f5ffff;
+    outline-offset: 1px;
+}
+
+.rack-lane-bypass-label-compact {
+    display: none;
+}
+
+.rack-lane-mix {
+    position: relative;
+    z-index: 4;
+    display: grid;
+    min-height: var(--cosimo-hit-min);
+    grid-template-columns: auto minmax(48px, 1fr) 34px;
+    align-items: center;
+    gap: 7px;
+    padding: 0 9px;
+    border-top: 1px solid rgb(105 213 197 / 0.18);
+    background: linear-gradient(180deg, rgb(16 17 19 / 0.96), #0d0e10);
+    color: #8d9898;
+    font: 500 9px/1 "Departure Mono", ui-monospace, monospace;
+    letter-spacing: 0.055em;
+}
+
+.rack-lane-mix > input[type="range"] {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    accent-color: #69d5c5;
+    cursor: ew-resize;
+    touch-action: pan-y;
+}
+
+.rack-lane-mix > input[type="range"]:disabled {
+    cursor: default;
+    opacity: 0.42;
+}
+
+.rack-lane-mix-value {
+    color: #d6e6e4;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
 .subway-trunk-tail-fill::before {
     position: absolute;
     top: 0;
@@ -1627,6 +1704,26 @@
     .rack-list.subway-map {
         border-right: 0;
         border-left: 0;
+    }
+
+    .rack-lane-bypass {
+        left: 3px;
+        width: var(--cosimo-hit-min);
+        padding-inline: 2px;
+    }
+
+    .rack-lane-bypass-label {
+        display: none;
+    }
+
+    .rack-lane-bypass-label-compact {
+        display: inline;
+    }
+
+    .rack-lane-mix {
+        grid-template-columns: auto minmax(48px, 1fr) 31px;
+        gap: 5px;
+        padding-inline: 7px;
     }
 
     .is-mobile-effects-page [data-role="sticky-keyboard"] {

@@ -476,6 +476,21 @@ test("Bounce, Global Tune, Amp Envelope, and Voice Filter Key Track preserve the
     assert.match(filterCutoffKeyTrackOffset.annotation, /rampFrames:\s*0/);
 });
 
+test("whole Effects Lane Mix and Bypass are struct state, never DAW automation slots", async () => {
+    const [synthSource, rackSource] = await Promise.all([
+        fs.readFile(path.join(repoRoot, "cmajor", "WavetableSynth.cmajor"), "utf8"),
+        fs.readFile(path.join(repoRoot, "cmajor", "EffectsRack.cmajor"), "utf8"),
+    ]);
+    const parameterOrder = parseGraphHostParameterIdentifiers(synthSource, "WavetableSynth");
+
+    assert.match(synthSource, /^\s*input rack\.laneOutputControl;$/m);
+    assert.equal(parameterOrder.includes("laneOutputControl"), false);
+    assert.equal(parameterOrder.some((endpointID) => /lane.*(?:mix|bypass)/i.test(endpointID)), false);
+    assert.match(rackSource, /input event LaneOutputControlUpload laneOutputControl;/);
+    assert.match(rackSource, /struct LaneOutputControlUpload\s*\{\s*float32 mix;\s*bool bypassed;/s);
+    assert.doesNotMatch(rackSource, /laneOutputControl[^;]*\[\[[^\]]*purpose:\s*parameter/s);
+});
+
 test("legacy synth presets resolve an omitted Filter Mix to fully wet through an exact-contract migration", async () => {
     const [{ buildCanonicalPluginStateContract }, { applyEffectPresetV2 }] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts"),

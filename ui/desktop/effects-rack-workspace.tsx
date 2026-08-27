@@ -578,6 +578,8 @@ function useRackState() {
     const {
         laneState,
         commit,
+        setOutputMix,
+        setOutputBypassed,
         setSplitCrossover,
         setSplitKeyTrackEnabled,
         setSplitKeyTrackOffset,
@@ -590,6 +592,8 @@ function useRackState() {
         rackState: laneState,
         rackStateRef,
         commit,
+        setOutputMix,
+        setOutputBypassed,
         setSplitCrossover,
         setSplitKeyTrackEnabled,
         setSplitKeyTrackOffset,
@@ -3938,6 +3942,8 @@ export function EffectsRackWorkspace({
         rackState,
         rackStateRef,
         commit,
+        setOutputMix,
+        setOutputBypassed,
         setSplitCrossover,
         setSplitKeyTrackEnabled,
         setSplitKeyTrackOffset,
@@ -5230,6 +5236,44 @@ export function EffectsRackWorkspace({
                             onKeyboardMove={moveDeviceByOffset}
                             onRequestAdd={(path, clientX, clientY) => setAddSheet({ path, clientX, clientY })}
                         />
+                        <button
+                            type="button"
+                            className={`rack-lane-bypass${rackState.output.bypassed ? " is-bypassed" : ""}`}
+                            data-role="rack-lane-bypass"
+                            aria-label="Bypass Effects Lane"
+                            aria-pressed={rackState.output.bypassed}
+                            onClick={() => {
+                                setOutputBypassed(!rackState.output.bypassed);
+                                persist();
+                            }}
+                        >
+                            <span className="rack-lane-bypass-label">BYPASS</span>
+                            <span className="rack-lane-bypass-label-compact" aria-hidden="true">BYP</span>
+                        </button>
+                        <label className="rack-lane-mix" data-role="rack-lane-mix">
+                            <span className="rack-lane-mix-label">MIX</span>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                value={rackState.output.mix}
+                                disabled={rackState.output.bypassed}
+                                data-role="rack-lane-mix-slider"
+                                aria-label="Effects Lane Mix"
+                                onChange={(event) => setOutputMix(Number(event.currentTarget.value))}
+                                onPointerUp={persist}
+                                onPointerCancel={persist}
+                                onKeyUp={persist}
+                                onBlur={persist}
+                            />
+                            <output
+                                className="rack-lane-mix-value"
+                                data-role="rack-lane-mix-value"
+                            >
+                                {Math.round(rackState.output.mix * 100)}%
+                            </output>
+                        </label>
                     </div>
                     <span
                         className={`subway-scroll-cue subway-scroll-cue-top${rackScrollPresentation.overflow && !rackScrollPresentation.atTop ? " is-visible" : ""}`}

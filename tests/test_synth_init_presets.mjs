@@ -1149,6 +1149,7 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     });
     source.rackHarness.adapter.apply({
         ...source.defaultRack,
+        output: { mix: 0.37, bypassed: true },
         order: [...source.defaultRack.order].reverse(),
         enabled: { ...source.defaultRack.enabled, chorus: true, delay: true },
     });
@@ -1167,6 +1168,8 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     assert.deepEqual(captured.value.preset.storedState["modulation.v6"], source.modulationHarness.value);
     assert.deepEqual(captured.value.preset.storedState["articulations.v4"], source.articulationHarness.value);
     assert.deepEqual(captured.value.supplementalStoredState["lane.v1"], source.rackHarness.value);
+    assert.deepEqual(captured.value.supplementalStoredState["lane.v1"].output,
+                     { mix: 0.37, bypassed: true });
 
     const target = await createSynthFixture();
     const initialized = synthMutations(target.controller).initSound();
@@ -1197,6 +1200,7 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     assert.deepEqual(target.modulationHarness.value, source.modulationHarness.value);
     assert.deepEqual(target.articulationHarness.value, source.articulationHarness.value);
     assert.deepEqual(target.rackHarness.value, source.rackHarness.value);
+    assert.deepEqual(target.rackHarness.value.output, { mix: 0.37, bypassed: true });
     assert.equal(target.controller.getState().activePreset, null);
     assert.equal(target.controller.getState().activeLabel, "Shared Lead");
     assert.equal(target.controller.getState().dirty, false);

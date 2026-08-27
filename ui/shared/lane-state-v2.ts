@@ -22,6 +22,7 @@ import {
     LANE_MAX_CHAIN_LENGTH,
     LANE_PARALLEL_SLOT_BASE,
     LANE_PARALLEL_UNIT_COUNT,
+    LANE_OUTPUT_CONTROL_ENDPOINT_ID,
     LANE_SLOT_PARAMS_ENDPOINT_ID,
     LANE_SPLIT_PARAM_XOVER_HIGH_HZ,
     LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_ENABLED,
@@ -110,9 +111,16 @@ export type LaneSplitGroupV2 = {
 export type LaneGroupV2 = LaneParallelGroupV2 | LaneSplitGroupV2;
 export type LaneChainNodeV2 = LaneDevicePlacementV2 | LaneGroupV2;
 
+/** Controls around the complete editable lane. Bypass never overwrites Mix. */
+export type LaneOutputState = {
+    readonly mix: number;
+    readonly bypassed: boolean;
+};
+
 export type LaneStateV2 = {
     readonly format: "cosimo.lane";
     readonly version: 2;
+    readonly output: LaneOutputState;
     readonly devices: Readonly<Record<string, LaneDeviceRecordV2>>;
     readonly chain: ReadonlyArray<LaneChainNodeV2>;
 };
@@ -244,7 +252,24 @@ function isValidCrossoverHz(value: unknown): value is number {
         && value >= LANE_SPLIT_XOVER_MIN_HZ && value <= LANE_SPLIT_XOVER_MAX_HZ;
 }
 
-/** Parse unknown persisted data into the complete clean lane.v2 schema. */
+function createDefaultLaneOutputState(): LaneOutputState {
+    return { mix: 1, bypassed: false };
+}
+
+function parseLaneOutputState(input: unknown): LaneOutputState | null {
+    if (!isRecord(input) || !hasExactKeys(input, ["mix", "bypassed"])) {
+        return null;
+    }
+    if (typeof input.mix !== "number" || !Number.isFinite(input.mix)
+            || input.mix < 0 || input.mix > 1 || typeof input.bypassed !== "boolean") {
+        return null;
+    }
+    return { mix: input.mix, bypassed: input.bypassed };
+}
+
+/** Parse unknown persisted data into the complete clean lane.v2 schema.
+    The exact pre-T63 v2 shape is the sole legacy exception and receives the
+    output defaults; partial/unknown output documents still fail closed. */
 export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
     let document: unknown = input;
     if (typeof input === "string") {
@@ -255,8 +280,13 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
             return err(`is not valid JSON: ${detail}`);
         }
     }
-    if (!isRecord(document) || !hasExactKeys(document, ["format", "version", "devices", "chain"])) {
-        return err("must be { format, version, devices, chain }");
+    if (!isRecord(document)) {
+        return err("must be an object");
+    }
+    const isLegacyDocument = hasExactKeys(document, ["format", "version", "devices", "chain"]);
+    if (!isLegacyDocument
+            && !hasExactKeys(document, ["format", "version", "output", "devices", "chain"])) {
+        return err("must be { format, version, output, devices, chain }");
     }
     if (document.format !== "cosimo.lane" || document.version !== 2) {
         return err("must be cosimo.lane version 2");
@@ -266,6 +296,10 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
     }
     if (!Array.isArray(document.chain)) {
         return err("chain must be an array");
+    }
+    const output = isLegacyDocument ? createDefaultLaneOutputState() : parseLaneOutputState(document.output);
+    if (output === null) {
+        return err("output must be { mix: 0..1, bypassed: boolean }");
     }
 
     const devices: Record<string, LaneDeviceRecordV2> = {};
@@ -405,7 +439,7 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
         return err(`flattens to ${wireEntryCount} wire entries; the topology upload holds ${LANE_MAX_CHAIN_LENGTH}`);
     }
 
-    return { _tag: "ok", value: { format: "cosimo.lane", version: 2, devices, chain } };
+    return { _tag: "ok", value: { format: "cosimo.lane", version: 2, output, devices, chain } };
 }
 
 /** Upgrade a parsed v1 document: eight instance-#1 devices, serial chain.
@@ -422,6 +456,7 @@ export function upgradeLaneStateV1(state: LaneState): LaneStateV2 {
     return {
         format: "cosimo.lane",
         version: 2,
+        output: createDefaultLaneOutputState(),
         devices,
         chain: state.order.map((effectId) => ({
             kind: "device",
@@ -454,6 +489,7 @@ export function createDefaultLaneStateV2(): LaneStateV2 {
     return {
         format: "cosimo.lane",
         version: 2,
+        output: createDefaultLaneOutputState(),
         devices,
         chain: legacy.chain.filter((node) => (
             node.kind === "device" && (STARTER_DEVICE_IDS as ReadonlyArray<string>).includes(node.deviceId)
@@ -503,6 +539,7 @@ export function serializeLaneStateV2(state: LaneStateV2): string {
     return JSON.stringify({
         format: "cosimo.lane",
         version: 2,
+        output: state.output,
         devices: state.devices,
         chain: state.chain,
     });
@@ -666,13 +703,17 @@ function buildLaneSplitParamValues(group: LaneSplitGroupV2): number[] {
 }
 
 /**
- * The complete runtime replay for one lane.v2 document: every device
- * instance's record, every split marker's crossover record, then the one
- * topology event. Records go FIRST so anything entering the committed chain
- * snaps onto its record rather than a zeroed default.
+ * The complete runtime replay for one lane.v2 document: whole-lane output,
+ * every device instance's record, every split marker's crossover record, then
+ * the one topology event. Output lands first so preset restore cannot flash
+ * full-wet; parameter records still precede topology so anything entering the
+ * committed chain snaps onto its record rather than a zeroed default.
  */
 export function buildLaneRuntimeEventsV2(state: LaneStateV2): ReadonlyArray<{ readonly endpointID: string; readonly value: unknown }> {
-    const events: Array<{ endpointID: string; value: unknown }> = [];
+    const events: Array<{ endpointID: string; value: unknown }> = [{
+        endpointID: LANE_OUTPUT_CONTROL_ENDPOINT_ID,
+        value: state.output,
+    }];
     let deliverySerial = 0;
 
     for (const device of listLaneDeviceInstancesV2(state)) {
@@ -952,6 +993,22 @@ export function setLaneKeyTrackEnabled(
         ...state,
         devices: { ...state.devices, [deviceId]: { params } },
     };
+}
+
+/** Store a continuous whole-lane Mix without changing the bypass latch. */
+export function setLaneOutputMix(state: LaneStateV2, mix: number): LaneStateV2 | null {
+    if (!Number.isFinite(mix) || mix < 0 || mix > 1) {
+        return null;
+    }
+    return { ...state, output: { ...state.output, mix } };
+}
+
+/** Toggle the whole lane without changing its stored Mix value. */
+export function setLaneOutputBypassed(state: LaneStateV2, bypassed: boolean): LaneStateV2 | null {
+    if (typeof bypassed !== "boolean") {
+        return null;
+    }
+    return { ...state, output: { ...state.output, bypassed } };
 }
 
 function laneWireEntryCount(state: LaneStateV2): number {

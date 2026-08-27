@@ -86,6 +86,7 @@ test("configure → share → fresh browser context → confirm reproduces the c
             const laneState = lane.createDefaultLaneStateV2();
             laneState.devices["reverb#1"].params.reverbSize = 0.82;
             laneState.chain = [...laneState.chain].reverse();
+            laneState.output = { mix: 0.37, bypassed: true };
 
             harness.setParameterValue("oscAWavetableSelect", 127);
             harness.setParameterValue("oscAFramePosition", 0.43);
@@ -128,6 +129,8 @@ test("configure → share → fresh browser context → confirm reproduces the c
         const decoded = await decodeSoundShareFragment(new URL(sharedURL).hash);
         assert.equal(decoded.ok, true, decoded.ok ? undefined : decoded.error.message);
         const envelope = decoded.value;
+        const decodedLane = JSON.parse(String(envelope.supplementalStoredState["lane.v1"]));
+        assert.deepEqual(decodedLane.output, { mix: 0.37, bypassed: true });
         const sourceSnapshot = await sourcePage.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot());
         assert.deepEqual(selectSoundDocument(sourceSnapshot, envelope), {
             parameters: envelope.preset.parameters,
@@ -152,6 +155,10 @@ test("configure → share → fresh browser context → confirm reproduces the c
             assert.deepEqual(
                 selectSoundDocument(targetSnapshot, envelope),
                 selectSoundDocument(sourceSnapshot, envelope),
+            );
+            assert.deepEqual(
+                JSON.parse(String(targetSnapshot.storedState["lane.v1"])).output,
+                { mix: 0.37, bypassed: true },
             );
             assert.equal(new URL(targetPage.url()).hash, "");
             await targetPage.close();
