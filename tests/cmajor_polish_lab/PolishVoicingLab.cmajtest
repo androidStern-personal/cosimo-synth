@@ -60,6 +60,69 @@ processor PolishCurveContract [[ main ]]
 
 ## testProcessor()
 
+processor PolishEditableCurveContract [[ main ]]
+{
+    output stream int32 out;
+    node core = polishlab::ClipCoreChannel;
+
+    float32 render (float32 sample, float32 amountPosition)
+    {
+        core.in <- sample;
+        core.driveDb <- 0.0f;
+        core.editorEnabled <- true;
+        core.pointCount <- 2.0f;
+        core.p1x <- 0.5f;
+        core.p1y <- 0.6f;
+        core.p1t <- 0.0f;
+        core.p2x <- 1.0f;
+        core.p2y <- 0.8f;
+        core.p2t <- 0.0f;
+        core.p3x <- 1.1f;
+        core.p3y <- 0.9f;
+        core.p3t <- 0.0f;
+        core.p4x <- 1.2f; core.p4y <- 1.0f;
+        core.p5x <- 1.3f; core.p5y <- 1.0f;
+        core.p6x <- 1.4f; core.p6y <- 1.0f;
+        core.p7x <- 1.5f; core.p7y <- 1.0f;
+        core.b1 <- 0.0f;
+        core.b2 <- 1.0f;
+        core.b3 <- 0.0f;
+        core.b4 <- 0.0f;
+        core.b5 <- 0.0f;
+        core.b6 <- 0.0f;
+        core.b7 <- 0.0f;
+        core.amountPoint <- amountPosition > 0.0f ? 1.0f : 0.0f;
+        core.amountTargetX <- 0.25f;
+        core.amountTargetY <- 0.8f;
+        core.amountPosition <- amountPosition;
+        core.advance();
+        return core.out;
+    }
+
+    bool close (float32 actual, float32 expected)
+    {
+        return std::intrinsics::abs (actual - expected) <= 2.0e-6f;
+    }
+
+    void main()
+    {
+        out <- close (render (0.25f, 0.0f), 0.3f) ? 1 : 0;
+        advance();
+        out <- close (render (0.75f, 0.0f), 0.75f) ? 1 : 0;
+        advance();
+        out <- close (render (-0.75f, 0.0f), -0.75f) ? 1 : 0;
+        advance();
+        out <- close (render (1.2f, 0.0f), 0.8f) ? 1 : 0;
+        advance();
+        out <- close (render (0.375f, 0.5f), 0.7f) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+## testProcessor()
+
 processor PolishCompressorCurveContract [[ main ]]
 {
     output stream int32 out;

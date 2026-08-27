@@ -33,7 +33,7 @@ exploratory low cut (0% at reset)
 → input trim + Amount drive
 → stereo-linked compressor
 → exploratory color EQ (flat at reset)
-→ 4× oversampled editable symmetric transfer curve
+→ 4× oversampled decoded or point-edited symmetric transfer curve
 → output trim
 ```
 
@@ -70,6 +70,10 @@ authority and tests require each plugin default to round to the same `float32`.
   not encoded publicly. Peak/gain-reduction smoothing, odd symmetry, the
   documented monotonic tension warp, and fixed 4× clipper oversampling are
   transparent Cosimo implementations.
+- The optional point editor is a new Cosimo sound-design model, not decoded
+  behavior and not an inference about the closed product. It intentionally uses
+  only anchors and one bend per incoming segment. The decoded curve remains a
+  separate, exactly resettable mode and a fixed dashed visual reference.
 - Variable lookahead is intentionally absent. Cmajor processor latency is a
   compile-time frame count; a 0–4 ms control cannot report changing latency to
   Ableton correctly across sample rates. T28 must settle one fixed lookahead and
@@ -94,26 +98,52 @@ preview with two large, authoritative direct-manipulation graphs:
   influence, the Ratio handle owns the base `Ratio`; at or above 50% it owns
   `Ratio Target`. The live readout names which real host endpoint owns the
   gesture, so no duplicate "effective ratio" state is created.
-- The clipper graph is a positive-magnitude editor; the DSP applies the same
-  curve with odd symmetry to negative samples. The solid line is the exact
+- The clipper graph is a positive-magnitude editor; the DSP mirrors the same
+  curve onto negative samples with odd symmetry. The solid line is the exact
   current mixed clipper output, while the dashed decoded-start curve stays
   fixed as a reference during every edit. Moving Drive shifts the first-point
-  boundary. Point 1, Point 2, and Ceiling move freely in both dimensions, and
-  grabbing any visible segment bends that segment directly. The large point
-  and segment targets use geometric ownership, so the short ceiling transition
-  remains grabbable even where its touch area overlaps both neighboring points.
-  Clip Mix remains an ordinary numeric control outside the graph because it is
-  not curve geometry.
+  boundary. Clip Mix remains an ordinary numeric control outside the graph
+  because it is not curve geometry.
+
+`Start point editor` is an explicit model change. It keeps the three decoded
+anchor coordinates, changes their interpolation to straight segments, and then
+lets the sound designer add or remove anchors and bend every segment. That
+transition can change the sound; it is never presented as a lossless conversion
+of the decoded tension curve. `Use decoded curve` temporarily returns to the
+decoded interpolation using the current decoded coefficients, and `Resume point
+editor` restores the editor shape without reinitializing it. Only `Restore
+decoded start` returns every decoded coefficient and editor-only value to the
+retained fixture baseline.
+
+The point editor's complete vocabulary is deliberately small:
+
+- the origin is fixed at `0 → 0`;
+- two to seven positive anchors move freely in both dimensions, subject to
+  increasing input and nondecreasing output so the result remains a clipper
+  rather than silently becoming a foldback waveshaper;
+- one orange diamond bends each incoming segment from concave through straight
+  to convex while preserving both endpoints;
+- output holds at the final anchor, making that anchor the ceiling;
+- selecting one anchor and choosing `Move with Amount` adds one mint 100%
+  target. The existing `Amount ^ Amount Curve` position moves that anchor from
+  its base to the target, including both input and output coordinates.
+
+Adding a point places it on the current curve and splits that segment; removing
+a point merges its neighbors. The selected point exposes exact base input,
+output, incoming bend, and optional Amount-target coordinates directly above
+the graph. The large point, bend, and segment targets use geometric ownership,
+so short transitions remain grabbable where touch areas overlap.
 
 All graph targets are at least 44 CSS pixels, use relative pickup with no value
 jump, publish the real host gesture transaction for every affected coordinate,
-show a fixed finger-clear numeric readout, and restore the exact starting values
-on Escape, pointer cancellation, or teardown. Graph geometry is derived
-entirely from ordinary Cmajor parameter state, so numeric edits, automation,
-saved host state, and decoded reset update the same paths and handles without
-private UI state. The raw point/tension coefficients remain available for exact
-entry under the closed-by-default `Advanced Reference` disclosure; they are not
-presented as the primary sound-design vocabulary.
+show a fixed finger-clear numeric readout, and restore the exact raw starting
+values on Escape, pointer cancellation, or teardown. Graph geometry is derived
+entirely from Cmajor parameter state, including the editor point count, bends,
+and Amount target, so numeric edits, automation, saved host state, and decoded
+reset reconstruct the same paths and handles without private shape state. The
+raw decoded point/tension coefficients remain available for exact entry under
+the closed-by-default `Advanced Reference` disclosure; editor-only state is
+hidden from the generic knob grid and owned by the graph-first interface.
 
 The compressor operating point is emitted by the real detector and smoothed,
 mix-aware compressor output. Its separate gain-reduction history is the live
@@ -130,9 +160,10 @@ Every voicing decision is editable in the lab window:
 - post-color frequency, gain, and Q;
 - compressor threshold, ratio, knee, attack, release, makeup, Peak/RMS detector,
   RMS window, detector high-pass, stereo link, and parallel mix;
-- clip drive and wet mix, plus three positive working points and three directly
-  bendable curve segments; their exact input/output/tension coefficients remain
-  editable under `Advanced Reference`.
+- clip drive and wet mix; the exact decoded point/tension coefficients remain
+  editable under `Advanced Reference`, while the optional point editor exposes
+  two to seven anchors, one bend per segment, and one Amount-movable anchor
+  directly on the graph.
 
 `Amount Curve` applies the explicit lab formula
 `normalized Amount ^ Amount Curve`: `1` is linear, values above `1` reserve
@@ -186,6 +217,20 @@ The browser view gate uses the pinned real Cmajor parameter-control factory,
 not simplified substitute elements. It requires painted geometry for a
 representative knob, switch, and option selector, which protects the exact
 theme-token contract used by Ableton's embedded view.
+
+On 2026-08-27, the graph-first point-editor follow-up passed 7/7 Node/browser
+checks and 5/5 Cmajor checks. The independent reference gate remained 7/7 and
+reverified 21 retained WAV files and nine comparisons. The current compiled DSP
+SHA-256 is `92ef3c14ec746f556c906729596343d288f1ee29968f6eb7e6053618162144f3`;
+the compiled UI SHA-256 is
+`a7d7b8cd8b8602ac1a3f5c144ef7c846248b73e7c7cc75983ff2fa8a033a7c85`.
+A fresh pluginval strictness-5 run with seed `0x27a8` passed editor open while
+processing, editor automation, state, parameters, stereo buses, and audio at
+44.1/48 kHz with 64/512-frame blocks. Ableton Live 11.3.43 also freshly created
+the installed processor and reported all 2,081 parameters. App automation could
+not press the embedded device's non-accessible wrench, so this follow-up claims
+a fresh Ableton processor instantiation plus compiled-editor visual and gesture
+proof—not a fresh Ableton custom-editor gesture or listening verdict.
 
 A fresh generic-loader rebuild on this machine stopped in pinned upstream
 Cmajor code because Xcode beta promotes an implicit integer-to-float conversion

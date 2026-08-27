@@ -139,8 +139,16 @@ test("the compiled VST3 view exposes all controls, live curve/meter feedback, co
             } = window.__POLISH_LAB_SETUP__;
             const view = window.__POLISH_LAB_FACTORY__(patchConnection);
             let lastGraphPointerID;
+            let lastGraphPointerTarget;
             view.shadowRoot.querySelector('[data-transfer-graph="clipper"]')
-                .addEventListener("pointerdown", event => { lastGraphPointerID = event.pointerId; }, { capture: true });
+                .addEventListener("pointerdown", event => {
+                    lastGraphPointerID = event.pointerId;
+                    lastGraphPointerTarget = {
+                        tag: event.target?.tagName,
+                        graphHandle: event.target?.closest?.("[data-graph-handle]")?.dataset.graphHandle,
+                        segmentHandle: event.target?.closest?.("[data-segment-handle]")?.dataset.segmentHandle,
+                    };
+                }, { capture: true });
             window.__POLISH_LAB_TEST__ = {
                 emitParameter,
                 emitMeter(frame) {
@@ -229,6 +237,23 @@ test("the compiled VST3 view exposes all controls, live curve/meter feedback, co
                         primaryClipperControlIDs: Array.from(
                             root.querySelectorAll(".group-clipper > .controls > cmaj-labelled-control-holder"),
                         ).map(control => control.endpointInfo.endpointID),
+                        curveEditor: {
+                            mode: root.querySelector("[data-curve-editor-mode]")?.textContent,
+                            selected: root.querySelector("[data-curve-selection]")?.textContent,
+                            startPresent: Boolean(root.querySelector("[data-curve-start-editor]")),
+                            startButton: root.querySelector("[data-curve-start-editor]")?.textContent,
+                            addDisabled: root.querySelector("[data-curve-add]")?.disabled,
+                            removeDisabled: root.querySelector("[data-curve-remove]")?.disabled,
+                            amountDisabled: root.querySelector("[data-curve-link-amount]")?.disabled,
+                            pointCount: root.querySelectorAll("[data-editor-point]").length,
+                            bendCount: root.querySelectorAll("[data-editor-bend]").length,
+                            amountTargetCount: root.querySelectorAll('[data-graph-handle="amountTarget"]').length,
+                            exactInput: root.querySelector("[data-curve-exact-x]")?.value,
+                            exactOutput: root.querySelector("[data-curve-exact-y]")?.value,
+                            exactBend: root.querySelector("[data-curve-exact-bend]")?.value,
+                            amountTargetInput: root.querySelector("[data-curve-amount-x]")?.value,
+                            amountTargetOutput: root.querySelector("[data-curve-amount-y]")?.value,
+                        },
                         graphHandles: Object.fromEntries(Array.from(root.querySelectorAll("[data-graph-control]")).map(handle => [
                             handle.dataset.graphControl,
                             handle.getAttribute("transform"),
@@ -241,6 +266,7 @@ test("the compiled VST3 view exposes all controls, live curve/meter feedback, co
                         sent: sent.map(message => ({ ...message })),
                         gestureStarts: [...gestureStarts],
                         gestureEnds: [...gestureEnds],
+                        lastGraphPointerTarget,
                         text: root.textContent,
                     };
                 },
@@ -299,6 +325,24 @@ test("the compiled VST3 view exposes all controls, live curve/meter feedback, co
         }, "the editor must devote its full area to positive magnitude; DSP mirrors the negative side");
         assert.equal(initial.tensionGraphHandleCount, 0, "raw tension markers must not masquerade as free curve controls");
         assert.deepEqual(initial.primaryClipperControlIDs, ["clipDriveDb", "clipMix"]);
+        assert.equal(initial.controlIDs.includes("curveEditorEnabled"), false, "editor state must not leak as generic knobs");
+        assert.deepEqual(initial.curveEditor, {
+            mode: "Decoded curve",
+            selected: "Select a point",
+            startPresent: true,
+            startButton: "Start point editor",
+            addDisabled: true,
+            removeDisabled: true,
+            amountDisabled: true,
+            pointCount: 0,
+            bendCount: 0,
+            amountTargetCount: 0,
+            exactInput: "",
+            exactOutput: "",
+            exactBend: "",
+            amountTargetInput: "",
+            amountTargetOutput: "",
+        });
         assert.equal(initial.curveReferenceDetails.present, true);
         assert.equal(initial.curveReferenceDetails.open, false, "raw coefficients must start outside sound-design flow");
         assert.deepEqual(initial.curveReferenceDetails.controlIDs, [
@@ -529,6 +573,7 @@ test("the compiled VST3 view exposes all controls, live curve/meter feedback, co
         const driveHandle = page.locator('[data-graph-handle="drive"]');
         assert.equal(await clipperGraph.count(), 1, "the exact clipper transfer graph must be present");
         const decodedCeilingSegment = page.locator('[data-curve-segment="3"]');
+        await decodedCeilingSegment.scrollIntoViewIfNeeded();
         const decodedCeilingSegmentPoint = await decodedCeilingSegment.evaluate(segment => {
             const point = segment.getPointAtLength(segment.getTotalLength() * 0.5);
             const screen = point.matrixTransform(segment.getScreenCTM());
@@ -546,7 +591,7 @@ test("the compiled VST3 view exposes all controls, live curve/meter feedback, co
         assert.equal(
             acquiredDecodedCeilingSegment.gestureStarts.at(-1),
             "curveP3T",
-            "the short decoded ceiling transition must own its bend gesture even between overlapping point targets",
+            `the short decoded ceiling transition must own its bend gesture even between overlapping point targets: ${JSON.stringify(acquiredDecodedCeilingSegment.lastGraphPointerTarget)}`,
         );
         await page.mouse.up();
         const releasedDecodedCeilingSegment = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
@@ -746,6 +791,180 @@ test("the compiled VST3 view exposes all controls, live curve/meter feedback, co
         assert.equal(graphAction.gestureEnds.at(-1), "curveP2T");
         assert.equal(graphAction.clipperCurvePath, curvedSegmentBeforeCancel, "cancel must restore the grabbed segment exactly");
 
+        await page.evaluate(() => window.__POLISH_LAB_TEST__.click("[data-reset]"));
+        await page.evaluate(() => window.__POLISH_LAB_TEST__.click("[data-curve-start-editor]"));
+        await page.waitForFunction(() => window.__POLISH_LAB_TEST__.snapshot().parameterValues.curveEditorEnabled === true);
+        let editorState = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(editorState.curveEditor.mode, "Point editor");
+        assert.equal(editorState.curveEditor.selected, "Point 1");
+        assert.equal(editorState.curveEditor.pointCount, 3);
+        assert.equal(editorState.curveEditor.bendCount, 3);
+        assert.equal(editorState.curveEditor.addDisabled, false);
+        assert.equal(editorState.curveEditor.removeDisabled, false);
+        assert.equal(editorState.curveEditor.amountDisabled, false);
+        assert.equal(editorState.parameterValues.curveEditorInitialized, true);
+        assert.equal(editorState.parameterValues.curvePointCount, 3);
+        assert.deepEqual(
+            [1, 2, 3].map(index => editorState.parameterValues[`curveB${index}`]),
+            [0, 0, 0],
+            "entering the editor must explicitly replace decoded interpolation with straight segments",
+        );
+        assert.ok(Math.abs(Number(editorState.curveEditor.exactInput) - 0.799438202) < 1e-6);
+        assert.ok(Math.abs(Number(editorState.curveEditor.exactOutput) - 0.717642209) < 1e-6);
+        assert.equal(Number(editorState.curveEditor.exactBend), 0);
+
+        const editorPoint2 = page.locator('[data-editor-point="2"]');
+        assert.equal(await editorPoint2.count(), 1);
+        let editorPoint2Box = await editorPoint2.boundingBox();
+        assert.ok(editorPoint2Box.width >= 44 && editorPoint2Box.height >= 44);
+        await page.mouse.click(
+            editorPoint2Box.x + editorPoint2Box.width / 2,
+            editorPoint2Box.y + editorPoint2Box.height / 2,
+        );
+        await page.locator("[data-curve-remove]").click();
+        editorState = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(editorState.parameterValues.curvePointCount, 2);
+        assert.equal(editorState.curveEditor.pointCount, 2);
+        assert.equal(editorState.curveEditor.bendCount, 2);
+
+        await page.locator("[data-curve-add]").click();
+        const addPointTarget = await clipperGraph.evaluate((graph, input) => {
+            const point = graph.createSVGPoint();
+            point.x = Number(graph.dataset.plotLeft)
+                + input / Number(graph.dataset.inputMax)
+                * (Number(graph.dataset.plotRight) - Number(graph.dataset.plotLeft));
+            point.y = (Number(graph.dataset.plotTop) + Number(graph.dataset.plotBottom)) * 0.5;
+            const screen = point.matrixTransform(graph.getScreenCTM());
+            return { x: screen.x, y: screen.y };
+        }, 0.85);
+        await page.mouse.click(addPointTarget.x, addPointTarget.y);
+        editorState = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(editorState.parameterValues.curvePointCount, 3);
+        assert.equal(editorState.curveEditor.pointCount, 3);
+        assert.equal(editorState.curveEditor.selected, "Point 2");
+        assert.ok(
+            Math.abs(editorState.parameterValues.curveP2X - 0.85 * (10 ** (-0.0192 / 20))) < 0.001,
+            "the added point must store the driven input represented by the graph position",
+        );
+        const editorBend2StartValue = editorState.parameterValues.curveB2;
+
+        const editorBend2 = page.locator('[data-graph-handle="bend2"]');
+        assert.equal(await editorBend2.count(), 1, "each editable segment needs one visible bend handle");
+        const editorBend2Box = await editorBend2.boundingBox();
+        assert.ok(
+            editorBend2Box.width >= 44 && editorBend2Box.height >= 44,
+            `bend handle needs a touch-sized target: ${JSON.stringify(editorBend2Box)}`,
+        );
+        const bendTarget = await clipperGraph.evaluate((graph, start) => {
+            const point = graph.createSVGPoint();
+            point.x = start.svgX;
+            point.y = start.svgY - 0.25 * (Number(graph.dataset.plotBottom) - Number(graph.dataset.plotTop));
+            const screen = point.matrixTransform(graph.getScreenCTM());
+            return { x: screen.x, y: screen.y };
+        }, await editorBend2.evaluate(handle => {
+            const transform = handle.transform.baseVal.consolidate().matrix;
+            return { svgX: transform.e, svgY: transform.f };
+        }));
+        await page.mouse.move(
+            editorBend2Box.x + editorBend2Box.width / 2,
+            editorBend2Box.y + editorBend2Box.height / 2,
+        );
+        await page.mouse.down();
+        await page.mouse.move(bendTarget.x, bendTarget.y, { steps: 5 });
+        await page.mouse.up();
+        editorState = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.ok(
+            Math.abs(editorState.parameterValues.curveB2 - Math.min(1, editorBend2StartValue + 0.5)) < 0.001,
+        );
+        assert.equal(editorState.gestureStarts.at(-1), "curveB2");
+        assert.equal(editorState.gestureEnds.at(-1), "curveB2");
+
+        const editorPoint1 = page.locator('[data-editor-point="1"]');
+        const editorPoint1Box = await editorPoint1.boundingBox();
+        await page.mouse.click(
+            editorPoint1Box.x + editorPoint1Box.width / 2,
+            editorPoint1Box.y + editorPoint1Box.height / 2,
+        );
+        await page.locator("[data-curve-link-amount]").click();
+        editorState = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(editorState.parameterValues.curveAmountPoint, 1);
+        assert.equal(editorState.curveEditor.amountTargetCount, 1);
+        assert.ok(Math.abs(editorState.parameterValues.curveAmountTargetX - editorState.parameterValues.curveP1X) < 1e-9);
+        assert.ok(Math.abs(editorState.parameterValues.curveAmountTargetY - editorState.parameterValues.curveP1Y) < 1e-9);
+
+        const amountTargetHandle = page.locator('[data-graph-handle="amountTarget"]');
+        const amountTargetBox = await amountTargetHandle.boundingBox();
+        assert.ok(amountTargetBox.width >= 44 && amountTargetBox.height >= 44);
+        const editorPoint2SelectBox = await page.locator('[data-editor-point="2"]').boundingBox();
+        await page.mouse.click(
+            editorPoint2SelectBox.x + editorPoint2SelectBox.width / 2,
+            editorPoint2SelectBox.y + editorPoint2SelectBox.height / 2,
+        );
+        assert.equal(
+            (await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot())).curveEditor.selected,
+            "Point 2",
+        );
+        const amountTarget = await clipperGraph.evaluate((graph, target) => {
+            const point = graph.createSVGPoint();
+            point.x = Number(graph.dataset.plotLeft)
+                + target.x / Number(graph.dataset.inputMax)
+                * (Number(graph.dataset.plotRight) - Number(graph.dataset.plotLeft));
+            point.y = Number(graph.dataset.plotBottom)
+                - target.y / Number(graph.dataset.outputMax)
+                * (Number(graph.dataset.plotBottom) - Number(graph.dataset.plotTop));
+            const screen = point.matrixTransform(graph.getScreenCTM());
+            return { x: screen.x, y: screen.y };
+        }, { x: 0.65, y: 0.74 });
+        const curveBeforeAmountTargetEdit = editorState.clipperCurvePath;
+        await page.mouse.move(
+            amountTargetBox.x + amountTargetBox.width / 2,
+            amountTargetBox.y + amountTargetBox.height / 2,
+        );
+        await page.mouse.down();
+        await page.mouse.move(amountTarget.x, amountTarget.y, { steps: 5 });
+        await page.mouse.up();
+        editorState = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(editorState.curveEditor.selected, "Point 1", "the Amount target must select its owning point");
+        assert.ok(
+            Math.abs(editorState.parameterValues.curveAmountTargetX - 0.65 * (10 ** (-0.0192 / 20))) < 0.001,
+            `unexpected Amount target input ${editorState.parameterValues.curveAmountTargetX}`,
+        );
+        assert.ok(
+            Math.abs(editorState.parameterValues.curveAmountTargetY - 0.74) < 0.001,
+            `unexpected Amount target output ${editorState.parameterValues.curveAmountTargetY}`,
+        );
+        assert.equal(
+            editorState.clipperCurvePath,
+            curveBeforeAmountTargetEdit,
+            "editing the 100% target at Amount 0 must not move the currently heard curve",
+        );
+
+        await page.evaluate(() => window.__POLISH_LAB_TEST__.emitParameter("amount", 100));
+        const fullAmountEditorState = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.notEqual(fullAmountEditorState.clipperCurvePath, curveBeforeAmountTargetEdit);
+        assert.equal(fullAmountEditorState.graphHandles.amountCurrent, fullAmountEditorState.graphHandles.amountTarget);
+
+        await page.evaluate(() => window.__POLISH_LAB_TEST__.emitParameter("amount", 0));
+        await page.locator("[data-curve-exact-x]").fill("0.58");
+        await page.locator("[data-curve-exact-x]").press("Enter");
+        await page.locator("[data-curve-exact-bend]").fill("0.25");
+        await page.locator("[data-curve-exact-bend]").press("Enter");
+        editorState = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(editorState.parameterValues.curveP1X, 0.58);
+        assert.equal(editorState.parameterValues.curveB1, 0.25);
+        const resumableEditorPath = editorState.clipperCurvePath;
+        await page.locator("[data-curve-start-editor]").click();
+        editorState = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(editorState.curveEditor.mode, "Decoded curve");
+        assert.equal(editorState.curveEditor.startButton, "Resume point editor");
+        await page.locator("[data-curve-start-editor]").click();
+        editorState = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(editorState.clipperCurvePath, resumableEditorPath, "resuming must preserve the editor shape");
+        assert.equal(editorState.parameterValues.curveB1, 0.25);
+        assert.equal(editorState.parameterValues.curveAmountPoint, 1);
+        if (process.env.POLISH_LAB_EDITOR_SCREENSHOT)
+            await page.screenshot({ path: process.env.POLISH_LAB_EDITOR_SCREENSHOT, fullPage: true });
+
         await page.locator('[data-endpoint-id="macroCurve"]').hover();
         await page.waitForFunction(() => window.__POLISH_LAB_TEST__.snapshot().tooltip?.visible);
         const tooltipVisible = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
@@ -887,6 +1106,57 @@ test("the compiled VST3 view exposes all controls, live curve/meter feedback, co
         assert.equal(restoredGraphState.clipperCurvePath, savedGraphState.clipperCurvePath);
         assert.equal(restoredGraphState.decodedClipperCurvePath, savedGraphState.decodedClipperCurvePath);
         assert.deepEqual(restoredGraphState.graphHandles, savedGraphState.graphHandles);
+
+        const restorableEditorState = {
+            thresholdDb: -9,
+            kneeDb: 7,
+            ratio: 6,
+            makeupDb: 2,
+            clipDriveDb: 5,
+            clipMix: 82,
+            amount: 73,
+            macroCurve: 1.4,
+            curveEditorEnabled: true,
+            curveEditorInitialized: true,
+            curvePointCount: 4,
+            curveP1X: 0.28,
+            curveP1Y: 0.42,
+            curveP2X: 0.61,
+            curveP2Y: 0.7,
+            curveP3X: 0.93,
+            curveP3Y: 0.91,
+            curveP4X: 1.18,
+            curveP4Y: 0.96,
+            curveB1: 0,
+            curveB2: 0.3,
+            curveB3: -0.2,
+            curveB4: 0.85,
+            curveAmountPoint: 2,
+            curveAmountTargetX: 0.49,
+            curveAmountTargetY: 0.78,
+        };
+        await page.evaluate(state => {
+            for (const [endpointID, value] of Object.entries(state))
+                window.__POLISH_LAB_TEST__.emitParameter(endpointID, value);
+        }, restorableEditorState);
+        const savedEditorState = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(savedEditorState.curveEditor.mode, "Point editor");
+        assert.equal(savedEditorState.curveEditor.pointCount, 4);
+        assert.equal(savedEditorState.curveEditor.bendCount, 4);
+        assert.equal(savedEditorState.curveEditor.amountTargetCount, 1);
+
+        await page.evaluate(() => window.__POLISH_LAB_TEST__.click("[data-reset]"));
+        await page.evaluate(state => {
+            for (const [endpointID, value] of Object.entries(state))
+                window.__POLISH_LAB_TEST__.emitParameter(endpointID, value);
+        }, restorableEditorState);
+        const restoredEditorState = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(restoredEditorState.clipperCurvePath, savedEditorState.clipperCurvePath);
+        assert.deepEqual(restoredEditorState.graphHandles, savedEditorState.graphHandles);
+        for (const [endpointID, value] of Object.entries(restorableEditorState))
+            assert.equal(restoredEditorState.parameterValues[endpointID], value, `${endpointID} must restore exactly`);
+
+        await page.evaluate(() => window.__POLISH_LAB_TEST__.click("[data-reset]"));
         if (process.env.POLISH_LAB_SCREENSHOT)
             await page.screenshot({ path: process.env.POLISH_LAB_SCREENSHOT, fullPage: true });
 

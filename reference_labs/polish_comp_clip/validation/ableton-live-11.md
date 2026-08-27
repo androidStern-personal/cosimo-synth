@@ -150,6 +150,62 @@ runtime, the active Ableton window visibly rendered the custom Release tooltip
 above its knob; the user's tuned Amount, dynamics, tone, and curve values were
 not changed during that inspection.
 
+## Arbitrary point-editor follow-up — 2026-08-27
+
+Andrew replaced the confusing exposed knot/tension experiment with a new,
+explicit Cosimo lab mode: a fixed origin, two to seven positive anchors, one
+direct bend per segment, a final ceiling, odd-symmetric negative mirroring, and
+one optional point trajectory driven by shaped Amount. This model is not
+decoded or inferred proprietary behavior. Entering it keeps the current decoded
+anchor coordinates but intentionally replaces decoded tension interpolation
+with straight, individually bendable segments; the immutable dashed reference
+and exact decoded reset remain separate.
+
+`npm run test:polish:lab` passed 7/7 Node/browser checks and 5/5 Cmajor checks.
+The compiled-browser gate directly moves, adds, removes, and bends points; edits
+the 100% Amount target; proves the Amount endpoint changes the heard curve;
+checks exact host writes and gesture bracketing; resumes an editor shape after a
+temporary decoded-mode comparison; and reconstructs graph geometry from reset
+and saved host state. `npm run test:reference:polish` independently remained
+7/7 and reverified all 21 WAVs and nine comparisons.
+
+`npm run fx:jit:install -- polish` associated the current runtime with the
+strict-code-sign-valid installed VST3. Current hashes are:
+
+- installed VST3 executable:
+  `b7cf660de10a9bb381535db1df58775e6150ee449689a037d9ca19fad3846a87`;
+- association:
+  `6862780413b71a932cdf286e40add2ecfbdb9ecf224f9e92ca6bbe66b8688fe5`;
+- compiled Cmajor source:
+  `92ef3c14ec746f556c906729596343d288f1ee29968f6eb7e6053618162144f3`;
+- compiled UI:
+  `a7d7b8cd8b8602ac1a3f5c144ef7c846248b73e7c7cc75983ff2fa8a033a7c85`.
+
+Ableton Live 11.3.43 loaded CmajPlugin onto a fresh audio track in the disposable
+Untitled set. The fresh host lines are:
+
+```text
+2026-08-27T15:36:02.453554: info: VST3: Going to create: CmajPlugin
+2026-08-27T15:36:06.749908: info: VST3: plugin processor successfully loaded: Cmajor Software Ltd 'CmajPlugin' v1.0.3066 (cid: {ABCDEF01-9182-FAEB-4D61-6E75436D616A})
+2026-08-27T15:36:06.751506: info: VST3: parameter count is 2081
+2026-08-27T15:36:06.752196: info: VST3: Created: CmajPlugin
+```
+
+The device remains loaded for Andrew's follow-up. Local app automation exposed
+Live's browser and menus but could not press the device's non-accessible wrench,
+so it did not establish a fresh Ableton custom-editor gesture pass. The current
+compiled editor was instead visually inspected from the real Cmajor-control
+browser bundle, and its gestures were exercised by that compiled gate. No
+subjective listening or physical-touch acceptance is claimed.
+
+A fresh pluginval 1.0.4 strictness-5 run with seed `0x27a8` completed with
+`SUCCESS`. It opened the editor cold and warm, opened it while processing,
+exercised editor automation, processed audio at 44.1/48 kHz with 64/512-frame
+blocks, and passed plugin state, automation, parameters, and stereo buses. The
+new transcript remains at
+`build/pluginval-polish-point-editor/pluginval.txt`; build artifacts are not
+source-controlled evidence.
+
 ## Independent host pass
 
 The exact pluginval transcript is retained in `pluginval.txt`. With random seed

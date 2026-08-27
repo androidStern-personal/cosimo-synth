@@ -1,4 +1,5 @@
 import {
+  CURVE_EDITOR_ENDPOINTS,
   CURVE_DEFAULTS,
   clamp,
   finiteOr,
@@ -22,6 +23,7 @@ const PREVIEW_ENDPOINTS = [
   "clipDriveDb",
   "clipMix",
   "bypass",
+  ...CURVE_EDITOR_ENDPOINTS,
 ];
 const CURVE_ENDPOINTS = new Set(Object.keys(CURVE_DEFAULTS));
 
@@ -46,6 +48,7 @@ class PolishVoicingLabView extends HTMLElement {
     super();
     this.patchConnection = patchConnection;
     this.Controls = patchConnection.utilities.ParameterControls;
+    this.allParameters = [];
     this.parameters = [];
     this.parameterValues = new Map();
     this.parameterListeners = new Map();
@@ -131,8 +134,9 @@ class PolishVoicingLabView extends HTMLElement {
     this.hideControlTooltip();
     this.clearControls();
     this.clearParameterListeners();
-    this.parameters = (status?.details?.inputs ?? [])
-      .filter(endpoint => endpoint?.purpose === "parameter" && !endpoint?.annotation?.hidden);
+    this.allParameters = (status?.details?.inputs ?? [])
+      .filter(endpoint => endpoint?.purpose === "parameter");
+    this.parameters = this.allParameters.filter(endpoint => !endpoint?.annotation?.hidden);
     this.groupsHost.replaceChildren();
 
     const groups = new Map();
@@ -259,7 +263,7 @@ class PolishVoicingLabView extends HTMLElement {
   }
 
   bindPreviewParameters() {
-    const available = new Set(this.parameters.map(parameter => parameter.endpointID));
+    const available = new Set(this.allParameters.map(parameter => parameter.endpointID));
 
     for (const endpointID of PREVIEW_ENDPOINTS.filter(id => available.has(id))) {
       const listener = value => {
@@ -275,7 +279,7 @@ class PolishVoicingLabView extends HTMLElement {
   }
 
   resetToDecodedStart() {
-    for (const parameter of this.parameters) {
+    for (const parameter of this.allParameters) {
       if (parameter.annotation?.init === undefined) continue;
       this.patchConnection.sendEventOrValue(parameter.endpointID, parameter.annotation.init, 0);
     }
@@ -401,6 +405,12 @@ class PolishVoicingLabView extends HTMLElement {
         .graph-curve { fill: none; stroke: var(--accent); stroke-width: 3; }
         .curve-segment-hit { fill: none; stroke: rgba(255,182,93,0); stroke-width: 44; pointer-events: stroke; cursor: ns-resize; }
         .curve-segment-hit:hover, .curve-segment-hit:focus { stroke: rgba(255,182,93,.11); outline: none; }
+        .bend-grip { fill: #101114; stroke: var(--accent); stroke-width: 2.5; }
+        .amount-path { fill: none; stroke: var(--accent-2); stroke-width: 1.5; stroke-dasharray: 4 5; pointer-events: none; }
+        .amount-base-ghost { fill: #101114; stroke: var(--accent-2); stroke-width: 2; stroke-dasharray: 3 2; pointer-events: none; }
+        .amount-target-grip { fill: #101114; stroke: var(--accent-2); stroke-width: 2.5; }
+        .amount-current-grip { fill: var(--accent); stroke: #101114; stroke-width: 3; pointer-events: none; opacity: 0; }
+        [data-graph-control="amountCurrent"][data-visible="true"] .amount-current-grip { opacity: 1; }
         .operating-guide { fill: none; stroke: rgba(103,214,199,.42); stroke-width: 1; stroke-dasharray: 3 4; opacity: 0; }
         .operating-guide[data-active="true"] { opacity: 1; }
         .operating-dot { fill: var(--accent-2); stroke: #101114; stroke-width: 4; opacity: 0; filter: drop-shadow(0 0 7px rgba(103,214,199,.75)); }
@@ -418,6 +428,9 @@ class PolishVoicingLabView extends HTMLElement {
         [data-graph-handle="makeup"] { cursor: ns-resize; }
         [data-graph-handle="drive"] { cursor: ew-resize; }
         [data-graph-handle^="knot"] { cursor: move; }
+        [data-editor-point][data-selected="true"] .knot-grip { stroke: var(--accent); filter: drop-shadow(0 0 6px rgba(255,182,93,.5)); }
+        [data-graph-handle^="bend"] { cursor: ns-resize; }
+        [data-graph-handle="amountTarget"] { cursor: move; }
         .knot-number { fill: var(--accent-2); font-size: 9px; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
         [data-graph-handle]:not(.curve-segment-hit):focus { stroke: var(--ink); }
         .graph-readout {
@@ -433,6 +446,36 @@ class PolishVoicingLabView extends HTMLElement {
         .gr-history svg { display: block; width: 100%; height: 72px; }
         .gr-grid { stroke: rgba(255,255,255,.09); stroke-width: 1; }
         .gr-trace { fill: none; stroke: var(--accent-2); stroke-width: 2.5; }
+
+        .curve-editor-tools {
+          display: flex; align-items: center; justify-content: space-between; gap: 12px;
+          margin-top: 9px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 11px;
+          background: rgba(0,0,0,.18);
+        }
+        .curve-editor-mode { min-width: 240px; }
+        .curve-editor-mode strong { display: block; color: var(--accent-2); font-size: 10px; }
+        .curve-editor-mode span { display: block; margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.4; }
+        .curve-editor-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+        .curve-editor-actions button {
+          min-height: 34px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
+          color: var(--ink); background: rgba(255,255,255,.04); cursor: pointer;
+        }
+        .curve-editor-actions button:hover:not(:disabled), .curve-editor-actions button[data-active="true"] {
+          border-color: var(--accent); background: rgba(255,182,93,.12);
+        }
+        .curve-editor-actions button:disabled { opacity: .35; cursor: default; }
+        .curve-inspector {
+          display: grid; grid-template-columns: minmax(120px, 1.25fr) repeat(5, minmax(92px, .8fr));
+          gap: 8px; align-items: end; margin-top: 7px; padding: 0 10px;
+        }
+        .curve-inspector strong { align-self: center; color: var(--accent); font-size: 10px; font-weight: 500; }
+        .curve-inspector label { display: grid; gap: 4px; color: var(--muted); font-size: 8px; }
+        .curve-inspector input {
+          width: 100%; min-height: 31px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 7px;
+          color: var(--ink); background: rgba(0,0,0,.28); font: inherit; font-size: 9px; user-select: text; -webkit-user-select: text;
+        }
+        .curve-inspector input:focus { border-color: var(--accent-2); outline: none; }
+        .curve-inspector input:disabled { opacity: .35; }
 
         .analysis { display: block; }
         .meter-panel { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; overflow: hidden; }
@@ -602,6 +645,26 @@ class PolishVoicingLabView extends HTMLElement {
               <div><h2>Clipper transfer</h2><p>Positive magnitude; the negative side mirrors automatically. Dashed is decoded reference, orange is working curve.</p></div>
               <p data-clipper-graph-summary></p>
             </header>
+            <div class="curve-editor-tools">
+              <div class="curve-editor-mode">
+                <strong data-curve-editor-mode>Decoded curve</strong>
+                <span data-curve-editor-note>The decoded interpolation remains exact. Start the point editor to keep its anchors but replace its interpolation with straight, individually bendable segments.</span>
+              </div>
+              <div class="curve-editor-actions">
+                <button type="button" data-curve-start-editor>Start point editor</button>
+                <button type="button" data-curve-add disabled>+ Point</button>
+                <button type="button" data-curve-remove disabled>Remove point</button>
+                <button type="button" data-curve-link-amount disabled>Move with Amount</button>
+              </div>
+            </div>
+            <div class="curve-inspector">
+              <strong data-curve-selection>Select a point</strong>
+              <label>Input<input type="number" min="0.01" max="1.5" step="0.0001" inputmode="decimal" data-curve-exact-x disabled /></label>
+              <label>Output<input type="number" min="0" max="1.5" step="0.0001" inputmode="decimal" data-curve-exact-y disabled /></label>
+              <label>Incoming bend<input type="number" min="-1" max="1" step="0.001" inputmode="decimal" data-curve-exact-bend disabled /></label>
+              <label>Amount 100% input<input type="number" min="0.01" max="1.5" step="0.0001" inputmode="decimal" data-curve-amount-x disabled /></label>
+              <label>Amount 100% output<input type="number" min="0" max="1.5" step="0.0001" inputmode="decimal" data-curve-amount-y disabled /></label>
+            </div>
             <svg
               viewBox="0 0 780 380"
               role="img"
@@ -621,13 +684,14 @@ class PolishVoicingLabView extends HTMLElement {
               <rect class="clipped-region" data-clipped-region y="24" height="322" x="722" width="0" />
               <path class="decoded-curve" data-decoded-clipper-curve d="" />
               <path class="graph-curve" data-clipper-curve d="" />
-              <path class="curve-segment-hit" data-curve-segment="1" data-graph-handle="segment1" role="slider" tabindex="0" aria-label="Drag curve segment 1 vertically to change its roundness" aria-valuemin="-1" aria-valuemax="1" d="" />
-              <path class="curve-segment-hit" data-curve-segment="2" data-graph-handle="segment2" role="slider" tabindex="0" aria-label="Drag curve segment 2 vertically to change its roundness" aria-valuemin="-1" aria-valuemax="1" d="" />
-              <path class="curve-segment-hit" data-curve-segment="3" data-graph-handle="segment3" role="slider" tabindex="0" aria-label="Drag the ceiling transition vertically to change its roundness" aria-valuemin="-1" aria-valuemax="1" d="" />
+              <g data-curve-segments></g>
               <path class="operating-guide" data-clipper-operating-guide data-active="false" d="" />
               <circle class="operating-dot" data-clipper-operating-point data-active="false" data-clipped="false" data-input="" data-output="" cx="0" cy="0" r="8" />
               <text class="operating-label" data-clipper-operating-label data-active="false" x="0" y="0"></text>
               <path class="drive-guide" data-drive-guide d="" />
+              <g data-curve-bends></g>
+              <g data-curve-points></g>
+              <g data-curve-amount-visuals></g>
               <g
                 data-graph-control="drive"
                 data-graph-handle="drive"
@@ -640,39 +704,6 @@ class PolishVoicingLabView extends HTMLElement {
                 <rect x="-26" y="-26" width="52" height="52" fill="transparent" stroke="transparent" />
                 <circle class="drive-grip" cx="0" cy="0" r="11" />
                 <path class="drive-grip-mark" d="M-7 0L-2 -4 M-7 0L-2 4 M7 0L2 -4 M7 0L2 4" />
-              </g>
-              <g
-                data-graph-control="knot1"
-                data-graph-handle="knot1"
-                role="slider"
-                tabindex="0"
-                aria-label="Clipper point 1 input and output; drag freely"
-              >
-                <rect x="-26" y="-26" width="52" height="52" fill="transparent" stroke="transparent" />
-                <circle class="knot-grip" cx="0" cy="0" r="11" />
-                <text class="knot-number" x="0" y="0">1</text>
-              </g>
-              <g
-                data-graph-control="knot2"
-                data-graph-handle="knot2"
-                role="slider"
-                tabindex="0"
-                aria-label="Clipper point 2 input and output; drag freely"
-              >
-                <rect x="-26" y="-26" width="52" height="52" fill="transparent" stroke="transparent" />
-                <circle class="knot-grip" cx="0" cy="0" r="11" />
-                <text class="knot-number" x="0" y="0">2</text>
-              </g>
-              <g
-                data-graph-control="knot3"
-                data-graph-handle="knot3"
-                role="slider"
-                tabindex="0"
-                aria-label="Clipper ceiling input and output; drag freely"
-              >
-                <rect x="-26" y="-26" width="52" height="52" fill="transparent" stroke="transparent" />
-                <circle class="knot-grip" cx="0" cy="0" r="11" />
-                <text class="knot-number" x="0" y="0">3</text>
               </g>
               <text class="graph-axis-label" x="58" y="369">0 input</text>
               <text class="graph-axis-label" x="722" y="369" text-anchor="end">+1.5 input</text>

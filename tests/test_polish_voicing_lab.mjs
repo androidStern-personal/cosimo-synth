@@ -5,7 +5,10 @@ import test from "node:test";
 
 import { decodedSettings, mappingBySuffix } from "../reference_labs/polish_comp_clip/lib/fixture-settings.mjs";
 import {
+  CURVE_EDITOR_MAX_POINTS,
   CURVE_DEFAULTS,
+  effectiveEditorCurve,
+  evaluateEditableCurve,
   evaluateCurve,
   evaluateClipperTransfer,
   sanitizeCurve,
@@ -135,6 +138,68 @@ test("the interactive graphs sample the same compressor and driven clipper math 
     assert.equal(evaluateClipperTransfer(-0.5, { clipDriveDb: 6, clipMix: 50 }), -0.75);
 });
 
+test("the point editor is an odd-symmetric monotonic piecewise-bow curve with an Amount-movable anchor", () => {
+    assert.equal(CURVE_EDITOR_MAX_POINTS, 7);
+
+    const values = {
+        curveEditorEnabled: true,
+        curvePointCount: 2,
+        curveP1X: 0.5,
+        curveP1Y: 0.6,
+        curveP2X: 1.0,
+        curveP2Y: 0.8,
+        curveB1: 0,
+        curveB2: 1,
+        curveAmountPoint: 0,
+        clipDriveDb: 0,
+        clipMix: 100,
+    };
+
+    assert.ok(Math.abs(evaluateEditableCurve(0.25, values) - 0.3) < 1e-12);
+    assert.ok(Math.abs(evaluateEditableCurve(0.75, values) - 0.75) < 1e-12);
+    assert.equal(evaluateEditableCurve(1.2, values), 0.8);
+    assert.ok(Math.abs(evaluateEditableCurve(-0.75, values) + 0.75) < 1e-12);
+    assert.ok(Math.abs(evaluateClipperTransfer(0.75, values) - 0.75) < 1e-12);
+
+    const amountValues = {
+        ...values,
+        curveAmountPoint: 1,
+        curveAmountTargetX: 0.25,
+        curveAmountTargetY: 0.8,
+        amount: 50,
+        macroCurve: 1,
+    };
+    let points = effectiveEditorCurve(amountValues);
+    assert.deepEqual(points[1], { x: 0.375, y: 0.7, bend: 0 });
+
+    points = effectiveEditorCurve({ ...amountValues, macroCurve: 2 });
+    assert.deepEqual(points[1], { x: 0.4375, y: 0.65, bend: 0 });
+
+    const sanitized = effectiveEditorCurve({
+        ...values,
+        curvePointCount: 7,
+        curveP1X: 1.49,
+        curveP2X: 0.2,
+        curveP3X: 0.1,
+        curveP4X: 0.1,
+        curveP5X: 0.1,
+        curveP6X: 0.1,
+        curveP7X: 0.1,
+        curveP1Y: 1.4,
+        curveP2Y: 0.2,
+        curveP3Y: 0.1,
+        curveP4Y: 0.1,
+        curveP5Y: 0.1,
+        curveP6Y: 0.1,
+        curveP7Y: 0.1,
+    });
+    assert.equal(sanitized.length, 8);
+    for (let index = 1; index < sanitized.length; index += 1) {
+        assert.ok(sanitized[index].x > sanitized[index - 1].x);
+        assert.ok(sanitized[index].y >= sanitized[index - 1].y);
+    }
+});
+
 test("the plugin exposes the complete requested design surface while remaining isolated and independently named", async () => {
     const source = await fs.readFile(sourcePath, "utf8");
     const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
@@ -151,10 +216,20 @@ test("the plugin exposes the complete requested design surface while remaining i
         "curveP1X", "curveP1Y", "curveP1T",
         "curveP2X", "curveP2Y", "curveP2T",
         "curveP3X", "curveP3Y", "curveP3T",
+        "curveEditorEnabled", "curveEditorInitialized", "curvePointCount",
+        "curveP4X", "curveP4Y", "curveP5X", "curveP5Y",
+        "curveP6X", "curveP6Y", "curveP7X", "curveP7Y",
+        "curveB1", "curveB2", "curveB3", "curveB4", "curveB5", "curveB6", "curveB7",
+        "curveAmountPoint", "curveAmountTargetX", "curveAmountTargetY",
     ];
 
     for (const endpointID of requiredControls)
         assert.ok(initial.has(endpointID), `missing ${endpointID}`);
+
+    assert.equal(initial.get("curveEditorEnabled"), false);
+    assert.equal(initial.get("curveEditorInitialized"), false);
+    assert.equal(initial.get("curvePointCount"), 3);
+    assert.equal(initial.get("curveAmountPoint"), 0);
 
     assert.equal(manifest.ID, "dev.cosimo.polish-voicing-lab");
     assert.equal(manifest.name, "Polish Voicing Lab");
