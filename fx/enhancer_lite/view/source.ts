@@ -12,6 +12,12 @@ import {
     enhancerLiteGainY,
     type EnhancerLiteSpectrumDisplay,
 } from "./spectrum";
+import {
+    ENHANCER_LITE_GESTURE_POLICY,
+    enhancerLiteAmountFromUpwardPixels,
+    enhancerLiteFrequencyFromHorizontalPixels,
+    enhancerLiteQFromUpwardPixels,
+} from "./gesture-policy";
 
 type ParameterListener = ((value: number) => void) & { endpointID?: string };
 type EndpointListener = (message: unknown) => void;
@@ -27,6 +33,7 @@ type EnhancerLitePatchConnection = {
 
 type NumericDescriptor = Extract<EnhancerLiteSettingDescriptor, { readonly kind: "number" }>;
 type ResponseRole = "primary" | "side";
+type ReadoutRole = "frequency" | "primary-amount" | "side-amount" | "q";
 type SpectrumRole = "input" | "output";
 
 type NumberControl = NumericDescriptor & {
@@ -43,6 +50,15 @@ type ResponseDrag = {
     readonly originAmount: number;
     readonly originQ: number;
     readonly captureTarget: SVGElement;
+};
+
+type ReadoutDrag = {
+    readonly pointerID: number;
+    readonly role: ReadoutRole;
+    readonly originClientX: number;
+    readonly originClientY: number;
+    readonly originValue: number;
+    readonly captureTarget: HTMLElement;
 };
 
 function requireNumberDescriptor(
@@ -174,6 +190,7 @@ class EnhancerLiteView extends HTMLElement {
     readonly spectrumDisplays = new Map<SpectrumRole, EnhancerLiteSpectrumDisplay>();
     hasAttached = false;
     drag: ResponseDrag | undefined;
+    readoutDrag: ReadoutDrag | undefined;
 
     constructor(patchConnection: EnhancerLitePatchConnection) {
         super();
@@ -217,6 +234,8 @@ class EnhancerLiteView extends HTMLElement {
     }
 
     disconnectedCallback(): void {
+        this.endReadoutDrag();
+        this.endResponseDrag();
         this.patchConnection.sendEventOrValue(
             ENHANCER_LITE_ANALYZER_ENDPOINTS.enabled,
             0,
@@ -266,11 +285,31 @@ class EnhancerLiteView extends HTMLElement {
             for (const target of this.root.querySelectorAll<SVGElement>(`[data-drag-role='${role}']`)) {
                 target.addEventListener("pointerdown", (event) => this.beginResponseDrag(event, role));
                 target.addEventListener("pointermove", (event) => this.moveResponseDrag(event));
-                target.addEventListener("pointerup", (event) => this.endResponseDrag(event));
-                target.addEventListener("pointercancel", (event) => this.endResponseDrag(event));
+                target.addEventListener("pointerup", (event) => this.endResponseDrag(event.pointerId));
+                target.addEventListener("pointercancel", (event) => this.endResponseDrag(event.pointerId));
+                target.addEventListener(
+                    "lostpointercapture",
+                    (event) => this.endResponseDrag(event.pointerId, false),
+                );
                 target.addEventListener("keydown", (event) => this.handleResponseKey(event, role));
             }
         }
+
+        for (const role of ["frequency", "primary-amount", "side-amount", "q"] as const)
+            this.bindReadoutControl(role);
+    }
+
+    bindReadoutControl(role: ReadoutRole): void {
+        const readout = this.requireElement<HTMLElement>(`[data-readout-control='${role}']`);
+        readout.addEventListener("pointerdown", (event) => this.beginReadoutDrag(event, role));
+        readout.addEventListener("pointermove", (event) => this.moveReadoutDrag(event));
+        readout.addEventListener("pointerup", (event) => this.endReadoutDrag(event.pointerId));
+        readout.addEventListener("pointercancel", (event) => this.endReadoutDrag(event.pointerId));
+        readout.addEventListener("keydown", (event) => this.handleReadoutKey(event, role));
+        readout.addEventListener(
+            "lostpointercapture",
+            (event) => this.endReadoutDrag(event.pointerId, false),
+        );
     }
 
     sendValue(endpointID: string, value: number): void {
@@ -283,14 +322,161 @@ class EnhancerLiteView extends HTMLElement {
         this.patchConnection.sendEventOrValue(endpointID, value, 0);
     }
 
+    beginReadoutDrag(event: PointerEvent, role: ReadoutRole): void {
+        if (!event.isPrimary
+            || event.button !== 0
+            || (role === "side-amount" && !this.isMidSide())) {
+            return;
+        }
+
+        if (!(event.currentTarget instanceof HTMLElement))
+            return;
+
+        this.endResponseDrag();
+        this.endReadoutDrag();
+        event.preventDefault();
+        event.currentTarget.focus({ preventScroll: true });
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.currentTarget.toggleAttribute("data-dragging", true);
+        this.readoutDrag = {
+            pointerID: event.pointerId,
+            role,
+            originClientX: event.clientX,
+            originClientY: event.clientY,
+            originValue: role === "frequency"
+                ? this.valueFor(frequencyControl)
+                : (role === "q"
+                    ? this.valueFor(qControl)
+                    : this.valueFor(role === "side-amount" ? sideAmountControl : midAmountControl)),
+            captureTarget: event.currentTarget,
+        };
+    }
+
+    moveReadoutDrag(event: PointerEvent): void {
+        const drag = this.readoutDrag;
+        if (!drag || drag.pointerID !== event.pointerId)
+            return;
+
+        event.preventDefault();
+        if (drag.role === "frequency") {
+            this.sendValue(
+                frequencyControl.dspEndpointID,
+                clamp(
+                    enhancerLiteFrequencyFromHorizontalPixels(
+                        drag.originValue,
+                        event.clientX - drag.originClientX,
+                    ),
+                    frequencyControl.min,
+                    frequencyControl.max,
+                ),
+            );
+            return;
+        }
+
+        if (drag.role === "q") {
+            this.sendValue(
+                qControl.dspEndpointID,
+                clamp(
+                    enhancerLiteQFromUpwardPixels(
+                        drag.originValue,
+                        drag.originClientY - event.clientY,
+                    ),
+                    qControl.min,
+                    qControl.max,
+                ),
+            );
+            return;
+        }
+
+        const amountControl = drag.role === "side-amount"
+            ? sideAmountControl
+            : midAmountControl;
+        this.sendValue(
+            amountControl.dspEndpointID,
+            clamp(
+                enhancerLiteAmountFromUpwardPixels(
+                    drag.originValue,
+                    drag.originClientY - event.clientY,
+                ),
+                amountControl.min,
+                amountControl.max,
+            ),
+        );
+    }
+
+    endReadoutDrag(pointerID?: number, releaseCapture = true): void {
+        const drag = this.readoutDrag;
+        if (!drag || (pointerID !== undefined && drag.pointerID !== pointerID))
+            return;
+
+        this.readoutDrag = undefined;
+        drag.captureTarget.toggleAttribute("data-dragging", false);
+        if (releaseCapture && drag.captureTarget.hasPointerCapture(drag.pointerID))
+            drag.captureTarget.releasePointerCapture(drag.pointerID);
+    }
+
+    handleReadoutKey(event: KeyboardEvent, role: ReadoutRole): void {
+        const direction = role === "frequency"
+            ? (event.key === "ArrowRight" ? 1 : (event.key === "ArrowLeft" ? -1 : 0))
+            : (event.key === "ArrowUp" ? 1 : (event.key === "ArrowDown" ? -1 : 0));
+        if (direction === 0)
+            return;
+
+        event.preventDefault();
+        if (role === "frequency") {
+            this.sendValue(
+                frequencyControl.dspEndpointID,
+                clamp(
+                    this.valueFor(frequencyControl) * Math.pow(
+                        2,
+                        direction
+                            * ENHANCER_LITE_GESTURE_POLICY.frequencyKeyboardOctavesPerStep,
+                    ),
+                    frequencyControl.min,
+                    frequencyControl.max,
+                ),
+            );
+            return;
+        }
+
+        if (role === "q") {
+            this.sendValue(
+                qControl.dspEndpointID,
+                clamp(
+                    this.valueFor(qControl) * Math.pow(
+                        2,
+                        direction * ENHANCER_LITE_GESTURE_POLICY.qKeyboardOctavesPerStep,
+                    ),
+                    qControl.min,
+                    qControl.max,
+                ),
+            );
+            return;
+        }
+
+        const amountControl = role === "side-amount" ? sideAmountControl : midAmountControl;
+        this.sendValue(
+            amountControl.dspEndpointID,
+            clamp(
+                this.valueFor(amountControl)
+                    + direction * ENHANCER_LITE_GESTURE_POLICY.amountKeyboardStep,
+                amountControl.min,
+                amountControl.max,
+            ),
+        );
+    }
+
     beginResponseDrag(event: PointerEvent, role: ResponseRole): void {
-        if (event.button !== 0 || (role === "side" && !this.isMidSide()))
+        if (!event.isPrimary || event.button !== 0 || (role === "side" && !this.isMidSide()))
             return;
 
         if (!(event.currentTarget instanceof SVGElement))
             return;
 
+        this.endReadoutDrag();
+        this.endResponseDrag();
         event.preventDefault();
+        event.currentTarget.focus({ preventScroll: true });
         event.currentTarget.setPointerCapture(event.pointerId);
         event.currentTarget.toggleAttribute("data-dragging", true);
         const amountControl = role === "side" ? sideAmountControl : midAmountControl;
@@ -312,26 +498,29 @@ class EnhancerLiteView extends HTMLElement {
             return;
 
         event.preventDefault();
-        const bounds = this.requireElement<SVGSVGElement>(".response-plot").getBoundingClientRect();
-        if (bounds.width <= 0 || bounds.height <= 0)
-            return;
-
         if (event.shiftKey) {
-            const octaves = (drag.originClientY - event.clientY) / bounds.height
-                * Math.log2(qControl.max / qControl.min);
             this.sendValue(
                 qControl.dspEndpointID,
-                clamp(drag.originQ * Math.pow(2, octaves), qControl.min, qControl.max),
+                clamp(
+                    enhancerLiteQFromUpwardPixels(
+                        drag.originQ,
+                        drag.originClientY - event.clientY,
+                    ),
+                    qControl.min,
+                    qControl.max,
+                ),
             );
             return;
         }
 
-        const logSpan = Math.log(frequencyControl.max / frequencyControl.min);
-        const frequencyHz = drag.originFrequencyHz * Math.exp(
-            (event.clientX - drag.originClientX) / bounds.width * logSpan,
+        const frequencyHz = enhancerLiteFrequencyFromHorizontalPixels(
+            drag.originFrequencyHz,
+            event.clientX - drag.originClientX,
         );
-        const amount = drag.originAmount
-            + (drag.originClientY - event.clientY) / bounds.height;
+        const amount = enhancerLiteAmountFromUpwardPixels(
+            drag.originAmount,
+            drag.originClientY - event.clientY,
+        );
         const amountControl = drag.role === "side" ? sideAmountControl : midAmountControl;
         this.sendValue(
             frequencyControl.dspEndpointID,
@@ -343,15 +532,15 @@ class EnhancerLiteView extends HTMLElement {
         );
     }
 
-    endResponseDrag(event: PointerEvent): void {
+    endResponseDrag(pointerID?: number, releaseCapture = true): void {
         const drag = this.drag;
-        if (!drag || drag.pointerID !== event.pointerId)
+        if (!drag || (pointerID !== undefined && drag.pointerID !== pointerID))
             return;
 
-        drag.captureTarget.toggleAttribute("data-dragging", false);
-        if (drag.captureTarget.hasPointerCapture(event.pointerId))
-            drag.captureTarget.releasePointerCapture(event.pointerId);
         this.drag = undefined;
+        drag.captureTarget.toggleAttribute("data-dragging", false);
+        if (releaseCapture && drag.captureTarget.hasPointerCapture(drag.pointerID))
+            drag.captureTarget.releasePointerCapture(drag.pointerID);
     }
 
     handleResponseKey(event: KeyboardEvent, role: ResponseRole): void {
@@ -365,7 +554,14 @@ class EnhancerLiteView extends HTMLElement {
         if (event.shiftKey) {
             this.sendValue(
                 qControl.dspEndpointID,
-                clamp(this.valueFor(qControl) * Math.pow(2, direction / 6), qControl.min, qControl.max),
+                clamp(
+                    this.valueFor(qControl) * Math.pow(
+                        2,
+                        direction * ENHANCER_LITE_GESTURE_POLICY.qKeyboardOctavesPerStep,
+                    ),
+                    qControl.min,
+                    qControl.max,
+                ),
             );
             return;
         }
@@ -374,7 +570,11 @@ class EnhancerLiteView extends HTMLElement {
             this.sendValue(
                 frequencyControl.dspEndpointID,
                 clamp(
-                    this.valueFor(frequencyControl) * Math.pow(2, direction / 12),
+                    this.valueFor(frequencyControl) * Math.pow(
+                        2,
+                        direction
+                            * ENHANCER_LITE_GESTURE_POLICY.frequencyKeyboardOctavesPerStep,
+                    ),
                     frequencyControl.min,
                     frequencyControl.max,
                 ),
@@ -385,7 +585,12 @@ class EnhancerLiteView extends HTMLElement {
         const amountControl = role === "side" ? sideAmountControl : midAmountControl;
         this.sendValue(
             amountControl.dspEndpointID,
-            clamp(this.valueFor(amountControl) + direction * 0.01, amountControl.min, amountControl.max),
+            clamp(
+                this.valueFor(amountControl)
+                    + direction * ENHANCER_LITE_GESTURE_POLICY.amountKeyboardStep,
+                amountControl.min,
+                amountControl.max,
+            ),
         );
     }
 
@@ -445,7 +650,15 @@ class EnhancerLiteView extends HTMLElement {
         this.requireElement<HTMLElement>("[data-primary-label]").textContent = isMidSide
             ? "MID"
             : "AMOUNT";
-        this.requireElement<HTMLElement>("[data-side-readout]").hidden = !isMidSide;
+        const primaryAmountReadout = this.requireElement<HTMLElement>(
+            "[data-readout-control='primary-amount']",
+        );
+        primaryAmountReadout.setAttribute("aria-label", isMidSide ? "Mid Amount" : "Amount");
+        const sideAmountReadout = this.requireElement<HTMLElement>(
+            "[data-readout-control='side-amount']",
+        );
+        sideAmountReadout.hidden = !isMidSide;
+        sideAmountReadout.tabIndex = isMidSide ? 0 : -1;
     }
 
     renderSegment(endpointID: string, dataName: "curve" | "saturation-mode"): void {
@@ -485,9 +698,27 @@ class EnhancerLiteView extends HTMLElement {
         primaryHandle.setAttribute("aria-valuetext", `${formatFrequency(frequencyHz)}, ${formatBoost(primaryAmount)}, Q ${formatQ(q)}`);
         sideHandle.setAttribute("aria-valuetext", `${formatFrequency(frequencyHz)}, ${formatBoost(sideAmount)}, Q ${formatQ(q)}`);
         this.requireElement<HTMLElement>("[data-readout='frequency']").textContent = formatFrequency(frequencyHz);
+        const frequencyReadout = this.requireElement<HTMLElement>(
+            "[data-readout-control='frequency']",
+        );
+        frequencyReadout.setAttribute("aria-valuenow", String(frequencyHz));
+        frequencyReadout.setAttribute("aria-valuetext", formatFrequency(frequencyHz));
         this.requireElement<HTMLElement>("[data-readout='q']").textContent = formatQ(q);
+        const qReadout = this.requireElement<HTMLElement>("[data-readout-control='q']");
+        qReadout.setAttribute("aria-valuenow", String(q));
+        qReadout.setAttribute("aria-valuetext", `Q ${formatQ(q)}`);
         this.requireElement<HTMLElement>("[data-readout='primary']").textContent = formatBoost(primaryAmount);
+        const primaryAmountReadout = this.requireElement<HTMLElement>(
+            "[data-readout-control='primary-amount']",
+        );
+        primaryAmountReadout.setAttribute("aria-valuenow", String(primaryAmount * 12));
+        primaryAmountReadout.setAttribute("aria-valuetext", formatBoost(primaryAmount));
         this.requireElement<HTMLElement>("[data-readout='side']").textContent = formatBoost(sideAmount);
+        const sideAmountReadout = this.requireElement<HTMLElement>(
+            "[data-readout-control='side-amount']",
+        );
+        sideAmountReadout.setAttribute("aria-valuenow", String(sideAmount * 12));
+        sideAmountReadout.setAttribute("aria-valuetext", formatBoost(sideAmount));
     }
 
     responsePlotMarkup(): string {
@@ -583,6 +814,16 @@ class EnhancerLiteView extends HTMLElement {
                 .readouts, .switches { border: 1px solid #20262c; border-radius: 10px; background: #000000; }
                 .readouts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 12px 14px; }
                 .readout { min-width: 0; border-right: 1px solid #20262c; padding: 0 13px; }
+                .readout-control { position: relative; cursor: ew-resize; outline: none; touch-action: none; }
+                .readout-control.vertical { cursor: ns-resize; }
+                .readout-control:focus-visible { border-radius: 5px; box-shadow: 0 0 0 1px #b7ff27, 0 0 10px rgba(183,255,39,0.35); }
+                .readout-control[data-dragging] { cursor: grabbing; }
+                .drag-affordance { position: absolute; top: 0; right: 11px; color: #33484d; font-size: 9px; line-height: 1; pointer-events: none; }
+                .readout-control.primary .drag-affordance { color: #14525a; }
+                .readout-control.side .drag-affordance { color: #5a1d50; }
+                .readout-control:hover .drag-affordance, .readout-control:focus-visible .drag-affordance { color: #00f0ff; }
+                .readout-control.side:hover .drag-affordance, .readout-control.side:focus-visible .drag-affordance { color: #ff2bd6; }
+                .readout-control[data-dragging] .drag-affordance { color: #b7ff27; }
                 .readout:first-child { padding-left: 0; }
                 .readout:last-child { border-right: 0; padding-right: 0; }
                 dt { color: #5f7379; font-size: 8px; letter-spacing: 0.11em; }
@@ -615,10 +856,10 @@ class EnhancerLiteView extends HTMLElement {
                 ${this.responsePlotMarkup()}
                 <div class="control-deck">
                     <dl class="readouts">
-                        <div class="readout"><dt>FREQ</dt><dd data-readout="frequency">130 Hz</dd></div>
-                        <div class="readout primary"><dt data-primary-label>AMOUNT</dt><dd data-readout="primary">+0.0 dB</dd></div>
-                        <div class="readout side" data-side-readout hidden><dt>SIDE</dt><dd data-readout="side">+0.0 dB</dd></div>
-                        <div class="readout"><dt>Q</dt><dd data-readout="q">0.71</dd></div>
+                        <div class="readout readout-control" data-readout-control="frequency" tabindex="0" role="slider" aria-label="Frequency" aria-orientation="horizontal" aria-valuemin="20" aria-valuemax="20000" aria-valuenow="130" aria-valuetext="130 Hz"><span class="drag-affordance" aria-hidden="true">↔</span><dt>FREQ</dt><dd data-readout="frequency">130 Hz</dd></div>
+                        <div class="readout readout-control vertical primary" data-readout-control="primary-amount" tabindex="0" role="slider" aria-label="Amount" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="12" aria-valuenow="0" aria-valuetext="+0.0 dB"><span class="drag-affordance" aria-hidden="true">↕</span><dt data-primary-label>AMOUNT</dt><dd data-readout="primary">+0.0 dB</dd></div>
+                        <div class="readout readout-control vertical side" data-readout-control="side-amount" tabindex="-1" role="slider" aria-label="Side Amount" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="12" aria-valuenow="0" aria-valuetext="+0.0 dB" hidden><span class="drag-affordance" aria-hidden="true">↕</span><dt>SIDE</dt><dd data-readout="side">+0.0 dB</dd></div>
+                        <div class="readout readout-control vertical" data-readout-control="q" tabindex="0" role="slider" aria-label="Q" aria-orientation="vertical" aria-valuemin="0.1" aria-valuemax="10" aria-valuenow="0.71" aria-valuetext="Q 0.71"><span class="drag-affordance" aria-hidden="true">↕</span><dt>Q</dt><dd data-readout="q">0.71</dd></div>
                     </dl>
                     <div class="switches">
                         <div class="switch-group">
