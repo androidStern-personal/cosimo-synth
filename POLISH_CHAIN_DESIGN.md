@@ -24,6 +24,15 @@ are marked **locked**; everything else is direction, not commitment.
   sound. Raising either Amount activates the one baked Safe Bass curve with a
   click-free transition. This is derived behavior, not a public or saved Polish
   bypass control.
+- **Locked — compact output meter**: keep one fixed-width meter capsule inside the
+  existing compact preset-bar row. It must not add a row, increase the bar height,
+  or cause changing digits to move surrounding controls. A small light pulses with
+  momentary loudness and changes color with remaining peak headroom, reaching red
+  at digital full scale. Beside it, fixed-width tabular readouts show `P` for the
+  post-trim peak/headroom relative to 0 dB and `L` for 400 ms momentary loudness.
+  A new higher peak writes immediately, holds for one second, then falls smoothly
+  toward silence; another higher peak restarts the hold. There is no permanent
+  latch, tap-to-clear state, preset state, or extra mastering panel.
 - **Locked — lookahead is permitted here, up to 4 ms** (Andrew, 2026-08-25),
   deliberately unlike the rack. Engineering consequences:
   - The chain is a top-level fixed stage, not a rack module, so ADR-008 still binds
@@ -120,7 +129,11 @@ POLISH is not a lane effect: it cannot be moved, deleted, replaced, reordered, o
 bypassed and has no effect context menu or drag behavior. The editable lane's
 tail add control remains immediately before POLISH and inserts new effects before
 the fixed section. The whole-Effects-Lane Mix and Bypass controls are upstream and
-do not affect it. The post-trim overload indicator remains in the preset bar.
+do not affect it. The post-trim peak/loudness capsule remains in the existing
+preset-bar row. Its approved left-side placement must be reconciled with the
+universal Back control on detail screens without hiding either control, adding
+height, or moving the centered preset name; the exact narrow-width composition is
+still open pending a real 320 px layout proof.
 
 ## 3. Not in this chain
 
@@ -161,7 +174,9 @@ do not affect it. The post-trim overload indicator remains in the preset bar.
    and compressor lookahead within the approved 0–4 ms range.
 3. SAFE BASS: fixed cutoff near the starting 120 Hz value and slope of 6 vs
    12 dB/oct. These are tuning choices, not user controls.
-4. Output surface: exact visual treatment of the compact preset-bar overload light.
+4. Output surface: exact sample-peak versus true-peak implementation and the
+   narrow-width coexistence of the approved left-side meter capsule with the
+   universal Back control.
 5. Transient/PUNCH mode (floated earlier): parked; revisit only if voicing shows
    the finisher kills material worth keeping.
 6. Name (working: "Polish").
