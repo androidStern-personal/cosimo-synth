@@ -193,18 +193,10 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
 
     const oscillatorTarget = parseOscillatorTarget(targetKind);
     if (oscillatorTarget !== null) {
-        if (
-            oscillatorTarget.parameterKind === "ampGainDb"
-            && getModulationTargetDescriptor(targetKind).binding._tag !== "endpoint"
-        ) {
-            // The catalog exposes Level as an engine modulation destination,
-            // but deliberately records no base endpoint contract for it.
-            return null;
-        }
         const controlID = voiceControlByParameterKind.get(oscillatorTarget.parameterKind);
         if (controlID === undefined) {
-            // Engine-only oscillator destinations without a base control
-            // (e.g. amp gain) edit amount-only from the table.
+            // Engine-only oscillator destinations without a presented base
+            // control edit amount-only from the table.
             return null;
         }
         const address = getOscillatorControlAddress(oscillatorTarget.oscillatorID, controlID);

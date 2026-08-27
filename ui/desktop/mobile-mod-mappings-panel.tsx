@@ -246,6 +246,7 @@ function MappingRow({
     onGestureActive,
     onBaseSample,
     oscillatorTargetsInactive,
+    resolveTargetBase,
 }: {
     route: ModulationRoute;
     routeIndex: number;
@@ -258,6 +259,7 @@ function MappingRow({
     onGestureActive: (routeId: string, active: boolean) => void;
     onBaseSample: (routeId: string, normalized: number | null) => void;
     oscillatorTargetsInactive: boolean;
+    resolveTargetBase: typeof resolveModulationTargetBase;
 }) {
     const source = sourceOptionForRoute(route);
     const sourceIdentity = route.sourceSlot === null
@@ -272,7 +274,10 @@ function MappingRow({
     const target = targetPresentation(route.targetKind);
     const isBounceInert = oscillatorTargetsInactive
         && isOscillatorModulationTargetKind(route.targetKind);
-    const base = useMemo(() => resolveModulationTargetBase(route.targetKind), [route.targetKind]);
+    const base = useMemo(
+        () => resolveTargetBase(route.targetKind),
+        [resolveTargetBase, route.targetKind],
+    );
 
     const baseBinding = useLaneOrHostParameterBinding({
         endpointID: base?.endpointID ?? `__unbacked_${route.targetKind}`,
@@ -521,6 +526,7 @@ export function MobileModMappingsPanel({
     onRemoveRoute,
     onRouteChange,
     oscillatorTargetsInactive = false,
+    resolveTargetBase = resolveModulationTargetBase,
 }: {
     routes: ReadonlyArray<ModulationRoute>;
     recentConfirmedRouteId: string | null;
@@ -531,6 +537,10 @@ export function MobileModMappingsPanel({
     onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     oscillatorTargetsInactive?: boolean;
+    /** Base-contract authority for the rendered host. The product uses the
+        shared resolver; isolated renderers can explicitly supply a narrower
+        contract without changing the production target catalog. */
+    resolveTargetBase?: typeof resolveModulationTargetBase;
 }) {
     const targetOptions = usePatchModulationTargetOptions({
         includeOscillatorTargets: !oscillatorTargetsInactive,
@@ -886,6 +896,7 @@ export function MobileModMappingsPanel({
                             onGestureActive={handleGestureActive}
                             onBaseSample={handleBaseSample}
                             oscillatorTargetsInactive={oscillatorTargetsInactive}
+                            resolveTargetBase={resolveTargetBase}
                         />
                     );
                 })}

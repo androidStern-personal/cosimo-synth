@@ -2524,7 +2524,7 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
     }
 });
 
-test("T66: MAPPINGS edits MSEG Rate and amount-only route amounts without changing base values", async () => {
+test("T66: MAPPINGS edits MSEG Rate and oscillator Level route amounts without changing base values", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -2551,7 +2551,7 @@ test("T66: MAPPINGS edits MSEG Rate and amount-only route amounts without changi
         const seededState = normalizeModulationState({
             routes: [
                 { id: "mseg-rate-route", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "mseg2Rate", amount: 0, reducer: "max" },
-                { id: "amount-only-route", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "oscA.ampGainDb", amount: 0, reducer: "max" },
+                { id: "osc-level-route", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "oscA.ampGainDb", amount: 0, reducer: "max" },
             ],
         });
         await page.evaluate((state) => {
@@ -2562,7 +2562,7 @@ test("T66: MAPPINGS edits MSEG Rate and amount-only route amounts without changi
         }, seededState);
         await waitForHarnessSnapshot(
             page,
-            "seeded MSEG Rate and amount-only mappings",
+            "seeded MSEG Rate and oscillator Level mappings",
             (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg2Rate) - 0.625) <= 1e-9
                 && Math.abs(Number(snapshot.parameterValues.oscAVolumeDb) - -12) <= 1e-9
                 && readStoredModulationState(snapshot).routes.length === 2,
@@ -2603,156 +2603,38 @@ test("T66: MAPPINGS edits MSEG Rate and amount-only route amounts without changi
         );
         assert.equal(Number(snapshot.parameterValues.mseg2Rate), 0.625);
 
-        const amountOnlyRow = page.locator('[data-role="mod-mappings-row"][data-route-id="amount-only-route"]');
-        const amountOnlyControl = amountOnlyRow.locator('[data-role="mod-mappings-amount-only"]');
-        await amountOnlyControl.waitFor();
-        assert.equal(await amountOnlyControl.getAttribute("role"), "slider");
-        await dragLocatorBy(page, amountOnlyControl, 0, -44);
+        const levelRow = page.locator('[data-role="mod-mappings-row"][data-route-id="osc-level-route"]');
+        await levelRow.waitFor();
+        assert.equal(
+            await levelRow.locator('[data-role="mod-mappings-amount-only"]').count(),
+            0,
+            "Oscillator Level has a live presented base and must use the normal base-plus-amount control.",
+        );
+        assert.match(await levelRow.locator('[data-role="mod-mappings-base-val"]').innerText(), /-12(?:\.0)? dB/);
+        const levelControl = levelRow.locator(".mobile-voice-cell.is-readout");
+        assert.equal(await levelControl.getAttribute("role"), "slider");
+        await dragLocatorBy(page, levelControl, 0, -44);
         snapshot = await waitForHarnessSnapshot(
             page,
-            "amount-only MAPPINGS drag edits route amount",
+            "oscillator Level MAPPINGS drag edits route amount",
             (nextSnapshot) => Number(
-                readStoredModulationState(nextSnapshot).routes.find((route) => route.id === "amount-only-route")?.amount,
+                readStoredModulationState(nextSnapshot).routes.find((route) => route.id === "osc-level-route")?.amount,
             ) > 0.01,
         );
         assert.equal(Number(snapshot.parameterValues.oscAVolumeDb), -12);
 
-        const amountOnlyInput = await openExactValueEntry(amountOnlyControl);
-        assert.equal(await page.locator('[data-role="rack-base-value-input"]').count(), 0);
-        await amountOnlyInput.fill("3 dB");
+        const levelAmountInput = await openExactValueEntry(levelControl);
+        assert.equal(await page.locator('[data-role="rack-base-value-input"]').count(), 1);
+        await levelAmountInput.fill("3 dB");
         await page.click('[data-role="rack-value-sheet-apply"]');
         snapshot = await waitForHarnessSnapshot(
             page,
-            "amount-only MAPPINGS exact entry edits route amount",
+            "oscillator Level MAPPINGS exact entry edits route amount",
             (nextSnapshot) => Math.abs(Number(
-                readStoredModulationState(nextSnapshot).routes.find((route) => route.id === "amount-only-route")?.amount,
+                readStoredModulationState(nextSnapshot).routes.find((route) => route.id === "osc-level-route")?.amount,
             ) - 3) < 0.0001,
         );
         assert.equal(Number(snapshot.parameterValues.oscAVolumeDb), -12);
-    } finally {
-        await page.close();
-    }
-});
-
-async function openAmountOnlyCancellationPage(routeId) {
-    const page = await openHarnessPage({
-        beforeGoto: async (nextPage) => {
-            await nextPage.setViewportSize({ width: 393, height: 852 });
-            await nextPage.addInitScript(() => {
-                localStorage.clear();
-                sessionStorage.clear();
-            });
-        },
-    });
-    const seededState = normalizeModulationState({
-        routes: [
-            { id: routeId, enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "oscA.ampGainDb", amount: 0, reducer: "max" },
-        ],
-    });
-    await page.evaluate((state) => {
-        window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
-    }, seededState);
-    await waitForHarnessSnapshot(
-        page,
-        "seeded amount-only cancellation mapping",
-        (snapshot) => readStoredModulationState(snapshot).routes.some((route) => route.id === routeId),
-    );
-    await page.click('[data-role="mobile-workspace-tab-mod"]');
-    await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
-
-    const control = page.locator(
-        `[data-role="mod-mappings-row"][data-route-id="${routeId}"] `
-        + '[data-role="mod-mappings-amount-only"]',
-    );
-    await control.waitFor();
-    return { page, control };
-}
-
-test("T66: amount-only MAPPINGS capture loss cancels its long press and closes the route gesture", async () => {
-    const routeId = "amount-only-capture-route";
-    const { page, control } = await openAmountOnlyCancellationPage(routeId);
-
-    try {
-        await control.evaluate((element) => {
-            const bounds = element.getBoundingClientRect();
-            const clientX = bounds.left + (bounds.width / 2);
-            const clientY = bounds.top + (bounds.height / 2);
-            element.dispatchEvent(new PointerEvent("pointerdown", {
-                bubbles: true,
-                pointerId: 66,
-                pointerType: "touch",
-                button: 0,
-                buttons: 1,
-                clientX,
-                clientY,
-            }));
-            element.dispatchEvent(new PointerEvent("lostpointercapture", {
-                bubbles: true,
-                pointerId: 66,
-                pointerType: "touch",
-                button: 0,
-                buttons: 1,
-                clientX,
-                clientY,
-            }));
-        });
-
-        await page.waitForFunction(() => (
-            document.querySelector('[data-role="mod-mappings-amount-only"]')?.hasAttribute("data-dragging") === false
-        ));
-        await page.waitForTimeout(700);
-        assert.equal(
-            await page.locator('[data-role="rack-parameter-menu"]').count(),
-            0,
-            "Capture loss must cancel the pending long press instead of opening a late exact-value menu.",
-        );
-        const snapshot = await getHarnessSnapshot(page);
-        assert.equal(
-            readStoredModulationState(snapshot).routes.find((route) => route.id === routeId)?.amount,
-            0,
-            "Capture loss must close the route gesture without changing its amount.",
-        );
-    } finally {
-        await page.close();
-    }
-});
-
-test("T66: unmounting an amount-only MAPPINGS control cancels its pending long press", async () => {
-    const routeId = "amount-only-unmount-route";
-    const { page, control } = await openAmountOnlyCancellationPage(routeId);
-
-    try {
-        await control.evaluate((element) => {
-            const bounds = element.getBoundingClientRect();
-            element.dispatchEvent(new PointerEvent("pointerdown", {
-                bubbles: true,
-                pointerId: 67,
-                pointerType: "touch",
-                button: 0,
-                buttons: 1,
-                clientX: bounds.left + (bounds.width / 2),
-                clientY: bounds.top + (bounds.height / 2),
-            }));
-        });
-        await page.waitForFunction(() => (
-            document.querySelector('[data-role="mod-mappings-amount-only"]')?.getAttribute("data-dragging")
-                === "modulation"
-        ));
-
-        await page.evaluate(() => {
-            const sourceTab = document.querySelector('[data-role="mobile-mod-panel-tab-source"]');
-            if (!(sourceTab instanceof HTMLButtonElement)) {
-                throw new Error("The Mod SOURCE tab is missing.");
-            }
-            sourceTab.click();
-        });
-        await control.waitFor({ state: "detached" });
-        await page.waitForTimeout(700);
-        assert.equal(
-            await page.locator('[data-role="rack-parameter-menu"]').count(),
-            0,
-            "Unmount must clear the timer instead of opening a menu for a removed control.",
-        );
     } finally {
         await page.close();
     }

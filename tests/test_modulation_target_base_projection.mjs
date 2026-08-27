@@ -155,9 +155,26 @@ test("every endpoint-backed MSEG and ENV generator target resolves its live MAPP
     }
 });
 
-test("the catalog's engine-only oscillator amp-gain target remains genuinely base-less", async () => {
+test("every oscillator Level target resolves its live presented base endpoint", async () => {
     const { resolveModulationTargetBase } = await loadResolver();
-    assert.equal(resolveModulationTargetBase("oscA.ampGainDb"), null);
+    for (const oscillatorID of ["A", "B", "C"]) {
+        const base = resolveModulationTargetBase(`osc${oscillatorID}.ampGainDb`);
+        assert.ok(base, `Oscillator ${oscillatorID} Level must expose its live base.`);
+        assert.equal(base.endpointID, `osc${oscillatorID}VolumeDb`);
+        assert.equal(base.label, "Level");
+        assert.equal(base.entrySpec.defaultUnit, "dB");
+    }
+});
+
+test("every currently visible production modulation target has a live base contract", async () => {
+    const { resolveModulationTargetBase } = await loadResolver();
+    const { MODULATION_TARGET_OPTIONS } = await loadUIModule(repoRoot, "ui/shared/modulation.ts");
+    for (const option of MODULATION_TARGET_OPTIONS) {
+        assert.ok(
+            resolveModulationTargetBase(option.value),
+            `${option.label} (${option.value}) must not fall into amount-only rendering.`,
+        );
+    }
 });
 
 test("the projection inverts: denormalize is the exact inverse of normalize", async () => {

@@ -61,8 +61,11 @@ import {
     serializeArticulationsV4,
 } from "../../ui/shared/articulation-image";
 import { addCapturedArticulationV4 } from "../../ui/shared/articulation-v4-editor";
-import { MockPatchConnection } from "../../ui/shared/patch-connection-mock";
+import { MockPatchConnection, loadHarnessManifest } from "../../ui/shared/patch-connection-mock";
 import { useModulationRouteAmountBinding } from "../../ui/shared/modulation-route-amount";
+import { ParameterMenuContext } from "../../ui/shared/parameter-context-menu";
+import { useParameterMenuShell } from "../../ui/shared/parameter-menu-shell";
+import { MobileModMappingsPanel } from "../../ui/desktop/mobile-mod-mappings-panel";
 import type { SynthKeyboardInputMode } from "../../ui/shared/synth-input-router";
 import { subscribeToUserEdits } from "../../ui/shared/user-edit-bus";
 import {
@@ -80,6 +83,7 @@ import {
     createDefaultRoute,
     createDefaultModulationState,
     serializeModulationState,
+    type ModulationRouteUpdate,
 } from "../../ui/shared/modulation";
 import { useStandaloneEffectPresets } from "../../ui/shared/effects/use-standalone-effect-presets";
 import {
@@ -1403,6 +1407,98 @@ export async function installModulationRouteAmountBindingHarness(target: HTMLEle
                 )),
                 storedStateListenerCount: storedStateListeners.size,
             };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
+export async function installMobileModMappingsAmountOnlyHarness(target: HTMLElement) {
+    installInlineTestStyle("mobile-mod-mappings-amount-only-styles", desktopCssText);
+    sessionStorage.clear();
+
+    const routeId = "controlled-amount-only-route";
+    const initialRoute = createDefaultRoute({
+        id: routeId,
+        sourceKind: "env",
+        sourceSlot: 1,
+        targetKind: "mseg2Rate",
+        amount: 0,
+    });
+    const patchConnection = new MockPatchConnection(await loadHarnessManifest());
+    patchConnection.setParameterValue("mseg2Rate", 0.625);
+    patchConnection.setStoredStateValue(MODULATION_STATE_KEY, serializeModulationState({
+        ...createDefaultModulationState(),
+        routes: [initialRoute],
+    }));
+
+    let setPanelVisible: ((visible: boolean) => void) | null = null;
+    const mounted = mountHarness(target, (root) => {
+        function Harness() {
+            const { state, bridge } = useModulationState();
+            const [panelVisible, setVisible] = useState(true);
+            const routes = state?.routes ?? [initialRoute];
+            setPanelVisible = setVisible;
+
+            const handleRouteChange = (routeIndex: number, update: ModulationRouteUpdate) => {
+                const currentRoute = bridge.current?.getState().routes[routeIndex];
+                if (currentRoute !== undefined) {
+                    bridge.current?.setRoute(routeIndex, { ...currentRoute, ...update });
+                }
+            };
+            const handleRemoveRoute = (routeIndex: number) => {
+                bridge.current?.removeRoute(routeIndex);
+            };
+            const { openParameterMenu, parameterMenuOverlays } = useParameterMenuShell({
+                routes,
+                armedSourceKind: "env",
+                armedSourceSlot: 1,
+                onRouteChange: handleRouteChange,
+                onRemoveRoute: handleRemoveRoute,
+            });
+
+            return (
+                <ParameterMenuContext.Provider value={openParameterMenu}>
+                    {panelVisible ? (
+                        <MobileModMappingsPanel
+                            routes={routes}
+                            recentConfirmedRouteId={null}
+                            hudContainer={null}
+                            onCreateRoute={(overrides) => { bridge.current?.addGeneratedRoute(overrides); }}
+                            onRemoveRoute={handleRemoveRoute}
+                            onRouteChange={handleRouteChange}
+                            resolveTargetBase={() => null}
+                        />
+                    ) : null}
+                    {parameterMenuOverlays}
+                </ParameterMenuContext.Provider>
+            );
+        }
+
+        root.render(
+            <PatchConnectionProvider patchConnection={patchConnection}>
+                <Harness />
+            </PatchConnectionProvider>,
+        );
+    });
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        getSnapshot() {
+            const debug = patchConnection.getDebugSnapshot();
+            const rawState = debug.storedState[MODULATION_STATE_KEY];
+            const modulationState = typeof rawState === "string" ? JSON.parse(rawState) : rawState;
+            return {
+                routeAmount: modulationState?.routes?.find((route: { id: string }) => route.id === routeId)?.amount ?? null,
+                baseValue: debug.parameterValues.mseg2Rate,
+            };
+        },
+        async setPanelVisible(visible: boolean) {
+            setPanelVisible?.(visible);
+            await waitForMicrotask();
         },
         async unmount() {
             mounted.unmount();
