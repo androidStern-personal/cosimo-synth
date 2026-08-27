@@ -867,14 +867,6 @@
     gap: 5px;
 }
 
-.cosimo-surface[data-mod-rail-edge="right"] .subway-group-solo-controls {
-    margin-right: var(--cosimo-rail-dock, 0px);
-}
-
-.cosimo-surface[data-mod-rail-edge="left"] .subway-group-solo-controls {
-    margin-left: var(--cosimo-rail-dock, 0px);
-}
-
 .subway-group-solo {
     display: grid;
     min-width: var(--cosimo-hit-min);
@@ -1607,6 +1599,31 @@
         gap: 5px;
     }
 
+    .subway-group-editor .rack-editor-header {
+        flex: none;
+    }
+
+    .subway-group-editor-body {
+        min-height: 0;
+        overflow-y: auto;
+        flex: 1 1 auto;
+        overscroll-behavior-y: contain;
+    }
+
+    /* The editor is the right grid column. Reserve the complete right-docked
+       rail for every group control; a left-docked rail never crosses it. */
+    .cosimo-surface[data-mod-rail-edge="right"] .subway-group-editor-body {
+        padding-right: calc(10px + var(--cosimo-rail-dock, 0px));
+    }
+
+    /* The editor shares a narrow phone row with the unchanged subway map.
+       Exact 44px tracks wrap instead of overflowing under the edge rail;
+       start alignment keeps the rightmost owned pixel clear of either dock. */
+    .subway-group-solo-controls {
+        grid-template-columns: repeat(2, var(--cosimo-hit-min));
+        justify-content: start;
+    }
+
     .rack-list.subway-map {
         border-right: 0;
         border-left: 0;
@@ -1687,6 +1704,12 @@
     .rack-editor-controls { gap: 4px; padding-inline: 4px; }
     .rack-mod-row { grid-template-columns: 20px minmax(0, 1fr) 20px; }
     .rack-mod-paddle { width: 20px; min-width: 20px; }
+
+    /* At 320px the right editor column has only 77px before the 44px edge
+       rail begins, so one exact hit track is the largest fully-owned row. */
+    .subway-group-solo-controls {
+        grid-template-columns: var(--cosimo-hit-min);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -39,14 +39,51 @@ test("Solo lives on the running patch connection and writes only its runtime eve
     assert.deepEqual(audition.readLaneSoloAudition(connection), {
         selectedBranchByGroup: { "parallel#1": 1 },
     });
+    assert.deepEqual(runtimeWrites, [
+        {
+            endpointID: "laneSolo",
+            value: {
+                parallelSoloBranches: [0, 0, 0, 0],
+                splitSoloBranches: [0, 0, 0, 0],
+            },
+        },
+        {
+            endpointID: "laneSolo",
+            value: {
+                parallelSoloBranches: [2, 0, 0, 0],
+                splitSoloBranches: [0, 0, 0, 0],
+            },
+        },
+    ]);
+    assert.deepEqual(storedWrites, []);
+});
+
+test("a new connection synchronizes zero once and same-connection resubscribe does not clear", async () => {
+    const audition = await auditionPromise;
+    const runtimeWrites = [];
+    const connection = {
+        sendEventOrValue(endpointID, value) {
+            runtimeWrites.push({ endpointID, value });
+        },
+    };
+    const firstUnsubscribe = audition.subscribeLaneSoloAudition(connection, laneState, () => {});
+
     assert.deepEqual(runtimeWrites, [{
         endpointID: "laneSolo",
         value: {
-            parallelSoloBranches: [2, 0, 0, 0],
+            parallelSoloBranches: [0, 0, 0, 0],
             splitSoloBranches: [0, 0, 0, 0],
         },
     }]);
-    assert.deepEqual(storedWrites, []);
+    audition.toggleLaneSoloAudition(connection, laneState, "parallel#1", 0);
+    firstUnsubscribe();
+    const secondUnsubscribe = audition.subscribeLaneSoloAudition(connection, laneState, () => {});
+
+    assert.equal(runtimeWrites.length, 2);
+    assert.deepEqual(audition.readLaneSoloAudition(connection), {
+        selectedBranchByGroup: { "parallel#1": 0 },
+    });
+    secondUnsubscribe();
 });
 
 test("ordinary remount-style reads retain Solo on the same synth connection", async () => {
@@ -54,7 +91,10 @@ test("ordinary remount-style reads retain Solo on the same synth connection", as
     const firstConnection = { sendEventOrValue() {} };
     const secondConnection = { sendEventOrValue() {} };
 
+    const unsubscribe = audition.subscribeLaneSoloAudition(firstConnection, laneState, () => {});
     audition.toggleLaneSoloAudition(firstConnection, laneState, "parallel#1", 0);
+    unsubscribe();
+    const remountUnsubscribe = audition.subscribeLaneSoloAudition(firstConnection, laneState, () => {});
 
     assert.deepEqual(audition.readLaneSoloAudition(firstConnection), {
         selectedBranchByGroup: { "parallel#1": 0 },
@@ -62,6 +102,7 @@ test("ordinary remount-style reads retain Solo on the same synth connection", as
     assert.deepEqual(audition.readLaneSoloAudition(secondConnection), {
         selectedBranchByGroup: {},
     });
+    remountUnsubscribe();
 });
 
 test("Init or preset reset clears every group with one zero runtime event", async () => {
@@ -102,7 +143,7 @@ test("Init or preset reset clears every group with one zero runtime event", asyn
         },
     });
     assert.equal(audition.clearLaneSoloAudition(connection), false);
-    assert.equal(runtimeWrites.length, 3);
+    assert.equal(runtimeWrites.length, 4);
 });
 
 test("rack deletion reconciliation clears only the affected group at runtime", async () => {

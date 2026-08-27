@@ -18,7 +18,10 @@ type LaneSoloAuditionStore = {
 const stores = new WeakMap<object, LaneSoloAuditionStore>();
 const EMPTY_LANE_SOLO_STATE = createLaneSoloState();
 
-function getStore(connection: PatchConnectionLike): LaneSoloAuditionStore {
+function getStore(
+    connection: PatchConnectionLike,
+    laneState: LaneStateV2,
+): LaneSoloAuditionStore {
     const key = connection as unknown as object;
     const existing = stores.get(key);
     if (existing !== undefined) {
@@ -26,10 +29,17 @@ function getStore(connection: PatchConnectionLike): LaneSoloAuditionStore {
     }
     const created: LaneSoloAuditionStore = {
         state: EMPTY_LANE_SOLO_STATE,
-        laneState: null,
+        laneState,
         listeners: new Set(),
     };
     stores.set(key, created);
+    // A native editor can be destroyed while its processor keeps running.
+    // Its replacement owns a new patch-connection object, so synchronize the
+    // empty presentation state once before that UI can show every Solo as off.
+    connection.sendEventOrValue?.(
+        LANE_SOLO_ENDPOINT_ID,
+        compileLaneSoloUpload(EMPTY_LANE_SOLO_STATE, laneState),
+    );
     return created;
 }
 
@@ -67,9 +77,10 @@ export function readLaneSoloAudition(connection: PatchConnectionLike): LaneSoloS
 /** Subscribe a mounted rack surface to transient Solo changes on this patch instance. */
 export function subscribeLaneSoloAudition(
     connection: PatchConnectionLike,
+    laneState: LaneStateV2,
     listener: () => void,
 ): () => void {
-    const store = getStore(connection);
+    const store = getStore(connection, laneState);
     store.listeners.add(listener);
     return () => store.listeners.delete(listener);
 }
@@ -81,7 +92,7 @@ export function toggleLaneSoloAudition(
     groupId: string,
     branchIndex: number,
 ): LaneSoloState | null {
-    const store = getStore(connection);
+    const store = getStore(connection, laneState);
     const nextState = toggleLaneBranchSolo(store.state, laneState, groupId, branchIndex);
     if (nextState === null) {
         return null;

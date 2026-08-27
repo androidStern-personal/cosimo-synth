@@ -28,6 +28,75 @@ import { decodePng, pngPixelAt, rgbDistance } from "./helpers/png_pixels.mjs";
 const readStoredLaneDoc = (snapshot) => JSON.parse(String(snapshot.storedState["lane.v1"]));
 const evidenceDirectory = path.resolve(import.meta.dirname, "..", "build", "fx-graph-foundation");
 
+async function assertEditorControlIsVisibleAndOwned(control, label) {
+    await control.scrollIntoViewIfNeeded();
+    const evidence = await control.evaluate((element) => {
+        const editor = element.closest(".subway-group-editor");
+        const body = element.closest(".subway-group-editor-body");
+        if (!(editor instanceof HTMLElement) || !(body instanceof HTMLElement)) {
+            throw new Error("Expected the control inside the visible group editor body.");
+        }
+        const rect = element.getBoundingClientRect();
+        const editorRect = editor.getBoundingClientRect();
+        const bodyRect = body.getBoundingClientRect();
+        const visibleRegion = {
+            left: Math.max(0, editorRect.left, bodyRect.left),
+            right: Math.min(window.innerWidth, editorRect.right, bodyRect.right),
+            top: Math.max(0, editorRect.top, bodyRect.top),
+            bottom: Math.min(window.innerHeight, editorRect.bottom, bodyRect.bottom),
+        };
+        const insetX = Math.min(8, rect.width / 4);
+        const insetY = Math.min(8, rect.height / 4);
+        const points = [
+            { x: rect.left + (rect.width / 2), y: rect.top + (rect.height / 2) },
+            { x: rect.left + insetX, y: rect.top + (rect.height / 2) },
+            { x: rect.right - insetX, y: rect.top + (rect.height / 2) },
+            { x: rect.left + (rect.width / 2), y: rect.top + insetY },
+            { x: rect.left + (rect.width / 2), y: rect.bottom - insetY },
+        ];
+        return {
+            rect: {
+                left: rect.left,
+                right: rect.right,
+                top: rect.top,
+                bottom: rect.bottom,
+                width: rect.width,
+                height: rect.height,
+            },
+            editorRect: {
+                left: editorRect.left,
+                right: editorRect.right,
+                top: editorRect.top,
+                bottom: editorRect.bottom,
+            },
+            bodyScrollable: body.scrollHeight > body.clientHeight,
+            visibleRegion,
+            hitOwners: points.map(({ x, y }) => {
+                const owner = document.elementFromPoint(x, y);
+                return {
+                    owned: owner !== null && (owner === element || element.contains(owner)),
+                    role: owner?.closest("[data-role]")?.getAttribute("data-role") ?? null,
+                };
+            }),
+        };
+    });
+    const epsilon = 0.5;
+    assert.equal(
+        evidence.rect.left >= evidence.visibleRegion.left - epsilon
+            && evidence.rect.right <= evidence.visibleRegion.right + epsilon
+            && evidence.rect.top >= evidence.visibleRegion.top - epsilon
+            && evidence.rect.bottom <= evidence.visibleRegion.bottom + epsilon,
+        true,
+        `${label} must be fully contained by the visible editor body: ${JSON.stringify(evidence)}`,
+    );
+    assert.equal(
+        evidence.hitOwners.every(({ owned }) => owned),
+        true,
+        `${label} must own its center and inset hit points: ${JSON.stringify(evidence)}`,
+    );
+    return evidence;
+}
+
 function emptyLaneDocJson() {
     return JSON.stringify({
         format: "cosimo.lane",
@@ -832,11 +901,11 @@ test("split and Parallel routes preserve owning colors symbols selection and byp
     }
 });
 
-test("phone, plugin, and desktop group editors expose click-safe exclusive Solo without persistence", async () => {
+test("phone rail edges, plugin, and desktop keep every exclusive Solo contained and hit-test owned", async () => {
     const laneDoc = populatedFourWayParallelLaneDocJson();
     const page = await openHarnessPage({
         laneDoc,
-        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 700 }),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 568 }),
     });
 
     try {
@@ -845,19 +914,12 @@ test("phone, plugin, and desktop group editors expose click-safe exclusive Solo 
         const soloButtons = page.locator('[data-role^="rack-branch-solo-parallel#1-"]');
         assert.equal(await soloButtons.count(), 4);
 
-        const boxes = await soloButtons.evaluateAll((buttons) => buttons.map((button) => {
-            const rect = button.getBoundingClientRect();
-            return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
-        }));
-        for (const [index, box] of boxes.entries()) {
-            assert.equal(box.right - box.left >= 44, true, `Solo ${index} width`);
-            assert.equal(box.bottom - box.top >= 44, true, `Solo ${index} height`);
-            for (const [otherIndex, other] of boxes.entries()) {
-                if (otherIndex <= index) continue;
-                const overlaps = box.left < other.right && box.right > other.left
-                    && box.top < other.bottom && box.bottom > other.top;
-                assert.equal(overlaps, false, `Solo ${index} overlaps Solo ${otherIndex}`);
-            }
+        for (let index = 0; index < 4; index += 1) {
+            const evidence = await assertEditorControlIsVisibleAndOwned(
+                soloButtons.nth(index), `320x568 right-rail Parallel Solo ${index}`,
+            );
+            assert.equal(evidence.rect.width >= 44, true, `Solo ${index} width`);
+            assert.equal(evidence.rect.height >= 44, true, `Solo ${index} height`);
         }
 
         await soloButtons.nth(1).click();
@@ -896,18 +958,47 @@ test("phone, plugin, and desktop group editors expose click-safe exclusive Solo 
                 '[data-role^="rack-branch-solo-parallel#1-"]:visible',
             );
             await surfaceSoloButtons.first().waitFor();
-            const surfaceBoxes = await surfaceSoloButtons.evaluateAll((buttons) => buttons.map((button) => {
-                const rect = button.getBoundingClientRect();
-                return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
-            }));
-            assert.equal(surfaceBoxes.length, 4, `${surface.name} Solo count`);
-            assert.equal(surfaceBoxes.every((box) => (
-                box.right - box.left >= 44 && box.bottom - box.top >= 44
-            )), true, `${surface.name} Solo hit targets`);
+            assert.equal(await surfaceSoloButtons.count(), 4, `${surface.name} Solo count`);
+            for (let index = 0; index < 4; index += 1) {
+                const evidence = await assertEditorControlIsVisibleAndOwned(
+                    surfaceSoloButtons.nth(index), `${surface.name} Parallel Solo ${index}`,
+                );
+                assert.equal(evidence.rect.width >= 44 && evidence.rect.height >= 44, true);
+            }
         }
-
     } finally {
         await page.close();
+    }
+
+    const leftRailPage = await openHarnessPage({
+        laneDoc,
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 320, height: 568 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ version: 2, edge: "left", normalizedY: 0.42 }),
+                );
+            });
+        },
+    });
+    try {
+        await leftRailPage.click('[data-role="mobile-workspace-tab-fx"]');
+        assert.equal(
+            await leftRailPage.locator('[data-role="mobile-global-mod-rail"]').getAttribute("data-edge"),
+            "left",
+        );
+        await leftRailPage.click('[data-role="rack-fork-parallel#1"]');
+        const soloButtons = leftRailPage.locator('[data-role^="rack-branch-solo-parallel#1-"]');
+        assert.equal(await soloButtons.count(), 4);
+        for (let index = 0; index < 4; index += 1) {
+            const evidence = await assertEditorControlIsVisibleAndOwned(
+                soloButtons.nth(index), `320x568 left-rail Parallel Solo ${index}`,
+            );
+            assert.equal(evidence.rect.width >= 44 && evidence.rect.height >= 44, true);
+        }
+    } finally {
+        await leftRailPage.close();
     }
 });
 
@@ -952,43 +1043,69 @@ test("Init clears active branch Solo without serializing it", async () => {
     }
 });
 
-test("two- and three-band Frequency Split editors expose every compact Solo target", async () => {
-    for (const branchCount of [2, 3]) {
-        const page = await openHarnessPage({
-            laneDoc: emptySplitLaneDocJson(branchCount),
-            beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 700 }),
-        });
+test("compact Split Solo wrapping keeps crossovers and group actions scroll-reachable", async () => {
+    const page = await openHarnessPage({
+        laneDoc: emptySplitLaneDocJson(2),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 568 }),
+    });
 
-        try {
-            await page.click('[data-role="mobile-workspace-tab-fx"]');
-            await page.click('[data-role="rack-fork-split#1"]');
-            const soloButtons = page.locator('[data-role^="rack-branch-solo-split#1-"]');
-            assert.equal(await soloButtons.count(), branchCount);
-            const labels = await soloButtons.evaluateAll((buttons) => (
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await page.click('[data-role="rack-fork-split#1"]');
+        let soloButtons = page.locator('[data-role^="rack-branch-solo-split#1-"]');
+        assert.equal(await soloButtons.count(), 2);
+        assert.deepEqual(
+            await soloButtons.evaluateAll((buttons) => (
                 buttons.map((button) => button.textContent?.replace("SOLO", "").trim())
-            ));
-            assert.deepEqual(labels, branchCount === 2 ? ["LO", "HI"] : ["LO", "MID", "HI"]);
-
-            const boxes = await soloButtons.evaluateAll((buttons) => buttons.map((button) => {
-                const rect = button.getBoundingClientRect();
-                return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
-            }));
-            assert.equal(boxes.every((box) => (
-                box.right - box.left >= 44 && box.bottom - box.top >= 44
-            )), true);
-
-            await soloButtons.nth(branchCount - 1).click();
-            const snapshot = await getHarnessSnapshot(page);
-            assert.deepEqual(
-                snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneSolo").at(-1)?.value,
-                {
-                    parallelSoloBranches: [0, 0, 0, 0],
-                    splitSoloBranches: [branchCount, 0, 0, 0],
-                },
-            );
-        } finally {
-            await page.close();
+            )),
+            ["LO", "HI"],
+        );
+        for (let index = 0; index < 2; index += 1) {
+            await assertEditorControlIsVisibleAndOwned(soloButtons.nth(index), `two-band Split Solo ${index}`);
         }
+        await assertEditorControlIsVisibleAndOwned(
+            page.locator('[data-role="rack-split-low-split#1"]'), "two-band crossover",
+        );
+        const addBand = page.locator('[data-role="rack-group-add-band"]');
+        await assertEditorControlIsVisibleAndOwned(addBand, "Add mid band");
+        await addBand.click();
+
+        soloButtons = page.locator('[data-role^="rack-branch-solo-split#1-"]');
+        await soloButtons.nth(2).waitFor();
+        assert.equal(await soloButtons.count(), 3);
+        assert.deepEqual(
+            await soloButtons.evaluateAll((buttons) => (
+                buttons.map((button) => button.textContent?.replace("SOLO", "").trim())
+            )),
+            ["LO", "MID", "HI"],
+        );
+        for (let index = 0; index < 3; index += 1) {
+            const evidence = await assertEditorControlIsVisibleAndOwned(
+                soloButtons.nth(index), `three-band Split Solo ${index}`,
+            );
+            assert.equal(evidence.rect.width >= 44 && evidence.rect.height >= 44, true);
+        }
+        for (const [selector, label] of [
+            ['[data-role="rack-split-low-split#1"]', "Low crossover"],
+            ['[data-role="rack-split-high-split#1"]', "High crossover"],
+            ['[data-role="rack-group-remove-band"]', "Remove mid band"],
+            ['[data-role="rack-group-dissolve"]', "Dissolve group"],
+        ]) {
+            const evidence = await assertEditorControlIsVisibleAndOwned(page.locator(selector), label);
+            assert.equal(evidence.bodyScrollable, true, `${label} must remain reachable in the scrolling body`);
+        }
+
+        await soloButtons.nth(2).click();
+        const snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneSolo").at(-1)?.value,
+            {
+                parallelSoloBranches: [0, 0, 0, 0],
+                splitSoloBranches: [3, 0, 0, 0],
+            },
+        );
+    } finally {
+        await page.close();
     }
 });
 

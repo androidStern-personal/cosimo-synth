@@ -154,8 +154,8 @@ export function useLaneSoloAudition(laneState: LaneStateV2): {
     const patchConnection = usePatchConnection();
     const soloState = useSyncExternalStore(
         useCallback(
-            (onChange) => subscribeLaneSoloAudition(patchConnection, onChange),
-            [patchConnection],
+            (onChange) => subscribeLaneSoloAudition(patchConnection, laneState, onChange),
+            [laneState, patchConnection],
         ),
         () => readLaneSoloAudition(patchConnection),
     );
