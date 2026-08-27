@@ -1339,6 +1339,9 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - The final desktop UI gate was 258/260: all T57/T58 product checks passed, the established React Grab `navigator.webdriver` assertion remained red, and one unrelated Vite optimize-cache startup failure passed immediately in isolated rerun. The complete layout gate was 27/28 with only the same React Grab assertion. A fresh HMR standalone is live at `http://127.0.0.1:5174`; the compiled VST3 is installed and strict-code-sign valid at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` (executable SHA-256 `4f003882d8fc0fa96d783b222edd1c8f7fee1d36207b2088f0849645d1110a7c`). Physical iPhone and Ableton interaction acceptance were not performed.
 
 [ ] T59 — Make Sine → Square → Triangle → Saw the default oscillator wavetable
+    Active owner (2026-08-27):
+    - Codex task `T59 Build Four-Frame Default Wavetable`, thread `01a04337-a792-7d21-a860-49d41f801ddc`, branch `codex/t59-four-frame-default-wavetable`, worktree `/Users/winterfell/.codex/worktrees/a8a5/cosimo-synth`, model SOL, reasoning max.
+    - This is a coordinator-managed implementation task. Final review, rebase, merge, push, and any deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
     Required result:
     - Create one license-safe wavetable containing exactly four stored frames in this order: Sine, Square, Triangle, and Saw. Every frame is one complete single-cycle waveform. Do not insert crossfade, transition, duplicate, or intermediate frames.
     - Do not change Index behavior, interpolation, modulation, display, dragging, or any other wavetable-engine behavior. This task constructs the four-frame table and selects it as the default only.
