@@ -82,7 +82,7 @@ Black-box equivalence cannot prove Spectre's source-code identity. It establishe
 - Smooth one-hot Shape weights over 15 ms. At a stable endpoint, run only the selected filter and conditioner and reset inactive states; on a change, warm the newly selected path from reset behind its initially near-zero crossfade weight. At stable Bell, the output resolves to the original Bell arithmetic without an additional gain stage.
 - Use independent shelf coefficients for Mid and Side because Amount is independently adjustable in M/S mode.
 - Preserve horizontal Frequency drag, vertical Amount/Mid/Side drag, and Shift-drag Q. The UI label remains Q because that is what the measurements support.
-- Draw the full shelf response for visual truth. The Frequency handle lies at the shelf's half-gain point; therefore its graph ordinate is half the full shelf gain, while Bell remains at full peak gain.
+- Draw the full shelf response for visual truth. Keep the parameter handle on the accepted `0..12 dB` Amount axis for direct manipulation in every shape; a shelf's measured curve still crosses half gain at Frequency, so the Amount handle is intentionally not a fake response sample.
 - Zero Amount must remain bit-identical dry for all three Shapes.
 
 ## Implemented Model
@@ -92,11 +92,11 @@ Black-box equivalence cannot prove Spectre's source-code identity. It establishe
 - Low and High use Cmajor's RBJ/JUCE Q-form shelf biquads at 4x and subtract the oversampled input to obtain `H(z) - 1`. Each M/S lane has coefficients derived from its own Amount.
 - Bell retains its checkpoint coefficient, drive, shaper, conditioning, routing, and reconstruction arithmetic. A generated-runtime lock across Stereo/M/S, Tube/Solid, and Subtle/Medium is bit-identical to checkpoint `2a652a4035519be1fbe12de9a8c6487ed736e3c5` with maximum absolute difference 0.
 - The shelf conditioner uses float64 coefficients and state. The accepted float32 Bell conditioner remains untouched. This is required because a 20.016 Hz biquad running at 4x loses material low-frequency accuracy at a 192 kHz host rate in float32.
-- The graph evaluates the measured shelf transfer rather than drawing a generic slope. Its expanded `-18..+30 dB` contribution range makes the real high-Q overshoot visible. Gesture semantics remain Frequency horizontally, Amount/Mid/Side vertically, and Q with Shift-drag.
+- The graph evaluates the measured shelf transfer rather than drawing a generic slope. Bell and the analyzer retain their accepted `0..12 dB` rows and handle geometry exactly. Shelf response inside that range uses the same scale; only real high-Q excursions are compressed into labeled `+12..+30 dB` and `0..-18 dB` top/bottom margins. Low/Bell/High handles all use full-range Amount geometry, and a shelf-only guide joins the full-Amount control point to the truthful half-gain response at Frequency. Vertical pointer travel therefore remains coherent while horizontal Frequency and Shift-drag Q semantics stay unchanged.
 
 ## Reproduction And Regression Result
 
-`scripts/measure_enhancer_lite_shelves.mjs --check` first verifies the exact Spectre report and measurement hashes, then regenerates the checkpoint, current Lite, and accepted full-Enhancer JavaScript runtimes, compares them to the complete corpus, and writes 96 level-matched listening files. The final report is `build/enhancer-lite-shelf-review/report.json` (SHA-256 `ec168de4147d2aa559b6bdcd210ff6b3881ea023e5f748d7d8d33213eb3c2b9c`).
+`scripts/measure_enhancer_lite_shelves.mjs --check` first verifies the exact Spectre report and measurement hashes, all 20 pinned input stimuli, and all 284 declared golden outputs as decoded planar Float32 audio. Only then does it regenerate the checkpoint, current Lite, and accepted full-Enhancer JavaScript runtimes, compare them to the corpus, and write 96 level-matched listening files. The fast `--verify-corpus` mode runs that same preflight without comparison. A focused tamper test proves that changing one decoded sample in copied input and output WAVs is rejected. The existing final DSP report remains `build/enhancer-lite-shelf-review/report.json` (SHA-256 `ec168de4147d2aa559b6bdcd210ff6b3881ea023e5f748d7d8d33213eb3c2b9c`).
 
 - Bell checkpoint maximum absolute difference: `0`.
 - Zero-Amount maximum absolute difference for Low/Bell/High: `0`.

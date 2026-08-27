@@ -11,6 +11,7 @@ import {
     advanceEnhancerLiteSpectrum,
     enhancerLiteFrequencyX,
     enhancerLiteGainY,
+    enhancerLiteShelfGainY,
     type EnhancerLiteSpectrumDisplay,
 } from "./spectrum";
 
@@ -225,11 +226,12 @@ function responsePath(
                 ENHANCER_LITE_PLOT.maximumHz / ENHANCER_LITE_PLOT.minimumHz,
                 normalized,
             );
+        const gainDb = responseDb(shape, frequencyHz, centreHz, q, amount);
         points.push(
             `${index === 0 ? "M" : "L"} ${enhancerLiteFrequencyX(frequencyHz).toFixed(2)} `
-            + enhancerLiteGainY(
-                responseDb(shape, frequencyHz, centreHz, q, amount),
-            ).toFixed(2),
+            + (shape === "bell"
+                ? enhancerLiteGainY(gainDb)
+                : enhancerLiteShelfGainY(gainDb)).toFixed(2),
         );
     }
     if (closeArea) {
@@ -564,17 +566,36 @@ class EnhancerLiteView extends HTMLElement {
         const primaryPath = this.requireElement<SVGPathElement>("[data-response-role='primary']");
         const sidePath = this.requireElement<SVGPathElement>("[data-response-role='side']");
         const fillPath = this.requireElement<SVGPathElement>("[data-response-role='fill']");
+        const primaryGuide = this.requireElement<SVGPathElement>("[data-response-role='primary-guide']");
+        const sideGuide = this.requireElement<SVGPathElement>("[data-response-role='side-guide']");
         const primaryHandle = this.requireElement<SVGCircleElement>("[data-response-role='primary-handle']");
         const sideHandle = this.requireElement<SVGCircleElement>("[data-response-role='side-handle']");
+
+        for (const label of this.root.querySelectorAll<SVGTextElement>("[data-shelf-overflow]"))
+            label.toggleAttribute("hidden", shape === "bell");
 
         primaryPath.setAttribute("d", responsePath(shape, frequencyHz, q, primaryAmount));
         sidePath.setAttribute("d", responsePath(shape, frequencyHz, q, sideAmount));
         fillPath.setAttribute("d", responsePath(shape, frequencyHz, q, primaryAmount, true));
-        const handleGainScale = shape === "bell" ? 12 : 6;
-        primaryHandle.setAttribute("cx", enhancerLiteFrequencyX(frequencyHz).toFixed(2));
-        primaryHandle.setAttribute("cy", enhancerLiteGainY(primaryAmount * handleGainScale).toFixed(2));
-        sideHandle.setAttribute("cx", enhancerLiteFrequencyX(frequencyHz).toFixed(2));
-        sideHandle.setAttribute("cy", enhancerLiteGainY(sideAmount * handleGainScale).toFixed(2));
+        const handleX = enhancerLiteFrequencyX(frequencyHz).toFixed(2);
+        const primaryHandleY = enhancerLiteGainY(primaryAmount * 12).toFixed(2);
+        const sideHandleY = enhancerLiteGainY(sideAmount * 12).toFixed(2);
+        primaryHandle.setAttribute("cx", handleX);
+        primaryHandle.setAttribute("cy", primaryHandleY);
+        sideHandle.setAttribute("cx", handleX);
+        sideHandle.setAttribute("cy", sideHandleY);
+        if (shape !== "bell") {
+            const primaryCurveY = enhancerLiteShelfGainY(
+                shelfResponseDb(shape, frequencyHz, frequencyHz, q, primaryAmount),
+            ).toFixed(2);
+            const sideCurveY = enhancerLiteShelfGainY(
+                shelfResponseDb(shape, frequencyHz, frequencyHz, q, sideAmount),
+            ).toFixed(2);
+            primaryGuide.setAttribute("d", `M ${handleX} ${primaryHandleY} V ${primaryCurveY}`);
+            sideGuide.setAttribute("d", `M ${handleX} ${sideHandleY} V ${sideCurveY}`);
+        }
+        primaryGuide.toggleAttribute("hidden", shape === "bell");
+        sideGuide.toggleAttribute("hidden", shape === "bell" || !isMidSide);
         sidePath.toggleAttribute("hidden", !isMidSide);
         sideHandle.toggleAttribute("hidden", !isMidSide);
         sideHandle.setAttribute("tabindex", isMidSide ? "0" : "-1");
@@ -613,12 +634,16 @@ class EnhancerLiteView extends HTMLElement {
                 <svg class="response-plot" viewBox="0 0 ${ENHANCER_LITE_PLOT.width} ${ENHANCER_LITE_PLOT.height}" role="application" aria-label="Draggable frequency and amount plot with input and output spectra">
                     ${verticalGrid}
                     ${horizontalGrid}
+                    <text class="axis-label shelf-overflow" data-shelf-overflow="high" x="${ENHANCER_LITE_PLOT.left - 8}" y="9" text-anchor="end" hidden>+30</text>
+                    <text class="axis-label shelf-overflow" data-shelf-overflow="low" x="${ENHANCER_LITE_PLOT.left - 8}" y="270" text-anchor="end" hidden>-18</text>
                     <path class="grid-line baseline" d="M ${ENHANCER_LITE_PLOT.left} ${enhancerLiteGainY(0).toFixed(2)} H ${ENHANCER_LITE_PLOT.width - ENHANCER_LITE_PLOT.right}"></path>
                     <text class="axis-unit gain" x="8" y="12">GAIN</text>
                     <text class="axis-unit level" x="${ENHANCER_LITE_PLOT.width - 5}" y="12" text-anchor="end">dBFS</text>
                     <path class="spectrum-trace input" data-spectrum-role="input"></path>
                     <path class="spectrum-trace output" data-spectrum-role="output"></path>
                     <path class="response-fill" data-response-role="fill"></path>
+                    <path class="response-handle-guide primary" data-response-role="primary-guide" hidden></path>
+                    <path class="response-handle-guide side" data-response-role="side-guide" hidden></path>
                     <path class="response-band primary" data-response-role="primary" data-drag-role="primary" tabindex="0"></path>
                     <path class="response-band side" data-response-role="side" data-drag-role="side" tabindex="-1" hidden></path>
                     <circle class="response-handle primary" data-response-role="primary-handle" data-drag-role="primary" tabindex="0" role="slider" r="6"></circle>
@@ -662,12 +687,16 @@ class EnhancerLiteView extends HTMLElement {
                 .grid-line { fill: none; stroke: #101b1e; stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
                 .grid-line.baseline { stroke: #29434a; }
                 .axis-label, .axis-unit { fill: #526a70; font: 8px/1 "SF Mono", Menlo, monospace; pointer-events: none; }
+                .axis-label.shelf-overflow { fill: #365c63; font-size: 7px; }
                 .axis-unit { letter-spacing: 0.08em; }
                 .axis-label.level, .axis-unit.level { fill: #677055; }
                 .spectrum-trace { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; pointer-events: none; }
                 .spectrum-trace.input { stroke: #6e7dff; stroke-width: 1.35; opacity: 0.68; filter: drop-shadow(0 0 3px rgba(110,125,255,0.55)); }
                 .spectrum-trace.output { stroke: #b7ff27; stroke-width: 1.65; opacity: 0.82; filter: drop-shadow(0 0 4px rgba(183,255,39,0.58)); }
                 .response-fill { fill: rgba(0,240,255,0.07); stroke: none; pointer-events: none; }
+                .response-handle-guide { fill: none; stroke-width: 1; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; pointer-events: none; opacity: 0.55; }
+                .response-handle-guide.primary { stroke: #00f0ff; }
+                .response-handle-guide.side { stroke: #ff2bd6; }
                 .response-band { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; cursor: grab; outline: none; }
                 .response-band.primary { stroke: #00f0ff; stroke-width: 2.5; filter: drop-shadow(0 0 6px rgba(0,240,255,0.8)); }
                 .response-band.side { stroke: #ff2bd6; stroke-width: 2; stroke-dasharray: 7 5; filter: drop-shadow(0 0 6px rgba(255,43,214,0.65)); }

@@ -114,6 +114,43 @@ async function drag(page, locator, deltaX, deltaY, modifiers = []) {
         await page.keyboard.up(modifier);
 }
 
+async function measurePrimaryHandleDrag(page, shape, shapeIn) {
+    const handle = shadow(page, "[data-response-role='primary-handle']");
+    await page.evaluate((selectedShapeIn) => {
+        window.__ENHANCER_LITE_TEST__.emit("shapeIn", selectedShapeIn);
+        window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000);
+        window.__ENHANCER_LITE_TEST__.emit("qIn", 0.7);
+        window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 0);
+    }, shapeIn);
+    const zeroCy = Number(await handle.getAttribute("cy"));
+    await page.evaluate(() => window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 1));
+    const fullCy = Number(await handle.getAttribute("cy"));
+    await page.evaluate(() => {
+        window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 0.25);
+        window.__ENHANCER_LITE_TEST__.clearSent();
+    });
+    const beforeCy = Number(await handle.getAttribute("cy"));
+    const plotBounds = await shadow(page, ".response-plot").boundingBox();
+    assert.ok(plotBounds, "response plot must have browser geometry");
+    const pointerDeltaY = -40;
+    await drag(page, handle, 0, pointerDeltaY);
+    const afterCy = Number(await handle.getAttribute("cy"));
+    const amountEvents = (await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent))
+        .filter(({ endpointID }) => endpointID === "midAmountIn");
+    assert.ok(amountEvents.length > 0, `${shape} emitted no Amount gesture`);
+    const amount = amountEvents.at(-1).value;
+    const expectedAmount = 0.25 - pointerDeltaY / plotBounds.height;
+    const expectedCy = zeroCy - expectedAmount * (zeroCy - fullCy);
+
+    assert.equal(zeroCy, 244, `${shape} zero-Amount geometry drifted`);
+    assert.equal(fullCy, 18, `${shape} full-Amount geometry drifted`);
+    assert.ok(Math.abs(amount - expectedAmount) < 1e-6, `${shape}: ${amount} vs ${expectedAmount}`);
+    assert.ok(Math.abs(afterCy - expectedCy) <= 0.02, `${shape}: ${afterCy} vs ${expectedCy}`);
+    assert.ok(beforeCy - afterCy > 30, `${shape} handle detached from a 40 px pointer drag`);
+
+    return { shape, zeroCy, fullCy, beforeCy, afterCy, amount };
+}
+
 test("every shape shares frequency, amount, and Shift-drag Q with no slider fallback", async () => {
     const page = await openEnhancerLite();
 
@@ -143,6 +180,31 @@ test("every shape shares frequency, amount, and Shift-drag Q with no slider fall
     }
 });
 
+test("Bell, Low, and High Amount handles follow real pointer travel in source and compiled UI", async () => {
+    const modulePaths = [
+        "/fx/enhancer_lite/view/source.ts",
+        "/build/fx/enhancer_lite_runtime/view/app.js",
+    ];
+    const results = [];
+    for (const modulePath of modulePaths) {
+        const page = await openEnhancerLite(modulePath);
+        try {
+            results.push({
+                modulePath,
+                shapes: [
+                    await measurePrimaryHandleDrag(page, "bell", 1),
+                    await measurePrimaryHandleDrag(page, "low", 0),
+                    await measurePrimaryHandleDrag(page, "high", 2),
+                ],
+            });
+        } finally {
+            await page.close();
+        }
+    }
+
+    assert.deepEqual(results[1].shapes, results[0].shapes);
+});
+
 test("M/S exposes an independent draggable Side amount while sharing frequency and Q", async () => {
     const page = await openEnhancerLite();
 
@@ -170,6 +232,12 @@ test("the plotted bell narrows as Q rises and tracks the actual 12 dB amount law
 
     try {
         const primaryPath = shadow(page, "[data-response-role='primary']");
+        assert.deepEqual(
+            await shadow(page, "[data-gain-db]").evaluateAll((rows) => (
+                rows.map((row) => Number(row.getAttribute("data-gain-db")))
+            )),
+            [12, 9, 6, 3, 0],
+        );
         await page.evaluate(() => {
             window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000);
             window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 1);
@@ -187,13 +255,13 @@ test("the plotted bell narrows as Q rises and tracks the actual 12 dB amount law
         assert.notEqual(narrowPath, widePath);
         assert.ok(widePointsAboveSixDb > narrowPointsAboveSixDb);
         assert.equal(await shadow(page, "[data-readout='primary']").textContent(), "+12.0 dB");
-        assert.equal(await shadow(page, "[data-response-role='primary-handle']").getAttribute("cy"), "102.75");
+        assert.equal(await shadow(page, "[data-response-role='primary-handle']").getAttribute("cy"), "18.00");
     } finally {
         await page.close();
     }
 });
 
-test("Low and High draw measured shelf responses with a half-gain frequency handle", async () => {
+test("Low and High draw measured shelf responses with a directly manipulated Amount handle", async () => {
     const page = await openEnhancerLite();
 
     try {
@@ -204,15 +272,27 @@ test("Low and High draw measured shelf responses with a half-gain frequency hand
             window.__ENHANCER_LITE_TEST__.emit("qIn", 0.7);
         });
         const bellPath = await primaryPath.getAttribute("d");
+        assert.equal(await shadow(page, "[data-shelf-overflow='high']").isHidden(), true);
+        assert.equal(await shadow(page, "[data-response-role='primary-guide']").isHidden(), true);
 
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearSent());
         await shadow(page, "[data-shape='low']").click();
         const lowPath = await primaryPath.getAttribute("d");
         assert.notEqual(lowPath, bellPath);
         assert.equal(await shadow(page, "[data-shape='low']").getAttribute("aria-pressed"), "true");
+        assert.equal(await shadow(page, "[data-shelf-overflow='high']").isVisible(), true);
+        assert.equal(await shadow(page, "[data-shelf-overflow='low']").isVisible(), true);
+        assert.equal(
+            await shadow(page, "[data-response-role='primary-guide']").getAttribute("hidden"),
+            null,
+        );
+        assert.match(
+            await shadow(page, "[data-response-role='primary-guide']").getAttribute("d"),
+            /^M [\d.]+ 18\.00 V [\d.]+$/,
+        );
         assert.equal(
             await shadow(page, "[data-response-role='primary-handle']").getAttribute("cy"),
-            "131.00",
+            "18.00",
         );
 
         await shadow(page, "[data-shape='high']").click();

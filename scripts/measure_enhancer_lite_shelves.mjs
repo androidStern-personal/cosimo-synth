@@ -5,11 +5,20 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import {
+    readFloatWave,
+    verifySpectreShelfAudio,
+} from "./enhancer_lite_shelf_corpus.mjs";
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const checkpoint = "2a652a4035519be1fbe12de9a8c6487ed736e3c5";
 const spectreDirectory = path.join(repoRoot, "build/t26-spectre-shelves");
 const spectreMeasurementsPath = path.join(spectreDirectory, "measurements.json");
 const spectreReportPath = path.join(spectreDirectory, "report.json");
+const spectreFixturePath = path.join(
+    repoRoot,
+    "tests/fixtures/enhancer_spectre_shelves_v1.json",
+);
 const reviewDirectory = path.join(repoRoot, "build/enhancer-lite-shelf-review");
 const reportPath = path.join(reviewDirectory, "report.json");
 const requestedMode = process.argv[2] ?? "--check";
@@ -18,8 +27,11 @@ const expectedSpectreHashes = Object.freeze({
     measurements: "fe9e29bfc7f0f937447ba959aea30305471f061970577f813a49e4ef774661aa",
 });
 
-if (requestedMode !== "--check" && requestedMode !== "--report")
-    throw new Error("usage: measure_enhancer_lite_shelves.mjs [--check|--report]");
+if (!["--check", "--report", "--verify-corpus"].includes(requestedMode)) {
+    throw new Error(
+        "usage: measure_enhancer_lite_shelves.mjs [--check|--report|--verify-corpus]",
+    );
+}
 
 const currentPatchPath = path.join(repoRoot, "fx/enhancer_lite/EnhancerLite.cmajorpatch");
 const acceptedPatchPath = path.join(repoRoot, "tools/enhancer_calibration/EnhancerCalibration.cmajorpatch");
@@ -206,45 +218,6 @@ function phaseDegrees(value) {
 function percentile(values, fraction) {
     const sorted = [...values].sort((left, right) => left - right);
     return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))];
-}
-
-async function readFloatWave(filePath) {
-    const buffer = await fs.readFile(filePath);
-    if (buffer.toString("ascii", 0, 4) !== "RIFF" || buffer.toString("ascii", 8, 12) !== "WAVE")
-        throw new Error(`Not a RIFF WAVE file: ${filePath}`);
-
-    let format;
-    let channels;
-    let sampleRate;
-    let bitsPerSample;
-    let dataOffset;
-    let dataBytes;
-    for (let offset = 12; offset + 8 <= buffer.length;) {
-        const chunkID = buffer.toString("ascii", offset, offset + 4);
-        const chunkBytes = buffer.readUInt32LE(offset + 4);
-        const payload = offset + 8;
-        if (chunkID === "fmt ") {
-            format = buffer.readUInt16LE(payload);
-            channels = buffer.readUInt16LE(payload + 2);
-            sampleRate = buffer.readUInt32LE(payload + 4);
-            bitsPerSample = buffer.readUInt16LE(payload + 14);
-        } else if (chunkID === "data") {
-            dataOffset = payload;
-            dataBytes = chunkBytes;
-        }
-        offset = payload + chunkBytes + (chunkBytes % 2);
-    }
-    if (format !== 3 || channels !== 2 || bitsPerSample !== 32 || dataOffset === undefined)
-        throw new Error(`Expected stereo Float32 WAVE: ${filePath}`);
-
-    const frameCount = dataBytes / 8;
-    const left = new Float32Array(frameCount);
-    const right = new Float32Array(frameCount);
-    for (let frame = 0; frame < frameCount; frame += 1) {
-        left[frame] = buffer.readFloatLE(dataOffset + frame * 8);
-        right[frame] = buffer.readFloatLE(dataOffset + frame * 8 + 4);
-    }
-    return { left, right, sampleRate };
 }
 
 async function writeFloatWave(filePath, stereo, sampleRate) {
@@ -624,19 +597,10 @@ const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "cosimo-enhan
 
 try {
     await fs.access(spectreMeasurementsPath);
-    const checkpointPatchPath = await createCheckpointPatch(temporaryDirectory);
-    const [
-        CheckpointRuntime,
-        CurrentRuntime,
-        AcceptedRuntime,
-        measurementsBuffer,
-        spectreReportBuffer,
-    ] = await Promise.all([
-        generateRuntime(checkpointPatchPath, path.join(temporaryDirectory, "checkpoint.mjs")),
-        generateRuntime(currentPatchPath, path.join(temporaryDirectory, "current.mjs")),
-        generateRuntime(acceptedPatchPath, path.join(temporaryDirectory, "accepted.mjs")),
+    const [measurementsBuffer, spectreReportBuffer, spectreFixtureBuffer] = await Promise.all([
         fs.readFile(spectreMeasurementsPath),
         fs.readFile(spectreReportPath),
+        fs.readFile(spectreFixturePath),
     ]);
     const spectreHashes = {
         report: sha256(spectreReportBuffer),
@@ -651,6 +615,29 @@ try {
     }
     const measurements = parsePythonJson(measurementsBuffer.toString("utf8"));
     const spectreReport = parsePythonJson(spectreReportBuffer.toString("utf8"));
+    const spectreFixture = JSON.parse(spectreFixtureBuffer.toString("utf8"));
+    if (spectreFixture.source.reportSha256 !== spectreHashes.report
+        || spectreFixture.source.measurementsSha256 !== spectreHashes.measurements) {
+        throw new Error("Committed Spectre fixture does not name the authenticated JSON corpus");
+    }
+    const audioIntegrity = await verifySpectreShelfAudio({
+        corpusDirectory: spectreDirectory,
+        measurements,
+        inputAudio: spectreFixture.inputAudio,
+    });
+
+    if (requestedMode === "--verify-corpus") {
+        process.stdout.write(
+            `Spectre shelf corpus integrity: ${audioIntegrity.inputCount} inputs and `
+            + `${audioIntegrity.outputCount} outputs authenticated as decoded Float32 audio.\n`,
+        );
+    } else {
+    const checkpointPatchPath = await createCheckpointPatch(temporaryDirectory);
+    const [CheckpointRuntime, CurrentRuntime, AcceptedRuntime] = await Promise.all([
+        generateRuntime(checkpointPatchPath, path.join(temporaryDirectory, "checkpoint.mjs")),
+        generateRuntime(currentPatchPath, path.join(temporaryDirectory, "current.mjs")),
+        generateRuntime(acceptedPatchPath, path.join(temporaryDirectory, "accepted.mjs")),
+    ]);
     const measurementsByID = new Map(measurements.map((row) => [row.id, row]));
     const inputCache = new Map();
     const neutralCache = new Map();
@@ -1005,6 +992,8 @@ try {
             sessionCount: spectreReport.corpus.session_count,
             reportSha256: spectreHashes.report,
             measurementsSha256: spectreHashes.measurements,
+            decodedFloat32InputCount: audioIntegrity.inputCount,
+            decodedFloat32OutputCount: audioIntegrity.outputCount,
         },
         architecture: {
             selection: "measured RBJ/JUCE Q-form Low/Bell/High at 4x",
@@ -1125,6 +1114,7 @@ try {
     );
     if (requestedMode === "--check" && failures.length > 0)
         throw new Error(`Enhancer Lite shelf evidence failed: ${failures.join("; ")}`);
+    }
 } finally {
     await fs.rm(temporaryDirectory, { recursive: true, force: true });
 }

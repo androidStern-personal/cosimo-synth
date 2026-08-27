@@ -19,9 +19,11 @@ Starting checkpoint: `2a652a4035519be1fbe12de9a8c6487ed736e3c5`
 
 - `npm run test:cmajor:enhancer-lite`: 7/7
 - `npm run test:enhancer-lite:state`: 18/18
-- `npm run test:enhancer-lite:view`: 10/10, including source and compiled shelf curves/gestures
+- Focused Enhancer Lite browser build/test: 11/11, including source/compiled pointer-to-handle coupling for Bell, Low, and High
 - `npm run test:enhancer-lite:audio`: pass; Bell/full-Enhancer comparison remains green
 - `npm run test:enhancer-lite:shelves`: pass against 284-case Spectre shelf corpus
+- `node --test tests/test_enhancer_lite_shelf_corpus.mjs`: 1/1; copied input and output sample tampering rejected
+- `node scripts/measure_enhancer_lite_shelves.mjs --verify-corpus`: 20 inputs and 284 outputs authenticated as decoded Float32 audio
 - `/Applications/pluginval.app/Contents/MacOS/pluginval --strictness-level 5`: `SUCCESS`
 - Final comparison report SHA-256: `ec168de4147d2aa559b6bdcd210ff6b3881ea023e5f748d7d8d33213eb3c2b9c`
 

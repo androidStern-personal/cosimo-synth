@@ -16,6 +16,128 @@
     "allRendersSaved": true,
     "freshInstanceRepeatabilityMaximumAbsoluteDifference": 0.0
   },
+  "inputAudio": [
+    {
+      "id": "shelf-alias-high-9000hz-48k",
+      "path": "inputs/shelf-alias-high-9000hz-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "647f0f5faaf69f2b369082fdf0a449ad59f8f03dd805158a4049b3b7762509c0"
+    },
+    {
+      "id": "shelf-alias-low-9000hz-48k",
+      "path": "inputs/shelf-alias-low-9000hz-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "647f0f5faaf69f2b369082fdf0a449ad59f8f03dd805158a4049b3b7762509c0"
+    },
+    {
+      "id": "shelf-impulse-192000",
+      "path": "inputs/shelf-impulse-192000.wav",
+      "sampleRate": 192000,
+      "sha256FloatAudio": "58db4d8301bf09f28d47ea2b8a3f411964ff87c8ea182089ea78015a5b7b1b5d"
+    },
+    {
+      "id": "shelf-impulse-44100",
+      "path": "inputs/shelf-impulse-44100.wav",
+      "sampleRate": 44100,
+      "sha256FloatAudio": "98d7397b489bd1fab219b1a4acdc25d5316d9586c8a311ba53e57bc24286fa29"
+    },
+    {
+      "id": "shelf-impulse-48000",
+      "path": "inputs/shelf-impulse-48000.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "8c9cd1a059ca16d08ef32e530589d8600c81b516a74aff70a9e8a00fdee23a5a"
+    },
+    {
+      "id": "shelf-impulse-96000",
+      "path": "inputs/shelf-impulse-96000.wav",
+      "sampleRate": 96000,
+      "sha256FloatAudio": "18a37153561b8d247e2fdafc6ce0fd13bca1c368a508d6ae8cd587d12fc0204e"
+    },
+    {
+      "id": "shelf-music-bass-48k",
+      "path": "inputs/shelf-music-bass-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "407ec6973a129a756fa6b11cd7636ec6d81a8608b0a85a2dc6353a2b94b353eb"
+    },
+    {
+      "id": "shelf-music-bright-poly-48k",
+      "path": "inputs/shelf-music-bright-poly-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "7dafa5773735d7d8db17261c8b6f0b0819523ac9d02206a8f8fbfbf64f6d316c"
+    },
+    {
+      "id": "shelf-music-drums-48k",
+      "path": "inputs/shelf-music-drums-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "010d3f73f6c21e60937232d02ac15fb4767e7e264447eb9ed09e6ee03db7f02c"
+    },
+    {
+      "id": "shelf-music-pink-48k",
+      "path": "inputs/shelf-music-pink-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "77e0087f7803aaf09df035791e14a83c1aa6131fd0fb72f4d1701c5da8ebd349"
+    },
+    {
+      "id": "shelf-routing-1k-left-48k",
+      "path": "inputs/shelf-routing-1k-left-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "5dc18d2ac057aa8f0e646799447e6d14bf94435dae976beb6204637f2f9c674a"
+    },
+    {
+      "id": "shelf-routing-1k-mid-48k",
+      "path": "inputs/shelf-routing-1k-mid-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "9ae9f5ce00823293a9aa890e5ea867d7959e6ae01bd6fc0617df2cdcd4c0a935"
+    },
+    {
+      "id": "shelf-routing-1k-right-48k",
+      "path": "inputs/shelf-routing-1k-right-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "bf8c5bb544b80567e8bd56deba6d36acef422e3b5c552233d591f8dbdb14b6a0"
+    },
+    {
+      "id": "shelf-routing-1k-side-48k",
+      "path": "inputs/shelf-routing-1k-side-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "0e7c15d461c4ab9497ecfb7f674acd23c87efadea78cd43fe5dc3f21c8cc242c"
+    },
+    {
+      "id": "shelf-transfer-high-100hz--18db-48k",
+      "path": "inputs/shelf-transfer-high-100hz--18db-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "583bdd9cc320c7d7f7aa47bca73736d973e7002a88e77f43e0b3dc73a418eeff"
+    },
+    {
+      "id": "shelf-transfer-high-100hz--30db-48k",
+      "path": "inputs/shelf-transfer-high-100hz--30db-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "3d31a39c95b70ce26bff1f3c089517fa922ac330b06713e1e6fc2ea410db8d46"
+    },
+    {
+      "id": "shelf-transfer-high-100hz--6db-48k",
+      "path": "inputs/shelf-transfer-high-100hz--6db-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "9dcbf19073cdb5bd9b9666f042e0bf674329b8a6b2e65646fc6b25c5aa622b8b"
+    },
+    {
+      "id": "shelf-transfer-low-100hz--18db-48k",
+      "path": "inputs/shelf-transfer-low-100hz--18db-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "583bdd9cc320c7d7f7aa47bca73736d973e7002a88e77f43e0b3dc73a418eeff"
+    },
+    {
+      "id": "shelf-transfer-low-100hz--30db-48k",
+      "path": "inputs/shelf-transfer-low-100hz--30db-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "3d31a39c95b70ce26bff1f3c089517fa922ac330b06713e1e6fc2ea410db8d46"
+    },
+    {
+      "id": "shelf-transfer-low-100hz--6db-48k",
+      "path": "inputs/shelf-transfer-low-100hz--6db-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "9dcbf19073cdb5bd9b9666f042e0bf674329b8a6b2e65646fc6b25c5aa622b8b"
+    }
+  ],
   "decodedFacts": {
     "parameterLabels": {
       "frequency": "Frequency",
