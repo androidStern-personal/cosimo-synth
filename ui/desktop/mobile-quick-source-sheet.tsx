@@ -43,6 +43,7 @@ import {
     parameterEntrySpecForScalar,
     parameterEntrySpecForSeconds,
 } from "../shared/parameter-value-entry";
+import { getModulationTargetDescriptor } from "../shared/target-descriptor";
 
 const COMPACT_FRACTION = 0.3;
 const HALF_FRACTION = 0.5;
@@ -145,6 +146,13 @@ export type QuickSheetEnvelope = {
     readonly sustain: number;
     readonly releaseSeconds: number;
 };
+
+const QUICK_ENVELOPE_STAGES = [
+    { id: "attack", field: "attackSeconds", targetSuffix: "Attack", shortLabel: "A" },
+    { id: "decay", field: "decaySeconds", targetSuffix: "Decay", shortLabel: "D" },
+    { id: "sustain", field: "sustain", targetSuffix: "Sustain", shortLabel: "S" },
+    { id: "release", field: "releaseSeconds", targetSuffix: "Release", shortLabel: "R" },
+] as const;
 
 export type MobileQuickSourceSheetProps = {
     readonly source: { readonly sourceKind: RackModulationSourceKind; readonly sourceSlot: number };
@@ -289,26 +297,52 @@ export function MobileQuickSourceSheet({
     /* --------------------------- Cell specs --------------------------- */
 
     const slot = source.sourceSlot;
+    const envelopeParameters = useMemo(() => {
+        if (source.sourceKind !== "env") {
+            return [];
+        }
+        const targetPrefix = slot === 4 ? "amp" : `env${slot}`;
+        const envelopeLabel = slot === 4 ? "Amp Envelope" : `Envelope ${slot}`;
+        return QUICK_ENVELOPE_STAGES.map((stage) => {
+            const targetKind = `${targetPrefix}${stage.targetSuffix}` as ModulationTargetKind;
+            const descriptor = getModulationTargetDescriptor(targetKind);
+            if (descriptor.binding._tag !== "endpoint") {
+                throw new Error(`${descriptor.label} has no quick-sheet endpoint.`);
+            }
+            const display = stage.field === "sustain"
+                ? { min: 0, max: 1, step: 0.001 }
+                : (() => {
+                    if (descriptor.format.kind !== "time") {
+                        throw new Error(`${descriptor.label} has no envelope-time range.`);
+                    }
+                    return {
+                        min: descriptor.format.minSeconds,
+                        max: descriptor.format.maxSeconds,
+                        step: 0.001,
+                    };
+                })();
+            return {
+                ...stage,
+                targetKind,
+                endpointID: descriptor.binding.endpointId,
+                fullLabel: `${envelopeLabel} ${stage.id}`,
+                display,
+            };
+        });
+    }, [slot, source.sourceKind]);
     const cells = useMemo<ReadonlyArray<ReadoutCellSpec>>(() => {
         if (source.sourceKind === "mseg") {
             return [];
         }
         if (source.sourceKind === "env") {
-            return [
-                { id: "attack", shortLabel: "A", fullLabel: `Envelope ${slot} attack` },
-                { id: "decay", shortLabel: "D", fullLabel: `Envelope ${slot} decay` },
-                { id: "sustain", shortLabel: "S", fullLabel: `Envelope ${slot} sustain` },
-                { id: "release", shortLabel: "R", fullLabel: `Envelope ${slot} release` },
-            ].map((cell): ReadoutCellSpec => ({
+            return envelopeParameters.map((cell): ReadoutCellSpec => ({
                 id: cell.id,
                 kind: "readout",
                 shortLabel: cell.shortLabel,
                 fullLabel: cell.fullLabel,
-                display: cell.id === "sustain"
-                    ? { min: 0, max: 1, step: 0.001 }
-                    : { min: 0.001, max: 10, step: 0.001 },
+                display: cell.display,
                 formatValue: cell.id === "sustain" ? formatPercentValue : formatSecondsValue,
-                targetKind: `env${slot}${cell.id[0].toUpperCase()}${cell.id.slice(1)}` as ModulationTargetKind,
+                targetKind: cell.targetKind,
             }));
         }
         return [{
@@ -320,7 +354,7 @@ export function MobileQuickSourceSheet({
             formatValue: formatPercentValue,
             targetKind: null,
         }];
-    }, [slot, source.sourceKind]);
+    }, [envelopeParameters, slot, source.sourceKind]);
 
     const bindings = useMemo((): Readonly<Record<string, PatchControlBinding<number>>> => {
         if (source.sourceKind === "mseg") {
@@ -328,20 +362,24 @@ export function MobileQuickSourceSheet({
         }
         if (source.sourceKind === "env") {
             if (envelope === null) {
-                throw new Error(`Envelope ${slot} is not available for the quick sheet.`);
+                throw new Error(`${identity.label} is not available for the quick sheet.`);
             }
-            return {
-                attack: documentValueBinding(`env${slot}Attack`, envelope.attackSeconds, envelopeReadiness.attackSeconds, (next) => onEnvelopeChange("attackSeconds", next)),
-                decay: documentValueBinding(`env${slot}Decay`, envelope.decaySeconds, envelopeReadiness.decaySeconds, (next) => onEnvelopeChange("decaySeconds", next)),
-                sustain: documentValueBinding(`env${slot}Sustain`, envelope.sustain, envelopeReadiness.sustain, (next) => onEnvelopeChange("sustain", next)),
-                release: documentValueBinding(`env${slot}Release`, envelope.releaseSeconds, envelopeReadiness.releaseSeconds, (next) => onEnvelopeChange("releaseSeconds", next)),
-            };
+            const nextBindings: Record<string, PatchControlBinding<number>> = {};
+            for (const parameter of envelopeParameters) {
+                nextBindings[parameter.id] = documentValueBinding(
+                    parameter.endpointID,
+                    envelope[parameter.field],
+                    envelopeReadiness[parameter.field],
+                    (next) => onEnvelopeChange(parameter.field, next),
+                );
+            }
+            return nextBindings;
         }
         if (macroBinding === null) {
             throw new Error(`Macro ${slot} is not available for the quick sheet.`);
         }
         return { value: macroBinding };
-    }, [envelope, envelopeReadiness, macroBinding, onEnvelopeChange, slot, source.sourceKind]);
+    }, [envelope, envelopeParameters, envelopeReadiness, identity.label, macroBinding, onEnvelopeChange, slot, source.sourceKind]);
 
     const stripSource = useMemo<ReadoutStripSource>(() => ({
         sourceKind: identity.sourceKind,
@@ -451,7 +489,7 @@ export function MobileQuickSourceSheet({
                             ? secondsSpec()
                             : percentSpec();
                         onRequestParameterMenu({
-                            controlKey: `quick-${source.sourceKind}${source.sourceSlot}-${cellId}`,
+                            controlKey: binding.endpointID,
                             label: cell.fullLabel,
                             targetKind: cell.targetKind,
                             baseSpec,

@@ -21,6 +21,9 @@ graph ModulationV6ProgramExecution [[ main ]]
         source.macro1Out -> engine.macro1In;
         source.macro4Out -> engine.macro4In;
         source.filterQOut -> engine.filterQIn;
+        source.ampAttackOut -> engine.ampAttackIn;
+        source.ampDecayOut -> engine.ampDecayIn;
+        source.ampSustainOut -> engine.ampSustainIn;
         engine.runtimeInstallAckOut -> witness.ackIn;
         engine.effectiveFilterStateOut -> witness.filterIn;
         engine.rackModOut[19] -> witness.hundredRackIn;
@@ -39,6 +42,9 @@ processor ModulationV6ProgramSource
     output value float32 macro1Out;
     output value float32 macro4Out;
     output value float32 filterQOut;
+    output value float32 ampAttackOut;
+    output value float32 ampDecayOut;
+    output value float32 ampSustainOut;
 
     // The upload is a processor MEMBER: at the mirrored 72-wide rack domain
     // the struct is tens of kilobytes, and building it through chained
@@ -211,6 +217,11 @@ processor ModulationV6ProgramSource
         macro1Out <- 1.0f;
         macro4Out <- 1.0f;
         filterQOut <- 0.707107f;
+        // Direct SharedVoiceEngine graphs do not apply endpoint init
+        // annotations, so preserve the old-sound ADSR explicitly here.
+        ampAttackOut <- 0.01f;
+        ampDecayOut <- 0.001f;
+        ampSustainOut <- 1.0f;
 
         for (int32 frame = 0; ; ++frame)
         {

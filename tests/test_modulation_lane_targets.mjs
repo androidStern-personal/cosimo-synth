@@ -8,7 +8,7 @@ const repoRoot = path.resolve(import.meta.dirname, "..");
 
 // Effects Lane target kinds (M1 slice 3): `lane.<instanceId>.<endpointID>`
 // names one pool device's parameter. Lane kinds are per-patch dynamic — they
-// never join the static 1,144-pair domain — and they speak their device
+// never join the static 1,288-pair domain — and they speak their device
 // type's canonical modulation language (the base module's units and limits).
 
 test("lane kind grammar accepts real device params and rejects everything else", async () => {
@@ -174,6 +174,17 @@ test("the compiler places lane routes in the pool block statically and drops out
         program.MODULATION_VOICE_RACK_ROUTE_CELL_COUNT,
         program.MODULATION_VOICE_SOURCE_COUNT * program.MODULATION_RACK_TARGET_TOTAL,
     );
+
+    const ampEnvelopeCompiled = program.compileModulationRuntimeProgram([{
+        ...route,
+        id: "amp-envelope-pool-route",
+        sourceKind: "env",
+        sourceSlot: 4,
+    }]);
+    assert.equal(ampEnvelopeCompiled.voiceRackRouteCount, 1);
+    assert.equal(ampEnvelopeCompiled.voiceRackRouteSources[0], 9,
+        "Amp Envelope keeps its append-only runtime source index on live lane instances");
+    assert.equal(ampEnvelopeCompiled.voiceRackRouteTargets[0], laneTargetIndex);
 });
 
 test("base rack routes are untouched by the widening", async () => {

@@ -34,6 +34,7 @@ const DEFAULT_LAST_TWEAKED_BY_MODULE = Object.freeze(Object.fromEntries(
 
 const toDisplay = (value) => Number(value) * 100;
 const toPort = (value) => Math.max(0, Math.min(1, Number(value) / 100));
+const isPermanentSource = (source) => source?.type === "fixed" || source?.id === "amp-envelope";
 
 function projectNormalizedRecord(values) {
   return Object.fromEntries(
@@ -832,6 +833,7 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       closeSource,
       deleteSource(sourceId) {
         const source = sourceLookup[sourceId];
+        if (isPermanentSource(source)) return;
         const uiContext = {
           activeMappingByTarget,
           moduleByWorkspace,

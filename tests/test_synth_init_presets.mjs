@@ -50,6 +50,10 @@ const synthStatus = {
             parameter("delayMix", { init: 0.5, min: 0, max: 1 }),
             parameter("reverbMix", { init: 0.5, min: 0, max: 1 }),
             parameter("globalTune", { init: 0, min: -24, max: 24 }),
+            parameter("ampAttack", { init: 0.01, min: 0.001, max: 10 }),
+            parameter("ampDecay", { init: 0.001, min: 0.001, max: 10 }),
+            parameter("ampSustain", { init: 1, min: 0, max: 1 }),
+            parameter("ampRelease", { init: 0.2, min: 0.005, max: 10 }),
         ],
     },
 };
@@ -373,6 +377,10 @@ async function createSynthFixture({ includeFactoryPreset = false, synthEnabled =
         delayMix: 0.6,
         reverbMix: 0.8,
         globalTune: 7.25,
+        ampAttack: 0.37,
+        ampDecay: 0.81,
+        ampSustain: 0.46,
+        ampRelease: 1.72,
     };
     for (const [endpointID, value] of Object.entries(representativeEdits)) {
         if (Object.hasOwn(initialValues, endpointID)) {
@@ -458,6 +466,11 @@ test("clean synth Init applies every canonical sound default and clears only the
     assert.equal(state.dirty, false);
     assert.deepEqual(patchConnection.parameterValues, defaults);
     assert.equal(patchConnection.parameterValues.globalTune, 0);
+    assert.deepEqual(
+        Object.fromEntries(["ampAttack", "ampDecay", "ampSustain", "ampRelease"]
+            .map((endpointID) => [endpointID, patchConnection.parameterValues[endpointID]])),
+        { ampAttack: 0.01, ampDecay: 0.001, ampSustain: 1, ampRelease: 0.2 },
+    );
     assert.deepEqual(modulationHarness.value, defaultModulation);
     assert.deepEqual(articulationHarness.value, defaultArticulations);
     assert.deepEqual(rackHarness.value, defaultRack);
@@ -530,6 +543,10 @@ test("Init writes the default for every current production public parameter, inc
         "oscCWavetableSelect",
         "filterMix",
         "globalTune",
+        "ampAttack",
+        "ampDecay",
+        "ampSustain",
+        "ampRelease",
     ]) {
         assert.equal(publicEndpointIDs.includes(requiredEndpointID), true, requiredEndpointID);
     }
@@ -1001,6 +1018,10 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     source.patchConnection.emitParameterValue("oscAFramePosition", 0.37);
     source.patchConnection.emitParameterValue("filterMix", 0.28);
     source.patchConnection.emitParameterValue("globalTune", 12.37);
+    source.patchConnection.emitParameterValue("ampAttack", 0.43);
+    source.patchConnection.emitParameterValue("ampDecay", 0.67);
+    source.patchConnection.emitParameterValue("ampSustain", 0.38);
+    source.patchConnection.emitParameterValue("ampRelease", 2.4);
     source.patchConnection.emitParameterValue("oscAVolumeDb", -3.25);
     source.patchConnection.emitParameterValue("oscBVolumeDb", -12.5);
     source.patchConnection.emitParameterValue("oscCVolumeDb", 2.75);
@@ -1038,6 +1059,11 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     assert.equal(captured.ok, true, captured.message);
     assert.deepEqual(captured.value.preset.parameters, source.patchConnection.parameterValues);
     assert.equal(captured.value.preset.parameters.globalTune, 12.37);
+    assert.deepEqual(
+        Object.fromEntries(["ampAttack", "ampDecay", "ampSustain", "ampRelease"]
+            .map((endpointID) => [endpointID, captured.value.preset.parameters[endpointID]])),
+        { ampAttack: 0.43, ampDecay: 0.67, ampSustain: 0.38, ampRelease: 2.4 },
+    );
     assert.deepEqual(captured.value.preset.storedState["modulation.v6"], source.modulationHarness.value);
     assert.deepEqual(captured.value.preset.storedState["articulations.v4"], source.articulationHarness.value);
     assert.deepEqual(captured.value.supplementalStoredState["lane.v1"], source.rackHarness.value);
@@ -1049,6 +1075,11 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     assert.equal(loaded.ok, true, loaded.message);
     assert.deepEqual(target.patchConnection.parameterValues, source.patchConnection.parameterValues);
     assert.equal(target.patchConnection.parameterValues.globalTune, 12.37);
+    assert.deepEqual(
+        Object.fromEntries(["ampAttack", "ampDecay", "ampSustain", "ampRelease"]
+            .map((endpointID) => [endpointID, target.patchConnection.parameterValues[endpointID]])),
+        { ampAttack: 0.43, ampDecay: 0.67, ampSustain: 0.38, ampRelease: 2.4 },
+    );
     assert.deepEqual(
         Object.fromEntries([
             "oscAVolumeDb", "oscBVolumeDb", "oscCVolumeDb",

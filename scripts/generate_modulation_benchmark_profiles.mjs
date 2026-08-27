@@ -86,19 +86,30 @@ function buildNeutralRouteGroups() {
     const macroSources = MODULATION_SOURCE_OPTIONS.filter((source) => source.sourceKind === "macro");
     const voiceTargets = MODULATION_TARGET_OPTIONS.filter((target) => !isRackModulationTarget(target.value));
     const rackTargets = MODULATION_TARGET_OPTIONS.filter((target) => isRackModulationTarget(target.value));
-    if (voiceSources.length !== 9 || macroSources.length !== 4) {
+    if (voiceSources.length !== 10 || macroSources.length !== 4) {
         throw new Error("Neutral benchmark source groups no longer cover the production source catalog");
     }
 
-    // MSEGs and envelopes are configured to exact zero. Velocity, pressure, and
-    // slide are driven from the same MIDI byte. Macros are all set to the same value.
-    // Each group therefore contributes exactly zero while every compiled instruction
-    // still resolves its real production source, polarity, reducer, and destination.
+    // MSEGs and ordinary envelopes are configured to exact zero. The settled
+    // Amp Envelope is full-scale, so its pair compensates the velocity value
+    // from the shared MIDI byte; pressure and slide receive that same byte.
+    // Macros are all set to the same value. Each group therefore contributes
+    // exactly zero while every compiled instruction still resolves its real
+    // production source, polarity, reducer, and destination.
+    const ampEnvelopeValue = 1;
+    const expressionValue = 100 / 127;
     const voiceGroups = [
         { sources: [voiceSources[0], voiceSources[1]], weights: [1, -1] },
         { sources: [voiceSources[2], voiceSources[3]], weights: [1, -1] },
         { sources: [voiceSources[4], voiceSources[5]], weights: [1, -1] },
-        { sources: [voiceSources[6], voiceSources[7], voiceSources[8]], weights: [1, 1, -2] },
+        {
+            sources: [voiceSources[6], voiceSources[7]],
+            weightsForPolarity: {
+                unipolar: [expressionValue / ampEnvelopeValue, -1],
+                bipolar: [((2 * expressionValue) - 1) / ((2 * ampEnvelopeValue) - 1), -1],
+            },
+        },
+        { sources: [voiceSources[8], voiceSources[9]], weights: [1, -1] },
     ];
     const macroGroups = [
         { sources: [macroSources[0], macroSources[1]], weights: [1, -1] },
@@ -117,6 +128,7 @@ function buildNeutralRouteGroups() {
         const targetGroups = targets.map((target, targetIndex) => sourceGroups.map((group, groupIndex) => {
             const polarity = targetIndex % 2 === 0 ? "unipolar" : "bipolar";
             const reducer = targetIndex % 2 === 0 ? "max" : "mean";
+            const weights = group.weightsForPolarity?.[polarity] ?? group.weights;
             const routes = group.sources.map((source, sourceIndex) => ({
                 id: `benchmark-${name}-${source.value}-${target.value}`,
                 enabled: true,
@@ -124,7 +136,7 @@ function buildNeutralRouteGroups() {
                 sourceSlot: source.sourceSlot,
                 polarity,
                 targetKind: target.value,
-                amount: neutralAmountUnit * group.weights[sourceIndex],
+                amount: neutralAmountUnit * weights[sourceIndex],
                 reducer,
                 benchmarkPath: name,
                 neutralGroup: `${name}:${targetIndex}:${groupIndex}`,
@@ -135,8 +147,8 @@ function buildNeutralRouteGroups() {
         groupsByPath.set(name, targetGroups);
     }
 
-    if (allRoutes.length !== 1144) {
-        throw new Error(`Expected the complete 1144-cell domain, received ${allRoutes.length}`);
+    if (allRoutes.length !== 1288) {
+        throw new Error(`Expected the complete 1288-cell domain, received ${allRoutes.length}`);
     }
     return { allRoutes, groupsByPath };
 }
@@ -149,60 +161,47 @@ function flattenSelectedGroups(groupsByPath, pathName, selections) {
     ));
 }
 
-function allVoiceGroupsForTargets(targetIndexes) {
-    return targetIndexes.map((targetIndex) => ({ targetIndex, groupIndexes: [0, 1, 2, 3] }));
-}
-
 function buildProfileRoutes(groupsByPath) {
-    const voiceHundred = flattenSelectedGroups(groupsByPath, "voice", [
-        ...allVoiceGroupsForTargets(Array.from({ length: 8 }, (_, index) => index)),
-        ...Array.from({ length: 4 }, (_, index) => ({
-            targetIndex: index + 8,
-            groupIndexes: [0, 1, 3],
-        })),
-    ]);
+    const fiveVoiceGroups = [0, 1, 2, 3, 4];
+    const voiceHundred = flattenSelectedGroups(
+        groupsByPath,
+        "voice",
+        Array.from({ length: 10 }, (_, targetIndex) => ({ targetIndex, groupIndexes: fiveVoiceGroups })),
+    );
 
-    const voiceRackHundredSelections = Array.from({ length: 36 }, (_, targetIndex) => ({
-        targetIndex,
-        groupIndexes: [targetIndex % 3],
-    }));
-    for (let targetIndex = 0; targetIndex < 11; targetIndex += 1) {
-        voiceRackHundredSelections[targetIndex].groupIndexes.push((targetIndex + 1) % 3);
-    }
-    for (let targetIndex = 0; targetIndex < 2; targetIndex += 1) {
-        voiceRackHundredSelections[targetIndex].groupIndexes.push(3);
-    }
+    // Retain the shipping profile's all-destination coverage while rotating
+    // through all five Amp-inclusive source pairs. One pair per 36 targets is
+    // 72 routes; a second pair on the first 14 targets makes exactly 100.
     const voiceRackHundred = flattenSelectedGroups(
         groupsByPath,
         "voiceRack",
-        voiceRackHundredSelections,
+        Array.from({ length: 36 }, (_, targetIndex) => ({
+            targetIndex,
+            groupIndexes: targetIndex < 14
+                ? [targetIndex % fiveVoiceGroups.length, (targetIndex + 1) % fiveVoiceGroups.length]
+                : [targetIndex % fiveVoiceGroups.length],
+        })),
     );
 
     const mixedVoice = flattenSelectedGroups(
         groupsByPath,
         "voice",
-        Array.from({ length: 12 }, (_, targetIndex) => ({
-            targetIndex,
-            groupIndexes: targetIndex < 2 ? [targetIndex % 3, 3] : [targetIndex % 3],
-        })),
+        Array.from({ length: 3 }, (_, targetIndex) => ({ targetIndex, groupIndexes: fiveVoiceGroups })),
     );
     const mixedMacroVoice = flattenSelectedGroups(
         groupsByPath,
         "macroVoice",
-        Array.from({ length: 10 }, (_, targetIndex) => ({ targetIndex, groupIndexes: [0] })),
+        Array.from({ length: 5 }, (_, targetIndex) => ({ targetIndex, groupIndexes: [0, 1] })),
     );
     const mixedVoiceRack = flattenSelectedGroups(
         groupsByPath,
         "voiceRack",
-        Array.from({ length: 12 }, (_, targetIndex) => ({
-            targetIndex,
-            groupIndexes: targetIndex < 2 ? [targetIndex % 3, 3] : [targetIndex % 3],
-        })),
+        Array.from({ length: 3 }, (_, targetIndex) => ({ targetIndex, groupIndexes: fiveVoiceGroups })),
     );
     const mixedMacroRack = flattenSelectedGroups(
         groupsByPath,
         "macroRack",
-        Array.from({ length: 10 }, (_, targetIndex) => ({ targetIndex, groupIndexes: [0] })),
+        Array.from({ length: 5 }, (_, targetIndex) => ({ targetIndex, groupIndexes: [0, 1] })),
     );
     const mixedHundred = [
         ...mixedVoice,
@@ -270,14 +269,14 @@ export function buildModulationBenchmarkProfiles() {
         createProfile("voice-rack-100", voiceRackHundred),
         createProfile("mixed-100", mixedHundred),
         createProfile("combined-200", [...voiceHundred, ...voiceRackHundred]),
-        createProfile("stored-1144-active-100", allRoutes.map((route) => ({
+        createProfile("stored-1288-active-100", allRoutes.map((route) => ({
             ...route,
             enabled: mixedActiveIDs.has(route.id),
         }))),
-        createProfile("active-1144", allRoutes),
+        createProfile("active-1288", allRoutes),
     ];
     const mixed = profiles.find((profile) => profile.name === "mixed-100");
-    const stored = profiles.find((profile) => profile.name === "stored-1144-active-100");
+    const stored = profiles.find((profile) => profile.name === "stored-1288-active-100");
     if (mixed.executionFingerprint !== stored.executionFingerprint) {
         throw new Error("Disabled stored routes changed the compiled real-time execution program");
     }

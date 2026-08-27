@@ -1116,7 +1116,7 @@ test("mounted iPhone callback controls stay visibly pending and re-enable after 
     }
 });
 
-test("mounted iPhone exposes every continuous MSEG and envelope modulation target", async () => {
+test("mounted iPhone exposes every continuous MSEG and envelope modulation target, including Amp Envelope", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
     });
@@ -1160,6 +1160,35 @@ test("mounted iPhone exposes every continuous MSEG and envelope modulation targe
                 `env${slotIndex + 1}Release`,
             ].sort());
         }
+
+        await clickShadowButton(page, "[aria-label='Select Amp Envelope']");
+        const ampTargets = await page.evaluate(() => Array.from(
+            document.querySelector("cosimo-synth-view")?.shadowRoot
+                ?.querySelectorAll(".ios-main-view [data-modulation-target-kind^='amp']") ?? [],
+            (element) => element.getAttribute("data-modulation-target-kind"),
+        ));
+        assert.deepEqual(ampTargets.sort(), [
+            "ampAttack",
+            "ampDecay",
+            "ampSustain",
+            "ampRelease",
+        ].sort());
+        await clearIOSHarnessDebugLog(page);
+        await page.evaluate(() => {
+            const input = document.querySelector("cosimo-synth-view")?.shadowRoot
+                ?.querySelector('[data-modulation-target-kind="ampAttack"]');
+            if (!(input instanceof HTMLInputElement)) {
+                throw new Error("Missing Amp Envelope attack control.");
+            }
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "0.43");
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        await waitForSnapshot(page, "iPhone Amp Envelope host write", (snapshot) => (
+            snapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "ampAttack" && Math.abs(Number(value) - 0.43) < 0.0001
+            ))
+        ));
     } finally {
         await closeIOSHarnessPage(page);
     }

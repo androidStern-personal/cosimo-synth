@@ -104,6 +104,9 @@ async function renderRelease(CmajorClass, releaseSeconds) {
     performer.setInputValue_oscBVolumeDb(-48, 0);
     performer.setInputValue_oscCVolumeDb(-48, 0);
     performer.setInputValue_filterMode(0, 0);
+    performer.setInputValue_ampAttack(0.01, 0);
+    performer.setInputValue_ampDecay(0.001, 0);
+    performer.setInputValue_ampSustain(1, 0);
     if (releaseSeconds !== undefined) performer.setInputValue_ampRelease(releaseSeconds, 0);
 
     performer.sendInputEvent_midiIn({ message: packMidi(0x90, 60, 100) });
@@ -113,20 +116,30 @@ async function renderRelease(CmajorClass, releaseSeconds) {
     return { held, released };
 }
 
-test("Amp Release is appended with the locked 0.2 second default and range", async () => {
+test("the complete Amp Envelope is exposed without moving the established Release slot", async () => {
     const CmajorClass = await loadGeneratedClass();
-    const endpoint = CmajorClass.prototype.getInputEndpoints()
-        .find(({ endpointID }) => endpointID === "ampRelease");
-    assert.ok(endpoint, "generated patch must expose ampRelease");
-    assert.ok(Math.abs(Number(endpoint.annotation?.init) - 0.2) < 1e-6);
-    assert.ok(Math.abs(Number(endpoint.annotation?.min) - 0.005) < 1e-6);
-    assert.equal(endpoint.annotation?.max, 10);
+    const endpoints = CmajorClass.prototype.getInputEndpoints();
+    const endpointByID = new Map(endpoints.map((endpoint) => [endpoint.endpointID, endpoint]));
+    const expectedStages = [
+        ["ampAttack", 0.001, 10, 0.01],
+        ["ampDecay", 0.001, 10, 0.001],
+        ["ampSustain", 0, 1, 1],
+        ["ampRelease", 0.005, 10, 0.2],
+    ];
 
-    const parameterEndpoints = CmajorClass.prototype.getInputEndpoints()
+    for (const [endpointID, min, max, initial] of expectedStages) {
+        const endpoint = endpointByID.get(endpointID);
+        assert.ok(endpoint, `generated patch must expose ${endpointID}`);
+        assert.ok(Math.abs(Number(endpoint.annotation?.init) - initial) < 1e-6, endpointID);
+        assert.ok(Math.abs(Number(endpoint.annotation?.min) - min) < 1e-6, endpointID);
+        assert.equal(endpoint.annotation?.max, max, endpointID);
+    }
+
+    const parameterEndpoints = endpoints
         .filter(({ purpose }) => purpose === "parameter");
     assert.deepEqual(
-        parameterEndpoints.slice(-3).map(({ endpointID }) => endpointID),
-        ["ampRelease", "sourceMode", "globalTune"],
+        parameterEndpoints.slice(-6).map(({ endpointID }) => endpointID),
+        ["ampRelease", "sourceMode", "globalTune", "ampAttack", "ampDecay", "ampSustain"],
     );
 });
 

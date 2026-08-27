@@ -85,6 +85,7 @@ function mappingSummary(snapshot) {
 }
 
 function bridgeSourceId(source) {
+    if (source.id === "amp-envelope") return source.id;
     return source.sourceKind === "env" ? `envelope-${source.sourceSlot}` : source.id;
 }
 
@@ -139,7 +140,7 @@ test("bridge hydration preserves distinct canonical A/B/C cells from the same so
     adapter.dispose();
 });
 
-test("bridge hydration accepts all 1144 canonical cells without identity collisions", async () => {
+test("bridge hydration accepts all 1288 canonical cells without identity collisions", async () => {
     const [adapterModule, modulation, targets, descriptors] = await Promise.all([
         adapterModulePromise,
         modulationModulePromise,
@@ -161,8 +162,8 @@ test("bridge hydration accepts all 1144 canonical cells without identity collisi
             });
         })
     ));
-    assert.equal(routes.length, 1144);
-    assert.equal(new Set(routes.map((route) => route.id)).size, 1144);
+    assert.equal(routes.length, 1288);
+    assert.equal(new Set(routes.map((route) => route.id)).size, 1288);
     const current = { ...modulation.createDefaultModulationState(), routes };
     const connection = new FakePatchConnection({
         [modulation.MODULATION_STATE_KEY]: modulation.serializeModulationState(current),
@@ -171,9 +172,9 @@ test("bridge hydration accepts all 1144 canonical cells without identity collisi
     const mappings = mappingSummary(adapter.getSnapshot());
 
     assert.equal(adapter.getSnapshot().connection._tag, "ready");
-    assert.equal(mappings.length, 1144);
-    assert.equal(new Set(mappings.map((mapping) => mapping.id)).size, 1144);
-    assert.equal(new Set(mappings.map((mapping) => `${mapping.targetId}->${mapping.sourceId}`)).size, 1144);
+    assert.equal(mappings.length, 1288);
+    assert.equal(new Set(mappings.map((mapping) => mapping.id)).size, 1288);
+    assert.equal(new Set(mappings.map((mapping) => `${mapping.targetId}->${mapping.sourceId}`)).size, 1288);
     assert.deepEqual(connection.storedWrites, []);
     adapter.dispose();
 });

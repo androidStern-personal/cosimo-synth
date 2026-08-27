@@ -57,6 +57,7 @@ import {
 } from "./modulation";
 import { useModulationRouteAmountBinding } from "./modulation-route-amount";
 import type { ModulationTargetKind } from "./modulation-targets";
+import { rackModulationSourceShortIdentity } from "./rack-modulation-sources";
 
 /** HUD linger after a completed cell drag (matches the established feel). */
 const HUD_LINGER_MS = 420;
@@ -576,7 +577,7 @@ export function useReadoutCells({
 
         let sourceLine = "";
         if (presentation.route !== null && armedSource !== null && cell.targetKind !== null) {
-            const label = `${armedSource.shortLabel} ${armedSource.sourceSlot}`.trim();
+            const label = rackModulationSourceShortIdentity(armedSource);
             const amountText = formatModulationAmountReadout(
                 cell.targetKind,
                 presentation.route.amount,

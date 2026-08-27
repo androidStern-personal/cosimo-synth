@@ -969,6 +969,28 @@ test("source long press opens management without also opening the source", async
   view.unmount();
 });
 
+test("Amp Envelope management exposes ordinary mappings but never source deletion", async () => {
+  const source = { id: "amp-envelope", label: "Amp Envelope", slot: 4, type: "envelope" };
+  const view = render(React.createElement(SourceRail, {
+    attachmentCounts: { "amp-envelope": 1 },
+    litMappings: { "amp-envelope": litMapping("amp-envelope", 20) },
+    onDeleteSource: () => assert.fail("Amp Envelope must not expose source deletion"),
+    onFocusSource: () => {},
+    onRemoveMapping: () => {},
+    sources: [source],
+    targetLabel: "Depth",
+  }));
+  const chip = view.host.querySelector("button.cosimo-source-chip");
+  pointer(chip, "pointerdown", 20, 20);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 540)));
+  pointer(chip, "pointerup", 20, 20);
+  const menu = view.host.querySelector('[aria-label="Amp Envelope actions"]');
+  assert.ok(menu, "an ordinary Amp Envelope mapping keeps its management action");
+  assert.match(menu.textContent, /Remove from Depth/);
+  assert.doesNotMatch(menu.textContent, /Delete/);
+  view.unmount();
+});
+
 test("source-to-target navigation preserves its shallow return trail and exact row context", () => {
   const controller = renderController();
   controller.run(({ actions }) => actions.focusModule("drive"));

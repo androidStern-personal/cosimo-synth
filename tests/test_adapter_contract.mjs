@@ -199,7 +199,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(adapter.getSnapshot().patch.mappings.length, initialCount + 101);
     });
 
-    t("the complete 1144-pair product domain is reachable", async (adapter) => {
+    t("the complete 1288-pair product domain is reachable", async (adapter) => {
         const { allTargetDescriptors } = await targetDescriptorPromise;
         for (const sourceType of ["mseg", "envelope", "macro"]) {
             while (adapter.commands.createSource(sourceType)._tag === "ok") {
@@ -211,8 +211,8 @@ function contractSuite(adapterName, makeAdapter) {
         const targets = allTargetDescriptors()
             .filter((descriptor) => descriptor.modulationTargetKind !== null)
             .map((descriptor) => descriptor.targetId);
-        assert.equal(sources.length, 13);
-        assert.equal(targets.length, 88);
+        assert.equal(sources.length, 14);
+        assert.equal(targets.length, 92);
 
         for (const targetId of targets) {
             for (const sourceId of sources) {
@@ -223,7 +223,7 @@ function contractSuite(adapterName, makeAdapter) {
             }
         }
 
-        assert.equal(adapter.getSnapshot().patch.mappings.length, 1144);
+        assert.equal(adapter.getSnapshot().patch.mappings.length, 1288);
     });
 
     t("mapping setters are reflected verbatim", (adapter) => {
@@ -293,7 +293,7 @@ function contractSuite(adapterName, makeAdapter) {
             created.push(result.value);
         }
         const envelopeSlots = adapter.getSnapshot().patch.sources
-            .filter((source) => source.type === "envelope")
+            .filter((source) => String(source.id).startsWith("envelope-"))
             .map((source) => source.slot)
             .sort();
         assert.deepEqual(envelopeSlots, [1, 2, 3], "three envelope slots, no gaps");
@@ -340,7 +340,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(macro.state.name, "Shimmer");
     });
 
-    t("fixed sources exist, are unmapped-deletable never, and typed fixed", (adapter) => {
+    t("fixed performance sources and Amp Envelope are permanent", (adapter) => {
         const { sources } = adapter.getSnapshot().patch;
         for (const id of ["velocity", "pressure", "slide"]) {
             const fixed = sources.find((source) => source.id === id);
@@ -353,6 +353,56 @@ function contractSuite(adapterName, makeAdapter) {
                 `${id} must survive deleteSource`,
             );
         }
+        const ampEnvelope = sources.find((source) => source.id === "amp-envelope");
+        assert.equal(ampEnvelope.type, "envelope");
+        assert.equal(ampEnvelope.state._tag, "envelope");
+        assert.equal(
+            adapter.getSnapshot().patch.mappings.some((mapping) => mapping.sourceId === "amp-envelope"),
+            false,
+            "the permanent amplitude job must not consume a user mapping row",
+        );
+        const mappingResult = adapter.commands.addMapping({
+            targetId: "voice-filter.cutoff",
+            sourceId: "amp-envelope",
+        });
+        assert.equal(mappingResult._tag, "ok");
+        adapter.commands.setEnvelope("amp-envelope", {
+            name: "Ignored Rename",
+            attackSeconds: 0.43,
+            decaySeconds: 0.67,
+            sustain: 0.38,
+            releaseSeconds: 2.4,
+        });
+        const editedAmpEnvelope = adapter.getSnapshot().patch.sources
+            .find((source) => source.id === "amp-envelope")?.state.envelope;
+        assert.deepEqual(editedAmpEnvelope, {
+            name: "Amp Envelope",
+            attackSeconds: 0.43,
+            decaySeconds: 0.67,
+            sustain: 0.38,
+            releaseSeconds: 2.4,
+        });
+        adapter.commands.setEnvelope("amp-envelope", {
+            ...editedAmpEnvelope,
+            releaseSeconds: 0.001,
+        });
+        assert.equal(
+            adapter.getSnapshot().patch.sources
+                .find((source) => source.id === "amp-envelope")?.state.envelope.releaseSeconds,
+            0.005,
+            "Amp Release keeps its established public minimum",
+        );
+        adapter.commands.deleteSource("amp-envelope");
+        assert.equal(
+            adapter.getSnapshot().patch.sources.some((source) => source.id === "amp-envelope"),
+            true,
+            "Amp Envelope must survive deleteSource",
+        );
+        assert.equal(
+            adapter.getSnapshot().patch.mappings.some((mapping) => mapping.id === mappingResult.value),
+            true,
+            "ordinary Amp Envelope mappings remain independently editable",
+        );
     });
 
     t("envelope and mseg source state uses real units and accepts writes", (adapter) => {
@@ -543,7 +593,7 @@ function contractSuite(adapterName, makeAdapter) {
         const blank = (await makeAdapter()).getSnapshot();
         assert.deepEqual(
             blank.patch.sources.map((source) => source.id).sort(),
-            ["envelope-1", "macro-1", "mseg-1", "pressure", "slide", "velocity"],
+            ["amp-envelope", "envelope-1", "macro-1", "mseg-1", "pressure", "slide", "velocity"],
         );
         assert.deepEqual(blank.patch.mappings, []);
         assert.deepEqual(blank.patch.articulations, []);

@@ -50,6 +50,10 @@ const voiceTargets = [
     "env3Release",
     "filterMix",
     "globalTuneSemitones",
+    "ampAttack",
+    "ampDecay",
+    "ampSustain",
+    "ampRelease",
 ];
 
 const runtimeLaneSpecifications = [
@@ -273,21 +277,21 @@ test("a deliberate 101st final-legal sentinel survives in its active prefix", as
     });
 });
 
-test("all 1144 legal mappings publish exact deterministic lane tails without truncation", async () => {
+test("all 1288 legal mappings publish exact deterministic lane tails without truncation", async () => {
     const runtime = await programModulePromise;
     const routes = await createAllLegalRoutes();
     const program = runtime.compileModulationRuntimeProgram(routes);
 
     assert.equal(routes.length, runtime.MODULATION_MAPPING_CELL_COUNT);
-    assert.deepEqual(runtimeLaneCounts(program), [468, 208, 324, 144]);
+    assert.deepEqual(runtimeLaneCounts(program), [560, 224, 360, 144]);
     // Rack-path cell indices run at the BUS width (static + lane pool):
     // source*TOTAL + target. Voice-path indices are untouched by the pool.
     assert.deepEqual(
         runtimeLaneSpecifications.map((specification) => runtimeLaneTail(program, specification)),
         [
-            { cellIndex: 467, sourceIndex: 8, targetIndex: 51, polarity: 1, amount: 0.25, reducer: null },
-            { cellIndex: 207, sourceIndex: 3, targetIndex: 51, polarity: 0, amount: 0.25, reducer: null },
-            { cellIndex: (8 * runtime.MODULATION_RACK_TARGET_TOTAL) + 35, sourceIndex: 8, targetIndex: 35, polarity: 1, amount: 0.25, reducer: 2 },
+            { cellIndex: 559, sourceIndex: 9, targetIndex: 55, polarity: 0, amount: 0.25, reducer: null },
+            { cellIndex: 223, sourceIndex: 3, targetIndex: 55, polarity: 0, amount: 0.25, reducer: null },
+            { cellIndex: (9 * runtime.MODULATION_RACK_TARGET_TOTAL) + 35, sourceIndex: 9, targetIndex: 35, polarity: 0, amount: 0.25, reducer: 2 },
             { cellIndex: (3 * runtime.MODULATION_RACK_TARGET_TOTAL) + 35, sourceIndex: 3, targetIndex: 35, polarity: 0, amount: 0.25, reducer: null },
         ],
     );
@@ -298,7 +302,7 @@ test("all 1144 legal mappings publish exact deterministic lane tails without tru
     );
 });
 
-test("1144 stored mappings with the same 100 active mappings publish identical execution lanes", async () => {
+test("1288 stored mappings with the same 100 active mappings publish identical execution lanes", async () => {
     const runtime = await programModulePromise;
     const allRoutes = await createAllLegalRoutes();
     const activeRoutes = selectActiveRoutesByLane(
@@ -312,7 +316,7 @@ test("1144 stored mappings with the same 100 active mappings publish identical e
     ));
 
     assert.equal(activeRoutes.length, 100);
-    assert.equal(storedDomain.length, 1144);
+    assert.equal(storedDomain.length, 1288);
     assert.deepEqual(
         projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(storedDomain)),
         projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(activeRoutes)),
@@ -387,14 +391,14 @@ test("filter Mix routes compile from their stable name at the appended Voice tar
     assert.equal(targets.getVoiceModulationTargetIndex("filterMix"), 50);
     assert.deepEqual(mixCell, {
         path: "voice",
-        cellIndex: (6 * 52) + 50,
+        cellIndex: (6 * 56) + 50,
         sourceIndex: 6,
         targetIndex: 50,
-        articulationCellIndex: (6 * 52) + 50,
+        articulationCellIndex: (6 * 56) + 50,
     });
     assert.equal(
         existingCell.cellIndex,
-        (6 * 52) + 31,
+        (6 * 56) + 31,
         "derived route-cell addresses must be rebuilt from the stable filterQ name using the current target stride",
     );
     assert.equal(program.voiceRouteCount, 2);
@@ -420,10 +424,10 @@ test("Global Tune routes compile at the append-only shared pitch target with a 4
     assert.equal(targets.getVoiceModulationTargetIndex("globalTuneSemitones"), 51);
     assert.deepEqual(cell, {
         path: "voice",
-        cellIndex: (6 * 52) + 51,
+        cellIndex: (6 * 56) + 51,
         sourceIndex: 6,
         targetIndex: 51,
-        articulationCellIndex: (6 * 52) + 51,
+        articulationCellIndex: (6 * 56) + 51,
     });
     assert.deepEqual(modulation.getModulationAmountBounds("globalTuneSemitones"), {
         min: -48,
@@ -463,6 +467,35 @@ test("the Cmajor consumer appends Global Tune and resolves shared played pitch b
     assert.match(
         source,
         /effectivePitchSemitones\s*=\s*sharedPlayedPitchSemitones\s*\+\s*voiceOscillatorTuningSemitones[\s\S]*voiceOscillatorModulationOffset/,
+    );
+});
+
+test("the note signal path applies one Amp Envelope after source combination and Voice Filter, before summing and Effects Lane", async () => {
+    const [voiceSource, synthSource] = await Promise.all([
+        fs.readFile(path.join(repoRoot, "cmajor/FixedFrameOscillator.cmajor"), "utf8"),
+        fs.readFile(path.join(repoRoot, "cmajor/WavetableSynth.cmajor"), "utf8"),
+    ]);
+    const renderStart = voiceSource.indexOf("                int32 rendererSucceeded = 0;");
+    const renderEnd = voiceSource.indexOf("                updateRackModulationOutputs();", renderStart);
+    assert.ok(renderStart >= 0 && renderEnd > renderStart, "Expected the per-note render and sum block.");
+    const renderBlock = voiceSource.slice(renderStart, renderEnd);
+
+    const combinedSource = renderBlock.indexOf("noteLeft = rendererFloats.at (outputIndex)");
+    const bounceSource = renderBlock.indexOf("noteLeft = bounceSample[0]");
+    const filter = renderBlock.indexOf("unisonLeftFilters.at (voice).process (noteLeft)");
+    const amp = renderBlock.indexOf("let gain = ampEnvelopes[voice].gainOut");
+    const sum = renderBlock.indexOf("leftMix += noteLeft * gain");
+    assert.ok(combinedSource >= 0 && bounceSource >= 0, "Both combined source choices must feed one note path.");
+    assert.ok(filter > combinedSource && filter > bounceSource, "Voice Filter must follow either combined source.");
+    assert.ok(amp > filter, "Amp Envelope must follow the per-note Voice Filter.");
+    assert.ok(sum > amp, "Voice summing must follow the one per-note Amp Envelope multiplication.");
+    assert.equal(renderBlock.match(/noteLeft \* gain/g)?.length, 1);
+    assert.equal(renderBlock.match(/noteRight \* gain/g)?.length, 1);
+
+    assert.match(
+        synthSource,
+        /sharedEngine\.out\s*->\s*trim\.in;[\s\S]*trim\.out\s*->[^;]*rack\.in;[\s\S]*rack\.out\s*->\s*outputStage\.in;/,
+        "the completed note sum must enter the Effects Lane before the fixed output stage",
     );
 });
 

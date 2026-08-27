@@ -249,6 +249,10 @@ const ENV_3_ATTACK_ENDPOINT_ID = "env3Attack";
 const ENV_3_DECAY_ENDPOINT_ID = "env3Decay";
 const ENV_3_SUSTAIN_ENDPOINT_ID = "env3Sustain";
 const ENV_3_RELEASE_ENDPOINT_ID = "env3Release";
+const AMP_ATTACK_ENDPOINT_ID = "ampAttack";
+const AMP_DECAY_ENDPOINT_ID = "ampDecay";
+const AMP_SUSTAIN_ENDPOINT_ID = "ampSustain";
+const AMP_RELEASE_ENDPOINT_ID = "ampRelease";
 const DISTORTION_MODE_ENDPOINT_ID = "distortionMode";
 const DISTORTION_DRIVE_DB_ENDPOINT_ID = "distortionDriveDb";
 const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
@@ -2848,6 +2852,26 @@ export function useSynthPatchViewModel({
         initialValue: 0.2,
         coerce: (value) => clamp(Number(value) || 0.001, 0.001, 10),
     });
+    const ampAttack = usePatchParameterBinding<number>({
+        endpointID: AMP_ATTACK_ENDPOINT_ID,
+        initialValue: 0.01,
+        coerce: (value) => clamp(Number(value) || 0.001, 0.001, 10),
+    });
+    const ampDecay = usePatchParameterBinding<number>({
+        endpointID: AMP_DECAY_ENDPOINT_ID,
+        initialValue: 0.001,
+        coerce: (value) => clamp(Number(value) || 0.001, 0.001, 10),
+    });
+    const ampSustain = usePatchParameterBinding<number>({
+        endpointID: AMP_SUSTAIN_ENDPOINT_ID,
+        initialValue: 1,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const ampRelease = usePatchParameterBinding<number>({
+        endpointID: AMP_RELEASE_ENDPOINT_ID,
+        initialValue: 0.2,
+        coerce: (value) => clamp(Number(value) || 0.005, 0.005, 10),
+    });
     const distortionMode = useLaneParameterBinding(requireLaneParameterDescriptor("distortionMode"));
     const distortionDriveDb = useLaneParameterBinding(requireLaneParameterDescriptor("distortionDriveDb"));
     const distortionKnee = useLaneParameterBinding(requireLaneParameterDescriptor("distortionKnee"));
@@ -3025,6 +3049,10 @@ export function useSynthPatchViewModel({
         env3Release,
         env3Sustain,
     ]);
+    const envelopeEditorBindings = useMemo(() => [
+        ...envelopeBindings,
+        { attackSeconds: ampAttack, decaySeconds: ampDecay, sustain: ampSustain, releaseSeconds: ampRelease },
+    ] as const, [ampAttack, ampDecay, ampRelease, ampSustain, envelopeBindings]);
     const displayedMsegControllerRef = useRef<MsegEditorControllerLike | null>(null);
     displayedMsegControllerRef.current = modulationBridge.current?.getMsegSlotController(selectedMsegSlot) ?? null;
     const routes = useMemo(() => modulationState?.routes ?? [], [modulationState?.routes]);
@@ -3050,17 +3078,19 @@ export function useSynthPatchViewModel({
     }, [msegState?.playback, observedMsegState, selectedMsegSlot]);
     const selectedEnvelope = useMemo(() => {
         const name = modulationState?.envelopeSlots[selectedEnvelopeSlot]?.name;
-        const bindings = envelopeBindings[selectedEnvelopeSlot];
+        const bindings = envelopeEditorBindings[selectedEnvelopeSlot];
         if (!modulationState || !bindings) return null;
         return {
-            name: name ?? `Env ${selectedEnvelopeSlot + 1}`,
+            name: selectedEnvelopeSlot === 3
+                ? "Amp Envelope"
+                : name ?? `Env ${selectedEnvelopeSlot + 1}`,
             attackSeconds: bindings.attackSeconds.value,
             decaySeconds: bindings.decaySeconds.value,
             sustain: bindings.sustain.value,
             releaseSeconds: bindings.releaseSeconds.value,
         };
-    }, [envelopeBindings, modulationState, selectedEnvelopeSlot]);
-    const selectedEnvelopeBindings = envelopeBindings[selectedEnvelopeSlot] ?? null;
+    }, [envelopeEditorBindings, modulationState, selectedEnvelopeSlot]);
+    const selectedEnvelopeBindings = envelopeEditorBindings[selectedEnvelopeSlot] ?? null;
     const callbackControlReadiness = useMemo<SynthCallbackControlReadiness>(() => ({
         wavetableSelection: wavetableSelect.isReady,
         mseg: {
@@ -3168,7 +3198,7 @@ export function useSynthPatchViewModel({
     }, []);
 
     const handleSelectEnvelopeSlot = useCallback((slotIndex: number) => {
-        setSelectedEnvelopeSlot(clamp(Math.round(slotIndex), 0, 2));
+        setSelectedEnvelopeSlot(clamp(Math.round(slotIndex), 0, 3));
     }, []);
 
     const handleMsegRateChange = useCallback((nextValue: number) => {
@@ -3211,12 +3241,12 @@ export function useSynthPatchViewModel({
         field: SynthEnvelopeField,
         nextValue: number,
     ) => {
-        const selectedBindings = envelopeBindings[selectedEnvelopeSlot];
+        const selectedBindings = envelopeEditorBindings[selectedEnvelopeSlot];
         if (!selectedBindings || !selectedBindings[field].isReady) {
             return;
         }
         selectedBindings[field].setValue(nextValue);
-    }, [envelopeBindings, selectedEnvelopeSlot]);
+    }, [envelopeEditorBindings, selectedEnvelopeSlot]);
 
     const handleAddRoute = useCallback(() => {
         const bridge = modulationBridge.current;

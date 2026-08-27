@@ -1344,6 +1344,11 @@ graph WavetableSynth [[ main ]]
     // Host parameters are append-only: Global Tune follows every established
     // slot so existing automation numbers remain unchanged.
     input value float32 globalTune [[ name: "Global Tune", min: -24.0f, max: 24.0f, init: 0.0f, unit: "st", rampFrames: 64 ]];
+    // T38 preserves the established ampRelease host slot above. The remaining
+    // Amp Envelope stages are appended after Global Tune.
+    input value float32 ampAttack [[ name: "Amp Envelope Attack", min: 0.001f, max: 10.0f, init: 0.01f, unit: "s", rampFrames: 0 ]];
+    input value float32 ampDecay [[ name: "Amp Envelope Decay", min: 0.001f, max: 10.0f, init: 0.001f, unit: "s", rampFrames: 0 ]];
+    input value float32 ampSustain [[ name: "Amp Envelope Sustain", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 0 ]];
     // Rack structure is patch state, not host automation (ADR-007). These are struct
     // events, which carry no parameter purpose, so they are structurally
     // non-automatable rather than non-automatable by convention.
@@ -1462,6 +1467,9 @@ graph WavetableSynth [[ main ]]
         env3Decay -> sharedEngine.envelopeDecayIn[2];
         env3Sustain -> sharedEngine.envelopeSustainIn[2];
         env3Release -> sharedEngine.envelopeReleaseIn[2];
+        ampAttack -> sharedEngine.ampAttackIn;
+        ampDecay -> sharedEngine.ampDecayIn;
+        ampSustain -> sharedEngine.ampSustainIn;
         ampRelease -> sharedEngine.ampReleaseIn;
         sourceMode -> sharedEngine.sourceModeIn;
         globalTune -> sharedEngine.globalTuneIn;

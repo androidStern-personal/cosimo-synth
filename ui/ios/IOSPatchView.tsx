@@ -88,6 +88,8 @@ import {
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
+const AMP_ENVELOPE_EDITOR_SLOT_INDEX = MODULATION_ENV_SLOT_COUNT;
+const ENVELOPE_EDITOR_SLOT_COUNT = MODULATION_ENV_SLOT_COUNT + 1;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
 const KEYBOARD_ROOT_NOTE_MAX = 72;
 const DISTORTION_WET_HP_MIN_HZ = 20;
@@ -659,11 +661,13 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
             </div>
 
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => (
+                {Array.from({ length: ENVELOPE_EDITOR_SLOT_COUNT }, (_, slotIndex) => (
                     <button
                         key={`ios-env-slot-${slotIndex + 1}`}
                         type="button"
-                        aria-label={`Select envelope ${slotIndex + 1}`}
+                        aria-label={slotIndex === AMP_ENVELOPE_EDITOR_SLOT_INDEX
+                            ? "Select Amp Envelope"
+                            : `Select envelope ${slotIndex + 1}`}
                         onClick={() => onSelectEnvelopeSlot(slotIndex)}
                         style={{
                             borderRadius: "999px",
@@ -676,7 +680,9 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
                             textTransform: "uppercase",
                         }}
                     >
-                        {`Env ${slotIndex + 1}`}
+                        {slotIndex === AMP_ENVELOPE_EDITOR_SLOT_INDEX
+                            ? "Amp Envelope"
+                            : `Env ${slotIndex + 1}`}
                     </button>
                 ))}
             </div>
@@ -686,14 +692,16 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
                     ["attackSeconds", "Attack", "Attack", 0.001, 10, 0.001, Number(selectedEnvelope?.attackSeconds ?? 0.01)],
                     ["decaySeconds", "Decay", "Decay", 0.001, 10, 0.001, Number(selectedEnvelope?.decaySeconds ?? 0.25)],
                     ["sustain", "Sustain", "Sustain", 0, 1, 0.001, Number(selectedEnvelope?.sustain ?? 0.5)],
-                    ["releaseSeconds", "Release", "Release", 0.001, 10, 0.001, Number(selectedEnvelope?.releaseSeconds ?? 0.2)],
+                    ["releaseSeconds", "Release", "Release", selectedEnvelopeSlot === AMP_ENVELOPE_EDITOR_SLOT_INDEX ? 0.005 : 0.001, 10, 0.001, Number(selectedEnvelope?.releaseSeconds ?? 0.2)],
                 ].map(([field, label, target, min, max, step, value]) => (
                     <label key={String(field)} style={{ display: "grid", gap: "0.35rem" }}>
                         <span className="mseg-depth-label">{String(label)}</span>
                         <input
                             className="mseg-rate-slider"
                             type="range"
-                            data-modulation-target-kind={`env${selectedEnvelopeSlot + 1}${target}`}
+                            data-modulation-target-kind={selectedEnvelopeSlot === AMP_ENVELOPE_EDITOR_SLOT_INDEX
+                                ? `amp${target}`
+                                : `env${selectedEnvelopeSlot + 1}${target}`}
                             min={String(min)}
                             max={String(max)}
                             step={String(step)}
@@ -1435,6 +1443,9 @@ function IOSPatchViewBody() {
                                     onChange={(event) => setArmedSource((current) => ({
                                         ...current,
                                         sourceKind: event.target.value === "env" ? "env" : event.target.value === "macro" ? "macro" : "mseg",
+                                        sourceSlot: event.target.value === "env"
+                                            ? clamp(current.sourceSlot, 1, 4)
+                                            : clamp(current.sourceSlot, 1, 3),
                                     }))}
                                 >
                                     <option value="mseg">MSEG</option>
@@ -1446,12 +1457,19 @@ function IOSPatchViewBody() {
                                     value={String(armedSource.sourceSlot)}
                                     onChange={(event) => setArmedSource((current) => ({
                                         ...current,
-                                        sourceSlot: clamp(Math.round(Number(event.target.value) || 1), 1, 3),
+                                        sourceSlot: clamp(
+                                            Math.round(Number(event.target.value) || 1),
+                                            1,
+                                            current.sourceKind === "env" ? 4 : 3,
+                                        ),
                                     }))}
                                 >
                                     <option value="1">1</option>
                                     <option value="2">2</option>
                                     <option value="3">3</option>
+                                    {armedSource.sourceKind === "env" ? (
+                                        <option value="4">Amp</option>
+                                    ) : null}
                                 </select>
                             </div>
 

@@ -3,7 +3,8 @@
  *
  * The engine's `effectiveModSourceState` monitor reports the clamped [0,1]
  * output of every per-voice modulation source (MSEG 1-3, Env 1-3, velocity,
- * pressure, slide) on the newest monitored voice at ~60Hz; macro sources are
+ * pressure, slide, Amp Envelope) on the newest monitored voice at ~60Hz;
+ * macro sources are
  * plain host parameters mirrored here from `macro1..4`. One driver per patch
  * connection subscribes ONCE, smooths the values, and moves every registered
  * light from a single rAF loop with direct attribute/style writes — hosts
@@ -27,7 +28,7 @@ import {
 export const EFFECTIVE_MOD_SOURCE_STATE_ENDPOINT_ID = "effectiveModSourceState";
 
 /** Runtime order of the engine's per-voice sources (modulation-targets.ts). */
-export const VOICE_MOD_SOURCE_VALUE_COUNT = 9;
+export const VOICE_MOD_SOURCE_VALUE_COUNT = 10;
 const MACRO_SOURCE_COUNT = 4;
 
 /** Smoothing time constant: how quickly a light chases a new source value. */
@@ -108,7 +109,8 @@ export function voiceModSourceValueIndex(source: ModSourceIdentity): number | nu
         case "mseg":
             return slot !== null && slot >= 1 && slot <= 3 ? slot - 1 : null;
         case "env":
-            return slot !== null && slot >= 1 && slot <= 3 ? 2 + slot : null;
+            if (slot !== null && slot >= 1 && slot <= 3) return 2 + slot;
+            return slot === 4 ? 9 : null;
         case "velocity":
             return 6;
         case "pressure":

@@ -20,6 +20,13 @@ const LEGACY_PARAMETERS = [
     { endpointID: "filterMode", type: "number", min: 0, max: 5, defaultValue: 0 },
     { endpointID: "filterCutoff", type: "number", min: 20, max: 20_000, defaultValue: 1_000 },
     { endpointID: "filterQ", type: "number", min: 0.1, max: 20, defaultValue: 0.707107 },
+    { endpointID: "ampRelease", type: "number", min: 0.005, max: 10, defaultValue: 0.2 },
+];
+
+const AMP_STAGE_PARAMETERS = [
+    { endpointID: "ampAttack", type: "number", min: 0.001, max: 10, defaultValue: 0.01 },
+    { endpointID: "ampDecay", type: "number", min: 0.001, max: 10, defaultValue: 0.001 },
+    { endpointID: "ampSustain", type: "number", min: 0, max: 1, defaultValue: 1 },
 ];
 
 test("the derived synth migration applies a pre-Mix preset with filterMix at fully wet", async () => {
@@ -34,6 +41,7 @@ test("the derived synth migration applies a pre-Mix preset with filterMix at ful
             ...LEGACY_PARAMETERS,
             { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
             { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
+            ...AMP_STAGE_PARAMETERS,
         ],
         storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
     });
@@ -44,7 +52,7 @@ test("the derived synth migration applies a pre-Mix preset with filterMix at ful
         presetID: "user.pre-mix",
         label: "Pre-Mix",
         contract: legacyContract,
-        parameters: { filterMode: 1, filterCutoff: 2_400, filterQ: 4 },
+        parameters: { filterMode: 1, filterCutoff: 2_400, filterQ: 4, ampRelease: 1.7 },
         storedState: {},
     };
     const writes = [];
@@ -69,6 +77,7 @@ test("the derived synth migration applies a pre-Mix preset with filterMix at ful
     // The migrated preset keeps every stored legacy value.
     assert.equal(normalized.parameters.filterCutoff, 2_400);
     assert.equal(normalized.parameters.filterQ, 4);
+    assert.equal(normalized.parameters.ampRelease, 1.7);
     assert.equal(normalized.storedState["bounce.v1"], null);
 });
 
@@ -87,6 +96,7 @@ test("the derived synth migration adds an oscillator-mode bounce reference to pr
         parameters: [
             ...parameters,
             { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
+            ...AMP_STAGE_PARAMETERS,
         ],
         storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
     });
@@ -97,7 +107,13 @@ test("the derived synth migration adds an oscillator-mode bounce reference to pr
         presetID: "user.pre-bounce",
         label: "Pre-Bounce",
         contract: legacyContract,
-        parameters: { filterMode: 1, filterCutoff: 2_400, filterQ: 4, filterMix: 0.5 },
+        parameters: {
+            filterMode: 1,
+            filterCutoff: 2_400,
+            filterQ: 4,
+            ampRelease: 0.83,
+            filterMix: 0.5,
+        },
         storedState: {},
     }, {
         currentContract,
@@ -107,6 +123,7 @@ test("the derived synth migration adds an oscillator-mode bounce reference to pr
     assert.equal(normalized.storedState["bounce.v1"], null);
     assert.equal(normalized.parameters.filterMix, 0.5);
     assert.equal(normalized.parameters.globalTune, 0);
+    assert.equal(normalized.parameters.ampRelease, 0.83);
 });
 
 test("the newest synth migration restores pre-Global-Tune presets at neutral zero", async () => {
@@ -126,6 +143,7 @@ test("the newest synth migration restores pre-Global-Tune presets at neutral zer
         parameters: [
             ...previousParameters,
             { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
+            ...AMP_STAGE_PARAMETERS,
         ],
         storedState,
     });
@@ -136,7 +154,13 @@ test("the newest synth migration restores pre-Global-Tune presets at neutral zer
         presetID: "user.pre-global-tune",
         label: "Pre Global Tune",
         contract: previousContract,
-        parameters: { filterMode: 1, filterCutoff: 2_400, filterQ: 4, filterMix: 0.63 },
+        parameters: {
+            filterMode: 1,
+            filterCutoff: 2_400,
+            filterQ: 4,
+            ampRelease: 0.61,
+            filterMix: 0.63,
+        },
         storedState: { "bounce.v1": null },
     }, {
         currentContract,
@@ -145,6 +169,10 @@ test("the newest synth migration restores pre-Global-Tune presets at neutral zer
 
     assert.equal(normalized.parameters.globalTune, 0);
     assert.equal(normalized.parameters.filterMix, 0.63);
+    assert.equal(normalized.parameters.ampAttack, 0.01);
+    assert.equal(normalized.parameters.ampDecay, 0.001);
+    assert.equal(normalized.parameters.ampSustain, 1);
+    assert.equal(normalized.parameters.ampRelease, 0.61);
 });
 
 test("the migration builder rejects a contract that lacks the filterMix parameter", async () => {
@@ -154,6 +182,7 @@ test("the migration builder rejects a contract that lacks the filterMix paramete
         parameters: [
             ...LEGACY_PARAMETERS,
             { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
+            ...AMP_STAGE_PARAMETERS,
         ],
         storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
     });
@@ -171,6 +200,7 @@ test("the migration builder rejects a contract that lacks Global Tune", async ()
         parameters: [
             ...LEGACY_PARAMETERS,
             { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
+            ...AMP_STAGE_PARAMETERS,
         ],
         storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
     });
@@ -178,5 +208,24 @@ test("the migration builder rejects a contract that lacks Global Tune", async ()
     assert.throws(
         () => migrationsModule.buildSynthPresetMigrations(contractWithoutGlobalTune),
         /globalTune/,
+    );
+});
+
+test("the migration builder rejects a contract that lacks one appended Amp Envelope stage", async () => {
+    const { contractModule, migrationsModule } = await loadModules();
+    const contractWithoutSustain = contractModule.buildCanonicalPluginStateContract({
+        effectID: "wavetable-synth",
+        parameters: [
+            ...LEGACY_PARAMETERS,
+            { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
+            { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
+            ...AMP_STAGE_PARAMETERS.filter(({ endpointID }) => endpointID !== "ampSustain"),
+        ],
+        storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
+    });
+
+    assert.throws(
+        () => migrationsModule.buildSynthPresetMigrations(contractWithoutSustain),
+        /all three appended Amp Envelope parameters/,
     );
 });

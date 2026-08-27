@@ -371,7 +371,7 @@ test("desktop synth reserves Cmajor host parameter slot 0 away from musical cont
     );
 });
 
-test("Bounce and Global Tune are append-only additions to the frozen synth host-parameter order", async () => {
+test("Bounce, Global Tune, and the complete Amp Envelope preserve the frozen synth host-parameter order", async () => {
     const synthSource = await fs.readFile(path.join(repoRoot, "cmajor", "WavetableSynth.cmajor"), "utf8");
     const parameterOrder = parseGraphHostParameterIdentifiers(synthSource, "WavetableSynth");
     const inputValues = parseGraphInputValues(synthSource, "WavetableSynth");
@@ -379,14 +379,19 @@ test("Bounce and Global Tune are append-only additions to the frozen synth host-
     const ampRelease = inputValues.find(({ identifier }) => identifier === "ampRelease");
     const sourceMode = inputValues.find(({ identifier }) => identifier === "sourceMode");
     const globalTune = inputValues.find(({ identifier }) => identifier === "globalTune");
+    const ampAttack = inputValues.find(({ identifier }) => identifier === "ampAttack");
+    const ampDecay = inputValues.find(({ identifier }) => identifier === "ampDecay");
+    const ampSustain = inputValues.find(({ identifier }) => identifier === "ampSustain");
 
     assert.deepEqual(
-        parameterOrder.slice(0, -4),
+        parameterOrder.slice(0, -7),
         EXISTING_SYNTH_HOST_PARAMETER_ORDER,
-        "appending Bounce controls must not move any existing DAW automation slot",
+        "appending synth controls must not move any existing DAW automation slot",
     );
-    assert.deepEqual(parameterOrder.slice(-4), ["filterMix", "ampRelease", "sourceMode", "globalTune"]);
-    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 4);
+    assert.deepEqual(parameterOrder.slice(-7), [
+        "filterMix", "ampRelease", "sourceMode", "globalTune", "ampAttack", "ampDecay", "ampSustain",
+    ]);
+    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 7);
     assert.notEqual(filterMix, undefined);
     assert.equal(filterMix.type, "float32");
     assert.match(filterMix.annotation, /name:\s*"Filter Mix"/);
@@ -420,6 +425,29 @@ test("Bounce and Global Tune are append-only additions to the frozen synth host-
     assert.match(globalTune.annotation, /unit:\s*"st"/);
     assert.match(globalTune.annotation, /rampFrames:\s*64/);
     assert.doesNotMatch(globalTune.annotation, /discrete:\s*true/);
+    assert.notEqual(ampAttack, undefined);
+    assert.equal(ampAttack.type, "float32");
+    assert.match(ampAttack.annotation, /name:\s*"Amp Envelope Attack"/);
+    assert.match(ampAttack.annotation, /min:\s*0\.001f?/);
+    assert.match(ampAttack.annotation, /max:\s*10(?:\.0)?f?/);
+    assert.match(ampAttack.annotation, /init:\s*0\.01f?/);
+    assert.match(ampAttack.annotation, /unit:\s*"s"/);
+    assert.match(ampAttack.annotation, /rampFrames:\s*0/);
+    assert.notEqual(ampDecay, undefined);
+    assert.equal(ampDecay.type, "float32");
+    assert.match(ampDecay.annotation, /name:\s*"Amp Envelope Decay"/);
+    assert.match(ampDecay.annotation, /min:\s*0\.001f?/);
+    assert.match(ampDecay.annotation, /max:\s*10(?:\.0)?f?/);
+    assert.match(ampDecay.annotation, /init:\s*0\.001f?/);
+    assert.match(ampDecay.annotation, /unit:\s*"s"/);
+    assert.match(ampDecay.annotation, /rampFrames:\s*0/);
+    assert.notEqual(ampSustain, undefined);
+    assert.equal(ampSustain.type, "float32");
+    assert.match(ampSustain.annotation, /name:\s*"Amp Envelope Sustain"/);
+    assert.match(ampSustain.annotation, /min:\s*0(?:\.0)?f?/);
+    assert.match(ampSustain.annotation, /max:\s*1(?:\.0)?f?/);
+    assert.match(ampSustain.annotation, /init:\s*1(?:\.0)?f?/);
+    assert.match(ampSustain.annotation, /rampFrames:\s*0/);
 });
 
 test("legacy synth presets resolve an omitted Filter Mix to fully wet through an exact-contract migration", async () => {

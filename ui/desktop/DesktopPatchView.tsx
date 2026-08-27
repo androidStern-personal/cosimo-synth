@@ -59,7 +59,10 @@ import {
     OSCILLATOR_VOLUME_MAX_DB,
     OSCILLATOR_VOLUME_MIN_DB,
 } from "../shared/oscillator-defaults";
-import type { EffectModuleId } from "../shared/target-descriptor";
+import {
+    getModulationTargetDescriptor,
+    type EffectModuleId,
+} from "../shared/target-descriptor";
 import {
     type SynthFocusBindings,
     type SynthKeyboardInputMode,
@@ -223,6 +226,8 @@ const KEYBOARD_ROOT_NOTE_MIN = 12;
 const KEYBOARD_ROOT_NOTE_MAX = 72;
 const ENVELOPE_TIME_MIN_SECONDS = 0.001;
 const ENVELOPE_TIME_MAX_SECONDS = 10;
+const AMP_ENVELOPE_EDITOR_SLOT_INDEX = MODULATION_ENV_SLOT_COUNT;
+const ENVELOPE_EDITOR_SLOT_COUNT = MODULATION_ENV_SLOT_COUNT + 1;
 const ENVELOPE_TIME_RESPONSE = 1.4;
 const ENVELOPE_NOTE_OFF_RATIO = 0.76;
 const ENVELOPE_VIEWBOX = {
@@ -562,9 +567,9 @@ function formatSemitoneOffset(value: number) {
     return `${prefix}${semitones.toFixed(2)} st`;
 }
 
-function envelopeTimeEntrySpec(currentSeconds: number) {
+function envelopeTimeEntrySpec(currentSeconds: number, minSeconds = ENVELOPE_TIME_MIN_SECONDS) {
     return parameterEntrySpecForSeconds({
-        minSeconds: ENVELOPE_TIME_MIN_SECONDS,
+        minSeconds,
         maxSeconds: ENVELOPE_TIME_MAX_SECONDS,
         stepSeconds: 0.001,
         currentSeconds,
@@ -584,15 +589,26 @@ function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
 }
 
-function secondsToEnvelopeNormalized(seconds: number) {
-    const clampedSeconds = clamp(seconds, ENVELOPE_TIME_MIN_SECONDS, ENVELOPE_TIME_MAX_SECONDS);
-    const raw = Math.log(clampedSeconds / ENVELOPE_TIME_MIN_SECONDS) / Math.log(ENVELOPE_TIME_MAX_SECONDS / ENVELOPE_TIME_MIN_SECONDS);
+function secondsToEnvelopeNormalized(seconds: number, minSeconds = ENVELOPE_TIME_MIN_SECONDS) {
+    const clampedSeconds = clamp(seconds, minSeconds, ENVELOPE_TIME_MAX_SECONDS);
+    const raw = Math.log(clampedSeconds / minSeconds) / Math.log(ENVELOPE_TIME_MAX_SECONDS / minSeconds);
     return clamp(Math.pow(clamp(raw, 0, 1), ENVELOPE_TIME_RESPONSE), 0, 1);
 }
 
-function normalizedToEnvelopeSeconds(normalized: number) {
+function normalizedToEnvelopeSeconds(normalized: number, minSeconds = ENVELOPE_TIME_MIN_SECONDS) {
     const raw = Math.pow(clamp(normalized, 0, 1), 1 / ENVELOPE_TIME_RESPONSE);
-    return ENVELOPE_TIME_MIN_SECONDS * Math.pow(ENVELOPE_TIME_MAX_SECONDS / ENVELOPE_TIME_MIN_SECONDS, raw);
+    return minSeconds * Math.pow(ENVELOPE_TIME_MAX_SECONDS / minSeconds, raw);
+}
+
+function envelopeReleaseMinimumSeconds(slotIndex: number): number {
+    const targetKind = slotIndex === AMP_ENVELOPE_EDITOR_SLOT_INDEX
+        ? "ampRelease"
+        : `env${slotIndex + 1}Release` as ModulationTargetKind;
+    const descriptor = getModulationTargetDescriptor(targetKind);
+    if (descriptor.format.kind !== "time") {
+        throw new Error(`${descriptor.label} has no envelope-time range.`);
+    }
+    return descriptor.format.minSeconds;
 }
 
 function envelopeSustainToY(sustain: number) {
@@ -605,7 +621,10 @@ function envelopeYToSustain(y: number) {
     return clamp(1 - ((y - ENVELOPE_VIEWBOX.top) / plotHeight), 0, 1);
 }
 
-function computeEnvelopeGeometry(envelope: NonNullable<ModulationMatrixSectionProps["selectedEnvelope"]>) {
+function computeEnvelopeGeometry(
+    envelope: NonNullable<ModulationMatrixSectionProps["selectedEnvelope"]>,
+    releaseMinimumSeconds: number,
+) {
     const plotWidth = ENVELOPE_VIEWBOX.width - ENVELOPE_VIEWBOX.left - ENVELOPE_VIEWBOX.right;
     const attackRegionWidth = plotWidth * 0.30;
     const decayRegionWidth = plotWidth * 0.28;
@@ -615,7 +634,9 @@ function computeEnvelopeGeometry(envelope: NonNullable<ModulationMatrixSectionPr
     const decayRegionStart = ENVELOPE_VIEWBOX.left + attackRegionWidth;
     const decayX = decayRegionStart + (secondsToEnvelopeNormalized(envelope.decaySeconds) * decayRegionWidth);
     const sustainY = envelopeSustainToY(envelope.sustain);
-    const releaseX = noteOffX + (secondsToEnvelopeNormalized(envelope.releaseSeconds) * releaseRegionWidth);
+    const releaseX = noteOffX + (
+        secondsToEnvelopeNormalized(envelope.releaseSeconds, releaseMinimumSeconds) * releaseRegionWidth
+    );
 
     return {
         noteOffX,
@@ -1554,18 +1575,23 @@ function DesktopEnvelopeEditor({
     selectedEnvelope,
     onEnvelopeChange,
     readiness,
+    releaseMinimumSeconds,
     compact = false,
 }: {
     selectedEnvelope: NonNullable<ModulationMatrixSectionProps["selectedEnvelope"]>;
     onEnvelopeChange: ModulationMatrixSectionProps["onEnvelopeChange"];
     readiness: SynthCallbackControlReadiness["envelope"];
+    releaseMinimumSeconds: number;
     compact?: boolean;
 }) {
     const svgRef = useRef<SVGSVGElement | null>(null);
     const [activeHandle, setActiveHandle] = useState<null | "attack" | "decay-sustain" | "release">(null);
     const [activePointerId, setActivePointerId] = useState<number | null>(null);
 
-    const geometry = useMemo(() => computeEnvelopeGeometry(selectedEnvelope), [selectedEnvelope]);
+    const geometry = useMemo(
+        () => computeEnvelopeGeometry(selectedEnvelope, releaseMinimumSeconds),
+        [releaseMinimumSeconds, selectedEnvelope],
+    );
     const isHandleReady = useCallback((handleName: "attack" | "decay-sustain" | "release") => {
         if (handleName === "attack") return readiness.attackSeconds;
         if (handleName === "decay-sustain") return readiness.decaySeconds && readiness.sustain;
@@ -1674,7 +1700,10 @@ function DesktopEnvelopeEditor({
                 0,
                 1,
             );
-            onEnvelopeChange("releaseSeconds", normalizedToEnvelopeSeconds(normalizedRelease));
+            onEnvelopeChange(
+                "releaseSeconds",
+                normalizedToEnvelopeSeconds(normalizedRelease, releaseMinimumSeconds),
+            );
         };
 
         const handleVisibilityChange = () => {
@@ -1696,7 +1725,15 @@ function DesktopEnvelopeEditor({
             window.removeEventListener("blur", clearActiveDrag);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
-    }, [activeHandle, activePointerId, geometry, isHandleReady, onEnvelopeChange, readStagePoint]);
+    }, [
+        activeHandle,
+        activePointerId,
+        geometry,
+        isHandleReady,
+        onEnvelopeChange,
+        readStagePoint,
+        releaseMinimumSeconds,
+    ]);
 
     const beginHandleDrag = useCallback((
         handleName: "attack" | "decay-sustain" | "release",
@@ -3211,10 +3248,11 @@ function ModulationMatrixSection({
 
     const activeMsegSlot = activeEditorTab.kind === "mseg" ? activeEditorTab.slotIndex : selectedMsegSlot;
     const activeEnvelopeSlot = activeEditorTab.kind === "envelope" ? activeEditorTab.slotIndex : selectedEnvelopeSlot;
+    const selectedEnvelopeReleaseMinimumSeconds = envelopeReleaseMinimumSeconds(selectedEnvelopeSlot);
     const activeEditorSlotCount = activeEditorTab.kind === "macro"
         ? MODULATION_MACRO_SLOT_COUNT
         : activeEditorTab.kind === "envelope"
-            ? MODULATION_ENV_SLOT_COUNT
+            ? ENVELOPE_EDITOR_SLOT_COUNT
             : MODULATION_MSEG_SLOT_COUNT;
 
     useEffect(() => {
@@ -3459,10 +3497,15 @@ function ModulationMatrixSection({
         readonly spec: ParameterEntrySpec;
     } | null>(null);
 
-    const entrySpecForEnvelopeField = (
+    const entrySpecForEnvelopeField = useCallback((
         field: EnvelopeEntryField,
         currentValue: number,
-    ) => field === "sustain" ? ENVELOPE_SUSTAIN_ENTRY_SPEC : envelopeTimeEntrySpec(currentValue);
+    ) => field === "sustain"
+        ? ENVELOPE_SUSTAIN_ENTRY_SPEC
+        : envelopeTimeEntrySpec(
+            currentValue,
+            field === "releaseSeconds" ? selectedEnvelopeReleaseMinimumSeconds : ENVELOPE_TIME_MIN_SECONDS,
+        ), [selectedEnvelopeReleaseMinimumSeconds]);
 
     useEffect(() => {
         if (!selectedEnvelope) {
@@ -3485,12 +3528,13 @@ function ModulationMatrixSection({
         }
         if (activeEnvelopeDraftField !== "releaseSeconds") {
             setDraftRelease(formatParameterEntry(
-                envelopeTimeEntrySpec(selectedEnvelope.releaseSeconds),
+                entrySpecForEnvelopeField("releaseSeconds", selectedEnvelope.releaseSeconds),
                 selectedEnvelope.releaseSeconds,
             ).display);
         }
     }, [
         activeEnvelopeDraftField,
+        entrySpecForEnvelopeField,
         selectedEnvelope?.attackSeconds,
         selectedEnvelope?.decaySeconds,
         selectedEnvelope?.releaseSeconds,
@@ -3540,7 +3584,7 @@ function ModulationMatrixSection({
         envelopeEditingSpecRef.current = null;
         onEnvelopeChange(field, result.commit.value);
         return true;
-    }, [callbackControlReadiness.envelope, onEnvelopeChange, selectedEnvelope]);
+    }, [callbackControlReadiness.envelope, entrySpecForEnvelopeField, onEnvelopeChange, selectedEnvelope]);
 
     const handleEnvelopeFieldKeyDown = useCallback((
         event: ReactKeyboardEvent<HTMLInputElement>,
@@ -3652,17 +3696,22 @@ function ModulationMatrixSection({
                                     }
                                     setActiveEditorTab({ kind: activeEditorTab.kind, slotIndex: nextSlotIndex });
                                     const nextSlotNumber = nextSlotIndex + 1;
-                                    if (nextSlotNumber === 1 || nextSlotNumber === 2 || nextSlotNumber === 3) {
+                                    const maximumArmableSlot = activeEditorTab.kind === "envelope"
+                                        ? ENVELOPE_EDITOR_SLOT_COUNT
+                                        : MODULATION_ENV_SLOT_COUNT;
+                                    if (nextSlotNumber >= 1 && nextSlotNumber <= maximumArmableSlot) {
                                         onArmSource?.({
                                             sourceKind: activeEditorTab.kind === "envelope" ? "env" : activeEditorTab.kind,
-                                            sourceSlot: nextSlotNumber,
+                                            sourceSlot: nextSlotNumber as 1 | 2 | 3 | 4,
                                         });
                                     }
                                 }}
                             >
                                 {Array.from({ length: activeEditorSlotCount }, (_, slotIndex) => (
                                     <option key={`mobile-mod-source-slot-${slotIndex}`} value={slotIndex + 1}>
-                                        {slotIndex + 1}
+                                        {activeEditorTab.kind === "envelope" && slotIndex === AMP_ENVELOPE_EDITOR_SLOT_INDEX
+                                            ? "Amp"
+                                            : slotIndex + 1}
                                     </option>
                                 ))}
                             </select>
@@ -3701,12 +3750,14 @@ function ModulationMatrixSection({
                 {/* ENV pips */}
                 <div data-role="mobile-mod-source-family" data-source-family="env" className="mod-source-family flex items-center gap-1">
                     <div className="flex gap-[3px]">
-                        {Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => (
+                        {Array.from({ length: ENVELOPE_EDITOR_SLOT_COUNT }, (_, slotIndex) => (
                             <button
                                 key={`env-pip-${slotIndex}`}
                                 type="button"
-                                aria-label={`Select envelope ${slotIndex + 1}`}
-                                className={`grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${
+                                aria-label={slotIndex === AMP_ENVELOPE_EDITOR_SLOT_INDEX
+                                    ? "Select Amp Envelope"
+                                    : `Select envelope ${slotIndex + 1}`}
+                                className={`grid ${slotIndex === AMP_ENVELOPE_EDITOR_SLOT_INDEX ? "h-[18px] w-[30px] max-[480px]:h-7 max-[480px]:w-10" : "size-[18px] max-[480px]:size-7"} place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${
                                     activeEditorTab.kind === "envelope" && activeEnvelopeSlot === slotIndex
                                         ? "synth-accent-active-button"
                                         : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"
@@ -3716,7 +3767,7 @@ function ModulationMatrixSection({
                                     setActiveEditorTab({ kind: "envelope", slotIndex });
                                 }}
                             >
-                                {slotIndex + 1}
+                                {slotIndex === AMP_ENVELOPE_EDITOR_SLOT_INDEX ? "AMP" : slotIndex + 1}
                             </button>
                         ))}
                     </div>
@@ -3932,7 +3983,9 @@ function ModulationMatrixSection({
                                 <div className="relative flex items-center">
                                 <input
                                     aria-label={param.ariaLabel}
-                                    data-modulation-target-kind={`env${selectedEnvelopeSlot + 1}${param.target}`}
+                                    data-modulation-target-kind={selectedEnvelopeSlot === AMP_ENVELOPE_EDITOR_SLOT_INDEX
+                                        ? `amp${param.target}`
+                                        : `env${selectedEnvelopeSlot + 1}${param.target}`}
                                     type="text"
                                     inputMode="decimal"
                                     disabled={!callbackControlReadiness.envelope[param.field]}
@@ -4118,6 +4171,7 @@ function ModulationMatrixSection({
                         selectedEnvelope={selectedEnvelope}
                         onEnvelopeChange={onEnvelopeChange}
                         readiness={callbackControlReadiness.envelope}
+                        releaseMinimumSeconds={selectedEnvelopeReleaseMinimumSeconds}
                         compact={compact}
                     />
                 ) : activeEditorTab.kind === "macro" ? (
@@ -4224,8 +4278,9 @@ function parseMobileModSourceDetail(detail: string | null): MobileModSource | nu
     const [kind, slotText] = detail.split(":");
     const slot = Number(slotText);
     if (
-        (kind === "mseg" || kind === "env" || kind === "macro")
-        && (slot === 1 || slot === 2 || slot === 3)
+        (kind === "mseg" && (slot === 1 || slot === 2 || slot === 3))
+        || (kind === "env" && (slot === 1 || slot === 2 || slot === 3 || slot === 4))
+        || (kind === "macro" && (slot === 1 || slot === 2 || slot === 3))
     ) {
         return { sourceKind: kind, sourceSlot: slot };
     }
@@ -5482,6 +5537,7 @@ function DesktopPatchViewBody({
                             selectedEnvelope={synthView.selectedEnvelope}
                             onEnvelopeChange={synthView.handleEnvelopeChange}
                             readiness={synthView.callbackControlReadiness.envelope}
+                            releaseMinimumSeconds={envelopeReleaseMinimumSeconds(synthView.selectedEnvelopeSlot)}
                             compact
                         />
                     )}

@@ -152,7 +152,9 @@ function buildAdditionalOscillatorStatusInputs() {
 function buildModulationGeneratorStatusInputs() {
     return allTargetDescriptors().flatMap((descriptor) => {
         if (descriptor.binding._tag !== "endpoint"
-            || (!descriptor.moduleId.startsWith("mseg") && !descriptor.moduleId.startsWith("env"))
+            || (!descriptor.moduleId.startsWith("mseg")
+                && !descriptor.moduleId.startsWith("env")
+                && descriptor.moduleId !== "ampEnvelope")
             || [mseg1MorphEndpointID, mseg2MorphEndpointID, mseg3MorphEndpointID]
                 .includes(descriptor.binding.endpointId)) {
             return [];

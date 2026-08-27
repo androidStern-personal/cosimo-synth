@@ -49,6 +49,10 @@ export const SHARED_VOICE_MODULATION_TARGET_KINDS = [
     "env3Release",
     "filterMix",
     "globalTuneSemitones",
+    "ampAttack",
+    "ampDecay",
+    "ampSustain",
+    "ampRelease",
 ] as const;
 
 /** One voice-global modulation destination. */
@@ -82,6 +86,7 @@ export type ModulationSourceGroup = "voice" | "macro";
 export type ModulationSourceId =
     | `mseg-${1 | 2 | 3}`
     | `env-${1 | 2 | 3}`
+    | "amp-envelope"
     | "velocity"
     | "pressure"
     | "slide"
@@ -111,6 +116,7 @@ export const MODULATION_SOURCE_IDENTITIES: ReadonlyArray<ModulationSourceIdentit
     { id: "env-1", sourceKind: "env", sourceSlot: 1, group: "voice", runtimeIndex: 3 },
     { id: "env-2", sourceKind: "env", sourceSlot: 2, group: "voice", runtimeIndex: 4 },
     { id: "env-3", sourceKind: "env", sourceSlot: 3, group: "voice", runtimeIndex: 5 },
+    { id: "amp-envelope", sourceKind: "env", sourceSlot: 4, group: "voice", runtimeIndex: 9 },
     { id: "macro-1", sourceKind: "macro", sourceSlot: 1, group: "macro", runtimeIndex: 0 },
     { id: "macro-2", sourceKind: "macro", sourceSlot: 2, group: "macro", runtimeIndex: 1 },
     { id: "macro-3", sourceKind: "macro", sourceSlot: 3, group: "macro", runtimeIndex: 2 },
@@ -213,22 +219,24 @@ const sourceIdentityByAddress = new Map(MODULATION_SOURCE_IDENTITIES.map((identi
 const targetIdentityByKind = new Map(MODULATION_TARGET_IDENTITIES.map((identity) => [identity.kind, identity]));
 
 function assertCanonicalIdentities(): void {
-    if (MODULATION_SOURCE_COUNT !== 13
-        || MODULATION_VOICE_TARGET_COUNT !== 52
+    if (MODULATION_SOURCE_COUNT !== 14
+        || MODULATION_VOICE_TARGET_COUNT !== 56
         || MODULATION_RACK_TARGET_COUNT !== 36
-        || MODULATION_LEGAL_PAIR_COUNT !== 1144) {
+        || MODULATION_LEGAL_PAIR_COUNT !== 1288) {
         throw new Error("Unexpected modulation domain size");
     }
 
-    for (const [group, expectedCount] of [["voice", 9], ["macro", 4]] as const) {
-        const identities = MODULATION_SOURCE_IDENTITIES.filter((identity) => identity.group === group);
+    for (const [group, expectedCount] of [["voice", 10], ["macro", 4]] as const) {
+        const identities = MODULATION_SOURCE_IDENTITIES
+            .filter((identity) => identity.group === group)
+            .sort((left, right) => left.runtimeIndex - right.runtimeIndex);
         if (identities.length !== expectedCount
             || identities.some((identity, position) => identity.runtimeIndex !== position)) {
             throw new Error(`Bad modulation ${group} source indexes`);
         }
     }
 
-    for (const [group, expectedCount] of [["voice", 52], ["rack", 36]] as const) {
+    for (const [group, expectedCount] of [["voice", 56], ["rack", 36]] as const) {
         const identities = MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
         if (identities.length !== expectedCount
             || identities.some((identity, position) => identity.runtimeIndex !== position)) {

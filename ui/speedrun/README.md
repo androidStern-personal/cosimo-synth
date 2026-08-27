@@ -143,7 +143,7 @@ run only while it remains in the tree; they are not part of the product gate
 set.
 
 The hardening fixture is generated from the current performer contract. It
-carries all 97 public parameters, stores all 1,144 legal modulation mappings,
+carries all 100 public parameters, stores all 1,288 legal modulation mappings,
 enables all 8 current effect types, and keeps all 3 oscillators audible. The
 browser pipeline gate also performs five consecutive audio-plus-video renders,
 tracking worker termination, object-URL lifetime, and post-GC heap bounds.

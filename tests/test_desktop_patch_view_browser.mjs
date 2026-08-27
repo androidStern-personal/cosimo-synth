@@ -3239,7 +3239,7 @@ test("MSEG morph is a real modulation drop target", async () => {
     }
 });
 
-test("every continuous MSEG and envelope control exposes its exact modulation target", async () => {
+test("every continuous MSEG and envelope control, including Amp Envelope, exposes its exact modulation target", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -3270,6 +3270,27 @@ test("every continuous MSEG and envelope control exposes its exact modulation ta
                 );
             }
         }
+
+        await page.getByRole("button", { name: "Select Amp Envelope" }).click();
+        for (const [ariaLabel, suffix] of envelopeFields) {
+            assert.equal(
+                await page.locator(`input[aria-label="${ariaLabel}"]:visible`).getAttribute("data-modulation-target-kind"),
+                `amp${suffix}`,
+            );
+        }
+        assert.equal(
+            (await page.getByRole("button", { name: "Select Amp Envelope" }).textContent())?.trim(),
+            "AMP",
+        );
+        const ampAttackInput = page.locator('input[aria-label="Envelope attack value"]:visible');
+        assert.equal(await ampAttackInput.isDisabled(), false);
+        const initialAmpAttack = Number((await getHarnessSnapshot(page)).parameterValues.ampAttack);
+        await dragEnvelopeHandleBy(page, "adsr-attack-handle-hit-target", 80, 0);
+        await waitForHarnessSnapshot(
+            page,
+            "Amp Envelope attack host write",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.ampAttack) - initialAmpAttack) > 0.0001,
+        );
     } finally {
         await page.close();
     }

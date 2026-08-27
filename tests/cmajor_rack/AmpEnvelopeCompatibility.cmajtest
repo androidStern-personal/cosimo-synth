@@ -1,0 +1,97 @@
+// The complete Amp Envelope must preserve the legacy loudness law for old
+// sounds.  With A=10 ms, D=1 ms, S=1 and the saved Release, its fixed gain
+// output is sample-identical to the former ASR at every velocity.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor")
+
+## testProcessor (undefined, { frequency: 600 })
+
+graph AmpEnvelopeLegacyCompatibility [[ main ]]
+{
+    output event int32 out;
+
+    node source = AmpEnvelopeCompatibilitySource;
+    node legacy = wt::RetriggerableASR (0.01f);
+    node amp = wt::RetriggerableAmpAdsr;
+    node witness = AmpEnvelopeCompatibilityWitness;
+
+    connection
+    {
+        source.noteOut -> legacy.eventIn, amp.eventIn;
+        source.attackOut -> amp.attackSecondsIn;
+        source.decayOut -> amp.decaySecondsIn;
+        source.sustainOut -> amp.sustainIn;
+        source.releaseOut -> legacy.releaseSecondsIn, amp.releaseSecondsIn;
+        legacy.gainOut -> witness.legacyIn;
+        amp.gainOut -> witness.ampIn;
+        witness.out -> out;
+    }
+}
+
+processor AmpEnvelopeCompatibilitySource
+{
+    output event (std::notes::NoteOn, std::notes::NoteOff) noteOut;
+    output value float32 attackOut;
+    output value float32 decayOut;
+    output value float32 sustainOut;
+    output value float32 releaseOut;
+
+    std::notes::NoteOn noteOn (float32 velocity)
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        note.velocity = velocity;
+        return note;
+    }
+
+    std::notes::NoteOff noteOff()
+    {
+        std::notes::NoteOff note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        return note;
+    }
+
+    void main()
+    {
+        attackOut <- 0.01f;
+        decayOut <- 0.001f;
+        sustainOut <- 1.0f;
+        releaseOut <- 0.2f;
+
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame == 1) noteOut <- noteOn (0.37f);
+            if (frame == 15) noteOut <- noteOff();
+            if (frame == 40)
+            {
+                releaseOut <- 0.05f;
+                noteOut <- noteOn (1.0f);
+            }
+            if (frame == 55) noteOut <- noteOff();
+            advance();
+        }
+    }
+}
+
+processor AmpEnvelopeCompatibilityWitness
+{
+    input stream float32 legacyIn;
+    input stream float32 ampIn;
+    output event int32 out;
+    bool stayedExact = true;
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (legacyIn != ampIn)
+                stayedExact = false;
+
+            if (frame == 90) out <- stayedExact ? 1 : 0;
+            if (frame == 91) out <- -1;
+            advance();
+        }
+    }
+}

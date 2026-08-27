@@ -56,6 +56,8 @@ export const MODULATION_STATE_KEY = "modulation.v6";
 export const MODULATION_STATE_VERSION = 6;
 export const MODULATION_MSEG_SLOT_COUNT = 3;
 export const MODULATION_ENV_SLOT_COUNT = 3;
+/** Permanent Amp Envelope source address; its stages are host parameters, not modulation.v6 envelope-slot state. */
+export const AMP_ENVELOPE_SOURCE_SLOT = 4;
 export const MODULATION_MSEG_BUFFER_ENDPOINT_ID = "modulationMsegBuffer";
 export const MODULATION_MSEG_PLAYBACK_ENDPOINT_ID = "modulationMsegPlayback";
 export const MODULATION_MACRO_SLOT_COUNT = 4;
@@ -104,6 +106,10 @@ const ROUTE_AMOUNT_LIMITS = {
     env3Decay: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
     env3Sustain: { min: -1.0, max: 1.0 },
     env3Release: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+    ampAttack: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+    ampDecay: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+    ampSustain: { min: -1.0, max: 1.0 },
+    ampRelease: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
 } as const;
 const ROUTE_AMOUNT_STEPS = {
     wavetablePosition: 0.001,
@@ -138,6 +144,10 @@ const ROUTE_AMOUNT_STEPS = {
     env3Decay: 0.001,
     env3Sustain: 0.001,
     env3Release: 0.001,
+    ampAttack: 0.001,
+    ampDecay: 0.001,
+    ampSustain: 0.001,
+    ampRelease: 0.001,
 } as const;
 
 const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors()
@@ -253,6 +263,7 @@ const MODULATION_SOURCE_LABELS: Readonly<Record<ModulationSourceId, string>> = {
     "env-1": "ENV 1",
     "env-2": "ENV 2",
     "env-3": "ENV 3",
+    "amp-envelope": "AMP ENV",
     velocity: "VEL",
     pressure: "AT",
     slide: "SLIDE",
@@ -563,6 +574,7 @@ export function formatModulationAmountReadout(
         case "env1Sustain":
         case "env2Sustain":
         case "env3Sustain":
+        case "ampSustain":
             return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
         case "mseg1Rate":
         case "mseg2Rate":
@@ -576,6 +588,9 @@ export function formatModulationAmountReadout(
         case "env3Attack":
         case "env3Decay":
         case "env3Release":
+        case "ampAttack":
+        case "ampDecay":
+        case "ampRelease":
             return `${prefix}${formatMagnitude(clampedAmount, 3)} s`;
         case "filterCutoffOctaves":
             return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
@@ -658,10 +673,14 @@ export function getModulationTargetClampHint(targetKind: ModulationTargetKind) {
         case "env3Attack":
         case "env3Decay":
         case "env3Release":
+        case "ampAttack":
+        case "ampDecay":
+        case "ampRelease":
             return "Envelope time still clamps to the envelope stage range.";
         case "env1Sustain":
         case "env2Sustain":
         case "env3Sustain":
+        case "ampSustain":
             return "Envelope sustain still clamps between silence and full level.";
         default:
             return "";
@@ -722,7 +741,7 @@ function normalizeSourceSlot(sourceKind: ModulationSourceKind, rawSlot: unknown)
         ? MODULATION_MSEG_SLOT_COUNT
         : sourceKind === "macro"
             ? MODULATION_MACRO_SLOT_COUNT
-            : MODULATION_ENV_SLOT_COUNT;
+            : AMP_ENVELOPE_SOURCE_SLOT;
     return clamp(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
 }
 
@@ -850,7 +869,7 @@ function canonicalJsonValuesEqual(left: unknown, right: unknown): boolean {
     ));
 }
 
-/** Pick the first unused cell in the closed 1144-pair domain for generic Add. */
+/** Pick the first unused cell in the closed canonical pair domain for generic Add. */
 export function createFirstAvailableModulationRoute(
     routes: ReadonlyArray<ModulationRoute>,
     targetOptions: ReadonlyArray<ModulationTargetOption> = MODULATION_TARGET_OPTIONS,

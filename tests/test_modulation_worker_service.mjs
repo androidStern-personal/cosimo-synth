@@ -18,7 +18,7 @@ const laneTails = [
         targets: "voiceRouteTargets",
         polarities: "voiceRoutePolarities",
         amounts: "voiceRouteAmounts",
-        expected: { count: 468, cellIndex: 467, sourceIndex: 8, targetIndex: 51, polarity: 0 },
+        expected: { count: 560, cellIndex: 559, sourceIndex: 9, targetIndex: 55, polarity: 0 },
     },
     {
         count: "macroVoiceRouteCount",
@@ -27,7 +27,7 @@ const laneTails = [
         targets: "macroVoiceRouteTargets",
         polarities: "macroVoiceRoutePolarities",
         amounts: "macroVoiceRouteAmounts",
-        expected: { count: 208, cellIndex: 207, sourceIndex: 3, targetIndex: 51, polarity: 0 },
+        expected: { count: 224, cellIndex: 223, sourceIndex: 3, targetIndex: 55, polarity: 0 },
     },
     {
         count: "voiceRackRouteCount",
@@ -38,8 +38,8 @@ const laneTails = [
         amounts: "voiceRackRouteAmounts",
         reducers: "voiceRackRouteReducers",
         // Rack cell indices run at the bus width (static 36 + four pool
-        // mirror sets = 180): final static voiceRack pair = 8*180 + 35.
-        expected: { count: 324, cellIndex: 1475, sourceIndex: 8, targetIndex: 35, polarity: 0 },
+        // mirror sets = 180): final static voiceRack pair = 9*180 + 35.
+        expected: { count: 360, cellIndex: 1655, sourceIndex: 9, targetIndex: 35, polarity: 0 },
     },
     {
         count: "macroRackRouteCount",
@@ -159,7 +159,7 @@ function readLaneTail(program, specification) {
     };
 }
 
-test("the modulation service publishes serialized all-1144 state through one correlated runtime frontier", async () => {
+test("the modulation service publishes serialized all-1288 state through one correlated runtime frontier", async () => {
     const [modulation, targets, serviceModule] = await Promise.all([
         modulationModulePromise,
         targetsModulePromise,
@@ -193,12 +193,12 @@ test("the modulation service publishes serialized all-1144 state through one cor
             () => installedProgram() !== undefined
                 && connection.acknowledgements.at(-1)?.acceptedModulationSerial
                     === installedProgram()?.value.deliverySerial,
-            "the all-1144 modulation program acknowledgement",
+            "the all-1288 modulation program acknowledgement",
         );
 
         const parsedState = modulation.parseModulationState(serializedState);
         assert.equal(parsedState._tag, "ok");
-        assert.equal(parsedState.value.routes.length, 1144);
+        assert.equal(parsedState.value.routes.length, 1288);
         assert.deepEqual(connection.protocolFailures, []);
 
         const programEvent = installedProgram();

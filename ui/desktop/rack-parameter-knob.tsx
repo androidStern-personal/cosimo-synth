@@ -35,7 +35,10 @@ import { BYPASSED_GREY as KNOB_BYPASSED_GREY, type ParameterKnobModRing } from "
 import type { PatchControlBinding } from "../shared/patch-controls";
 import { useParameterMenu } from "../shared/parameter-context-menu";
 import type { ParameterEntrySpec } from "../shared/parameter-value-entry";
-import { findRackModulationSource } from "../shared/rack-modulation-sources";
+import {
+    findRackModulationSource,
+    rackModulationSourceShortIdentity,
+} from "../shared/rack-modulation-sources";
 import {
     formatRackParameterValue,
     type RackParameterDescriptor,
@@ -526,7 +529,7 @@ function ParameterKnobSurface({
             ? findRackModulationSource(route.sourceKind, route.sourceSlot)
             : null;
         const sourceLine = route !== null && sourceIdentity !== null
-            ? `${sourceIdentity.shortLabel} ${route.sourceSlot ?? ""}`.trim()
+            ? rackModulationSourceShortIdentity(sourceIdentity)
                 + ` · ${formatModulationAmountReadout(targetKind, modulationAmount, route.polarity)}`
             : "";
         const modRing: ParameterKnobModRing = !enableModulationGesture || !sourceIsSelected

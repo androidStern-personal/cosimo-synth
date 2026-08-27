@@ -230,6 +230,9 @@ async function createSamplerPerformer(CmajorClass, sessionID) {
     await performer.initialise(sessionID, sampleRate);
     performer.setInputValue_sourceMode(1, 0);
     performer.setInputValue_filterMode(0, 0);
+    performer.setInputValue_ampAttack(0.01, 0);
+    performer.setInputValue_ampDecay(0.001, 0);
+    performer.setInputValue_ampSustain(1, 0);
     performer.setInputValue_ampRelease(0.2, 0);
     performer.advance(8);
     return performer;
@@ -287,6 +290,9 @@ function renderOscillatorRegression(performer, sessionID) {
     performer.setInputValue_oscBVolumeDb(-48, 0);
     performer.setInputValue_oscCVolumeDb(-48, 0);
     performer.setInputValue_filterMode(0, 0);
+    performer.setInputValue_ampAttack(0.01, 0);
+    performer.setInputValue_ampDecay(0.001, 0);
+    performer.setInputValue_ampSustain(1, 0);
     performer.setInputValue_ampRelease(0.2, 0);
     noteOn(performer, 60, 100);
     const held = renderFrames(performer, 12_000);
@@ -307,6 +313,9 @@ async function measureOscillatorGlobalTune(CmajorClass, oscillatorIndex, session
     await performer.initialise(sessionID, sampleRate);
     performer.setInputValue_sourceMode(0, 0);
     performer.setInputValue_filterMode(0, 0);
+    performer.setInputValue_ampAttack(0.01, 0);
+    performer.setInputValue_ampDecay(0.001, 0);
+    performer.setInputValue_ampSustain(1, 0);
     performer.setInputValue_ampRelease(0.005, 0);
     performer[`setInputValue_osc${oscillatorID}Solo`](1, 0);
     performer[`setInputValue_osc${oscillatorID}VolumeDb`](0, 0);
@@ -334,13 +343,13 @@ async function measureOscillatorGlobalTune(CmajorClass, oscillatorIndex, session
     return { oscillatorID, neutralHz, afterPrivateNeighbourTuneHz, globalOctaveHz };
 }
 
-test("Source Mode and Global Tune are append-only and neutral tune retains the M1 render bit-for-bit", async () => {
+test("Source Mode, Global Tune, and Amp ADSR are append-only while legacy defaults retain the M1 render bit-for-bit", async () => {
     const CmajorClass = await loadGeneratedClass();
     const parameterEndpoints = CmajorClass.prototype.getInputEndpoints()
         .filter(({ purpose }) => purpose === "parameter");
     assert.deepEqual(
-        parameterEndpoints.slice(-4).map(({ endpointID }) => endpointID),
-        ["filterMix", "ampRelease", "sourceMode", "globalTune"],
+        parameterEndpoints.slice(-7).map(({ endpointID }) => endpointID),
+        ["filterMix", "ampRelease", "sourceMode", "globalTune", "ampAttack", "ampDecay", "ampSustain"],
     );
     const endpoint = parameterEndpoints.find(({ endpointID }) => endpointID === "sourceMode");
     assert.ok(endpoint);
@@ -431,7 +440,7 @@ test("staging is silent until commit and an aborted replacement preserves the ac
     assert.equal(stateAfterAbort.hasStaging, 0);
 });
 
-test("root playback matches captured PCM within one i16 step and restores the 0.18 trim", async () => {
+test("root playback preserves captured PCM level through the shared live Amp Envelope", async () => {
     const CmajorClass = await loadGeneratedClass();
     const sessionID = 42_203;
     const performer = await createSamplerPerformer(CmajorClass, sessionID);
@@ -447,7 +456,10 @@ test("root playback matches captured PCM within one i16 step and restores the 0.
     installBank(performer, sessionID, 1, buildUpload([{ note: 60, samples: source }]));
     noteOn(performer, 60, captureVelocity);
     const rendered = renderFrames(performer, frameCount);
-    const tolerance = (1 / 32_768) + 1e-7;
+    // The shared legacy envelope's exponential attack can settle fractionally above its
+    // nominal velocity. Bounce deliberately keeps that same per-note behavior instead of
+    // restoring its former private velocity clamp.
+    const tolerance = (3 / 32_768) + 1e-7;
     let maximumDifference = 0;
     for (let frame = 800; frame < frameCount - 2; frame += 1) {
         for (let channelIndex = 0; channelIndex < 2; channelIndex += 1) {
@@ -462,7 +474,10 @@ test("root playback matches captured PCM within one i16 step and restores the 0.
 
     const expectedRms = rms(Float32Array.from(source.subarray(1_000 * 2, 3_000 * 2), (x) => x / 32_768));
     const actualRms = rms(rendered.subarray(1_000 * 2, 3_000 * 2));
-    assert.ok(Math.abs(actualRms / expectedRms - 1) < 0.001, "makeup must cancel the 0.18 trim");
+    assert.ok(
+        Math.abs(actualRms / expectedRms - 1) < 0.005,
+        "the shared Amp Envelope must keep the captured root level audibly equivalent",
+    );
     assert.ok(Math.abs(actualRms / expectedRms - 0.18) > 0.5, "the unmade-up level must be impossible");
 });
 
@@ -541,7 +556,102 @@ test("live velocity scales loudness and early note-off follows Amp Release", asy
     assert.equal(rms(released.subarray(5_000)), 0, "the early release must reach silence");
 });
 
-test("a release at the bank's baked note-off is not applied a second time", async () => {
+test("Bounce follows the complete live Attack, Decay, Sustain, and Release contour", async () => {
+    const CmajorClass = await loadGeneratedClass();
+    const sessionID = 42_216;
+    const performer = await createSamplerPerformer(CmajorClass, sessionID);
+    installBank(performer, sessionID, 1, buildUpload([{
+        note: 60,
+        samples: makeConstantStereo(12_000, 0.02, 0.02),
+    }]));
+    performer.setInputValue_ampAttack(0.02, 0);
+    performer.setInputValue_ampDecay(0.02, 0);
+    performer.setInputValue_ampSustain(0.25, 0);
+    performer.setInputValue_ampRelease(0.02, 0);
+    performer.advance(4);
+
+    noteOn(performer, 60, captureVelocity);
+    const held = channel(renderFrames(performer, 4_000), 0);
+    const attackStart = meanAbsolute(held.subarray(0, 200));
+    const attackPeak = meanAbsolute(held.subarray(900, 1_000));
+    const sustain = meanAbsolute(held.subarray(2_500, 3_500));
+    assert.ok(attackPeak > 0.015, `attack peak was ${attackPeak}`);
+    assert.ok(attackStart < attackPeak * 0.4, `attack began at ${attackStart} for peak ${attackPeak}`);
+    assert.ok(Math.abs((sustain / attackPeak) - 0.25) < 0.04,
+        `sustain/peak ratio was ${sustain / attackPeak}`);
+
+    noteOff(performer, 60);
+    const released = channel(renderFrames(performer, 2_000), 0);
+    assert.ok(rms(released.subarray(0, 200)) > 1e-5, "release must begin from Sustain");
+    assert.equal(rms(released.subarray(1_500)), 0, "release must reach silence");
+});
+
+test("Mono retriggers the Amp Envelope while connected Legato notes preserve its progress", async () => {
+    const CmajorClass = await loadGeneratedClass();
+
+    async function renderConnectedNote(mode, sessionID) {
+        const performer = await createSamplerPerformer(CmajorClass, sessionID);
+        performer.setInputValue_playMode(mode, 0);
+        performer.setInputValue_ampAttack(0.1, 0);
+        performer.advance(8);
+        installBank(performer, sessionID, 1, buildUpload([{
+            note: 60,
+            samples: makeConstantStereo(16_000, 0.02, 0.02),
+        }]));
+        noteOn(performer, 60, captureVelocity);
+        renderFrames(performer, 6_000);
+        noteOn(performer, 64, captureVelocity);
+        return meanAbsolute(channel(renderFrames(performer, 240), 0));
+    }
+
+    const monoConnectedLevel = await renderConnectedNote(1, 42_217);
+    const legatoConnectedLevel = await renderConnectedNote(2, 42_218);
+    assert.ok(legatoConnectedLevel > 0.015, `Legato level was ${legatoConnectedLevel}`);
+    assert.ok(monoConnectedLevel < legatoConnectedLevel * 0.35,
+        `Mono ${monoConnectedLevel} should restart below Legato ${legatoConnectedLevel}`);
+});
+
+test("polyphonic voice stealing replaces the oldest tail and restarts that voice's Amp Envelope", async () => {
+    const CmajorClass = await loadGeneratedClass();
+    const sessionID = 42_219;
+    const performer = await createSamplerPerformer(CmajorClass, sessionID);
+    performer.setInputValue_ampAttack(0.05, 0);
+    performer.advance(4);
+
+    const roots = [];
+    for (let note = 48; note <= 64; note += 1) {
+        const isOldest = note === 48;
+        const isStealingNote = note === 64;
+        roots.push({
+            note,
+            samples: makeConstantStereo(
+                8_000,
+                isOldest ? 0.02 : 0,
+                isStealingNote ? 0.02 : 0,
+            ),
+        });
+    }
+    installBank(performer, sessionID, 1, buildUpload(roots));
+
+    for (let note = 48; note < 64; note += 1) noteOn(performer, note, captureVelocity);
+    const beforeSteal = renderFrames(performer, 3_000);
+    assert.ok(meanAbsolute(channel(beforeSteal, 0).subarray(2_500)) > 0.015,
+        "the oldest voice must be audible before stealing");
+    assert.equal(meanAbsolute(channel(beforeSteal, 1).subarray(2_500)), 0);
+
+    noteOn(performer, 64, captureVelocity);
+    const stealStart = renderFrames(performer, 240);
+    assert.equal(meanAbsolute(channel(stealStart, 0)), 0,
+        "stealing must remove the oldest voice instead of leaving its tail summed");
+    const restartedRight = meanAbsolute(channel(stealStart, 1));
+    const stealSettled = renderFrames(performer, 3_000);
+    const settledRight = meanAbsolute(channel(stealSettled, 1).subarray(2_500));
+    assert.ok(restartedRight < settledRight * 0.35,
+        `stolen voice began at ${restartedRight} instead of restarting below ${settledRight}`);
+    assert.ok(settledRight > 0.015, `stolen voice settled at ${settledRight}`);
+});
+
+test("Bounce metadata never bypasses the live complete Amp Envelope", async () => {
     const CmajorClass = await loadGeneratedClass();
     const sessionID = 42_207;
     const performer = await createSamplerPerformer(CmajorClass, sessionID);
@@ -556,8 +666,8 @@ test("a release at the bank's baked note-off is not applied a second time", asyn
     renderFrames(performer, 3_000);
     noteOff(performer, 60);
     const afterBakedNoteOff = channel(renderFrames(performer, 2_000), 0);
-    assert.ok(rms(afterBakedNoteOff.subarray(1_000)) > 0.015,
-        "already-baked release audio must survive the fresh gate");
+    assert.equal(rms(afterBakedNoteOff.subarray(1_000)), 0,
+        "the fresh Amp release must own Bounce loudness even after its baked note-off marker");
 });
 
 test("source swaps and note boundaries stay below the committed click ceiling", async (t) => {

@@ -59,7 +59,7 @@ const chromiumLaunchOptions = isLinuxHeadless
 
 const stressSources = [
     ["mseg", 1], ["mseg", 2], ["mseg", 3],
-    ["env", 1], ["env", 2], ["env", 3],
+    ["env", 1], ["env", 2], ["env", 3], ["env", 4],
     ["velocity", null], ["pressure", null], ["slide", null],
     ["macro", 1], ["macro", 2], ["macro", 3], ["macro", 4],
 ];
@@ -70,7 +70,7 @@ const targetIdByModulationKind = new Map(allTargetDescriptors().flatMap((descrip
 )));
 
 function productSourceId(sourceKind, sourceSlot) {
-    if (sourceKind === "env") return `envelope-${sourceSlot}`;
+    if (sourceKind === "env") return sourceSlot === 4 ? "amp-envelope" : `envelope-${sourceSlot}`;
     if (sourceKind === "mseg" || sourceKind === "macro") return `${sourceKind}-${sourceSlot}`;
     return sourceKind;
 }
@@ -183,9 +183,9 @@ const matrixVoiceRackHundredProgram = compileModulationRuntimeProgram(matrixBenc
 const matrixMixedHundredProgram = compileModulationRuntimeProgram(matrixBenchmarkState("mixed-100").routes);
 const matrixCombinedTwoHundredProgram = compileModulationRuntimeProgram(matrixBenchmarkState("combined-200").routes);
 const matrixStoredFullDomainHundredProgram = compileModulationRuntimeProgram(
-    matrixBenchmarkState("stored-1144-active-100").routes,
+    matrixBenchmarkState("stored-1288-active-100").routes,
 );
-const matrixActiveFullDomainProgram = compileModulationRuntimeProgram(matrixBenchmarkState("active-1144").routes);
+const matrixActiveFullDomainProgram = compileModulationRuntimeProgram(matrixBenchmarkState("active-1288").routes);
 const macroRackDistortionWetProgram = compileModulationRuntimeProgram([{
     ...requireStressRoute("macro", 1, "lane.distortion#1.distortionWet"),
     enabled: true,
@@ -1906,7 +1906,7 @@ test("lane slot-param edits stream at drag rate with serial acknowledgment and n
     }
 });
 
-test("16 sounding voices sustain 100 mappings, isolated live edits, and the full 1144-cell domain", {
+test("16 sounding voices sustain 100 mappings, isolated live edits, and the full 1288-cell domain", {
     skip: qualifiesRealtimeAudio
         ? false
         : "Linux headless has no realtime audio output; set COSIMO_WEB_REALTIME_AUDIO=1 when one is available.",
@@ -1916,7 +1916,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
     const pageFailures = observePageFailures(page);
 
     try {
-        assert.equal(allStressRoutes.length, 1144);
+        assert.equal(allStressRoutes.length, 1288);
         assert.deepEqual([
             mixedHundredRouteProgram.voiceRouteCount,
             mixedHundredRouteProgram.macroVoiceRouteCount,
@@ -1925,8 +1925,8 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
         ], [30, 20, 30, 20]);
         assert.equal(hundredVoiceRouteProgram.voiceRouteCount, 100);
         assert.equal(hundredVoiceTailSentinelProgram.voiceRouteCount, 100);
-        assert.equal(hundredVoiceTailSentinelProgram.voiceRouteCells[99], 439);
-        assert.equal(hundredVoiceTailSentinelProgram.voiceRouteAmounts[439], 10);
+        assert.equal(hundredVoiceTailSentinelProgram.voiceRouteCells[99], 479);
+        assert.equal(hundredVoiceTailSentinelProgram.voiceRouteAmounts[479], 10);
         assert.equal(hundredVoiceRackRouteProgram.voiceRackRouteCount, 100);
         assert.deepEqual([
             matrixVoiceHundredProgram.voiceRouteCount,
@@ -1963,7 +1963,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             matrixActiveFullDomainProgram.macroVoiceRouteCount,
             matrixActiveFullDomainProgram.voiceRackRouteCount,
             matrixActiveFullDomainProgram.macroRackRouteCount,
-        ], [468, 208, 324, 144]);
+        ], [560, 224, 360, 144]);
         assert.deepEqual([
             disabledAllMappingProgram.voiceRouteCount,
             disabledAllMappingProgram.macroVoiceRouteCount,
@@ -1975,7 +1975,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             ...disabledAllMappingProgram.macroVoiceRouteAmounts,
             ...disabledAllMappingProgram.voiceRackRouteAmounts,
             ...disabledAllMappingProgram.macroRackRouteAmounts,
-        ].filter((amount) => amount !== 0).length, 1144);
+        ].filter((amount) => amount !== 0).length, 1288);
         await page.goto(`${baseUrl}?test=1&runtime-owner=host`, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
@@ -2072,7 +2072,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
         }, null, { timeout: 5_000 });
         await sendAcceptedModulationEvent(page, "modulationAmount", {
             pathKind: 1,
-            cellIndex: 439,
+            cellIndex: 479,
             amount: 0,
         });
         await page.waitForFunction(() => {

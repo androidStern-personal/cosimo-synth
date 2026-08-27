@@ -741,6 +741,245 @@ test("the quick sheet's Full editor opens the exact Envelope and Macro slots wit
     }
 });
 
+test("Amp Envelope keeps its exact quick-sheet identity and 5 ms desktop Release floor", async () => {
+    const routeId = "amp-envelope-quick-sheet-route";
+    const seededState = normalizeModulationState({
+        routes: [
+            {
+                id: routeId,
+                enabled: true,
+                sourceKind: "env",
+                sourceSlot: 4,
+                polarity: "unipolar",
+                targetKind: "ampAttack",
+                amount: 0.25,
+                reducer: "max",
+            },
+            {
+                id: "amp-envelope-rack-hud-route",
+                enabled: true,
+                sourceKind: "env",
+                sourceSlot: 4,
+                polarity: "unipolar",
+                targetKind: "lane.reverb#1.reverbSize",
+                amount: 0.2,
+                reducer: "max",
+            },
+        ],
+    });
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const sheet = page.locator('[data-role="quick-source-sheet"]');
+    const menu = page.locator('[data-role="rack-parameter-menu"]');
+    const longPress = async (locator) => {
+        const box = await locator.boundingBox();
+        assert.ok(box);
+        await page.mouse.move(box.x + (box.width / 2), box.y + (box.height / 2));
+        await page.mouse.down();
+        await menu.waitFor({ state: "visible", timeout: 10000 });
+        await page.mouse.up();
+    };
+    const writesValue = (snapshot, endpointID, expected) => snapshot.sentMessages.some(({ endpointID: sentEndpointID, value }) => (
+        sentEndpointID === endpointID && Math.abs(Number(value) - expected) <= 1e-9
+    ));
+
+    try {
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
+        }, seededState);
+        await waitForHarnessSnapshot(
+            page,
+            "seeded Amp Envelope quick-sheet route",
+            (snapshot) => readStoredModulationState(snapshot).routes.some((route) => route.id === routeId),
+        );
+
+        // Arm the permanent Amp Envelope from the real Mod source selector,
+        // return to FX, then open its Voice/FX quick sheet from the collapsed
+        // source rail. This is the product path that previously fabricated
+        // an ordinary fourth envelope.
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.locator('[data-role="mobile-mod-source-type"]').selectOption("envelope");
+        await page.locator('[data-role="mobile-mod-source-number"]').selectOption("4");
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-global-mod-rail-selected"]')
+                ?.getAttribute("aria-label") === "Amp Envelope selected"
+        ));
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await collapseGlobalModRail(page);
+
+        // The rack knob owns the other parameter-HUD path. It must use the
+        // same unnumbered Amp identity for an ordinary Amp-source mapping.
+        await selectRackEffect(page, "reverb");
+        const rackKnob = page.locator('[data-role="rack-parameter-reverbSize"]');
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-parameter-reverbSize"]')?.getAttribute("data-route-state") === "mapped"
+        ), undefined, { timeout: 5000 });
+        await clearHarnessDebugLog(page);
+        const rackArtBox = await rackKnob.locator(".rack-knob-art").boundingBox();
+        assert.ok(rackArtBox);
+        const rackCenterX = rackArtBox.x + (rackArtBox.width / 2);
+        const rackCenterY = rackArtBox.y + (rackArtBox.height / 2);
+        await page.mouse.move(rackCenterX, rackCenterY);
+        await page.mouse.down();
+        await page.mouse.move(rackCenterX, rackCenterY - 38, { steps: 8 });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-voice-hud"]')?.getAttribute("data-hud-axis") === "modulation"
+        ), undefined, { timeout: 5000 });
+        let sourceLine = await page.locator('[data-role="mobile-voice-hud"] .mobile-voice-hud-source').innerText();
+        assert.match(sourceLine, /^AMP\b/);
+        assert.doesNotMatch(sourceLine, /AMP\s*4|Envelope\s*4/i);
+        await page.mouse.up();
+
+        await page.click('[data-role="mobile-global-mod-rail-selected"]');
+        await sheet.waitFor();
+
+        assert.equal(await sheet.getAttribute("data-source-kind"), "env");
+        assert.equal(await sheet.getAttribute("data-source-slot"), "4");
+        assert.equal(await sheet.getAttribute("aria-label"), "Amp Envelope quick editor");
+        assert.doesNotMatch(await sheet.innerText(), /Envelope\s*4|AMP\s*4/i);
+
+        const stageCells = [
+            ["attack", "ampAttack", "Amp Envelope attack", "0.001"],
+            ["decay", "ampDecay", "Amp Envelope decay", "0.001"],
+            ["sustain", "ampSustain", "Amp Envelope sustain", "0"],
+            ["release", "ampRelease", "Amp Envelope release", "0.005"],
+        ];
+        for (const [stage, targetKind, label, minimum] of stageCells) {
+            const cell = sheet.locator(`[data-role="quick-source-sheet-cell-${stage}"]`);
+            assert.equal(await cell.getAttribute("data-modulation-target-kind"), targetKind);
+            assert.equal(await cell.getAttribute("aria-label"), label);
+            assert.equal(await cell.getAttribute("aria-valuemin"), minimum);
+        }
+
+        // Long-press context belongs to the actual endpoint and finds the
+        // ordinary user route from Amp Envelope independently of its fixed
+        // amplitude job.
+        const attackCell = sheet.locator('[data-role="quick-source-sheet-cell-attack"]');
+        await longPress(attackCell);
+        assert.equal(await menu.getAttribute("data-endpoint-id"), "ampAttack");
+        assert.equal(
+            await menu.locator('[data-action="toggle-route"]').count(),
+            1,
+            "The Amp route must be found through env slot 4 + ampAttack context.",
+        );
+        await page.locator('[data-role="rack-parameter-menu-layer"]').click({ position: { x: 4, y: 4 } });
+        await menu.waitFor({ state: "detached" });
+
+        // Every quick cell writes the real append-only host endpoint. Home is
+        // also the accessibility proof that Amp Release floors at 5 ms.
+        await clearHarnessDebugLog(page);
+        await attackCell.press("Home");
+        await sheet.locator('[data-role="quick-source-sheet-cell-decay"]').press("End");
+        await sheet.locator('[data-role="quick-source-sheet-cell-sustain"]').press("Home");
+        await sheet.locator('[data-role="quick-source-sheet-cell-release"]').press("Home");
+        let snapshot = await waitForHarnessSnapshot(page, "Amp Envelope quick-sheet host writes", (nextSnapshot) => (
+            writesValue(nextSnapshot, "ampAttack", 0.001)
+                && writesValue(nextSnapshot, "ampDecay", 10)
+                && writesValue(nextSnapshot, "ampSustain", 0)
+                && writesValue(nextSnapshot, "ampRelease", 0.005)
+        ));
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => /^env4/.test(endpointID)), false);
+
+        // The mapped-cell HUD uses the same env/slot-4 route identity, while
+        // its presentation must call the source AMP without exposing a fake
+        // numbered envelope.
+        const attackBox = await attackCell.boundingBox();
+        assert.ok(attackBox);
+        const attackCenterX = attackBox.x + (attackBox.width / 2);
+        const attackCenterY = attackBox.y + (attackBox.height / 2);
+        await page.mouse.move(attackCenterX, attackCenterY);
+        await page.mouse.down();
+        await page.mouse.move(attackCenterX, attackCenterY - 6);
+        await page.mouse.move(attackCenterX, attackCenterY - 58, { steps: 8 });
+        const hud = page.locator('[data-role="mobile-voice-hud"]');
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-voice-hud"]')?.getAttribute("data-hud-axis") === "modulation"
+        ));
+        sourceLine = await hud.locator(".mobile-voice-hud-source").innerText();
+        assert.match(sourceLine, /^AMP\b/);
+        assert.doesNotMatch(sourceLine, /AMP\s*4|Envelope\s*4/i);
+        await page.mouse.up();
+        snapshot = await waitForHarnessSnapshot(page, "Amp Envelope quick-sheet route amount", (nextSnapshot) => (
+            Math.abs(readStoredModulationState(nextSnapshot).routes.find((route) => route.id === routeId)?.amount ?? 0.25) > 0.251
+        ));
+        assert.deepEqual(
+            (({ sourceKind, sourceSlot, targetKind }) => ({ sourceKind, sourceSlot, targetKind }))(
+                readStoredModulationState(snapshot).routes.find((route) => route.id === routeId),
+            ),
+            { sourceKind: "env", sourceSlot: 4, targetKind: "ampAttack" },
+        );
+
+        // Full editor handoff keeps the Amp identity. Its exact-entry and
+        // draggable Release controls both share the 5 ms floor, while Env 1
+        // retains the established 1 ms floor.
+        await page.click('[data-role="quick-source-sheet-full-editor"]');
+        const editor = page.locator('[data-role="mod-source-editor"]');
+        await editor.waitFor({ state: "attached" });
+        assert.equal(await editor.getAttribute("data-source-kind"), "env");
+        assert.equal(await editor.getAttribute("data-source-slot"), "4");
+        assert.doesNotMatch(await page.locator('[data-role="mobile-workspace-panel-mod"]').innerText(), /Envelope\s*4|AMP\s*4/i);
+
+        let releaseInput = page.locator('input[aria-label="Envelope release value"]:visible');
+        await clearHarnessDebugLog(page);
+        await releaseInput.focus();
+        await releaseInput.fill("1 ms");
+        await releaseInput.blur();
+        snapshot = await waitForHarnessSnapshot(page, "Amp Envelope exact Release floor", (nextSnapshot) => (
+            writesValue(nextSnapshot, "ampRelease", 0.005)
+        ));
+        assert.equal(snapshot.sentMessages.some(({ endpointID, value }) => (
+            endpointID === "ampRelease" && Number(value) < 0.005
+        )), false);
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("ampRelease", 0.2, true);
+        });
+        await page.waitForFunction(() => Math.abs(Number(
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.ampRelease,
+        ) - 0.2) <= 1e-9);
+        await clearHarnessDebugLog(page);
+        await dragEnvelopeHandleBy(page, "adsr-release-handle-hit-target", -1000, 0);
+        snapshot = await waitForHarnessSnapshot(page, "Amp Envelope dragged Release floor", (nextSnapshot) => (
+            writesValue(nextSnapshot, "ampRelease", 0.005)
+        ));
+        assert.equal(snapshot.sentMessages.some(({ endpointID, value }) => (
+            endpointID === "ampRelease" && Number(value) < 0.005
+        )), false);
+
+        await page.locator('[data-role="mobile-mod-source-number"]').selectOption("1");
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("env1Release", 0.2, true);
+        });
+        await page.waitForFunction(() => Math.abs(Number(
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.env1Release,
+        ) - 0.2) <= 1e-9);
+        releaseInput = page.locator('input[aria-label="Envelope release value"]:visible');
+        await clearHarnessDebugLog(page);
+        await releaseInput.focus();
+        await releaseInput.fill("1 ms");
+        await releaseInput.blur();
+        snapshot = await waitForHarnessSnapshot(page, "ordinary Envelope exact Release floor", (nextSnapshot) => (
+            writesValue(nextSnapshot, "env1Release", 0.001)
+        ));
+        assert.equal(snapshot.parameterValues.env1Release, 0.001);
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("env1Release", 0.2, true);
+        });
+        await page.waitForFunction(() => Math.abs(Number(
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.env1Release,
+        ) - 0.2) <= 1e-9);
+        await clearHarnessDebugLog(page);
+        await dragEnvelopeHandleBy(page, "adsr-release-handle-hit-target", -1000, 0);
+        await waitForHarnessSnapshot(page, "ordinary Envelope dragged Release floor", (nextSnapshot) => (
+            writesValue(nextSnapshot, "env1Release", 0.001)
+        ));
+    } finally {
+        await page.close();
+    }
+});
+
 test("rack continuous parameters use the approved stippled dual-ring knobs instead of native ranges", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
@@ -2129,7 +2368,7 @@ test("mobile Mod selector drives the attached editor and stays contained at iPho
         await page.waitForFunction(() => (
             document.querySelector('[data-role="mod-source-editor"]')?.getAttribute("data-source-kind") === "env"
         ));
-        assert.deepEqual(await numberSelect.locator("option").allTextContents(), ["1", "2", "3"]);
+        assert.deepEqual(await numberSelect.locator("option").allTextContents(), ["1", "2", "3", "Amp"]);
         const envelopeSurface = frame.locator('[data-role="adsr-editor-surface"]');
         assert.equal(await envelopeSurface.count(), 1);
         assert.equal(await envelopeSurface.getAttribute("preserveAspectRatio"), "none");
@@ -2138,6 +2377,9 @@ test("mobile Mod selector drives the attached editor and stays contained at iPho
             ["Attack", "Decay", "Sustain", "Release"],
         );
         assert.equal(await frame.getByLabel("Envelope sustain value").inputValue(), "50%");
+        await numberSelect.selectOption("4");
+        assert.equal(await editorState.getAttribute("data-source-slot"), "4");
+        assert.equal(await frame.getByLabel("Envelope sustain value").inputValue(), "100%");
         await numberSelect.selectOption("3");
         assert.equal(await editorState.getAttribute("data-source-slot"), "3");
 

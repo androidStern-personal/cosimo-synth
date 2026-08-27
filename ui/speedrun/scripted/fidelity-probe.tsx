@@ -217,7 +217,7 @@ function seedTelemetry(patchConnection: MockPatchConnection) {
     patchConnection.emitEffectiveUnisonState({ voices: 5, detune: 0.31, width: 0.82 });
     patchConnection.emitEffectiveFilterState({ mode: 1, cutoffHz: 2_600, q: 2.2 });
     patchConnection.emitEffectiveMsegState({ positions: [0.22, 0.57, 0.81] });
-    patchConnection.emitEffectiveModSourceState({ values: [0.3, 0.7, 0.45, 0.2, 0.8, 0.1, 0.65, 0.4, 0.9] });
+    patchConnection.emitEffectiveModSourceState({ values: [0.3, 0.7, 0.45, 0.2, 0.8, 0.1, 0.65, 0.4, 0.9, 0.6] });
     patchConnection.emitFilterSpectrum({
         magnitudes: Array.from({ length: 96 }, (_, index) => -78 + (34 * Math.sin((index / 95) * Math.PI) ** 2)),
     });

@@ -5,13 +5,36 @@ export type RackModulationSourceKind = Extract<ModulationSourceKind, "mseg" | "e
 
 export type RackModulationSource = {
     readonly sourceKind: RackModulationSourceKind;
-    readonly sourceSlot: 1 | 2 | 3;
+    readonly sourceSlot: 1 | 2 | 3 | 4;
     readonly label: string;
     readonly shortLabel: string;
     readonly iconUrl: string;
     readonly identityIconUrl: string;
     readonly accent: string;
 };
+
+type RackModulationSourceAddress = {
+    readonly sourceKind: string;
+    readonly sourceSlot: number | null;
+};
+type RackModulationSourceShortIdentity = RackModulationSourceAddress & { readonly shortLabel: string };
+
+function isAmpEnvelopeRackModulationSource(source: RackModulationSourceAddress): boolean {
+    return source.sourceKind === "env" && source.sourceSlot === 4;
+}
+
+/** The art badge is a slot number for numbered sources and AMP for the permanent envelope. */
+export function rackModulationSourceBadgeLabel(source: RackModulationSourceAddress): string {
+    return isAmpEnvelopeRackModulationSource(source) ? "AMP" : String(source.sourceSlot ?? "");
+}
+
+/** Compact HUD identity without inventing a numbered fourth envelope. */
+export function rackModulationSourceShortIdentity(source: RackModulationSourceShortIdentity): string {
+    if (isAmpEnvelopeRackModulationSource(source) || source.sourceSlot === null) {
+        return source.shortLabel;
+    }
+    return `${source.shortLabel} ${source.sourceSlot}`;
+}
 
 type SourceFamily = {
     readonly sourceKind: RackModulationSourceKind;
@@ -70,9 +93,24 @@ export function findRackModulationSource(
         (candidate) => candidate.sourceKind === sourceKind,
     );
 
-    if (source === undefined) {
-        throw new Error(`Unknown rack modulation source: ${sourceKind} ${sourceSlot}`);
+    if (source !== undefined) {
+        return source;
     }
 
-    return source;
+    if (sourceSlot === 4 && sourceKind === "env") {
+        const family = SOURCE_FAMILIES.find((candidate) => candidate.sourceKind === "env");
+        if (family !== undefined) {
+            return {
+                sourceKind,
+                sourceSlot,
+                label: "Amp Envelope",
+                shortLabel: "AMP",
+                iconUrl: family.iconUrl,
+                identityIconUrl: family.identityIconUrl,
+                accent: family.accent,
+            };
+        }
+    }
+
+    throw new Error(`Unknown rack modulation source: ${sourceKind} ${sourceSlot}`);
 }

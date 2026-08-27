@@ -399,6 +399,9 @@ function voiceAmountSpec(
         case "env3Attack":
         case "env3Decay":
         case "env3Release":
+        case "ampAttack":
+        case "ampDecay":
+        case "ampRelease":
             return amountSpec({ ...bounds, defaultUnit: "s", canonicalPerDisplayedUnit: 1, digits: 3, percentMeaning: "depth", baseValue: null, physicalIntervalUnit: null });
         case "pan":
             return { _tag: "pan", ...bounds, defaultUnit: "%" };
@@ -416,6 +419,7 @@ function voiceAmountSpec(
         case "env1Sustain":
         case "env2Sustain":
         case "env3Sustain":
+        case "ampSustain":
             return nativePercentAmount(bounds.min, bounds.max, bounds.step, 0.01);
     }
 }

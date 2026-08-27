@@ -50,16 +50,18 @@ namespace wt
     let packedWavetableChunkCount = 4;
     let modulationMsegSlotCount = 3;
     let modulationEnvSlotCount = 3;
-    let modulationVoiceSourceCount = 9;
+    // Existing source indexes are frozen. The Amp Envelope is append-only at
+    // index 9 so stored modulation.v6 programs keep their exact meaning.
+    let modulationVoiceSourceCount = 10;
     let modulationMacroSourceCount = 4;
     // Runtime order matches ui/shared/modulation-targets.ts: ten local targets
     // for each oscillator, the two established shared filter targets, the
-    // continuous MSEG/envelope controls, then append-only Filter Mix and
-    // Global Tune.
+    // continuous MSEG/envelope controls, append-only Filter Mix and Global
+    // Tune, then the complete Amp Envelope controls.
     let modulationOscillatorTargetCount = 10;
-    let modulationVoiceTargetCount = (oscillatorCount * modulationOscillatorTargetCount) + 22;
+    let modulationVoiceTargetCount = (oscillatorCount * modulationOscillatorTargetCount) + 26;
     // Keep the established 32-wide SIMD block intact and place appended
-    // destinations in a second padded SIMD block. A single 52-wide
+    // destinations in a second padded SIMD block. A single 56-wide
     // vector scalarises in the pinned browser backend and cannot meet the
     // production AudioWorklet deadline.
     let modulationVoiceCoreLaneCount = 32;
@@ -96,7 +98,7 @@ namespace wt
     // 68KB, and cmaj::Patch's native performer event FIFO is a fixed 64KB —
     // the event could never be delivered on the native (iPhone) transport.
     // The budget covers the ENTIRE 36-target static domain active at once
-    // (the shipping 1,144-route stress contract needs 324 voice-rack and 144
+    // (the shipping 1,288-route stress contract needs 360 voice-rack and 144
     // macro-rack routes) with lane-pool routes on top. The per-CELL amount
     // tables keep the full cell space: cell indexes, live amount edits and
     // the reducer vocabulary are untouched by this budget.
@@ -207,6 +209,10 @@ namespace wt
     let modulationTargetEnv3Release = modulationTargetEnv3Sustain + 1;
     let modulationTargetFilterMix = modulationTargetEnv3Release + 1;
     let modulationTargetGlobalTuneSemitones = modulationTargetFilterMix + 1;
+    let modulationTargetAmpAttack = modulationTargetGlobalTuneSemitones + 1;
+    let modulationTargetAmpDecay = modulationTargetAmpAttack + 1;
+    let modulationTargetAmpSustain = modulationTargetAmpDecay + 1;
+    let modulationTargetAmpRelease = modulationTargetAmpSustain + 1;
     let articulationSlotCount = 128;
     let articulationSelectorNone = -1;
     // Frozen Cmajor/native address book for the 16-note, three-oscillator
@@ -1246,6 +1252,177 @@ namespace wt
         }
     }
 
+    // Per-note loudness ADSR. Its attack and release equations deliberately
+    // match RetriggerableASR: at A=10 ms, D=1 ms, S=1 the gain stream is
+    // sample-identical to every pre-T38 sound, including velocity response.
+    processor RetriggerableAmpAdsr
+    {
+        input event (std::notes::NoteOn,
+                     std::notes::NoteOff) eventIn;
+        input value float32 attackSecondsIn;
+        input value float32 decaySecondsIn;
+        input value float32 sustainIn;
+        input value float32 releaseSecondsIn;
+
+        output stream float32 gainOut;
+
+        float32 keyDownVelocity, envelopeVelocity, currentLevel;
+        float32 lastAttackSeconds = -1.0f;
+        float32 lastAttackVelocity = -1.0f;
+        float32 attackMultiplier = 0.0f;
+        float32 lastReleaseSeconds = -1.0f;
+        float32 releaseDecayFactor = 0.0f;
+        int32 noteOnSerial;
+
+        event eventIn (std::notes::NoteOn noteOn)
+        {
+            keyDownVelocity = noteOn.velocity;
+            envelopeVelocity = noteOn.velocity;
+            noteOnSerial += 1;
+        }
+
+        event eventIn (std::notes::NoteOff noteOff)
+        {
+            keyDownVelocity = 0.0f;
+        }
+
+        void emitCurrentLevel()
+        {
+            gainOut <- currentLevel;
+        }
+
+        float32 safeAttackSeconds()
+        {
+            return attackSecondsIn > 0.0f
+                ? std::intrinsics::max (0.001f, attackSecondsIn)
+                : 0.01f;
+        }
+
+        float32 safeDecaySeconds()
+        {
+            return decaySecondsIn > 0.0f
+                ? std::intrinsics::max (0.001f, decaySecondsIn)
+                : 0.001f;
+        }
+
+        float32 safeReleaseSeconds()
+        {
+            return releaseSecondsIn > 0.0f
+                ? std::intrinsics::max (0.005f, releaseSecondsIn)
+                : 0.2f;
+        }
+
+        void main()
+        {
+            int32 handledNoteOnSerial = 0;
+
+            loop
+            {
+                while (keyDownVelocity == 0.0f)
+                {
+                    let releaseSeconds = safeReleaseSeconds();
+                    if (releaseSeconds != lastReleaseSeconds)
+                    {
+                        lastReleaseSeconds = releaseSeconds;
+                        releaseDecayFactor = pow (
+                            0.0001f,
+                            float32 (processor.period) / releaseSeconds
+                        );
+                    }
+
+                    if (currentLevel > 0.0001f)
+                    {
+                        emitCurrentLevel();
+                        currentLevel *= releaseDecayFactor;
+                    }
+                    else
+                    {
+                        currentLevel = 0.0f;
+                        emitCurrentLevel();
+                    }
+
+                    advance();
+                }
+
+                handledNoteOnSerial = noteOnSerial;
+                currentLevel = 0.0f;
+
+                while (currentLevel < keyDownVelocity)
+                {
+                    let attackSeconds = safeAttackSeconds();
+                    if (attackSeconds != lastAttackSeconds
+                        || keyDownVelocity != lastAttackVelocity)
+                    {
+                        lastAttackSeconds = attackSeconds;
+                        lastAttackVelocity = keyDownVelocity;
+                        let attackFrameCount = std::intrinsics::max (
+                            1, int32 (attackSeconds * float32 (processor.frequency))
+                        );
+                        let attackExponent = 1.0f / attackFrameCount;
+                        attackMultiplier = 2.0f ** -attackExponent
+                                         * (2.0f + keyDownVelocity) ** attackExponent;
+                    }
+
+                    emitCurrentLevel();
+                    currentLevel = attackMultiplier * (currentLevel + 2.0f) - 2.0f;
+                    advance();
+
+                    if (keyDownVelocity == 0.0f)
+                        break;
+
+                    if (handledNoteOnSerial != noteOnSerial)
+                    {
+                        handledNoteOnSerial = noteOnSerial;
+                        currentLevel = 0.0f;
+                    }
+                }
+
+                if (handledNoteOnSerial != noteOnSerial)
+                    continue;
+
+                // Full sustain is the exact legacy hold representation. Skip
+                // its inaudible decay stage so the old ASR stream stays bit-for-bit.
+                let initialSustain = std::intrinsics::clamp (sustainIn, 0.0f, 1.0f);
+                if (keyDownVelocity != 0.0f && initialSustain < 1.0f)
+                {
+                    let decayStartLevel = currentLevel;
+                    float32 decayProgress = 0.0f;
+
+                    while (keyDownVelocity != 0.0f && decayProgress < 1.0f)
+                    {
+                        let sustainLevel = std::intrinsics::clamp (sustainIn, 0.0f, 1.0f);
+                        let decayTargetLevel = envelopeVelocity * sustainLevel;
+                        currentLevel = decayStartLevel
+                            + ((decayTargetLevel - decayStartLevel)
+                                * std::intrinsics::clamp (decayProgress, 0.0f, 1.0f));
+                        emitCurrentLevel();
+                        decayProgress += 1.0f
+                            / (safeDecaySeconds() * float32 (processor.frequency));
+                        advance();
+
+                        if (handledNoteOnSerial != noteOnSerial)
+                            break;
+                    }
+                }
+
+                if (handledNoteOnSerial != noteOnSerial)
+                    continue;
+
+                while (keyDownVelocity != 0.0f)
+                {
+                    let sustainLevel = std::intrinsics::clamp (sustainIn, 0.0f, 1.0f);
+                    if (sustainLevel < 1.0f)
+                        currentLevel = envelopeVelocity * sustainLevel;
+                    emitCurrentLevel();
+                    advance();
+
+                    if (handledNoteOnSerial != noteOnSerial)
+                        break;
+                }
+            }
+        }
+    }
+
     processor RetriggerableAdsr
     {
         input event (std::notes::NoteOn,
@@ -1408,6 +1585,9 @@ namespace wt
         input value float32 envelopeDecayIn[modulationEnvSlotCount];
         input value float32 envelopeSustainIn[modulationEnvSlotCount];
         input value float32 envelopeReleaseIn[modulationEnvSlotCount];
+        input value float32 ampAttackIn [[ name: "Amp Envelope Attack", min: 0.001f, max: 10.0f, init: 0.01f, unit: "s", rampFrames: 0 ]];
+        input value float32 ampDecayIn [[ name: "Amp Envelope Decay", min: 0.001f, max: 10.0f, init: 0.001f, unit: "s", rampFrames: 0 ]];
+        input value float32 ampSustainIn [[ name: "Amp Envelope Sustain", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 0 ]];
         input value float32 ampReleaseIn [[ name: "Amp Release", min: 0.005f, max: 10.0f, init: 0.2f, unit: "s", rampFrames: 0 ]];
         input value float32 sourceModeIn [[ name: "Source Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Oscillator|Bounce", rampFrames: 0 ]];
         input value float32 globalTuneIn [[ name: "Global Tune", min: -24.0f, max: 24.0f, init: 0.0f, unit: "st", rampFrames: 64 ]];
@@ -1441,7 +1621,7 @@ namespace wt
             return slots;
         }
 
-        node envelopes = wt::RetriggerableASR (0.01f)[voiceCount];
+        node ampEnvelopes = wt::RetriggerableAmpAdsr[voiceCount];
         node mseg1 = wt::MsegReader[voiceCount];
         node mseg2 = wt::MsegReader[voiceCount];
         node mseg3 = wt::MsegReader[voiceCount];
@@ -1460,11 +1640,11 @@ namespace wt
         float32[voiceCount] voicePressure;
         float32[voiceCount] voiceSlide;
         float32[voiceCount] voiceVelocity;
+        float32[voiceCount] voiceAmpEnvelopeInverseVelocity;
         float64[voiceCount] voiceBouncePosition;
         int32[voiceCount] voiceBounceRootIndex;
         int32[voiceCount] voiceBounceBankSlot;
         bool[voiceCount] voiceBouncePlaying;
-        bool[voiceCount] voiceBounceReleaseGate;
         float32[voiceCount] voicePitchGlideStep;
         int32[voiceCount] voiceGlideSamplesRemaining;
         int32[voiceCount] voiceActive;
@@ -1493,6 +1673,10 @@ namespace wt
         float32[voiceCount * modulationEnvSlotCount] voiceEffectiveEnvelopeDecaySeconds;
         float32[voiceCount * modulationEnvSlotCount] voiceEffectiveEnvelopeSustain;
         float32[voiceCount * modulationEnvSlotCount] voiceEffectiveEnvelopeReleaseSeconds;
+        float32[voiceCount] voiceEffectiveAmpAttackSeconds;
+        float32[voiceCount] voiceEffectiveAmpDecaySeconds;
+        float32[voiceCount] voiceEffectiveAmpSustain;
+        float32[voiceCount] voiceEffectiveAmpReleaseSeconds;
         float32[voiceCount] voiceMsegProgress2;
         float32[voiceCount] voiceMsegProgress3;
         bool[articulationSlotCount] articulationSlotDefined;
@@ -1532,6 +1716,10 @@ namespace wt
         float32[modulationEnvSlotCount] currentEnvelopeDecaySeconds;
         float32[modulationEnvSlotCount] currentEnvelopeSustain;
         float32[modulationEnvSlotCount] currentEnvelopeReleaseSeconds;
+        float32 currentAmpAttackSeconds = 0.01f;
+        float32 currentAmpDecaySeconds = 0.001f;
+        float32 currentAmpSustain = 1.0f;
+        float32 currentAmpReleaseSeconds = 0.2f;
         bool[voiceCount] voiceUsesArticulation;
         int32[voiceCount] voiceSelectorA;
         int32[voiceCount] voiceSelectorB;
@@ -3111,6 +3299,10 @@ namespace wt
             if (sourceIndex == 8)
                 return std::intrinsics::clamp (voiceSlide.at (voice), 0.0f, 1.0f);
 
+            if (sourceIndex == 9)
+                return ampEnvelopes[voice].gainOut
+                    * voiceAmpEnvelopeInverseVelocity.at (voice);
+
             return 0.0f;
         }
 
@@ -3135,12 +3327,15 @@ namespace wt
                     ) + macroVoiceRouteGeneratorBiasVectors[sourceIndex];
             }
 
-            for (wrap<modulationVoiceSourceCount> sourceIndex)
+            if (voiceRackRouteCount != 0)
             {
-                voiceRackSourceSums[sourceIndex] = 0.0f;
-                voiceRackSourceMaxima[sourceIndex] = 0.0f;
-                voiceRackSourceBipolarStrongest[sourceIndex] = 0.0f;
-                voiceRackSourceBipolarMagnitudes[sourceIndex] = 0.0f;
+                for (wrap<modulationVoiceSourceCount> sourceIndex)
+                {
+                    voiceRackSourceSums[sourceIndex] = 0.0f;
+                    voiceRackSourceMaxima[sourceIndex] = 0.0f;
+                    voiceRackSourceBipolarStrongest[sourceIndex] = 0.0f;
+                    voiceRackSourceBipolarMagnitudes[sourceIndex] = 0.0f;
+                }
             }
 
             voiceRackParticipantCount = 0;
@@ -3275,6 +3470,10 @@ namespace wt
 
             voiceTargetOffsets[voice].coreValues = macroVoiceCoreBaseTargetOffsets;
             voiceTargetOffsets[voice].generatorValues = macroVoiceGeneratorBaseTargetOffsets;
+
+            if (voiceRouteCount == 0 && macroVoiceRouteCount == 0)
+                return;
+
             for (wrap<modulationVoiceSourceCount> sourceIndex)
             {
                 if (! voiceRouteCoreSourceUsed[sourceIndex]
@@ -3319,6 +3518,26 @@ namespace wt
                 + voiceBendSemitones.at (voice)
                 + std::intrinsics::clamp (globalTuneIn, -24.0f, 24.0f)
                 + voiceTargetOffset (voiceIndex, modulationTargetGlobalTuneSemitones);
+        }
+
+        float32 resolveAmpAttackBase()
+        {
+            return currentAmpAttackSeconds;
+        }
+
+        float32 resolveAmpDecayBase()
+        {
+            return currentAmpDecaySeconds;
+        }
+
+        float32 resolveAmpSustainBase()
+        {
+            return currentAmpSustain;
+        }
+
+        float32 resolveAmpReleaseBase()
+        {
+            return currentAmpReleaseSeconds;
         }
 
         void updateVoiceGeneratorModulationTargets (int32 voiceIndex)
@@ -3389,6 +3608,32 @@ namespace wt
                         10.0f
                     );
             }
+
+            let voice = wrap<voiceCount> (voiceIndex);
+            voiceEffectiveAmpAttackSeconds.at (voice) = std::intrinsics::clamp (
+                resolveAmpAttackBase()
+                    + voiceTargetOffset (voiceIndex, modulationTargetAmpAttack),
+                0.001f,
+                10.0f
+            );
+            voiceEffectiveAmpDecaySeconds.at (voice) = std::intrinsics::clamp (
+                resolveAmpDecayBase()
+                    + voiceTargetOffset (voiceIndex, modulationTargetAmpDecay),
+                0.001f,
+                10.0f
+            );
+            voiceEffectiveAmpSustain.at (voice) = std::intrinsics::clamp (
+                resolveAmpSustainBase()
+                    + voiceTargetOffset (voiceIndex, modulationTargetAmpSustain),
+                0.0f,
+                1.0f
+            );
+            voiceEffectiveAmpReleaseSeconds.at (voice) = std::intrinsics::clamp (
+                resolveAmpReleaseBase()
+                    + voiceTargetOffset (voiceIndex, modulationTargetAmpRelease),
+                0.005f,
+                10.0f
+            );
         }
 
         void resetVoiceGeneratorModulationTargets (int32 voiceIndex)
@@ -3413,6 +3658,12 @@ namespace wt
                 voiceEffectiveEnvelopeReleaseSeconds.at (effectiveIndex)
                     = resolveVoiceEnvelopeReleaseBase (voiceIndex, slotIndex);
             }
+
+            let voice = wrap<voiceCount> (voiceIndex);
+            voiceEffectiveAmpAttackSeconds.at (voice) = resolveAmpAttackBase();
+            voiceEffectiveAmpDecaySeconds.at (voice) = resolveAmpDecayBase();
+            voiceEffectiveAmpSustain.at (voice) = resolveAmpSustainBase();
+            voiceEffectiveAmpReleaseSeconds.at (voice) = resolveAmpReleaseBase();
         }
 
         int32 oscillatorModulationTargetIndex (int32 oscillatorIndex, int32 localTargetIndex)
@@ -3604,7 +3855,6 @@ namespace wt
         {
             let voice = wrap<voiceCount> (voiceIndex);
             voiceBouncePlaying.at (voice) = false;
-            voiceBounceReleaseGate.at (voice) = false;
             voiceBouncePosition.at (voice) = 0.0;
             voiceBounceRootIndex.at (voice) = 0;
             voiceBounceBankSlot.at (voice) = -1;
@@ -3627,33 +3877,6 @@ namespace wt
             voiceBounceRootIndex.at (voice) = rootIndex;
             voiceBouncePosition.at (voice) = 0.0;
             voiceBouncePlaying.at (voice) = true;
-        }
-
-        void armBounceReleaseGateForVoice (int32 voiceIndex)
-        {
-            let voice = wrap<voiceCount> (voiceIndex);
-            if (! voiceBouncePlaying.at (voice))
-                return;
-
-            let slotIndex = voiceBounceBankSlot.at (voice);
-            let rootIndex = voiceBounceRootIndex.at (voice);
-            if (slotIndex < 0 || slotIndex >= bounceBankSlotCount
-                || rootIndex < 0 || rootIndex >= bounceSlotRootCounts.at (slotIndex))
-            {
-                voiceBounceReleaseGate.at (voice) = true;
-                return;
-            }
-
-            let metadataIndex = bounceRootMetadataIndex (slotIndex, rootIndex);
-            let bakedNoteOff = bounceSlotRootNoteOffFrameOffsets.at (metadataIndex);
-            // Offset zero is the backwards-compatible hand-built-bank case:
-            // every release uses the live gate. Captured banks carry their
-            // exact logical note-off; releasing there or later must not apply
-            // the same release twice to already-baked PCM. An earlier release
-            // remains latched for the rest of this one-shot, preventing a
-            // faded voice from reappearing when it crosses the baked offset.
-            voiceBounceReleaseGate.at (voice) = bakedNoteOff <= 0
-                || voiceBouncePosition.at (voice) < float64 (bakedNoteOff);
         }
 
         float32<2> readBounceSampleForVoice (int32 voiceIndex)
@@ -3706,15 +3929,17 @@ namespace wt
             if (voiceBouncePosition.at (voice) >= float64 (frameCount))
                 voiceBouncePlaying.at (voice) = false;
 
-            return sample * bouncePlaybackMakeupGain;
+            // The bank is captured at fixed velocity 100. Calibrate that
+            // source once, then let the same live per-note Amp Envelope own
+            // all oscillator and Bounce loudness.
+            return sample * (bouncePlaybackMakeupGain / bounceCaptureVelocityGain);
         }
 
         bool voiceIsSoundingForRackModulation (int32 voiceIndex)
         {
             let voice = wrap<voiceCount> (voiceIndex);
             return voiceActive.at (voice) != 0
-                || envelopes[voice].gainOut > 0.0f
-                || voiceBouncePlaying.at (voice);
+                || ampEnvelopes[voice].gainOut > 0.0f;
         }
 
         void requestSourceModeTransition (int32 requestedMode)
@@ -3956,7 +4181,7 @@ namespace wt
 
             for (wrap<voiceCount> voice)
             {
-                let isVisible = voiceActive.at (voice) != 0 || envelopes[voice].gainOut > 0.0f;
+                let isVisible = voiceActive.at (voice) != 0 || ampEnvelopes[voice].gainOut > 0.0f;
 
                 if (isVisible && voiceGeneration.at (voice) >= newestGeneration)
                 {
@@ -4297,6 +4522,9 @@ namespace wt
             let voice = wrap<voiceCount> (index);
             voiceChannel.at (voice) = note.channel;
             voiceVelocity.at (voice) = note.velocity;
+            voiceAmpEnvelopeInverseVelocity.at (voice) = note.velocity > 0.0f
+                ? 1.0f / note.velocity
+                : 0.0f;
             voiceBendSemitones.at (voice) = 0.0f;
             voicePressure.at (voice) = 0.0f;
             voiceSlide.at (voice) = 0.0f;
@@ -4312,7 +4540,7 @@ namespace wt
             resetFilterState (index);
             resetVoiceGeneratorModulationTargets (index);
 
-            envelopes[voice].eventIn <- note;
+            ampEnvelopes[voice].eventIn <- note;
             triggerVoiceModulators (index);
         }
 
@@ -4340,8 +4568,7 @@ namespace wt
         {
             let voice = wrap<voiceCount> (index);
             voiceActive.at (voice) = 0;
-            armBounceReleaseGateForVoice (int32 (index));
-            envelopes[voice].eventIn <- note;
+            ampEnvelopes[voice].eventIn <- note;
             noteOffVoiceModulators (index, note);
         }
 
@@ -4398,12 +4625,15 @@ namespace wt
                 note.channel = change.channel;
                 note.pitch = change.pitch;
                 note.velocity = change.velocity;
+                voiceAmpEnvelopeInverseVelocity.at (voice) = change.velocity > 0.0f
+                    ? 1.0f / change.velocity
+                    : 0.0f;
                 voiceGeneration.at (voice) = nextVoiceGeneration;
                 nextVoiceGeneration += 1;
                 resetVoiceOscillatorLifecycle (index);
                 startBounceSampleForVoice (index, change.pitch);
                 resetFilterState (index);
-                envelopes[voice].eventIn <- note;
+                ampEnvelopes[voice].eventIn <- note;
                 triggerVoiceModulators (index);
             }
         }
@@ -5406,6 +5636,16 @@ namespace wt
             loop
             {
                 glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
+                currentAmpAttackSeconds = ampAttackIn > 0.0f
+                    ? std::intrinsics::clamp (ampAttackIn, 0.001f, 10.0f)
+                    : 0.01f;
+                currentAmpDecaySeconds = ampDecayIn > 0.0f
+                    ? std::intrinsics::clamp (ampDecayIn, 0.001f, 10.0f)
+                    : 0.001f;
+                currentAmpSustain = std::intrinsics::clamp (ampSustainIn, 0.0f, 1.0f);
+                currentAmpReleaseSeconds = ampReleaseIn > 0.0f
+                    ? std::intrinsics::clamp (ampReleaseIn, 0.005f, 10.0f)
+                    : 0.2f;
                 requestSourceModeTransition (
                     sourceModeIn >= 0.5f ? sourceModeBounce : sourceModeOscillator);
                 let sourceModeGain = advanceSourceModeTransition();
@@ -5461,14 +5701,21 @@ namespace wt
                     modEnv3[voice].decaySecondsIn <- voiceEffectiveEnvelopeDecaySeconds.at (envIndex2);
                     modEnv3[voice].sustainIn <- voiceEffectiveEnvelopeSustain.at (envIndex2);
                     modEnv3[voice].releaseSecondsIn <- voiceEffectiveEnvelopeReleaseSeconds.at (envIndex2);
-                    envelopes[voice].releaseSecondsIn <- ampReleaseIn;
+                    ampEnvelopes[voice].attackSecondsIn
+                        <- voiceEffectiveAmpAttackSeconds.at (voice);
+                    ampEnvelopes[voice].decaySecondsIn
+                        <- voiceEffectiveAmpDecaySeconds.at (voice);
+                    ampEnvelopes[voice].sustainIn
+                        <- voiceEffectiveAmpSustain.at (voice);
+                    ampEnvelopes[voice].releaseSecondsIn
+                        <- voiceEffectiveAmpReleaseSeconds.at (voice);
                     mseg1[voice].advance();
                     mseg2[voice].advance();
                     mseg3[voice].advance();
                     modEnv1[voice].advance();
                     modEnv2[voice].advance();
                     modEnv3[voice].advance();
-                    envelopes[voice].advance();
+                    ampEnvelopes[voice].advance();
                     voiceMsegProgress1[voice] = mseg1[voice].progressOut;
                     voiceMsegProgress2[voice] = mseg2[voice].progressOut;
                     voiceMsegProgress3[voice] = mseg3[voice].progressOut;
@@ -5693,13 +5940,11 @@ namespace wt
                         unisonRightFilters.at (voice).reset();
                     }
 
-                    let gain = isBounceSource
-                        ? (voiceBounceReleaseGate.at (voice)
-                            ? std::intrinsics::min (
-                                envelopes[voice].gainOut,
-                                voiceVelocity.at (voice))
-                            : voiceVelocity.at (voice)) / bounceCaptureVelocityGain
-                        : envelopes[voice].gainOut;
+                    // Oscillators A/B/C are already combined by the renderer,
+                    // and Bounce is the alternative combined source. The
+                    // Voice Filter above processes that note before this one
+                    // shared per-note Amp Envelope; voices are summed only now.
+                    let gain = ampEnvelopes[voice].gainOut;
                     leftMix += noteLeft * gain;
                     rightMix += noteRight * gain;
                 }

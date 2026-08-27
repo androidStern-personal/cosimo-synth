@@ -257,6 +257,10 @@ const GENERATOR_TARGET_DEFINITIONS = Object.freeze([
     { moduleId: "env3", targetIdSuffix: "decay", endpointID: "env3Decay", targetKind: "env3Decay", label: "ENV 3 Decay", min: 0.001, max: 10, initial: 0.25, format: "time", articulationParameterId: "env3.decaySeconds" },
     { moduleId: "env3", targetIdSuffix: "sustain", endpointID: "env3Sustain", targetKind: "env3Sustain", label: "ENV 3 Sustain", min: 0, max: 1, initial: 0.5, format: "percent", articulationParameterId: "env3.sustain" },
     { moduleId: "env3", targetIdSuffix: "release", endpointID: "env3Release", targetKind: "env3Release", label: "ENV 3 Release", min: 0.001, max: 10, initial: 0.2, format: "time", articulationParameterId: "env3.releaseSeconds" },
+    { moduleId: "ampEnvelope", targetIdSuffix: "attack", endpointID: "ampAttack", targetKind: "ampAttack", label: "Amp Envelope Attack", min: 0.001, max: 10, initial: 0.01, format: "time", articulationParameterId: null },
+    { moduleId: "ampEnvelope", targetIdSuffix: "decay", endpointID: "ampDecay", targetKind: "ampDecay", label: "Amp Envelope Decay", min: 0.001, max: 10, initial: 0.001, format: "time", articulationParameterId: null },
+    { moduleId: "ampEnvelope", targetIdSuffix: "sustain", endpointID: "ampSustain", targetKind: "ampSustain", label: "Amp Envelope Sustain", min: 0, max: 1, initial: 1, format: "percent", articulationParameterId: null },
+    { moduleId: "ampEnvelope", targetIdSuffix: "release", endpointID: "ampRelease", targetKind: "ampRelease", label: "Amp Envelope Release", min: 0.005, max: 10, initial: 0.2, format: "time", articulationParameterId: null },
 ]);
 function createGeneratorTargetDescriptor(definition) {
     const targetId = catalogTargetId(definition.moduleId, definition.targetIdSuffix);

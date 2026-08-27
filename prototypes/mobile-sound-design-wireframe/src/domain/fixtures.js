@@ -23,6 +23,7 @@ export const INITIAL_SOURCES = Object.freeze([
   { id: "macro-1", type: "macro", slot: 1, label: "Macro 1" },
   { id: "envelope-1", type: "envelope", slot: 1, label: "Envelope 1" },
   { id: "mseg-1", type: "mseg", slot: 1, label: "MSEG 1" },
+  { id: "amp-envelope", type: "envelope", slot: 4, label: "Amp Envelope" },
 ]);
 
 export function createDefaultSourceState(source) {
@@ -30,14 +31,15 @@ export function createDefaultSourceState(source) {
     return { _tag: "macro", value: 0.45, name: source.label };
   }
   if (source.type === "envelope") {
+    const isAmpEnvelope = source.id === "amp-envelope";
     return {
       _tag: "envelope",
       envelope: {
         name: source.label,
-        attackSeconds: 0.2,
-        decaySeconds: 0.32,
-        sustain: 0.65,
-        releaseSeconds: 0.35,
+        attackSeconds: isAmpEnvelope ? 0.01 : 0.2,
+        decaySeconds: isAmpEnvelope ? 0.001 : 0.32,
+        sustain: isAmpEnvelope ? 1 : 0.65,
+        releaseSeconds: isAmpEnvelope ? 0.2 : 0.35,
       },
     };
   }
@@ -146,7 +148,7 @@ export const INITIAL_AUDITION = Object.freeze({
 
 /**
  * The product-initial "new patch": fixed performance sources plus Macro 1,
- * Envelope 1, and MSEG 1 (ADR-010 progressive disclosure), zero mappings,
+ * Envelope 1, MSEG 1, and the permanent Amp Envelope (ADR-010 progressive disclosure), zero mappings,
  * zero articulations, catalog initial values. The adapter contract suite
  * boots BOTH adapters from this state and builds its fixture through port
  * commands, so fixture parity across mock and bridge holds by construction.

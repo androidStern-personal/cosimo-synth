@@ -1,0 +1,232 @@
+// T38's loudness envelope is note-owned, shares one stage setting set, and is
+// also source index 9 in the ordinary sparse modulation program.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "ConstantThreeOscillatorRenderer.cmajor")
+
+## testProcessor (undefined, { frequency: 600 })
+
+graph AmpEnvelopeIndependentVoices [[ main ]]
+{
+    output event int32 out;
+
+    node source = IndependentVoiceSource;
+    node engine = wt::SharedVoiceEngine (2);
+    node reference0 = wt::RetriggerableAmpAdsr;
+    node reference1 = wt::RetriggerableAmpAdsr;
+    node witness = IndependentVoiceWitness;
+
+    connection
+    {
+        source.note0Out -> engine.voiceEventIn[0], reference0.eventIn;
+        source.note1Out -> engine.voiceEventIn[1], reference1.eventIn;
+        source.attackOut -> engine.ampAttackIn,
+                            reference0.attackSecondsIn,
+                            reference1.attackSecondsIn;
+        source.decayOut -> engine.ampDecayIn,
+                           reference0.decaySecondsIn,
+                           reference1.decaySecondsIn;
+        source.sustainOut -> engine.ampSustainIn,
+                             reference0.sustainIn,
+                             reference1.sustainIn;
+        source.releaseOut -> engine.ampReleaseIn,
+                             reference0.releaseSecondsIn,
+                             reference1.releaseSecondsIn;
+        source.filterModeOut -> engine.filterModeIn;
+        engine.out -> witness.engineIn;
+        reference0.gainOut -> witness.gain0In;
+        reference1.gainOut -> witness.gain1In;
+        witness.out -> out;
+    }
+}
+
+processor IndependentVoiceSource
+{
+    output event (std::notes::NoteOn, std::notes::NoteOff) note0Out;
+    output event (std::notes::NoteOn, std::notes::NoteOff) note1Out;
+    output value float32 attackOut;
+    output value float32 decayOut;
+    output value float32 sustainOut;
+    output value float32 releaseOut;
+    output value float32 filterModeOut;
+
+    std::notes::NoteOn noteOn (float32 pitch, float32 velocity)
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = pitch;
+        note.velocity = velocity;
+        return note;
+    }
+
+    std::notes::NoteOff noteOff (float32 pitch)
+    {
+        std::notes::NoteOff note;
+        note.channel = 0;
+        note.pitch = pitch;
+        return note;
+    }
+
+    void main()
+    {
+        attackOut <- 0.01f;
+        decayOut <- 0.012f;
+        sustainOut <- 0.5f;
+        releaseOut <- 0.02f;
+        filterModeOut <- 0.0f;
+
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame == 1) note0Out <- noteOn (60.0f, 0.4f);
+            if (frame == 9) note1Out <- noteOn (67.0f, 0.8f);
+            if (frame == 34) note0Out <- noteOff (60.0f);
+            if (frame == 48) note1Out <- noteOff (67.0f);
+            advance();
+        }
+    }
+}
+
+processor IndependentVoiceWitness
+{
+    input stream float32<2> engineIn;
+    input stream float32 gain0In;
+    input stream float32 gain1In;
+    output event int32 out;
+
+    bool matchedEverySoundingFrame = true;
+    bool sawIndependentProgress;
+    bool sawReleaseTail;
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            let expectedLeft = 0.75f * (gain0In + gain1In);
+            let expectedRight = -0.5f * (gain0In + gain1In);
+            if (std::intrinsics::abs (engineIn[0] - expectedLeft) > 0.000001f
+                || std::intrinsics::abs (engineIn[1] - expectedRight) > 0.000001f)
+                matchedEverySoundingFrame = false;
+
+            if (frame > 10 && frame < 20 && gain0In != gain1In
+                && gain0In > 0.0f && gain1In > 0.0f)
+                sawIndependentProgress = true;
+
+            if (frame > 34 && frame < 48 && gain0In > 0.0f && gain1In > 0.0f)
+                sawReleaseTail = true;
+
+            if (frame == 85) out <- matchedEverySoundingFrame ? 1 : 0;
+            if (frame == 86) out <- sawIndependentProgress ? 1 : 0;
+            if (frame == 87) out <- sawReleaseTail ? 1 : 0;
+            if (frame == 88) out <- -1;
+            advance();
+        }
+    }
+}
+
+## testProcessor (undefined, { frequency: 600 })
+
+graph AmpEnvelopeFixedGainAndModulationSource [[ main ]]
+{
+    output event int32 out;
+
+    node source = FixedGainAndSourceInput;
+    node engine = wt::SharedVoiceEngine (1);
+    node witness = FixedGainAndSourceWitness;
+
+    connection
+    {
+        source.noteOut -> engine.voiceEventIn[0];
+        source.programOut -> engine.modulationProgramIn;
+        source.attackOut -> engine.ampAttackIn;
+        source.decayOut -> engine.ampDecayIn;
+        source.sustainOut -> engine.ampSustainIn;
+        source.releaseOut -> engine.ampReleaseIn;
+        source.filterModeOut -> engine.filterModeIn;
+        engine.out -> witness.audioIn;
+        engine.trackingPitchHzOut -> witness.pitchHzIn;
+        witness.out -> out;
+    }
+}
+
+processor FixedGainAndSourceInput
+{
+    output event std::notes::NoteOn noteOut;
+    output event wt::ModulationProgramUpload programOut;
+    output value float32 attackOut;
+    output value float32 decayOut;
+    output value float32 sustainOut;
+    output value float32 releaseOut;
+    output value float32 filterModeOut;
+
+    wt::ModulationProgramUpload program()
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = 1;
+        let ampSource = 9;
+        let routeCell = ampSource * wt::modulationVoiceTargetCount
+            + wt::modulationTargetGlobalTuneSemitones;
+        upload.voiceRouteCount = 1;
+        upload.voiceRouteCells[0] = routeCell;
+        upload.voiceRouteSources[0] = ampSource;
+        upload.voiceRouteTargets[0] = wt::modulationTargetGlobalTuneSemitones;
+        upload.voiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.voiceRouteAmounts[routeCell] = 12.0f;
+        return upload;
+    }
+
+    std::notes::NoteOn noteOn()
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        note.velocity = 0.5f;
+        return note;
+    }
+
+    void main()
+    {
+        attackOut <- 0.01f;
+        decayOut <- 0.001f;
+        sustainOut <- 1.0f;
+        releaseOut <- 0.02f;
+        filterModeOut <- 0.0f;
+
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame == 1) programOut <- program();
+            if (frame == 2) noteOut <- noteOn();
+            advance();
+        }
+    }
+}
+
+processor FixedGainAndSourceWitness
+{
+    input stream float32<2> audioIn;
+    input stream float32 pitchHzIn;
+    output event int32 out;
+
+    bool sawFixedAmplitudeJob;
+    bool sawAmpSourceOctaveRoute;
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame > 20 && frame < 60)
+            {
+                if (std::intrinsics::abs (audioIn[0]) > 0.01f
+                    && std::intrinsics::abs (audioIn[1]) > 0.01f)
+                    sawFixedAmplitudeJob = true;
+
+                if (pitchHzIn > 520.0f && pitchHzIn < 526.0f)
+                    sawAmpSourceOctaveRoute = true;
+            }
+
+            if (frame == 70) out <- sawFixedAmplitudeJob ? 1 : 0;
+            if (frame == 71) out <- sawAmpSourceOctaveRoute ? 1 : 0;
+            if (frame == 72) out <- -1;
+            advance();
+        }
+    }
+}

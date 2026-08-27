@@ -91,7 +91,8 @@ export function SourceRail({
 
   useEffect(() => () => clearPress({ cancelDrag: true }), []);
 
-  const canManage = (source, mapping) => source.type !== "fixed" || Boolean(mapping);
+  const canDeleteSource = (source) => source.type !== "fixed" && source.id !== "amp-envelope";
+  const canManage = (source, mapping) => canDeleteSource(source) || Boolean(mapping);
 
   const beginPress = (event, source, mapping) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -336,7 +337,7 @@ export function SourceRail({
               <span>Remove from {targetLabel}</span>
             </button>
           )}
-          {contextSource.type !== "fixed" && (
+          {canDeleteSource(contextSource) && (
             <button
               onClick={() => {
                 onDeleteSource?.(contextSource.id);

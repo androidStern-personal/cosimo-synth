@@ -15436,7 +15436,11 @@ const SHARED_VOICE_MODULATION_TARGET_KINDS = [
   "env3Sustain",
   "env3Release",
   "filterMix",
-  "globalTuneSemitones"
+  "globalTuneSemitones",
+  "ampAttack",
+  "ampDecay",
+  "ampSustain",
+  "ampRelease"
 ];
 const MODULATION_SOURCE_IDENTITIES = Object.freeze([
   { id: "mseg-1", sourceKind: "mseg", sourceSlot: 1, group: "voice", runtimeIndex: 0 },
@@ -15445,6 +15449,7 @@ const MODULATION_SOURCE_IDENTITIES = Object.freeze([
   { id: "env-1", sourceKind: "env", sourceSlot: 1, group: "voice", runtimeIndex: 3 },
   { id: "env-2", sourceKind: "env", sourceSlot: 2, group: "voice", runtimeIndex: 4 },
   { id: "env-3", sourceKind: "env", sourceSlot: 3, group: "voice", runtimeIndex: 5 },
+  { id: "amp-envelope", sourceKind: "env", sourceSlot: 4, group: "voice", runtimeIndex: 9 },
   { id: "macro-1", sourceKind: "macro", sourceSlot: 1, group: "macro", runtimeIndex: 0 },
   { id: "macro-2", sourceKind: "macro", sourceSlot: 2, group: "macro", runtimeIndex: 1 },
   { id: "macro-3", sourceKind: "macro", sourceSlot: 3, group: "macro", runtimeIndex: 2 },
@@ -15516,16 +15521,16 @@ const sourceIdentityByAddress = new Map(MODULATION_SOURCE_IDENTITIES.map((identi
 ]));
 const targetIdentityByKind = new Map(MODULATION_TARGET_IDENTITIES.map((identity) => [identity.kind, identity]));
 function assertCanonicalIdentities() {
-  if (MODULATION_SOURCE_COUNT !== 13 || MODULATION_VOICE_TARGET_COUNT$1 !== 52 || MODULATION_RACK_TARGET_COUNT$1 !== 36 || MODULATION_LEGAL_PAIR_COUNT !== 1144) {
+  if (MODULATION_SOURCE_COUNT !== 14 || MODULATION_VOICE_TARGET_COUNT$1 !== 56 || MODULATION_RACK_TARGET_COUNT$1 !== 36 || MODULATION_LEGAL_PAIR_COUNT !== 1288) {
     throw new Error("Unexpected modulation domain size");
   }
-  for (const [group, expectedCount] of [["voice", 9], ["macro", 4]]) {
-    const identities = MODULATION_SOURCE_IDENTITIES.filter((identity) => identity.group === group);
+  for (const [group, expectedCount] of [["voice", 10], ["macro", 4]]) {
+    const identities = MODULATION_SOURCE_IDENTITIES.filter((identity) => identity.group === group).sort((left, right) => left.runtimeIndex - right.runtimeIndex);
     if (identities.length !== expectedCount || identities.some((identity, position) => identity.runtimeIndex !== position)) {
       throw new Error(`Bad modulation ${group} source indexes`);
     }
   }
-  for (const [group, expectedCount] of [["voice", 52], ["rack", 36]]) {
+  for (const [group, expectedCount] of [["voice", 56], ["rack", 36]]) {
     const identities = MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
     if (identities.length !== expectedCount || identities.some((identity, position) => identity.runtimeIndex !== position)) {
       throw new Error(`Bad modulation ${group} target indexes`);
@@ -16003,7 +16008,11 @@ const GENERATOR_TARGET_DEFINITIONS = Object.freeze([
   { moduleId: "env3", targetIdSuffix: "attack", endpointID: "env3Attack", targetKind: "env3Attack", label: "ENV 3 Attack", min: 1e-3, max: 10, initial: 0.01, format: "time", articulationParameterId: "env3.attackSeconds" },
   { moduleId: "env3", targetIdSuffix: "decay", endpointID: "env3Decay", targetKind: "env3Decay", label: "ENV 3 Decay", min: 1e-3, max: 10, initial: 0.25, format: "time", articulationParameterId: "env3.decaySeconds" },
   { moduleId: "env3", targetIdSuffix: "sustain", endpointID: "env3Sustain", targetKind: "env3Sustain", label: "ENV 3 Sustain", min: 0, max: 1, initial: 0.5, format: "percent", articulationParameterId: "env3.sustain" },
-  { moduleId: "env3", targetIdSuffix: "release", endpointID: "env3Release", targetKind: "env3Release", label: "ENV 3 Release", min: 1e-3, max: 10, initial: 0.2, format: "time", articulationParameterId: "env3.releaseSeconds" }
+  { moduleId: "env3", targetIdSuffix: "release", endpointID: "env3Release", targetKind: "env3Release", label: "ENV 3 Release", min: 1e-3, max: 10, initial: 0.2, format: "time", articulationParameterId: "env3.releaseSeconds" },
+  { moduleId: "ampEnvelope", targetIdSuffix: "attack", endpointID: "ampAttack", targetKind: "ampAttack", label: "Amp Envelope Attack", min: 1e-3, max: 10, initial: 0.01, format: "time", articulationParameterId: null },
+  { moduleId: "ampEnvelope", targetIdSuffix: "decay", endpointID: "ampDecay", targetKind: "ampDecay", label: "Amp Envelope Decay", min: 1e-3, max: 10, initial: 1e-3, format: "time", articulationParameterId: null },
+  { moduleId: "ampEnvelope", targetIdSuffix: "sustain", endpointID: "ampSustain", targetKind: "ampSustain", label: "Amp Envelope Sustain", min: 0, max: 1, initial: 1, format: "percent", articulationParameterId: null },
+  { moduleId: "ampEnvelope", targetIdSuffix: "release", endpointID: "ampRelease", targetKind: "ampRelease", label: "Amp Envelope Release", min: 5e-3, max: 10, initial: 0.2, format: "time", articulationParameterId: null }
 ]);
 function createGeneratorTargetDescriptor(definition) {
   const targetId = catalogTargetId(definition.moduleId, definition.targetIdSuffix);
@@ -16154,6 +16163,7 @@ const MODULATION_STATE_KEY = "modulation.v6";
 const MODULATION_STATE_VERSION = 6;
 const MODULATION_MSEG_SLOT_COUNT = 3;
 const MODULATION_ENV_SLOT_COUNT = 3;
+const AMP_ENVELOPE_SOURCE_SLOT = 4;
 const MODULATION_MACRO_SLOT_COUNT = 4;
 const MSEG_SLOT_NAMES = ["MSEG 1", "MSEG 2", "MSEG 3"];
 const MACRO_SLOT_NAMES = ["Macro 1", "Macro 2", "Macro 3", "Macro 4"];
@@ -16198,7 +16208,11 @@ const ROUTE_AMOUNT_LIMITS = {
   env3Attack: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
   env3Decay: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
   env3Sustain: { min: -1, max: 1 },
-  env3Release: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS }
+  env3Release: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+  ampAttack: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+  ampDecay: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+  ampSustain: { min: -1, max: 1 },
+  ampRelease: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS }
 };
 const ROUTE_AMOUNT_STEPS = {
   wavetablePosition: 1e-3,
@@ -16232,7 +16246,11 @@ const ROUTE_AMOUNT_STEPS = {
   env3Attack: 1e-3,
   env3Decay: 1e-3,
   env3Sustain: 1e-3,
-  env3Release: 1e-3
+  env3Release: 1e-3,
+  ampAttack: 1e-3,
+  ampDecay: 1e-3,
+  ampSustain: 1e-3,
+  ampRelease: 1e-3
 };
 const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors().filter((parameter2) => parameter2.modulationTargetIndex !== null);
 const RACK_MODULATION_PARAMETER_BY_KIND = new Map(
@@ -16248,6 +16266,7 @@ const MODULATION_SOURCE_LABELS = {
   "env-1": "ENV 1",
   "env-2": "ENV 2",
   "env-3": "ENV 3",
+  "amp-envelope": "AMP ENV",
   velocity: "VEL",
   pressure: "AT",
   slide: "SLIDE",
@@ -16460,6 +16479,7 @@ function formatModulationAmountReadout(rawTargetKind, amount, polarity = "unipol
     case "env1Sustain":
     case "env2Sustain":
     case "env3Sustain":
+    case "ampSustain":
       return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
     case "mseg1Rate":
     case "mseg2Rate":
@@ -16473,6 +16493,9 @@ function formatModulationAmountReadout(rawTargetKind, amount, polarity = "unipol
     case "env3Attack":
     case "env3Decay":
     case "env3Release":
+    case "ampAttack":
+    case "ampDecay":
+    case "ampRelease":
       return `${prefix}${formatMagnitude(clampedAmount, 3)} s`;
     case "filterCutoffOctaves":
       return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
@@ -16551,10 +16574,14 @@ function getModulationTargetClampHint(targetKind) {
     case "env3Attack":
     case "env3Decay":
     case "env3Release":
+    case "ampAttack":
+    case "ampDecay":
+    case "ampRelease":
       return "Envelope time still clamps to the envelope stage range.";
     case "env1Sustain":
     case "env2Sustain":
     case "env3Sustain":
+    case "ampSustain":
       return "Envelope sustain still clamps between silence and full level.";
     default:
       return "";
@@ -16588,7 +16615,7 @@ function normalizeSourceSlot(sourceKind, rawSlot) {
   if (sourceKind === "velocity" || sourceKind === "pressure" || sourceKind === "slide") {
     return null;
   }
-  const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : sourceKind === "macro" ? MODULATION_MACRO_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
+  const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : sourceKind === "macro" ? MODULATION_MACRO_SLOT_COUNT : AMP_ENVELOPE_SOURCE_SLOT;
   return clamp$c(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
 }
 function createDefaultEnvelope(slotIndex) {
@@ -20388,6 +20415,9 @@ function voiceAmountSpec(targetKind, baseValue) {
     case "env3Attack":
     case "env3Decay":
     case "env3Release":
+    case "ampAttack":
+    case "ampDecay":
+    case "ampRelease":
       return amountSpec({ ...bounds, defaultUnit: "s", canonicalPerDisplayedUnit: 1, digits: 3, percentMeaning: "depth", baseValue: null, physicalIntervalUnit: null });
     case "pan":
       return { _tag: "pan", ...bounds, defaultUnit: "%" };
@@ -20405,6 +20435,7 @@ function voiceAmountSpec(targetKind, baseValue) {
     case "env1Sustain":
     case "env2Sustain":
     case "env3Sustain":
+    case "ampSustain":
       return nativePercentAmount(bounds.min, bounds.max, bounds.step, 0.01);
   }
 }
@@ -20826,6 +20857,15 @@ function useModulationRouteAmountBinding(route) {
   }, [routeId]);
   return reactExports.useMemo(() => ({ value, setValue }), [setValue, value]);
 }
+function isAmpEnvelopeRackModulationSource(source) {
+  return source.sourceKind === "env" && source.sourceSlot === 4;
+}
+function rackModulationSourceShortIdentity(source) {
+  if (isAmpEnvelopeRackModulationSource(source) || source.sourceSlot === null) {
+    return source.shortLabel;
+  }
+  return `${source.shortLabel} ${source.sourceSlot}`;
+}
 const SOURCE_FAMILIES = [
   {
     sourceKind: "mseg",
@@ -20867,10 +20907,24 @@ function findRackModulationSource(sourceKind, sourceSlot) {
   const source = RACK_MODULATION_SOURCE_PAGES[sourceSlot - 1]?.find(
     (candidate) => candidate.sourceKind === sourceKind
   );
-  if (source === void 0) {
-    throw new Error(`Unknown rack modulation source: ${sourceKind} ${sourceSlot}`);
+  if (source !== void 0) {
+    return source;
   }
-  return source;
+  if (sourceSlot === 4 && sourceKind === "env") {
+    const family = SOURCE_FAMILIES.find((candidate) => candidate.sourceKind === "env");
+    if (family !== void 0) {
+      return {
+        sourceKind,
+        sourceSlot,
+        label: "Amp Envelope",
+        shortLabel: "AMP",
+        iconUrl: family.iconUrl,
+        identityIconUrl: family.identityIconUrl,
+        accent: family.accent
+      };
+    }
+  }
+  throw new Error(`Unknown rack modulation source: ${sourceKind} ${sourceSlot}`);
 }
 const DEFAULT_ROLLING_AXIS_CONFIG = Object.freeze({
   touchActivationPx: 8,
@@ -21422,7 +21476,7 @@ function ParameterKnobArtwork({
   );
 }
 const EFFECTIVE_MOD_SOURCE_STATE_ENDPOINT_ID = "effectiveModSourceState";
-const VOICE_MOD_SOURCE_VALUE_COUNT = 9;
+const VOICE_MOD_SOURCE_VALUE_COUNT = 10;
 const MACRO_SOURCE_COUNT = 4;
 const LIGHT_SMOOTHING_TAU_MS = 45;
 const SETTLE_EPSILON = 5e-4;
@@ -21472,7 +21526,8 @@ function voiceModSourceValueIndex(source) {
     case "mseg":
       return slot !== null && slot >= 1 && slot <= 3 ? slot - 1 : null;
     case "env":
-      return slot !== null && slot >= 1 && slot <= 3 ? 2 + slot : null;
+      if (slot !== null && slot >= 1 && slot <= 3) return 2 + slot;
+      return slot === 4 ? 9 : null;
     case "velocity":
       return 6;
     case "pressure":
@@ -22278,7 +22333,7 @@ function useReadoutCells({
     const baseOrigin = symmetricBipolar ? (0 - display.min) / (display.max - display.min) : 0;
     let sourceLine = "";
     if (presentation.route !== null && armedSource !== null && cell.targetKind !== null) {
-      const label = `${armedSource.shortLabel} ${armedSource.sourceSlot}`.trim();
+      const label = rackModulationSourceShortIdentity(armedSource);
       const amountText = formatModulationAmountReadout(
         cell.targetKind,
         presentation.route.amount,
@@ -25757,6 +25812,10 @@ const ENV_3_ATTACK_ENDPOINT_ID = "env3Attack";
 const ENV_3_DECAY_ENDPOINT_ID = "env3Decay";
 const ENV_3_SUSTAIN_ENDPOINT_ID = "env3Sustain";
 const ENV_3_RELEASE_ENDPOINT_ID = "env3Release";
+const AMP_ATTACK_ENDPOINT_ID = "ampAttack";
+const AMP_DECAY_ENDPOINT_ID = "ampDecay";
+const AMP_SUSTAIN_ENDPOINT_ID = "ampSustain";
+const AMP_RELEASE_ENDPOINT_ID = "ampRelease";
 const DISTORTION_TYPE_ENDPOINT_ID = "distortionType";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
@@ -27669,6 +27728,26 @@ function useSynthPatchViewModel({
     initialValue: 0.2,
     coerce: (value) => clamp$3(Number(value) || 1e-3, 1e-3, 10)
   });
+  const ampAttack = usePatchParameterBinding({
+    endpointID: AMP_ATTACK_ENDPOINT_ID,
+    initialValue: 0.01,
+    coerce: (value) => clamp$3(Number(value) || 1e-3, 1e-3, 10)
+  });
+  const ampDecay = usePatchParameterBinding({
+    endpointID: AMP_DECAY_ENDPOINT_ID,
+    initialValue: 1e-3,
+    coerce: (value) => clamp$3(Number(value) || 1e-3, 1e-3, 10)
+  });
+  const ampSustain = usePatchParameterBinding({
+    endpointID: AMP_SUSTAIN_ENDPOINT_ID,
+    initialValue: 1,
+    coerce: (value) => clamp$3(Number(value) || 0, 0, 1)
+  });
+  const ampRelease = usePatchParameterBinding({
+    endpointID: AMP_RELEASE_ENDPOINT_ID,
+    initialValue: 0.2,
+    coerce: (value) => clamp$3(Number(value) || 5e-3, 5e-3, 10)
+  });
   const distortionMode = useLaneParameterBinding(requireLaneParameterDescriptor("distortionMode"));
   const distortionDriveDb = useLaneParameterBinding(requireLaneParameterDescriptor("distortionDriveDb"));
   const distortionKnee = useLaneParameterBinding(requireLaneParameterDescriptor("distortionKnee"));
@@ -27825,6 +27904,10 @@ function useSynthPatchViewModel({
     env3Release,
     env3Sustain
   ]);
+  const envelopeEditorBindings = reactExports.useMemo(() => [
+    ...envelopeBindings,
+    { attackSeconds: ampAttack, decaySeconds: ampDecay, sustain: ampSustain, releaseSeconds: ampRelease }
+  ], [ampAttack, ampDecay, ampRelease, ampSustain, envelopeBindings]);
   const displayedMsegControllerRef = reactExports.useRef(null);
   displayedMsegControllerRef.current = modulationBridge.current?.getMsegSlotController(selectedMsegSlot) ?? null;
   const routes = reactExports.useMemo(() => modulationState?.routes ?? [], [modulationState?.routes]);
@@ -27850,17 +27933,17 @@ function useSynthPatchViewModel({
   }, [msegState?.playback, observedMsegState, selectedMsegSlot]);
   const selectedEnvelope = reactExports.useMemo(() => {
     const name = modulationState?.envelopeSlots[selectedEnvelopeSlot]?.name;
-    const bindings = envelopeBindings[selectedEnvelopeSlot];
+    const bindings = envelopeEditorBindings[selectedEnvelopeSlot];
     if (!modulationState || !bindings) return null;
     return {
-      name: name ?? `Env ${selectedEnvelopeSlot + 1}`,
+      name: selectedEnvelopeSlot === 3 ? "Amp Envelope" : name ?? `Env ${selectedEnvelopeSlot + 1}`,
       attackSeconds: bindings.attackSeconds.value,
       decaySeconds: bindings.decaySeconds.value,
       sustain: bindings.sustain.value,
       releaseSeconds: bindings.releaseSeconds.value
     };
-  }, [envelopeBindings, modulationState, selectedEnvelopeSlot]);
-  const selectedEnvelopeBindings = envelopeBindings[selectedEnvelopeSlot] ?? null;
+  }, [envelopeEditorBindings, modulationState, selectedEnvelopeSlot]);
+  const selectedEnvelopeBindings = envelopeEditorBindings[selectedEnvelopeSlot] ?? null;
   const callbackControlReadiness = reactExports.useMemo(() => ({
     wavetableSelection: wavetableSelect.isReady,
     mseg: {
@@ -27951,7 +28034,7 @@ function useSynthPatchViewModel({
     displayedMsegControllerRef.current?.setEditShapeIndex?.(shapeIndex);
   }, []);
   const handleSelectEnvelopeSlot = reactExports.useCallback((slotIndex) => {
-    setSelectedEnvelopeSlot(clamp$3(Math.round(slotIndex), 0, 2));
+    setSelectedEnvelopeSlot(clamp$3(Math.round(slotIndex), 0, 3));
   }, []);
   const handleMsegRateChange = reactExports.useCallback((nextValue) => {
     if (!selectedMsegRate.isReady) {
@@ -27985,12 +28068,12 @@ function useSynthPatchViewModel({
     targetBinding.setValue(nextMorph);
   }, [mseg1Morph, msegMorphBindings, selectedMsegSlot]);
   const handleEnvelopeChange = reactExports.useCallback((field, nextValue) => {
-    const selectedBindings = envelopeBindings[selectedEnvelopeSlot];
+    const selectedBindings = envelopeEditorBindings[selectedEnvelopeSlot];
     if (!selectedBindings || !selectedBindings[field].isReady) {
       return;
     }
     selectedBindings[field].setValue(nextValue);
-  }, [envelopeBindings, selectedEnvelopeSlot]);
+  }, [envelopeEditorBindings, selectedEnvelopeSlot]);
   const handleAddRoute = reactExports.useCallback(() => {
     const bridge = modulationBridge.current;
     if (!bridge) return;
@@ -29698,7 +29781,7 @@ function ParameterKnobSurface({
   ]);
   const hudModel = hudPresentation === null ? null : (() => {
     const sourceIdentity = route !== null && route.sourceSlot !== null && (route.sourceKind === "mseg" || route.sourceKind === "env" || route.sourceKind === "macro") ? findRackModulationSource(route.sourceKind, route.sourceSlot) : null;
-    const sourceLine = route !== null && sourceIdentity !== null ? `${sourceIdentity.shortLabel} ${route.sourceSlot ?? ""}`.trim() + ` · ${formatModulationAmountReadout(targetKind, modulationAmount, route.polarity)}` : "";
+    const sourceLine = route !== null && sourceIdentity !== null ? rackModulationSourceShortIdentity(sourceIdentity) + ` · ${formatModulationAmountReadout(targetKind, modulationAmount, route.polarity)}` : "";
     const modRing = !enableModulationGesture || !sourceIsSelected ? { kind: "hidden" } : route === null ? { kind: "unmapped" } : {
       kind: "mapped",
       lowNormalized: routeTravel?.normalized[0] ?? baseNormalized,
@@ -29909,6 +29992,8 @@ function ModulatedParameterKnob({
 }
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
+const AMP_ENVELOPE_EDITOR_SLOT_INDEX = MODULATION_ENV_SLOT_COUNT;
+const ENVELOPE_EDITOR_SLOT_COUNT = MODULATION_ENV_SLOT_COUNT + 1;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
 const KEYBOARD_ROOT_NOTE_MAX = 72;
 const DISTORTION_WET_HP_MIN_HZ = 20;
@@ -30343,11 +30428,11 @@ const IOSModulationMatrixPanel = reactExports.memo(function IOSModulationMatrixP
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mseg-eyebrow", children: "Envelopes + Routes" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { className: "mseg-route-title", children: "Modulation Matrix" })
         ] }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", gap: "0.5rem", flexWrap: "wrap" }, children: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", gap: "0.5rem", flexWrap: "wrap" }, children: Array.from({ length: ENVELOPE_EDITOR_SLOT_COUNT }, (_, slotIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx(
           "button",
           {
             type: "button",
-            "aria-label": `Select envelope ${slotIndex + 1}`,
+            "aria-label": slotIndex === AMP_ENVELOPE_EDITOR_SLOT_INDEX ? "Select Amp Envelope" : `Select envelope ${slotIndex + 1}`,
             onClick: () => onSelectEnvelopeSlot(slotIndex),
             style: {
               borderRadius: "999px",
@@ -30359,7 +30444,7 @@ const IOSModulationMatrixPanel = reactExports.memo(function IOSModulationMatrixP
               letterSpacing: "0.14em",
               textTransform: "uppercase"
             },
-            children: `Env ${slotIndex + 1}`
+            children: slotIndex === AMP_ENVELOPE_EDITOR_SLOT_INDEX ? "Amp Envelope" : `Env ${slotIndex + 1}`
           },
           `ios-env-slot-${slotIndex + 1}`
         )) }),
@@ -30367,7 +30452,7 @@ const IOSModulationMatrixPanel = reactExports.memo(function IOSModulationMatrixP
           ["attackSeconds", "Attack", "Attack", 1e-3, 10, 1e-3, Number(selectedEnvelope?.attackSeconds ?? 0.01)],
           ["decaySeconds", "Decay", "Decay", 1e-3, 10, 1e-3, Number(selectedEnvelope?.decaySeconds ?? 0.25)],
           ["sustain", "Sustain", "Sustain", 0, 1, 1e-3, Number(selectedEnvelope?.sustain ?? 0.5)],
-          ["releaseSeconds", "Release", "Release", 1e-3, 10, 1e-3, Number(selectedEnvelope?.releaseSeconds ?? 0.2)]
+          ["releaseSeconds", "Release", "Release", selectedEnvelopeSlot === AMP_ENVELOPE_EDITOR_SLOT_INDEX ? 5e-3 : 1e-3, 10, 1e-3, Number(selectedEnvelope?.releaseSeconds ?? 0.2)]
         ].map(([field, label, target, min, max, step, value]) => /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { display: "grid", gap: "0.35rem" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "mseg-depth-label", children: String(label) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -30375,7 +30460,7 @@ const IOSModulationMatrixPanel = reactExports.memo(function IOSModulationMatrixP
             {
               className: "mseg-rate-slider",
               type: "range",
-              "data-modulation-target-kind": `env${selectedEnvelopeSlot + 1}${target}`,
+              "data-modulation-target-kind": selectedEnvelopeSlot === AMP_ENVELOPE_EDITOR_SLOT_INDEX ? `amp${target}` : `env${selectedEnvelopeSlot + 1}${target}`,
               min: String(min),
               max: String(max),
               step: String(step),
@@ -31082,7 +31167,8 @@ function IOSPatchViewBody() {
                   value: armedSource.sourceKind,
                   onChange: (event) => setArmedSource((current) => ({
                     ...current,
-                    sourceKind: event.target.value === "env" ? "env" : event.target.value === "macro" ? "macro" : "mseg"
+                    sourceKind: event.target.value === "env" ? "env" : event.target.value === "macro" ? "macro" : "mseg",
+                    sourceSlot: event.target.value === "env" ? clamp(current.sourceSlot, 1, 4) : clamp(current.sourceSlot, 1, 3)
                   })),
                   children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "mseg", children: "MSEG" }),
@@ -31098,12 +31184,17 @@ function IOSPatchViewBody() {
                   value: String(armedSource.sourceSlot),
                   onChange: (event) => setArmedSource((current) => ({
                     ...current,
-                    sourceSlot: clamp(Math.round(Number(event.target.value) || 1), 1, 3)
+                    sourceSlot: clamp(
+                      Math.round(Number(event.target.value) || 1),
+                      1,
+                      current.sourceKind === "env" ? 4 : 3
+                    )
                   })),
                   children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "1", children: "1" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "2", children: "2" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "3", children: "3" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "3", children: "3" }),
+                    armedSource.sourceKind === "env" ? /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "4", children: "Amp" }) : null
                   ]
                 }
               )

@@ -36,7 +36,10 @@ import {
     getRackEffectDescriptor,
     getRackParameterDescriptor,
 } from "../shared/rack-parameter-descriptors";
-import { RACK_MODULATION_SOURCE_PAGES } from "../shared/rack-modulation-sources";
+import {
+    RACK_MODULATION_SOURCE_PAGES,
+    rackModulationSourceBadgeLabel,
+} from "../shared/rack-modulation-sources";
 import { getModulationTargetPresentation, type EffectModuleId } from "../shared/target-descriptor";
 import { getModulationRouteCreation } from "../shared/rack-route-presentation";
 
@@ -122,7 +125,7 @@ export function SourceIdentity({
             aria-hidden="true"
         >
             <img src={family.iconUrl} alt="" draggable={false} />
-            <span>{sourceSlot}</span>
+            <span>{rackModulationSourceBadgeLabel({ sourceKind, sourceSlot })}</span>
         </span>
     );
 }

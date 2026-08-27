@@ -93,6 +93,11 @@ processor RackModulationReachesRealDsp [[ main ]]
 
     float32 renderDry (int32 frame)
     {
+        // Direct SharedVoiceEngine graphs do not apply endpoint init annotations.
+        // Drive the legacy-compatible Amp Envelope defaults explicitly.
+        engineDry.ampAttackIn <- 0.01f;
+        engineDry.ampDecayIn <- 0.001f;
+        engineDry.ampSustainIn <- 1.0f;
         engineDry.advance();
 
         for (wrap<wt::rackModTargetCount> target)
@@ -105,6 +110,9 @@ processor RackModulationReachesRealDsp [[ main ]]
 
     float32 renderModulated (int32 frame)
     {
+        engineModulated.ampAttackIn <- 0.01f;
+        engineModulated.ampDecayIn <- 0.001f;
+        engineModulated.ampSustainIn <- 1.0f;
         engineModulated.advance();
 
         for (wrap<wt::rackModTargetCount> target)

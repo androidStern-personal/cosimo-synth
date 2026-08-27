@@ -112,6 +112,7 @@ import {
 import {
     RACK_MODULATION_SOURCE_PAGES,
     findRackModulationSource,
+    rackModulationSourceBadgeLabel,
     type RackModulationSource,
 } from "../shared/rack-modulation-sources";
 import {
@@ -1241,7 +1242,7 @@ function ModSourceArt({ source }: { source: RackModulationSource }) {
             aria-hidden="true"
         >
             <span data-role="rack-mod-glyph" className="rack-mod-glyph" />
-            <span className="rack-mod-number">{source.sourceSlot}</span>
+            <span className="rack-mod-number">{rackModulationSourceBadgeLabel(source)}</span>
         </span>
     );
 }
@@ -3313,15 +3314,16 @@ export function EffectsRackWorkspace({
         return true;
     }, [clearReorderBranchDwell, focusRackBranch, focusedBranchIndices]);
     const [selectedSource, setSelectedSource] = useState<SelectedSource>({ sourceKind: "mseg", sourceSlot: 1 });
+    const [sourceIsArmed, setSourceIsArmed] = useState(false);
     // T14 one-selection: the Mod page's selectors arm the bar. This state is
     // the real selection owner; onGlobalModRailStateChange re-reports it.
     useEffect(() => {
         if (selectModSourceSignal !== null) {
             setSelectedSource(selectModSourceSignal.source);
+            setSourceIsArmed(true);
         }
     }, [selectModSourceSignal]);
     const [sourcePageIndex, setSourcePageIndex] = useState(0);
-    const [sourceIsArmed, setSourceIsArmed] = useState(false);
     const [dragSource, setDragSource] = useState<SelectedSource | null>(null);
     const [selectedTargetEndpointID, setSelectedTargetEndpointID] = useState("distortionDriveDb");
     const [hoverTargetEndpointID, setHoverTargetEndpointID] = useState<string | null>(null);

@@ -28,6 +28,10 @@ export function createIOSHarnessInitScript() {
             ["playMode", 0],
             ["glideTime", 0.15],
             ["globalTune", 0],
+            ["ampAttack", 0.01],
+            ["ampDecay", 0.001],
+            ["ampSustain", 1],
+            ["ampRelease", 0.2],
             ["oscAPan", 0],
             ["oscAVolumeDb", 0],
             ["oscBVolumeDb", 0],
@@ -151,6 +155,26 @@ export function createIOSHarnessInitScript() {
                         endpointID: "globalTune",
                         purpose: "parameter",
                         annotation: { name: "Global Tune", min: -24, max: 24, init: 0, unit: "st" },
+                    },
+                    {
+                        endpointID: "ampAttack",
+                        purpose: "parameter",
+                        annotation: { name: "Amp Envelope Attack", min: 0.001, max: 10, init: 0.01, unit: "s" },
+                    },
+                    {
+                        endpointID: "ampDecay",
+                        purpose: "parameter",
+                        annotation: { name: "Amp Envelope Decay", min: 0.001, max: 10, init: 0.001, unit: "s" },
+                    },
+                    {
+                        endpointID: "ampSustain",
+                        purpose: "parameter",
+                        annotation: { name: "Amp Envelope Sustain", min: 0, max: 1, init: 1 },
+                    },
+                    {
+                        endpointID: "ampRelease",
+                        purpose: "parameter",
+                        annotation: { name: "Amp Envelope Release", min: 0.005, max: 10, init: 0.2, unit: "s" },
                     },
                     {
                         endpointID: "oscAPan",
@@ -396,6 +420,7 @@ export function createIOSHarnessInitScript() {
                 const oscillatorPositionMatch = /^osc([ABC])WavetablePosition$/.exec(endpointID);
                 const oscillatorSelectMatch = /^osc([ABC])WavetableSelect$/.exec(endpointID);
                 const oscillatorPanMatch = /^osc([ABC])Pan$/.exec(endpointID);
+                const ampEnvelopeMatch = /^amp(?:Attack|Decay|Sustain|Release)$/.test(endpointID);
                 sentMessages.push({ endpointID, value });
 
                 if (endpointID === "runtimeSyncRequest") {
@@ -428,6 +453,7 @@ export function createIOSHarnessInitScript() {
                     || endpointID === "playMode"
                     || endpointID === "glideTime"
                     || endpointID === "globalTune"
+                    || ampEnvelopeMatch
                     || endpointID === "chorusMix"
                     || endpointID === "chorusMotionMode"
                     || endpointID === "chorusBloomMode"

@@ -16,7 +16,9 @@ import {
 } from "../shared/modulation";
 import {
     getModulationSourceIdentity,
+    MODULATION_SOURCE_IDENTITIES,
     OSCILLATOR_IDS,
+    parseModulationSourceIdentity,
     type ModulationSourceId,
     type OscillatorID,
 } from "../shared/modulation-targets";
@@ -237,7 +239,7 @@ function routeTargetOscillator(route: ModulationRoute): OscillatorID | null {
 }
 
 function routeTargetIsVoiceSetup(route: ModulationRoute): boolean {
-    return /^(mseg[123](Morph|Rate)|env[123](Attack|Decay|Sustain|Release))$/.test(route.targetKind);
+    return /^(mseg[123](Morph|Rate)|env[123](Attack|Decay|Sustain|Release)|amp(Attack|Decay|Sustain|Release)|globalTuneSemitones)$/.test(route.targetKind);
 }
 
 function laneParameterDiffs(
@@ -284,13 +286,10 @@ export function analyzePatch(document: PatchDocument, defaults: DefaultsSnapshot
     const demonstratedRouteIds = new Set(demonstratedRoutes.map((route) => route.id));
 
     const sources = [...new Set(operativeRoutes.map(sourceIdForRoute))].map((id): SourceUsage => {
-        const identity = getModulationSourceIdentity(
-            id.startsWith("mseg-") ? "mseg"
-                : id.startsWith("env-") ? "env"
-                    : id.startsWith("macro-") ? "macro"
-                        : id as "velocity" | "pressure" | "slide",
-            /-(\d)$/.test(id) ? Number(id.slice(-1)) : null,
-        );
+        const identity = parseModulationSourceIdentity(id);
+        if (identity === null) {
+            throw new Error(`Route resolved a non-canonical modulation source: ${id}`);
+        }
         const parameterDiffs = sourceParameterIDs(id).flatMap((endpointID) => {
             const diff = diffsByEndpoint.get(endpointID);
             return diff ? [diff] : [];
@@ -306,12 +305,7 @@ export function analyzePatch(document: PatchDocument, defaults: DefaultsSnapshot
             hasConfiguration: parameterDiffs.length > 0 || metadataChanged,
         };
     }).sort((left, right) => {
-        const sourceOrder = [
-            "mseg-1", "mseg-2", "mseg-3",
-            "env-1", "env-2", "env-3",
-            "macro-1", "macro-2", "macro-3", "macro-4",
-            "velocity", "pressure", "slide",
-        ];
+        const sourceOrder = MODULATION_SOURCE_IDENTITIES.map((identity) => identity.id);
         return sourceOrder.indexOf(left.id) - sourceOrder.indexOf(right.id);
     });
 

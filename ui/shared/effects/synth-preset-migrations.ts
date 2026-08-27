@@ -10,20 +10,38 @@ import {
 } from "../global-tune";
 
 const FILTER_MIX_ENDPOINT_ID = "filterMix";
+const AMP_ATTACK_ENDPOINT_ID = "ampAttack";
+const AMP_DECAY_ENDPOINT_ID = "ampDecay";
+const AMP_SUSTAIN_ENDPOINT_ID = "ampSustain";
+const AMP_LEGACY_ATTACK_SECONDS = 0.01;
+// The public minimum is the exact no-dip decay representation when Sustain=1.
+const AMP_LEGACY_DECAY_SECONDS = 0.001;
+const AMP_LEGACY_SUSTAIN = 1;
 
 /**
  * Append-only synth migrations are derived from the live contract. Each
  * historical step fills the neutral value introduced at that step: fully-wet
- * filter Mix, oscillator-mode Bounce, then zero-semitone Global Tune.
+ * filter Mix, oscillator-mode Bounce, zero-semitone Global Tune, then the
+ * bit-compatible ADSR representation of the legacy Amp Release contour.
  */
 export function buildSynthPresetMigrations(
     currentContract: EffectPluginStateContract,
 ): EffectPresetMigration[] {
-    const preTuneParameters = currentContract.parameters.filter(
+    const preAmpParameters = currentContract.parameters.filter(
+        (parameter) => parameter.endpointID !== AMP_ATTACK_ENDPOINT_ID
+            && parameter.endpointID !== AMP_DECAY_ENDPOINT_ID
+            && parameter.endpointID !== AMP_SUSTAIN_ENDPOINT_ID,
+    );
+
+    if (preAmpParameters.length !== currentContract.parameters.length - 3) {
+        throw new Error("The synth contract must include all three appended Amp Envelope parameters.");
+    }
+
+    const preTuneParameters = preAmpParameters.filter(
         (parameter) => parameter.endpointID !== GLOBAL_TUNE_ENDPOINT_ID,
     );
 
-    if (preTuneParameters.length === currentContract.parameters.length) {
+    if (preTuneParameters.length === preAmpParameters.length) {
         throw new Error(`The synth contract must include the ${GLOBAL_TUNE_ENDPOINT_ID} parameter.`);
     }
 
@@ -63,6 +81,11 @@ export function buildSynthPresetMigrations(
         parameters: preMixParameters,
         storedState: preBounceStoredState,
     });
+    const preAmpContract = buildCanonicalPluginStateContract({
+        effectID: currentContract.effectID,
+        parameters: preAmpParameters,
+        storedState: currentContract.storedState,
+    });
 
     return [
         {
@@ -98,13 +121,28 @@ export function buildSynthPresetMigrations(
         {
             effectID: currentContract.effectID,
             fromHash: preTuneContract.hash,
+            toHash: preAmpContract.hash,
+            migrate: (preset) => ({
+                ...preset,
+                contract: preAmpContract,
+                parameters: {
+                    ...preset.parameters,
+                    [GLOBAL_TUNE_ENDPOINT_ID]: GLOBAL_TUNE_INITIAL_SEMITONES,
+                },
+            }),
+        },
+        {
+            effectID: currentContract.effectID,
+            fromHash: preAmpContract.hash,
             toHash: currentContract.hash,
             migrate: (preset) => ({
                 ...preset,
                 contract: currentContract,
                 parameters: {
                     ...preset.parameters,
-                    [GLOBAL_TUNE_ENDPOINT_ID]: GLOBAL_TUNE_INITIAL_SEMITONES,
+                    [AMP_ATTACK_ENDPOINT_ID]: AMP_LEGACY_ATTACK_SECONDS,
+                    [AMP_DECAY_ENDPOINT_ID]: AMP_LEGACY_DECAY_SECONDS,
+                    [AMP_SUSTAIN_ENDPOINT_ID]: AMP_LEGACY_SUSTAIN,
                 },
             }),
         },

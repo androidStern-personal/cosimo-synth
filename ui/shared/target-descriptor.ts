@@ -54,8 +54,8 @@ export type EffectModuleId =
 /** The per-note voice modules. */
 export type VoiceModuleId = `osc${OscillatorID}` | "voice" | "voice-filter";
 
-/** The six modulation-generator modules shown in the voice workspace. */
-export type ModulationGeneratorModuleId = `mseg${1 | 2 | 3}` | `env${1 | 2 | 3}`;
+/** The modulation-generator modules shown in the voice workspace. */
+export type ModulationGeneratorModuleId = `mseg${1 | 2 | 3}` | `env${1 | 2 | 3}` | "ampEnvelope";
 
 /** Any module owning parameters. */
 export type ModuleId = EffectModuleId | VoiceModuleId | ModulationGeneratorModuleId;
@@ -158,6 +158,10 @@ type BoundEndpointId =
     | "filterCutoff"
     | "filterQ"
     | "filterMix"
+    | "ampAttack"
+    | "ampDecay"
+    | "ampSustain"
+    | "ampRelease"
     | `mseg${1 | 2 | 3}${"Morph" | "Rate"}`
     | `env${1 | 2 | 3}${"Attack" | "Decay" | "Sustain" | "Release"}`;
 
@@ -498,6 +502,10 @@ const GENERATOR_TARGET_DEFINITIONS: ReadonlyArray<GeneratorTargetDefinition> = O
     { moduleId: "env3", targetIdSuffix: "decay", endpointID: "env3Decay", targetKind: "env3Decay", label: "ENV 3 Decay", min: 0.001, max: 10, initial: 0.25, format: "time", articulationParameterId: "env3.decaySeconds" },
     { moduleId: "env3", targetIdSuffix: "sustain", endpointID: "env3Sustain", targetKind: "env3Sustain", label: "ENV 3 Sustain", min: 0, max: 1, initial: 0.5, format: "percent", articulationParameterId: "env3.sustain" },
     { moduleId: "env3", targetIdSuffix: "release", endpointID: "env3Release", targetKind: "env3Release", label: "ENV 3 Release", min: 0.001, max: 10, initial: 0.2, format: "time", articulationParameterId: "env3.releaseSeconds" },
+    { moduleId: "ampEnvelope", targetIdSuffix: "attack", endpointID: "ampAttack", targetKind: "ampAttack", label: "Amp Envelope Attack", min: 0.001, max: 10, initial: 0.01, format: "time", articulationParameterId: null },
+    { moduleId: "ampEnvelope", targetIdSuffix: "decay", endpointID: "ampDecay", targetKind: "ampDecay", label: "Amp Envelope Decay", min: 0.001, max: 10, initial: 0.001, format: "time", articulationParameterId: null },
+    { moduleId: "ampEnvelope", targetIdSuffix: "sustain", endpointID: "ampSustain", targetKind: "ampSustain", label: "Amp Envelope Sustain", min: 0, max: 1, initial: 1, format: "percent", articulationParameterId: null },
+    { moduleId: "ampEnvelope", targetIdSuffix: "release", endpointID: "ampRelease", targetKind: "ampRelease", label: "Amp Envelope Release", min: 0.005, max: 10, initial: 0.2, format: "time", articulationParameterId: null },
 ]);
 
 function createGeneratorTargetDescriptor(definition: GeneratorTargetDefinition): TargetDescriptor {

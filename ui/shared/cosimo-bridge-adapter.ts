@@ -103,7 +103,7 @@ const ARTICULATION_COLORS = [
     "#d48bac",
 ] as const;
 
-const INITIAL_VISIBLE_SOURCE_IDS = ["macro-1", "envelope-1", "mseg-1"] as const;
+const INITIAL_VISIBLE_SOURCE_IDS = ["macro-1", "envelope-1", "mseg-1", "amp-envelope"] as const;
 const MSEG_MORPH_ENDPOINT_IDS = ["mseg1Morph", "mseg2Morph", "mseg3Morph"] as const;
 
 type SourceDefinition = {
@@ -184,11 +184,12 @@ function createSourceDefinitions(): ReadonlyArray<SourceDefinition> {
             : option.sourceKind === "velocity" || option.sourceKind === "pressure" || option.sourceKind === "slide"
                 ? "fixed"
                 : option.sourceKind;
+        const isAmpEnvelope = option.value === "amp-envelope";
         const idRaw = option.sourceKind === "env"
-            ? `envelope-${option.sourceSlot ?? 0}`
+            ? isAmpEnvelope ? option.value : `envelope-${option.sourceSlot ?? 0}`
             : option.value;
         const label = option.sourceKind === "env"
-            ? `Envelope ${option.sourceSlot ?? 0}`
+            ? isAmpEnvelope ? "Amp Envelope" : `Envelope ${option.sourceSlot ?? 0}`
             : option.label;
 
         return {
@@ -288,8 +289,11 @@ function buildParameterOwnedEnvelope(
     envelopeName: string,
     slotIndex: number,
 ): ModulationEnvelope {
-    const fallback = createDefaultEnvelope(slotIndex);
-    const prefix = `env${slotIndex + 1}`;
+    const isAmpEnvelope = slotIndex === 3;
+    const fallback = isAmpEnvelope
+        ? { name: "Amp Envelope", attackSeconds: 0.01, decaySeconds: 0.001, sustain: 1, releaseSeconds: 0.2 }
+        : createDefaultEnvelope(slotIndex);
+    const prefix = isAmpEnvelope ? "ampEnvelope" : `env${slotIndex + 1}`;
     const readEngineValue = (field: "attack" | "decay" | "sustain" | "release", fallbackValue: number) => {
         const descriptor = allTargetDescriptors().find((candidate) => candidate.targetId === `${prefix}.${field}`);
         if (descriptor?.binding._tag !== "endpoint") return fallbackValue;
@@ -297,7 +301,7 @@ function buildParameterOwnedEnvelope(
         return descriptor.binding.toEngine(value);
     };
     return {
-        name: envelopeName,
+        name: isAmpEnvelope ? "Amp Envelope" : envelopeName,
         attackSeconds: readEngineValue("attack", fallback.attackSeconds),
         decaySeconds: readEngineValue("decay", fallback.decaySeconds),
         sustain: readEngineValue("sustain", fallback.sustain),
@@ -1255,7 +1259,9 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private createSource(type: Exclude<SourceType, "fixed">): ReturnType<CosimoCommands["createSource"]> {
-        const definitions = SOURCE_DEFINITIONS.filter((definition) => definition.type === type);
+        const definitions = SOURCE_DEFINITIONS.filter((definition) => (
+            definition.type === type && definition.idRaw !== "amp-envelope"
+        ));
         const definition = definitions.find((candidate) => !this.visibleSourceIds.has(candidate.idRaw));
         if (definition === undefined) {
             return err(new SourceSlotsExhausted(type, definitions.length));
@@ -1272,7 +1278,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         if (definition === undefined) {
             throw new Error(`Unknown source id: ${sourceId}`);
         }
-        if (definition.type === "fixed") {
+        if (definition.type === "fixed" || definition.idRaw === "amp-envelope") {
             return;
         }
         this.requireSource(sourceId);
@@ -1428,8 +1434,22 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private setEnvelope(sourceId: SourceId, envelope: ModulationEnvelope): void {
         const definition = this.requireSource(sourceId, "envelope");
         const slotIndex = this.slotIndex(definition);
-        const normalizedEnvelope = normalizeEnvelope(envelope, slotIndex);
-        this.modulationBridge.setEnvelope(slotIndex, normalizedEnvelope);
+        const isAmpEnvelope = slotIndex === 3;
+        const baseEnvelope = normalizeEnvelope(
+            isAmpEnvelope
+                ? {
+                    ...envelope,
+                    name: "Amp Envelope",
+                }
+                : envelope,
+            slotIndex,
+        );
+        const normalizedEnvelope = isAmpEnvelope
+            ? { ...baseEnvelope, name: "Amp Envelope", releaseSeconds: Math.max(0.005, baseEnvelope.releaseSeconds) }
+            : baseEnvelope;
+        if (!isAmpEnvelope) {
+            this.modulationBridge.setEnvelope(slotIndex, normalizedEnvelope);
+        }
 
         const parameterValues = [
             ["attack", normalizedEnvelope.attackSeconds],
@@ -1438,7 +1458,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             ["release", normalizedEnvelope.releaseSeconds],
         ] as const;
         for (const [field, engineValue] of parameterValues) {
-            const parsedTarget = parseTargetId(`env${slotIndex + 1}.${field}`);
+            const parsedTarget = parseTargetId(`${isAmpEnvelope ? "ampEnvelope" : `env${slotIndex + 1}`}.${field}`);
             if (parsedTarget._tag === "err") {
                 throw parsedTarget.error;
             }
@@ -1940,7 +1960,12 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             return;
         }
         if (definition.type === "envelope") {
-            this.setEnvelope(sourceIdFromDefinition(definition), createDefaultEnvelope(slotIndex));
+            this.setEnvelope(
+                sourceIdFromDefinition(definition),
+                slotIndex === 3
+                    ? { name: "Amp Envelope", attackSeconds: 0.01, decaySeconds: 0.001, sustain: 1, releaseSeconds: 0.2 }
+                    : createDefaultEnvelope(slotIndex),
+            );
             return;
         }
         const label = `MSEG ${slotIndex + 1}`;

@@ -635,6 +635,7 @@ export function createMockCosimoAdapter({
 
         deleteSource(sourceId) {
             const source = requireSource(state, sourceId);
+            if (source.id === "amp-envelope") return;
             dispatch({ type: "DELETE_SOURCE", sourceId: source.id });
         },
 
@@ -657,7 +658,17 @@ export function createMockCosimoAdapter({
         setEnvelope(sourceId, envelope) {
             const source = requireSource(state, sourceId);
             requireSourceState(state, sourceId, "envelope");
-            dispatch({ type: "SET_ENVELOPE", sourceId: source.id, envelope });
+            dispatch({
+                type: "SET_ENVELOPE",
+                sourceId: source.id,
+                envelope: source.id === "amp-envelope"
+                    ? {
+                        ...envelope,
+                        name: "Amp Envelope",
+                        releaseSeconds: Math.max(0.005, Number(envelope.releaseSeconds) || 0.005),
+                    }
+                    : envelope,
+            });
         },
 
         setMsegShape({ sourceId, shapeIndex, shape }) {

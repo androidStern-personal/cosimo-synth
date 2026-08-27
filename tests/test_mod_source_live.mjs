@@ -19,13 +19,13 @@ test("normalizeEffectiveModSourceStateMessage unwraps, clamps, and rejects malfo
         event: {
             voiceGeneration: 7,
             hasActive: 1,
-            values: [0.25, -0.5, 1.5, 0, 0.5, 1, 0.1, 0.2, 0.3],
+            values: [0.25, -0.5, 1.5, 0, 0.5, 1, 0.1, 0.2, 0.3, 0.75],
         },
     });
     assert.deepEqual(wrapped, {
         voiceGeneration: 7,
         hasActive: true,
-        values: [0.25, 0, 1, 0, 0.5, 1, 0.1, 0.2, 0.3],
+        values: [0.25, 0, 1, 0, 0.5, 1, 0.1, 0.2, 0.3, 0.75],
     });
 
     assert.equal(normalizeEffectiveModSourceStateMessage(null), null);
@@ -35,7 +35,7 @@ test("normalizeEffectiveModSourceStateMessage unwraps, clamps, and rejects malfo
         normalizeEffectiveModSourceStateMessage({
             voiceGeneration: "nope",
             hasActive: 0,
-            values: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+            values: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         }).voiceGeneration,
         0,
     );
@@ -47,21 +47,21 @@ test("selectObservedEffectiveModSourceState rejects stale voice generations", as
     const first = selectObservedEffectiveModSourceState(null, {
         voiceGeneration: 5,
         hasActive: 1,
-        values: [1, 0, 0, 0, 0, 0, 0, 0, 0],
+        values: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     });
     assert.equal(first.voiceGeneration, 5);
 
     const stale = selectObservedEffectiveModSourceState(first, {
         voiceGeneration: 3,
         hasActive: 1,
-        values: [0, 1, 0, 0, 0, 0, 0, 0, 0],
+        values: [0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
     });
     assert.equal(stale, first, "an older generation keeps the newer state");
 
     const advanced = selectObservedEffectiveModSourceState(first, {
         voiceGeneration: 6,
         hasActive: 0,
-        values: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        values: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     });
     assert.equal(advanced.voiceGeneration, 6);
     assert.equal(advanced.hasActive, false);
@@ -83,6 +83,7 @@ test("voiceModSourceValueIndex mirrors the engine's runtime source order", async
     assert.equal(voiceModSourceValueIndex({ sourceKind: "velocity", sourceSlot: null }), 6);
     assert.equal(voiceModSourceValueIndex({ sourceKind: "pressure", sourceSlot: null }), 7);
     assert.equal(voiceModSourceValueIndex({ sourceKind: "slide", sourceSlot: null }), 8);
+    assert.equal(voiceModSourceValueIndex({ sourceKind: "env", sourceSlot: 4 }), 9);
     assert.equal(voiceModSourceValueIndex({ sourceKind: "macro", sourceSlot: 1 }), null,
         "macros are mirrored from parameters, not the voice monitor");
     assert.equal(voiceModSourceValueIndex({ sourceKind: "mseg", sourceSlot: 4 }), null);
@@ -255,7 +256,7 @@ test("driver moves a rail light from monitor events without React involvement", 
     connection.emitEndpoint("effectiveModSourceState", {
         voiceGeneration: 1,
         hasActive: 1,
-        values: [1, 0, 0, 0, 0, 0, 0, 0, 0],
+        values: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     });
     for (let frame = 0; frame < 60 && frames.pendingCount() > 0; frame += 1) {
         frames.step();
@@ -268,7 +269,7 @@ test("driver moves a rail light from monitor events without React involvement", 
     connection.emitEndpoint("effectiveModSourceState", {
         voiceGeneration: 1,
         hasActive: 0,
-        values: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        values: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     });
     for (let frame = 0; frame < 120 && frames.pendingCount() > 0; frame += 1) {
         frames.step();
@@ -324,7 +325,7 @@ test("driver places knob-arc lights on the artwork sweep", async () => {
     connection.emitEndpoint("effectiveModSourceState", {
         voiceGeneration: 1,
         hasActive: 1,
-        values: [0, 0, 0, 0.5, 0, 0, 0, 0, 0],
+        values: [0, 0, 0, 0.5, 0, 0, 0, 0, 0, 0],
     });
     for (let frame = 0; frame < 60 && frames.pendingCount() > 0; frame += 1) {
         frames.step();

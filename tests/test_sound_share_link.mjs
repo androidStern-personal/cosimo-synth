@@ -33,8 +33,12 @@ function currentContract(buildCanonicalPluginStateContract) {
             { endpointID: "sourceMode", type: "number", min: 0, max: 1, defaultValue: 0 },
             { endpointID: "oscAWavetableSelect", type: "number", min: 0, max: 237, defaultValue: 0 },
             { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
+            { endpointID: "ampRelease", type: "number", min: 0.005, max: 10, defaultValue: 0.2 },
             { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
             { endpointID: "voiceEnabled", type: "boolean", defaultValue: true },
+            { endpointID: "ampAttack", type: "number", min: 0.001, max: 10, defaultValue: 0.01 },
+            { endpointID: "ampDecay", type: "number", min: 0.001, max: 10, defaultValue: 0.001 },
+            { endpointID: "ampSustain", type: "number", min: 0, max: 1, defaultValue: 1 },
         ],
         storedState: [
             { key: "bounce.v1", schemaVersion: 1, required: true },
@@ -46,6 +50,10 @@ function currentContract(buildCanonicalPluginStateContract) {
 const soundDocumentArbitrary = fc.record({
     wavetable: fc.integer({ min: 0, max: 237 }),
     filterMix: fc.integer({ min: 0, max: 1_000 }).map((value) => value / 1_000),
+    ampAttack: fc.integer({ min: 1, max: 10_000 }).map((value) => value / 1_000),
+    ampDecay: fc.integer({ min: 1, max: 10_000 }).map((value) => value / 1_000),
+    ampSustain: fc.integer({ min: 0, max: 1_000 }).map((value) => value / 1_000),
+    ampRelease: fc.integer({ min: 5, max: 10_000 }).map((value) => value / 1_000),
     globalTune: fc.integer({ min: -2_400, max: 2_400 }).map((value) => value / 100),
     voiceEnabled: fc.boolean(),
     routes: fc.array(fc.record({
@@ -75,8 +83,12 @@ test("random valid complete sounds survive deflate/base64url round trips exactly
                 sourceMode: 0,
                 oscAWavetableSelect: document.wavetable,
                 filterMix: document.filterMix,
+                ampRelease: document.ampRelease,
                 globalTune: document.globalTune,
                 voiceEnabled: document.voiceEnabled,
+                ampAttack: document.ampAttack,
+                ampDecay: document.ampDecay,
+                ampSustain: document.ampSustain,
             },
             storedState: {
                 "bounce.v1": null,
@@ -109,6 +121,7 @@ test("version skew uses the existing synth preset migrations after link decode",
     const legacyParameters = [
         { endpointID: "sourceMode", type: "number", min: 0, max: 1, defaultValue: 0 },
         { endpointID: "oscAWavetableSelect", type: "number", min: 0, max: 237, defaultValue: 0 },
+        { endpointID: "ampRelease", type: "number", min: 0.005, max: 10, defaultValue: 0.2 },
         { endpointID: "voiceEnabled", type: "boolean", defaultValue: true },
     ];
     const legacyContract = contract.buildCanonicalPluginStateContract({
@@ -122,6 +135,9 @@ test("version skew uses the existing synth preset migrations after link decode",
             ...legacyParameters,
             { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
             { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
+            { endpointID: "ampAttack", type: "number", min: 0.001, max: 10, defaultValue: 0.01 },
+            { endpointID: "ampDecay", type: "number", min: 0.001, max: 10, defaultValue: 0.001 },
+            { endpointID: "ampSustain", type: "number", min: 0, max: 1, defaultValue: 1 },
         ],
         storedState: [
             { key: "modulation.v6", schemaVersion: 6, required: true },
@@ -135,7 +151,7 @@ test("version skew uses the existing synth preset migrations after link decode",
         presetID: "user.pre-mix-and-bounce",
         label: "Older Shared Sound",
         contract: legacyContract,
-        parameters: { sourceMode: 0, oscAWavetableSelect: 93, voiceEnabled: false },
+        parameters: { sourceMode: 0, oscAWavetableSelect: 93, ampRelease: 1.73, voiceEnabled: false },
         storedState: { "modulation.v6": { routes: [{ id: "legacy-route" }] } },
     };
     const encoded = await share.encodeSoundShareFragment({
@@ -154,6 +170,10 @@ test("version skew uses the existing synth preset migrations after link decode",
     });
     assert.equal(normalized.parameters.filterMix, 1);
     assert.equal(normalized.parameters.globalTune, 0);
+    assert.equal(normalized.parameters.ampAttack, 0.01);
+    assert.equal(normalized.parameters.ampDecay, 0.001);
+    assert.equal(normalized.parameters.ampSustain, 1);
+    assert.equal(normalized.parameters.ampRelease, 1.73);
     assert.equal(normalized.storedState["bounce.v1"], null);
     assert.deepEqual(normalized.storedState["modulation.v6"], legacyPreset.storedState["modulation.v6"]);
 });
