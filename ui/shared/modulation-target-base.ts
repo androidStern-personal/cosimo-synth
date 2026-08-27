@@ -412,6 +412,7 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
                 application: "linear",
             }),
             amountDragStyle: "amount-span",
+            keyTrack: null,
         };
     }
     if (targetKind === GLOBAL_TUNE_TARGET_KIND) {
