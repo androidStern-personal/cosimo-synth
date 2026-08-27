@@ -27,79 +27,15 @@ namespace polishlab
         return std::levels::gainTodB (std::intrinsics::max (gain, 1.0e-6f));
     }
 
-    float32 tensionWarp (float32 position, float32 tension)
-    {
-        let u = clamp01 (position);
-        let t = std::intrinsics::clamp (tension, -1.0f, 1.0f);
-        return u + (t * u * (1.0f - u) * (1.0f - (2.0f * u)));
-    }
-
-    float32 evaluatePositiveCurve (
-        float32 magnitude,
-        float32 p1xIn, float32 p1yIn, float32 p1t,
-        float32 p2xIn, float32 p2yIn, float32 p2t,
-        float32 p3xIn, float32 p3yIn, float32 p3t)
-    {
-        let p1x = std::intrinsics::clamp (p1xIn, 0.01f, 1.45f);
-        let p2x = std::intrinsics::clamp (p2xIn, p1x + 0.001f, 1.48f);
-        let p3x = std::intrinsics::clamp (p3xIn, p2x + 0.001f, 1.5f);
-        let p1y = std::intrinsics::clamp (p1yIn, 0.0f, 1.45f);
-        let p2y = std::intrinsics::clamp (p2yIn, p1y, 1.48f);
-        let p3y = std::intrinsics::clamp (p3yIn, p2y, 1.5f);
-        let x = std::intrinsics::max (0.0f, magnitude);
-
-        if (x >= p3x)
-            return p3y;
-
-        if (x <= p1x)
-        {
-            let u = tensionWarp (x / p1x, p1t);
-            return p1y * u;
-        }
-
-        if (x <= p2x)
-        {
-            let u = tensionWarp ((x - p1x) / (p2x - p1x), p2t);
-            return p1y + ((p2y - p1y) * u);
-        }
-
-        let u = tensionWarp ((x - p2x) / (p3x - p2x), p3t);
-        return p2y + ((p3y - p2y) * u);
-    }
-
-    float32 evaluateCurve (
-        float32 sample,
-        float32 p1x, float32 p1y, float32 p1t,
-        float32 p2x, float32 p2y, float32 p2t,
-        float32 p3x, float32 p3y, float32 p3t)
-    {
-        if (sample == 0.0f)
-            return 0.0f;
-
-        let shaped = evaluatePositiveCurve (
-            std::intrinsics::abs (sample),
-            p1x, p1y, p1t,
-            p2x, p2y, p2t,
-            p3x, p3y, p3t
-        );
-
-        return sample < 0.0f ? -shaped : shaped;
-    }
-
-    float32 quadraticBow (float32 position, float32 bend)
-    {
-        let u = clamp01 (position);
-        let b = std::intrinsics::clamp (bend, -1.0f, 1.0f);
-        return u + (b * u * (1.0f - u));
-    }
-
     float32 evaluateBowSegment (float32 x,
                                 float32 leftX, float32 leftY,
                                 float32 rightX, float32 rightY,
                                 float32 bend)
     {
-        let u = quadraticBow ((x - leftX) / (rightX - leftX), bend);
-        return leftY + ((rightY - leftY) * u);
+        let u = clamp01 ((x - leftX) / (rightX - leftX));
+        let linear = leftY + ((rightY - leftY) * u);
+        let midpointOffset = std::intrinsics::clamp (bend, -1.0f, 1.0f);
+        return linear + (midpointOffset * 4.0f * u * (1.0f - u));
     }
 
     float32 desiredGainReductionDb (float32 detectorAmplitude,
@@ -126,43 +62,6 @@ namespace polishlab
 
         let kneeDistance = distance + halfKnee;
         return -slope * kneeDistance * kneeDistance / (2.0f * safeKnee);
-    }
-
-    processor ClipCoreChannel
-    {
-        input stream float32 in;
-        output stream float32 out;
-        output stream float32 thru;
-
-        input value float32 driveDb;
-        input value float32 p1x;
-        input value float32 p1y;
-        input value float32 p1t;
-        input value float32 p2x;
-        input value float32 p2y;
-        input value float32 p2t;
-        input value float32 p3x;
-        input value float32 p3y;
-        input value float32 p3t;
-        void main()
-        {
-            loop
-            {
-                let sample = in;
-                let driven = sample * std::levels::dBtoGain (
-                    std::intrinsics::clamp (driveDb, -24.0f, 36.0f)
-                );
-
-                thru <- sample;
-                out <- evaluateCurve (
-                    driven,
-                    p1x, p1y, p1t,
-                    p2x, p2y, p2t,
-                    p3x, p3y, p3t
-                );
-                advance();
-            }
-        }
     }
 
     float32 evaluateBipolarSideCurve (

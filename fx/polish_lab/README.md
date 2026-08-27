@@ -38,9 +38,11 @@ intentional possibilities rather than silently forbidden clipper behavior.
 Each incoming segment uses one transparent Cosimo bend primitive:
 
 ```text
-u' = u + bend * u * (1 - u),  bend in [-1, +1]
+output = lerp(left output, right output, u) + bend * 4 * u * (1 - u), bend in [-1, +1]
 ```
 
+`bend` is the signed vertical offset at the segment midpoint: positive bends
+upward and negative bends downward, including on descending or flat segments.
 It preserves both endpoints. The last endpoint is held for larger input
 magnitudes. Processing runs through the existing 4x Cmajor oversampling graph.
 
@@ -93,8 +95,9 @@ four distinct kinds of evidence:
 
 The exact decoded compressor, gain, macro, drive, and transfer-curve values are
 still pinned in that reference package. They are not the live editor defaults
-and are not exposed as reference UI. The retained pure evaluator exists for
-fixture verification only; active plugin DSP uses the bipolar editor model.
+and are not exposed as reference UI. Decoded evaluators and fixture checks live
+only in that reference package; the active plugin contains only the bipolar
+editor model.
 
 This is not a reproduction of proprietary behavior. The independent positive
 and negative curves, bend primitive, peak/full-link compressor, neutral reset,

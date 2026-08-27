@@ -6,9 +6,9 @@ import {
 import {
   SHAPER_MAX_POINTS,
   effectiveShapePoints,
+  evaluateBowedOutput,
   evaluateBipolarTransfer,
   morphOwner,
-  quadraticBow,
   rawShapePoint,
   shapePointCount,
   shapePointEndpointIDs,
@@ -171,7 +171,7 @@ export function createPolishGraphStudio({ root, patchConnection, parameterValues
     for (let sample = 0; sample <= 28; sample += 1) {
       const position = sample / 28;
       const magnitude = left.x + (right.x - left.x) * position;
-      const output = left.y + (right.y - left.y) * quadraticBow(position, right.bend);
+      const output = evaluateBowedOutput(left.y, right.y, position, right.bend);
       const input = side === "negative" ? -magnitude : magnitude;
       commands.push(
         (sample === 0 ? "M" : "L")
@@ -351,8 +351,8 @@ export function createPolishGraphStudio({ root, patchConnection, parameterValues
             && selection.index === segment.index,
         ),
         "aria-label": sideLabel(segment.side) + " segment " + segment.index,
-        "aria-description": "Drag vertically on the curve to bend this segment.",
-        "data-control-help": "Drag vertically on the curve to bend this segment.",
+        "aria-description": "Drag vertically to offset this segment at its midpoint. Up is positive; down is negative.",
+        "data-control-help": "Bend is the midpoint output offset. Drag up for positive or down for negative.",
       }));
     }
 
@@ -501,6 +501,7 @@ export function createPolishGraphStudio({ root, patchConnection, parameterValues
     activeGesture = {
       kind: "point",
       pointerId: event.pointerId,
+      pointerType: event.pointerType,
       handle,
       side,
       endpointIDs,
@@ -530,6 +531,7 @@ export function createPolishGraphStudio({ root, patchConnection, parameterValues
     activeGesture = {
       kind: "bend",
       pointerId: event.pointerId,
+      pointerType: event.pointerType,
       handle,
       side,
       endpointID,
@@ -564,6 +566,7 @@ export function createPolishGraphStudio({ root, patchConnection, parameterValues
     activeGesture = {
       kind: "point",
       pointerId: event.pointerId,
+      pointerType: event.pointerType,
       handle,
       side,
       endpointIDs,
@@ -624,6 +627,7 @@ export function createPolishGraphStudio({ root, patchConnection, parameterValues
       control,
       endpointID,
       pointerId: event.pointerId,
+      pointerType: event.pointerType,
       handle,
       startPointer: compressorValueAt(event.clientX, event.clientY),
       startValue: finiteParameter(parameterValues, endpointID, fallback),
@@ -706,10 +710,9 @@ export function createPolishGraphStudio({ root, patchConnection, parameterValues
           + "  out " + nextY.toFixed(3),
       );
     } else {
-      const visualDirection = gesture.side === "negative" ? -1 : 1;
       const nextBend = clamp(
         gesture.startValue
-          + (pointer.output - gesture.startPointer.output) * visualDirection,
+          + (pointer.output - gesture.startPointer.output),
         -1,
         1,
       );
@@ -747,18 +750,9 @@ export function createPolishGraphStudio({ root, patchConnection, parameterValues
     const newY = evaluateBipolarTransfer(side === "negative" ? -newX : newX, parameterValues);
     const splitPosition = (newX - left.x) / Math.max(0.001, right.x - left.x);
     const existingBend = rawShapePoint(parameterValues, side, insertIndex).bend;
-    const leftBend = clamp(
-      existingBend * splitPosition
-        / Math.max(0.001, 1 + existingBend * (1 - splitPosition)),
-      -1,
-      1,
-    );
-    const rightBend = clamp(
-      existingBend * (1 - splitPosition)
-        / Math.max(0.001, 1 - existingBend * splitPosition),
-      -1,
-      1,
-    );
+    const leftBend = clamp(existingBend * splitPosition * splitPosition, -1, 1);
+    const rightPosition = 1 - splitPosition;
+    const rightBend = clamp(existingBend * rightPosition * rightPosition, -1, 1);
     const changes = {};
 
     for (let targetIndex = count + 1; targetIndex > insertIndex; targetIndex -= 1) {
@@ -866,12 +860,20 @@ export function createPolishGraphStudio({ root, patchConnection, parameterValues
     event.currentTarget.select();
   }
 
-  function onPointerUp() {
-    if (activeGesture) finishGesture(false);
+  function onPointerUp(event) {
+    if (!activeGesture) return;
+    if (event.type === "mouseup") {
+      // Embedded WebKit can lose the PointerEvent release after SVG capture.
+      // Keep its legacy fallback strictly scoped to a mouse-owned gesture.
+      if (activeGesture.pointerType === "mouse") finishGesture(false);
+      return;
+    }
+    if (event.pointerId === activeGesture.pointerId) finishGesture(false);
   }
 
-  function onPointerCancel() {
-    if (activeGesture) finishGesture(true);
+  function onPointerCancel(event) {
+    if (activeGesture && event.pointerId === activeGesture.pointerId)
+      finishGesture(true);
   }
 
   function onKeyDown(event) {

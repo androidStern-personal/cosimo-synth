@@ -4,62 +4,6 @@
 
 ## testProcessor()
 
-processor PolishCurveContract [[ main ]]
-{
-    output stream int32 out;
-    node core = polishlab::ClipCoreChannel;
-
-    float32 render (float32 sample)
-    {
-        core.in <- sample;
-        core.driveDb <- 0.0f;
-        core.p1x <- 0.799438202f;
-        core.p1y <- 0.717642209f;
-        core.p1t <- 0.42f;
-        core.p2x <- 0.927299703f;
-        core.p2y <- 0.893592677f;
-        core.p2t <- 0.0f;
-        core.p3x <- 0.93620178f;
-        core.p3y <- 1.0f;
-        core.p3t <- -0.72f;
-        core.advance();
-        return core.out;
-    }
-
-    bool close (float32 actual, float32 expected, float32 tolerance)
-    {
-        return std::intrinsics::abs (actual - expected) <= tolerance;
-    }
-
-    void main()
-    {
-        let tolerance = 2.0e-6f;
-        let knot1 = render (0.799438202f);
-        let knot2 = render (0.927299703f);
-        let knot3 = render (0.93620178f);
-        let plateau = render (1.2f);
-        let negative = render (-0.5f);
-        let positive = render (0.5f);
-
-        out <- close (knot1, 0.717642209f, tolerance) ? 1 : 0;
-        advance();
-        out <- close (knot2, 0.893592677f, tolerance) ? 1 : 0;
-        advance();
-        out <- close (knot3, 1.0f, tolerance) ? 1 : 0;
-        advance();
-        out <- close (plateau, 1.0f, tolerance) ? 1 : 0;
-        advance();
-        out <- close (negative, -positive, tolerance) ? 1 : 0;
-        advance();
-        out <- close (positive, 0.4311271f, 3.0e-6f) ? 1 : 0;
-        advance();
-        out <- -1;
-        advance();
-    }
-}
-
-## testProcessor()
-
 processor PolishBipolarShapeContract [[ main ]]
 {
     output stream int32 out;
@@ -134,31 +78,31 @@ processor PolishBipolarBendContract [[ main ]]
     {
         core.in <- sample;
         core.positivePointCount <- 2.0f;
-        core.positiveP1X <- 0.5f; core.positiveP1Y <- 0.6f;
-        core.positiveP2X <- 1.0f; core.positiveP2Y <- 0.8f;
-        core.positiveP3X <- 1.16f; core.positiveP3Y <- 0.8f;
-        core.positiveP4X <- 1.24f; core.positiveP4Y <- 0.8f;
-        core.positiveP5X <- 1.32f; core.positiveP5Y <- 0.8f;
-        core.positiveP6X <- 1.4f; core.positiveP6Y <- 0.8f;
-        core.positiveP7X <- 1.5f; core.positiveP7Y <- 0.8f;
-        core.positiveB1 <- -0.5f; core.positiveB2 <- 1.0f; core.positiveB3 <- 0.0f;
+        core.positiveP1X <- 0.5f; core.positiveP1Y <- 0.8f;
+        core.positiveP2X <- 1.0f; core.positiveP2Y <- 0.2f;
+        core.positiveP3X <- 1.16f; core.positiveP3Y <- 0.2f;
+        core.positiveP4X <- 1.24f; core.positiveP4Y <- 0.2f;
+        core.positiveP5X <- 1.32f; core.positiveP5Y <- 0.2f;
+        core.positiveP6X <- 1.4f; core.positiveP6Y <- 0.2f;
+        core.positiveP7X <- 1.5f; core.positiveP7Y <- 0.2f;
+        core.positiveB1 <- 0.0f; core.positiveB2 <- 0.25f; core.positiveB3 <- 0.0f;
         core.positiveB4 <- 0.0f; core.positiveB5 <- 0.0f; core.positiveB6 <- 0.0f; core.positiveB7 <- 0.0f;
 
         core.negativePointCount <- 2.0f;
         core.negativeP1X <- 0.4f; core.negativeP1Y <- -0.2f;
-        core.negativeP2X <- 0.9f; core.negativeP2Y <- -0.7f;
-        core.negativeP3X <- 1.16f; core.negativeP3Y <- -0.7f;
-        core.negativeP4X <- 1.24f; core.negativeP4Y <- -0.7f;
-        core.negativeP5X <- 1.32f; core.negativeP5Y <- -0.7f;
-        core.negativeP6X <- 1.4f; core.negativeP6Y <- -0.7f;
-        core.negativeP7X <- 1.5f; core.negativeP7Y <- -0.7f;
-        core.negativeB1 <- 0.5f; core.negativeB2 <- -1.0f; core.negativeB3 <- 0.0f;
+        core.negativeP2X <- 0.9f; core.negativeP2Y <- -0.2f;
+        core.negativeP3X <- 1.16f; core.negativeP3Y <- -0.2f;
+        core.negativeP4X <- 1.24f; core.negativeP4Y <- -0.2f;
+        core.negativeP5X <- 1.32f; core.negativeP5Y <- -0.2f;
+        core.negativeP6X <- 1.4f; core.negativeP6Y <- -0.2f;
+        core.negativeP7X <- 1.5f; core.negativeP7Y <- -0.2f;
+        core.negativeB1 <- 0.0f; core.negativeB2 <- 0.2f; core.negativeB3 <- 0.0f;
         core.negativeB4 <- 0.0f; core.negativeB5 <- 0.0f; core.negativeB6 <- 0.0f; core.negativeB7 <- 0.0f;
 
         core.morphSide <- 1.0f;
         core.morphPoint <- 1.0f;
         core.morphTargetX <- 0.5f;
-        core.morphTargetY <- 0.6f;
+        core.morphTargetY <- 0.8f;
         core.morphPosition <- 0.0f;
         core.advance();
         return core.out;
@@ -171,17 +115,17 @@ processor PolishBipolarBendContract [[ main ]]
 
     void main()
     {
-        out <- close (render (0.25f), 0.225f) ? 1 : 0;
+        out <- close (render (0.25f), 0.4f) ? 1 : 0;
         advance();
         out <- close (render (0.75f), 0.75f) ? 1 : 0;
         advance();
-        out <- close (render (-0.2f), -0.125f) ? 1 : 0;
+        out <- close (render (-0.2f), -0.1f) ? 1 : 0;
         advance();
-        out <- close (render (-0.65f), -0.325f) ? 1 : 0;
+        out <- close (render (-0.65f), 0.0f) ? 1 : 0;
         advance();
-        out <- close (render (1.2f), 0.8f) ? 1 : 0;
+        out <- close (render (1.2f), 0.2f) ? 1 : 0;
         advance();
-        out <- close (render (-1.2f), -0.7f) ? 1 : 0;
+        out <- close (render (-1.2f), -0.2f) ? 1 : 0;
         advance();
         out <- -1;
         advance();

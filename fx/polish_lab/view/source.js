@@ -229,7 +229,7 @@ class PolishVoicingLabView extends HTMLElement {
         .transfer-curve { fill: none; stroke: var(--accent); stroke-width: 3; }
         .operating-point {
           fill: var(--cyan); stroke: #0b0c0f; stroke-width: 4; opacity: 0;
-          filter: drop-shadow(0 0 6px rgba(110,220,205,.7));
+          filter: drop-shadow(0 0 6px rgba(110,220,205,.7)); pointer-events: none;
         }
         .operating-point[data-active="true"] { opacity: 1; }
         .graph-handle-hit, .shape-point-hit { fill: transparent; stroke: transparent; pointer-events: all; }

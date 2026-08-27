@@ -3,15 +3,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
-import { decodedSettings, mappingBySuffix } from "../reference_labs/polish_comp_clip/lib/fixture-settings.mjs";
 import {
-  CURVE_DEFAULTS,
   SHAPER_MAX_POINTS,
   effectiveShapePoints,
   evaluateBipolarTransfer,
-  evaluateCurve,
   morphOwner,
-  sanitizeCurve,
 } from "../fx/polish_lab/view/curve-model.js";
 import {
     desiredGainReductionDbForLevel,
@@ -22,7 +18,6 @@ import {
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const sourcePath = path.join(repoRoot, "fx/polish_lab/PolishVoicingLab.cmajor");
 const manifestPath = path.join(repoRoot, "fx/polish_lab/PolishVoicingLab.cmajorpatch");
-const transferFixturePath = path.join(repoRoot, "reference_labs/polish_comp_clip/fixtures/transfer-samples.json");
 
 function parseInitialValues(source) {
     const values = new Map();
@@ -42,34 +37,9 @@ function parseInitialValues(source) {
     return values;
 }
 
-function assertFloat32Default(actual, expected, label) {
-    assert.equal(Math.fround(actual), Math.fround(expected), label);
-}
-
-test("the extracted reference remains exact while the design lab starts from a neutral two-sided curve", async () => {
+test("the design lab starts from a neutral two-sided curve", async () => {
     const source = await fs.readFile(sourcePath, "utf8");
     const initial = parseInitialValues(source);
-    const facts = decodedSettings.decodedPresetFacts;
-    const derived = decodedSettings.cosimoDerivedValues;
-
-    assertFloat32Default(facts.compressor.HIGH_THRESHOLD.value, 0, "retained reference threshold");
-    assertFloat32Default(derived.compressorRatioFromStoredSlope, 11.415525114155871, "retained ratio conversion");
-    assertFloat32Default(facts.compressor.HIGH_KNEE.value, 0, "retained reference knee");
-    assertFloat32Default(derived.compressorAttackSeconds * 1000, 0.20511621788255668, "retained attack");
-    assertFloat32Default(derived.compressorReleaseSeconds * 1000, 26.79168324819022, "retained release");
-    assertFloat32Default(facts.compressor.OUTPUT_GAIN.value, -0.04000000000000409, "retained makeup");
-    assertFloat32Default(
-        mappingBySuffix("/AMPLITUDE").mappedAmount.value,
-        35.9712,
-        "retained reference input mapping",
-    );
-    assertFloat32Default(
-        mappingBySuffix("/OUTPUT_GAIN").mappedAmount.value,
-        4.12,
-        "retained reference makeup mapping",
-    );
-    assert.equal(mappingBySuffix("/HIGH_RATIO").mappedAmount.value, -0.025200000000000014);
-    assertFloat32Default(facts.curve.drive.value, -0.0192, "retained reference drive");
 
     assert.equal(initial.get("thresholdDb"), 0);
     assert.equal(initial.get("ratio"), 4);
@@ -89,36 +59,6 @@ test("the extracted reference remains exact while the design lab starts from a n
     assert.equal(initial.get("morphPoint"), 1);
     assert.equal(initial.get("morphTargetX"), 0.72);
     assert.equal(initial.get("morphTargetY"), 1.05);
-});
-
-test("the isolated reference evaluator stays pinned to exact decoded points and sampled fixtures", async () => {
-    const facts = decodedSettings.decodedPresetFacts;
-    assert.deepEqual(CURVE_DEFAULTS, {
-        curveP1X: facts.curve.points[1].input.value,
-        curveP1Y: facts.curve.points[1].output.value,
-        curveP1T: facts.curve.points[1].tension.value,
-        curveP2X: facts.curve.points[2].input.value,
-        curveP2Y: facts.curve.points[2].output.value,
-        curveP2T: facts.curve.points[2].tension.value,
-        curveP3X: facts.curve.points[3].input.value,
-        curveP3Y: facts.curve.points[3].output.value,
-        curveP3T: facts.curve.points[3].tension.value,
-    });
-
-    const fixture = JSON.parse(await fs.readFile(transferFixturePath, "utf8"));
-    for (const sample of fixture.samples)
-        assert.equal(evaluateCurve(sample.input), sample.output, `transfer sample ${sample.input}`);
-
-    const sanitized = sanitizeCurve({
-        curveP1X: 1.4,
-        curveP2X: 0.2,
-        curveP3X: 0.1,
-        curveP1Y: 1.3,
-        curveP2Y: 0.2,
-        curveP3Y: 0.1,
-    });
-    assert.ok(sanitized[0].x < sanitized[1].x && sanitized[1].x < sanitized[2].x && sanitized[2].x < sanitized[3].x);
-    assert.ok(sanitized[0].y <= sanitized[1].y && sanitized[1].y <= sanitized[2].y && sanitized[2].y <= sanitized[3].y);
 });
 
 test("the interactive graph models use only the visible compressor and bipolar waveshaper state", () => {
@@ -155,7 +95,7 @@ test("the waveshaper supports independent sides, arbitrary output, bends, and on
         curveP2X: 1.0,
         curveP2Y: 0.8,
         curveB1: 0,
-        curveB2: 1,
+        curveB2: 0.05,
         curveNPointCount: 1,
         curveN1X: 1,
         curveN1Y: -0.4,
@@ -188,6 +128,35 @@ test("the waveshaper supports independent sides, arbitrary output, bends, and on
     });
 
     assert.equal(evaluateBipolarTransfer(1.2, { ...values, curveP2Y: -0.2 }), -0.2);
+
+    const descending = {
+        ...values,
+        curveP1Y: 0.8,
+        curveP2Y: 0.2,
+        curveB2: 0.25,
+    };
+    assert.ok(
+        Math.abs(evaluateBipolarTransfer(0.75, descending) - 0.75) < 1e-12,
+        "positive bend is a +0.25 output-space midpoint offset on a descending segment",
+    );
+    assert.ok(
+        Math.abs(evaluateBipolarTransfer(0.75, { ...descending, curveP2Y: 0.8 }) - 1.05) < 1e-12,
+        "a flat segment remains bendable in output space",
+    );
+    const flatNegative = {
+        ...values,
+        curveNPointCount: 2,
+        curveN1X: 0.4,
+        curveN1Y: -0.2,
+        curveN2X: 0.9,
+        curveN2Y: -0.2,
+        curveNB2: 0.2,
+    };
+    assert.ok(
+        Math.abs(evaluateBipolarTransfer(-0.65, flatNegative)) < 1e-12,
+        "the JS model matches the Cmajor flat negative-segment midpoint fixture",
+    );
+
     const sanitized = effectiveShapePoints({
         ...values,
         curvePointCount: 7,
@@ -209,6 +178,7 @@ test("the plugin exposes only the requested design surface while remaining isola
     const source = await fs.readFile(sourcePath, "utf8");
     const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
     const viewSource = await fs.readFile(path.join(repoRoot, "fx/polish_lab/view/source.js"), "utf8");
+    const curveModelSource = await fs.readFile(path.join(repoRoot, "fx/polish_lab/view/curve-model.js"), "utf8");
     const helpSource = await fs.readFile(path.join(repoRoot, "fx/polish_lab/view/control-help.js"), "utf8");
     const initial = parseInitialValues(source);
     const requiredControls = [
@@ -242,6 +212,8 @@ test("the plugin exposes only the requested design surface while remaining isola
     assert.match(source, /frame\.compressorOutputDb = meterCompressorOutputDb/);
     assert.match(source, /frame\.clipInput = meterClipInput/);
     assert.match(source, /frame\.clipOutput = meterClipOutput/);
+    assert.doesNotMatch(source, /ClipCoreChannel|tensionWarp|evaluatePositiveCurve|\bdriveDb\b/);
+    assert.doesNotMatch(curveModelSource, /CURVE_DEFAULTS|sanitizeCurve|tensionWarp|evaluateCurve/);
     assert.match(viewSource, /COMPRESSOR_CONTROLS/);
     assert.match(viewSource, /data-morph-controls/);
     for (const removedEndpoint of [

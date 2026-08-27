@@ -428,6 +428,54 @@ test("positive and negative ceiling drags independently update the DSP-facing cu
     }
 });
 
+test("live telemetry cannot block the curve control underneath it", async () => {
+    const page = await openLab();
+    try {
+        await page.evaluate(() => window.__POLISH_LAB_TEST__.emitMeter({
+            compressorInputDb: -6,
+            compressorOutputDb: -6,
+            gainReductionDb: 0,
+            clipInput: 1,
+            clipOutput: 1,
+        }));
+        const handle = page.locator(
+            '[data-shape-point-handle][data-shape-side="positive"][data-shape-index="1"]',
+        );
+        await handle.scrollIntoViewIfNeeded();
+        const box = await handle.boundingBox();
+        const hit = await handle.evaluate(element => {
+            const bounds = element.getBoundingClientRect();
+            const top = element.getRootNode().elementFromPoint(
+                bounds.left + bounds.width / 2,
+                bounds.top + bounds.height / 2,
+            );
+            return {
+                className: top?.getAttribute?.("class"),
+                side: top?.closest?.("[data-shape-point-handle]")?.dataset.shapeSide,
+                index: top?.closest?.("[data-shape-point-handle]")?.dataset.shapeIndex,
+            };
+        });
+        assert.deepEqual(
+            { side: hit.side, index: hit.index },
+            { side: "positive", index: "1" },
+            `telemetry must not own hit-testing: ${JSON.stringify(hit)}`,
+        );
+
+        const before = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(box.x + box.width / 2 - 40, box.y + box.height / 2 + 30, { steps: 4 });
+        await page.mouse.up();
+        const after = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.notEqual(after.parameterValues.curveP1X, before.parameterValues.curveP1X);
+        assert.notEqual(after.parameterValues.curveP1Y, before.parameterValues.curveP1Y);
+        assert.deepEqual(after.gestureStarts.slice(-2), ["curveP1X", "curveP1Y"]);
+        assert.deepEqual(after.gestureEnds.slice(-2), ["curveP1X", "curveP1Y"]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("segments bend directly and points can be added and removed without extra knobs", async () => {
     const page = await openLab();
     try {
@@ -474,6 +522,71 @@ test("segments bend directly and points can be added and removed without extra k
         assert.ok(Math.abs(edited.parameterValues.curveP1Y - 1) < 1e-6);
     } finally {
         await page.close();
+    }
+});
+
+test("descending and flat segments bend in the visible drag direction", async () => {
+    for (const scenario of [
+        { name: "descending", leftY: 0.8, rightY: 0.2 },
+        { name: "flat", leftY: 0.4, rightY: 0.4 },
+    ]) {
+        const page = await openLab();
+        try {
+            await page.evaluate(values => {
+                const emit = window.__POLISH_LAB_TEST__.emitParameter;
+                emit("curvePointCount", 2);
+                emit("curveP1X", 0.5);
+                emit("curveP1Y", values.leftY);
+                emit("curveB1", 0);
+                emit("curveP2X", 1);
+                emit("curveP2Y", values.rightY);
+                emit("curveB2", 0);
+            }, scenario);
+            const graph = page.locator('[data-transfer-graph="shaper"]');
+            const segment = page.locator(
+                '[data-shape-segment-handle][data-shape-side="positive"][data-shape-index="2"]',
+            );
+            await segment.scrollIntoViewIfNeeded();
+            const midpointOutput = () => segment.evaluate(element => {
+                const commands = element.getAttribute("d").match(/[ML][^ML]+/g);
+                const command = commands[Math.floor(commands.length / 2)].slice(1).split(",").map(Number);
+                const svg = element.closest("svg");
+                const minimum = Number(svg.dataset.outputMin);
+                const maximum = Number(svg.dataset.outputMax);
+                return minimum
+                    + ((Number(svg.dataset.plotBottom) - command[1])
+                        / (Number(svg.dataset.plotBottom) - Number(svg.dataset.plotTop)))
+                    * (maximum - minimum);
+            });
+            const before = await midpointOutput();
+            const start = await graph.evaluate((element, value) => {
+                const point = element.createSVGPoint();
+                point.x = Number(element.dataset.plotLeft)
+                    + ((value.input - Number(element.dataset.inputMin))
+                        / (Number(element.dataset.inputMax) - Number(element.dataset.inputMin)))
+                    * (Number(element.dataset.plotRight) - Number(element.dataset.plotLeft));
+                point.y = Number(element.dataset.plotBottom)
+                    - ((value.output - Number(element.dataset.outputMin))
+                        / (Number(element.dataset.outputMax) - Number(element.dataset.outputMin)))
+                    * (Number(element.dataset.plotBottom) - Number(element.dataset.plotTop));
+                const screen = point.matrixTransform(element.getScreenCTM());
+                return { x: screen.x, y: screen.y };
+            }, { input: 0.75, output: (scenario.leftY + scenario.rightY) * 0.5 });
+            await page.mouse.move(start.x, start.y);
+            await page.mouse.down();
+            await page.mouse.move(start.x, start.y - 48, { steps: 4 });
+            await page.mouse.up();
+
+            const state = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+            const after = await midpointOutput();
+            assert.ok(state.parameterValues.curveB2 > 0, `${scenario.name}: upward drag stores positive bend`);
+            assert.ok(
+                after > before + 0.2,
+                `${scenario.name}: upward drag moved midpoint from ${before} to ${after}`,
+            );
+        } finally {
+            await page.close();
+        }
     }
 });
 
@@ -566,7 +679,7 @@ test("Morph linearly moves only its assigned point between visible A and B posit
     }
 });
 
-test("Reset and host-state replay reconstruct both graphs exactly", async () => {
+test("Reset and all-slot host-state replay reconstruct both graphs exactly", async () => {
     const page = await openLab();
     try {
         const editedValues = {
@@ -577,20 +690,50 @@ test("Reset and host-state replay reconstruct both graphs exactly", async () => 
             attackMs: 3.5,
             releaseMs: 240,
             makeupDb: 1.75,
-            curvePointCount: 2,
+            curvePointCount: 7,
             curveP1X: 0.42,
             curveP1Y: 0.61,
             curveB1: 0.35,
-            curveP2X: 0.91,
-            curveP2Y: 1.18,
+            curveP2X: 0.58,
+            curveP2Y: 0.2,
             curveB2: -0.2,
-            curveNPointCount: 2,
+            curveP3X: 0.74,
+            curveP3Y: 0.95,
+            curveB3: 0.5,
+            curveP4X: 0.91,
+            curveP4Y: -0.15,
+            curveB4: -0.45,
+            curveP5X: 1.08,
+            curveP5Y: 1.18,
+            curveB5: 0.1,
+            curveP6X: 1.26,
+            curveP6Y: 0.3,
+            curveB6: -0.7,
+            curveP7X: 1.44,
+            curveP7Y: 1.31,
+            curveB7: 0.25,
+            curveNPointCount: 7,
             curveN1X: 0.37,
             curveN1Y: -0.52,
             curveNB1: -0.4,
-            curveN2X: 1.06,
-            curveN2Y: -1.24,
+            curveN2X: 0.55,
+            curveN2Y: 0.3,
             curveNB2: 0.45,
+            curveN3X: 0.73,
+            curveN3Y: -0.8,
+            curveNB3: -0.2,
+            curveN4X: 0.9,
+            curveN4Y: 0.15,
+            curveNB4: 0.3,
+            curveN5X: 1.07,
+            curveN5Y: -1.24,
+            curveNB5: -0.5,
+            curveN6X: 1.25,
+            curveN6Y: -0.2,
+            curveNB6: 0.1,
+            curveN7X: 1.43,
+            curveN7Y: -1.4,
+            curveNB7: 0.6,
             morph: 63,
             morphSide: -1,
             morphPoint: 2,
@@ -677,6 +820,53 @@ test("cancelled point gestures restore exact raw non-monotonic host coordinates"
             assert.equal(restored.parameterValues.curveP2Y, 0.9, `${cancellation}: raw Y restores exactly`);
             assert.deepEqual(restored.gestureEnds.slice(-2), ["curveP2X", "curveP2Y"]);
         } finally {
+            await page.close();
+        }
+    }
+});
+
+test("only the owning pointer can commit or cancel a graph gesture", async () => {
+    for (const unrelatedType of ["pointerup", "pointercancel"]) {
+        const page = await openLab();
+        try {
+            const handle = page.locator(
+                '[data-shape-point-handle][data-shape-side="positive"][data-shape-index="1"]',
+            );
+            await handle.scrollIntoViewIfNeeded();
+            const box = await handle.boundingBox();
+            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+            await page.mouse.down();
+            await page.mouse.move(box.x + box.width / 2 - 28, box.y + box.height / 2 + 24, { steps: 3 });
+            const owned = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+            assert.equal(owned.shaperReadout.visible, "true");
+            assert.notEqual(owned.parameterValues.curveP1X, 1);
+            assert.notEqual(owned.parameterValues.curveP1Y, 1);
+
+            await page.evaluate(type => document.dispatchEvent(new PointerEvent(type, {
+                bubbles: true,
+                pointerId: 2,
+                pointerType: "touch",
+            })), unrelatedType);
+            const afterUnrelated = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+            assert.equal(
+                afterUnrelated.shaperReadout.visible,
+                "true",
+                `${unrelatedType}: pointer 2 must not end pointer 1's gesture`,
+            );
+            assert.equal(afterUnrelated.gestureEnds.length, owned.gestureEnds.length);
+            assert.equal(afterUnrelated.parameterValues.curveP1X, owned.parameterValues.curveP1X);
+            assert.equal(afterUnrelated.parameterValues.curveP1Y, owned.parameterValues.curveP1Y);
+
+            await page.mouse.move(box.x + box.width / 2 - 44, box.y + box.height / 2 + 38, { steps: 2 });
+            const continued = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+            assert.notEqual(continued.parameterValues.curveP1X, afterUnrelated.parameterValues.curveP1X);
+            assert.notEqual(continued.parameterValues.curveP1Y, afterUnrelated.parameterValues.curveP1Y);
+            await page.mouse.up();
+            const finished = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+            assert.equal(finished.shaperReadout.visible, "false");
+            assert.deepEqual(finished.gestureEnds.slice(-2), ["curveP1X", "curveP1Y"]);
+        } finally {
+            await page.mouse.up().catch(() => {});
             await page.close();
         }
     }
