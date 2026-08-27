@@ -4800,9 +4800,11 @@ export function EffectsRackWorkspace({
         onDuplicateHover: handleDuplicateHover,
         onTap: (source, wasActiveSelection) => {
             if (modSourceTapMode === "toggle-quick-source") {
-                // T43: selection and quick-sheet ownership change in one
-                // gesture without exposing a stale source frame.
-                selectSource(source);
+                // T43: an inactive source changes selection and sheet ownership
+                // atomically. The active source only toggles its existing editor.
+                if (!wasActiveSelection) {
+                    selectSource(source);
+                }
                 openSelectedSource(source);
                 return;
             }
