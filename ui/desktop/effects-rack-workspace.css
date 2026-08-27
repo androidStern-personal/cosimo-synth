@@ -1710,6 +1710,37 @@
     .subway-group-solo-controls {
         grid-template-columns: var(--cosimo-hit-min);
     }
+
+    /* The right rail leaves one owned 59px control track at 320px. Keep the
+       crossover drag/readout and Key Track as full-width rows instead of
+       collapsing the slider beside the fixed-width toggle. */
+    .cosimo-surface[data-mod-rail-edge="right"] .subway-crossover-control {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .cosimo-surface[data-mod-rail-edge="right"] .subway-crossover-slider {
+        grid-template-columns: minmax(0, 1fr);
+        align-content: center;
+        gap: 2px;
+        padding-inline: 6px;
+        scroll-margin-block: 1px;
+    }
+
+    .cosimo-surface[data-mod-rail-edge="right"] .subway-crossover-label {
+        font-size: 7px;
+        letter-spacing: 0.04em;
+        line-height: 1.1;
+        white-space: normal;
+    }
+
+    .cosimo-surface[data-mod-rail-edge="right"] .subway-crossover-readout {
+        justify-self: end;
+    }
+
+    .cosimo-surface[data-mod-rail-edge="right"] .split-key-track-button {
+        width: 100%;
+        min-height: var(--cosimo-hit-min);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

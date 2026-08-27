@@ -227,3 +227,141 @@ processor LaneSplitSoloTest [[ main ]]
         loop { out <- -1; advance(); }
     }
 }
+
+//==============================================================================
+// Two adjacent Parallel groups keep simultaneous, independent choices while a
+// 1ms feedback tail is running. Group 1's second branch is empty; Group 2's
+// branch 1 adds a 1.5ms echo while branch 2 is bit-exact dry. Switching Group 1
+// to silence and then clearing it must leave Group 2 on branch 2 throughout.
+// The feedback pulses also sample the shared 3ms fade during and after commit:
+// a hard switch loses the early pulses, a longer fade leaves the commit pulse,
+// and resetting branch state prevents the tail from returning after clear.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor LaneSequentialSoloTransitionTest [[ main ]]
+{
+    output stream int32 out;
+
+    node rack = wt::EffectsRack;
+
+    let settleFrames = 1024;
+    let recordFrames = 780;
+    let switchFrame = 220;
+    let clearFrame = 484;
+    let pulseFrames = 44;
+    let groupTwoOffsetFrames = 66;
+    let peakWindow = 4;
+    let liveTailMinimum = 0.01f;
+    let transitionEarlyMinimum = 0.02f;
+    let transitionCommitCeiling = 0.015f;
+    let excludedBranchCeiling = 0.015f;
+    let laneSlotDelayThree = wt::laneSlotDelayTwo + wt::rackModuleCount;
+
+    float32[780] recordedLeft;
+
+    wt::LaneSlotParamsUpload makeDelayParams (
+        int32 slotId, int32 serial, float32 timeMs, float32 feedback, float32 mix)
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = slotId;
+        upload.deliverySerial = serial;
+        upload.values[wt::laneDelayParamTimeMs] = timeMs;
+        upload.values[wt::laneDelayParamFeedback] = feedback;
+        upload.values[wt::laneDelayParamFilterHz] = 18000.0f;
+        upload.values[wt::laneDelayParamMix] = mix;
+        return upload;
+    }
+
+    wt::LaneTopologyUpload makeSequentialGroups()
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 5;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 2);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        upload.slotIds[2] = wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase + 1, 2);
+        upload.slotIds[3] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 1);
+        upload.slotIds[4] = wt::laneEncodeSlotWithBranchTag (laneSlotDelayThree, 2);
+        upload.enabledMask = 0b11111;
+        return upload;
+    }
+
+    wt::LaneSoloUpload makeSolo (int32 groupOneBranch)
+    {
+        wt::LaneSoloUpload upload;
+        upload.parallelSoloBranches[0] = groupOneBranch;
+        upload.parallelSoloBranches[1] = 2;
+        return upload;
+    }
+
+    void advanceRack (float32 sample)
+    {
+        rack.in <- float32<2> (sample, sample);
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+    }
+
+    float32 windowPeak (int32 center)
+    {
+        var peak = 0.0f;
+        for (int32 offset = -peakWindow; offset <= peakWindow; ++offset)
+        {
+            let index = center + offset;
+            if (index >= 0 && index < recordFrames)
+            {
+                let magnitude = std::intrinsics::abs (recordedLeft.at (index));
+                if (magnitude > peak)
+                    peak = magnitude;
+            }
+        }
+        return peak;
+    }
+
+    void main()
+    {
+        rack.tempoBpmIn <- 120.0f;
+        rack.laneSlotParams <- makeDelayParams (wt::rackModuleDelay, 1, 1.0f, 0.9f, 1.0f);
+        rack.laneSlotParams <- makeDelayParams (wt::laneSlotDelayTwo, 2, 1.5f, 0.0f, 1.0f);
+        rack.laneSlotParams <- makeDelayParams (laneSlotDelayThree, 3, 1.0f, 0.0f, 0.0f);
+        rack.laneTopology <- makeSequentialGroups();
+        rack.laneSolo <- makeSolo (1);
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            if (frame == switchFrame)
+                rack.laneSolo <- makeSolo (2);
+            else if (frame == clearFrame)
+                rack.laneSolo <- makeSolo (0);
+
+            advanceRack (frame == 0 ? 1.0f : 0.0f);
+            recordedLeft.at (frame) = rack.out[0];
+        }
+
+        // Both groups begin selected together: Group 1's live tail is heard,
+        // while Group 2's unselected offset echo remains absent.
+        out <- (windowPeak (pulseFrames * 4) > liveTailMinimum ? 1 : 0); advance();
+        out <- (windowPeak (pulseFrames + groupTwoOffsetFrames) < excludedBranchCeiling ? 1 : 0); advance();
+
+        // 44 and 88 frames into the fade retain the running tail; 132 frames
+        // reaches the dry commit frame for 3ms at 44.1kHz.
+        out <- (windowPeak (switchFrame + pulseFrames) > transitionEarlyMinimum ? 1 : 0); advance();
+        out <- (windowPeak (switchFrame + pulseFrames * 2) > transitionEarlyMinimum ? 1 : 0); advance();
+        out <- (windowPeak (switchFrame + pulseFrames * 3) < transitionCommitCeiling ? 1 : 0); advance();
+        out <- (windowPeak (switchFrame + pulseFrames * 2 + groupTwoOffsetFrames)
+                < excludedBranchCeiling ? 1 : 0); advance();
+
+        // Clearing Group 1 returns its still-advancing feedback tail after the
+        // reverse transition. Group 2 remains on dry branch 2: its offset echo
+        // is still absent between the returned tail pulses.
+        out <- (windowPeak (clearFrame + pulseFrames * 4) > liveTailMinimum ? 1 : 0); advance();
+        out <- (windowPeak (clearFrame + pulseFrames * 5) > liveTailMinimum ? 1 : 0); advance();
+        out <- (windowPeak (clearFrame + pulseFrames * 5 + groupTwoOffsetFrames - pulseFrames)
+                < excludedBranchCeiling ? 1 : 0); advance();
+        out <- (windowPeak (clearFrame + pulseFrames * 6) > liveTailMinimum ? 1 : 0); advance();
+
+        loop { out <- -1; advance(); }
+    }
+}

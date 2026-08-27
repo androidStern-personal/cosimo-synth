@@ -97,6 +97,67 @@ async function assertEditorControlIsVisibleAndOwned(control, label) {
     return evidence;
 }
 
+async function assertCompactSplitCrossoverIsUsable(page, which, label) {
+    const slider = page.locator(`[data-role="rack-split-${which}-split#1"]`);
+    const keyTrack = page.locator(`[data-role="key-track-frequencySplit-${which}-split#1"]`);
+    const sliderEvidence = await assertEditorControlIsVisibleAndOwned(slider, `${label} slider`);
+    const keyTrackEvidence = await assertEditorControlIsVisibleAndOwned(keyTrack, `${label} Key Track`);
+    const sliderPresentation = await slider.evaluate((element) => {
+        const readout = element.querySelector(".subway-crossover-readout");
+        if (!(readout instanceof HTMLElement)) {
+            throw new Error("Expected a crossover readout inside the slider.");
+        }
+        const rect = element.getBoundingClientRect();
+        const readoutRect = readout.getBoundingClientRect();
+        const gridTemplateColumns = getComputedStyle(element).gridTemplateColumns;
+        return {
+            gridTemplateColumns,
+            gridTrackWidths: Array.from(gridTemplateColumns.matchAll(/([0-9.]+)px/g), (match) => Number(match[1])),
+            readoutRect: {
+                left: readoutRect.left,
+                right: readoutRect.right,
+                top: readoutRect.top,
+                bottom: readoutRect.bottom,
+                width: readoutRect.width,
+                height: readoutRect.height,
+            },
+            sliderRect: {
+                left: rect.left,
+                right: rect.right,
+                top: rect.top,
+                bottom: rect.bottom,
+            },
+        };
+    });
+    const epsilon = 0.5;
+    assert.equal(
+        sliderEvidence.rect.width >= 56 && sliderEvidence.rect.height >= 44,
+        true,
+        `${label} must retain a meaningful drag surface: ${JSON.stringify(sliderEvidence)}`,
+    );
+    assert.equal(
+        keyTrackEvidence.rect.width >= 44 && keyTrackEvidence.rect.height >= 44,
+        true,
+        `${label} Key Track must retain a full compact hit target: ${JSON.stringify(keyTrackEvidence)}`,
+    );
+    assert.equal(
+        sliderPresentation.gridTrackWidths.length > 0
+            && sliderPresentation.gridTrackWidths.every((width) => width >= 1),
+        true,
+        `${label} must not collapse an inner slider grid track: ${JSON.stringify(sliderPresentation)}`,
+    );
+    assert.equal(
+        sliderPresentation.readoutRect.width >= 28
+            && sliderPresentation.readoutRect.height >= 10
+            && sliderPresentation.readoutRect.left >= sliderPresentation.sliderRect.left - epsilon
+            && sliderPresentation.readoutRect.right <= sliderPresentation.sliderRect.right + epsilon
+            && sliderPresentation.readoutRect.top >= sliderPresentation.sliderRect.top - epsilon
+            && sliderPresentation.readoutRect.bottom <= sliderPresentation.sliderRect.bottom + epsilon,
+        true,
+        `${label} readout must remain legible inside the slider: ${JSON.stringify(sliderPresentation)}`,
+    );
+}
+
 function emptyLaneDocJson() {
     return JSON.stringify({
         format: "cosimo.lane",
@@ -1071,9 +1132,7 @@ test("compact Split Solo wrapping keeps crossovers and group actions scroll-reac
         for (let index = 0; index < 2; index += 1) {
             await assertEditorControlIsVisibleAndOwned(soloButtons.nth(index), `two-band Split Solo ${index}`);
         }
-        await assertEditorControlIsVisibleAndOwned(
-            page.locator('[data-role="rack-split-low-split#1"]'), "two-band crossover",
-        );
+        await assertCompactSplitCrossoverIsUsable(page, "low", "two-band crossover");
         const addBand = page.locator('[data-role="rack-group-add-band"]');
         await assertEditorControlIsVisibleAndOwned(addBand, "Add mid band");
         await addBand.click();
@@ -1093,9 +1152,9 @@ test("compact Split Solo wrapping keeps crossovers and group actions scroll-reac
             );
             assert.equal(evidence.rect.width >= 44 && evidence.rect.height >= 44, true);
         }
+        await assertCompactSplitCrossoverIsUsable(page, "low", "three-band Low crossover");
+        await assertCompactSplitCrossoverIsUsable(page, "high", "three-band High crossover");
         for (const [selector, label] of [
-            ['[data-role="rack-split-low-split#1"]', "Low crossover"],
-            ['[data-role="rack-split-high-split#1"]', "High crossover"],
             ['[data-role="rack-group-remove-band"]', "Remove mid band"],
             ['[data-role="rack-group-dissolve"]', "Dissolve group"],
         ]) {
@@ -1137,7 +1196,9 @@ test("compact Split Solo wrapping keeps crossovers and group actions scroll-reac
         }
         for (const [selector, label] of [
             ['[data-role="rack-split-low-split#1"]', "393x852 Low crossover"],
+            ['[data-role="key-track-frequencySplit-low-split#1"]', "393x852 Low Key Track"],
             ['[data-role="rack-split-high-split#1"]', "393x852 High crossover"],
+            ['[data-role="key-track-frequencySplit-high-split#1"]', "393x852 High Key Track"],
             ['[data-role="rack-group-remove-band"]', "393x852 Remove mid band"],
             ['[data-role="rack-group-dissolve"]', "393x852 Dissolve group"],
         ]) {
