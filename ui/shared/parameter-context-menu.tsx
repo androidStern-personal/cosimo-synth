@@ -47,21 +47,35 @@ export const PARAMETER_MENU_ITEMS = [
 
 export type ParameterMenuAction = typeof PARAMETER_MENU_ITEMS[number]["action"];
 
+type ParameterMenuBaseContract =
+    | {
+        readonly baseSpec: ParameterEntrySpec;
+        readonly baseValue: number;
+        /** null → the control has no canonical default; the reset item hides. */
+        readonly defaultValue: number | null;
+        readonly commitBase: (value: number) => void;
+    }
+    | {
+        /** An amount-only route target has no editable base row. */
+        readonly baseSpec: null;
+        readonly baseValue: null;
+        readonly defaultValue: null;
+        readonly commitBase: null;
+    };
+
 /** What a long-press host reports upward: the full editing context for the
     pressed control, so the shell's one menu machinery never re-derives host
     internals. Route actions stay shell-owned (armed source + routes). */
-export type ParameterMenuRequest = {
+export type ParameterMenuRequestContext = ParameterMenuBaseContract & {
     readonly controlKey: string;
     readonly label: string;
     readonly targetKind: string | null;
-    readonly baseSpec: ParameterEntrySpec;
-    readonly baseValue: number;
-    /** null → the control has no canonical default; the reset item hides. */
-    readonly defaultValue: number | null;
-    readonly commitBase: (value: number) => void;
     /** When the host knows the exact route (e.g. a matrix row), it pins it
         here; otherwise the shell resolves by targetKind + armed source. */
     readonly routeIndex?: number;
+};
+
+export type ParameterMenuRequest = ParameterMenuRequestContext & {
     readonly clientX: number;
     readonly clientY: number;
 };
@@ -88,7 +102,7 @@ const LONG_PRESS_SLOP_PX = 8;
  * has nothing to offer, so spreading is always safe.
  */
 export function useLongPressParameterMenu(
-    buildRequest: (() => Omit<ParameterMenuRequest, "clientX" | "clientY">) | null,
+    buildRequest: (() => ParameterMenuRequestContext) | null,
 ) {
     const openMenu = useParameterMenu();
     const pressRef = useRef<{ pointerId: number; startX: number; startY: number; timer: number } | null>(null);
@@ -240,9 +254,7 @@ export function ParameterValueSheet({
     kicker = "EXACT VALUE",
     heading,
     label,
-    baseSpec,
-    baseValue,
-    defaultValue,
+    base,
     route,
     amountSpec,
     sourceLabel,
@@ -254,34 +266,41 @@ export function ParameterValueSheet({
     heading: string;
     /** The parameter's short label, used in the dialog's aria-label. */
     label: string;
-    baseSpec: ParameterEntrySpec;
-    baseValue: number;
-    /** The canonical default the Default button restores (never touches
-        routes); null hides the button for controls with no default. */
-    defaultValue: number | null;
+    /** null means this route target has no editable base endpoint. */
+    base: {
+        spec: ParameterEntrySpec;
+        value: number;
+        /** null hides the Default button. */
+        defaultValue: number | null;
+    } | null;
     route: ModulationRoute | null;
     /** null when the target kind has no amount entry (base-only controls). */
     amountSpec: ParameterEntrySpec | null;
     /** The armed source's label, or null when no source is armed. */
     sourceLabel: string | null;
-    onApply: (baseCommit: ParameterEntryCommit, modulationAmount: number | null) => void;
+    onApply: (baseCommit: ParameterEntryCommit | null, modulationAmount: number | null) => void;
     onClose: () => void;
 }) {
-    const [baseDraft, setBaseDraft] = useState(() => formatParameterEntry(baseSpec, baseValue).draft);
+    const [baseDraft, setBaseDraft] = useState(() => (
+        base === null ? "" : formatParameterEntry(base.spec, base.value).draft
+    ));
     const [amountDraft, setAmountDraft] = useState(() => (
         route && amountSpec ? formatParameterEntry(amountSpec, route.amount).draft : ""
     ));
     const [error, setError] = useState("");
+    const defaultBaseDraft = base === null || base.defaultValue === null
+        ? null
+        : formatParameterEntry(base.spec, base.defaultValue).draft;
 
     const apply = useCallback(() => {
-        const baseResult = parseParameterEntry(baseSpec, baseDraft);
+        const baseResult = base === null ? null : parseParameterEntry(base.spec, baseDraft);
         if (route !== null && amountSpec === null) {
             throw new Error(`Route target "${route.targetKind}" has no amount entry spec.`);
         }
         const amountResult = route === null || amountSpec === null
             ? null
             : parseParameterEntry(amountSpec, amountDraft);
-        if (baseResult._tag === "rejected") {
+        if (baseResult?._tag === "rejected") {
             setError(baseResult.message);
             return;
         }
@@ -297,13 +316,15 @@ export function ParameterValueSheet({
         if (amountResult !== null && modulationAmount === null) {
             throw new Error("A modulation amount cannot commit a tempo division.");
         }
-        setBaseDraft(baseResult.echo.draft);
+        if (baseResult !== null) {
+            setBaseDraft(baseResult.echo.draft);
+        }
         if (amountResult !== null) {
             setAmountDraft(amountResult.echo.draft);
         }
         setError("");
-        onApply(baseResult.commit, modulationAmount);
-    }, [amountDraft, amountSpec, baseDraft, baseSpec, onApply, route]);
+        onApply(baseResult?.commit ?? null, modulationAmount);
+    }, [amountDraft, amountSpec, base, baseDraft, onApply, route]);
 
     return (
         <div className="rack-value-sheet-layer" onPointerDown={onClose}>
@@ -319,23 +340,25 @@ export function ParameterValueSheet({
                     <span>{kicker}</span>
                     <strong>{heading}</strong>
                 </header>
-                <label>
-                    <span>Base</span>
-                    <span className="rack-value-sheet-input">
-                        <input
-                            data-role="rack-base-value-input"
-                            inputMode="decimal"
-                            value={baseDraft}
-                            onChange={(event) => setBaseDraft(event.currentTarget.value)}
-                            onKeyDown={(event) => {
-                                if (event.key === "Enter") apply();
-                                if (event.key === "Escape") onClose();
-                            }}
-                            autoFocus
-                        />
-                        <em>{formatParameterEntry(baseSpec, baseValue).unit}</em>
-                    </span>
-                </label>
+                {base === null ? null : (
+                    <label>
+                        <span>Base</span>
+                        <span className="rack-value-sheet-input">
+                            <input
+                                data-role="rack-base-value-input"
+                                inputMode="decimal"
+                                value={baseDraft}
+                                onChange={(event) => setBaseDraft(event.currentTarget.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Enter") apply();
+                                    if (event.key === "Escape") onClose();
+                                }}
+                                autoFocus
+                            />
+                            <em>{formatParameterEntry(base.spec, base.value).unit}</em>
+                        </span>
+                    </label>
+                )}
                 <label>
                     <span>{sourceLabel === null ? "No armed source" : `${sourceLabel} amount`}</span>
                     <span className="rack-value-sheet-input">
@@ -344,6 +367,7 @@ export function ParameterValueSheet({
                             inputMode="decimal"
                             value={amountDraft}
                             disabled={route === null}
+                            autoFocus={base === null}
                             onChange={(event) => setAmountDraft(event.currentTarget.value)}
                             onKeyDown={(event) => {
                                 if (event.key === "Enter") apply();
@@ -356,9 +380,9 @@ export function ParameterValueSheet({
                 {route === null ? <p data-role="rack-value-sheet-no-route">{sourceLabel === null ? "Arm a source to edit its route." : "No selected source route."}</p> : null}
                 {error ? <p className="rack-value-sheet-error" role="alert">{error}</p> : null}
                 <footer>
-                    {defaultValue === null ? <span /> : (
+                    {defaultBaseDraft === null ? <span /> : (
                         <button type="button" data-role="rack-value-sheet-default" onClick={() => {
-                            setBaseDraft(formatParameterEntry(baseSpec, defaultValue).draft);
+                            setBaseDraft(defaultBaseDraft);
                             setError("");
                         }}>Default</button>
                     )}

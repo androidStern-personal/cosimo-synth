@@ -2431,6 +2431,11 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
         await panel.waitFor();
         assert.equal(await panel.locator('[data-role="mod-mappings-count"]').innerText(), "3");
         assert.equal(await panel.locator('[data-role="mod-mappings-row"]').count(), 3);
+        assert.equal(
+            await panel.locator('[data-role="mod-mappings-row"] [role="slider"]').count(),
+            3,
+            "Every rendered mapping row must expose an amount-editing slider.",
+        );
 
         const geometry = await panel.evaluate((element) => ({
             clientWidth: element.clientWidth,
@@ -2514,6 +2519,116 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
             await panel.locator('[data-role="mod-mappings-draft-target"] option[value="lane.reverb#1.reverbSize"]').isDisabled(),
             true,
         );
+    } finally {
+        await page.close();
+    }
+});
+
+test("T66: MAPPINGS edits MSEG Rate and amount-only route amounts without changing base values", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.clear();
+                sessionStorage.clear();
+            });
+        },
+    });
+    const openExactValueEntry = async (control) => {
+        const box = await control.boundingBox();
+        assert.ok(box);
+        await page.mouse.move(box.x + (box.width / 2), box.y + (box.height / 2));
+        await page.mouse.down();
+        await page.locator('[data-role="rack-parameter-menu"]').waitFor({ state: "visible", timeout: 10000 });
+        await page.mouse.up();
+        await page.click('[data-role="rack-parameter-menu-item"][data-action="edit-values"]');
+        const amountInput = page.locator('[data-role="rack-modulation-value-input"]');
+        await amountInput.waitFor();
+        return amountInput;
+    };
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [
+                { id: "mseg-rate-route", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "mseg2Rate", amount: 0, reducer: "max" },
+                { id: "amount-only-route", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "env1Attack", amount: 0, reducer: "max" },
+            ],
+        });
+        await page.evaluate((state) => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            harness.setParameterValue("mseg2Rate", 0.625);
+            harness.setParameterValue("env1Attack", 0.4);
+            harness.setStoredStateValue("modulation.v6", JSON.stringify(state));
+        }, seededState);
+        await waitForHarnessSnapshot(
+            page,
+            "seeded MSEG Rate and amount-only mappings",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg2Rate) - 0.625) <= 1e-9
+                && Math.abs(Number(snapshot.parameterValues.env1Attack) - 0.4) <= 1e-9
+                && readStoredModulationState(snapshot).routes.length === 2,
+        );
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+
+        const rateRow = page.locator('[data-role="mod-mappings-row"][data-route-id="mseg-rate-route"]');
+        await rateRow.waitFor();
+        assert.equal(
+            await rateRow.locator('[data-role="mod-mappings-amount-only"]').count(),
+            0,
+            "MSEG Rate has a live base endpoint and must use the normal base-plus-amount control.",
+        );
+        assert.notEqual((await rateRow.locator('[data-role="mod-mappings-base-val"]').innerText()).trim(), "");
+        const rateControl = rateRow.locator(".mobile-voice-cell.is-readout");
+        assert.equal(await rateControl.getAttribute("role"), "slider");
+
+        await dragLocatorBy(page, rateControl, 0, -44);
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "MAPPINGS drag edits MSEG Rate route amount",
+            (nextSnapshot) => Number(
+                readStoredModulationState(nextSnapshot).routes.find((route) => route.id === "mseg-rate-route")?.amount,
+            ) > 0.01,
+        );
+        assert.equal(Number(snapshot.parameterValues.mseg2Rate), 0.625);
+
+        const amountInput = await openExactValueEntry(rateControl);
+        await amountInput.fill("0.37 s");
+        await page.click('[data-role="rack-value-sheet-apply"]');
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "MAPPINGS exact entry edits MSEG Rate route amount",
+            (nextSnapshot) => Math.abs(Number(
+                readStoredModulationState(nextSnapshot).routes.find((route) => route.id === "mseg-rate-route")?.amount,
+            ) - 0.37) < 0.0001,
+        );
+        assert.equal(Number(snapshot.parameterValues.mseg2Rate), 0.625);
+
+        const amountOnlyRow = page.locator('[data-role="mod-mappings-row"][data-route-id="amount-only-route"]');
+        const amountOnlyControl = amountOnlyRow.locator('[data-role="mod-mappings-amount-only"]');
+        await amountOnlyControl.waitFor();
+        assert.equal(await amountOnlyControl.getAttribute("role"), "slider");
+        await dragLocatorBy(page, amountOnlyControl, 0, -44);
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "amount-only MAPPINGS drag edits route amount",
+            (nextSnapshot) => Number(
+                readStoredModulationState(nextSnapshot).routes.find((route) => route.id === "amount-only-route")?.amount,
+            ) > 0.01,
+        );
+        assert.equal(Number(snapshot.parameterValues.env1Attack), 0.4);
+
+        const amountOnlyInput = await openExactValueEntry(amountOnlyControl);
+        assert.equal(await page.locator('[data-role="rack-base-value-input"]').count(), 0);
+        await amountOnlyInput.fill("0.12 s");
+        await page.click('[data-role="rack-value-sheet-apply"]');
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "amount-only MAPPINGS exact entry edits route amount",
+            (nextSnapshot) => Math.abs(Number(
+                readStoredModulationState(nextSnapshot).routes.find((route) => route.id === "amount-only-route")?.amount,
+            ) - 0.12) < 0.0001,
+        );
+        assert.equal(Number(snapshot.parameterValues.env1Attack), 0.4);
     } finally {
         await page.close();
     }

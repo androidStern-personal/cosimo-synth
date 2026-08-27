@@ -15,6 +15,7 @@ import {
     type ParameterMenuRequest,
 } from "./parameter-context-menu";
 import {
+    MODULATION_SOURCE_OPTIONS,
     isVoiceModulationSource,
     type ModulationRoute,
     type ModulationRouteUpdate,
@@ -86,7 +87,7 @@ export function useParameterMenuShell({
             return;
         }
         if (action === "reset-base") {
-            if (request.defaultValue === null) {
+            if (request.defaultValue === null || request.commitBase === null) {
                 throw new Error(`${request.controlKey} has no canonical default.`);
             }
             request.commitBase(request.defaultValue);
@@ -115,7 +116,11 @@ export function useParameterMenuShell({
         close();
     }, [close, onRemoveRoute, onRouteChange, request, route, routeIndex]);
 
-    const sourceLabel = findRackModulationSource(armedSourceKind, armedSourceSlot).label;
+    const sourceLabel = route === null
+        ? findRackModulationSource(armedSourceKind, armedSourceSlot).label
+        : MODULATION_SOURCE_OPTIONS.find((source) => (
+            source.sourceKind === route.sourceKind && source.sourceSlot === route.sourceSlot
+        ))?.label ?? "Selected source";
 
     const parameterMenuOverlays = (
         <>
@@ -125,7 +130,7 @@ export function useParameterMenuShell({
                     controlId={request.controlKey}
                     route={route}
                     targetRouteCount={targetRouteIndices.length}
-                    canResetBase={request.defaultValue !== null}
+                    canResetBase={request.defaultValue !== null && request.commitBase !== null}
                     onClose={close}
                     onSelectAction={handleAction}
                 />
@@ -134,19 +139,23 @@ export function useParameterMenuShell({
                 <ParameterValueSheet
                     heading={request.label}
                     label={request.label}
-                    baseSpec={request.baseSpec}
-                    baseValue={request.baseValue}
-                    defaultValue={request.defaultValue}
+                    base={request.baseSpec === null ? null : {
+                        spec: request.baseSpec,
+                        value: request.baseValue,
+                        defaultValue: request.defaultValue,
+                    }}
                     route={route}
                     amountSpec={targetKind === null
                         ? null
-                        : parameterEntrySpecForModulationAmount(targetKind, request.baseValue)}
+                        : parameterEntrySpecForModulationAmount(targetKind, request.baseValue ?? 1)}
                     sourceLabel={sourceLabel}
                     onApply={(baseCommit, modulationAmount) => {
-                        if (baseCommit._tag !== "value") {
-                            throw new Error("This parameter cannot commit a tempo division.");
+                        if (baseCommit !== null) {
+                            if (baseCommit._tag !== "value" || request.commitBase === null) {
+                                throw new Error("This parameter cannot commit a tempo division.");
+                            }
+                            request.commitBase(baseCommit.value);
                         }
-                        request.commitBase(baseCommit.value);
                         if (modulationAmount !== null && route !== null) {
                             amountBinding.setValue(modulationAmount);
                         }

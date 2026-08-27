@@ -156,6 +156,9 @@ const QUICK_ENVELOPE_STAGES = [
 
 export type MobileQuickSourceSheetProps = {
     readonly source: { readonly sourceKind: RackModulationSourceKind; readonly sourceSlot: number };
+    /** The route source shown/edited by the controls. This is deliberately
+        independent from `source`, which owns the open editor target. */
+    readonly armedSource: ReadoutStripSource | null;
     readonly routes: ReadonlyArray<ModulationRoute>;
     readonly hudContainer: Element | null;
     readonly resolveScrollLockTargets?: () => ReadonlyArray<HTMLElement>;
@@ -189,6 +192,7 @@ export type MobileQuickSourceSheetProps = {
 
 export function MobileQuickSourceSheet({
     source,
+    armedSource,
     routes,
     hudContainer,
     resolveScrollLockTargets,
@@ -430,7 +434,7 @@ export function MobileQuickSourceSheet({
             rateBinding={msegRateBinding}
             morphBinding={msegMorphBinding}
             routes={routes}
-            armedSource={stripSource}
+            armedSource={armedSource}
             hudContainer={hudContainer}
             rolePrefix="quick-source-sheet"
             dataRole="quick-source-sheet-strip"

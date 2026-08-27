@@ -92,6 +92,19 @@ test("oscillator targets project linearly through the same contract", async () =
     assert.ok(Math.abs(band.highNormalized - 0.75) < CLOSE);
 });
 
+test("every MSEG Rate resolves its live seconds endpoint for MAPPINGS base editing", async () => {
+    const { resolveModulationTargetBase } = await loadResolver();
+    for (const slot of [1, 2, 3]) {
+        const base = resolveModulationTargetBase(`mseg${slot}Rate`);
+        assert.ok(base);
+        assert.equal(base.endpointID, `mseg${slot}Rate`);
+        assert.equal(base.entrySpec._tag, "seconds");
+        assert.equal(base.entrySpec.min, 0);
+        assert.equal(base.entrySpec.max, 2);
+        assert.equal(base.initialValue, 1);
+    }
+});
+
 test("the projection inverts: denormalize is the exact inverse of normalize", async () => {
     const { resolveModulationTargetBase } = await loadResolver();
     const logProjection = resolveModulationTargetBase("lane.globalFilter#1.globalFilterCutoff").railProjection;

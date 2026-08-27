@@ -155,6 +155,9 @@ type EffectsRackWorkspaceProps = {
      */
     modSourceTapMode?: "select-then-open" | "toggle-quick-source";
     onGlobalModRailStateChange?: (state: GlobalModRailState) => void;
+    /** The source owned only by an active mapping drag. It never changes
+        ordinary source selection or tap behavior. */
+    onGlobalModSourceDragChange?: (source: GlobalModRailState["selectedSource"] | null) => void;
     /** T14 one-selection: the Mod page's selectors arm the bar through this. */
     selectModSourceSignal?: { source: SelectedSource; serial: number } | null;
     /** ADR-025 row 15: fired once per authoritative route creation. */
@@ -3183,6 +3186,7 @@ export function EffectsRackWorkspace({
     onModSourceTap,
     modSourceTapMode = "select-then-open",
     onGlobalModRailStateChange,
+    onGlobalModSourceDragChange,
     selectModSourceSignal = null,
     onRouteCreationConfirmed,
     onSelectedEffectChange,
@@ -3368,6 +3372,10 @@ export function EffectsRackWorkspace({
         return () => clearUiTimeout(timeout);
     }, [confirmedRoute]);
     const [sourceDrag, setSourceDrag] = useState<SourceDragPresentation | null>(null);
+    const handleSourceDragChange = useCallback((nextDrag: SourceDragPresentation | null) => {
+        setSourceDrag(nextDrag);
+        onGlobalModSourceDragChange?.(nextDrag?.source ?? null);
+    }, [onGlobalModSourceDragChange]);
     const [railCollapseSignal, setRailCollapseSignal] = useState(0);
     const [parameterMenu, setParameterMenu] = useState<RackParameterMenuState | null>(null);
     const [stationMenu, setStationMenu] = useState<SubwayStationMenuRequest | null>(null);
@@ -4038,7 +4046,7 @@ export function EffectsRackWorkspace({
                 onModSourceTap?.(source);
             }}
             onHoverTarget={hoverSourceTarget}
-            onSourceDragChange={setSourceDrag}
+            onSourceDragChange={handleSourceDragChange}
             onDwellNavigate={handleDwellNavigate}
         />
     );
@@ -4333,9 +4341,11 @@ export function EffectsRackWorkspace({
                     key={`${parameterValueSheetEndpointID}:${selectedSource.sourceKind}:${selectedSource.sourceSlot}`}
                     heading={`${getRackEffectDescriptor(parameterOverlayDescriptor.effectId).label} · ${parameterOverlayDescriptor.label}`}
                     label={parameterOverlayDescriptor.label}
-                    baseSpec={parameterEntrySpecForRackParameter(parameterOverlayDescriptor, parameterOverlayBinding.value)}
-                    baseValue={parameterOverlayBinding.value}
-                    defaultValue={parameterOverlayDescriptor.initial}
+                    base={{
+                        spec: parameterEntrySpecForRackParameter(parameterOverlayDescriptor, parameterOverlayBinding.value),
+                        value: parameterOverlayBinding.value,
+                        defaultValue: parameterOverlayDescriptor.initial,
+                    }}
                     amountSpec={(() => {
                         const targetKind = parseAnyModulationTargetKind(kindForDescriptor(parameterOverlayDescriptor));
                         return targetKind === null
@@ -4345,6 +4355,9 @@ export function EffectsRackWorkspace({
                     route={parameterOverlayPresentedRoute}
                     sourceLabel={sourceIsArmed ? activeSource.label : null}
                     onApply={(baseCommit, modulationAmount) => {
+                        if (baseCommit === null) {
+                            throw new Error("A rack parameter value sheet requires a base commit.");
+                        }
                         if (baseCommit._tag === "tempoDivision") {
                             // Publish the division before exposing Sync so the newly visible row
                             // never flashes the previous division.
@@ -4568,7 +4581,7 @@ export function EffectsRackWorkspace({
                         onModSourceTap?.(source);
                     }}
                     onHoverTarget={hoverSourceTarget}
-                    onSourceDragChange={setSourceDrag}
+                    onSourceDragChange={handleSourceDragChange}
                     onNoteKeyDown={modRailAudition.onNoteKeyDown}
                     onNoteKeyUp={modRailAudition.onNoteKeyUp}
                     onToggleAutoPreview={modRailAudition.onToggleAutoPreview}

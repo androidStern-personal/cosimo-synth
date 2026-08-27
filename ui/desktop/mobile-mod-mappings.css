@@ -250,10 +250,10 @@
     }
 
     /* Dimmed is not dead: a live gesture lifts the row to full emphasis. */
-    .mod-mappings-row.is-bypassed:has(.mobile-voice-cell[data-dragging]) .mod-mappings-row-identity,
-    .mod-mappings-row.is-bypassed:has(.mobile-voice-cell[data-dragging]) .mod-mappings-row-rail,
-    .mod-mappings-row.is-bypassed:has(.mobile-voice-cell[data-dragging]) .mod-mappings-row-polarity,
-    .mod-mappings-row.is-bypassed:has(.mobile-voice-cell[data-dragging]) .mod-mappings-row-delete {
+    .mod-mappings-row.is-bypassed:has([data-dragging]) .mod-mappings-row-identity,
+    .mod-mappings-row.is-bypassed:has([data-dragging]) .mod-mappings-row-rail,
+    .mod-mappings-row.is-bypassed:has([data-dragging]) .mod-mappings-row-polarity,
+    .mod-mappings-row.is-bypassed:has([data-dragging]) .mod-mappings-row-delete {
         opacity: 1;
     }
 
@@ -310,9 +310,21 @@
     }
 
     .mod-mappings-row-amount-only {
-        color: var(--cosimo-ink-muted);
+        position: relative;
+        display: grid;
+        width: 100%;
+        min-height: 32px;
+        align-content: end;
+        color: var(--route-source-accent, var(--cosimo-ink-muted));
         font-size: var(--cosimo-type-label);
-        text-align: center;
+        cursor: ns-resize;
+        touch-action: none;
+        user-select: none;
+    }
+
+    .mod-mappings-row-amount-only:focus-visible {
+        outline: 1px solid var(--route-source-accent, var(--cosimo-accent-teal));
+        outline-offset: 2px;
     }
 
     .mod-mappings-row-polarity {

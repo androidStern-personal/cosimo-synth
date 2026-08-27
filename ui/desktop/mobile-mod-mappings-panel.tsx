@@ -37,7 +37,10 @@ import {
 } from "../shared/mod-mappings-table-model";
 import {
     MODULATION_SOURCE_OPTIONS,
+    composeModulationAmount,
     formatModulationAmountReadout,
+    getModulationAmountBounds,
+    getModulationAmountSliderPosition,
     type GeneratedModulationRouteInput,
     type ModulationRoute,
     type ModulationRouteUpdate,
@@ -50,11 +53,18 @@ import { parseLaneModulationTargetKind } from "../shared/lane-modulation-targets
 import { resolveModulationTargetBase } from "../shared/modulation-target-base";
 import { findRackModulationSource } from "../shared/rack-modulation-sources";
 import { useLaneOrHostParameterBinding, usePatchModulationTargetOptions } from "../shared/lane-param-bindings";
+import type { PatchControlBinding } from "../shared/patch-controls";
 import { formatParameterEntry } from "../shared/parameter-value-entry";
 import { useParameterGesture } from "../shared/parameter-gesture";
 import { useReadoutCells, type ReadoutCellSpec } from "../shared/parameter-readout-strip";
-import { useParameterMenu, type ParameterMenuRequest } from "../shared/parameter-context-menu";
+import {
+    useLongPressParameterMenu,
+    useParameterMenu,
+    type ParameterMenuRequestContext,
+} from "../shared/parameter-context-menu";
 import { hexToRgbTriplet } from "../shared/parameter-hud";
+import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
+import { useSliderDrag } from "../shared/use-slider-drag";
 import { sourceOptionForRoute, targetPresentation, SourceIdentity } from "./mobile-mod-matrix";
 
 export const MOD_MAPPINGS_VIEW_STORAGE_KEY = "cosimo.mod-mappings-view.v1";
@@ -78,6 +88,148 @@ function loadStoredViewPrefs(): MappingsViewPrefs {
 /* ------------------------------------------------------------------ */
 /* One row = one editing surface                                        */
 /* ------------------------------------------------------------------ */
+
+function MappingAmountOnlyControl({
+    route,
+    routeIndex,
+    sourceLabel,
+    sourceAccent,
+    targetLabel,
+    onGestureActive,
+}: {
+    route: ModulationRoute;
+    routeIndex: number;
+    sourceLabel: string;
+    sourceAccent: string;
+    targetLabel: string;
+    onGestureActive: (routeId: string, active: boolean) => void;
+}) {
+    const amountBinding = useModulationRouteAmountBinding(route);
+    const amountBounds = useMemo(() => getModulationAmountBounds(route.targetKind), [route.targetKind]);
+    const amountSliderPosition = getModulationAmountSliderPosition(route.targetKind, amountBinding.value);
+    const zeroSliderPosition = getModulationAmountSliderPosition(route.targetKind, 0);
+    const [dragging, setDragging] = useState(false);
+    const sliderDrag = useSliderDrag();
+    const sliderBinding = useMemo<PatchControlBinding<number>>(() => ({
+        endpointID: `modulation-route:${route.id}`,
+        value: amountBinding.value,
+        isReady: true,
+        setValue: (nextValue) => { amountBinding.setValue(nextValue); },
+        commitValue: (nextValue) => { amountBinding.setValue(nextValue); },
+        beginGesture: () => {
+            setDragging(true);
+            onGestureActive(route.id, true);
+        },
+        endGesture: () => {
+            setDragging(false);
+            onGestureActive(route.id, false);
+        },
+    }), [amountBinding, onGestureActive, route.id]);
+    const menuRequestContext = useCallback((): ParameterMenuRequestContext => ({
+        controlKey: `mapping-${route.id}`,
+        label: targetLabel,
+        targetKind: route.targetKind,
+        baseSpec: null,
+        baseValue: null,
+        defaultValue: null,
+        commitBase: null,
+        routeIndex,
+    }), [route.id, route.targetKind, routeIndex, targetLabel]);
+    const menuHandlers = useLongPressParameterMenu(menuRequestContext);
+
+    return (
+        <div
+            className="mod-mappings-row-amount-only"
+            data-role="mod-mappings-amount-only"
+            data-dragging={dragging ? "modulation" : undefined}
+            role="slider"
+            tabIndex={0}
+            aria-label={`${sourceLabel} to ${targetLabel} amount`}
+            aria-orientation="vertical"
+            aria-valuemin={amountBounds.min}
+            aria-valuemax={amountBounds.max}
+            aria-valuenow={amountBinding.value}
+            aria-valuetext={formatModulationAmountReadout(route.targetKind, amountBinding.value, route.polarity)}
+            style={{
+                "--route-source-accent": sourceAccent,
+                "--mobile-voice-source-accent": sourceAccent,
+            } as CSSProperties}
+            onPointerDown={(event) => {
+                menuHandlers.onPointerDown?.(event);
+                sliderDrag.handlePointerDown(
+                    event,
+                    event.currentTarget,
+                    sliderBinding,
+                    amountSliderPosition,
+                    0,
+                    1,
+                    "vertical",
+                    (normalized) => {
+                        amountBinding.setValue(composeModulationAmount(route.targetKind, normalized));
+                    },
+                );
+            }}
+            onPointerMove={(event) => {
+                menuHandlers.onPointerMove?.(event);
+                sliderDrag.handlePointerMove(event);
+            }}
+            onPointerUp={(event) => {
+                menuHandlers.onPointerUp?.();
+                sliderDrag.handlePointerUp(event);
+            }}
+            onPointerCancel={(event) => {
+                menuHandlers.onPointerCancel?.();
+                sliderDrag.handlePointerCancel(event);
+            }}
+            onLostPointerCapture={(event) => sliderDrag.handleLostPointerCapture(event.pointerId)}
+            onKeyDown={(event) => {
+                let nextAmount: number | null = null;
+                if (event.key === "Home") nextAmount = amountBounds.min;
+                if (event.key === "End") nextAmount = amountBounds.max;
+                if (event.key === "ArrowUp" || event.key === "ArrowRight") {
+                    nextAmount = Math.min(
+                        amountBounds.max,
+                        amountBinding.value + (amountBounds.step * (event.shiftKey ? 10 : 1)),
+                    );
+                }
+                if (event.key === "ArrowDown" || event.key === "ArrowLeft") {
+                    nextAmount = Math.max(
+                        amountBounds.min,
+                        amountBinding.value - (amountBounds.step * (event.shiftKey ? 10 : 1)),
+                    );
+                }
+                if (nextAmount !== null) {
+                    event.preventDefault();
+                    amountBinding.setValue(nextAmount);
+                }
+            }}
+        >
+            <span className="mod-led-flag" data-role="mod-mappings-amount-flag">
+                {formatModulationAmountReadout(route.targetKind, amountBinding.value, route.polarity)}
+            </span>
+            <span
+                className="mod-led-rail"
+                data-rail-state={route.enabled
+                    ? Math.abs(amountBinding.value) <= 1e-9 ? "mapped-zero" : "mapped"
+                    : "bypassed"}
+                aria-hidden="true"
+            >
+                <span className="mod-led-track" />
+                <span
+                    className="mod-led-fill"
+                    style={{
+                        left: `${(Math.min(amountSliderPosition, zeroSliderPosition) * 100).toFixed(2)}%`,
+                        width: `${(Math.abs(amountSliderPosition - zeroSliderPosition) * 100).toFixed(2)}%`,
+                    }}
+                />
+                <span
+                    className="mod-led-tick"
+                    style={{ left: `calc(${(zeroSliderPosition * 100).toFixed(2)}% - 1px)` }}
+                />
+            </span>
+        </div>
+    );
+}
 
 function MappingRow({
     route,
@@ -126,26 +278,24 @@ function MappingRow({
         active: base !== null,
         deviceId: parseLaneModulationTargetKind(route.targetKind)?.instanceId,
     });
-
     const gestureController = useParameterGesture();
     const openParameterMenu = useParameterMenu();
 
-    const menuRequest = useCallback((clientX: number, clientY: number): ParameterMenuRequest | null => (
-        base === null
-            ? null
-            : {
-                controlKey: `mapping-${route.id}`,
-                label: `${target.category} · ${target.parameter}`,
-                targetKind: route.targetKind,
-                baseSpec: base.entrySpec,
-                baseValue: baseBinding.value,
-                defaultValue: base.initialValue,
-                commitBase: baseBinding.commitValue,
-                routeIndex,
-                clientX,
-                clientY,
-            }
-    ), [base, baseBinding.commitValue, baseBinding.value, route.id, route.targetKind, routeIndex, target.category, target.parameter]);
+    const menuRequestContext = useCallback((): ParameterMenuRequestContext => {
+        if (base === null) {
+            throw new Error(`Mapping ${route.id} has no base control menu.`);
+        }
+        return {
+            controlKey: `mapping-${route.id}`,
+            label: `${target.category} · ${target.parameter}`,
+            targetKind: route.targetKind,
+            baseSpec: base.entrySpec,
+            baseValue: baseBinding.value,
+            defaultValue: base.initialValue,
+            commitBase: baseBinding.commitValue,
+            routeIndex,
+        };
+    }, [base, baseBinding.commitValue, baseBinding.value, route.id, route.targetKind, routeIndex, target.category, target.parameter]);
 
     const rowBindings = useMemo(() => ({ [route.id]: baseBinding }), [baseBinding, route.id]);
 
@@ -186,10 +336,7 @@ function MappingRow({
         onRequestParameterMenu: base === null || openParameterMenu === null
             ? undefined
             : (_cellId, clientX, clientY) => {
-                const request = menuRequest(clientX, clientY);
-                if (request !== null) {
-                    openParameterMenu(request);
-                }
+                openParameterMenu({ ...menuRequestContext(), clientX, clientY });
             },
     });
 
@@ -230,9 +377,14 @@ function MappingRow({
                 data-role={`mod-mappings-rail-${routeIndex}`}
             >
                 {base === null ? (
-                    <span className="mod-mappings-row-amount-only" data-role="mod-mappings-amount-only">
-                        {formatModulationAmountReadout(route.targetKind, route.amount, route.polarity)}
-                    </span>
+                    <MappingAmountOnlyControl
+                        route={route}
+                        routeIndex={routeIndex}
+                        sourceLabel={source.label}
+                        sourceAccent={sourceIdentity.accent}
+                        targetLabel={`${target.category} · ${target.parameter}`}
+                        onGestureActive={onGestureActive}
+                    />
                 ) : (
                     <MappingLedCell
                         cell={cellSpec[0]}

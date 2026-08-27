@@ -471,6 +471,12 @@ type MsegEditorModalProps = {
     orientation: MsegSurfaceOrientation;
     onOrientationChange: (orientation: MsegSurfaceOrientation) => void;
     routes: ReadonlyArray<ModulationRoute>;
+    armedSource: {
+        readonly sourceKind: ModulationRoute["sourceKind"];
+        readonly sourceSlot: number | null;
+        readonly shortLabel: string;
+        readonly accent: string;
+    } | null;
     resolveScrollLockTargets: () => ReadonlyArray<HTMLElement>;
     onRequestParameterMenu: (request: ParameterMenuRequest) => void;
 };
@@ -2925,6 +2931,7 @@ function MsegEditorModal({
     orientation,
     onOrientationChange,
     routes,
+    armedSource,
     resolveScrollLockTargets,
     onRequestParameterMenu,
 }: MsegEditorModalProps) {
@@ -3031,7 +3038,7 @@ function MsegEditorModal({
                         rateBinding={rateBinding}
                         morphBinding={morphBinding}
                         routes={routes}
-                        armedSource={null}
+                        armedSource={armedSource}
                         hudContainer={modalHudContainer}
                         rolePrefix="mseg-editor"
                         dataRole="mseg-editor-controls"
@@ -4332,6 +4339,20 @@ function DesktopPatchViewBody({
         expanded: false,
         selectedSource: { sourceKind: "mseg", sourceSlot: 1 },
     });
+    const [globalModDragSource, setGlobalModDragSource] = useState<GlobalModRailState["selectedSource"] | null>(null);
+    const activeMsegRouteSource = globalModDragSource ?? globalModRailState.selectedSource;
+    const activeMsegRouteSourceIdentity = useMemo(() => {
+        const source = findRackModulationSource(
+            activeMsegRouteSource.sourceKind,
+            activeMsegRouteSource.sourceSlot,
+        );
+        return {
+            sourceKind: source.sourceKind,
+            sourceSlot: source.sourceSlot,
+            shortLabel: source.shortLabel,
+            accent: source.accent,
+        };
+    }, [activeMsegRouteSource.sourceKind, activeMsegRouteSource.sourceSlot]);
     const [selectedRackEffectId, setSelectedRackEffectId] = useState<EffectModuleId>("drive");
     useEffect(() => {
         if (typeof window.matchMedia !== "function") {
@@ -5221,7 +5242,14 @@ function DesktopPatchViewBody({
                         <ModulationMatrixSection
                             compact={isCompactViewport}
                             focusedSource={mobileModSource}
-                            armedSource={isCompactViewport ? globalModRailState.selectedSource : null}
+                            // The hidden Mod page must not retarget an editor
+                            // that is open over Voice/FX after a source drop.
+                            // Ordinary Mod-page selection and source taps keep
+                            // their existing paths; only the offscreen sync is
+                            // suspended outside the Mod workspace.
+                            armedSource={mobileWorkspaceSection === "mod"
+                                ? globalModRailState.selectedSource
+                                : null}
                             onArmSource={isCompactViewport ? handleArmModSource : undefined}
                             selectedMsegSlot={synthView.selectedMsegSlot}
                             msegState={synthView.msegState}
@@ -5339,6 +5367,7 @@ function DesktopPatchViewBody({
                 ? "toggle-quick-source"
                 : "select-then-open"}
             onGlobalModRailStateChange={setGlobalModRailState}
+            onGlobalModSourceDragChange={setGlobalModDragSource}
             selectModSourceSignal={armModSourceSignal}
             onRouteCreationConfirmed={handleRouteCreationConfirmed}
             onSelectedEffectChange={setSelectedRackEffectId}
@@ -5502,6 +5531,7 @@ function DesktopPatchViewBody({
             {isCompactViewport && quickEditorSource !== null && mobileWorkspaceSection !== "mod" ? (
                 <MobileQuickSourceSheet
                     source={quickEditorSource}
+                    armedSource={activeMsegRouteSourceIdentity}
                     routes={synthView.routes}
                     hudContainer={mobileVoiceHudLayer}
                     resolveScrollLockTargets={resolveMobileVoiceScrollLocks}
@@ -5593,6 +5623,7 @@ function DesktopPatchViewBody({
                 orientation={msegSurfaceOrientation}
                 onOrientationChange={setMsegSurfaceOrientation}
                 routes={synthView.routes}
+                armedSource={activeMsegRouteSourceIdentity}
                 resolveScrollLockTargets={resolveMobileVoiceScrollLocks}
                 onRequestParameterMenu={openShellParameterMenu}
             />

@@ -59,6 +59,7 @@ import {
     selectRackEffect,
     expandGlobalModRail,
     collapseGlobalModRail,
+    createRackMappingByDrop,
     touchPointForModSourcePreviewTarget,
     editRackParameterValue,
     dispatchRackKnobPointerEvents,
@@ -3546,6 +3547,120 @@ test("the drawer MSEG timing knob fits its existing row and reaches both range e
         );
         assert.deepEqual(leftDragSnapshot.gestureStarts, ["mseg1Rate"]);
         assert.deepEqual(leftDragSnapshot.gestureEnds, ["mseg1Rate"]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("T66: an open MSEG 2 Rate control edits a transient MSEG 1 route without moving the base Rate", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        const sourceNumber = page.locator('[data-role="mobile-mod-source-number"]');
+        await sourceNumber.waitFor();
+        await sourceNumber.selectOption("2");
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-global-mod-rail-selected"]')?.textContent?.includes("2") === true
+        ));
+        await page.click('[data-role="mobile-workspace-tab-voice"]');
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+
+        const sheet = page.locator('[data-role="quick-source-sheet"]');
+        const rateControl = sheet.locator('[data-role="quick-source-sheet-cell-rate"]');
+        await rateControl.waitFor();
+        assert.equal(await rateControl.getAttribute("aria-label"), "MSEG 2 rate");
+        assert.equal(await rateControl.getAttribute("data-modulation-target-kind"), "mseg2Rate");
+
+        const baseRateBefore = Number((await getHarnessSnapshot(page)).parameterValues.mseg2Rate);
+        await expandGlobalModRail(page);
+        await createRackMappingByDrop(
+            page,
+            '[data-role="rack-mod-source-mseg-1"]',
+            '[data-role="quick-source-sheet-cell-rate"]',
+        );
+
+        const createdSnapshot = await waitForHarnessSnapshot(
+            page,
+            "MSEG 1 to MSEG 2 Rate route created at zero",
+            (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "mseg"
+                && route.sourceSlot === 1
+                && route.targetKind === "mseg2Rate"
+                && Math.abs(Number(route.amount)) <= 1e-9
+            )),
+        );
+        assert.equal(await sheet.isVisible(), true, "The MSEG 2 editor must stay open during a source drag.");
+        assert.equal(await rateControl.getAttribute("aria-label"), "MSEG 2 rate");
+        assert.equal(Number(createdSnapshot.parameterValues.mseg2Rate), baseRateBefore);
+
+        await dragLocatorBy(page, rateControl, 0, -48);
+        const editedSnapshot = await waitForHarnessSnapshot(
+            page,
+            "open MSEG 2 Rate edits the MSEG 1 route amount",
+            (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "mseg"
+                && route.sourceSlot === 1
+                && route.targetKind === "mseg2Rate"
+                && Number(route.amount) > 0.01
+            )),
+        );
+        const route = readStoredModulationState(editedSnapshot).routes.find((candidate) => (
+            candidate.sourceKind === "mseg"
+            && candidate.sourceSlot === 1
+            && candidate.targetKind === "mseg2Rate"
+        ));
+        assert.ok(route);
+        assert.equal(Number(editedSnapshot.parameterValues.mseg2Rate), baseRateBefore);
+        assert.equal(hasRuntimeAmount(editedSnapshot, route, route.amount, 0.001), true);
+
+        const rateBox = await rateControl.boundingBox();
+        assert.ok(rateBox);
+        await page.mouse.move(rateBox.x + (rateBox.width / 2), rateBox.y + (rateBox.height / 2));
+        await page.mouse.down();
+        await page.locator('[data-role="rack-parameter-menu"]').waitFor({ state: "visible", timeout: 10000 });
+        await page.mouse.up();
+        await page.click('[data-role="rack-parameter-menu-item"][data-action="edit-values"]');
+        const amountInput = page.locator('[data-role="rack-modulation-value-input"]');
+        await amountInput.waitFor();
+        await amountInput.fill("0.25 s");
+        await page.click('[data-role="rack-value-sheet-apply"]');
+        const exactSnapshot = await waitForHarnessSnapshot(
+            page,
+            "open MSEG 2 Rate exact entry edits the MSEG 1 route amount",
+            (snapshot) => Math.abs(Number(readStoredModulationState(snapshot).routes.find((candidate) => (
+                candidate.sourceKind === "mseg"
+                && candidate.sourceSlot === 1
+                && candidate.targetKind === "mseg2Rate"
+            ))?.amount) - 0.25) <= 0.001,
+        );
+        assert.equal(Number(exactSnapshot.parameterValues.mseg2Rate), baseRateBefore);
+
+        await sheet.locator('[data-role="quick-source-sheet-full-editor"]').click();
+        const dialog = page.locator('[data-role="mseg-editor-dialog"]');
+        const fullRateControl = dialog.locator('[data-role="mseg-editor-cell-rate"]');
+        await fullRateControl.waitFor();
+        assert.equal(await fullRateControl.getAttribute("data-modulation-target-kind"), "mseg2Rate");
+        await dragLocatorBy(page, fullRateControl, 0, -32);
+        const fullEditorSnapshot = await waitForHarnessSnapshot(
+            page,
+            "full MSEG 2 Rate edits the same MSEG 1 route amount",
+            (snapshot) => Number(readStoredModulationState(snapshot).routes.find((candidate) => (
+                candidate.sourceKind === "mseg"
+                && candidate.sourceSlot === 1
+                && candidate.targetKind === "mseg2Rate"
+            ))?.amount) > 0.25,
+        );
+        assert.equal(Number(fullEditorSnapshot.parameterValues.mseg2Rate), baseRateBefore);
+        const fullEditorRoute = readStoredModulationState(fullEditorSnapshot).routes.find((candidate) => (
+            candidate.sourceKind === "mseg"
+            && candidate.sourceSlot === 1
+            && candidate.targetKind === "mseg2Rate"
+        ));
+        assert.ok(fullEditorRoute);
+        assert.equal(hasRuntimeAmount(fullEditorSnapshot, fullEditorRoute, fullEditorRoute.amount, 0.001), true);
     } finally {
         await page.close();
     }

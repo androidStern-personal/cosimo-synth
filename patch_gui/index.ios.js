@@ -23439,25 +23439,24 @@ function ParameterValueSheet({
   kicker = "EXACT VALUE",
   heading,
   label,
-  baseSpec,
-  baseValue,
-  defaultValue,
+  base,
   route,
   amountSpec: amountSpec2,
   sourceLabel,
   onApply,
   onClose
 }) {
-  const [baseDraft, setBaseDraft] = reactExports.useState(() => formatParameterEntry(baseSpec, baseValue).draft);
+  const [baseDraft, setBaseDraft] = reactExports.useState(() => base === null ? "" : formatParameterEntry(base.spec, base.value).draft);
   const [amountDraft, setAmountDraft] = reactExports.useState(() => route && amountSpec2 ? formatParameterEntry(amountSpec2, route.amount).draft : "");
   const [error, setError] = reactExports.useState("");
+  const defaultBaseDraft = base === null || base.defaultValue === null ? null : formatParameterEntry(base.spec, base.defaultValue).draft;
   const apply = reactExports.useCallback(() => {
-    const baseResult = parseParameterEntry(baseSpec, baseDraft);
+    const baseResult = base === null ? null : parseParameterEntry(base.spec, baseDraft);
     if (route !== null && amountSpec2 === null) {
       throw new Error(`Route target "${route.targetKind}" has no amount entry spec.`);
     }
     const amountResult = route === null || amountSpec2 === null ? null : parseParameterEntry(amountSpec2, amountDraft);
-    if (baseResult._tag === "rejected") {
+    if (baseResult?._tag === "rejected") {
       setError(baseResult.message);
       return;
     }
@@ -23469,13 +23468,15 @@ function ParameterValueSheet({
     if (amountResult !== null && modulationAmount === null) {
       throw new Error("A modulation amount cannot commit a tempo division.");
     }
-    setBaseDraft(baseResult.echo.draft);
+    if (baseResult !== null) {
+      setBaseDraft(baseResult.echo.draft);
+    }
     if (amountResult !== null) {
       setAmountDraft(amountResult.echo.draft);
     }
     setError("");
-    onApply(baseResult.commit, modulationAmount);
-  }, [amountDraft, amountSpec2, baseDraft, baseSpec, onApply, route]);
+    onApply(baseResult?.commit ?? null, modulationAmount);
+  }, [amountDraft, amountSpec2, base, baseDraft, onApply, route]);
   return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rack-value-sheet-layer", onPointerDown: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "section",
     {
@@ -23490,7 +23491,7 @@ function ParameterValueSheet({
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: kicker }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: heading })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+        base === null ? null : /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Base" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "rack-value-sheet-input", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -23507,7 +23508,7 @@ function ParameterValueSheet({
                 autoFocus: true
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("em", { children: formatParameterEntry(baseSpec, baseValue).unit })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("em", { children: formatParameterEntry(base.spec, base.value).unit })
           ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
@@ -23520,6 +23521,7 @@ function ParameterValueSheet({
                 inputMode: "decimal",
                 value: amountDraft,
                 disabled: route === null,
+                autoFocus: base === null,
                 onChange: (event) => setAmountDraft(event.currentTarget.value),
                 onKeyDown: (event) => {
                   if (event.key === "Enter") apply();
@@ -23533,8 +23535,8 @@ function ParameterValueSheet({
         route === null ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { "data-role": "rack-value-sheet-no-route", children: sourceLabel === null ? "Arm a source to edit its route." : "No selected source route." }) : null,
         error ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "rack-value-sheet-error", role: "alert", children: error }) : null,
         /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { children: [
-          defaultValue === null ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", {}) : /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", "data-role": "rack-value-sheet-default", onClick: () => {
-            setBaseDraft(formatParameterEntry(baseSpec, defaultValue).draft);
+          defaultBaseDraft === null ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", {}) : /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", "data-role": "rack-value-sheet-default", onClick: () => {
+            setBaseDraft(defaultBaseDraft);
             setError("");
           }, children: "Default" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", {}),
@@ -23617,7 +23619,7 @@ function useParameterMenuShell({
       return;
     }
     if (action === "reset-base") {
-      if (request.defaultValue === null) {
+      if (request.defaultValue === null || request.commitBase === null) {
         throw new Error(`${request.controlKey} has no canonical default.`);
       }
       request.commitBase(request.defaultValue);
@@ -23645,7 +23647,7 @@ function useParameterMenuShell({
     }
     close();
   }, [close, onRemoveRoute, onRouteChange, request, route, routeIndex]);
-  const sourceLabel = findRackModulationSource(armedSourceKind, armedSourceSlot).label;
+  const sourceLabel = route === null ? findRackModulationSource(armedSourceKind, armedSourceSlot).label : MODULATION_SOURCE_OPTIONS.find((source) => source.sourceKind === route.sourceKind && source.sourceSlot === route.sourceSlot)?.label ?? "Selected source";
   const parameterMenuOverlays = /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     request !== null && stage === "menu" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       ParameterContextMenu,
@@ -23654,7 +23656,7 @@ function useParameterMenuShell({
         controlId: request.controlKey,
         route,
         targetRouteCount: targetRouteIndices.length,
-        canResetBase: request.defaultValue !== null,
+        canResetBase: request.defaultValue !== null && request.commitBase !== null,
         onClose: close,
         onSelectAction: handleAction
       }
@@ -23664,17 +23666,21 @@ function useParameterMenuShell({
       {
         heading: request.label,
         label: request.label,
-        baseSpec: request.baseSpec,
-        baseValue: request.baseValue,
-        defaultValue: request.defaultValue,
+        base: request.baseSpec === null ? null : {
+          spec: request.baseSpec,
+          value: request.baseValue,
+          defaultValue: request.defaultValue
+        },
         route,
-        amountSpec: targetKind === null ? null : parameterEntrySpecForModulationAmount(targetKind, request.baseValue),
+        amountSpec: targetKind === null ? null : parameterEntrySpecForModulationAmount(targetKind, request.baseValue ?? 1),
         sourceLabel,
         onApply: (baseCommit, modulationAmount) => {
-          if (baseCommit._tag !== "value") {
-            throw new Error("This parameter cannot commit a tempo division.");
+          if (baseCommit !== null) {
+            if (baseCommit._tag !== "value" || request.commitBase === null) {
+              throw new Error("This parameter cannot commit a tempo division.");
+            }
+            request.commitBase(baseCommit.value);
           }
-          request.commitBase(baseCommit.value);
           if (modulationAmount !== null && route !== null) {
             amountBinding.setValue(modulationAmount);
           }

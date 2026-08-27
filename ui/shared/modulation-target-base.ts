@@ -32,6 +32,7 @@ import {
     parameterEntrySpecForMobileVoiceControl,
     parameterEntrySpecForRackParameter,
     parameterEntrySpecForScalar,
+    parameterEntrySpecForSeconds,
     type ParameterEntrySpec,
 } from "./parameter-value-entry";
 import type { MobileVoiceBindableControlID } from "./mobile-voice-display-descriptors";
@@ -205,6 +206,33 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
             entrySpec,
             label: getMobileVoiceControlSpec(controlID).fullLabel,
             initialValue: null,
+            railProjection: buildRailProjection({
+                min: entrySpec.min,
+                max: entrySpec.max,
+                scale: "linear",
+                application: "linear",
+            }),
+            amountDragStyle: "amount-span",
+        };
+    }
+
+    if (targetKind === "mseg1Rate" || targetKind === "mseg2Rate" || targetKind === "mseg3Rate") {
+        const descriptor = getModulationTargetDescriptor(targetKind);
+        if (descriptor.binding._tag !== "endpoint" || descriptor.format.kind !== "time") {
+            throw new Error(`MSEG Rate target "${targetKind}" has no time endpoint binding.`);
+        }
+        const initialValue = descriptor.binding.toEngine(descriptor.initialValue);
+        const entrySpec = parameterEntrySpecForSeconds({
+            minSeconds: descriptor.format.minSeconds,
+            maxSeconds: descriptor.format.maxSeconds,
+            stepSeconds: 0.001,
+            currentSeconds: initialValue,
+        });
+        return {
+            endpointID: descriptor.binding.endpointId,
+            entrySpec,
+            label: descriptor.label,
+            initialValue,
             railProjection: buildRailProjection({
                 min: entrySpec.min,
                 max: entrySpec.max,
