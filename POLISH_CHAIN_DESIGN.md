@@ -18,11 +18,16 @@ are marked **locked**; everything else is direction, not commitment.
     sum its children (per the `EffectsRack.cmajor` C10 notes), so the chain's
     latency is representable and reportable at the top level; the AUv3/web host
     delay-compensation path must be verified to carry it.
-  - Latency is **constant** regardless of settings (192 samples @ 48 kHz for 4 ms),
-    reported once — never settings-dependent.
-  - "Neutral = identity" becomes *delayed* identity: with all controls neutral the
-    output is bit-exact modulo the constant reported delay, enforced per stage by
-    routing around, not by trusting ≈1.0 multiplies through M/S round trips.
+  - Latency is **constant** regardless of settings and reported once — never
+    settings-dependent. The accepted high-quality T26 Enhancer contributes a fixed
+    declared 60 samples. The compressor may add 0–4 ms of fixed lookahead (up to
+    another 192 samples at 48 kHz). The reported total is their exact sum; do not
+    replace the Enhancer with Lite's cheaper wrapper merely to avoid that latency.
+  - Neutral behavior is pinned per stage. The T26 Enhancer contributes exactly zero
+    nonlinear signal at zero Amount and matches its retained FIR neutral impulse
+    within `1e-7`; it is not same-frame bit-exact dry. Other stages should use true
+    bypass paths where possible. The complete chain must report the exact constant
+    latency it applies.
 - **The gain-change rule (Andrew): as fast as possible without distortion — no gain
   trajectory shorter than one cycle of a 60 Hz bass note (~16.7 ms).** In practice:
   attack may be effectively instant *because* lookahead lets the gain ramp ahead of
@@ -55,8 +60,9 @@ no-op. Open: fixed frequency vs one knob.
 
 ### 2.2 ENHANCER
 
-As `ENHANCER_DESIGN.md` (two parametric bells, Tube/Solid, independent mid/side
-amounts, always-on de-emphasis), params static per §1.
+As `ENHANCER_DESIGN.md`: two parametric bells; per-band Stereo or Mid/Side routing;
+linked Stereo Amount or independent Mid and Side amounts; Tube/Solid; shared
+Subtle/Medium; continuous de-emphasis. All settings are static per §1.
 
 ### 2.3 COMP/CLIP (the finisher)
 

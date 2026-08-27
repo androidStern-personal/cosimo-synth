@@ -1161,7 +1161,7 @@ BROWSER SHARING AND ENVELOPE FOLLOW-UP
 [ ] T50 — Add Key Track to controls that can be musically tuned
     Dependency:
     - Build this on T39's shared played pitch. Do not derive tracking from any oscillator's private tuning.
-    - This shared optional-Key-Track contract is also the prerequisite for the per-voice Enhancer in T26/T62. The control state is shared, but while Key Track is on each active voice calculates its own Enhancer frequency from that voice's final played pitch.
+    - This shared optional-Key-Track contract is also the prerequisite for the standalone Enhancer Lite release in T61 and the per-voice Enhancer in T62. The standalone effect follows the post-mix held-note rule below; while Key Track is on, each active synth voice calculates its own T62 Enhancer frequency from that voice's final played pitch.
     User contract:
     - Put the same compact button, literally labeled `Key Track`, beside each qualifying control. It is off by default, and its state is saved and restored with the complete sound.
     - Turning Key Track on sets the neighboring knob to its exact center: 1:1 ratio, 0 semitones, 0 cents. Do not convert the current Hertz or millisecond setting, do not use a reference note, and do not restore an earlier Key Track offset.
@@ -1356,23 +1356,25 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
 
 [ ] T61 — Package Enhancer Lite as a shippable free VST3 and iOS AUv3 product
     Existing starting point:
-    - The isolated Enhancer Lite DSP, direct-manipulation editor, analyzer, wordmark, state tests, signed universal macOS VST3, and pluginval proof already exist on `codex/t26-spectre-wrapper-prototype`. Treat that as source material, not as a finished public release.
+    - Cosimo Enhancer Lite is the one-band standalone spin-off, not the two-band Polish processor and not the eventual per-voice processor. Its DSP, direct-manipulation editor, analyzer, wordmark, state tests, signed universal macOS VST3, and pluginval proof start on `codex/t26-spectre-wrapper-prototype`. Treat that as source material, not as a finished public release.
+    - Preserve Lite's cheaper 4x polyphase-IIR wrapper and truthful 3-sample latency. Do not replace it with Cosimo Enhancer's high-quality 60-sample FIR wrapper.
+    - Two child branches must be composed rather than choosing one: `codex/t26-enhancer-lite-draggable-readouts` at `19a67d0c` adds draggable numeric readouts, while `codex/t26-enhancer-lite-shelves` at `0c5a73cd` adds the measured Low/Bell/High shapes, corpus proof, and Ableton audition evidence. Both descend independently from `2a652a40`; the shelf branch does not contain the readout work.
     Required product:
     - Produce a clean free-product source boundary and reproducible release build for VST3 and iOS AUv3, with stable product/bundle identities, preset/state compatibility, packaged resources, versioning, licenses/credits, release notes, and install/validation instructions.
-    - Add the approved MIDI pitch-tracking behavior rather than shipping a permanently fixed-frequency effect. Settle the standalone plugin's held-note/last-note behavior, pitch-bend handling, no-note latch, and continuous harmonic-ratio offset against the same musical rules as T26/T50.
-    - Preserve the current direct graph interaction, Mid/Side behavior, Tube/Solid character, analyzer, and zero-effect dry behavior unless listening review explicitly changes them.
+    - Add the approved MIDI pitch-tracking behavior rather than shipping a permanently fixed-frequency effect. Settle the standalone plugin's held-note/last-note behavior, pitch-bend handling, no-note latch, and continuous harmonic-ratio offset against T50's musical rules.
+    - Preserve the current direct graph interaction, Stereo/Mid-Side routing, separate Mid and Side amounts, Tube/Solid character, Subtle/Medium intensity, fixed de-emphasis behavior, analyzer, Low/Bell/High shapes, and zero-effect dry behavior unless Andrew explicitly changes that product.
     - Validate VST3 in Ableton and the AUv3 in the real iPhone host/app. A browser preview, JIT loader, or locally installed development binary is not a shippable product.
     Done when:
     - Clean release artifacts for VST3 and iOS AUv3 build from documented commands, retain state across reload/update, pass signing and host validation, and are installable by someone without the development checkout.
     - Andrew approves the sound, MIDI tracking, interface, free-product branding, and installation flow.
 
-[ ] T62 — Put Enhancer Lite after the filter inside every synth voice
+[ ] T62 — Put a lightweight one-band Enhancer after the filter inside every synth voice
     Dependency:
     - Build on T39's shared played pitch and T50's approved `Key Track` state, offset, exact-entry, modulation, and last-held-note behavior. Do not create a third pitch-tracking formula specifically for this effect.
     Product decisions (2026-08-27):
     - The required Cosimo form is one Enhancer inside every active synth voice, immediately after that voice's filter and before its amplitude envelope/VCA and the final voice sum. Its purpose is early per-note tone shaping; a single processor after the voices are combined does not satisfy this requirement.
     - Add optional Key Track. With Key Track off, Frequency is an ordinary fixed frequency shared by the voices. With Key Track on, every active voice follows its own final played pitch and applies the same continuous harmonic-ratio offset, so a chord produces one correctly tracked Enhancer frequency per note. Preserve the non-tracked Frequency value while tracking is on and restore it when tracking is turned off, following T50.
-    - Always process each voice in linked Mid/Side. Encode that voice's stereo filter output with the established Enhancer Lite half-sum/half-difference matrix, apply the same Frequency, Q, and Amount to Mid and Side through the one fixed shaping curve, then decode back to stereo. This deliberately keeps the nonlinear Mid/Side sound rather than trying to reproduce ordinary linked-stereo processing.
+    - Always process each voice in linked Mid/Side. Encode that voice's stereo filter output with the established Enhancer Lite half-sum/half-difference matrix, apply the same Frequency, Q, and Amount to Mid and Side through one fixed Tube-family curve, then decode back to stereo. This deliberately keeps the nonlinear Mid/Side sound rather than trying to reproduce ordinary linked-stereo processing.
     - A separate Enhancer Lite device may be added to the Effects Lane later, but it is optional additional work and cannot replace this required per-voice stage.
     - Keep this separate from T26's fixed two-band Polish Enhancer, which remains a single post-rack bus processor near the end of the complete synth signal path.
     Controls and placement decided (2026-08-27):
@@ -1382,7 +1384,7 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Put the small `KEY TRACK` mode button inside a corner of the graph. Its state changes the first control's label and interpretation between `FREQ` and `RATIO`; it is not a fourth adjustable value.
     - This is one shared control surface for the settings used by every per-voice Enhancer instance. Do not put it on the Effects page, hide it in a generic settings popout, or show a separate panel for every sounding note.
     Required integration:
-    - Reuse the production Enhancer Lite shaping core and its exact Mid/Side encode/decode convention behind a per-voice Cosimo adapter rather than copying the algorithm. Give every allocated voice independent Mid and Side filter/shaper history and reset it through the synth's existing voice lifecycle.
+    - Reuse Enhancer Lite's one-band selection/filtering behavior, residue sound, and exact Mid/Side encode/decode convention behind a per-voice Cosimo adapter. Do not instantiate either Cosimo Enhancer's high-quality 4x FIR wrapper or standalone Lite's 4x IIR wrapper inside every voice. Use the dedicated first-order ADAA residue implementation in `ENHANCER_DESIGN.md`, with no oversampling wrapper or resampler. Give every allocated voice independent Mid and Side filter/shaper history and reset it through the synth's existing voice lifecycle.
     - Preserve complete sound save/restore, Init, URL sharing, modulation, exact entry, and host state. Keep the continuous tracked offset modulatable, and prove polyphonic notes, glide, pitch bend, Global Tune, note stealing, mono, and legato all follow the existing voice rules.
     Done when:
     - The approved three-value Voice interface fits in the existing Filter footprint without shrinking or covering either stage, and tests prove the Enhancer processes each voice after its filter but before voices are combined, fixed linked Mid/Side uses one Amount with no hidden mode state, optional pitch tracking works independently across simultaneous notes, zero Amount is bit-identical, state round trips are complete, retained-voice CPU is acceptable, and the fixed T26/T28 Polish Enhancer is unchanged.
@@ -1447,13 +1449,21 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Codex task `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`, branch `codex/task-integration-coordinator`, worktree `/Users/winterfell/.codex/worktrees/74e4/cosimo-synth`, model SOL, reasoning max.
     Standing responsibility:
     - Receive clean committed handoffs from every implementation task; maintain the one authoritative queue of task, thread, branch, worktree, commit, scope, dependencies, review state, and remaining merge/push/deploy work.
-    - Review source and scoped diffs before broad suites or complete rebuilds. Return defects to the owning implementation task, use focused tests during repair loops, and run the complete relevant suite plus expensive build/install gates once only after rebased source is review-clean.
+    - Every delegated thread must be classified explicitly as either an Andrew-owned product/design conversation or a coordinator-managed implementation task. Review source and scoped diffs before broad suites or complete rebuilds. Return defects only to a thread explicitly classified as a coordinator-managed implementation task; use focused tests during repair loops, and run the complete relevant suite plus expensive build/install gates once only after rebased source is review-clean.
     - Rebase, review, and merge accepted branches one at a time against the moving latest master; push master and deploy affected Sites work. Preserve dirty worktrees and unrelated `TODOS.txt`/`PROGRESS.txt` history, and never move uncommitted files, generated output, or installed artifacts between tasks.
     - Parallelize independent reviews and focused checks while serializing master changes, fixed ports, shared generated output, installed plugins, and native builds. Keep automated qualification separate from Andrew's physical-device, Ableton, listening, and visual acceptance.
+    Protected product discussion:
+    - `T26 Build Fixed Two-Band Enhancer`, thread `01a03b9a-b1c0-7431-bc23-3e85da52c3d0`, is Andrew's ongoing product-development room. The coordinator may read Andrew-approved decisions after they are recorded on master and may later review commits originating there, but it must never message, interrupt, assign work or repairs to, wait on, or otherwise direct that thread.
+    - If review finds a defect in code originating from that protected conversation, report the defect to Andrew. After Andrew approves repair work, create a separate implementation task and isolated worktree; do not turn the product conversation into the repair worker.
+    Enhancer integration boundary:
+    - Keep Cosimo Enhancer, Cosimo Enhancer Lite, and the per-voice Enhancer separate exactly as specified by T26, T61, T62, and `ENHANCER_DESIGN.md`. Per-voice simplifications never authorize deleting approved behavior from either standalone processor.
+    - `codex/t26-spectre-wrapper-prototype` is the shared historical base. The readout and shelf branches are independent Lite descendants and must both survive composition. T61 packaging and MIDI tracking remain open after that composition; T62 remains separate and depends on T50.
     Initial handoff sources to audit:
     - T57/T58 effect-editor cleanup: thread `01a0426b-19ee-7db0-ba88-e21192770e6a`.
     - T27 Sausage Fattener lab: thread `01a03b9b-5ad4-7f11-aafb-53bc9db9ca6f`.
-    - T26 fixed Enhancer and related Lite work: threads `01a03b9a-b1c0-7431-bc23-3e85da52c3d0`, `01a0427c-0976-7561-949f-738fc8f47bca`, and `01a0426c-31f8-76a2-8b81-5e31af0d6c28`.
+    - T26 fixed Enhancer source and initial Lite source: protected product thread `01a03b9a-b1c0-7431-bc23-3e85da52c3d0`; review its commits without directing the thread.
+    - Enhancer Lite readouts: coordinator-managed implementation thread `01a0427c-0976-7561-949f-738fc8f47bca`.
+    - Enhancer Lite shelves: coordinator-managed implementation thread `01a0426c-31f8-76a2-8b81-5e31af0d6c28`.
     Done when:
     - This is an ongoing coordination role. It remains open while delegated work exists; an empty queue is an idle state, not task completion.
 
@@ -1656,25 +1666,21 @@ Source note (2026-08-25):
     - The composed-editor regression covers quiet and normal signals for all three Types, exact restored compact geometry, curve/history boundary alignment, and contrast. Shared/UI/browser suites pass 124/124; deterministic before/after captures at 393×852 phone, 1440×900 desktop, and 1120×680 plugin dimensions retain identical Type/Drive/Knee/Mix/filter settings and editor geometry.
     - No distortion DSP or audio behavior changed. A fresh HMR standalone is running from this worktree at `127.0.0.1:5178`; the compiled VST3 is installed at `~/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` and passes strict codesign verification.
 
-[ ] T26 — Finish the fixed two-band Enhancer and build its per-voice MIDI-tracked form
-    Active owner (2026-08-26):
-    - Codex task `Implement fixed two-band bus Enhancer`, thread `01a03b9a-b1c0-7431-bc23-3e85da52c3d0`, current branch `codex/t26-spectre-wrapper-prototype`, worktree `/Users/winterfell/.codex/worktrees/479c3700-c222-4730-88a3-1f9ff584b411/cosimo-synth`, model SOL, reasoning max.
+[ ] T26 — Finish the high-quality two-band Enhancer for the Polish section
+    Protected product discussion and source (2026-08-27):
+    - Codex task `T26 Build Fixed Two-Band Enhancer`, thread `01a03b9a-b1c0-7431-bc23-3e85da52c3d0`, branch `codex/t26-spectre-wrapper-prototype`, worktree `/Users/winterfell/.codex/worktrees/479c3700-c222-4730-88a3-1f9ff584b411/cosimo-synth`, model SOL, reasoning max.
+    - This thread is Andrew's product-development conversation, not a coordinator-managed implementation worker. Do not send it repair requests or other assignments. Review its committed source; if repair is needed, ask Andrew to authorize a separate task.
     Design authority: `ENHANCER_DESIGN.md`.
-    Corrected product decision (2026-08-27):
-    - The per-voice MIDI-tracked Enhancer is required. It is not deferred and must not be administratively closed as a rejected experiment.
-    Locked bus effect:
-    - Build two parametric bell bands, each with frequency, Q, separate mid and side amounts, and Tube/Solid character. Generate only the shaped-minus-unprocessed residue, remove DC, and add that residue back to the original signal.
-    - Keep the de-emphasis permanently active, use the documented 4x oversampling, and keep the ten controls static, smoothed, preset-persisted, and unavailable to the modulation and Effects Lane systems.
-    - Put the bus effect after Safe Bass and before the compressor/clipper in T28. With every amount at zero it must be bit-identical to dry.
-    Required per-voice form:
-    - Build it independently with one Enhancer band per active synth voice, immediately after that voice's filter and before its amplitude envelope/VCA and the final voice sum, using the documented first-order anti-aliasing treatment. Always use linked Mid/Side internally: apply the same Frequency, Q, and Amount through the one fixed shaping curve on both components. Expose exactly Frequency/Ratio, Q, and one Amount; provide no routing switch, separate Mid and Side amounts, or sound-character control.
-    - Put those controls in the existing Voice filter area behind an explicit `FILTER` → `ENHANCER` stage selector. Keep the same graph height: the Enhancer view replaces the graph and three-cell row in place, with the Key Track button in a graph corner. Do not use horizontal swipe navigation because horizontal bell drag edits Frequency/Ratio.
-    - Add the optional Key Track mode from T50. Off uses the preserved ordinary Frequency value. On tracks each voice's own final played pitch after note choice, glide, pitch bend, Global Tune, and modulation routed to Global Tune, with a continuous harmonic-ratio offset from 0.5x to 32x. The offset remains modulatable and must allow deliberately inharmonic positions rather than snapping to integer harmonics.
-    - Keep the voice lifecycle consistent with the synth's existing voice allocation, note stealing, mono/poly/legato, and envelope restart rules. Do not invent a second MIDI-voice policy inside the Enhancer.
-    - Measure retained-voice CPU and aliasing at representative sample rates and voice counts before selecting the production quality setting.
+    Locked processor:
+    - Preserve the accepted `CosimoEnhancer` processor: two parametric bell bands, each with Frequency, Q, Stereo/Mid-Side routing, separate Mid and Side amounts, and Tube/Solid character; plus global Subtle/Medium intensity and the saved de-emphasis amount used during listening. These fourteen static settings are smoothed, preset-persisted, and unavailable to modulation and the Effects Lane.
+    - Preserve the high-quality measured 4x FIR wrapper and its truthful 60-sample declared latency. Do not replace it with Enhancer Lite's cheaper 3-sample IIR wrapper or the per-voice ADAA design.
+    - Generate the accepted shaped-minus-selected contribution, condition it, and add it back to the delayed original signal. With every amount at zero, the nonlinear contribution must be exactly zero and output must match the retained JUCE FIR neutral impulse within `1e-7`, with exactly 60 samples reported to the host. Do not restore the obsolete same-frame bit-exact or zero-latency implementation.
+    - Put the processor after Safe Bass and before the compressor/clipper in T28.
+    Scope boundary:
+    - T61 owns packaging and finishing the separate one-band Enhancer Lite product. T62 owns the still-required lightweight per-voice form. Neither is part of T26 completion, and neither may be used to simplify this processor.
     Done when:
-    - Zero amount is bit-identical to dry; mono stays mono; a side-only test remains side-only; safety and reset checks pass; and level-matched listening shows added harmonics without an unintended loudness jump.
-    - The fixed bus form is cleanly integrated for T28, and the per-voice form follows independent simultaneous notes, glide, bend, and Global Tune correctly with retained renders, measured cost, and no stuck voice state.
+    - Zero amount produces no nonlinear contribution, matches the retained FIR neutral impulse within `1e-7`, and reports exactly 60 samples; mono stays mono; side-only behavior, safety, reset, state, and declared latency pass; and level-matched listening preserves the approved sound.
+    - The high-quality two-band processor is cleanly available for T28 without silently deleting or replacing any accepted sound, routing, state, or wrapper behavior.
 
 [ ] T27 — Reproduce the Sausage Fattener reference before using it to voice Cosimo's compressor and clipper
     Active owner (2026-08-26):
@@ -1698,6 +1704,7 @@ Source note (2026-08-25):
     - This is one fixed, non-reorderable, non-modulatable end-of-chain section: Safe Bass into the T26 Enhancer, then medium compression into an intentional soft clipper, followed by Output Trim.
     - Up to 4 ms of constant lookahead is permitted if the host is told the exact delay. No audible gain change may complete faster than one 60 Hz cycle (about 16.7 ms). FAT, Width, Tilt, and Punch are not part of this version.
     User controls and tuning:
+    - T26's fourteen settings remain the internal high-quality Enhancer contract. T28 decides which values are baked and how the public Polish controls drive them; a compact final interface is not permission for the integrator to delete T26 controls or replace its DSP while merging the source.
     - Expose one `Amount` knob for the compressor and soft-clip combination. Do not expose separate Compression or Clip controls. Tune the macro mapping and the final medium-compression values during development using level-matched listening and the T27 reference bundle.
     - Safe Bass is always fixed and has no user control. Tune its cutoff and side-only high-pass slope during development, then bake the accepted values into the design.
     - Expose Output Trim after the intentional Polish soft clipper.
@@ -1706,7 +1713,7 @@ Source note (2026-08-25):
     - Do not replace it with an always-on final limiter or any other hidden output processor. Internal safety shaping inside an individual effect or feedback loop remains part of that effect and is outside this removal.
     - Add a small overload indicator in the preset bar. It turns red when the post-trim output reaches or exceeds digital full scale; it reports the overload and does not alter the sound. Tune the exact compact light or meter presentation during development.
     Architecture proof before sound work:
-    - Decide the compressor's exact lookahead within the approved 0-4 ms range, then prove that the desktop plugin, AUv3, standalone app, and browser path report and compensate that exact constant delay. At Amount zero, the compressor/soft-clip stage must remain a delayed identity rather than a timing-mismatched bypass.
+    - Decide the compressor's exact lookahead within the approved 0-4 ms range, add it to T26's fixed 60-sample Enhancer latency, then prove that the desktop plugin, AUv3, standalone app, and browser path report and compensate that exact constant total. At Amount zero, the compressor/soft-clip stage must remain a delayed identity rather than a timing-mismatched bypass.
     - Update `POLISH_CHAIN_DESIGN.md` to match these settled choices before implementing the sound.
     Done when:
     - The implemented order is Safe Bass → Enhancer → medium compressor → intentional soft clipper → Output Trim, with only Amount and Output Trim exposed to the user.

@@ -1,12 +1,12 @@
 # Enhancer Design (Spectre-style, two-band)
 
-Status: **locked design, 2026-08-25** (Andrew + assistant session), companion to
-`DISTORTION_QUALITY_DESIGN.md`. Integration resolved same day: this module is a
-member of the fixed, non-modulatable end-of-chain polish section — see
-`POLISH_CHAIN_DESIGN.md`. Same ground rules: this specifies what to build and
-why; implementation is a separate effort. This module is **separate from and
-orthogonal to** the saturator redesign — that module makes a sound *driven*; this one
-adds presence/weight/air at constant level, at the end of the chain.
+Status: **accepted high-quality processor contract, updated 2026-08-27**, companion
+to `DISTORTION_QUALITY_DESIGN.md`. Integration is still owned by T28: this module is
+a fixed, non-modulatable member of the end-of-chain Polish section — see
+`POLISH_CHAIN_DESIGN.md`. The measured implementation and audition plug-in live on
+the protected T26 branch. This module is **separate from and orthogonal to** the
+saturator redesign — that module makes a sound *driven*; this one adds selected-band
+presence, weight, and air at the end of the chain.
 
 Reference product: Wavesfactory Spectre (2018, DSP by Jesús Ginard and Ivan Cohen) —
 a five-band parallel EQ where the *difference* between the EQ'd and dry signal is
@@ -16,106 +16,137 @@ high-pass → distort → blend a little back; Spectre generalizes the fixed hig
 EQ-shaped regions. Cosimo already ships the core trick: the distortion module's
 "harmonics" mode (`dry + residue`) is this architecture with one band.
 
-Andrew's scope decisions (2026-08-25): **two bands, not five. Tube and Solid curves
-only. Per-band mid/side targeting with independent amounts. Lives at the end of the
-signal chain.**
+Andrew's accepted processor (updated 2026-08-27): **two bands, not five. Each band
+independently selects Stereo or Mid/Side. Stereo uses one linked Amount; Mid/Side
+uses separate Mid and Side amounts. Each band selects Tube or Solid. One shared
+Subtle/Medium selector and one continuous de-emphasis value apply to the processor.
+It lives in the fixed Polish section at the end of the signal chain.**
+
+## Product family boundary (locked 2026-08-27)
+
+Three related products share the residue idea, but they are not interchangeable:
+
+- **Cosimo Enhancer** is the accepted high-quality two-band processor. Its production
+  branch uses the measured 4x FIR wrapper and declares 60 samples of latency. It is
+  currently auditionable as its own plug-in and will become the Enhancer stage inside
+  the fixed Polish section.
+- **Cosimo Enhancer Lite** is the one-band standalone spin-off. It keeps the accepted
+  Lite routing, character, intensity, analyzer, and direct-manipulation behavior while
+  using a cheaper 4x polyphase-IIR wrapper with 3 samples of declared latency. It is
+  the source for the free VST3 and iOS AUv3 product, not a replacement for the Polish
+  processor.
+- **The per-voice Cosimo Enhancer** is a further lightweight derivative of Lite's
+  one-band sound, placed after every synth voice's filter. It does not instantiate
+  either the full processor's FIR wrapper or Lite's IIR wrapper per voice. It uses the
+  dedicated first-order ADAA implementation below, fixed linked Mid/Side, and one
+  fixed Tube-family curve.
+
+A control or DSP decision for one member of this family never silently rewrites the
+others. In particular, the per-voice simplifications are not permission to remove
+routing, Tube/Solid, Subtle/Medium, de-emphasis, latency, or other approved behavior
+from Cosimo Enhancer or Cosimo Enhancer Lite.
 
 ---
 
 ## 1. Signal flow
 
 ```
-in (stereo) ──┬────────────────────────────────────────────────┐ (dry, bit-exact)
-              │ M/S encode:  M = (L+R)/2,  S = (L−R)/2         │
-              │                                                │
-              │  band 1:  b = SVF-BP(freq1, Q1)  of M and S    │
-              │  band 2:  b = SVF-BP(freq2, Q2)  of M and S    │
-              │                                                │
-              │  per band, per channel (M, S):                 │
-              │     d   = amount(band, channel) · b            │
-              │     [ ×4 oversampled core ]                    │
-              │        s    = curve(band)(d)     Tube | Solid  │
-              │        thru = d (same round trip)              │
-              │     r   = DCblock(s − thru)      residue only  │
-              │                                                │
-              │  M/S decode residues → stereo residue          │
-              └── out = dry + residue                          │
+in (stereo) ── shared JUCE-compatible 4x FIR upsampler ─────────┐
+              │                                                 │
+              │ each band, in parallel Stereo and M/S domains: │
+              │   d = peakingEQ(input) - input at 4x           │
+              │   shaped = selected curve(d) at 4x             │
+              │   reconstruct shaped and d separately          │
+              │   conditioned = 20.016 Hz HP(shaped)           │
+              │   c = conditioned - deEmphasis * d             │
+              │   decode M/S; crossfade by per-band mode       │
+              │                                                 │
+              └── reconstruct neutral dry through same FIR ─────┤
+                  out = delayed dry + band 1 c + band 2 c
 ```
 
-De-emphasis is **always on** (the `− thru` subtraction): only newly generated
-harmonics are ever added; the band's own level never changes. There is no
-non-de-emphasized mode — that would be a parallel EQ with distortion, which the rack's
-existing EQ/filter modules already cover. Consequence: each amount knob is pure
-*drive*, and the knob-to-drive mapping is voiced so the onset of audible harmonics is
-progressive (see §5).
+De-emphasis is one saved continuous control, from 0 to 1 and defaulting to 1. At 0,
+the contribution is the complete shaped bell. At 1, the aligned unprocessed bell is
+fully inverted and summed with the shaped bell. Intermediate values scale only that
+subtraction. There is no post-shaper trim, gain matcher, or level compensation. The
+fixed high-pass is on the reconstructed shaped path only; the unprocessed bell is
+not filtered. Preserve this control and signal law during integration. Whether T28
+exposes, hides, bakes, or macro-maps the control is a later product decision.
 
-The bands are **two full parametric bells, Spectre-style** (Andrew, 2026-08-25:
-bands, not LP/HP halves): each freely steerable across the audible range with its own
-Q. In a parallel EQ, the difference signal of a bell boost *is* bandpass-shaped
-content, so extraction is the constant-peak-gain bandpass output of a TPT/Zavalishin
-SVF per band, scaled by amount. A wide low-Q bell parked at either extreme
-approximates shelf-like reach when wanted. The parallel topology keeps the residue
-subtraction phase-clean by construction — the reason Spectre's EQ is boost-only and
-parallel rather than serial biquads.
+The bands are **two full parametric bells, Spectre-style**: each is freely steerable
+from 20 Hz to 20 kHz with its own displayed Q. Direct measurements show that Spectre
+first makes a conventional boosted peaking EQ and then takes `EQ - dry`. For
+`G = gain(12 dB * Amount)`, that difference is a unity-peak bandpass multiplied by
+`G - 1`, with effective pole Q `displayed Q * sqrt(G)`. The accepted implementation
+uses that equivalent form in the 4x core. This gain-dependent Q replaces the earlier
+fixed-Q approximation.
 
-## 2. Parameters (10, static — dialed in, not modulatable, per the polish-chain rule)
+## 2. Accepted processor settings (14, static and non-modulatable)
 
 | Param | Range | Default | Meaning |
 |---|---|---|---|
-| `b1FreqHz` | 30..16k | 130 | band 1 bell center |
-| `b1Q` | 0.3..8 | 0.71 | band 1 bell width |
+| `b1FreqHz` | 20..20k | 130 | band 1 bell center |
+| `b1Q` | 0.1..10 | 0.71 | band 1 bell width |
+| `b1Mode` | Stereo / Mid-Side | Stereo | band 1 processing domain |
 | `b1MidAmount` | 0..1 | 0 | band 1 drive into the curve, mid channel |
 | `b1SideAmount` | 0..1 | 0 | band 1 drive, side channel |
 | `b1Curve` | Tube / Solid | Solid | band 1 curve |
-| `b2FreqHz` | 30..16k | 9k | band 2 bell center |
-| `b2Q` | 0.3..8 | 0.71 | band 2 bell width |
+| `b2FreqHz` | 20..20k | 9k | band 2 bell center |
+| `b2Q` | 0.1..10 | 0.71 | band 2 bell width |
+| `b2Mode` | Stereo / Mid-Side | Stereo | band 2 processing domain |
 | `b2MidAmount` | 0..1 | 0 | band 2 drive, mid |
 | `b2SideAmount` | 0..1 | 0 | band 2 drive, side |
 | `b2Curve` | Tube / Solid | Tube | band 2 curve |
+| `saturationMode` | Subtle / Medium | Subtle | shared nonlinear intensity |
+| `deEmphasis` | 0..1 | 1 | selected-signal subtraction amount |
 
-Independent mid and side amounts per band subsume Spectre's per-band channel routing
-selector (mid-only = side amount 0, and so on) without an enum, and directly support
-the two marquee uses at the default band positions: a low bell driven into the mid
-for weight that stays mono-solid, a high bell driven into the side as a natural
-widener (Spectre's own manual headlines this use case). Mono input ⇒ S = 0 ⇒ side
-amounts do nothing, correctly.
+The routing choice and separate amounts are both part of the accepted sound and state;
+do not infer that one makes the other disposable. They support linked Stereo use as
+well as Mid/Side targeting such as a low bell in the mid for mono-solid weight and a
+high bell in the side for widening. Mono input ⇒ S = 0 ⇒ side amounts do nothing.
 
-All amounts default 0 ⇒ the module is born silent-by-contribution: `curve(0) = 0`,
-residue = 0, `out = dry` **bit-exact**. The rack's hard-bypass invariant (ADR-005)
-holds with no special casing.
+All amounts default to 0, so the nonlinear contribution is exactly zero. The output
+then matches the retained JUCE FIR neutral impulse within `1e-7` and the processor
+reports exactly 60 samples of host latency. It is intentionally not the same-frame,
+bit-exact input; that older requirement was superseded when Andrew approved the
+measured high-quality wrapper.
 
-No global mix (the four amounts are the mix), no output trim (rack gain staging owns
-that), no oversampling quality switch (fixed ×4 — one less way to sound bad; Spectre's
-16x tier is a CPU luxury this design doesn't need at two gentle bands).
+There is no global mix, output trim, or oversampling-quality switch. The four band
+amounts own contribution level; rack gain staging owns output trim; the high-quality
+4x FIR wrapper is fixed. T28 may expose a smaller final Polish surface, but it must
+map or bake these accepted settings deliberately rather than deleting them during
+branch integration.
 
 ## 3. The two curves
 
-Per the Spectre manual's own characterizations, mapped to our vocabulary:
+Direct Spectre 1.5.6 measurements supersede the manual's reversed character labels.
+The accepted **Subtle** transfer functions are:
 
-- **Tube** — symmetric soft clip (the clipped rational tanh approximation already
-  cited in `DISTORTION_QUALITY_DESIGN.md` §9): odd harmonics, "presence." Default for
-  band 2 (the 9 kHz default position).
-- **Solid** — *asymmetric* soft clip (bias-offset tanh variant): even + odd
-  harmonics, "thickness." Default for band 1. Asymmetry ⇒ DC in the residue ⇒ the
-  per-path DC blocker in §1 is mandatory, reusing the existing
-  `std::filters::dcblocker` idiom.
+- **Solid** — `tanh(3x) / sqrt(2)`: symmetric, predominantly odd harmonics.
+- **Tube** — `(tanh(3x + 0.125) - tanh(0.125)) / sqrt(2)`: biased, even and odd
+  harmonics. Tube is band 2's default.
 
-Both memoryless. No envelope-driven bias here — this module is a subtle finisher, and
-the "alive" machinery belongs to the saturator module. If the two ever share a curve
-library, these are the same kernels.
+The accepted **Medium** transfer functions are:
+
+- **Solid** — `tanh(6x) / 2`.
+- **Tube** — `(tanh(6x + 0.3125) - tanh(0.3125)) / 2`.
+
+These are fixed, memoryless laws. There is no envelope-driven bias, normalization
+back to unity fundamental gain, RMS follower, correlation follower, or hidden gain
+compensation. Tube's signal-dependent DC makes the shaped-path high-pass mandatory.
 
 ## 4. Anti-aliasing and alignment
 
-Identical stance to `DISTORTION_QUALITY_DESIGN.md` §3.4–3.5, same idiom, same
-requirements:
-
-- The four shaper paths run in ×4 oversampled cores with the **unity thru-path**
-  trick, so `s − thru` compares two signals that took the same round trip — the
-  residue is aligned by construction, zero measurement needed. This matters *more*
-  here than in the saturator: the module's entire output contribution is a residue.
-- Same resampler requirement: no declared latency, ≤ ~1 sample smear (ADR-008), same
-  verification note about Cmajor node-oversampling interpolation, same fallback
-  (in-processor polynomial up + cascaded IIR halfband down).
+- One shared input stage runs the pinned JUCE 7.0.1 maximum-quality 4x equiripple
+  half-band FIR. Every Stereo and M/S bell and shaper runs at 4x. Shaped and
+  unprocessed selected-bell paths are reconstructed separately by identical FIR
+  stages before subtraction, keeping the contribution aligned.
+- The neutral path uses the same up/down FIR. The wrapper has 59.5 samples of
+  fractional latency and declares 60 samples to the host. This is the high-quality
+  algorithm T28 must integrate; do not replace it with Lite's cheaper IIR wrapper.
+- The shaped path then receives the measured 20.016318 Hz second-order Butterworth
+  high-pass and fixed `+0.020816 dB` fit before the unfiltered selected bell is
+  subtracted. No program-dependent gain process follows.
 - A high-parked bell is the honest aliasing risk: harmonics of 8–16 kHz content land near
   or above Nyquist and fold. ×4 oversampling plus gentle curves plus residue levels
   (this is a subtle effect by design) keeps fold-back below audibility; the ADAA
@@ -124,10 +155,14 @@ requirements:
 
 ## 5. Voicing
 
-- Amount→drive mapping per band, voiced so the audible-harmonics onset is spread
-  across the knob (compensating the de-emphasis dead zone at low drive), with the
-  residue level roughly loudness-linear in the knob. Starting shape:
-  `drive = 24 dB · amount²`, residue post-gain trimmed by ear.
+- Amount is a conventional 0..+12 dB boost. The selected signal is
+  `band(displayed Q * sqrt(gain(12 dB * Amount))) * (gain(12 dB * Amount) - 1)`.
+  It is exactly zero at Amount 0 and reaches 2.981x at 100%.
+- The contribution is exactly
+  `ButterworthHP(shape(selected)) - deEmphasis * selected` after both terms are
+  reconstructed from 4x, then added to the FIR-aligned dry. There is no second
+  Amount multiply, post-shaper attenuation, unity-fundamental matcher, automatic
+  level compensation, or output trim.
 - Low-position voicing target: kick/bass weight on small speakers (2nd/3rd harmonic
   of 40–130 Hz content landing 80–400 Hz). High-position: acoustic guitar / vocal
   sheen and the side-widener use.
@@ -140,21 +175,27 @@ requirements:
 Position: **inside the fixed polish chain** (`POLISH_CHAIN_DESIGN.md`) — after all
 rack modules and the global filter, between the SAFE BASS stage and the final
 comp/clipper. A single always-resident instance: no pool membership, no
-`poolResetIn` lifecycle, no modulation-table rows, no lane-state schema growth. Zero
-declared latency (SVFs + memoryless curves + the §4 oversampling stance), no
-allocation. State is four SVFs, four DC blockers, and the OS cores; reset semantics
-follow the polish chain's single-instance rules.
+`poolResetIn` lifecycle, no modulation-table rows, no lane-state schema growth. The
+processor declares the accepted FIR wrapper's 60-sample latency and performs no
+allocation. Stereo and M/S branches retain independent filter/reconstruction state
+so a smoothed mode change crossfades coherent contributions rather than reinterpreting
+one channel basis as the other. Reset follows the Polish chain's single-instance
+rules.
 
-## 7. Per-voice variant (feasibility)
+## 7. Lightweight per-voice derivative
 
 The per-voice form is required (Andrew, updated 2026-08-27): one single-band
 instance after each voice's filter and before that voice's amplitude envelope and
 the final voice sum. Pitch tracking is optional (center = note frequency × harmonic
 ratio when enabled).
 
+This is spun from the Lite one-band sound, not from the processor-heavy two-band
+implementation. It reuses Lite's selection/filtering behavior, residue sound, and
+Mid/Side convention, but it does not copy Lite's 4x IIR wrapper into every voice.
+
 Routing is permanently **linked Mid/Side**. Encode each voice's stereo signal with
 the established Lite matrix, `M = 0.5 × (L + R)` and `S = 0.5 × (L − R)`, run the
-same Frequency, Q, and Amount through one fixed shaping curve on both components,
+same Frequency, Q, and Amount through one fixed Tube-family shaping curve on both components,
 then decode with `L = M + S` and `R = M − S`. There is one Amount control, no routing
 switch, no independent Mid and Side amounts, and no sound-character parameter or
 hidden mode state. Because the shaper is nonlinear, this is deliberately a different
@@ -228,18 +269,18 @@ Only the measured production quality setting remains open.
 
 ## 8. Ship criteria
 
-1. All amounts 0 ⇒ output bit-exact dry (ADR-005 proof unchanged).
-2. Harmonics-only guarantee: enabling any band at default voicing changes pink-noise
-   LUFS by ≤ 0.5 dB while visibly adding harmonic lines on a sine — the de-emphasis
-   contract, testable.
+1. All amounts 0 ⇒ nonlinear contribution exactly zero; output matches the retained
+   JUCE FIR neutral impulse within `1e-7`; host latency is exactly 60 samples.
+2. De-emphasis follows the accepted continuous shaped-minus-selected law at 0%, 50%,
+   and 100%; do not replace it with a generic gain matcher or harmonics-only promise.
 3. Mono input with only side amounts raised ⇒ output identical to input.
 4. Andrew's ears against Spectre at Subtle/Medium on the same stems.
 
 ## 9. Open decisions (defaults apply unless overridden)
 
-1. **De-emphasis always-on, no toggle.** Default: yes (rationale in §1). Overriding
-   means adding a "boost mode" that duplicates parallel EQ — argue for it before
-   spending a param on it.
+1. **Final Polish exposure of de-emphasis.** The accepted processor preserves the
+   saved coefficient used during listening. T28 may bake, hide, or macro-map it only
+   through an explicit product decision; integration alone must not remove it.
 2. **Rack integration form.** ~~Open~~ **Resolved 2026-08-25**: a fixed member of
    the static polish chain (`POLISH_CHAIN_DESIGN.md`) — not a pool module, not
    modulatable.

@@ -1,3 +1,8 @@
+Enhancer family and coordinator authority clarified — 2026-08-27
+- Cosimo Enhancer is the accepted high-quality two-band, 4x-FIR, 60-sample processor for T28. Cosimo Enhancer Lite is the one-band standalone product with the cheaper 4x-IIR, 3-sample wrapper. T62 is a further lightweight per-voice derivative that keeps Lite's one-band sound but uses fixed linked Mid/Side, one Tube-family curve, and first-order ADAA with no oversampling wrapper.
+- The T26 thread `01a03b9a-b1c0-7431-bc23-3e85da52c3d0` is Andrew's protected product-development conversation. The integration coordinator may review its committed output but may not direct, interrupt, or assign repairs to it. Defects require Andrew's approval and a separate implementation task.
+- Enhancer Lite readouts (`19a67d0c`) and shelves (`0c5a73cd`) are independent descendants of the common `2a652a40` base and must both survive composition. T61 shipping/MIDI work and T62 per-voice work remain separate open tasks.
+
 Shared task checklist across Codex worktrees — 2026-08-27
 - The normal Git-tracked `TODOS.txt` in the primary master checkout is the single live checklist. Codex's project setup runs `scripts/link_master_todos.sh` for each new task worktree, linking its checkout path to the primary file while marking that expected worktree-only type change as skip-worktree.
 - The linker verifies both paths belong to this repository, requires the source checkout to be on master, and refuses staged, dirty, conflicted, missing, or misdirected task copies before replacing anything. `PROGRESS.txt` remains branch-local by design.
