@@ -3666,6 +3666,87 @@ test("T66: an open MSEG 2 Rate control edits a transient MSEG 1 route without mo
     }
 });
 
+test("T66: the active Mod-page full editor keeps MSEG 2 as its target while MSEG 1 is dropped on Rate", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        const sourceNumber = page.locator('[data-role="mobile-mod-source-number"]');
+        await sourceNumber.waitFor();
+        await sourceNumber.selectOption("2");
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-global-mod-rail-selected"]')?.textContent?.includes("2") === true
+        ));
+        await page.click('button[aria-label="Open MSEG editor"]');
+
+        const dialog = page.locator('[data-role="mseg-editor-dialog"]');
+        const rateControl = dialog.locator('[data-role="mseg-editor-cell-rate"]');
+        await rateControl.waitFor();
+        assert.equal(await rateControl.getAttribute("aria-label"), "MSEG rate");
+        assert.equal(await rateControl.getAttribute("data-modulation-target-kind"), "mseg2Rate");
+
+        const baseRateBefore = Number((await getHarnessSnapshot(page)).parameterValues.mseg2Rate);
+        await expandGlobalModRail(page);
+        await createRackMappingByDrop(
+            page,
+            '[data-role="rack-mod-source-mseg-1"]',
+            '[data-role="mseg-editor-cell-rate"]',
+        );
+
+        const createdSnapshot = await waitForHarnessSnapshot(
+            page,
+            "active Mod-page MSEG 1 to MSEG 2 Rate route created at zero",
+            (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "mseg"
+                && route.sourceSlot === 1
+                && route.targetKind === "mseg2Rate"
+                && Math.abs(Number(route.amount)) <= 1e-9
+            )),
+        );
+        assert.equal(await dialog.isVisible(), true);
+        assert.equal(await rateControl.getAttribute("aria-label"), "MSEG rate");
+        assert.equal(await rateControl.getAttribute("data-modulation-target-kind"), "mseg2Rate");
+        assert.equal(Number(createdSnapshot.parameterValues.mseg2Rate), baseRateBefore);
+
+        await dragLocatorBy(page, rateControl, 0, -48);
+        const editedSnapshot = await waitForHarnessSnapshot(
+            page,
+            "active Mod-page full editor edits MSEG 1 to MSEG 2 Rate",
+            (snapshot) => Number(readStoredModulationState(snapshot).routes.find((route) => (
+                route.sourceKind === "mseg"
+                && route.sourceSlot === 1
+                && route.targetKind === "mseg2Rate"
+            ))?.amount) > 0.01,
+        );
+        const route = readStoredModulationState(editedSnapshot).routes.find((candidate) => (
+            candidate.sourceKind === "mseg"
+            && candidate.sourceSlot === 1
+            && candidate.targetKind === "mseg2Rate"
+        ));
+        assert.ok(route);
+        assert.equal(Number(editedSnapshot.parameterValues.mseg2Rate), baseRateBefore);
+        assert.equal(hasRuntimeAmount(editedSnapshot, route, route.amount, 0.001), true);
+
+        // A normal tap remains the existing product behavior: selecting a
+        // different MSEG retargets the open editor. Only a drop is isolated.
+        await page.click('button[aria-label="Next modulation-source group"]');
+        await page.click('button[aria-label="Next modulation-source group"]');
+        await page.click('[data-role="rack-mod-source-mseg-3"]');
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mseg-editor-cell-rate"]')?.getAttribute("data-modulation-target-kind")
+                === "mseg3Rate"
+        ));
+        assert.equal(
+            (await page.locator('[data-role="mobile-global-mod-rail-selected"]').innerText()).includes("3"),
+            true,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
 test("the full-screen MSEG timing and morph knobs share the compact row without making it taller", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),

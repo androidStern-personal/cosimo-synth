@@ -15,6 +15,7 @@ import {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useRef,
     useState,
     type CSSProperties,
@@ -98,8 +99,9 @@ const LONG_PRESS_SLOP_PX = 8;
 /**
  * Pointer-prop pack for controls that own their pointer interaction (number
  * fields, rails): a stationary press opens the shell menu; movement past
- * slop or release cancels. Returns {} when no shell menu exists or the host
- * has nothing to offer, so spreading is always safe.
+ * slop, release, cancellation, capture loss, or unmount cancels. Returns {}
+ * when no shell menu exists or the host has nothing to offer, so spreading
+ * is always safe.
  */
 export function useLongPressParameterMenu(
     buildRequest: (() => ParameterMenuRequestContext) | null,
@@ -144,6 +146,10 @@ export function useLongPressParameterMenu(
         }
     }, [clearPress]);
 
+    useEffect(() => () => {
+        clearPress();
+    }, [clearPress]);
+
     return openMenu === null || buildRequest === null
         ? {}
         : {
@@ -151,6 +157,7 @@ export function useLongPressParameterMenu(
             onPointerMove,
             onPointerUp: clearPress,
             onPointerCancel: clearPress,
+            onLostPointerCapture: clearPress,
         };
 }
 

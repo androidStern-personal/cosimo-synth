@@ -105,6 +105,61 @@ test("every MSEG Rate resolves its live seconds endpoint for MAPPINGS base editi
     }
 });
 
+test("every endpoint-backed MSEG and ENV generator target resolves its live MAPPINGS base", async () => {
+    const { resolveModulationTargetBase } = await loadResolver();
+    const percentTargets = [
+        ["mseg1Morph", 0],
+        ["mseg2Morph", 0],
+        ["mseg3Morph", 0],
+        ["env1Sustain", 0.5],
+        ["env2Sustain", 0.5],
+        ["env3Sustain", 0.5],
+    ];
+    for (const [targetKind, initialValue] of percentTargets) {
+        const base = resolveModulationTargetBase(targetKind);
+        assert.ok(base, `${targetKind} must expose its endpoint-backed base.`);
+        assert.equal(base.endpointID, targetKind);
+        assert.equal(base.entrySpec._tag, "scalar");
+        assert.equal(base.entrySpec.defaultUnit, "%");
+        assert.equal(base.entrySpec.min, 0);
+        assert.equal(base.entrySpec.max, 1);
+        assert.ok(Math.abs(base.initialValue - initialValue) < 1e-9);
+        assert.equal(base.railProjection.normalizeValue(0), 0);
+        assert.equal(base.railProjection.normalizeValue(1), 1);
+    }
+
+    const timeTargets = [
+        ["mseg1Rate", 0, 2, 1],
+        ["mseg2Rate", 0, 2, 1],
+        ["mseg3Rate", 0, 2, 1],
+        ["env1Attack", 0.001, 10, 0.01],
+        ["env1Decay", 0.001, 10, 0.25],
+        ["env1Release", 0.001, 10, 0.2],
+        ["env2Attack", 0.001, 10, 0.01],
+        ["env2Decay", 0.001, 10, 0.25],
+        ["env2Release", 0.001, 10, 0.2],
+        ["env3Attack", 0.001, 10, 0.01],
+        ["env3Decay", 0.001, 10, 0.25],
+        ["env3Release", 0.001, 10, 0.2],
+    ];
+    for (const [targetKind, min, max, initialValue] of timeTargets) {
+        const base = resolveModulationTargetBase(targetKind);
+        assert.ok(base, `${targetKind} must expose its endpoint-backed base.`);
+        assert.equal(base.endpointID, targetKind);
+        assert.equal(base.entrySpec._tag, "seconds");
+        assert.equal(base.entrySpec.min, min);
+        assert.equal(base.entrySpec.max, max);
+        assert.ok(Math.abs(base.initialValue - initialValue) < 1e-9);
+        assert.equal(base.railProjection.normalizeValue(min), 0);
+        assert.equal(base.railProjection.normalizeValue(max), 1);
+    }
+});
+
+test("the catalog's engine-only oscillator amp-gain target remains genuinely base-less", async () => {
+    const { resolveModulationTargetBase } = await loadResolver();
+    assert.equal(resolveModulationTargetBase("oscA.ampGainDb"), null);
+});
+
 test("the projection inverts: denormalize is the exact inverse of normalize", async () => {
     const { resolveModulationTargetBase } = await loadResolver();
     const logProjection = resolveModulationTargetBase("lane.globalFilter#1.globalFilterCutoff").railProjection;

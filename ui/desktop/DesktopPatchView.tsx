@@ -4340,6 +4340,7 @@ function DesktopPatchViewBody({
         selectedSource: { sourceKind: "mseg", sourceSlot: 1 },
     });
     const [globalModDragSource, setGlobalModDragSource] = useState<GlobalModRailState["selectedSource"] | null>(null);
+    const [openMsegEditorTargetSlot, setOpenMsegEditorTargetSlot] = useState<number | null>(null);
     const activeMsegRouteSource = globalModDragSource ?? globalModRailState.selectedSource;
     const activeMsegRouteSourceIdentity = useMemo(() => {
         const source = findRackModulationSource(
@@ -4501,6 +4502,7 @@ function DesktopPatchViewBody({
         serial: number;
     } | null>(null);
     const handleArmModSource = useCallback((source: GlobalModRailState["selectedSource"]) => {
+        setOpenMsegEditorTargetSlot(null);
         setGlobalModRailState((current) => ({ ...current, selectedSource: source }));
         setArmModSourceSignal((previous) => ({ source, serial: (previous?.serial ?? 0) + 1 }));
     }, []);
@@ -4940,6 +4942,7 @@ function DesktopPatchViewBody({
         onRemoveRoute: synthView.handleRemoveRoute,
     });
     const handleMobileModSourceTap = useCallback((source: MobileModSource) => {
+        setOpenMsegEditorTargetSlot(null);
         if (mobileWorkspaceSection === "mod") {
             setWorkspaceShell((current) => (
                 openDeepLink(current, {
@@ -4968,6 +4971,25 @@ function DesktopPatchViewBody({
         synthView.handleSelectEnvelopeSlot,
         synthView.handleSelectMsegSlot,
     ]);
+    const handleGlobalModSourceDrop = useCallback((source: GlobalModRailState["selectedSource"]) => {
+        if (mobileWorkspaceSection === "mod" && synthView.msegEditor.isOpen) {
+            setOpenMsegEditorTargetSlot(synthView.selectedMsegSlot);
+        }
+        setGlobalModRailState((current) => ({ ...current, selectedSource: source }));
+    }, [mobileWorkspaceSection, synthView.msegEditor.isOpen, synthView.selectedMsegSlot]);
+    const handleGlobalModSourceSelect = useCallback((source: GlobalModRailState["selectedSource"]) => {
+        setOpenMsegEditorTargetSlot(null);
+        setGlobalModRailState((current) => ({ ...current, selectedSource: source }));
+    }, []);
+    const closeMsegEditor = useCallback(() => {
+        setOpenMsegEditorTargetSlot(null);
+        synthView.msegEditor.closeEditor();
+    }, [synthView.msegEditor.closeEditor]);
+    useEffect(() => {
+        if (!synthView.msegEditor.isOpen) {
+            setOpenMsegEditorTargetSlot(null);
+        }
+    }, [synthView.msegEditor.isOpen]);
     const closeQuickEditor = useCallback(() => setQuickEditorSource(null), []);
     const openQuickEditorFullEditor = useCallback(() => {
         const source = quickEditorSource;
@@ -5242,13 +5264,15 @@ function DesktopPatchViewBody({
                         <ModulationMatrixSection
                             compact={isCompactViewport}
                             focusedSource={mobileModSource}
-                            // The hidden Mod page must not retarget an editor
-                            // that is open over Voice/FX after a source drop.
-                            // Ordinary Mod-page selection and source taps keep
-                            // their existing paths; only the offscreen sync is
-                            // suspended outside the Mod workspace.
+                            // A valid source drop pins an already-open MSEG
+                            // editor's target while the dropped source becomes
+                            // its route source. Ordinary rail/page selections
+                            // clear that pin and retain the existing behavior;
+                            // hidden Mod pages still suspend this sync.
                             armedSource={mobileWorkspaceSection === "mod"
-                                ? globalModRailState.selectedSource
+                                ? openMsegEditorTargetSlot === null
+                                    ? globalModRailState.selectedSource
+                                    : { sourceKind: "mseg", sourceSlot: openMsegEditorTargetSlot + 1 }
                                 : null}
                             onArmSource={isCompactViewport ? handleArmModSource : undefined}
                             selectedMsegSlot={synthView.selectedMsegSlot}
@@ -5368,6 +5392,8 @@ function DesktopPatchViewBody({
                 : "select-then-open"}
             onGlobalModRailStateChange={setGlobalModRailState}
             onGlobalModSourceDragChange={setGlobalModDragSource}
+            onGlobalModSourceSelect={handleGlobalModSourceSelect}
+            onGlobalModSourceDrop={handleGlobalModSourceDrop}
             selectModSourceSignal={armModSourceSignal}
             onRouteCreationConfirmed={handleRouteCreationConfirmed}
             onSelectedEffectChange={setSelectedRackEffectId}
@@ -5611,7 +5637,7 @@ function DesktopPatchViewBody({
                 hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
                 activeSegmentIndex={synthView.msegEditor.activeSegmentIndex}
                 canUndo={synthView.msegEditor.canUndo}
-                onClose={synthView.msegEditor.closeEditor}
+                onClose={closeMsegEditor}
                 onUndo={synthView.msegEditor.undoLastEdit}
                 onSelectShape={synthView.handleSelectMsegShape}
                 onToggleLoop={synthView.handleToggleMsegLoop}

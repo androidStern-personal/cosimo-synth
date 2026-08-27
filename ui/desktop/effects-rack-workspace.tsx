@@ -158,6 +158,10 @@ type EffectsRackWorkspaceProps = {
     /** The source owned only by an active mapping drag. It never changes
         ordinary source selection or tap behavior. */
     onGlobalModSourceDragChange?: (source: GlobalModRailState["selectedSource"] | null) => void;
+    /** Ordinary selection is distinct from a mapping drop. */
+    onGlobalModSourceSelect?: (source: GlobalModRailState["selectedSource"]) => void;
+    /** A valid drop is distinct from an ordinary source tap. */
+    onGlobalModSourceDrop?: (source: GlobalModRailState["selectedSource"]) => void;
     /** T14 one-selection: the Mod page's selectors arm the bar through this. */
     selectModSourceSignal?: { source: SelectedSource; serial: number } | null;
     /** ADR-025 row 15: fired once per authoritative route creation. */
@@ -3187,6 +3191,8 @@ export function EffectsRackWorkspace({
     modSourceTapMode = "select-then-open",
     onGlobalModRailStateChange,
     onGlobalModSourceDragChange,
+    onGlobalModSourceSelect,
+    onGlobalModSourceDrop,
     selectModSourceSignal = null,
     onRouteCreationConfirmed,
     onSelectedEffectChange,
@@ -3924,11 +3930,12 @@ export function EffectsRackWorkspace({
     }, [onDragDwellNavigate, selectEffect]);
 
     const selectSource = useCallback((source: SelectedSource) => {
+        onGlobalModSourceSelect?.(source);
         setSelectedSource(source);
         setSourcePageIndex(source.sourceSlot - 1);
         setSourceIsArmed(true);
         setRouteStatus("");
-    }, []);
+    }, [onGlobalModSourceSelect]);
 
     const dropSource = useCallback((
         source: SelectedSource,
@@ -3948,6 +3955,7 @@ export function EffectsRackWorkspace({
         if (!anyCreatable) {
             return;
         }
+        onGlobalModSourceDrop?.(source);
         setSelectedSource(source);
         setSourcePageIndex(source.sourceSlot - 1);
         setSourceIsArmed(true);
@@ -3971,7 +3979,14 @@ export function EffectsRackWorkspace({
                 });
             }
         }
-    }, [createRoute, deviceIdForEffectSelection, getPairCreation, onAddRouteWithOverrides, onSelectedEffectChange]);
+    }, [
+        createRoute,
+        deviceIdForEffectSelection,
+        getPairCreation,
+        onAddRouteWithOverrides,
+        onGlobalModSourceDrop,
+        onSelectedEffectChange,
+    ]);
 
     const changeSourcePage = useCallback((nextPageIndex: number) => {
         const normalizedPageIndex = ((nextPageIndex % RACK_MODULATION_SOURCE_PAGES.length)

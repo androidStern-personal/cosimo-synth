@@ -181,7 +181,10 @@ function MappingAmountOnlyControl({
                 menuHandlers.onPointerCancel?.();
                 sliderDrag.handlePointerCancel(event);
             }}
-            onLostPointerCapture={(event) => sliderDrag.handleLostPointerCapture(event.pointerId)}
+            onLostPointerCapture={(event) => {
+                menuHandlers.onLostPointerCapture?.();
+                sliderDrag.handleLostPointerCapture(event.pointerId);
+            }}
             onKeyDown={(event) => {
                 let nextAmount: number | null = null;
                 if (event.key === "Home") nextAmount = amountBounds.min;

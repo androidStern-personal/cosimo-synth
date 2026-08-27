@@ -193,6 +193,14 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
 
     const oscillatorTarget = parseOscillatorTarget(targetKind);
     if (oscillatorTarget !== null) {
+        if (
+            oscillatorTarget.parameterKind === "ampGainDb"
+            && getModulationTargetDescriptor(targetKind).binding._tag !== "endpoint"
+        ) {
+            // The catalog exposes Level as an engine modulation destination,
+            // but deliberately records no base endpoint contract for it.
+            return null;
+        }
         const controlID = voiceControlByParameterKind.get(oscillatorTarget.parameterKind);
         if (controlID === undefined) {
             // Engine-only oscillator destinations without a base control
@@ -216,20 +224,37 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
         };
     }
 
-    if (targetKind === "mseg1Rate" || targetKind === "mseg2Rate" || targetKind === "mseg3Rate") {
-        const descriptor = getModulationTargetDescriptor(targetKind);
-        if (descriptor.binding._tag !== "endpoint" || descriptor.format.kind !== "time") {
-            throw new Error(`MSEG Rate target "${targetKind}" has no time endpoint binding.`);
+    // Catalog-owned targets: endpoint-bound entries resolve; deliberately
+    // unbacked ones do not.
+    const descriptor = getModulationTargetDescriptor(targetKind);
+    const binding = descriptor.binding;
+    if (binding._tag !== "endpoint") {
+        return null;
+    }
+    if (/^(?:mseg|env)[123]$/.test(descriptor.moduleId)) {
+        const initialValue = binding.toEngine(descriptor.initialValue);
+        let entrySpec: ParameterEntrySpec;
+        if (descriptor.format.kind === "percent") {
+            entrySpec = parameterEntrySpecForScalar({
+                min: 0,
+                max: 1,
+                step: 0.001,
+                unit: "%",
+                canonicalPerDisplayedUnit: 0.01,
+                digits: 3,
+            });
+        } else if (descriptor.format.kind === "time") {
+            entrySpec = parameterEntrySpecForSeconds({
+                minSeconds: descriptor.format.minSeconds,
+                maxSeconds: descriptor.format.maxSeconds,
+                stepSeconds: 0.001,
+                currentSeconds: initialValue,
+            });
+        } else {
+            throw new Error(`Generator target "${targetKind}" has no percent/time entry format.`);
         }
-        const initialValue = descriptor.binding.toEngine(descriptor.initialValue);
-        const entrySpec = parameterEntrySpecForSeconds({
-            minSeconds: descriptor.format.minSeconds,
-            maxSeconds: descriptor.format.maxSeconds,
-            stepSeconds: 0.001,
-            currentSeconds: initialValue,
-        });
         return {
-            endpointID: descriptor.binding.endpointId,
+            endpointID: binding.endpointId,
             entrySpec,
             label: descriptor.label,
             initialValue,
@@ -241,14 +266,6 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
             }),
             amountDragStyle: "amount-span",
         };
-    }
-
-    // Catalog-owned targets (global filter family): endpoint-bound entries
-    // resolve; deliberately unbacked ones (e.g. voice-filter drive) do not.
-    const descriptor = getModulationTargetDescriptor(targetKind);
-    const binding = descriptor.binding;
-    if (binding._tag !== "endpoint") {
-        return null;
     }
     if (targetKind === GLOBAL_TUNE_TARGET_KIND) {
         const entrySpec = parameterEntrySpecForScalar({
