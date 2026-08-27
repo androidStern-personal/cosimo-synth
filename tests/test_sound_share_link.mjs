@@ -31,7 +31,7 @@ function currentContract(buildCanonicalPluginStateContract) {
         effectID: "wavetable-synth",
         parameters: [
             { endpointID: "sourceMode", type: "number", min: 0, max: 1, defaultValue: 0 },
-            { endpointID: "oscAWavetableSelect", type: "number", min: 0, max: 237, defaultValue: 0 },
+            { endpointID: "oscAWavetableSelect", type: "number", min: 0, max: 238, defaultValue: 238 },
             { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
             { endpointID: "ampRelease", type: "number", min: 0.005, max: 10, defaultValue: 0.2 },
             { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
@@ -48,7 +48,7 @@ function currentContract(buildCanonicalPluginStateContract) {
 }
 
 const soundDocumentArbitrary = fc.record({
-    wavetable: fc.integer({ min: 0, max: 237 }),
+    wavetable: fc.integer({ min: 0, max: 238 }),
     filterMix: fc.integer({ min: 0, max: 1_000 }).map((value) => value / 1_000),
     ampAttack: fc.integer({ min: 1, max: 10_000 }).map((value) => value / 1_000),
     ampDecay: fc.integer({ min: 1, max: 10_000 }).map((value) => value / 1_000),

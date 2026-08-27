@@ -15,7 +15,7 @@ Endpoint names below use `osc{A|B|C}` because the same contract exists independe
 
 | Group | Product control | Endpoint | Range / choices | Current mobile location | Mod destination |
 | --- | --- | --- | --- | --- | --- |
-| Source | Wavetable | `osc{X}WavetableSelect` | catalog index `0–237`, default `34` | top-left picker on graphic | no |
+| Source | Wavetable | `osc{X}WavetableSelect` | catalog index `0–238`, default `238` (`Core Shapes`) | top-left picker on graphic | no |
 | Source | Index / position | `osc{X}WavetablePosition` | `0–1`, default `0` | drag the graphic; `Frame N` readout | yes |
 | Source | Warp mode | `osc{X}WarpMode` | Off, Bend +/-, PWM, Asym +/-, Mirror | bottom-left overlay on graphic | no |
 | Source | Warp amount | `osc{X}WarpAmount` | `0–1`, default `0` | bottom-left overlay on graphic | yes |

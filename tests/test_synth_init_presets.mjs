@@ -7,7 +7,10 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const {
+    OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
     OSCILLATOR_DEFAULT_VOLUME_DB,
+    OSCILLATOR_WAVETABLE_MAX_INDEX,
+    OSCILLATOR_WAVETABLE_MIN_INDEX,
     OSCILLATOR_VOLUME_MAX_DB,
     OSCILLATOR_VOLUME_MIN_DB,
 } = await loadUIModule(repoRoot, "ui/shared/oscillator-defaults.ts");
@@ -24,9 +27,24 @@ const synthStatus = {
     details: {
         inputs: [
             parameter("hostSlot0Guard", { hidden: true, init: 0, min: 0, max: 1 }),
-            parameter("oscAWavetableSelect", { init: 0, min: 0, max: 237, integer: true }),
-            parameter("oscBWavetableSelect", { init: 1, min: 0, max: 237, integer: true }),
-            parameter("oscCWavetableSelect", { init: 2, min: 0, max: 237, integer: true }),
+            parameter("oscAWavetableSelect", {
+                init: OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
+                min: OSCILLATOR_WAVETABLE_MIN_INDEX,
+                max: OSCILLATOR_WAVETABLE_MAX_INDEX,
+                integer: true,
+            }),
+            parameter("oscBWavetableSelect", {
+                init: OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
+                min: OSCILLATOR_WAVETABLE_MIN_INDEX,
+                max: OSCILLATOR_WAVETABLE_MAX_INDEX,
+                integer: true,
+            }),
+            parameter("oscCWavetableSelect", {
+                init: OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
+                min: OSCILLATOR_WAVETABLE_MIN_INDEX,
+                max: OSCILLATOR_WAVETABLE_MAX_INDEX,
+                integer: true,
+            }),
             parameter("oscAFramePosition", { init: 0.25, min: 0, max: 1 }),
             parameter("oscAVolumeDb", {
                 init: OSCILLATOR_DEFAULT_VOLUME_DB,
@@ -558,6 +576,49 @@ test("clean synth Init applies every canonical sound default and clears only the
     assert.equal(controller.getState().activePreset, null);
     assert.equal(controller.getState().activeLabel, "INIT");
     assert.equal(controller.getState().dirty, false);
+});
+
+test("Init selects Core Shapes for A/B/C while a saved sound restores its explicit tables", async () => {
+    const fixture = await createSynthFixture();
+    const explicitSelections = {
+        oscAWavetableSelect: 17,
+        oscBWavetableSelect: 81,
+        oscCWavetableSelect: 203,
+    };
+
+    assert.deepEqual(
+        Object.fromEntries(Object.keys(explicitSelections).map((endpointID) => [
+            endpointID,
+            fixture.patchConnection.parameterValues[endpointID],
+        ])),
+        explicitSelections,
+    );
+    const saved = fixture.controller.getMutations().saveCurrentAsNewPreset("Explicit Tables");
+    assert.equal(saved.ok, true, saved.message);
+
+    const initialized = synthMutations(fixture.controller).initSound();
+    assert.equal(initialized.ok, true, initialized.message);
+    assert.deepEqual(
+        Object.fromEntries(Object.keys(explicitSelections).map((endpointID) => [
+            endpointID,
+            fixture.patchConnection.parameterValues[endpointID],
+        ])),
+        {
+            oscAWavetableSelect: OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
+            oscBWavetableSelect: OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
+            oscCWavetableSelect: OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
+        },
+    );
+
+    const restored = fixture.controller.getMutations().applyPreset(`user:${saved.value.presetID}`);
+    assert.equal(restored.ok, true, restored.message);
+    assert.deepEqual(
+        Object.fromEntries(Object.keys(explicitSelections).map((endpointID) => [
+            endpointID,
+            fixture.patchConnection.parameterValues[endpointID],
+        ])),
+        explicitSelections,
+    );
 });
 
 test("Init writes the default for every current production public parameter, including all selectors and FX", async () => {

@@ -1,5 +1,17 @@
 import type { OscillatorID } from "./modulation-targets";
 
+/** Stable catalog identity for the authored Core Shapes Init table. */
+export const OSCILLATOR_DEFAULT_WAVETABLE_ID = "core-shapes";
+
+/** Append-only catalog index of the Core Shapes table. */
+export const OSCILLATOR_DEFAULT_WAVETABLE_INDEX = 238;
+
+/** Lowest valid factory wavetable selector index. */
+export const OSCILLATOR_WAVETABLE_MIN_INDEX = 0;
+
+/** Highest valid factory wavetable selector index. */
+export const OSCILLATOR_WAVETABLE_MAX_INDEX = 238;
+
 /** The host/DSP range for every oscillator's base level control. */
 export const OSCILLATOR_VOLUME_MIN_DB = -48;
 export const OSCILLATOR_VOLUME_MAX_DB = 6;

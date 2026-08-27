@@ -1188,5 +1188,10 @@
     "tableId": "xlnt-xello",
     "name": "XLNT-Xello",
     "source": "factory_sources/imported/XLNT-Xello.wav"
+  },
+  {
+    "tableId": "core-shapes",
+    "name": "Core Shapes",
+    "source": "factory_sources/core-shapes.wav"
   }
 ]

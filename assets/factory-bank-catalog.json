@@ -1427,6 +1427,12 @@
       "name": "XLNT-Xello",
       "frameCount": 19,
       "sourceWav": "assets/factory_sources/imported/XLNT-Xello.wav"
+    },
+    {
+      "tableId": "core-shapes",
+      "name": "Core Shapes",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/core-shapes.wav"
     }
   ]
 }

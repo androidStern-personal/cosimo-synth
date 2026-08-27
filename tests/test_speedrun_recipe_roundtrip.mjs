@@ -24,7 +24,7 @@ test("fast-check: recipe(defaults) round-trips random current-contract audible p
         readFactoryCatalog(),
     ]);
     const sampleArbitrary = fc.record({
-        table: fc.integer({ min: 0, max: 237 }),
+        table: fc.integer({ min: 0, max: catalog.tables.length - 1 }),
         position: fc.double({ min: 0.1, max: 0.95, noNaN: true }),
         warpMode: fc.integer({ min: 0, max: 5 }),
         warp: fc.double({ min: 0.1, max: 0.95, noNaN: true }),

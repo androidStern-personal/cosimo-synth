@@ -14,7 +14,10 @@ import {
     type OscillatorControlID,
 } from "./oscillator-binding";
 import {
+    OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
     OSCILLATOR_DEFAULT_VOLUME_DB,
+    OSCILLATOR_WAVETABLE_MAX_INDEX,
+    OSCILLATOR_WAVETABLE_MIN_INDEX,
     OSCILLATOR_VOLUME_MAX_DB,
     OSCILLATOR_VOLUME_MIN_DB,
     getOscillatorDefaultMute,
@@ -83,7 +86,14 @@ type OscillatorParameterAnnotation = {
 };
 
 const oscillatorParameterAnnotations: Record<OscillatorControlID, OscillatorParameterAnnotation> = {
-    wavetableSelect: { name: "Wavetable Select", min: 0, max: 237, init: 0, discrete: true, step: 1 },
+    wavetableSelect: {
+        name: "Wavetable Select",
+        min: OSCILLATOR_WAVETABLE_MIN_INDEX,
+        max: OSCILLATOR_WAVETABLE_MAX_INDEX,
+        init: OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
+        discrete: true,
+        step: 1,
+    },
     framePosition: { name: "Wavetable Position", min: 0, max: 1, init: 0 },
     pan: { name: "Pan", min: -1, max: 1, init: 0 },
     octave: { name: "Octave", min: -4, max: 4, init: 0, discrete: true, step: 1 },
@@ -317,11 +327,11 @@ function createDefaultRuntimeState() {
     return {
         dspSessionId: 1,
         oscillatorIndex: 0,
-        desiredTableIndex: 0,
+        desiredTableIndex: OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
         desiredIntentSerial: 1,
         serviceState: 0,
         hasActive: true,
-        activeTableIndex: 0,
+        activeTableIndex: OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
         activeGeneration: 1,
         hasLoading: false,
         loadingTableIndex: 0,
@@ -338,7 +348,7 @@ function createDefaultRuntimeState() {
 function createInitialParameterValues(): Map<string, unknown> {
     const values = new Map<string, unknown>([
         [wavetablePositionEndpointID, 0.28],
-        [wavetableSelectEndpointID, 0],
+        [wavetableSelectEndpointID, OSCILLATOR_DEFAULT_WAVETABLE_INDEX],
         [playModeEndpointID, 0],
         [glideTimeEndpointID, 0.15],
         [panEndpointID, 0],
@@ -419,9 +429,9 @@ function buildHarnessStatus(manifest: unknown) {
                     purpose: "parameter",
                     annotation: {
                         name: "Wavetable Select",
-                        min: 0,
-                        max: 255,
-                        init: 0,
+                        min: OSCILLATOR_WAVETABLE_MIN_INDEX,
+                        max: OSCILLATOR_WAVETABLE_MAX_INDEX,
+                        init: OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
                     },
                 },
                 {
