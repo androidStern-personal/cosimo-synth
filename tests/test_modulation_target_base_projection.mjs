@@ -201,3 +201,42 @@ test("resonance targets carry the knobs' effective-value amount drag style", asy
     assert.equal(resolveModulationTargetBase("lane.flanger#1.flangerDepth").amountDragStyle, "amount-span");
     assert.equal(resolveModulationTargetBase("oscA.wavetablePosition").amountDragStyle, "amount-span");
 });
+
+test("Frequency Split crossovers resolve live lane-marker bases with Key Track presentation", async () => {
+    const { resolveModulationTargetBase } = await loadResolver();
+    for (const expected of [{
+        targetKind: "lane.frequencySplit#3.xoverLowHz",
+        endpointID: "xoverLowHz",
+        groupId: "split#3",
+        which: "low",
+        label: "Low Crossover",
+        initialValue: 800,
+    }, {
+        targetKind: "lane.frequencySplit#3.xoverHighHz",
+        endpointID: "xoverHighHz",
+        groupId: "split#3",
+        which: "high",
+        label: "High Crossover",
+        initialValue: 2_500,
+    }]) {
+        const base = resolveModulationTargetBase(expected.targetKind);
+        assert.ok(base, `${expected.targetKind} must have a live base`);
+        assert.equal(base.endpointID, expected.endpointID);
+        assert.equal(base.label, expected.label);
+        assert.equal(base.initialValue, expected.initialValue);
+        assert.deepEqual(base.laneSplitBinding, {
+            groupId: expected.groupId,
+            which: expected.which,
+        });
+        assert.equal(base.entrySpec._tag, "frequency");
+        assert.equal(base.entrySpec.min, 40);
+        assert.equal(base.entrySpec.max, 18_000);
+        assert.equal(base.keyTrack.definition.family, "crossover-frequency");
+        assert.equal(base.keyTrack.storage, "octaves");
+        assert.deepEqual(base.keyTrack.binding, {
+            kind: "lane-split",
+            groupId: expected.groupId,
+            which: expected.which,
+        });
+    }
+});

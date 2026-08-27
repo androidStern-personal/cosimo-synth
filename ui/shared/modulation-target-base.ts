@@ -18,7 +18,7 @@ import {
     allRackParameterDescriptors,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
-import { parseLaneModulationTargetKind } from "./lane-modulation-targets";
+import { laneMirrorRackKind, parseLaneModulationTargetKind } from "./lane-modulation-targets";
 import { getModulationTargetDescriptor } from "./target-descriptor";
 import {
     OSCILLATOR_IDS,
@@ -31,6 +31,7 @@ import { MOBILE_VOICE_PAGES, getMobileVoiceControlSpec } from "./mobile-voice-pa
 import {
     parameterEntrySpecForKeyTrackModulationAmount,
     parameterEntrySpecForKeyTrackOffset,
+    parameterEntrySpecForFrequency,
     parameterEntrySpecForMobileVoiceControl,
     parameterEntrySpecForRackParameter,
     parameterEntrySpecForScalar,
@@ -60,6 +61,12 @@ import {
     type KeyTrackControlDefinition,
     type KeyTrackRouteStorage,
 } from "./key-track";
+import {
+    LANE_SPLIT_DEFAULT_XOVER_HIGH_HZ,
+    LANE_SPLIT_DEFAULT_XOVER_LOW_HZ,
+    LANE_SPLIT_XOVER_MAX_HZ,
+    LANE_SPLIT_XOVER_MIN_HZ,
+} from "./lane-state-v2";
 
 export type ModulationTargetRailProjection = {
     /** Value -> [0,1] track position in the parameter's own display scale. */
@@ -77,6 +84,12 @@ export type ModulationTargetRailProjection = {
 
 export type ModulationTargetBase = {
     readonly endpointID: string;
+    /** Split-marker fields are lane-document addresses rather than ordinary
+        lane-device/host endpoints. Absence means the existing endpoint seam. */
+    readonly laneSplitBinding?: {
+        readonly groupId: string;
+        readonly which: "low" | "high";
+    };
     readonly entrySpec: ParameterEntrySpec;
     /** The parameter's short display label (e.g. "Cutoff", "Pan"). */
     readonly label: string;
@@ -101,6 +114,10 @@ export type ModulationTargetKeyTrackBase = {
     readonly binding: {
         readonly kind: "lane";
         readonly descriptor: RackParameterDescriptor;
+    } | {
+        readonly kind: "lane-split";
+        readonly groupId: string;
+        readonly which: "low" | "high";
     } | {
         readonly kind: "host";
         readonly enabledEndpointID: "filterCutoffKeyTrackEnabled";
@@ -260,7 +277,43 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
     const parsedLane = parseLaneModulationTargetKind(targetKind);
     if (parsedLane !== null) {
         if (parsedLane.deviceType === "frequencySplit") {
-            return null;
+            const which: "low" | "high" = parsedLane.endpointID === "xoverLowHz" ? "low" : "high";
+            const groupId = parsedLane.instanceId.replace(/^frequencySplit#/, "split#");
+            const initialValue = which === "low"
+                ? LANE_SPLIT_DEFAULT_XOVER_LOW_HZ
+                : LANE_SPLIT_DEFAULT_XOVER_HIGH_HZ;
+            const entrySpec = parameterEntrySpecForFrequency({
+                minHz: LANE_SPLIT_XOVER_MIN_HZ,
+                maxHz: LANE_SPLIT_XOVER_MAX_HZ,
+                stepHz: 1,
+                allowLogPercent: true,
+            });
+            const definition = getKeyTrackDefinition(
+                which === "low" ? "lane.frequencySplitLowHz" : "lane.frequencySplitHighHz",
+            );
+            if (definition === null) {
+                throw new Error(`Frequency Split ${which} crossover is missing its Key Track definition.`);
+            }
+            const laneSplitBinding = { groupId, which };
+            return {
+                endpointID: parsedLane.endpointID,
+                laneSplitBinding,
+                entrySpec,
+                label: getModulationTargetDescriptor(laneMirrorRackKind(parsedLane)).label,
+                initialValue,
+                railProjection: buildRailProjection({
+                    min: entrySpec.min,
+                    max: entrySpec.max,
+                    scale: "log",
+                    application: "octaves",
+                }),
+                amountDragStyle: "amount-span",
+                keyTrack: {
+                    definition,
+                    storage: "octaves",
+                    binding: { kind: "lane-split", ...laneSplitBinding },
+                },
+            };
         }
         // T6: every instance has its own lane.v2 document slot, and the base
         // CONTRACT (endpoint, spec, labels) is the type's. Which slot a

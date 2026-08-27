@@ -5,6 +5,7 @@ import {
     expandGlobalModRail,
     dragLocatorBy,
     getHarnessSnapshot,
+    legacyEightLaneDocJson,
     normalizeModulationState,
     openHarnessPage,
     readStoredModulationState,
@@ -61,6 +62,65 @@ function applyDelayFieldWritesWithoutExclusiveModeOverlap(runtimeMirror, writes)
                 && runtimeMirror.delayTimeKeyTrackEnabled >= 1,
             false,
             `Delay runtime prefix exposed Sync + Key Track after ${write.endpointID}`,
+        );
+    }
+    return runtimeMirror;
+}
+
+const SPLIT_SLOT_ID = 44;
+const SPLIT_FIELD_ENDPOINTS = Object.freeze([
+    "xoverLowHz",
+    "xoverHighHz",
+    "xoverLowKeyTrackEnabled",
+    "xoverLowKeyTrackOffsetSemitones",
+    "xoverHighKeyTrackEnabled",
+    "xoverHighKeyTrackOffsetSemitones",
+]);
+
+function trackedThreeBandSplitLaneDocJson() {
+    const document = JSON.parse(legacyEightLaneDocJson());
+    const placements = document.chain;
+    assert.equal(placements.length, 8);
+    assert.equal(placements.every((node) => node.kind === "device"), true);
+    document.chain = [{
+        kind: "split",
+        groupId: "split#1",
+        enabled: true,
+        xoverLowHz: 320,
+        xoverHighHz: 3_200,
+        xoverLowKeyTrackEnabled: false,
+        xoverLowKeyTrackOffsetSemitones: 5.5,
+        xoverHighKeyTrackEnabled: false,
+        xoverHighKeyTrackOffsetSemitones: -7.25,
+        branches: [placements.slice(0, 3), placements.slice(3, 5), placements.slice(5)],
+    }];
+    return JSON.stringify(document);
+}
+
+function readSplitFieldWrites(snapshot) {
+    return snapshot.sentMessages.flatMap(({ endpointID, value }) => {
+        if (endpointID !== "laneSlotParamValue"
+                || Number(value?.slotId) !== SPLIT_SLOT_ID) {
+            return [];
+        }
+        return [{
+            endpointID: SPLIT_FIELD_ENDPOINTS[Number(value?.paramIndex)]
+                ?? `unknown:${String(value?.paramIndex)}`,
+            value: Number(value?.value),
+        }];
+    });
+}
+
+function applySplitEnableWritesWithoutStaleOffset(runtimeMirror, writes, which) {
+    const enabledEndpointID = `xover${which}KeyTrackEnabled`;
+    const offsetEndpointID = `xover${which}KeyTrackOffsetSemitones`;
+    for (const write of writes) {
+        runtimeMirror[write.endpointID] = write.value;
+        assert.equal(
+            runtimeMirror[enabledEndpointID] >= 1
+                && runtimeMirror[offsetEndpointID] !== 0,
+            false,
+            `${which} split prefix enabled Key Track with a stale offset after ${write.endpointID}`,
         );
     }
     return runtimeMirror;
@@ -303,6 +363,163 @@ test("Delay mode edits publish one mutually exclusive document and runtime state
         assert.deepEqual(readDelayFieldWrites(snapshot), [
             { endpointID: "delayFeedback", value: feedbackAfter },
         ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("Frequency Split publishes centered enables safely and MAPPINGS edits its live base", async () => {
+    const seededState = normalizeModulationState({
+        routes: [{
+            id: "tracked-mapping-split-low",
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "bipolar",
+            targetKind: "lane.frequencySplit#1.xoverLowHz",
+            amount: 0.5,
+            reducer: "max",
+        }],
+    });
+    const page = await openHarnessPage({
+        laneDoc: trackedThreeBandSplitLaneDocJson(),
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript((state) => {
+                const initial = window.__COSIMO_DESKTOP_HARNESS_INITIAL__ ?? {};
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    ...initial,
+                    storedState: {
+                        ...initial.storedState,
+                        "modulation.v6": JSON.stringify(state),
+                    },
+                };
+            }, seededState);
+        },
+    });
+
+    try {
+        await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
+        await page.locator('[data-role="rack-fork-readout-split#1"]').click();
+        await page.locator('[data-role="rack-group-editor-split#1"]').waitFor();
+
+        for (const expected of [{
+            which: "Low",
+            buttonRole: "key-track-frequencySplit-low-split#1",
+            retainedOffset: 5.5,
+        }, {
+            which: "High",
+            buttonRole: "key-track-frequencySplit-high-split#1",
+            retainedOffset: -7.25,
+        }]) {
+            const enabledEndpointID = `xover${expected.which}KeyTrackEnabled`;
+            const offsetEndpointID = `xover${expected.which}KeyTrackOffsetSemitones`;
+            const button = page.locator(`[data-role="${expected.buttonRole}"]`);
+            await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.clearDebugLog());
+            await button.click();
+            let snapshot = await waitForHarnessSnapshot(page, `${expected.which} split Key Track enable`, (next) => {
+                const split = readLaneDocument(next)?.chain?.find((node) => node.groupId === "split#1");
+                return split?.[enabledEndpointID] === true && Number(split?.[offsetEndpointID]) === 0;
+            });
+            const enableWrites = readSplitFieldWrites(snapshot);
+            assert.deepEqual(enableWrites, [
+                { endpointID: offsetEndpointID, value: 0 },
+                { endpointID: enabledEndpointID, value: 1 },
+            ]);
+            assert.deepEqual(
+                applySplitEnableWritesWithoutStaleOffset({
+                    [enabledEndpointID]: 0,
+                    [offsetEndpointID]: expected.retainedOffset,
+                }, enableWrites, expected.which),
+                { [enabledEndpointID]: 1, [offsetEndpointID]: 0 },
+            );
+
+            await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.clearDebugLog());
+            await button.click();
+            snapshot = await waitForHarnessSnapshot(page, `${expected.which} split Key Track disable`, (next) => {
+                const split = readLaneDocument(next)?.chain?.find((node) => node.groupId === "split#1");
+                return split?.[enabledEndpointID] === false;
+            });
+            assert.deepEqual(readSplitFieldWrites(snapshot), [
+                { endpointID: enabledEndpointID, value: 0 },
+            ]);
+        }
+
+        await page.locator('[data-role="mobile-workspace-tab-mod"]').click();
+        await page.locator('[data-role="mobile-mod-panel-tab-mappings"]').click();
+        const row = page.locator(
+            '[data-role="mod-mappings-row"][data-route-id="tracked-mapping-split-low"]',
+        );
+        await row.waitFor();
+        assert.equal(await row.locator('[data-role="mod-mappings-amount-only"]').count(), 0);
+        assert.equal((await row.locator('[data-role="mod-mappings-base-val"]').innerText()).trim(), "320 Hz");
+
+        await longPress(page, row.locator(".mobile-voice-cell"));
+        await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
+        let sheet = page.locator('[data-role="rack-parameter-value-sheet"]');
+        await sheet.locator('[data-role="rack-base-value-input"]').fill("456 Hz");
+        await sheet.locator('[data-role="rack-modulation-value-input"]').fill("2 oct");
+        await sheet.locator('[data-role="rack-value-sheet-apply"]').click();
+        let snapshot = await waitForHarnessSnapshot(page, "ordinary split MAPPINGS edits", (next) => {
+            const split = readLaneDocument(next)?.chain?.find((node) => node.groupId === "split#1");
+            const route = readStoredModulationState(next).routes[0];
+            return Number(split?.xoverLowHz) === 456 && Number(route?.amount) === 2;
+        });
+        let split = readLaneDocument(snapshot).chain.find((node) => node.groupId === "split#1");
+        assert.equal(split.xoverLowKeyTrackOffsetSemitones, 0);
+
+        await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
+        await page.locator('[data-role="rack-fork-readout-split#1"]').click();
+        const lowKeyTrack = page.locator('[data-role="key-track-frequencySplit-low-split#1"]');
+        await lowKeyTrack.click();
+        snapshot = await waitForHarnessSnapshot(page, "tracked split MAPPINGS enable", (next) => {
+            const nextSplit = readLaneDocument(next)?.chain?.find((node) => node.groupId === "split#1");
+            return nextSplit?.xoverLowKeyTrackEnabled === true
+                && Number(nextSplit?.xoverLowKeyTrackOffsetSemitones) === 0;
+        });
+        assert.equal(
+            readLaneDocument(snapshot).chain.find((node) => node.groupId === "split#1").xoverLowHz,
+            456,
+        );
+
+        await page.locator('[data-role="mobile-workspace-tab-mod"]').click();
+        await page.locator('[data-role="mobile-mod-panel-tab-mappings"]').click();
+        assert.match(
+            (await row.locator(".mod-mappings-row-target").innerText()).trim(),
+            /Key Track Offset$/,
+        );
+        assert.equal((await row.locator('[data-role="mod-mappings-base-val"]').innerText()).trim(), "0 st");
+        assert.equal((await row.locator('[data-role="mod-mappings-amount-flag"]').innerText()).trim(), "24 st");
+
+        await longPress(page, row.locator(".mobile-voice-cell"));
+        await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
+        sheet = page.locator('[data-role="rack-parameter-value-sheet"]');
+        assert.deepEqual(
+            await sheet.locator("label > span:first-child").allTextContents(),
+            ["Key Track Offset", "MSEG 1 -> Key Track Offset"],
+        );
+        await sheet.locator('[data-role="rack-base-value-input"]').fill("7.125 st");
+        await sheet.locator('[data-role="rack-modulation-value-input"]').fill("37.5 ct");
+        await sheet.locator('[data-role="rack-value-sheet-apply"]').click();
+        snapshot = await waitForHarnessSnapshot(page, "tracked split MAPPINGS edits", (next) => {
+            const nextSplit = readLaneDocument(next)?.chain?.find((node) => node.groupId === "split#1");
+            const route = readStoredModulationState(next).routes[0];
+            return Math.abs(Number(nextSplit?.xoverLowKeyTrackOffsetSemitones) - 7.125) < 1e-9
+                && Math.abs(Number(route?.amount) - 0.03125) < 1e-9;
+        });
+        split = readLaneDocument(snapshot).chain.find((node) => node.groupId === "split#1");
+        assert.equal(split.xoverLowHz, 456);
+
+        await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
+        await page.locator('[data-role="rack-fork-readout-split#1"]').click();
+        await lowKeyTrack.click();
+        snapshot = await waitForHarnessSnapshot(page, "tracked split ordinary restore", (next) => {
+            const nextSplit = readLaneDocument(next)?.chain?.find((node) => node.groupId === "split#1");
+            return nextSplit?.xoverLowKeyTrackEnabled === false;
+        });
+        split = readLaneDocument(snapshot).chain.find((node) => node.groupId === "split#1");
+        assert.equal(split.xoverLowHz, 456);
+        assert.equal(split.xoverLowKeyTrackOffsetSemitones, 7.125);
     } finally {
         await page.close();
     }

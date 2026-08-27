@@ -15,6 +15,10 @@ import {
     commitLaneStateV2,
     createDefaultLaneStateV2,
     deserializeLaneStateV2,
+    LANE_SPLIT_DEFAULT_XOVER_HIGH_HZ,
+    LANE_SPLIT_DEFAULT_XOVER_LOW_HZ,
+    LANE_SPLIT_XOVER_MAX_HZ,
+    LANE_SPLIT_XOVER_MIN_HZ,
     laneSplitMarkerSlotId,
     listLaneDeviceInstancesV2,
     parseLaneInstanceId,
@@ -24,6 +28,7 @@ import {
     setLaneSplitCrossoverHz,
     setLaneSplitKeyTrackEnabled as transitionLaneSplitKeyTrackEnabled,
     setLaneSplitKeyTrackOffset as transitionLaneSplitKeyTrackOffset,
+    type LaneSplitGroupV2,
     type LaneStateV2,
 } from "./lane-state-v2";
 import {
@@ -293,13 +298,19 @@ export function useLaneStateDoc(): {
         const next = transitionLaneSplitKeyTrackEnabled(store.state, groupId, which, enabled);
         if (next === null) return;
         acceptLaneState(store, next);
-        sendSplitField(groupId, which === "low"
+        const enabledParamIndex = which === "low"
             ? LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_ENABLED
-            : LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_ENABLED, enabled ? 1 : 0);
-        if (enabled) {
-            sendSplitField(groupId, which === "low"
-                ? LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES
-                : LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_OFFSET_SEMITONES, 0);
+            : LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_ENABLED;
+        const offsetParamIndex = which === "low"
+            ? LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES
+            : LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_OFFSET_SEMITONES;
+        if (!enabled) {
+            sendSplitField(groupId, enabledParamIndex, 0);
+        } else {
+            // Each marker-field event may reach DSP on a different frame.
+            // Centre the dependency before publishing the primary enable bit.
+            sendSplitField(groupId, offsetParamIndex, 0);
+            sendSplitField(groupId, enabledParamIndex, 1);
         }
         patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(next));
     }, [patchConnection, sendSplitField, store]);
@@ -442,6 +453,62 @@ export function useLaneParameterBinding(
     }), [descriptor.endpointID, descriptor.initial, value, setValue, commitValue, beginGesture, endGesture]);
 }
 
+/** Live base binding for one Frequency Split marker field. This is a real
+    lane-document address, not a synthesized rack descriptor or host endpoint. */
+export function useLaneSplitCrossoverBinding(
+    groupId: string,
+    which: "low" | "high",
+): PatchControlBinding<number> {
+    const patchConnection = usePatchConnection();
+    const { laneState, setSplitCrossover, persist } = useLaneStateDoc();
+    const endpointID = which === "low" ? "xoverLowHz" : "xoverHighHz";
+    const initialValue = which === "low"
+        ? LANE_SPLIT_DEFAULT_XOVER_LOW_HZ
+        : LANE_SPLIT_DEFAULT_XOVER_HIGH_HZ;
+    const group = laneState.chain.find((node): node is LaneSplitGroupV2 => (
+        node.kind === "split" && node.groupId === groupId
+    ));
+    const rawValue = group === undefined
+        ? initialValue
+        : which === "low" ? group.xoverLowHz : group.xoverHighHz;
+    const value = Math.min(LANE_SPLIT_XOVER_MAX_HZ, Math.max(LANE_SPLIT_XOVER_MIN_HZ, rawValue));
+
+    const setValue = useCallback((nextValue: number) => {
+        const numeric = Number.isFinite(nextValue) ? nextValue : initialValue;
+        const clamped = Math.min(
+            LANE_SPLIT_XOVER_MAX_HZ,
+            Math.max(LANE_SPLIT_XOVER_MIN_HZ, numeric),
+        );
+        setSplitCrossover(groupId, which, clamped);
+        reportUserParameterEdit({ endpointID, changed: !Object.is(clamped, value) });
+    }, [endpointID, groupId, initialValue, setSplitCrossover, value, which]);
+    const beginGesture = useCallback(() => {
+        patchConnection.sendParameterGestureStart?.(endpointID);
+        reportUserGestureStart();
+    }, [endpointID, patchConnection]);
+    const endGesture = useCallback(() => {
+        patchConnection.sendParameterGestureEnd?.(endpointID);
+        reportUserGestureEnd();
+        persist();
+    }, [endpointID, patchConnection, persist]);
+    const commitValue = useCallback((nextValue: number) => {
+        beginGesture();
+        setValue(nextValue);
+        endGesture();
+    }, [beginGesture, endGesture, setValue]);
+
+    return useMemo(() => ({
+        endpointID,
+        value,
+        isReady: group !== undefined,
+        initialValue,
+        setValue,
+        commitValue,
+        beginGesture,
+        endGesture,
+    }), [beginGesture, commitValue, endpointID, endGesture, group, initialValue, setValue, value]);
+}
+
 export type LaneKeyTrackControlBinding = {
     readonly eligible: boolean;
     readonly enabled: boolean;
@@ -558,6 +625,105 @@ export function useLaneKeyTrackControlBinding(
     ]);
 }
 
+/** Key Track presentation of one Frequency Split marker field. It shares the
+    same PatchControlBinding interface as device-backed controls while keeping
+    marker state and writes inside the lane-document module. */
+export function useLaneSplitKeyTrackControlBinding(
+    groupId: string,
+    which: "low" | "high",
+): LaneKeyTrackControlBinding {
+    const patchConnection = usePatchConnection();
+    const ordinaryBinding = useLaneSplitCrossoverBinding(groupId, which);
+    const {
+        laneState,
+        setSplitKeyTrackEnabled,
+        setSplitKeyTrackOffset,
+        persist,
+    } = useLaneStateDoc();
+    const endpointID = which === "low" ? "xoverLowHz" : "xoverHighHz";
+    const definition = getKeyTrackDefinition(
+        which === "low" ? "lane.frequencySplitLowHz" : "lane.frequencySplitHighHz",
+    );
+    const range = requireKeyTrackRange(definition?.family ?? "crossover-frequency");
+    const group = laneState.chain.find((node): node is LaneSplitGroupV2 => (
+        node.kind === "split" && node.groupId === groupId
+    ));
+    const eligible = definition !== null;
+    const enabled = eligible && (which === "low"
+        ? group?.xoverLowKeyTrackEnabled === true
+        : group?.xoverHighKeyTrackEnabled === true);
+    const rawOffset = which === "low"
+        ? group?.xoverLowKeyTrackOffsetSemitones
+        : group?.xoverHighKeyTrackOffsetSemitones;
+    const offsetValue = Math.min(
+        range.knobMax,
+        Math.max(range.knobMin, Number(rawOffset) || 0),
+    );
+
+    const setValue = useCallback((nextValue: number) => {
+        const numeric = Number.isFinite(nextValue) ? nextValue : 0;
+        const clamped = Math.min(range.knobMax, Math.max(range.knobMin, numeric));
+        if (!eligible) return;
+        setSplitKeyTrackOffset(groupId, which, clamped);
+        reportUserParameterEdit({
+            endpointID,
+            changed: !Object.is(clamped, offsetValue),
+        });
+    }, [eligible, endpointID, groupId, offsetValue, range.knobMax, range.knobMin, setSplitKeyTrackOffset, which]);
+    const beginGesture = useCallback(() => {
+        patchConnection.sendParameterGestureStart?.(endpointID);
+        reportUserGestureStart();
+    }, [endpointID, patchConnection]);
+    const endGesture = useCallback(() => {
+        patchConnection.sendParameterGestureEnd?.(endpointID);
+        reportUserGestureEnd();
+        persist();
+    }, [endpointID, patchConnection, persist]);
+    const commitValue = useCallback((value: number) => {
+        beginGesture();
+        setValue(value);
+        endGesture();
+    }, [beginGesture, endGesture, setValue]);
+    const setEnabled = useCallback((nextEnabled: boolean) => {
+        if (!eligible) return;
+        patchConnection.sendParameterGestureStart?.(endpointID);
+        reportUserGestureStart();
+        setSplitKeyTrackEnabled(groupId, which, nextEnabled);
+        reportUserParameterEdit({ endpointID, changed: enabled !== nextEnabled });
+        patchConnection.sendParameterGestureEnd?.(endpointID);
+        reportUserGestureEnd();
+    }, [eligible, enabled, endpointID, groupId, patchConnection, setSplitKeyTrackEnabled, which]);
+
+    const binding = useMemo<PatchControlBinding<number>>(() => enabled ? ({
+        endpointID,
+        value: offsetValue,
+        isReady: group !== undefined,
+        initialValue: 0,
+        setValue,
+        commitValue,
+        beginGesture,
+        endGesture,
+    }) : ordinaryBinding, [
+        beginGesture,
+        commitValue,
+        enabled,
+        endpointID,
+        endGesture,
+        group,
+        offsetValue,
+        ordinaryBinding,
+        setValue,
+    ]);
+
+    return useMemo(() => ({ eligible, enabled, binding, ordinaryBinding, setEnabled }), [
+        binding,
+        eligible,
+        enabled,
+        ordinaryBinding,
+        setEnabled,
+    ]);
+}
+
 const FALLBACK_LANE_DESCRIPTOR: RackParameterDescriptor | null = getRackParameterDescriptor("delayMix");
 
 /**
@@ -572,6 +738,7 @@ export function useLaneOrHostParameterBinding({
     coerce,
     active = true,
     deviceId,
+    laneSplit,
 }: {
     endpointID: string;
     initialValue: number;
@@ -579,6 +746,8 @@ export function useLaneOrHostParameterBinding({
     active?: boolean;
     /** The lane instance to edit (e.g. "delay#2"); the type's #1 without it. */
     deviceId?: string;
+    /** A Frequency Split marker field, which has no rack descriptor or host endpoint. */
+    laneSplit?: { readonly groupId: string; readonly which: "low" | "high" };
 }): PatchControlBinding<number> {
     const laneDescriptor = getRackParameterDescriptor(endpointID);
     if (FALLBACK_LANE_DESCRIPTOR === null) {
@@ -588,11 +757,17 @@ export function useLaneOrHostParameterBinding({
         laneDescriptor ?? FALLBACK_LANE_DESCRIPTOR,
         laneDescriptor === null ? undefined : deviceId,
     );
+    const splitBinding = useLaneSplitCrossoverBinding(
+        laneSplit?.groupId ?? "split#1",
+        laneSplit?.which ?? "low",
+    );
     const hostBinding = usePatchParameterBinding<number>({
         endpointID,
         initialValue,
         coerce,
-        active: active && laneDescriptor === null,
+        active: active && laneDescriptor === null && laneSplit === undefined,
     });
-    return laneDescriptor === null ? hostBinding : laneBinding;
+    return laneSplit !== undefined
+        ? splitBinding
+        : laneDescriptor === null ? hostBinding : laneBinding;
 }

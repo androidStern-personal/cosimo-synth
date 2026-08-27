@@ -58,6 +58,7 @@ import { findRackModulationSource } from "../shared/rack-modulation-sources";
 import {
     useLaneKeyTrackControlBinding,
     useLaneOrHostParameterBinding,
+    useLaneSplitKeyTrackControlBinding,
     usePatchModulationTargetOptions,
 } from "../shared/lane-param-bindings";
 import { formatParameterEntry } from "../shared/parameter-value-entry";
@@ -77,10 +78,11 @@ import { sourceOptionForRoute, targetPresentation, SourceIdentity } from "./mobi
 
 export const MOD_MAPPINGS_VIEW_STORAGE_KEY = "cosimo.mod-mappings-view.v1";
 
-const FALLBACK_MAPPING_LANE_DESCRIPTOR = getRackParameterDescriptor("delayMix");
-if (FALLBACK_MAPPING_LANE_DESCRIPTOR === null) {
+const fallbackMappingLaneDescriptor = getRackParameterDescriptor("delayMix");
+if (fallbackMappingLaneDescriptor === null) {
     throw new Error("The mappings table is missing its fallback lane descriptor.");
 }
+const FALLBACK_MAPPING_LANE_DESCRIPTOR = fallbackMappingLaneDescriptor;
 
 function loadStoredViewPrefs(): MappingsViewPrefs {
     const raw = sessionStorage.getItem(MOD_MAPPINGS_VIEW_STORAGE_KEY);
@@ -291,20 +293,29 @@ function MappingRow({
         () => resolveTargetBase(route.targetKind),
         [resolveTargetBase, route.targetKind],
     );
+    const parsedLaneTarget = parseLaneModulationTargetKind(route.targetKind);
 
     const baseBinding = useLaneOrHostParameterBinding({
         endpointID: base?.endpointID ?? `__unbacked_${route.targetKind}`,
         initialValue: base?.initialValue ?? 0,
         coerce: (rawValue) => Number(rawValue) || 0,
         active: base !== null,
-        deviceId: parseLaneModulationTargetKind(route.targetKind)?.instanceId,
+        deviceId: parsedLaneTarget?.instanceId,
+        laneSplit: base?.laneSplitBinding,
     });
-    const parsedLaneTarget = parseLaneModulationTargetKind(route.targetKind);
     const laneKeyTrackBinding = useLaneKeyTrackControlBinding(
         base?.keyTrack?.binding.kind === "lane"
             ? base.keyTrack.binding.descriptor
             : FALLBACK_MAPPING_LANE_DESCRIPTOR,
         parsedLaneTarget?.instanceId,
+    );
+    const splitKeyTrackBinding = useLaneSplitKeyTrackControlBinding(
+        base?.keyTrack?.binding.kind === "lane-split"
+            ? base.keyTrack.binding.groupId
+            : "split#1",
+        base?.keyTrack?.binding.kind === "lane-split"
+            ? base.keyTrack.binding.which
+            : "low",
     );
     const hostKeyTrackEnabled = usePatchParameterBinding<number>({
         endpointID: base?.keyTrack?.binding.kind === "host"
@@ -322,8 +333,13 @@ function MappingRow({
         coerce: (rawValue) => Number(rawValue) || 0,
         active: base?.keyTrack?.binding.kind === "host",
     });
-    const keyTrackEnabled = base?.keyTrack?.binding.kind === "lane"
-        ? laneKeyTrackBinding.enabled
+    const laneDomainKeyTrackBinding = base?.keyTrack?.binding.kind === "lane"
+        ? laneKeyTrackBinding
+        : base?.keyTrack?.binding.kind === "lane-split"
+            ? splitKeyTrackBinding
+            : null;
+    const keyTrackEnabled = laneDomainKeyTrackBinding !== null
+        ? laneDomainKeyTrackBinding.enabled
         : base?.keyTrack?.binding.kind === "host"
             ? hostKeyTrackEnabled.value >= 0.5
             : false;
@@ -334,9 +350,7 @@ function MappingRow({
             : keyTrackModulationTargetBasePresentation(base.keyTrack)
     ), [base?.keyTrack]);
     const presentedBaseBinding = keyTrackEnabled
-        ? base?.keyTrack?.binding.kind === "lane"
-            ? laneKeyTrackBinding.binding
-            : hostKeyTrackOffset
+        ? laneDomainKeyTrackBinding?.binding ?? hostKeyTrackOffset
         : baseBinding;
     const entrySpec = keyTrackEnabled && keyTrackPresentation !== null
         ? keyTrackPresentation.entrySpec
