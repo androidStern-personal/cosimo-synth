@@ -147,33 +147,43 @@ follow the polish chain's single-instance rules.
 
 ## 7. Per-voice variant (feasibility)
 
-Question on the table (Andrew, 2026-08-25): a single-band instance per synth voice,
-band frequency tracking MIDI pitch (center = note frequency × harmonic ratio). How
-cheap can it get? **Verdict: cheap enough to run on every voice** — but only by
-changing two implementation choices relative to the bus module: drop mid/side (a
-voice is one signal), and replace oversampling with first-order ADAA. Costed:
+The per-voice form is required (Andrew, updated 2026-08-27): one single-band
+instance after each voice's filter and before that voice's amplitude envelope and
+the final voice sum. Pitch tracking is optional (center = note frequency × harmonic
+ratio when enabled).
 
-- **Filter**: one TPT SVF bandpass per voice ≈ a dozen flops/sample. MIDI tracking
+Routing is permanently **linked Mid/Side**. Encode each voice's stereo signal with
+the established Lite matrix, `M = 0.5 × (L + R)` and `S = 0.5 × (L − R)`, run the
+same Frequency, Q, Amount, and Tube/Solid character on both components, then decode
+with `L = M + S` and `R = M − S`. There is one Amount control, no routing switch,
+and no independent Mid and Side amounts. Because the shaper is nonlinear, this is
+deliberately a different sound from linked Left/Right processing. Keep first-order
+ADAA instead of the bus module's oversampling. The original mono-path cost estimate
+is superseded by this fixed two-component design:
+
+- **Filter**: one TPT SVF bandpass for Mid and one for Side in every voice. MIDI tracking
   is control-rate work, not audio-rate: recompute the `tan()` coefficient only on
   note/bend/glide events (or per block) and smooth the *coefficient*, never call
   `tan` per sample. Cheaper filter structures (cascaded one-poles) save almost
   nothing and lose the clean bell — the SVF is already the floor.
-- **Shaper**: ADAA the residue function directly. `r(x) = f(x) − x` is itself a
+- **Shaper**: ADAA the residue function directly on both Mid and Side. `r(x) = f(x) − x` is itself a
   waveshaper with antiderivative `R(x) = F(x) − x²/2`, so ONE guarded-divide ADAA
-  evaluation of `r` yields the aligned residue with no oversampling, no resampler,
+  evaluation per component yields the aligned residue with no oversampling, no resampler,
   no thru-path — the §4 alignment problem *disappears* instead of being solved.
   Choose algebraic kernels so antiderivatives are closed-form and sqrt-cheap:
   tube = `x/√(1+x²)` (R = `√(1+x²) − x²/2` + const), solid = the same curve
   bias-shifted, with its static DC removed exactly by subtracting the constant
   `r(0)` instead of running a per-voice DC blocker. (`x/√(1+x²)` is the k = 2 case
   of the saturator's existing knee curve — shared kernel.)
-- **Post-sum, once, not per voice**: a single DC blocker on the summed voice
-  residues (the DC blocker is linear, so it commutes with the sum) catches the
-  signal-dependent DC of the solid curve.
-- **Budget**: ≈ 40–50 flops and 4 state floats per voice per sample. Sixteen voices
-  at 48 kHz ≈ 30–40 MFLOP/s — well under a percent of one mobile core, on the order
-  of one extra filter per voice, far less than an extra oscillator. The bus module's
-  four ×4-oversampled paths cost roughly as much as ten of these voices.
+- **Post-sum, once, not per voice**: after decoding each processed voice back to
+  Left/Right, a single stereo DC blocker on the summed voice residues catches the
+  signal-dependent DC of the solid curve. The DC blocker is linear, so it commutes
+  with the sum.
+- **Budget**: the earlier ≈40–50-flop, four-state estimate covered one mono path and
+  is no longer valid. Fixed linked Mid/Side roughly doubles the filter/shaper work
+  and state relative to that estimate. It remains a plausible retained-voice cost,
+  but representative 16-voice phone and desktop measurements now decide the
+  production quality setting; the old paper estimate is not acceptance evidence.
 - **SIMD**: two levels. Inside Cmajor: keep the kernel branch-free (the ADAA
   ill-conditioning guard as a select, not a branch) and let the JIT vectorize. On
   the native renderer path: batch voices across SIMD lanes exactly as the surveyed
@@ -203,8 +213,9 @@ Q ≈ 0.7 smooths into a continuous tilt of where the energy lands. Voicing keep
 default Q on the low side for smooth sweeps; high Q remains available for the
 surgical sound.
 
-Status: feasibility locked; ratio control locked as above. Whether to build the
-per-voice variant at all remains a product decision for later.
+Status: the per-voice form, its post-filter placement, fixed linked Mid/Side routing,
+single Amount, optional Key Track, and ratio control are locked. The exact remaining
+Voice-interface control set and measured production quality setting remain open.
 
 ## 8. Ship criteria
 

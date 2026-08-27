@@ -1013,19 +1013,23 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - Oscillator-local tuning and pitch modulation remain relative to Global Tune but do not leak into the pitch followed by filters or effects.
     - Zero is neutral, the full knob and modulation ranges work continuously, and complete sound save/restore reproduces the same setting and routes.
 
-[ ] T39A — Choose the right home for Global Tune, then move the existing control there
+[ ] T39A — Move Global Tune into the Voice settings popout and make it a usable modulation target
     Reported problem (2026-08-26):
     - The Global Tune control works, but its current location in the top-level Voice layout is wrong and is not accepted as the product design.
-    Design before implementation:
-    - Review the real phone, desktop, and plugin layouts and decide where a synth-wide tuning control belongs in Cosimo's control hierarchy.
-    - Show the proposed location in the real composed interface and get Andrew's approval before moving it. Do not treat the current location or another guessed empty space as accepted.
+    Product placement decided (2026-08-27):
+    - Put the one existing Global Tune control inside the Voice settings popout beside Voice Mode (Poly/Mono/Legato) and Glide Time. That popout is opened from the Mod bar. Do not add a preset-bar control or leave a second copy in the main Voice layout.
+    - This location keeps synth-wide pitch behavior with the other synth-wide note behavior. The tradeoff is that the popout must remain usable during modulation routing instead of disappearing as soon as the person touches the Mod bar.
+    Confirmed interaction blocker:
+    - The current Mod bar explicitly closes the Voice settings popout whenever a modulation-source drag starts. Remove that behavior: touching or dragging a source must leave the already-open Voice popout visible.
+    - While the source is dragged, Global Tune must present itself as an eligible destination and accept the drop. A successful drop creates the route from the dragged source, and the Global Tune control then edits that route's amount normally.
+    - Switching to a different source in the Mod bar must update the armed source without closing the Voice popout. Explicit close and genuine outside-dismiss behavior may still close it after the source interaction is over.
     Move, do not redesign the feature:
     - Move the existing Global Tune control to the approved location and remove its old presentation completely. Keep one Global Tune control, not two synchronized copies.
     - Preserve all accepted T39 behavior unchanged: the -24 to +24 semitone knob, continuous cents, modulation up to +/-48 semitones, shared played-pitch math, Bounce and effects tracking, host parameter identity, automation, presets, URL state, Init, undo, exact entry, and modulation routes.
     - Keep the approved location reachable and legible at representative phone, desktop, and plugin sizes without crowding neighboring controls or changing their layout accidentally.
     Done when:
-    - Andrew approves the placement on the real interface at representative sizes.
-    - Browser and state tests prove exactly one Global Tune control appears in the approved location, the rejected location is gone, and every existing T39 interaction and saved/automated value still drives the same underlying parameter.
+    - Browser tests open the Voice popout, touch and drag multiple Mod-bar sources without closing it, show Global Tune as the drop destination, create a route by dropping, and then edit that route's amount.
+    - Browser and state tests prove exactly one Global Tune control appears in the Voice popout, the rejected location is gone, ordinary explicit/outside dismissal still works, and every existing T39 interaction and saved/automated value still drives the same underlying parameter.
 
 [ ] T40 — Make the drag heads-up display match the parameter being changed
     Required result:
@@ -1157,7 +1161,7 @@ BROWSER SHARING AND ENVELOPE FOLLOW-UP
 [ ] T50 — Add Key Track to controls that can be musically tuned
     Dependency:
     - Build this on T39's shared played pitch. Do not derive tracking from any oscillator's private tuning.
-    - This shared optional-Key-Track contract is also the prerequisite for exposing Enhancer Lite as a pitch-following Cosimo effect in T62. T26's permanently per-voice Enhancer consumes the synth's shared final played pitch directly rather than pretending to be an ordinary global effect control.
+    - This shared optional-Key-Track contract is also the prerequisite for the per-voice Enhancer in T26/T62. The control state is shared, but while Key Track is on each active voice calculates its own Enhancer frequency from that voice's final played pitch.
     User contract:
     - Put the same compact button, literally labeled `Key Track`, beside each qualifying control. It is off by default, and its state is saved and restored with the complete sound.
     - Turning Key Track on sets the neighboring knob to its exact center: 1:1 ratio, 0 semitones, 0 cents. Do not convert the current Hertz or millisecond setting, do not use a reference note, and do not restore an earlier Key Track offset.
@@ -1322,20 +1326,33 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     Done when:
     - Browser tests inspect every effect while active and bypassed and prove the heading area contains only its effect name, with no subtitle, bypass message, clipping, or leftover blank row at representative phone and desktop sizes.
 
+[ ] T59 — Make Sine → Square → Sine → Triangle the default oscillator wavetable
+    Required result:
+    - Create or select a license-safe wavetable whose ordered frames are Sine, Square, Sine, and Triangle, with normal interpolation between them.
+    - Add it to the shipped factory wavetable catalog with a stable identity and make it the selected table for every oscillator in Init and every brand-new patch.
+    - Preserve the wavetable selected by existing saved patches; this changes the default only and must not rewrite recalled sounds.
+    Done when:
+    - The shipped table audibly and visually reaches Sine, Square, Sine, and Triangle in that order across its index range, and tests prove Init/new-patch selection uses it for Oscillators A, B, and C while existing saved selections still restore unchanged.
+
 [ ] T60 — Make the Mod bar scale adjustable and let it float or park horizontally
-    Product direction (2026-08-27):
+    Product decisions (2026-08-27):
     - Replace the fixed visual-size decision with one scale coefficient that proportionally controls the complete Mod bar: shell, icons, labels, badges, gaps, arrows, outline, and actual touch targets.
     - Put a live coefficient control in Developer Settings and include it in `Copy settings`, so Andrew can tune the whole bar without code changes.
-    - Add a saved placement choice that can keep the bar floating at the left/right edge or park it horizontally beneath or within the preset bar. The bar becomes one responsive component, not separate unrelated vertical and horizontal implementations.
-    Design discussion required before implementation:
-    - Decide the useful coefficient range/default and whether scale is a global application preference or part of a sound. The current 1.10 result is the starting value, not a permanent hard-coded answer.
-    - Decide whether `beneath the preset bar` and `merged into the preset bar` are one parked design or two distinct placements, and show the real phone, desktop, and plugin compositions before choosing.
-    - Define how source paging, expansion, quick drawers, drag-to-map, audition, left/right preference, safe areas, and preset-bar overflow behave when the bar is horizontal.
-    - Decide whether placement is always explicit or may switch automatically at a breakpoint. Do not infer an automatic mode without approval.
+    - Scale and placement are application preferences, not part of a sound. Start live tuning from the current 1.10 scale with a proposed 0.85-1.30 adjustment range; Andrew chooses the shipped default during the composed-interface tuning pass.
+    - Offer three explicit placements: floating left, floating right, or parked horizontally immediately above the bottom Voice/FX/Mod strip. Do not merge it into the preset bar and do not switch placement automatically at a breakpoint.
+    Parked behavior:
+    - The visible parked bar is exactly the same height as the Voice/FX/Mod strip below it. It is one horizontal row and never expands into a larger source-list drawer. Navigate its source/tool groups horizontally within that row.
+    - Add a small chevron that hides the complete parked row. Hidden means the row reserves zero vertical space. Leave only a tiny restore-chevron tab emerging from the top edge of Voice/FX/Mod and overlaying the page content, so even the restore affordance consumes no layout height.
+    - Tapping the restore tab animates the parked row back into view. Hiding and restoring must preserve the selected source, current source group/scroll position, open source editor or Voice popout, route count, audition settings, and pending application preferences. The restore tab must remain reachable without covering an important page control.
+    - In parked mode, keep the row height fixed and let the coefficient scale the contents, widths, gaps, and horizontal density inside that height; every source still owns a full-row touch target. Floating mode may scale the whole shell normally. Do not make the bottom Voice/FX/Mod strip taller merely to follow the Mod-bar coefficient.
+    Parked interaction:
+    - Use left/right paddles to cycle through source/tool groups. Do not use free horizontal swiping because a horizontal drag beginning on a source icon belongs to the existing drag-to-map gesture.
+    - The parked bar itself never expands. Tapping a source still opens its existing MSEG/Envelope/Macro quick editor, and the Voice button still opens its Voice settings popout. Those editors float independently and do not enlarge the parked bar.
     Done when:
     - Andrew approves the real composed floating and parked designs and the coefficient feel.
-    - One setting changes placement without losing the selected source, open drawer, mapping gesture, or audition state; one coefficient scales the complete geometry without overlap, clipping, or uneven spacing.
-    - The setting survives relaunch as an application preference, does not change a saved patch's sound, and is covered at representative phone, desktop, and plugin sizes.
+    - One setting changes placement without losing the selected source, open editor/popout, mapping gesture, or audition state. The coefficient scales each placement without overlap, clipping, uneven spacing, or changing the parked row's required height.
+    - Hide/show animation leaves no permanent blank row, the tiny restore tab remains usable, and neither state blocks page content or the bottom navigation.
+    - Scale, placement, and parked visibility survive relaunch as application preferences, do not change a saved patch's sound, and are covered at representative phone, desktop, and plugin sizes.
 
 [ ] T61 — Package Enhancer Lite as a shippable free VST3 and iOS AUv3 product
     Existing starting point:
@@ -1349,30 +1366,38 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Clean release artifacts for VST3 and iOS AUv3 build from documented commands, retain state across reload/update, pass signing and host validation, and are installable by someone without the development checkout.
     - Andrew approves the sound, MIDI tracking, interface, free-product branding, and installation flow.
 
-[ ] T62 — Integrate Enhancer Lite into Cosimo with optional pitch tracking
+[ ] T62 — Put Enhancer Lite after the filter inside every synth voice
     Dependency:
     - Build on T39's shared played pitch and T50's approved `Key Track` state, offset, exact-entry, modulation, and last-held-note behavior. Do not create a third pitch-tracking formula specifically for this effect.
-    Design discussion required before implementation:
-    - Decide where Enhancer Lite belongs in Cosimo: an Effects Lane device, a fixed Voice-stage processor, or another explicit location. Do not silently duplicate or replace T26's fixed two-band Polish Enhancer.
-    - Decide which standalone controls remain exposed in Cosimo, whether Mid/Side is valid at the chosen signal location, and whether the continuous harmonic ratio replaces the ordinary Frequency value only while `Key Track` is on.
+    Product decisions (2026-08-27):
+    - The required Cosimo form is one Enhancer inside every active synth voice, immediately after that voice's filter and before its amplitude envelope/VCA and the final voice sum. Its purpose is early per-note tone shaping; a single processor after the voices are combined does not satisfy this requirement.
+    - Add optional Key Track. With Key Track off, Frequency is an ordinary fixed frequency shared by the voices. With Key Track on, every active voice follows its own final played pitch and applies the same continuous harmonic-ratio offset, so a chord produces one correctly tracked Enhancer frequency per note. Preserve the non-tracked Frequency value while tracking is on and restore it when tracking is turned off, following T50.
+    - Always process each voice in linked Mid/Side. Encode that voice's stereo filter output with the established Enhancer Lite half-sum/half-difference matrix, apply the same Frequency, Q, Amount, and character to Mid and Side, then decode back to stereo. Expose one Amount only: no Stereo/Mid-Side switch and no separate Mid and Side amounts. This deliberately keeps the nonlinear Mid/Side sound rather than trying to reproduce ordinary linked-stereo processing.
+    - A separate Enhancer Lite device may be added to the Effects Lane later, but it is optional additional work and cannot replace this required per-voice stage.
+    - Keep this separate from T26's fixed two-band Polish Enhancer, which remains a single post-rack bus processor near the end of the complete synth signal path.
+    Control placement decided (2026-08-27):
+    - Put one shared Enhancer control panel directly with the Voice filter controls, visually following the filter as the next stage in the Voice page. Do not put the required controls on the Effects page or hide them in a generic settings popout. The panel edits the shared settings used by every per-voice Enhancer instance; it does not show a separate panel for every sounding note.
+    Control-set discussion still required before implementation:
+    - Decide which remaining standalone controls carry over beyond the locked single Amount and fixed linked Mid/Side routing. Mid/Side mode and independent Mid/Side amounts are no longer open decisions.
     Required integration:
-    - Reuse the production Enhancer Lite DSP/state module behind a Cosimo adapter rather than copying the algorithm.
-    - Preserve Effects Lane save/restore, Init, URL sharing, modulation, exact entry, bypass, dry/wet defaults, and host state. When Key Track is enabled, follow the shared final pitch and keep the continuous offset modulatable.
+    - Reuse the production Enhancer Lite shaping core and its exact Mid/Side encode/decode convention behind a per-voice Cosimo adapter rather than copying the algorithm. Give every allocated voice independent Mid and Side filter/shaper history and reset it through the synth's existing voice lifecycle.
+    - Preserve complete sound save/restore, Init, URL sharing, modulation, exact entry, bypass, and host state. Keep the continuous tracked offset modulatable, and prove polyphonic notes, glide, pitch bend, Global Tune, note stealing, mono, and legato all follow the existing voice rules.
     Done when:
-    - Andrew approves the signal location and control set, and tests prove standalone/Cosimo DSP parity, correct optional pitch tracking, complete state round trips, and no change to the fixed T26/T28 Polish Enhancer.
+    - Andrew approves the Voice-interface control set, and tests prove the Enhancer processes each voice after its filter but before voices are combined, fixed linked Mid/Side uses one Amount with no hidden mode state, optional pitch tracking works independently across simultaneous notes, zero Amount is bit-identical, state round trips are complete, retained-voice CPU is acceptable, and the fixed T26/T28 Polish Enhancer is unchanged.
 
 [ ] T63 — Discuss and build whole-Effects-chain Mix and Bypass
-    Product direction (2026-08-27):
-    - Add one control that blends the dry signal around the entire Effects Lane and one control that bypasses the entire lane. Per-effect Mix controls and effect bypasses remain unchanged inside it.
-    Design discussion required before implementation:
-    - Decide the exact boundary: Effects Lane only, or Effects Lane plus the later fixed Polish section. The words `entire FX chain` are not precise enough to choose this silently.
-    - Decide where the controls live and whether they are host-automatable, modulatable, saved in sounds, and included in URL sharing. The likely default is 100% wet with bypass off, but this must be confirmed.
-    - Decide whether Bypass is a click-free audible bypass that keeps effects processing/tails alive, or a CPU-saving hard bypass that stops processing. Define what happens to delay/reverb tails when bypass is engaged and released.
-    - Delay-align the outer dry and wet paths for every latency-producing effect and for the future Polish lookahead. Do not accept comb filtering or a timing jump at intermediate Mix values.
-    - Define the difference between Mix at 0% and Bypass. Avoid two controls that appear equivalent but have surprising state, tail, CPU, or automation behavior.
+    Product decisions (2026-08-27):
+    - Add one control that blends the dry signal around the complete editable Effects Lane and one control that temporarily bypasses that lane. The later fixed Polish section remains outside both controls and still processes the chosen result. Per-effect Mix controls and effect bypasses remain unchanged inside the lane.
+    - Do not consume permanent vertical space above the graph. Overlay the Bypass button in the currently unused top-left corner of the FX graph, and place Mix as a horizontal slider along the inside bottom edge of the graph. These controls must remain reachable without obscuring effects, connectors, group controls, tail add buttons, or drag destinations at phone, desktop, and plugin sizes.
+    - Mix defaults to 100%. Mix and Bypass are saved with the sound and included in URL sharing, but neither is a modulation destination or a host-automatable parameter.
+    - Use the rack's existing always-running behavior: the rack continues receiving live input while bypassed, so delay/reverb state and tails keep progressing. Bypass briefly crossfades the audible output to dry and releasing it returns to the previously set Mix value. Do not add CPU suspension, a separate tail engine, tail clearing, or another rack-state mode.
+    - Mix at 0% deliberately stores a continuous blend value. Bypass is a temporary override that leaves the stored Mix untouched, allowing one tap to return to the exact previous blend.
+    Required implementation:
+    - Delay-align the outer dry and wet paths for every latency-producing Effects Lane device. The future Polish lookahead is outside this blend and therefore does not belong in this dry/wet alignment. Do not accept comb filtering or a timing jump at intermediate Mix values.
+    - Keep bypass transitions click-free with the smallest suitable smoothing ramp. The existing Effects Lane continues processing exactly as it does now; this task only chooses whether its output or the aligned dry path is heard.
     Done when:
-    - Andrew approves the signal boundary, UI location, tail behavior, automation/modulation policy, and Mix-versus-Bypass semantics.
-    - Tests cover empty, serial, split, parallel, latency-producing, feedback/tail, bypass-transition, preset, Init, URL-share, and automation cases with click-free, delay-aligned output.
+    - The real composed FX page proves the overlaid controls consume no additional graph height and do not cover or block any graph content or interaction at representative sizes.
+    - Tests cover empty, serial, split, parallel, latency-producing, feedback/tail, bypass-transition, preset, Init, and URL-share cases with click-free, delay-aligned output; inventory tests prove neither control is modulatable or host-automatable.
 
 [ ] T64 — Toggle an effect's bypass from its selected graph icon without stealing scroll gestures
     Tap behavior:
@@ -1382,10 +1407,53 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     Gesture precedence:
     - An ordinary finger movement that begins on an effect node belongs to vertical graph scrolling. Do not capture it or promote it into reordering merely because it crossed the current movement threshold.
     - Reordering requires a deliberate hold-and-drag: a short hold lifts the node, then movement reorders it. Continuing to hold without moving reaches the existing longer-press context menu. Tune the two timings and movement tolerances so these three intentions are distinct.
+    - Give exactly one light haptic bump when the short hold actually lifts the node into reorder mode. Do not vibrate on pointer-down, ordinary scrolling, the stationary context-menu hold, or every subsequent reorder movement. Use Cosimo's existing native haptic bridge in the iPhone/AUv3 wrapper; in an ordinary browser, use `navigator.vibrate` only when it exists and succeeds, with a silent no-haptic fallback everywhere else.
     - Once scrolling has won a gesture, it stays scrolling or hands off to the containing scroll area at a boundary; it must never turn into a reorder later in the same gesture. Once a node has visibly lifted for reordering, reorder owns the gesture until drop or cancellation.
     Done when:
     - Browser tests prove first tap selects/opens, second selected-icon tap bypasses, the next selected-icon tap re-enables, and neither action closes or changes the selected editor.
-    - Real touch tests starting on trunk and branch nodes prove immediate vertical drags scroll without selecting, bypassing, or reordering; hold-and-drag still reorders; stationary long-press still opens the menu; and releasing any cancelled scroll/reorder gesture produces no stray tap.
+    - Real touch tests starting on trunk and branch nodes prove immediate vertical drags scroll without selecting, bypassing, reordering, or requesting haptics; hold-and-drag still reorders and requests exactly one bump when it lifts; stationary long-press still opens the menu without the reorder bump; and releasing any cancelled scroll/reorder gesture produces no stray tap.
+
+[ ] T66 — Make one MSEG's mapping to another MSEG's Rate editable
+    Confirmed failure (2026-08-27):
+    - In the real phone-width interface, an MSEG 1 -> MSEG 2 Rate route can be created, but a vertical drag on MSEG 2 Rate leaves the route amount at exactly zero.
+    - The Rate control in the open MSEG drawer currently looks for a route whose source is the MSEG being edited. When MSEG 2 is open, it therefore looks for MSEG 2 -> MSEG 2 even though the actually selected and dragged source is MSEG 1. The real MSEG 1 -> MSEG 2 route is present but cannot be adjusted there.
+    Required result:
+    - Keep the MSEG being edited and the currently selected modulation source as two independent identities. The open MSEG 2 editor remains on MSEG 2 while MSEG 1 is selected or dragged from the Mod bar.
+    - After MSEG 1 is dropped on MSEG 2 Rate, the MSEG 2 Rate control must display that mapping and edit its amount through the normal vertical drag and exact-value entry behavior. Editing the amount must not change MSEG 2's underlying Rate value.
+    - Apply the same source-versus-target rule anywhere the shared MSEG Rate control appears; do not repair only one drawer while leaving another MSEG editor unable to address the selected route.
+    Done when:
+    - A real browser regression creates MSEG 1 -> MSEG 2 Rate through the interface, changes its amount away from zero, proves the stored route and running modulation program receive the new amount, and proves the base MSEG 2 Rate did not move.
+    - The route survives save/reload and remains editable, self-mapping and another cross-MSEG pairing still work, cancelled gestures close cleanly, and ordinary base-Rate editing remains unchanged when no mapped source is selected.
+
+[ ] T65 — Make every Cosimo haptic cross-platform and audit the complete interaction set
+    One shared capability:
+    - Replace scattered direct calls to `cmaj_triggerHaptic` and surface-specific callback plumbing with one shared haptic adapter used by the browser, desktop standalone/plugin, iPhone standalone, and AUv3 interfaces.
+    - Prefer the native host bridge when it is present. Otherwise request the closest short `navigator.vibrate` pattern when the browser implements it and permits it. Never fire both for one event. Missing hardware, a rejected/false browser request, a hidden page, or an unsupported browser is a silent no-op and must never change the interaction result.
+    - Give call sites semantic events such as detent, selection, lift, success, warning, and failure; translate those centrally to native styles and restrained browser vibration patterns instead of scattering platform-specific durations through product code.
+    Audit and complete the product behavior:
+    - Inventory every existing haptic request in `TODOS.txt`, every direct bridge call, and every callback-based haptic path. Preserve the already requested behavior for discrete oscillator detents, MSEG hold/lift editing, rack-parameter long press, Mod-source acquisition, mapping confirmation, duplicate/failure warnings, and T64's reorder lift.
+    - Review the remaining touch interactions and add a bump wherever one clearly confirms a discrete physical transition that the person caused: acquiring or releasing a drag target, crossing a detent or snap point, lifting or dropping a movable object, completing an insertion or mapping, changing a discrete mode, or confirming a warning/error boundary.
+    - Do not add vibration to continuous knob travel, ordinary scrolling, pointer-down before an action is recognized, every animation/reorder frame, automatic state restoration, telemetry, or background changes. One meaningful transition produces at most one bump unless a deliberately documented warning pattern requires otherwise.
+    - Record the completed audit as an event-to-style table so future controls use the same vocabulary and do not reintroduce direct platform calls or duplicate bumps.
+    Done when:
+    - Tests prove native-bridge preference, browser fallback, unsupported/failed no-op behavior, semantic-style translation, and exactly-once delivery without duplicate native-plus-browser feedback.
+    - Interaction tests cover every retained and newly added event, including negative assertions for scroll and continuous dragging. Real-device checks confirm native haptics in the iPhone standalone/AUv3 and best-effort vibration in a supporting browser; Safari and other unsupported browsers retain the complete interaction without tactile feedback.
+    - Product UI code contains no direct native or browser haptic calls outside the shared adapter, and the audit table accounts for every haptic call site.
+
+[ ] T67 — Coordinate review and integration of all delegated Codex tasks
+    Active coordinator (2026-08-27):
+    - Codex task `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`, branch `codex/task-integration-coordinator`, worktree `/Users/winterfell/.codex/worktrees/74e4/cosimo-synth`, model SOL, reasoning max.
+    Standing responsibility:
+    - Receive clean committed handoffs from every implementation task; maintain the one authoritative queue of task, thread, branch, worktree, commit, scope, dependencies, review state, and remaining merge/push/deploy work.
+    - Review source and scoped diffs before broad suites or complete rebuilds. Return defects to the owning implementation task, use focused tests during repair loops, and run the complete relevant suite plus expensive build/install gates once only after rebased source is review-clean.
+    - Rebase, review, and merge accepted branches one at a time against the moving latest master; push master and deploy affected Sites work. Preserve dirty worktrees and unrelated `TODOS.txt`/`PROGRESS.txt` history, and never move uncommitted files, generated output, or installed artifacts between tasks.
+    - Parallelize independent reviews and focused checks while serializing master changes, fixed ports, shared generated output, installed plugins, and native builds. Keep automated qualification separate from Andrew's physical-device, Ableton, listening, and visual acceptance.
+    Initial handoff sources to audit:
+    - T57/T58 effect-editor cleanup: thread `01a0426b-19ee-7db0-ba88-e21192770e6a`.
+    - T27 Sausage Fattener lab: thread `01a03b9b-5ad4-7f11-aafb-53bc9db9ca6f`.
+    - T26 fixed Enhancer and related Lite work: threads `01a03b9a-b1c0-7431-bc23-3e85da52c3d0`, `01a0427c-0976-7561-949f-738fc8f47bca`, and `01a0426c-31f8-76a2-8b81-5e31af0d6c28`.
+    Done when:
+    - This is an ongoing coordination role. It remains open while delegated work exists; an empty queue is an idle state, not task completion.
 
 INFRASTRUCTURE AND TOOLING
 
@@ -1587,8 +1655,8 @@ Source note (2026-08-25):
     - Keep the de-emphasis permanently active, use the documented 4x oversampling, and keep the ten controls static, smoothed, preset-persisted, and unavailable to the modulation and Effects Lane systems.
     - Put the bus effect after Safe Bass and before the compressor/clipper in T28. With every amount at zero it must be bit-identical to dry.
     Required per-voice form:
-    - Build it independently with one Enhancer band per active synth voice, no mid/side controls, the documented first-order anti-aliasing treatment, and one continuous harmonic-ratio control from 0.5x to 32x.
-    - Track each voice's own final played pitch after note choice, glide, pitch bend, Global Tune, and modulation routed to Global Tune. The continuous ratio remains modulatable and must allow deliberately inharmonic positions rather than snapping to integer harmonics.
+    - Build it independently with one Enhancer band per active synth voice, immediately after that voice's filter and before its amplitude envelope/VCA and the final voice sum, using the documented first-order anti-aliasing treatment. Always use linked Mid/Side internally: apply the same Frequency, Q, Amount, and character to both components, expose one Amount, and provide neither a routing switch nor separate Mid and Side amounts.
+    - Add the optional Key Track mode from T50. Off uses the preserved ordinary Frequency value. On tracks each voice's own final played pitch after note choice, glide, pitch bend, Global Tune, and modulation routed to Global Tune, with a continuous harmonic-ratio offset from 0.5x to 32x. The offset remains modulatable and must allow deliberately inharmonic positions rather than snapping to integer harmonics.
     - Keep the voice lifecycle consistent with the synth's existing voice allocation, note stealing, mono/poly/legato, and envelope restart rules. Do not invent a second MIDI-voice policy inside the Enhancer.
     - Measure retained-voice CPU and aliasing at representative sample rates and voice counts before selecting the production quality setting.
     Done when:
