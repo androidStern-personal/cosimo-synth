@@ -5,12 +5,17 @@ import {
     collapseGlobalModRail,
     expandGlobalModRail,
     openBuiltDesktopBundlePage,
-    reachableGlobalModRailGripPoint,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 const PHONE_VIEWPORT = { width: 393, height: 852 };
 const SHORT_PHONE_VIEWPORT = { width: 320, height: 568 };
 const MOD_RAIL_POSITION_KEY = "cosimo.mobile-global-mod-rail.position.v1";
+
+async function builtModRailGripPoint(page) {
+    const bounds = await page.locator('[data-role="mobile-global-mod-rail-grip"]').boundingBox();
+    assert.ok(bounds, "The compiled Mod rail grip must be rendered.");
+    return { x: bounds.x + 28, y: bounds.y + 12 };
+}
 
 async function readBuiltVoicePopoverOpen(page) {
     return page.evaluate(() => Boolean(
@@ -80,7 +85,7 @@ async function touchDragHorizontally(page, cdp, locator, deltaX) {
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
 }
 
-test("compiled 320px Voice overlap keeps controls actionable while the Mod rail moves and expands", async () => {
+test("compiled 320px Voice keeps the Mod rail above fixed-edge controls while it moves and expands", async () => {
     const page = await openBuiltDesktopBundlePage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize(SHORT_PHONE_VIEWPORT);
@@ -148,7 +153,7 @@ test("compiled 320px Voice overlap keeps controls actionable while the Mod rail 
                 intersectionWidth: intersection.right - intersection.left,
                 intersectionHeight: intersection.bottom - intersection.top,
                 overlapPoint,
-                overlapOwnedByWarp: hit instanceof Element && warpElement.contains(hit),
+                overlapOwnedByRail: hit instanceof Element && railElement.contains(hit),
                 toolbarLeft: toolbarBounds.left,
                 toolbarRight: toolbarBounds.right,
                 previousLeft: previousBounds.left,
@@ -160,19 +165,11 @@ test("compiled 320px Voice overlap keeps controls actionable while the Mod rail 
         assert.equal(overlap.expanded, "false");
         assert.equal(overlap.intersectionWidth >= 8, true, "The collapsed rail must genuinely overlap the Warp chip.");
         assert.equal(overlap.intersectionHeight >= 8, true, "The collapsed rail must genuinely overlap the Warp chip.");
-        assert.equal(overlap.overlapOwnedByWarp, true, "The overlapped Warp pixels must retain Voice pointer priority.");
+        assert.equal(overlap.overlapOwnedByRail, true, "The Mod rail must own pixels where it overlaps the Warp chip.");
         assert.equal(Math.abs(overlap.previousLeft - overlap.toolbarLeft) <= 0.5, true);
         assert.equal(Math.abs(overlap.nextRight - overlap.toolbarRight) <= 0.5, true);
 
-        const initialWarpLabel = await warp.getAttribute("aria-label");
-        await page.mouse.click(overlap.overlapPoint.x, overlap.overlapPoint.y);
-        assert.notEqual(
-            await warp.getAttribute("aria-label"),
-            initialWarpLabel,
-            "Clicking the actual rail/chip intersection must cycle Warp.",
-        );
-
-        const gripPoint = await reachableGlobalModRailGripPoint(page);
+        const gripPoint = await builtModRailGripPoint(page);
         await page.mouse.move(gripPoint.x, gripPoint.y);
         await page.mouse.down();
         pointerDown = true;

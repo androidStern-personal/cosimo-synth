@@ -228,21 +228,6 @@
     border-left: 1px solid var(--cosimo-line);
 }
 
-/* The collapsed Mod bar is free to traverse the Voice page, including these
- * edge controls. At an actual overlap the Voice control paints and receives
- * the pointer above the bar; opening the drawer deliberately restores the Mod
- * surface as the foreground interaction layer. */
-@media (max-width: 639px) {
-    .cosimo-surface:has(.mobile-global-mod-rail[data-expanded="false"]) .mobile-voice-chip {
-        z-index: 61;
-    }
-
-    .cosimo-surface:has(.mobile-global-mod-rail[data-expanded="false"]) .mobile-voice-paddle {
-        position: relative;
-        z-index: 61;
-    }
-}
-
 .mobile-voice-page {
     display: grid;
     gap: var(--cosimo-space-1);

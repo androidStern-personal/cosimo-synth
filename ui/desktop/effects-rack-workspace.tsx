@@ -1869,8 +1869,6 @@ const MOBILE_MOD_RAIL_STOP_VELOCITY_PX_PER_MS = 0.02;
 const MOBILE_MOD_RAIL_DECELERATION_RATE_PER_MS = 0.99;
 const MOBILE_MOD_RAIL_SETTLE_X_MS = 220;
 const MOBILE_MOD_RAIL_DEFAULT_DOCK: RailDock = { edge: "right", normalizedY: 0.42 };
-const MOBILE_MOD_RAIL_MIN_USABLE_DRAWER_EXTENT = (3 * MOBILE_MOD_RAIL_GEOMETRY.module)
-    + (2 * MOBILE_MOD_RAIL_GEOMETRY.gap);
 
 type RailMotionSample = {
     readonly clientY: number;
@@ -2003,10 +2001,7 @@ function MobileGlobalModRail({
     const railRef = useRef<HTMLElement | null>(null);
     const tabRef = useRef<HTMLDivElement | null>(null);
     const drawerRef = useRef<HTMLDivElement | null>(null);
-    // Requested position is user intent; React state `top` is the separately
-    // projected collision-free position currently displayed.
-    const requestedPositionRef = useRef(0);
-    const displayedPositionRef = useRef(MOBILE_MOD_RAIL_GEOMETRY.safeGap);
+    const positionRef = useRef(0);
     const normalizedPositionRef = useRef<number | null>(null);
     const boundsRef = useRef<RailVerticalBounds>({
         min: MOBILE_MOD_RAIL_GEOMETRY.safeGap,
@@ -2034,8 +2029,6 @@ function MobileGlobalModRail({
             + (2 * MOBILE_MOD_RAIL_GEOMETRY.shoulder),
         desiredHeight: MOBILE_MOD_RAIL_GEOMETRY.drawerFallbackHeight,
     });
-    const measurementPendingRef = useRef(false);
-    const measurementReplayFrameRef = useRef<number | null>(null);
     const decelerationFrameRef = useRef<number | null>(null);
     const gestureRef = useRef<{
         pointerId: number;
@@ -2043,9 +2036,7 @@ function MobileGlobalModRail({
         startClientY: number;
         lastClientX: number;
         startNormalizedY: number;
-        startRequestedTop: number;
-        startDisplayedTop: number;
-        currentDisplayedTop: number;
+        startTop: number;
         startEdge: RailEdge;
         moved: boolean;
         interruptedDeceleration: boolean;
@@ -2053,8 +2044,6 @@ function MobileGlobalModRail({
         captureElement: HTMLButtonElement;
     } | null>(null);
     const [expanded, setExpanded] = useState(false);
-    const expandedRef = useRef(expanded);
-    expandedRef.current = expanded;
     const [top, setTop] = useState(MOBILE_MOD_RAIL_GEOMETRY.safeGap);
     const [edge, setEdge] = useState<RailEdge>(MOBILE_MOD_RAIL_DEFAULT_DOCK.edge);
     const [dragX, setDragX] = useState(0);
@@ -2086,44 +2075,32 @@ function MobileGlobalModRail({
         setDragX(nextDragX);
     }, []);
 
-    const applyDisplayedRailPosition = useCallback((nextTop: number) => {
-        const bounds = boundsRef.current;
-        const projectedTop = clamp(nextTop, bounds.min, bounds.max);
-        const drawer = projectRailDrawerPlacement(projectedTop, drawerMetricsRef.current);
-        displayedPositionRef.current = projectedTop;
-        setTop(projectedTop);
-        setDrawerPlacement(drawer);
-        return { top: projectedTop, drawer };
+    const updateDrawerPlacement = useCallback((nextTop: number) => {
+        setDrawerPlacement(projectRailDrawerPlacement(nextTop, drawerMetricsRef.current));
     }, []);
 
-    const applyRequestedRailPosition = useCallback((nextRequestedTop: number) => {
-        const bounds = boundsRef.current;
-        const requestedTop = clamp(nextRequestedTop, bounds.min, bounds.max);
-        requestedPositionRef.current = requestedTop;
-        if (!expandedRef.current) {
-            return applyDisplayedRailPosition(requestedTop);
-        }
-        const drawerMetrics = drawerMetricsRef.current;
-        const usablePlacement = projectRailDefaultPlacement(
-            normalizeRailTop(requestedTop, bounds),
-            bounds,
-            {
-                ...drawerMetrics,
-                desiredHeight: Math.min(
-                    drawerMetrics.desiredHeight,
-                    MOBILE_MOD_RAIL_MIN_USABLE_DRAWER_EXTENT,
-                ),
-            },
-        );
-        return applyDisplayedRailPosition(usablePlacement.top);
-    }, [applyDisplayedRailPosition]);
-
     useLayoutEffect(() => {
-        if (!dockInitializedRef.current) {
+        const surface = layerRef.current?.closest(".cosimo-surface");
+        if (!(surface instanceof HTMLElement)) {
             return;
         }
-        applyRequestedRailPosition(requestedPositionRef.current);
-    }, [expanded, applyRequestedRailPosition]);
+        const previousEdge = surface.dataset.modRailEdge;
+        const previousDockWidth = surface.style.getPropertyValue("--cosimo-rail-dock");
+        surface.dataset.modRailEdge = edge;
+        surface.style.setProperty("--cosimo-rail-dock", `${MOBILE_MOD_RAIL_GEOMETRY.width}px`);
+        return () => {
+            if (previousEdge === undefined) {
+                delete surface.dataset.modRailEdge;
+            } else {
+                surface.dataset.modRailEdge = previousEdge;
+            }
+            if (previousDockWidth) {
+                surface.style.setProperty("--cosimo-rail-dock", previousDockWidth);
+            } else {
+                surface.style.removeProperty("--cosimo-rail-dock");
+            }
+        };
+    }, [edge]);
 
     // The voice-settings popover belongs to the open drawer; whatever hides
     // the drawer (collapse, mapping drag) takes the popover with it.
@@ -2154,14 +2131,9 @@ function MobileGlobalModRail({
     const measureAndClamp = useCallback(() => {
         const layer = layerRef.current;
         const rail = railRef.current;
-        if (!layer || !rail) {
+        if (!layer || !rail || gestureRef.current !== null || decelerationFrameRef.current !== null) {
             return;
         }
-        if (gestureRef.current !== null || decelerationFrameRef.current !== null) {
-            measurementPendingRef.current = true;
-            return;
-        }
-        measurementPendingRef.current = false;
 
         const layerBounds = layer.getBoundingClientRect();
         const layerStyle = getComputedStyle(layer);
@@ -2221,6 +2193,7 @@ function MobileGlobalModRail({
             desiredHeight: drawerHeight,
         };
         drawerMetricsRef.current = nextDrawerMetrics;
+
         if (!dockInitializedRef.current) {
             dockInitializedRef.current = true;
             let storedDock: RailDock | null = null;
@@ -2241,21 +2214,11 @@ function MobileGlobalModRail({
                 ).normalizedY;
         }
         normalizedPositionRef.current ??= MOBILE_MOD_RAIL_DEFAULT_DOCK.normalizedY;
-        const nextRequestedTop = projectRailTop(normalizedPositionRef.current, nextBounds);
-        applyRequestedRailPosition(nextRequestedTop);
-    }, [applyRequestedRailPosition]);
-
-    const replayPendingMeasurement = useCallback(() => {
-        if (!measurementPendingRef.current || measurementReplayFrameRef.current !== null) {
-            return;
-        }
-        measurementReplayFrameRef.current = requestAnimationFrame(() => {
-            measurementReplayFrameRef.current = null;
-            if (measurementPendingRef.current) {
-                measureAndClamp();
-            }
-        });
-    }, [measureAndClamp]);
+        const nextTop = projectRailTop(normalizedPositionRef.current, nextBounds);
+        positionRef.current = nextTop;
+        setTop(nextTop);
+        updateDrawerPlacement(nextTop);
+    }, [updateDrawerPlacement]);
 
     useLayoutEffect(() => {
         measureAndClamp();
@@ -2285,20 +2248,14 @@ function MobileGlobalModRail({
         if (presetBar) {
             observer?.observe(presetBar);
         }
-        surface?.addEventListener("scroll", measureAndClamp, true);
         window.addEventListener("resize", measureAndClamp);
         window.visualViewport?.addEventListener("resize", measureAndClamp);
         window.visualViewport?.addEventListener("scroll", measureAndClamp);
         return () => {
             observer?.disconnect();
-            surface?.removeEventListener("scroll", measureAndClamp, true);
             window.removeEventListener("resize", measureAndClamp);
             window.visualViewport?.removeEventListener("resize", measureAndClamp);
             window.visualViewport?.removeEventListener("scroll", measureAndClamp);
-            if (measurementReplayFrameRef.current !== null) {
-                cancelAnimationFrame(measurementReplayFrameRef.current);
-                measurementReplayFrameRef.current = null;
-            }
         };
     }, [measureAndClamp]);
 
@@ -2353,9 +2310,8 @@ function MobileGlobalModRail({
         };
     }, [mappingActive, selectedSource.accent]);
 
-    const persistRailDock = useCallback((nextUserOwnedTop: number) => {
-        const normalizedY = normalizeRailTop(nextUserOwnedTop, boundsRef.current);
-        requestedPositionRef.current = projectRailTop(normalizedY, boundsRef.current);
+    const persistRailDock = useCallback((nextTop: number) => {
+        const normalizedY = normalizeRailTop(nextTop, boundsRef.current);
         normalizedPositionRef.current = normalizedY;
         try {
             localStorage.setItem(
@@ -2367,21 +2323,22 @@ function MobileGlobalModRail({
         }
     }, []);
 
-    const settleRailPosition = useCallback((unsettledDisplayedTop: number) => {
+    const settleRailPosition = useCallback((unsettledTop: number) => {
         const bounds = boundsRef.current;
-        const clampedDisplayedTop = clamp(unsettledDisplayedTop, bounds.min, bounds.max);
-        const { top: settledDisplayedTop } = snapRailTop(
-            clampedDisplayedTop,
+        const clampedTop = clamp(unsettledTop, bounds.min, bounds.max);
+        const { top: settledTop } = snapRailTop(
+            clampedTop,
             bounds,
             MOBILE_MOD_RAIL_GEOMETRY.snapDistance,
         );
-        if (settledDisplayedTop !== clampedDisplayedTop) {
+        if (settledTop !== clampedTop) {
             triggerLightHaptic();
         }
-        const placement = applyDisplayedRailPosition(settledDisplayedTop);
-        persistRailDock(placement.top);
-        replayPendingMeasurement();
-    }, [applyDisplayedRailPosition, persistRailDock, replayPendingMeasurement]);
+        positionRef.current = settledTop;
+        setTop(settledTop);
+        updateDrawerPlacement(settledTop);
+        persistRailDock(settledTop);
+    }, [persistRailDock, updateDrawerPlacement]);
 
     const stopRailDeceleration = useCallback(() => {
         const frameID = decelerationFrameRef.current;
@@ -2420,17 +2377,18 @@ function MobileGlobalModRail({
             const nextVelocity = velocity * attenuation;
             const displacement = decayLog > 0 ? (velocity - nextVelocity) / decayLog : 0;
             const bounds = boundsRef.current;
-            const previousDisplayedTop = displayedPositionRef.current;
-            const projectedDisplayedTop = previousDisplayedTop + displacement;
-            const nextDisplayedTop = clamp(projectedDisplayedTop, bounds.min, bounds.max);
-            const reachedBound = nextDisplayedTop !== projectedDisplayedTop;
-            const placement = applyDisplayedRailPosition(nextDisplayedTop);
-            if (
-                reachedBound
-                || Math.abs(nextVelocity) <= MOBILE_MOD_RAIL_STOP_VELOCITY_PX_PER_MS
-            ) {
+            const projectedTop = positionRef.current + displacement;
+            const nextTop = clamp(projectedTop, bounds.min, bounds.max);
+            const reachedBound = nextTop !== projectedTop;
+
+            positionRef.current = nextTop;
+            normalizedPositionRef.current = normalizeRailTop(nextTop, bounds);
+            setTop(nextTop);
+            updateDrawerPlacement(nextTop);
+
+            if (reachedBound || Math.abs(nextVelocity) <= MOBILE_MOD_RAIL_STOP_VELOCITY_PX_PER_MS) {
                 setDecelerating(false);
-                settleRailPosition(placement.top);
+                settleRailPosition(nextTop);
                 return;
             }
 
@@ -2440,7 +2398,7 @@ function MobileGlobalModRail({
 
         decelerationFrameRef.current = requestAnimationFrame(step);
         return true;
-    }, [applyDisplayedRailPosition, settleRailPosition]);
+    }, [settleRailPosition, updateDrawerPlacement]);
 
     const settleDragXHome = useCallback(() => {
         // Paint the compensated offset first, then glide the bar flush against
@@ -2482,19 +2440,19 @@ function MobileGlobalModRail({
         if (cancelled) {
             stopRailDeceleration();
             normalizedPositionRef.current = gesture.startNormalizedY;
+            positionRef.current = gesture.startTop;
+            setTop(gesture.startTop);
+            updateDrawerPlacement(gesture.startTop);
             edgeRef.current = gesture.startEdge;
             setEdge(gesture.startEdge);
-            applyRequestedRailPosition(gesture.startRequestedTop);
             setSettlingX(false);
             applyDragX(0);
-            replayPendingMeasurement();
             return;
         }
         if (!gesture.moved) {
             if (!gesture.interruptedDeceleration) {
                 setExpanded((current) => !current);
             }
-            replayPendingMeasurement();
             return;
         }
 
@@ -2507,45 +2465,20 @@ function MobileGlobalModRail({
             const edgeSpan = Math.max(0, layerWidth - MOBILE_MOD_RAIL_GEOMETRY.width);
             edgeRef.current = nextEdge;
             setEdge(nextEdge);
-            const placement = applyDisplayedRailPosition(gesture.currentDisplayedTop);
-            gesture.currentDisplayedTop = placement.top;
             applyDragX(nextEdge === "left"
                 ? dragXRef.current + edgeSpan
                 : dragXRef.current - edgeSpan);
         }
         settleDragXHome();
 
-        const changedEdge = nextEdge !== gesture.startEdge;
-        const visibleVerticalMovement = Math.abs(
-            gesture.currentDisplayedTop - gesture.startDisplayedTop,
-        ) >= 0.5;
-        if (!visibleVerticalMovement && !changedEdge) {
-            // An explicit gesture that moved no pixels must not rewrite the
-            // persisted vertical dock.
-            normalizedPositionRef.current = gesture.startNormalizedY;
-            applyRequestedRailPosition(gesture.startRequestedTop);
-            replayPendingMeasurement();
-            return;
-        }
-
         const releaseVelocity = railReleaseVelocity(gesture.motionSamples, releaseTimeStamp);
         if (
-            !visibleVerticalMovement
-            || prefersReducedRailMotion()
+            prefersReducedRailMotion()
             || !startRailDeceleration(releaseVelocity)
         ) {
-            settleRailPosition(gesture.currentDisplayedTop);
+            settleRailPosition(positionRef.current);
         }
-    }, [
-        applyDisplayedRailPosition,
-        applyDragX,
-        applyRequestedRailPosition,
-        replayPendingMeasurement,
-        settleDragXHome,
-        settleRailPosition,
-        startRailDeceleration,
-        stopRailDeceleration,
-    ]);
+    }, [applyDragX, settleDragXHome, settleRailPosition, startRailDeceleration, stopRailDeceleration, updateDrawerPlacement]);
 
     const releaseNoteKey = useCallback((pointerId: number) => {
         if (noteKeyPointerRef.current !== pointerId) {
@@ -2580,7 +2513,7 @@ function MobileGlobalModRail({
                 finishRailGesture(gesture.pointerId, true);
             }
             if (stopRailDeceleration()) {
-                settleRailPosition(displayedPositionRef.current);
+                settleRailPosition(positionRef.current);
             }
             abortNoteKey();
         };
@@ -2610,26 +2543,6 @@ function MobileGlobalModRail({
 
     const clampedActivity = sourceActivity === null ? null : clamp(sourceActivity, 0, 1);
     const drawerOpen = expanded && !mappingActive;
-    useLayoutEffect(() => {
-        if (!drawerOpen) {
-            return;
-        }
-        const drawer = drawerRef.current;
-        const firstSource = drawer?.querySelector<HTMLElement>(
-            '.rack-mod-page:not([aria-hidden="true"]) .rack-mod-source',
-        );
-        if (!drawer || !firstSource) {
-            return;
-        }
-        const drawerBounds = drawer.getBoundingClientRect();
-        const sourceBounds = firstSource.getBoundingClientRect();
-        if (
-            sourceBounds.top < drawerBounds.top - 0.5
-            || sourceBounds.bottom > drawerBounds.bottom + 0.5
-        ) {
-            drawer.scrollTop = Math.max(0, drawer.scrollTop + sourceBounds.top - drawerBounds.top);
-        }
-    }, [drawerOpen, drawerPlacement.direction, drawerPlacement.extent]);
     const activePlayMode = VOICE_MODE_OPTIONS.find(
         (option) => option.value === voiceSettings.playMode.value,
     );
@@ -2759,7 +2672,7 @@ function MobileGlobalModRail({
                                 if (interruptedDeceleration) {
                                     // Like touching a coasting scroll view, a new touch stops
                                     // it exactly where it is before beginning the next gesture.
-                                    persistRailDock(displayedPositionRef.current);
+                                    persistRailDock(positionRef.current);
                                 }
                                 const motionSamples: RailMotionSample[] = [];
                                 appendRailMotionSample(motionSamples, event.clientY, event.timeStamp);
@@ -2770,9 +2683,7 @@ function MobileGlobalModRail({
                                     lastClientX: event.clientX,
                                     startNormalizedY: normalizedPositionRef.current
                                         ?? MOBILE_MOD_RAIL_DEFAULT_DOCK.normalizedY,
-                                    startRequestedTop: requestedPositionRef.current,
-                                    startDisplayedTop: displayedPositionRef.current,
-                                    currentDisplayedTop: displayedPositionRef.current,
+                                    startTop: positionRef.current,
                                     startEdge: edgeRef.current,
                                     moved: false,
                                     interruptedDeceleration,
@@ -2810,10 +2721,12 @@ function MobileGlobalModRail({
                                 if (!gesture.moved) {
                                     return;
                                 }
-                                const placement = applyDisplayedRailPosition(
-                                    gesture.startDisplayedTop + deltaY,
-                                );
-                                gesture.currentDisplayedTop = placement.top;
+                                const bounds = boundsRef.current;
+                                const nextTop = clamp(gesture.startTop + deltaY, bounds.min, bounds.max);
+                                positionRef.current = nextTop;
+                                normalizedPositionRef.current = normalizeRailTop(nextTop, bounds);
+                                setTop(nextTop);
+                                updateDrawerPlacement(nextTop);
                                 // The bar follows the finger horizontally inside the layer;
                                 // release settles it against the nearest edge.
                                 const edgeSpan = Math.max(

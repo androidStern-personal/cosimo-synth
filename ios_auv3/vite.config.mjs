@@ -23,9 +23,6 @@ export default defineConfig(({ command }) => ({
     appType: "custom",
     root: repoRoot,
     clearScreen: false,
-    resolve: {
-        preserveSymlinks: command === "build",
-    },
     define: {
         "process.env.NODE_ENV": JSON.stringify(command === "build" ? "production" : "development"),
     },

@@ -2,7 +2,7 @@
  * Pure geometry for the perimeter-docked mobile Mod rail (T10B).
  *
  * The rail docks flush against the left or right screen edge, travels
- * vertically inside a fixed-chrome band (safe areas plus persistent chrome), snaps to
+ * vertically inside a keep-out band (safe areas plus fixed chrome), snaps to
  * three vertical anchors, opens its drawer toward the larger free side, and
  * persists its dock (edge + normalized vertical position) between uses.
  * Everything here is side-effect free so the interaction layer stays thin.

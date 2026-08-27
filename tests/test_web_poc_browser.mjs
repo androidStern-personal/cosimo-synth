@@ -1253,6 +1253,62 @@ after(async () => {
     });
 });
 
+test("startup screen covers every mobile synth control until audio starts", async () => {
+    const page = await browser.newPage({ ...devices["iPhone 13"] });
+
+    try {
+        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+
+        const ownership = await page.evaluate(() => {
+            const overlay = document.querySelector("#cosimo-start-overlay");
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            if (!(overlay instanceof HTMLElement) || !(root instanceof ShadowRoot)) {
+                return null;
+            }
+
+            const controls = [
+                ["Warp chip", '[data-role="mobile-voice-warp-mode"]'],
+                ["previous parameter page", '[data-role="mobile-voice-page-previous"]'],
+                ["next parameter page", '[data-role="mobile-voice-page-next"]'],
+                ["Mod bar", '[data-role="mobile-global-mod-rail"]'],
+            ];
+
+            return controls.map(([label, selector]) => {
+                const control = root.querySelector(selector);
+                if (!(control instanceof HTMLElement)) {
+                    return { label, found: false, overlayOwnsPoint: false, hit: null };
+                }
+                const bounds = control.getBoundingClientRect();
+                const hit = document.elementFromPoint(
+                    (bounds.left + bounds.right) / 2,
+                    (bounds.top + bounds.bottom) / 2,
+                );
+                return {
+                    label,
+                    found: bounds.width > 0 && bounds.height > 0,
+                    overlayOwnsPoint: hit instanceof Element && overlay.contains(hit),
+                    hit: hit instanceof Element ? hit.id || hit.tagName : null,
+                };
+            });
+        });
+
+        assert.ok(ownership, "The ready browser synth must expose its startup screen and mobile controls.");
+        for (const control of ownership) {
+            assert.equal(control.found, true, `${control.label} must be rendered behind the startup screen.`);
+            assert.equal(
+                control.overlayOwnsPoint,
+                true,
+                `${control.label} escaped above the startup screen: ${JSON.stringify(control)}.`,
+            );
+        }
+    } finally {
+        await page.close();
+    }
+});
+
 test("generated browser proof keeps the real keyboard pinned and renders non-silent audio from it", async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const factoryCatalog = await readServedFactoryCatalog(page);
