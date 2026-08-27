@@ -974,6 +974,9 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - A clipboard test changes values in every settings section, presses the button, and proves the copied text contains the complete current state in a stable order.
 
 [ ] T38 — Add the synth's full Amp Envelope
+    Active owner (2026-08-27):
+    - Codex task `T38 Build Full Amp Envelope`, thread `01a04334-3063-7d92-ab3b-544288810cb8`, branch `codex/t38-full-amp-envelope`, worktree `/Users/winterfell/.codex/worktrees/fd2f/cosimo-synth`, model SOL, reasoning max.
+    - This is a coordinator-managed implementation task. Final review, rebase, merge, push, and any deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
     Code-backed starting point:
     - The voice loudness path currently has a fixed 10 ms attack and an adjustable release, not a complete user-facing amplitude envelope. The recently added real decay stage belongs to the modulation envelopes, not to overall loudness.
     Locked signal behavior:
