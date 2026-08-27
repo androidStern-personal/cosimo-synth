@@ -29,7 +29,9 @@ are marked **locked**; everything else is direction, not commitment.
   or cause changing digits to move surrounding controls. A small light pulses with
   momentary loudness and changes color with remaining peak headroom, reaching red
   at digital full scale. Beside it, fixed-width tabular readouts show `P` for the
-  post-trim peak/headroom relative to 0 dB and `L` for 400 ms momentary loudness.
+  ordinary post-trim sample peak/headroom in dBFS relative to 0 dB and `L` for
+  400 ms momentary loudness. Do not add true-peak oversampling or a user-selectable
+  meter mode; Andrew explicitly chose the simplest implementation.
   A new higher peak writes immediately, holds for one second, then falls smoothly
   toward silence; another higher peak restarts the hold. There is no permanent
   latch, tap-to-clear state, preset state, or extra mastering panel. On detail
@@ -178,8 +180,7 @@ real 320 px layout proof before acceptance.
    and compressor lookahead within the approved 0–4 ms range.
 3. SAFE BASS: fixed cutoff near the starting 120 Hz value and slope of 6 vs
    12 dB/oct. These are tuning choices, not user controls.
-4. Output surface: exact sample-peak versus true-peak implementation.
-5. Transient/PUNCH mode (floated earlier): parked; revisit only if voicing shows
+4. Transient/PUNCH mode (floated earlier): parked; revisit only if voicing shows
    the finisher kills material worth keeping.
-6. Name (working: "Polish").
-7. WIDTH stage: out of the lineup unless Andrew re-adds it.
+5. Name (working: "Polish").
+6. WIDTH stage: out of the lineup unless Andrew re-adds it.
