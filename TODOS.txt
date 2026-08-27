@@ -973,10 +973,12 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     Done when:
     - A clipboard test changes values in every settings section, presses the button, and proves the copied text contains the complete current state in a stable order.
 
-[ ] T38 — Add the synth's full Amp Envelope
-    Active owner (2026-08-27):
+[x] T38 — Add the synth's full Amp Envelope
+    Completed (2026-08-27):
     - Codex task `T38 Build Full Amp Envelope`, thread `01a04334-3063-7d92-ab3b-544288810cb8`, branch `codex/t38-full-amp-envelope`, worktree `/Users/winterfell/.codex/worktrees/fd2f/cosimo-synth`, model SOL, reasoning max.
-    - This is a coordinator-managed implementation task. Final review, rebase, merge, push, and any deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
+    - Coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d` source-reviewed the clean task tip, returned the final UI identity/Release-floor repair, rebased the accepted 71-file scope onto current master without importing stale tracker or design text, and rebuilt every generated desktop/iOS/worker mirror from source.
+    - Final integration qualification passes the complete Cmajor rack suite 82/82, orphan/unit suite 738/738, sound-share/preset/URL suite 28/28, and iOS host contract 82/82. The desktop UI suite is 260/261 with only the established unrelated React Grab `navigator.webdriver` assertion; all T38 cases pass.
+    - A fresh HMR standalone was verified from the coordinator worktree with `usesViteClient: true` and then stopped. The final compiled, strict-code-sign-valid VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` (executable SHA-256 `e5196b1d4a138d8bd57fe0c6525735d856da29633a2f3badb86619a712f5e223`). Physical Ableton and iPhone/AUv3 acceptance remain unperformed.
     Code-backed starting point:
     - The voice loudness path currently has a fixed 10 ms attack and an adjustable release, not a complete user-facing amplitude envelope. The recently added real decay stage belongs to the modulation envelopes, not to overall loudness.
     Locked signal behavior:
