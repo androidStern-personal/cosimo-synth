@@ -47,6 +47,8 @@ namespace wt
     //     `tempoBpmIn`, `rackModIn` and the four preview streams.
     //   - laneTopology is the only structure gate for every device: chain membership
     //     plus the per-position enable mask. There is no other participation path.
+    //     laneSolo is a transient merge-selection overlay and never changes that
+    //     structure or resets a branch processor.
     //   - The distortion scope and history analyzers read the four preview streams
     //     forwarded below rather than reaching into wt::DistortionBus directly.
     //   - A composed processor cannot write to `console`, so every diagnostic here is a
@@ -381,6 +383,16 @@ namespace wt
         int32 enabledMask;
     }
 
+    // Temporary audition state, intentionally separate from the topology
+    // document. Each value is one-based (matching branch tags); zero means
+    // that unit is not soloed. The fixed unit arrays let sequential groups
+    // keep independent choices without changing or re-uploading the chain.
+    struct LaneSoloUpload
+    {
+        int32[laneParallelUnitCount] parallelSoloBranches;
+        int32[laneSplitUnitCount] splitSoloBranches;
+    }
+
     // One pool slot's parameter record, addressed by slot id. The delivery
     // serial is the HOT PATH's acknowledgment contract: the rack echoes the
     // last APPLIED record's serial on laneParamsAcknowledgedSerial the same
@@ -487,6 +499,21 @@ namespace wt
         return true;
     }
 
+    bool isValidLaneSolo (LaneSoloUpload upload)
+    {
+        for (wrap<laneParallelUnitCount> unit)
+            if (upload.parallelSoloBranches[unit] < 0
+                 || upload.parallelSoloBranches[unit] > laneMaxBranchesPerGroup)
+                return false;
+
+        for (wrap<laneSplitUnitCount> unit)
+            if (upload.splitSoloBranches[unit] < 0
+                 || upload.splitSoloBranches[unit] > laneMaxBandsPerSplit)
+                return false;
+
+        return true;
+    }
+
 
     //==============================================================================
     // Modulation application (ADR-012). The rack is the single point at which a
@@ -558,11 +585,12 @@ namespace wt
         input value float32 tempoBpmIn [[ init: 120.0f ]];
 
         //----------------------------------------------------------------------
-        // Structure (ADR-007: patch state, NOT host automation). These are struct
-        // events, which carry no parameter purpose, so they are structurally
-        // non-automatable rather than non-automatable by convention.
+        // Lane control. Topology and parameter records are patch state (ADR-007),
+        // while Solo is runtime-only audition state. These struct events carry no
+        // parameter purpose, so none can become a host automation slot.
 
         input event LaneTopologyUpload laneTopology;
+        input event LaneSoloUpload laneSolo;
         input event LaneSlotParamsUpload laneSlotParams;
         input event LaneSlotParamValueUpload laneSlotParamValue;
 
@@ -624,7 +652,7 @@ namespace wt
         let transitionFrames = int32 (std::intrinsics::max (1.0f,
                                         float32 (processor.frequency) * rackTransitionMs * 0.001f));
 
-        bool hasPendingStructure;
+        bool hasPendingTransition;
         float32 transitionGain = 1.0f;
         int32 currentPositionMask;
         int32 pendingPositionMask;
@@ -641,6 +669,11 @@ namespace wt
         int32[maxLaneChainLength] pendingLaneBranchTag;
         bool[laneChainSlotCount] currentLaneEnabled;
         bool[laneChainSlotCount] pendingLaneEnabled;
+        bool pendingLaneSoloUpload;
+        int32[laneParallelUnitCount] currentParallelSoloBranches;
+        int32[laneParallelUnitCount] pendingParallelSoloBranches;
+        int32[laneSplitUnitCount] currentSplitSoloBranches;
+        int32[laneSplitUnitCount] pendingSplitSoloBranches;
         int32 laneGeneration;
         int32 laneRejectedCount;
         int32 laneParamsSerial;
@@ -693,6 +726,7 @@ namespace wt
         bool laneGroupEnabled;
         int32 laneGroupBranchCount;
         int32 laneGroupMemberCount;
+        int32 laneGroupSoloBranch;
         int32 laneRunBranch;
         float32<rackChannelCount> laneGroupInput;
         float32<rackChannelCount> laneBranchSignal;
@@ -793,7 +827,7 @@ namespace wt
         }
 
         //----------------------------------------------------------------------
-        // Structure uploads.
+        // Lane control uploads.
 
         event laneTopology (LaneTopologyUpload upload)
         {
@@ -854,8 +888,36 @@ namespace wt
                 // Drives the shared ADR-003 transition; the commit swaps the
                 // chain on the fully-dry frame exactly as a reorder does.
                 pendingLaneUpload = true;
-                hasPendingStructure = true;
+                hasPendingTransition = true;
             }
+        }
+
+        event laneSolo (LaneSoloUpload upload)
+        {
+            if (! isValidLaneSolo (upload))
+            {
+                laneRejectedCount += 1;
+                return;
+            }
+
+            pendingParallelSoloBranches = upload.parallelSoloBranches;
+            pendingSplitSoloBranches = upload.splitSoloBranches;
+
+            var differs = false;
+
+            for (wrap<laneParallelUnitCount> unit)
+                if (pendingParallelSoloBranches[unit] != currentParallelSoloBranches[unit])
+                    differs = true;
+
+            for (wrap<laneSplitUnitCount> unit)
+                if (pendingSplitSoloBranches[unit] != currentSplitSoloBranches[unit])
+                    differs = true;
+
+            // Solo is an interactive replacement, not a durable document
+            // replay. A rapid tap back to the running choice therefore
+            // cancels an uncommitted Solo change and lets the ramp reverse.
+            pendingLaneSoloUpload = differs;
+            hasPendingTransition = pendingLaneUpload || pendingLaneSoloUpload;
         }
 
         event laneSlotParams (LaneSlotParamsUpload upload)
@@ -888,11 +950,10 @@ namespace wt
             laneRejectedCount += 1;
         }
 
-        // Compared against the RUNNING structure, never against the previous upload, so
-        // that a redundant upload arriving mid-transition cannot cancel a real pending
-        // change - and so that the adapter re-sending rack state on every patch load,
-        // which it does, costs nothing instead of a 6 ms dropout.
-        void commitPendingStructure()
+        // Topology is compared against the RUNNING structure, never the previous
+        // upload, so a redundant restore cannot cancel a real pending change. Solo
+        // instead replaces its pending audition choice so a rapid toggle can cancel.
+        void commitPendingRackState()
         {
             if (pendingLaneUpload)
             {
@@ -984,7 +1045,14 @@ namespace wt
                 pendingLaneUpload = false;
             }
 
-            hasPendingStructure = false;
+            if (pendingLaneSoloUpload)
+            {
+                currentParallelSoloBranches = pendingParallelSoloBranches;
+                currentSplitSoloBranches = pendingSplitSoloBranches;
+                pendingLaneSoloUpload = false;
+            }
+
+            hasPendingTransition = false;
         }
 
         int32 committedChainCode()
@@ -1032,11 +1100,12 @@ namespace wt
         //----------------------------------------------------------------------
         // The ADR-003 transition: one rack-local processed-depth ramp.
         //
-        // Fade the processed chain to the live dry input, swap on that dry frame, then
-        // fade the new chain back in. A reorder never gates or mutes the instrument.
+        // Fade the processed chain to the live dry input, commit topology and/or Solo
+        // on that dry frame, then fade the running chain back in. Branch processors
+        // keep advancing throughout, so a Solo switch never resets their state.
         //
         // An upload arriving mid-transition simply REVERSES THE RAMP, in either
-        // direction, and can never strand a pending structure: there is no phase to be
+        // direction, and can never strand a pending change: there is no phase to be
         // in and no counter to be halfway through. The recon's first attempt used a
         // two-phase counter state machine and lost the second of two rapid uploads;
         // this form is immune to that whole class.
@@ -1045,12 +1114,12 @@ namespace wt
         {
             let step = 1.0f / float32 (transitionFrames);
 
-            if (hasPendingStructure)
+            if (hasPendingTransition)
             {
                 transitionGain = std::intrinsics::max (0.0f, transitionGain - step);
 
                 if (transitionGain == 0.0f)
-                    commitPendingStructure();
+                    commitPendingRackState();
             }
             else
             {
@@ -1565,6 +1634,7 @@ namespace wt
             laneGroupEnabled = currentLaneEnabled[wrap<laneChainSlotCount> (markerSlot)];
             laneGroupBranchCount = fanout;
             laneGroupMemberCount = 0;
+            laneGroupSoloBranch = 0;
             laneRunBranch = 0;
             laneGroupInput = forkSignal;
 
@@ -1576,6 +1646,8 @@ namespace wt
                 // filters run whether or not the group is bypassed — their
                 // time bases never drift (the ADR-005 posture).
                 let unit = wrap<laneSplitUnitCount> (markerSlot - laneSplitSlotBase);
+                let requestedSolo = currentSplitSoloBranches[unit];
+                laneGroupSoloBranch = requestedSolo <= fanout ? requestedSolo : 0;
 
                 if (fanout == 2)
                 {
@@ -1605,6 +1677,10 @@ namespace wt
             }
             else
             {
+                let unit = wrap<laneParallelUnitCount> (markerSlot - laneParallelSlotBase);
+                let requestedSolo = currentParallelSoloBranches[unit];
+                laneGroupSoloBranch = requestedSolo <= fanout ? requestedSolo : 0;
+
                 // A parallel branch's empty contribution is SILENCE: every
                 // branch reads the whole fork signal, so an empty lane must
                 // add nothing at the merge.
@@ -1631,18 +1707,26 @@ namespace wt
             }
         }
 
-        // Close the open group: bank the running branch, then merge by sum.
-        // A group with no members at all, and a group whose marker is
-        // disabled, hands the FORK signal through untouched — placing or
-        // bypassing structure is inaudible until an enabled device speaks.
+        // Close the open group: bank the running branch, then select the
+        // auditioned contribution or merge by sum. Group bypass still hands
+        // the FORK signal through. With no Solo, an entirely empty group is
+        // also a hard passthrough; with Solo, an empty Parallel branch is
+        // silence while an empty Split band retains its raw filtered band.
         float32<rackChannelCount> mergeOpenGroup()
         {
             if (laneRunBranch >= 1)
                 laneGroupContributions[wrap<laneMaxBranchesPerGroup> (laneRunBranch - 1)] = laneBranchSignal;
 
+            let selectedBranch = laneGroupSoloBranch;
             laneGroupKind = 0;
 
-            if (laneGroupMemberCount == 0 || ! laneGroupEnabled)
+            if (! laneGroupEnabled)
+                return laneGroupInput;
+
+            if (selectedBranch >= 1)
+                return laneGroupContributions[wrap<laneMaxBranchesPerGroup> (selectedBranch - 1)];
+
+            if (laneGroupMemberCount == 0)
                 return laneGroupInput;
 
             var merged = float32<rackChannelCount> ();

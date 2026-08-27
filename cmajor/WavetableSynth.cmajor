@@ -1353,14 +1353,13 @@ graph WavetableSynth [[ main ]]
     // Existing automation slots and parameter IDs remain untouched.
     input value float32 filterCutoffKeyTrackEnabled [[ name: "Voice Filter Key Track", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
     input value float32 filterCutoffKeyTrackOffsetSemitones [[ name: "Voice Filter Key Track Offset", min: -60.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
-    // Rack structure is patch state, not host automation (ADR-007). These are struct
-    // events, which carry no parameter purpose, so they are structurally
-    // non-automatable rather than non-automatable by convention.
-    // Effects Lane structure and parameter records/fields: patch state and
-    // live edits, one delivery path, never host automation slots.
+    // Effects Lane structure and parameter records/fields are patch state and
+    // live edits (ADR-007); Solo is runtime-only audition state. These struct
+    // events carry no parameter purpose, so none become host automation slots.
     input rack.laneTopology;
     input rack.laneSlotParams;
     input rack.laneSlotParamValue;
+    input rack.laneSolo;
     // Host transport, not a user parameter: no `name:`, so it never becomes an
     // automation slot. See wt::TempoMonitor.
     input event std::timeline::Tempo tempo;

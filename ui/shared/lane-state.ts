@@ -23,6 +23,8 @@ import { getRackEffectDescriptor } from "./rack-parameter-descriptors";
 export const LANE_STATE_KEY = "lane.v1";
 /** DSP endpoint receiving the complete lane structure: chain + enable mask. */
 export const LANE_TOPOLOGY_ENDPOINT_ID = "laneTopology";
+/** DSP endpoint receiving the transient per-group branch Solo overlay. */
+export const LANE_SOLO_ENDPOINT_ID = "laneSolo";
 /** DSP endpoint receiving one device's complete positional parameter record. */
 export const LANE_SLOT_PARAMS_ENDPOINT_ID = "laneSlotParams";
 /** DSP endpoint receiving one live-edited parameter field. */

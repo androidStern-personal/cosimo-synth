@@ -861,6 +861,49 @@
     padding: 12px 10px;
 }
 
+.subway-group-solo-controls {
+    display: grid;
+    grid-template-columns: repeat(var(--subway-solo-count), minmax(var(--cosimo-hit-min), 1fr));
+    gap: 5px;
+}
+
+.cosimo-surface[data-mod-rail-edge="right"] .subway-group-solo-controls {
+    margin-right: var(--cosimo-rail-dock, 0px);
+}
+
+.cosimo-surface[data-mod-rail-edge="left"] .subway-group-solo-controls {
+    margin-left: var(--cosimo-rail-dock, 0px);
+}
+
+.subway-group-solo {
+    display: grid;
+    min-width: var(--cosimo-hit-min);
+    min-height: var(--cosimo-hit-min);
+    place-content: center;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid rgb(105 213 197 / 0.28);
+    border-radius: 7px;
+    background: rgb(8 14 16 / 0.72);
+    color: rgb(189 210 212 / 0.68);
+    cursor: pointer;
+    font: 500 8px/1 "Departure Mono", ui-monospace, monospace;
+    letter-spacing: 0.04em;
+}
+
+.subway-group-solo > strong {
+    color: inherit;
+    font-size: 9px;
+    font-weight: 600;
+}
+
+.subway-group-solo[aria-pressed="true"] {
+    border-color: #69d5c5;
+    background: rgb(105 213 197 / 0.16);
+    color: #a5f3e8;
+    box-shadow: 0 0 8px rgb(105 213 197 / 0.28);
+}
+
 .subway-crossover-stack {
     display: grid;
     gap: 8px;

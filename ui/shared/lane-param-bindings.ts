@@ -56,6 +56,13 @@ import {
 } from "./rack-parameter-descriptors";
 import { isOscillatorModulationTargetKind } from "./modulation-targets";
 import { getLaneKeyTrackEndpoints, getKeyTrackDefinition, requireKeyTrackRange } from "./key-track";
+import {
+    readLaneSoloAudition,
+    reconcileLaneSoloAudition,
+    subscribeLaneSoloAudition,
+    toggleLaneSoloAudition,
+} from "./lane-solo-audition";
+import type { LaneSoloState } from "./lane-solo-state";
 
 /**
  * One shared lane-document store per patch connection.
@@ -73,6 +80,7 @@ import { getLaneKeyTrackEndpoints, getKeyTrackDefinition, requireKeyTrackRange }
  */
 type LaneStateStore = {
     state: LaneStateV2;
+    readonly connection: PatchConnectionLike;
     readonly listeners: Set<() => void>;
     deliverySerial: number;
     /** The serialized form of `state`, for identity-stable dedupe. */
@@ -96,6 +104,7 @@ function acceptLaneState(store: LaneStateStore, nextState: LaneStateV2) {
     if (serialized === store.serialized) {
         return;
     }
+    reconcileLaneSoloAudition(store.connection, store.state, nextState);
     store.state = nextState;
     store.serialized = serialized;
     for (const listener of [...store.listeners]) {
@@ -112,6 +121,7 @@ function getLaneStateStore(connection: PatchConnectionLike): LaneStateStore {
     const initialState = createDefaultLaneStateV2();
     const created: LaneStateStore = {
         state: initialState,
+        connection,
         listeners: new Set(),
         deliverySerial: 0,
         serialized: serializeLaneStateV2(initialState),
@@ -134,6 +144,26 @@ function getLaneStateStore(connection: PatchConnectionLike): LaneStateStore {
     });
 
     return created;
+}
+
+/** Subscribe a rack surface to instance-lifetime Solo without placing it in the lane document. */
+export function useLaneSoloAudition(laneState: LaneStateV2): {
+    readonly soloState: LaneSoloState;
+    readonly toggleSolo: (groupId: string, branchIndex: number) => boolean;
+} {
+    const patchConnection = usePatchConnection();
+    const soloState = useSyncExternalStore(
+        useCallback(
+            (onChange) => subscribeLaneSoloAudition(patchConnection, onChange),
+            [patchConnection],
+        ),
+        () => readLaneSoloAudition(patchConnection),
+    );
+    const toggleSolo = useCallback((groupId: string, branchIndex: number) => (
+        toggleLaneSoloAudition(patchConnection, laneState, groupId, branchIndex) !== null
+    ), [laneState, patchConnection]);
+
+    return useMemo(() => ({ soloState, toggleSolo }), [soloState, toggleSolo]);
 }
 
 /**

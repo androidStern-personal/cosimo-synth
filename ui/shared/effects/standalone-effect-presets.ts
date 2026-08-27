@@ -147,6 +147,8 @@ export type StandaloneEffectPresetControllerOptions = {
     readClipboardText?: () => string | Promise<string>;
     writeClipboardText?: (text: string) => void | Promise<void>;
     synth?: StandaloneEffectPresetSynthOptions;
+    /** Successful synth sound replacements; presentation-only audition state may reset here. */
+    onSoundReplacementApplied?: (replacement: StandaloneEffectPendingSoundReplacement) => void;
 
     // Kept only so older callers fail by behavior, not by TypeScript shape.
     descriptorRegistry?: unknown;
@@ -624,11 +626,11 @@ export class StandaloneEffectPresetController {
             return this.fail(new Error("No sound replacement is waiting for confirmation."));
         }
 
-        return this.runMutation(() => {
+        return this.runSoundReplacement(replacement, () => {
             const value = replacement.apply();
             this.pendingSoundReplacement = null;
             return value;
-        }, replacement.successMessage);
+        });
     }
 
     saveAndContinueSoundReplacement(): StandaloneEffectPresetMutationResult<unknown> {
@@ -702,46 +704,52 @@ export class StandaloneEffectPresetController {
                         Object.fromEntries(this.synthCleanInitOnlyState),
                         "unnamed sound baseline",
                     );
-                    return this.runMutation(() => {
-                        this.applySoundTransaction({
-                            preset,
-                            initOnlyValues,
-                            commit: () => {
-                                this.unnamedSynthDirty = false;
-                                this.bridge.setActivePresetMetadata(this.options.effectID, null);
-                            },
-                        });
-                        return cloneEffectPresetV2(preset);
-                    }, "Preset reapplied.");
+                    return this.runSoundReplacement({
+                        pending: { kind: "init" },
+                        successMessage: "Preset reapplied.",
+                        apply: () => {
+                            this.applySoundTransaction({
+                                preset,
+                                initOnlyValues,
+                                commit: () => {
+                                    this.unnamedSynthDirty = false;
+                                    this.bridge.setActivePresetMetadata(this.options.effectID, null);
+                                },
+                            });
+                            return cloneEffectPresetV2(preset);
+                        },
+                    });
                 }
                 const replacement = this.prepareInitSoundReplacement();
-                return this.runMutation(replacement.apply, "Preset reapplied.");
+                return this.runSoundReplacement({ ...replacement, successMessage: "Preset reapplied." });
             } catch (error) {
                 return this.fail(errorFromUnknown(error));
             }
         }
 
-        return this.runMutation(() => {
-            const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+        const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+        if (!activePreset) {
+            return this.fail(new Error("No active preset is available to reapply."));
+        }
+        return this.runSoundReplacement({
+            pending: { kind: "preset", presetKey: activePreset.presetID },
+            successMessage: "Preset reapplied.",
+            apply: () => {
+                ensureStoredStateWriter(this.options.patchConnection, "reapply effect presets");
+                ensureParameterWriter(this.options.patchConnection, "reapply effect presets");
 
-            if (!activePreset) {
-                throw new Error("No active preset is available to reapply.");
-            }
+                const preset = this.findPresetByID(activePreset.presetID);
 
-            ensureStoredStateWriter(this.options.patchConnection, "reapply effect presets");
-            ensureParameterWriter(this.options.patchConnection, "reapply effect presets");
+                if (!preset) {
+                    throw new Error(`Active preset "${activePreset.presetID}" is not available.`);
+                }
 
-            const preset = this.findPresetByID(activePreset.presetID);
+                const normalizedPreset = this.normalizePresetForCurrentContract(preset);
+                this.commitActivePresetAndApply(normalizedPreset);
 
-            if (!preset) {
-                throw new Error(`Active preset "${activePreset.presetID}" is not available.`);
-            }
-
-            const normalizedPreset = this.normalizePresetForCurrentContract(preset);
-            this.commitActivePresetAndApply(normalizedPreset);
-
-            return cloneEffectPresetV2(normalizedPreset);
-        }, "Preset reapplied.");
+                return cloneEffectPresetV2(normalizedPreset);
+            },
+        });
     }
 
     saveCurrentAsNewPreset(label: string): StandaloneEffectPresetMutationResult<EffectPresetV2> {
@@ -2006,7 +2014,23 @@ export class StandaloneEffectPresetController {
             };
         }
 
-        return this.runMutation(replacement.apply, replacement.successMessage);
+        return this.runSoundReplacement(replacement);
+    }
+
+    private runSoundReplacement<T>(
+        replacement: PreparedSoundReplacement<T>,
+        apply: () => T = replacement.apply,
+    ): StandaloneEffectPresetMutationResult<T> {
+        const result = this.runMutation(apply, replacement.successMessage);
+        if (result.ok && this.options.onSoundReplacementApplied) {
+            try {
+                this.options.onSoundReplacementApplied({ ...replacement.pending });
+            } catch (error) {
+                this.lastError = errorFromUnknown(error).message;
+                this.notify();
+            }
+        }
+        return result;
     }
 
     private runMutation<T>(

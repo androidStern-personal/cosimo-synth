@@ -69,6 +69,7 @@ import {
 import {
     useLaneKeyTrackControlBinding,
     useLaneParameterBinding,
+    useLaneSoloAudition,
     useLaneStateDoc,
 } from "../shared/lane-param-bindings";
 import {
@@ -3343,6 +3344,8 @@ function CrossoverSlider({
     fan-out and bypass for both kinds, dissolve to leave. */
 function GroupEditorPane({
     group,
+    soloedBranchIndex,
+    onToggleSolo,
     onToggleEnabled,
     onSetBranchCount,
     onDissolve,
@@ -3355,6 +3358,8 @@ function GroupEditorPane({
     sourceIsArmed,
 }: {
     group: LaneGroupV2;
+    soloedBranchIndex: number | null;
+    onToggleSolo: (branchIndex: number) => void;
     onToggleEnabled: () => void;
     onSetBranchCount: (branchCount: number) => void;
     onDissolve: () => void;
@@ -3368,6 +3373,9 @@ function GroupEditorPane({
 }) {
     const isSplit = group.kind === "split";
     const unitNumber = group.groupId.slice(group.groupId.indexOf("#") + 1);
+    const branchLabels = isSplit
+        ? (group.branches.length === 3 ? ["LO", "MID", "HI"] : ["LO", "HI"])
+        : group.branches.map((_, branchIndex) => String.fromCharCode("A".charCodeAt(0) + branchIndex));
 
     return (
         <section
@@ -3401,6 +3409,28 @@ function GroupEditorPane({
                 </button>
             </header>
             <div className="subway-group-editor-body">
+                <div
+                    className="subway-group-solo-controls"
+                    style={{ "--subway-solo-count": group.branches.length } as CSSProperties}
+                    role="group"
+                    aria-label={`${isSplit ? "Frequency split band" : "Parallel branch"} Solo controls`}
+                >
+                    {branchLabels.map((label, branchIndex) => (
+                        <button
+                            type="button"
+                            key={label}
+                            data-role={`rack-branch-solo-${group.groupId}-${branchIndex}`}
+                            data-branch-index={branchIndex}
+                            aria-label={`Solo ${isSplit ? `${label} band` : `branch ${label}`}`}
+                            aria-pressed={soloedBranchIndex === branchIndex}
+                            className="subway-group-solo"
+                            onClick={() => onToggleSolo(branchIndex)}
+                        >
+                            <span>{label}</span>
+                            <strong>SOLO</strong>
+                        </button>
+                    ))}
+                </div>
                 {isSplit ? (
                     <div className="subway-crossover-stack">
                         <CrossoverSlider
@@ -3516,6 +3546,7 @@ export function EffectsRackWorkspace({
         setSplitKeyTrackOffset,
         persist,
     } = useRackState();
+    const { soloState, toggleSolo } = useLaneSoloAudition(rackState);
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [groupMenu, setGroupMenu] = useState<SubwayGroupMenuRequest | null>(null);
     // Selection is a DEVICE INSTANCE (T6): the effect id derives from it.
@@ -4796,6 +4827,10 @@ export function EffectsRackWorkspace({
                 {selectedGroup !== null && selectedGroup.kind !== "device" ? (
                     <GroupEditorPane
                         group={selectedGroup}
+                        soloedBranchIndex={soloState.selectedBranchByGroup[selectedGroup.groupId] ?? null}
+                        onToggleSolo={(branchIndex) => {
+                            toggleSolo(selectedGroup.groupId, branchIndex);
+                        }}
                         onToggleEnabled={() => {
                             const next = setLaneGroupEnabled(
                                 rackStateRef.current, selectedGroup.groupId, !selectedGroup.enabled);

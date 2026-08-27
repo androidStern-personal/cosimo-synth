@@ -9,6 +9,7 @@ import {
 } from "../patch_gui/lane-state.js";
 import { normalizeModulationState } from "../patch_gui/modulation.js";
 import {
+    clickPresetBarAction,
     clearHarnessDebugLog,
     createRackMappingByDrop,
     editRackParameterValue,
@@ -71,6 +72,22 @@ function populatedThreeBandLaneDocJson() {
                     { kind: "device", deviceId: "reverb#1", enabled: true },
                 ],
             ],
+        }],
+    });
+}
+
+function emptySplitLaneDocJson(branchCount) {
+    return JSON.stringify({
+        format: "cosimo.lane",
+        version: 2,
+        devices: {},
+        chain: [{
+            kind: "split",
+            groupId: "split#1",
+            enabled: true,
+            xoverLowHz: 320,
+            xoverHighHz: 3200,
+            branches: new Array(branchCount).fill(null).map(() => []),
         }],
     });
 }
@@ -809,6 +826,166 @@ test("split and Parallel routes preserve owning colors symbols selection and byp
             assert.equal(bypass.routeStroke, fixture.expectedStrokes[0]);
             assert.equal(Number(bypass.routeOpacity) < 1, true);
             assert.equal(Number(bypass.symbolOpacity) < 1, true);
+        } finally {
+            await page.close();
+        }
+    }
+});
+
+test("phone, plugin, and desktop group editors expose click-safe exclusive Solo without persistence", async () => {
+    const laneDoc = populatedFourWayParallelLaneDocJson();
+    const page = await openHarnessPage({
+        laneDoc,
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 700 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await page.click('[data-role="rack-fork-parallel#1"]');
+        const soloButtons = page.locator('[data-role^="rack-branch-solo-parallel#1-"]');
+        assert.equal(await soloButtons.count(), 4);
+
+        const boxes = await soloButtons.evaluateAll((buttons) => buttons.map((button) => {
+            const rect = button.getBoundingClientRect();
+            return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+        }));
+        for (const [index, box] of boxes.entries()) {
+            assert.equal(box.right - box.left >= 44, true, `Solo ${index} width`);
+            assert.equal(box.bottom - box.top >= 44, true, `Solo ${index} height`);
+            for (const [otherIndex, other] of boxes.entries()) {
+                if (otherIndex <= index) continue;
+                const overlaps = box.left < other.right && box.right > other.left
+                    && box.top < other.bottom && box.bottom > other.top;
+                assert.equal(overlaps, false, `Solo ${index} overlaps Solo ${otherIndex}`);
+            }
+        }
+
+        await soloButtons.nth(1).click();
+        assert.equal(await soloButtons.nth(1).getAttribute("aria-pressed"), "true");
+        await soloButtons.nth(3).click();
+        assert.equal(await soloButtons.nth(1).getAttribute("aria-pressed"), "false");
+        assert.equal(await soloButtons.nth(3).getAttribute("aria-pressed"), "true");
+
+        let snapshot = await getHarnessSnapshot(page);
+        const soloWrites = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneSolo");
+        assert.deepEqual(soloWrites.at(-1)?.value, {
+            parallelSoloBranches: [4, 0, 0, 0],
+            splitSoloBranches: [0, 0, 0, 0],
+        });
+        assert.equal(snapshot.storedState["lane.v1"], laneDoc);
+
+        await soloButtons.nth(3).click();
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(await soloButtons.nth(3).getAttribute("aria-pressed"), "false");
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneSolo").at(-1)?.value,
+            {
+                parallelSoloBranches: [0, 0, 0, 0],
+                splitSoloBranches: [0, 0, 0, 0],
+            },
+        );
+        assert.equal(snapshot.storedState["lane.v1"], laneDoc);
+
+        for (const surface of [
+            { name: "plugin", width: 640, height: 700 },
+            { name: "desktop", width: 1024, height: 768 },
+        ]) {
+            await page.setViewportSize({ width: surface.width, height: surface.height });
+            await page.locator('[data-role="rack-fork-parallel#1"]:visible').click();
+            const surfaceSoloButtons = page.locator(
+                '[data-role^="rack-branch-solo-parallel#1-"]:visible',
+            );
+            await surfaceSoloButtons.first().waitFor();
+            const surfaceBoxes = await surfaceSoloButtons.evaluateAll((buttons) => buttons.map((button) => {
+                const rect = button.getBoundingClientRect();
+                return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+            }));
+            assert.equal(surfaceBoxes.length, 4, `${surface.name} Solo count`);
+            assert.equal(surfaceBoxes.every((box) => (
+                box.right - box.left >= 44 && box.bottom - box.top >= 44
+            )), true, `${surface.name} Solo hit targets`);
+        }
+
+    } finally {
+        await page.close();
+    }
+});
+
+test("Init clears active branch Solo without serializing it", async () => {
+    const page = await openHarnessPage({
+        laneDoc: populatedFourWayParallelLaneDocJson(),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 700 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await page.click('[data-role="rack-fork-parallel#1"]');
+        await page.click('[data-role="rack-branch-solo-parallel#1-0"]');
+        await clickPresetBarAction(page, "init");
+        await page.waitForTimeout(100);
+        let snapshot = await getHarnessSnapshot(page);
+        if (snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneSolo")
+            .at(-1)?.value?.parallelSoloBranches?.[0] !== 0) {
+            await page.waitForFunction(() => (
+                document.querySelector("cosimo-preset-bar")?.shadowRoot
+                    ?.querySelector('[data-action="sound-replacement-discard"]') instanceof HTMLButtonElement
+            ));
+            await page.evaluate(() => {
+                const discard = document.querySelector("cosimo-preset-bar")?.shadowRoot
+                    ?.querySelector('[data-action="sound-replacement-discard"]');
+                if (!(discard instanceof HTMLButtonElement)) {
+                    throw new Error("Discard and Init action is missing.");
+                }
+                discard.click();
+            });
+        }
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "Init clears the runtime Solo overlay",
+            (candidate) => candidate.sentMessages
+                .filter(({ endpointID }) => endpointID === "laneSolo")
+                .at(-1)?.value?.parallelSoloBranches?.[0] === 0,
+        );
+        assert.equal(String(snapshot.storedState["lane.v1"]).toLowerCase().includes("solo"), false);
+    } finally {
+        await page.close();
+    }
+});
+
+test("two- and three-band Frequency Split editors expose every compact Solo target", async () => {
+    for (const branchCount of [2, 3]) {
+        const page = await openHarnessPage({
+            laneDoc: emptySplitLaneDocJson(branchCount),
+            beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 700 }),
+        });
+
+        try {
+            await page.click('[data-role="mobile-workspace-tab-fx"]');
+            await page.click('[data-role="rack-fork-split#1"]');
+            const soloButtons = page.locator('[data-role^="rack-branch-solo-split#1-"]');
+            assert.equal(await soloButtons.count(), branchCount);
+            const labels = await soloButtons.evaluateAll((buttons) => (
+                buttons.map((button) => button.textContent?.replace("SOLO", "").trim())
+            ));
+            assert.deepEqual(labels, branchCount === 2 ? ["LO", "HI"] : ["LO", "MID", "HI"]);
+
+            const boxes = await soloButtons.evaluateAll((buttons) => buttons.map((button) => {
+                const rect = button.getBoundingClientRect();
+                return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+            }));
+            assert.equal(boxes.every((box) => (
+                box.right - box.left >= 44 && box.bottom - box.top >= 44
+            )), true);
+
+            await soloButtons.nth(branchCount - 1).click();
+            const snapshot = await getHarnessSnapshot(page);
+            assert.deepEqual(
+                snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneSolo").at(-1)?.value,
+                {
+                    parallelSoloBranches: [0, 0, 0, 0],
+                    splitSoloBranches: [branchCount, 0, 0, 0],
+                },
+            );
         } finally {
             await page.close();
         }

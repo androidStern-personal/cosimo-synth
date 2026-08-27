@@ -19216,6 +19216,7 @@ function buildLaneSlotParamValues(deviceType, params) {
 }
 const LANE_STATE_KEY = "lane.v1";
 const LANE_TOPOLOGY_ENDPOINT_ID = "laneTopology";
+const LANE_SOLO_ENDPOINT_ID = "laneSolo";
 const LANE_SLOT_PARAMS_ENDPOINT_ID = "laneSlotParams";
 const LANE_SLOT_PARAM_VALUE_ENDPOINT_ID = "laneSlotParamValue";
 const LANE_MAX_CHAIN_LENGTH = 16;
@@ -20102,6 +20103,104 @@ function usePatchEventTrigger(endpointID) {
     patchConnection.sendEventOrValue?.(endpointID, value);
   }, [endpointID, patchConnection]);
 }
+function createLaneSoloState() {
+  return { selectedBranchByGroup: {} };
+}
+function compileLaneSoloUpload(state2, laneState) {
+  const parallelSoloBranches = new Array(LANE_PARALLEL_UNIT_COUNT).fill(0);
+  const splitSoloBranches = new Array(LANE_SPLIT_UNIT_COUNT).fill(0);
+  for (const node of laneState.chain) {
+    if (node.kind === "device") {
+      continue;
+    }
+    const branchIndex = state2.selectedBranchByGroup[node.groupId];
+    if (branchIndex === void 0 || branchIndex < 0 || branchIndex >= node.branches.length) {
+      continue;
+    }
+    const separatorIndex = node.groupId.indexOf("#");
+    const unitIndex = Number(node.groupId.slice(separatorIndex + 1)) - 1;
+    const soloBranches = node.kind === "parallel" ? parallelSoloBranches : splitSoloBranches;
+    if (!Number.isInteger(unitIndex) || unitIndex < 0 || unitIndex >= soloBranches.length) {
+      throw new Error(`Invalid lane group id in audition state: ${node.groupId}`);
+    }
+    soloBranches[unitIndex] = branchIndex + 1;
+  }
+  return { parallelSoloBranches, splitSoloBranches };
+}
+function findLaneGroup(laneState, groupId) {
+  for (const node of laneState.chain) {
+    if (node.kind !== "device" && node.groupId === groupId) {
+      return node;
+    }
+  }
+  return void 0;
+}
+const TWO_SPLIT_BANDS = ["low", "high"];
+const THREE_SPLIT_BANDS = ["low", "mid", "high"];
+function reconcileBranchIndex(previousGroup, nextGroup, branchIndex) {
+  if (branchIndex < 0 || branchIndex >= previousGroup.branches.length) {
+    return null;
+  }
+  if (previousGroup.kind === "parallel" && nextGroup.kind === "parallel") {
+    return branchIndex < nextGroup.branches.length ? branchIndex : null;
+  }
+  if (previousGroup.kind !== "split" || nextGroup.kind !== "split") {
+    return null;
+  }
+  const previousBands = previousGroup.branches.length === 3 ? THREE_SPLIT_BANDS : TWO_SPLIT_BANDS;
+  const nextBands = nextGroup.branches.length === 3 ? THREE_SPLIT_BANDS : TWO_SPLIT_BANDS;
+  const selectedBand = previousBands[branchIndex];
+  if (selectedBand === void 0) {
+    return null;
+  }
+  const nextBranchIndex = nextBands.findIndex((band) => band === selectedBand);
+  return nextBranchIndex < 0 ? null : nextBranchIndex;
+}
+function reconcileLaneSoloState(state2, previousLaneState, nextLaneState) {
+  const selectedBranchByGroup = {};
+  for (const [groupId, branchIndex] of Object.entries(state2.selectedBranchByGroup)) {
+    const previousGroup = findLaneGroup(previousLaneState, groupId);
+    const nextGroup = findLaneGroup(nextLaneState, groupId);
+    if (previousGroup === void 0 || nextGroup === void 0 || previousGroup.kind !== nextGroup.kind) {
+      continue;
+    }
+    const nextBranchIndex = reconcileBranchIndex(previousGroup, nextGroup, branchIndex);
+    if (nextBranchIndex !== null) {
+      selectedBranchByGroup[groupId] = nextBranchIndex;
+    }
+  }
+  return { selectedBranchByGroup };
+}
+const stores$1 = /* @__PURE__ */ new WeakMap();
+const EMPTY_LANE_SOLO_STATE = createLaneSoloState();
+function soloStatesEqual(left, right) {
+  const leftEntries = Object.entries(left.selectedBranchByGroup);
+  const rightEntries = Object.entries(right.selectedBranchByGroup);
+  return leftEntries.length === rightEntries.length && leftEntries.every(([groupId, branchIndex]) => right.selectedBranchByGroup[groupId] === branchIndex);
+}
+function publishState(connection, store, state2, laneState) {
+  store.state = state2;
+  store.laneState = laneState;
+  connection.sendEventOrValue?.(
+    LANE_SOLO_ENDPOINT_ID,
+    compileLaneSoloUpload(state2, laneState)
+  );
+  for (const listener of [...store.listeners]) {
+    listener();
+  }
+}
+function reconcileLaneSoloAudition(connection, previousLaneState, nextLaneState) {
+  const store = stores$1.get(connection);
+  if (store === void 0) {
+    return EMPTY_LANE_SOLO_STATE;
+  }
+  store.laneState = nextLaneState;
+  const nextSoloState = reconcileLaneSoloState(store.state, previousLaneState, nextLaneState);
+  if (!soloStatesEqual(store.state, nextSoloState)) {
+    publishState(connection, store, nextSoloState, nextLaneState);
+  }
+  return store.state;
+}
 const stores = /* @__PURE__ */ new WeakMap();
 function readLaneStateFromFullStoredState(fullState) {
   const values = fullState.values && typeof fullState.values === "object" ? fullState.values : {};
@@ -20112,6 +20211,7 @@ function acceptLaneState(store, nextState) {
   if (serialized === store.serialized) {
     return;
   }
+  reconcileLaneSoloAudition(store.connection, store.state, nextState);
   store.state = nextState;
   store.serialized = serialized;
   for (const listener of [...store.listeners]) {
@@ -20127,6 +20227,7 @@ function getLaneStateStore(connection) {
   const initialState = createDefaultLaneStateV2();
   const created = {
     state: initialState,
+    connection,
     listeners: /* @__PURE__ */ new Set(),
     deliverySerial: 0,
     serialized: serializeLaneStateV2(initialState)

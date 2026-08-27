@@ -321,7 +321,12 @@ class FakeSynthPatchConnection {
     }
 }
 
-async function createSynthFixture({ includeFactoryPreset = false, synthEnabled = true, status = synthStatus } = {}) {
+async function createSynthFixture({
+    includeFactoryPreset = false,
+    synthEnabled = true,
+    status = synthStatus,
+    onSoundReplacementApplied,
+} = {}) {
     const [presets, contractModule, modulation, articulations, rack] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/effects/standalone-effect-presets.ts"),
         loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts"),
@@ -394,6 +399,7 @@ async function createSynthFixture({ includeFactoryPreset = false, synthEnabled =
         factoryPresets,
         storedStateAdapters: [modulationHarness.adapter, articulationHarness.adapter],
         createPresetID: ({ label, attempt }) => `user.cosimo.${label.toLowerCase().replaceAll(" ", "-")}-${attempt}`,
+        onSoundReplacementApplied,
     };
     if (synthEnabled) {
         controllerOptions.synth = {
@@ -422,6 +428,33 @@ async function createSynthFixture({ includeFactoryPreset = false, synthEnabled =
         rackHarness,
     };
 }
+
+test("successful Init and preset loading announce the completed sound replacement", async () => {
+    const applied = [];
+    const fixture = await createSynthFixture({
+        includeFactoryPreset: true,
+        onSoundReplacementApplied: (replacement) => applied.push(replacement),
+    });
+
+    assert.equal(synthMutations(fixture.controller).initSound().ok, true);
+    assert.deepEqual(applied, [{ kind: "init" }]);
+
+    assert.equal(
+        fixture.controller.getMutations().applyPreset("factory:factory.cosimo.bright").ok,
+        true,
+    );
+    assert.deepEqual(applied, [
+        { kind: "init" },
+        { kind: "preset", presetKey: "factory:factory.cosimo.bright" },
+    ]);
+
+    assert.equal(fixture.controller.getMutations().reapplyActivePreset().ok, true);
+    assert.deepEqual(applied, [
+        { kind: "init" },
+        { kind: "preset", presetKey: "factory:factory.cosimo.bright" },
+        { kind: "preset", presetKey: "factory.cosimo.bright" },
+    ]);
+});
 
 test("the synth controller owns the Init-only adapter subscription lifecycle", async () => {
     const { controller, rackHarness } = await createSynthFixture();
@@ -618,6 +651,7 @@ test("structured and rack edits dirty unnamed INIT and Revert restores every can
 });
 
 test("Discard and Init replaces a dirty unnamed sound without saving it", async () => {
+    const appliedSoundReplacements = [];
     const {
         controller,
         defaultArticulations,
@@ -628,19 +662,24 @@ test("Discard and Init replaces a dirty unnamed sound without saving it", async 
         modulationHarness,
         patchConnection,
         rackHarness,
-    } = await createSynthFixture();
+    } = await createSynthFixture({
+        onSoundReplacementApplied: (replacement) => appliedSoundReplacements.push(replacement),
+    });
 
     const cleanInit = synthMutations(controller).initSound();
     assert.equal(cleanInit.ok, true, cleanInit.message);
+    assert.deepEqual(appliedSoundReplacements, [{ kind: "init" }]);
     patchConnection.emitParameterValue("oscAFramePosition", 0.91);
     assert.equal(controller.getState().dirty, true);
 
     const guardedInit = synthMutations(controller).initSound();
     assert.equal(guardedInit.ok, false);
     assert.equal(guardedInit.actionRequired, "confirm-sound-replacement");
+    assert.deepEqual(appliedSoundReplacements, [{ kind: "init" }]);
 
     const discardResult = synthMutations(controller).discardAndContinueSoundReplacement();
     assert.equal(discardResult.ok, true, discardResult.message);
+    assert.deepEqual(appliedSoundReplacements, [{ kind: "init" }, { kind: "init" }]);
     assert.deepEqual(patchConnection.parameterValues, defaults);
     assert.deepEqual(modulationHarness.value, defaultModulation);
     assert.deepEqual(articulationHarness.value, defaultArticulations);

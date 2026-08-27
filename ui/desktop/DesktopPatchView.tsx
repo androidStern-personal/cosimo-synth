@@ -195,6 +195,7 @@ import { createStandaloneEffectPresetController } from "../shared/effects/standa
 import { createSynthPresetInitOptions } from "../shared/effects/synth-init-state";
 import { buildSynthPresetMigrations } from "../shared/effects/synth-preset-migrations";
 import type { EffectStoredStateAdapter } from "../shared/effects/effect-preset-v2";
+import { clearLaneSoloAudition } from "../shared/lane-solo-audition";
 import {
     ArticulationControlSurface,
     type ArticulationCardView,
@@ -1999,6 +2000,11 @@ function SynthPresetBarHost({
         storedStateAdapters,
         presetMigrations: buildSynthPresetMigrations,
         synth: createSynthPresetInitOptions(patchConnection, storedStateAdapters),
+        onSoundReplacementApplied: (replacement) => {
+            if (replacement.kind !== "bounce") {
+                clearLaneSoloAudition(patchConnection);
+            }
+        },
     }), [patchConnection, storedStateAdapters]);
 
     useEffect(() => {

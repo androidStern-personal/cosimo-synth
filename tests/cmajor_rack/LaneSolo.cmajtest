@@ -1,0 +1,229 @@
+// T55 branch Solo is a transient runtime overlay: one selected branch per
+// group unit, independent across units. It never changes the topology upload.
+// Solo transitions use the rack's existing dry-depth transition so switching
+// does not hard-cut the processed signal or reset branch effect state.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "../../cmajor/GlobalFilter.cmajor", "../../cmajor/Distortion.cmajor", "../../cmajor/Ott.cmajor", "../../cmajor/Chorus.cmajor", "../../cmajor/Flanger.cmajor", "../../cmajor/Phaser.cmajor", "../../cmajor/Delay.cmajor", "../../cmajor/Reverb.cmajor", "../../cmajor/EffectsRack.cmajor")
+
+//==============================================================================
+// Two full-wet Parallel delays make branch identity audible: Solo A keeps only
+// the 40ms echo, Solo B keeps only the 90ms echo, and clear restores both.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor LaneParallelSoloTest [[ main ]]
+{
+    output stream int32 out;
+
+    node rack = wt::EffectsRack;
+
+    let echoOneFrame = 1764;
+    let echoTwoFrame = 3969;
+    let settleFrames = 1024;
+    let recordFrames = 4600;
+    let peakWindow = 8;
+    let expectedPeakMinimum = 0.08f;
+    let controlCeiling = 0.015f;
+
+    float32[4600] recordedLeft;
+
+    wt::LaneSlotParamsUpload makeDelayParams (int32 slotId, int32 serial, float32 timeMs)
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = slotId;
+        upload.deliverySerial = serial;
+        upload.values[wt::laneDelayParamTimeMs] = timeMs;
+        upload.values[wt::laneDelayParamFeedback] = 0.0f;
+        upload.values[wt::laneDelayParamFilterHz] = 18000.0f;
+        upload.values[wt::laneDelayParamMix] = 1.0f;
+        return upload;
+    }
+
+    wt::LaneTopologyUpload makeParallelChain()
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 3;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 2);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        upload.slotIds[2] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 2);
+        upload.enabledMask = 0b111;
+        return upload;
+    }
+
+    wt::LaneSoloUpload makeSolo (int32 branch)
+    {
+        wt::LaneSoloUpload upload;
+        upload.parallelSoloBranches[0] = branch;
+        return upload;
+    }
+
+    void advanceRack (float32 sample)
+    {
+        rack.in <- float32<2> (sample, sample);
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+    }
+
+    void captureImpulseResponse()
+    {
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            advanceRack (frame == 0 ? 1.0f : 0.0f);
+            recordedLeft.at (frame) = rack.out[0];
+        }
+    }
+
+    float32 windowPeak (int32 center)
+    {
+        var peak = 0.0f;
+        for (int32 offset = -peakWindow; offset <= peakWindow; ++offset)
+        {
+            let magnitude = std::intrinsics::abs (recordedLeft.at (center + offset));
+            if (magnitude > peak)
+                peak = magnitude;
+        }
+        return peak;
+    }
+
+    void main()
+    {
+        rack.tempoBpmIn <- 120.0f;
+        rack.laneSlotParams <- makeDelayParams (wt::rackModuleDelay, 1, 40.0f);
+        rack.laneSlotParams <- makeDelayParams (wt::laneSlotDelayTwo, 2, 90.0f);
+        rack.laneTopology <- makeParallelChain();
+
+        rack.laneSolo <- makeSolo (1);
+        captureImpulseResponse();
+        out <- (windowPeak (echoOneFrame) > expectedPeakMinimum ? 1 : 0); advance();
+        out <- (windowPeak (echoTwoFrame) < controlCeiling ? 1 : 0); advance();
+
+        rack.laneSolo <- makeSolo (2);
+        captureImpulseResponse();
+        out <- (windowPeak (echoOneFrame) < controlCeiling ? 1 : 0); advance();
+        out <- (windowPeak (echoTwoFrame) > expectedPeakMinimum ? 1 : 0); advance();
+
+        rack.laneSolo <- makeSolo (0);
+        captureImpulseResponse();
+        out <- (windowPeak (echoOneFrame) > expectedPeakMinimum ? 1 : 0); advance();
+        out <- (windowPeak (echoTwoFrame) > expectedPeakMinimum ? 1 : 0); advance();
+
+        loop { out <- -1; advance(); }
+    }
+}
+
+//==============================================================================
+// A full-wet delay in the low band makes split-band selection observable:
+// low Solo retains its echo, high Solo excludes it, and clear restores it.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor LaneSplitSoloTest [[ main ]]
+{
+    output stream int32 out;
+
+    node rack = wt::EffectsRack;
+
+    let echoFrame = 1764;
+    let settleFrames = 1024;
+    let recordFrames = 3000;
+    let peakWindow = 8;
+    let expectedEchoMinimum = 0.25f;
+    let echoResidueCeiling = 0.05f;
+
+    float32[3000] recordedLeft;
+
+    wt::LaneSlotParamsUpload makeDelayParams()
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::rackModuleDelay;
+        upload.deliverySerial = 1;
+        upload.values[wt::laneDelayParamTimeMs] = 40.0f;
+        upload.values[wt::laneDelayParamFeedback] = 0.0f;
+        upload.values[wt::laneDelayParamFilterHz] = 18000.0f;
+        upload.values[wt::laneDelayParamMix] = 1.0f;
+        return upload;
+    }
+
+    wt::LaneSlotParamsUpload makeSplitParams()
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::laneSplitSlotBase;
+        upload.deliverySerial = 2;
+        upload.values[wt::laneSplitParamXoverLowHz] = 18000.0f;
+        upload.values[wt::laneSplitParamXoverHighHz] = 18000.0f;
+        return upload;
+    }
+
+    wt::LaneTopologyUpload makeSplitChain()
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 2;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, 2);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        upload.enabledMask = 0b11;
+        return upload;
+    }
+
+    wt::LaneSoloUpload makeSolo (int32 branch)
+    {
+        wt::LaneSoloUpload upload;
+        upload.splitSoloBranches[0] = branch;
+        return upload;
+    }
+
+    void advanceRack (float32 sample)
+    {
+        rack.in <- float32<2> (sample, sample);
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+    }
+
+    void captureImpulseResponse()
+    {
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            advanceRack (frame == 0 ? 1.0f : 0.0f);
+            recordedLeft.at (frame) = rack.out[0];
+        }
+    }
+
+    float32 windowPeak (int32 center)
+    {
+        var peak = 0.0f;
+        for (int32 offset = -peakWindow; offset <= peakWindow; ++offset)
+        {
+            let magnitude = std::intrinsics::abs (recordedLeft.at (center + offset));
+            if (magnitude > peak)
+                peak = magnitude;
+        }
+        return peak;
+    }
+
+    void main()
+    {
+        rack.tempoBpmIn <- 120.0f;
+        rack.laneSlotParams <- makeDelayParams();
+        rack.laneSlotParams <- makeSplitParams();
+        rack.laneTopology <- makeSplitChain();
+
+        rack.laneSolo <- makeSolo (1);
+        captureImpulseResponse();
+        out <- (windowPeak (echoFrame) > expectedEchoMinimum ? 1 : 0); advance();
+
+        rack.laneSolo <- makeSolo (2);
+        captureImpulseResponse();
+        out <- (windowPeak (echoFrame) < echoResidueCeiling ? 1 : 0); advance();
+
+        rack.laneSolo <- makeSolo (0);
+        captureImpulseResponse();
+        out <- (windowPeak (echoFrame) > expectedEchoMinimum ? 1 : 0); advance();
+
+        loop { out <- -1; advance(); }
+    }
+}
