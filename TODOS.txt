@@ -1372,18 +1372,20 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     Product decisions (2026-08-27):
     - The required Cosimo form is one Enhancer inside every active synth voice, immediately after that voice's filter and before its amplitude envelope/VCA and the final voice sum. Its purpose is early per-note tone shaping; a single processor after the voices are combined does not satisfy this requirement.
     - Add optional Key Track. With Key Track off, Frequency is an ordinary fixed frequency shared by the voices. With Key Track on, every active voice follows its own final played pitch and applies the same continuous harmonic-ratio offset, so a chord produces one correctly tracked Enhancer frequency per note. Preserve the non-tracked Frequency value while tracking is on and restore it when tracking is turned off, following T50.
-    - Always process each voice in linked Mid/Side. Encode that voice's stereo filter output with the established Enhancer Lite half-sum/half-difference matrix, apply the same Frequency, Q, Amount, and character to Mid and Side, then decode back to stereo. Expose one Amount only: no Stereo/Mid-Side switch and no separate Mid and Side amounts. This deliberately keeps the nonlinear Mid/Side sound rather than trying to reproduce ordinary linked-stereo processing.
+    - Always process each voice in linked Mid/Side. Encode that voice's stereo filter output with the established Enhancer Lite half-sum/half-difference matrix, apply the same Frequency, Q, and Amount to Mid and Side through the one fixed shaping curve, then decode back to stereo. This deliberately keeps the nonlinear Mid/Side sound rather than trying to reproduce ordinary linked-stereo processing.
     - A separate Enhancer Lite device may be added to the Effects Lane later, but it is optional additional work and cannot replace this required per-voice stage.
     - Keep this separate from T26's fixed two-band Polish Enhancer, which remains a single post-rack bus processor near the end of the complete synth signal path.
-    Control placement decided (2026-08-27):
-    - Put one shared Enhancer control panel directly with the Voice filter controls, visually following the filter as the next stage in the Voice page. Do not put the required controls on the Effects page or hide them in a generic settings popout. The panel edits the shared settings used by every per-voice Enhancer instance; it does not show a separate panel for every sounding note.
-    Control-set discussion still required before implementation:
-    - Decide which remaining standalone controls carry over beyond the locked single Amount and fixed linked Mid/Side routing. Mid/Side mode and independent Mid/Side amounts are no longer open decisions.
+    Controls and placement decided (2026-08-27):
+    - Expose exactly three adjustable values: Frequency when Key Track is off, Ratio when Key Track is on, Q, and Amount. Use the one fixed shaping curve internally; do not expose another sound-character control or persist hidden mode state.
+    - Reuse the existing Voice filter area as a two-stage `FILTER` → `ENHANCER` surface instead of stacking another panel and stealing vertical space. Explicit taps switch the displayed stage; do not use a horizontal swipe because horizontal graph movement edits Frequency/Ratio. The Filter view remains unchanged.
+    - In the Enhancer view, show the draggable bell in the existing graph footprint and use the existing three-cell bottom row for Frequency/Ratio, Q, and Amount. Horizontal bell drag edits Frequency/Ratio, vertical drag edits Amount, and the Q control remains directly editable; modifier-assisted Q dragging may remain on platforms with a keyboard.
+    - Put the small `KEY TRACK` mode button inside a corner of the graph. Its state changes the first control's label and interpretation between `FREQ` and `RATIO`; it is not a fourth adjustable value.
+    - This is one shared control surface for the settings used by every per-voice Enhancer instance. Do not put it on the Effects page, hide it in a generic settings popout, or show a separate panel for every sounding note.
     Required integration:
     - Reuse the production Enhancer Lite shaping core and its exact Mid/Side encode/decode convention behind a per-voice Cosimo adapter rather than copying the algorithm. Give every allocated voice independent Mid and Side filter/shaper history and reset it through the synth's existing voice lifecycle.
-    - Preserve complete sound save/restore, Init, URL sharing, modulation, exact entry, bypass, and host state. Keep the continuous tracked offset modulatable, and prove polyphonic notes, glide, pitch bend, Global Tune, note stealing, mono, and legato all follow the existing voice rules.
+    - Preserve complete sound save/restore, Init, URL sharing, modulation, exact entry, and host state. Keep the continuous tracked offset modulatable, and prove polyphonic notes, glide, pitch bend, Global Tune, note stealing, mono, and legato all follow the existing voice rules.
     Done when:
-    - Andrew approves the Voice-interface control set, and tests prove the Enhancer processes each voice after its filter but before voices are combined, fixed linked Mid/Side uses one Amount with no hidden mode state, optional pitch tracking works independently across simultaneous notes, zero Amount is bit-identical, state round trips are complete, retained-voice CPU is acceptable, and the fixed T26/T28 Polish Enhancer is unchanged.
+    - The approved three-value Voice interface fits in the existing Filter footprint without shrinking or covering either stage, and tests prove the Enhancer processes each voice after its filter but before voices are combined, fixed linked Mid/Side uses one Amount with no hidden mode state, optional pitch tracking works independently across simultaneous notes, zero Amount is bit-identical, state round trips are complete, retained-voice CPU is acceptable, and the fixed T26/T28 Polish Enhancer is unchanged.
 
 [ ] T63 — Discuss and build whole-Effects-chain Mix and Bypass
     Product decisions (2026-08-27):
@@ -1456,6 +1458,16 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - This is an ongoing coordination role. It remains open while delegated work exists; an empty queue is an idle state, not task completion.
 
 INFRASTRUCTURE AND TOOLING
+
+[x] T68 — Keep one live, Git-tracked task checklist across Codex worktrees
+    Decision and implementation (2026-08-27):
+    - `TODOS.txt` remains a normal tracked file in the primary checkout on master, so every change retains its ordinary repository history.
+    - `.codex/environments/environment.toml` runs `scripts/link_master_todos.sh` whenever Codex creates a task worktree. The script replaces that worktree's clean checkout copy with a link to master's live file and hides only that expected local type change from Git.
+    - The setup refuses to replace a checklist with staged changes, uncommitted changes, or a merge conflict. It also refuses a source checkout that is not this repository's primary master checkout, preventing an old branch from becoming the authority by accident.
+    - `PROGRESS.txt` deliberately remains local to each branch because it records that task's implementation handoff rather than shared product decisions.
+    - Existing active/recent task worktrees were reconciled by keeping the current master checklist and linking clean stale copies to it. Their former checklist snapshots remain in Git history; no rejected or superseded branch text was copied back onto master.
+    Done when:
+    - A newly created Codex worktree immediately reads the same `TODOS.txt` as master, edits made through either path are visible through the other, the task worktree stays clean, and unsafe replacement cases fail without losing the local file.
 
 [x] T17 — Cut the desktop browser suite's wall clock without losing coverage or stringency
     Implementation evidence (2026-08-19, codex-implemented, independently verified):
@@ -1655,7 +1667,8 @@ Source note (2026-08-25):
     - Keep the de-emphasis permanently active, use the documented 4x oversampling, and keep the ten controls static, smoothed, preset-persisted, and unavailable to the modulation and Effects Lane systems.
     - Put the bus effect after Safe Bass and before the compressor/clipper in T28. With every amount at zero it must be bit-identical to dry.
     Required per-voice form:
-    - Build it independently with one Enhancer band per active synth voice, immediately after that voice's filter and before its amplitude envelope/VCA and the final voice sum, using the documented first-order anti-aliasing treatment. Always use linked Mid/Side internally: apply the same Frequency, Q, Amount, and character to both components, expose one Amount, and provide neither a routing switch nor separate Mid and Side amounts.
+    - Build it independently with one Enhancer band per active synth voice, immediately after that voice's filter and before its amplitude envelope/VCA and the final voice sum, using the documented first-order anti-aliasing treatment. Always use linked Mid/Side internally: apply the same Frequency, Q, and Amount through the one fixed shaping curve on both components. Expose exactly Frequency/Ratio, Q, and one Amount; provide no routing switch, separate Mid and Side amounts, or sound-character control.
+    - Put those controls in the existing Voice filter area behind an explicit `FILTER` → `ENHANCER` stage selector. Keep the same graph height: the Enhancer view replaces the graph and three-cell row in place, with the Key Track button in a graph corner. Do not use horizontal swipe navigation because horizontal bell drag edits Frequency/Ratio.
     - Add the optional Key Track mode from T50. Off uses the preserved ordinary Frequency value. On tracks each voice's own final played pitch after note choice, glide, pitch bend, Global Tune, and modulation routed to Global Tune, with a continuous harmonic-ratio offset from 0.5x to 32x. The offset remains modulatable and must allow deliberately inharmonic positions rather than snapping to integer harmonics.
     - Keep the voice lifecycle consistent with the synth's existing voice allocation, note stealing, mono/poly/legato, and envelope restart rules. Do not invent a second MIDI-voice policy inside the Enhancer.
     - Measure retained-voice CPU and aliasing at representative sample rates and voice counts before selecting the production quality setting.

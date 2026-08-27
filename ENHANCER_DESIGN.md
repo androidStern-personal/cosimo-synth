@@ -154,12 +154,13 @@ ratio when enabled).
 
 Routing is permanently **linked Mid/Side**. Encode each voice's stereo signal with
 the established Lite matrix, `M = 0.5 × (L + R)` and `S = 0.5 × (L − R)`, run the
-same Frequency, Q, Amount, and Tube/Solid character on both components, then decode
-with `L = M + S` and `R = M − S`. There is one Amount control, no routing switch,
-and no independent Mid and Side amounts. Because the shaper is nonlinear, this is
-deliberately a different sound from linked Left/Right processing. Keep first-order
-ADAA instead of the bus module's oversampling. The original mono-path cost estimate
-is superseded by this fixed two-component design:
+same Frequency, Q, and Amount through one fixed shaping curve on both components,
+then decode with `L = M + S` and `R = M − S`. There is one Amount control, no routing
+switch, no independent Mid and Side amounts, and no sound-character parameter or
+hidden mode state. Because the shaper is nonlinear, this is deliberately a different
+sound from linked Left/Right processing. Keep first-order ADAA instead of the bus
+module's oversampling. The original mono-path cost estimate is superseded by this
+fixed two-component design:
 
 - **Filter**: one TPT SVF bandpass for Mid and one for Side in every voice. MIDI tracking
   is control-rate work, not audio-rate: recompute the `tan()` coefficient only on
@@ -170,15 +171,13 @@ is superseded by this fixed two-component design:
   waveshaper with antiderivative `R(x) = F(x) − x²/2`, so ONE guarded-divide ADAA
   evaluation per component yields the aligned residue with no oversampling, no resampler,
   no thru-path — the §4 alignment problem *disappears* instead of being solved.
-  Choose algebraic kernels so antiderivatives are closed-form and sqrt-cheap:
-  tube = `x/√(1+x²)` (R = `√(1+x²) − x²/2` + const), solid = the same curve
-  bias-shifted, with its static DC removed exactly by subtracting the constant
-  `r(0)` instead of running a per-voice DC blocker. (`x/√(1+x²)` is the k = 2 case
-  of the saturator's existing knee curve — shared kernel.)
+  Use the single fixed algebraic kernel `x/√(1+x²)`, whose antiderivative is
+  `√(1+x²) − x²/2` + const. It is the k = 2 case of the saturator's existing
+  knee curve, so the implementation can share that kernel.
 - **Post-sum, once, not per voice**: after decoding each processed voice back to
-  Left/Right, a single stereo DC blocker on the summed voice residues catches the
-  signal-dependent DC of the solid curve. The DC blocker is linear, so it commutes
-  with the sum.
+  Left/Right, a single stereo DC blocker on the summed voice residues catches any
+  signal-dependent DC from the nonlinear residue. The DC blocker is linear, so it
+  commutes with the sum.
 - **Budget**: the earlier ≈40–50-flop, four-state estimate covered one mono path and
   is no longer valid. Fixed linked Mid/Side roughly doubles the filter/shaper work
   and state relative to that estimate. It remains a plausible retained-voice cost,
@@ -213,9 +212,19 @@ Q ≈ 0.7 smooths into a continuous tilt of where the energy lands. Voicing keep
 default Q on the low side for smooth sweeps; high Q remains available for the
 surgical sound.
 
+**Voice interface (locked, Andrew 2026-08-27).** Expose exactly Frequency/Ratio, Q,
+and Amount. Reuse the existing Voice filter footprint as a two-stage `FILTER` →
+`ENHANCER` surface selected by explicit taps; do not stack another panel or use a
+horizontal swipe. The Enhancer view puts its draggable bell in the existing graph
+area and the three values in the existing three-cell row. Horizontal bell drag edits
+Frequency/Ratio, vertical drag edits Amount, and Q remains directly editable. A small
+Key Track button in a graph corner switches the first value's label and meaning
+between Frequency and Ratio. The shared surface controls every per-voice instance;
+it does not display one panel per sounding note.
+
 Status: the per-voice form, its post-filter placement, fixed linked Mid/Side routing,
-single Amount, optional Key Track, and ratio control are locked. The exact remaining
-Voice-interface control set and measured production quality setting remain open.
+three-value interface, optional Key Track, ratio control, and UI placement are locked.
+Only the measured production quality setting remains open.
 
 ## 8. Ship criteria
 

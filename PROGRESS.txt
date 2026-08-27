@@ -1,3 +1,7 @@
+Shared task checklist across Codex worktrees — 2026-08-27
+- The normal Git-tracked `TODOS.txt` in the primary master checkout is the single live checklist. Codex's project setup runs `scripts/link_master_todos.sh` for each new task worktree, linking its checkout path to the primary file while marking that expected worktree-only type change as skip-worktree.
+- The linker verifies both paths belong to this repository, requires the source checkout to be on master, and refuses staged, dirty, conflicted, missing, or misdirected task copies before replacing anything. `PROGRESS.txt` remains branch-local by design.
+
 T54/T54A wavetable and Mod-bar behavior restored — 2026-08-27
 - Compact Voice keeps all four wavetable chips at mirrored 8 px graph insets and keeps the parameter row full width. The Mod bar is the floating foreground control wherever it overlaps ordinary Voice controls; chips and page arrows do not receive elevated stacking or redefine the bar's travel.
 - The Mod-bar component and its compact geometry test are restored exactly to `aadb3d12`, the original right-edge-placement result before collision follow-ups `5d10370b`, `24fd1d60`, and `c3ad435f`. Requested/displayed projection, Voice keep-outs, toolbar gutters, forced expansion shifts, deferred measurement replay, and the layer-61 Voice override are gone.
