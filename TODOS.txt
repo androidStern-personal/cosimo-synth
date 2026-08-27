@@ -1278,9 +1278,12 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     Required behavior:
     - Give every Frequency Split band and every Parallel branch a small Solo control so one branch can be heard by itself.
     - Solo is exclusive within that group: tapping an unsoloed branch isolates it; tapping another switches the solo directly; tapping the active Solo again returns every branch to normal.
+    - Different groups own independent Solo choices. Solos in separate upstream or downstream groups may remain active together, allowing the user to isolate one complete route through multiple groups. Activating Solo in one group must never clear Solo in another group.
     - Support all current two- and three-band Frequency Split layouts and every supported Parallel branch count. The control must remain usable in the compact graph.
-    State boundary still to settle:
-    - Solo is an audition feature and must never reorder, delete, or reroute the rack. Decide before state wiring whether its active state is deliberately saved or remains temporary preview state; do not let persistence happen accidentally.
+    Temporary state boundary (settled 2026-08-27):
+    - Solo is audition state, not part of the sound. Never save it in presets, URL sharing, host projects, or rack documents. It remains active while navigating the same running synth.
+    - Loading any preset or pressing Init clears every active branch Solo. Deleting a soloed branch or its containing group clears that group's Solo without disturbing Solo choices in other surviving groups.
+    - Solo must never reorder, delete, reroute, or otherwise rewrite the rack.
     Done when:
     - DSP and browser tests prove exactly the selected branch is heard, switching and clearing work without changing the rack, and the controls remain visible and tappable in representative phone, desktop, and plugin layouts.
 
