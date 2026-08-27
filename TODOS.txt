@@ -1163,10 +1163,13 @@ BROWSER SHARING AND ENVELOPE FOLLOW-UP
     - Touch tests prove diagonal gestures settle on one axis without cross-changing the other value, the sustain line can be acquired away from its breakpoint, and the floating value remains above the finger and inside the viewport at both screen edges.
     - Cancellation restores normal interaction state with no stuck label or extra parameter write, and mouse/pen editing remains usable.
 
-[ ] T50 — Add Key Track to controls that can be musically tuned
-    Active owner (2026-08-27):
+[x] T50 — Add Key Track to controls that can be musically tuned
+    Completed (2026-08-27):
     - Codex task `T50 Build Shared Key Track`, thread `01a0435e-576b-7c31-8de8-592b1c274673`, branch `codex/t50-shared-key-track`, worktree `/Users/winterfell/.codex/worktrees/fbf2/cosimo-synth`, model SOL, reasoning max.
-    - This is a coordinator-managed implementation task. Final review, rebase, merge, push, and any deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
+    - Coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d` source-reviewed and semantically rebased the clean task commits onto the T38/T66 master. The accepted result keeps T39's shared played pitch as the sole authority, preserves ordinary untracked values, and composes the append-only host/state/modulation changes without importing stale tracker or design text.
+    - Shared continuous Key Track now covers every currently shipped qualifying control, including both Frequency Split markers and the new Flanger Base Delay/Tune. Delay Sync/Key Track and all enable sequences publish dependency-safe prefixes; pre-T50 Chorus sounds retain their exact nonlinear clamp through one hidden append-only migration flag, while newly authored Chorus state uses the continuous law.
+    - Final integration qualification is effectively green across the complete Cmajor rack suite 88/88, orphan/unit suite 744/744, and desktop UI suite 263/264 after focused repairs to issues exposed by each one-time broad run. The sole remaining desktop red is the established unrelated React Grab `navigator.webdriver` assertion. Focused pitch authority/fallback/latch, target-base, state, preset/URL, exact-entry, route, generated-map, and T38/T66 composition checks pass.
+    - A fresh HMR standalone reported the exact coordinator repo root and `usesViteClient: true`, then was stopped and port 5174 released. The final compiled-mode VST3 is installed and strict-code-sign valid at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` (installed executable SHA-256 `aad0efe08e6e5b5403efc75635a1612c67737eee0fa571c2b037bb2ae8825bfb`). No physical Ableton/listening, MIDI-controller, or iPhone/AUv3 acceptance is claimed.
     Dependency:
     - Build this on T39's shared played pitch. Do not derive tracking from any oscillator's private tuning.
     - This shared optional-Key-Track contract is also the prerequisite for the standalone Enhancer Lite release in T61 and the per-voice Enhancer in T62. The standalone effect follows the post-mix held-note rule below; while Key Track is on, each active synth voice calculates its own T62 Enhancer frequency from that voice's final played pitch.
