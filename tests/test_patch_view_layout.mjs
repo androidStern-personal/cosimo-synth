@@ -163,6 +163,38 @@ async function runUiBuild(extraEnv = {}) {
     });
 }
 
+test("checked-in UI source maps keep dependency provenance inside the checkout", async () => {
+    const mapContracts = [
+        {
+            relativePath: "patch_gui/desktop/app.js.map",
+            dependencyPrefix: "../../node_modules/",
+        },
+        {
+            relativePath: "patch_gui/index.ios.js.map",
+            dependencyPrefix: "../node_modules/",
+        },
+    ];
+
+    for (const { relativePath, dependencyPrefix } of mapContracts) {
+        const sourceMap = JSON.parse(await fs.readFile(path.join(repoRoot, relativePath), "utf8"));
+        const dependencySources = sourceMap.sources.filter((source) => source.includes("node_modules/"));
+
+        assert.equal(dependencySources.length > 0, true, `${relativePath} must retain dependency sources.`);
+        for (const source of dependencySources) {
+            assert.equal(
+                source.startsWith(dependencyPrefix),
+                true,
+                `${relativePath} dependency source must resolve through this checkout: ${source}`,
+            );
+            assert.doesNotMatch(
+                source,
+                /(?:\.codex\/worktrees|src\/cosimo-synth\/node_modules|^\/Users\/)/,
+                `${relativePath} must not encode dependency provenance from another checkout.`,
+            );
+        }
+    }
+});
+
 async function pickUnusedLocalPort() {
     return await new Promise((resolve, reject) => {
         const server = createServer();
