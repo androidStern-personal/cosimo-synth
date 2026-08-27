@@ -713,9 +713,6 @@
     }
 
     .mobile-global-mod-rail.is-parked {
-        --parked-selected-w: calc(36px * var(--rail-scale));
-        --parked-paddle-w: calc(27px * var(--rail-scale));
-        --parked-hide-w: calc(25px * var(--rail-scale));
         position: absolute;
         inset: 0;
         display: block;
@@ -749,11 +746,11 @@
         width: 100%;
         height: var(--cosimo-module);
         grid-template-columns:
-            var(--parked-selected-w)
-            var(--parked-paddle-w)
-            minmax(0, 1fr)
-            var(--parked-paddle-w)
-            var(--parked-hide-w);
+            minmax(0, 36fr)
+            minmax(0, 27fr)
+            minmax(0, var(--parked-page-share))
+            minmax(0, 27fr)
+            minmax(0, 25fr);
         box-sizing: border-box;
         overflow: hidden;
         border: 0;
@@ -932,6 +929,19 @@
         padding: 0;
         border: 0;
         background: transparent;
+        /* Keep the established box-center activation through a narrow bridge
+           to the visible 30x14 tab. The broad transparent margins remain
+           pass-through so editors beneath the overlay do not gain dead input. */
+        clip-path: polygon(
+            45% 47%,
+            55% 47%,
+            55% 56.25%,
+            84.0909% 56.25%,
+            84.0909% 100%,
+            15.9091% 100%,
+            15.9091% 56.25%,
+            45% 56.25%
+        );
         color: var(--cosimo-ink-muted);
         pointer-events: auto;
         transform: translateX(-50%);

@@ -118,6 +118,8 @@ import {
     type RailVerticalBounds,
 } from "../shared/mod-rail-perimeter";
 import {
+    MOD_BAR_MAX_SCALE,
+    MOD_BAR_MIN_SCALE,
     updateModBarPreferences,
     type ModBarPreferences,
 } from "../shared/mod-bar-preferences";
@@ -312,8 +314,19 @@ function hasReleasedMouseButton(event: ReactPointerEvent<HTMLElement>) {
     return event.pointerType === "mouse" && event.buttons === 0;
 }
 
-function elementAtPointInRenderRoot(referenceElement: Element, clientX: number, clientY: number) {
-    const renderRoot = referenceElement.getRootNode();
+type HitTestRoot = Document | ShadowRoot;
+
+function hitTestRoot(reference: Element | HitTestRoot): HitTestRoot | null {
+    const renderRoot = reference instanceof Document || reference instanceof ShadowRoot
+        ? reference
+        : reference.getRootNode();
+    return renderRoot instanceof Document || renderRoot instanceof ShadowRoot
+        ? renderRoot
+        : null;
+}
+
+function elementAtPointInRenderRoot(reference: Element | HitTestRoot, clientX: number, clientY: number) {
+    const renderRoot = hitTestRoot(reference);
     if (renderRoot instanceof Document || renderRoot instanceof ShadowRoot) {
         return renderRoot.elementFromPoint(clientX, clientY);
     }
@@ -356,11 +369,11 @@ function parseCompanionKinds(element: HTMLElement): ReadonlyArray<ModulationTarg
 }
 
 function modulationTargetAtPoint(
-    referenceElement: Element,
+    reference: Element | HitTestRoot,
     clientX: number,
     clientY: number,
 ): ModulationDropTarget | null {
-    const element = elementAtPointInRenderRoot(referenceElement, clientX, clientY)
+    const element = elementAtPointInRenderRoot(reference, clientX, clientY)
         ?.closest<HTMLElement>("[data-modulation-target-kind]") ?? null;
     const targetKind = parseAnyModulationTargetKind(element?.dataset.modulationTargetKind);
     return element === null || targetKind === null
@@ -394,9 +407,9 @@ function modulationDropCandidateFromTarget(target: ModulationDropTarget): Modula
     };
 }
 
-function modulationDropCandidates(referenceElement: Element): ModulationDropCandidate[] {
-    const renderRoot = referenceElement.getRootNode();
-    if (!(renderRoot instanceof Document || renderRoot instanceof ShadowRoot)) {
+function modulationDropCandidates(reference: Element | HitTestRoot): ModulationDropCandidate[] {
+    const renderRoot = hitTestRoot(reference);
+    if (renderRoot === null) {
         return [];
     }
 
@@ -454,12 +467,12 @@ function segmentClientRectEntry(
 }
 
 function resolveModulationTargetForDrag(
-    referenceElement: Element,
+    reference: Element | HitTestRoot,
     point: ClientPoint,
     previousPoint: ClientPoint,
     previousTarget: HTMLElement | null,
 ): ModulationDropCandidate | null {
-    const exactTarget = modulationTargetAtPoint(referenceElement, point.x, point.y);
+    const exactTarget = modulationTargetAtPoint(reference, point.x, point.y);
     if (exactTarget) {
         const candidate = modulationDropCandidateFromTarget(exactTarget);
         if (candidate) {
@@ -475,7 +488,7 @@ function resolveModulationTargetForDrag(
         }
     }
 
-    const candidates = modulationDropCandidates(referenceElement);
+    const candidates = modulationDropCandidates(reference);
     const nearPoint = candidates
         .filter(({ rect }) => pointIsInsideClientRect(point, rect))
         .sort((left, right) => {
@@ -1409,6 +1422,14 @@ type ModSourceDragCallbacks = {
     readonly onDuplicateHover?: (source: SelectedSource, targetKind: string) => void;
 };
 
+type SourcePointerMovement = {
+    readonly pointerId: number;
+    readonly pointerType: string;
+    readonly buttons: number;
+    readonly clientX: number;
+    readonly clientY: number;
+};
+
 /** Deliberate hover before a dwell navigation fires; transit stays inert. */
 const MOD_SOURCE_DWELL_NAVIGATE_MS = 550;
 /** ADR-025 row 16: a deliberate duplicate hover warns after this dwell. */
@@ -1421,8 +1442,8 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         clientX: number;
         clientY: number;
         frame: number | null;
-        referenceElement: HTMLElement | null;
-    }>({ clientX: 0, clientY: 0, frame: null, referenceElement: null });
+        renderRoot: HitTestRoot | null;
+    }>({ clientX: 0, clientY: 0, frame: null, renderRoot: null });
     const dragRef = useRef<{
         pointerId: number;
         pointerType: string;
@@ -1432,6 +1453,8 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         startY: number;
         wasActiveSelection: boolean;
         captureElement: HTMLButtonElement;
+        captureLost: boolean;
+        renderRoot: HitTestRoot;
         hoveredTarget: HTMLElement | null;
         lastPointerPoint: ClientPoint;
         lastDragPoint: ClientPoint;
@@ -1448,12 +1471,12 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         }
     }, []);
 
-    const updateDwellTracker = useCallback((referenceElement: Element, dragPoint: ClientPoint) => {
+    const updateDwellTracker = useCallback((renderRoot: HitTestRoot, dragPoint: ClientPoint) => {
         const drag = dragRef.current;
         if (!drag) {
             return;
         }
-        const dwellKey = elementAtPointInRenderRoot(referenceElement, dragPoint.x, dragPoint.y)
+        const dwellKey = elementAtPointInRenderRoot(renderRoot, dragPoint.x, dragPoint.y)
             ?.closest<HTMLElement>("[data-drag-dwell]")
             ?.dataset.dragDwell ?? null;
         if ((drag.dwell?.key ?? null) === dwellKey) {
@@ -1526,7 +1549,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         if (autoScrollRef.current.frame !== null) {
             cancelAnimationFrame(autoScrollRef.current.frame);
         }
-        autoScrollRef.current = { clientX: 0, clientY: 0, frame: null, referenceElement: null };
+        autoScrollRef.current = { clientX: 0, clientY: 0, frame: null, renderRoot: null };
     }, []);
 
     const sourceAutoScrollDelta = useCallback((surface: HTMLElement, clientY: number) => {
@@ -1555,11 +1578,11 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
     }, []);
 
     const graphScrollSurfaceAtPoint = useCallback((
-        referenceElement: HTMLElement,
+        renderRoot: HitTestRoot,
         clientX: number,
         clientY: number,
     ) => {
-        const graph = elementAtPointInRenderRoot(referenceElement, clientX, clientY)
+        const graph = elementAtPointInRenderRoot(renderRoot, clientX, clientY)
             ?.closest<HTMLElement>('[data-role="rack-module-list"]') ?? null;
         return graph !== null && graph.scrollHeight > graph.clientHeight + 1
             ? graph
@@ -1568,14 +1591,14 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
 
     const runSourceAutoScroll = useCallback(() => {
         const state = autoScrollRef.current;
-        const referenceElement = state.referenceElement;
-        if (!referenceElement || dragRef.current === null) {
+        const renderRoot = state.renderRoot;
+        if (!renderRoot || dragRef.current === null) {
             stopSourceAutoScroll();
             return;
         }
 
         const graphSurface = graphScrollSurfaceAtPoint(
-            referenceElement,
+            renderRoot,
             state.clientX,
             state.clientY,
         );
@@ -1585,10 +1608,9 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         if (graphSurface !== null && sourceAutoScrollCanMove(graphSurface, graphDelta)) {
             graphSurface.scrollTop += graphDelta;
         } else {
-            const renderRoot = referenceElement.getRootNode();
-            const activePanel = (renderRoot instanceof Document || renderRoot instanceof ShadowRoot)
-                ? renderRoot.querySelector<HTMLElement>('[data-role^="mobile-workspace-panel-"]:not([hidden])')
-                : null;
+            const activePanel = renderRoot.querySelector<HTMLElement>(
+                '[data-role^="mobile-workspace-panel-"]:not([hidden])',
+            );
             if (activePanel) {
                 const panelDelta = sourceAutoScrollDelta(activePanel, state.clientY);
                 if (sourceAutoScrollCanMove(activePanel, panelDelta)) {
@@ -1600,14 +1622,14 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         autoScrollRef.current.frame = requestAnimationFrame(runSourceAutoScroll);
     }, [graphScrollSurfaceAtPoint, sourceAutoScrollCanMove, sourceAutoScrollDelta, stopSourceAutoScroll]);
 
-    const updateSourceAutoScroll = useCallback((referenceElement: HTMLElement, dragPoint: ClientPoint) => {
+    const updateSourceAutoScroll = useCallback((renderRoot: HitTestRoot, dragPoint: ClientPoint) => {
         autoScrollRef.current.clientX = dragPoint.x;
         autoScrollRef.current.clientY = dragPoint.y;
-        autoScrollRef.current.referenceElement = referenceElement;
+        autoScrollRef.current.renderRoot = renderRoot;
         if (autoScrollRef.current.frame === null) {
             autoScrollRef.current.frame = requestAnimationFrame(runSourceAutoScroll);
         }
-        const graphSurface = graphScrollSurfaceAtPoint(referenceElement, dragPoint.x, dragPoint.y);
+        const graphSurface = graphScrollSurfaceAtPoint(renderRoot, dragPoint.x, dragPoint.y);
         if (graphSurface === null) {
             return false;
         }
@@ -1648,7 +1670,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             : pointerStayedAtLastPoint
                 ? modulationTargetFromElement(drag.hoveredTarget)
                 : resolveModulationTargetForDrag(
-                    drag.captureElement,
+                    drag.renderRoot,
                     dragPoint,
                     drag.lastDragPoint,
                     drag.hoveredTarget,
@@ -1685,7 +1707,84 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         }
     }, [clearDwellTracker, stopSourceAutoScroll, updateHoveredTarget]);
 
+    const moveSourceGesture = useCallback((event: SourcePointerMovement) => {
+        const drag = dragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) {
+            return;
+        }
+        if (event.pointerType === "mouse" && event.buttons === 0) {
+            finishSourceGesture(event.pointerId, event.clientX, event.clientY, true);
+            return;
+        }
+        drag.moved ||= modSourceDragHasActivated(
+            { x: drag.startX, y: drag.startY },
+            { x: event.clientX, y: event.clientY },
+        );
+        if (drag.moved) {
+            const dragPoint = resolveModSourceDragPoint(
+                drag.captureElement,
+                drag.pointerType,
+                { x: drag.startX, y: drag.startY },
+                drag.lastPointerPoint,
+                drag.lastDragPoint,
+                { x: event.clientX, y: event.clientY },
+            );
+            const previousDragPoint = drag.lastDragPoint;
+            drag.lastPointerPoint = { x: event.clientX, y: event.clientY };
+            drag.lastDragPoint = dragPoint;
+            const graphEdgeOwnsPreview = updateSourceAutoScroll(drag.renderRoot, dragPoint);
+            if (graphEdgeOwnsPreview) {
+                updateHoveredTarget(null, drag.source);
+                clearDwellTracker();
+                handlersRef.current.onSourceDragChange?.({
+                    source: drag.source,
+                    clientX: dragPoint.x,
+                    clientY: dragPoint.y,
+                    targetCaptured: false,
+                });
+                handlersRef.current.onHoverTarget(drag.source, null);
+                return;
+            }
+            const target = resolveModulationTargetForDrag(
+                drag.renderRoot,
+                dragPoint,
+                previousDragPoint,
+                drag.hoveredTarget,
+            );
+            handlersRef.current.onSourceDragChange?.({
+                source: drag.source,
+                clientX: dragPoint.x,
+                clientY: dragPoint.y,
+                targetCaptured: target !== null,
+            });
+            updateHoveredTarget(target?.element ?? null, drag.source);
+            updateDwellTracker(drag.renderRoot, dragPoint);
+            handlersRef.current.onHoverTarget(drag.source, target?.targetKind ?? null);
+            return;
+        }
+        const target = modulationTargetAtPoint(drag.renderRoot, event.clientX, event.clientY);
+        updateHoveredTarget(target?.element ?? null, drag.source);
+        handlersRef.current.onHoverTarget(drag.source, target?.targetKind ?? null);
+    }, [
+        clearDwellTracker,
+        finishSourceGesture,
+        updateDwellTracker,
+        updateHoveredTarget,
+        updateSourceAutoScroll,
+    ]);
+
     useEffect(() => {
+        const handlePointerMove = (event: PointerEvent) => {
+            const drag = dragRef.current;
+            if (!drag || drag.pointerId !== event.pointerId) {
+                return;
+            }
+            if (drag.captureElement.isConnected && !drag.captureLost) {
+                return;
+            }
+            event.preventDefault();
+            moveSourceGesture(event);
+        };
         const handlePointerUp = (event: PointerEvent) => {
             finishSourceGesture(event.pointerId, event.clientX, event.clientY, false);
         };
@@ -1704,11 +1803,13 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             }
         };
 
+        window.addEventListener("pointermove", handlePointerMove, { capture: true, passive: false });
         window.addEventListener("pointerup", handlePointerUp, true);
         window.addEventListener("pointercancel", handlePointerCancel, true);
         window.addEventListener("blur", cancelActiveGesture);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
+            window.removeEventListener("pointermove", handlePointerMove, true);
             window.removeEventListener("pointerup", handlePointerUp, true);
             window.removeEventListener("pointercancel", handlePointerCancel, true);
             window.removeEventListener("blur", cancelActiveGesture);
@@ -1716,7 +1817,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             cancelActiveGesture();
             stopSourceAutoScroll();
         };
-    }, [finishSourceGesture, stopSourceAutoScroll]);
+    }, [finishSourceGesture, moveSourceGesture, stopSourceAutoScroll]);
 
     return useCallback((source: SelectedSource, wasActiveSelection: boolean) => ({
         onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -1725,6 +1826,10 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             }
             event.preventDefault();
             event.stopPropagation();
+            const renderRoot = hitTestRoot(event.currentTarget);
+            if (renderRoot === null) {
+                return;
+            }
             handlersRef.current.onDragSourceChange(source);
             dragRef.current = {
                 pointerId: event.pointerId,
@@ -1735,6 +1840,8 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
                 startY: event.clientY,
                 wasActiveSelection,
                 captureElement: event.currentTarget,
+                captureLost: false,
+                renderRoot,
                 hoveredTarget: null,
                 lastPointerPoint: { x: event.clientX, y: event.clientY },
                 lastDragPoint: { x: event.clientX, y: event.clientY },
@@ -1745,7 +1852,10 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             try {
                 event.currentTarget.setPointerCapture(event.pointerId);
             } catch {
-                // Window-level termination still owns unsupported or synthetic pointers.
+                const drag = dragRef.current;
+                if (drag?.pointerId === event.pointerId) {
+                    drag.captureLost = true;
+                }
             }
         },
         onPointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -1755,59 +1865,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             }
             event.preventDefault();
             event.stopPropagation();
-            if (hasReleasedMouseButton(event)) {
-                finishSourceGesture(event.pointerId, event.clientX, event.clientY, true);
-                return;
-            }
-            drag.moved ||= modSourceDragHasActivated(
-                { x: drag.startX, y: drag.startY },
-                { x: event.clientX, y: event.clientY },
-            );
-            if (drag.moved) {
-                const dragPoint = resolveModSourceDragPoint(
-                    event.currentTarget,
-                    drag.pointerType,
-                    { x: drag.startX, y: drag.startY },
-                    drag.lastPointerPoint,
-                    drag.lastDragPoint,
-                    { x: event.clientX, y: event.clientY },
-                );
-                const previousDragPoint = drag.lastDragPoint;
-                drag.lastPointerPoint = { x: event.clientX, y: event.clientY };
-                drag.lastDragPoint = dragPoint;
-                const graphEdgeOwnsPreview = updateSourceAutoScroll(event.currentTarget, dragPoint);
-                if (graphEdgeOwnsPreview) {
-                    updateHoveredTarget(null, drag.source);
-                    clearDwellTracker();
-                    handlersRef.current.onSourceDragChange?.({
-                        source: drag.source,
-                        clientX: dragPoint.x,
-                        clientY: dragPoint.y,
-                        targetCaptured: false,
-                    });
-                    handlersRef.current.onHoverTarget(drag.source, null);
-                    return;
-                }
-                const target = resolveModulationTargetForDrag(
-                    event.currentTarget,
-                    dragPoint,
-                    previousDragPoint,
-                    drag.hoveredTarget,
-                );
-                handlersRef.current.onSourceDragChange?.({
-                    source: drag.source,
-                    clientX: dragPoint.x,
-                    clientY: dragPoint.y,
-                    targetCaptured: target !== null,
-                });
-                updateHoveredTarget(target?.element ?? null, drag.source);
-                updateDwellTracker(event.currentTarget, dragPoint);
-                handlersRef.current.onHoverTarget(drag.source, target?.targetKind ?? null);
-                return;
-            }
-            const target = modulationTargetAtPoint(event.currentTarget, event.clientX, event.clientY);
-            updateHoveredTarget(target?.element ?? null, drag.source);
-            handlersRef.current.onHoverTarget(drag.source, target?.targetKind ?? null);
+            moveSourceGesture(event);
         },
         onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => {
             finishSourceGesture(event.pointerId, event.clientX, event.clientY, false);
@@ -1816,75 +1874,34 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             finishSourceGesture(event.pointerId, event.clientX, event.clientY, true);
         },
         onLostPointerCapture: (event: ReactPointerEvent<HTMLButtonElement>) => {
-            finishSourceGesture(event.pointerId, event.clientX, event.clientY, true);
+            const drag = dragRef.current;
+            if (drag?.pointerId === event.pointerId) {
+                drag.captureLost = true;
+            }
         },
-    }), [finishSourceGesture, updateDwellTracker, updateHoveredTarget, updateSourceAutoScroll]);
+    }), [finishSourceGesture, moveSourceGesture]);
 }
+
+type ModSourceGestureHandlers = ReturnType<typeof useModSourceDrag>;
 
 function ModSourceCarousel({
     pageIndex,
     selectedSource,
     sourceIsArmed,
     orientation = "horizontal",
-    tapMode = "select-then-open",
     onPageChange,
-    onDragSourceChange,
-    onSourceSelect,
-    onSourceDrop,
-    onSourceTap,
-    onHoverTarget,
-    onSourceDragChange,
-    onDwellNavigate,
-    getPairCreation,
-    onDuplicateHover,
+    sourceHandlers,
 }: {
     pageIndex: number;
     selectedSource: SelectedSource;
     sourceIsArmed: boolean;
     orientation?: "horizontal" | "vertical";
-    tapMode?: "select-then-open" | "toggle-quick-source";
     onPageChange: (pageIndex: number) => void;
-    onDragSourceChange: (source: SelectedSource | null) => void;
-    onSourceSelect: (source: SelectedSource) => void;
-    onSourceDrop: (
-        source: SelectedSource,
-        targetKind: ModulationTargetKind,
-        companionKinds?: ReadonlyArray<ModulationTargetKind>,
-    ) => void;
-    onSourceTap: (source: SelectedSource) => void;
-    onHoverTarget: (source: SelectedSource, targetKind: ModulationTargetKind | null) => void;
-    getPairCreation?: (source: SelectedSource, targetKind: string) => RackRouteCreation;
-    onDuplicateHover?: (source: SelectedSource, targetKind: string) => void;
-    onSourceDragChange?: (drag: SourceDragPresentation | null) => void;
-    onDwellNavigate?: (dwellKey: string) => void;
+    sourceHandlers: ModSourceGestureHandlers;
 }) {
     const armedSourceLabel = sourceIsArmed
         ? findRackModulationSource(selectedSource.sourceKind, selectedSource.sourceSlot).label
         : null;
-    const sourceHandlers = useModSourceDrag({
-        onHoverTarget,
-        onDragSourceChange,
-        onSourceDrop,
-        onSourceDragChange,
-        onDwellNavigate,
-        getPairCreation,
-        onDuplicateHover,
-        onTap: (source, wasActiveSelection) => {
-            if (tapMode === "toggle-quick-source") {
-                // T43: the quick sheet owner receives the exact tapped source
-                // in the same gesture that arms it. It can atomically open,
-                // close, or replace the mounted sheet without a stale frame.
-                onSourceSelect(source);
-                onSourceTap(source);
-                return;
-            }
-            if (wasActiveSelection) {
-                onSourceTap(source);
-            } else {
-                onSourceSelect(source);
-            }
-        },
-    });
     const vertical = orientation === "vertical";
 
     return (
@@ -2008,6 +2025,15 @@ const MOBILE_MOD_RAIL_STOP_VELOCITY_PX_PER_MS = 0.02;
 const MOBILE_MOD_RAIL_DECELERATION_RATE_PER_MS = 0.99;
 const MOBILE_MOD_RAIL_SETTLE_X_MS = 220;
 const MOBILE_MOD_RAIL_DEFAULT_DOCK: RailDock = { edge: "right", normalizedY: 0.42 };
+const PARKED_PAGE_SHARE_AT_MIN_SCALE = 0.555;
+const PARKED_PAGE_SHARE_AT_MAX_SCALE = 0.62;
+
+function parkedPageShare(scale: number) {
+    const scaleProgress = (clamp(scale, MOD_BAR_MIN_SCALE, MOD_BAR_MAX_SCALE) - MOD_BAR_MIN_SCALE)
+        / (MOD_BAR_MAX_SCALE - MOD_BAR_MIN_SCALE);
+    return PARKED_PAGE_SHARE_AT_MIN_SCALE
+        + (scaleProgress * (PARKED_PAGE_SHARE_AT_MAX_SCALE - PARKED_PAGE_SHARE_AT_MIN_SCALE));
+}
 
 type RailMotionSample = {
     readonly clientY: number;
@@ -2091,24 +2117,15 @@ function MobileGlobalModRail({
     preferences,
     sourcePageIndex,
     sourceIsArmed,
-    sourceTapMode,
+    sourceHandlers,
     onStateChange,
-    onDragSourceChange,
-    onSourceDrop,
-    onHoverTarget,
-    getPairCreation,
-    onDuplicateHover,
-    onSourceDragChange,
     onNoteKeyDown,
     onNoteKeyUp,
     onToggleAutoPreview,
     onToggleKeyboard,
-    onSourceSelect,
     onSourcePageChange,
     voiceSettings,
-    onDwellNavigate,
     countPulseSerial = 0,
-    onSelectedSourceTap,
     children,
 }: {
     selectedSource: RackModulationSource;
@@ -2122,30 +2139,16 @@ function MobileGlobalModRail({
     preferences: ModBarPreferences;
     sourcePageIndex: number;
     sourceIsArmed: boolean;
-    sourceTapMode: "select-then-open" | "toggle-quick-source";
+    sourceHandlers: ModSourceGestureHandlers;
     onStateChange?: (state: GlobalModRailState) => void;
-    onDragSourceChange: (source: SelectedSource | null) => void;
-    onSourceDrop: (
-        source: SelectedSource,
-        targetKind: ModulationTargetKind,
-        companionKinds?: ReadonlyArray<ModulationTargetKind>,
-    ) => void;
-    onHoverTarget: (source: SelectedSource, targetKind: ModulationTargetKind | null) => void;
-    getPairCreation?: (source: SelectedSource, targetKind: string) => RackRouteCreation;
-    onDuplicateHover?: (source: SelectedSource, targetKind: string) => void;
     /** ADR-025 row 15: bumps once per confirmed creation to pulse the count. */
     countPulseSerial?: number;
-    /** The collapsed source icon follows the current screen's source-tap behavior. */
-    onSelectedSourceTap?: (source: SelectedSource) => void;
-    onSourceDragChange: (drag: SourceDragPresentation | null) => void;
     onNoteKeyDown: () => void;
     onNoteKeyUp: () => void;
     onToggleAutoPreview: () => void;
     onToggleKeyboard: () => void;
-    onSourceSelect: (source: SelectedSource) => void;
     onSourcePageChange: (pageIndex: number) => void;
     voiceSettings: ModRailVoiceSettings;
-    onDwellNavigate: (dwellKey: string) => void;
     children: React.ReactNode;
 }) {
     const railGeometry = useMemo(
@@ -2218,42 +2221,14 @@ function MobileGlobalModRail({
     const voiceToggleRef = useRef<HTMLButtonElement | null>(null);
     const silhouetteGradientId = `mobile-mod-rail-fill-${useId().replaceAll(":", "")}`;
     const mappingActive = sourceDrag !== null;
-    const selectedSourceHandlers = useModSourceDrag({
-        onHoverTarget,
-        onDragSourceChange,
-        onSourceDrop,
-        onSourceDragChange,
-        onDwellNavigate,
-        getPairCreation,
-        onDuplicateHover,
-        onTap: (source) => onSelectedSourceTap?.(source),
-    });
-
-    const parkedSourceHandlers = useModSourceDrag({
-        onHoverTarget,
-        onDragSourceChange,
-        onSourceDrop,
-        onSourceDragChange,
-        onDwellNavigate,
-        getPairCreation,
-        onDuplicateHover,
-        onTap: (source, wasActiveSelection) => {
-            if (sourceTapMode === "toggle-quick-source") {
-                onSourceSelect(source);
-                onSelectedSourceTap?.(source);
-                return;
-            }
-            if (wasActiveSelection) {
-                onSelectedSourceTap?.(source);
-            } else {
-                onSourceSelect(source);
-            }
-        },
-    });
 
     useEffect(() => {
         setParkedPageIndex(selectedSource.sourceSlot - 1);
     }, [selectedSource.sourceSlot]);
+
+    useEffect(() => {
+        setParkedPageIndex(sourcePageIndex);
+    }, [sourcePageIndex]);
 
     useEffect(() => {
         if (!floating) {
@@ -2831,6 +2806,7 @@ function MobileGlobalModRail({
     const parkedSources = parkedPageIndex < RACK_MODULATION_SOURCE_PAGES.length
         ? RACK_MODULATION_SOURCE_PAGES[parkedPageIndex] ?? []
         : [];
+    const parkedPageWidthShare = parkedPageShare(preferences.scale);
 
     const noteButton = (
         <button
@@ -3004,6 +2980,7 @@ function MobileGlobalModRail({
                         "--editor-accent": accent,
                         "--rail-scale": preferences.scale,
                         "--rail-outline": `${railGeometry.outline}px`,
+                        "--parked-page-share": `${parkedPageWidthShare * 100}%`,
                     } as CSSProperties}
                     aria-label="Global modulation bar"
                 >
@@ -3017,7 +2994,7 @@ function MobileGlobalModRail({
                             data-role="mobile-global-mod-rail-selected"
                             className="mobile-global-mod-rail-module mobile-global-mod-rail-selected"
                             aria-label={`${selectedSource.label} selected`}
-                            {...selectedSourceHandlers(selectedSource, true)}
+                            {...sourceHandlers(selectedSource, true)}
                         >
                             <ModSourceArt source={selectedSource} />
                             {clampedActivity !== null ? (
@@ -3070,7 +3047,7 @@ function MobileGlobalModRail({
                                                 aria-pressed={isSelected}
                                                 className={`rack-mod-source${isSelected ? " is-selected" : ""}`}
                                                 style={{ "--source-color": source.accent } as CSSProperties}
-                                                {...parkedSourceHandlers(source, isSelected)}
+                                                {...sourceHandlers(source, isSelected)}
                                             >
                                                 <ModSourceArt source={source} />
                                             </button>
@@ -3306,7 +3283,7 @@ function MobileGlobalModRail({
                             data-role="mobile-global-mod-rail-selected"
                             className="mobile-global-mod-rail-module mobile-global-mod-rail-selected"
                             aria-label={`${selectedSource.label} selected`}
-                            {...selectedSourceHandlers(selectedSource, false)}
+                            {...sourceHandlers(selectedSource, true)}
                         >
                             <ModSourceArt source={selectedSource} />
                             {clampedActivity !== null ? (
@@ -4807,26 +4784,44 @@ export function EffectsRackWorkspace({
         setHoverTargetEndpointID(creation === "creatable" ? endpointID : null);
     }, [getPairCreation]);
 
+    const openSelectedSource = useCallback((source: SelectedSource) => {
+        setRailCollapseSignal((current) => current + 1);
+        onModSourceTap?.(source);
+    }, [onModSourceTap]);
+    // The workspace, not either replaceable rail presentation, owns the
+    // mapping lifecycle so a live placement change cannot unmount the drag.
+    const sourceHandlers = useModSourceDrag({
+        onHoverTarget: hoverSourceTarget,
+        onDragSourceChange: setDragSource,
+        onSourceDrop: dropSource,
+        onSourceDragChange: handleSourceDragChange,
+        onDwellNavigate: handleDwellNavigate,
+        getPairCreation,
+        onDuplicateHover: handleDuplicateHover,
+        onTap: (source, wasActiveSelection) => {
+            if (modSourceTapMode === "toggle-quick-source") {
+                // T43: selection and quick-sheet ownership change in one
+                // gesture without exposing a stale source frame.
+                selectSource(source);
+                openSelectedSource(source);
+                return;
+            }
+            if (wasActiveSelection) {
+                openSelectedSource(source);
+            } else {
+                selectSource(source);
+            }
+        },
+    });
+
     const modulationSourceControls = (
         <ModSourceCarousel
             pageIndex={sourcePageIndex}
             selectedSource={selectedSource}
             sourceIsArmed={sourceIsArmed}
             orientation={mobileGlobalModRail ? "vertical" : "horizontal"}
-            tapMode={modSourceTapMode}
             onPageChange={changeSourcePage}
-            onDragSourceChange={setDragSource}
-            onSourceSelect={selectSource}
-            onSourceDrop={dropSource}
-            getPairCreation={getPairCreation}
-            onDuplicateHover={handleDuplicateHover}
-            onSourceTap={(source) => {
-                setRailCollapseSignal((current) => current + 1);
-                onModSourceTap?.(source);
-            }}
-            onHoverTarget={hoverSourceTarget}
-            onSourceDragChange={handleSourceDragChange}
-            onDwellNavigate={handleDwellNavigate}
+            sourceHandlers={sourceHandlers}
         />
     );
 
@@ -5376,27 +5371,15 @@ export function EffectsRackWorkspace({
                     preferences={modBarPreferences}
                     sourcePageIndex={sourcePageIndex}
                     sourceIsArmed={sourceIsArmed}
-                    sourceTapMode={modSourceTapMode}
+                    sourceHandlers={sourceHandlers}
                     onStateChange={onGlobalModRailStateChange}
-                    onDragSourceChange={setDragSource}
-                    onSourceDrop={dropSource}
-                    getPairCreation={getPairCreation}
-                    onDuplicateHover={handleDuplicateHover}
                     countPulseSerial={confirmedRoute?.serial ?? 0}
-                    onSelectedSourceTap={(source) => {
-                        setRailCollapseSignal((current) => current + 1);
-                        onModSourceTap?.(source);
-                    }}
-                    onHoverTarget={hoverSourceTarget}
-                    onSourceDragChange={handleSourceDragChange}
                     onNoteKeyDown={modRailAudition.onNoteKeyDown}
                     onNoteKeyUp={modRailAudition.onNoteKeyUp}
                     onToggleAutoPreview={modRailAudition.onToggleAutoPreview}
                     onToggleKeyboard={modRailAudition.onToggleKeyboard}
-                    onSourceSelect={selectSource}
                     onSourcePageChange={changeSourcePage}
                     voiceSettings={modRailVoiceSettings}
-                    onDwellNavigate={handleDwellNavigate}
                 >
                     {modulationSourceControls}
                 </MobileGlobalModRail>,

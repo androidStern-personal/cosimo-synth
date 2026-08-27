@@ -1643,6 +1643,439 @@ test("T60 live preferences park, scale, hide, restore, and float the Mod bar wit
     }
 });
 
+test("T60 parked 320px source and tool targets grow with scale and own their inset hit area", async () => {
+    const scales = [
+        { scale: 0.85, sourceWidth: 58.8281, toolWidth: 44.1094 },
+        { scale: 1.1, sourceWidth: 62.6563, toolWidth: 46.9844 },
+        { scale: 1.3, sourceWidth: 65.7188, toolWidth: 49.2813 },
+    ];
+    const measuredSourceWidths = [];
+    const measuredToolWidths = [];
+
+    for (const expected of scales) {
+        const page = await openHarnessPage({
+            beforeGoto: async (nextPage) => {
+                await nextPage.setViewportSize({ width: 320, height: 568 });
+                await nextPage.addInitScript(({ scale }) => {
+                    localStorage.setItem("cosimo.mod-bar.preferences.v1", JSON.stringify({
+                        version: 1,
+                        scale,
+                        placement: "parked",
+                        parkedVisibility: "visible",
+                    }));
+                }, { scale: expected.scale });
+            },
+        });
+
+        const readTargetOwnership = async (selector) => page.locator(selector).evaluateAll((targets) => (
+            targets.map((target) => {
+                const bounds = target.getBoundingClientRect();
+                const inset = 3;
+                const points = [
+                    [bounds.left + inset, bounds.top + inset],
+                    [bounds.right - inset, bounds.top + inset],
+                    [bounds.left + inset, bounds.bottom - inset],
+                    [bounds.right - inset, bounds.bottom - inset],
+                    [bounds.left + (bounds.width / 2), bounds.top + (bounds.height / 2)],
+                ];
+                return {
+                    width: bounds.width,
+                    height: bounds.height,
+                    insetOwners: points.map(([x, y]) => (
+                        document.elementFromPoint(x, y)?.closest("button") === target
+                    )),
+                };
+            })
+        ));
+
+        try {
+            const rail = page.locator('[data-role="mobile-global-mod-rail"][data-placement="parked"]');
+            await rail.waitFor();
+            await page.waitForTimeout(220);
+
+            const sources = await readTargetOwnership(
+                '[data-role="mobile-global-mod-rail"] .mobile-global-mod-rail-parked-sources .rack-mod-source',
+            );
+            assert.equal(sources.length, 3);
+            for (const source of sources) {
+                assert.equal(Math.abs(source.width - expected.sourceWidth) <= 0.15, true);
+                assert.equal(Math.abs(source.height - 40) <= 0.5, true);
+                assert.equal(source.width >= 44, true);
+                assert.deepEqual(source.insetOwners, source.insetOwners.map(() => true));
+            }
+            measuredSourceWidths.push(sources[0].width);
+
+            for (let pageIndex = 0; pageIndex < 3; pageIndex += 1) {
+                await rail.getByRole("button", { name: "Next Mod bar group" }).click();
+            }
+            await rail.locator('xpath=self::*[@data-page-kind="tools"]').waitFor();
+            const tools = await readTargetOwnership(
+                '[data-role="mobile-global-mod-rail"] .mobile-global-mod-rail-parked-tools > button',
+            );
+            assert.equal(tools.length, 4);
+            for (const tool of tools) {
+                assert.equal(Math.abs(tool.width - expected.toolWidth) <= 0.15, true);
+                assert.equal(Math.abs(tool.height - 40) <= 0.5, true);
+                assert.equal(
+                    tool.width >= 44,
+                    true,
+                    `Scale ${expected.scale} parked tool width fell below 44px: ${tool.width}`,
+                );
+                assert.deepEqual(tool.insetOwners, tool.insetOwners.map(() => true));
+            }
+            measuredToolWidths.push(tools[0].width);
+        } finally {
+            await page.evaluate(() => {
+                localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+            }).catch(() => {});
+            await page.close();
+        }
+    }
+
+    assert.deepEqual(
+        measuredSourceWidths,
+        [...measuredSourceWidths].sort((left, right) => left - right),
+        "Increasing scale must never shrink a parked source target.",
+    );
+    assert.deepEqual(
+        measuredToolWidths,
+        [...measuredToolWidths].sort((left, right) => left - right),
+        "Increasing scale must never shrink a parked tool target.",
+    );
+});
+
+test("T60 preserves the explicitly visible source group in both placement directions", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 320, height: 568 });
+            await nextPage.addInitScript(() => {
+                localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+                localStorage.removeItem("cosimo.mobile-global-mod-rail.position.v1");
+            });
+        },
+    });
+
+    const changePlacement = async (placement) => {
+        const presetBar = page.locator("cosimo-preset-bar");
+        await presetBar.evaluate((element) => {
+            element.dispatchEvent(new CustomEvent("cosimo-open-perf-tuning"));
+        });
+        const settings = page.locator('[data-role="perf-tuning-page"]');
+        await settings.waitFor({ state: "visible" });
+        await settings.locator(`[data-mod-bar-placement="${placement}"]`).click();
+        await settings.getByRole("button", { name: "Close developer settings" }).click();
+        await settings.waitFor({ state: "detached" });
+    };
+
+    const visibleFloatingPage = async (rail) => rail.evaluate((element) => (
+        [...element.querySelectorAll(".rack-mod-page")]
+            .findIndex((candidate) => candidate.getAttribute("aria-hidden") === "false")
+    ));
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+        await rail.waitFor();
+        await expandGlobalModRail(page);
+        await rail.getByRole("button", { name: "Next modulation-source group" }).click();
+        await rail.getByRole("button", { name: "Next modulation-source group" }).click();
+        assert.equal(await visibleFloatingPage(rail), 2);
+        assert.equal(
+            await rail.locator('[data-role="mobile-global-mod-rail-selected"]').getAttribute("aria-label"),
+            "MSEG 1 selected",
+            "Paging must not be conflated with the selected source's slot.",
+        );
+
+        await changePlacement("parked");
+        await rail.locator('xpath=self::*[@data-placement="parked"][@data-page-index="2"][@data-page-kind="sources"]').waitFor();
+        assert.equal(
+            await rail.locator('[data-role="mobile-global-mod-rail-selected"]').getAttribute("aria-label"),
+            "MSEG 1 selected",
+        );
+
+        await rail.getByRole("button", { name: "Previous Mod bar group" }).click();
+        await rail.locator('xpath=self::*[@data-page-index="1"][@data-page-kind="sources"]').waitFor();
+        await changePlacement("floating-right");
+        await rail.locator('xpath=self::*[@data-edge="right"][@data-expanded="true"]').waitFor();
+        assert.equal(await visibleFloatingPage(rail), 1, "Parked source paging must survive floating.");
+
+        await changePlacement("parked");
+        await rail.locator('xpath=self::*[@data-page-index="1"][@data-page-kind="sources"]').waitFor();
+        await rail.getByRole("button", { name: "Next Mod bar group" }).click();
+        await rail.locator('xpath=self::*[@data-page-index="2"][@data-page-kind="sources"]').waitFor();
+        await rail.getByRole("button", { name: "Next Mod bar group" }).click();
+        await rail.locator('xpath=self::*[@data-page-kind="tools"]').waitFor();
+        await changePlacement("floating-left");
+        await rail.locator('xpath=self::*[@data-edge="left"][@data-expanded="true"]').waitFor();
+        assert.equal(
+            await visibleFloatingPage(rail),
+            2,
+            "The parked-only tools page must retain the last explicit source group when floating.",
+        );
+    } finally {
+        await page.evaluate(() => {
+            localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+        }).catch(() => {});
+        await page.close();
+    }
+});
+
+test("T60 live placement changes preserve an active source drag through its real drop", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+                localStorage.removeItem("cosimo.mobile-global-mod-rail.position.v1");
+            });
+        },
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await expandGlobalModRail(page);
+        const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+        const source = rail.locator('[data-role="rack-mod-source-mseg-1"]');
+        const target = page.locator('[data-rack-mod-target].is-selected-target');
+        const sourceBox = await source.boundingBox();
+        assert.ok(sourceBox);
+        const sourceCenter = {
+            x: sourceBox.x + (sourceBox.width / 2),
+            y: sourceBox.y + (sourceBox.height / 2),
+        };
+
+        await page.mouse.move(sourceCenter.x, sourceCenter.y);
+        await page.mouse.down();
+        await page.mouse.move(sourceCenter.x - 12, sourceCenter.y + 12, { steps: 3 });
+        await rail.locator('xpath=self::*[@data-mapping-active="true"]').waitFor();
+
+        await page.evaluate(() => {
+            document.querySelector("cosimo-preset-bar")?.dispatchEvent(
+                new CustomEvent("cosimo-open-perf-tuning"),
+            );
+        });
+        const settings = page.locator('[data-role="perf-tuning-page"]');
+        await settings.waitFor({ state: "visible" });
+        await settings.locator('[data-mod-bar-placement="parked"]').evaluate((button) => {
+            if (!(button instanceof HTMLButtonElement)) {
+                throw new Error("Parked placement button missing.");
+            }
+            button.click();
+        });
+        await rail.locator('xpath=self::*[@data-placement="parked"]').waitFor();
+        await settings.getByRole("button", { name: "Close developer settings" }).evaluate((button) => {
+            if (!(button instanceof HTMLButtonElement)) {
+                throw new Error("Developer settings close button missing.");
+            }
+            button.click();
+        });
+        await settings.waitFor({ state: "detached" });
+        assert.equal(
+            await rail.getAttribute("data-mapping-active"),
+            "true",
+            "Replacing the floating tree must not cancel the active mapping gesture.",
+        );
+
+        const targetBox = await target.boundingBox();
+        assert.ok(targetBox);
+        await page.mouse.move(
+            targetBox.x + (targetBox.width / 2),
+            targetBox.y + (targetBox.height / 2),
+            { steps: 8 },
+        );
+        await page.mouse.up();
+        await page.waitForTimeout(120);
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "mseg"
+                && route.sourceSlot === 1
+                && route.targetKind === "lane.distortion#1.distortionDriveDb"
+            )),
+            true,
+            "The pre-placement drag must complete the same real mapping after parking.",
+        );
+    } finally {
+        await page.evaluate(() => {
+            localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+        }).catch(() => {});
+        await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
+test("T60 hide and restore keep quick and full MSEG editors mounted without dead transparent hit areas", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 320, height: 568 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem("cosimo.mod-bar.preferences.v1", JSON.stringify({
+                    version: 1,
+                    scale: 1.1,
+                    placement: "parked",
+                    parkedVisibility: "visible",
+                }));
+            });
+        },
+    });
+
+    const readRestoreOwnership = async (surfaceSelector) => page.evaluate((selector) => {
+        const restore = document.querySelector('[data-role="mobile-global-mod-rail-restore"]');
+        const surface = document.querySelector(selector);
+        if (!(restore instanceof HTMLButtonElement) || !(surface instanceof HTMLElement)) {
+            return null;
+        }
+        const bounds = restore.getBoundingClientRect();
+        const visibleStyle = getComputedStyle(restore, "::before");
+        const visibleWidth = Number.parseFloat(visibleStyle.width);
+        const visibleHeight = Number.parseFloat(visibleStyle.height);
+        const transparentPoints = [
+            { x: bounds.left + (bounds.width / 2), y: bounds.top + 3 },
+            { x: bounds.left + 3, y: bounds.bottom - (visibleHeight / 2) },
+            { x: bounds.right - 3, y: bounds.bottom - (visibleHeight / 2) },
+        ];
+        const visibleCenter = {
+            x: bounds.left + (bounds.width / 2),
+            y: bounds.bottom - (visibleHeight / 2),
+        };
+        const surfaceStack = (point) => {
+            const stack = document.elementsFromPoint(point.x, point.y);
+            const restoreIndex = stack.findIndex((candidate) => restore.contains(candidate));
+            const surfaceIndex = stack.findIndex((candidate) => surface.contains(candidate));
+            return {
+                surfaceIsUnder: surfaceIndex >= 0,
+                restoreMasksSurface: restoreIndex >= 0
+                    && surfaceIndex >= 0
+                    && restoreIndex < surfaceIndex,
+                point,
+                owners: stack.slice(0, 5).map((candidate) => (
+                    candidate.closest("[data-role]")?.getAttribute("data-role") ?? candidate.tagName
+                )),
+            };
+        };
+        const surfaceBounds = surface.getBoundingClientRect();
+        return {
+            visibleWidth,
+            visibleHeight,
+            restoreBounds: {
+                left: bounds.left,
+                right: bounds.right,
+                top: bounds.top,
+                bottom: bounds.bottom,
+            },
+            surfaceBounds: {
+                left: surfaceBounds.left,
+                right: surfaceBounds.right,
+                top: surfaceBounds.top,
+                bottom: surfaceBounds.bottom,
+            },
+            visibleCenterOwned: document.elementFromPoint(
+                visibleCenter.x,
+                visibleCenter.y,
+            )?.closest("button") === restore,
+            transparentSurfaceOwnership: transparentPoints.map(surfaceStack),
+        };
+    }, surfaceSelector);
+
+    const assertRestoreOwnership = (ownership, label) => {
+        assert.ok(ownership);
+        assert.equal(ownership.visibleCenterOwned, true, `${label}: visible restore center must remain usable.`);
+        assert.equal(Math.abs(ownership.visibleWidth - 33) <= 0.5, true);
+        assert.equal(Math.abs(ownership.visibleHeight - 15.4) <= 0.5, true);
+        for (const point of ownership.transparentSurfaceOwnership) {
+            assert.equal(
+                point.surfaceIsUnder,
+                true,
+                `${label}: expected editor surface beneath restore bounds: ${JSON.stringify(ownership)}`,
+            );
+            assert.equal(
+                point.restoreMasksSurface,
+                false,
+                `${label}: transparent restore bounds stole editor input: ${JSON.stringify(ownership)}`,
+            );
+        }
+    };
+
+    const clickVisibleRestore = async () => {
+        const restore = page.getByRole("button", { name: "Restore parked Mod bar" });
+        const target = await restore.evaluate((button) => {
+            const bounds = button.getBoundingClientRect();
+            const visibleHeight = Number.parseFloat(getComputedStyle(button, "::before").height);
+            return {
+                x: bounds.width / 2,
+                y: bounds.height - (visibleHeight / 2),
+            };
+        });
+        await restore.click({ position: target });
+    };
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"][data-placement="parked"]');
+        await rail.waitFor();
+        await rail.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+        const quickSheet = page.locator('[data-role="quick-source-sheet"]');
+        await quickSheet.waitFor();
+        await quickSheet.evaluate((element) => {
+            globalThis.__cosimoT60QuickSheet = element;
+        });
+
+        await rail.getByRole("button", { name: "Hide parked Mod bar" }).click();
+        await page.getByRole("button", { name: "Restore parked Mod bar" }).waitFor();
+        assert.equal(
+            await quickSheet.evaluate((element) => globalThis.__cosimoT60QuickSheet === element),
+            true,
+            "Hiding must preserve the mounted quick-editor instance.",
+        );
+        assertRestoreOwnership(
+            await readRestoreOwnership('[data-role="quick-source-sheet-grip"]'),
+            "quick editor",
+        );
+
+        await clickVisibleRestore();
+        await rail.getByRole("button", { name: "Hide parked Mod bar" }).waitFor();
+        assert.equal(
+            await quickSheet.evaluate((element) => globalThis.__cosimoT60QuickSheet === element),
+            true,
+        );
+        await quickSheet.locator('[data-role="quick-source-sheet-full-editor"]').evaluate((button) => {
+            if (!(button instanceof HTMLButtonElement)) {
+                throw new Error("Quick-editor Full button missing.");
+            }
+            button.click();
+        });
+        const fullEditor = page.locator('[data-role="mseg-editor-dialog"]');
+        await fullEditor.waitFor();
+        await fullEditor.evaluate((element) => {
+            globalThis.__cosimoT60FullEditor = element;
+        });
+
+        await rail.getByRole("button", { name: "Hide parked Mod bar" }).click();
+        await page.getByRole("button", { name: "Restore parked Mod bar" }).waitFor();
+        assert.equal(
+            await fullEditor.evaluate((element) => globalThis.__cosimoT60FullEditor === element),
+            true,
+            "Hiding must preserve the mounted full-editor instance.",
+        );
+        assertRestoreOwnership(
+            await readRestoreOwnership('[data-role="mseg-editor-controls"]'),
+            "full editor",
+        );
+        await clickVisibleRestore();
+        assert.equal(
+            await fullEditor.evaluate((element) => globalThis.__cosimoT60FullEditor === element),
+            true,
+            "Restoring must not replace the full-editor instance.",
+        );
+        await fullEditor.locator('[data-role="mseg-editor-done"]').click();
+    } finally {
+        await page.evaluate(() => {
+            localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+            delete globalThis.__cosimoT60QuickSheet;
+            delete globalThis.__cosimoT60FullEditor;
+        }).catch(() => {});
+        await page.close();
+    }
+});
+
 test("T60 parked row stays fixed, fully hittable, and drag-owned across compact compositions", async () => {
     const layouts = [
         { name: "short 320px phone", width: 320, height: 568, scale: 0.85 },
