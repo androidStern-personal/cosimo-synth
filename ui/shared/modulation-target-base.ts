@@ -223,7 +223,7 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
     if (binding._tag !== "endpoint") {
         return null;
     }
-    if (/^(?:mseg|env)[123]$/.test(descriptor.moduleId)) {
+    if (/^(?:mseg[123]|env[123]|ampEnvelope)$/.test(descriptor.moduleId)) {
         const initialValue = binding.toEngine(descriptor.initialValue);
         let entrySpec: ParameterEntrySpec;
         if (descriptor.format.kind === "percent") {
