@@ -11,12 +11,18 @@ import {
 export const ENHANCER_LITE_STATE_FORMAT = "cosimo.enhancer-lite";
 
 /** Current persisted Enhancer Lite state version. */
-export const ENHANCER_LITE_STATE_VERSION = 1;
+export const ENHANCER_LITE_STATE_VERSION = 2;
+
+/** Measured selection shapes available to the one-band prototype. */
+export const ENHANCER_LITE_SHAPES = ["low", "bell", "high"] as const;
+
+/** Saved selection shape. */
+export type EnhancerLiteShape = typeof ENHANCER_LITE_SHAPES[number];
 
 /** Complete saved sound and routing state for the one-band prototype. */
 export type EnhancerLiteState = {
     readonly format: typeof ENHANCER_LITE_STATE_FORMAT;
-    readonly version: 1;
+    readonly version: 2;
     readonly freqHz: number;
     readonly q: number;
     readonly mode: EnhancerMode;
@@ -24,6 +30,7 @@ export type EnhancerLiteState = {
     readonly sideAmount: number;
     readonly curve: EnhancerCurve;
     readonly saturationMode: EnhancerSaturationMode;
+    readonly shape: EnhancerLiteShape;
 };
 
 /** A saved one-band setting identity. */
@@ -64,6 +71,14 @@ export type EnhancerLiteSettingDescriptor =
         readonly initial: EnhancerSaturationMode;
         readonly choices: typeof ENHANCER_SATURATION_MODES;
         readonly exposure: "static-preset";
+    }
+    | {
+        readonly kind: "shape";
+        readonly id: EnhancerLiteSettingID;
+        readonly dspEndpointID: string;
+        readonly initial: EnhancerLiteShape;
+        readonly choices: typeof ENHANCER_LITE_SHAPES;
+        readonly exposure: "static-preset";
     };
 
 /** Numeric values sent to the isolated Cmajor graph. */
@@ -75,6 +90,7 @@ export type EnhancerLiteDspSettings = {
     readonly sideAmountIn: number;
     readonly curveIn: 0 | 1;
     readonly saturationModeIn: 0 | 1;
+    readonly shapeIn: 0 | 1 | 2;
 };
 
 /** Result of parsing unknown persisted prototype state. */
@@ -150,6 +166,14 @@ export const ENHANCER_LITE_SETTING_DESCRIPTORS = [
         choices: ENHANCER_SATURATION_MODES,
         exposure: "static-preset",
     },
+    {
+        kind: "shape",
+        id: "shape",
+        dspEndpointID: "shapeIn",
+        initial: "bell",
+        choices: ENHANCER_LITE_SHAPES,
+        exposure: "static-preset",
+    },
 ] as const satisfies ReadonlyArray<EnhancerLiteSettingDescriptor>;
 
 const ENHANCER_LITE_STATE_KEYS = [
@@ -158,16 +182,23 @@ const ENHANCER_LITE_STATE_KEYS = [
     ...ENHANCER_LITE_SETTING_DESCRIPTORS.map(({ id }) => id),
 ] as const;
 
+const ENHANCER_LITE_V1_STATE_KEYS = ENHANCER_LITE_STATE_KEYS.filter(
+    (key) => key !== "shape",
+);
+
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function hasExactlyStateKeys(record: Readonly<Record<string, unknown>>): boolean {
+function hasExactlyStateKeys(
+    record: Readonly<Record<string, unknown>>,
+    expectedKeys: ReadonlyArray<string>,
+): boolean {
     const ownKeys = Reflect.ownKeys(record);
-    return ownKeys.length === ENHANCER_LITE_STATE_KEYS.length
+    return ownKeys.length === expectedKeys.length
         && ownKeys.every((key) => (
             typeof key === "string"
-            && ENHANCER_LITE_STATE_KEYS.some((candidate) => candidate === key)
+            && expectedKeys.some((candidate) => candidate === key)
         ));
 }
 
@@ -205,6 +236,12 @@ function parseSaturationMode(value: unknown): EnhancerSaturationMode | ParseFail
         : { _tag: "err", message: "saturationMode must be Subtle or Medium." };
 }
 
+function parseShape(value: unknown): EnhancerLiteShape | ParseFailure {
+    return value === "low" || value === "bell" || value === "high"
+        ? value
+        : { _tag: "err", message: "shape must be Low, Bell, or High." };
+}
+
 function isFailure(value: unknown): value is ParseFailure {
     return isRecord(value) && value._tag === "err" && typeof value.message === "string";
 }
@@ -221,10 +258,11 @@ export function createDefaultEnhancerLiteState(): EnhancerLiteState {
         sideAmount: 0,
         curve: "solid",
         saturationMode: "subtle",
+        shape: "bell",
     };
 }
 
-/** Parse a JSON string or unknown value into the exact v1 state shape. */
+/** Parse a JSON string or unknown value, migrating exact v1 states to Bell. */
 export function parseEnhancerLiteState(input: unknown): EnhancerLiteStateParseOutcome {
     let document = input;
     if (typeof input === "string") {
@@ -236,13 +274,20 @@ export function parseEnhancerLiteState(input: unknown): EnhancerLiteStateParseOu
         }
     }
 
-    if (!isRecord(document) || !hasExactlyStateKeys(document))
+    if (!isRecord(document))
         return { _tag: "err", message: "Enhancer Lite state has the wrong keys." };
 
     if (document.format !== ENHANCER_LITE_STATE_FORMAT
-        || document.version !== ENHANCER_LITE_STATE_VERSION) {
+        || (document.version !== 1 && document.version !== ENHANCER_LITE_STATE_VERSION)) {
         return { _tag: "err", message: "Enhancer Lite state format or version is unsupported." };
     }
+
+    const isLegacyV1 = document.version === 1;
+    const expectedKeys = isLegacyV1
+        ? ENHANCER_LITE_V1_STATE_KEYS
+        : ENHANCER_LITE_STATE_KEYS;
+    if (!hasExactlyStateKeys(document, expectedKeys))
+        return { _tag: "err", message: "Enhancer Lite state has the wrong keys." };
 
     const freqHz = parseNumber(document, "freqHz", 20, 20_000);
     const q = parseNumber(document, "q", 0.1, 10);
@@ -251,7 +296,17 @@ export function parseEnhancerLiteState(input: unknown): EnhancerLiteStateParseOu
     const mode = parseMode(document.mode);
     const curve = parseCurve(document.curve);
     const saturationMode = parseSaturationMode(document.saturationMode);
-    for (const result of [freqHz, q, midAmount, sideAmount, mode, curve, saturationMode]) {
+    const shape = isLegacyV1 ? "bell" : parseShape(document.shape);
+    for (const result of [
+        freqHz,
+        q,
+        midAmount,
+        sideAmount,
+        mode,
+        curve,
+        saturationMode,
+        shape,
+    ]) {
         if (isFailure(result))
             return result;
     }
@@ -262,7 +317,8 @@ export function parseEnhancerLiteState(input: unknown): EnhancerLiteStateParseOu
         || typeof sideAmount !== "number"
         || (mode !== "stereo" && mode !== "mid-side")
         || (curve !== "tube" && curve !== "solid")
-        || (saturationMode !== "subtle" && saturationMode !== "medium")) {
+        || (saturationMode !== "subtle" && saturationMode !== "medium")
+        || (shape !== "low" && shape !== "bell" && shape !== "high")) {
         return { _tag: "err", message: "Enhancer Lite state refinement failed." };
     }
 
@@ -278,6 +334,7 @@ export function parseEnhancerLiteState(input: unknown): EnhancerLiteStateParseOu
             sideAmount,
             curve,
             saturationMode,
+            shape,
         },
     };
 }
@@ -297,5 +354,6 @@ export function toEnhancerLiteDspSettings(state: EnhancerLiteState): EnhancerLit
         sideAmountIn: state.sideAmount,
         curveIn: state.curve === "solid" ? 1 : 0,
         saturationModeIn: state.saturationMode === "medium" ? 1 : 0,
+        shapeIn: state.shape === "low" ? 0 : (state.shape === "high" ? 2 : 1),
     };
 }

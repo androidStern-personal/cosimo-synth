@@ -72,14 +72,34 @@ export const effectPlugins = {
             { repoPath: "fx/enhancer_lite/EnhancerLitePlugin.cmajor", runtimePath: "EnhancerLitePlugin.cmajor" },
         ],
     },
+    "enhancer-lite-shelves-audition": {
+        patch: "fx/enhancer_lite/EnhancerLiteShelvesAudition.cmajorpatch",
+        runtimeOut: "build/fx/enhancer_lite_shelves_audition_runtime",
+        juceOut: "build/enhancer_lite_shelves_audition_juce",
+        cmakeTarget: "CosimoEnhancerLiteShelvesAudition",
+        productName: "CosimoEnhancerLiteShelvesAudition",
+        generatedHostLatencySamples: 3,
+        includeInAll: false,
+        runtimeSources: [
+            { repoPath: "cmajor/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
+            { repoPath: "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor", runtimePath: "EnhancerLiteSpectrumAnalyzer.cmajor" },
+            { repoPath: "fx/enhancer_lite/EnhancerLitePlugin.cmajor", runtimePath: "EnhancerLitePlugin.cmajor" },
+        ],
+    },
 };
 
 export function effectPluginNames() {
+    return Object.entries(effectPlugins)
+        .filter(([, plugin]) => plugin.includeInAll !== false)
+        .map(([pluginName]) => pluginName);
+}
+
+export function effectPluginTargetNames() {
     return Object.keys(effectPlugins);
 }
 
 export function usage() {
-    const names = ["all", ...effectPluginNames()].join(", ");
+    const names = ["all", ...effectPluginTargetNames()].join(", ");
     return `Usage: npm run fx:build -- <plugin>\n\nAvailable plugins: ${names}`;
 }
 

@@ -16,17 +16,17 @@ test("Enhancer Lite saves exactly one band's static Stereo/M/S sound controls", 
     const defaults = enhancer.createDefaultEnhancerLiteState();
 
     assert.equal(enhancer.ENHANCER_LITE_STATE_FORMAT, "cosimo.enhancer-lite");
-    assert.equal(enhancer.ENHANCER_LITE_STATE_VERSION, 1);
+    assert.equal(enhancer.ENHANCER_LITE_STATE_VERSION, 2);
     assert.deepEqual(
         enhancer.ENHANCER_LITE_SETTING_DESCRIPTORS.map(({ id }) => id),
-        ["freqHz", "q", "mode", "midAmount", "sideAmount", "curve", "saturationMode"],
+        ["freqHz", "q", "mode", "midAmount", "sideAmount", "curve", "saturationMode", "shape"],
     );
     assert.ok(enhancer.ENHANCER_LITE_SETTING_DESCRIPTORS.every(
         ({ exposure }) => exposure === "static-preset",
     ));
     assert.deepEqual(defaults, {
         format: "cosimo.enhancer-lite",
-        version: 1,
+        version: 2,
         freqHz: 130,
         q: 0.71,
         mode: "stereo",
@@ -34,6 +34,7 @@ test("Enhancer Lite saves exactly one band's static Stereo/M/S sound controls", 
         sideAmount: 0,
         curve: "solid",
         saturationMode: "subtle",
+        shape: "bell",
     });
     assert.equal(Object.hasOwn(defaults, "deEmphasis"), false);
     assert.deepEqual(
@@ -50,6 +51,7 @@ test("Enhancer Lite saves exactly one band's static Stereo/M/S sound controls", 
         sideAmount: 0.37,
         curve: "tube",
         saturationMode: "medium",
+        shape: "high",
     };
     assert.deepEqual(enhancer.parseEnhancerLiteState(edited), { _tag: "ok", value: edited });
     assert.deepEqual(enhancer.toEnhancerLiteDspSettings(edited), {
@@ -60,6 +62,15 @@ test("Enhancer Lite saves exactly one band's static Stereo/M/S sound controls", 
         sideAmountIn: 0.37,
         curveIn: 0,
         saturationModeIn: 1,
+        shapeIn: 2,
+    });
+
+    const legacyV1 = Object.fromEntries(
+        Object.entries({ ...defaults, version: 1 }).filter(([key]) => key !== "shape"),
+    );
+    assert.deepEqual(enhancer.parseEnhancerLiteState(legacyV1), {
+        _tag: "ok",
+        value: defaults,
     });
 });
 
@@ -71,7 +82,7 @@ test("Enhancer Lite rejects partial, extra, non-finite, and out-of-range state",
         [],
         "not json",
         { ...defaults, format: "cosimo.enhancer" },
-        { ...defaults, version: 2 },
+        { ...defaults, version: 3 },
         { ...defaults, freqHz: 19.9 },
         { ...defaults, q: 10.1 },
         { ...defaults, midAmount: Number.NaN },
@@ -79,6 +90,7 @@ test("Enhancer Lite rejects partial, extra, non-finite, and out-of-range state",
         { ...defaults, mode: "linked" },
         { ...defaults, curve: "tape" },
         { ...defaults, saturationMode: "hard" },
+        { ...defaults, shape: "notch" },
         { ...defaults, deEmphasis: 0 },
         Object.fromEntries(Object.entries(defaults).filter(([key]) => key !== "q")),
     ];
@@ -116,6 +128,9 @@ test("the isolated Lite DSP keeps the accepted laws while removing de-emphasis",
     assert.match(source, /x \* \(27\.0f \+ x2\) \/ \(27\.0f \+ 9\.0f \* x2\)/);
     assert.match(source, /enhancerLiteEffectiveBellQ \(q, midAmount\)/);
     assert.match(source, /enhancerLiteEffectiveBellQ \(q, sideAmount\)/);
+    assert.match(source, /simper::Mode::lowShelf/);
+    assert.match(source, /simper::Mode::highShelf/);
+    assert.match(source, /let enhancerLiteShapeDefault = enhancerLiteShapeBell;/);
     assert.match(source, /let enhancerLiteMediumDrive = 6\.0f;/);
     assert.match(source, /let enhancerLiteMediumTubeBias = 0\.3125f;/);
     assert.match(source, /combinedFrames\.at \(oversampleFrame\) = oversampledDry/);
@@ -135,9 +150,9 @@ test("the isolated Lite DSP keeps the accepted laws while removing de-emphasis",
         source.indexOf("void smoothControls()"),
         source.indexOf("void main()", source.indexOf("void smoothControls()")),
     );
-    assert.equal([...smoothingSection.matchAll(/smoothEnhancerLiteControl/g)].length, 7);
+    assert.equal([...smoothingSection.matchAll(/smoothEnhancerLiteControl/g)].length, 10);
     for (const endpointID of [
-        "freqHzIn", "qIn", "modeIn", "midAmountIn", "sideAmountIn", "curveIn", "saturationModeIn",
+        "freqHzIn", "qIn", "modeIn", "midAmountIn", "sideAmountIn", "curveIn", "saturationModeIn", "shapeIn",
     ]) {
         const declaration = graph.split("\n").find((line) => line.includes(` ${endpointID} `));
         assert.ok(declaration, `missing ${endpointID}`);

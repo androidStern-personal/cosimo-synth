@@ -5,7 +5,7 @@ export const ENHANCER_LITE_ANALYZER_ENDPOINTS = Object.freeze({
     output: "outputSpectrum",
 });
 
-/** Shared plot geometry used by the bell and both spectrum traces. */
+/** Accepted Bell plot geometry, also shared by both spectrum traces. */
 export const ENHANCER_LITE_PLOT = Object.freeze({
     width: 760,
     height: 272,
@@ -34,6 +34,9 @@ export const ENHANCER_LITE_DB_ROWS = Object.freeze([
     { gainDb: 3, levelDbfs: -54 },
     { gainDb: 0, levelDbfs: -72 },
 ]);
+
+const shelfMinimumDisplayDb = -18;
+const shelfMaximumDisplayDb = 30;
 
 /** Smoothed spectrum data ready to render in the shared plot. */
 export type EnhancerLiteSpectrumDisplay = {
@@ -171,7 +174,7 @@ export function enhancerLiteFrequencyX(frequencyHz: number): number {
         );
 }
 
-/** Project relative bell gain onto the left-hand gain axis. */
+/** Project accepted Bell gain onto its original left-hand gain axis. */
 export function enhancerLiteGainY(gainDb: number): number {
     const normalized = (
         clamp(gainDb, ENHANCER_LITE_PLOT.minimumGainDb, ENHANCER_LITE_PLOT.maximumGainDb)
@@ -183,6 +186,36 @@ export function enhancerLiteGainY(gainDb: number): number {
             - ENHANCER_LITE_PLOT.top
             - ENHANCER_LITE_PLOT.bottom
         );
+}
+
+/**
+ * Project the measured shelf response without changing Bell/analyser geometry.
+ * The nominal 0..12 dB shelf range stays on the accepted axis. Only genuine
+ * high-Q overflow is compressed into the otherwise unused top/bottom margins:
+ * +12..+30 dB maps to y=18..0, and 0..-18 dB maps to y=244..272.
+ */
+export function enhancerLiteShelfGainY(gainDb: number): number {
+    if (gainDb > ENHANCER_LITE_PLOT.maximumGainDb) {
+        const normalized = (
+            clamp(
+                gainDb,
+                ENHANCER_LITE_PLOT.maximumGainDb,
+                shelfMaximumDisplayDb,
+            ) - ENHANCER_LITE_PLOT.maximumGainDb
+        ) / (shelfMaximumDisplayDb - ENHANCER_LITE_PLOT.maximumGainDb);
+        return ENHANCER_LITE_PLOT.top * (1 - normalized);
+    }
+
+    if (gainDb < ENHANCER_LITE_PLOT.minimumGainDb) {
+        const normalized = (
+            ENHANCER_LITE_PLOT.minimumGainDb
+            - clamp(gainDb, shelfMinimumDisplayDb, ENHANCER_LITE_PLOT.minimumGainDb)
+        ) / (ENHANCER_LITE_PLOT.minimumGainDb - shelfMinimumDisplayDb);
+        return ENHANCER_LITE_PLOT.height - ENHANCER_LITE_PLOT.bottom
+            + normalized * ENHANCER_LITE_PLOT.bottom;
+    }
+
+    return enhancerLiteGainY(gainDb);
 }
 
 /** Project absolute signal level onto the row-aligned right-hand dBFS axis. */

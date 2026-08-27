@@ -39,6 +39,7 @@ const liteDefaults = Object.freeze({
     sideAmountIn: 0,
     curveIn: 1,
     saturationModeIn: 0,
+    shapeIn: 1,
 });
 
 function run(command, args) {

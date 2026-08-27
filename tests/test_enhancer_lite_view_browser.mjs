@@ -18,6 +18,7 @@ const initialValues = {
     sideAmountIn: 0,
     curveIn: 1,
     saturationModeIn: 0,
+    shapeIn: 1,
 };
 
 let server;
@@ -113,7 +114,44 @@ async function drag(page, locator, deltaX, deltaY, modifiers = []) {
         await page.keyboard.up(modifier);
 }
 
-test("the bell owns frequency, amount, and Shift-drag Q with no slider fallback", async () => {
+async function measurePrimaryHandleDrag(page, shape, shapeIn) {
+    const handle = shadow(page, "[data-response-role='primary-handle']");
+    await page.evaluate((selectedShapeIn) => {
+        window.__ENHANCER_LITE_TEST__.emit("shapeIn", selectedShapeIn);
+        window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000);
+        window.__ENHANCER_LITE_TEST__.emit("qIn", 0.7);
+        window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 0);
+    }, shapeIn);
+    const zeroCy = Number(await handle.getAttribute("cy"));
+    await page.evaluate(() => window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 1));
+    const fullCy = Number(await handle.getAttribute("cy"));
+    await page.evaluate(() => {
+        window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 0.25);
+        window.__ENHANCER_LITE_TEST__.clearSent();
+    });
+    const beforeCy = Number(await handle.getAttribute("cy"));
+    const plotBounds = await shadow(page, ".response-plot").boundingBox();
+    assert.ok(plotBounds, "response plot must have browser geometry");
+    const pointerDeltaY = -40;
+    await drag(page, handle, 0, pointerDeltaY);
+    const afterCy = Number(await handle.getAttribute("cy"));
+    const amountEvents = (await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent))
+        .filter(({ endpointID }) => endpointID === "midAmountIn");
+    assert.ok(amountEvents.length > 0, `${shape} emitted no Amount gesture`);
+    const amount = amountEvents.at(-1).value;
+    const expectedAmount = 0.25 - pointerDeltaY / plotBounds.height;
+    const expectedCy = zeroCy - expectedAmount * (zeroCy - fullCy);
+
+    assert.equal(zeroCy, 244, `${shape} zero-Amount geometry drifted`);
+    assert.equal(fullCy, 18, `${shape} full-Amount geometry drifted`);
+    assert.ok(Math.abs(amount - expectedAmount) < 1e-6, `${shape}: ${amount} vs ${expectedAmount}`);
+    assert.ok(Math.abs(afterCy - expectedCy) <= 0.02, `${shape}: ${afterCy} vs ${expectedCy}`);
+    assert.ok(beforeCy - afterCy > 30, `${shape} handle detached from a 40 px pointer drag`);
+
+    return { shape, zeroCy, fullCy, beforeCy, afterCy, amount };
+}
+
+test("every shape shares frequency, amount, and Shift-drag Q with no slider fallback", async () => {
     const page = await openEnhancerLite();
 
     try {
@@ -140,6 +178,31 @@ test("the bell owns frequency, amount, and Shift-drag Q with no slider fallback"
     } finally {
         await page.close();
     }
+});
+
+test("Bell, Low, and High Amount handles follow real pointer travel in source and compiled UI", async () => {
+    const modulePaths = [
+        "/fx/enhancer_lite/view/source.ts",
+        "/build/fx/enhancer_lite_runtime/view/app.js",
+    ];
+    const results = [];
+    for (const modulePath of modulePaths) {
+        const page = await openEnhancerLite(modulePath);
+        try {
+            results.push({
+                modulePath,
+                shapes: [
+                    await measurePrimaryHandleDrag(page, "bell", 1),
+                    await measurePrimaryHandleDrag(page, "low", 0),
+                    await measurePrimaryHandleDrag(page, "high", 2),
+                ],
+            });
+        } finally {
+            await page.close();
+        }
+    }
+
+    assert.deepEqual(results[1].shapes, results[0].shapes);
 });
 
 test("M/S exposes an independent draggable Side amount while sharing frequency and Q", async () => {
@@ -169,6 +232,12 @@ test("the plotted bell narrows as Q rises and tracks the actual 12 dB amount law
 
     try {
         const primaryPath = shadow(page, "[data-response-role='primary']");
+        assert.deepEqual(
+            await shadow(page, "[data-gain-db]").evaluateAll((rows) => (
+                rows.map((row) => Number(row.getAttribute("data-gain-db")))
+            )),
+            [12, 9, 6, 3, 0],
+        );
         await page.evaluate(() => {
             window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000);
             window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 1);
@@ -187,6 +256,70 @@ test("the plotted bell narrows as Q rises and tracks the actual 12 dB amount law
         assert.ok(widePointsAboveSixDb > narrowPointsAboveSixDb);
         assert.equal(await shadow(page, "[data-readout='primary']").textContent(), "+12.0 dB");
         assert.equal(await shadow(page, "[data-response-role='primary-handle']").getAttribute("cy"), "18.00");
+    } finally {
+        await page.close();
+    }
+});
+
+test("Low and High draw measured shelf responses with a directly manipulated Amount handle", async () => {
+    const page = await openEnhancerLite();
+
+    try {
+        const primaryPath = shadow(page, "[data-response-role='primary']");
+        await page.evaluate(() => {
+            window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000);
+            window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 1);
+            window.__ENHANCER_LITE_TEST__.emit("qIn", 0.7);
+        });
+        const bellPath = await primaryPath.getAttribute("d");
+        assert.equal(await shadow(page, "[data-shelf-overflow='high']").isHidden(), true);
+        assert.equal(await shadow(page, "[data-response-role='primary-guide']").isHidden(), true);
+
+        await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearSent());
+        await shadow(page, "[data-shape='low']").click();
+        const lowPath = await primaryPath.getAttribute("d");
+        assert.notEqual(lowPath, bellPath);
+        assert.equal(await shadow(page, "[data-shape='low']").getAttribute("aria-pressed"), "true");
+        assert.equal(await shadow(page, "[data-shelf-overflow='high']").isVisible(), true);
+        assert.equal(await shadow(page, "[data-shelf-overflow='low']").isVisible(), true);
+        assert.equal(
+            await shadow(page, "[data-response-role='primary-guide']").getAttribute("hidden"),
+            null,
+        );
+        assert.match(
+            await shadow(page, "[data-response-role='primary-guide']").getAttribute("d"),
+            /^M [\d.]+ 18\.00 V [\d.]+$/,
+        );
+        assert.equal(
+            await shadow(page, "[data-response-role='primary-handle']").getAttribute("cy"),
+            "18.00",
+        );
+
+        await shadow(page, "[data-shape='high']").click();
+        const highPath = await primaryPath.getAttribute("d");
+        assert.notEqual(highPath, lowPath);
+        assert.equal(await shadow(page, "[data-shape='high']").getAttribute("aria-pressed"), "true");
+        assert.deepEqual(
+            await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent),
+            [
+                { endpointID: "shapeIn", value: 0 },
+                { endpointID: "shapeIn", value: 2 },
+            ],
+        );
+
+        const points = (pathValue) => [...pathValue.matchAll(/[ML] ([\d.]+) ([\d.]+)/g)]
+            .map((match) => ({ x: Number(match[1]), y: Number(match[2]) }));
+        const lowPoints = points(lowPath);
+        const highPoints = points(highPath);
+        assert.ok(lowPoints[0].y < lowPoints.at(-1).y, JSON.stringify(lowPoints.slice(0, 1)));
+        assert.ok(highPoints[0].y > highPoints.at(-1).y, JSON.stringify(highPoints.slice(-1)));
+
+        await page.evaluate(() => window.__ENHANCER_LITE_TEST__.emit("qIn", 10));
+        const resonantHighPath = await primaryPath.getAttribute("d");
+        assert.notEqual(resonantHighPath, highPath);
+        const resonantY = points(resonantHighPath).map(({ y }) => y);
+        assert.ok(Math.min(...resonantY) <= 21);
+        assert.ok(Math.max(...resonantY) >= 241);
     } finally {
         await page.close();
     }
@@ -353,7 +486,7 @@ test("the surface is solid black, neon, and free of the removed de-emphasis UI",
     }
 });
 
-test("host-restored character and intensity select the truthful segment", async () => {
+test("host-restored shape, character, and intensity select the truthful segment", async () => {
     const page = await openEnhancerLite();
 
     try {
@@ -362,9 +495,11 @@ test("host-restored character and intensity select the truthful segment", async 
             await shadow(page, "[data-saturation-mode='subtle']").getAttribute("aria-pressed"),
             "true",
         );
+        assert.equal(await shadow(page, "[data-shape='bell']").getAttribute("aria-pressed"), "true");
         await page.evaluate(() => {
             window.__ENHANCER_LITE_TEST__.emit("curveIn", 0);
             window.__ENHANCER_LITE_TEST__.emit("saturationModeIn", 1);
+            window.__ENHANCER_LITE_TEST__.emit("shapeIn", 2);
         });
         assert.equal(await shadow(page, "[data-curve='tube']").getAttribute("aria-pressed"), "true");
         assert.equal(await shadow(page, "[data-curve='solid']").getAttribute("aria-pressed"), "false");
@@ -376,21 +511,25 @@ test("host-restored character and intensity select the truthful segment", async 
             await shadow(page, "[data-saturation-mode='subtle']").getAttribute("aria-pressed"),
             "false",
         );
+        assert.equal(await shadow(page, "[data-shape='high']").getAttribute("aria-pressed"), "true");
+        assert.equal(await shadow(page, "[data-shape='bell']").getAttribute("aria-pressed"), "false");
     } finally {
         await page.close();
     }
 });
 
-test("the compiled VST view preserves the same gesture surface and seven static controls", async () => {
+test("the compiled VST view preserves the same gesture surface and eight static controls", async () => {
     const page = await openEnhancerLite("/build/fx/enhancer_lite_runtime/view/app.js");
 
     try {
         assert.equal(await shadow(page, ".response-panel").count(), 1);
         assert.equal(await shadow(page, "input").count(), 0);
+        await shadow(page, "[data-shape='low']").click();
         await shadow(page, "[data-saturation-mode='medium']").click();
         await shadow(page, "[data-mode='mid-side']").click();
         assert.equal(await shadow(page, "[data-response-role='side-handle']").isVisible(), true);
-        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.slice(-2)), [
+        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.slice(-3)), [
+            { endpointID: "shapeIn", value: 0 },
             { endpointID: "saturationModeIn", value: 1 },
             { endpointID: "modeIn", value: 1 },
         ]);

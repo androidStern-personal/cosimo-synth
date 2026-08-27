@@ -1,0 +1,296 @@
+{
+  "schema": "cosimo.enhancer-spectre-shelves.v1",
+  "source": {
+    "product": "Wavesfactory Spectre",
+    "version": "1.5.6",
+    "auBinarySha256": "47e926a2b59cab3264d5b411b5c99d92d4e5c927054c7012428879ab3702354d",
+    "measurementScript": "scripts/measure_spectre_enhancer_shelves.py",
+    "fullCorpusPath": "build/t26-spectre-shelves",
+    "reportSha256": "17e56c3b5fcb0ab1eb300c4934f6aae593982dafb531c740e9055685e7663c83",
+    "measurementsSha256": "fe9e29bfc7f0f937447ba959aea30305471f061970577f813a49e4ef774661aa",
+    "caseCount": 284,
+    "stimulusCount": 20,
+    "sessionCount": 17,
+    "savedFileCount": 374,
+    "savedBytes": 382212268,
+    "allRendersSaved": true,
+    "freshInstanceRepeatabilityMaximumAbsoluteDifference": 0.0
+  },
+  "inputAudio": [
+    {
+      "id": "shelf-alias-high-9000hz-48k",
+      "path": "inputs/shelf-alias-high-9000hz-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "647f0f5faaf69f2b369082fdf0a449ad59f8f03dd805158a4049b3b7762509c0"
+    },
+    {
+      "id": "shelf-alias-low-9000hz-48k",
+      "path": "inputs/shelf-alias-low-9000hz-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "647f0f5faaf69f2b369082fdf0a449ad59f8f03dd805158a4049b3b7762509c0"
+    },
+    {
+      "id": "shelf-impulse-192000",
+      "path": "inputs/shelf-impulse-192000.wav",
+      "sampleRate": 192000,
+      "sha256FloatAudio": "58db4d8301bf09f28d47ea2b8a3f411964ff87c8ea182089ea78015a5b7b1b5d"
+    },
+    {
+      "id": "shelf-impulse-44100",
+      "path": "inputs/shelf-impulse-44100.wav",
+      "sampleRate": 44100,
+      "sha256FloatAudio": "98d7397b489bd1fab219b1a4acdc25d5316d9586c8a311ba53e57bc24286fa29"
+    },
+    {
+      "id": "shelf-impulse-48000",
+      "path": "inputs/shelf-impulse-48000.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "8c9cd1a059ca16d08ef32e530589d8600c81b516a74aff70a9e8a00fdee23a5a"
+    },
+    {
+      "id": "shelf-impulse-96000",
+      "path": "inputs/shelf-impulse-96000.wav",
+      "sampleRate": 96000,
+      "sha256FloatAudio": "18a37153561b8d247e2fdafc6ce0fd13bca1c368a508d6ae8cd587d12fc0204e"
+    },
+    {
+      "id": "shelf-music-bass-48k",
+      "path": "inputs/shelf-music-bass-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "407ec6973a129a756fa6b11cd7636ec6d81a8608b0a85a2dc6353a2b94b353eb"
+    },
+    {
+      "id": "shelf-music-bright-poly-48k",
+      "path": "inputs/shelf-music-bright-poly-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "7dafa5773735d7d8db17261c8b6f0b0819523ac9d02206a8f8fbfbf64f6d316c"
+    },
+    {
+      "id": "shelf-music-drums-48k",
+      "path": "inputs/shelf-music-drums-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "010d3f73f6c21e60937232d02ac15fb4767e7e264447eb9ed09e6ee03db7f02c"
+    },
+    {
+      "id": "shelf-music-pink-48k",
+      "path": "inputs/shelf-music-pink-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "77e0087f7803aaf09df035791e14a83c1aa6131fd0fb72f4d1701c5da8ebd349"
+    },
+    {
+      "id": "shelf-routing-1k-left-48k",
+      "path": "inputs/shelf-routing-1k-left-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "5dc18d2ac057aa8f0e646799447e6d14bf94435dae976beb6204637f2f9c674a"
+    },
+    {
+      "id": "shelf-routing-1k-mid-48k",
+      "path": "inputs/shelf-routing-1k-mid-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "9ae9f5ce00823293a9aa890e5ea867d7959e6ae01bd6fc0617df2cdcd4c0a935"
+    },
+    {
+      "id": "shelf-routing-1k-right-48k",
+      "path": "inputs/shelf-routing-1k-right-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "bf8c5bb544b80567e8bd56deba6d36acef422e3b5c552233d591f8dbdb14b6a0"
+    },
+    {
+      "id": "shelf-routing-1k-side-48k",
+      "path": "inputs/shelf-routing-1k-side-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "0e7c15d461c4ab9497ecfb7f674acd23c87efadea78cd43fe5dc3f21c8cc242c"
+    },
+    {
+      "id": "shelf-transfer-high-100hz--18db-48k",
+      "path": "inputs/shelf-transfer-high-100hz--18db-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "583bdd9cc320c7d7f7aa47bca73736d973e7002a88e77f43e0b3dc73a418eeff"
+    },
+    {
+      "id": "shelf-transfer-high-100hz--30db-48k",
+      "path": "inputs/shelf-transfer-high-100hz--30db-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "3d31a39c95b70ce26bff1f3c089517fa922ac330b06713e1e6fc2ea410db8d46"
+    },
+    {
+      "id": "shelf-transfer-high-100hz--6db-48k",
+      "path": "inputs/shelf-transfer-high-100hz--6db-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "9dcbf19073cdb5bd9b9666f042e0bf674329b8a6b2e65646fc6b25c5aa622b8b"
+    },
+    {
+      "id": "shelf-transfer-low-100hz--18db-48k",
+      "path": "inputs/shelf-transfer-low-100hz--18db-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "583bdd9cc320c7d7f7aa47bca73736d973e7002a88e77f43e0b3dc73a418eeff"
+    },
+    {
+      "id": "shelf-transfer-low-100hz--30db-48k",
+      "path": "inputs/shelf-transfer-low-100hz--30db-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "3d31a39c95b70ce26bff1f3c089517fa922ac330b06713e1e6fc2ea410db8d46"
+    },
+    {
+      "id": "shelf-transfer-low-100hz--6db-48k",
+      "path": "inputs/shelf-transfer-low-100hz--6db-48k.wav",
+      "sampleRate": 48000,
+      "sha256FloatAudio": "9dcbf19073cdb5bd9b9666f042e0bf674329b8a6b2e65646fc6b25c5aa622b8b"
+    }
+  ],
+  "decodedFacts": {
+    "parameterLabels": {
+      "frequency": "Frequency",
+      "amount": "Gain",
+      "q": "Q",
+      "processing": "Processing",
+      "character": "Color"
+    },
+    "parameterRanges": {
+      "frequencyHz": [20, 20000],
+      "gainDb": [0, 12],
+      "q": [0.1, 10]
+    },
+    "quality": "Good",
+    "shelfControlsAreIndependent": true,
+    "qIsDisplayedAsQ": true,
+    "zeroGainIsInactive": true,
+    "routingModes": ["Stereo", "Mid", "Side"]
+  },
+  "inferredSelectionModel": {
+    "formula": "RBJ/JUCE Q-form low- or high-shelf H(z)-1",
+    "designRateFactor": 4,
+    "frequencyLaw": "displayed Frequency in Hz, evaluated at 4x host sample rate",
+    "qLaw": "displayed Q used directly in beta = sin(w0) * sqrt(A) / Q",
+    "amountLaw": "A = 10^(gainDb/40), gainDb = 12 * amount",
+    "normalization": "divide all numerator and denominator coefficients by a0",
+    "shapedPathConditioning": {
+      "filter": "second-order Butterworth high-pass",
+      "frequencyHz": 20.01631809314913,
+      "q": 0.7071067811865476,
+      "gain": 1.0023994109214078,
+      "location": "after 4x reconstruction, before selected-path subtraction"
+    },
+    "remainingAmbiguity": "Black-box equivalence establishes behavior, not source implementation identity."
+  },
+  "modelFit": {
+    "selectedFactor": 4,
+    "factorRanking": {
+      "1x": {
+        "meanMagnitudeRmsErrorDb": 1.3438818260990848,
+        "meanPhaseRmsErrorDegrees": 3.013796255212533
+      },
+      "2x": {
+        "meanMagnitudeRmsErrorDb": 0.21120721664513062,
+        "meanPhaseRmsErrorDegrees": 0.5634231790400929
+      },
+      "4x": {
+        "meanMagnitudeRmsErrorDb": 0.020809416224034802,
+        "meanPhaseRmsErrorDegrees": 0.023217958106957984
+      },
+      "8x": {
+        "meanMagnitudeRmsErrorDb": 0.06751116459249971,
+        "meanPhaseRmsErrorDegrees": 0.13193049093488363
+      }
+    },
+    "worstDirectMagnitudeRmsErrorDb": 0.02082425288292489,
+    "worstDirectPhaseRmsErrorDegrees": 0.03244895100877471,
+    "worstPlateauGainErrorDb": 0.0208201818264658,
+    "fittedFrequencyRatioRange": [0.9941716465884025, 1.0059256454396697],
+    "fittedQRatioRange": [0.9960693716572653, 1.0011354582015537]
+  },
+  "representativeLinearGolden": [
+    {
+      "shape": "Low",
+      "sampleRate": 48000,
+      "frequencyHz": 1000,
+      "effectiveFrequencyHz": 1000,
+      "q": 0.7,
+      "gainDb": 6,
+      "responseAnchors": [
+        {"frequencyHz": 20.1416015625, "magnitudeDb": -2.9899238050900174, "phaseDegrees": 88.28089701184511},
+        {"frequencyHz": 250.1220703125, "magnitudeDb": 0.04179436317160615, "phaseDegrees": -8.500356916900504},
+        {"frequencyHz": 1000.1220703125, "magnitudeDb": -3.142211274309157, "phaseDegrees": -66.9058698898106},
+        {"frequencyHz": 4000.1220703125, "magnitudeDb": -17.647256588961067, "phaseDegrees": -91.6982101809541},
+        {"frequencyHz": 19999.8779296875, "magnitudeDb": -32.41047334403608, "phaseDegrees": -90.51886510647324}
+      ]
+    },
+    {
+      "shape": "Low",
+      "sampleRate": 48000,
+      "frequencyHz": 5000,
+      "effectiveFrequencyHz": 5000,
+      "q": 8,
+      "gainDb": 12,
+      "responseAnchors": [
+        {"frequencyHz": 20.1416015625, "magnitudeDb": 6.5382670168141885, "phaseDegrees": 89.40123262280358},
+        {"frequencyHz": 1249.8779296875, "magnitudeDb": 10.628902850876454, "phaseDegrees": -0.7399126988620773},
+        {"frequencyHz": 4999.8779296875, "magnitudeDb": 9.410006842010564, "phaseDegrees": -166.24231030016057},
+        {"frequencyHz": 19999.8779296875, "magnitudeDb": -20.685189120223075, "phaseDegrees": -164.94610355889097}
+      ]
+    },
+    {
+      "shape": "High",
+      "sampleRate": 48000,
+      "frequencyHz": 3000,
+      "effectiveFrequencyHz": 3000,
+      "q": 0.7,
+      "gainDb": 6,
+      "responseAnchors": [
+        {"frequencyHz": 20.1416015625, "magnitudeDb": -52.50915186467264, "phaseDegrees": 179.5130260488181},
+        {"frequencyHz": 750, "magnitudeDb": -17.64132951527233, "phaseDegrees": 94.26406888104968},
+        {"frequencyHz": 3000, "magnitudeDb": -3.1411552937997462, "phaseDegrees": 69.05998723106218},
+        {"frequencyHz": 12000, "magnitudeDb": 0.04075720850909997, "phaseDegrees": 14.9219712468571},
+        {"frequencyHz": 19999.8779296875, "magnitudeDb": -0.005464931009438524, "phaseDegrees": 8.471840506762806}
+      ]
+    },
+    {
+      "shape": "High",
+      "sampleRate": 48000,
+      "frequencyHz": 10000,
+      "effectiveFrequencyHz": 10023.74,
+      "q": 8,
+      "gainDb": 12,
+      "responseAnchors": [
+        {"frequencyHz": 20.1416015625, "magnitudeDb": -78.03026706302403, "phaseDegrees": -178.56105864356724},
+        {"frequencyHz": 2505.9814453125, "magnitudeDb": -20.233208267780935, "phaseDegrees": 165.97356312983325},
+        {"frequencyHz": 10023.5595703125, "magnitudeDb": 9.408547030634644, "phaseDegrees": 166.72705202616459},
+        {"frequencyHz": 19999.8779296875, "magnitudeDb": 14.961087852588523, "phaseDegrees": 7.731427813719265}
+      ]
+    }
+  ],
+  "sampleRateGolden": [
+    {"shape": "Low", "sampleRate": 44100, "frequencyHz": 1000, "gainDb": 9, "magnitudeRmsErrorDb": 0.020811566504324794, "phaseRmsErrorDegrees": 0.03244895100877471},
+    {"shape": "Low", "sampleRate": 96000, "frequencyHz": 1000, "gainDb": 9, "magnitudeRmsErrorDb": 0.020809990318411024, "phaseRmsErrorDegrees": 0.0066935534606933356},
+    {"shape": "Low", "sampleRate": 192000, "frequencyHz": 1000, "gainDb": 9, "magnitudeRmsErrorDb": 0.020812007105100613, "phaseRmsErrorDegrees": 0.0027271110107583794},
+    {"shape": "High", "sampleRate": 44100, "frequencyHz": 3000, "gainDb": 9, "magnitudeRmsErrorDb": 0.02081586668693574, "phaseRmsErrorDegrees": 0.03236791476759822},
+    {"shape": "High", "sampleRate": 96000, "frequencyHz": 3000, "gainDb": 9, "magnitudeRmsErrorDb": 0.020815657091369857, "phaseRmsErrorDegrees": 0.0064055281794734515},
+    {"shape": "High", "sampleRate": 192000, "frequencyHz": 3000, "gainDb": 9, "magnitudeRmsErrorDb": 0.020816215315752423, "phaseRmsErrorDegrees": 0.0019074369877086393}
+  ],
+  "distortionInteraction": {
+    "model": {
+      "Subtle Solid": "tanh(3*x)/sqrt(2)",
+      "Subtle Tube": "(tanh(3*x+0.125)-tanh(0.125))/sqrt(2)",
+      "Medium Solid": "tanh(6*x)/2",
+      "Medium Tube": "(tanh(6*x+0.3125)-tanh(0.3125))/2"
+    },
+    "worstRmsErrorDb": 0.1335283639426677,
+    "worstPointErrorDb": 0.44644630259977175
+  },
+  "aliasingGoldenAt48k": [
+    {"shape": "Low", "color": "Solid", "thirdAliasAt21000HzDbc": -57.92453265249891, "fifthAliasAt3000HzDbc": -63.68075452132452},
+    {"shape": "Low", "color": "Tube", "thirdAliasAt21000HzDbc": -67.31919317672319, "fifthAliasAt3000HzDbc": -77.02058081040948},
+    {"shape": "High", "color": "Solid", "thirdAliasAt21000HzDbc": -53.95704246901964, "fifthAliasAt3000HzDbc": -59.188513549117346},
+    {"shape": "High", "color": "Tube", "thirdAliasAt21000HzDbc": -61.11248045108154, "fifthAliasAt3000HzDbc": -68.75983264456954}
+  ],
+  "musicalListeningBundle": {
+    "fixtureCount": 4,
+    "renderCount": 32,
+    "shapes": ["Low", "High"],
+    "curves": ["Subtle", "Medium"],
+    "colors": ["Solid", "Tube"],
+    "rawRmsDeltaDbRange": [-0.07835223999528043, 11.533757346724197],
+    "staticLoudnessMatchGainDbRange": [-11.100000000000001, 0.0],
+    "rawAndStaticLoudnessMatchedFilesSaved": true
+  }
+}

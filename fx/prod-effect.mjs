@@ -7,6 +7,7 @@ import os from "node:os";
 import {
     buildPlugin,
     effectPluginNames,
+    effectPluginTargetNames,
     effectPlugins,
     repoRoot,
 } from "./build-effect.mjs";
@@ -30,7 +31,7 @@ const keyboardBridgeForbiddenStrings = [
 const sidechainBusRequiredString = "COSIMO_CMAJOR_JUCE_PLUGIN_SPLIT_INPUT_BUSES";
 
 function availablePluginNames() {
-    return ["all", ...effectPluginNames()].join(", ");
+    return ["all", ...effectPluginTargetNames()].join(", ");
 }
 
 function usage() {
