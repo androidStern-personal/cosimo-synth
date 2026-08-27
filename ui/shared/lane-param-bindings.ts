@@ -241,12 +241,18 @@ export function useLaneStateDoc(): {
                 value,
             });
         };
-        sendField(endpoints.enabledEndpointID, enabled ? 1 : 0);
-        if (enabled) {
-            sendField(endpoints.offsetEndpointID, 0);
+        if (!enabled) {
+            sendField(endpoints.enabledEndpointID, 0);
+        } else {
+            // Publish every dependency before the primary enable bit. Each
+            // lane-field event may reach DSP on a different frame, so Delay
+            // must already be Free and every control already centred before
+            // Key Track can become active.
             if (ordinaryEndpointID === "delayTime") {
                 sendField("delayTimeMode", 0);
             }
+            sendField(endpoints.offsetEndpointID, 0);
+            sendField(endpoints.enabledEndpointID, 1);
         }
         patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(next));
     }, [patchConnection, store]);

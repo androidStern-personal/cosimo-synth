@@ -53,6 +53,19 @@ function applyDelayFieldWrites(runtimeMirror, writes) {
     return runtimeMirror;
 }
 
+function applyDelayFieldWritesWithoutExclusiveModeOverlap(runtimeMirror, writes) {
+    for (const write of writes) {
+        applyDelayFieldWrites(runtimeMirror, [write]);
+        assert.equal(
+            runtimeMirror.delayTimeMode >= 1
+                && runtimeMirror.delayTimeKeyTrackEnabled >= 1,
+            false,
+            `Delay runtime prefix exposed Sync + Key Track after ${write.endpointID}`,
+        );
+    }
+    return runtimeMirror;
+}
+
 async function longPress(page, locator) {
     const box = await locator.boundingBox();
     assert.ok(box, "Key Track control must have a rendered hit area.");
@@ -224,9 +237,16 @@ test("Delay mode edits publish one mutually exclusive document and runtime state
         const keyTrackButton = page.locator('[data-role="key-track-delayTime"]');
         await keyTrackButton.waitFor();
 
+        await page.locator('[data-role="rack-parameter-delayTimeMode"]').click();
+        let snapshot = await waitForHarnessSnapshot(page, "Delay Sync starting state", (next) => {
+            const params = readLaneDocument(next)?.devices?.["delay#1"]?.params;
+            return Number(params?.delayTimeMode) === 1
+                && Number(params?.delayTimeKeyTrackEnabled) === 0
+                && Number(next.laneParams?.delayTimeMode) === 1;
+        });
         await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.clearDebugLog());
         await keyTrackButton.click();
-        let snapshot = await waitForHarnessSnapshot(page, "Delay Key Track enable runtime fields", (next) => {
+        snapshot = await waitForHarnessSnapshot(page, "Delay Key Track enable runtime fields", (next) => {
             const params = readLaneDocument(next)?.devices?.["delay#1"]?.params;
             return Number(params?.delayTimeMode) === 0
                 && Number(params?.delayTimeKeyTrackEnabled) === 1
@@ -234,11 +254,16 @@ test("Delay mode edits publish one mutually exclusive document and runtime state
         });
         const enableWrites = readDelayFieldWrites(snapshot);
         assert.deepEqual(enableWrites, [
-            { endpointID: "delayTimeKeyTrackEnabled", value: 1 },
-            { endpointID: "delayTimeKeyTrackOffsetSemitones", value: 0 },
             { endpointID: "delayTimeMode", value: 0 },
+            { endpointID: "delayTimeKeyTrackOffsetSemitones", value: 0 },
+            { endpointID: "delayTimeKeyTrackEnabled", value: 1 },
         ]);
-        const runtimeMirror = applyDelayFieldWrites({}, enableWrites);
+        const runtimeMirror = {
+            delayTimeMode: 1,
+            delayTimeKeyTrackEnabled: 0,
+            delayTimeKeyTrackOffsetSemitones: 0,
+        };
+        applyDelayFieldWritesWithoutExclusiveModeOverlap(runtimeMirror, enableWrites);
         assert.deepEqual(runtimeMirror, {
             delayTimeKeyTrackEnabled: 1,
             delayTimeKeyTrackOffsetSemitones: 0,
@@ -260,7 +285,7 @@ test("Delay mode edits publish one mutually exclusive document and runtime state
             { endpointID: "delayTimeKeyTrackEnabled", value: 0 },
             { endpointID: "delayTimeMode", value: 1 },
         ]);
-        applyDelayFieldWrites(runtimeMirror, syncWrites);
+        applyDelayFieldWritesWithoutExclusiveModeOverlap(runtimeMirror, syncWrites);
         assert.equal(snapshot.laneParams.delayTimeMode, 1);
         assert.equal(runtimeMirror.delayTimeMode, 1);
         assert.equal(runtimeMirror.delayTimeKeyTrackEnabled, 0);
