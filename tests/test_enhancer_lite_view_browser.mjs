@@ -18,6 +18,7 @@ const initialValues = {
     sideAmountIn: 0,
     curveIn: 1,
     saturationModeIn: 0,
+    shapeIn: 1,
 };
 
 let server;
@@ -113,7 +114,7 @@ async function drag(page, locator, deltaX, deltaY, modifiers = []) {
         await page.keyboard.up(modifier);
 }
 
-test("the bell owns frequency, amount, and Shift-drag Q with no slider fallback", async () => {
+test("every shape shares frequency, amount, and Shift-drag Q with no slider fallback", async () => {
     const page = await openEnhancerLite();
 
     try {
@@ -186,7 +187,59 @@ test("the plotted bell narrows as Q rises and tracks the actual 12 dB amount law
         assert.notEqual(narrowPath, widePath);
         assert.ok(widePointsAboveSixDb > narrowPointsAboveSixDb);
         assert.equal(await shadow(page, "[data-readout='primary']").textContent(), "+12.0 dB");
-        assert.equal(await shadow(page, "[data-response-role='primary-handle']").getAttribute("cy"), "18.00");
+        assert.equal(await shadow(page, "[data-response-role='primary-handle']").getAttribute("cy"), "102.75");
+    } finally {
+        await page.close();
+    }
+});
+
+test("Low and High draw measured shelf responses with a half-gain frequency handle", async () => {
+    const page = await openEnhancerLite();
+
+    try {
+        const primaryPath = shadow(page, "[data-response-role='primary']");
+        await page.evaluate(() => {
+            window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000);
+            window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 1);
+            window.__ENHANCER_LITE_TEST__.emit("qIn", 0.7);
+        });
+        const bellPath = await primaryPath.getAttribute("d");
+
+        await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearSent());
+        await shadow(page, "[data-shape='low']").click();
+        const lowPath = await primaryPath.getAttribute("d");
+        assert.notEqual(lowPath, bellPath);
+        assert.equal(await shadow(page, "[data-shape='low']").getAttribute("aria-pressed"), "true");
+        assert.equal(
+            await shadow(page, "[data-response-role='primary-handle']").getAttribute("cy"),
+            "131.00",
+        );
+
+        await shadow(page, "[data-shape='high']").click();
+        const highPath = await primaryPath.getAttribute("d");
+        assert.notEqual(highPath, lowPath);
+        assert.equal(await shadow(page, "[data-shape='high']").getAttribute("aria-pressed"), "true");
+        assert.deepEqual(
+            await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent),
+            [
+                { endpointID: "shapeIn", value: 0 },
+                { endpointID: "shapeIn", value: 2 },
+            ],
+        );
+
+        const points = (pathValue) => [...pathValue.matchAll(/[ML] ([\d.]+) ([\d.]+)/g)]
+            .map((match) => ({ x: Number(match[1]), y: Number(match[2]) }));
+        const lowPoints = points(lowPath);
+        const highPoints = points(highPath);
+        assert.ok(lowPoints[0].y < lowPoints.at(-1).y, JSON.stringify(lowPoints.slice(0, 1)));
+        assert.ok(highPoints[0].y > highPoints.at(-1).y, JSON.stringify(highPoints.slice(-1)));
+
+        await page.evaluate(() => window.__ENHANCER_LITE_TEST__.emit("qIn", 10));
+        const resonantHighPath = await primaryPath.getAttribute("d");
+        assert.notEqual(resonantHighPath, highPath);
+        const resonantY = points(resonantHighPath).map(({ y }) => y);
+        assert.ok(Math.min(...resonantY) <= 21);
+        assert.ok(Math.max(...resonantY) >= 241);
     } finally {
         await page.close();
     }
@@ -353,7 +406,7 @@ test("the surface is solid black, neon, and free of the removed de-emphasis UI",
     }
 });
 
-test("host-restored character and intensity select the truthful segment", async () => {
+test("host-restored shape, character, and intensity select the truthful segment", async () => {
     const page = await openEnhancerLite();
 
     try {
@@ -362,9 +415,11 @@ test("host-restored character and intensity select the truthful segment", async 
             await shadow(page, "[data-saturation-mode='subtle']").getAttribute("aria-pressed"),
             "true",
         );
+        assert.equal(await shadow(page, "[data-shape='bell']").getAttribute("aria-pressed"), "true");
         await page.evaluate(() => {
             window.__ENHANCER_LITE_TEST__.emit("curveIn", 0);
             window.__ENHANCER_LITE_TEST__.emit("saturationModeIn", 1);
+            window.__ENHANCER_LITE_TEST__.emit("shapeIn", 2);
         });
         assert.equal(await shadow(page, "[data-curve='tube']").getAttribute("aria-pressed"), "true");
         assert.equal(await shadow(page, "[data-curve='solid']").getAttribute("aria-pressed"), "false");
@@ -376,21 +431,25 @@ test("host-restored character and intensity select the truthful segment", async 
             await shadow(page, "[data-saturation-mode='subtle']").getAttribute("aria-pressed"),
             "false",
         );
+        assert.equal(await shadow(page, "[data-shape='high']").getAttribute("aria-pressed"), "true");
+        assert.equal(await shadow(page, "[data-shape='bell']").getAttribute("aria-pressed"), "false");
     } finally {
         await page.close();
     }
 });
 
-test("the compiled VST view preserves the same gesture surface and seven static controls", async () => {
+test("the compiled VST view preserves the same gesture surface and eight static controls", async () => {
     const page = await openEnhancerLite("/build/fx/enhancer_lite_runtime/view/app.js");
 
     try {
         assert.equal(await shadow(page, ".response-panel").count(), 1);
         assert.equal(await shadow(page, "input").count(), 0);
+        await shadow(page, "[data-shape='low']").click();
         await shadow(page, "[data-saturation-mode='medium']").click();
         await shadow(page, "[data-mode='mid-side']").click();
         assert.equal(await shadow(page, "[data-response-role='side-handle']").isVisible(), true);
-        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.slice(-2)), [
+        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.slice(-3)), [
+            { endpointID: "shapeIn", value: 0 },
             { endpointID: "saturationModeIn", value: 1 },
             { endpointID: "modeIn", value: 1 },
         ]);

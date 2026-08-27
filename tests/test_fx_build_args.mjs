@@ -29,13 +29,21 @@ test("fx_build_single_plugin_still_resolves_to_only_that_plugin", async () => {
     assert.deepEqual(prodModule.resolveProdPluginNames("chorus"), ["chorus"]);
     assert.deepEqual(buildModule.resolvePluginNames("enhancer"), ["enhancer"]);
     assert.deepEqual(buildModule.resolvePluginNames("enhancer-lite"), ["enhancer-lite"]);
+    assert.deepEqual(
+        buildModule.resolvePluginNames("enhancer-lite-shelves-audition"),
+        ["enhancer-lite-shelves-audition"],
+    );
+    assert.deepEqual(
+        prodModule.resolveProdPluginNames("enhancer-lite-shelves-audition"),
+        ["enhancer-lite-shelves-audition"],
+    );
 });
 
 test("fx_build_unknown_plugin_reports_all_as_an_available_target", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
 
-    assert.throws(() => buildModule.resolvePluginNames("wat"), /Available plugins: all, ott, chorus, seqfx, spectral, enhancer, enhancer-lite/);
-    assert.throws(() => prodModule.resolveProdPluginNames("wat"), /Available plugins: all, ott, chorus, seqfx, spectral, enhancer, enhancer-lite/);
+    assert.throws(() => buildModule.resolvePluginNames("wat"), /Available plugins: all, ott, chorus, seqfx, spectral, enhancer, enhancer-lite, enhancer-lite-shelves-audition/);
+    assert.throws(() => prodModule.resolveProdPluginNames("wat"), /Available plugins: all, ott, chorus, seqfx, spectral, enhancer, enhancer-lite, enhancer-lite-shelves-audition/);
 });
 
 test("the Enhancer production plugin packages the canonical T26 DSP instead of a copy", async () => {
@@ -66,6 +74,21 @@ test("the Enhancer Lite plugin packages its isolated one-band prototype", async 
     assert.equal(buildModule.effectPlugins["enhancer-lite"].generatedHostLatencySamples, 3);
     assert.equal(buildModule.effectPlugins["enhancer-lite"].productName, "CosimoEnhancerLite");
     assert.deepEqual(manifest.resources, ["assets/enhancer-lite-wordmark.png"]);
+});
+
+test("the Enhancer Lite shelf audition target is isolated from production all", async () => {
+    const { buildModule } = await loadBuildModules();
+    const audition = buildModule.effectPlugins["enhancer-lite-shelves-audition"];
+    const manifest = JSON.parse(await readFile(
+        path.join(repoRoot, audition.patch),
+        "utf8",
+    ));
+
+    assert.equal(audition.includeInAll, false);
+    assert.ok(!buildModule.effectPluginNames().includes("enhancer-lite-shelves-audition"));
+    assert.equal(audition.productName, "CosimoEnhancerLiteShelvesAudition");
+    assert.equal(manifest.ID, "dev.cosimo.enhancer-lite-shelves-audition");
+    assert.equal(manifest.plugin.pluginCode, "CsLS");
 });
 
 test("the generated Enhancer plugin host latency is corrected at the narrow Cmajor seam", async () => {

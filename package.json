@@ -79,6 +79,7 @@
     "test:enhancer-lite:state": "node --test tests/test_enhancer_lite_state.mjs tests/test_fx_build_args.mjs",
     "test:enhancer-lite:view": "npm run fx:build -- enhancer-lite && node --test tests/test_enhancer_lite_view_browser.mjs",
     "test:enhancer-lite:audio": "node scripts/measure_enhancer_lite.mjs --check",
+    "test:enhancer-lite:shelves": "node scripts/measure_enhancer_lite_shelves.mjs --check",
     "test:enhancer-lite": "npm run test:cmajor:enhancer-lite && npm run test:enhancer-lite:state && npm run test:enhancer-lite:view && npm run test:enhancer-lite:audio",
     "test:distortion:calibration": "node scripts/calibrate_distortion_compensation.mjs --check",
     "test:distortion:low-level-mix": "node scripts/calibrate_distortion_compensation.mjs --experiment-filtered-saw",

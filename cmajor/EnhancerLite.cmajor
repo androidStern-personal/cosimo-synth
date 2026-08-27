@@ -2,9 +2,9 @@ namespace wt
 {
     // Experimental one-band Enhancer for evaluating a voice-affordable signal
     // path. It deliberately remains separate from the accepted two-band
-    // EnhancerBus. The bell, Amount/Q laws, routing, and four measured Spectre
-    // transfers are preserved; only the oversampling implementation and tanh
-    // evaluation are approximated. There is no de-emphasis path.
+    // EnhancerBus. The measured Bell/Low/High selection laws, routing, and four
+    // Spectre transfers are preserved; only the oversampling implementation and
+    // tanh evaluation are approximated. There is no de-emphasis path.
 
     let enhancerLiteOversampleFactor = 4;
     let enhancerLiteFrequencyMinHz = 20.0f;
@@ -23,6 +23,10 @@ namespace wt
     let enhancerLiteSaturationModeSubtle = 0;
     let enhancerLiteSaturationModeMedium = 1;
     let enhancerLiteSaturationModeDefault = enhancerLiteSaturationModeSubtle;
+    let enhancerLiteShapeLow = 0;
+    let enhancerLiteShapeBell = 1;
+    let enhancerLiteShapeHigh = 2;
+    let enhancerLiteShapeDefault = enhancerLiteShapeBell;
     let enhancerLiteLatencySamples = 3;
 
     let enhancerLiteControlSmoothingMs = 15.0f;
@@ -107,6 +111,11 @@ namespace wt
         );
     }
 
+    float32 enhancerLiteShelfGainDb (float32 amount)
+    {
+        return enhancerLiteBandGainRangeDb * clampEnhancerLiteAmount (amount);
+    }
+
     float32 smoothEnhancerLiteControl (
         float32 current,
         float32 target,
@@ -121,6 +130,21 @@ namespace wt
     float32 resolveEnhancerLiteWeight (float32 value)
     {
         return value >= 0.5f ? 1.0f : 0.0f;
+    }
+
+    float32 resolveEnhancerLiteLowShapeWeight (float32 value)
+    {
+        return value < 0.5f ? 1.0f : 0.0f;
+    }
+
+    float32 resolveEnhancerLiteBellShapeWeight (float32 value)
+    {
+        return value >= 0.5f && value < 1.5f ? 1.0f : 0.0f;
+    }
+
+    float32 resolveEnhancerLiteHighShapeWeight (float32 value)
+    {
+        return value >= 1.5f ? 1.0f : 0.0f;
     }
 
     float32 enhancerLiteFastTanh (float32 value)
@@ -363,38 +387,120 @@ namespace wt
         }
     }
 
+    // Shelf selection approaches zero at the opposite plateau, which exposes
+    // coefficient quantisation in the accepted float32 Bell conditioner at
+    // high host rates. Shelves use the same measured topology with float64
+    // coefficients/state; the stable Bell output remains on the original path.
+    struct EnhancerLiteShelfShapedHighpass
+    {
+        float64<2> state1;
+        float64<2> state2;
+        float64 b0;
+        float64 b1;
+        float64 b2;
+        float64 a1;
+        float64 a2;
+
+        void setSampleRate (float64 sampleRate)
+        {
+            let omega = twoPi * float64 (enhancerLiteHighpassCutoffHz) / sampleRate;
+            let cosine = std::intrinsics::cos (omega);
+            let alpha = std::intrinsics::sin (omega)
+                        / (2.0 * float64 (enhancerLiteHighpassQ));
+            let a0 = 1.0 + alpha;
+            this.b0 = (1.0 + cosine) * 0.5 / a0;
+            this.b1 = -(1.0 + cosine) / a0;
+            this.b2 = this.b0;
+            this.a1 = -2.0 * cosine / a0;
+            this.a2 = (1.0 - alpha) / a0;
+        }
+
+        void reset()
+        {
+            this.state1 = ();
+            this.state2 = ();
+        }
+
+        float32<2> process (float32<2> sampleFrame)
+        {
+            let inputFrame = float64<2> (sampleFrame);
+            let result = inputFrame * this.b0 + this.state1;
+            this.state1 = inputFrame * this.b1 - result * this.a1 + this.state2;
+            this.state2 = inputFrame * this.b2 - result * this.a2;
+            return float32<2> (result * float64 (enhancerLiteHighpassGain));
+        }
+    }
+
     struct EnhancerLiteBandCore
     {
         enhancerLiteFilters::tpt::svf::Implementation[2] bandFilters;
+        enhancerLiteFilters::simper::Implementation[2] lowShelfFilters;
+        enhancerLiteFilters::simper::Implementation[2] highShelfFilters;
         float32 tunedFrequencyHz0;
         float32 tunedFrequencyHz1;
         float32 tunedQ0;
         float32 tunedQ1;
+        float32 tunedShelfFrequencyHz0;
+        float32 tunedShelfFrequencyHz1;
+        float32 tunedShelfQ0;
+        float32 tunedShelfQ1;
+        float32 tunedShelfGainDb0;
+        float32 tunedShelfGainDb1;
+        bool bellFiltersActive;
+        bool lowShelfFiltersActive;
+        bool highShelfFiltersActive;
         int32 framesUntilCoefficientUpdate;
+        int32 shelfFramesUntilCoefficientUpdate;
         float64 sampleRate;
 
         void prepare (float64 oversampledSampleRate)
         {
             for (wrap<2> lane)
+            {
                 this.bandFilters[lane].setMode (
                     enhancerLiteFilters::tpt::svf::Mode::bandPass
                 );
+                this.lowShelfFilters[lane].setMode (
+                    enhancerLiteFilters::simper::Mode::lowShelf
+                );
+                this.highShelfFilters[lane].setMode (
+                    enhancerLiteFilters::simper::Mode::highShelf
+                );
+            }
             this.sampleRate = oversampledSampleRate;
         }
 
         void reset()
         {
             for (wrap<2> lane)
+            {
                 this.bandFilters[lane].reset();
+                this.lowShelfFilters[lane].reset();
+                this.highShelfFilters[lane].reset();
+            }
 
             this.tunedFrequencyHz0 = 0.0f;
             this.tunedFrequencyHz1 = 0.0f;
             this.tunedQ0 = 0.0f;
             this.tunedQ1 = 0.0f;
+            this.tunedShelfFrequencyHz0 = 0.0f;
+            this.tunedShelfFrequencyHz1 = 0.0f;
+            this.tunedShelfQ0 = 0.0f;
+            this.tunedShelfQ1 = 0.0f;
+            this.tunedShelfGainDb0 = -1.0f;
+            this.tunedShelfGainDb1 = -1.0f;
+            this.bellFiltersActive = false;
+            this.lowShelfFiltersActive = false;
+            this.highShelfFiltersActive = false;
             this.framesUntilCoefficientUpdate = 0;
+            this.shelfFramesUntilCoefficientUpdate = 0;
         }
 
-        void updateBandCoefficients (float32 frequencyHz, float32 q0, float32 q1)
+        void updateBellCoefficients (
+            float32 frequencyHz,
+            float32 bellQ0,
+            float32 bellQ1
+        )
         {
             if (this.framesUntilCoefficientUpdate > 0)
             {
@@ -407,22 +513,100 @@ namespace wt
 
             if (std::intrinsics::abs (frequencyHz - this.tunedFrequencyHz0)
                     > enhancerLiteCoefficientEpsilon
-                || std::intrinsics::abs (q0 - this.tunedQ0)
+                || std::intrinsics::abs (bellQ0 - this.tunedQ0)
                     > enhancerLiteCoefficientEpsilon)
             {
-                this.bandFilters[0].setFrequency (this.sampleRate, frequencyHz, q0);
+                this.bandFilters[0].setFrequency (
+                    this.sampleRate,
+                    frequencyHz,
+                    bellQ0
+                );
                 this.tunedFrequencyHz0 = frequencyHz;
-                this.tunedQ0 = q0;
+                this.tunedQ0 = bellQ0;
             }
 
             if (std::intrinsics::abs (frequencyHz - this.tunedFrequencyHz1)
                     > enhancerLiteCoefficientEpsilon
-                || std::intrinsics::abs (q1 - this.tunedQ1)
+                || std::intrinsics::abs (bellQ1 - this.tunedQ1)
                     > enhancerLiteCoefficientEpsilon)
             {
-                this.bandFilters[1].setFrequency (this.sampleRate, frequencyHz, q1);
+                this.bandFilters[1].setFrequency (
+                    this.sampleRate,
+                    frequencyHz,
+                    bellQ1
+                );
                 this.tunedFrequencyHz1 = frequencyHz;
-                this.tunedQ1 = q1;
+                this.tunedQ1 = bellQ1;
+            }
+
+        }
+
+        void updateShelfCoefficients (
+            float32 frequencyHz,
+            float32 shelfQ,
+            float32 shelfGainDb0,
+            float32 shelfGainDb1
+        )
+        {
+            if (this.shelfFramesUntilCoefficientUpdate > 0)
+            {
+                this.shelfFramesUntilCoefficientUpdate -= 1;
+                return;
+            }
+
+            this.shelfFramesUntilCoefficientUpdate = enhancerLiteCoefficientUpdateFrames
+                                                     * enhancerLiteOversampleFactor - 1;
+
+            if (std::intrinsics::abs (
+                    frequencyHz - this.tunedShelfFrequencyHz0
+                ) > enhancerLiteCoefficientEpsilon
+                || std::intrinsics::abs (shelfQ - this.tunedShelfQ0)
+                    > enhancerLiteCoefficientEpsilon
+                || std::intrinsics::abs (
+                    shelfGainDb0 - this.tunedShelfGainDb0
+                ) > enhancerLiteCoefficientEpsilon)
+            {
+                this.lowShelfFilters[0].setFrequency (
+                    this.sampleRate,
+                    frequencyHz,
+                    shelfQ,
+                    shelfGainDb0
+                );
+                this.highShelfFilters[0].setFrequency (
+                    this.sampleRate,
+                    frequencyHz,
+                    shelfQ,
+                    shelfGainDb0
+                );
+                this.tunedShelfFrequencyHz0 = frequencyHz;
+                this.tunedShelfQ0 = shelfQ;
+                this.tunedShelfGainDb0 = shelfGainDb0;
+            }
+
+            if (std::intrinsics::abs (
+                    frequencyHz - this.tunedShelfFrequencyHz1
+                ) > enhancerLiteCoefficientEpsilon
+                || std::intrinsics::abs (shelfQ - this.tunedShelfQ1)
+                    > enhancerLiteCoefficientEpsilon
+                || std::intrinsics::abs (
+                    shelfGainDb1 - this.tunedShelfGainDb1
+                ) > enhancerLiteCoefficientEpsilon)
+            {
+                this.lowShelfFilters[1].setFrequency (
+                    this.sampleRate,
+                    frequencyHz,
+                    shelfQ,
+                    shelfGainDb1
+                );
+                this.highShelfFilters[1].setFrequency (
+                    this.sampleRate,
+                    frequencyHz,
+                    shelfQ,
+                    shelfGainDb1
+                );
+                this.tunedShelfFrequencyHz1 = frequencyHz;
+                this.tunedShelfQ1 = shelfQ;
+                this.tunedShelfGainDb1 = shelfGainDb1;
             }
         }
 
@@ -500,15 +684,58 @@ namespace wt
             return subtle + (medium - subtle) * mediumWeight;
         }
 
+        float32 mixSelectedShapes (
+            float32 lowSelected,
+            float32 bellSelected,
+            float32 highSelected,
+            float32 solidWeight,
+            float32 mediumWeight,
+            float32 lowWeight,
+            float32 bellWeight,
+            float32 highWeight
+        )
+        {
+            // Stable endpoints avoid an extra multiply/add in the accepted Bell
+            // path. During a Shape transition, all participating nonlinear
+            // outputs are crossfaded while a newly selected filter warms from
+            // its reset state behind an initially near-zero weight.
+            if (bellWeight == 1.0f && lowWeight == 0.0f && highWeight == 0.0f)
+                return this.shape (bellSelected, solidWeight, mediumWeight);
+
+            if (lowWeight == 1.0f && bellWeight == 0.0f && highWeight == 0.0f)
+                return this.shape (lowSelected, solidWeight, mediumWeight);
+
+            if (highWeight == 1.0f && lowWeight == 0.0f && bellWeight == 0.0f)
+                return this.shape (highSelected, solidWeight, mediumWeight);
+
+            var result = 0.0f;
+            if (lowWeight > 0.0f)
+                result += this.shape (lowSelected, solidWeight, mediumWeight)
+                          * lowWeight;
+            if (bellWeight > 0.0f)
+                result += this.shape (bellSelected, solidWeight, mediumWeight)
+                          * bellWeight;
+            if (highWeight > 0.0f)
+                result += this.shape (highSelected, solidWeight, mediumWeight)
+                          * highWeight;
+            return result;
+        }
+
         float32<2> process (
             float32<2> sampleFrame,
             float32 frequencyHz,
-            float32 q0,
-            float32 q1,
+            float32 bellQ0,
+            float32 bellQ1,
+            float32 shelfQ,
+            float32 amount0,
+            float32 amount1,
             float32 drive0,
             float32 drive1,
             float32 solidWeight,
-            float32 mediumWeight
+            float32 mediumWeight,
+            float32 lowShapeWeight,
+            float32 bellShapeWeight,
+            float32 highShapeWeight
         )
         {
             let qMaximum = enhancerLiteQMax * std::levels::dBtoGain (
@@ -519,8 +746,16 @@ namespace wt
                 enhancerLiteFrequencyMinHz,
                 enhancerLiteFrequencyMaxHz
             );
-            let safeQ0 = std::intrinsics::clamp (q0, enhancerLiteQMin, qMaximum);
-            let safeQ1 = std::intrinsics::clamp (q1, enhancerLiteQMin, qMaximum);
+            let safeBellQ0 = std::intrinsics::clamp (
+                bellQ0,
+                enhancerLiteQMin,
+                qMaximum
+            );
+            let safeBellQ1 = std::intrinsics::clamp (
+                bellQ1,
+                enhancerLiteQMin,
+                qMaximum
+            );
             let safeDrive0 = std::intrinsics::clamp (
                 drive0,
                 0.0f,
@@ -533,15 +768,238 @@ namespace wt
             );
             let safeSolidWeight = std::intrinsics::clamp (solidWeight, 0.0f, 1.0f);
             let safeMediumWeight = std::intrinsics::clamp (mediumWeight, 0.0f, 1.0f);
-            this.updateBandCoefficients (safeFrequencyHz, safeQ0, safeQ1);
+            let safeLowShapeWeight = std::intrinsics::clamp (
+                lowShapeWeight,
+                0.0f,
+                1.0f
+            );
+            let safeBellShapeWeight = std::intrinsics::clamp (
+                bellShapeWeight,
+                0.0f,
+                1.0f
+            );
+            let safeHighShapeWeight = std::intrinsics::clamp (
+                highShapeWeight,
+                0.0f,
+                1.0f
+            );
 
-            let selected0 = this.bandFilters[0].process (sampleFrame[0])
-                            * safeDrive0 / safeQ0;
-            let selected1 = this.bandFilters[1].process (sampleFrame[1])
-                            * safeDrive1 / safeQ1;
+            // Keep the accepted stable Bell path short. Shelf coefficient and
+            // state work begins only when a shelf participates in a crossfade.
+            if (safeBellShapeWeight == 1.0f
+                && safeLowShapeWeight == 0.0f
+                && safeHighShapeWeight == 0.0f)
+            {
+                if (this.lowShelfFiltersActive)
+                {
+                    for (wrap<2> lane)
+                        this.lowShelfFilters[lane].reset();
+                    this.lowShelfFiltersActive = false;
+                }
+                if (this.highShelfFiltersActive)
+                {
+                    for (wrap<2> lane)
+                        this.highShelfFilters[lane].reset();
+                    this.highShelfFiltersActive = false;
+                }
+
+                this.updateBellCoefficients (
+                    safeFrequencyHz,
+                    safeBellQ0,
+                    safeBellQ1
+                );
+                let bellSelected0 = this.bandFilters[0].process (sampleFrame[0])
+                                    * safeDrive0 / safeBellQ0;
+                let bellSelected1 = this.bandFilters[1].process (sampleFrame[1])
+                                    * safeDrive1 / safeBellQ1;
+                this.bellFiltersActive = true;
+                return float32<2> (
+                    this.shape (
+                        bellSelected0,
+                        safeSolidWeight,
+                        safeMediumWeight
+                    ),
+                    this.shape (
+                        bellSelected1,
+                        safeSolidWeight,
+                        safeMediumWeight
+                    )
+                );
+            }
+
+            let safeShelfQ = clampEnhancerLiteQ (shelfQ);
+            let safeAmount0 = clampEnhancerLiteAmount (amount0);
+            let safeAmount1 = clampEnhancerLiteAmount (amount1);
+            let safeShelfGainDb0 = enhancerLiteShelfGainDb (safeAmount0);
+            let safeShelfGainDb1 = enhancerLiteShelfGainDb (safeAmount1);
+
+            if (safeLowShapeWeight == 1.0f
+                && safeBellShapeWeight == 0.0f
+                && safeHighShapeWeight == 0.0f)
+            {
+                if (this.bellFiltersActive)
+                {
+                    for (wrap<2> lane)
+                        this.bandFilters[lane].reset();
+                    this.bellFiltersActive = false;
+                }
+                if (this.highShelfFiltersActive)
+                {
+                    for (wrap<2> lane)
+                        this.highShelfFilters[lane].reset();
+                    this.highShelfFiltersActive = false;
+                }
+
+                this.updateShelfCoefficients (
+                    safeFrequencyHz,
+                    safeShelfQ,
+                    safeShelfGainDb0,
+                    safeShelfGainDb1
+                );
+                let lowSelected0 = this.lowShelfFilters[0].process (sampleFrame[0])
+                                   - sampleFrame[0];
+                let lowSelected1 = this.lowShelfFilters[1].process (sampleFrame[1])
+                                   - sampleFrame[1];
+                this.lowShelfFiltersActive = true;
+                return float32<2> (
+                    this.shape (
+                        lowSelected0,
+                        safeSolidWeight,
+                        safeMediumWeight
+                    ),
+                    this.shape (
+                        lowSelected1,
+                        safeSolidWeight,
+                        safeMediumWeight
+                    )
+                );
+            }
+
+            if (safeHighShapeWeight == 1.0f
+                && safeLowShapeWeight == 0.0f
+                && safeBellShapeWeight == 0.0f)
+            {
+                if (this.bellFiltersActive)
+                {
+                    for (wrap<2> lane)
+                        this.bandFilters[lane].reset();
+                    this.bellFiltersActive = false;
+                }
+                if (this.lowShelfFiltersActive)
+                {
+                    for (wrap<2> lane)
+                        this.lowShelfFilters[lane].reset();
+                    this.lowShelfFiltersActive = false;
+                }
+
+                this.updateShelfCoefficients (
+                    safeFrequencyHz,
+                    safeShelfQ,
+                    safeShelfGainDb0,
+                    safeShelfGainDb1
+                );
+                let highSelected0 = this.highShelfFilters[0].process (sampleFrame[0])
+                                    - sampleFrame[0];
+                let highSelected1 = this.highShelfFilters[1].process (sampleFrame[1])
+                                    - sampleFrame[1];
+                this.highShelfFiltersActive = true;
+                return float32<2> (
+                    this.shape (
+                        highSelected0,
+                        safeSolidWeight,
+                        safeMediumWeight
+                    ),
+                    this.shape (
+                        highSelected1,
+                        safeSolidWeight,
+                        safeMediumWeight
+                    )
+                );
+            }
+
+            this.updateBellCoefficients (
+                safeFrequencyHz,
+                safeBellQ0,
+                safeBellQ1
+            );
+            this.updateShelfCoefficients (
+                safeFrequencyHz,
+                safeShelfQ,
+                safeShelfGainDb0,
+                safeShelfGainDb1
+            );
+
+            var bellSelected0 = 0.0f;
+            var bellSelected1 = 0.0f;
+            if (safeBellShapeWeight > 0.0f)
+            {
+                bellSelected0 = this.bandFilters[0].process (sampleFrame[0])
+                                * safeDrive0 / safeBellQ0;
+                bellSelected1 = this.bandFilters[1].process (sampleFrame[1])
+                                * safeDrive1 / safeBellQ1;
+                this.bellFiltersActive = true;
+            }
+            else if (this.bellFiltersActive)
+            {
+                for (wrap<2> lane)
+                    this.bandFilters[lane].reset();
+                this.bellFiltersActive = false;
+            }
+
+            var lowSelected0 = 0.0f;
+            var lowSelected1 = 0.0f;
+            if (safeLowShapeWeight > 0.0f)
+            {
+                lowSelected0 = this.lowShelfFilters[0].process (sampleFrame[0])
+                               - sampleFrame[0];
+                lowSelected1 = this.lowShelfFilters[1].process (sampleFrame[1])
+                               - sampleFrame[1];
+                this.lowShelfFiltersActive = true;
+            }
+            else if (this.lowShelfFiltersActive)
+            {
+                for (wrap<2> lane)
+                    this.lowShelfFilters[lane].reset();
+                this.lowShelfFiltersActive = false;
+            }
+
+            var highSelected0 = 0.0f;
+            var highSelected1 = 0.0f;
+            if (safeHighShapeWeight > 0.0f)
+            {
+                highSelected0 = this.highShelfFilters[0].process (sampleFrame[0])
+                                - sampleFrame[0];
+                highSelected1 = this.highShelfFilters[1].process (sampleFrame[1])
+                                - sampleFrame[1];
+                this.highShelfFiltersActive = true;
+            }
+            else if (this.highShelfFiltersActive)
+            {
+                for (wrap<2> lane)
+                    this.highShelfFilters[lane].reset();
+                this.highShelfFiltersActive = false;
+            }
             return float32<2> (
-                this.shape (selected0, safeSolidWeight, safeMediumWeight),
-                this.shape (selected1, safeSolidWeight, safeMediumWeight)
+                this.mixSelectedShapes (
+                    lowSelected0,
+                    bellSelected0,
+                    highSelected0,
+                    safeSolidWeight,
+                    safeMediumWeight,
+                    safeLowShapeWeight,
+                    safeBellShapeWeight,
+                    safeHighShapeWeight
+                ),
+                this.mixSelectedShapes (
+                    lowSelected1,
+                    bellSelected1,
+                    highSelected1,
+                    safeSolidWeight,
+                    safeMediumWeight,
+                    safeLowShapeWeight,
+                    safeBellShapeWeight,
+                    safeHighShapeWeight
+                )
             );
         }
     }
@@ -557,6 +1015,7 @@ namespace wt
         input value float32 sideAmountIn [[ name: "Enhancer Lite Side", min: enhancerLiteAmountMin, max: enhancerLiteAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
         input value float32 curveIn [[ name: "Enhancer Lite Character", min: 0.0f, max: 1.0f, init: float32 (enhancerLiteCurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: false, rampFrames: 0 ]];
         input value float32 saturationModeIn [[ name: "Enhancer Lite Saturation Mode", min: 0.0f, max: 1.0f, init: float32 (enhancerLiteSaturationModeDefault), discrete: true, step: 1.0f, text: "Subtle|Medium", automatable: false, rampFrames: 0 ]];
+        input value float32 shapeIn [[ name: "Enhancer Lite Shape", min: 0.0f, max: 2.0f, init: float32 (enhancerLiteShapeDefault), discrete: true, step: 1.0f, text: "Low|Bell|High", automatable: false, rampFrames: 0 ]];
 
         input event int32 resetIn;
         output stream float32<2> out;
@@ -570,6 +1029,7 @@ namespace wt
         EnhancerLiteBandCore stereoCore;
         EnhancerLiteBandCore midSideCore;
         EnhancerLiteShapedHighpass shapedHighpass;
+        EnhancerLiteShelfShapedHighpass shelfShapedHighpass;
 
         float32 frequencyHz = enhancerLiteFrequencyDefaultHz;
         float32 q = enhancerLiteQDefault;
@@ -578,6 +1038,9 @@ namespace wt
         float32 sideAmount;
         float32 solidWeight = float32 (enhancerLiteCurveDefault);
         float32 mediumWeight = float32 (enhancerLiteSaturationModeDefault);
+        float32 lowShapeWeight;
+        float32 bellShapeWeight = 1.0f;
+        float32 highShapeWeight;
         var smoothingAmount = 1.0f - std::intrinsics::exp (
             -1.0f / (
                 enhancerLiteControlSmoothingMs * 0.001f * float32 (processor.frequency)
@@ -591,6 +1054,7 @@ namespace wt
             stereoCore.prepare (oversampledSampleRate);
             midSideCore.prepare (oversampledSampleRate);
             shapedHighpass.setSampleRate (oversampledSampleRate);
+            shelfShapedHighpass.setSampleRate (oversampledSampleRate);
         }
 
         event resetIn (int32 ignored)
@@ -600,6 +1064,7 @@ namespace wt
             stereoCore.reset();
             midSideCore.reset();
             shapedHighpass.reset();
+            shelfShapedHighpass.reset();
         }
 
         void smoothControls()
@@ -647,6 +1112,24 @@ namespace wt
                 smoothingAmount,
                 enhancerLiteCoefficientEpsilon
             );
+            lowShapeWeight = smoothEnhancerLiteControl (
+                lowShapeWeight,
+                resolveEnhancerLiteLowShapeWeight (shapeIn),
+                smoothingAmount,
+                enhancerLiteCoefficientEpsilon
+            );
+            bellShapeWeight = smoothEnhancerLiteControl (
+                bellShapeWeight,
+                resolveEnhancerLiteBellShapeWeight (shapeIn),
+                smoothingAmount,
+                enhancerLiteCoefficientEpsilon
+            );
+            highShapeWeight = smoothEnhancerLiteControl (
+                highShapeWeight,
+                resolveEnhancerLiteHighShapeWeight (shapeIn),
+                smoothingAmount,
+                enhancerLiteCoefficientEpsilon
+            );
         }
 
         void main()
@@ -677,20 +1160,32 @@ namespace wt
                         frequencyHz,
                         primaryQ,
                         primaryQ,
+                        q,
+                        midAmount,
+                        midAmount,
                         primaryDrive,
                         primaryDrive,
                         solidWeight,
-                        mediumWeight
+                        mediumWeight,
+                        lowShapeWeight,
+                        bellShapeWeight,
+                        highShapeWeight
                     );
                     let midSideShaped = midSideCore.process (
                         oversampledMidSide,
                         frequencyHz,
                         primaryQ,
                         sideQ,
+                        q,
+                        midAmount,
+                        sideAmount,
                         primaryDrive,
                         sideDrive,
                         solidWeight,
-                        mediumWeight
+                        mediumWeight,
+                        lowShapeWeight,
+                        bellShapeWeight,
+                        highShapeWeight
                     );
                     let decodedMidSideShaped = float32<2> (
                         midSideShaped[0] + midSideShaped[1],
@@ -704,8 +1199,35 @@ namespace wt
                     // DC conditioning stays on the shaped contribution, but is
                     // moved into the 4x cluster so dry plus contribution can use
                     // one shared reconstruction path.
-                    combinedFrames.at (oversampleFrame) = oversampledDry
-                        + shapedHighpass.process (shaped);
+                    if (bellShapeWeight == 1.0f
+                        && lowShapeWeight == 0.0f
+                        && highShapeWeight == 0.0f)
+                    {
+                        // This is the accepted Bell arithmetic path verbatim.
+                        shelfShapedHighpass.reset();
+                        combinedFrames.at (oversampleFrame) = oversampledDry
+                            + shapedHighpass.process (shaped);
+                    }
+                    else if (bellShapeWeight == 0.0f)
+                    {
+                        shapedHighpass.reset();
+                        combinedFrames.at (oversampleFrame) = oversampledDry
+                            + shelfShapedHighpass.process (shaped);
+                    }
+                    else
+                    {
+                        let bellConditioned = shapedHighpass.process (shaped);
+                        let shelfConditioned = shelfShapedHighpass.process (shaped);
+                        let shelfWeight = std::intrinsics::clamp (
+                            lowShapeWeight + highShapeWeight,
+                            0.0f,
+                            1.0f
+                        );
+                        let conditioned = bellConditioned
+                            + (shelfConditioned - bellConditioned) * shelfWeight;
+                        combinedFrames.at (oversampleFrame) = oversampledDry
+                            + conditioned;
+                    }
                 }
 
                 out <- outputDownsampler.process (

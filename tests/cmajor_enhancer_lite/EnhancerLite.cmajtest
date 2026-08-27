@@ -28,8 +28,10 @@ processor EnhancerLiteSignalContract [[ main ]]
         enhancer.sideAmountIn <- sideAmount;
         enhancer.curveIn <- float32 (curve);
         enhancer.saturationModeIn <- float32 (saturationMode);
+        enhancer.shapeIn <- float32 (wt::enhancerLiteShapeBell);
         neutral.midAmountIn <- 0.0f;
         neutral.sideAmountIn <- 0.0f;
+        neutral.shapeIn <- float32 (wt::enhancerLiteShapeBell);
     }
 
     float32<2> render (float32<2> sampleFrame)
@@ -54,6 +56,7 @@ processor EnhancerLiteSignalContract [[ main ]]
             enhancer.modeIn <- frame < 7000 ? 0.0f : 1.0f;
             enhancer.curveIn <- frame < 6000 ? 0.0f : 1.0f;
             enhancer.saturationModeIn <- frame < 9000 ? 0.0f : 1.0f;
+            enhancer.shapeIn <- float32 ((frame / 2048) % 3);
             let sampleFrame = float32<2> (
                 0.31f * float32 (std::intrinsics::sin (float32 (frame) * 0.071f)),
                 0.27f * float32 (std::intrinsics::sin (float32 (frame) * 0.043f + 0.4f))
@@ -71,6 +74,7 @@ processor EnhancerLiteSignalContract [[ main ]]
         bool monoSideOnlyMatches = true;
         for (int32 frame = 0; frame < 16384; ++frame)
         {
+            enhancer.shapeIn <- float32 ((frame / 4096) % 3);
             let sample = 0.3f * float32 (std::intrinsics::sin (
                 twoPi * 1000.0f * float32 (frame) / float32 (processor.frequency)
             ));
@@ -88,6 +92,7 @@ processor EnhancerLiteSignalContract [[ main ]]
         float64 monoDifferencePower;
         for (int32 frame = 0; frame < 16384; ++frame)
         {
+            enhancer.shapeIn <- float32 ((frame / 4096) % 3);
             let sample = 0.3f * float32 (std::intrinsics::sin (
                 twoPi * 1000.0f * float32 (frame) / float32 (processor.frequency)
             ));
@@ -110,12 +115,14 @@ processor EnhancerLiteSignalContract [[ main ]]
         sideOnlyEnhancer.saturationModeIn <- float32 (
             wt::enhancerLiteSaturationModeMedium
         );
+        sideOnlyEnhancer.shapeIn <- float32 (wt::enhancerLiteShapeBell);
         sideOnlyEnhancer.resetIn <- 1;
         neutral.resetIn <- 1;
         float32 maximumSideSymmetryError;
         float64 sideDifferencePower;
         for (int32 frame = 0; frame < 16384; ++frame)
         {
+            sideOnlyEnhancer.shapeIn <- float32 ((frame / 4096) % 3);
             let sample = 0.3f * float32 (std::intrinsics::sin (
                 twoPi * 1000.0f * float32 (frame) / float32 (processor.frequency)
             ));
@@ -142,6 +149,7 @@ processor EnhancerLiteSignalContract [[ main ]]
         enhancer.sideAmountIn <- -3.0f;
         enhancer.curveIn <- 100.0f;
         enhancer.saturationModeIn <- 100.0f;
+        enhancer.shapeIn <- 100.0f;
         enhancer.resetIn <- 1;
         bool finiteOutput = true;
         for (int32 frame = 0; frame < 8192; ++frame)
@@ -181,6 +189,151 @@ processor EnhancerLiteSignalContract [[ main ]]
         out <- finiteOutput ? 1 : 0;
         advance();
         out <- resetIsSilent ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Low/High select opposite plateaus, use Q directly, retain the measured Amount
+// law, and warm a newly selected filter behind a click-safe crossfade.
+
+## testProcessor()
+
+processor EnhancerLiteShapeContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerLiteBus;
+    node neutral = wt::EnhancerLiteBus;
+    float64 phase;
+
+    float64 measureContributionPower (
+        int32 shape,
+        float32 centreHz,
+        float32 q,
+        float32 amount,
+        float32 probeHz
+    )
+    {
+        enhancer.freqHzIn <- centreHz;
+        enhancer.qIn <- q;
+        enhancer.modeIn <- float32 (wt::enhancerLiteModeStereo);
+        enhancer.midAmountIn <- amount;
+        enhancer.sideAmountIn <- 0.0f;
+        enhancer.curveIn <- float32 (wt::enhancerLiteCurveSolid);
+        enhancer.saturationModeIn <- float32 (
+            wt::enhancerLiteSaturationModeSubtle
+        );
+        enhancer.shapeIn <- float32 (shape);
+        neutral.midAmountIn <- 0.0f;
+        neutral.sideAmountIn <- 0.0f;
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        phase = 0.0;
+
+        let settleFrames = int32 (processor.frequency * 0.08);
+        let measureFrames = int32 (processor.frequency * 0.12);
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            let sample = 0.03f * float32 (std::intrinsics::sin (phase));
+            phase += twoPi * float64 (probeHz) / processor.frequency;
+            enhancer.in <- float32<2> (sample);
+            neutral.in <- float32<2> (sample);
+            enhancer.advance();
+            neutral.advance();
+        }
+
+        float64 power;
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let sample = 0.03f * float32 (std::intrinsics::sin (phase));
+            phase += twoPi * float64 (probeHz) / processor.frequency;
+            enhancer.in <- float32<2> (sample);
+            neutral.in <- float32<2> (sample);
+            enhancer.advance();
+            neutral.advance();
+            let contribution = enhancer.out[0] - neutral.out[0];
+            power += float64 (contribution) * float64 (contribution);
+        }
+        return power / float64 (measureFrames);
+    }
+
+    void main()
+    {
+        let lowAt100 = measureContributionPower (
+            wt::enhancerLiteShapeLow, 1000.0f, 0.71f, 0.75f, 100.0f
+        );
+        let highAt100 = measureContributionPower (
+            wt::enhancerLiteShapeHigh, 1000.0f, 0.71f, 0.75f, 100.0f
+        );
+        let lowAt10000 = measureContributionPower (
+            wt::enhancerLiteShapeLow, 1000.0f, 0.71f, 0.75f, 10000.0f
+        );
+        let highAt10000 = measureContributionPower (
+            wt::enhancerLiteShapeHigh, 1000.0f, 0.71f, 0.75f, 10000.0f
+        );
+        let lowWeak = measureContributionPower (
+            wt::enhancerLiteShapeLow, 1000.0f, 0.71f, 0.25f, 100.0f
+        );
+        let lowStrong = measureContributionPower (
+            wt::enhancerLiteShapeLow, 1000.0f, 0.71f, 0.75f, 100.0f
+        );
+        let highGentleQ = measureContributionPower (
+            wt::enhancerLiteShapeHigh, 1000.0f, 0.71f, 0.75f, 1414.2135f
+        );
+        let highResonantQ = measureContributionPower (
+            wt::enhancerLiteShapeHigh, 1000.0f, 10.0f, 0.75f, 1414.2135f
+        );
+
+        enhancer.freqHzIn <- 1000.0f;
+        enhancer.qIn <- 4.0f;
+        enhancer.modeIn <- float32 (wt::enhancerLiteModeStereo);
+        enhancer.midAmountIn <- 1.0f;
+        enhancer.sideAmountIn <- 0.0f;
+        enhancer.curveIn <- float32 (wt::enhancerLiteCurveTube);
+        enhancer.saturationModeIn <- float32 (
+            wt::enhancerLiteSaturationModeMedium
+        );
+        enhancer.shapeIn <- float32 (wt::enhancerLiteShapeBell);
+        enhancer.resetIn <- 1;
+        phase = 0.0;
+        float32 previous;
+        float32 maximumStep;
+        bool switchingFinite = true;
+        for (int32 frame = 0; frame < 24576; ++frame)
+        {
+            if (frame == 8192)
+                enhancer.shapeIn <- float32 (wt::enhancerLiteShapeLow);
+            if (frame == 14336)
+                enhancer.shapeIn <- float32 (wt::enhancerLiteShapeHigh);
+            if (frame == 20480)
+                enhancer.shapeIn <- float32 (wt::enhancerLiteShapeBell);
+
+            let sample = 0.2f * float32 (std::intrinsics::sin (phase));
+            phase += twoPi * 100.0 / processor.frequency;
+            enhancer.in <- float32<2> (sample);
+            enhancer.advance();
+            let rendered = enhancer.out[0];
+            if (rendered != rendered || std::intrinsics::abs (rendered) > 10.0f)
+                switchingFinite = false;
+            if (frame > 4096)
+                maximumStep = std::intrinsics::max (
+                    maximumStep,
+                    std::intrinsics::abs (rendered - previous)
+                );
+            previous = rendered;
+        }
+
+        out <- lowAt100 > highAt100 * 100.0 ? 1 : 0;
+        advance();
+        out <- highAt10000 > lowAt10000 * 100.0 ? 1 : 0;
+        advance();
+        out <- lowStrong > lowWeak * 4.0 ? 1 : 0;
+        advance();
+        out <- highResonantQ > highGentleQ * 2.0 ? 1 : 0;
+        advance();
+        out <- (switchingFinite && maximumStep < 0.1f) ? 1 : 0;
         advance();
         out <- -1;
         advance();

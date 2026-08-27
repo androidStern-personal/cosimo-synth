@@ -5,7 +5,7 @@ export const ENHANCER_LITE_ANALYZER_ENDPOINTS = Object.freeze({
     output: "outputSpectrum",
 });
 
-/** Shared plot geometry used by the bell and both spectrum traces. */
+/** Shared plot geometry used by all three shapes and both spectrum traces. */
 export const ENHANCER_LITE_PLOT = Object.freeze({
     width: 760,
     height: 272,
@@ -15,8 +15,10 @@ export const ENHANCER_LITE_PLOT = Object.freeze({
     bottom: 28,
     minimumHz: 20,
     maximumHz: 20_000,
-    minimumGainDb: 0,
-    maximumGainDb: 12,
+    // Q=10 shelves can overshoot the nominal 12 dB plateau. This fixed range
+    // keeps their measured extrema visible without changing the spectrum scale.
+    minimumGainDb: -18,
+    maximumGainDb: 30,
     minimumLevelDbfs: -72,
     maximumLevelDbfs: 0,
 });
@@ -28,11 +30,11 @@ export const ENHANCER_LITE_FREQUENCY_TICKS = Object.freeze([
 
 /** Row-aligned relative-gain and absolute-level labels. */
 export const ENHANCER_LITE_DB_ROWS = Object.freeze([
-    { gainDb: 12, levelDbfs: 0 },
-    { gainDb: 9, levelDbfs: -18 },
+    { gainDb: 30, levelDbfs: 0 },
+    { gainDb: 18, levelDbfs: -18 },
     { gainDb: 6, levelDbfs: -36 },
-    { gainDb: 3, levelDbfs: -54 },
-    { gainDb: 0, levelDbfs: -72 },
+    { gainDb: -6, levelDbfs: -54 },
+    { gainDb: -18, levelDbfs: -72 },
 ]);
 
 /** Smoothed spectrum data ready to render in the shared plot. */
@@ -171,7 +173,7 @@ export function enhancerLiteFrequencyX(frequencyHz: number): number {
         );
 }
 
-/** Project relative bell gain onto the left-hand gain axis. */
+/** Project relative response gain onto the left-hand gain axis. */
 export function enhancerLiteGainY(gainDb: number): number {
     const normalized = (
         clamp(gainDb, ENHANCER_LITE_PLOT.minimumGainDb, ENHANCER_LITE_PLOT.maximumGainDb)

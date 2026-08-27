@@ -1,5 +1,6 @@
 import {
     ENHANCER_LITE_SETTING_DESCRIPTORS,
+    type EnhancerLiteShape,
     type EnhancerLiteSettingDescriptor,
 } from "../../../ui/shared/enhancer-lite-state";
 import {
@@ -87,6 +88,7 @@ const sideAmountControl: NumberControl = {
 const modeEndpointID = "modeIn";
 const curveEndpointID = "curveIn";
 const saturationModeEndpointID = "saturationModeIn";
+const shapeEndpointID = "shapeIn";
 // Keep the URL runtime-relative so both the source harness and packaged patch use the manifest resource.
 const wordmarkURL = new URL(
     ["..", "assets", "enhancer-lite-wordmark.png"].join("/"),
@@ -101,6 +103,7 @@ const endpointInitialValues = new Map<string, number>([
     [sideAmountControl.dspEndpointID, sideAmountControl.initial],
     [curveEndpointID, 1],
     [saturationModeEndpointID, 0],
+    [shapeEndpointID, 1],
 ]);
 
 const responseModelSampleRate = 48_000 * 4;
@@ -142,7 +145,77 @@ function peakingResponseDb(
     return clamp(10 * Math.log10(Math.max(numeratorPower / denominatorPower, 1e-30)), 0, 12);
 }
 
-function responsePath(centreHz: number, q: number, amount: number, closeArea = false): string {
+function shelfResponseDb(
+    shape: Exclude<EnhancerLiteShape, "bell">,
+    frequencyHz: number,
+    centreHz: number,
+    q: number,
+    amount: number,
+): number {
+    const gainDb = 12 * clamp(amount, 0, 1);
+    const amplitude = Math.pow(10, gainDb / 40);
+    const centreOmega = 2 * Math.PI * clamp(centreHz, 20, 20_000)
+        / responseModelSampleRate;
+    const centreCosine = Math.cos(centreOmega);
+    const beta = Math.sin(centreOmega) * Math.sqrt(amplitude) / clamp(q, 0.1, 10);
+    const plus = amplitude + 1;
+    const minus = amplitude - 1;
+    let b0: number;
+    let b1: number;
+    let b2: number;
+    let a0: number;
+    let a1: number;
+    let a2: number;
+    if (shape === "low") {
+        b0 = amplitude * (plus - minus * centreCosine + beta);
+        b1 = 2 * amplitude * (minus - plus * centreCosine);
+        b2 = amplitude * (plus - minus * centreCosine - beta);
+        a0 = plus + minus * centreCosine + beta;
+        a1 = -2 * (minus + plus * centreCosine);
+        a2 = plus + minus * centreCosine - beta;
+    } else {
+        b0 = amplitude * (plus + minus * centreCosine + beta);
+        b1 = -2 * amplitude * (minus + plus * centreCosine);
+        b2 = amplitude * (plus + minus * centreCosine - beta);
+        a0 = plus - minus * centreCosine + beta;
+        a1 = 2 * (minus - plus * centreCosine);
+        a2 = plus - minus * centreCosine - beta;
+    }
+
+    const omega = 2 * Math.PI * clamp(frequencyHz, 20, 20_000)
+        / responseModelSampleRate;
+    const z1Real = Math.cos(omega);
+    const z1Imaginary = -Math.sin(omega);
+    const z2Real = Math.cos(2 * omega);
+    const z2Imaginary = -Math.sin(2 * omega);
+    const numeratorReal = b0 + b1 * z1Real + b2 * z2Real;
+    const numeratorImaginary = b1 * z1Imaginary + b2 * z2Imaginary;
+    const denominatorReal = a0 + a1 * z1Real + a2 * z2Real;
+    const denominatorImaginary = a1 * z1Imaginary + a2 * z2Imaginary;
+    const numeratorPower = numeratorReal * numeratorReal + numeratorImaginary * numeratorImaginary;
+    const denominatorPower = denominatorReal * denominatorReal + denominatorImaginary * denominatorImaginary;
+    return 10 * Math.log10(Math.max(numeratorPower / denominatorPower, 1e-30));
+}
+
+function responseDb(
+    shape: EnhancerLiteShape,
+    frequencyHz: number,
+    centreHz: number,
+    q: number,
+    amount: number,
+): number {
+    return shape === "bell"
+        ? peakingResponseDb(frequencyHz, centreHz, q, amount)
+        : shelfResponseDb(shape, frequencyHz, centreHz, q, amount);
+}
+
+function responsePath(
+    shape: EnhancerLiteShape,
+    centreHz: number,
+    q: number,
+    amount: number,
+    closeArea = false,
+): string {
     const pointCount = 241;
     const points: Array<string> = [];
     for (let index = 0; index < pointCount; index += 1) {
@@ -154,7 +227,9 @@ function responsePath(centreHz: number, q: number, amount: number, closeArea = f
             );
         points.push(
             `${index === 0 ? "M" : "L"} ${enhancerLiteFrequencyX(frequencyHz).toFixed(2)} `
-            + enhancerLiteGainY(peakingResponseDb(frequencyHz, centreHz, q, amount)).toFixed(2),
+            + enhancerLiteGainY(
+                responseDb(shape, frequencyHz, centreHz, q, amount),
+            ).toFixed(2),
         );
     }
     if (closeArea) {
@@ -259,6 +334,12 @@ class EnhancerLiteView extends HTMLElement {
                     saturationModeEndpointID,
                     button.dataset.saturationMode === "medium" ? 1 : 0,
                 );
+            });
+        }
+        for (const button of this.root.querySelectorAll<HTMLButtonElement>("[data-shape]")) {
+            button.addEventListener("click", () => {
+                const shape = button.dataset.shape;
+                this.sendValue(shapeEndpointID, shape === "low" ? 0 : (shape === "high" ? 2 : 1));
             });
         }
 
@@ -397,6 +478,11 @@ class EnhancerLiteView extends HTMLElement {
         return (this.values.get(modeEndpointID) ?? 0) >= 0.5;
     }
 
+    selectedShape(): EnhancerLiteShape {
+        const value = this.values.get(shapeEndpointID) ?? 1;
+        return value < 0.5 ? "low" : (value >= 1.5 ? "high" : "bell");
+    }
+
     renderAll(): void {
         for (const endpointID of endpointInitialValues.keys())
             this.renderEndpoint(endpointID);
@@ -409,12 +495,15 @@ class EnhancerLiteView extends HTMLElement {
             this.renderSegment(curveEndpointID, "curve");
         if (endpointID === saturationModeEndpointID)
             this.renderSegment(saturationModeEndpointID, "saturation-mode");
+        if (endpointID === shapeEndpointID)
+            this.renderShape();
 
         const affectsPlot = endpointID === frequencyControl.dspEndpointID
             || endpointID === qControl.dspEndpointID
             || endpointID === midAmountControl.dspEndpointID
             || endpointID === sideAmountControl.dspEndpointID
-            || endpointID === modeEndpointID;
+            || endpointID === modeEndpointID
+            || endpointID === shapeEndpointID;
         if (affectsPlot)
             this.renderResponsePlot();
     }
@@ -459,31 +548,39 @@ class EnhancerLiteView extends HTMLElement {
         }
     }
 
+    renderShape(): void {
+        const selected = this.selectedShape();
+        for (const button of this.root.querySelectorAll<HTMLButtonElement>("[data-shape]"))
+            button.setAttribute("aria-pressed", String(button.dataset.shape === selected));
+    }
+
     renderResponsePlot(): void {
         const frequencyHz = this.valueFor(frequencyControl);
         const q = this.valueFor(qControl);
         const primaryAmount = this.valueFor(midAmountControl);
         const sideAmount = this.valueFor(sideAmountControl);
         const isMidSide = this.isMidSide();
+        const shape = this.selectedShape();
         const primaryPath = this.requireElement<SVGPathElement>("[data-response-role='primary']");
         const sidePath = this.requireElement<SVGPathElement>("[data-response-role='side']");
         const fillPath = this.requireElement<SVGPathElement>("[data-response-role='fill']");
         const primaryHandle = this.requireElement<SVGCircleElement>("[data-response-role='primary-handle']");
         const sideHandle = this.requireElement<SVGCircleElement>("[data-response-role='side-handle']");
 
-        primaryPath.setAttribute("d", responsePath(frequencyHz, q, primaryAmount));
-        sidePath.setAttribute("d", responsePath(frequencyHz, q, sideAmount));
-        fillPath.setAttribute("d", responsePath(frequencyHz, q, primaryAmount, true));
+        primaryPath.setAttribute("d", responsePath(shape, frequencyHz, q, primaryAmount));
+        sidePath.setAttribute("d", responsePath(shape, frequencyHz, q, sideAmount));
+        fillPath.setAttribute("d", responsePath(shape, frequencyHz, q, primaryAmount, true));
+        const handleGainScale = shape === "bell" ? 12 : 6;
         primaryHandle.setAttribute("cx", enhancerLiteFrequencyX(frequencyHz).toFixed(2));
-        primaryHandle.setAttribute("cy", enhancerLiteGainY(primaryAmount * 12).toFixed(2));
+        primaryHandle.setAttribute("cy", enhancerLiteGainY(primaryAmount * handleGainScale).toFixed(2));
         sideHandle.setAttribute("cx", enhancerLiteFrequencyX(frequencyHz).toFixed(2));
-        sideHandle.setAttribute("cy", enhancerLiteGainY(sideAmount * 12).toFixed(2));
+        sideHandle.setAttribute("cy", enhancerLiteGainY(sideAmount * handleGainScale).toFixed(2));
         sidePath.toggleAttribute("hidden", !isMidSide);
         sideHandle.toggleAttribute("hidden", !isMidSide);
         sideHandle.setAttribute("tabindex", isMidSide ? "0" : "-1");
 
-        primaryHandle.setAttribute("aria-valuetext", `${formatFrequency(frequencyHz)}, ${formatBoost(primaryAmount)}, Q ${formatQ(q)}`);
-        sideHandle.setAttribute("aria-valuetext", `${formatFrequency(frequencyHz)}, ${formatBoost(sideAmount)}, Q ${formatQ(q)}`);
+        primaryHandle.setAttribute("aria-valuetext", `${shape}, ${formatFrequency(frequencyHz)}, ${formatBoost(primaryAmount)}, Q ${formatQ(q)}`);
+        sideHandle.setAttribute("aria-valuetext", `${shape}, ${formatFrequency(frequencyHz)}, ${formatBoost(sideAmount)}, Q ${formatQ(q)}`);
         this.requireElement<HTMLElement>("[data-readout='frequency']").textContent = formatFrequency(frequencyHz);
         this.requireElement<HTMLElement>("[data-readout='q']").textContent = formatQ(q);
         this.requireElement<HTMLElement>("[data-readout='primary']").textContent = formatBoost(primaryAmount);
@@ -500,13 +597,13 @@ class EnhancerLiteView extends HTMLElement {
         const horizontalGrid = ENHANCER_LITE_DB_ROWS.map(({ gainDb, levelDbfs }, index) => {
             const y = enhancerLiteGainY(gainDb).toFixed(2);
             return `<path class="grid-line${gainDb === 0 ? " baseline" : ""}" data-grid-row="${index}" d="M ${ENHANCER_LITE_PLOT.left} ${y} H ${ENHANCER_LITE_PLOT.width - ENHANCER_LITE_PLOT.right}"></path>
-                    <text class="axis-label gain" data-gain-db="${gainDb}" x="${ENHANCER_LITE_PLOT.left - 8}" y="${Number(y) + 3}" text-anchor="end">${gainDb === 0 ? "0" : `+${gainDb}`}</text>
+                    <text class="axis-label gain" data-gain-db="${gainDb}" x="${ENHANCER_LITE_PLOT.left - 8}" y="${Number(y) + 3}" text-anchor="end">${gainDb > 0 ? `+${gainDb}` : gainDb}</text>
                     <text class="axis-label level" data-level-dbfs="${levelDbfs}" x="${ENHANCER_LITE_PLOT.width - ENHANCER_LITE_PLOT.right + 8}" y="${Number(y) + 3}" text-anchor="start">${levelDbfs}</text>`;
         }).join("");
         return `
             <section class="response-panel" aria-label="Enhancer Lite response">
                 <div class="plot-heading">
-                    <span>HARMONIC BAND</span>
+                    <span>HARMONIC SHAPE</span>
                     <span class="analyzer-legend" aria-label="Input and output spectrum peaks">
                         <span class="legend-item input"><i></i>IN <strong data-spectrum-peak="input">--</strong></span>
                         <span class="legend-item output"><i></i>OUT <strong data-spectrum-peak="output">--</strong></span>
@@ -516,6 +613,7 @@ class EnhancerLiteView extends HTMLElement {
                 <svg class="response-plot" viewBox="0 0 ${ENHANCER_LITE_PLOT.width} ${ENHANCER_LITE_PLOT.height}" role="application" aria-label="Draggable frequency and amount plot with input and output spectra">
                     ${verticalGrid}
                     ${horizontalGrid}
+                    <path class="grid-line baseline" d="M ${ENHANCER_LITE_PLOT.left} ${enhancerLiteGainY(0).toFixed(2)} H ${ENHANCER_LITE_PLOT.width - ENHANCER_LITE_PLOT.right}"></path>
                     <text class="axis-unit gain" x="8" y="12">GAIN</text>
                     <text class="axis-unit level" x="${ENHANCER_LITE_PLOT.width - 5}" y="12" text-anchor="end">dBFS</text>
                     <path class="spectrum-trace input" data-spectrum-role="input"></path>
@@ -579,7 +677,7 @@ class EnhancerLiteView extends HTMLElement {
                 .response-handle.side { fill: #000000; stroke: #ff2bd6; stroke-width: 2.5; filter: drop-shadow(0 0 8px #ff2bd6); }
                 .response-handle:focus-visible, .response-band:focus-visible { stroke: #b7ff27; filter: drop-shadow(0 0 8px #b7ff27); }
                 .response-handle[data-dragging] { cursor: grabbing; stroke: #b7ff27; }
-                .control-deck { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; margin-top: 12px; }
+                .control-deck { display: grid; grid-template-columns: 1fr 1.3fr; gap: 12px; margin-top: 12px; }
                 .readouts, .switches { border: 1px solid #20262c; border-radius: 10px; background: #000000; }
                 .readouts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 12px 14px; }
                 .readout { min-width: 0; border-right: 1px solid #20262c; padding: 0 13px; }
@@ -589,7 +687,7 @@ class EnhancerLiteView extends HTMLElement {
                 dd { margin: 7px 0 0; color: #f4fbff; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
                 .readout.primary dd { color: #00f0ff; }
                 .readout.side dd { color: #ff2bd6; }
-                .switches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 10px; }
+                .switches { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 10px; }
                 .switch-group { display: grid; gap: 6px; }
                 .switch-label { color: #5f7379; font-size: 8px; letter-spacing: 0.1em; }
                 .segmented { display: flex; border: 1px solid #273137; border-radius: 7px; padding: 2px; background: #000000; }
@@ -621,6 +719,14 @@ class EnhancerLiteView extends HTMLElement {
                         <div class="readout"><dt>Q</dt><dd data-readout="q">0.71</dd></div>
                     </dl>
                     <div class="switches">
+                        <div class="switch-group">
+                            <span class="switch-label">SHAPE</span>
+                            <div class="segmented">
+                                <button type="button" data-shape="low" aria-pressed="false">Low</button>
+                                <button type="button" data-shape="bell" aria-pressed="true">Bell</button>
+                                <button type="button" data-shape="high" aria-pressed="false">High</button>
+                            </div>
+                        </div>
                         <div class="switch-group">
                             <span class="switch-label">ROUTE</span>
                             <div class="segmented">

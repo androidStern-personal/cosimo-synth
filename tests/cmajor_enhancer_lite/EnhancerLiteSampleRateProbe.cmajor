@@ -5,22 +5,24 @@ processor EnhancerLiteSampleRateProbe
     node neutral = wt::EnhancerLiteBus;
     float64 phase;
 
-    void configure()
+    void configure (int32 shape)
     {
         enhancer.freqHzIn <- 1200.0f;
-        enhancer.qIn <- 4.0f;
+        enhancer.qIn <- shape == wt::enhancerLiteShapeBell ? 4.0f : 0.71f;
         enhancer.modeIn <- float32 (wt::enhancerLiteModeStereo);
         enhancer.midAmountIn <- 0.85f;
         enhancer.sideAmountIn <- 0.0f;
         enhancer.curveIn <- float32 (wt::enhancerLiteCurveSolid);
         enhancer.saturationModeIn <- float32 (wt::enhancerLiteSaturationModeSubtle);
+        enhancer.shapeIn <- float32 (shape);
         neutral.midAmountIn <- 0.0f;
         neutral.sideAmountIn <- 0.0f;
+        neutral.shapeIn <- float32 (wt::enhancerLiteShapeBell);
     }
 
-    float64 measureContributionPower (float32 frequencyHz)
+    float64 measureContributionPower (int32 shape, float32 frequencyHz)
     {
-        configure();
+        configure (shape);
         enhancer.resetIn <- 1;
         neutral.resetIn <- 1;
         phase = 0.0;
@@ -54,13 +56,44 @@ processor EnhancerLiteSampleRateProbe
 
     void main()
     {
-        let inBandPower = measureContributionPower (1200.0f);
-        let outOfBandPower = measureContributionPower (7000.0f);
-        let finite = inBandPower == inBandPower && outOfBandPower == outOfBandPower;
+        let bellInBandPower = measureContributionPower (
+            wt::enhancerLiteShapeBell,
+            1200.0f
+        );
+        let bellOutOfBandPower = measureContributionPower (
+            wt::enhancerLiteShapeBell,
+            7000.0f
+        );
+        let lowPlateauPower = measureContributionPower (
+            wt::enhancerLiteShapeLow,
+            120.0f
+        );
+        let lowOppositePower = measureContributionPower (
+            wt::enhancerLiteShapeLow,
+            12000.0f
+        );
+        let highOppositePower = measureContributionPower (
+            wt::enhancerLiteShapeHigh,
+            120.0f
+        );
+        let highPlateauPower = measureContributionPower (
+            wt::enhancerLiteShapeHigh,
+            12000.0f
+        );
+        let finite = bellInBandPower == bellInBandPower
+                     && bellOutOfBandPower == bellOutOfBandPower
+                     && lowPlateauPower == lowPlateauPower
+                     && lowOppositePower == lowOppositePower
+                     && highOppositePower == highOppositePower
+                     && highPlateauPower == highPlateauPower;
 
-        out <- (finite && inBandPower > 1.0e-10) ? 1 : 0;
+        out <- (finite && bellInBandPower > 1.0e-10) ? 1 : 0;
         advance();
-        out <- (inBandPower > outOfBandPower * 4.0) ? 1 : 0;
+        out <- (bellInBandPower > bellOutOfBandPower * 4.0) ? 1 : 0;
+        advance();
+        out <- (lowPlateauPower > lowOppositePower * 100.0) ? 1 : 0;
+        advance();
+        out <- (highPlateauPower > highOppositePower * 100.0) ? 1 : 0;
         advance();
         out <- -1;
         advance();
