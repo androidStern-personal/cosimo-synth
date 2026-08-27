@@ -1747,7 +1747,8 @@ Source note (2026-08-25):
     - Up to 4 ms of constant lookahead is permitted if the host is told the exact delay. No audible gain change may complete faster than one 60 Hz cycle (about 16.7 ms). FAT, Width, Tilt, and Punch are not part of this version.
     User controls and tuning:
     - T26's fourteen settings remain the internal high-quality Enhancer contract. T28 decides which values are baked and how the public Polish controls drive them; a compact final interface is not permission for the integrator to delete T26 controls or replace its DSP while merging the source.
-    - Expose one `Amount` knob for the compressor and soft-clip combination. Do not expose separate Compression or Clip controls. Tune the macro mapping and the final medium-compression values during development using level-matched listening and the T27 reference bundle.
+    - Expose a dedicated `Enhancer Amount` knob. Frequency, Q, routing, character, intensity, de-emphasis, and the relative per-band Mid/Side balance remain baked internal settings. The knob scales the accepted per-band Enhancer amounts together from neutral to the tuned Polish setting; tune its response during development.
+    - Expose a separate `Compression/Clip Amount` knob for the compressor and soft-clip combination. Do not expose separate Compression and Clip controls. Tune that macro mapping and the final medium-compression values during development using level-matched listening and the T27 reference bundle.
     - Safe Bass is always fixed and has no user control. Tune its cutoff and side-only high-pass slope during development, then bake the accepted values into the design.
     - Expose Output Trim after the intentional Polish soft clipper.
     Final output behavior:
@@ -1755,13 +1756,13 @@ Source note (2026-08-25):
     - Do not replace it with an always-on final limiter or any other hidden output processor. Internal safety shaping inside an individual effect or feedback loop remains part of that effect and is outside this removal.
     - Add a small overload indicator in the preset bar. It turns red when the post-trim output reaches or exceeds digital full scale; it reports the overload and does not alter the sound. Tune the exact compact light or meter presentation during development.
     Architecture proof before sound work:
-    - Decide the compressor's exact lookahead within the approved 0-4 ms range, add it to T26's fixed 60-sample Enhancer latency, then prove that the desktop plugin, AUv3, standalone app, and browser path report and compensate that exact constant total. At Amount zero, the compressor/soft-clip stage must remain a delayed identity rather than a timing-mismatched bypass.
+    - Decide the compressor's exact lookahead within the approved 0-4 ms range, add it to T26's fixed 60-sample Enhancer latency, then prove that the desktop plugin, AUv3, standalone app, and browser path report and compensate that exact constant total. At `Compression/Clip Amount` zero, that stage must remain a delayed identity rather than a timing-mismatched bypass. At `Enhancer Amount` zero, retain T26's fixed latency while its nonlinear contribution is neutral.
     - Update `POLISH_CHAIN_DESIGN.md` to match these settled choices before implementing the sound.
     Done when:
-    - The implemented order is Safe Bass → Enhancer → medium compressor → intentional soft clipper → Output Trim, with only Amount and Output Trim exposed to the user.
-    - Tests prove the fixed Safe Bass values, the 60 Hz gain-change floor, smoothing, preset recall, Amount-zero delayed identity, exact reported lookahead, Output Trim, and correct overload indication.
+    - The implemented order is Safe Bass → Enhancer → medium compressor → intentional soft clipper → Output Trim, with only Enhancer Amount, Compression/Clip Amount, and Output Trim exposed to the user.
+    - Tests prove the fixed Safe Bass values, independent behavior and neutral points for both Amount knobs, the 60 Hz gain-change floor, smoothing, preset recall, exact reported lookahead, Output Trim, and correct overload indication.
     - The separate `RackOutputStage` is gone, there is no replacement final limiter or hidden final clipper, below-ceiling output is not changed after Output Trim, and overloads are reported without being silently reshaped.
-    - Andrew approves the fixed Safe Bass tuning, Amount response, compression/clip character, and level-matched listening against the T27 reference bundle.
+    - Andrew approves the fixed Safe Bass tuning, both Amount responses, compression/clip character, and level-matched listening against the T27 reference bundle.
 
 [?] T29 — Use the distortion field notes to choose one genuinely new sound experiment
     Knowledge source: `DISTORTION_FIELD_NOTES.md`.

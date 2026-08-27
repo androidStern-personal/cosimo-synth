@@ -42,7 +42,7 @@ are marked **locked**; everything else is direction, not commitment.
   1. SAFE BASS   side-channel low cut (bass to mono)
   2. ENHANCER    the two-band module (per ENHANCER_DESIGN.md)
   3. COMP/CLIP   medium compression evening out into a soft clipper
-→ output trim / safety (RackOutputStage relationship: open, §5)
+→ output trim (no post-trim safety processor; overload indication only)
 ```
 
 Supersessions from earlier drafts, recorded: TILT (vetoed — linear tone is
@@ -56,13 +56,21 @@ High-pass on the side channel only; mid untouched. This is classic **elliptical
 EQ** from vinyl mastering (bass summed to mono so the cutter head survived), still
 standard practice: phasey stereo bass wastes clipper headroom and muddies small
 speakers. Starting spec: 6–12 dB/oct on S below ~120 Hz. Mono input ⇒ S = 0 ⇒
-no-op. Open: fixed frequency vs one knob.
+no-op. The public surface is locked: no Safe Bass control. Cutoff and slope remain
+development-tuning decisions and are baked after acceptance.
 
 ### 2.2 ENHANCER
 
 As `ENHANCER_DESIGN.md`: two parametric bells; per-band Stereo or Mid/Side routing;
 linked Stereo Amount or independent Mid and Side amounts; Tube/Solid; shared
 Subtle/Medium; continuous de-emphasis. All settings are static per §1.
+
+The Polish surface exposes one dedicated **Enhancer Amount** macro. Frequency, Q,
+routing, Tube/Solid choice, Subtle/Medium choice, de-emphasis, and relative
+per-band Mid/Side balance remain baked internal settings. The macro scales the
+accepted per-band amounts together from neutral to the tuned Polish setting. Its
+exact response is tuned by ear during development; it does not replace or delete
+T26's full internal contract.
 
 ### 2.3 COMP/CLIP (the finisher)
 
@@ -76,8 +84,9 @@ with the two rules above: up to 4 ms lookahead (same speed as SF's 0.2 ms attack
 without its overshoot-or-distort tradeoff), release ≥ the 60 Hz floor (SF's
 26.8 ms already is), detector HP as the cleaner alternative for bass-heavy
 material. "Medium" compression (Andrew) rather than SF's near-limiting ratio —
-exact threshold/ratio and the knob surface (one knob vs comp-amount + clip-amount)
-are open.
+exact threshold/ratio remain open. The public surface is locked to one separate
+**Compression/Clip Amount** macro that drives both stages together; there are no
+independent Compression and Clip knobs.
 
 T27's repeatable, isolated comparison package is
 `reference_labs/polish_comp_clip/`. Its exact decoded fixtures are source facts;
@@ -120,13 +129,14 @@ no production signal-path connection.
 
 ## 5. Open items
 
-1. COMP/CLIP control surface: one fattener-style knob vs separate comp-amount and
-   clip-amount; exact "medium" threshold/ratio values (voiced by ear against the
-   SF reference numbers).
-2. SAFE BASS: fixed ~120 Hz vs a knob; slope 6 vs 12 dB/oct.
-3. RackOutputStage relationship: absorbed into the chain's final stage vs kept as
-   a separate safety clipper after it; where the output trim UI lives.
-4. Transient/PUNCH mode (floated earlier): parked; revisit only if voicing shows
+1. Enhancer: exact baked settings and the response of the dedicated Enhancer
+   Amount macro.
+2. COMP/CLIP: exact "medium" threshold/ratio, soft-clip tuning, macro response,
+   and compressor lookahead within the approved 0–4 ms range.
+3. SAFE BASS: fixed cutoff near the starting 120 Hz value and slope of 6 vs
+   12 dB/oct. These are tuning choices, not user controls.
+4. Output surface: exact placement of Output Trim and the compact overload light.
+5. Transient/PUNCH mode (floated earlier): parked; revisit only if voicing shows
    the finisher kills material worth keeping.
-5. Name (working: "Polish").
-6. WIDTH stage: out of the lineup unless Andrew re-adds it.
+6. Name (working: "Polish").
+7. WIDTH stage: out of the lineup unless Andrew re-adds it.
