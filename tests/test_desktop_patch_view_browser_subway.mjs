@@ -949,10 +949,17 @@ test("phone rail edges, plugin, and desktop keep every exclusive Solo contained 
         assert.equal(snapshot.storedState["lane.v1"], laneDoc);
 
         for (const surface of [
+            { name: "393x852 right-rail phone", width: 393, height: 852, railEdge: "right" },
             { name: "plugin", width: 640, height: 700 },
             { name: "desktop", width: 1024, height: 768 },
         ]) {
             await page.setViewportSize({ width: surface.width, height: surface.height });
+            if (surface.railEdge !== undefined) {
+                assert.equal(
+                    await page.locator('[data-role="mobile-global-mod-rail"]').getAttribute("data-edge"),
+                    surface.railEdge,
+                );
+            }
             await page.locator('[data-role="rack-fork-parallel#1"]:visible').click();
             const surfaceSoloButtons = page.locator(
                 '[data-role^="rack-branch-solo-parallel#1-"]:visible',
@@ -1041,6 +1048,7 @@ test("Init clears active branch Solo without serializing it", async () => {
     } finally {
         await page.close();
     }
+
 });
 
 test("compact Split Solo wrapping keeps crossovers and group actions scroll-reachable", async () => {
@@ -1106,6 +1114,37 @@ test("compact Split Solo wrapping keeps crossovers and group actions scroll-reac
         );
     } finally {
         await page.close();
+    }
+
+    const widePhonePage = await openHarnessPage({
+        laneDoc: emptySplitLaneDocJson(3),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    try {
+        await widePhonePage.click('[data-role="mobile-workspace-tab-fx"]');
+        assert.equal(
+            await widePhonePage.locator('[data-role="mobile-global-mod-rail"]').getAttribute("data-edge"),
+            "right",
+        );
+        await widePhonePage.click('[data-role="rack-fork-split#1"]');
+        const soloButtons = widePhonePage.locator('[data-role^="rack-branch-solo-split#1-"]');
+        assert.equal(await soloButtons.count(), 3);
+        for (let index = 0; index < 3; index += 1) {
+            const evidence = await assertEditorControlIsVisibleAndOwned(
+                soloButtons.nth(index), `393x852 three-band Split Solo ${index}`,
+            );
+            assert.equal(evidence.rect.width >= 44 && evidence.rect.height >= 44, true);
+        }
+        for (const [selector, label] of [
+            ['[data-role="rack-split-low-split#1"]', "393x852 Low crossover"],
+            ['[data-role="rack-split-high-split#1"]', "393x852 High crossover"],
+            ['[data-role="rack-group-remove-band"]', "393x852 Remove mid band"],
+            ['[data-role="rack-group-dissolve"]', "393x852 Dissolve group"],
+        ]) {
+            await assertEditorControlIsVisibleAndOwned(widePhonePage.locator(selector), label);
+        }
+    } finally {
+        await widePhonePage.close();
     }
 });
 
