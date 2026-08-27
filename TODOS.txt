@@ -1756,6 +1756,8 @@ Source note (2026-08-25):
     - Expose a separate `Compression/Clip Amount` knob for the compressor and soft-clip combination. Do not expose separate Compression and Clip controls. Tune that macro mapping and the final medium-compression values during development using level-matched listening and the T27 reference bundle.
     - Safe Bass is always fixed and has no user control. Tune its cutoff and side-only high-pass slope during development, then bake the accepted values into the design.
     - Expose Output Trim after the intentional Polish soft clipper.
+    - Init and every brand-new patch start with `Enhancer Amount` at zero, `Compression/Clip Amount` at zero, and Output Trim at 0 dB. Polish starts off; do not ship an audible default.
+    - When both Amount knobs are zero, the complete Polish section must be neutral apart from its declared constant latency: Safe Bass must not change the signal merely because it has no visible control. Derive its internal activation from the two Amount knobs and transition click-free; do not add a public or saved Polish bypass state. Once either Amount is raised, Safe Bass uses its one baked cutoff and slope.
     Interface placement:
     - Show one permanent `POLISH` node at the end of the FX graph, after the complete editable Effects Lane. It represents the fixed end-of-chain section and is not another lane effect.
     - Tapping `POLISH` opens Enhancer Amount, Compression/Clip Amount, and Output Trim in the existing effect-editor area. The node does not create another permanent panel or consume extra page height outside the graph.
@@ -1774,7 +1776,7 @@ Source note (2026-08-25):
     Done when:
     - The implemented order is Safe Bass → Enhancer → medium compressor → intentional soft clipper → Output Trim, with only Enhancer Amount, Compression/Clip Amount, and Output Trim exposed to the user.
     - The real FX graph always shows `POLISH` after the editable lane, opens its controls in the normal editor area, and proves that add, drag, swap, delete, context-menu, per-effect bypass, and whole-lane bypass actions cannot move or alter that fixed boundary.
-    - Tests prove the fixed Safe Bass values, independent behavior and neutral points for both Amount knobs, the 60 Hz gain-change floor, smoothing, preset recall, exact reported lookahead, Output Trim, and correct overload indication.
+    - Tests prove Init/new-patch neutrality, the fixed Safe Bass values when Polish is active, independent behavior and neutral points for both Amount knobs, a click-free transition out of the all-zero state, the 60 Hz gain-change floor, smoothing, preset recall, exact reported lookahead, Output Trim, and correct overload indication.
     - State tests prove every current-format Polish value round-trips and every older complete-sound version is ignored atomically without partially changing the running sound. No migration, missing-field fallback, or hidden compatibility flag exists.
     - The separate `RackOutputStage` is gone, there is no replacement final limiter or hidden final clipper, below-ceiling output is not changed after Output Trim, and overloads are reported without being silently reshaped.
     - Andrew approves the fixed Safe Bass tuning, both Amount responses, compression/clip character, and level-matched listening against the T27 reference bundle.

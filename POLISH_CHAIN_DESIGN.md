@@ -17,6 +17,13 @@ are marked **locked**; everything else is direction, not commitment.
   Polish values, migrate old documents, or add a hidden legacy bypass. Retained
   factory sounds are rebuilt in the new format; obsolete old-format copies may be
   deleted after they are inventoried.
+- **Locked — starts off**: Init and every brand-new patch set Enhancer Amount and
+  Compression/Clip Amount to zero and Output Trim to 0 dB. With both Amounts at
+  zero, the complete section is neutral apart from its declared constant latency;
+  Safe Bass is internally bypassed rather than altering an otherwise unpolished
+  sound. Raising either Amount activates the one baked Safe Bass curve with a
+  click-free transition. This is derived behavior, not a public or saved Polish
+  bypass control.
 - **Locked — lookahead is permitted here, up to 4 ms** (Andrew, 2026-08-25),
   deliberately unlike the rack. Engineering consequences:
   - The chain is a top-level fixed stage, not a rack module, so ADR-008 still binds
