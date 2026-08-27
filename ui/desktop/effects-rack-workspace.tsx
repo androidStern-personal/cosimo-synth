@@ -2947,36 +2947,6 @@ function MobileGlobalModRail({
     );
 }
 
-function UnmappedModulationPair({
-    source,
-    target,
-    onCreate,
-}: {
-    source: RackModulationSource;
-    target: RackParameterDescriptor;
-    onCreate: () => void;
-}) {
-    return (
-        <section
-            className="rack-mod-amount rack-mod-unmapped"
-            aria-label="Selected modulation source and target are not mapped"
-            data-role="rack-unmapped-pair"
-        >
-            <span className="rack-mod-unmapped-pair">
-                {source.label} → {getRackEffectDescriptor(target.effectId).label} {target.label}
-            </span>
-            <button
-                type="button"
-                data-role="rack-create-mapping"
-                className="rack-create-mapping"
-                onClick={onCreate}
-            >
-                CREATE MAPPING +
-            </button>
-        </section>
-    );
-}
-
 type RackParameterMenuState = {
     readonly endpointID: string;
     readonly clientX: number;
@@ -4076,16 +4046,6 @@ export function EffectsRackWorkspace({
         <>
             {/* T09: a selected mapped pair shows NO separate amount control —
                 the target knob, its ring, and the shared HUD own that job. */}
-            {selectedRoute ? null : sourceIsArmed ? (
-                <UnmappedModulationPair
-                    source={activeSource}
-                    target={selectedTarget}
-                    onCreate={() => createRoute(
-                        selectedSource,
-                        selectedTargetKind,
-                    )}
-                />
-            ) : null}
             <output className="rack-route-status" aria-live="polite">
                 {routeStatus || (hoverTargetEndpointID ? `Route to ${hoverTargetEndpointID}` : "")}
             </output>
@@ -4529,17 +4489,15 @@ export function EffectsRackWorkspace({
                     style={{ "--editor-accent": EFFECT_ACCENTS[selectedEffectId] } as CSSProperties}
                     aria-label="Selected effect editor"
                 >
-                    <header className="rack-editor-header" data-effect-id={selectedEffectId}>
+                    <header className="rack-editor-header rack-effect-header" data-effect-id={selectedEffectId}>
                         {/* The faceplate art lives here now — the header is
                             the one place with room for it at station scale. */}
                         <div className="rack-editor-heading">
-                            <span>{selectedEffectEnabled ? "SELECTED FX" : "FX BYPASSED"}</span>
                             <strong className="rack-editor-name">
                                 {selectedInstanceNumber > 1
                                     ? `${selectedEffect.label} ${selectedInstanceNumber}`
                                     : selectedEffect.label}
                             </strong>
-                            <p>{selectedEffect.summary}</p>
                         </div>
                         <button
                             type="button"

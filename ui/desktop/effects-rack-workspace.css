@@ -997,6 +997,15 @@
     background-position: center, center var(--plate-y, 0%);
 }
 
+.rack-effect-header {
+    min-height: 48px;
+    padding-block: 1px;
+}
+
+.rack-effect-header .rack-editor-name {
+    line-height: 1.5;
+}
+
 .rack-editor-header[data-effect-id="filter"] { --plate-y: 0%; }
 .rack-editor-header[data-effect-id="drive"] { --plate-y: 14.2857%; }
 .rack-editor-header[data-effect-id="ott"] { --plate-y: 28.5714%; }
@@ -1480,40 +1489,6 @@
     pointer-events: none;
 }
 
-.rack-mod-unmapped {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 6px;
-}
-
-.rack-mod-unmapped-pair {
-    min-width: 0;
-    overflow: hidden;
-    color: #8e999d;
-    font-size: 7px;
-    line-height: 1.25;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.rack-create-mapping {
-    min-height: 36px;
-    padding-inline: 9px;
-    border: 1px solid color-mix(in srgb, var(--editor-accent) 48%, transparent);
-    border-radius: var(--cosimo-radius-sm);
-    background: color-mix(in srgb, var(--editor-accent) 10%, #0b0f11);
-    color: color-mix(in srgb, var(--editor-accent) 82%, white);
-    font: 600 var(--cosimo-type-caption)/1 var(--cosimo-font-readout);
-    letter-spacing: 0.07em;
-    white-space: nowrap;
-}
-
-.rack-create-mapping:disabled {
-    border-color: rgb(255 120 96 / 0.28);
-    background: rgb(85 23 18 / 0.24);
-    color: #d88779;
-}
-
 .rack-route-status {
     display: block;
     height: 10px;
@@ -1614,6 +1589,18 @@
     .rack-editor-control,
     .rack-choice-control {
         min-height: 72px;
+    }
+
+    .rack-effect-editor[data-selected-effect="drive"] .rack-editor-name {
+        font-size: 17px;
+    }
+
+    .rack-effect-editor[data-selected-effect="chorus"] .rack-editor-name {
+        font-size: 15px;
+    }
+
+    .rack-effect-editor[data-selected-effect="phaser"] .rack-editor-name {
+        font-size: 12px;
     }
 }
 

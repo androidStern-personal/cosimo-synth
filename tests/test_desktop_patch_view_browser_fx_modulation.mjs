@@ -60,6 +60,7 @@ import {
     toggleRackEffectEnabled,
     expandGlobalModRail,
     collapseGlobalModRail,
+    createRackMappingByDrop,
     touchPointForModSourcePreviewTarget,
     editRackParameterValue,
     dispatchRackKnobPointerEvents,
@@ -966,7 +967,7 @@ test("rack knob outer-ring drags edit only the selected source-target modulation
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
         await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
-        await page.click('[data-role="rack-create-mapping"]');
+        await createRackMappingByDrop(page);
         await waitForHarnessSnapshot(
             page,
             "initial zero-depth reverb route",
@@ -1191,6 +1192,172 @@ test("an unmapped rack knob shows a neutral outer track and its modulation axis 
     }
 });
 
+test("T57 removes the redundant Create Mapping row without changing source-drop mapping", async () => {
+    const layouts = [
+        { name: "phone", width: 393, height: 852, compact: true },
+        { name: "plugin", width: 1120, height: 680, compact: false },
+        { name: "desktop", width: 1440, height: 900, compact: false },
+    ];
+
+    for (const layout of layouts) {
+        const page = await openHarnessPage({
+            beforeGoto: (nextPage) => nextPage.setViewportSize({
+                width: layout.width,
+                height: layout.height,
+            }),
+        });
+
+        try {
+            if (layout.compact) {
+                await page.click('[data-role="mobile-workspace-tab-fx"]');
+            }
+            await selectRackEffect(page, "reverb");
+            if (layout.compact) {
+                await expandGlobalModRail(page);
+                await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
+            } else {
+                await page.click('[data-role="rack-mod-source-mseg-1"]');
+            }
+
+            const modulationArea = page.locator(".rack-editor-modulation");
+            const unmappedHeight = await modulationArea.evaluate((element) => element.getBoundingClientRect().height);
+            assert.equal(
+                await page.locator('[data-role="rack-create-mapping"]').count(),
+                0,
+                `${layout.name} still renders CREATE MAPPING +.`,
+            );
+            assert.equal(
+                await page.locator('[data-role="rack-unmapped-pair"]').count(),
+                0,
+                `${layout.name} still reserves an unmapped-pair row.`,
+            );
+
+            await createRackMappingByDrop(page);
+            await waitForHarnessSnapshot(
+                page,
+                `${layout.name} source drop creates the selected mapping`,
+                (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                    route.sourceKind === "mseg"
+                    && route.sourceSlot === 1
+                    && route.targetKind === "lane.reverb#1.reverbSize"
+                )),
+            );
+            const mappedHeight = await modulationArea.evaluate((element) => element.getBoundingClientRect().height);
+            assert.equal(
+                Math.abs(mappedHeight - unmappedHeight) <= 1,
+                true,
+                `${layout.name} reserves different modulation height when unmapped (${unmappedHeight}) and mapped (${mappedHeight}).`,
+            );
+            assert.equal(await page.locator('[data-role="rack-create-mapping"]').count(), 0);
+            assert.equal(await page.locator('[data-role="rack-unmapped-pair"]').count(), 0);
+        } finally {
+            await page.close();
+        }
+    }
+});
+
+test("T58 effect headers contain only the name in active and bypassed phone, plugin, and desktop editors", async () => {
+    const effects = [
+        { id: "filter", label: "Filter" },
+        { id: "drive", label: "Distortion" },
+        { id: "ott", label: "OTT" },
+        { id: "chorus", label: "Chorus" },
+        { id: "flanger", label: "Flanger" },
+        { id: "phaser", label: "Phaser" },
+        { id: "delay", label: "Delay" },
+        { id: "reverb", label: "Reverb" },
+    ];
+    const layouts = [
+        { name: "phone", width: 393, height: 852, compact: true },
+        { name: "plugin", width: 1120, height: 680, compact: false },
+        { name: "desktop", width: 1440, height: 900, compact: false },
+    ];
+
+    for (const layout of layouts) {
+        const page = await openHarnessPage({
+            beforeGoto: (nextPage) => nextPage.setViewportSize({
+                width: layout.width,
+                height: layout.height,
+            }),
+        });
+
+        try {
+            if (layout.compact) {
+                await page.click('[data-role="mobile-workspace-tab-fx"]');
+            }
+
+            for (const effect of effects) {
+                await selectRackEffect(page, effect.id);
+                const editor = page.locator(`[data-role="rack-editor-${effect.id}"]`);
+                const assertHeader = async (enabled) => {
+                    const header = await editor.locator(".rack-editor-header").evaluate((element) => {
+                        const heading = element.querySelector(".rack-editor-heading");
+                        const name = element.querySelector(".rack-editor-name");
+                        const power = element.querySelector('[data-role="rack-editor-power"]');
+                        if (!(heading instanceof HTMLElement)
+                            || !(name instanceof HTMLElement)
+                            || !(power instanceof HTMLElement)) {
+                            return null;
+                        }
+                        const headerBounds = element.getBoundingClientRect();
+                        const headingBounds = heading.getBoundingClientRect();
+                        const nameBounds = name.getBoundingClientRect();
+                        const powerBounds = power.getBoundingClientRect();
+                        return {
+                            text: heading.innerText.trim(),
+                            childTags: Array.from(heading.children).map((child) => child.tagName),
+                            headerHeight: headerBounds.height,
+                            headingHeight: headingBounds.height,
+                            nameHeight: nameBounds.height,
+                            nameFits: name.scrollWidth <= name.clientWidth + 1
+                                && name.scrollHeight <= name.clientHeight + 1,
+                            nameScrollWidth: name.scrollWidth,
+                            nameClientWidth: name.clientWidth,
+                            nameScrollHeight: name.scrollHeight,
+                            nameClientHeight: name.clientHeight,
+                            nameContained: nameBounds.left >= headerBounds.left - 0.5
+                                && nameBounds.right <= powerBounds.left + 0.5
+                                && nameBounds.top >= headerBounds.top - 0.5
+                                && nameBounds.bottom <= headerBounds.bottom + 0.5,
+                            powerWidth: powerBounds.width,
+                            powerHeight: powerBounds.height,
+                        };
+                    });
+                    assert.ok(header, `${layout.name} ${effect.label} header is incomplete.`);
+                    assert.equal(header.text, effect.label, `${layout.name} ${effect.label} ${enabled ? "active" : "bypassed"} header leaked extra text.`);
+                    assert.deepEqual(header.childTags, ["STRONG"]);
+                    assert.equal(header.headerHeight <= 50, true, `${layout.name} ${effect.label} did not reclaim the old heading rows (${header.headerHeight}px).`);
+                    assert.equal(header.headingHeight <= header.nameHeight + 1, true, `${layout.name} ${effect.label} retains blank heading-row height.`);
+                    assert.equal(
+                        header.nameFits,
+                        true,
+                        `${layout.name} ${effect.label} name is clipped (${header.nameScrollWidth}x${header.nameScrollHeight} in ${header.nameClientWidth}x${header.nameClientHeight}).`,
+                    );
+                    assert.equal(header.nameContained, true, `${layout.name} ${effect.label} name escapes its header.`);
+                    assert.equal(header.powerWidth >= 44 && header.powerHeight >= 44, true, `${layout.name} ${effect.label} power hit area shrank.`);
+                };
+                const setEnabled = async (enabled) => {
+                    if ((await editor.getAttribute("data-effect-enabled")) !== String(enabled)) {
+                        await editor.locator('[data-role="rack-editor-power"]').click();
+                        await page.waitForFunction(
+                            ({ effectId, expected }) => document.querySelector(`[data-role="rack-editor-${effectId}"]`)
+                                ?.getAttribute("data-effect-enabled") === expected,
+                            { effectId: effect.id, expected: String(enabled) },
+                        );
+                    }
+                };
+
+                await setEnabled(true);
+                await assertHeader(true);
+                await setEnabled(false);
+                await assertHeader(false);
+            }
+        } finally {
+            await page.close();
+        }
+    }
+});
+
 test("editing a bypassed rack route preserves bypass and renders the outer ring as bypassed", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
@@ -1201,7 +1368,7 @@ test("editing a bypassed rack route preserves bypass and renders the outer ring 
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
         await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
-        await page.click('[data-role="rack-create-mapping"]');
+        await createRackMappingByDrop(page);
         await waitForHarnessSnapshot(page, "route before bypass-preserving edit", (snapshot) => (
             readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "lane.reverb#1.reverbSize")
         ));
@@ -1263,7 +1430,7 @@ test("a stationary touch hold on a rack knob opens its routing menu with one hap
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
         await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
-        await page.click('[data-role="rack-create-mapping"]');
+        await createRackMappingByDrop(page);
         await waitForHarnessSnapshot(
             page,
             "route before rack parameter hold",
@@ -1409,7 +1576,7 @@ test("rack parameter reset restores the base default without deleting modulation
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
         await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
-        await page.click('[data-role="rack-create-mapping"]');
+        await createRackMappingByDrop(page);
         await waitForHarnessSnapshot(
             page,
             "route before base reset",
@@ -1457,7 +1624,7 @@ test("rack parameter menu edits the active route enablement polarity and voice r
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
         await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
-        await page.click('[data-role="rack-create-mapping"]');
+        await createRackMappingByDrop(page);
         await waitForHarnessSnapshot(
             page,
             "route before context edits",
@@ -1523,7 +1690,7 @@ test("rack exact-value sheet applies real-unit base and selected-route amounts",
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
         await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
-        await page.click('[data-role="rack-create-mapping"]');
+        await createRackMappingByDrop(page);
         await waitForHarnessSnapshot(
             page,
             "route before exact rack edit",
@@ -1741,9 +1908,9 @@ test("rack parameter route removal targets one source or confirms removal of eve
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
         await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
-        await page.click('[data-role="rack-create-mapping"]');
+        await createRackMappingByDrop(page);
         await armRackModSourceForRouting(page, '[data-role="rack-mod-source-env-1"]');
-        await page.click('[data-role="rack-create-mapping"]');
+        await createRackMappingByDrop(page, '[data-role="rack-mod-source-env-1"]');
         await waitForHarnessSnapshot(
             page,
             "two source routes before removal",

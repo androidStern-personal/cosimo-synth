@@ -10,6 +10,7 @@ import {
 import { normalizeModulationState } from "../patch_gui/modulation.js";
 import {
     clearHarnessDebugLog,
+    createRackMappingByDrop,
     editRackParameterValue,
     expandGlobalModRail,
     getHarnessSnapshot,
@@ -2559,7 +2560,7 @@ test("creating a mapping with the second instance selected targets that instance
         await page.waitForSelector('[data-role="rack-editor-delay"][data-device-id="delay#2"]');
 
         await page.click('[data-role="rack-mod-source-mseg-1"]');
-        await page.click('[data-role="rack-create-mapping"]');
+        await createRackMappingByDrop(page);
 
         const snapshot = await waitForHarnessSnapshot(
             page,

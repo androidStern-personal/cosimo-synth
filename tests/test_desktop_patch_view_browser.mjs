@@ -997,6 +997,98 @@ test("T54 keeps the wavetable corner controls on symmetric insets at phone, plug
     }
 });
 
+test("built desktop bundle ships the compact effect header and no Create Mapping row", async () => {
+    const page = await openBuiltDesktopBundlePage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.waitForFunction(() => (
+            document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="mobile-workspace-tab-fx"]') instanceof HTMLButtonElement
+        ));
+        await page.evaluate(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            const fxTab = root?.querySelector('[data-role="mobile-workspace-tab-fx"]');
+            const distortion = root?.querySelector('[data-role="rack-station-drive"]');
+            if (!(fxTab instanceof HTMLButtonElement) || !(distortion instanceof HTMLButtonElement)) {
+                throw new Error("Expected the compiled FX tab and Distortion station.");
+            }
+            fxTab.click();
+            distortion.click();
+        });
+        await page.waitForFunction(() => (
+            document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="rack-editor-drive"]') instanceof HTMLElement
+        ));
+        await page.evaluate(() => document.fonts.ready);
+
+        const readHeader = () => page.evaluate(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            const header = root?.querySelector('[data-role="rack-editor-drive"] .rack-editor-header');
+            const heading = header?.querySelector(".rack-editor-heading");
+            const name = heading?.querySelector(".rack-editor-name");
+            if (!(header instanceof HTMLElement)
+                || !(heading instanceof HTMLElement)
+                || !(name instanceof HTMLElement)) {
+                return null;
+            }
+            return {
+                text: heading.innerText.trim(),
+                childTags: Array.from(heading.children).map((child) => child.tagName),
+                height: header.getBoundingClientRect().height,
+                nameFits: name.scrollWidth <= name.clientWidth + 1
+                    && name.scrollHeight <= name.clientHeight + 1,
+                nameSize: {
+                    scrollWidth: name.scrollWidth,
+                    clientWidth: name.clientWidth,
+                    scrollHeight: name.scrollHeight,
+                    clientHeight: name.clientHeight,
+                },
+            };
+        });
+        const activeHeader = await readHeader();
+        assert.deepEqual(activeHeader?.childTags, ["STRONG"]);
+        assert.equal(activeHeader?.text, "Distortion");
+        assert.equal((activeHeader?.height ?? Infinity) <= 50, true);
+        assert.equal(
+            activeHeader?.nameFits,
+            true,
+            `Compiled Distortion name is clipped: ${JSON.stringify(activeHeader?.nameSize)}.`,
+        );
+
+        const enabledBefore = await page.evaluate(() => (
+            document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="rack-editor-drive"]')?.getAttribute("data-effect-enabled")
+        ));
+        await page.evaluate(() => {
+            const power = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="rack-editor-power"]');
+            if (!(power instanceof HTMLButtonElement)) {
+                throw new Error("Expected the compiled effect power control.");
+            }
+            power.click();
+        });
+        await page.waitForFunction((previous) => (
+            document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="rack-editor-drive"]')?.getAttribute("data-effect-enabled") !== previous
+        ), enabledBefore);
+        const toggledHeader = await readHeader();
+        assert.deepEqual(toggledHeader?.childTags, ["STRONG"]);
+        assert.equal(toggledHeader?.text, "Distortion");
+
+        await expandGlobalModRail(page);
+        await page.locator('[data-role="rack-mod-source-mseg-1"]').click();
+        assert.equal(
+            await page.evaluate(() => document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelectorAll('[data-role="rack-create-mapping"], [data-role="rack-unmapped-pair"]').length),
+            0,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
 test("desktop custom-element wrapper honors an explicitly injected resource client", async () => {
     const page = await openDesktopEntryPageWithInjectedResourceClient();
 

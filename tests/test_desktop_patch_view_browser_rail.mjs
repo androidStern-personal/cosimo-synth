@@ -56,6 +56,7 @@ import {
     toggleRackEffectEnabled,
     expandGlobalModRail,
     collapseGlobalModRail,
+    createRackMappingByDrop,
     touchPointForModSourcePreviewTarget,
     editRackParameterValue,
     dispatchRackKnobPointerEvents,
@@ -1792,10 +1793,7 @@ test("the parameter gesture HUD avoids the active control, the global rail, the 
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
         await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-mseg-1"]');
-        const createMapping = page.locator('[data-role="rack-create-mapping"]');
-        if (await createMapping.count() > 0) {
-            await createMapping.click();
-        }
+        await createRackMappingByDrop(page);
 
         const readHudCollisions = async (knobRole, finger) => {
             const layout = await page.evaluate(({ role }) => {
@@ -2324,7 +2322,7 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
     }
 });
 
-test("rack mod bar keeps source and target selection unassigned until explicit route creation", async () => {
+test("rack mod bar keeps source and target selection unassigned until source-drop route creation", async () => {
     const sourceFirstPage = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
     });
@@ -2346,13 +2344,9 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
             "Selecting a source must not imply a modulation route.",
         );
         assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').count(), 0);
-        const createMapping = sourceFirstPage.locator('[data-role="rack-create-mapping"]');
-        assert.match(await createMapping.innerText(), /create mapping \+/i);
-        assert.match(
-            await sourceFirstPage.locator('[data-role="rack-unmapped-pair"]').innerText(),
-            /MSEG 1.*Distortion.*Drive/i,
-        );
-        await createMapping.click();
+        assert.equal(await sourceFirstPage.locator('[data-role="rack-create-mapping"]').count(), 0);
+        assert.equal(await sourceFirstPage.locator('[data-role="rack-unmapped-pair"]').count(), 0);
+        await createRackMappingByDrop(sourceFirstPage);
 
         snapshot = await waitForHarnessSnapshot(
             sourceFirstPage,
@@ -2452,7 +2446,10 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
             false,
             "Target-first selection must remain context-only.",
         );
-        await targetFirstPage.click('[data-role="rack-create-mapping"]');
+        await createRackMappingByDrop(
+            targetFirstPage,
+            '[data-role="rack-mod-source-macro-2"]',
+        );
 
         snapshot = await waitForHarnessSnapshot(
             targetFirstPage,
@@ -2888,7 +2885,12 @@ test("effect bypass and mode suspension preserve route geometry without claiming
         const routesBeforeBypass = routeSummaries(readStoredModulationState(await getHarnessSnapshot(page)).routes);
 
         await page.click('[data-role="rack-editor-power"]');
-        assert.match(await page.locator('[data-role="rack-editor-reverb"] .rack-editor-header').innerText(), /FX BYPASSED/);
+        assert.equal(
+            (await page.locator('[data-role="rack-editor-reverb"] .rack-editor-heading').innerText()).trim(),
+            "Reverb",
+        );
+        assert.equal(await page.locator('[data-role="rack-editor-power"]').getAttribute("aria-label"), "Enable Reverb");
+        assert.equal(await page.locator('[data-role="rack-editor-power"]').getAttribute("aria-pressed"), "false");
         assert.equal(await reverbKnob.getAttribute("data-route-state"), "mapped");
         assert.equal(await reverbKnob.getAttribute("data-route-effectiveness"), "effect-bypassed");
         assert.equal(await reverbKnob.locator('.rack-knob-mod-fill').getAttribute("d"), activeGeometry);
@@ -2961,7 +2963,12 @@ test("rack Filter defaults to Lowpass while its effect remains bypassed", async 
         const mode = page.locator('[data-role="rack-parameter-globalFilterMode"]');
         assert.equal(Number(snapshot.laneParams.globalFilterMode), 1);
         assert.match(await mode.innerText(), /Lowpass/i);
-        assert.match(await page.locator('[data-role="rack-editor-filter"] .rack-editor-header').innerText(), /FX BYPASSED/);
+        assert.equal(
+            (await page.locator('[data-role="rack-editor-filter"] .rack-editor-heading').innerText()).trim(),
+            "Filter",
+        );
+        assert.equal(await page.locator('[data-role="rack-editor-power"]').getAttribute("aria-label"), "Enable Filter");
+        assert.equal(await page.locator('[data-role="rack-editor-power"]').getAttribute("aria-pressed"), "false");
         assert.equal(await page.locator('[data-role="rack-editor-filter"]').getAttribute("data-effect-enabled"), "false");
     } finally {
         await page.close();

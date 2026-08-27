@@ -485,6 +485,39 @@ export async function collapseGlobalModRail(page) {
     await page.waitForTimeout(240);
 }
 
+/**
+ * Create the currently armed rack source/target mapping through the product's
+ * source-to-parameter drop gesture.
+ */
+export async function createRackMappingByDrop(
+    page,
+    sourceSelector = '[data-role="rack-mod-source-mseg-1"]',
+    targetSelector = '[data-rack-mod-target].is-selected-target',
+) {
+    const sourceBox = await page.locator(sourceSelector).boundingBox();
+    const targetBox = await page.locator(targetSelector).boundingBox();
+    assert.ok(sourceBox, `Expected a visible rack modulation source at ${sourceSelector}.`);
+    assert.ok(targetBox, `Expected a visible rack modulation target at ${targetSelector}.`);
+
+    const sourceCenter = {
+        x: sourceBox.x + (sourceBox.width / 2),
+        y: sourceBox.y + (sourceBox.height / 2),
+    };
+    const targetCenter = {
+        x: targetBox.x + (targetBox.width / 2),
+        y: targetBox.y + (targetBox.height / 2),
+    };
+    await page.mouse.move(sourceCenter.x, sourceCenter.y);
+    await page.mouse.down();
+    await page.mouse.move(
+        sourceCenter.x + ((targetCenter.x - sourceCenter.x) * 0.35),
+        sourceCenter.y + ((targetCenter.y - sourceCenter.y) * 0.35),
+        { steps: 4 },
+    );
+    await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 8 });
+    await page.mouse.up();
+}
+
 export function touchPointForModSourcePreviewTarget(start, target, viewportWidth, viewportHeight = 852) {
     const delta = { x: target.x - start.x, y: target.y - start.y };
     const distance = Math.hypot(delta.x, delta.y);
