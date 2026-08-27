@@ -1285,7 +1285,7 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - A generated iPhone-profile browser check proves the startup screen owns the rendered pixels over Warp, both parameter-page arrows, and the Mod bar until audio starts. The complete Voice/Mod-bar browser suite passes 50/50, compiled integration passes 2/2, pure geometry passes 23/23, and the original T42 phone-geometry check remains green. The current compiled VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`.
     - Physical iPhone finger comfort and Ableton interaction remain manual acceptance; neither is claimed by browser automation.
 
-[ ] T55 — Add exclusive branch Solo to Frequency Split and Parallel groups
+[x] T55 — Add exclusive branch Solo to Frequency Split and Parallel groups
     Active owner (2026-08-27):
     - Codex task `T55 Build Exclusive Branch Solo`, thread `01a0435c-7cf6-75c0-8fbb-c2eadc6901d0`, branch `codex/t55-exclusive-branch-solo`, worktree `/Users/winterfell/.codex/worktrees/72e4/cosimo-synth`, model SOL, reasoning max.
     - This is a coordinator-managed implementation task. Final review, rebase, merge, push, and any deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
@@ -1300,6 +1300,11 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Solo must never reorder, delete, reroute, or otherwise rewrite the rack.
     Done when:
     - DSP and browser tests prove exactly the selected branch is heard, switching and clearing work without changing the rack, and the controls remain visible and tappable in representative phone, desktop, and plugin layouts.
+    Completion evidence (2026-08-27):
+    - Coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d` source-reviewed and semantically replayed the clean owner commits onto current T38/T66/T50 master, without importing stale tracker text. Solo is a WeakMap-owned runtime audition event: it never enters lane documents, presets, URLs, or host state; successful sound replacement clears it while ordinary navigation on the same patch connection preserves it.
+    - Review repairs made the first WebView synchronization explicit, retained independent choices across sequential groups, kept every branch processor advancing, and proved the existing 3 ms transition around switches. At 320 px the right-rail Split editor now stacks its crossover and Key Track controls into the one owned track; phone, plugin, and desktop tests prove full containment and pointer ownership.
+    - Final integration gates pass the complete Cmajor rack suite 91/91 and orphan/unit suite 745/745. The desktop UI suite is 266/267: every T55 and adjacent composition case passes, with only the established unrelated React Grab `navigator.webdriver` assertion red. Focused Solo lifecycle, generated-map provenance, and compact composed geometry checks also pass.
+    - A fresh HMR standalone reported this coordinator repo root and `usesViteClient: true`, then was stopped and port 5174 released. The final compiled-mode VST3 is installed and strict-code-sign valid at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` (installed executable SHA-256 `a051799aceeef62b481af78398ca800851794e7f12a550d5dd57925377d2c3ef`). Physical Ableton/listening and iPhone touch/audio acceptance were not performed.
 
 [x] T56 — Make Init recover from the Distortion Type state change and show one error
     Active owner (2026-08-26):
