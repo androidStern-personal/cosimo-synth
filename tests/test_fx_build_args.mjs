@@ -15,7 +15,15 @@ async function loadBuildModules() {
 
 test("fx_build_all_expands_to_every_known_effect_plugin_in_manifest_order", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
-    const expectedPluginNames = ["ott", "chorus", "polish", "seqfx", "spectral"];
+    const expectedPluginNames = [
+        "ott",
+        "chorus",
+        "polish",
+        "seqfx",
+        "spectral",
+        "enhancer",
+        "enhancer-lite",
+    ];
 
     assert.deepEqual(buildModule.effectPluginNames(), expectedPluginNames);
     assert.deepEqual(buildModule.resolvePluginNames("all"), expectedPluginNames);
@@ -27,13 +35,78 @@ test("fx_build_single_plugin_still_resolves_to_only_that_plugin", async () => {
 
     assert.deepEqual(buildModule.resolvePluginNames("seqfx"), ["seqfx"]);
     assert.deepEqual(prodModule.resolveProdPluginNames("chorus"), ["chorus"]);
+    assert.deepEqual(buildModule.resolvePluginNames("enhancer"), ["enhancer"]);
+    assert.deepEqual(buildModule.resolvePluginNames("enhancer-lite"), ["enhancer-lite"]);
 });
 
 test("fx_build_unknown_plugin_reports_all_as_an_available_target", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
 
-    assert.throws(() => buildModule.resolvePluginNames("wat"), /Available plugins: all, ott, chorus, polish, seqfx, spectral/);
-    assert.throws(() => prodModule.resolveProdPluginNames("wat"), /Available plugins: all, ott, chorus, polish, seqfx, spectral/);
+    const expectedMessage = /Available plugins: all, ott, chorus, polish, seqfx, spectral, enhancer, enhancer-lite/;
+    assert.throws(() => buildModule.resolvePluginNames("wat"), expectedMessage);
+    assert.throws(() => prodModule.resolveProdPluginNames("wat"), expectedMessage);
+});
+
+test("the Enhancer production plugin packages the canonical T26 DSP instead of a copy", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    assert.deepEqual(buildModule.effectPlugins.enhancer.runtimeSources, [
+        { repoPath: "cmajor/Enhancer.cmajor", runtimePath: "Enhancer.cmajor" },
+        { repoPath: "fx/enhancer/EnhancerPlugin.cmajor", runtimePath: "EnhancerPlugin.cmajor" },
+    ]);
+    assert.equal(buildModule.effectPlugins.enhancer.generatedHostLatencySamples, 60);
+});
+
+test("the Enhancer Lite plugin packages its isolated one-band prototype", async () => {
+    const { buildModule } = await loadBuildModules();
+    const manifest = JSON.parse(await readFile(
+        path.join(repoRoot, "fx/enhancer_lite/EnhancerLite.cmajorpatch"),
+        "utf8",
+    ));
+
+    assert.deepEqual(buildModule.effectPlugins["enhancer-lite"].runtimeSources, [
+        { repoPath: "cmajor/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
+        {
+            repoPath: "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
+            runtimePath: "EnhancerLiteSpectrumAnalyzer.cmajor",
+        },
+        { repoPath: "fx/enhancer_lite/EnhancerLitePlugin.cmajor", runtimePath: "EnhancerLitePlugin.cmajor" },
+    ]);
+    assert.equal(buildModule.effectPlugins["enhancer-lite"].generatedHostLatencySamples, 3);
+    assert.equal(buildModule.effectPlugins["enhancer-lite"].productName, "CosimoEnhancerLite");
+    assert.deepEqual(manifest.resources, ["assets/enhancer-lite-wordmark.png"]);
+});
+
+test("the generated Enhancer plugin host latency is corrected at the narrow Cmajor seam", async () => {
+    const { prodModule } = await loadBuildModules();
+    const latencyConstant = "static constexpr double   latency            = 0.000000;";
+    const pluginFactory = "    return new cmaj::plugin::GeneratedPlugin<::CosimoEnhancer> (std::make_shared<cmaj::Patch>());";
+    const generated = `${latencyConstant}\n${pluginFactory}`;
+    assert.equal(
+        prodModule.replaceGeneratedPluginLatency(generated, 60),
+        [
+            "static constexpr double   latency            = 60.000000;",
+            "    auto* plugin = new cmaj::plugin::GeneratedPlugin<::CosimoEnhancer> (std::make_shared<cmaj::Patch>());",
+            "    plugin->patchChangeCallback = [] (auto& changedPlugin) { changedPlugin.setLatencySamples (60); };",
+            "    plugin->setLatencySamples (60);",
+            "    return plugin;",
+        ].join("\n"),
+    );
+    assert.throws(
+        () => prodModule.replaceGeneratedPluginLatency(`no latency here\n${pluginFactory}`, 60),
+        /exactly one generated Cmajor latency constant, found 0/,
+    );
+    assert.throws(
+        () => prodModule.replaceGeneratedPluginLatency(
+            `${latencyConstant}\n${latencyConstant}\n${pluginFactory}`,
+            60,
+        ),
+        /exactly one generated Cmajor latency constant, found 2/,
+    );
+    assert.throws(
+        () => prodModule.replaceGeneratedPluginLatency(latencyConstant, 60),
+        /exactly one generated Cmajor plugin factory, found 0/,
+    );
 });
 
 test("fx_prod_install_accepts_all_with_dry_run_without_swallowing_unknown_flags", async () => {

@@ -1,0 +1,139 @@
+namespace wt
+{
+    let enhancerLiteSpectrumFFTSize = 4096;
+    let enhancerLiteSpectrumBinCount = enhancerLiteSpectrumFFTSize / 2;
+    let enhancerLiteSpectrumWindowSize = 1024;
+    let enhancerLiteSpectrumFramesPerSecond = 20.0f;
+
+    struct EnhancerLiteSpectrumFrame
+    {
+        float32 sampleRateHz;
+        float32[enhancerLiteSpectrumBinCount] magnitudes;
+    }
+
+    // Stereo power is measured before magnitude conversion so pure Side input
+    // remains visible instead of cancelling in a mono-average analyser.
+    processor EnhancerLiteSpectrumAnalyzer
+    {
+        input stream float32<2> in;
+        input event int32 enabledIn;
+        output event EnhancerLiteSpectrumFrame spectrum;
+
+        let hopSize = int32 (
+            float32 (processor.frequency) / enhancerLiteSpectrumFramesPerSecond
+        );
+
+        float32[enhancerLiteSpectrumWindowSize] leftRing;
+        float32[enhancerLiteSpectrumWindowSize] rightRing;
+        float32[enhancerLiteSpectrumFFTSize] fftBuffer;
+        wrap<enhancerLiteSpectrumWindowSize> writePosition;
+        int32 collectedFrames;
+        int32 framesUntilAnalysis;
+        bool enabled;
+
+        float32[enhancerLiteSpectrumWindowSize] hann()
+        {
+            float32[enhancerLiteSpectrumWindowSize] window;
+
+            for (wrap<enhancerLiteSpectrumWindowSize> index)
+                window[index] = 0.5f * (1.0f - std::intrinsics::cos (
+                    float32 (twoPi) * float32 (index)
+                        / float32 (enhancerLiteSpectrumWindowSize - 1)
+                ));
+
+            return window;
+        }
+
+        float32[enhancerLiteSpectrumWindowSize] window = hann();
+
+        event enabledIn (int32 value)
+        {
+            enabled = value != 0;
+            writePosition = 0;
+            collectedFrames = 0;
+            framesUntilAnalysis = enhancerLiteSpectrumWindowSize;
+        }
+
+        void copyChannelToFFTBuffer (bool useRightChannel)
+        {
+            for (wrap<enhancerLiteSpectrumWindowSize> index)
+            {
+                let sourceIndex = wrap<enhancerLiteSpectrumWindowSize> (
+                    int32 (writePosition) + int32 (index)
+                );
+                let sample = useRightChannel
+                    ? rightRing[sourceIndex]
+                    : leftRing[sourceIndex];
+                fftBuffer[index] = sample * window[index];
+            }
+
+            for (int32 index = enhancerLiteSpectrumWindowSize;
+                 index < enhancerLiteSpectrumFFTSize;
+                 ++index)
+                fftBuffer.at (index) = 0.0f;
+        }
+
+        void emitSpectrum()
+        {
+            EnhancerLiteSpectrumFrame result;
+            result.sampleRateHz = float32 (processor.frequency);
+            float32[enhancerLiteSpectrumFFTSize] fft;
+
+            copyChannelToFFTBuffer (false);
+            std::frequency::realOnlyForwardFFT (fftBuffer, fft);
+            for (wrap<enhancerLiteSpectrumBinCount> index)
+            {
+                let real = fft[index];
+                let imag = fft.at (enhancerLiteSpectrumBinCount + index);
+                result.magnitudes[index] = (real * real) + (imag * imag);
+            }
+
+            copyChannelToFFTBuffer (true);
+            std::frequency::realOnlyForwardFFT (fftBuffer, fft);
+            let amplitudeCalibration = 4.0f
+                / float32 (enhancerLiteSpectrumWindowSize);
+            for (wrap<enhancerLiteSpectrumBinCount> index)
+            {
+                let real = fft[index];
+                let imag = fft.at (enhancerLiteSpectrumBinCount + index);
+                let rightPower = (real * real) + (imag * imag);
+                let stereoPower = 0.5f
+                    * (result.magnitudes[index] + rightPower);
+                result.magnitudes[index] = std::intrinsics::sqrt (stereoPower)
+                    * amplitudeCalibration;
+            }
+
+            spectrum <- result;
+        }
+
+        void main()
+        {
+            framesUntilAnalysis = enhancerLiteSpectrumWindowSize;
+
+            loop
+            {
+                if (enabled)
+                {
+                    leftRing[writePosition] = in[0];
+                    rightRing[writePosition] = in[1];
+                    writePosition = wrap<enhancerLiteSpectrumWindowSize> (
+                        int32 (writePosition) + 1
+                    );
+
+                    if (collectedFrames < enhancerLiteSpectrumWindowSize)
+                        ++collectedFrames;
+
+                    --framesUntilAnalysis;
+                    if (collectedFrames >= enhancerLiteSpectrumWindowSize
+                        && framesUntilAnalysis <= 0)
+                    {
+                        emitSpectrum();
+                        framesUntilAnalysis = hopSize;
+                    }
+                }
+
+                advance();
+            }
+        }
+    }
+}

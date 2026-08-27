@@ -1,0 +1,1298 @@
+// Behavioural contract for the isolated production wt::EnhancerBus. T28 owns
+// composition into the final Polish chain; these tests drive T26's real module.
+
+function requireMeasuredWrapperLatency (relativePath)
+{
+    const section = getCurrentTestSection();
+    const source = new File (section.getAbsolutePath (relativePath)).read();
+    const code = source.replace (/\/\*[\s\S]*?\*\//g, "").replace (/\/\/[^\n]*/g, "");
+
+    if (! /processor\.latency\s*=\s*60/.test (code)
+        || ! /let\s+enhancerLatencySamples\s*=\s*60/.test (code))
+        throw new Error ("Enhancer must declare the measured 60-sample wrapper latency: " + relativePath);
+
+    return undefined;
+}
+
+## global ("../../cmajor/Enhancer.cmajor", "EnhancerSampleRateProbe.cmajor")
+
+//==============================================================================
+// Exact neutral path plus the two M/S invariants that prevent accidental image
+// creation or channel leakage.
+
+## testProcessor (requireMeasuredWrapperLatency ("../../cmajor/Enhancer.cmajor"))
+
+processor EnhancerNeutralAndStereoContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+    node neutral = wt::EnhancerBus;
+    float32<2> neutralOutput;
+
+    void setSettings (
+        float32 b1Mid,
+        float32 b1Side,
+        float32 b2Mid,
+        float32 b2Side
+    )
+    {
+        enhancer.b1FreqHzIn <- 130.0f;
+        enhancer.b1QIn <- 0.71f;
+        enhancer.b1ModeIn <- float32 (wt::enhancerModeMidSide);
+        enhancer.b1MidAmountIn <- b1Mid;
+        enhancer.b1SideAmountIn <- b1Side;
+        enhancer.b1CurveIn <- float32 (wt::enhancerCurveSolid);
+        enhancer.b2FreqHzIn <- 9000.0f;
+        enhancer.b2QIn <- 0.71f;
+        enhancer.b2ModeIn <- float32 (wt::enhancerModeMidSide);
+        enhancer.b2MidAmountIn <- b2Mid;
+        enhancer.b2SideAmountIn <- b2Side;
+        enhancer.b2CurveIn <- float32 (wt::enhancerCurveTube);
+        enhancer.saturationModeIn <- float32 (wt::enhancerSaturationModeSubtle);
+        enhancer.deEmphasisIn <- 1.0f;
+    }
+
+    float32<2> render (float32<2> sampleFrame)
+    {
+        enhancer.in <- sampleFrame;
+        neutral.in <- sampleFrame;
+        enhancer.advance();
+        neutral.advance();
+        neutralOutput = neutral.out;
+        return enhancer.out;
+    }
+
+    void main()
+    {
+        bool neutralIsBitExact = true;
+
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            // Exercise every non-amount control while the contribution is zero.
+            enhancer.b1FreqHzIn <- frame < 4096 ? 20.0f : 20000.0f;
+            enhancer.b1QIn <- frame < 8192 ? 0.1f : 10.0f;
+            enhancer.b1ModeIn <- frame < 7000 ? 0.0f : 1.0f;
+            enhancer.b1MidAmountIn <- 0.0f;
+            enhancer.b1SideAmountIn <- 0.0f;
+            enhancer.b1CurveIn <- frame < 6000 ? 0.0f : 1.0f;
+            enhancer.b2FreqHzIn <- frame < 5000 ? 20000.0f : 20.0f;
+            enhancer.b2QIn <- frame < 9000 ? 10.0f : 0.1f;
+            enhancer.b2ModeIn <- frame < 8000 ? 1.0f : 0.0f;
+            enhancer.b2MidAmountIn <- 0.0f;
+            enhancer.b2SideAmountIn <- 0.0f;
+            enhancer.b2CurveIn <- frame < 7000 ? 1.0f : 0.0f;
+            enhancer.saturationModeIn <- frame < 6500
+                ? float32 (wt::enhancerSaturationModeSubtle)
+                : float32 (wt::enhancerSaturationModeMedium);
+            enhancer.deEmphasisIn <- frame < 7500 ? 0.0f : 1.0f;
+
+            let dry = float32<2> (
+                0.41f * float32 (std::intrinsics::sin (float32 (frame) * 0.071f)),
+                0.33f * float32 (std::intrinsics::sin (float32 (frame) * 0.043f + 0.7f))
+            );
+            let rendered = render (dry);
+            if (rendered[0] != neutralOutput[0] || rendered[1] != neutralOutput[1])
+                neutralIsBitExact = false;
+        }
+
+        // A mono signal contains exactly zero side. Raising both side controls
+        // must therefore remain exact dry, not merely mono-looking.
+        setSettings (0.0f, 1.0f, 0.0f, 1.0f);
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        bool monoSideOnlyIsExact = true;
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            let sample = 0.35f * float32 (std::intrinsics::sin (
+                twoPi * 173.0f * float32 (frame) / float32 (processor.frequency)
+            ));
+            let rendered = render (float32<2> (sample, sample));
+            if (rendered[0] != neutralOutput[0] || rendered[1] != neutralOutput[1])
+                monoSideOnlyIsExact = false;
+        }
+
+        // Mid enhancement may change mono tone but cannot manufacture a side.
+        setSettings (0.9f, 0.0f, 0.7f, 0.0f);
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        bool enhancedMonoStaysMono = true;
+        float64 monoDifferencePower;
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            let sample = 0.35f * float32 (std::intrinsics::sin (
+                twoPi * 130.0f * float32 (frame) / float32 (processor.frequency)
+            ));
+            let rendered = render (float32<2> (sample, sample));
+            if (rendered[0] != rendered[1])
+                enhancedMonoStaysMono = false;
+            if (frame >= 4096)
+            {
+                let difference = rendered[0] - neutralOutput[0];
+                monoDifferencePower += float64 (difference) * float64 (difference);
+            }
+        }
+
+        // Pure side in, side-only enhancement: the output remains anti-symmetric
+        // within one float roundoff while the residue proves the path ran.
+        setSettings (0.0f, 0.85f, 0.0f, 0.75f);
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        float64 sideDifferencePower;
+        float32 maximumSideSymmetryError;
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            let sample = 0.31f * float32 (std::intrinsics::sin (
+                twoPi * 9000.0f * float32 (frame) / float32 (processor.frequency)
+            ));
+            let rendered = render (float32<2> (sample, -sample));
+            if (frame >= 4096)
+            {
+                maximumSideSymmetryError = std::intrinsics::max (
+                    maximumSideSymmetryError,
+                    std::intrinsics::abs (rendered[0] + rendered[1])
+                );
+                let difference = rendered[0] - neutralOutput[0];
+                sideDifferencePower += float64 (difference) * float64 (difference);
+            }
+        }
+
+        // Returning every amount to zero must converge to the literal dry
+        // branch after smoothing, even after both bands have built history.
+        setSettings (0.8f, 0.7f, 0.6f, 0.5f);
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        for (int32 frame = 0; frame < 4096; ++frame)
+        {
+            let dry = float32<2> (
+                0.29f * float32 (std::intrinsics::sin (float32 (frame) * 0.091f)),
+                0.24f * float32 (std::intrinsics::sin (float32 (frame) * 0.067f + 0.4f))
+            );
+            render (dry);
+        }
+
+        setSettings (0.0f, 0.0f, 0.0f, 0.0f);
+        bool releasedNeutralIsBitExact = true;
+        for (int32 frame = 0; frame < 24576; ++frame)
+        {
+            let dry = float32<2> (
+                0.29f * float32 (std::intrinsics::sin (float32 (frame) * 0.091f)),
+                0.24f * float32 (std::intrinsics::sin (float32 (frame) * 0.067f + 0.4f))
+            );
+            let rendered = render (dry);
+            if (frame >= 16384
+                && (rendered[0] != neutralOutput[0] || rendered[1] != neutralOutput[1]))
+                releasedNeutralIsBitExact = false;
+        }
+
+        out <- neutralIsBitExact ? 1 : 0;
+        advance();
+        out <- monoSideOnlyIsExact ? 1 : 0;
+        advance();
+        out <- (enhancedMonoStaysMono && monoDifferencePower > 1.0e-9) ? 1 : 0;
+        advance();
+        out <- (maximumSideSymmetryError <= 1.0e-6f
+                && sideDifferencePower > 1.0e-9) ? 1 : 0;
+        advance();
+        out <- releasedNeutralIsBitExact ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Each band chooses its own routing domain. Stereo shapes L/R independently
+// with one shared Amount; Mid/Side shapes encoded M and S with independent
+// Mid and Side amounts.
+
+## testProcessor()
+
+processor EnhancerPerBandRoutingModeContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+    node neutral = wt::EnhancerBus;
+    float64 phase;
+
+    void configureBand1 (int32 mode)
+    {
+        enhancer.b1FreqHzIn <- 1000.0f;
+        enhancer.b1QIn <- 1.0f;
+        enhancer.b1ModeIn <- float32 (mode);
+        enhancer.b1MidAmountIn <- 0.9f;
+        enhancer.b1SideAmountIn <- 0.0f;
+        enhancer.b1CurveIn <- float32 (wt::enhancerCurveTube);
+
+        enhancer.b2FreqHzIn <- 9000.0f;
+        enhancer.b2QIn <- 0.71f;
+        enhancer.b2ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b2MidAmountIn <- 0.0f;
+        enhancer.b2SideAmountIn <- 1.0f;
+        enhancer.b2CurveIn <- float32 (wt::enhancerCurveSolid);
+        enhancer.deEmphasisIn <- 1.0f;
+    }
+
+    void configureBand2MidSideWhileBand1Stereo()
+    {
+        enhancer.b1FreqHzIn <- 1000.0f;
+        enhancer.b1QIn <- 1.0f;
+        enhancer.b1ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b1MidAmountIn <- 0.0f;
+        enhancer.b1SideAmountIn <- 1.0f;
+        enhancer.b1CurveIn <- float32 (wt::enhancerCurveSolid);
+
+        enhancer.b2FreqHzIn <- 1000.0f;
+        enhancer.b2QIn <- 1.0f;
+        enhancer.b2ModeIn <- float32 (wt::enhancerModeMidSide);
+        enhancer.b2MidAmountIn <- 0.9f;
+        enhancer.b2SideAmountIn <- 0.0f;
+        enhancer.b2CurveIn <- float32 (wt::enhancerCurveTube);
+        enhancer.deEmphasisIn <- 1.0f;
+    }
+
+    float32<2> renderLeftOnly()
+    {
+        let sample = 0.31f * float32 (std::intrinsics::sin (phase));
+        phase += twoPi * 1000.0 / processor.frequency;
+        enhancer.in <- float32<2> (sample, 0.0f);
+        neutral.in <- float32<2> (sample, 0.0f);
+        enhancer.advance();
+        neutral.advance();
+        return enhancer.out - neutral.out;
+    }
+
+    void main()
+    {
+        configureBand1 (wt::enhancerModeStereo);
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        phase = 0.0;
+        float64 stereoLeftPower;
+        float64 stereoRightPower;
+        for (int32 frame = 0; frame < 24576; ++frame)
+        {
+            let residue = renderLeftOnly();
+            if (frame >= 8192)
+            {
+                stereoLeftPower += float64 (residue[0]) * float64 (residue[0]);
+                stereoRightPower += float64 (residue[1]) * float64 (residue[1]);
+            }
+        }
+
+        configureBand1 (wt::enhancerModeMidSide);
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        phase = 0.0;
+        float64 midSideLeftPower;
+        float64 midSideRightPower;
+        float64 midSideDifferencePower;
+        for (int32 frame = 0; frame < 24576; ++frame)
+        {
+            let residue = renderLeftOnly();
+            if (frame >= 8192)
+            {
+                midSideLeftPower += float64 (residue[0]) * float64 (residue[0]);
+                midSideRightPower += float64 (residue[1]) * float64 (residue[1]);
+                let difference = residue[0] - residue[1];
+                midSideDifferencePower += float64 (difference) * float64 (difference);
+            }
+        }
+
+        configureBand2MidSideWhileBand1Stereo();
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        phase = 0.0;
+        float64 independentBand2LeftPower;
+        float64 independentBand2RightPower;
+        float64 independentBand2DifferencePower;
+        for (int32 frame = 0; frame < 24576; ++frame)
+        {
+            let residue = renderLeftOnly();
+            if (frame >= 8192)
+            {
+                independentBand2LeftPower += float64 (residue[0]) * float64 (residue[0]);
+                independentBand2RightPower += float64 (residue[1]) * float64 (residue[1]);
+                let difference = residue[0] - residue[1];
+                independentBand2DifferencePower += float64 (difference) * float64 (difference);
+            }
+        }
+
+        out <- (stereoLeftPower > 1.0e-9 && stereoRightPower == 0.0) ? 1 : 0;
+        advance();
+        out <- (midSideLeftPower > 1.0e-9
+                && midSideRightPower > 1.0e-9
+                && midSideDifferencePower < midSideLeftPower * 1.0e-8) ? 1 : 0;
+        advance();
+        out <- (independentBand2LeftPower > 1.0e-9
+                && independentBand2RightPower > 1.0e-9
+                && independentBand2DifferencePower
+                   < independentBand2LeftPower * 1.0e-8) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// The bus must add nonlinear residue rather than filtered fundamental. Spectre
+// 1.5.6's measured labels supersede its manual here: Solid is symmetric/odd,
+// while Tube is biased and adds a distinct even component. The sample-rate-aware
+// blockers must remove Tube's DC.
+
+## testProcessor()
+
+processor EnhancerResidueAndCharacterContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+    node neutral = wt::EnhancerBus;
+
+    float64 phase;
+
+    void configure (int32 curve)
+    {
+        enhancer.b1FreqHzIn <- 1000.0f;
+        enhancer.b1QIn <- 1.0f;
+        enhancer.b1ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b1MidAmountIn <- 0.9f;
+        enhancer.b1SideAmountIn <- 0.0f;
+        enhancer.b1CurveIn <- float32 (curve);
+        enhancer.b2FreqHzIn <- 9000.0f;
+        enhancer.b2QIn <- 0.71f;
+        enhancer.b2ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b2MidAmountIn <- 0.0f;
+        enhancer.b2SideAmountIn <- 0.0f;
+        enhancer.b2CurveIn <- 0.0f;
+        enhancer.deEmphasisIn <- 1.0f;
+    }
+
+    float32 renderNext()
+    {
+        let sample = 0.31f * float32 (std::intrinsics::sin (phase));
+        phase += twoPi * 1000.0 / processor.frequency;
+        enhancer.in <- float32<2> (sample, sample);
+        neutral.in <- float32<2> (sample, sample);
+        enhancer.advance();
+        neutral.advance();
+        return enhancer.out[0] - neutral.out[0];
+    }
+
+    void main()
+    {
+        let settleFrames = 8192;
+        let measureFrames = 32768;
+
+        configure (wt::enhancerCurveTube);
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        phase = 0.0;
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            renderNext();
+
+        float64 tubePower;
+        float64 tubeSum;
+        float64 tubeSecondSin, tubeSecondCos;
+        float64 tubeThirdSin, tubeThirdCos;
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let residue = renderNext();
+            let analysisPhase = twoPi * 1000.0 * float64 (frame + settleFrames)
+                                / processor.frequency;
+            tubePower += float64 (residue) * float64 (residue);
+            tubeSum += float64 (residue);
+            tubeSecondSin += float64 (residue) * std::intrinsics::sin (2.0 * analysisPhase);
+            tubeSecondCos += float64 (residue) * std::intrinsics::cos (2.0 * analysisPhase);
+            tubeThirdSin += float64 (residue) * std::intrinsics::sin (3.0 * analysisPhase);
+            tubeThirdCos += float64 (residue) * std::intrinsics::cos (3.0 * analysisPhase);
+        }
+
+        configure (wt::enhancerCurveSolid);
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        phase = 0.0;
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            renderNext();
+
+        float64 solidPower;
+        float64 solidSum;
+        float64 solidSecondSin, solidSecondCos;
+        float64 solidThirdSin, solidThirdCos;
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let residue = renderNext();
+            let analysisPhase = twoPi * 1000.0 * float64 (frame + settleFrames)
+                                / processor.frequency;
+            solidPower += float64 (residue) * float64 (residue);
+            solidSum += float64 (residue);
+            solidSecondSin += float64 (residue) * std::intrinsics::sin (2.0 * analysisPhase);
+            solidSecondCos += float64 (residue) * std::intrinsics::cos (2.0 * analysisPhase);
+            solidThirdSin += float64 (residue) * std::intrinsics::sin (3.0 * analysisPhase);
+            solidThirdCos += float64 (residue) * std::intrinsics::cos (3.0 * analysisPhase);
+        }
+
+        let tubeSecond = std::intrinsics::sqrt (
+            tubeSecondSin * tubeSecondSin + tubeSecondCos * tubeSecondCos
+        );
+        let tubeThird = std::intrinsics::sqrt (
+            tubeThirdSin * tubeThirdSin + tubeThirdCos * tubeThirdCos
+        );
+        let solidSecond = std::intrinsics::sqrt (
+            solidSecondSin * solidSecondSin + solidSecondCos * solidSecondCos
+        );
+        let solidThird = std::intrinsics::sqrt (
+            solidThirdSin * solidThirdSin + solidThirdCos * solidThirdCos
+        );
+        let tubeMean = tubeSum / float64 (measureFrames);
+        let solidMean = solidSum / float64 (measureFrames);
+
+        out <- (tubePower > 1.0e-9 && solidPower > 1.0e-9) ? 1 : 0;
+        advance();
+        out <- (solidThird > solidSecond * 4.0 && solidThird > 1.0e-5) ? 1 : 0;
+        advance();
+        out <- (tubeSecond > solidSecond * 2.0 && tubeSecond > 1.0e-5) ? 1 : 0;
+        advance();
+        out <- (tubeThird > 1.0e-5
+                && std::intrinsics::abs (tubeMean) < 0.0001
+                && std::intrinsics::abs (solidMean) < 0.0001) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Medium is a distinct measured waveshaper, not an output-gain change. It must
+// increase Solid's odd-harmonic ratio and Tube's even-harmonic ratio relative
+// to Subtle while retaining the same selected-band input and routing.
+
+## testProcessor()
+
+processor EnhancerSaturationModeContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+    node neutral = wt::EnhancerBus;
+    float64 phase;
+
+    void configure (int32 curve, int32 saturationMode)
+    {
+        enhancer.b1FreqHzIn <- 1000.0f;
+        enhancer.b1QIn <- 1.0f;
+        enhancer.b1ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b1MidAmountIn <- 0.9f;
+        enhancer.b1SideAmountIn <- 0.0f;
+        enhancer.b1CurveIn <- float32 (curve);
+        enhancer.b2FreqHzIn <- 9000.0f;
+        enhancer.b2QIn <- 0.71f;
+        enhancer.b2ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b2MidAmountIn <- 0.0f;
+        enhancer.b2SideAmountIn <- 0.0f;
+        enhancer.b2CurveIn <- float32 (wt::enhancerCurveTube);
+        enhancer.saturationModeIn <- float32 (saturationMode);
+        enhancer.deEmphasisIn <- 0.0f;
+    }
+
+    float32 renderNext()
+    {
+        let sample = 0.31f * float32 (std::intrinsics::sin (phase));
+        phase += twoPi * 1000.0 / processor.frequency;
+        enhancer.in <- float32<2> (sample, sample);
+        neutral.in <- float32<2> (sample, sample);
+        enhancer.advance();
+        neutral.advance();
+        return enhancer.out[0] - neutral.out[0];
+    }
+
+    float64 measureHarmonic (int32 curve, int32 saturationMode, int32 harmonic)
+    {
+        let settleFrames = 8192;
+        let measureFrames = 24576;
+        configure (curve, saturationMode);
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        phase = 0.0;
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            renderNext();
+
+        float64 sine;
+        float64 cosine;
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let residue = renderNext();
+            let analysisPhase = twoPi * 1000.0 * float64 (frame + settleFrames)
+                                / processor.frequency;
+            sine += float64 (residue) * std::intrinsics::sin (
+                float64 (harmonic) * analysisPhase
+            );
+            cosine += float64 (residue) * std::intrinsics::cos (
+                float64 (harmonic) * analysisPhase
+            );
+        }
+        return std::intrinsics::sqrt (sine * sine + cosine * cosine);
+    }
+
+    void main()
+    {
+        let subtleSolidFundamental = measureHarmonic (
+            wt::enhancerCurveSolid, wt::enhancerSaturationModeSubtle, 1
+        );
+        let subtleSolidThird = measureHarmonic (
+            wt::enhancerCurveSolid, wt::enhancerSaturationModeSubtle, 3
+        );
+        let mediumSolidFundamental = measureHarmonic (
+            wt::enhancerCurveSolid, wt::enhancerSaturationModeMedium, 1
+        );
+        let mediumSolidThird = measureHarmonic (
+            wt::enhancerCurveSolid, wt::enhancerSaturationModeMedium, 3
+        );
+        let subtleTubeFundamental = measureHarmonic (
+            wt::enhancerCurveTube, wt::enhancerSaturationModeSubtle, 1
+        );
+        let subtleTubeSecond = measureHarmonic (
+            wt::enhancerCurveTube, wt::enhancerSaturationModeSubtle, 2
+        );
+        let mediumTubeFundamental = measureHarmonic (
+            wt::enhancerCurveTube, wt::enhancerSaturationModeMedium, 1
+        );
+        let mediumTubeSecond = measureHarmonic (
+            wt::enhancerCurveTube, wt::enhancerSaturationModeMedium, 2
+        );
+
+        out <- (mediumSolidThird * subtleSolidFundamental
+                > subtleSolidThird * mediumSolidFundamental * 1.25) ? 1 : 0;
+        advance();
+        out <- (mediumTubeSecond * subtleTubeFundamental
+                > subtleTubeSecond * mediumTubeFundamental * 1.25) ? 1 : 0;
+        advance();
+        out <- (mediumSolidThird > 1.0e-5 && mediumTubeSecond > 1.0e-5) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Amount is Spectre's ordinary 0..12 dB boost control expressed as 0..1. The
+// extracted parallel-band gain is therefore 10^(12*Amount/20)-1. At a tiny
+// signal level the fixed shaper is linear enough for contribution-power ratios
+// to expose that public control law without reaching into an implementation
+// helper.
+
+## testProcessor()
+
+processor EnhancerSpectreAmountLawContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+    node neutral = wt::EnhancerBus;
+    float64 phase;
+
+    float32 render (float32 amount)
+    {
+        let sample = 0.002f * float32 (std::intrinsics::sin (phase));
+        phase += twoPi * 1000.0 / processor.frequency;
+        enhancer.b1FreqHzIn <- 1000.0f;
+        enhancer.b1QIn <- 1.0f;
+        enhancer.b1ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b1MidAmountIn <- amount;
+        enhancer.b1SideAmountIn <- 0.0f;
+        enhancer.b1CurveIn <- float32 (wt::enhancerCurveSolid);
+        enhancer.b2MidAmountIn <- 0.0f;
+        enhancer.b2SideAmountIn <- 0.0f;
+        enhancer.deEmphasisIn <- 0.0f;
+        enhancer.in <- float32<2> (sample, sample);
+        neutral.in <- float32<2> (sample, sample);
+        enhancer.advance();
+        neutral.advance();
+        return enhancer.out[0] - neutral.out[0];
+    }
+
+    float64 measurePower (float32 amount)
+    {
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        phase = 0.0;
+        for (int32 frame = 0; frame < 16384; ++frame)
+            render (amount);
+
+        float64 power;
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            let contribution = render (amount);
+            power += float64 (contribution) * float64 (contribution);
+        }
+        return power;
+    }
+
+    void main()
+    {
+        let quarterPower = measurePower (0.25f);
+        let halfPower = measurePower (0.5f);
+        let fullPower = measurePower (1.0f);
+        let fullToHalfPower = fullPower / halfPower;
+        let halfToQuarterPower = halfPower / quarterPower;
+
+        out <- (fullToHalfPower > 8.5 && fullToHalfPower < 9.5) ? 1 : 0;
+        advance();
+        out <- (halfToQuarterPower > 5.4 && halfToQuarterPower < 6.3) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Cmajor's TPT band output has centre gain Q. The production division by Q must
+// therefore leave the public Enhancer contribution constant-peak as Q changes,
+// matching a parametric bell's parallel difference rather than making narrow
+// bands silently weaker or stronger.
+
+## testProcessor()
+
+processor EnhancerQPeakNormalizationContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+    node neutral = wt::EnhancerBus;
+    float64 phase;
+
+    float32 render (float32 q)
+    {
+        let sample = 0.002f * float32 (std::intrinsics::sin (phase));
+        phase += twoPi * 1000.0 / processor.frequency;
+        enhancer.b1FreqHzIn <- 1000.0f;
+        enhancer.b1QIn <- q;
+        enhancer.b1ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b1MidAmountIn <- 0.5f;
+        enhancer.b1SideAmountIn <- 0.0f;
+        enhancer.b1CurveIn <- float32 (wt::enhancerCurveSolid);
+        enhancer.b2MidAmountIn <- 0.0f;
+        enhancer.b2SideAmountIn <- 0.0f;
+        enhancer.deEmphasisIn <- 0.0f;
+        enhancer.in <- float32<2> (sample, sample);
+        neutral.in <- float32<2> (sample, sample);
+        enhancer.advance();
+        neutral.advance();
+        return enhancer.out[0] - neutral.out[0];
+    }
+
+    float64 measurePower (float32 q)
+    {
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        phase = 0.0;
+        for (int32 frame = 0; frame < 16384; ++frame)
+            render (q);
+
+        float64 power;
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            let contribution = render (q);
+            power += float64 (contribution) * float64 (contribution);
+        }
+        return power;
+    }
+
+    void main()
+    {
+        let widePower = measurePower (0.1f);
+        let referencePower = measurePower (1.0f);
+        let narrowPower = measurePower (10.0f);
+        let wideRatio = widePower / referencePower;
+        let narrowRatio = narrowPower / referencePower;
+
+        out <- (wideRatio > 0.99 && wideRatio < 1.01) ? 1 : 0;
+        advance();
+        out <- (narrowRatio > 0.99 && narrowRatio < 1.01) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// De-emphasis changes only the aligned bell subtraction: 0% keeps the shaped
+// bell, 100% subtracts the full unprocessed bell, and 50% is their midpoint.
+
+## testProcessor()
+
+processor EnhancerDeEmphasisContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+    node neutral = wt::EnhancerBus;
+
+    float64 phase;
+    float32[8192] noSubtraction;
+    float32[8192] fullSubtraction;
+
+    void configure (float32 deEmphasis)
+    {
+        enhancer.b1FreqHzIn <- 1000.0f;
+        enhancer.b1QIn <- 1.0f;
+        enhancer.b1ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b1MidAmountIn <- 1.0f;
+        enhancer.b1SideAmountIn <- 0.0f;
+        enhancer.b1CurveIn <- float32 (wt::enhancerCurveTube);
+        enhancer.b2FreqHzIn <- 9000.0f;
+        enhancer.b2QIn <- 0.71f;
+        enhancer.b2ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b2MidAmountIn <- 0.0f;
+        enhancer.b2SideAmountIn <- 0.0f;
+        enhancer.b2CurveIn <- float32 (wt::enhancerCurveTube);
+        enhancer.deEmphasisIn <- deEmphasis;
+    }
+
+    float32 renderNext()
+    {
+        let sample = 0.18f * float32 (std::intrinsics::sin (phase));
+        phase += twoPi * 1000.0 / processor.frequency;
+        enhancer.in <- float32<2> (sample, sample);
+        neutral.in <- float32<2> (sample, sample);
+        enhancer.advance();
+        neutral.advance();
+        return enhancer.out[0] - neutral.out[0];
+    }
+
+    void prepare (float32 deEmphasis)
+    {
+        configure (deEmphasis);
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        phase = 0.0;
+        for (int32 frame = 0; frame < 16384; ++frame)
+            renderNext();
+    }
+
+    void main()
+    {
+        prepare (0.0f);
+        float64 noSubtractionPower;
+        for (int32 frame = 0; frame < 8192; ++frame)
+        {
+            let contribution = renderNext();
+            noSubtraction.at (frame) = contribution;
+            noSubtractionPower += float64 (contribution) * float64 (contribution);
+        }
+
+        prepare (1.0f);
+        float64 fullSubtractionPower;
+        float64 endpointDifferencePower;
+        for (int32 frame = 0; frame < 8192; ++frame)
+        {
+            let contribution = renderNext();
+            fullSubtraction.at (frame) = contribution;
+            fullSubtractionPower += float64 (contribution) * float64 (contribution);
+            let difference = contribution - noSubtraction.at (frame);
+            endpointDifferencePower += float64 (difference) * float64 (difference);
+        }
+
+        prepare (0.5f);
+        float64 midpointErrorPower;
+        float64 midpointPower;
+        for (int32 frame = 0; frame < 8192; ++frame)
+        {
+            let contribution = renderNext();
+            let expected = 0.5f * (
+                noSubtraction.at (frame) + fullSubtraction.at (frame)
+            );
+            let error = contribution - expected;
+            midpointErrorPower += float64 (error) * float64 (error);
+            midpointPower += float64 (expected) * float64 (expected);
+        }
+
+        let dryPower = 0.5 * 0.18 * 0.18 * 8192.0;
+        out <- (noSubtractionPower > dryPower * 0.01) ? 1 : 0;
+        advance();
+        out <- (fullSubtractionPower > dryPower * 0.01) ? 1 : 0;
+        advance();
+        out <- (endpointDifferencePower > dryPower * 0.01) ? 1 : 0;
+        advance();
+        out <- (midpointErrorPower <= midpointPower * 1.0e-6 + 1.0e-12) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Hostile values and near-Nyquist material remain finite/bounded. Reset clears
+// both TPT/DC histories and the sinc resamplers, without depending on zero Amount.
+
+## testProcessor()
+
+processor EnhancerSafetyAndResetContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+    node neutral = wt::EnhancerBus;
+
+    void configureHostile()
+    {
+        enhancer.b1FreqHzIn <- -1000.0f;
+        enhancer.b1QIn <- 0.0f;
+        enhancer.b1ModeIn <- -100.0f;
+        enhancer.b1MidAmountIn <- 4.0f;
+        enhancer.b1SideAmountIn <- -2.0f;
+        enhancer.b1CurveIn <- -100.0f;
+        enhancer.b2FreqHzIn <- 1000000.0f;
+        enhancer.b2QIn <- 1000.0f;
+        enhancer.b2ModeIn <- 100.0f;
+        enhancer.b2MidAmountIn <- 5.0f;
+        enhancer.b2SideAmountIn <- 3.0f;
+        enhancer.b2CurveIn <- 100.0f;
+        enhancer.saturationModeIn <- 100.0f;
+        enhancer.deEmphasisIn <- 100.0f;
+    }
+
+    void configureResetProbe()
+    {
+        enhancer.b1FreqHzIn <- 1000.0f;
+        enhancer.b1QIn <- 1.0f;
+        enhancer.b1ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b1MidAmountIn <- 1.0f;
+        enhancer.b1SideAmountIn <- 0.0f;
+        enhancer.b1CurveIn <- 1.0f;
+        enhancer.b2FreqHzIn <- 9000.0f;
+        enhancer.b2QIn <- 0.71f;
+        enhancer.b2ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b2MidAmountIn <- 0.0f;
+        enhancer.b2SideAmountIn <- 0.0f;
+        enhancer.b2CurveIn <- 0.0f;
+        enhancer.saturationModeIn <- float32 (wt::enhancerSaturationModeMedium);
+        enhancer.deEmphasisIn <- 1.0f;
+    }
+
+    void main()
+    {
+        configureHostile();
+        enhancer.resetIn <- 1;
+        bool finite = true;
+        float32 peak;
+
+        for (int32 frame = 0; frame < 32768; ++frame)
+        {
+            let phase = twoPi * 0.44f * float32 (frame);
+            let left = 0.95f * float32 (std::intrinsics::sin (phase));
+            let right = 0.81f * float32 (std::intrinsics::sin (phase * 0.973f + 0.4f));
+            enhancer.in <- float32<2> (left, right);
+            enhancer.advance();
+            let rendered = enhancer.out;
+            if (rendered[0] != rendered[0] || rendered[1] != rendered[1])
+                finite = false;
+            peak = std::intrinsics::max (
+                peak,
+                std::intrinsics::max (
+                    std::intrinsics::abs (rendered[0]),
+                    std::intrinsics::abs (rendered[1])
+                )
+            );
+        }
+
+        // Move to a known non-neutral setting before reset. No value endpoint is
+        // republished afterward: reset owns audio history, not the saved voicing.
+        configureResetProbe();
+        float64 phase;
+        for (int32 frame = 0; frame < 8192; ++frame)
+        {
+            let sample = 0.31f * float32 (std::intrinsics::sin (phase));
+            phase += twoPi * 1000.0 / processor.frequency;
+            enhancer.in <- float32<2> (sample, sample);
+            enhancer.advance();
+        }
+
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        bool resetIsSilent = true;
+        for (int32 frame = 0; frame < 4096; ++frame)
+        {
+            enhancer.in <- float32<2> (0.0f, 0.0f);
+            neutral.in <- float32<2> (0.0f, 0.0f);
+            enhancer.advance();
+            neutral.advance();
+            if (enhancer.out[0] != 0.0f || enhancer.out[1] != 0.0f)
+                resetIsSilent = false;
+        }
+
+        float64 postResetResiduePower;
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            let sample = 0.31f * float32 (std::intrinsics::sin (phase));
+            phase += twoPi * 1000.0 / processor.frequency;
+            enhancer.in <- float32<2> (sample, sample);
+            neutral.in <- float32<2> (sample, sample);
+            enhancer.advance();
+            neutral.advance();
+            if (frame >= 4096)
+            {
+                let residue = enhancer.out[0] - neutral.out[0];
+                postResetResiduePower += float64 (residue) * float64 (residue);
+            }
+        }
+
+        out <- finite ? 1 : 0;
+        advance();
+        out <- (peak <= 64.0f) ? 1 : 0;
+        advance();
+        out <- resetIsSilent ? 1 : 0;
+        advance();
+        out <- (postResetResiduePower > 1.0e-9) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// A simultaneous step across Frequency, Q, Amount, and Tube/Solid must emerge
+// progressively. Later character and saturation-mode edits may not introduce
+// an instantaneous discontinuity.
+
+## testProcessor()
+
+processor EnhancerControlSmoothingContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+    node neutral = wt::EnhancerBus;
+
+    float64 phase;
+
+    float32 render (
+        float32 frequency,
+        float32 q,
+        float32 amount,
+        float32 mode,
+        float32 curve,
+        float32 saturationMode
+    )
+    {
+        let sample = 0.3f * float32 (std::intrinsics::sin (phase));
+        phase += twoPi * 1000.0 / processor.frequency;
+        enhancer.b1FreqHzIn <- frequency;
+        enhancer.b1QIn <- q;
+        enhancer.b1ModeIn <- mode;
+        enhancer.b1MidAmountIn <- amount;
+        enhancer.b1SideAmountIn <- 0.0f;
+        enhancer.b1CurveIn <- curve;
+        enhancer.b2FreqHzIn <- 9000.0f;
+        enhancer.b2QIn <- 0.71f;
+        enhancer.b2ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b2MidAmountIn <- 0.0f;
+        enhancer.b2SideAmountIn <- 0.0f;
+        enhancer.b2CurveIn <- 0.0f;
+        enhancer.saturationModeIn <- saturationMode;
+        enhancer.deEmphasisIn <- 1.0f;
+        enhancer.in <- float32<2> (sample, sample);
+        neutral.in <- float32<2> (sample, sample);
+        enhancer.advance();
+        neutral.advance();
+        return enhancer.out[0] - neutral.out[0];
+    }
+
+    void main()
+    {
+        for (int32 frame = 0; frame < 4096; ++frame)
+            render (400.0f, 0.3f, 0.0f, 0.0f, 1.0f, 0.0f);
+
+        float32 earlyPeak;
+        float32 latePeak;
+        for (int32 frame = 0; frame < 8192; ++frame)
+        {
+            let residue = render (1000.0f, 8.0f, 1.0f, 1.0f, 0.0f, 0.0f);
+            if (frame < 32)
+                earlyPeak = std::intrinsics::max (earlyPeak, std::intrinsics::abs (residue));
+            if (frame >= 4096)
+                latePeak = std::intrinsics::max (latePeak, std::intrinsics::abs (residue));
+        }
+
+        float32 previousResidue = render (1000.0f, 8.0f, 1.0f, 1.0f, 0.0f, 0.0f);
+        float32 baselineMaxStep;
+        for (int32 frame = 0; frame < 2048; ++frame)
+        {
+            let residue = render (1000.0f, 8.0f, 1.0f, 1.0f, 0.0f, 0.0f);
+            baselineMaxStep = std::intrinsics::max (
+                baselineMaxStep,
+                std::intrinsics::abs (residue - previousResidue)
+            );
+            previousResidue = residue;
+        }
+
+        float32 maxCharacterStep;
+        bool transitionFinite = true;
+        for (int32 frame = 0; frame < 2048; ++frame)
+        {
+            let residue = render (1000.0f, 8.0f, 1.0f, 1.0f, 1.0f, 0.0f);
+            if (residue != residue)
+                transitionFinite = false;
+            maxCharacterStep = std::intrinsics::max (
+                maxCharacterStep,
+                std::intrinsics::abs (residue - previousResidue)
+            );
+            previousResidue = residue;
+        }
+
+        float32 modeBaselineMaxStep;
+        for (int32 frame = 0; frame < 2048; ++frame)
+        {
+            let residue = render (1000.0f, 8.0f, 1.0f, 1.0f, 1.0f, 0.0f);
+            modeBaselineMaxStep = std::intrinsics::max (
+                modeBaselineMaxStep,
+                std::intrinsics::abs (residue - previousResidue)
+            );
+            previousResidue = residue;
+        }
+
+        float32 firstSaturationModeStep;
+        bool saturationTransitionFinite = true;
+        for (int32 frame = 0; frame < 2048; ++frame)
+        {
+            let residue = render (1000.0f, 8.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+            if (residue != residue)
+                saturationTransitionFinite = false;
+            if (frame == 0)
+                firstSaturationModeStep = std::intrinsics::abs (residue - previousResidue);
+            previousResidue = residue;
+        }
+
+        out <- (latePeak > 1.0e-5 && earlyPeak < latePeak * 0.25f) ? 1 : 0;
+        advance();
+        out <- (transitionFinite
+                && maxCharacterStep <= baselineMaxStep * 1.25f + 0.0001f) ? 1 : 0;
+        advance();
+        out <- (saturationTransitionFinite
+                && firstSaturationModeStep <= modeBaselineMaxStep * 1.25f + 0.0001f) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// The same production processor is exercised independently at four rates. Each
+// run must retain bell selectivity, a measurable contribution, and finite output.
+
+## testProcessor (undefined, { frequency: 44100, maxFrequency: 192000 })
+graph EnhancerAt44100 [[ main ]]
+{
+    output stream int32 out;
+    node probe = EnhancerSampleRateProbe;
+    connection
+    {
+        probe.out -> out;
+    }
+}
+
+## testProcessor (undefined, { frequency: 48000, maxFrequency: 192000 })
+graph EnhancerAt48000 [[ main ]]
+{
+    output stream int32 out;
+    node probe = EnhancerSampleRateProbe;
+    connection
+    {
+        probe.out -> out;
+    }
+}
+
+## testProcessor (undefined, { frequency: 96000, maxFrequency: 192000 })
+graph EnhancerAt96000 [[ main ]]
+{
+    output stream int32 out;
+    node probe = EnhancerSampleRateProbe;
+    connection
+    {
+        probe.out -> out;
+    }
+}
+
+## testProcessor (undefined, { frequency: 192000, maxFrequency: 192000 })
+graph EnhancerAt192000 [[ main ]]
+{
+    output stream int32 out;
+    node probe = EnhancerSampleRateProbe;
+    connection
+    {
+        probe.out -> out;
+    }
+}
+
+//==============================================================================
+// Deterministic, normalized drum, bass, and bright-poly holdouts through the
+// production processor. This is the musical-material regression, not a mirrored
+// transfer implementation.
+
+## testProcessor (undefined, { frequency: 48000, maxFrequency: 48000 })
+
+processor EnhancerMusicalMaterialContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerBus;
+    node neutral = wt::EnhancerBus;
+
+    let settleFrames = 4096;
+    let measureFrames = 24576;
+    let totalFrames = settleFrames + measureFrames;
+    let targetRms = 0.12589254f;
+
+    float32<2>[totalFrames] material;
+    std::random::RNG noise;
+    bool allFinite = true;
+    bool allChanged = true;
+    bool allDcControlled = true;
+
+    void configure()
+    {
+        enhancer.b1FreqHzIn <- 130.0f;
+        enhancer.b1QIn <- 0.71f;
+        enhancer.b1ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancer.b1MidAmountIn <- 0.7f;
+        enhancer.b1SideAmountIn <- 0.35f;
+        enhancer.b1CurveIn <- 1.0f;
+        enhancer.b2FreqHzIn <- 9000.0f;
+        enhancer.b2QIn <- 0.71f;
+        enhancer.b2ModeIn <- float32 (wt::enhancerModeMidSide);
+        enhancer.b2MidAmountIn <- 0.35f;
+        enhancer.b2SideAmountIn <- 0.7f;
+        enhancer.b2CurveIn <- 0.0f;
+        enhancer.deEmphasisIn <- 1.0f;
+    }
+
+    float32 bassSample (int32 frame)
+    {
+        let time = float32 (frame) / float32 (processor.frequency);
+        let noteIndex = int32 (time / 0.25f) & 3;
+        let frequency = noteIndex == 0 ? 55.0f
+                        : (noteIndex == 1 ? 65.406f
+                           : (noteIndex == 2 ? 73.416f : 82.407f));
+        let noteAge = std::intrinsics::wrap (time, 0.25f);
+        float32 sample;
+        for (int32 harmonic = 1; harmonic <= 7; ++harmonic)
+            sample += float32 (std::intrinsics::sin (
+                twoPi * float64 (frequency) * float64 (harmonic) * float64 (time)
+            )) / float32 (harmonic);
+        return sample * (0.58f + 0.42f * std::intrinsics::exp (-8.0f * noteAge));
+    }
+
+    float32<2> fixtureSample (int32 fixture, int32 frame)
+    {
+        let time = float32 (frame) / float32 (processor.frequency);
+
+        if (fixture == 0)
+        {
+            let kickAge = std::intrinsics::wrap (time, 0.25f);
+            let snareAge = std::intrinsics::wrap (time + 0.25f, 0.5f);
+            let hatAge = std::intrinsics::wrap (time, 0.125f);
+            let randomLeft = noise.getBipolar();
+            let randomRight = noise.getBipolar();
+            let kickPhase = twoPi * (46.0f * kickAge
+                                     + 2.8f * (1.0f - std::intrinsics::exp (-28.0f * kickAge)));
+            let kick = float32 (std::intrinsics::sin (kickPhase))
+                       * std::intrinsics::exp (-18.0f * kickAge);
+            let snareEnvelope = std::intrinsics::exp (-26.0f * snareAge) * 0.52f;
+            let hatEnvelope = std::intrinsics::exp (-95.0f * hatAge) * 0.16f;
+            return float32<2> (
+                kick + randomLeft * (snareEnvelope + hatEnvelope),
+                kick + randomRight * (snareEnvelope + hatEnvelope)
+            );
+        }
+
+        if (fixture == 1)
+        {
+            let bass = bassSample (frame);
+            return float32<2> (bass, bass);
+        }
+
+        float32 left;
+        float32 right;
+        float32[4] chord = (220.0f, 277.183f, 329.628f, 415.305f);
+        for (wrap<4> voice)
+            for (int32 harmonic = 1; harmonic <= 9; ++harmonic)
+            {
+                let amplitude = 1.0f / float32 (harmonic);
+                let angle = twoPi * float64 (chord[voice]) * float64 (harmonic)
+                            * float64 (time);
+                left += amplitude * float32 (std::intrinsics::sin (
+                    angle + float64 (voice) * 0.37
+                ));
+                right += amplitude * float32 (std::intrinsics::sin (
+                    angle + float64 (voice) * 0.61 + float64 (harmonic) * 0.03
+                ));
+            }
+        return float32<2> (left, right);
+    }
+
+    void buildNormalizedFixture (int32 fixture)
+    {
+        noise.seed (260826L + int64 (fixture));
+        float64 power;
+        for (int32 frame = 0; frame < totalFrames; ++frame)
+        {
+            let sampleFrame = fixtureSample (fixture, frame);
+            material.at (frame) = sampleFrame;
+            if (frame >= settleFrames)
+                power += 0.5 * (float64 (sampleFrame[0]) * float64 (sampleFrame[0])
+                                + float64 (sampleFrame[1]) * float64 (sampleFrame[1]));
+        }
+        let rms = float32 (std::intrinsics::sqrt (power / float64 (measureFrames)));
+        let scale = targetRms / std::intrinsics::max (rms, 1.0e-12f);
+        for (int32 frame = 0; frame < totalFrames; ++frame)
+            material.at (frame) *= scale;
+    }
+
+    void checkFixture (int32 fixture)
+    {
+        buildNormalizedFixture (fixture);
+        configure();
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        float64 differencePower;
+        float64 differenceSum;
+
+        for (int32 frame = 0; frame < totalFrames; ++frame)
+        {
+            let dry = material.at (frame);
+            configure();
+            enhancer.in <- dry;
+            neutral.in <- dry;
+            enhancer.advance();
+            neutral.advance();
+            let rendered = enhancer.out;
+            if (rendered[0] != rendered[0] || rendered[1] != rendered[1])
+                allFinite = false;
+
+            if (frame >= settleFrames)
+            {
+                let difference = rendered - neutral.out;
+                differencePower += 0.5 * (
+                    float64 (difference[0]) * float64 (difference[0])
+                    + float64 (difference[1]) * float64 (difference[1])
+                );
+                differenceSum += 0.5 * float64 (difference[0] + difference[1]);
+            }
+        }
+
+        let differenceMean = differenceSum / float64 (measureFrames);
+        let differenceRms = std::intrinsics::sqrt (
+            differencePower / float64 (measureFrames)
+        );
+        if (differencePower / float64 (measureFrames) <= 1.0e-10)
+            allChanged = false;
+        if (std::intrinsics::abs (differenceMean) / differenceRms > 0.01)
+            allDcControlled = false;
+    }
+
+    void main()
+    {
+        for (int32 fixture = 0; fixture < 3; ++fixture)
+            checkFixture (fixture);
+
+        out <- allFinite ? 1 : 0;
+        advance();
+        out <- allChanged ? 1 : 0;
+        advance();
+        out <- allDcControlled ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}

@@ -1,0 +1,12 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.enhancer-calibration",
+  "version": "1.0",
+  "name": "Enhancer Calibration",
+  "description": "Offline T26 production EnhancerBus loudness and review-material seam",
+  "category": "effect",
+  "source": [
+    "../../cmajor/Enhancer.cmajor",
+    "EnhancerCalibration.cmajor"
+  ]
+}

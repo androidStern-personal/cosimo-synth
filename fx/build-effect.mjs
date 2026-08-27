@@ -47,6 +47,31 @@ export const effectPlugins = {
         workerSource: "fx/spectral_chord_resonator/worker/source.ts",
         workerOut: "worker.js",
     },
+    enhancer: {
+        patch: "fx/enhancer/Enhancer.cmajorpatch",
+        runtimeOut: "build/fx/enhancer_runtime",
+        juceOut: "build/enhancer_juce",
+        cmakeTarget: "CosimoEnhancer",
+        productName: "CosimoEnhancer",
+        generatedHostLatencySamples: 60,
+        runtimeSources: [
+            { repoPath: "cmajor/Enhancer.cmajor", runtimePath: "Enhancer.cmajor" },
+            { repoPath: "fx/enhancer/EnhancerPlugin.cmajor", runtimePath: "EnhancerPlugin.cmajor" },
+        ],
+    },
+    "enhancer-lite": {
+        patch: "fx/enhancer_lite/EnhancerLite.cmajorpatch",
+        runtimeOut: "build/fx/enhancer_lite_runtime",
+        juceOut: "build/enhancer_lite_juce",
+        cmakeTarget: "CosimoEnhancerLite",
+        productName: "CosimoEnhancerLite",
+        generatedHostLatencySamples: 3,
+        runtimeSources: [
+            { repoPath: "cmajor/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
+            { repoPath: "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor", runtimePath: "EnhancerLiteSpectrumAnalyzer.cmajor" },
+            { repoPath: "fx/enhancer_lite/EnhancerLitePlugin.cmajor", runtimePath: "EnhancerLitePlugin.cmajor" },
+        ],
+    },
 };
 
 export function effectPluginNames() {
@@ -99,6 +124,10 @@ async function copyRelativeEntries(entries, fromRoot, toRoot, label) {
 async function writeRuntimePatchManifest(manifest, plugin, runtimeRoot, patchPath) {
     const runtimeManifest = { ...manifest };
 
+    if (plugin.runtimeSources) {
+        runtimeManifest.source = plugin.runtimeSources.map(({ runtimePath }) => runtimePath);
+    }
+
     if (plugin.workerSource) {
         runtimeManifest.worker = plugin.workerOut ?? "worker.js";
     }
@@ -108,6 +137,15 @@ async function writeRuntimePatchManifest(manifest, plugin, runtimeRoot, patchPat
         `${JSON.stringify(runtimeManifest, null, 2)}\n`,
         "utf8",
     );
+}
+
+async function copyRuntimeSources(runtimeSources, runtimeRoot) {
+    for (const { repoPath, runtimePath } of runtimeSources) {
+        const sourcePath = path.join(repoRoot, normalizeRepoPath(repoPath, "runtime source repoPath"));
+        const targetPath = path.join(runtimeRoot, normalizeRepoPath(runtimePath, "runtime source runtimePath"));
+        await mkdir(path.dirname(targetPath), { recursive: true });
+        await cp(sourcePath, targetPath, { recursive: true });
+    }
 }
 
 async function buildWorker(plugin, runtimeRoot) {
@@ -183,7 +221,11 @@ export async function buildPlugin(pluginName) {
     await mkdir(runtimeViewRoot, { recursive: true });
 
     await writeRuntimePatchManifest(manifest, plugin, runtimeRoot, patchPath);
-    await copyRelativeEntries(manifest.source, patchRoot, runtimeRoot, "source");
+    if (plugin.runtimeSources) {
+        await copyRuntimeSources(plugin.runtimeSources, runtimeRoot);
+    } else {
+        await copyRelativeEntries(manifest.source, patchRoot, runtimeRoot, "source");
+    }
     await copyRelativeEntries(manifest.resources, patchRoot, runtimeRoot, "resources");
     if (!plugin.workerSource) {
         await copyRelativeEntries(manifest.worker, patchRoot, runtimeRoot, "worker");

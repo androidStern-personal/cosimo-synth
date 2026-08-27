@@ -1,4 +1,4 @@
-import { access, cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { access, cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -168,6 +168,60 @@ async function ensureCmajorSourcePath() {
     return cmajorSourcePath;
 }
 
+export function replaceGeneratedPluginLatency(source, latencySamples) {
+    if (!Number.isInteger(latencySamples) || latencySamples < 0)
+        throw new Error("generatedHostLatencySamples must be a non-negative integer.");
+
+    const pattern = /static constexpr double\s+latency\s*=\s*[-+0-9.eE]+;/g;
+    const matches = [...source.matchAll(pattern)];
+
+    if (matches.length !== 1) {
+        throw new Error(
+            `Expected exactly one generated Cmajor latency constant, found ${matches.length}.`,
+        );
+    }
+
+    const correctedConstant = source.replace(
+        pattern,
+        `static constexpr double   latency            = ${latencySamples.toFixed(6)};`,
+    );
+    const factoryPattern = /([ \t]*)return new (cmaj::plugin::GeneratedPlugin<[^\n;]+> \(std::make_shared<cmaj::Patch>\(\)\));/g;
+    const factoryMatches = [...correctedConstant.matchAll(factoryPattern)];
+
+    if (factoryMatches.length !== 1) {
+        throw new Error(
+            `Expected exactly one generated Cmajor plugin factory, found ${factoryMatches.length}.`,
+        );
+    }
+
+    return correctedConstant.replace(
+        factoryPattern,
+        (_, indent, construction) => [
+            `${indent}auto* plugin = new ${construction};`,
+            `${indent}plugin->patchChangeCallback = [] (auto& changedPlugin) { changedPlugin.setLatencySamples (${latencySamples}); };`,
+            `${indent}plugin->setLatencySamples (${latencySamples});`,
+            `${indent}return plugin;`,
+        ].join("\n"),
+    );
+}
+
+async function applyGeneratedHostLatency(pluginName, plugin, juceOut) {
+    if (plugin.generatedHostLatencySamples === undefined)
+        return;
+
+    const generatedSourcePath = path.join(juceOut, "cmajor_plugin.cpp");
+    const generatedSource = await readFile(generatedSourcePath, "utf8");
+    const correctedSource = replaceGeneratedPluginLatency(
+        generatedSource,
+        plugin.generatedHostLatencySamples,
+    );
+    await writeFile(generatedSourcePath, correctedSource, "utf8");
+    console.log(
+        `Pinned ${pluginName} generated host latency to `
+        + `${plugin.generatedHostLatencySamples} samples for Cmajor 1.0.3066.`,
+    );
+}
+
 export async function prepareJuceProjectOutput(juceOut, { clean = false } = {}) {
     if (clean) {
         await rm(juceOut, { recursive: true, force: true });
@@ -201,6 +255,7 @@ async function generateJuceProject(pluginName, plugin, options = {}) {
         `--jucePath=${jucePath}`,
         `--cmajorIncludePath=${path.join(cmajorSourcePath, "include")}`,
     ]);
+    await applyGeneratedHostLatency(pluginName, plugin, juceOut);
 
     console.log(`Generated ${pluginName} JUCE plugin project at ${path.relative(repoRoot, juceOut)}`);
 }

@@ -1,0 +1,29 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.enhancer-lite",
+  "version": "0.1.0",
+  "name": "Cosimo Enhancer Lite",
+  "description": "One-band harmonic enhancer prototype with Stereo and Mid/Side routing.",
+  "category": "effect",
+  "manufacturer": "Cosimo",
+  "plugin": {
+    "pluginCode": "CsEL",
+    "manufacturerCode": "Cosi"
+  },
+  "view": {
+    "src": "view/index.js",
+    "devModule": "/fx/enhancer_lite/view/source.ts",
+    "width": 820,
+    "height": 520,
+    "resizable": true
+  },
+  "resources": [
+    "assets/enhancer-lite-wordmark.png"
+  ],
+  "isInstrument": false,
+  "source": [
+    "../../cmajor/EnhancerLite.cmajor",
+    "../../cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
+    "EnhancerLitePlugin.cmajor"
+  ]
+}

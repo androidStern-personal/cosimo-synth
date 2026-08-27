@@ -1,0 +1,264 @@
+## global ("../../cmajor/EnhancerLite.cmajor", "EnhancerLiteSampleRateProbe.cmajor")
+
+//==============================================================================
+// Neutral equality, mono/stereo coherence, side-only preservation, reset, and
+// finite-output behavior through the real optimized processor.
+
+## testProcessor()
+
+processor EnhancerLiteSignalContract [[ main ]]
+{
+    output stream int32 out;
+    node enhancer = wt::EnhancerLiteBus;
+    node neutral = wt::EnhancerLiteBus;
+    node sideOnlyEnhancer = wt::EnhancerLiteBus;
+
+    void configure (
+        float32 midAmount,
+        float32 sideAmount,
+        int32 mode,
+        int32 curve,
+        int32 saturationMode
+    )
+    {
+        enhancer.freqHzIn <- 1000.0f;
+        enhancer.qIn <- 1.0f;
+        enhancer.modeIn <- float32 (mode);
+        enhancer.midAmountIn <- midAmount;
+        enhancer.sideAmountIn <- sideAmount;
+        enhancer.curveIn <- float32 (curve);
+        enhancer.saturationModeIn <- float32 (saturationMode);
+        neutral.midAmountIn <- 0.0f;
+        neutral.sideAmountIn <- 0.0f;
+    }
+
+    float32<2> render (float32<2> sampleFrame)
+    {
+        enhancer.in <- sampleFrame;
+        neutral.in <- sampleFrame;
+        enhancer.advance();
+        neutral.advance();
+        return enhancer.out;
+    }
+
+    void main()
+    {
+        bool neutralMatches = true;
+        configure (0.0f, 0.0f, wt::enhancerLiteModeStereo,
+                   wt::enhancerLiteCurveSolid,
+                   wt::enhancerLiteSaturationModeSubtle);
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            enhancer.freqHzIn <- frame < 4096 ? 20.0f : 20000.0f;
+            enhancer.qIn <- frame < 8192 ? 0.1f : 10.0f;
+            enhancer.modeIn <- frame < 7000 ? 0.0f : 1.0f;
+            enhancer.curveIn <- frame < 6000 ? 0.0f : 1.0f;
+            enhancer.saturationModeIn <- frame < 9000 ? 0.0f : 1.0f;
+            let sampleFrame = float32<2> (
+                0.31f * float32 (std::intrinsics::sin (float32 (frame) * 0.071f)),
+                0.27f * float32 (std::intrinsics::sin (float32 (frame) * 0.043f + 0.4f))
+            );
+            let rendered = render (sampleFrame);
+            if (rendered[0] != neutral.out[0] || rendered[1] != neutral.out[1])
+                neutralMatches = false;
+        }
+
+        configure (0.0f, 1.0f, wt::enhancerLiteModeMidSide,
+                   wt::enhancerLiteCurveTube,
+                   wt::enhancerLiteSaturationModeMedium);
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        bool monoSideOnlyMatches = true;
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            let sample = 0.3f * float32 (std::intrinsics::sin (
+                twoPi * 1000.0f * float32 (frame) / float32 (processor.frequency)
+            ));
+            let rendered = render (float32<2> (sample, sample));
+            if (rendered[0] != neutral.out[0] || rendered[1] != neutral.out[1])
+                monoSideOnlyMatches = false;
+        }
+
+        configure (0.9f, 0.0f, wt::enhancerLiteModeMidSide,
+                   wt::enhancerLiteCurveSolid,
+                   wt::enhancerLiteSaturationModeSubtle);
+        enhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        bool enhancedMonoIsMono = true;
+        float64 monoDifferencePower;
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            let sample = 0.3f * float32 (std::intrinsics::sin (
+                twoPi * 1000.0f * float32 (frame) / float32 (processor.frequency)
+            ));
+            let rendered = render (float32<2> (sample, sample));
+            if (rendered[0] != rendered[1])
+                enhancedMonoIsMono = false;
+            if (frame >= 4096)
+            {
+                let difference = rendered[0] - neutral.out[0];
+                monoDifferencePower += float64 (difference) * float64 (difference);
+            }
+        }
+
+        sideOnlyEnhancer.freqHzIn <- 1000.0f;
+        sideOnlyEnhancer.qIn <- 1.0f;
+        sideOnlyEnhancer.modeIn <- float32 (wt::enhancerLiteModeMidSide);
+        sideOnlyEnhancer.midAmountIn <- 0.0f;
+        sideOnlyEnhancer.sideAmountIn <- 0.9f;
+        sideOnlyEnhancer.curveIn <- float32 (wt::enhancerLiteCurveTube);
+        sideOnlyEnhancer.saturationModeIn <- float32 (
+            wt::enhancerLiteSaturationModeMedium
+        );
+        sideOnlyEnhancer.resetIn <- 1;
+        neutral.resetIn <- 1;
+        float32 maximumSideSymmetryError;
+        float64 sideDifferencePower;
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            let sample = 0.3f * float32 (std::intrinsics::sin (
+                twoPi * 1000.0f * float32 (frame) / float32 (processor.frequency)
+            ));
+            sideOnlyEnhancer.in <- float32<2> (sample, -sample);
+            neutral.in <- float32<2> (sample, -sample);
+            sideOnlyEnhancer.advance();
+            neutral.advance();
+            let rendered = sideOnlyEnhancer.out;
+            if (frame >= 4096)
+            {
+                maximumSideSymmetryError = std::intrinsics::max (
+                    maximumSideSymmetryError,
+                    std::intrinsics::abs (rendered[0] + rendered[1])
+                );
+                let difference = rendered[0] - neutral.out[0];
+                sideDifferencePower += float64 (difference) * float64 (difference);
+            }
+        }
+
+        enhancer.freqHzIn <- -1000.0f;
+        enhancer.qIn <- 1000.0f;
+        enhancer.modeIn <- 100.0f;
+        enhancer.midAmountIn <- 5.0f;
+        enhancer.sideAmountIn <- -3.0f;
+        enhancer.curveIn <- 100.0f;
+        enhancer.saturationModeIn <- 100.0f;
+        enhancer.resetIn <- 1;
+        bool finiteOutput = true;
+        for (int32 frame = 0; frame < 8192; ++frame)
+        {
+            let sampleFrame = float32<2> (
+                0.9f * float32 (std::intrinsics::sin (float32 (frame) * 0.31f)),
+                0.8f * float32 (std::intrinsics::sin (float32 (frame) * 0.19f + 0.3f))
+            );
+            enhancer.in <- sampleFrame;
+            enhancer.advance();
+            let rendered = enhancer.out;
+            if (rendered[0] != rendered[0] || rendered[1] != rendered[1]
+                || std::intrinsics::abs (rendered[0]) > 100.0f
+                || std::intrinsics::abs (rendered[1]) > 100.0f)
+                finiteOutput = false;
+        }
+
+        enhancer.resetIn <- 1;
+        bool resetIsSilent = true;
+        for (int32 frame = 0; frame < 1024; ++frame)
+        {
+            enhancer.in <- float32<2> (0.0f);
+            enhancer.advance();
+            if (enhancer.out[0] != 0.0f || enhancer.out[1] != 0.0f)
+                resetIsSilent = false;
+        }
+
+        out <- neutralMatches ? 1 : 0;
+        advance();
+        out <- monoSideOnlyMatches ? 1 : 0;
+        advance();
+        out <- (enhancedMonoIsMono && monoDifferencePower > 1.0e-9) ? 1 : 0;
+        advance();
+        out <- (maximumSideSymmetryError <= 1.0e-6f
+                && sideDifferencePower > 1.0e-9) ? 1 : 0;
+        advance();
+        out <- finiteOutput ? 1 : 0;
+        advance();
+        out <- resetIsSilent ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// The rational curve remains close to tanh across and beyond the shaped range.
+
+## testProcessor()
+
+processor EnhancerLiteApproximationContract [[ main ]]
+{
+    output stream int32 out;
+
+    void main()
+    {
+        float32 maximumError;
+        float32 maximumOddError;
+        for (int32 index = -8000; index <= 8000; ++index)
+        {
+            let x = float32 (index) * 0.001f;
+            let approximation = wt::enhancerLiteFastTanh (x);
+            let reference = std::intrinsics::tanh (x);
+            maximumError = std::intrinsics::max (
+                maximumError,
+                std::intrinsics::abs (approximation - reference)
+            );
+            maximumOddError = std::intrinsics::max (
+                maximumOddError,
+                std::intrinsics::abs (
+                    approximation + wt::enhancerLiteFastTanh (-x)
+                )
+            );
+        }
+
+        out <- wt::enhancerLiteFastTanh (0.0f) == 0.0f ? 1 : 0;
+        advance();
+        out <- maximumError <= 0.02353f ? 1 : 0;
+        advance();
+        out <- maximumOddError <= 1.0e-7f ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Sample-rate behavior uses the same public processor at representative rates.
+
+## testProcessor (undefined, { frequency: 44100, maxFrequency: 192000 })
+graph EnhancerLiteAt44100 [[ main ]]
+{
+    output stream int32 out;
+    node probe = EnhancerLiteSampleRateProbe;
+    connection { probe.out -> out; }
+}
+
+## testProcessor (undefined, { frequency: 48000, maxFrequency: 192000 })
+graph EnhancerLiteAt48000 [[ main ]]
+{
+    output stream int32 out;
+    node probe = EnhancerLiteSampleRateProbe;
+    connection { probe.out -> out; }
+}
+
+## testProcessor (undefined, { frequency: 96000, maxFrequency: 192000 })
+graph EnhancerLiteAt96000 [[ main ]]
+{
+    output stream int32 out;
+    node probe = EnhancerLiteSampleRateProbe;
+    connection { probe.out -> out; }
+}
+
+## testProcessor (undefined, { frequency: 192000, maxFrequency: 192000 })
+graph EnhancerLiteAt192000 [[ main ]]
+{
+    output stream int32 out;
+    node probe = EnhancerLiteSampleRateProbe;
+    connection { probe.out -> out; }
+}

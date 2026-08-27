@@ -1,0 +1,25 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.enhancer",
+  "version": "0.1.0",
+  "name": "Cosimo Enhancer",
+  "description": "Two-band harmonic enhancer with independently switchable Stereo and Mid/Side routing.",
+  "category": "effect",
+  "manufacturer": "Cosimo",
+  "plugin": {
+    "pluginCode": "CsEn",
+    "manufacturerCode": "Cosi"
+  },
+  "view": {
+    "src": "view/index.js",
+    "devModule": "/fx/enhancer/view/source.ts",
+    "width": 980,
+    "height": 700,
+    "resizable": true
+  },
+  "isInstrument": false,
+  "source": [
+    "../../cmajor/Enhancer.cmajor",
+    "EnhancerPlugin.cmajor"
+  ]
+}
