@@ -1390,6 +1390,9 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - The approved three-value Voice interface fits in the existing Filter footprint without shrinking or covering either stage, and tests prove the Enhancer processes each voice after its filter but before voices are combined, fixed linked Mid/Side uses one Amount with no hidden mode state, optional pitch tracking works independently across simultaneous notes, zero Amount is bit-identical, state round trips are complete, retained-voice CPU is acceptable, and the fixed T26/T28 Polish Enhancer is unchanged.
 
 [ ] T63 — Discuss and build whole-Effects-chain Mix and Bypass
+    Active owner (2026-08-27):
+    - Codex task `T63 Build Effects Lane Mix and Bypass`, thread `01a04330-913e-7482-a486-ce792f10ee69`, branch `codex/t63-effects-lane-mix-bypass`, worktree `/Users/winterfell/.codex/worktrees/c0e8/cosimo-synth`, model SOL, reasoning max.
+    - This is a coordinator-managed implementation task. Final review, rebase, merge, push, and any deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
     Product decisions (2026-08-27):
     - Add one control that blends the dry signal around the complete editable Effects Lane and one control that temporarily bypasses that lane. The later fixed Polish section remains outside both controls and still processes the chosen result. Per-effect Mix controls and effect bypasses remain unchanged inside the lane.
     - Do not consume permanent vertical space above the graph. Overlay the Bypass button in the currently unused top-left corner of the FX graph, and place Mix as a horizontal slider along the inside bottom edge of the graph. These controls must remain reachable without obscuring effects, connectors, group controls, tail add buttons, or drag destinations at phone, desktop, and plugin sizes.
