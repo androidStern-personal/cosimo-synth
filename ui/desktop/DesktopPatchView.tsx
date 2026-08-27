@@ -7,6 +7,7 @@ import {
     useMemo,
     useRef,
     useState,
+    useSyncExternalStore,
     type ReactNode,
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
@@ -159,6 +160,10 @@ import {
     serializeAutoPreviewEnabled,
 } from "../shared/audition-preferences";
 import { PERF_TUNING_AVAILABLE } from "../shared/perf-tuning";
+import {
+    getModBarPreferences,
+    subscribeModBarPreferences,
+} from "../shared/mod-bar-preferences";
 import {
     GLOBAL_TUNE_ENDPOINT_ID,
     GLOBAL_TUNE_INITIAL_SEMITONES,
@@ -1971,7 +1976,7 @@ function SynthPresetBarHost({
     compactSynth?: boolean;
     backAvailable?: boolean;
     onShellBack?: () => void;
-    /** Developer builds only: reveals the shell menu's Performance tuning row. */
+    /** Developer builds only: reveals the shell menu's Developer settings row. */
     perfTuningAvailable?: boolean;
     onOpenPerfTuning?: () => void;
     onBounceGuardReady?: (
@@ -3134,7 +3139,11 @@ function MsegEditorModal({
                 // The floating Mod bar is the universal play surface (T11);
                 // editing a shape while auditioning it is the point, so the
                 // modal must never deaden it.
-                && candidate.getAttribute("data-role") !== "mobile-global-mod-rail-portal",
+                && candidate.getAttribute("data-role") !== "mobile-global-mod-rail-portal"
+                // T60 groups the portal with the bottom tabs so a parked row
+                // can consume exactly one dock row. During full-screen editing
+                // the tabs are absent, leaving this wrapper as the bar owner.
+                && candidate.querySelector('[data-role="mobile-global-mod-rail-portal"]') === null,
         );
         const inertStates = siblings.map((element) => ({ element, inert: element.inert }));
         for (const sibling of siblings) {
@@ -4482,6 +4491,10 @@ function DesktopPatchViewBody({
     const [isCompactViewport, setIsCompactViewport] = useState(() => (
         typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639px)").matches
     ));
+    const modBarPreferences = useSyncExternalStore(
+        subscribeModBarPreferences,
+        getModBarPreferences,
+    );
     const [workspaceShell, setWorkspaceShell] = useState<WorkspaceShellState>(() => {
         try {
             return parseStoredShellState(sessionStorage.getItem(WORKSPACE_SHELL_STORAGE_KEY))
@@ -4592,8 +4605,8 @@ function DesktopPatchViewBody({
             // A private-browsing storage failure must not break the toggle.
         }
     }, [autoPreviewEnabled]);
-    // Developer builds only (perf-tuning.ts): the shell menu's Performance
-    // tuning page; ordinary production never reveals the row or loads it.
+    // Developer builds only (perf-tuning.ts): the shell menu's Developer
+    // settings page; ordinary production never reveals the row or loads it.
     const [perfTuningOpen, setPerfTuningOpen] = useState(false);
     const openPerfTuning = useCallback(() => setPerfTuningOpen(true), []);
     const closePerfTuning = useCallback(() => setPerfTuningOpen(false), []);
@@ -5576,6 +5589,7 @@ function DesktopPatchViewBody({
             onSelectedEffectChange={setSelectedRackEffectId}
             mobileGlobalModRail={isCompactViewport}
             mobileModRailPortalTarget={mobileModRailPortalTarget}
+            modBarPreferences={modBarPreferences}
             globalModSourceActivity={globalModSourceActivity}
             modRailAudition={modRailAudition}
             modRailVoiceSettings={modRailVoiceSettings}
@@ -5670,15 +5684,6 @@ function DesktopPatchViewBody({
                 </main>
             )}
 
-            {isCompactViewport ? (
-                <div
-                    ref={setMobileModRailPortalTarget}
-                    data-role="mobile-global-mod-rail-portal"
-                    className="mobile-global-mod-rail-portal"
-                    aria-hidden={false}
-                />
-            ) : null}
-
             {/* The one precision-HUD layer: every parameter control (cells
                 and knobs, compact AND desktop) portals its HUD here. */}
             <div
@@ -5688,12 +5693,27 @@ function DesktopPatchViewBody({
                 aria-hidden={false}
             />
 
-            {isCompactViewport && !synthView.msegEditor.isOpen ? (
-                <MobileWorkspaceTabs
-                    activeTab={mobileWorkspaceSection}
-                    onActivateTab={activateWorkspaceTab}
-                    onTapActiveTab={tapActiveWorkspaceTab}
-                />
+            {isCompactViewport ? (
+                <div
+                    data-role="mobile-bottom-dock"
+                    data-mod-bar-placement={modBarPreferences.placement}
+                    data-parked-visibility={modBarPreferences.parkedVisibility}
+                    className="mobile-bottom-dock"
+                >
+                    <div
+                        ref={setMobileModRailPortalTarget}
+                        data-role="mobile-global-mod-rail-portal"
+                        className="mobile-global-mod-rail-portal"
+                        aria-hidden={false}
+                    />
+                    {!synthView.msegEditor.isOpen ? (
+                        <MobileWorkspaceTabs
+                            activeTab={mobileWorkspaceSection}
+                            onActivateTab={activateWorkspaceTab}
+                            onTapActiveTab={tapActiveWorkspaceTab}
+                        />
+                    ) : null}
+                </div>
             ) : null}
 
             <div

@@ -100,8 +100,7 @@ import {
 } from "../shared/mod-source-touch-geometry";
 import {
     buildRailSilhouettePath,
-    MOBILE_MOD_RAIL_GEOMETRY,
-    MOBILE_MOD_RAIL_SCALE,
+    MOBILE_MOD_RAIL_BASE_GEOMETRY,
     normalizeRailTop,
     parseStoredRailDock,
     projectRailDefaultPlacement,
@@ -109,6 +108,7 @@ import {
     projectRailTop,
     railVerticalBounds,
     serializeRailDock,
+    scaleMobileModRailGeometry,
     settleRailEdge,
     snapRailTop,
     type RailDock,
@@ -117,6 +117,10 @@ import {
     type RailEdge,
     type RailVerticalBounds,
 } from "../shared/mod-rail-perimeter";
+import {
+    updateModBarPreferences,
+    type ModBarPreferences,
+} from "../shared/mod-bar-preferences";
 import { presentRouteWithCanonicalAmount, useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import {
     laneBaseKindForRackEndpoint,
@@ -194,6 +198,7 @@ type EffectsRackWorkspaceProps = {
     onSelectedEffectChange?: (effectId: EffectModuleId) => void;
     mobileGlobalModRail?: boolean;
     mobileModRailPortalTarget?: HTMLElement | null;
+    modBarPreferences?: ModBarPreferences;
     globalModSourceActivity?: number | null;
     modRailAudition?: ModRailAuditionBindings;
     modRailVoiceSettings?: ModRailVoiceSettings;
@@ -2083,6 +2088,10 @@ function MobileGlobalModRail({
     collapseSignal,
     autoPreviewEnabled,
     keyboardVisible,
+    preferences,
+    sourcePageIndex,
+    sourceIsArmed,
+    sourceTapMode,
     onStateChange,
     onDragSourceChange,
     onSourceDrop,
@@ -2094,6 +2103,8 @@ function MobileGlobalModRail({
     onNoteKeyUp,
     onToggleAutoPreview,
     onToggleKeyboard,
+    onSourceSelect,
+    onSourcePageChange,
     voiceSettings,
     onDwellNavigate,
     countPulseSerial = 0,
@@ -2108,6 +2119,10 @@ function MobileGlobalModRail({
     collapseSignal: number;
     autoPreviewEnabled: boolean;
     keyboardVisible: boolean;
+    preferences: ModBarPreferences;
+    sourcePageIndex: number;
+    sourceIsArmed: boolean;
+    sourceTapMode: "select-then-open" | "toggle-quick-source";
     onStateChange?: (state: GlobalModRailState) => void;
     onDragSourceChange: (source: SelectedSource | null) => void;
     onSourceDrop: (
@@ -2127,10 +2142,18 @@ function MobileGlobalModRail({
     onNoteKeyUp: () => void;
     onToggleAutoPreview: () => void;
     onToggleKeyboard: () => void;
+    onSourceSelect: (source: SelectedSource) => void;
+    onSourcePageChange: (pageIndex: number) => void;
     voiceSettings: ModRailVoiceSettings;
     onDwellNavigate: (dwellKey: string) => void;
     children: React.ReactNode;
 }) {
+    const railGeometry = useMemo(
+        () => scaleMobileModRailGeometry(MOBILE_MOD_RAIL_BASE_GEOMETRY, preferences.scale),
+        [preferences.scale],
+    );
+    const floating = preferences.placement !== "parked";
+    const preferenceEdge: RailEdge = preferences.placement === "floating-left" ? "left" : "right";
     const layerRef = useRef<HTMLDivElement | null>(null);
     const railRef = useRef<HTMLElement | null>(null);
     const tabRef = useRef<HTMLDivElement | null>(null);
@@ -2138,11 +2161,11 @@ function MobileGlobalModRail({
     const positionRef = useRef(0);
     const normalizedPositionRef = useRef<number | null>(null);
     const boundsRef = useRef<RailVerticalBounds>({
-        min: MOBILE_MOD_RAIL_GEOMETRY.safeGap,
-        max: MOBILE_MOD_RAIL_GEOMETRY.safeGap,
+        min: railGeometry.safeGap,
+        max: railGeometry.safeGap,
     });
     const layerWidthRef = useRef(0);
-    const edgeRef = useRef<RailEdge>(MOBILE_MOD_RAIL_DEFAULT_DOCK.edge);
+    const edgeRef = useRef<RailEdge>(preferenceEdge);
     const dockInitializedRef = useRef(false);
     const dragXRef = useRef(0);
     const settleXTimeoutRef = useRef<number | null>(null);
@@ -2157,11 +2180,11 @@ function MobileGlobalModRail({
         return () => clearUiTimeout(timeout);
     }, [countPulseSerial]);
     const drawerMetricsRef = useRef<RailDrawerMetrics>({
-        safeTop: MOBILE_MOD_RAIL_GEOMETRY.safeGap,
-        safeBottom: MOBILE_MOD_RAIL_GEOMETRY.safeGap,
-        collapsedHeight: MOBILE_MOD_RAIL_GEOMETRY.tabContentHeight
-            + (2 * MOBILE_MOD_RAIL_GEOMETRY.shoulder),
-        desiredHeight: MOBILE_MOD_RAIL_GEOMETRY.drawerFallbackHeight,
+        safeTop: railGeometry.safeGap,
+        safeBottom: railGeometry.safeGap,
+        collapsedHeight: railGeometry.tabContentHeight
+            + (2 * railGeometry.shoulder),
+        desiredHeight: railGeometry.drawerFallbackHeight,
     });
     const decelerationFrameRef = useRef<number | null>(null);
     const gestureRef = useRef<{
@@ -2178,17 +2201,19 @@ function MobileGlobalModRail({
         captureElement: HTMLButtonElement;
     } | null>(null);
     const [expanded, setExpanded] = useState(false);
-    const [top, setTop] = useState(MOBILE_MOD_RAIL_GEOMETRY.safeGap);
-    const [edge, setEdge] = useState<RailEdge>(MOBILE_MOD_RAIL_DEFAULT_DOCK.edge);
+    const [top, setTop] = useState(railGeometry.safeGap);
+    const [edge, setEdge] = useState<RailEdge>(preferenceEdge);
     const [dragX, setDragX] = useState(0);
     const [settlingX, setSettlingX] = useState(false);
     const [decelerating, setDecelerating] = useState(false);
     const [noteHeld, setNoteHeld] = useState(false);
     const [drawerPlacement, setDrawerPlacement] = useState<RailDrawerPlacement>({
         direction: "down",
-        extent: MOBILE_MOD_RAIL_GEOMETRY.drawerFallbackHeight,
+        extent: railGeometry.drawerFallbackHeight,
     });
     const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
+    const [parkedPageIndex, setParkedPageIndex] = useState(sourcePageIndex);
+    const previousPlacementRef = useRef(preferences.placement);
     const voicePopoverRef = useRef<HTMLDivElement | null>(null);
     const voiceToggleRef = useRef<HTMLButtonElement | null>(null);
     const silhouetteGradientId = `mobile-mod-rail-fill-${useId().replaceAll(":", "")}`;
@@ -2203,6 +2228,40 @@ function MobileGlobalModRail({
         onDuplicateHover,
         onTap: (source) => onSelectedSourceTap?.(source),
     });
+
+    const parkedSourceHandlers = useModSourceDrag({
+        onHoverTarget,
+        onDragSourceChange,
+        onSourceDrop,
+        onSourceDragChange,
+        onDwellNavigate,
+        getPairCreation,
+        onDuplicateHover,
+        onTap: (source, wasActiveSelection) => {
+            if (sourceTapMode === "toggle-quick-source") {
+                onSourceSelect(source);
+                onSelectedSourceTap?.(source);
+                return;
+            }
+            if (wasActiveSelection) {
+                onSelectedSourceTap?.(source);
+            } else {
+                onSourceSelect(source);
+            }
+        },
+    });
+
+    useEffect(() => {
+        setParkedPageIndex(selectedSource.sourceSlot - 1);
+    }, [selectedSource.sourceSlot]);
+
+    useEffect(() => {
+        if (!floating) {
+            return;
+        }
+        edgeRef.current = preferenceEdge;
+        setEdge(preferenceEdge);
+    }, [floating, preferenceEdge]);
 
     const applyDragX = useCallback((nextDragX: number) => {
         dragXRef.current = nextDragX;
@@ -2219,14 +2278,25 @@ function MobileGlobalModRail({
             return;
         }
         const previousEdge = surface.dataset.modRailEdge;
+        const previousPlacement = surface.dataset.modBarPlacement;
         const previousDockWidth = surface.style.getPropertyValue("--cosimo-rail-dock");
-        surface.dataset.modRailEdge = edge;
-        surface.style.setProperty("--cosimo-rail-dock", `${MOBILE_MOD_RAIL_GEOMETRY.width}px`);
+        surface.dataset.modBarPlacement = preferences.placement;
+        if (floating) {
+            surface.dataset.modRailEdge = edge;
+        } else {
+            delete surface.dataset.modRailEdge;
+        }
+        surface.style.setProperty("--cosimo-rail-dock", floating ? `${railGeometry.width}px` : "0px");
         return () => {
             if (previousEdge === undefined) {
                 delete surface.dataset.modRailEdge;
             } else {
                 surface.dataset.modRailEdge = previousEdge;
+            }
+            if (previousPlacement === undefined) {
+                delete surface.dataset.modBarPlacement;
+            } else {
+                surface.dataset.modBarPlacement = previousPlacement;
             }
             if (previousDockWidth) {
                 surface.style.setProperty("--cosimo-rail-dock", previousDockWidth);
@@ -2234,15 +2304,26 @@ function MobileGlobalModRail({
                 surface.style.removeProperty("--cosimo-rail-dock");
             }
         };
-    }, [edge]);
+    }, [edge, floating, preferences.placement, railGeometry.width]);
 
-    // The voice-settings popover belongs to the open drawer; whatever hides
-    // the drawer (collapse, mapping drag) takes the popover with it.
+    // Parked tools float independently. Moving an open Voice popover back to
+    // a floating edge reopens its drawer so the control and popover survive
+    // the placement change together.
     useEffect(() => {
-        if (!expanded || mappingActive) {
+        const previousPlacement = previousPlacementRef.current;
+        previousPlacementRef.current = preferences.placement;
+        if (mappingActive) {
             setVoiceSettingsOpen(false);
+            return;
         }
-    }, [expanded, mappingActive]);
+        if (floating && !expanded) {
+            if (previousPlacement === "parked" && voiceSettingsOpen) {
+                setExpanded(true);
+            } else {
+                setVoiceSettingsOpen(false);
+            }
+        }
+    }, [expanded, floating, mappingActive, preferences.placement, voiceSettingsOpen]);
 
     useEffect(() => {
         if (!voiceSettingsOpen) {
@@ -2250,8 +2331,17 @@ function MobileGlobalModRail({
         }
         const handlePointerDown = (event: PointerEvent) => {
             const eventPath = event.composedPath();
+            const preservesPresentation = eventPath.some((target) => (
+                target instanceof Element
+                && target.closest([
+                    '[data-role="perf-tuning-page"]',
+                    '[data-role="mobile-global-mod-rail-hide"]',
+                    '[data-role="mobile-global-mod-rail-restore"]',
+                ].join(",")) !== null
+            ));
             if (
-                (voicePopoverRef.current !== null && eventPath.includes(voicePopoverRef.current))
+                preservesPresentation
+                || (voicePopoverRef.current !== null && eventPath.includes(voicePopoverRef.current))
                 || (voiceToggleRef.current !== null && eventPath.includes(voiceToggleRef.current))
             ) {
                 return;
@@ -2263,6 +2353,9 @@ function MobileGlobalModRail({
     }, [voiceSettingsOpen]);
 
     const measureAndClamp = useCallback(() => {
+        if (!floating) {
+            return;
+        }
         const layer = layerRef.current;
         const rail = railRef.current;
         if (!layer || !rail || gestureRef.current !== null || decelerationFrameRef.current !== null) {
@@ -2290,15 +2383,15 @@ function MobileGlobalModRail({
             ? measuredTabsBounds
             : undefined;
         const presetBarBounds = presetBar?.getBoundingClientRect();
-        const safeTopInset = MOBILE_MOD_RAIL_GEOMETRY.safeGap
+        const safeTopInset = railGeometry.safeGap
             + (Number.parseFloat(layerStyle.paddingTop) || 0);
         const safeTop = presetBarBounds
             ? Math.max(
                 safeTopInset,
-                presetBarBounds.bottom - layerBounds.top + MOBILE_MOD_RAIL_GEOMETRY.safeGap,
+                presetBarBounds.bottom - layerBounds.top + railGeometry.safeGap,
             )
             : safeTopInset;
-        const safeBottom = MOBILE_MOD_RAIL_GEOMETRY.safeGap
+        const safeBottom = railGeometry.safeGap
             + (Number.parseFloat(layerStyle.paddingBottom) || 0);
         const chromeTop = Math.min(
             keyboardBounds ? keyboardBounds.top : Number.POSITIVE_INFINITY,
@@ -2309,9 +2402,9 @@ function MobileGlobalModRail({
             : layerBounds.height;
         const railStyle = getComputedStyle(rail);
         const shoulderHeight = Number.parseFloat(railStyle.getPropertyValue("--rail-shoulder"))
-            || MOBILE_MOD_RAIL_GEOMETRY.shoulder;
+            || railGeometry.shoulder;
         const tabHeight = tabRef.current?.getBoundingClientRect().height
-            || MOBILE_MOD_RAIL_GEOMETRY.tabContentHeight;
+            || railGeometry.tabContentHeight;
         const railHeight = tabHeight + (2 * shoulderHeight);
         const nextBounds = railVerticalBounds(
             { height: availableBottom, insetTop: safeTop, insetBottom: safeBottom },
@@ -2319,7 +2412,7 @@ function MobileGlobalModRail({
         );
         boundsRef.current = nextBounds;
         const drawerHeight = drawerRef.current?.scrollHeight
-            || MOBILE_MOD_RAIL_GEOMETRY.drawerFallbackHeight;
+            || railGeometry.drawerFallbackHeight;
         const nextDrawerMetrics = {
             safeTop,
             safeBottom: availableBottom - safeBottom,
@@ -2337,8 +2430,8 @@ function MobileGlobalModRail({
                 storedDock = null;
             }
             const dock = storedDock ?? MOBILE_MOD_RAIL_DEFAULT_DOCK;
-            edgeRef.current = dock.edge;
-            setEdge(dock.edge);
+            edgeRef.current = preferenceEdge;
+            setEdge(preferenceEdge);
             normalizedPositionRef.current = storedDock
                 ? dock.normalizedY
                 : projectRailDefaultPlacement(
@@ -2352,7 +2445,7 @@ function MobileGlobalModRail({
         positionRef.current = nextTop;
         setTop(nextTop);
         updateDrawerPlacement(nextTop);
-    }, [updateDrawerPlacement]);
+    }, [floating, preferenceEdge, railGeometry, updateDrawerPlacement]);
 
     useLayoutEffect(() => {
         measureAndClamp();
@@ -2395,13 +2488,13 @@ function MobileGlobalModRail({
 
     useEffect(() => {
         onStateChange?.({
-            expanded,
+            expanded: floating && expanded,
             selectedSource: {
                 sourceKind: selectedSource.sourceKind,
                 sourceSlot: selectedSource.sourceSlot,
             },
         });
-    }, [expanded, onStateChange, selectedSource.sourceKind, selectedSource.sourceSlot]);
+    }, [expanded, floating, onStateChange, selectedSource.sourceKind, selectedSource.sourceSlot]);
 
     useEffect(() => {
         // A source deep-link navigates into that source's full editor; collapse
@@ -2463,7 +2556,7 @@ function MobileGlobalModRail({
         const { top: settledTop } = snapRailTop(
             clampedTop,
             bounds,
-            MOBILE_MOD_RAIL_GEOMETRY.snapDistance,
+            railGeometry.snapDistance,
         );
         if (settledTop !== clampedTop) {
             triggerLightHaptic();
@@ -2472,7 +2565,7 @@ function MobileGlobalModRail({
         setTop(settledTop);
         updateDrawerPlacement(settledTop);
         persistRailDock(settledTop);
-    }, [persistRailDock, updateDrawerPlacement]);
+    }, [persistRailDock, railGeometry.snapDistance, updateDrawerPlacement]);
 
     const stopRailDeceleration = useCallback(() => {
         const frameID = decelerationFrameRef.current;
@@ -2596,9 +2689,12 @@ function MobileGlobalModRail({
         const currentEdge = edgeRef.current;
         const nextEdge = settleRailEdge(gesture.lastClientX, layerWidth, currentEdge);
         if (nextEdge !== currentEdge) {
-            const edgeSpan = Math.max(0, layerWidth - MOBILE_MOD_RAIL_GEOMETRY.width);
+            const edgeSpan = Math.max(0, layerWidth - railGeometry.width);
             edgeRef.current = nextEdge;
             setEdge(nextEdge);
+            updateModBarPreferences({
+                placement: nextEdge === "left" ? "floating-left" : "floating-right",
+            });
             applyDragX(nextEdge === "left"
                 ? dragXRef.current + edgeSpan
                 : dragXRef.current - edgeSpan);
@@ -2612,7 +2708,7 @@ function MobileGlobalModRail({
         ) {
             settleRailPosition(positionRef.current);
         }
-    }, [applyDragX, settleDragXHome, settleRailPosition, startRailDeceleration, stopRailDeceleration, updateDrawerPlacement]);
+    }, [applyDragX, railGeometry.width, settleDragXHome, settleRailPosition, startRailDeceleration, stopRailDeceleration, updateDrawerPlacement]);
 
     const releaseNoteKey = useCallback((pointerId: number) => {
         if (noteKeyPointerRef.current !== pointerId) {
@@ -2691,13 +2787,13 @@ function MobileGlobalModRail({
         stepSeconds: GLIDE_TIME_STEP_SECONDS,
         currentSeconds: voiceSettings.glideTime.value,
     });
-    const silhouetteHeight = MOBILE_MOD_RAIL_GEOMETRY.tabContentHeight
-        + (2 * MOBILE_MOD_RAIL_GEOMETRY.shoulder)
+    const silhouetteHeight = railGeometry.tabContentHeight
+        + (2 * railGeometry.shoulder)
         + (drawerOpen ? drawerPlacement.extent : 0);
     const silhouettePath = buildRailSilhouettePath({
-        width: MOBILE_MOD_RAIL_GEOMETRY.width,
-        shoulder: MOBILE_MOD_RAIL_GEOMETRY.shoulder,
-        corner: MOBILE_MOD_RAIL_GEOMETRY.corner,
+        width: railGeometry.width,
+        shoulder: railGeometry.shoulder,
+        corner: railGeometry.corner,
         height: silhouetteHeight,
     }, edge);
     const upwardDrawerOffset = drawerOpen && drawerPlacement.direction === "up" ? -drawerPlacement.extent : 0;
@@ -2723,12 +2819,331 @@ function MobileGlobalModRail({
         };
     })();
 
+    const parkedPageCount = RACK_MODULATION_SOURCE_PAGES.length + 1;
+    const parkedToolPageIndex = RACK_MODULATION_SOURCE_PAGES.length;
+    const changeParkedPage = (direction: -1 | 1) => {
+        const nextPageIndex = (parkedPageIndex + parkedPageCount + direction) % parkedPageCount;
+        setParkedPageIndex(nextPageIndex);
+        if (nextPageIndex < RACK_MODULATION_SOURCE_PAGES.length) {
+            onSourcePageChange(nextPageIndex);
+        }
+    };
+    const parkedSources = parkedPageIndex < RACK_MODULATION_SOURCE_PAGES.length
+        ? RACK_MODULATION_SOURCE_PAGES[parkedPageIndex] ?? []
+        : [];
+
+    const noteButton = (
+        <button
+            type="button"
+            data-role="mobile-global-mod-rail-note"
+            className="mobile-global-mod-rail-module mobile-global-mod-rail-note"
+            data-note-held={noteHeld}
+            aria-label="Play note"
+            onPointerDown={(event) => {
+                if (event.pointerType === "mouse" && event.button !== 0) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                try {
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                } catch {
+                    // Window-level termination still owns unsupported pointers.
+                }
+                noteKeyPointerRef.current = event.pointerId;
+                setNoteHeld(true);
+                onNoteKeyDown();
+            }}
+            onPointerUp={(event) => releaseNoteKey(event.pointerId)}
+            onPointerCancel={(event) => releaseNoteKey(event.pointerId)}
+            onLostPointerCapture={(event) => releaseNoteKey(event.pointerId)}
+            onKeyDown={(event) => {
+                if ((event.key !== "Enter" && event.key !== " ") || event.repeat) {
+                    return;
+                }
+                event.preventDefault();
+                noteKeyPointerRef.current = -1;
+                setNoteHeld(true);
+                onNoteKeyDown();
+            }}
+            onKeyUp={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") {
+                    return;
+                }
+                event.preventDefault();
+                releaseNoteKey(-1);
+            }}
+        >
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="9" cy="17" r="2.8" fill="currentColor" />
+                <path d="M11.8 17V5.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                <path d="M11.8 5.5c3 1 4.6 2.6 4.9 5.4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+            {autoPreviewEnabled ? (
+                <span
+                    data-role="mobile-global-mod-rail-note-dot"
+                    className="mobile-global-mod-rail-note-dot"
+                    aria-hidden="true"
+                />
+            ) : null}
+        </button>
+    );
+
+    const auditionToolButtons = (
+        <>
+            <button
+                type="button"
+                data-role="mobile-global-mod-rail-keyboard-toggle"
+                className="mobile-global-mod-rail-toggle"
+                aria-pressed={keyboardVisible}
+                aria-label="Toggle on-screen keyboard"
+                onClick={onToggleKeyboard}
+            >
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="8" width="18" height="9.5" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
+                    <path d="M9 8v6M15 8v6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                </svg>
+            </button>
+            <button
+                type="button"
+                data-role="mobile-global-mod-rail-auto-toggle"
+                className="mobile-global-mod-rail-toggle is-auto"
+                aria-pressed={autoPreviewEnabled}
+                aria-label="Toggle auto-preview"
+                onClick={onToggleAutoPreview}
+            >
+                <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                    <path d="M19.5 3.5v3.4h-3.4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            </button>
+            <button
+                ref={voiceToggleRef}
+                type="button"
+                data-role="mobile-global-mod-rail-voice-toggle"
+                className="mobile-global-mod-rail-toggle is-voice"
+                aria-pressed={voiceSettingsOpen}
+                aria-haspopup="dialog"
+                aria-label={`Voice settings (${activePlayMode.label})`}
+                onClick={() => setVoiceSettingsOpen((current) => !current)}
+            >
+                {activePlayMode.label}
+            </button>
+        </>
+    );
+
+    const voicePopover = voiceSettingsOpen ? (
+        <div
+            ref={voicePopoverRef}
+            data-role="mobile-global-mod-rail-voice-popover"
+            className="mobile-global-mod-rail-voice-popover"
+            role="dialog"
+            aria-label="Voice settings"
+        >
+            <div className="mobile-global-mod-rail-voice-modes" role="radiogroup" aria-label="Play mode">
+                {VOICE_MODE_OPTIONS.map((option) => (
+                    <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={option.value === voiceSettings.playMode.value}
+                        className="mobile-global-mod-rail-voice-mode"
+                        onClick={() => voiceSettings.playMode.commitValue(option.value)}
+                    >
+                        {option.label}
+                    </button>
+                ))}
+            </div>
+            <div
+                className="mobile-global-mod-rail-voice-glide"
+                data-disabled={glideDisabled}
+                inert={glideDisabled}
+            >
+                <PrecisionNumberField
+                    ariaLabel="Glide time"
+                    binding={voiceSettings.glideTime}
+                    entrySpec={glideEntrySpec}
+                    suffix={glideEntrySpec.defaultUnit}
+                    leadingLabel="Glide"
+                    variant="inlineDark"
+                    dataRole="mobile-global-mod-rail-glide-field"
+                    width={64 * preferences.scale}
+                    height={22 * preferences.scale}
+                />
+            </div>
+        </div>
+    ) : null;
+
+    if (!floating) {
+        const parkedHidden = preferences.parkedVisibility === "hidden";
+        return (
+            <div
+                ref={layerRef}
+                data-role="mobile-global-mod-rail-layer"
+                data-placement="parked"
+                data-parked-visibility={preferences.parkedVisibility}
+                className="mobile-global-mod-rail-layer"
+                style={{
+                    "--rail-scale": preferences.scale,
+                    "--rail-outline": `${railGeometry.outline}px`,
+                } as CSSProperties}
+            >
+                <aside
+                    ref={railRef}
+                    data-role="mobile-global-mod-rail"
+                    data-placement="parked"
+                    data-expanded="false"
+                    data-page-index={parkedPageIndex}
+                    data-page-kind={parkedPageIndex === parkedToolPageIndex ? "tools" : "sources"}
+                    data-mapping-active={mappingActive}
+                    aria-hidden={parkedHidden}
+                    inert={parkedHidden}
+                    className="mobile-global-mod-rail is-parked"
+                    style={{
+                        "--source-color": selectedSource.accent,
+                        "--editor-accent": accent,
+                        "--rail-scale": preferences.scale,
+                        "--rail-outline": `${railGeometry.outline}px`,
+                    } as CSSProperties}
+                    aria-label="Global modulation bar"
+                >
+                    <div
+                        ref={tabRef}
+                        data-role="mobile-global-mod-rail-tab"
+                        className="mobile-global-mod-rail-parked-row"
+                    >
+                        <button
+                            type="button"
+                            data-role="mobile-global-mod-rail-selected"
+                            className="mobile-global-mod-rail-module mobile-global-mod-rail-selected"
+                            aria-label={`${selectedSource.label} selected`}
+                            {...selectedSourceHandlers(selectedSource, true)}
+                        >
+                            <ModSourceArt source={selectedSource} />
+                            {clampedActivity !== null ? (
+                                <span
+                                    className="mobile-global-mod-rail-activity"
+                                    aria-label={`${selectedSource.label} activity`}
+                                    style={{ "--source-activity": clampedActivity } as CSSProperties}
+                                ><span /></span>
+                            ) : null}
+                            <span
+                                data-role="mobile-global-mod-rail-route-count"
+                                data-count-pulsing={countPulsing || undefined}
+                                className="mobile-global-mod-rail-route-count"
+                                aria-label={`${routeCount} modulation routes`}
+                            >{routeCount}</span>
+                        </button>
+                        <button
+                            type="button"
+                            data-role="mobile-global-mod-rail-parked-previous"
+                            className="mobile-global-mod-rail-parked-paddle"
+                            aria-label="Previous Mod bar group"
+                            onClick={() => changeParkedPage(-1)}
+                        >
+                            <span className="rack-mod-chevron" data-direction="left" aria-hidden="true" />
+                        </button>
+                        <div
+                            data-role="mobile-global-mod-rail-parked-page"
+                            className="mobile-global-mod-rail-parked-page"
+                            aria-label={parkedPageIndex === parkedToolPageIndex
+                                ? "Mod bar tools"
+                                : `Modulation source group ${parkedPageIndex + 1}`}
+                        >
+                            {parkedPageIndex === parkedToolPageIndex ? (
+                                <div className="mobile-global-mod-rail-parked-tools" role="group" aria-label="Audition controls">
+                                    {noteButton}
+                                    {auditionToolButtons}
+                                </div>
+                            ) : (
+                                <div className="mobile-global-mod-rail-parked-sources" role="group" aria-label="Rack modulation sources">
+                                    {parkedSources.map((source) => {
+                                        const isSelected = sourceIsArmed
+                                            && source.sourceKind === selectedSource.sourceKind
+                                            && source.sourceSlot === selectedSource.sourceSlot;
+                                        return (
+                                            <button
+                                                key={`${source.sourceKind}-${source.sourceSlot}`}
+                                                type="button"
+                                                data-role={`rack-mod-source-${source.sourceKind}-${source.sourceSlot}`}
+                                                aria-label={source.label}
+                                                aria-pressed={isSelected}
+                                                className={`rack-mod-source${isSelected ? " is-selected" : ""}`}
+                                                style={{ "--source-color": source.accent } as CSSProperties}
+                                                {...parkedSourceHandlers(source, isSelected)}
+                                            >
+                                                <ModSourceArt source={source} />
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                        <button
+                            type="button"
+                            data-role="mobile-global-mod-rail-parked-next"
+                            className="mobile-global-mod-rail-parked-paddle"
+                            aria-label="Next Mod bar group"
+                            onClick={() => changeParkedPage(1)}
+                        >
+                            <span className="rack-mod-chevron" data-direction="right" aria-hidden="true" />
+                        </button>
+                        <button
+                            type="button"
+                            data-role="mobile-global-mod-rail-hide"
+                            className="mobile-global-mod-rail-parked-hide"
+                            aria-label="Hide parked Mod bar"
+                            onClick={() => updateModBarPreferences({ parkedVisibility: "hidden" })}
+                        >
+                            <span className="rack-mod-chevron" data-direction="down" aria-hidden="true" />
+                        </button>
+                    </div>
+                    {voicePopover}
+                </aside>
+                {parkedHidden ? (
+                    <button
+                        type="button"
+                        data-role="mobile-global-mod-rail-restore"
+                        className="mobile-global-mod-rail-restore"
+                        aria-label="Restore parked Mod bar"
+                        onClick={() => updateModBarPreferences({ parkedVisibility: "visible" })}
+                    >
+                        <span className="rack-mod-chevron" data-direction="up" aria-hidden="true" />
+                    </button>
+                ) : null}
+                {sourceDrag && ghostLayerPoint ? (
+                    <div
+                        data-role="mobile-global-mod-source-ghost"
+                        data-target-captured={sourceDrag.targetCaptured}
+                        className="mobile-global-mod-source-ghost"
+                        style={{
+                            left: ghostLayerPoint.left,
+                            top: ghostLayerPoint.top,
+                            "--source-color": findRackModulationSource(
+                                sourceDrag.source.sourceKind,
+                                sourceDrag.source.sourceSlot,
+                            ).accent,
+                        } as CSSProperties}
+                        aria-hidden="true"
+                    >
+                        <ModSourceArt
+                            source={findRackModulationSource(
+                                sourceDrag.source.sourceKind,
+                                sourceDrag.source.sourceSlot,
+                            )}
+                        />
+                    </div>
+                ) : null}
+            </div>
+        );
+    }
+
     return (
         <div
             ref={layerRef}
             data-role="mobile-global-mod-rail-layer"
             className="mobile-global-mod-rail-layer"
-            style={{ "--rail-scale": MOBILE_MOD_RAIL_SCALE } as CSSProperties}
+            style={{ "--rail-scale": preferences.scale } as CSSProperties}
         >
             <aside
                 ref={railRef}
@@ -2745,7 +3160,8 @@ function MobileGlobalModRail({
                     transform: `translate(${dragX}px, ${upwardDrawerOffset}px)`,
                     "--source-color": selectedSource.accent,
                     "--editor-accent": accent,
-                    "--rail-scale": MOBILE_MOD_RAIL_SCALE,
+                    "--rail-scale": preferences.scale,
+                    "--rail-outline": `${railGeometry.outline}px`,
                     "--rail-drawer-size": `${drawerPlacement.extent}px`,
                 } as CSSProperties}
                 aria-label="Global modulation bar"
@@ -2759,7 +3175,7 @@ function MobileGlobalModRail({
                 <svg
                     data-role="mobile-global-mod-rail-silhouette"
                     className="mobile-global-mod-rail-silhouette"
-                    viewBox={`0 0 ${MOBILE_MOD_RAIL_GEOMETRY.width} ${silhouetteHeight}`}
+                    viewBox={`0 0 ${railGeometry.width} ${silhouetteHeight}`}
                     preserveAspectRatio="none"
                     focusable="false"
                     aria-hidden="true"
@@ -2850,8 +3266,8 @@ function MobileGlobalModRail({
                                 gesture.lastClientX = event.clientX;
                                 const deltaY = event.clientY - gesture.startClientY;
                                 const deltaX = event.clientX - gesture.startClientX;
-                                gesture.moved ||= Math.abs(deltaY) > MOBILE_MOD_RAIL_GEOMETRY.dragThreshold
-                                    || Math.abs(deltaX) > MOBILE_MOD_RAIL_GEOMETRY.dragThreshold;
+                                gesture.moved ||= Math.abs(deltaY) > railGeometry.dragThreshold
+                                    || Math.abs(deltaX) > railGeometry.dragThreshold;
                                 if (!gesture.moved) {
                                     return;
                                 }
@@ -2865,7 +3281,7 @@ function MobileGlobalModRail({
                                 // release settles it against the nearest edge.
                                 const edgeSpan = Math.max(
                                     0,
-                                    layerWidthRef.current - MOBILE_MOD_RAIL_GEOMETRY.width,
+                                    layerWidthRef.current - railGeometry.width,
                                 );
                                 const dragRange: readonly [number, number] = gesture.startEdge === "right"
                                     ? [-edgeSpan, 0]
@@ -3047,8 +3463,8 @@ function MobileGlobalModRail({
                                 leadingLabel="Glide"
                                 variant="inlineDark"
                                 dataRole="mobile-global-mod-rail-glide-field"
-                                width={64 * MOBILE_MOD_RAIL_SCALE}
-                                height={22 * MOBILE_MOD_RAIL_SCALE}
+                                width={64 * preferences.scale}
+                                height={22 * preferences.scale}
                             />
                         </div>
                     </div>
@@ -3525,6 +3941,7 @@ export function EffectsRackWorkspace({
     onSelectedEffectChange,
     mobileGlobalModRail = false,
     mobileModRailPortalTarget = null,
+    modBarPreferences,
     globalModSourceActivity = null,
     modRailAudition,
     modRailVoiceSettings,
@@ -3536,6 +3953,9 @@ export function EffectsRackWorkspace({
     }
     if (mobileGlobalModRail && !modRailVoiceSettings) {
         throw new Error("The mobile Mod rail requires modRailVoiceSettings bindings.");
+    }
+    if (mobileGlobalModRail && !modBarPreferences) {
+        throw new Error("The mobile Mod rail requires application preferences.");
     }
     const {
         rackState,
@@ -4943,7 +5363,7 @@ export function EffectsRackWorkspace({
                 </section>
                 )}
             </div>
-            {mobileGlobalModRail && mobileModRailPortalTarget && modRailAudition && modRailVoiceSettings ? createPortal(
+            {mobileGlobalModRail && mobileModRailPortalTarget && modRailAudition && modRailVoiceSettings && modBarPreferences ? createPortal(
                 <MobileGlobalModRail
                     selectedSource={activeSource}
                     routeCount={routes.length}
@@ -4953,6 +5373,10 @@ export function EffectsRackWorkspace({
                     collapseSignal={railCollapseSignal}
                     autoPreviewEnabled={modRailAudition.autoPreviewEnabled}
                     keyboardVisible={modRailAudition.keyboardVisible}
+                    preferences={modBarPreferences}
+                    sourcePageIndex={sourcePageIndex}
+                    sourceIsArmed={sourceIsArmed}
+                    sourceTapMode={modSourceTapMode}
                     onStateChange={onGlobalModRailStateChange}
                     onDragSourceChange={setDragSource}
                     onSourceDrop={dropSource}
@@ -4969,6 +5393,8 @@ export function EffectsRackWorkspace({
                     onNoteKeyUp={modRailAudition.onNoteKeyUp}
                     onToggleAutoPreview={modRailAudition.onToggleAutoPreview}
                     onToggleKeyboard={modRailAudition.onToggleKeyboard}
+                    onSourceSelect={selectSource}
+                    onSourcePageChange={changeSourcePage}
                     voiceSettings={modRailVoiceSettings}
                     onDwellNavigate={handleDwellNavigate}
                 >

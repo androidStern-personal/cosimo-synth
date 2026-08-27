@@ -12,7 +12,7 @@ const sitesBundlePath = path.join(generatedDirectory, "sites-app.js");
 const ordinaryModuleUrl = "/build/developer-settings-generated/ordinary-app.js";
 const sitesModuleUrl = "/build/developer-settings-generated/sites-app.js";
 const expectedCopiedSettings = [
-    "Cosimo Performance tuning",
+    "Cosimo Developer settings",
     "",
     "[Auto-preview algorithm]",
     'algorithm: "paced"',
@@ -27,6 +27,11 @@ const expectedCopiedSettings = [
     "drag.gainMin: 1.75",
     "drag.gainMax: 5.25",
     "drag.referenceTravelPx: 444",
+    "",
+    "[Mod bar]",
+    "modBar.scale: 1.22",
+    'modBar.placement: "parked"',
+    'modBar.parkedVisibility: "visible"',
 ].join("\n");
 
 async function openPhoneBundle(compiledModuleUrl, { clipboard = false } = {}) {
@@ -34,6 +39,9 @@ async function openPhoneBundle(compiledModuleUrl, { clipboard = false } = {}) {
         compiledModuleUrl,
         beforeGoto: async (page) => {
             await page.setViewportSize(PHONE_VIEWPORT);
+            await page.addInitScript(() => {
+                localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+            });
             if (clipboard) {
                 await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
             }
@@ -78,13 +86,14 @@ test("generated ordinary and Codex Sites builds gate the complete developer sett
         const presetBar = await openPresetActions(sitesPage);
         const tuningRow = presetBar.locator('[data-action="perf-tuning"]');
         assert.equal(await tuningRow.isVisible(), true);
+        assert.equal((await tuningRow.textContent())?.trim(), "Developer settings");
         await tuningRow.click();
 
         const tuningPage = sitesPage.locator('[data-role="perf-tuning-page"]');
         await tuningPage.waitFor({ state: "visible" });
         assert.deepEqual(
             await tuningPage.locator("section h3").allTextContents(),
-            ["Auto-preview algorithm", "Mod drag feel"],
+            ["Auto-preview algorithm", "Mod drag feel", "Mod bar"],
         );
         assert.deepEqual(
             await tuningPage.locator("[data-perf-tuning-key]").evaluateAll((controls) => (
@@ -100,7 +109,14 @@ test("generated ordinary and Codex Sites builds gate the complete developer sett
                 "drag.gainMin",
                 "drag.gainMax",
                 "drag.referenceTravelPx",
+                "modBar.scale",
             ],
+        );
+        assert.deepEqual(
+            await tuningPage.locator("[data-mod-bar-placement]").evaluateAll((controls) => (
+                controls.map((control) => control.getAttribute("data-mod-bar-placement"))
+            )),
+            ["floating-left", "floating-right", "parked"],
         );
 
         await tuningPage.locator('[data-perf-tuning-algorithm="paced"]').click();
@@ -113,6 +129,8 @@ test("generated ordinary and Codex Sites builds gate the complete developer sett
         await tuningPage.locator('[data-perf-tuning-key="drag.gainMin"]').fill("1.75");
         await tuningPage.locator('[data-perf-tuning-key="drag.gainMax"]').fill("5.25");
         await tuningPage.locator('[data-perf-tuning-key="drag.referenceTravelPx"]').fill("444");
+        await tuningPage.locator('[data-perf-tuning-key="modBar.scale"]').fill("1.22");
+        await tuningPage.locator('[data-mod-bar-placement="parked"]').click();
 
         const copyButton = tuningPage.locator('[data-action="copy-perf-tuning-settings"]');
         assert.equal(await copyButton.count(), 1);
@@ -170,7 +188,7 @@ test("generated ordinary and Codex Sites builds gate the complete developer sett
             "Copy failed. Check clipboard permission and try again.",
         );
 
-        await tuningPage.getByRole("button", { name: "Close performance tuning" }).click();
+        await tuningPage.getByRole("button", { name: "Close developer settings" }).click();
         await tuningPage.waitFor({ state: "detached" });
         await presetBar.locator('[data-action="toggle-shell-menu"]').waitFor({ state: "visible" });
     } finally {

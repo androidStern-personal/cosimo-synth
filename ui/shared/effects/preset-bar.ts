@@ -860,7 +860,7 @@ const PRESET_BAR_HTML = /* html */ `
     <button class="shell-menu-row" role="menuitem" data-action="copy">Copy preset JSON</button>
     <button class="shell-menu-row" role="menuitem" data-action="paste">Paste preset JSON</button>
     <button class="shell-menu-row" role="menuitem" data-action="share" data-el="menu-share" disabled>Share sound link</button>
-    <button class="shell-menu-row" role="menuitem" data-action="perf-tuning" data-el="menu-perf-tuning" hidden>Performance tuning</button>
+    <button class="shell-menu-row" role="menuitem" data-action="perf-tuning" data-el="menu-perf-tuning" hidden>Developer settings</button>
   </div>
 
   <div class="flyout" data-el="flyout">
@@ -1286,7 +1286,7 @@ class PresetBar extends HTMLElement {
         (this._els["shell-back"] as HTMLButtonElement).disabled = !available;
     }
 
-    /** Developer builds only: reveals the shell menu's Performance tuning row. */
+    /** Developer builds only: reveals the shell menu's Developer settings row. */
     set perfTuningAvailable(available: boolean) {
         this._els["menu-perf-tuning"].toggleAttribute("hidden", !available);
     }

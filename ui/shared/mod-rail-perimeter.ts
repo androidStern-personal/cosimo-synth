@@ -75,7 +75,8 @@ export const MOBILE_MOD_RAIL_BASE_GEOMETRY: MobileModRailGeometry = {
     ghostArt: 36,
 };
 
-function scaleMobileModRailGeometry(
+/** Derive the complete floating-rail geometry from one coherent coefficient. */
+export function scaleMobileModRailGeometry(
     base: MobileModRailGeometry,
     scale: number,
 ): MobileModRailGeometry {

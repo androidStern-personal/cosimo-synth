@@ -10,6 +10,10 @@ async function loadPerimeterModule() {
     return await loadUIModule(repoRoot, "ui/shared/mod-rail-perimeter.ts");
 }
 
+async function loadPreferencesModule() {
+    return await loadUIModule(repoRoot, "ui/shared/mod-bar-preferences.ts");
+}
+
 test("T42 scales every measured Mod rail geometry value through one 1.10 contract", async () => {
     const {
         MOBILE_MOD_RAIL_BASE_GEOMETRY,
@@ -36,6 +40,63 @@ test("T42 scales every measured Mod rail geometry value through one 1.10 contrac
         + (2 * MOBILE_MOD_RAIL_GEOMETRY.shoulder);
     assert.equal(beforeCollapsedHeight, 152);
     assert.ok(Math.abs(afterCollapsedHeight - 167.2) <= 1e-12);
+});
+
+test("T60 derives every floating geometry field from any live coefficient", async () => {
+    const {
+        MOBILE_MOD_RAIL_BASE_GEOMETRY,
+        scaleMobileModRailGeometry,
+    } = await loadPerimeterModule();
+
+    for (const scale of [0.85, 1.1, 1.3]) {
+        const geometry = scaleMobileModRailGeometry(MOBILE_MOD_RAIL_BASE_GEOMETRY, scale);
+        assert.deepEqual(
+            Object.keys(geometry).sort(),
+            Object.keys(MOBILE_MOD_RAIL_BASE_GEOMETRY).sort(),
+        );
+        for (const [name, baseValue] of Object.entries(MOBILE_MOD_RAIL_BASE_GEOMETRY)) {
+            assert.ok(
+                Math.abs((geometry[name] / baseValue) - scale) <= 1e-12,
+                `${name} must follow ${scale}: ${baseValue} -> ${geometry[name]}`,
+            );
+        }
+    }
+});
+
+test("T60 application preferences round-trip three placements, scale bounds, and parked visibility", async () => {
+    const {
+        MOD_BAR_MAX_SCALE,
+        MOD_BAR_MIN_SCALE,
+        MOD_BAR_PREFERENCES_STORAGE_KEY,
+        parseStoredModBarPreferences,
+        serializeModBarPreferences,
+    } = await loadPreferencesModule();
+
+    for (const placement of ["floating-left", "floating-right", "parked"]) {
+        const preferences = { scale: 1.17, placement, parkedVisibility: "hidden" };
+        assert.deepEqual(
+            parseStoredModBarPreferences(serializeModBarPreferences(preferences)),
+            preferences,
+        );
+    }
+
+    assert.equal(parseStoredModBarPreferences(null), null);
+    assert.equal(parseStoredModBarPreferences("not json"), null);
+    assert.equal(parseStoredModBarPreferences("[]"), null);
+    assert.deepEqual(
+        parseStoredModBarPreferences(JSON.stringify({
+            scale: 99,
+            placement: "automatic",
+            parkedVisibility: "maybe",
+        })),
+        { scale: MOD_BAR_MAX_SCALE, placement: "floating-right", parkedVisibility: "visible" },
+    );
+    assert.deepEqual(
+        parseStoredModBarPreferences(JSON.stringify({ scale: -99, placement: "parked" })),
+        { scale: MOD_BAR_MIN_SCALE, placement: "parked", parkedVisibility: "visible" },
+    );
+    assert.match(MOD_BAR_PREFERENCES_STORAGE_KEY, /preferences/u);
+    assert.doesNotMatch(MOD_BAR_PREFERENCES_STORAGE_KEY, /preset|patch|sound/u);
 });
 
 test("vertical bounds clamp to the keep-out insets and never invert", async () => {

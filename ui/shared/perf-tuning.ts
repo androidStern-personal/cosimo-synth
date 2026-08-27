@@ -12,6 +12,7 @@ import {
     setModSourceTouchTuning,
     type ModSourceTouchTuning,
 } from "./mod-source-touch-geometry";
+import type { ModBarPreferences } from "./mod-bar-preferences";
 
 /**
  * Compile-time developer-surface gate. Vite dev serves import.meta.env.DEV ===
@@ -71,11 +72,14 @@ function formatExportSection(
 }
 
 /**
- * Formats every current Performance tuning value in deterministic source-field
- * order. The exhaustive `satisfies` projections make additions to either
- * tuning section fail type-checking until the export contract is updated.
+ * Formats every current Developer setting in deterministic source-field order.
+ * The exhaustive `satisfies` projections make additions to the performance or
+ * Mod-bar records fail type-checking until the export contract is updated.
  */
-export function formatPerfTuningSettings(current: PerfTuningState): string {
+export function formatPerfTuningSettings(
+    current: PerfTuningState,
+    modBar: ModBarPreferences,
+): string {
     const previewValues = {
         algorithm: current.algorithm,
         settleMs: current.settleMs,
@@ -90,13 +94,20 @@ export function formatPerfTuningSettings(current: PerfTuningState): string {
         gainMax: current.drag.gainMax,
         referenceTravelPx: current.drag.referenceTravelPx,
     } satisfies ModSourceTouchTuning;
+    const modBarValues = {
+        scale: modBar.scale,
+        placement: modBar.placement,
+        parkedVisibility: modBar.parkedVisibility,
+    } satisfies ModBarPreferences;
 
     return [
-        "Cosimo Performance tuning",
+        "Cosimo Developer settings",
         "",
         ...formatExportSection("Auto-preview algorithm", "", previewValues),
         "",
         ...formatExportSection("Mod drag feel", "drag.", dragValues),
+        "",
+        ...formatExportSection("Mod bar", "modBar.", modBarValues),
     ].join("\n");
 }
 

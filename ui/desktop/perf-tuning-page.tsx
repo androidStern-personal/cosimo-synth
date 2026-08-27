@@ -1,9 +1,7 @@
 /**
- * The developer-build Performance tuning page (preset bar → shell menu →
- * Performance tuning). Two live tuning surfaces: which auto-preview algorithm
- * the running synth uses (with its numbers), and the mod-source drag outrun
- * feel. Values persist in localStorage via the perf-tuning store; ordinary
- * production builds never load this module.
+ * The developer settings page (preset bar → shell menu → Developer settings).
+ * Performance experiments remain developer-only; T60's Mod-bar preferences
+ * persist through their application-level store and affect every UI build.
  */
 
 import { useState, useSyncExternalStore } from "react";
@@ -19,6 +17,15 @@ import {
     type AutoPreviewAlgorithm,
 } from "../shared/perf-tuning";
 import { type ModSourceTouchTuning } from "../shared/mod-source-touch-geometry";
+import {
+    MOD_BAR_MAX_SCALE,
+    MOD_BAR_MIN_SCALE,
+    getModBarPreferences,
+    resetModBarPreferences,
+    subscribeModBarPreferences,
+    updateModBarPreferences,
+    type ModBarPlacement,
+} from "../shared/mod-bar-preferences";
 
 const ALGORITHM_ROWS: ReadonlyArray<{
     id: AutoPreviewAlgorithm;
@@ -50,6 +57,16 @@ const ALGORITHM_ROWS: ReadonlyArray<{
         label: "Paced",
         summary: "In-motion restrikes at the min gap plus a settle restrike, all choked, then hold.",
     },
+];
+
+const MOD_BAR_PLACEMENTS: ReadonlyArray<{
+    readonly id: ModBarPlacement;
+    readonly label: string;
+    readonly summary: string;
+}> = [
+    { id: "floating-left", label: "Float left", summary: "Vertical edge rail on the left." },
+    { id: "floating-right", label: "Float right", summary: "Vertical edge rail on the right." },
+    { id: "parked", label: "Park", summary: "One fixed row above Voice / FX / Mod." },
 ];
 
 const SLIDER_TRACK_CLASS = "h-1 w-full cursor-pointer appearance-none rounded-full bg-white/15";
@@ -117,6 +134,7 @@ function SectionHeading({ title, onReset }: { title: string; onReset: () => void
 
 export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
     const state = useSyncExternalStore(subscribePerfTuning, getPerfTuningState);
+    const modBar = useSyncExternalStore(subscribeModBarPreferences, getModBarPreferences);
     const [copyStatus, setCopyStatus] = useState<"idle" | "copying" | "success" | "failure">("idle");
     const setDrag = (next: Partial<ModSourceTouchTuning>) => updatePerfTuning({ drag: next });
     const copySettings = async () => {
@@ -128,7 +146,7 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                 setCopyStatus("failure");
                 return;
             }
-            await writeText(formatPerfTuningSettings(state));
+            await writeText(formatPerfTuningSettings(state, modBar));
             setCopyStatus("success");
         } catch {
             setCopyStatus("failure");
@@ -154,12 +172,12 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
             />
             <div
                 role="dialog"
-                aria-label="Performance tuning"
+                aria-label="Developer settings"
                 className="relative flex max-h-[88%] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-[#11161b] text-slate-100 shadow-2xl sm:max-h-[85%] sm:rounded-2xl"
             >
                 <header className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-4 py-3">
                     <div className="flex items-baseline gap-2">
-                        <h2 className="text-sm font-semibold tracking-wide">Performance tuning</h2>
+                        <h2 className="text-sm font-semibold tracking-wide">Developer settings</h2>
                         <span className="rounded bg-[#87d7f5]/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#87d7f5]">
                             dev
                         </span>
@@ -167,7 +185,7 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                     <button
                         type="button"
                         onClick={onClose}
-                        aria-label="Close performance tuning"
+                        aria-label="Close developer settings"
                         className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-white/10 hover:text-slate-100"
                     >
                         &#215;
@@ -316,6 +334,49 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                             {PERF_TUNING_DEFAULTS.drag.rampPx}px, gain {PERF_TUNING_DEFAULTS.drag.gainMin}
                             &ndash;{PERF_TUNING_DEFAULTS.drag.gainMax}&#215;, reference{" "}
                             {PERF_TUNING_DEFAULTS.drag.referenceTravelPx}px.
+                        </p>
+                    </section>
+
+                    <section className="flex flex-col gap-3">
+                        <SectionHeading title="Mod bar" onReset={resetModBarPreferences} />
+                        <TuningSlider
+                            label="Scale"
+                            detail="complete shell, contents, spacing, and touch geometry"
+                            value={modBar.scale}
+                            min={MOD_BAR_MIN_SCALE}
+                            max={MOD_BAR_MAX_SCALE}
+                            step={0.01}
+                            settingKey="modBar.scale"
+                            format={(value) => `${value.toFixed(2)}×`}
+                            onChange={(scale) => updateModBarPreferences({ scale })}
+                        />
+                        <div className="flex flex-col gap-1.5" role="radiogroup" aria-label="Mod bar placement">
+                            {MOD_BAR_PLACEMENTS.map((row) => {
+                                const selected = modBar.placement === row.id;
+                                return (
+                                    <button
+                                        key={row.id}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={selected}
+                                        data-mod-bar-placement={row.id}
+                                        onClick={() => updateModBarPreferences({ placement: row.id })}
+                                        className={`flex flex-col gap-0.5 rounded-xl border px-3 py-2 text-left ${
+                                            selected
+                                                ? "border-[#87d7f5]/60 bg-[#87d7f5]/10"
+                                                : "border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06]"
+                                        }`}
+                                    >
+                                        <span className={`text-[13px] font-semibold ${selected ? "text-[#b8e6fa]" : "text-slate-200"}`}>
+                                            {row.label}
+                                        </span>
+                                        <span className="text-[11.5px] leading-snug text-slate-400">{row.summary}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                            Parked hide / restore is also an application preference. It never enters a sound or preset.
                         </p>
                     </section>
                 </div>

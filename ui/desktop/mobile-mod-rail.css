@@ -1,11 +1,10 @@
-/* The perimeter-docked mobile Mod rail (T10B, approved design "B2 · Linear
-   Glass · Shouldered"): T42 applies one 1.10 scale to the complete 40px /
-   28px / 10px baseline geometry instead of resizing individual descendants.
-   The result is a 44px bar with 30.8px modules on an 11px rhythm, docked
-   flush against the left or right screen edge with a tab-with-shoulders
-   silhouette in a translucent glass material. Route count is a corner badge on
-   the selected-source module, live activity is the thin bar inside it, and the
-   Note key carries the Auto-preview status dot. */
+/* The perimeter-docked mobile Mod bar (T10B, approved design "B2 · Linear
+   Glass · Shouldered"): T60 applies one live 0.85–1.30 coefficient to the
+   complete 40px / 28px / 10px baseline geometry, starting at T42's 1.10.
+   Floating placement stays flush against either screen edge with a
+   tab-with-shoulders silhouette in a translucent glass material. Route count
+   is a corner badge on the selected-source module, live activity is the thin
+   bar inside it, and the Note key carries the Auto-preview status dot. */
 
 @media (max-width: 639px) {
     /* Above the full-screen editor backdrop (z-50): the rail is part of the
@@ -669,8 +668,306 @@
 
 @media (max-width: 639px) and (prefers-reduced-motion: reduce) {
     .mobile-global-mod-rail,
-    .mobile-global-mod-rail-drawer {
+    .mobile-global-mod-rail-drawer,
+    .mobile-global-mod-rail-portal {
         transition-duration: 1ms;
+    }
+}
+
+/* T60's bottom dock owns the parked row and the existing Voice / FX / Mod
+   strip as one flex child. This avoids flex-gap ghost space when the Mod bar
+   is hidden: the portal itself transitions from exactly 40px to zero. */
+@media (max-width: 639px) {
+    .mobile-bottom-dock {
+        position: relative;
+        display: flex;
+        min-width: 0;
+        flex: none;
+        flex-direction: column;
+        overflow: visible;
+    }
+
+    .mobile-bottom-dock[data-mod-bar-placement="parked"] .mobile-global-mod-rail-portal {
+        position: relative;
+        inset: auto;
+        width: 100%;
+        height: var(--cosimo-module);
+        flex: 0 0 var(--cosimo-module);
+        overflow: visible;
+        transition:
+            height 180ms cubic-bezier(0.22, 0.72, 0.22, 1),
+            flex-basis 180ms cubic-bezier(0.22, 0.72, 0.22, 1);
+    }
+
+    .mobile-bottom-dock[data-mod-bar-placement="parked"][data-parked-visibility="hidden"]
+    .mobile-global-mod-rail-portal {
+        height: 0;
+        flex-basis: 0;
+    }
+
+    .mobile-global-mod-rail-layer[data-placement="parked"] {
+        position: absolute;
+        inset: 0;
+        overflow: visible;
+        padding: 0;
+    }
+
+    .mobile-global-mod-rail.is-parked {
+        --parked-selected-w: calc(36px * var(--rail-scale));
+        --parked-paddle-w: calc(27px * var(--rail-scale));
+        --parked-hide-w: calc(25px * var(--rail-scale));
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: var(--cosimo-module);
+        overflow: visible;
+        border: 0;
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+        transition:
+            opacity 150ms ease,
+            transform 180ms cubic-bezier(0.22, 0.72, 0.22, 1);
+    }
+
+    .mobile-global-mod-rail-layer[data-placement="parked"][data-parked-visibility="hidden"]
+    .mobile-global-mod-rail.is-parked {
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(100%);
+    }
+
+    .mobile-global-mod-rail.is-parked[data-mapping-active="true"] {
+        translate: 0 0;
+        pointer-events: none;
+    }
+
+    .mobile-global-mod-rail-parked-row {
+        position: relative;
+        display: grid;
+        width: 100%;
+        height: var(--cosimo-module);
+        grid-template-columns:
+            var(--parked-selected-w)
+            var(--parked-paddle-w)
+            minmax(0, 1fr)
+            var(--parked-paddle-w)
+            var(--parked-hide-w);
+        box-sizing: border-box;
+        overflow: hidden;
+        border: 0;
+        background:
+            linear-gradient(var(--cosimo-line), var(--cosimo-line)) top / 100% var(--rail-outline) no-repeat,
+            linear-gradient(var(--cosimo-line), var(--cosimo-line)) bottom / 100% var(--rail-outline) no-repeat,
+            linear-gradient(var(--cosimo-line), var(--cosimo-line)) left / var(--rail-outline) 100% no-repeat,
+            linear-gradient(var(--cosimo-line), var(--cosimo-line)) right / var(--rail-outline) 100% no-repeat,
+            linear-gradient(180deg, rgb(var(--cosimo-raised-rgb) / 0.72), rgb(var(--cosimo-ground-rgb) / 0.94));
+        box-shadow: var(--cosimo-shadow-raised);
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-selected {
+        position: relative;
+        top: auto;
+        left: auto;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        border-right: var(--rail-outline) solid var(--cosimo-line);
+        border-radius: 0;
+        transform: none;
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-selected .rack-mod-art {
+        width: var(--rail-module);
+        height: var(--rail-module);
+        border: var(--rail-outline) solid color-mix(in srgb, var(--source-color) 38%, transparent);
+        border-radius: var(--rail-module-radius);
+        background: color-mix(in srgb, var(--source-color) 14%, transparent);
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-route-count {
+        top: calc(1px * var(--rail-scale));
+        right: calc(1px * var(--rail-scale));
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-activity {
+        bottom: calc(2px * var(--rail-scale));
+    }
+
+    .mobile-global-mod-rail-parked-paddle,
+    .mobile-global-mod-rail-parked-hide {
+        display: grid;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        border-right: var(--rail-outline) solid var(--cosimo-line);
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        color: var(--cosimo-ink-muted);
+        touch-action: manipulation;
+    }
+
+    .mobile-global-mod-rail-parked-hide {
+        border-right: 0;
+        border-left: var(--rail-outline) solid var(--cosimo-line);
+    }
+
+    .mobile-global-mod-rail.is-parked .rack-mod-chevron,
+    .mobile-global-mod-rail-restore .rack-mod-chevron {
+        width: var(--rail-chevron-size);
+        height: var(--rail-chevron-size);
+        border-width: 0 var(--rail-chevron-stroke) var(--rail-chevron-stroke) 0;
+    }
+
+    .mobile-global-mod-rail-parked-page {
+        min-width: 0;
+        height: 100%;
+        overflow: hidden;
+    }
+
+    .mobile-global-mod-rail-parked-sources,
+    .mobile-global-mod-rail-parked-tools {
+        display: grid;
+        width: 100%;
+        height: 100%;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .mobile-global-mod-rail-parked-tools {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-parked-sources .rack-mod-source {
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        padding: 0;
+        border-radius: 0;
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-parked-sources .rack-mod-source .rack-mod-art {
+        display: grid;
+        width: var(--rail-module);
+        height: var(--rail-module);
+        place-items: center;
+        box-sizing: border-box;
+        border: var(--rail-outline) solid transparent;
+        border-radius: var(--rail-module-radius);
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-parked-sources .rack-mod-source.is-selected .rack-mod-art {
+        border-color: color-mix(in srgb, var(--source-color) 38%, transparent);
+        background: color-mix(in srgb, var(--source-color) 14%, transparent);
+        filter: none;
+        transform: none;
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-parked-sources .rack-mod-source.is-selected::after {
+        right: calc(6px * var(--rail-scale));
+        bottom: 0;
+        left: calc(6px * var(--rail-scale));
+        height: var(--rail-outline);
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-note,
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-toggle {
+        position: relative;
+        top: auto;
+        left: auto;
+        display: grid;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        border-right: var(--rail-outline) solid var(--cosimo-line);
+        border-radius: 0;
+        background: transparent;
+        transform: none;
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-toggle.is-voice {
+        width: 100%;
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-note[data-note-held="true"],
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-toggle[aria-pressed="true"] {
+        background: var(--cosimo-line);
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-note > svg,
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-toggle > svg {
+        width: var(--rail-icon);
+        height: var(--rail-icon);
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-note-dot {
+        top: calc(3px * var(--rail-scale));
+        right: calc(3px * var(--rail-scale));
+    }
+
+    .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-voice-popover {
+        right: var(--rail-gap);
+        bottom: calc(100% + var(--rail-gap));
+        max-width: calc(100vw - (2 * var(--rail-gap)));
+    }
+
+    .mobile-global-mod-rail-restore {
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        z-index: 2;
+        display: grid;
+        width: calc(44px * var(--rail-scale));
+        height: calc(32px * var(--rail-scale));
+        place-items: center;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--cosimo-ink-muted);
+        pointer-events: auto;
+        transform: translateX(-50%);
+    }
+
+    .mobile-global-mod-rail-restore::before {
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        width: calc(30px * var(--rail-scale));
+        height: calc(14px * var(--rail-scale));
+        border: var(--rail-outline) solid var(--cosimo-line);
+        border-bottom: 0;
+        border-radius:
+            calc(var(--cosimo-radius-sm) * var(--rail-scale))
+            calc(var(--cosimo-radius-sm) * var(--rail-scale))
+            0 0;
+        background: rgb(var(--cosimo-raised-rgb) / 0.96);
+        box-shadow: 0 calc(-3px * var(--rail-scale)) calc(10px * var(--rail-scale)) var(--cosimo-cast-shadow);
+        content: "";
+        transform: translateX(-50%);
+    }
+
+    .mobile-global-mod-rail-restore .rack-mod-chevron {
+        position: absolute;
+        bottom: calc(3px * var(--rail-scale));
+        left: 50%;
+        z-index: 1;
+        transform: translateX(-50%) rotate(225deg);
+    }
+
+    .mobile-global-mod-rail-restore:focus-visible,
+    .mobile-global-mod-rail-parked-paddle:focus-visible,
+    .mobile-global-mod-rail-parked-hide:focus-visible {
+        outline: calc(2px * var(--rail-scale)) solid var(--cosimo-raised);
+        outline-offset: calc(-2px * var(--rail-scale));
     }
 }
 
