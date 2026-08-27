@@ -1692,7 +1692,7 @@ Source note (2026-08-25):
     - The composed-editor regression covers quiet and normal signals for all three Types, exact restored compact geometry, curve/history boundary alignment, and contrast. Shared/UI/browser suites pass 124/124; deterministic before/after captures at 393×852 phone, 1440×900 desktop, and 1120×680 plugin dimensions retain identical Type/Drive/Knee/Mix/filter settings and editor geometry.
     - No distortion DSP or audio behavior changed. A fresh HMR standalone is running from this worktree at `127.0.0.1:5178`; the compiled VST3 is installed at `~/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` and passes strict codesign verification.
 
-[ ] T26 — Finish the high-quality two-band Enhancer for the Polish section
+[x] T26 — Finish the high-quality two-band Enhancer for the Polish section
     Protected product discussion and source (2026-08-27):
     - Codex task `T26 Build Fixed Two-Band Enhancer`, thread `01a03b9a-b1c0-7431-bc23-3e85da52c3d0`, branch `codex/t26-spectre-wrapper-prototype`, worktree `/Users/winterfell/.codex/worktrees/479c3700-c222-4730-88a3-1f9ff584b411/cosimo-synth`, model SOL, reasoning max.
     - This thread is Andrew's product-development conversation, not a coordinator-managed implementation worker. Do not send it repair requests or other assignments. Review its committed source; if repair is needed, ask Andrew to authorize a separate task.
@@ -1707,6 +1707,11 @@ Source note (2026-08-25):
     Done when:
     - Zero amount produces no nonlinear contribution, matches the retained FIR neutral impulse within `1e-7`, and reports exactly 60 samples; mono stays mono; side-only behavior, safety, reset, state, and declared latency pass; and level-matched listening preserves the approved sound.
     - The high-quality two-band processor is cleanly available for T28 without silently deleting or replacing any accepted sound, routing, state, or wrapper behavior.
+    Integration evidence (2026-08-27):
+    - Coordinator source commit `71f106b9` semantically replays protected checkpoint `2a652a40` onto current master without importing its stale tracker or design copies. The current 14-setting contract, separate Lite/T62 boundaries, Polish lab build target, and unrelated package history are preserved.
+    - Final qualification passes Cmajor 14/14, state/exposure 7/7, source/compiled editor 7/7, and the complete retained audio evidence. The zero-Amount neutral FIR, exact 60-sample host seam, mono/Side behavior, reset, sample-rate safety, and approved measured laws are covered.
+    - The clean universal `CosimoEnhancer.vst3` build installs at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoEnhancer.vst3`, passes strict deep code-sign verification, and has executable SHA-256 `a0f356fd56f612c816e0dc7b011c50d4380efb5abeb1d5ee0b1837200b419040`, exactly matching the previously pluginval/Ableton-qualified binary. The prior observed Ableton listening sign-off is retained; no new listening or physical-device acceptance is claimed.
+    - This completes only the high-quality two-band T26 processor. Lite readout/shelf composition, T61 release/MIDI work, T62 per-voice work, and T28 Polish-chain integration remain open.
 
 [x] T27 — Reproduce the Sausage Fattener reference before using it to voice Cosimo's compressor and clipper
     Completed owner (2026-08-27):

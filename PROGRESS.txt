@@ -1,3 +1,8 @@
+T26 high-quality two-band Enhancer integrated and qualified — 2026-08-27
+- Semantically replayed protected source checkpoint `2a652a40` as coordinator commit `71f106b9` without importing stale branch copies of `TODOS.txt`, `PROGRESS.txt`, `ENHANCER_DESIGN.md`, or `POLISH_CHAIN_DESIGN.md`. Current master remains authoritative, including the accepted 14-setting contract and the separate Lite/T62 products.
+- Final gates pass Cmajor 14/14, state/exposure 7/7, source/compiled editor 7/7, and the retained complete audio evidence. The universal installed VST3 is strict-code-sign valid at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoEnhancer.vst3`; executable SHA-256 `a0f356fd56f612c816e0dc7b011c50d4380efb5abeb1d5ee0b1837200b419040` exactly matches the previously pluginval/Ableton-qualified binary.
+- The prior observed Ableton listening sign-off is retained, but no fresh integration-time listening or physical-device acceptance is claimed. Lite sibling composition, T61, T62, and T28 remain open.
+
 T27 isolated Polish reference lab integrated and qualified — 2026-08-27
 - Semantically replayed clean task tip `175cc126` onto current master while preserving current `TODOS.txt`, `PROGRESS.txt`, `POLISH_CHAIN_DESIGN.md`, and package history. The retained design addition is factual only: the reference package and live lab remain disconnected from the production synth, Effects Lane, Distortion, and T28 signal path.
 - The deterministic reference gate passes 7/7 and verifies all 21 retained WAVs, nine comparisons, and worst RMS match `1.742e-7 dB`. The final compiled lab/browser gate passes 6/6 and Cmajor passes 4/4, including exact graph-to-DSP writes and exact raw host-state restoration on every cancelled point gesture.
