@@ -329,6 +329,7 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
     assert.equal(iosManifest.view.resizable, true);
     assert.deepEqual(iosManifest.source, desktopManifest.source);
     assert.deepEqual(desktopManifest.source, [
+        "cmajor/KeyTrack.cmajor",
         "cmajor/Distortion.cmajor",
         "cmajor/Chorus.cmajor",
         "cmajor/GlobalFilter.cmajor",
@@ -371,7 +372,7 @@ test("desktop synth reserves Cmajor host parameter slot 0 away from musical cont
     );
 });
 
-test("Bounce, Global Tune, and the complete Amp Envelope preserve the frozen synth host-parameter order", async () => {
+test("Bounce, Global Tune, Amp Envelope, and Voice Filter Key Track preserve the frozen synth host-parameter order", async () => {
     const synthSource = await fs.readFile(path.join(repoRoot, "cmajor", "WavetableSynth.cmajor"), "utf8");
     const parameterOrder = parseGraphHostParameterIdentifiers(synthSource, "WavetableSynth");
     const inputValues = parseGraphInputValues(synthSource, "WavetableSynth");
@@ -382,16 +383,30 @@ test("Bounce, Global Tune, and the complete Amp Envelope preserve the frozen syn
     const ampAttack = inputValues.find(({ identifier }) => identifier === "ampAttack");
     const ampDecay = inputValues.find(({ identifier }) => identifier === "ampDecay");
     const ampSustain = inputValues.find(({ identifier }) => identifier === "ampSustain");
+    const filterCutoffKeyTrackEnabled = inputValues.find(
+        ({ identifier }) => identifier === "filterCutoffKeyTrackEnabled",
+    );
+    const filterCutoffKeyTrackOffset = inputValues.find(
+        ({ identifier }) => identifier === "filterCutoffKeyTrackOffsetSemitones",
+    );
 
     assert.deepEqual(
-        parameterOrder.slice(0, -7),
+        parameterOrder.slice(0, -9),
         EXISTING_SYNTH_HOST_PARAMETER_ORDER,
         "appending synth controls must not move any existing DAW automation slot",
     );
-    assert.deepEqual(parameterOrder.slice(-7), [
-        "filterMix", "ampRelease", "sourceMode", "globalTune", "ampAttack", "ampDecay", "ampSustain",
+    assert.deepEqual(parameterOrder.slice(-9), [
+        "filterMix",
+        "ampRelease",
+        "sourceMode",
+        "globalTune",
+        "ampAttack",
+        "ampDecay",
+        "ampSustain",
+        "filterCutoffKeyTrackEnabled",
+        "filterCutoffKeyTrackOffsetSemitones",
     ]);
-    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 7);
+    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 9);
     assert.notEqual(filterMix, undefined);
     assert.equal(filterMix.type, "float32");
     assert.match(filterMix.annotation, /name:\s*"Filter Mix"/);
@@ -448,6 +463,17 @@ test("Bounce, Global Tune, and the complete Amp Envelope preserve the frozen syn
     assert.match(ampSustain.annotation, /max:\s*1(?:\.0)?f?/);
     assert.match(ampSustain.annotation, /init:\s*1(?:\.0)?f?/);
     assert.match(ampSustain.annotation, /rampFrames:\s*0/);
+    assert.notEqual(filterCutoffKeyTrackEnabled, undefined);
+    assert.match(filterCutoffKeyTrackEnabled.annotation, /name:\s*"Voice Filter Key Track"/);
+    assert.match(filterCutoffKeyTrackEnabled.annotation, /init:\s*0(?:\.0)?f?/);
+    assert.match(filterCutoffKeyTrackEnabled.annotation, /discrete:\s*true/);
+    assert.match(filterCutoffKeyTrackEnabled.annotation, /rampFrames:\s*0/);
+    assert.notEqual(filterCutoffKeyTrackOffset, undefined);
+    assert.match(filterCutoffKeyTrackOffset.annotation, /name:\s*"Voice Filter Key Track Offset"/);
+    assert.match(filterCutoffKeyTrackOffset.annotation, /min:\s*-60(?:\.0)?f?/);
+    assert.match(filterCutoffKeyTrackOffset.annotation, /max:\s*60(?:\.0)?f?/);
+    assert.match(filterCutoffKeyTrackOffset.annotation, /unit:\s*"st"/);
+    assert.match(filterCutoffKeyTrackOffset.annotation, /rampFrames:\s*0/);
 });
 
 test("legacy synth presets resolve an omitted Filter Mix to fully wet through an exact-contract migration", async () => {

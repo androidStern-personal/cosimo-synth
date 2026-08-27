@@ -2,7 +2,7 @@
 // fully-wet rail is deliberately exact: no interpolation expression may replace
 // the current filtered sample when Mix is 1.
 
-## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "ConstantThreeOscillatorRenderer.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "ConstantThreeOscillatorRenderer.cmajor")
 
 ## testFunction()
 

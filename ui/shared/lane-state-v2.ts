@@ -1,11 +1,13 @@
 import type { PatchConnectionLike } from "./cmajor-react";
 import type { LaneDeviceInstance, LaneDeviceType } from "./lane-modulation-targets";
 import {
+    LEGACY_LANE_DEVICE_PARAM_ENDPOINTS,
     LANE_SLOT_ORDINAL_COUNT,
     LANE_SLOT_PARAM_COUNT,
     buildLaneSlotParamValues,
     getLaneSlotId,
     laneDeviceParamEndpoints,
+    materializeLaneDeviceParams,
 } from "./lane-slot-params";
 import { getRackEffectDescriptor } from "./rack-parameter-descriptors";
 import {
@@ -21,7 +23,11 @@ import {
     LANE_PARALLEL_UNIT_COUNT,
     LANE_SLOT_PARAMS_ENDPOINT_ID,
     LANE_SPLIT_PARAM_XOVER_HIGH_HZ,
+    LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_ENABLED,
+    LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_OFFSET_SEMITONES,
     LANE_SPLIT_PARAM_XOVER_LOW_HZ,
+    LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_ENABLED,
+    LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES,
     LANE_SPLIT_SLOT_BASE,
     LANE_SPLIT_UNIT_COUNT,
     LANE_TOPOLOGY_ENDPOINT_ID,
@@ -35,6 +41,7 @@ import {
     parseLaneState,
     type LaneState,
 } from "./lane-state";
+import { getLaneKeyTrackEndpoints } from "./key-track";
 
 /**
  * lane.v2 — the device-instance + topology-tree document (M3).
@@ -92,6 +99,10 @@ export type LaneSplitGroupV2 = {
     readonly enabled: boolean;
     readonly xoverLowHz: number;
     readonly xoverHighHz: number;
+    readonly xoverLowKeyTrackEnabled: boolean;
+    readonly xoverLowKeyTrackOffsetSemitones: number;
+    readonly xoverHighKeyTrackEnabled: boolean;
+    readonly xoverHighKeyTrackOffsetSemitones: number;
     readonly branches: ReadonlyArray<ReadonlyArray<LaneDevicePlacementV2>>;
 };
 
@@ -183,18 +194,30 @@ function parseDeviceRecord(deviceId: string, input: unknown):
         return { failure: err(`device ${deviceId} must be { params }`) };
     }
     const endpoints = laneDeviceParamEndpoints(parsedId.deviceType);
-    if (Reflect.ownKeys(input.params).length !== endpoints.length) {
+    const legacyEndpoints = LEGACY_LANE_DEVICE_PARAM_ENDPOINTS[parsedId.deviceType];
+    const effectId = LANE_TYPE_TO_EFFECT_ID.get(parsedId.deviceType);
+    if (effectId === undefined) {
+        return { failure: err(`device ${deviceId} has no effect descriptor`) };
+    }
+    const presentationEndpoints = getRackEffectDescriptor(effectId).parameters
+        .map((descriptor) => descriptor.endpointID);
+    const inputParams = input.params as Record<string, unknown>;
+    const inputKeys = Object.keys(inputParams);
+    const hasShape = (expected: ReadonlyArray<string>) => inputKeys.length === expected.length
+        && inputKeys.every((key) => expected.includes(key));
+    const hasValidShape = hasShape(endpoints)
+        || hasShape(legacyEndpoints)
+        || hasShape(presentationEndpoints);
+    if (!hasValidShape) {
         return { failure: err(`device ${deviceId} must carry every parameter once`) };
     }
-    const params: Record<string, number> = {};
-    for (const endpointID of endpoints) {
-        const value = input.params[endpointID];
+    for (const endpointID of inputKeys) {
+        const value = inputParams[endpointID];
         if (typeof value !== "number" || !Number.isFinite(value)) {
             return { failure: err(`device ${deviceId}.${endpointID} must be a finite number`) };
         }
-        params[endpointID] = value;
     }
-    return { record: { params } };
+    return { record: { params: materializeLaneDeviceParams(parsedId.deviceType, inputParams) } };
 }
 
 function parsePlacement(input: unknown, deviceIds: ReadonlySet<string>):
@@ -289,10 +312,15 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
         }
 
         const isSplit = rawNode.kind === "split";
-        const expectedKeys = isSplit
-            ? ["kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz", "branches"]
-            : ["kind", "groupId", "enabled", "branches"];
-        if (!hasExactKeys(rawNode, expectedKeys)) {
+        const legacySplitKeys = ["kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz", "branches"];
+        const currentSplitKeys = [
+            "kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz",
+            "xoverLowKeyTrackEnabled", "xoverLowKeyTrackOffsetSemitones",
+            "xoverHighKeyTrackEnabled", "xoverHighKeyTrackOffsetSemitones", "branches",
+        ];
+        const expectedKeys = isSplit ? currentSplitKeys : ["kind", "groupId", "enabled", "branches"];
+        const isLegacySplit = isSplit && hasExactKeys(rawNode, legacySplitKeys);
+        if (!hasExactKeys(rawNode, expectedKeys) && !isLegacySplit) {
             return err(`a ${rawNode.kind} group is { ${expectedKeys.join(", ")} }`);
         }
         const groupId = parseLaneGroupId(rawNode.groupId);
@@ -314,6 +342,16 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
         if (isSplit && (!isValidCrossoverHz(rawNode.xoverLowHz) || !isValidCrossoverHz(rawNode.xoverHighHz))) {
             return err(`group ${String(rawNode.groupId)} crossovers must sit in `
                 + `${LANE_SPLIT_XOVER_MIN_HZ}..${LANE_SPLIT_XOVER_MAX_HZ} Hz`);
+        }
+        if (isSplit && !isLegacySplit && (
+            typeof rawNode.xoverLowKeyTrackEnabled !== "boolean"
+            || typeof rawNode.xoverHighKeyTrackEnabled !== "boolean"
+            || typeof rawNode.xoverLowKeyTrackOffsetSemitones !== "number"
+            || !Number.isFinite(rawNode.xoverLowKeyTrackOffsetSemitones)
+            || typeof rawNode.xoverHighKeyTrackOffsetSemitones !== "number"
+            || !Number.isFinite(rawNode.xoverHighKeyTrackOffsetSemitones)
+        )) {
+            return err(`group ${String(rawNode.groupId)} Key Track state must be finite`);
         }
 
         wireEntryCount += 1;
@@ -340,6 +378,10 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
                 enabled: rawNode.enabled,
                 xoverLowHz: rawNode.xoverLowHz as number,
                 xoverHighHz: rawNode.xoverHighHz as number,
+                xoverLowKeyTrackEnabled: isLegacySplit ? false : rawNode.xoverLowKeyTrackEnabled as boolean,
+                xoverLowKeyTrackOffsetSemitones: isLegacySplit ? 0 : rawNode.xoverLowKeyTrackOffsetSemitones as number,
+                xoverHighKeyTrackEnabled: isLegacySplit ? false : rawNode.xoverHighKeyTrackEnabled as boolean,
+                xoverHighKeyTrackOffsetSemitones: isLegacySplit ? 0 : rawNode.xoverHighKeyTrackOffsetSemitones as number,
                 branches,
             }
             : {
@@ -372,10 +414,7 @@ export function upgradeLaneStateV1(state: LaneState): LaneStateV2 {
     for (const effectId of RACK_EFFECT_ORDER) {
         const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
         devices[`${deviceType}#1`] = {
-            params: Object.fromEntries(laneDeviceParamEndpoints(deviceType).map((endpointID) => [
-                endpointID,
-                state.params[effectId][endpointID] ?? 0,
-            ])),
+            params: materializeLaneDeviceParams(deviceType, state.params[effectId]),
         };
     }
     return {
@@ -617,6 +656,10 @@ function buildLaneSplitParamValues(group: LaneSplitGroupV2): number[] {
     const values = new Array<number>(LANE_SLOT_PARAM_COUNT).fill(0);
     values[LANE_SPLIT_PARAM_XOVER_LOW_HZ] = group.xoverLowHz;
     values[LANE_SPLIT_PARAM_XOVER_HIGH_HZ] = group.xoverHighHz;
+    values[LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_ENABLED] = group.xoverLowKeyTrackEnabled ? 1 : 0;
+    values[LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES] = group.xoverLowKeyTrackOffsetSemitones;
+    values[LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_ENABLED] = group.xoverHighKeyTrackEnabled ? 1 : 0;
+    values[LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_OFFSET_SEMITONES] = group.xoverHighKeyTrackOffsetSemitones;
     return values;
 }
 
@@ -865,12 +908,47 @@ export function setLaneDeviceParam(
             || !Number.isFinite(value)) {
         return null;
     }
+    const params = { ...record.params, [endpointID]: value };
+    if (parsedId.deviceType === "delay" && endpointID === "delayTimeMode" && value >= 0.5) {
+        params.delayTimeKeyTrackEnabled = 0;
+    }
     return {
         ...state,
         devices: {
             ...state.devices,
-            [deviceId]: { params: { ...record.params, [endpointID]: value } },
+            [deviceId]: { params },
         },
+    };
+}
+
+/** Shared lane transition: enabling centres the offset and leaves the ordinary value untouched. */
+export function setLaneKeyTrackEnabled(
+    state: LaneStateV2,
+    deviceId: string,
+    ordinaryEndpointID: string,
+    enabled: boolean,
+): LaneStateV2 | null {
+    const endpoints = getLaneKeyTrackEndpoints(ordinaryEndpointID);
+    const record = state.devices[deviceId];
+    if (endpoints === null || record === undefined
+            || !Object.hasOwn(record.params, ordinaryEndpointID)
+            || !Object.hasOwn(record.params, endpoints.enabledEndpointID)
+            || !Object.hasOwn(record.params, endpoints.offsetEndpointID)) {
+        return null;
+    }
+    const params: Record<string, number> = {
+        ...record.params,
+        [endpoints.enabledEndpointID]: enabled ? 1 : 0,
+    };
+    if (enabled) {
+        params[endpoints.offsetEndpointID] = 0;
+        if (ordinaryEndpointID === "delayTime") {
+            params.delayTimeMode = 0;
+        }
+    }
+    return {
+        ...state,
+        devices: { ...state.devices, [deviceId]: { params } },
     };
 }
 
@@ -922,6 +1000,10 @@ export function wrapLaneDeviceInGroup(
             enabled: true,
             xoverLowHz: LANE_SPLIT_DEFAULT_XOVER_LOW_HZ,
             xoverHighHz: LANE_SPLIT_DEFAULT_XOVER_HIGH_HZ,
+            xoverLowKeyTrackEnabled: false,
+            xoverLowKeyTrackOffsetSemitones: 0,
+            xoverHighKeyTrackEnabled: false,
+            xoverHighKeyTrackOffsetSemitones: 0,
             branches: [[placement], []],
           }
         : { kind: "parallel", groupId, enabled: true, branches: [[placement], []] };
@@ -957,6 +1039,57 @@ export function setLaneSplitCrossoverHz(
     return withChain(state, state.chain.map((node) => (
         node.kind === "split" && node.groupId === groupId
             ? { ...node, [which === "low" ? "xoverLowHz" : "xoverHighHz"]: hz }
+            : node
+    )) as LaneChainNodeV2[]);
+}
+
+/** Split crossover equivalent of the shared device transition. */
+export function setLaneSplitKeyTrackEnabled(
+    state: LaneStateV2,
+    groupId: string,
+    which: "low" | "high",
+    enabled: boolean,
+): LaneStateV2 | null {
+    const group = state.chain.find((node) => node.kind === "split" && node.groupId === groupId);
+    if (group === undefined) {
+        return null;
+    }
+    const enabledKey = which === "low"
+        ? "xoverLowKeyTrackEnabled"
+        : "xoverHighKeyTrackEnabled";
+    const offsetKey = which === "low"
+        ? "xoverLowKeyTrackOffsetSemitones"
+        : "xoverHighKeyTrackOffsetSemitones";
+    return withChain(state, state.chain.map((node) => (
+        node.kind === "split" && node.groupId === groupId
+            ? {
+                ...node,
+                [enabledKey]: enabled,
+                ...(enabled ? { [offsetKey]: 0 } : {}),
+            }
+            : node
+    )) as LaneChainNodeV2[]);
+}
+
+export function setLaneSplitKeyTrackOffset(
+    state: LaneStateV2,
+    groupId: string,
+    which: "low" | "high",
+    offsetSemitones: number,
+): LaneStateV2 | null {
+    if (!Number.isFinite(offsetSemitones)) {
+        return null;
+    }
+    const group = state.chain.find((node) => node.kind === "split" && node.groupId === groupId);
+    if (group === undefined) {
+        return null;
+    }
+    const offsetKey = which === "low"
+        ? "xoverLowKeyTrackOffsetSemitones"
+        : "xoverHighKeyTrackOffsetSemitones";
+    return withChain(state, state.chain.map((node) => (
+        node.kind === "split" && node.groupId === groupId
+            ? { ...node, [offsetKey]: Math.min(48, Math.max(-48, offsetSemitones)) }
             : node
     )) as LaneChainNodeV2[]);
 }

@@ -4,10 +4,11 @@ import {
     getLaneDeviceModulationTargetKinds,
     laneMirrorRackKind,
     parseLaneModulationTargetKind,
-    type LaneDeviceInstance,
+    type LaneModulationOwnerInstance,
 } from "./lane-modulation-targets";
 import {
     allRackParameterDescriptors,
+    rackModulationIdentityEndpointID,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 import {
@@ -34,6 +35,7 @@ import {
     MODULATION_TARGET_IDENTITIES,
     getVoiceModulationParameterKind,
     parseModulationTargetKind as parseCanonicalModulationTargetKind,
+    parseRackModulationTargetKind,
     type ModulationSourceId,
     type ModulationSourceKind,
     type ModulationTargetKind,
@@ -153,7 +155,10 @@ const ROUTE_AMOUNT_STEPS = {
 const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors()
     .filter((parameter) => parameter.modulationTargetIndex !== null);
 const RACK_MODULATION_PARAMETER_BY_KIND = new Map<RackModulationTargetKind, RackParameterDescriptor>(
-    RACK_MODULATION_PARAMETERS.map((parameter) => [laneBaseKindForRackEndpoint(parameter.endpointID), parameter]),
+    RACK_MODULATION_PARAMETERS.map((parameter) => [
+        laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
+        parameter,
+    ]),
 );
 
 export type {
@@ -290,21 +295,30 @@ const VOICE_TARGET_OPTIONS: ReadonlyArray<ModulationTargetOption> = MODULATION_T
 
 /**
  * The per-patch target domain: the static voice core plus one entry per live
- * lane device parameter, instance-labeled. Callers pass the patch's live
- * device list in stable identity order (lane-state's
- * `listLaneDeviceInstances`); the resident instance-#1 set reproduces
- * `MODULATION_TARGET_OPTIONS` exactly, so the default patch's pickers are
- * unchanged by the dynamic domain.
+ * lane device parameter, instance-labeled. Canonical instance-#1 targets keep
+ * their append-only runtime order; later pool instances follow the patch's
+ * stable device order. Optional frequency splits therefore appear only while
+ * their split node exists without reshuffling established destinations.
  */
 export function buildPatchModulationTargetOptions(
-    devices: ReadonlyArray<LaneDeviceInstance>,
+    devices: ReadonlyArray<LaneModulationOwnerInstance>,
 ): ModulationTargetOption[] {
-    return [
-        ...VOICE_TARGET_OPTIONS,
-        ...devices.flatMap((device) => getLaneDeviceModulationTargetKinds(device).map((kind) => ({
+    const laneKinds = devices.flatMap((device) => getLaneDeviceModulationTargetKinds(device));
+    const liveKindSet = new Set(laneKinds);
+    const liveCanonicalRackOptions = MODULATION_TARGET_OPTIONS.filter((option) => (
+        isRackModulationTarget(option.value) && liveKindSet.has(option.value)
+    ));
+    const poolOptions = laneKinds
+        .filter((kind) => parseCanonicalModulationTargetKind(kind) === null)
+        .map((kind) => ({
             value: kind as ModulationTargetKind,
             label: getModulationTargetDisplayLabel(kind as ModulationTargetKind),
-        }))),
+        }));
+
+    return [
+        ...VOICE_TARGET_OPTIONS,
+        ...liveCanonicalRackOptions,
+        ...poolOptions,
     ];
 }
 
@@ -364,7 +378,7 @@ function formatMagnitude(value: number, digits: number) {
 }
 
 export function isRackModulationTarget(targetKind: ModulationTargetKind): targetKind is RackModulationTargetKind {
-    return RACK_MODULATION_PARAMETER_BY_KIND.has(targetKind as RackModulationTargetKind);
+    return parseRackModulationTargetKind(targetKind) !== null;
 }
 
 /** Whether a route to this target runs on the effects rack bus and is
@@ -383,6 +397,9 @@ function getRackRouteAmountLimit(descriptor: RackParameterDescriptor) {
     if (descriptor.modulationApplication === "octaves") {
         return { min: -6, max: 6 };
     }
+    if (descriptor.modulationApplication === "semitones") {
+        return { min: -60, max: 60 };
+    }
     const span = descriptor.max - descriptor.min;
     return { min: -span, max: span };
 }
@@ -396,6 +413,9 @@ function amountAuthorityKind(targetKind: ModulationTargetKind): ModulationTarget
 
 function getRouteAmountLimit(rawTargetKind: ModulationTargetKind) {
     const targetKind = amountAuthorityKind(rawTargetKind);
+    if (parseLaneModulationTargetKind(targetKind)?.deviceType === "frequencySplit") {
+        return { min: -4, max: 4 };
+    }
     const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind as RackModulationTargetKind);
     if (rackParameter !== undefined) {
         return getRackRouteAmountLimit(rackParameter);
@@ -405,9 +425,15 @@ function getRouteAmountLimit(rawTargetKind: ModulationTargetKind) {
 
 function getRouteAmountStep(rawTargetKind: ModulationTargetKind) {
     const targetKind = amountAuthorityKind(rawTargetKind);
+    if (parseLaneModulationTargetKind(targetKind)?.deviceType === "frequencySplit") {
+        return 0.01;
+    }
     const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind as RackModulationTargetKind);
     if (rackParameter !== undefined) {
-        return rackParameter.modulationApplication === "octaves" ? 0.01 : (rackParameter.max - rackParameter.min) / 1000;
+        return rackParameter.modulationApplication === "octaves"
+            || rackParameter.modulationApplication === "semitones"
+            ? 0.01
+            : (rackParameter.max - rackParameter.min) / 1000;
     }
     return ROUTE_AMOUNT_STEPS[getVoiceModulationParameterKind(targetKind as VoiceModulationTargetKind)];
 }
@@ -550,11 +576,17 @@ export function formatModulationAmountReadout(
         if (rackParameter.modulationApplication === "octaves") {
             return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
         }
+        if (rackParameter.modulationApplication === "semitones") {
+            return `${prefix}${formatMagnitude(clampedAmount, 2)} st`;
+        }
         if (rackParameter.unit === "" && rackParameter.max - rackParameter.min <= 2) {
             return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
         }
         const unit = rackParameter.unit === "deg" ? "°" : rackParameter.unit;
         return `${prefix}${formatMagnitude(clampedAmount, Math.abs(clampedAmount) < 10 ? 2 : 1)}${unit ? ` ${unit}` : ""}`;
+    }
+    if (parseLaneModulationTargetKind(targetKind)?.deviceType === "frequencySplit") {
+        return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
     }
 
     switch (getVoiceModulationParameterKind(targetKind as VoiceModulationTargetKind)) {

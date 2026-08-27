@@ -144,10 +144,16 @@ export function useParameterMenuShell({
                         value: request.baseValue,
                         defaultValue: request.defaultValue,
                     }}
+                    baseFieldLabel={request.baseFieldLabel}
+                    routeFieldLabel={request.routeDestinationLabel === undefined
+                        ? undefined
+                        : `${sourceLabel} -> ${request.routeDestinationLabel}`}
                     route={route}
-                    amountSpec={targetKind === null
-                        ? null
-                        : parameterEntrySpecForModulationAmount(targetKind, request.baseValue ?? 1)}
+                    amountSpec={request.amountSpec !== undefined
+                        ? request.amountSpec
+                        : targetKind === null
+                            ? null
+                            : parameterEntrySpecForModulationAmount(targetKind, request.baseValue ?? 1)}
                     sourceLabel={sourceLabel}
                     onApply={(baseCommit, modulationAmount) => {
                         if (baseCommit !== null) {

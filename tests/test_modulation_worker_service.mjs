@@ -37,9 +37,9 @@ const laneTails = [
         polarities: "voiceRackRoutePolarities",
         amounts: "voiceRackRouteAmounts",
         reducers: "voiceRackRouteReducers",
-        // Rack cell indices run at the bus width (static 36 + four pool
-        // mirror sets = 180): final static voiceRack pair = 9*180 + 35.
-        expected: { count: 360, cellIndex: 1655, sourceIndex: 9, targetIndex: 35, polarity: 0 },
+        // Rack cell indices run at the bus width (static 39 + four pool
+        // mirror sets = 195): final static voiceRack pair = 9*195 + 38.
+        expected: { count: 390, cellIndex: 1793, sourceIndex: 9, targetIndex: 38, polarity: 0 },
     },
     {
         count: "macroRackRouteCount",
@@ -48,8 +48,8 @@ const laneTails = [
         targets: "macroRackRouteTargets",
         polarities: "macroRackRoutePolarities",
         amounts: "macroRackRouteAmounts",
-        // Final static macroRack pair = 3*180 + 35.
-        expected: { count: 144, cellIndex: 575, sourceIndex: 3, targetIndex: 35, polarity: 0 },
+        // Final static macroRack pair = 3*195 + 38.
+        expected: { count: 156, cellIndex: 623, sourceIndex: 3, targetIndex: 38, polarity: 0 },
     },
 ];
 
@@ -159,7 +159,7 @@ function readLaneTail(program, specification) {
     };
 }
 
-test("the modulation service publishes serialized all-1288 state through one correlated runtime frontier", async () => {
+test("the modulation service publishes serialized all-1330 state through one correlated runtime frontier", async () => {
     const [modulation, targets, serviceModule] = await Promise.all([
         modulationModulePromise,
         targetsModulePromise,
@@ -193,12 +193,12 @@ test("the modulation service publishes serialized all-1288 state through one cor
             () => installedProgram() !== undefined
                 && connection.acknowledgements.at(-1)?.acceptedModulationSerial
                     === installedProgram()?.value.deliverySerial,
-            "the all-1288 modulation program acknowledgement",
+            "the all-1330 modulation program acknowledgement",
         );
 
         const parsedState = modulation.parseModulationState(serializedState);
         assert.equal(parsedState._tag, "ok");
-        assert.equal(parsedState.value.routes.length, 1288);
+        assert.equal(parsedState.value.routes.length, 1330);
         assert.deepEqual(connection.protocolFailures, []);
 
         const programEvent = installedProgram();

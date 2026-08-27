@@ -72,7 +72,7 @@ test("a lane document replays as complete records first, then one topology event
     const records = events.slice(0, 8);
     for (const record of records) {
         assert.equal(record.endpointID, "laneSlotParams");
-        assert.equal(record.value.values.length, 8);
+        assert.equal(record.value.values.length, 11);
     }
     const delayRecord = records.find((record) => record.value.slotId === 6);
     assert.equal(delayRecord.value.values[0], 90);      // laneDelayParamTimeMs
@@ -107,7 +107,7 @@ test("live field edits speak the positional wire layout", async () => {
 
 test("the slot param layout mirrors the engine's positional constants", async () => {
     const params = await laneParamsPromise;
-    assert.equal(params.LANE_SLOT_PARAM_COUNT, 8);
+    assert.equal(params.LANE_SLOT_PARAM_COUNT, 11);
     assert.equal(params.getLaneSlotParamIndex("delay", "delayTime"), 0);
     assert.equal(params.getLaneSlotParamIndex("delay", "delayDivision"), 5);
     assert.equal(params.getLaneSlotParamIndex("chorus", "chorusRingFineSemitones"), 7);

@@ -17,23 +17,35 @@ const AMP_LEGACY_ATTACK_SECONDS = 0.01;
 // The public minimum is the exact no-dip decay representation when Sustain=1.
 const AMP_LEGACY_DECAY_SECONDS = 0.001;
 const AMP_LEGACY_SUSTAIN = 1;
+const FILTER_KEY_TRACK_ENABLED_ENDPOINT_ID = "filterCutoffKeyTrackEnabled";
+const FILTER_KEY_TRACK_OFFSET_ENDPOINT_ID = "filterCutoffKeyTrackOffsetSemitones";
 
 /**
  * Append-only synth migrations are derived from the live contract. Each
  * historical step fills the neutral value introduced at that step: fully-wet
- * filter Mix, oscillator-mode Bounce, zero-semitone Global Tune, then the
- * bit-compatible ADSR representation of the legacy Amp Release contour.
+ * filter Mix, oscillator-mode Bounce, zero-semitone Global Tune, the
+ * bit-compatible ADSR representation of the legacy Amp Release contour,
+ * then neutral Key Track state.
  */
 export function buildSynthPresetMigrations(
     currentContract: EffectPluginStateContract,
 ): EffectPresetMigration[] {
-    const preAmpParameters = currentContract.parameters.filter(
+    const preKeyTrackParameters = currentContract.parameters.filter(
+        (parameter) => parameter.endpointID !== FILTER_KEY_TRACK_ENABLED_ENDPOINT_ID
+            && parameter.endpointID !== FILTER_KEY_TRACK_OFFSET_ENDPOINT_ID,
+    );
+
+    if (preKeyTrackParameters.length !== currentContract.parameters.length - 2) {
+        throw new Error("The synth contract must include both Voice Filter Key Track parameters.");
+    }
+
+    const preAmpParameters = preKeyTrackParameters.filter(
         (parameter) => parameter.endpointID !== AMP_ATTACK_ENDPOINT_ID
             && parameter.endpointID !== AMP_DECAY_ENDPOINT_ID
             && parameter.endpointID !== AMP_SUSTAIN_ENDPOINT_ID,
     );
 
-    if (preAmpParameters.length !== currentContract.parameters.length - 3) {
+    if (preAmpParameters.length !== preKeyTrackParameters.length - 3) {
         throw new Error("The synth contract must include all three appended Amp Envelope parameters.");
     }
 
@@ -86,6 +98,11 @@ export function buildSynthPresetMigrations(
         parameters: preAmpParameters,
         storedState: currentContract.storedState,
     });
+    const preKeyTrackContract = buildCanonicalPluginStateContract({
+        effectID: currentContract.effectID,
+        parameters: preKeyTrackParameters,
+        storedState: currentContract.storedState,
+    });
 
     return [
         {
@@ -134,15 +151,29 @@ export function buildSynthPresetMigrations(
         {
             effectID: currentContract.effectID,
             fromHash: preAmpContract.hash,
+            toHash: preKeyTrackContract.hash,
+            migrate: (preset) => ({
+                ...preset,
+                contract: preKeyTrackContract,
+                parameters: {
+                    ...preset.parameters,
+                    [AMP_ATTACK_ENDPOINT_ID]: AMP_LEGACY_ATTACK_SECONDS,
+                    [AMP_DECAY_ENDPOINT_ID]: AMP_LEGACY_DECAY_SECONDS,
+                    [AMP_SUSTAIN_ENDPOINT_ID]: AMP_LEGACY_SUSTAIN,
+                },
+            }),
+        },
+        {
+            effectID: currentContract.effectID,
+            fromHash: preKeyTrackContract.hash,
             toHash: currentContract.hash,
             migrate: (preset) => ({
                 ...preset,
                 contract: currentContract,
                 parameters: {
                     ...preset.parameters,
-                    [AMP_ATTACK_ENDPOINT_ID]: AMP_LEGACY_ATTACK_SECONDS,
-                    [AMP_DECAY_ENDPOINT_ID]: AMP_LEGACY_DECAY_SECONDS,
-                    [AMP_SUSTAIN_ENDPOINT_ID]: AMP_LEGACY_SUSTAIN,
+                    [FILTER_KEY_TRACK_ENABLED_ENDPOINT_ID]: 0,
+                    [FILTER_KEY_TRACK_OFFSET_ENDPOINT_ID]: 0,
                 },
             }),
         },

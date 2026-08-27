@@ -45,8 +45,9 @@ namespace wt
     // Rack modulation destinations.
     //
     // ADR-012: "Every continuous creative parameter owned by a rack module is eligible
-    // to be a modulation destination, including Mix/Wet." All thirty-six of them are
-    // here. Rack order, enabled state and discrete mode selectors are deliberately
+    // to be a modulation destination, including Mix/Wet." Established identities
+    // remain 0..35; T50 appends Flanger Base Delay and both split crossovers at
+    // 36..38. Rack order, enabled state and discrete mode selectors are deliberately
     // absent - they are not continuous, and the glossary's "Routable Effect Parameter"
     // excludes them in v1. Hiding a destination from the v1 UI is a UI-surface
     // decision; this table is where DSP eligibility lives, and it withholds nothing.
@@ -94,6 +95,9 @@ namespace wt
     let rackModTargetReverbDecay                = 33;
     let rackModTargetReverbDamping              = 34;
     let rackModTargetReverbMix                  = 35;
+    let rackModTargetFlangerBaseDelayOctaves    = 36;
+    let rackModTargetFrequencySplitLowOctaves   = 37;
+    let rackModTargetFrequencySplitHighOctaves  = 38;
 
     // Effects Lane pool block: a complete MIRROR of the static vocabulary at
     // indices rackModStaticTargetCount.. — one lane per pool instance's
@@ -135,6 +139,7 @@ namespace wt
     let rackModTargetLaneReverbDecay = rackModStaticTargetCount + rackModTargetReverbDecay;
     let rackModTargetLaneReverbDamping = rackModStaticTargetCount + rackModTargetReverbDamping;
     let rackModTargetLaneReverbMix = rackModStaticTargetCount + rackModTargetReverbMix;
+    let rackModTargetLaneFlangerBaseDelayOctaves = rackModStaticTargetCount + rackModTargetFlangerBaseDelayOctaves;
 
     //==============================================================================
     // Timing.

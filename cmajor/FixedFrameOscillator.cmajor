@@ -68,12 +68,12 @@ namespace wt
     let modulationVoiceGeneratorLaneCount = 32;
     // Shared rack destination domain. Kept here because several isolated oscillator
     // tests compile this module without VoiceReducer.cmajor.
-    // The bus is the STATIC vocabulary (the 36 named base-module destinations,
+    // The bus is the STATIC vocabulary (39 append-only base-module destinations,
     // VoiceReducer.cmajor) plus the Effects Lane pool block: one lane per
     // modulatable pool destination (M1: delay #2's four). Cell math, program
     // validation, and the rackMod bus all run at the TOTAL width; the static
     // count remains the contiguous named-vocabulary pin.
-    let rackModStaticTargetCount = 36;
+    let rackModStaticTargetCount = 39;
     // Effects Lane pool sizing lives HERE with the other shared wire
     // constants: lanePoolSetCount ADDITIONAL resident instances per type,
     // each set mirroring the static vocabulary on the bus.
@@ -81,7 +81,7 @@ namespace wt
     let laneModPoolTargetCount = lanePoolSetCount * rackModStaticTargetCount;
     let rackModTargetCount = rackModStaticTargetCount + laneModPoolTargetCount;
     // SIMD discipline (see the 32-wide note above): rack vectors stay at the
-    // proven static width and the pool adds whole BLOCKS of it — one 36-wide
+    // proven static width and the pool adds whole BLOCKS of it — one 39-wide
     // vector per mirror set, never one wide vector that scalarises.
     let rackModBlockCount = 1 + lanePoolSetCount;
     // Uniform instance count per effect type: ordinal 0 is the (former) base
@@ -94,11 +94,11 @@ namespace wt
 
     // Wire ROUTE CAPACITY for the two rack tables. Their per-route upload
     // arrays are deliberately NOT sized as the full source x target matrix:
-    // at the 180-wide pooled target bus that matrix put the program upload at
+    // at the 195-wide pooled target bus that matrix put the program upload at
     // 68KB, and cmaj::Patch's native performer event FIFO is a fixed 64KB —
     // the event could never be delivered on the native (iPhone) transport.
-    // The budget covers the ENTIRE 36-target static domain active at once
-    // (the shipping 1,288-route stress contract needs 360 voice-rack and 144
+    // The budget covers the ENTIRE 39-target static domain active at once
+    // (the shipping 1,330-route stress contract needs 390 voice-rack and 156
     // macro-rack routes) with lane-pool routes on top. The per-CELL amount
     // tables keep the full cell space: cell indexes, live amount edits and
     // the reducer vocabulary are untouched by this budget.
@@ -155,7 +155,9 @@ namespace wt
     let articulationSharedMseg2Bit = 1 << 4;
     let articulationSharedMseg3Bit = 1 << 5;
     let articulationSharedEnvelopeBitOffset = 6;
-    let articulationSharedAllBits = (1 << 18) - 1;
+    // Append-only: the established shared articulation bits remain 0..17.
+    let articulationSharedFilterKeyTrackOffsetBit = 1 << 18;
+    let articulationSharedAllBits = (1 << 19) - 1;
     let modulationPathVoice = 1;
     let modulationPathMacroVoice = 2;
     let modulationPathVoiceRack = 3;
@@ -544,6 +546,7 @@ namespace wt
         float32[modulationEnvSlotCount] envelopeDecaySeconds;
         float32[modulationEnvSlotCount] envelopeSustain;
         float32[modulationEnvSlotCount] envelopeReleaseSeconds;
+        float32 filterKeyTrackOffsetSemitones;
         int32 dspSessionId;
         int32 deliverySerial;
     }
@@ -757,6 +760,7 @@ namespace wt
         if (upload.sharedOverrideMask < 0
             || upload.sharedOverrideMask > articulationSharedAllBits
             || ! isFiniteRuntimeValue (upload.filterCutoffHz)
+            || ! isFiniteRuntimeValue (upload.filterKeyTrackOffsetSemitones)
             || ! isFiniteRuntimeValue (upload.filterQ))
             return false;
 
@@ -1571,6 +1575,8 @@ namespace wt
         input value float32 glideTimeIn [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
         input value float32 filterModeIn [[ name: "Filter Mode", min: 0.0f, max: 5.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
         input value float32 filterCutoffIn [[ name: "Filter Cutoff", min: 20.0f, max: 20000.0f, init: 1000.0f, unit: "Hz", rampFrames: 64 ]];
+        input value float32 filterCutoffKeyTrackEnabledIn [[ name: "Voice Filter Key Track", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+        input value float32 filterCutoffKeyTrackOffsetSemitonesIn [[ name: "Voice Filter Key Track Offset", min: -60.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
         input value float32 filterQIn [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
         input value float32 filterMixIn [[ name: "Filter Mix", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
         input value float32 macro1In [[ name: "Macro 1", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
@@ -1650,6 +1656,9 @@ namespace wt
         int32[voiceCount] voiceActive;
         int32[voiceCount] voiceGeneration;
         int32[voiceCount] voiceTrackingSerial;
+        // Post-mix effects follow the newest still-held voice. Once no note is
+        // held, retain the last realized shared pitch so effect tails never retune.
+        float32 trackingPitchHzState = keyTrackFallbackPitchHz;
         float32[voiceCount] voiceEffectivePosition;
         int32[voiceCount] voiceEffectiveWarpMode;
         float32[voiceCount] voiceEffectiveWarpAmount;
@@ -1705,6 +1714,7 @@ namespace wt
         float32[articulationSlotCount * oscillatorCount] articulationUnisonWarpSpreads;
         int32[articulationSlotCount] articulationFilterMode;
         float32[articulationSlotCount] articulationFilterCutoffHz;
+        float32[articulationSlotCount] articulationFilterKeyTrackOffsetSemitones;
         float32[articulationSlotCount] articulationFilterQ;
         float32[articulationSlotCount * modulationMsegSlotCount] articulationMsegMorphs;
         float32[articulationSlotCount * modulationArticulationRouteCellCount] articulationRouteAmounts;
@@ -1748,7 +1758,9 @@ namespace wt
         float32[voiceCount * oscillatorCount] voiceArticulationUnisonWarpSpreads;
         int32[voiceCount] voiceArticulationFilterMode;
         float32[voiceCount] voiceArticulationFilterCutoffHz;
+        float32[voiceCount] voiceArticulationFilterKeyTrackOffsetSemitones;
         float32[voiceCount] voiceArticulationFilterQ;
+        float32[voiceCount] voiceFilterKeyTrackSmoothedHz;
         float32[voiceCount * modulationMsegSlotCount] voiceArticulationMsegMorphs;
         float32[voiceCount * modulationArticulationRouteCellCount] voiceArticulationRouteAmounts;
         VoiceArticulationModulationTransforms[voiceCount] voiceArticulationRouteTransforms;
@@ -1816,6 +1828,7 @@ namespace wt
         float32[rackModTargetCount] rackModSmoothed;
         float32 rackModGateReleaseStepState;
         float32 rackModSmoothingCoefficientState;
+        float32 keyTrackSmoothingCoefficientState;
         int32 rejectedModulationRouteCount;
         int32 acceptedModulationSerial;
         int32 acceptedModulationProgramSerial;
@@ -1951,6 +1964,7 @@ namespace wt
         float32[oscillatorCount] indexedWarpSpreadState;
         int32 indexedFilterModeState;
         float32 indexedFilterCutoffState;
+        float32 indexedFilterKeyTrackOffsetSemitonesState;
         float32 indexedFilterQState;
         float32[modulationMsegSlotCount] indexedMsegMorphState;
         float32[modulationMsegSlotCount] indexedMsegRateState;
@@ -2001,6 +2015,8 @@ namespace wt
             }
             indexedFilterModeState = resolveFilterMode (filterModeIn);
             indexedFilterCutoffState = clampFilterCutoffHz (filterCutoffIn, float32 (processor.frequency));
+            indexedFilterKeyTrackOffsetSemitonesState = std::intrinsics::clamp (
+                filterCutoffKeyTrackOffsetSemitonesIn, -60.0f, 60.0f);
             indexedFilterQState = clampFilterQ (filterQIn);
             indexedMsegMorphState[0] = std::intrinsics::clamp (mseg1MorphIn, 0.0f, 1.0f);
             indexedMsegMorphState[1] = std::intrinsics::clamp (mseg2MorphIn, 0.0f, 1.0f);
@@ -3038,6 +3054,10 @@ namespace wt
                 = articulationMaskContains (sharedOverrideMask, articulationSharedFilterCutoffBit)
                     ? articulationFilterCutoffHz.at (selectorA)
                     : indexedFilterCutoffState;
+            voiceArticulationFilterKeyTrackOffsetSemitones.at (voice)
+                = articulationMaskContains (sharedOverrideMask, articulationSharedFilterKeyTrackOffsetBit)
+                    ? articulationFilterKeyTrackOffsetSemitones.at (selectorA)
+                    : indexedFilterKeyTrackOffsetSemitonesState;
             voiceArticulationFilterQ.at (voice)
                 = articulationMaskContains (sharedOverrideMask, articulationSharedFilterQBit)
                     ? articulationFilterQ.at (selectorA)
@@ -5131,6 +5151,8 @@ namespace wt
             articulationSharedOverrideMasks.at (selectorA) = upload.sharedOverrideMask;
             articulationFilterMode.at (selectorA) = resolveFilterMode (float32 (upload.filterMode));
             articulationFilterCutoffHz.at (selectorA) = clampFilterCutoffHz (upload.filterCutoffHz, float32 (processor.frequency));
+            articulationFilterKeyTrackOffsetSemitones.at (selectorA)
+                = std::intrinsics::clamp (upload.filterKeyTrackOffsetSemitones, -60.0f, 60.0f);
             articulationFilterQ.at (selectorA) = clampFilterQ (upload.filterQ);
 
             for (int32 slotIndex = 0; slotIndex < modulationMsegSlotCount; ++slotIndex)
@@ -5614,6 +5636,8 @@ namespace wt
             rackModGateReleaseStepState = rackModGateReleaseStep (float32 (processor.frequency));
             rackModSmoothingCoefficientState = rackModOnePoleCoefficient (
                 rackModSmoothingMs, float32 (processor.frequency));
+            keyTrackSmoothingCoefficientState = keyTrackOnePoleCoefficient (
+                float32 (processor.frequency));
             resetAllFilterState();
 
             for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
@@ -5663,7 +5687,7 @@ namespace wt
 
                 float32 leftMix = 0.0f;
                 float32 rightMix = 0.0f;
-                float32 trackingPitchHz = 0.0f;
+                float32 trackingPitchHz = trackingPitchHzState;
                 int32 trackingSerial = -1;
 
                 if (! isBounceSource)
@@ -5754,13 +5778,29 @@ namespace wt
                     let baseFilterCutoffHz = voiceUsesArticulation.at (voice)
                         ? voiceArticulationFilterCutoffHz.at (voice)
                         : clampFilterCutoffHz (filterCutoffIn, processorFrequency);
+                    let baseFilterKeyTrackOffsetSemitones = voiceUsesArticulation.at (voice)
+                        ? voiceArticulationFilterKeyTrackOffsetSemitones.at (voice)
+                        : std::intrinsics::clamp (
+                            filterCutoffKeyTrackOffsetSemitonesIn, -60.0f, 60.0f);
                     let baseFilterQ = voiceUsesArticulation.at (voice)
                         ? voiceArticulationFilterQ.at (voice)
                         : filterQIn;
-                    let effectiveFilterCutoffHz = clampFilterCutoffHz (
-                        baseFilterCutoffHz
-                            * std::intrinsics::pow (2.0f, routeFilterCutoffOctaves),
-                        processorFrequency);
+                    let filterKeyTrackEnabled = filterCutoffKeyTrackEnabledIn >= 0.5f;
+                    let targetFilterCutoffHz = resolveKeyTrackedFrequencyHz (
+                        filterKeyTrackEnabled ? 1.0f : 0.0f,
+                        baseFilterCutoffHz,
+                        std::notes::noteToFrequency (sharedPlayedPitchSemitones),
+                        baseFilterKeyTrackOffsetSemitones,
+                        routeFilterCutoffOctaves * 12.0f,
+                        filterCutoffMinHz,
+                        std::intrinsics::min (filterCutoffMaxHz, processorFrequency * 0.48f));
+                    let effectiveFilterCutoffHz = filterKeyTrackEnabled
+                        ? advanceKeyTrackSmoothedValue (
+                            voiceFilterKeyTrackSmoothedHz.at (voice),
+                            targetFilterCutoffHz,
+                            keyTrackSmoothingCoefficientState)
+                        : targetFilterCutoffHz;
+                    voiceFilterKeyTrackSmoothedHz.at (voice) = effectiveFilterCutoffHz;
                     let effectiveFilterQ = clampFilterQ (baseFilterQ + routeFilterQ);
                     let effectiveFilterMix = resolveVoiceFilterMix (filterMixIn, routeFilterMix);
                     let hasSoloedOscillator = voiceHasSoloedOscillator (voiceIndex);
@@ -5950,6 +5990,8 @@ namespace wt
                 }
 
                 updateRackModulationOutputs();
+
+                trackingPitchHzState = trackingPitchHz;
 
                 out <- float32<2> (
                     leftMix * sourceModeGain,

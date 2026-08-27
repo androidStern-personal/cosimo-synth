@@ -65,6 +65,7 @@ export const SHARED_ARTICULATION_VOICE_PARAMETER_IDS = [
     "env3.decaySeconds",
     "env3.sustain",
     "env3.releaseSeconds",
+    "filterKeyTrackOffsetSemitones",
 ];
 export const ARTICULATION_VOICE_PARAMETER_IDS = [
     ...OSCILLATOR_IDS.flatMap((oscillatorID) => (OSCILLATOR_ARTICULATION_PARAMETER_IDS.map((parameterID) => `osc${oscillatorID}.${parameterID}`))),
@@ -315,6 +316,7 @@ export function compileArticulationOverrideImage(slot, routeCells) {
         warpAmounts: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "warpAmount")),
         filterMode: sharedValue("filterMode"),
         filterCutoffHz: sharedValue("filterCutoffHz"),
+        filterKeyTrackOffsetSemitones: sharedValue("filterKeyTrackOffsetSemitones"),
         filterQ: sharedValue("filterQ"),
         unisonVoices: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "unisonVoices")),
         unisonDetunes: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "unisonDetune")),

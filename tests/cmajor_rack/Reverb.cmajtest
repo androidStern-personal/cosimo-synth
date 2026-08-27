@@ -14,7 +14,7 @@
 //
 // Run: cmaj test --singleThread --sessionID=1 tests/cmajor_rack
 
-## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/Reverb.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/Reverb.cmajor")
 
 
 //==============================================================================

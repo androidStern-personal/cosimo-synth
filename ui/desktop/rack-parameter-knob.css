@@ -34,6 +34,34 @@
     justify-items: center;
 }
 
+.key-track-button {
+    min-height: 15px;
+    padding: 1px 4px;
+    border: 1px solid rgb(255 255 255 / 0.16);
+    border-radius: var(--cosimo-radius-full);
+    background: rgb(5 9 11 / 0.9);
+    color: #929ca0;
+    font-family: var(--cosimo-font-readout);
+    font-size: 6.5px;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.key-track-button[aria-pressed="true"] {
+    border-color: color-mix(in srgb, var(--key-track-accent, var(--cosimo-accent-violet)) 78%, transparent);
+    background: color-mix(in srgb, var(--key-track-accent, var(--cosimo-accent-violet)) 14%, #070b0d);
+    color: var(--key-track-accent, var(--cosimo-accent-violet));
+}
+
+.voice-key-track-button.is-knob-button {
+    position: absolute;
+    z-index: 5;
+    right: 1px;
+    bottom: 1px;
+}
+
 .rack-knob-label,
 .rack-knob-readout {
     max-width: 100%;

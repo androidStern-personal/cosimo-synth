@@ -3,7 +3,7 @@
 // RackModulationProducer.cmajtest; this file deliberately contains no shadow
 // reducer implementation.
 
-## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor")
 
 ## testFunction()
 
@@ -15,30 +15,34 @@ bool testReducerWireValuesKeepZeroInvalid()
 
 bool testCompleteMappingDomainCellCountsArePinned()
 {
-    // 1,288 static legal pairs (the enumerable UI domain) plus the Effects
-    // Lane pool block's cells: 144 mirror destinations x 14 sources = 2,016.
+    // 1,330 static legal pairs (the enumerable UI domain) plus the Effects
+    // Lane pool block's cells: 156 mirror destinations x 14 sources = 2,184.
     // Pool PAIRS are per-patch dynamic (they exist only while a lane device
     // does), so they widen the cell tables without joining the static domain.
     return wt::modulationVoiceRouteCellCount
             + wt::modulationMacroVoiceRouteCellCount
             + wt::modulationVoiceRackRouteCellCount
             + wt::modulationMacroRackRouteCellCount
-        == 1288 + ((wt::modulationVoiceSourceCount + wt::modulationMacroSourceCount) * wt::laneModPoolTargetCount);
-    // (14 sources x 144 mirror lanes = 2,016 pool cells; static pairs are 1,288.)
+        == 1330 + ((wt::modulationVoiceSourceCount + wt::modulationMacroSourceCount) * wt::laneModPoolTargetCount);
+    // (14 sources x 156 mirror lanes = 2,184 pool cells; static pairs are 1,330.)
 }
 
 bool testRackDestinationVocabularyIsCompleteAndContiguous()
 {
-    // The STATIC vocabulary stays 36 named, contiguous base-module
+    // The STATIC vocabulary appends Flanger Base Delay at 36 and the two
+    // Frequency Split crossover identities at 37..38.
     // destinations; the Effects Lane pool block follows it on the same bus
     // (M1: delay #2's four destinations), and the bus width is their sum.
-    return wt::rackModStaticTargetCount == 36
+    return wt::rackModStaticTargetCount == 39
         && wt::rackModTargetGlobalFilterCutoffOctaves == 0
-        && wt::rackModTargetReverbMix == wt::rackModStaticTargetCount - 1
+        && wt::rackModTargetReverbMix == 35
         && wt::rackModTargetLaneGlobalFilterCutoffOctaves == wt::rackModStaticTargetCount
-        && wt::rackModTargetLaneReverbMix == (2 * wt::rackModStaticTargetCount) - 1
+        && wt::rackModTargetLaneReverbMix == wt::rackModStaticTargetCount + 35
         && wt::laneModPoolTargetCount == wt::lanePoolSetCount * wt::rackModStaticTargetCount
-        && wt::rackModTargetCount == 180;
+        && wt::rackModTargetFlangerBaseDelayOctaves == 36
+        && wt::rackModTargetFrequencySplitLowOctaves == 37
+        && wt::rackModTargetFrequencySplitHighOctaves == 38
+        && wt::rackModTargetCount == 195;
 }
 
 bool testRackSmoothingAndReleaseTimingContractsArePinned()

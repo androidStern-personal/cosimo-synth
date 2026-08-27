@@ -1,0 +1,266 @@
+/**
+ * Shared musical-pitch contract for every optional Key Track control.
+ *
+ * Values in this module are always continuous semitone offsets. DSP clients
+ * add the base offset and every route contribution before calling one of the
+ * conversion functions. Ordinary Hz/ms values never enter this model.
+ */
+
+export type KeyTrackParameterFamily =
+    | "filter-frequency"
+    | "crossover-frequency"
+    | "ring-frequency"
+    | "phaser-frequency"
+    | "delay-period"
+    | "flanger-period"
+    | "resonator-frequency"
+    | "comb-period";
+
+export type KeyTrackRange = {
+    readonly center: 0;
+    readonly knobMin: number;
+    readonly knobMax: number;
+    readonly routeMin: number;
+    readonly routeMax: number;
+    readonly step: number;
+    readonly unit: "st";
+    readonly reason: string;
+};
+
+/**
+ * Family-specific ranges are deliberately not normalized into one span:
+ * filters benefit from broad sweeps, while short delay/comb periods need a
+ * tighter range to remain useful and numerically safe at musical extremes.
+ */
+export const KEY_TRACK_RANGES: Readonly<Record<KeyTrackParameterFamily, KeyTrackRange>> = Object.freeze({
+    "filter-frequency": Object.freeze({
+        center: 0, knobMin: -60, knobMax: 60, routeMin: -72, routeMax: 72, step: 0.01, unit: "st",
+        reason: "Five knob octaves cover sub through air bands; routes retain the established six-octave filter sweep.",
+    }),
+    "crossover-frequency": Object.freeze({
+        center: 0, knobMin: -48, knobMax: 48, routeMin: -48, routeMax: 48, step: 0.01, unit: "st",
+        reason: "Four octaves keep adjacent split bands controllable inside the crossover's safe frequency clamp.",
+    }),
+    "ring-frequency": Object.freeze({
+        center: 0, knobMin: -48, knobMax: 48, routeMin: -60, routeMax: 60, step: 0.01, unit: "st",
+        reason: "Four base octaves and five route octaves cover subharmonic through bright inharmonic ring colours.",
+    }),
+    "phaser-frequency": Object.freeze({
+        center: 0, knobMin: -36, knobMax: 36, routeMin: -48, routeMax: 48, step: 0.01, unit: "st",
+        reason: "Three base octaves keep the all-pass centre useful while routes can traverse the complete four-octave sweep.",
+    }),
+    "delay-period": Object.freeze({
+        center: 0, knobMin: -36, knobMax: 36, routeMin: -36, routeMax: 36, step: 0.01, unit: "st",
+        reason: "Three octaves each way spans pitched echoes without parking most of the control at delay-line limits.",
+    }),
+    "flanger-period": Object.freeze({
+        center: 0, knobMin: -24, knobMax: 24, routeMin: -36, routeMax: 36, step: 0.01, unit: "st",
+        reason: "A two-octave base span keeps the short comb region playable; modulation gets one additional octave.",
+    }),
+    "resonator-frequency": Object.freeze({
+        center: 0, knobMin: -48, knobMax: 48, routeMin: -60, routeMax: 60, step: 0.01, unit: "st",
+        reason: "Four base octaves support harmonic and inharmonic modes while routes reach a wider resonant register.",
+    }),
+    "comb-period": Object.freeze({
+        center: 0, knobMin: -36, knobMax: 36, routeMin: -48, routeMax: 48, step: 0.01, unit: "st",
+        reason: "Three base octaves preserve useful comb spacing while a four-octave route remains musically expressive.",
+    }),
+});
+
+export function requireKeyTrackRange(family: KeyTrackParameterFamily): KeyTrackRange {
+    return KEY_TRACK_RANGES[family];
+}
+
+export type KeyTrackState = {
+    readonly enabled: boolean;
+    readonly ordinaryValue: number;
+    readonly offsetSemitones: number;
+};
+
+/** Enabling always starts at the exact 1:1 centre; no prior offset is recalled. */
+export function enableKeyTrack(state: KeyTrackState): KeyTrackState {
+    return { ...state, enabled: true, offsetSemitones: 0 };
+}
+
+/** Disabling reveals the untouched ordinary value without rewriting either value. */
+export function disableKeyTrack(state: KeyTrackState): KeyTrackState {
+    return { ...state, enabled: false };
+}
+
+export function visibleKeyTrackValue(state: KeyTrackState): number {
+    return state.enabled ? state.offsetSemitones : state.ordinaryValue;
+}
+
+type ConvertedValueBounds = { readonly min: number; readonly max: number };
+
+function finitePitchHz(playedPitchHz: number): number {
+    return Number.isFinite(playedPitchHz) && playedPitchHz > 0 ? playedPitchHz : 440;
+}
+
+function sumOffsets(baseOffsetSemitones: number, routeOffsetsSemitones: ReadonlyArray<number>): number {
+    return routeOffsetsSemitones.reduce(
+        (sum, offset) => sum + (Number.isFinite(offset) ? offset : 0),
+        Number.isFinite(baseOffsetSemitones) ? baseOffsetSemitones : 0,
+    );
+}
+
+function clampConverted(value: number, bounds?: ConvertedValueBounds): number {
+    if (bounds === undefined) return value;
+    return Math.min(bounds.max, Math.max(bounds.min, value));
+}
+
+/** Follow pitch as a frequency, converting the summed offset exactly once. */
+export function trackedFrequencyHz(
+    playedPitchHz: number,
+    baseOffsetSemitones: number,
+    routeOffsetsSemitones: ReadonlyArray<number>,
+    bounds?: ConvertedValueBounds,
+): number {
+    const offsetSemitones = sumOffsets(baseOffsetSemitones, routeOffsetsSemitones);
+    return clampConverted(finitePitchHz(playedPitchHz) * (2 ** (offsetSemitones / 12)), bounds);
+}
+
+/** Follow pitch as a tuned delay/comb period; positive pitch offsets shorten time. */
+export function trackedPeriodMilliseconds(
+    playedPitchHz: number,
+    baseOffsetSemitones: number,
+    routeOffsetsSemitones: ReadonlyArray<number>,
+    bounds?: ConvertedValueBounds,
+): number {
+    const offsetSemitones = sumOffsets(baseOffsetSemitones, routeOffsetsSemitones);
+    const periodMilliseconds = (1_000 / finitePitchHz(playedPitchHz)) * (2 ** (-offsetSemitones / 12));
+    return clampConverted(periodMilliseconds, bounds);
+}
+
+export type KeyTrackRouteStorage = "octaves" | "semitones";
+
+/** Existing octave-backed routes keep their deployed storage unchanged. */
+export function keyTrackRouteAmountToSemitones(
+    canonicalAmount: number,
+    storage: KeyTrackRouteStorage,
+): number {
+    return storage === "octaves" ? canonicalAmount * 12 : canonicalAmount;
+}
+
+/** Convert the Key Track editor's semitone language back to deployed storage. */
+export function keyTrackRouteAmountFromSemitones(
+    semitones: number,
+    storage: KeyTrackRouteStorage,
+): number {
+    return storage === "octaves" ? semitones / 12 : semitones;
+}
+
+export type KeyTrackControlDefinition = {
+    readonly id: string;
+    readonly family: KeyTrackParameterFamily;
+    readonly buttonLabel: "Key Track";
+    readonly initialEnabled: false;
+};
+
+export const KEY_TRACK_CURRENT_CONTROL_IDS = Object.freeze([
+    "voice.filterCutoff",
+    "lane.globalFilterCutoff",
+    "lane.distortionWetHPHz",
+    "lane.distortionWetLPHz",
+    "lane.delayFilter",
+    "lane.delayTime",
+    "lane.phaserFrequency",
+    "lane.chorusRingFrequencyHz",
+    "lane.flangerBaseDelayMs",
+    "lane.frequencySplitLowHz",
+    "lane.frequencySplitHighHz",
+] as const);
+
+const familyByControlID: Readonly<Record<(typeof KEY_TRACK_CURRENT_CONTROL_IDS)[number], KeyTrackParameterFamily>> = Object.freeze({
+    "voice.filterCutoff": "filter-frequency",
+    "lane.globalFilterCutoff": "filter-frequency",
+    "lane.distortionWetHPHz": "filter-frequency",
+    "lane.distortionWetLPHz": "filter-frequency",
+    "lane.delayFilter": "filter-frequency",
+    "lane.delayTime": "delay-period",
+    "lane.phaserFrequency": "phaser-frequency",
+    "lane.chorusRingFrequencyHz": "ring-frequency",
+    "lane.flangerBaseDelayMs": "flanger-period",
+    "lane.frequencySplitLowHz": "crossover-frequency",
+    "lane.frequencySplitHighHz": "crossover-frequency",
+});
+
+const definitionsByID = new Map<string, KeyTrackControlDefinition>(
+    KEY_TRACK_CURRENT_CONTROL_IDS.map((id) => [id, Object.freeze({
+        id,
+        family: familyByControlID[id],
+        buttonLabel: "Key Track" as const,
+        initialEnabled: false as const,
+    })]),
+);
+
+export function getKeyTrackDefinition(id: string): KeyTrackControlDefinition | null {
+    return definitionsByID.get(id) ?? null;
+}
+
+export type LaneKeyTrackEndpoints = {
+    readonly enabledEndpointID: string;
+    readonly offsetEndpointID: string;
+};
+
+const laneEndpointsByOrdinaryEndpointID: Readonly<Record<string, LaneKeyTrackEndpoints>> = Object.freeze({
+    globalFilterCutoff: Object.freeze({
+        enabledEndpointID: "globalFilterCutoffKeyTrackEnabled",
+        offsetEndpointID: "globalFilterCutoffKeyTrackOffsetSemitones",
+    }),
+    distortionWetHPHz: Object.freeze({
+        enabledEndpointID: "distortionWetHPKeyTrackEnabled",
+        offsetEndpointID: "distortionWetHPKeyTrackOffsetSemitones",
+    }),
+    distortionWetLPHz: Object.freeze({
+        enabledEndpointID: "distortionWetLPKeyTrackEnabled",
+        offsetEndpointID: "distortionWetLPKeyTrackOffsetSemitones",
+    }),
+    delayFilter: Object.freeze({
+        enabledEndpointID: "delayFilterKeyTrackEnabled",
+        offsetEndpointID: "delayFilterKeyTrackOffsetSemitones",
+    }),
+    delayTime: Object.freeze({
+        enabledEndpointID: "delayTimeKeyTrackEnabled",
+        offsetEndpointID: "delayTimeKeyTrackOffsetSemitones",
+    }),
+    phaserFrequency: Object.freeze({
+        enabledEndpointID: "phaserFrequencyKeyTrackEnabled",
+        offsetEndpointID: "phaserFrequencyKeyTrackOffsetSemitones",
+    }),
+    chorusRingFrequencyHz: Object.freeze({
+        enabledEndpointID: "chorusRingKeyTrackEnabled",
+        offsetEndpointID: "chorusRingKeyTrackOffsetSemitones",
+    }),
+    flangerBaseDelayMs: Object.freeze({
+        enabledEndpointID: "flangerBaseDelayKeyTrackEnabled",
+        offsetEndpointID: "flangerBaseDelayKeyTrackOffsetSemitones",
+    }),
+});
+
+export function getLaneKeyTrackEndpoints(ordinaryEndpointID: string): LaneKeyTrackEndpoints | null {
+    return laneEndpointsByOrdinaryEndpointID[ordinaryEndpointID] ?? null;
+}
+
+type ScalarSpecBuilder = (input: {
+    readonly min: number;
+    readonly max: number;
+    readonly step: number;
+    readonly unit: "st";
+    readonly digits: number;
+}) => unknown;
+
+/** Exact-entry base and route fields share this semitone/cents language. */
+export function keyTrackOffsetEntrySpec(
+    family: KeyTrackParameterFamily,
+    buildScalarSpec: ScalarSpecBuilder,
+): unknown {
+    const range = requireKeyTrackRange(family);
+    return buildScalarSpec({
+        min: range.knobMin,
+        max: range.knobMax,
+        step: 0,
+        unit: "st",
+        digits: 4,
+    });
+}

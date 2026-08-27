@@ -3206,7 +3206,7 @@ test("Phaser and Delay keep the selected Free control visibly ineffective when S
     }
 });
 
-test("desktop chorus mode buttons do not visually collide in the selected rack editor", async () => {
+test("desktop chorus mode buttons and Ring Frequency Key Track stay contained", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -3215,24 +3215,30 @@ test("desktop chorus mode buttons do not visually collide in the selected rack e
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusMotionMode", 2);
             window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusBloomMode", 2);
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusRingOffsetMode", 1);
         });
 
         await page.waitForFunction(() => (
             document.querySelector('[data-role="chorus-motion-mode-control"]')?.textContent?.trim() === "MotionClassic"
             && document.querySelector('[data-role="chorus-bloom-mode-control"]')?.textContent?.trim() === "BloomLarge"
-            && document.querySelector('[data-role="chorus-ring-offset-mode-control"]')?.textContent?.trim() === "PitchLow 5th"
+            && document.querySelector('[data-role="key-track-chorusRingFrequencyHz"]')?.textContent?.trim() === "Key Track"
         ));
 
         const layout = await page.evaluate(() => {
             const roles = [
                 "chorus-motion-mode-control",
                 "chorus-bloom-mode-control",
-                "chorus-ring-offset-mode-control",
             ];
             const buttons = roles.map((role) => document.querySelector(`[data-role="${role}"]`));
+            const ringSurface = document.querySelector(
+                '[data-role="rack-parameter-surface-chorusRingFrequencyHz"]',
+            );
+            const keyTrackButton = document.querySelector(
+                '[data-role="key-track-chorusRingFrequencyHz"]',
+            );
 
-            if (!buttons.every((button) => button instanceof HTMLElement)) {
+            if (!buttons.every((button) => button instanceof HTMLElement)
+                || !(ringSurface instanceof HTMLElement)
+                || !(keyTrackButton instanceof HTMLElement)) {
                 return null;
             }
 
@@ -3264,13 +3270,24 @@ test("desktop chorus mode buttons do not visually collide in the selected rack e
                 ))),
                 clipsInternalOverflow: rects.every((rect) => rect.overflowX === "hidden"),
                 contentFits: rects.every((rect) => rect.scrollWidth <= rect.clientWidth + 1),
+                keyTrackText: keyTrackButton.textContent?.trim(),
+                keyTrackContained: (() => {
+                    const surfaceRect = ringSurface.getBoundingClientRect();
+                    const buttonRect = keyTrackButton.getBoundingClientRect();
+                    return buttonRect.left >= surfaceRect.left
+                        && buttonRect.right <= surfaceRect.right
+                        && buttonRect.top >= surfaceRect.top
+                        && buttonRect.bottom <= surfaceRect.bottom;
+                })(),
             };
         });
 
-        assert.ok(layout, "Expected chorus mode buttons to render.");
+        assert.ok(layout, "Expected Chorus mode and Ring Frequency controls to render.");
         assert.equal(layout.noBoxOverlap, true, `Mode button boxes overlap: ${JSON.stringify(layout.rects)}`);
         assert.equal(layout.clipsInternalOverflow, true, `Mode button labels can paint outside their boxes: ${JSON.stringify(layout.rects)}`);
         assert.equal(layout.contentFits, true, `Longest chorus mode labels do not fit their buttons: ${JSON.stringify(layout.rects)}`);
+        assert.equal(layout.keyTrackText, "Key Track");
+        assert.equal(layout.keyTrackContained, true, "Ring Frequency Key Track must stay inside its control.");
     } finally {
         await page.close();
     }
@@ -3285,7 +3302,6 @@ test("desktop chorus controls send exact parameter updates", async () => {
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusMotionMode", 0);
             window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusBloomMode", 0);
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusRingOffsetMode", 0);
         });
         await clearHarnessDebugLog(page);
 
@@ -3293,17 +3309,22 @@ test("desktop chorus controls send exact parameter updates", async () => {
         await editRackParameterValue(page, "chorus-mix-control", "66");
         await page.click('[data-role="chorus-motion-mode-control"]');
         await page.click('[data-role="chorus-bloom-mode-control"]');
-        await page.click('[data-role="chorus-ring-offset-mode-control"]');
         await editRackParameterValue(page, "chorus-tone-control", "80");
         await editRackParameterValue(page, "chorus-feedback-control", "70");
         await editRackParameterValue(page, "chorus-ring-amount-control", "50");
-        await editRackParameterValue(page, "chorus-ring-fine-control", "-0.75");
+        await editRackParameterValue(page, "rack-parameter-chorusRingFrequencyHz", "440.5 Hz");
+        await page.click('[data-role="key-track-chorusRingFrequencyHz"]');
+        await editRackParameterValue(page, "rack-parameter-chorusRingFrequencyHz", "-0.75 st");
 
         const snapshot = await waitForHarnessSnapshot(
             page,
             "chorus parameter updates",
-            (nextSnapshot) => (
-                nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+            (nextSnapshot) => {
+                const rawLaneState = nextSnapshot.storedState?.["lane.v1"];
+                const chorusParams = typeof rawLaneState === "string"
+                    ? JSON.parse(rawLaneState).devices?.["chorus#1"]?.params
+                    : null;
+                return nextSnapshot.sentMessages.some(({ endpointID, value }) => (
                     endpointID === "laneTopology"
                     && Array.isArray(value?.slotIds)
                     && ((Number(value.enabledMask) >> value.slotIds.indexOf(3)) & 1) === 1
@@ -3311,12 +3332,13 @@ test("desktop chorus controls send exact parameter updates", async () => {
                 && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusMix", 0.66))
                 && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusMotionMode", 1))
                 && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusBloomMode", 1))
-                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusRingOffsetMode", 1))
                 && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusTone", 0.8))
                 && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusFeedback", 0.7))
                 && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusRingAmount", 0.5))
-                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusRingFineSemitones", -0.75))
-            ),
+                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusRingFrequencyHz", 440.5))
+                && Number(chorusParams?.chorusRingKeyTrackEnabled) === 1
+                && Number(chorusParams?.chorusRingKeyTrackOffsetSemitones) === -0.75;
+            },
         );
 
         assert.equal(snapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusMix")), true);
@@ -3332,14 +3354,22 @@ test("desktop chorus controls render host values before edits", async () => {
         await page.waitForSelector('[data-role="effects-rack-card"]');
         await selectRackEffect(page, "chorus");
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusMix", 0.375);
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusMotionMode", 3);
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusBloomMode", 4);
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusRingOffsetMode", 2);
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusTone", 0.825);
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusFeedback", 0.615);
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusRingAmount", 0.285);
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusRingFineSemitones", 1.25);
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            const snapshot = harness.getSnapshot();
+            const laneState = JSON.parse(String(snapshot.storedState["lane.v1"]));
+            laneState.devices["chorus#1"].params = {
+                ...laneState.devices["chorus#1"].params,
+                chorusMix: 0.375,
+                chorusMotionMode: 3,
+                chorusBloomMode: 4,
+                chorusTone: 0.825,
+                chorusFeedback: 0.615,
+                chorusRingAmount: 0.285,
+                chorusRingFrequencyHz: 441.25,
+                chorusRingKeyTrackEnabled: 1,
+                chorusRingKeyTrackOffsetSemitones: 1.25,
+            };
+            harness.setStoredStateValue("lane.v1", JSON.stringify(laneState));
         });
 
         await page.waitForFunction(() => {
@@ -3350,10 +3380,10 @@ test("desktop chorus controls render host values before edits", async () => {
                 && readInputValue("chorus-tone-control") === "0.825"
                 && readInputValue("chorus-feedback-control") === "0.615"
                 && readInputValue("chorus-ring-amount-control") === "0.285"
-                && readInputValue("chorus-ring-fine-control") === "1.25"
+                && readInputValue("rack-parameter-chorusRingFrequencyHz") === "1.25"
+                && document.querySelector('[data-role="key-track-chorusRingFrequencyHz"]')?.getAttribute("aria-pressed") === "true"
                 && readText("chorus-motion-mode-control").includes("Fast")
-                && readText("chorus-bloom-mode-control").includes("Lg+Sh")
-                && readText("chorus-ring-offset-mode-control").includes("+Oct");
+                && readText("chorus-bloom-mode-control").includes("Lg+Sh");
         });
 
         const rendered = await page.evaluate(() => ({
@@ -3361,10 +3391,10 @@ test("desktop chorus controls render host values before edits", async () => {
             tone: document.querySelector('[data-role="chorus-tone-control"]')?.value,
             feedback: document.querySelector('[data-role="chorus-feedback-control"]')?.value,
             ring: document.querySelector('[data-role="chorus-ring-amount-control"]')?.value,
-            ringFine: document.querySelector('[data-role="chorus-ring-fine-control"]')?.value,
+            ringOffset: document.querySelector('[data-role="rack-parameter-chorusRingFrequencyHz"]')?.value,
+            keyTrackPressed: document.querySelector('[data-role="key-track-chorusRingFrequencyHz"]')?.getAttribute("aria-pressed"),
             motionText: document.querySelector('[data-role="chorus-motion-mode-control"]')?.textContent?.trim(),
             bloomText: document.querySelector('[data-role="chorus-bloom-mode-control"]')?.textContent?.trim(),
-            ringOffsetText: document.querySelector('[data-role="chorus-ring-offset-mode-control"]')?.textContent?.trim(),
         }));
 
         assert.deepEqual(rendered, {
@@ -3372,10 +3402,10 @@ test("desktop chorus controls render host values before edits", async () => {
             tone: "0.825",
             feedback: "0.615",
             ring: "0.285",
-            ringFine: "1.25",
+            ringOffset: "1.25",
+            keyTrackPressed: "true",
             motionText: "MotionFast",
             bloomText: "BloomLg+Sh",
-            ringOffsetText: "Pitch+Oct",
         });
     } finally {
         await page.close();
@@ -3531,7 +3561,7 @@ test("desktop chorus knob ignores mouse movement after a completed drag release"
     }
 });
 
-test("desktop chorus cycle buttons wrap through all modes", async () => {
+test("desktop chorus Motion and Bloom buttons wrap through all modes", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -3540,7 +3570,6 @@ test("desktop chorus cycle buttons wrap through all modes", async () => {
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusMotionMode", 0);
             window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusBloomMode", 0);
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusRingOffsetMode", 0);
         });
         await clearHarnessDebugLog(page);
 
@@ -3552,17 +3581,12 @@ test("desktop chorus cycle buttons wrap through all modes", async () => {
             await page.click('[data-role="chorus-bloom-mode-control"]');
         }
 
-        for (let i = 0; i < 5; i += 1) {
-            await page.click('[data-role="chorus-ring-offset-mode-control"]');
-        }
-
         const snapshot = await waitForHarnessSnapshot(
             page,
             "chorus cycle button updates",
             (nextSnapshot) => (
                 nextSnapshot.sentMessages.filter((message) => isLaneParamSend(message, "chorusMotionMode")).length >= 5
                 && nextSnapshot.sentMessages.filter((message) => isLaneParamSend(message, "chorusBloomMode")).length >= 6
-                && nextSnapshot.sentMessages.filter((message) => isLaneParamSend(message, "chorusRingOffsetMode")).length >= 5
             ),
         );
 
@@ -3577,12 +3601,6 @@ test("desktop chorus cycle buttons wrap through all modes", async () => {
                 .filter((message) => isLaneParamSend(message, "chorusBloomMode"))
                 .map(({ value }) => Number(value.value)),
             [1, 2, 3, 4, 0, 1],
-        );
-        assert.deepEqual(
-            snapshot.sentMessages
-                .filter((message) => isLaneParamSend(message, "chorusRingOffsetMode"))
-                .map(({ value }) => Number(value.value)),
-            [1, 2, 3, 0, 1],
         );
     } finally {
         await page.close();

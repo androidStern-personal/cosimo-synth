@@ -28,10 +28,11 @@ const LANE_DEVICE_ENDPOINTS = new Map([
     ["distortion", ["distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"]],
     ["ott", ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"]],
     ["chorus", ["chorusMix", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingFineSemitones"]],
-    ["flanger", ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix"]],
+    ["flanger", ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix", "flangerBaseDelayMs"]],
     ["phaser", ["phaserRate", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix"]],
     ["delay", ["delayTime", "delayFeedback", "delayFilter", "delayMix"]],
     ["reverb", ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"]],
+    ["frequencySplit", ["xoverLowHz", "xoverHighHz"]],
 ]);
 const LANE_KIND_PATTERN = /^lane\.([a-zA-Z]+)#([1-9][0-9]*)\.([A-Za-z0-9]+)$/;
 /** Parse an untrusted lane target without accepting unknown devices/params. */

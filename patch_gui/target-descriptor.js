@@ -10,7 +10,7 @@
  */
 import { laneInstanceNumber, laneMirrorRackKind, parseLaneModulationTargetKind, } from "./lane-modulation-targets.js";
 import { MODULATION_TARGET_IDENTITIES, OSCILLATOR_IDS, laneBaseKindForRackEndpoint, } from "./modulation-targets.js";
-import { RACK_EFFECT_DESCRIPTORS, } from "./rack-parameter-descriptors.js";
+import { RACK_EFFECT_DESCRIPTORS, rackModulationIdentityEndpointID, } from "./rack-parameter-descriptors.js";
 import { casesHandled, err, ok, shouldNeverHappen } from "./result.js";
 import { GLOBAL_TUNE_ENDPOINT_ID, GLOBAL_TUNE_INITIAL_SEMITONES, GLOBAL_TUNE_MAX_SEMITONES, GLOBAL_TUNE_MIN_SEMITONES, GLOBAL_TUNE_MODULATION_MAX_SEMITONES, GLOBAL_TUNE_MODULATION_MIN_SEMITONES, GLOBAL_TUNE_TARGET_KIND, } from "./global-tune.js";
 import { OSCILLATOR_DEFAULT_VOLUME_NORMALIZED } from "./oscillator-defaults.js";
@@ -288,6 +288,24 @@ function createGeneratorTargetDescriptor(definition) {
     });
 }
 const GENERATOR_TARGET_DESCRIPTORS = Object.freeze(GENERATOR_TARGET_DEFINITIONS.map(createGeneratorTargetDescriptor));
+const FREQUENCY_SPLIT_TARGET_DESCRIPTORS = Object.freeze([
+    { suffix: "low", label: "Low Crossover", kind: "lane.frequencySplit#1.xoverLowHz" },
+    { suffix: "high", label: "High Crossover", kind: "lane.frequencySplit#1.xoverHighHz" },
+].map(({ suffix, label, kind }) => Object.freeze({
+    targetId: `frequency-split.${suffix}`,
+    moduleId: "frequency-split",
+    workspace: "effects",
+    label,
+    defaultValue: 0.5,
+    initialValue: 0.5,
+    format: { kind: "frequency", minHz: 40, maxHz: 18_000 },
+    modAmount: { min: -4, max: 4, unit: "oct", digits: 2 },
+    binding: { _tag: "unbacked", reason: "no-endpoint" },
+    isQuick: false,
+    compound: null,
+    articulationParameterId: null,
+    modulationTargetKind: kind,
+})));
 function rackTargetId(parameter) {
     // SAFETY: effect identity and endpoint id both come from the closed rack catalog.
     return `${parameter.effectId}.${parameter.endpointID}`;
@@ -357,11 +375,12 @@ function createRackTargetDescriptor(parameter) {
         articulationParameterId: null,
         modulationTargetKind: parameter.modulationTargetIndex === null
             ? null
-            : laneBaseKindForRackEndpoint(parameter.endpointID),
+            : laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
     });
 }
 const TARGET_DESCRIPTORS = Object.freeze([
     ...RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters.map(createRackTargetDescriptor)),
+    ...FREQUENCY_SPLIT_TARGET_DESCRIPTORS,
     GLOBAL_TUNE_TARGET_DESCRIPTOR,
     ...OSCILLATOR_MODULATION_DESCRIPTORS,
     ...GENERATOR_TARGET_DESCRIPTORS,
@@ -450,7 +469,10 @@ export function getModulationTargetDisplayLabel(targetKind) {
     const parsedLane = parseLaneModulationTargetKind(targetKind);
     if (parsedLane !== null) {
         const descriptor = getModulationTargetDescriptor(laneMirrorRackKind(parsedLane));
-        return `${descriptor.moduleId.toUpperCase()}${laneInstanceSuffix(parsedLane)} ${descriptor.label.toUpperCase()}`;
+        const moduleLabel = parsedLane.deviceType === "frequencySplit"
+            ? "FREQUENCY SPLIT"
+            : descriptor.moduleId.toUpperCase();
+        return `${moduleLabel}${laneInstanceSuffix(parsedLane)} ${descriptor.label.toUpperCase()}`;
     }
     return getModulationTargetDescriptor(targetKind).label.toUpperCase();
 }
@@ -465,7 +487,9 @@ export function getModulationTargetPresentation(targetKind) {
         const descriptor = getModulationTargetDescriptor(laneMirrorRackKind(parsedLane));
         const moduleLabel = descriptor.moduleId === "filter"
             ? "Global Filter"
-            : EFFECT_LABEL_BY_MODULE_ID.get(descriptor.moduleId) ?? descriptor.moduleId;
+            : descriptor.moduleId === "frequency-split"
+                ? "Frequency Split"
+                : EFFECT_LABEL_BY_MODULE_ID.get(descriptor.moduleId) ?? descriptor.moduleId;
         return {
             category: `${moduleLabel}${laneInstanceSuffix(parsedLane)}`,
             parameter: descriptor.label,

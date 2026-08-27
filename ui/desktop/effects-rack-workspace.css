@@ -866,6 +866,14 @@
     gap: 8px;
 }
 
+.subway-crossover-control {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 5px;
+    align-items: stretch;
+}
+
 .subway-crossover-slider {
     --crossover-progress: 0.5;
     position: relative;
@@ -905,6 +913,19 @@
 
 .subway-crossover-readout {
     font-size: 11px;
+}
+
+.subway-crossover-slider small {
+    grid-column: 1 / -1;
+    color: #8fa19f;
+    font-family: var(--cosimo-font-readout);
+    font-size: 7px;
+    text-align: right;
+}
+
+.split-key-track-button {
+    width: 43px;
+    --key-track-accent: #69d5c5;
 }
 
 .subway-group-editor-actions {
@@ -1186,6 +1207,14 @@
     display: grid;
     place-items: stretch;
     touch-action: none;
+}
+
+.rack-key-track-button {
+    position: absolute;
+    z-index: 5;
+    right: 3px;
+    bottom: 3px;
+    --key-track-accent: var(--editor-accent);
 }
 
 /* ADR-025 row 2: selection brightens the OWNING effect color, never neutral. */

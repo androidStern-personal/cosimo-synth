@@ -163,12 +163,21 @@ namespace wt
     // linear-phase FIR idea). Ascending band order: tag 1 is low.
     let laneSplitParamXoverLowHz  = 0;
     let laneSplitParamXoverHighHz = 1;
+    let laneSplitParamXoverLowKeyTrackEnabled = 2;
+    let laneSplitParamXoverLowKeyTrackOffsetSemitones = 3;
+    let laneSplitParamXoverHighKeyTrackEnabled = 4;
+    let laneSplitParamXoverHighKeyTrackOffsetSemitones = 5;
 
     let laneSplitXoverMinHz = 40.0f;
     let laneSplitXoverMaxHz = 18000.0f;
 
-    // Crossover drags glide like the filter-cutoff rows in the ramp table.
-    let laneUtilitySlotParamRampFrames = 64;
+    // Ordinary crossover Hz glides in its deployed domain. Key Track state and
+    // offsets snap here, then the converted/clamped frequency is smoothed.
+    int32 laneUtilitySlotParamRampFrames (int32 paramIndex)
+    {
+        return paramIndex == laneSplitParamXoverLowHz
+            || paramIndex == laneSplitParamXoverHighHz ? 64 : 0;
+    }
 
     float32 laneClampSplitXoverHz (float32 hz)
     {
@@ -198,7 +207,7 @@ namespace wt
 
     // Per-slot parameter records travel in LaneSlotParamsUpload.values; each pool
     // slot type documents its own value vocabulary below (indices into `values`).
-    let laneSlotParamCount = 8;
+    let laneSlotParamCount = 11;
 
     // Delay-type pool slots.
     let laneDelayParamTimeMs   = 0;
@@ -207,12 +216,18 @@ namespace wt
     let laneDelayParamMix      = 3;
     let laneDelayParamTimeMode = 4;
     let laneDelayParamDivision = 5;
+    let laneDelayParamTimeKeyTrackEnabled = 6;
+    let laneDelayParamTimeKeyTrackOffsetSemitones = 7;
+    let laneDelayParamFilterKeyTrackEnabled = 8;
+    let laneDelayParamFilterKeyTrackOffsetSemitones = 9;
 
     // GlobalFilter-type pool slots.
     let laneGlobalFilterParamMode      = 0;
     let laneGlobalFilterParamCutoffHz  = 1;
     let laneGlobalFilterParamResonance = 2;
     let laneGlobalFilterParamDrive     = 3;
+    let laneGlobalFilterParamCutoffKeyTrackEnabled = 4;
+    let laneGlobalFilterParamCutoffKeyTrackOffsetSemitones = 5;
 
     // Distortion-type pool slots.
     let laneDistortionParamMode    = 0;
@@ -222,6 +237,10 @@ namespace wt
     let laneDistortionParamWetHPHz = 4;
     let laneDistortionParamWetLPHz = 5;
     let laneDistortionParamType    = 6;
+    let laneDistortionParamWetHPKeyTrackEnabled = 7;
+    let laneDistortionParamWetHPKeyTrackOffsetSemitones = 8;
+    let laneDistortionParamWetLPKeyTrackEnabled = 9;
+    let laneDistortionParamWetLPKeyTrackOffsetSemitones = 10;
 
     // OTT-type pool slots.
     let laneOttParamMix           = 0;
@@ -239,12 +258,18 @@ namespace wt
     let laneChorusParamRingAmount        = 5;
     let laneChorusParamRingOffsetMode    = 6;
     let laneChorusParamRingFineSemitones = 7;
+    let laneChorusParamRingFrequencyHz = 8;
+    let laneChorusParamRingKeyTrackEnabled = 9;
+    let laneChorusParamRingKeyTrackOffsetSemitones = 10;
 
     // Flanger-type pool slots.
     let laneFlangerParamRate     = 0;
     let laneFlangerParamDepth    = 1;
     let laneFlangerParamFeedback = 2;
     let laneFlangerParamMix      = 3;
+    let laneFlangerParamBaseDelayMs = 4;
+    let laneFlangerParamBaseDelayKeyTrackEnabled = 5;
+    let laneFlangerParamBaseDelayKeyTrackOffsetSemitones = 6;
 
     // Phaser-type pool slots.
     let lanePhaserParamRate         = 0;
@@ -255,6 +280,8 @@ namespace wt
     let lanePhaserParamFeedback     = 5;
     let lanePhaserParamPhase        = 6;
     let lanePhaserParamMix          = 7;
+    let lanePhaserParamFrequencyKeyTrackEnabled = 8;
+    let lanePhaserParamFrequencyKeyTrackOffsetSemitones = 9;
 
     // Reverb-type pool slots.
     let laneReverbParamSize    = 0;
@@ -290,12 +317,13 @@ namespace wt
         table[wrap<rackModuleCount> (rackModuleOtt), 3] = 128;
         table[wrap<rackModuleCount> (rackModuleOtt), 4] = 128;
         // chorus: mix 128, motion 0, bloom 0, tone 128, feedback 128,
-        // ringAmount 128, ringOffsetMode 0, ringFine 128
+        // ringAmount 128, legacy mode 0/fine 128, ordinary frequency 128.
         table[wrap<rackModuleCount> (rackModuleChorus), 0] = 128;
         table[wrap<rackModuleCount> (rackModuleChorus), 3] = 128;
         table[wrap<rackModuleCount> (rackModuleChorus), 4] = 128;
         table[wrap<rackModuleCount> (rackModuleChorus), 5] = 128;
         table[wrap<rackModuleCount> (rackModuleChorus), 7] = 128;
+        table[wrap<rackModuleCount> (rackModuleChorus), 8] = 128;
         // flanger: rate 64, depth 64, feedback 64, mix 128
         table[wrap<rackModuleCount> (rackModuleFlanger), 0] = 64;
         table[wrap<rackModuleCount> (rackModuleFlanger), 1] = 64;
@@ -323,13 +351,10 @@ namespace wt
         return table;
     }
 
-
-    // Distortion.cmajor:144-160's rule, in octave units: 0.001 octaves is 0.07% of a
-    // frequency, so recomputing pow() below that buys nothing.
+    // Preserve the deployed untracked route law bit-for-bit. Existing
+    // frequency/time destinations stay octave-backed and retain the 0.001
+    // octave recompute threshold whenever Key Track is off.
     let rackOctaveEpsilon = 0.001f;
-
-    // Pool sets each carry a bank of the six frequency-like scalers after
-    // One glide-scaler bank per ORDINAL: index = ordinal*6 + laneOctaveScaler<X>.
     let laneOctaveScalerGlobalFilterCutoff = 0;
     let laneOctaveScalerDistortionWetHP    = 1;
     let laneOctaveScalerDistortionWetLP    = 2;
@@ -471,10 +496,6 @@ namespace wt
         return base + offset;
     }
 
-    // Frequency-like destinations modulate in OCTAVES, matching the engine's existing
-    // modulationTargetFilterCutoffOctaves convention. pow() is only recomputed when the
-    // offset has actually moved, which in the overwhelmingly common case of an
-    // unrouted destination means never - the offset is exactly 0.0f every frame.
     struct RackOctaveScaler
     {
         float32 offsetOctaves;
@@ -631,6 +652,18 @@ namespace wt
         int32[rackModuleCount, laneSlotParamCount] slotParamRampTable;
         bool[laneChainSlotCount] slotInCurrentChain;
 
+        // Post-conversion smoothing state. Ordinary values retain their
+        // deployed ramps; these cells are only advanced while Key Track is on.
+        let laneTrackedFrequencyGlobalFilter = 0;
+        let laneTrackedFrequencyDistortionWetHP = 1;
+        let laneTrackedFrequencyDistortionWetLP = 2;
+        let laneTrackedFrequencyPhaser = 3;
+        let laneTrackedFrequencyDelayFilter = 4;
+        let laneTrackedFrequencyCount = 5;
+        float32[lanePoolInstanceCount, laneTrackedFrequencyCount] trackedFrequencyHz;
+        float32[lanePoolInstanceCount] trackedDelayTimeMs;
+        float32[lanePoolInstanceCount] trackedFlangerBaseDelayMs;
+        float32 keyTrackSmoothingCoefficientState;
         RackOctaveScaler[rackOctaveScalerCount] octaveScalers;
 
         // Split marker DSP (T2): per unit, the LR4 crossover tree plus the
@@ -646,6 +679,7 @@ namespace wt
         laneSplitFilters::tpt::svf::Implementation[laneSplitUnitCount] splitCompensation;
         float32[laneSplitUnitCount] splitTunedLowHz;
         float32[laneSplitUnitCount] splitTunedHighHz;
+        float32[laneSplitUnitCount, 2] splitTrackedFrequencyHz;
         int32[laneSplitUnitCount] currentSplitBandCount;
 
         // Per-frame group-walk scratch, held as members so the dispatch
@@ -663,12 +697,12 @@ namespace wt
 
         void init()
         {
-            // pow (2, 0) - the identity, so an unrouted frequency destination never
-            // computes a pow() at all.
             for (wrap<rackOctaveScalerCount> scaler)
                 octaveScalers[scaler].scale = 1.0f;
 
             slotParamRampTable = laneSlotParamRampFrames();
+            keyTrackSmoothingCoefficientState = keyTrackOnePoleCoefficient (
+                float32 (processor.frequency));
         }
 
         // One frame of host-style linear ramping for every pool record cell.
@@ -693,7 +727,7 @@ namespace wt
                         // The type table is device-shaped; marker slots take
                         // the utility row (crossovers glide like cutoffs).
                         let rampFrames = laneSlotIsGroupMarker (int32 (slot))
-                                           ? laneUtilitySlotParamRampFrames
+                                           ? laneUtilitySlotParamRampFrames (int32 (param))
                                            : slotParamRampTable[wrap<rackModuleCount> (int32 (slot) % rackModuleCount), param];
 
                         if (rampFrames <= 0)
@@ -1019,12 +1053,43 @@ namespace wt
             for (wrap<laneSplitUnitCount> unit)
             {
                 let slot = wrap<laneChainSlotCount> (laneSplitSlotBase + int32 (unit));
+                let splitModBase = int32 (unit) * rackModStaticTargetCount;
 
                 if (! slotInCurrentChain[slot])
                     continue;
 
-                let lowHz = laneClampSplitXoverHz (slotParamCurrent[slot, laneSplitParamXoverLowHz]);
-                let highHz = laneClampSplitXoverHz (slotParamCurrent[slot, laneSplitParamXoverHighHz]);
+                let lowKeyTrackEnabled = slotParamCurrent[slot, laneSplitParamXoverLowKeyTrackEnabled] >= 0.5f;
+                let highKeyTrackEnabled = slotParamCurrent[slot, laneSplitParamXoverHighKeyTrackEnabled] >= 0.5f;
+                let lowTargetHz = resolveKeyTrackedFrequencyHz (
+                    lowKeyTrackEnabled ? 1.0f : 0.0f,
+                    slotParamCurrent[slot, laneSplitParamXoverLowHz],
+                    trackingPitchHzIn,
+                    slotParamCurrent[slot, laneSplitParamXoverLowKeyTrackOffsetSemitones],
+                    rackModIn[wrap<rackModTargetCount> (
+                        splitModBase + rackModTargetFrequencySplitLowOctaves)] * 12.0f,
+                    laneSplitXoverMinHz,
+                    laneSplitXoverMaxHz);
+                let highTargetHz = resolveKeyTrackedFrequencyHz (
+                    highKeyTrackEnabled ? 1.0f : 0.0f,
+                    slotParamCurrent[slot, laneSplitParamXoverHighHz],
+                    trackingPitchHzIn,
+                    slotParamCurrent[slot, laneSplitParamXoverHighKeyTrackOffsetSemitones],
+                    rackModIn[wrap<rackModTargetCount> (
+                        splitModBase + rackModTargetFrequencySplitHighOctaves)] * 12.0f,
+                    laneSplitXoverMinHz,
+                    laneSplitXoverMaxHz);
+                let lowHz = lowKeyTrackEnabled
+                    ? advanceKeyTrackSmoothedValue (
+                        splitTrackedFrequencyHz[unit, 0], lowTargetHz,
+                        keyTrackSmoothingCoefficientState)
+                    : lowTargetHz;
+                let highHz = highKeyTrackEnabled
+                    ? advanceKeyTrackSmoothedValue (
+                        splitTrackedFrequencyHz[unit, 1], highTargetHz,
+                        keyTrackSmoothingCoefficientState)
+                    : highTargetHz;
+                splitTrackedFrequencyHz[unit, 0] = lowHz;
+                splitTrackedFrequencyHz[unit, 1] = highHz;
 
                 if (lowHz != splitTunedLowHz[unit])
                 {
@@ -1056,12 +1121,32 @@ namespace wt
                 if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModuleGlobalFilter)])
                 {
                     let pp = slotParamCurrent[wrap<laneChainSlotCount> (slotBase + rackModuleGlobalFilter)];
+                    let keyTrackEnabled = pp[laneGlobalFilterParamCutoffKeyTrackEnabled] >= 0.5f;
+                    let cutoffRouteOctaves = rackModIn[wrap<rackModTargetCount> (
+                        laneBase + rackModTargetGlobalFilterCutoffOctaves)];
+                    let cutoffTargetHz = keyTrackEnabled
+                        ? resolveKeyTrackedFrequencyHz (
+                            1.0f,
+                            pp[laneGlobalFilterParamCutoffHz],
+                            trackingPitchHzIn,
+                            pp[laneGlobalFilterParamCutoffKeyTrackOffsetSemitones],
+                            cutoffRouteOctaves * 12.0f,
+                            filterCutoffMinHz,
+                            std::intrinsics::min (filterCutoffMaxHz, sampleRate * 0.48f))
+                        : clampFilterCutoffHz (
+                            pp[laneGlobalFilterParamCutoffHz]
+                                * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (
+                                    scalerBase + laneOctaveScalerGlobalFilterCutoff)], cutoffRouteOctaves),
+                            sampleRate);
+                    let cutoffHz = keyTrackEnabled
+                        ? advanceKeyTrackSmoothedValue (
+                            trackedFrequencyHz[ordinal, laneTrackedFrequencyGlobalFilter],
+                            cutoffTargetHz,
+                            keyTrackSmoothingCoefficientState)
+                        : cutoffTargetHz;
+                    trackedFrequencyHz[ordinal, laneTrackedFrequencyGlobalFilter] = cutoffHz;
                     globalFilterPool[ordinal].modeIn <- pp[laneGlobalFilterParamMode];
-                    globalFilterPool[ordinal].cutoffHzIn <- clampFilterCutoffHz (
-                        pp[laneGlobalFilterParamCutoffHz]
-                            * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerGlobalFilterCutoff)],
-                                               rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetGlobalFilterCutoffOctaves)]),
-                        sampleRate);
+                    globalFilterPool[ordinal].cutoffHzIn <- cutoffHz;
                     globalFilterPool[ordinal].resonanceIn <- clampFilterQ (
                         rackModulateLinear (pp[laneGlobalFilterParamResonance],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetGlobalFilterResonance)]));
@@ -1073,10 +1158,51 @@ namespace wt
                 if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModuleDistortion)])
                 {
                     let pp = slotParamCurrent[wrap<laneChainSlotCount> (slotBase + rackModuleDistortion)];
-                    let laneWetHPHz = clampDistortionWetHPHz (
-                        pp[laneDistortionParamWetHPHz]
-                            * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerDistortionWetHP)],
-                                               rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDistortionWetHPOctaves)]));
+                    let wetHPKeyTrackEnabled = pp[laneDistortionParamWetHPKeyTrackEnabled] >= 0.5f;
+                    let wetHPRouteOctaves = rackModIn[wrap<rackModTargetCount> (
+                        laneBase + rackModTargetDistortionWetHPOctaves)];
+                    let wetHPHzTarget = wetHPKeyTrackEnabled
+                        ? resolveKeyTrackedFrequencyHz (
+                            1.0f,
+                            pp[laneDistortionParamWetHPHz],
+                            trackingPitchHzIn,
+                            pp[laneDistortionParamWetHPKeyTrackOffsetSemitones],
+                            wetHPRouteOctaves * 12.0f,
+                            distortionWetHPMinHz,
+                            distortionWetHPMaxHz)
+                        : clampDistortionWetHPHz (
+                            pp[laneDistortionParamWetHPHz]
+                                * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (
+                                    scalerBase + laneOctaveScalerDistortionWetHP)], wetHPRouteOctaves));
+                    let laneWetHPHz = wetHPKeyTrackEnabled
+                        ? advanceKeyTrackSmoothedValue (
+                            trackedFrequencyHz[ordinal, laneTrackedFrequencyDistortionWetHP],
+                            wetHPHzTarget,
+                            keyTrackSmoothingCoefficientState)
+                        : wetHPHzTarget;
+                    trackedFrequencyHz[ordinal, laneTrackedFrequencyDistortionWetHP] = laneWetHPHz;
+                    let wetLPKeyTrackEnabled = pp[laneDistortionParamWetLPKeyTrackEnabled] >= 0.5f;
+                    let wetLPRouteOctaves = rackModIn[wrap<rackModTargetCount> (
+                        laneBase + rackModTargetDistortionWetLPOctaves)];
+                    let wetLPHzTarget = resolveKeyTrackedFrequencyHz (
+                        1.0f,
+                        pp[laneDistortionParamWetLPHz],
+                        trackingPitchHzIn,
+                        pp[laneDistortionParamWetLPKeyTrackOffsetSemitones],
+                        wetLPRouteOctaves * 12.0f,
+                        distortionWetLPMinHz,
+                        distortionWetLPMaxHz);
+                    let laneWetLPHz = wetLPKeyTrackEnabled
+                        ? advanceKeyTrackSmoothedValue (
+                            trackedFrequencyHz[ordinal, laneTrackedFrequencyDistortionWetLP],
+                            wetLPHzTarget,
+                            keyTrackSmoothingCoefficientState)
+                        : clampDistortionWetLPHz (
+                            pp[laneDistortionParamWetLPHz]
+                                * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (
+                                    scalerBase + laneOctaveScalerDistortionWetLP)], wetLPRouteOctaves),
+                            laneWetHPHz);
+                    trackedFrequencyHz[ordinal, laneTrackedFrequencyDistortionWetLP] = laneWetLPHz;
                     distortionPool[ordinal].modeIn <- pp[laneDistortionParamMode];
                     distortionPool[ordinal].typeIn <- pp[laneDistortionParamType];
                     distortionPool[ordinal].driveDbIn <- clampDistortionDriveDb (
@@ -1090,10 +1216,7 @@ namespace wt
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDistortionWet)]));
                     distortionPool[ordinal].wetHPHzIn <- laneWetHPHz;
                     distortionPool[ordinal].wetLPHzIn <- clampDistortionWetLPHz (
-                        pp[laneDistortionParamWetLPHz]
-                            * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerDistortionWetLP)],
-                                               rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDistortionWetLPOctaves)]),
-                        laneWetHPHz);
+                        laneWetLPHz, laneWetHPHz);
                 }
 
                 if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModuleOtt)])
@@ -1130,15 +1253,36 @@ namespace wt
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetChorusFeedback)]);
                     chorusPool[ordinal].ringAmountIn <- rackModulateLinear (pp[laneChorusParamRingAmount],
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetChorusRingAmount)]);
+                    chorusPool[ordinal].ringFrequencyHzIn <- pp[laneChorusParamRingFrequencyHz];
+                    chorusPool[ordinal].ringKeyTrackEnabledIn <- pp[laneChorusParamRingKeyTrackEnabled];
+                    chorusPool[ordinal].ringKeyTrackOffsetSemitonesIn <- pp[laneChorusParamRingKeyTrackOffsetSemitones];
+                    chorusPool[ordinal].ringRouteOffsetSemitonesIn <-
+                        rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetChorusRingFineSemitones)];
                     chorusPool[ordinal].ringOffsetModeIn <- pp[laneChorusParamRingOffsetMode];
-                    chorusPool[ordinal].ringFineSemitonesIn <- rackModulateLinear (pp[laneChorusParamRingFineSemitones],
-                        rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetChorusRingFineSemitones)]);
+                    chorusPool[ordinal].ringFineSemitonesIn <- pp[laneChorusParamRingFineSemitones];
                     chorusPool[ordinal].trackingPitchHzIn <- trackingPitchHzIn;
                 }
 
                 if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModuleFlanger)])
                 {
                     let pp = slotParamCurrent[wrap<laneChainSlotCount> (slotBase + rackModuleFlanger)];
+                    let baseDelayKeyTrackEnabled = pp[laneFlangerParamBaseDelayKeyTrackEnabled] >= 0.5f;
+                    let baseDelayTargetMs = resolveKeyTrackedPeriodMilliseconds (
+                        baseDelayKeyTrackEnabled ? 1.0f : 0.0f,
+                        pp[laneFlangerParamBaseDelayMs],
+                        trackingPitchHzIn,
+                        pp[laneFlangerParamBaseDelayKeyTrackOffsetSemitones],
+                        rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetFlangerBaseDelayOctaves)] * 12.0f,
+                        flangerBaseDelayMinMs,
+                        flangerBaseDelayMaxMs);
+                    let baseDelayMs = baseDelayKeyTrackEnabled
+                        ? advanceKeyTrackSmoothedValue (
+                            trackedFlangerBaseDelayMs[ordinal],
+                            baseDelayTargetMs,
+                            keyTrackSmoothingCoefficientState)
+                        : baseDelayTargetMs;
+                    trackedFlangerBaseDelayMs[ordinal] = baseDelayMs;
+                    flangerPool[ordinal].baseDelayMsIn <- baseDelayMs;
                     flangerPool[ordinal].rateIn <- clampFlangerRateHz (
                         rackModulateLinear (pp[laneFlangerParamRate],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetFlangerRate)]));
@@ -1156,6 +1300,29 @@ namespace wt
                 if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModulePhaser)])
                 {
                     let pp = slotParamCurrent[wrap<laneChainSlotCount> (slotBase + rackModulePhaser)];
+                    let frequencyKeyTrackEnabled = pp[lanePhaserParamFrequencyKeyTrackEnabled] >= 0.5f;
+                    let phaserFrequencyRouteOctaves = rackModIn[wrap<rackModTargetCount> (
+                        laneBase + rackModTargetPhaserFrequencyOctaves)];
+                    let frequencyTargetHz = frequencyKeyTrackEnabled
+                        ? resolveKeyTrackedFrequencyHz (
+                            1.0f,
+                            pp[lanePhaserParamFrequency],
+                            trackingPitchHzIn,
+                            pp[lanePhaserParamFrequencyKeyTrackOffsetSemitones],
+                            phaserFrequencyRouteOctaves * 12.0f,
+                            phaserFrequencyMinHz,
+                            phaserFrequencyMaxHz)
+                        : clampPhaserFrequencyHz (
+                            pp[lanePhaserParamFrequency]
+                                * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (
+                                    scalerBase + laneOctaveScalerPhaserFrequency)], phaserFrequencyRouteOctaves));
+                    let frequencyHz = frequencyKeyTrackEnabled
+                        ? advanceKeyTrackSmoothedValue (
+                            trackedFrequencyHz[ordinal, laneTrackedFrequencyPhaser],
+                            frequencyTargetHz,
+                            keyTrackSmoothingCoefficientState)
+                        : frequencyTargetHz;
+                    trackedFrequencyHz[ordinal, laneTrackedFrequencyPhaser] = frequencyHz;
                     phaserPool[ordinal].rateIn <- clampPhaserRateHz (
                         rackModulateLinear (pp[lanePhaserParamRate],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetPhaserRate)]));
@@ -1164,10 +1331,7 @@ namespace wt
                     phaserPool[ordinal].depthIn <- clampPhaserDepth (
                         rackModulateLinear (pp[lanePhaserParamDepth],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetPhaserDepth)]));
-                    phaserPool[ordinal].frequencyIn <- clampPhaserFrequencyHz (
-                        pp[lanePhaserParamFrequency]
-                            * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerPhaserFrequency)],
-                                               rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetPhaserFrequencyOctaves)]));
+                    phaserPool[ordinal].frequencyIn <- frequencyHz;
                     phaserPool[ordinal].feedbackIn <- clampPhaserFeedback (
                         rackModulateLinear (pp[lanePhaserParamFeedback],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetPhaserFeedback)]));
@@ -1183,19 +1347,60 @@ namespace wt
                 if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModuleDelay)])
                 {
                     let pp = slotParamCurrent[wrap<laneChainSlotCount> (slotBase + rackModuleDelay)];
-                    delayPool[ordinal].timeMsIn <- clampDelayTimeMs (
-                        pp[laneDelayParamTimeMs]
-                            * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerDelayTime)],
-                                               rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDelayTimeOctaves)]));
-                    delayPool[ordinal].timeModeIn <- pp[laneDelayParamTimeMode];
+                    let timeKeyTrackEnabled = pp[laneDelayParamTimeKeyTrackEnabled] >= 0.5f;
+                    let delayTimeRouteOctaves = rackModIn[wrap<rackModTargetCount> (
+                        laneBase + rackModTargetDelayTimeOctaves)];
+                    let trackedTimeTargetMs = timeKeyTrackEnabled
+                        ? resolveKeyTrackedPeriodMilliseconds (
+                            1.0f,
+                            pp[laneDelayParamTimeMs],
+                            trackingPitchHzIn,
+                            pp[laneDelayParamTimeKeyTrackOffsetSemitones],
+                            delayTimeRouteOctaves * 12.0f,
+                            delayMinMs,
+                            delayMaxMs)
+                        : clampDelayTimeMs (
+                            pp[laneDelayParamTimeMs]
+                                * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (
+                                    scalerBase + laneOctaveScalerDelayTime)], delayTimeRouteOctaves));
+                    let trackedTimeMs = timeKeyTrackEnabled
+                        ? advanceKeyTrackSmoothedValue (
+                            trackedDelayTimeMs[ordinal], trackedTimeTargetMs,
+                            keyTrackSmoothingCoefficientState)
+                        : trackedTimeTargetMs;
+                    trackedDelayTimeMs[ordinal] = trackedTimeMs;
+                    let filterKeyTrackEnabled = pp[laneDelayParamFilterKeyTrackEnabled] >= 0.5f;
+                    let delayFilterRouteOctaves = rackModIn[wrap<rackModTargetCount> (
+                        laneBase + rackModTargetDelayFilterOctaves)];
+                    let filterTargetHz = filterKeyTrackEnabled
+                        ? resolveKeyTrackedFrequencyHz (
+                            1.0f,
+                            pp[laneDelayParamFilterHz],
+                            trackingPitchHzIn,
+                            pp[laneDelayParamFilterKeyTrackOffsetSemitones],
+                            delayFilterRouteOctaves * 12.0f,
+                            delayFilterMinHz,
+                            delayFilterMaxHz)
+                        : clampDelayFilterHz (
+                            pp[laneDelayParamFilterHz]
+                                * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (
+                                    scalerBase + laneOctaveScalerDelayFilter)], delayFilterRouteOctaves));
+                    let filterHz = filterKeyTrackEnabled
+                        ? advanceKeyTrackSmoothedValue (
+                            trackedFrequencyHz[ordinal, laneTrackedFrequencyDelayFilter],
+                            filterTargetHz,
+                            keyTrackSmoothingCoefficientState)
+                        : filterTargetHz;
+                    trackedFrequencyHz[ordinal, laneTrackedFrequencyDelayFilter] = filterHz;
+                    delayPool[ordinal].timeMsIn <- trackedTimeMs;
+                    delayPool[ordinal].timeModeIn <- timeKeyTrackEnabled
+                        ? float32 (delayTimeModeFree)
+                        : pp[laneDelayParamTimeMode];
                     delayPool[ordinal].divisionIn <- pp[laneDelayParamDivision];
                     delayPool[ordinal].feedbackIn <- clampDelayFeedback (
                         rackModulateLinear (pp[laneDelayParamFeedback],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDelayFeedback)]));
-                    delayPool[ordinal].filterHzIn <- clampDelayFilterHz (
-                        pp[laneDelayParamFilterHz]
-                            * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerDelayFilter)],
-                                               rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDelayFilterOctaves)]));
+                    delayPool[ordinal].filterHzIn <- filterHz;
                     delayPool[ordinal].mixIn <- clampDelayMix (
                         rackModulateLinear (pp[laneDelayParamMix],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDelayMix)]));

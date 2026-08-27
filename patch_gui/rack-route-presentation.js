@@ -91,7 +91,9 @@ function normalizeDisplayedValue(descriptor, value) {
 function applyRouteOffset(descriptor, baseValue, offset) {
     const rawValue = descriptor.modulationApplication === "octaves"
         ? baseValue * (2 ** offset)
-        : baseValue + offset;
+        : descriptor.modulationApplication === "semitones"
+            ? baseValue * (2 ** (offset / 12))
+            : baseValue + offset;
     return clamp(rawValue, descriptor.min, descriptor.max);
 }
 /**

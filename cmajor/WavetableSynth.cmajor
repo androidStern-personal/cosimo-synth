@@ -1349,6 +1349,10 @@ graph WavetableSynth [[ main ]]
     input value float32 ampAttack [[ name: "Amp Envelope Attack", min: 0.001f, max: 10.0f, init: 0.01f, unit: "s", rampFrames: 0 ]];
     input value float32 ampDecay [[ name: "Amp Envelope Decay", min: 0.001f, max: 10.0f, init: 0.001f, unit: "s", rampFrames: 0 ]];
     input value float32 ampSustain [[ name: "Amp Envelope Sustain", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 0 ]];
+    // T50 follows the moving append-only contract after the T38 stages.
+    // Existing automation slots and parameter IDs remain untouched.
+    input value float32 filterCutoffKeyTrackEnabled [[ name: "Voice Filter Key Track", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+    input value float32 filterCutoffKeyTrackOffsetSemitones [[ name: "Voice Filter Key Track Offset", min: -60.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
     // Rack structure is patch state, not host automation (ADR-007). These are struct
     // events, which carry no parameter purpose, so they are structurally
     // non-automatable rather than non-automatable by convention.
@@ -1473,6 +1477,8 @@ graph WavetableSynth [[ main ]]
         ampRelease -> sharedEngine.ampReleaseIn;
         sourceMode -> sharedEngine.sourceModeIn;
         globalTune -> sharedEngine.globalTuneIn;
+        filterCutoffKeyTrackEnabled -> sharedEngine.filterCutoffKeyTrackEnabledIn;
+        filterCutoffKeyTrackOffsetSemitones -> sharedEngine.filterCutoffKeyTrackOffsetSemitonesIn;
         oscAWavetableSelect -> desiredTableMonitorA.tableSelectIn;
         oscBWavetableSelect -> desiredTableMonitorB.tableSelectIn;
         oscCWavetableSelect -> desiredTableMonitorC.tableSelectIn;

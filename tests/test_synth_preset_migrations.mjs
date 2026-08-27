@@ -29,6 +29,11 @@ const AMP_STAGE_PARAMETERS = [
     { endpointID: "ampSustain", type: "number", min: 0, max: 1, defaultValue: 1 },
 ];
 
+const KEY_TRACK_PARAMETERS = [
+    { endpointID: "filterCutoffKeyTrackEnabled", type: "number", min: 0, max: 1, defaultValue: 0 },
+    { endpointID: "filterCutoffKeyTrackOffsetSemitones", type: "number", min: -60, max: 60, defaultValue: 0 },
+];
+
 test("the derived synth migration applies a pre-Mix preset with filterMix at fully wet", async () => {
     const { contractModule, presetModule, migrationsModule } = await loadModules();
     const legacyContract = contractModule.buildCanonicalPluginStateContract({
@@ -42,6 +47,7 @@ test("the derived synth migration applies a pre-Mix preset with filterMix at ful
             { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
             { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
             ...AMP_STAGE_PARAMETERS,
+            ...KEY_TRACK_PARAMETERS,
         ],
         storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
     });
@@ -70,6 +76,8 @@ test("the derived synth migration applies a pre-Mix preset with filterMix at ful
 
     assert.equal(normalized.parameters.filterMix, 1);
     assert.equal(normalized.parameters.globalTune, 0);
+    assert.equal(normalized.parameters.filterCutoffKeyTrackEnabled, 0);
+    assert.equal(normalized.parameters.filterCutoffKeyTrackOffsetSemitones, 0);
     assert.deepEqual(
         writes.filter(({ endpointID }) => endpointID === "filterMix"),
         [{ endpointID: "filterMix", value: 1 }],
@@ -97,6 +105,7 @@ test("the derived synth migration adds an oscillator-mode bounce reference to pr
             ...parameters,
             { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
             ...AMP_STAGE_PARAMETERS,
+            ...KEY_TRACK_PARAMETERS,
         ],
         storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
     });
@@ -144,6 +153,7 @@ test("the newest synth migration restores pre-Global-Tune presets at neutral zer
             ...previousParameters,
             { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
             ...AMP_STAGE_PARAMETERS,
+            ...KEY_TRACK_PARAMETERS,
         ],
         storedState,
     });
@@ -183,6 +193,7 @@ test("the migration builder rejects a contract that lacks the filterMix paramete
             ...LEGACY_PARAMETERS,
             { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
             ...AMP_STAGE_PARAMETERS,
+            ...KEY_TRACK_PARAMETERS,
         ],
         storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
     });
@@ -201,6 +212,7 @@ test("the migration builder rejects a contract that lacks Global Tune", async ()
             ...LEGACY_PARAMETERS,
             { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
             ...AMP_STAGE_PARAMETERS,
+            ...KEY_TRACK_PARAMETERS,
         ],
         storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
     });

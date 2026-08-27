@@ -20,12 +20,19 @@ import {
     parseLaneInstanceId,
     serializeLaneStateV2,
     setLaneDeviceParam,
+    setLaneKeyTrackEnabled as transitionLaneKeyTrackEnabled,
     setLaneSplitCrossoverHz,
+    setLaneSplitKeyTrackEnabled as transitionLaneSplitKeyTrackEnabled,
+    setLaneSplitKeyTrackOffset as transitionLaneSplitKeyTrackOffset,
     type LaneStateV2,
 } from "./lane-state-v2";
 import {
     LANE_SPLIT_PARAM_XOVER_HIGH_HZ,
+    LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_ENABLED,
+    LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_OFFSET_SEMITONES,
     LANE_SPLIT_PARAM_XOVER_LOW_HZ,
+    LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_ENABLED,
+    LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES,
 } from "./lane-state";
 import { getLaneSlotId, getLaneSlotParamIndex } from "./lane-slot-params";
 import type { EffectModuleId } from "./target-descriptor";
@@ -39,6 +46,7 @@ import {
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 import { isOscillatorModulationTargetKind } from "./modulation-targets";
+import { getLaneKeyTrackEndpoints, getKeyTrackDefinition, requireKeyTrackRange } from "./key-track";
 
 /**
  * One shared lane-document store per patch connection.
@@ -128,9 +136,24 @@ export function useLaneStateDoc(): {
     readonly laneState: LaneStateV2;
     readonly commit: (nextState: LaneStateV2) => void;
     readonly setParamValue: (deviceId: string, endpointID: string, value: number) => void;
+    readonly setKeyTrackEnabled: (
+        deviceId: string,
+        ordinaryEndpointID: string,
+        enabled: boolean,
+    ) => void;
     /** The split editor's hot path: optimistic doc update + the acked
         marker-record field upload. */
     readonly setSplitCrossover: (groupId: string, which: "low" | "high", hz: number) => void;
+    readonly setSplitKeyTrackEnabled: (
+        groupId: string,
+        which: "low" | "high",
+        enabled: boolean,
+    ) => void;
+    readonly setSplitKeyTrackOffset: (
+        groupId: string,
+        which: "low" | "high",
+        offsetSemitones: number,
+    ) => void;
     readonly persist: () => void;
 } {
     const patchConnection = usePatchConnection();
@@ -168,6 +191,40 @@ export function useLaneStateDoc(): {
         });
     }, [patchConnection, store]);
 
+    const setKeyTrackEnabled = useCallback((
+        deviceId: string,
+        ordinaryEndpointID: string,
+        enabled: boolean,
+    ) => {
+        const parsedId = parseLaneInstanceId(deviceId);
+        const endpoints = getLaneKeyTrackEndpoints(ordinaryEndpointID);
+        const next = transitionLaneKeyTrackEnabled(
+            store.state, deviceId, ordinaryEndpointID, enabled);
+        if (parsedId === null || endpoints === null || next === null) {
+            return;
+        }
+        acceptLaneState(store, next);
+        const sendField = (endpointID: string, value: number) => {
+            const paramIndex = getLaneSlotParamIndex(parsedId.deviceType, endpointID);
+            if (paramIndex === null) return;
+            store.deliverySerial += 1;
+            patchConnection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
+                slotId: getLaneSlotId(parsedId.deviceType, parsedId.instanceNumber - 1),
+                paramIndex,
+                deliverySerial: store.deliverySerial,
+                value,
+            });
+        };
+        sendField(endpoints.enabledEndpointID, enabled ? 1 : 0);
+        if (enabled) {
+            sendField(endpoints.offsetEndpointID, 0);
+            if (ordinaryEndpointID === "delayTime") {
+                sendField("delayTimeMode", 0);
+            }
+        }
+        patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(next));
+    }, [patchConnection, store]);
+
     const setSplitCrossover = useCallback((groupId: string, which: "low" | "high", hz: number) => {
         const slotId = laneSplitMarkerSlotId(groupId);
         const next = setLaneSplitCrossoverHz(store.state, groupId, which, hz);
@@ -184,12 +241,79 @@ export function useLaneStateDoc(): {
         });
     }, [patchConnection, store]);
 
+    const sendSplitField = useCallback((groupId: string, paramIndex: number, value: number) => {
+        const slotId = laneSplitMarkerSlotId(groupId);
+        if (slotId === null) return;
+        store.deliverySerial += 1;
+        patchConnection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
+            slotId,
+            paramIndex,
+            deliverySerial: store.deliverySerial,
+            value,
+        });
+    }, [patchConnection, store]);
+
+    const setSplitKeyTrackEnabled = useCallback((
+        groupId: string,
+        which: "low" | "high",
+        enabled: boolean,
+    ) => {
+        const next = transitionLaneSplitKeyTrackEnabled(store.state, groupId, which, enabled);
+        if (next === null) return;
+        acceptLaneState(store, next);
+        sendSplitField(groupId, which === "low"
+            ? LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_ENABLED
+            : LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_ENABLED, enabled ? 1 : 0);
+        if (enabled) {
+            sendSplitField(groupId, which === "low"
+                ? LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES
+                : LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_OFFSET_SEMITONES, 0);
+        }
+        patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(next));
+    }, [patchConnection, sendSplitField, store]);
+
+    const setSplitKeyTrackOffset = useCallback((
+        groupId: string,
+        which: "low" | "high",
+        offsetSemitones: number,
+    ) => {
+        const next = transitionLaneSplitKeyTrackOffset(
+            store.state, groupId, which, offsetSemitones);
+        if (next === null) return;
+        acceptLaneState(store, next);
+        const group = next.chain.find((node) => node.kind === "split" && node.groupId === groupId);
+        if (group === undefined || group.kind !== "split") return;
+        const value = which === "low"
+            ? group.xoverLowKeyTrackOffsetSemitones
+            : group.xoverHighKeyTrackOffsetSemitones;
+        sendSplitField(groupId, which === "low"
+            ? LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES
+            : LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_OFFSET_SEMITONES, value);
+    }, [sendSplitField, store]);
+
     const persist = useCallback(() => {
         patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(store.state));
     }, [patchConnection, store]);
 
-    return useMemo(() => ({ laneState, commit, setParamValue, setSplitCrossover, persist }),
-        [laneState, commit, setParamValue, setSplitCrossover, persist]);
+    return useMemo(() => ({
+        laneState,
+        commit,
+        setParamValue,
+        setKeyTrackEnabled,
+        setSplitCrossover,
+        setSplitKeyTrackEnabled,
+        setSplitKeyTrackOffset,
+        persist,
+    }), [
+        laneState,
+        commit,
+        setParamValue,
+        setKeyTrackEnabled,
+        setSplitCrossover,
+        setSplitKeyTrackEnabled,
+        setSplitKeyTrackOffset,
+        persist,
+    ]);
 }
 
 /**
@@ -204,7 +328,13 @@ export function usePatchModulationTargetOptions({
     includeOscillatorTargets?: boolean;
 } = {}): ReadonlyArray<ModulationTargetOption> {
     const { laneState } = useLaneStateDoc();
-    const devices = listLaneDeviceInstancesV2(laneState);
+    const devices = [
+        ...listLaneDeviceInstancesV2(laneState),
+        ...laneState.chain.flatMap((node) => node.kind === "split" ? [{
+            instanceId: node.groupId.replace(/^split#/, "frequencySplit#"),
+            deviceType: "frequencySplit" as const,
+        }] : []),
+    ];
     const deviceSignature = devices.map((device) => device.instanceId).join("\n");
     // An unchanged signature is an unchanged device list, so the captured
     // `devices` from the first matching render stays correct.
@@ -278,6 +408,122 @@ export function useLaneParameterBinding(
         beginGesture,
         endGesture,
     }), [descriptor.endpointID, descriptor.initial, value, setValue, commitValue, beginGesture, endGesture]);
+}
+
+export type LaneKeyTrackControlBinding = {
+    readonly eligible: boolean;
+    readonly enabled: boolean;
+    readonly binding: PatchControlBinding<number>;
+    readonly ordinaryBinding: PatchControlBinding<number>;
+    readonly setEnabled: (enabled: boolean) => void;
+};
+
+/**
+ * One Effects Lane Key Track control. The public binding keeps the ordinary
+ * endpoint identity so modulation routes remain attached while its value and
+ * writes switch between ordinary units and the hidden semitone offset.
+ */
+export function useLaneKeyTrackControlBinding(
+    descriptor: RackParameterDescriptor,
+    deviceId?: string,
+): LaneKeyTrackControlBinding {
+    const patchConnection = usePatchConnection();
+    const ordinaryBinding = useLaneParameterBinding(descriptor, deviceId);
+    const { laneState, setParamValue, setKeyTrackEnabled, persist } = useLaneStateDoc();
+    const boundDeviceId = deviceId ?? `${EFFECT_ID_TO_LANE_TYPE[descriptor.effectId]}#1`;
+    const definition = getKeyTrackDefinition(`lane.${descriptor.endpointID}`);
+    const endpoints = getLaneKeyTrackEndpoints(descriptor.endpointID);
+    const eligible = definition !== null && endpoints !== null;
+    const resolvedEndpoints = endpoints ?? {
+        enabledEndpointID: descriptor.endpointID,
+        offsetEndpointID: descriptor.endpointID,
+    };
+    const range = requireKeyTrackRange(definition?.family ?? "filter-frequency");
+    const params = laneState.devices[boundDeviceId]?.params;
+    const enabled = eligible
+        && Number(params?.[resolvedEndpoints.enabledEndpointID] ?? 0) >= 0.5;
+    const offsetValue = Math.min(
+        range.knobMax,
+        Math.max(range.knobMin, Number(params?.[resolvedEndpoints.offsetEndpointID]) || 0),
+    );
+
+    const setValue = useCallback((nextValue: number) => {
+        const numeric = Number.isFinite(nextValue) ? nextValue : 0;
+        const clamped = Math.min(range.knobMax, Math.max(range.knobMin, numeric));
+        if (!eligible) return;
+        setParamValue(boundDeviceId, resolvedEndpoints.offsetEndpointID, clamped);
+        reportUserParameterEdit({
+            endpointID: descriptor.endpointID,
+            changed: !Object.is(clamped, offsetValue),
+        });
+    }, [
+        boundDeviceId,
+        descriptor.endpointID,
+        eligible,
+        resolvedEndpoints.offsetEndpointID,
+        offsetValue,
+        range.knobMax,
+        range.knobMin,
+        setParamValue,
+    ]);
+    const beginGesture = useCallback(() => {
+        patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
+        reportUserGestureStart();
+    }, [descriptor.endpointID, patchConnection]);
+    const endGesture = useCallback(() => {
+        patchConnection.sendParameterGestureEnd?.(descriptor.endpointID);
+        reportUserGestureEnd();
+        persist();
+    }, [descriptor.endpointID, patchConnection, persist]);
+    const commitValue = useCallback((value: number) => {
+        beginGesture();
+        setValue(value);
+        endGesture();
+    }, [beginGesture, endGesture, setValue]);
+    const setEnabled = useCallback((nextEnabled: boolean) => {
+        if (!eligible) return;
+        patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
+        reportUserGestureStart();
+        setKeyTrackEnabled(boundDeviceId, descriptor.endpointID, nextEnabled);
+        reportUserParameterEdit({ endpointID: descriptor.endpointID, changed: enabled !== nextEnabled });
+        patchConnection.sendParameterGestureEnd?.(descriptor.endpointID);
+        reportUserGestureEnd();
+    }, [
+        boundDeviceId,
+        descriptor.endpointID,
+        eligible,
+        enabled,
+        patchConnection,
+        setKeyTrackEnabled,
+    ]);
+
+    const binding = useMemo<PatchControlBinding<number>>(() => enabled ? ({
+        endpointID: descriptor.endpointID,
+        value: offsetValue,
+        isReady: true,
+        initialValue: 0,
+        setValue,
+        commitValue,
+        beginGesture,
+        endGesture,
+    }) : ordinaryBinding, [
+        beginGesture,
+        commitValue,
+        descriptor.endpointID,
+        enabled,
+        endGesture,
+        offsetValue,
+        ordinaryBinding,
+        setValue,
+    ]);
+
+    return useMemo(() => ({ eligible, enabled, binding, ordinaryBinding, setEnabled }), [
+        binding,
+        eligible,
+        enabled,
+        ordinaryBinding,
+        setEnabled,
+    ]);
 }
 
 const FALLBACK_LANE_DESCRIPTOR: RackParameterDescriptor | null = getRackParameterDescriptor("delayMix");

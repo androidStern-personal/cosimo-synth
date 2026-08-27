@@ -229,6 +229,8 @@ const PLAY_MODE_ENDPOINT_ID = "playMode";
 const GLIDE_TIME_ENDPOINT_ID = "glideTime";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
+const FILTER_CUTOFF_KEY_TRACK_ENABLED_ENDPOINT_ID = "filterCutoffKeyTrackEnabled";
+const FILTER_CUTOFF_KEY_TRACK_OFFSET_ENDPOINT_ID = "filterCutoffKeyTrackOffsetSemitones";
 const FILTER_Q_ENDPOINT_ID = "filterQ";
 const FILTER_MIX_ENDPOINT_ID = "filterMix";
 const MSEG_1_MORPH_ENDPOINT_ID = "mseg1Morph";
@@ -266,8 +268,6 @@ const CHORUS_BLOOM_MODE_ENDPOINT_ID = "chorusBloomMode";
 const CHORUS_TONE_ENDPOINT_ID = "chorusTone";
 const CHORUS_FEEDBACK_ENDPOINT_ID = "chorusFeedback";
 const CHORUS_RING_AMOUNT_ENDPOINT_ID = "chorusRingAmount";
-const CHORUS_RING_OFFSET_MODE_ENDPOINT_ID = "chorusRingOffsetMode";
-const CHORUS_RING_FINE_SEMITONES_ENDPOINT_ID = "chorusRingFineSemitones";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
@@ -465,6 +465,8 @@ export type SynthPatchViewModel = {
     warpAmount: PatchControlBinding<number>;
     filterMode: PatchControlBinding<number>;
     filterCutoff: PatchControlBinding<number>;
+    filterCutoffKeyTrackEnabled: PatchControlBinding<number>;
+    filterCutoffKeyTrackOffsetSemitones: PatchControlBinding<number>;
     filterQ: PatchControlBinding<number>;
     filterMix: PatchControlBinding<number>;
     unisonVoices: PatchControlBinding<number>;
@@ -493,8 +495,6 @@ export type SynthPatchViewModel = {
     chorusTone: PatchControlBinding<number>;
     chorusFeedback: PatchControlBinding<number>;
     chorusRingAmount: PatchControlBinding<number>;
-    chorusRingOffsetMode: PatchControlBinding<number>;
-    chorusRingFineSemitones: PatchControlBinding<number>;
     observedFilterState: EffectiveFilterState;
     observedFilterSpectrum: FilterSpectrumFrame | null;
     observedDistortionHistory: DistortionHistoryFrame | null;
@@ -1162,6 +1162,11 @@ export function resolveVisibleArticulationSnapshotV4(
             warpAmount: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "warpAmount"), parameters.warpAmount),
             filterMode: readArticulationOverride(slot, "filterMode", parameters.filterMode),
             filterCutoff: readArticulationOverride(slot, "filterCutoffHz", parameters.filterCutoff),
+            filterKeyTrackOffsetSemitones: readArticulationOverride(
+                slot,
+                "filterKeyTrackOffsetSemitones",
+                parameters.filterKeyTrackOffsetSemitones,
+            ),
             filterQ: readArticulationOverride(slot, "filterQ", parameters.filterQ),
             unisonVoices: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "unisonVoices"), parameters.unisonVoices),
             unisonDetune: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "unisonDetune"), parameters.unisonDetune),
@@ -1241,6 +1246,7 @@ const VISIBLE_SHARED_ARTICULATION_PARAMETER_IDS: ReadonlyArray<ArticulationVoice
     "env3.decaySeconds",
     "env3.sustain",
     "env3.releaseSeconds",
+    "filterKeyTrackOffsetSemitones",
 ];
 
 function visibleArticulationParameterIDs(
@@ -1279,6 +1285,7 @@ export function projectArticulationSnapshotToVisibleV4Layer(
             [selectedOscillatorArticulationID(oscillatorID, "warpAmount")]: parameters.warpAmount,
             filterMode: parameters.filterMode,
             filterCutoffHz: parameters.filterCutoff,
+            filterKeyTrackOffsetSemitones: parameters.filterKeyTrackOffsetSemitones,
             filterQ: parameters.filterQ,
             [selectedOscillatorArticulationID(oscillatorID, "unisonVoices")]: parameters.unisonVoices,
             [selectedOscillatorArticulationID(oscillatorID, "unisonDetune")]: parameters.unisonDetune,
@@ -2685,6 +2692,16 @@ export function useSynthPatchViewModel({
         initialValue: 1000,
         coerce: (value) => clamp(Number(value) || 0, 20, 20_000),
     });
+    const filterCutoffKeyTrackEnabled = usePatchParameterBinding<number>({
+        endpointID: FILTER_CUTOFF_KEY_TRACK_ENABLED_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => Number(value) >= 0.5 ? 1 : 0,
+    });
+    const filterCutoffKeyTrackOffsetSemitones = usePatchParameterBinding<number>({
+        endpointID: FILTER_CUTOFF_KEY_TRACK_OFFSET_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, -60, 60),
+    });
     const filterQ = usePatchParameterBinding<number>({
         endpointID: FILTER_Q_ENDPOINT_ID,
         initialValue: 0.707107,
@@ -2885,8 +2902,6 @@ export function useSynthPatchViewModel({
     const chorusTone = useLaneParameterBinding(requireLaneParameterDescriptor("chorusTone"));
     const chorusFeedback = useLaneParameterBinding(requireLaneParameterDescriptor("chorusFeedback"));
     const chorusRingAmount = useLaneParameterBinding(requireLaneParameterDescriptor("chorusRingAmount"));
-    const chorusRingOffsetMode = useLaneParameterBinding(requireLaneParameterDescriptor("chorusRingOffsetMode"));
-    const chorusRingFineSemitones = useLaneParameterBinding(requireLaneParameterDescriptor("chorusRingFineSemitones"));
     const requestRuntimeSync = usePatchEventTrigger<number>(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
     const retryDesiredTableLoad = usePatchEventTrigger<number>(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
     const prewarmWavetable = usePatchEventTrigger<number>(WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID);
@@ -3300,6 +3315,7 @@ export function useSynthPatchViewModel({
                 warpAmount: warpAmount.value,
                 filterMode: filterMode.value,
                 filterCutoff: filterCutoff.value,
+                filterKeyTrackOffsetSemitones: filterCutoffKeyTrackOffsetSemitones.value,
                 filterQ: filterQ.value,
                 unisonVoices: unisonVoices.value,
                 unisonDetune: unisonDetune.value,
@@ -3330,6 +3346,7 @@ export function useSynthPatchViewModel({
         });
     }, [
         filterCutoff.value,
+        filterCutoffKeyTrackOffsetSemitones.value,
         filterMode.value,
         filterQ.value,
         envelopeBindings,
@@ -3386,6 +3403,7 @@ export function useSynthPatchViewModel({
             unisonWarpSpread,
             filterMode,
             filterCutoff,
+            filterKeyTrackOffsetSemitones: filterCutoffKeyTrackOffsetSemitones,
             filterQ,
             mseg1Morph,
             mseg2Morph,
@@ -3476,6 +3494,7 @@ export function useSynthPatchViewModel({
         env3Release,
         env3Sustain,
         filterCutoff,
+        filterCutoffKeyTrackOffsetSemitones,
         filterMode,
         filterQ,
         modulationState,
@@ -3559,6 +3578,9 @@ export function useSynthPatchViewModel({
             warpAmount.setValue(parameters.warpAmount);
             filterMode.setValue(parameters.filterMode);
             filterCutoff.setValue(parameters.filterCutoff);
+            filterCutoffKeyTrackOffsetSemitones.setValue(
+                parameters.filterKeyTrackOffsetSemitones,
+            );
             filterQ.setValue(parameters.filterQ);
             unisonVoices.setValue(parameters.unisonVoices);
             unisonDetune.setValue(parameters.unisonDetune);
@@ -3616,6 +3638,7 @@ export function useSynthPatchViewModel({
         }
     }, [
         filterCutoff,
+        filterCutoffKeyTrackOffsetSemitones,
         filterMode,
         filterQ,
         envelopeBindings,
@@ -4648,6 +4671,8 @@ export function useSynthPatchViewModel({
         warpAmount,
         filterMode,
         filterCutoff,
+        filterCutoffKeyTrackEnabled,
+        filterCutoffKeyTrackOffsetSemitones,
         filterQ,
         filterMix,
         unisonVoices,
@@ -4676,8 +4701,6 @@ export function useSynthPatchViewModel({
         chorusTone,
         chorusFeedback,
         chorusRingAmount,
-        chorusRingOffsetMode,
-        chorusRingFineSemitones,
         observedFilterState,
         observedFilterSpectrum,
         observedDistortionHistory,

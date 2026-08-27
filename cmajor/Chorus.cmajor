@@ -125,6 +125,13 @@ namespace wt
         input value float32 toneIn [[ name: "Chorus Tone", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
         input value float32 feedbackIn [[ name: "Chorus Feedback", min: 0.0f, max: 0.95f, init: 0.42f, rampFrames: 128 ]];
         input value float32 ringAmountIn [[ name: "Chorus Ring", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
+        input value float32 ringFrequencyHzIn [[ name: "Chorus Ring Frequency", min: 10.0f, max: 20000.0f, init: 28.0f, unit: "Hz", rampFrames: 0 ]];
+        input value float32 ringKeyTrackEnabledIn [[ name: "Chorus Ring Key Track", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+        input value float32 ringKeyTrackOffsetSemitonesIn [[ name: "Chorus Ring Key Track Offset", min: -48.0f, max: 48.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
+        input value float32 ringRouteOffsetSemitonesIn [[ name: "Chorus Ring Route Offset", min: -60.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
+        // Deprecated internal endpoints remain so old test graphs and compiled
+        // child wiring keep their identities; lane-state migration folds their
+        // values into ringKeyTrackOffsetSemitonesIn.
         input value float32 ringOffsetModeIn [[ name: "Chorus Ring Pitch", min: 0.0f, max: 3.0f, init: 0.0f, discrete: true, step: 1.0f, text: "+5th|Low 5th|+Oct|-Oct", rampFrames: 0 ]];
         input value float32 ringFineSemitonesIn [[ name: "Chorus Ring Fine", min: -2.0f, max: 2.0f, init: 0.0f, unit: "st", rampFrames: 128 ]];
 
@@ -453,8 +460,6 @@ namespace wt
                 let tone01 = std::intrinsics::clamp (toneIn, 0.0f, 1.0f);
                 let feedback01 = std::intrinsics::clamp (feedbackIn, 0.0f, 0.92f);
                 let ringAmount01 = std::intrinsics::clamp (ringAmountIn, 0.0f, 1.0f);
-                let ringOffsetMode = chorusClampMode (ringOffsetModeIn, 3);
-                let ringFineSemitones = std::intrinsics::clamp (ringFineSemitonesIn, -2.0f, 2.0f);
                 let effectActive = enabled && mix01 > 0.000001f;
 
                 var activeMix01 = 0.0f;
@@ -477,10 +482,14 @@ namespace wt
                 let lowCoeff = chorusCoefficientForCutoff (sampleRate, lpCutoff);
                 let highCoeff = chorusCoefficientForCutoff (sampleRate, hpCutoff);
 
-                var targetRingHz = trackingPitchHzIn > 0.1f
-                    ? trackingPitchHzIn * std::intrinsics::pow (2.0f, (chorusRingOffsetSemitones (ringOffsetMode) + ringFineSemitones) / 12.0f)
-                    : chorusRingFallbackHz;
-                targetRingHz = std::intrinsics::clamp (targetRingHz, 0.1f, sampleRate * 0.45f);
+                let targetRingHz = resolveKeyTrackedFrequencyHz (
+                    ringKeyTrackEnabledIn,
+                    ringFrequencyHzIn,
+                    trackingPitchHzIn,
+                    ringKeyTrackOffsetSemitonesIn,
+                    ringRouteOffsetSemitonesIn,
+                    0.1f,
+                    sampleRate * 0.45f);
 
                 if (trackedRingHz <= 0.0f)
                     trackedRingHz = targetRingHz;

@@ -17,7 +17,7 @@
 // cmajor/Delay.cmajor reuses wt::catmullRom, which lives in
 // cmajor/FixedFrameOscillator.cmajor, which in turn needs cmajor/Mseg.cmajor.
 
-## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/Delay.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/Delay.cmajor")
 
 
 //==============================================================================

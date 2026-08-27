@@ -71,6 +71,11 @@ export type ParameterMenuRequestContext = ParameterMenuBaseContract & {
     readonly controlKey: string;
     readonly label: string;
     readonly targetKind: string | null;
+    /** Overrides the target's ordinary amount language while this menu is open. */
+    readonly amountSpec?: ParameterEntrySpec | null;
+    readonly baseFieldLabel?: string;
+    /** The shell prefixes this destination with the armed source label. */
+    readonly routeDestinationLabel?: string;
     /** When the host knows the exact route (e.g. a matrix row), it pins it
         here; otherwise the shell resolves by targetKind + armed source. */
     readonly routeIndex?: number;
@@ -265,6 +270,8 @@ export function ParameterValueSheet({
     route,
     amountSpec,
     sourceLabel,
+    baseFieldLabel = "Base",
+    routeFieldLabel,
     onApply,
     onClose,
 }: {
@@ -285,6 +292,10 @@ export function ParameterValueSheet({
     amountSpec: ParameterEntrySpec | null;
     /** The armed source's label, or null when no source is armed. */
     sourceLabel: string | null;
+    /** Defaults to Base; Key Track uses its literal product label. */
+    baseFieldLabel?: string;
+    /** Defaults to "Source amount"; Key Track names the offset destination. */
+    routeFieldLabel?: string;
     onApply: (baseCommit: ParameterEntryCommit | null, modulationAmount: number | null) => void;
     onClose: () => void;
 }) {
@@ -349,7 +360,7 @@ export function ParameterValueSheet({
                 </header>
                 {base === null ? null : (
                     <label>
-                        <span>Base</span>
+                        <span>{baseFieldLabel}</span>
                         <span className="rack-value-sheet-input">
                             <input
                                 data-role="rack-base-value-input"
@@ -367,7 +378,8 @@ export function ParameterValueSheet({
                     </label>
                 )}
                 <label>
-                    <span>{sourceLabel === null ? "No armed source" : `${sourceLabel} amount`}</span>
+                    <span>{routeFieldLabel
+                        ?? (sourceLabel === null ? "No armed source" : `${sourceLabel} amount`)}</span>
                     <span className="rack-value-sheet-input">
                         <input
                             data-role="rack-modulation-value-input"

@@ -39,7 +39,7 @@
 // output endpoint: <0 stops, >0 is a pass, ==0 is a failure. Child nodes are advanced
 // by hand inside main(), so tails longer than 100 frames are reachable.
 
-## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "../../cmajor/GlobalFilter.cmajor", "../../cmajor/Distortion.cmajor", "../../cmajor/Ott.cmajor", "../../cmajor/Chorus.cmajor", "../../cmajor/Flanger.cmajor", "../../cmajor/Phaser.cmajor", "../../cmajor/Delay.cmajor", "../../cmajor/Reverb.cmajor", "../../cmajor/EffectsRack.cmajor", "../../cmajor/RackOutputStage.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "../../cmajor/GlobalFilter.cmajor", "../../cmajor/Distortion.cmajor", "../../cmajor/Ott.cmajor", "../../cmajor/Chorus.cmajor", "../../cmajor/Flanger.cmajor", "../../cmajor/Phaser.cmajor", "../../cmajor/Delay.cmajor", "../../cmajor/Reverb.cmajor", "../../cmajor/EffectsRack.cmajor", "../../cmajor/RackOutputStage.cmajor")
 
 //==============================================================================
 // Order, structure-upload validation, and hard audible bypass.

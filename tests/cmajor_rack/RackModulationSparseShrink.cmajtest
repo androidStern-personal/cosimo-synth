@@ -2,7 +2,7 @@
 // the two removed records remain populated behind the active count. This runs
 // through the production program endpoint and rack output streams.
 
-## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor")
 
 ## testProcessor (undefined, { frequency: 1000, maxFrequency: 1000 })
 

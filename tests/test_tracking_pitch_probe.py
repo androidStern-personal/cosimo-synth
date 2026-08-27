@@ -16,6 +16,7 @@ from bench import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MSEG_SOURCE = REPO_ROOT / "cmajor" / "Mseg.cmajor"
+KEY_TRACK_SOURCE = REPO_ROOT / "cmajor" / "KeyTrack.cmajor"
 FIXED_FRAME_SOURCE = REPO_ROOT / "cmajor" / "FixedFrameOscillator.cmajor"
 NOOP_RENDERER_SOURCE = REPO_ROOT / "tests" / "cmajor_rack" / "NoopThreeOscillatorRenderer.cmajor"
 VOICE_REDUCER_SOURCE = REPO_ROOT / "cmajor" / "VoiceReducer.cmajor"
@@ -117,7 +118,9 @@ def _build_tracking_pitch_probe_source(
     global_tune_modulation_polarity: int = 0,
 ) -> str:
     return (
-        MSEG_SOURCE.read_text(encoding="utf-8")
+        KEY_TRACK_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + NOOP_RENDERER_SOURCE.read_text(encoding="utf-8")
         + "\n"
@@ -205,7 +208,9 @@ processor TrackingRingStereoSplitter
 
 def _build_chorus_tracking_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
     return (
-        MSEG_SOURCE.read_text(encoding="utf-8")
+        KEY_TRACK_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + NOOP_RENDERER_SOURCE.read_text(encoding="utf-8")
         + "\n"
@@ -235,6 +240,10 @@ def _build_chorus_tracking_probe_source(scheduled_events: list[tuple[int, str]])
         + "    input value float32 chorusTone [[ init: 0.5f ]];\n"
         + "    input value float32 chorusFeedback [[ init: 0.28f ]];\n"
         + "    input value float32 chorusRingAmount [[ init: 1.0f ]];\n"
+        + "    input value float32 chorusRingFrequencyHz [[ init: 28.0f ]];\n"
+        + "    input value float32 chorusRingKeyTrackEnabled [[ init: 1.0f ]];\n"
+        + "    input value float32 chorusRingKeyTrackOffsetSemitones [[ init: 7.0f ]];\n"
+        + "    input value float32 chorusRingRouteOffsetSemitones [[ init: 0.0f ]];\n"
         + "    output stream float leftOut;\n"
         + "    node scheduler = TrackingPitchScheduler;\n"
         + "    node dispatcher = wt::NoteDispatcher (4);\n"
@@ -263,6 +272,10 @@ def _build_chorus_tracking_probe_source(scheduled_events: list[tuple[int, str]])
         + "        chorusTone -> chorus.toneIn;\n"
         + "        chorusFeedback -> chorus.feedbackIn;\n"
         + "        chorusRingAmount -> chorus.ringAmountIn;\n"
+        + "        chorusRingFrequencyHz -> chorus.ringFrequencyHzIn;\n"
+        + "        chorusRingKeyTrackEnabled -> chorus.ringKeyTrackEnabledIn;\n"
+        + "        chorusRingKeyTrackOffsetSemitones -> chorus.ringKeyTrackOffsetSemitonesIn;\n"
+        + "        chorusRingRouteOffsetSemitones -> chorus.ringRouteOffsetSemitonesIn;\n"
         + "        chorus.out -> splitter.in;\n"
         + "        splitter.leftOut -> leftOut;\n"
         + "    }\n"
@@ -368,6 +381,10 @@ def _render_chorus_tracking_audio(
                 "patch.setInputValue_chorusTone(0.5, 0);",
                 "patch.setInputValue_chorusFeedback(0.28, 0);",
                 "patch.setInputValue_chorusRingAmount(1.0, 0);",
+                "patch.setInputValue_chorusRingFrequencyHz(28.0, 0);",
+                "patch.setInputValue_chorusRingKeyTrackEnabled(1.0, 0);",
+                "patch.setInputValue_chorusRingKeyTrackOffsetSemitones(7.0, 0);",
+                "patch.setInputValue_chorusRingRouteOffsetSemitones(0.0, 0);",
             ]
         )
 
@@ -407,6 +424,22 @@ def test_tracking_pitch_uses_most_recent_active_voice() -> None:
     assert _median_window(tracking, 2048, 3072) == pytest.approx(_note_to_frequency(60.0), abs=1.0)
     assert _median_window(tracking, 5120, 6144) == pytest.approx(_note_to_frequency(67.0), abs=1.5)
     assert _median_window(tracking, 9216, 10_240) == pytest.approx(_note_to_frequency(60.0), abs=1.0)
+
+
+@pytest.mark.cmajor
+def test_tracking_pitch_latches_after_the_final_note_is_released() -> None:
+    tracking = _render_tracking_pitch(
+        [
+            (1024, _note_on_expr(1, 60.0)),
+            (4096, _note_off_expr(1, 60.0)),
+        ],
+        play_mode=PLAY_MODE_POLY,
+        num_samples=8192,
+    )
+
+    expected = _note_to_frequency(60.0)
+    assert _median_window(tracking, 2048, 3072) == pytest.approx(expected, abs=1.0)
+    assert _median_window(tracking, 6144, 7168) == pytest.approx(expected, abs=1.0)
 
 
 @pytest.mark.cmajor

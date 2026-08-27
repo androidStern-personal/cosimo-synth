@@ -1,6 +1,6 @@
 // Production proof that a sparse voice-domain instruction reaches the global rack.
 
-## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor", "../../cmajor/GlobalFilter.cmajor", "../../cmajor/Distortion.cmajor", "../../cmajor/Ott.cmajor", "../../cmajor/Chorus.cmajor", "../../cmajor/Flanger.cmajor", "../../cmajor/Phaser.cmajor", "../../cmajor/Delay.cmajor", "../../cmajor/Reverb.cmajor", "../../cmajor/EffectsRack.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor", "../../cmajor/GlobalFilter.cmajor", "../../cmajor/Distortion.cmajor", "../../cmajor/Ott.cmajor", "../../cmajor/Chorus.cmajor", "../../cmajor/Flanger.cmajor", "../../cmajor/Phaser.cmajor", "../../cmajor/Delay.cmajor", "../../cmajor/Reverb.cmajor", "../../cmajor/EffectsRack.cmajor")
 
 ## testProcessor()
 
@@ -243,7 +243,7 @@ processor RackModulationReachesRealDsp [[ main ]]
 //==============================================================================
 // MACRO-rack live amount edits are SURGICAL.
 //
-// The macro tables run as 36-wide blocked vectors, and the live amount-edit
+// The macro tables run as 39-wide blocked vectors, and the live amount-edit
 // path once collapsed the blocked subscript: one edit smeared its scale across
 // an entire block (audibly detuning every other macro route from that source).
 // Two routes from macro 1 - one static-block target, one lane-pool mirror -

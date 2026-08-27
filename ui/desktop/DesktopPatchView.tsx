@@ -110,6 +110,8 @@ import { ParameterHudLayerContext } from "../shared/parameter-hud";
 import {
     formatParameterEntry,
     parameterEntrySpecForFrequency,
+    parameterEntrySpecForKeyTrackModulationAmount,
+    parameterEntrySpecForKeyTrackOffset,
     parameterEntrySpecForMobileVoiceControl,
     parameterEntrySpecForScalar,
     parameterEntrySpecForModulationAmount,
@@ -166,6 +168,12 @@ import {
     GLOBAL_TUNE_TARGET_KIND,
     formatSemitonesAndCents,
 } from "../shared/global-tune";
+import {
+    getKeyTrackDefinition,
+    keyTrackRouteAmountFromSemitones,
+    keyTrackRouteAmountToSemitones,
+    requireKeyTrackRange,
+} from "../shared/key-track";
 
 // Compile-time split so ordinary production builds (flag false) never contain
 // the tuning page; Vite dev and the opted-in Codex Sites build do.
@@ -279,6 +287,28 @@ const FILTER_CUTOFF_ENTRY_SPEC = parameterEntrySpecForFrequency({
     maxHz: FILTER_CUTOFF_MAX_HZ,
     stepHz: 0,
     allowLogPercent: true,
+});
+const VOICE_FILTER_KEY_TRACK_DEFINITION = getKeyTrackDefinition("voice.filterCutoff");
+if (VOICE_FILTER_KEY_TRACK_DEFINITION === null) {
+    throw new Error("Voice filter cutoff is missing its Key Track definition.");
+}
+const VOICE_FILTER_KEY_TRACK_RANGE = requireKeyTrackRange(
+    VOICE_FILTER_KEY_TRACK_DEFINITION.family);
+const FILTER_KEY_TRACK_OFFSET_ENTRY_SPEC = parameterEntrySpecForKeyTrackOffset(
+    VOICE_FILTER_KEY_TRACK_DEFINITION.family);
+const FILTER_KEY_TRACK_ROUTE_ENTRY_SPEC = parameterEntrySpecForKeyTrackModulationAmount(
+    VOICE_FILTER_KEY_TRACK_DEFINITION.family, "octaves");
+const VOICE_FILTER_KEY_TRACK_DESCRIPTOR: RackParameterDescriptor = Object.freeze({
+    ...VOICE_FILTER_KNOB_DESCRIPTORS.cutoff,
+    label: "Key Track Offset",
+    shortLabel: "Offset",
+    min: VOICE_FILTER_KEY_TRACK_RANGE.knobMin,
+    max: VOICE_FILTER_KEY_TRACK_RANGE.knobMax,
+    initial: 0,
+    step: VOICE_FILTER_KEY_TRACK_RANGE.step,
+    scale: "linear",
+    unit: "st",
+    modulationApplication: "linear",
 });
 const FILTER_RESONANCE_ENTRY_SPEC = parameterEntrySpecForScalar({
     min: FILTER_Q_MIN,
@@ -422,6 +452,8 @@ type VoiceGlideSectionProps = {
 type FilterSectionProps = {
     filterMode: PatchControlBinding<number>;
     filterCutoff: PatchControlBinding<number>;
+    filterCutoffKeyTrackEnabled: PatchControlBinding<number>;
+    filterCutoffKeyTrackOffsetSemitones: PatchControlBinding<number>;
     filterQ: PatchControlBinding<number>;
     observedFilterState: {
         hasActive: boolean;
@@ -2050,6 +2082,8 @@ function VoiceFilterKnob({
     disabled,
     formatValue,
     modulationDragStyle,
+    keyTrackEnabled = false,
+    onKeyTrackToggle,
 }: {
     descriptor: RackParameterDescriptor;
     binding: PatchControlBinding<number>;
@@ -2059,6 +2093,8 @@ function VoiceFilterKnob({
     disabled: boolean;
     formatValue: (value: number) => string;
     modulationDragStyle?: "amount-span" | "effective-value";
+    keyTrackEnabled?: boolean;
+    onKeyTrackToggle?: () => void;
 }) {
     const armedRoute = routes.find((route) => (
         route.targetKind === targetKind
@@ -2066,7 +2102,13 @@ function VoiceFilterKnob({
         && route.sourceSlot === armedSource.sourceSlot
     )) ?? null;
     const amountBinding = useModulationRouteAmountBinding(armedRoute);
-    const presentedRoute = presentRouteWithCanonicalAmount(armedRoute, amountBinding);
+    const canonicalPresentedRoute = presentRouteWithCanonicalAmount(armedRoute, amountBinding);
+    const presentedRoute = keyTrackEnabled && canonicalPresentedRoute !== null
+        ? {
+            ...canonicalPresentedRoute,
+            amount: keyTrackRouteAmountToSemitones(canonicalPresentedRoute.amount, "octaves"),
+          }
+        : canonicalPresentedRoute;
     const sourceDescriptor = findRackModulationSource(armedSource.sourceKind, armedSource.sourceSlot);
     // ADR-025 row 7: Voice knobs report the same real mapping total as FX.
     const targetRouteCount = routes.filter((route) => route.targetKind === targetKind).length;
@@ -2094,6 +2136,15 @@ function VoiceFilterKnob({
                 formatValue={formatValue}
                 ownerAccent={VOICE_FILTER_OWNER_ACCENT}
                 modulationDragStyle={modulationDragStyle}
+                modulationAmountBounds={keyTrackEnabled
+                    ? {
+                        min: VOICE_FILTER_KEY_TRACK_RANGE.routeMin,
+                        max: VOICE_FILTER_KEY_TRACK_RANGE.routeMax,
+                      }
+                    : undefined}
+                formatModulationAmount={keyTrackEnabled
+                    ? (amount) => `${Number(amount.toFixed(2))} st`
+                    : undefined}
                 route={presentedRoute}
                 sourceIsSelected
                 sourceAccent={sourceDescriptor.accent}
@@ -2102,13 +2153,21 @@ function VoiceFilterKnob({
                 trackDataRole={`voice-filter-knob-track-${descriptor.endpointID}`}
                 handleDataRole={`voice-filter-knob-handle-${descriptor.endpointID}`}
                 onSelect={() => {}}
-                onModulationAmountChange={(amount) => amountBinding.setValue(amount)}
+                onModulationAmountChange={(amount) => amountBinding.setValue(
+                    keyTrackEnabled
+                        ? keyTrackRouteAmountFromSemitones(amount, "octaves")
+                        : amount)}
                 onRequestContextMenu={(clientX: number, clientY: number) => {
                     openParameterMenu?.({
                         controlKey: descriptor.endpointID,
-                        label: descriptor.label,
+                        label: keyTrackEnabled ? "Key Track Offset" : descriptor.label,
                         targetKind,
-                        baseSpec: parameterEntrySpecForRackParameter(descriptor, binding.value),
+                        baseSpec: keyTrackEnabled
+                            ? FILTER_KEY_TRACK_OFFSET_ENTRY_SPEC
+                            : parameterEntrySpecForRackParameter(descriptor, binding.value),
+                        amountSpec: keyTrackEnabled ? FILTER_KEY_TRACK_ROUTE_ENTRY_SPEC : undefined,
+                        baseFieldLabel: keyTrackEnabled ? "Key Track Offset" : undefined,
+                        routeDestinationLabel: keyTrackEnabled ? "Key Track Offset" : undefined,
                         baseValue: binding.value,
                         defaultValue: descriptor.initial,
                         commitBase: binding.commitValue,
@@ -2117,6 +2176,16 @@ function VoiceFilterKnob({
                     });
                 }}
             />
+            {onKeyTrackToggle !== undefined ? (
+                <button
+                    type="button"
+                    data-role="key-track-filterCutoff"
+                    aria-pressed={keyTrackEnabled}
+                    className="key-track-button voice-key-track-button is-knob-button"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={onKeyTrackToggle}
+                >Key Track</button>
+            ) : null}
         </div>
     );
 }
@@ -2195,6 +2264,8 @@ function GlobalTuneKnob({
 function FilterSection({
     filterMode,
     filterCutoff,
+    filterCutoffKeyTrackEnabled,
+    filterCutoffKeyTrackOffsetSemitones,
     filterQ,
     observedFilterState,
     observedFilterSpectrum,
@@ -2208,6 +2279,25 @@ function FilterSection({
     armedSource,
 }: FilterSectionProps) {
     const [spectrumRenderMode, setSpectrumRenderMode] = useState<FilterSpectrumRenderMode>("graph");
+    const keyTrackEnabled = filterCutoffKeyTrackEnabled.value >= 0.5;
+    const displayedFilterCutoff = keyTrackEnabled
+        ? filterCutoffKeyTrackOffsetSemitones
+        : filterCutoff;
+    const displayedCutoffDescriptor = keyTrackEnabled
+        ? VOICE_FILTER_KEY_TRACK_DESCRIPTOR
+        : VOICE_FILTER_KNOB_DESCRIPTORS.cutoff;
+    const toggleKeyTrack = useCallback(() => {
+        if (keyTrackEnabled) {
+            filterCutoffKeyTrackEnabled.commitValue(0);
+            return;
+        }
+        filterCutoffKeyTrackOffsetSemitones.commitValue(0);
+        filterCutoffKeyTrackEnabled.commitValue(1);
+    }, [
+        filterCutoffKeyTrackEnabled,
+        filterCutoffKeyTrackOffsetSemitones,
+        keyTrackEnabled,
+    ]);
     const findArmedRoute = (targetKind: "filterCutoffOctaves" | "filterQ") => (routes && armedSource
         ? routes.find((route) => (
             route.targetKind === targetKind
@@ -2238,7 +2328,7 @@ function FilterSection({
         // T04A: the travel overlay renders only while the armed source has a
         // filter mapping — color must never claim a mapping that does not
         // exist. Each axis is live only through its own route.
-        const modulationTravel = armedCutoffRoute === null && armedQRoute === null
+        const modulationTravel = keyTrackEnabled || (armedCutoffRoute === null && armedQRoute === null)
             ? null
             : buildFilterModulationTravel({
                 baseCutoffHz: filterCutoff.value,
@@ -2437,7 +2527,9 @@ function FilterSection({
                             filterCutoff.endGesture();
                             filterQ.endGesture();
                         }}
-                        onCutoffSet={(nextValue) => filterCutoff.setValue(nextValue)}
+                        onCutoffSet={(nextValue) => {
+                            if (!keyTrackEnabled) filterCutoff.setValue(nextValue);
+                        }}
                         onQSet={(nextValue) => filterQ.setValue(nextValue)}
                         modulationTravel={filterOff ? null : modulationTravel}
                         onTravelEndpointSet={handleTravelEndpointSet}
@@ -2462,13 +2554,17 @@ function FilterSection({
                 </div>
                 <div data-role="voice-filter-knob-row" className="mobile-filter-knob-row">
                     <VoiceFilterKnob
-                        descriptor={VOICE_FILTER_KNOB_DESCRIPTORS.cutoff}
-                        binding={filterCutoff}
+                        descriptor={displayedCutoffDescriptor}
+                        binding={displayedFilterCutoff}
                         targetKind="filterCutoffOctaves"
                         routes={routes}
                         armedSource={armedSource}
                         disabled={filterOff}
-                        formatValue={formatCutoffDisplay}
+                        formatValue={keyTrackEnabled
+                            ? (value) => `${Number(value.toFixed(2))} st`
+                            : formatCutoffDisplay}
+                        keyTrackEnabled={keyTrackEnabled}
+                        onKeyTrackToggle={toggleKeyTrack}
                     />
                     <VoiceFilterKnob
                         descriptor={VOICE_FILTER_KNOB_DESCRIPTORS.resonance}
@@ -2530,7 +2626,9 @@ function FilterSection({
                         filterCutoff.endGesture();
                         filterQ.endGesture();
                     }}
-                    onCutoffSet={(nextValue) => filterCutoff.setValue(nextValue)}
+                    onCutoffSet={(nextValue) => {
+                        if (!keyTrackEnabled) filterCutoff.setValue(nextValue);
+                    }}
                     onQSet={(nextValue) => filterQ.setValue(nextValue)}
                     className="h-full w-full"
                 />
@@ -2558,21 +2656,41 @@ function FilterSection({
             </div>
 
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-1.5 p-1.5">
-                <div className="pointer-events-auto">
+                <div className="pointer-events-auto flex flex-col items-start gap-0.5">
                     <PrecisionNumberField
-                        ariaLabel="Filter cutoff"
-                        binding={filterCutoff}
-                        entrySpec={FILTER_CUTOFF_ENTRY_SPEC}
-                        suffix={FILTER_CUTOFF_ENTRY_SPEC.defaultUnit}
-                        normalizedFromValue={filterCutoffHzToNormalized}
-                        valueFromNormalized={normalizedToFilterCutoffHz}
+                        ariaLabel={keyTrackEnabled ? "Key Track Offset" : "Filter cutoff"}
+                        binding={displayedFilterCutoff}
+                        entrySpec={keyTrackEnabled
+                            ? FILTER_KEY_TRACK_OFFSET_ENTRY_SPEC
+                            : FILTER_CUTOFF_ENTRY_SPEC}
+                        suffix={keyTrackEnabled ? "st" : FILTER_CUTOFF_ENTRY_SPEC.defaultUnit}
+                        normalizedFromValue={keyTrackEnabled
+                            ? (value) => (value - VOICE_FILTER_KEY_TRACK_RANGE.knobMin)
+                                / (VOICE_FILTER_KEY_TRACK_RANGE.knobMax - VOICE_FILTER_KEY_TRACK_RANGE.knobMin)
+                            : filterCutoffHzToNormalized}
+                        valueFromNormalized={keyTrackEnabled
+                            ? (normalized) => VOICE_FILTER_KEY_TRACK_RANGE.knobMin
+                                + (normalized * (VOICE_FILTER_KEY_TRACK_RANGE.knobMax
+                                    - VOICE_FILTER_KEY_TRACK_RANGE.knobMin))
+                            : normalizedToFilterCutoffHz}
                         pixelsPerFullRange={220}
                         dataRole="filter-cutoff-field"
                         modulationTargetKind="filterCutoffOctaves"
+                        menuLabel={keyTrackEnabled ? "Key Track Offset" : undefined}
+                        menuAmountSpec={keyTrackEnabled ? FILTER_KEY_TRACK_ROUTE_ENTRY_SPEC : undefined}
+                        menuBaseFieldLabel={keyTrackEnabled ? "Key Track Offset" : undefined}
+                        menuRouteDestinationLabel={keyTrackEnabled ? "Key Track Offset" : undefined}
                         variant="compactOverlay"
                         width={72}
                         height={22}
                     />
+                    <button
+                        type="button"
+                        data-role="key-track-filterCutoff"
+                        aria-pressed={keyTrackEnabled}
+                        className="key-track-button voice-key-track-button"
+                        onClick={toggleKeyTrack}
+                    >Key Track</button>
                 </div>
                 <div className="pointer-events-auto">
                     <PrecisionNumberField
@@ -5208,6 +5326,8 @@ function DesktopPatchViewBody({
             <FilterSection
                 filterMode={synthView.filterMode}
                 filterCutoff={synthView.filterCutoff}
+                filterCutoffKeyTrackEnabled={synthView.filterCutoffKeyTrackEnabled}
+                filterCutoffKeyTrackOffsetSemitones={synthView.filterCutoffKeyTrackOffsetSemitones}
                 filterQ={synthView.filterQ}
                 observedFilterState={synthView.observedFilterState}
                 observedFilterSpectrum={synthView.observedFilterSpectrum}

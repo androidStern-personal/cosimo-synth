@@ -46,7 +46,11 @@ import {
     GLOBAL_TUNE_TARGET_KIND,
     formatSemitonesAndCents,
 } from "../shared/global-tune";
-import { usePatchModulationTargetOptions } from "../shared/lane-param-bindings";
+import {
+    useLaneKeyTrackControlBinding,
+    usePatchModulationTargetOptions,
+    type LaneKeyTrackControlBinding,
+} from "../shared/lane-param-bindings";
 import { getModulationTargetDisplayLabel } from "../shared/target-descriptor";
 import {
     presentRouteWithCanonicalAmount,
@@ -57,6 +61,9 @@ import type { PatchControlBinding } from "../shared/patch-controls";
 import {
     formatParameterEntry,
     parameterEntrySpecForFrequency,
+    parameterEntrySpecForKeyTrackModulationAmount,
+    parameterEntrySpecForKeyTrackOffset,
+    parameterEntrySpecForRackParameter,
     parameterEntrySpecForScalar,
     parameterEntrySpecForSeconds,
 } from "../shared/parameter-value-entry";
@@ -67,7 +74,12 @@ import {
     type MobileVoiceEditorBindings,
 } from "../shared/mobile-voice-editor";
 import { ParameterHudLayerContext } from "../shared/parameter-hud";
-import { ParameterMenuContext, useParameterMenu } from "../shared/parameter-context-menu";
+import {
+    ParameterMenuContext,
+    useLongPressParameterMenu,
+    useParameterMenu,
+    type ParameterMenuRequest,
+} from "../shared/parameter-context-menu";
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import {
     clampDisplayPosition,
@@ -85,6 +97,11 @@ import {
     ModulatedParameterKnob,
     type ParameterKnobDescriptor,
 } from "../desktop/rack-parameter-knob";
+import {
+    getRackParameterDescriptor,
+    type RackParameterDescriptor,
+} from "../shared/rack-parameter-descriptors";
+import { requireKeyTrackRange } from "../shared/key-track";
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
@@ -96,6 +113,16 @@ const DISTORTION_WET_HP_MIN_HZ = 20;
 const DISTORTION_WET_HP_MAX_HZ = 4_000;
 const DISTORTION_WET_LP_MIN_HZ = 20;
 const DISTORTION_WET_LP_MAX_HZ = 20_000;
+function requireIOSRackParameterDescriptor(endpointID: string): RackParameterDescriptor {
+    const descriptor = getRackParameterDescriptor(endpointID);
+    if (descriptor === null) {
+        throw new Error(`Missing iPhone rack parameter descriptor: ${endpointID}`);
+    }
+    return descriptor;
+}
+const DISTORTION_WET_HP_DESCRIPTOR = requireIOSRackParameterDescriptor("distortionWetHPHz");
+const DISTORTION_WET_LP_DESCRIPTOR = requireIOSRackParameterDescriptor("distortionWetLPHz");
+const IOS_DISTORTION_KEY_TRACK_RANGE = requireKeyTrackRange("filter-frequency");
 const IOS_PERCENT_ENTRY_SPEC = parameterEntrySpecForScalar({
     min: 0,
     max: 1,
@@ -798,14 +825,121 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
     );
 });
 
+function IOSDistortionTrackedFrequencyField({
+    descriptor,
+    keyTrack,
+    otherOrdinaryHz,
+    role,
+    isHighPass,
+}: {
+    descriptor: RackParameterDescriptor;
+    keyTrack: LaneKeyTrackControlBinding;
+    otherOrdinaryHz: number;
+    role: "distortion-wet-hp-slider" | "distortion-wet-lp-slider";
+    isHighPass: boolean;
+}) {
+    const openParameterMenu = useParameterMenu();
+    const targetKind = `lane.distortion#1.${descriptor.endpointID}`;
+    const buildMenuRequest = useCallback((): Omit<ParameterMenuRequest, "clientX" | "clientY"> => ({
+        controlKey: descriptor.endpointID,
+        label: keyTrack.enabled ? "Key Track Offset" : descriptor.label,
+        targetKind,
+        baseSpec: keyTrack.enabled
+            ? parameterEntrySpecForKeyTrackOffset("filter-frequency")
+            : parameterEntrySpecForRackParameter(descriptor, keyTrack.binding.value),
+        amountSpec: keyTrack.enabled
+            ? parameterEntrySpecForKeyTrackModulationAmount("filter-frequency", "octaves")
+            : undefined,
+        baseFieldLabel: keyTrack.enabled ? "Key Track Offset" : undefined,
+        routeDestinationLabel: keyTrack.enabled ? "Key Track Offset" : undefined,
+        baseValue: keyTrack.binding.value,
+        defaultValue: keyTrack.enabled ? 0 : descriptor.initial,
+        commitBase: keyTrack.binding.commitValue,
+    }), [descriptor, keyTrack.binding, keyTrack.enabled, targetKind]);
+    const longPressProps = useLongPressParameterMenu(buildMenuRequest);
+    const displayedValue = keyTrack.binding.value;
+    const normalizedValue = keyTrack.enabled
+        ? (displayedValue - IOS_DISTORTION_KEY_TRACK_RANGE.knobMin)
+            / (IOS_DISTORTION_KEY_TRACK_RANGE.knobMax - IOS_DISTORTION_KEY_TRACK_RANGE.knobMin)
+        : frequencyHzToLogNormalized(displayedValue, descriptor.min, descriptor.max);
+    const displayedLabel = keyTrack.enabled ? "Key Track Offset" : descriptor.shortLabel === "HP" ? "Band HP" : "Band LP";
+    const displayedReadout = keyTrack.enabled
+        ? `${Number(displayedValue.toFixed(2))} st`
+        : formatParameterEntry(IOS_FREQUENCY_ENTRY_SPEC, displayedValue).display;
+
+    return (
+        <label style={{ display: "grid", gap: "0.32rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
+                <span className="mseg-depth-label">{displayedLabel}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                    <span style={{
+                        fontFamily: "\"SF Mono\", Menlo, monospace",
+                        fontSize: "0.72rem",
+                        letterSpacing: "0.08em",
+                        color: "rgba(226,232,240,0.92)",
+                    }}
+                    >
+                        {displayedReadout}
+                    </span>
+                    <button
+                        type="button"
+                        className="key-track-button ios-key-track-button"
+                        style={{ ["--key-track-accent" as string]: "#fb7185" }}
+                        aria-pressed={keyTrack.enabled}
+                        onClick={(event) => {
+                            event.preventDefault();
+                            keyTrack.setEnabled(!keyTrack.enabled);
+                        }}
+                    >Key Track</button>
+                </div>
+            </div>
+            <input
+                {...longPressProps}
+                data-role={role}
+                className="mseg-rate-slider"
+                type="range"
+                min="0"
+                max="1"
+                step="0.001"
+                value={clamp(normalizedValue, 0, 1).toFixed(3)}
+                aria-label={keyTrack.enabled ? "Key Track Offset" : descriptor.label}
+                onContextMenu={(event) => {
+                    if (openParameterMenu === null) return;
+                    event.preventDefault();
+                    openParameterMenu({
+                        ...buildMenuRequest(),
+                        clientX: event.clientX,
+                        clientY: event.clientY,
+                    });
+                }}
+                onChange={(event) => {
+                    const normalized = Number(event.target.value);
+                    if (keyTrack.enabled) {
+                        keyTrack.binding.commitValue(
+                            IOS_DISTORTION_KEY_TRACK_RANGE.knobMin
+                                + normalized * (IOS_DISTORTION_KEY_TRACK_RANGE.knobMax
+                                    - IOS_DISTORTION_KEY_TRACK_RANGE.knobMin),
+                        );
+                        return;
+                    }
+                    const nextHz = normalizedToLogFrequencyHz(normalized, descriptor.min, descriptor.max);
+                    keyTrack.binding.commitValue(isHighPass
+                        ? clamp(nextHz, descriptor.min, Math.min(descriptor.max, otherOrdinaryHz))
+                        : clamp(nextHz, Math.max(descriptor.min, otherOrdinaryHz), descriptor.max));
+                }}
+            />
+        </label>
+    );
+}
+
 const IOSDistortionPanel = memo(function IOSDistortionPanel({
     modeValue,
     typeValue,
     driveValue,
     kneeValue,
     wetValue,
-    wetHPHzValue,
-    wetLPHzValue,
+    wetHPKeyTrack,
+    wetLPKeyTrack,
     historyFrame,
     scopeFrame,
     onModeChange,
@@ -813,16 +947,14 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
     onDriveChange,
     onKneeChange,
     onWetChange,
-    onWetHPHzChange,
-    onWetLPHzChange,
 }: {
     modeValue: number;
     typeValue: number;
     driveValue: number;
     kneeValue: number;
     wetValue: number;
-    wetHPHzValue: number;
-    wetLPHzValue: number;
+    wetHPKeyTrack: LaneKeyTrackControlBinding;
+    wetLPKeyTrack: LaneKeyTrackControlBinding;
     historyFrame: ReturnType<typeof useSynthPatchViewModel>["observedDistortionHistory"];
     scopeFrame: ReturnType<typeof useSynthPatchViewModel>["observedDistortionScope"];
     onModeChange: (nextValue: number) => void;
@@ -830,8 +962,6 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
     onDriveChange: (nextValue: number) => void;
     onKneeChange: (nextValue: number) => void;
     onWetChange: (nextValue: number) => void;
-    onWetHPHzChange: (nextValue: number) => void;
-    onWetLPHzChange: (nextValue: number) => void;
 }) {
     const inputPeak = scopeFrame?.inputPeak ?? 0;
     const outputPeak = scopeFrame?.outputPeak ?? 0;
@@ -1003,69 +1133,21 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
                     </label>
                 ))}
 
-                <label style={{ display: "grid", gap: "0.32rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
-                        <span className="mseg-depth-label">Band HP</span>
-                        <span style={{
-                            fontFamily: "\"SF Mono\", Menlo, monospace",
-                            fontSize: "0.72rem",
-                            letterSpacing: "0.08em",
-                            color: "rgba(226,232,240,0.92)",
-                        }}
-                        >
-                            {formatParameterEntry(IOS_FREQUENCY_ENTRY_SPEC, wetHPHzValue).display}
-                        </span>
-                    </div>
-                    <input
-                        data-role="distortion-wet-hp-slider"
-                        className="mseg-rate-slider"
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.001"
-                        value={frequencyHzToLogNormalized(wetHPHzValue, DISTORTION_WET_HP_MIN_HZ, DISTORTION_WET_HP_MAX_HZ).toFixed(3)}
-                        onChange={(event) => {
-                            const nextValue = clamp(
-                                normalizedToLogFrequencyHz(Number(event.target.value), DISTORTION_WET_HP_MIN_HZ, DISTORTION_WET_HP_MAX_HZ),
-                                DISTORTION_WET_HP_MIN_HZ,
-                                Math.min(DISTORTION_WET_HP_MAX_HZ, wetLPHzValue),
-                            );
-                            onWetHPHzChange(nextValue);
-                        }}
-                    />
-                </label>
+                <IOSDistortionTrackedFrequencyField
+                    descriptor={DISTORTION_WET_HP_DESCRIPTOR}
+                    keyTrack={wetHPKeyTrack}
+                    otherOrdinaryHz={wetLPKeyTrack.ordinaryBinding.value}
+                    role="distortion-wet-hp-slider"
+                    isHighPass
+                />
 
-                <label style={{ display: "grid", gap: "0.32rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
-                        <span className="mseg-depth-label">Band LP</span>
-                        <span style={{
-                            fontFamily: "\"SF Mono\", Menlo, monospace",
-                            fontSize: "0.72rem",
-                            letterSpacing: "0.08em",
-                            color: "rgba(226,232,240,0.92)",
-                        }}
-                        >
-                            {formatParameterEntry(IOS_FREQUENCY_ENTRY_SPEC, wetLPHzValue).display}
-                        </span>
-                    </div>
-                    <input
-                        data-role="distortion-wet-lp-slider"
-                        className="mseg-rate-slider"
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.001"
-                        value={frequencyHzToLogNormalized(wetLPHzValue, DISTORTION_WET_LP_MIN_HZ, DISTORTION_WET_LP_MAX_HZ).toFixed(3)}
-                        onChange={(event) => {
-                            const nextValue = clamp(
-                                normalizedToLogFrequencyHz(Number(event.target.value), DISTORTION_WET_LP_MIN_HZ, DISTORTION_WET_LP_MAX_HZ),
-                                Math.max(DISTORTION_WET_LP_MIN_HZ, wetHPHzValue),
-                                DISTORTION_WET_LP_MAX_HZ,
-                            );
-                            onWetLPHzChange(nextValue);
-                        }}
-                    />
-                </label>
+                <IOSDistortionTrackedFrequencyField
+                    descriptor={DISTORTION_WET_LP_DESCRIPTOR}
+                    keyTrack={wetLPKeyTrack}
+                    otherOrdinaryHz={wetHPKeyTrack.ordinaryBinding.value}
+                    role="distortion-wet-lp-slider"
+                    isHighPass={false}
+                />
             </div>
 
             <div style={{
@@ -1280,6 +1362,8 @@ function IOSPatchViewBody() {
             triggerIOSHaptic("light");
         },
     });
+    const distortionWetHPKeyTrack = useLaneKeyTrackControlBinding(DISTORTION_WET_HP_DESCRIPTOR);
+    const distortionWetLPKeyTrack = useLaneKeyTrackControlBinding(DISTORTION_WET_LP_DESCRIPTOR);
 
     /* T20 — the ADR-017 long-press parameter menu (shared shell machine). */
     const { openParameterMenu, parameterMenuOverlays } = useParameterMenuShell({
@@ -1493,8 +1577,8 @@ function IOSPatchViewBody() {
                                 driveValue={synthView.distortionDriveDb.value}
                                 kneeValue={synthView.distortionKnee.value}
                                 wetValue={synthView.distortionWet.value}
-                                wetHPHzValue={synthView.distortionWetHPHz.value}
-                                wetLPHzValue={synthView.distortionWetLPHz.value}
+                                wetHPKeyTrack={distortionWetHPKeyTrack}
+                                wetLPKeyTrack={distortionWetLPKeyTrack}
                                 historyFrame={synthView.observedDistortionHistory}
                                 scopeFrame={synthView.observedDistortionScope}
                                 onModeChange={synthView.distortionMode.commitValue}
@@ -1502,8 +1586,6 @@ function IOSPatchViewBody() {
                                 onDriveChange={synthView.distortionDriveDb.commitValue}
                                 onKneeChange={synthView.distortionKnee.commitValue}
                                 onWetChange={synthView.distortionWet.commitValue}
-                                onWetHPHzChange={synthView.distortionWetHPHz.commitValue}
-                                onWetLPHzChange={synthView.distortionWetLPHz.commitValue}
                             />
 
                             <IOSMsegLauncher

@@ -2,7 +2,7 @@
 // sparse program domain. This verifies installed prefix counts and live DSP
 // sentinels without turning the test into a performance budget.
 
-## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor")
 
 ## testProcessor (undefined, { frequency: 600 })
 

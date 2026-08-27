@@ -6,7 +6,7 @@
  * device parameter — ordinal 0 included — rides the two record events on
  * wt::EffectsRack:
  *
- *   laneSlotParams      { slotId, deliverySerial, values[8] }   bulk restore
+ *   laneSlotParams      { slotId, deliverySerial, values[11] }  bulk restore
  *   laneSlotParamValue  { slotId, paramIndex, deliverySerial, value }  live edit
  *
  * A slot's record is POSITIONAL: `values[paramIndex]` for the device type's
@@ -16,7 +16,7 @@
  * never hand-numbered at call sites.
  */
 /** Engine laneSlotParamCount: every record carries this many values. */
-export const LANE_SLOT_PARAM_COUNT = 8;
+export const LANE_SLOT_PARAM_COUNT = 11;
 /** Engine lanePoolInstanceCount: ordinals 0..4 exist per device type. */
 export const LANE_SLOT_ORDINAL_COUNT = 5;
 /** Engine rackModuleCount: slot = ordinal * 8 + type wire id. */
@@ -33,6 +33,37 @@ const LANE_TYPE_WIRE_IDS = Object.freeze({
 });
 /** Positional record layout per device type (index IS the wire paramIndex). */
 const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
+    globalFilter: [
+        "globalFilterMode", "globalFilterCutoff", "globalFilterResonance", "globalFilterDrive",
+        "globalFilterCutoffKeyTrackEnabled", "globalFilterCutoffKeyTrackOffsetSemitones",
+    ],
+    distortion: [
+        "distortionMode", "distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz", "distortionType",
+        "distortionWetHPKeyTrackEnabled", "distortionWetHPKeyTrackOffsetSemitones",
+        "distortionWetLPKeyTrackEnabled", "distortionWetLPKeyTrackOffsetSemitones",
+    ],
+    ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
+    chorus: [
+        "chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingOffsetMode", "chorusRingFineSemitones",
+        "chorusRingFrequencyHz", "chorusRingKeyTrackEnabled", "chorusRingKeyTrackOffsetSemitones",
+    ],
+    flanger: [
+        "flangerRate", "flangerDepth", "flangerFeedback", "flangerMix",
+        "flangerBaseDelayMs", "flangerBaseDelayKeyTrackEnabled", "flangerBaseDelayKeyTrackOffsetSemitones",
+    ],
+    phaser: [
+        "phaserRate", "phaserRateMode", "phaserRateDivision", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix",
+        "phaserFrequencyKeyTrackEnabled", "phaserFrequencyKeyTrackOffsetSemitones",
+    ],
+    delay: [
+        "delayTime", "delayFeedback", "delayFilter", "delayMix", "delayTimeMode", "delayDivision",
+        "delayTimeKeyTrackEnabled", "delayTimeKeyTrackOffsetSemitones",
+        "delayFilterKeyTrackEnabled", "delayFilterKeyTrackOffsetSemitones",
+    ],
+    reverb: ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"],
+});
+/** Exact per-device records written before T50 appended Key Track state. */
+export const LEGACY_LANE_DEVICE_PARAM_ENDPOINTS = Object.freeze({
     globalFilter: ["globalFilterMode", "globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"],
     distortion: ["distortionMode", "distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz", "distortionType"],
     ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
@@ -42,6 +73,66 @@ const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
     delay: ["delayTime", "delayFeedback", "delayFilter", "delayMix", "delayTimeMode", "delayDivision"],
     reverb: ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"],
 });
+const APPENDED_LANE_PARAM_DEFAULTS = Object.freeze({
+    globalFilterCutoffKeyTrackEnabled: 0,
+    globalFilterCutoffKeyTrackOffsetSemitones: 0,
+    distortionWetHPKeyTrackEnabled: 0,
+    distortionWetHPKeyTrackOffsetSemitones: 0,
+    distortionWetLPKeyTrackEnabled: 0,
+    distortionWetLPKeyTrackOffsetSemitones: 0,
+    chorusRingOffsetMode: 0,
+    chorusRingFineSemitones: 0,
+    chorusRingFrequencyHz: 28,
+    chorusRingKeyTrackEnabled: 0,
+    chorusRingKeyTrackOffsetSemitones: 0,
+    flangerBaseDelayMs: 0.6,
+    flangerBaseDelayKeyTrackEnabled: 0,
+    flangerBaseDelayKeyTrackOffsetSemitones: 0,
+    phaserFrequencyKeyTrackEnabled: 0,
+    phaserFrequencyKeyTrackOffsetSemitones: 0,
+    delayTimeKeyTrackEnabled: 0,
+    delayTimeKeyTrackOffsetSemitones: 0,
+    delayFilterKeyTrackEnabled: 0,
+    delayFilterKeyTrackOffsetSemitones: 0,
+});
+function legacyChorusRingOffsetSemitones(mode) {
+    if (Math.round(mode) === 1)
+        return -5;
+    if (Math.round(mode) === 2)
+        return 12;
+    if (Math.round(mode) === 3)
+        return -12;
+    return 7;
+}
+/**
+ * Expand any validated pre-T50/presentation record to the append-only wire
+ * layout. The old Chorus mode + fine fields are retained at their deployed
+ * indexes and translated to an enabled tracked offset, preserving its sound.
+ */
+export function materializeLaneDeviceParams(deviceType, input) {
+    const params = {};
+    for (const endpointID of LANE_DEVICE_PARAM_LAYOUT[deviceType]) {
+        const value = input[endpointID];
+        if (typeof value === "number" && Number.isFinite(value)) {
+            params[endpointID] = value;
+            continue;
+        }
+        const fallback = APPENDED_LANE_PARAM_DEFAULTS[endpointID];
+        if (fallback === undefined) {
+            throw new Error(`Missing lane parameter value: ${deviceType}.${endpointID}`);
+        }
+        params[endpointID] = fallback;
+    }
+    const isLegacyChorus = deviceType === "chorus"
+        && Object.hasOwn(input, "chorusRingOffsetMode")
+        && Object.hasOwn(input, "chorusRingFineSemitones")
+        && !Object.hasOwn(input, "chorusRingFrequencyHz");
+    if (isLegacyChorus) {
+        params.chorusRingKeyTrackEnabled = 1;
+        params.chorusRingKeyTrackOffsetSemitones = legacyChorusRingOffsetSemitones(Number(input.chorusRingOffsetMode)) + Number(input.chorusRingFineSemitones);
+    }
+    return params;
+}
 /** The full parameter vocabulary of one device type, in wire order. */
 export function laneDeviceParamEndpoints(deviceType) {
     return LANE_DEVICE_PARAM_LAYOUT[deviceType];
@@ -61,12 +152,9 @@ export function getLaneSlotId(deviceType, ordinal) {
 /** Build one complete positional record from a device's parameter values. */
 export function buildLaneSlotParamValues(deviceType, params) {
     const values = new Array(LANE_SLOT_PARAM_COUNT).fill(0);
+    const materialized = materializeLaneDeviceParams(deviceType, params);
     LANE_DEVICE_PARAM_LAYOUT[deviceType].forEach((endpointID, index) => {
-        const value = params[endpointID];
-        if (typeof value !== "number" || !Number.isFinite(value)) {
-            throw new Error(`Missing lane parameter value: ${deviceType}.${endpointID}`);
-        }
-        values[index] = value;
+        values[index] = materialized[endpointID];
     });
     return values;
 }

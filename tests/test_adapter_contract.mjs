@@ -199,7 +199,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(adapter.getSnapshot().patch.mappings.length, initialCount + 101);
     });
 
-    t("the complete 1288-pair product domain is reachable", async (adapter) => {
+    t("the complete 1330-pair product domain is reachable", async (adapter) => {
         const { allTargetDescriptors } = await targetDescriptorPromise;
         for (const sourceType of ["mseg", "envelope", "macro"]) {
             while (adapter.commands.createSource(sourceType)._tag === "ok") {
@@ -212,7 +212,7 @@ function contractSuite(adapterName, makeAdapter) {
             .filter((descriptor) => descriptor.modulationTargetKind !== null)
             .map((descriptor) => descriptor.targetId);
         assert.equal(sources.length, 14);
-        assert.equal(targets.length, 92);
+        assert.equal(targets.length, 95);
 
         for (const targetId of targets) {
             for (const sourceId of sources) {
@@ -223,7 +223,7 @@ function contractSuite(adapterName, makeAdapter) {
             }
         }
 
-        assert.equal(adapter.getSnapshot().patch.mappings.length, 1288);
+        assert.equal(adapter.getSnapshot().patch.mappings.length, 1330);
     });
 
     t("mapping setters are reflected verbatim", (adapter) => {

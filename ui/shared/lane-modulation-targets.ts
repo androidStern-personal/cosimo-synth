@@ -33,9 +33,11 @@ export type LaneDeviceType =
     | "globalFilter" | "distortion" | "ott" | "chorus"
     | "flanger" | "phaser" | "delay" | "reverb";
 
+export type LaneModulationOwnerType = LaneDeviceType | "frequencySplit";
+
 export type ParsedLaneModulationTarget = {
     readonly instanceId: string;
-    readonly deviceType: LaneDeviceType;
+    readonly deviceType: LaneModulationOwnerType;
     readonly endpointID: string;
 };
 
@@ -47,18 +49,25 @@ export type LaneDeviceInstance = {
     readonly deviceType: LaneDeviceType;
 };
 
+/** Device instances plus the optional split-marker modulation owners. */
+export type LaneModulationOwnerInstance = {
+    readonly instanceId: string;
+    readonly deviceType: LaneModulationOwnerType;
+};
+
 
 /** Modulatable pool endpoints per device type; the mirror target is always
     the instance-#1 base target. */
-const LANE_DEVICE_ENDPOINTS: ReadonlyMap<LaneDeviceType, ReadonlyArray<string>> = new Map([
+const LANE_DEVICE_ENDPOINTS: ReadonlyMap<LaneModulationOwnerType, ReadonlyArray<string>> = new Map([
     ["globalFilter", ["globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"]],
     ["distortion", ["distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"]],
     ["ott", ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"]],
     ["chorus", ["chorusMix", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingFineSemitones"]],
-    ["flanger", ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix"]],
+    ["flanger", ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix", "flangerBaseDelayMs"]],
     ["phaser", ["phaserRate", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix"]],
     ["delay", ["delayTime", "delayFeedback", "delayFilter", "delayMix"]],
     ["reverb", ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"]],
+    ["frequencySplit", ["xoverLowHz", "xoverHighHz"]],
 ]);
 
 const LANE_KIND_PATTERN = /^lane\.([a-zA-Z]+)#([1-9][0-9]*)\.([A-Za-z0-9]+)$/;
@@ -72,7 +81,7 @@ export function parseLaneModulationTargetKind(value: unknown): ParsedLaneModulat
     if (match === null) {
         return null;
     }
-    const deviceType = match[1] as LaneDeviceType;
+    const deviceType = match[1] as LaneModulationOwnerType;
     const endpoints = LANE_DEVICE_ENDPOINTS.get(deviceType);
     if (endpoints === undefined) {
         return null;
@@ -102,7 +111,7 @@ export function laneInstanceNumber(parsed: ParsedLaneModulationTarget): number {
 /** One device's modulation target kinds, in the canonical catalog order the
     static vocabulary uses (pinned by the resident-domain invariant test). */
 export function getLaneDeviceModulationTargetKinds(
-    device: LaneDeviceInstance,
+    device: LaneModulationOwnerInstance,
 ): ReadonlyArray<string> {
     const endpoints = LANE_DEVICE_ENDPOINTS.get(device.deviceType);
     if (endpoints === undefined) {

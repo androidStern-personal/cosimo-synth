@@ -11,7 +11,9 @@ namespace wt
     // The comb. A 0.6 ms floor puts the first notch at 833 Hz; the sweep takes the
     // delay out to 8.0 ms, walking that notch down to 62 Hz. Short enough to read as
     // a flanger rather than as a chorus or a slapback.
-    let flangerBaseDelayMs = 0.6f;
+    let flangerBaseDelayInitMs = 0.6f;
+    let flangerBaseDelayMinMs = 0.2f;
+    let flangerBaseDelayMaxMs = 16.0f;
     let flangerSweepDelayMs = 7.4f;
 
     // Right channel LFO in quadrature - the same stereo device ChorusBus uses
@@ -42,6 +44,12 @@ namespace wt
     float32 clampFlangerRateHz (float32 value)
     {
         return std::intrinsics::clamp (value, flangerRateMinHz, flangerRateMaxHz);
+    }
+
+    float32 clampFlangerBaseDelayMs (float32 value)
+    {
+        return std::intrinsics::clamp (
+            value, flangerBaseDelayMinMs, flangerBaseDelayMaxMs);
     }
 
     float32 clampFlangerDepth (float32 value)
@@ -95,6 +103,7 @@ namespace wt
         input stream float32<2> in;
 
         input value float32 rateIn     [[ name: "Flanger Rate",     min: 0.02f,  max: 8.0f,  init: 0.35f, unit: "Hz", rampFrames: 64 ]];
+        input value float32 baseDelayMsIn [[ name: "Flanger Base Delay / Tune", min: 0.2f, max: 16.0f, init: 0.6f, unit: "ms", rampFrames: 0 ]];
         input value float32 depthIn    [[ name: "Flanger Depth",    min: 0.0f,   max: 1.0f,  init: 0.6f,  rampFrames: 64 ]];
         input value float32 feedbackIn [[ name: "Flanger Feedback", min: -0.95f, max: 0.95f, init: 0.0f,  rampFrames: 64 ]];
         input value float32 mixIn      [[ name: "Flanger Mix",      min: 0.0f,   max: 1.0f,  init: 0.5f,  rampFrames: 128 ]];
@@ -127,6 +136,7 @@ namespace wt
         float32 currentRateHz = -1.0f;
         float32 phaseIncrement;
         float32 currentDepth = -1.0f;
+        float32 currentBaseDelayMs = -1.0f;
         float32 sweepDelaySamples;
         float32 baseDelaySamples;
 
@@ -139,11 +149,12 @@ namespace wt
             // Sentinels force rate/depth-derived values to recompute.
             currentRateHz = -1.0f;
             currentDepth = -1.0f;
+            currentBaseDelayMs = -1.0f;
         }
 
         void init()
         {
-            baseDelaySamples = flangerBaseDelayMs * float32 (processor.frequency) * 0.001f;
+            baseDelaySamples = flangerBaseDelayInitMs * float32 (processor.frequency) * 0.001f;
         }
 
         void updateModulationCoefficients()
@@ -151,6 +162,7 @@ namespace wt
             let sampleRate = float32 (processor.frequency);
             let nextRateHz = clampFlangerRateHz (rateIn);
             let nextDepth = clampFlangerDepth (depthIn);
+            let nextBaseDelayMs = clampFlangerBaseDelayMs (baseDelayMsIn);
 
             if (std::intrinsics::abs (nextRateHz - currentRateHz) > flangerRateEpsilonHz)
             {
@@ -162,6 +174,12 @@ namespace wt
             {
                 sweepDelaySamples = nextDepth * flangerSweepDelayMs * sampleRate * 0.001f;
                 currentDepth = nextDepth;
+            }
+
+            if (std::intrinsics::abs (nextBaseDelayMs - currentBaseDelayMs) > flangerRateEpsilonHz)
+            {
+                baseDelaySamples = nextBaseDelayMs * sampleRate * 0.001f;
+                currentBaseDelayMs = nextBaseDelayMs;
             }
         }
 

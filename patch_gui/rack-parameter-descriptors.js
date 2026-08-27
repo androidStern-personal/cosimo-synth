@@ -36,6 +36,7 @@ const p = (effectId, endpointID, label, shortLabel, min, max, initial, options =
     modulationTargetIndex: options.modulationTargetIndex ?? null,
     modulationApplication: options.modulationApplication
         ?? (options.modulationTargetIndex === undefined || options.modulationTargetIndex === null ? null : "linear"),
+    modulationIdentityEndpointID: options.modulationIdentityEndpointID,
     modulationDragStyle: options.modulationDragStyle,
 });
 const PHASER_DIVISIONS = ["4/1", "2/1", "1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16"];
@@ -105,8 +106,10 @@ const definitions = [
             p("chorus", "chorusTone", "Tone", "Tone", 0, 1, 0.5, { modulationTargetIndex: 14 }),
             p("chorus", "chorusFeedback", "Feedback", "Fdbk", 0, 0.95, 0.42, { modulationTargetIndex: 15 }),
             p("chorus", "chorusRingAmount", "Ring", "Ring", 0, 1, 0, { modulationTargetIndex: 16 }),
-            p("chorus", "chorusRingOffsetMode", "Ring Pitch", "Pitch", 0, 3, 0, { step: 1, choices: ["+5th", "Low 5th", "+Oct", "-Oct"].map(choice) }),
-            p("chorus", "chorusRingFineSemitones", "Ring Fine", "Fine", -2, 2, 0, { unit: "st", modulationTargetIndex: 17 }),
+            p("chorus", "chorusRingFrequencyHz", "Ring Frequency", "Freq", 10, 20_000, 28, {
+                unit: "Hz", scale: "log", modulationTargetIndex: 17, modulationApplication: "semitones",
+                modulationIdentityEndpointID: "chorusRingFineSemitones",
+            }),
         ],
     },
     {
@@ -122,6 +125,9 @@ const definitions = [
             p("flanger", "flangerDepth", "Depth", "Dpt", 0, 1, 0.6, { quick: true, modulationTargetIndex: 19 }),
             p("flanger", "flangerFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 20 }),
             p("flanger", "flangerMix", "Mix", "Mix", 0, 1, 0.5, { modulationTargetIndex: 21 }),
+            p("flanger", "flangerBaseDelayMs", "Base Delay / Tune", "Tune", 0.2, 16, 0.6, {
+                unit: "ms", scale: "log", modulationTargetIndex: 36, modulationApplication: "octaves",
+            }),
         ],
     },
     {
@@ -195,6 +201,14 @@ export function allRackParameterDescriptors() {
 /** Look up a parameter through the catalog's allocation-free endpoint index. */
 export function getRackParameterDescriptor(endpointID) {
     return RACK_PARAMETER_BY_ENDPOINT_ID.get(endpointID) ?? null;
+}
+/** Persisted modulation identity; may deliberately differ from the presented base endpoint. */
+export function rackModulationIdentityEndpointID(descriptor) {
+    return descriptor.modulationIdentityEndpointID ?? descriptor.endpointID;
+}
+/** Resolve either a current endpoint or an append-only modulation identity. */
+export function getRackParameterDescriptorForModulationEndpoint(endpointID) {
+    return RACK_PARAMETER_DESCRIPTORS.find((descriptor) => rackModulationIdentityEndpointID(descriptor) === endpointID) ?? null;
 }
 /** Format a raw engine value with the descriptor's unit and scale vocabulary. */
 export function formatRackParameterValue(descriptor, value) {

@@ -118,6 +118,11 @@ export type RackParameterKnobProps = {
      * direction's effect into a few pixels and leaves the rest dead.
      */
     readonly modulationDragStyle?: "amount-span" | "effective-value";
+    readonly modulationAmountBounds?: { readonly min: number; readonly max: number };
+    readonly formatModulationAmount?: (
+        amount: number,
+        polarity: ModulationRoute["polarity"],
+    ) => string;
 };
 
 export type ModulatedParameterKnobProps = Omit<
@@ -125,7 +130,7 @@ export type ModulatedParameterKnobProps = Omit<
     "descriptor" | "formatValue"
 > & {
     readonly descriptor: ParameterKnobDescriptor;
-    readonly modulationApplication: "linear" | "octaves";
+    readonly modulationApplication: "linear" | "octaves" | "semitones";
     readonly formatValue: (value: number) => string;
 };
 
@@ -262,6 +267,11 @@ type ParameterKnobSurfaceProps = {
     readonly modulationTargetKind?: ModulationTargetKind;
     readonly ownerAccent?: string;
     readonly modulationDragStyle?: "amount-span" | "effective-value";
+    readonly modulationAmountBounds?: { readonly min: number; readonly max: number };
+    readonly formatModulationAmount?: (
+        amount: number,
+        polarity: ModulationRoute["polarity"],
+    ) => string;
 };
 
 function ParameterKnobSurface({
@@ -286,6 +296,8 @@ function ParameterKnobSurface({
     modulationTargetKind,
     ownerAccent,
     modulationDragStyle = "amount-span",
+    modulationAmountBounds,
+    formatModulationAmount,
 }: ParameterKnobSurfaceProps) {
     const artRef = useRef<SVGSVGElement | null>(null);
     const bindingRef = useRef(binding);
@@ -414,7 +426,7 @@ function ParameterKnobSurface({
             ?? maybeLaneBaseKindForRackEndpoint(gestureDescriptor.endpointID)
             ?? (`lane.none#1.${gestureDescriptor.endpointID}` as RackModulationTargetKind);
         const amountBounds = enableModulationGesture && route !== null
-            ? getModulationAmountBounds(gestureTargetKind)
+            ? modulationAmountBounds ?? getModulationAmountBounds(gestureTargetKind)
             : null;
         lastBaseValueRef.current = bindingRef.current.value;
 
@@ -516,6 +528,7 @@ function ParameterKnobSurface({
         gestureController,
         hideHud,
         modulationTargetKind,
+        modulationAmountBounds,
         onSelect,
         route,
     ]);
@@ -530,7 +543,9 @@ function ParameterKnobSurface({
             : null;
         const sourceLine = route !== null && sourceIdentity !== null
             ? rackModulationSourceShortIdentity(sourceIdentity)
-                + ` · ${formatModulationAmountReadout(targetKind, modulationAmount, route.polarity)}`
+                + ` · ${formatModulationAmount !== undefined
+                    ? formatModulationAmount(modulationAmount, route.polarity)
+                    : formatModulationAmountReadout(targetKind, modulationAmount, route.polarity)}`
             : "";
         const modRing: ParameterKnobModRing = !enableModulationGesture || !sourceIsSelected
             ? { kind: "hidden" }

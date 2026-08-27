@@ -55,6 +55,7 @@ export type ArticulationParameterSnapshot = {
     warpAmount: number;
     filterMode: number;
     filterCutoff: number;
+    filterKeyTrackOffsetSemitones: number;
     filterQ: number;
     unisonVoices: number;
     unisonDetune: number;
@@ -144,6 +145,7 @@ export type ArticulationSnapshotRuntimeUpload = {
     warpAmounts: number[];
     filterMode: number;
     filterCutoffHz: number;
+    filterKeyTrackOffsetSemitones: number;
     filterQ: number;
     unisonVoices: number[];
     unisonDetunes: number[];
@@ -273,6 +275,7 @@ export function createDefaultArticulationParameterSnapshot(): ArticulationParame
         warpAmount: 0,
         filterMode: 0,
         filterCutoff: 1000,
+        filterKeyTrackOffsetSemitones: 0,
         filterQ: 0.707107,
         unisonVoices: 1,
         unisonDetune: 0.1,
@@ -314,6 +317,12 @@ export function normalizeArticulationParameterSnapshot(value: unknown): Articula
         warpAmount: normalizeNumber(nextValue.warpAmount, defaults.warpAmount, 0, 1),
         filterMode: normalizeInteger(nextValue.filterMode, defaults.filterMode, 0, 5),
         filterCutoff: normalizeNumber(nextValue.filterCutoff, defaults.filterCutoff, 20, 20_000),
+        filterKeyTrackOffsetSemitones: normalizeNumber(
+            nextValue.filterKeyTrackOffsetSemitones,
+            defaults.filterKeyTrackOffsetSemitones,
+            -60,
+            60,
+        ),
         filterQ: normalizeNumber(nextValue.filterQ, defaults.filterQ, 0.1, 20),
         unisonVoices: normalizeInteger(nextValue.unisonVoices, defaults.unisonVoices, 1, 8),
         unisonDetune: normalizeNumber(nextValue.unisonDetune, defaults.unisonDetune, 0, 1),
@@ -1348,6 +1357,7 @@ export function createDisabledArticulationRuntimeUpload(selectorA: number): Arti
         warpAmounts: perOscillator(0),
         filterMode: 0,
         filterCutoffHz: 1000,
+        filterKeyTrackOffsetSemitones: 0,
         filterQ: 0.707107,
         unisonVoices: perOscillator(1),
         unisonDetunes: perOscillator(0.1),

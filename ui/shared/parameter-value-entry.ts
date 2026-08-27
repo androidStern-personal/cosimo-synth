@@ -1,6 +1,7 @@
 import {
     getRackEffectDescriptor,
     getRackParameterDescriptor,
+    getRackParameterDescriptorForModulationEndpoint,
     type RackParameterChoice,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
@@ -21,6 +22,11 @@ import {
 } from "./mobile-voice-display-descriptors";
 import { getMobileVoiceControlSpec } from "./mobile-voice-parameter-manifest";
 import { getModulationTargetDescriptor } from "./target-descriptor";
+import {
+    requireKeyTrackRange,
+    type KeyTrackParameterFamily,
+    type KeyTrackRouteStorage,
+} from "./key-track";
 
 type ParameterEntryBounds = {
     readonly min: number;
@@ -442,6 +448,17 @@ function rackAmountSpec(
             physicalIntervalUnit: descriptor.unit === "ms" ? "milliseconds" : "frequency",
         });
     }
+    if (descriptor.modulationApplication === "semitones") {
+        return amountSpec({
+            ...bounds,
+            defaultUnit: "st",
+            canonicalPerDisplayedUnit: 1,
+            digits: 4,
+            percentMeaning: "depth",
+            baseValue: null,
+            physicalIntervalUnit: null,
+        });
+    }
     if (descriptor.unit === "" && descriptor.max - descriptor.min <= 2) {
         return nativePercentAmount(bounds.min, bounds.max, bounds.step, 0.01);
     }
@@ -480,10 +497,25 @@ export function parameterEntrySpecForModulationAmount(
     if (voiceTargetKind !== null) {
         return voiceAmountSpec(voiceTargetKind, baseValue);
     }
+    if (parseLaneModulationTargetKind(targetKind)?.deviceType === "frequencySplit") {
+        return amountSpec({
+            min: -4,
+            max: 4,
+            step: 0,
+            defaultUnit: "oct",
+            canonicalPerDisplayedUnit: 1,
+            digits: 4,
+            percentMeaning: "depth",
+            baseValue: null,
+            physicalIntervalUnit: null,
+        });
+    }
     if (!isRackModulationTarget(laneAmountAuthorityKind(targetKind))) {
         throw new Error(`Unknown modulation target "${targetKind}".`);
     }
-    const descriptor = getRackParameterDescriptor(parseLaneModulationTargetKind(targetKind)?.endpointID ?? "");
+    const descriptor = getRackParameterDescriptorForModulationEndpoint(
+        parseLaneModulationTargetKind(targetKind)?.endpointID ?? "",
+    );
     if (descriptor === null || descriptor.modulationTargetIndex === null) {
         throw new Error(`Unknown rack modulation target "${targetKind}".`);
     }
@@ -498,10 +530,15 @@ export function modulationAmountBaseBindingSpec(
     targetKind: ModulationTargetKind,
 ): ModulationAmountBaseBindingSpec | null {
     const voiceTargetKind = parseVoiceModulationTargetKind(targetKind);
+    if (parseLaneModulationTargetKind(targetKind)?.deviceType === "frequencySplit") {
+        return null;
+    }
     const authorityKind = laneAmountAuthorityKind(targetKind);
     const needsBase = voiceTargetKind === "filterCutoffOctaves"
         || (isRackModulationTarget(authorityKind)
-            && getRackParameterDescriptor(parseLaneModulationTargetKind(targetKind)?.endpointID ?? "")?.modulationApplication === "octaves");
+            && getRackParameterDescriptorForModulationEndpoint(
+                parseLaneModulationTargetKind(targetKind)?.endpointID ?? "",
+            )?.modulationApplication === "octaves");
     if (!needsBase) {
         return null;
     }
@@ -545,6 +582,43 @@ export function parameterEntrySpecForFrequency({
 /** Construct a scalar spec from an existing display range and unit. */
 export function parameterEntrySpecForScalar(input: ScalarParameterEntrySpecInput): ParameterEntrySpec {
     return scalarSpec(input);
+}
+
+/** The base field shown while an eligible control is in Key Track mode. */
+export function parameterEntrySpecForKeyTrackOffset(
+    family: KeyTrackParameterFamily,
+): ParameterEntrySpec {
+    const range = requireKeyTrackRange(family);
+    return scalarSpec({
+        min: range.knobMin,
+        max: range.knobMax,
+        step: 0,
+        unit: "st",
+        digits: 4,
+    });
+}
+
+/**
+ * Key Track route entry always speaks semitones/cents. The spec's bounds and
+ * conversion preserve the route's deployed octave or semitone storage.
+ */
+export function parameterEntrySpecForKeyTrackModulationAmount(
+    family: KeyTrackParameterFamily,
+    storage: KeyTrackRouteStorage,
+): ParameterEntrySpec {
+    const range = requireKeyTrackRange(family);
+    const canonicalPerDisplayedUnit = storage === "octaves" ? 1 / 12 : 1;
+    return amountSpec({
+        min: range.routeMin * canonicalPerDisplayedUnit,
+        max: range.routeMax * canonicalPerDisplayedUnit,
+        step: 0,
+        defaultUnit: "st",
+        canonicalPerDisplayedUnit,
+        digits: 4,
+        percentMeaning: "depth",
+        baseValue: null,
+        physicalIntervalUnit: null,
+    });
 }
 
 /** Derive exact-entry behavior from the authoritative mobile Voice display contract. */
@@ -701,7 +775,7 @@ function parseScalar(spec: ScalarParameterEntrySpec, text: string): ParameterEnt
         || (spec.defaultUnit === "Q" && unitIs(parsed.unit, "q"))
         || (spec.defaultUnit === "dB" && unitIs(parsed.unit, "db"))
         || (spec.defaultUnit === "°" && unitIs(parsed.unit, "°", "deg", "degree", "degrees"))
-        || (spec.defaultUnit === "st" && unitIs(parsed.unit, "st", "semitone", "semitones"))
+        || (spec.defaultUnit === "st" && unitIs(parsed.unit, "st", "semitone", "semitones", "ct", "cent", "cents"))
         || (spec.defaultUnit === "oct" && unitIs(parsed.unit, "oct", "octave", "octaves"))
         || (spec.defaultUnit === "ct" && unitIs(parsed.unit, "ct", "cent", "cents"))
         || (spec.defaultUnit === "x" && unitIs(parsed.unit, "x", "voice", "voices"));
@@ -717,7 +791,8 @@ function parseScalar(spec: ScalarParameterEntrySpec, text: string): ParameterEnt
                 : `Enter a finite number in ${spec.defaultUnit}.`,
         };
     }
-    return valueCommit(numericValue * spec.canonicalPerDisplayedUnit, spec);
+    const centsScale = spec.defaultUnit === "st" && unitIs(parsed.unit, "ct", "cent", "cents") ? 0.01 : 1;
+    return valueCommit(numericValue * centsScale * spec.canonicalPerDisplayedUnit, spec);
 }
 
 function timeUnitKind(unit: string | undefined): "milliseconds" | "seconds" | "unknown" | "bare" {
@@ -834,7 +909,7 @@ function parseOctavePhysicalInterval(
 
 function amountUnitCompatible(spec: AmountParameterEntrySpec, unit: string): boolean {
     return (spec.defaultUnit === "oct" && unitIs(unit, "oct", "octave", "octaves"))
-        || (spec.defaultUnit === "st" && unitIs(unit, "st", "semitone", "semitones"))
+        || (spec.defaultUnit === "st" && unitIs(unit, "st", "semitone", "semitones", "ct", "cent", "cents"))
         || (spec.defaultUnit === "dB" && unitIs(unit, "db"))
         || (spec.defaultUnit === "Q" && unitIs(unit, "q"))
         || (spec.defaultUnit === "s" && timeUnitKind(unit) !== "unknown")
@@ -869,7 +944,8 @@ function parseAmount(spec: AmountParameterEntrySpec, text: string): ParameterEnt
         return rejectForUnit(parsed.unit, spec.defaultUnit);
     }
 
-    let value = numericValue * spec.canonicalPerDisplayedUnit;
+    const centsScale = spec.defaultUnit === "st" && unitIs(parsed.unit, "ct", "cent", "cents") ? 0.01 : 1;
+    let value = numericValue * centsScale * spec.canonicalPerDisplayedUnit;
     if (spec.defaultUnit === "s" && timeUnitKind(parsed.unit) === "milliseconds") {
         value = numericValue / 1_000;
     } else if (spec.defaultUnit === "ms" && timeUnitKind(parsed.unit) === "seconds") {

@@ -24,7 +24,7 @@
 // from processor.maxFrequency and the compiler cannot fold that for an
 // uninstantiated processor. See the note on flangerSaturate in Flanger.cmajor.
 
-## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/Flanger.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/Flanger.cmajor")
 
 // ---------------------------------------------------------------------------
 // 1. HARD AUDIBLE BYPASS. At mix 0 the module passes its input BIT-EXACTLY -
@@ -416,7 +416,7 @@ processor FlangerLfoPeriod [[ main ]]
 }
 
 // ---------------------------------------------------------------------------
-// 5. EVERY PARAMETER REACHES THE DSP. Four modules differ from a reference module
+// 5. EVERY PARAMETER REACHES THE DSP. Five modules differ from a reference module
 //    in exactly one parameter each. A parameter wired to the wrong internal state,
 //    or never read at all, compiles silently and sounds plausible - this is the
 //    only thing that catches it at module level.
@@ -432,10 +432,11 @@ processor FlangerParameterReach [[ main ]]
     node depthVariant = wt::FlangerBus;
     node feedbackVariant = wt::FlangerBus;
     node mixVariant   = wt::FlangerBus;
+    node baseDelayVariant = wt::FlangerBus;
 
     let measureFrames = 8192;
-    // Measured: every one of the four differences lands at 0.2 or above, so this
-    // threshold is a floor with margin rather than a hair above the noise.
+    // The threshold is deliberately well above numerical noise; each variant
+    // must produce a materially different wet signal.
     let minimumDifference = 0.1f;
 
     float32 testSignal (int32 frame)
@@ -445,20 +446,23 @@ processor FlangerParameterReach [[ main ]]
 
     void configure()
     {
-        reference.rateIn <- 0.35f;        reference.depthIn <- 0.6f;
+        reference.rateIn <- 0.35f;        reference.baseDelayMsIn <- 0.6f; reference.depthIn <- 0.6f;
         reference.feedbackIn <- 0.0f;     reference.mixIn <- 1.0f;
 
-        rateVariant.rateIn <- 8.0f;       rateVariant.depthIn <- 0.6f;
+        rateVariant.rateIn <- 8.0f;       rateVariant.baseDelayMsIn <- 0.6f; rateVariant.depthIn <- 0.6f;
         rateVariant.feedbackIn <- 0.0f;   rateVariant.mixIn <- 1.0f;
 
-        depthVariant.rateIn <- 0.35f;     depthVariant.depthIn <- 0.0f;
+        depthVariant.rateIn <- 0.35f;     depthVariant.baseDelayMsIn <- 0.6f; depthVariant.depthIn <- 0.0f;
         depthVariant.feedbackIn <- 0.0f;  depthVariant.mixIn <- 1.0f;
 
-        feedbackVariant.rateIn <- 0.35f;    feedbackVariant.depthIn <- 0.6f;
+        feedbackVariant.rateIn <- 0.35f;    feedbackVariant.baseDelayMsIn <- 0.6f; feedbackVariant.depthIn <- 0.6f;
         feedbackVariant.feedbackIn <- 0.9f; feedbackVariant.mixIn <- 1.0f;
 
-        mixVariant.rateIn <- 0.35f;       mixVariant.depthIn <- 0.6f;
+        mixVariant.rateIn <- 0.35f;       mixVariant.baseDelayMsIn <- 0.6f; mixVariant.depthIn <- 0.6f;
         mixVariant.feedbackIn <- 0.0f;    mixVariant.mixIn <- 0.0f;
+
+        baseDelayVariant.rateIn <- 0.35f; baseDelayVariant.baseDelayMsIn <- 4.0f; baseDelayVariant.depthIn <- 0.6f;
+        baseDelayVariant.feedbackIn <- 0.0f; baseDelayVariant.mixIn <- 1.0f;
     }
 
     void main()
@@ -469,6 +473,7 @@ processor FlangerParameterReach [[ main ]]
         float32 depthDifference;
         float32 feedbackDifference;
         float32 mixDifference;
+        float32 baseDelayDifference;
 
         for (int32 frame = 0; frame < measureFrames; ++frame)
         {
@@ -479,6 +484,7 @@ processor FlangerParameterReach [[ main ]]
             depthVariant.in <- signal;     depthVariant.advance();
             feedbackVariant.in <- signal;  feedbackVariant.advance();
             mixVariant.in <- signal;       mixVariant.advance();
+            baseDelayVariant.in <- signal; baseDelayVariant.advance();
 
             let base = reference.out[0];
 
@@ -490,6 +496,8 @@ processor FlangerParameterReach [[ main ]]
                                                        std::intrinsics::abs (feedbackVariant.out[0] - base));
             mixDifference = std::intrinsics::max (mixDifference,
                                                   std::intrinsics::abs (mixVariant.out[0] - base));
+            baseDelayDifference = std::intrinsics::max (baseDelayDifference,
+                                                        std::intrinsics::abs (baseDelayVariant.out[0] - base));
         }
 
         out <- (rateDifference > minimumDifference) ? 1 : 0;
@@ -502,6 +510,9 @@ processor FlangerParameterReach [[ main ]]
         advance();
 
         out <- (mixDifference > minimumDifference) ? 1 : 0;
+        advance();
+
+        out <- (baseDelayDifference > minimumDifference) ? 1 : 0;
         advance();
 
         out <- -1;
@@ -861,6 +872,7 @@ processor FlangerMinimumDelay [[ main ]]
         flanger.depthIn <- 0.0f;
         flanger.feedbackIn <- 0.0f;
         flanger.rateIn <- 4.0f;
+        flanger.baseDelayMsIn <- baseDelayMs;
 
         for (int32 frame = 0; frame < settleFrames; ++frame)
             render (frame);

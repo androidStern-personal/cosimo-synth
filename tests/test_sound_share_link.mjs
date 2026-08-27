@@ -138,6 +138,8 @@ test("version skew uses the existing synth preset migrations after link decode",
             { endpointID: "ampAttack", type: "number", min: 0.001, max: 10, defaultValue: 0.01 },
             { endpointID: "ampDecay", type: "number", min: 0.001, max: 10, defaultValue: 0.001 },
             { endpointID: "ampSustain", type: "number", min: 0, max: 1, defaultValue: 1 },
+            { endpointID: "filterCutoffKeyTrackEnabled", type: "number", min: 0, max: 1, defaultValue: 0 },
+            { endpointID: "filterCutoffKeyTrackOffsetSemitones", type: "number", min: -60, max: 60, defaultValue: 0 },
         ],
         storedState: [
             { key: "modulation.v6", schemaVersion: 6, required: true },
@@ -174,6 +176,8 @@ test("version skew uses the existing synth preset migrations after link decode",
     assert.equal(normalized.parameters.ampDecay, 0.001);
     assert.equal(normalized.parameters.ampSustain, 1);
     assert.equal(normalized.parameters.ampRelease, 1.73);
+    assert.equal(normalized.parameters.filterCutoffKeyTrackEnabled, 0);
+    assert.equal(normalized.parameters.filterCutoffKeyTrackOffsetSemitones, 0);
     assert.equal(normalized.storedState["bounce.v1"], null);
     assert.deepEqual(normalized.storedState["modulation.v6"], legacyPreset.storedState["modulation.v6"]);
 });

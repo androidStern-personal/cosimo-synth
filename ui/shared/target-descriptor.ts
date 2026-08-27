@@ -26,6 +26,7 @@ import {
 } from "./modulation-targets";
 import {
     RACK_EFFECT_DESCRIPTORS,
+    rackModulationIdentityEndpointID,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 import { casesHandled, err, ok, shouldNeverHappen, type Result } from "./result";
@@ -58,7 +59,7 @@ export type VoiceModuleId = `osc${OscillatorID}` | "voice" | "voice-filter";
 export type ModulationGeneratorModuleId = `mseg${1 | 2 | 3}` | `env${1 | 2 | 3}` | "ampEnvelope";
 
 /** Any module owning parameters. */
-export type ModuleId = EffectModuleId | VoiceModuleId | ModulationGeneratorModuleId;
+export type ModuleId = EffectModuleId | VoiceModuleId | ModulationGeneratorModuleId | "frequency-split";
 
 /** A real engine endpoint id, minted only by this catalog. */
 export type EndpointId = Brand<string, "EndpointId">;
@@ -542,6 +543,25 @@ const GENERATOR_TARGET_DESCRIPTORS: ReadonlyArray<TargetDescriptor> = Object.fre
     GENERATOR_TARGET_DEFINITIONS.map(createGeneratorTargetDescriptor),
 );
 
+const FREQUENCY_SPLIT_TARGET_DESCRIPTORS: ReadonlyArray<TargetDescriptor> = Object.freeze([
+    { suffix: "low", label: "Low Crossover", kind: "lane.frequencySplit#1.xoverLowHz" },
+    { suffix: "high", label: "High Crossover", kind: "lane.frequencySplit#1.xoverHighHz" },
+].map(({ suffix, label, kind }) => Object.freeze({
+    targetId: `frequency-split.${suffix}` as TargetId,
+    moduleId: "frequency-split" as const,
+    workspace: "effects" as const,
+    label,
+    defaultValue: 0.5 as NormalizedValue,
+    initialValue: 0.5 as NormalizedValue,
+    format: { kind: "frequency" as const, minHz: 40, maxHz: 18_000 },
+    modAmount: { min: -4, max: 4, unit: "oct" as const, digits: 2 },
+    binding: { _tag: "unbacked" as const, reason: "no-endpoint" as const },
+    isQuick: false,
+    compound: null,
+    articulationParameterId: null,
+    modulationTargetKind: kind as ModulationTargetKind,
+})));
+
 function rackTargetId(parameter: RackParameterDescriptor): TargetId {
     // SAFETY: effect identity and endpoint id both come from the closed rack catalog.
     return `${parameter.effectId}.${parameter.endpointID}` as TargetId;
@@ -616,13 +636,14 @@ function createRackTargetDescriptor(parameter: RackParameterDescriptor): TargetD
         articulationParameterId: null,
         modulationTargetKind: parameter.modulationTargetIndex === null
             ? null
-            : laneBaseKindForRackEndpoint(parameter.endpointID),
+            : laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
     });
 }
 
 const TARGET_DESCRIPTORS: ReadonlyArray<TargetDescriptor> = Object.freeze(
     [
         ...RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters.map(createRackTargetDescriptor)),
+        ...FREQUENCY_SPLIT_TARGET_DESCRIPTORS,
         GLOBAL_TUNE_TARGET_DESCRIPTOR,
         ...OSCILLATOR_MODULATION_DESCRIPTORS,
         ...GENERATOR_TARGET_DESCRIPTORS,
@@ -740,7 +761,10 @@ export function getModulationTargetDisplayLabel(targetKind: ModulationTargetKind
     const parsedLane = parseLaneModulationTargetKind(targetKind);
     if (parsedLane !== null) {
         const descriptor = getModulationTargetDescriptor(laneMirrorRackKind(parsedLane));
-        return `${descriptor.moduleId.toUpperCase()}${laneInstanceSuffix(parsedLane)} ${descriptor.label.toUpperCase()}`;
+        const moduleLabel = parsedLane.deviceType === "frequencySplit"
+            ? "FREQUENCY SPLIT"
+            : descriptor.moduleId.toUpperCase();
+        return `${moduleLabel}${laneInstanceSuffix(parsedLane)} ${descriptor.label.toUpperCase()}`;
     }
 
     return getModulationTargetDescriptor(targetKind).label.toUpperCase();
@@ -760,6 +784,8 @@ export function getModulationTargetPresentation(targetKind: ModulationTargetKind
         const descriptor = getModulationTargetDescriptor(laneMirrorRackKind(parsedLane));
         const moduleLabel = descriptor.moduleId === "filter"
             ? "Global Filter"
+            : descriptor.moduleId === "frequency-split"
+                ? "Frequency Split"
             : EFFECT_LABEL_BY_MODULE_ID.get(descriptor.moduleId) ?? descriptor.moduleId;
         return {
             category: `${moduleLabel}${laneInstanceSuffix(parsedLane)}`,

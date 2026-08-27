@@ -28,6 +28,10 @@ export type PrecisionNumberFieldProps = {
     fineDragMultiplier?: number;
     dataRole?: string;
     modulationTargetKind?: ModulationTargetKind;
+    menuLabel?: string;
+    menuAmountSpec?: ParameterEntrySpec | null;
+    menuBaseFieldLabel?: string;
+    menuRouteDestinationLabel?: string;
 };
 
 type ActiveDragState = {
@@ -78,19 +82,26 @@ export function PrecisionNumberField({
     fineDragMultiplier = 0.2,
     dataRole,
     modulationTargetKind,
+    menuLabel = ariaLabel,
+    menuAmountSpec,
+    menuBaseFieldLabel,
+    menuRouteDestinationLabel,
 }: PrecisionNumberFieldProps) {
     const { min, max, step } = entrySpec;
     // T20: a stationary long press opens the ADR-017 parameter menu; the
     // field's own drag cancels it through ordinary movement bubbling.
     const longPressMenu = useLongPressParameterMenu(useCallback(() => ({
         controlKey: binding.endpointID,
-        label: ariaLabel,
+        label: menuLabel,
         targetKind: modulationTargetKind ?? null,
         baseSpec: entrySpec,
+        amountSpec: menuAmountSpec,
+        baseFieldLabel: menuBaseFieldLabel,
+        routeDestinationLabel: menuRouteDestinationLabel,
         baseValue: binding.value,
         defaultValue: binding.initialValue ?? null,
         commitBase: binding.commitValue,
-    }), [ariaLabel, binding.commitValue, binding.endpointID, binding.initialValue, binding.value, entrySpec, modulationTargetKind]));
+    }), [binding.commitValue, binding.endpointID, binding.initialValue, binding.value, entrySpec, menuAmountSpec, menuBaseFieldLabel, menuLabel, menuRouteDestinationLabel, modulationTargetKind]));
     const inputRef = useRef<HTMLInputElement | null>(null);
     const fieldRef = useRef<HTMLLabelElement | null>(null);
     const activeDragRef = useRef<ActiveDragState | null>(null);

@@ -2,7 +2,7 @@
 // the native worker. Positive serials are modulation; negative serials are
 // articulation, so both services can share one acknowledgement endpoint.
 
-## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor")
 
 ## testProcessor()
 

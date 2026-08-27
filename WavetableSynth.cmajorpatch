@@ -12,6 +12,7 @@
   },
   "isInstrument": true,
   "source": [
+    "cmajor/KeyTrack.cmajor",
     "cmajor/Distortion.cmajor",
     "cmajor/Chorus.cmajor",
     "cmajor/GlobalFilter.cmajor",

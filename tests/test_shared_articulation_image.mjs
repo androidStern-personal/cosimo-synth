@@ -61,6 +61,7 @@ function imageAccessorTable() {
     const table = {
         "filterMode": scalar("filterMode"),
         "filterCutoffHz": scalar("filterCutoffHz"),
+        "filterKeyTrackOffsetSemitones": scalar("filterKeyTrackOffsetSemitones"),
         "filterQ": scalar("filterQ"),
         "msegMorph1": (image) => image.msegMorphs[0],
         "msegMorph2": (image) => image.msegMorphs[1],
@@ -85,6 +86,19 @@ function imageAccessorTable() {
     });
     return table;
 }
+
+test("voice filter Key Track offset appends one shared articulation identity", async () => {
+    const { image } = await modules();
+    const existingLastIndex = image.SHARED_ARTICULATION_VOICE_PARAMETER_IDS.indexOf("env3.releaseSeconds");
+    assert.equal(existingLastIndex, 17);
+    assert.equal(image.SHARED_ARTICULATION_VOICE_PARAMETER_IDS[18], "filterKeyTrackOffsetSemitones");
+
+    const slot = makeMinimalSlot(7);
+    slot.overrides.filterKeyTrackOffsetSemitones = -3.75;
+    const upload = image.compileArticulationOverrideImage(slot, {});
+    assert.equal(upload.filterKeyTrackOffsetSemitones, -3.75);
+    assert.equal(upload.sharedOverrideMask, 1 << 18);
+});
 
 function makeMinimalSlot(index) {
     return {

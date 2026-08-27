@@ -2,7 +2,7 @@
 // amount edit therefore reaches the next note without republishing the image,
 // while an already-sounding note retains its original latch.
 
-## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor")
 
 ## testProcessor (undefined, { frequency: 600 })
 

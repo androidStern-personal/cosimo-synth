@@ -88,7 +88,7 @@ function buildRailProjection({ min, max, scale, application }: {
     min: number;
     max: number;
     scale: "linear" | "log";
-    application: "linear" | "octaves";
+    application: "linear" | "octaves" | "semitones";
 }): ModulationTargetRailProjection {
     if (!(max > min) || (scale === "log" && !(min > 0))) {
         throw new Error(`Invalid rail projection domain [${min}, ${max}] (${scale}).`);
@@ -114,10 +114,14 @@ function buildRailProjection({ min, max, scale, application }: {
         const offsets = routeAmountOffsets(route);
         const rawLow = application === "octaves"
             ? baseValue * (2 ** offsets[0])
-            : baseValue + offsets[0];
+            : application === "semitones"
+                ? baseValue * (2 ** (offsets[0] / 12))
+                : baseValue + offsets[0];
         const rawHigh = application === "octaves"
             ? baseValue * (2 ** offsets[1])
-            : baseValue + offsets[1];
+            : application === "semitones"
+                ? baseValue * (2 ** (offsets[1] / 12))
+                : baseValue + offsets[1];
         const lowNormalized = normalizeValue(rawLow);
         const highNormalized = normalizeValue(rawHigh);
         const magnitude = Math.abs(route.amount);
@@ -135,7 +139,14 @@ function buildRailProjection({ min, max, scale, application }: {
 }
 
 const rackDescriptorsByEndpoint: ReadonlyMap<string, RackParameterDescriptor> = new Map(
-    allRackParameterDescriptors().map((descriptor: RackParameterDescriptor) => [descriptor.endpointID, descriptor]),
+    allRackParameterDescriptors().flatMap((descriptor: RackParameterDescriptor) => [
+        [descriptor.endpointID, descriptor] as const,
+        ...(
+            descriptor.modulationIdentityEndpointID === undefined
+                ? []
+                : [[descriptor.modulationIdentityEndpointID, descriptor] as const]
+        ),
+    ]),
 );
 
 const voiceControlByParameterKind: ReadonlyMap<OscillatorModulationParameterKind, MobileVoiceBindableControlID> = new Map(
@@ -166,18 +177,20 @@ function parseOscillatorTarget(targetKind: string): {
 export function resolveModulationTargetBase(targetKind: ModulationTargetKind): ModulationTargetBase | null {
     const parsedLane = parseLaneModulationTargetKind(targetKind);
     if (parsedLane !== null) {
+        if (parsedLane.deviceType === "frequencySplit") {
+            return null;
+        }
         // T6: every instance has its own lane.v2 document slot, and the base
         // CONTRACT (endpoint, spec, labels) is the type's. Which slot a
         // binding edits comes from the deviceId its caller threads through
         // useLaneOrHostParameterBinding.
-        const endpointID = parsedLane.endpointID;
-        const descriptor = rackDescriptorsByEndpoint.get(endpointID);
+        const descriptor = rackDescriptorsByEndpoint.get(parsedLane.endpointID);
         if (descriptor === undefined) {
             throw new Error(`Rack modulation target "${targetKind}" has no rack descriptor.`);
         }
         const entrySpec = parameterEntrySpecForRackParameter(descriptor, descriptor.initial);
         return {
-            endpointID,
+            endpointID: descriptor.endpointID,
             entrySpec,
             label: descriptor.label,
             initialValue: descriptor.initial,

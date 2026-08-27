@@ -29,12 +29,16 @@ import {
     formatRackParameterValue,
     getRackEffectDescriptor,
     getRackParameterDescriptor,
+    rackModulationIdentityEndpointID,
     type RackEffectDescriptor,
     type RackParameterDescriptor,
 } from "../shared/rack-parameter-descriptors";
 import {
     formatParameterEntry,
     parameterEntrySpecForModulationAmount,
+    parameterEntrySpecForKeyTrackModulationAmount,
+    parameterEntrySpecForKeyTrackOffset,
+    parameterEntrySpecForFrequency,
     parameterEntrySpecForRackParameter,
     parameterEntrySpecForSeconds,
     parseParameterEntry,
@@ -55,12 +59,26 @@ import {
     parseLaneInstanceId,
     removeLaneDevice,
     setLaneGroupEnabled,
+    LANE_SPLIT_DEFAULT_XOVER_HIGH_HZ,
+    LANE_SPLIT_DEFAULT_XOVER_LOW_HZ,
     wrapLaneDeviceInGroup,
     type LaneDevicePathV2,
     type LaneGroupV2,
     type LaneStateV2,
 } from "../shared/lane-state-v2";
-import { useLaneParameterBinding, useLaneStateDoc } from "../shared/lane-param-bindings";
+import {
+    useLaneKeyTrackControlBinding,
+    useLaneParameterBinding,
+    useLaneStateDoc,
+} from "../shared/lane-param-bindings";
+import {
+    getKeyTrackDefinition,
+    keyTrackRouteAmountFromSemitones,
+    keyTrackRouteAmountToSemitones,
+    requireKeyTrackRange,
+    type KeyTrackParameterFamily,
+    type KeyTrackRouteStorage,
+} from "../shared/key-track";
 import {
     MODULATION_SOURCE_OPTIONS,
     parseAnyModulationTargetKind,
@@ -107,6 +125,7 @@ import {
     ParameterContextMenu,
     ParameterValueSheet,
     RemoveTargetRoutesConfirmation,
+    useParameterMenu,
     type ParameterMenuAction,
 } from "../shared/parameter-context-menu";
 import {
@@ -134,6 +153,11 @@ import {
 } from "../shared/synth-hooks";
 import { useSliderDrag, type SliderDragPointer } from "../shared/use-slider-drag";
 import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
+import {
+    PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
+    PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
+    useParameterGesture,
+} from "../shared/parameter-gesture";
 import {
     RackParameterKnob,
 } from "./rack-parameter-knob";
@@ -520,7 +544,10 @@ function firstLaneDeviceId(state: LaneStateV2): string | null {
 function useLaneKindResolver(): (descriptor: RackParameterDescriptor) => RackModulationTargetKind {
     const selectedDeviceId = useContext(SelectedLaneDeviceContext);
     return useCallback((descriptor: RackParameterDescriptor) => (
-        laneKindForDevice(laneDeviceIdForDescriptor(selectedDeviceId, descriptor), descriptor.endpointID)
+        laneKindForDevice(
+            laneDeviceIdForDescriptor(selectedDeviceId, descriptor),
+            rackModulationIdentityEndpointID(descriptor),
+        )
     ), [selectedDeviceId]);
 }
 
@@ -529,11 +556,26 @@ function useRackState() {
     // diagnostic readback without a correlated intent id, so an older DSP event must
     // never replace the base of a newer user edit. The document itself lives in the
     // connection-scoped lane store, shared with every parameter binding.
-    const { laneState, commit, setSplitCrossover, persist } = useLaneStateDoc();
+    const {
+        laneState,
+        commit,
+        setSplitCrossover,
+        setSplitKeyTrackEnabled,
+        setSplitKeyTrackOffset,
+        persist,
+    } = useLaneStateDoc();
     const rackStateRef = useRef(laneState);
     rackStateRef.current = laneState;
 
-    return { rackState: laneState, rackStateRef, commit, setSplitCrossover, persist };
+    return {
+        rackState: laneState,
+        rackStateRef,
+        commit,
+        setSplitCrossover,
+        setSplitKeyTrackEnabled,
+        setSplitKeyTrackOffset,
+        persist,
+    };
 }
 
 /**
@@ -549,6 +591,46 @@ function useRackParameterBinding(
     void active;
     const contextDeviceId = useContext(SelectedLaneDeviceContext);
     return useLaneParameterBinding(descriptor, laneDeviceIdForDescriptor(deviceId ?? contextDeviceId, descriptor));
+}
+
+function useRackKeyTrackBinding(
+    descriptor: RackParameterDescriptor,
+    deviceId: string | null = null,
+) {
+    const contextDeviceId = useContext(SelectedLaneDeviceContext);
+    return useLaneKeyTrackControlBinding(
+        descriptor,
+        laneDeviceIdForDescriptor(deviceId ?? contextDeviceId, descriptor),
+    );
+}
+
+function keyTrackPresentedDescriptor(
+    descriptor: RackParameterDescriptor,
+    family: KeyTrackParameterFamily,
+): RackParameterDescriptor {
+    const range = requireKeyTrackRange(family);
+    return {
+        ...descriptor,
+        label: "Key Track Offset",
+        shortLabel: "OFFSET",
+        min: range.knobMin,
+        max: range.knobMax,
+        initial: 0,
+        step: range.step,
+        scale: "linear",
+        unit: "st",
+        choices: undefined,
+        modulationApplication: "linear",
+        modulationDragStyle: undefined,
+    };
+}
+
+function keyTrackRouteStorage(descriptor: RackParameterDescriptor): KeyTrackRouteStorage {
+    return descriptor.modulationApplication === "semitones" ? "semitones" : "octaves";
+}
+
+function formatKeyTrackOffset(value: number): string {
+    return `${Number(value.toFixed(2))} st`;
 }
 
 function normalizedRackParameterValue(descriptor: RackParameterDescriptor, value: number) {
@@ -603,8 +685,6 @@ const RACK_CONTROL_ROLE_ALIASES: Readonly<Record<string, string>> = {
     chorusTone: "chorus-tone-control",
     chorusFeedback: "chorus-feedback-control",
     chorusRingAmount: "chorus-ring-amount-control",
-    chorusRingOffsetMode: "chorus-ring-offset-mode-control",
-    chorusRingFineSemitones: "chorus-ring-fine-control",
 };
 
 const RACK_TRACK_ROLE_ALIASES: Readonly<Record<string, string>> = {
@@ -649,7 +729,12 @@ function RackParameterControl({
     onRecentParameter: (endpointID: string) => void;
     onRequestContextMenu: (endpointID: string, clientX: number, clientY: number) => void;
 }) {
-    const binding = useRackParameterBinding(descriptor);
+    const keyTrack = useRackKeyTrackBinding(descriptor);
+    const definition = getKeyTrackDefinition(`lane.${descriptor.endpointID}`);
+    const presentedDescriptor = keyTrack.enabled && definition !== null
+        ? keyTrackPresentedDescriptor(descriptor, definition.family)
+        : descriptor;
+    const binding = keyTrack.binding;
     const resolveLaneKind = useLaneKindResolver();
     const controlTargetKind = resolveLaneKind(descriptor);
     const isTarget = descriptor.modulationTargetIndex !== null;
@@ -662,7 +747,15 @@ function RackParameterControl({
         pending,
     });
     const amountBinding = useModulationRouteAmountBinding(presentation.currentRoute);
-    const presentedRoute = presentRouteWithCanonicalAmount(presentation.currentRoute, amountBinding);
+    const canonicalPresentedRoute = presentRouteWithCanonicalAmount(
+        presentation.currentRoute, amountBinding);
+    const storage = keyTrackRouteStorage(descriptor);
+    const presentedRoute = keyTrack.enabled && canonicalPresentedRoute !== null
+        ? {
+            ...canonicalPresentedRoute,
+            amount: keyTrackRouteAmountToSemitones(canonicalPresentedRoute.amount, storage),
+          }
+        : canonicalPresentedRoute;
     const dragSourceAccent = dragSource === null
         ? null
         : findRackModulationSource(dragSource.sourceKind, dragSource.sourceSlot).accent;
@@ -708,7 +801,7 @@ function RackParameterControl({
                     }
                 }}
             >
-                <span>{descriptor.endpointID === "chorusRingOffsetMode" ? descriptor.shortLabel : descriptor.label}</span>
+                <span>{descriptor.label}</span>
                 <strong>{selectedChoice?.label}</strong>
             </button>
         );
@@ -742,7 +835,7 @@ function RackParameterControl({
                 <span className="rack-confirm-check" aria-hidden="true">✓</span>
             ) : null}
             <RackParameterKnob
-                descriptor={descriptor}
+                descriptor={presentedDescriptor}
                 binding={binding}
                 route={presentedRoute}
                 sourceIsSelected={sourceIsSelected}
@@ -754,13 +847,35 @@ function RackParameterControl({
                 onSelect={selectParameter}
                 ownerAccent={EFFECT_ACCENTS[descriptor.effectId]}
                 modulationDragStyle={descriptor.modulationDragStyle}
-                onModulationAmountChange={amountBinding.setValue}
+                modulationTargetKind={controlTargetKind}
+                modulationAmountBounds={keyTrack.enabled && definition !== null
+                    ? (() => {
+                        const range = requireKeyTrackRange(definition.family);
+                        return { min: range.routeMin, max: range.routeMax };
+                    })()
+                    : undefined}
+                formatValue={keyTrack.enabled ? formatKeyTrackOffset : undefined}
+                formatModulationAmount={keyTrack.enabled ? (amount) => formatKeyTrackOffset(amount) : undefined}
+                onModulationAmountChange={keyTrack.enabled
+                    ? (amount) => amountBinding.setValue(
+                        keyTrackRouteAmountFromSemitones(amount, storage))
+                    : amountBinding.setValue}
                 onRequestContextMenu={(clientX, clientY) => onRequestContextMenu(
                     descriptor.endpointID,
                     clientX,
                     clientY,
                 )}
             />
+            {keyTrack.eligible ? (
+                <button
+                    type="button"
+                    data-role={`key-track-${descriptor.endpointID}`}
+                    aria-pressed={keyTrack.enabled}
+                    className="key-track-button rack-key-track-button"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={() => keyTrack.setEnabled(!keyTrack.enabled)}
+                >Key Track</button>
+            ) : null}
         </div>
     );
 }
@@ -2964,6 +3079,21 @@ type RackParameterMenuState = {
 const SPLIT_XOVER_MIN_HZ = 40;
 const SPLIT_XOVER_MAX_HZ = 18000;
 const SPLIT_XOVER_LOG_SPAN = Math.log(SPLIT_XOVER_MAX_HZ / SPLIT_XOVER_MIN_HZ);
+const SPLIT_XOVER_ENTRY_SPEC = parameterEntrySpecForFrequency({
+    minHz: SPLIT_XOVER_MIN_HZ,
+    maxHz: SPLIT_XOVER_MAX_HZ,
+    stepHz: 0,
+    allowLogPercent: false,
+});
+const SPLIT_KEY_TRACK_DEFINITION = getKeyTrackDefinition("lane.frequencySplitLowHz");
+if (SPLIT_KEY_TRACK_DEFINITION === null) {
+    throw new Error("Frequency Split is missing its Key Track definition.");
+}
+const SPLIT_KEY_TRACK_RANGE = requireKeyTrackRange(SPLIT_KEY_TRACK_DEFINITION.family);
+const SPLIT_KEY_TRACK_OFFSET_ENTRY_SPEC = parameterEntrySpecForKeyTrackOffset(
+    SPLIT_KEY_TRACK_DEFINITION.family);
+const SPLIT_KEY_TRACK_ROUTE_ENTRY_SPEC = parameterEntrySpecForKeyTrackModulationAmount(
+    SPLIT_KEY_TRACK_DEFINITION.family, "octaves");
 
 function crossoverToNormalized(hz: number) {
     return clamp(Math.log(hz / SPLIT_XOVER_MIN_HZ) / SPLIT_XOVER_LOG_SPAN, 0, 1);
@@ -2983,86 +3113,181 @@ function CrossoverSlider({
     which,
     label,
     hz,
-    onDrag,
+    keyTrackEnabled,
+    keyTrackOffsetSemitones,
+    routes,
+    activeSource,
+    sourceIsArmed,
+    onHzDrag,
+    onKeyTrackOffsetDrag,
+    onKeyTrackToggle,
     onGestureEnd,
 }: {
     groupId: string;
     which: "low" | "high";
     label: string;
     hz: number;
-    onDrag: (which: "low" | "high", hz: number) => void;
+    keyTrackEnabled: boolean;
+    keyTrackOffsetSemitones: number;
+    routes: ReadonlyArray<ModulationRoute>;
+    activeSource: RackModulationSource;
+    sourceIsArmed: boolean;
+    onHzDrag: (which: "low" | "high", hz: number) => void;
+    onKeyTrackOffsetDrag: (which: "low" | "high", offsetSemitones: number) => void;
+    onKeyTrackToggle: (which: "low" | "high", enabled: boolean) => void;
     onGestureEnd: () => void;
 }) {
     const surfaceRef = useRef<HTMLButtonElement | null>(null);
-    const dragPointerRef = useRef<number | null>(null);
+    const gestureController = useParameterGesture();
+    const openParameterMenu = useParameterMenu();
+    const unitNumber = Number(groupId.slice(groupId.indexOf("#") + 1));
+    const targetKind = `lane.frequencySplit#${unitNumber}.${which === "low" ? "xoverLowHz" : "xoverHighHz"}` as ModulationTargetKind;
+    const route = sourceIsArmed ? routes.find((candidate) => (
+        candidate.targetKind === targetKind
+        && candidate.sourceKind === activeSource.sourceKind
+        && candidate.sourceSlot === activeSource.sourceSlot
+    )) ?? null : null;
+    const amountBinding = useModulationRouteAmountBinding(route);
+    const canonicalAmount = amountBinding.value ?? route?.amount ?? 0;
+    const displayedAmount = keyTrackEnabled
+        ? keyTrackRouteAmountToSemitones(canonicalAmount, "octaves")
+        : canonicalAmount;
+    const displayedValue = keyTrackEnabled ? keyTrackOffsetSemitones : hz;
+    const baseNormalized = keyTrackEnabled
+        ? (displayedValue - SPLIT_KEY_TRACK_RANGE.knobMin)
+            / (SPLIT_KEY_TRACK_RANGE.knobMax - SPLIT_KEY_TRACK_RANGE.knobMin)
+        : crossoverToNormalized(hz);
+    const amountMin = keyTrackEnabled ? SPLIT_KEY_TRACK_RANGE.routeMin : -4;
+    const amountMax = keyTrackEnabled ? SPLIT_KEY_TRACK_RANGE.routeMax : 4;
+    const amountNormalized = (displayedAmount - amountMin) / (amountMax - amountMin);
+    const targetRouteCount = routes.filter((candidate) => candidate.targetKind === targetKind).length;
+    const hasEnabledTargetRoute = routes.some((candidate) => (
+        candidate.targetKind === targetKind && candidate.enabled));
 
-    const applyClientX = useCallback((clientX: number) => {
-        const surface = surfaceRef.current;
-        if (surface === null) {
-            return;
+    const commitBase = useCallback((value: number) => {
+        if (keyTrackEnabled) {
+            onKeyTrackOffsetDrag(which, value);
+        } else {
+            onHzDrag(which, value);
         }
-        const bounds = surface.getBoundingClientRect();
-        const normalized = (clientX - bounds.left) / Math.max(1, bounds.width);
-        onDrag(which, Math.round(normalizedToCrossover(normalized)));
-    }, [onDrag, which]);
+        onGestureEnd();
+    }, [keyTrackEnabled, onGestureEnd, onHzDrag, onKeyTrackOffsetDrag, which]);
+
+    const openExactMenu = useCallback((clientX: number, clientY: number) => {
+        openParameterMenu?.({
+            controlKey: `frequencySplit#${unitNumber}.${which}`,
+            label: keyTrackEnabled ? "Key Track Offset" : label,
+            targetKind,
+            baseSpec: keyTrackEnabled ? SPLIT_KEY_TRACK_OFFSET_ENTRY_SPEC : SPLIT_XOVER_ENTRY_SPEC,
+            amountSpec: keyTrackEnabled ? SPLIT_KEY_TRACK_ROUTE_ENTRY_SPEC : undefined,
+            baseFieldLabel: keyTrackEnabled ? "Key Track Offset" : undefined,
+            routeDestinationLabel: keyTrackEnabled ? "Key Track Offset" : undefined,
+            baseValue: displayedValue,
+            defaultValue: keyTrackEnabled
+                ? 0
+                : which === "low" ? LANE_SPLIT_DEFAULT_XOVER_LOW_HZ : LANE_SPLIT_DEFAULT_XOVER_HIGH_HZ,
+            commitBase,
+            clientX,
+            clientY,
+        });
+    }, [commitBase, displayedValue, keyTrackEnabled, label, openParameterMenu, targetKind, unitNumber, which]);
 
     return (
-        <button
-            ref={surfaceRef}
-            type="button"
-            role="slider"
-            data-role={`rack-split-${which}-${groupId}`}
-            aria-label={label}
-            aria-valuemin={SPLIT_XOVER_MIN_HZ}
-            aria-valuemax={SPLIT_XOVER_MAX_HZ}
-            aria-valuenow={Math.round(hz)}
-            aria-valuetext={`${formatCrossoverHz(hz)} Hz`}
-            className="subway-crossover-slider"
-            style={{ "--crossover-progress": crossoverToNormalized(hz) } as CSSProperties}
-            onPointerDown={(event) => {
-                if (event.pointerType === "mouse" && event.button !== 0) {
-                    return;
-                }
-                try {
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                } catch {
-                    // Window-level release still ends the gesture.
-                }
-                dragPointerRef.current = event.pointerId;
-                applyClientX(event.clientX);
-            }}
-            onPointerMove={(event) => {
-                if (dragPointerRef.current === event.pointerId) {
-                    applyClientX(event.clientX);
-                }
-            }}
-            onPointerUp={(event) => {
-                if (dragPointerRef.current === event.pointerId) {
-                    dragPointerRef.current = null;
-                    onGestureEnd();
-                }
-            }}
-            onPointerCancel={(event) => {
-                if (dragPointerRef.current === event.pointerId) {
-                    dragPointerRef.current = null;
-                    onGestureEnd();
-                }
-            }}
-            onKeyDown={(event) => {
-                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
-                    return;
-                }
-                event.preventDefault();
-                const direction = event.key === "ArrowRight" ? 1 : -1;
-                const stepped = clamp(
-                    hz * Math.pow(2, direction / 12), SPLIT_XOVER_MIN_HZ, SPLIT_XOVER_MAX_HZ);
-                onDrag(which, Math.round(stepped));
-                onGestureEnd();
-            }}
+        <div
+            className="subway-crossover-control"
+            data-modulation-target-kind={targetKind}
         >
-            <span className="subway-crossover-label">{label}</span>
-            <strong className="subway-crossover-readout">{formatCrossoverHz(hz)} Hz</strong>
-        </button>
+            {targetRouteCount > 0 ? (
+                <span className={`rack-route-count-badge ${hasEnabledTargetRoute ? "is-solid" : "is-hollow"}`}>
+                    {targetRouteCount}
+                </span>
+            ) : null}
+            <button
+                ref={surfaceRef}
+                type="button"
+                role="slider"
+                data-role={`rack-split-${which}-${groupId}`}
+                aria-label={keyTrackEnabled ? "Key Track Offset" : label}
+                aria-valuemin={keyTrackEnabled ? SPLIT_KEY_TRACK_RANGE.knobMin : SPLIT_XOVER_MIN_HZ}
+                aria-valuemax={keyTrackEnabled ? SPLIT_KEY_TRACK_RANGE.knobMax : SPLIT_XOVER_MAX_HZ}
+                aria-valuenow={displayedValue}
+                aria-valuetext={keyTrackEnabled
+                    ? `${Number(displayedValue.toFixed(2))} st`
+                    : `${formatCrossoverHz(hz)} Hz`}
+                className="subway-crossover-slider"
+                style={{ "--crossover-progress": baseNormalized } as CSSProperties}
+                onPointerDown={(event) => {
+                    if (event.pointerType === "mouse" && event.button !== 0) return;
+                    gestureController.startGesture(event, {
+                        horizontal: {
+                            startNormalized: baseNormalized,
+                            pixelsPerFullSpan: PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
+                            write: (normalized) => {
+                                if (keyTrackEnabled) {
+                                    onKeyTrackOffsetDrag(which,
+                                        SPLIT_KEY_TRACK_RANGE.knobMin
+                                        + normalized * (SPLIT_KEY_TRACK_RANGE.knobMax
+                                            - SPLIT_KEY_TRACK_RANGE.knobMin));
+                                } else {
+                                    onHzDrag(which, Math.round(normalizedToCrossover(normalized)));
+                                }
+                            },
+                        },
+                        vertical: {
+                            startNormalized: amountNormalized,
+                            pixelsPerFullSpan: PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
+                            write: route === null ? null : (normalized) => {
+                                const amount = amountMin + normalized * (amountMax - amountMin);
+                                amountBinding.setValue(keyTrackEnabled
+                                    ? keyTrackRouteAmountFromSemitones(amount, "octaves")
+                                    : amount);
+                            },
+                        },
+                        onFinish: () => onGestureEnd(),
+                        onLongPress: openParameterMenu === null ? undefined : openExactMenu,
+                    });
+                }}
+                onContextMenu={(event) => {
+                    if (openParameterMenu === null) return;
+                    event.preventDefault();
+                    openExactMenu(event.clientX, event.clientY);
+                }}
+                onKeyDown={(event) => {
+                    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                    event.preventDefault();
+                    const direction = event.key === "ArrowRight" ? 1 : -1;
+                    if (keyTrackEnabled) {
+                        onKeyTrackOffsetDrag(which, clamp(
+                            keyTrackOffsetSemitones + direction * 0.1,
+                            SPLIT_KEY_TRACK_RANGE.knobMin,
+                            SPLIT_KEY_TRACK_RANGE.knobMax));
+                    } else {
+                        onHzDrag(which, Math.round(clamp(
+                            hz * Math.pow(2, direction / 12),
+                            SPLIT_XOVER_MIN_HZ,
+                            SPLIT_XOVER_MAX_HZ)));
+                    }
+                    onGestureEnd();
+                }}
+            >
+                <span className="subway-crossover-label">{keyTrackEnabled ? "KEY TRACK OFFSET" : label}</span>
+                <strong className="subway-crossover-readout">{keyTrackEnabled
+                    ? `${Number(displayedValue.toFixed(2))} st`
+                    : `${formatCrossoverHz(hz)} Hz`}</strong>
+                {route !== null ? (
+                    <small>{keyTrackEnabled
+                        ? `${Number(displayedAmount.toFixed(2))} st`
+                        : formatModulationAmountReadout(targetKind, canonicalAmount, route.polarity)}</small>
+                ) : null}
+            </button>
+            <button
+                type="button"
+                data-role={`key-track-frequencySplit-${which}-${groupId}`}
+                aria-pressed={keyTrackEnabled}
+                className="key-track-button split-key-track-button"
+                onClick={() => onKeyTrackToggle(which, !keyTrackEnabled)}
+            >Key Track</button>
+        </div>
     );
 }
 
@@ -3074,14 +3299,24 @@ function GroupEditorPane({
     onSetBranchCount,
     onDissolve,
     onCrossoverDrag,
+    onCrossoverKeyTrackOffsetDrag,
+    onCrossoverKeyTrackToggle,
     onCrossoverGestureEnd,
+    routes,
+    activeSource,
+    sourceIsArmed,
 }: {
     group: LaneGroupV2;
     onToggleEnabled: () => void;
     onSetBranchCount: (branchCount: number) => void;
     onDissolve: () => void;
     onCrossoverDrag: (which: "low" | "high", hz: number) => void;
+    onCrossoverKeyTrackOffsetDrag: (which: "low" | "high", offsetSemitones: number) => void;
+    onCrossoverKeyTrackToggle: (which: "low" | "high", enabled: boolean) => void;
     onCrossoverGestureEnd: () => void;
+    routes: ReadonlyArray<ModulationRoute>;
+    activeSource: RackModulationSource;
+    sourceIsArmed: boolean;
 }) {
     const isSplit = group.kind === "split";
     const unitNumber = group.groupId.slice(group.groupId.indexOf("#") + 1);
@@ -3125,7 +3360,14 @@ function GroupEditorPane({
                             which="low"
                             label={group.branches.length === 3 ? "LOW CROSSOVER" : "CROSSOVER"}
                             hz={group.xoverLowHz}
-                            onDrag={onCrossoverDrag}
+                            keyTrackEnabled={group.xoverLowKeyTrackEnabled}
+                            keyTrackOffsetSemitones={group.xoverLowKeyTrackOffsetSemitones}
+                            routes={routes}
+                            activeSource={activeSource}
+                            sourceIsArmed={sourceIsArmed}
+                            onHzDrag={onCrossoverDrag}
+                            onKeyTrackOffsetDrag={onCrossoverKeyTrackOffsetDrag}
+                            onKeyTrackToggle={onCrossoverKeyTrackToggle}
                             onGestureEnd={onCrossoverGestureEnd}
                         />
                         {group.branches.length === 3 ? (
@@ -3134,7 +3376,14 @@ function GroupEditorPane({
                                 which="high"
                                 label="HIGH CROSSOVER"
                                 hz={group.xoverHighHz}
-                                onDrag={onCrossoverDrag}
+                                keyTrackEnabled={group.xoverHighKeyTrackEnabled}
+                                keyTrackOffsetSemitones={group.xoverHighKeyTrackOffsetSemitones}
+                                routes={routes}
+                                activeSource={activeSource}
+                                sourceIsArmed={sourceIsArmed}
+                                onHzDrag={onCrossoverDrag}
+                                onKeyTrackOffsetDrag={onCrossoverKeyTrackOffsetDrag}
+                                onKeyTrackToggle={onCrossoverKeyTrackToggle}
                                 onGestureEnd={onCrossoverGestureEnd}
                             />
                         ) : null}
@@ -3210,7 +3459,15 @@ export function EffectsRackWorkspace({
     if (mobileGlobalModRail && !modRailVoiceSettings) {
         throw new Error("The mobile Mod rail requires modRailVoiceSettings bindings.");
     }
-    const { rackState, rackStateRef, commit, setSplitCrossover, persist } = useRackState();
+    const {
+        rackState,
+        rackStateRef,
+        commit,
+        setSplitCrossover,
+        setSplitKeyTrackEnabled,
+        setSplitKeyTrackOffset,
+        persist,
+    } = useRackState();
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [groupMenu, setGroupMenu] = useState<SubwayGroupMenuRequest | null>(null);
     // Selection is a DEVICE INSTANCE (T6): the effect id derives from it.
@@ -3536,7 +3793,10 @@ export function EffectsRackWorkspace({
         ? null
         : findRackModulationSource(dragSource.sourceKind, dragSource.sourceSlot);
     const kindForDescriptor = useCallback((descriptor: RackParameterDescriptor) => (
-        laneKindForDevice(laneDeviceIdForDescriptor(selectedDeviceId, descriptor), descriptor.endpointID)
+        laneKindForDevice(
+            laneDeviceIdForDescriptor(selectedDeviceId, descriptor),
+            rackModulationIdentityEndpointID(descriptor),
+        )
     ), [selectedDeviceId]);
     const selectedTargetKind = kindForDescriptor(selectedTarget);
     const selectedRouteIndex = routes.findIndex((route) => (
@@ -3553,11 +3813,13 @@ export function EffectsRackWorkspace({
         ? selectedTarget
         : getRackParameterDescriptor(parameterOverlayEndpointID)
             ?? selectedTarget;
-    const parameterOverlayBinding = useRackParameterBinding(
+    const parameterOverlayKeyTrack = useRackKeyTrackBinding(
         parameterOverlayDescriptor,
-        parameterOverlayEndpointID !== undefined && parameterOverlayEndpointID !== null,
         selectedDeviceId,
     );
+    const parameterOverlayBinding = parameterOverlayKeyTrack.binding;
+    const parameterOverlayKeyTrackDefinition = getKeyTrackDefinition(
+        `lane.${parameterOverlayDescriptor.endpointID}`);
     const parameterOverlaySyncModeEndpointID = parameterOverlayDescriptor.endpointID === "delayTime"
         ? "delayTimeMode"
         : parameterOverlayDescriptor.endpointID === "phaserRate"
@@ -4003,7 +4265,9 @@ export function EffectsRackWorkspace({
         if (action === "edit-values") {
             setParameterValueSheetEndpointID(parameterOverlayDescriptor.endpointID);
         } else if (action === "reset-base") {
-            parameterOverlayBinding.commitValue(parameterOverlayDescriptor.initial);
+            parameterOverlayBinding.commitValue(parameterOverlayKeyTrack.enabled
+                ? 0
+                : parameterOverlayDescriptor.initial);
         } else if (action === "remove-all-target-routes") {
             setRemoveTargetRoutesEndpointID(parameterOverlayDescriptor.endpointID);
         } else if (parameterOverlayRouteIndex >= 0 && parameterOverlayRoute !== null) {
@@ -4026,6 +4290,7 @@ export function EffectsRackWorkspace({
         onRouteChange,
         onRemoveRoute,
         parameterOverlayBinding,
+        parameterOverlayKeyTrack.enabled,
         parameterOverlayDescriptor.endpointID,
         parameterOverlayDescriptor.initial,
         parameterOverlayRoute,
@@ -4354,18 +4619,29 @@ export function EffectsRackWorkspace({
             {parameterValueSheetEndpointID ? (
                 <ParameterValueSheet
                     key={`${parameterValueSheetEndpointID}:${selectedSource.sourceKind}:${selectedSource.sourceSlot}`}
-                    heading={`${getRackEffectDescriptor(parameterOverlayDescriptor.effectId).label} · ${parameterOverlayDescriptor.label}`}
-                    label={parameterOverlayDescriptor.label}
+                    heading={`${getRackEffectDescriptor(parameterOverlayDescriptor.effectId).label} · ${parameterOverlayKeyTrack.enabled ? "Key Track Offset" : parameterOverlayDescriptor.label}`}
+                    label={parameterOverlayKeyTrack.enabled ? "Key Track Offset" : parameterOverlayDescriptor.label}
+                    baseFieldLabel={parameterOverlayKeyTrack.enabled ? "Key Track Offset" : undefined}
+                    routeFieldLabel={parameterOverlayKeyTrack.enabled && sourceIsArmed
+                        ? `${activeSource.label} -> Key Track Offset`
+                        : undefined}
                     base={{
-                        spec: parameterEntrySpecForRackParameter(parameterOverlayDescriptor, parameterOverlayBinding.value),
+                        spec: parameterOverlayKeyTrack.enabled && parameterOverlayKeyTrackDefinition !== null
+                            ? parameterEntrySpecForKeyTrackOffset(parameterOverlayKeyTrackDefinition.family)
+                            : parameterEntrySpecForRackParameter(parameterOverlayDescriptor, parameterOverlayBinding.value),
                         value: parameterOverlayBinding.value,
-                        defaultValue: parameterOverlayDescriptor.initial,
+                        defaultValue: parameterOverlayKeyTrack.enabled ? 0 : parameterOverlayDescriptor.initial,
                     }}
                     amountSpec={(() => {
                         const targetKind = parseAnyModulationTargetKind(kindForDescriptor(parameterOverlayDescriptor));
                         return targetKind === null
                             ? null
-                            : parameterEntrySpecForModulationAmount(targetKind, parameterOverlayBinding.value);
+                            : parameterOverlayKeyTrack.enabled && parameterOverlayKeyTrackDefinition !== null
+                                ? parameterEntrySpecForKeyTrackModulationAmount(
+                                    parameterOverlayKeyTrackDefinition.family,
+                                    keyTrackRouteStorage(parameterOverlayDescriptor),
+                                )
+                                : parameterEntrySpecForModulationAmount(targetKind, parameterOverlayBinding.value);
                     })()}
                     route={parameterOverlayPresentedRoute}
                     sourceLabel={sourceIsArmed ? activeSource.label : null}
@@ -4496,7 +4772,16 @@ export function EffectsRackWorkspace({
                             }
                         }}
                         onCrossoverDrag={(which, hz) => setSplitCrossover(selectedGroup.groupId, which, hz)}
+                        onCrossoverKeyTrackOffsetDrag={(which, offsetSemitones) => (
+                            setSplitKeyTrackOffset(selectedGroup.groupId, which, offsetSemitones)
+                        )}
+                        onCrossoverKeyTrackToggle={(which, enabled) => (
+                            setSplitKeyTrackEnabled(selectedGroup.groupId, which, enabled)
+                        )}
                         onCrossoverGestureEnd={persist}
+                        routes={routes}
+                        activeSource={activeSource}
+                        sourceIsArmed={sourceIsArmed}
                     />
                 ) : !selectedDeviceExists ? (
                 <section

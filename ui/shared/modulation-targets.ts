@@ -1,4 +1,7 @@
-import { allRackParameterDescriptors } from "./rack-parameter-descriptors";
+import {
+    allRackParameterDescriptors,
+    rackModulationIdentityEndpointID,
+} from "./rack-parameter-descriptors";
 
 /** Stable oscillator identities in runtime order. */
 export const OSCILLATOR_IDS = ["A", "B", "C"] as const;
@@ -187,13 +190,15 @@ export function maybeLaneBaseKindForRackEndpoint(endpointID: string): RackModula
 
 /** Base-instance lane destinations paired with their descriptor-owned runtime indexes. */
 export const RACK_MODULATION_TARGET_IDENTITIES: ReadonlyArray<ModulationTargetIdentity> = Object.freeze(
-    rackModulationParameters.map((parameter) => ({
+    [...rackModulationParameters.map((parameter) => ({
         // SAFETY: The preceding filter proves the authored index is non-null; endpoint IDs
         // and indexes are both minted only by the rack descriptor catalog.
-        kind: laneBaseKindForRackEndpoint(parameter.endpointID),
+        kind: laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
         group: "rack" as const,
         runtimeIndex: parameter.modulationTargetIndex as number,
     })).sort((left, right) => left.runtimeIndex - right.runtimeIndex),
+    { kind: "lane.frequencySplit#1.xoverLowHz", group: "rack" as const, runtimeIndex: 37 },
+    { kind: "lane.frequencySplit#1.xoverHighHz", group: "rack" as const, runtimeIndex: 38 }],
 );
 
 /** Every canonical modulation target, with voice and rack indexes kept in separate runtime groups. */
@@ -221,8 +226,8 @@ const targetIdentityByKind = new Map(MODULATION_TARGET_IDENTITIES.map((identity)
 function assertCanonicalIdentities(): void {
     if (MODULATION_SOURCE_COUNT !== 14
         || MODULATION_VOICE_TARGET_COUNT !== 56
-        || MODULATION_RACK_TARGET_COUNT !== 36
-        || MODULATION_LEGAL_PAIR_COUNT !== 1288) {
+        || MODULATION_RACK_TARGET_COUNT !== 39
+        || MODULATION_LEGAL_PAIR_COUNT !== 1330) {
         throw new Error("Unexpected modulation domain size");
     }
 
@@ -236,7 +241,7 @@ function assertCanonicalIdentities(): void {
         }
     }
 
-    for (const [group, expectedCount] of [["voice", 56], ["rack", 36]] as const) {
+    for (const [group, expectedCount] of [["voice", 56], ["rack", 39]] as const) {
         const identities = MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
         if (identities.length !== expectedCount
             || identities.some((identity, position) => identity.runtimeIndex !== position)) {
