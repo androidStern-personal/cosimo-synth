@@ -42905,7 +42905,7 @@ function bH({
     onDuplicateHover: hr,
     onTap: (U, be) => {
       if (p === "toggle-quick-source") {
-        Ws(U), Bi(U);
+        be || Ws(U), Bi(U);
         return;
       }
       be ? Bi(U) : Ws(U);
