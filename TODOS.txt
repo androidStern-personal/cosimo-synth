@@ -1452,10 +1452,14 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Browser tests prove first tap selects/opens, second selected-icon tap bypasses, the next selected-icon tap re-enables, and neither action closes or changes the selected editor.
     - Real touch tests starting on trunk and branch nodes prove immediate vertical drags scroll without selecting, bypassing, reordering, or requesting haptics; hold-and-drag still reorders and requests exactly one bump when it lifts; stationary long-press still opens the menu without the reorder bump; and releasing any cancelled scroll/reorder gesture produces no stray tap.
 
-[ ] T66 — Make one MSEG's mapping to another MSEG's Rate editable
+[x] T66 — Make one MSEG's mapping to another MSEG's Rate editable
     Active owner (2026-08-27):
     - Codex task `Fix T66 MSEG rate mapping controls`, thread `01a0434d-6730-7340-a091-ff0d448199ff`, branch `codex/t66-mseg-rate-mapping`, worktree `/Users/winterfell/.codex/worktrees/4533/cosimo-synth`, model SOL, reasoning max.
     - This is a coordinator-managed implementation task. Its clean final handoff goes to `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; it must not merge, push master, or deploy itself.
+    Integrated (2026-08-27):
+    - Coordinator-rebased implementation commits preserve ordinary source-tap behavior while separating the open MSEG target from a transient dragged source. Drawer/full-editor Rate and MAPPINGS controls now edit the canonical route amount without moving the live base; endpoint-backed MSEG, ENV, Amp Envelope, and oscillator Level targets resolve their real bases, while the controlled genuinely base-less seam retains an amount-only drag/exact-entry control with complete cancellation cleanup.
+    - Focused rebased browser/resolver/provenance checks pass, including T38 Amp Envelope composition. The complete desktop UI gate is 263/264 with every T66 case green and only the established unrelated React Grab `navigator.webdriver` assertion red.
+    - A fresh coordinator HMR session reported the correct repo root and `usesViteClient: true`, then was stopped. The final compiled-mode VST3 is installed and strict-code-sign valid at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` (executable SHA-256 `15af4c6bd3bfb576d71ad28f31a4c92860a5ee1acc7db00a051ca5e3488c269f`). Physical iPhone and Ableton gesture acceptance remain unperformed.
     Confirmed failure (2026-08-27):
     - In the real phone-width interface, an MSEG 1 -> MSEG 2 Rate route can be created, but a vertical drag on MSEG 2 Rate leaves the route amount at exactly zero.
     - The Rate control in the open MSEG drawer currently looks for a route whose source is the MSEG being edited. When MSEG 2 is open, it therefore looks for MSEG 2 -> MSEG 2 even though the actually selected and dragged source is MSEG 1. The real MSEG 1 -> MSEG 2 route is present but cannot be adjusted there.
