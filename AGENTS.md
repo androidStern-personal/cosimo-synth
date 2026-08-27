@@ -8,6 +8,15 @@
 
 - If `build/deps` is not already linked in an isolated worktree, link it to the primary checkout's existing pinned `build/deps` before running builds or tests. Do not provision a second Cmajor checkout.
 
+## Codex Task Integration
+
+- Every implementation task runs in its own Codex worktree with SOL at max reasoning, records its thread, branch, worktree, and scope under the owning item in `TODOS.txt`, and reports its final handoff to the active integration coordinator recorded there. New task prompts must include that coordinator's thread ID and must forbid direct merges to master, pushes of master, and deployments unless the coordinator explicitly delegates them.
+- A completion handoff must name the task, thread, branch, worktree, final commit, clean/dirty status, exact changed scope, focused tests already run, known failures, generated artifacts, and any unperformed physical or host acceptance. Do not describe a branch as ready without a committed, clean handoff.
+- The integration coordinator is the sole owner of delegated-task rebases, final reviews, merges to master, pushes of master, and deployments. Keep one explicit integration queue. Rebase and merge branches one at a time against the moving latest master; never mix files, generated output, installed binaries, or uncommitted changes between worktrees.
+- Review source and the scoped diff before running a broad test suite or rebuilding the complete app. When review finds a problem, return a concrete repair request to the owning task and use focused tests for that problem. Repeat source review and focused tests until the repair is clean. Run the complete relevant suite and expensive native/build/install gates once, after the rebased source is review-clean and immediately before integration.
+- Parallelize independent source reviews, focused tests, and non-conflicting work. Serialize operations that mutate master, shared generated outputs, fixed ports, installed plugins, or native build directories. Do not launch competing native builds merely to make the queue appear parallel.
+- Before integration, compare the rebased branch's final name-status and diff to its requested scope, confirm `TODOS.txt` and `PROGRESS.txt` preserve unrelated history, and separate product acceptance from automated qualification. After integration, mark the exact task complete with merge evidence and tell its implementation thread the result.
+
 ## iPhone Build And Install
 
 - If `build/ios_device_run/CosimoSynthAUv3.xcodeproj` does not exist yet in the current worktree, generate it with `./scripts/generate_ios_auv3_xcode_project.sh build/ios_device_run`.
