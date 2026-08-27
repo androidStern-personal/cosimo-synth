@@ -1162,6 +1162,9 @@ BROWSER SHARING AND ENVELOPE FOLLOW-UP
     - Cancellation restores normal interaction state with no stuck label or extra parameter write, and mouse/pen editing remains usable.
 
 [ ] T50 — Add Key Track to controls that can be musically tuned
+    Active owner (2026-08-27):
+    - Codex task `T50 Build Shared Key Track`, thread `01a0435e-576b-7c31-8de8-592b1c274673`, branch `codex/t50-shared-key-track`, worktree `/Users/winterfell/.codex/worktrees/fbf2/cosimo-synth`, model SOL, reasoning max.
+    - This is a coordinator-managed implementation task. Final review, rebase, merge, push, and any deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
     Dependency:
     - Build this on T39's shared played pitch. Do not derive tracking from any oscillator's private tuning.
     - This shared optional-Key-Track contract is also the prerequisite for the standalone Enhancer Lite release in T61 and the per-voice Enhancer in T62. The standalone effect follows the post-mix held-note rule below; while Key Track is on, each active synth voice calculates its own T62 Enhancer frequency from that voice's final played pitch.
