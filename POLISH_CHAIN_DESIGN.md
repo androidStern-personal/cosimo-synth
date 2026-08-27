@@ -96,6 +96,19 @@ The independently named `fx/polish_lab/` VST3 exposes those defaults plus the
 open detector, macro, tone, and curve decisions for live Ableton tuning; it has
 no production signal-path connection.
 
+### 2.4 Interface placement
+
+The FX graph always ends with one permanent **POLISH** node after the complete
+editable Effects Lane. It makes the true signal position visible without adding
+a permanent control panel. Tapping it opens Enhancer Amount, Compression/Clip
+Amount, and Output Trim in the existing effect-editor area.
+
+POLISH is not a lane effect: it cannot be moved, deleted, replaced, reordered, or
+bypassed and has no effect context menu or drag behavior. The editable lane's
+tail add control remains immediately before POLISH and inserts new effects before
+the fixed section. The whole-Effects-Lane Mix and Bypass controls are upstream and
+do not affect it. The post-trim overload indicator remains in the preset bar.
+
 ## 3. Not in this chain
 
 - Modulation of any kind (locked out).
@@ -135,7 +148,7 @@ no production signal-path connection.
    and compressor lookahead within the approved 0–4 ms range.
 3. SAFE BASS: fixed cutoff near the starting 120 Hz value and slope of 6 vs
    12 dB/oct. These are tuning choices, not user controls.
-4. Output surface: exact placement of Output Trim and the compact overload light.
+4. Output surface: exact visual treatment of the compact preset-bar overload light.
 5. Transient/PUNCH mode (floated earlier): parked; revisit only if voicing shows
    the finisher kills material worth keeping.
 6. Name (working: "Polish").
