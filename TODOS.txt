@@ -1440,13 +1440,17 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     Confirmed failure (2026-08-27):
     - In the real phone-width interface, an MSEG 1 -> MSEG 2 Rate route can be created, but a vertical drag on MSEG 2 Rate leaves the route amount at exactly zero.
     - The Rate control in the open MSEG drawer currently looks for a route whose source is the MSEG being edited. When MSEG 2 is open, it therefore looks for MSEG 2 -> MSEG 2 even though the actually selected and dragged source is MSEG 1. The real MSEG 1 -> MSEG 2 route is present but cannot be adjusted there.
+    - The Mod page's MAPPINGS table also recognizes and lists an MSEG Rate route, but resolves no live base contract for that target. It falls back to a plain amount label at zero with no slider, drag behavior, or exact-value menu, so the route is visible but cannot be adjusted there either.
     Required result:
-    - Keep the MSEG being edited and the currently selected modulation source as two independent identities. The open MSEG 2 editor remains on MSEG 2 while MSEG 1 is selected or dragged from the Mod bar.
+    - During a source-to-target drag, keep the MSEG being edited and the transient dragged modulation source as independent identities. An open MSEG 2 editor remains on MSEG 2 while MSEG 1 is dragged from the Mod bar and dropped on its Rate control.
+    - Do not invent or change ordinary tap/selection behavior in this task. What tapping MSEG 1 should do while MSEG 2 is open remains a separate product decision; preserve the current non-drag selection behavior.
     - After MSEG 1 is dropped on MSEG 2 Rate, the MSEG 2 Rate control must display that mapping and edit its amount through the normal vertical drag and exact-value entry behavior. Editing the amount must not change MSEG 2's underlying Rate value.
     - Apply the same source-versus-target rule anywhere the shared MSEG Rate control appears; do not repair only one drawer while leaving another MSEG editor unable to address the selected route.
+    - Every MAPPINGS-table route must expose an editable amount control. MSEG Rate routes must bind their real Rate endpoint so the normal row can show the live base Rate separately from the route amount. Targets that genuinely have no editable base must still receive an amount-only slider/drag and exact-value control instead of dead text.
     Done when:
     - A real browser regression creates MSEG 1 -> MSEG 2 Rate through the interface, changes its amount away from zero, proves the stored route and running modulation program receive the new amount, and proves the base MSEG 2 Rate did not move.
-    - The route survives save/reload and remains editable, self-mapping and another cross-MSEG pairing still work, cancelled gestures close cleanly, and ordinary base-Rate editing remains unchanged when no mapped source is selected.
+    - A real MAPPINGS-table regression proves the same MSEG Rate route has a working amount control at zero, can be changed by drag/slider and exact entry, and never conflates the live base Rate with route depth. An amount-only target also remains editable.
+    - The route survives save/reload and remains editable, self-mapping and another cross-MSEG pairing still work, cancelled gestures close cleanly, ordinary base-Rate editing remains unchanged when no mapped source is selected, and ordinary source taps retain their pre-task behavior.
 
 [ ] T65 — Make every Cosimo haptic cross-platform and audit the complete interaction set
     One shared capability:
