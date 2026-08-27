@@ -1437,6 +1437,9 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Real touch tests starting on trunk and branch nodes prove immediate vertical drags scroll without selecting, bypassing, reordering, or requesting haptics; hold-and-drag still reorders and requests exactly one bump when it lifts; stationary long-press still opens the menu without the reorder bump; and releasing any cancelled scroll/reorder gesture produces no stray tap.
 
 [ ] T66 — Make one MSEG's mapping to another MSEG's Rate editable
+    Active owner (2026-08-27):
+    - Codex task `Fix T66 MSEG rate mapping controls`, thread `01a0434d-6730-7340-a091-ff0d448199ff`, branch `codex/t66-mseg-rate-mapping`, worktree `/Users/winterfell/.codex/worktrees/4533/cosimo-synth`, model SOL, reasoning max.
+    - This is a coordinator-managed implementation task. Its clean final handoff goes to `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; it must not merge, push master, or deploy itself.
     Confirmed failure (2026-08-27):
     - In the real phone-width interface, an MSEG 1 -> MSEG 2 Rate route can be created, but a vertical drag on MSEG 2 Rate leaves the route amount at exactly zero.
     - The Rate control in the open MSEG drawer currently looks for a route whose source is the MSEG being edited. When MSEG 2 is open, it therefore looks for MSEG 2 -> MSEG 2 even though the actually selected and dragged source is MSEG 1. The real MSEG 1 -> MSEG 2 route is present but cannot be adjusted there.
