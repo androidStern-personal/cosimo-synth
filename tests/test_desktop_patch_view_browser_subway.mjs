@@ -202,6 +202,10 @@ function branchTailLaneDocJson(groupKind) {
             enabled: true,
             xoverLowHz: 320,
             xoverHighHz: 3200,
+            xoverLowKeyTrackEnabled: false,
+            xoverLowKeyTrackOffsetSemitones: 0,
+            xoverHighKeyTrackEnabled: false,
+            xoverHighKeyTrackOffsetSemitones: 0,
             branches: [
                 [{ kind: "device", deviceId: "ott#1", enabled: true }],
                 [],
@@ -213,15 +217,52 @@ function branchTailLaneDocJson(groupKind) {
         };
     const devices = groupKind === "parallel"
         ? {
-            "distortion#1": { params: { ...params.drive } },
-            "chorus#1": { params: { ...params.chorus } },
-            "phaser#1": { params: { ...params.phaser } },
+            "distortion#1": {
+                params: {
+                    ...params.drive,
+                    distortionWetHPKeyTrackEnabled: 0,
+                    distortionWetHPKeyTrackOffsetSemitones: 0,
+                    distortionWetLPKeyTrackEnabled: 0,
+                    distortionWetLPKeyTrackOffsetSemitones: 0,
+                },
+            },
+            "chorus#1": {
+                params: {
+                    ...params.chorus,
+                    chorusRingOffsetMode: 0,
+                    chorusRingFineSemitones: 0,
+                    chorusRingKeyTrackEnabled: 0,
+                    chorusRingKeyTrackOffsetSemitones: 0,
+                    chorusRingLegacyClampEnabled: 0,
+                },
+            },
+            "phaser#1": {
+                params: {
+                    ...params.phaser,
+                    phaserFrequencyKeyTrackEnabled: 0,
+                    phaserFrequencyKeyTrackOffsetSemitones: 0,
+                },
+            },
         }
         : {
             "ott#1": { params: { ...params.ott } },
-            "delay#1": { params: { ...params.delay } },
+            "delay#1": {
+                params: {
+                    ...params.delay,
+                    delayTimeKeyTrackEnabled: 0,
+                    delayTimeKeyTrackOffsetSemitones: 0,
+                    delayFilterKeyTrackEnabled: 0,
+                    delayFilterKeyTrackOffsetSemitones: 0,
+                },
+            },
             "reverb#1": { params: { ...params.reverb } },
-            "phaser#1": { params: { ...params.phaser } },
+            "phaser#1": {
+                params: {
+                    ...params.phaser,
+                    phaserFrequencyKeyTrackEnabled: 0,
+                    phaserFrequencyKeyTrackOffsetSemitones: 0,
+                },
+            },
         };
     return JSON.stringify({
         format: "cosimo.lane",

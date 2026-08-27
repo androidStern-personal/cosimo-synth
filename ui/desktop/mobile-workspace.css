@@ -172,7 +172,7 @@
         justify-items: center;
     }
 
-    .mobile-filter-knob-cell.is-disabled > :not(.voice-key-track-button) {
+    .mobile-filter-knob-cell.is-disabled {
         opacity: 0.38;
         pointer-events: none;
     }

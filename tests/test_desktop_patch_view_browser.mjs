@@ -5046,6 +5046,9 @@ test("fresh and Init desktop state show only oscillator A enabled at 0 dB", asyn
 
     try {
         await page.waitForSelector('[data-role="mobile-voice-editor"][data-selected-oscillator-id="A"]');
+        const visibleParameterEndpointIDs = await readVisibleHarnessParameterEndpointIDs(page);
+        assert.equal(visibleParameterEndpointIDs.includes("filterCutoffKeyTrackEnabled"), true);
+        assert.equal(visibleParameterEndpointIDs.includes("filterCutoffKeyTrackOffsetSemitones"), true);
         let snapshot = await waitForHarnessSnapshot(
             page,
             "fresh oscillator defaults",
@@ -5174,6 +5177,8 @@ test("fresh and Init desktop state show only oscillator A enabled at 0 dB", asyn
             oscAMute: 0,
             oscBMute: 1,
             oscCMute: 1,
+            filterCutoffKeyTrackEnabled: 0,
+            filterCutoffKeyTrackOffsetSemitones: 0,
         })) {
             const latestWrite = [...snapshot.sentMessages]
                 .reverse()

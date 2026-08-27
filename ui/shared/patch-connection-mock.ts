@@ -36,6 +36,8 @@ const warpModeEndpointID = "oscAWarpMode";
 const warpAmountEndpointID = "oscAWarpAmount";
 const filterModeEndpointID = "filterMode";
 const filterCutoffEndpointID = "filterCutoff";
+const filterCutoffKeyTrackEnabledEndpointID = "filterCutoffKeyTrackEnabled";
+const filterCutoffKeyTrackOffsetEndpointID = "filterCutoffKeyTrackOffsetSemitones";
 const filterQEndpointID = "filterQ";
 const filterMixEndpointID = "filterMix";
 const unisonVoicesEndpointID = "oscAUnisonVoices";
@@ -344,6 +346,8 @@ function createInitialParameterValues(): Map<string, unknown> {
         [warpAmountEndpointID, 0],
         [filterModeEndpointID, 0],
         [filterCutoffEndpointID, 1000],
+        [filterCutoffKeyTrackEnabledEndpointID, 0],
+        [filterCutoffKeyTrackOffsetEndpointID, 0],
         [filterQEndpointID, 0.707107],
         [filterMixEndpointID, 1],
         [unisonVoicesEndpointID, 1],
@@ -499,6 +503,29 @@ function buildHarnessStatus(manifest: unknown) {
                         min: 20,
                         max: 20000,
                         init: 1000,
+                    },
+                },
+                {
+                    endpointID: filterCutoffKeyTrackEnabledEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Voice Filter Key Track",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                        discrete: true,
+                        step: 1,
+                    },
+                },
+                {
+                    endpointID: filterCutoffKeyTrackOffsetEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Voice Filter Key Track Offset",
+                        min: -60,
+                        max: 60,
+                        init: 0,
+                        unit: "st",
                     },
                 },
                 {

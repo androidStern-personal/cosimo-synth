@@ -3148,6 +3148,7 @@ function CrossoverSlider({
     onGestureEnd: () => void;
 }) {
     const surfaceRef = useRef<HTMLButtonElement | null>(null);
+    const ordinaryDragPointerRef = useRef<number | null>(null);
     const gestureController = useParameterGesture();
     const openParameterMenu = useParameterMenu();
     const unitNumber = Number(groupId.slice(groupId.indexOf("#") + 1));
@@ -3173,6 +3174,16 @@ function CrossoverSlider({
     const targetRouteCount = routes.filter((candidate) => candidate.targetKind === targetKind).length;
     const hasEnabledTargetRoute = routes.some((candidate) => (
         candidate.targetKind === targetKind && candidate.enabled));
+
+    const applyOrdinaryClientX = useCallback((clientX: number) => {
+        const surface = surfaceRef.current;
+        if (surface === null) {
+            return;
+        }
+        const bounds = surface.getBoundingClientRect();
+        const normalized = (clientX - bounds.left) / Math.max(1, bounds.width);
+        onHzDrag(which, Math.round(normalizedToCrossover(normalized)));
+    }, [onHzDrag, which]);
 
     const commitBase = useCallback((value: number) => {
         if (keyTrackEnabled) {
@@ -3228,6 +3239,16 @@ function CrossoverSlider({
                 style={{ "--crossover-progress": baseNormalized } as CSSProperties}
                 onPointerDown={(event) => {
                     if (event.pointerType === "mouse" && event.button !== 0) return;
+                    if (!keyTrackEnabled) {
+                        try {
+                            event.currentTarget.setPointerCapture(event.pointerId);
+                        } catch {
+                            // Window-level release still ends the ordinary drag.
+                        }
+                        ordinaryDragPointerRef.current = event.pointerId;
+                        applyOrdinaryClientX(event.clientX);
+                        return;
+                    }
                     gestureController.startGesture(event, {
                         horizontal: {
                             startNormalized: baseNormalized,
@@ -3256,6 +3277,23 @@ function CrossoverSlider({
                         onFinish: () => onGestureEnd(),
                         onLongPress: openParameterMenu === null ? undefined : openExactMenu,
                     });
+                }}
+                onPointerMove={(event) => {
+                    if (ordinaryDragPointerRef.current === event.pointerId) {
+                        applyOrdinaryClientX(event.clientX);
+                    }
+                }}
+                onPointerUp={(event) => {
+                    if (ordinaryDragPointerRef.current === event.pointerId) {
+                        ordinaryDragPointerRef.current = null;
+                        onGestureEnd();
+                    }
+                }}
+                onPointerCancel={(event) => {
+                    if (ordinaryDragPointerRef.current === event.pointerId) {
+                        ordinaryDragPointerRef.current = null;
+                        onGestureEnd();
+                    }
                 }}
                 onContextMenu={(event) => {
                     if (openParameterMenu === null) return;
