@@ -3528,7 +3528,6 @@ export function EffectsRackWorkspace({
         && route.sourceSlot === selectedSource.sourceSlot
         && route.targetKind === selectedTargetKind
     ));
-    const selectedRoute = sourceIsArmed && selectedRouteIndex >= 0 ? routes[selectedRouteIndex] : null;
     const selectedPairKey = `${selectedSource.sourceKind}:${selectedSource.sourceSlot}:${selectedTargetKind}`;
     const parameterOverlayEndpointID = parameterValueSheetEndpointID
         ?? parameterMenu?.endpointID
