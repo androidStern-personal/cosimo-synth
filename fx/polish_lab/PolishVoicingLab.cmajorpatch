@@ -3,7 +3,7 @@
   "ID": "dev.cosimo.polish-voicing-lab",
   "version": "0.1.0",
   "name": "Polish Voicing Lab",
-  "description": "Isolated compressor, tone, macro, and transfer-curve design studio for internal tuning.",
+  "description": "Isolated compressor and bipolar transfer-function design studio for internal tuning.",
   "category": "effect",
   "manufacturer": "Cosimo",
   "plugin": {

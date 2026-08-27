@@ -102,103 +102,6 @@ namespace polishlab
         return leftY + ((rightY - leftY) * u);
     }
 
-    float32 evaluateEditablePositiveCurve (
-        float32 magnitude,
-        float32 pointCountIn,
-        float32 p1xIn, float32 p1yIn,
-        float32 p2xIn, float32 p2yIn,
-        float32 p3xIn, float32 p3yIn,
-        float32 p4xIn, float32 p4yIn,
-        float32 p5xIn, float32 p5yIn,
-        float32 p6xIn, float32 p6yIn,
-        float32 p7xIn, float32 p7yIn,
-        float32 b1, float32 b2, float32 b3, float32 b4,
-        float32 b5, float32 b6, float32 b7,
-        float32 amountPointIn,
-        float32 amountTargetX,
-        float32 amountTargetY,
-        float32 amountPosition)
-    {
-        let count = int32 (std::intrinsics::clamp (pointCountIn, 2.0f, 7.0f) + 0.5f);
-        let amountPoint = int32 (std::intrinsics::clamp (amountPointIn, 0.0f, 7.0f) + 0.5f);
-        let amount01 = clamp01 (amountPosition);
-        var p1xRaw = p1xIn; var p1yRaw = p1yIn;
-        var p2xRaw = p2xIn; var p2yRaw = p2yIn;
-        var p3xRaw = p3xIn; var p3yRaw = p3yIn;
-        var p4xRaw = p4xIn; var p4yRaw = p4yIn;
-        var p5xRaw = p5xIn; var p5yRaw = p5yIn;
-        var p6xRaw = p6xIn; var p6yRaw = p6yIn;
-        var p7xRaw = p7xIn; var p7yRaw = p7yIn;
-
-        if (amountPoint == 1) { p1xRaw += (amountTargetX - p1xRaw) * amount01; p1yRaw += (amountTargetY - p1yRaw) * amount01; }
-        if (amountPoint == 2) { p2xRaw += (amountTargetX - p2xRaw) * amount01; p2yRaw += (amountTargetY - p2yRaw) * amount01; }
-        if (amountPoint == 3) { p3xRaw += (amountTargetX - p3xRaw) * amount01; p3yRaw += (amountTargetY - p3yRaw) * amount01; }
-        if (amountPoint == 4) { p4xRaw += (amountTargetX - p4xRaw) * amount01; p4yRaw += (amountTargetY - p4yRaw) * amount01; }
-        if (amountPoint == 5) { p5xRaw += (amountTargetX - p5xRaw) * amount01; p5yRaw += (amountTargetY - p5yRaw) * amount01; }
-        if (amountPoint == 6) { p6xRaw += (amountTargetX - p6xRaw) * amount01; p6yRaw += (amountTargetY - p6yRaw) * amount01; }
-        if (amountPoint == 7) { p7xRaw += (amountTargetX - p7xRaw) * amount01; p7yRaw += (amountTargetY - p7yRaw) * amount01; }
-
-        let p1x = std::intrinsics::clamp (p1xRaw, 0.01f, 1.5f - 0.001f * float32 (count - 1));
-        let p2x = std::intrinsics::clamp (p2xRaw, p1x + 0.001f, 1.5f - 0.001f * float32 (count > 2 ? count - 2 : 0));
-        let p3x = std::intrinsics::clamp (p3xRaw, p2x + 0.001f, 1.5f - 0.001f * float32 (count > 3 ? count - 3 : 0));
-        let p4x = std::intrinsics::clamp (p4xRaw, p3x + 0.001f, 1.5f - 0.001f * float32 (count > 4 ? count - 4 : 0));
-        let p5x = std::intrinsics::clamp (p5xRaw, p4x + 0.001f, 1.5f - 0.001f * float32 (count > 5 ? count - 5 : 0));
-        let p6x = std::intrinsics::clamp (p6xRaw, p5x + 0.001f, 1.5f - 0.001f * float32 (count > 6 ? count - 6 : 0));
-        let p7x = std::intrinsics::clamp (p7xRaw, p6x + 0.001f, 1.5f);
-        let p1y = std::intrinsics::clamp (p1yRaw, 0.0f, 1.5f);
-        let p2y = std::intrinsics::clamp (p2yRaw, p1y, 1.5f);
-        let p3y = std::intrinsics::clamp (p3yRaw, p2y, 1.5f);
-        let p4y = std::intrinsics::clamp (p4yRaw, p3y, 1.5f);
-        let p5y = std::intrinsics::clamp (p5yRaw, p4y, 1.5f);
-        let p6y = std::intrinsics::clamp (p6yRaw, p5y, 1.5f);
-        let p7y = std::intrinsics::clamp (p7yRaw, p6y, 1.5f);
-        let x = std::intrinsics::max (0.0f, magnitude);
-
-        if (x <= p1x) return evaluateBowSegment (x, 0.0f, 0.0f, p1x, p1y, b1);
-        if (x <= p2x) return evaluateBowSegment (x, p1x, p1y, p2x, p2y, b2);
-        if (count == 2) return p2y;
-        if (x <= p3x) return evaluateBowSegment (x, p2x, p2y, p3x, p3y, b3);
-        if (count == 3) return p3y;
-        if (x <= p4x) return evaluateBowSegment (x, p3x, p3y, p4x, p4y, b4);
-        if (count == 4) return p4y;
-        if (x <= p5x) return evaluateBowSegment (x, p4x, p4y, p5x, p5y, b5);
-        if (count == 5) return p5y;
-        if (x <= p6x) return evaluateBowSegment (x, p5x, p5y, p6x, p6y, b6);
-        if (count == 6) return p6y;
-        if (x <= p7x) return evaluateBowSegment (x, p6x, p6y, p7x, p7y, b7);
-        return p7y;
-    }
-
-    float32 evaluateEditableCurve (
-        float32 sample,
-        float32 pointCount,
-        float32 p1x, float32 p1y,
-        float32 p2x, float32 p2y,
-        float32 p3x, float32 p3y,
-        float32 p4x, float32 p4y,
-        float32 p5x, float32 p5y,
-        float32 p6x, float32 p6y,
-        float32 p7x, float32 p7y,
-        float32 b1, float32 b2, float32 b3, float32 b4,
-        float32 b5, float32 b6, float32 b7,
-        float32 amountPoint,
-        float32 amountTargetX,
-        float32 amountTargetY,
-        float32 amountPosition)
-    {
-        if (sample == 0.0f)
-            return 0.0f;
-
-        let shaped = evaluateEditablePositiveCurve (
-            std::intrinsics::abs (sample), pointCount,
-            p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y,
-            p5x, p5y, p6x, p6y, p7x, p7y,
-            b1, b2, b3, b4, b5, b6, b7,
-            amountPoint, amountTargetX, amountTargetY, amountPosition
-        );
-        return sample < 0.0f ? -shaped : shaped;
-    }
-
     float32 desiredGainReductionDb (float32 detectorAmplitude,
                                     float32 thresholdDb,
                                     float32 ratio,
@@ -241,19 +144,6 @@ namespace polishlab
         input value float32 p3x;
         input value float32 p3y;
         input value float32 p3t;
-        input value bool editorEnabled;
-        input value float32 pointCount;
-        input value float32 p4x; input value float32 p4y;
-        input value float32 p5x; input value float32 p5y;
-        input value float32 p6x; input value float32 p6y;
-        input value float32 p7x; input value float32 p7y;
-        input value float32 b1; input value float32 b2; input value float32 b3; input value float32 b4;
-        input value float32 b5; input value float32 b6; input value float32 b7;
-        input value float32 amountPoint;
-        input value float32 amountTargetX;
-        input value float32 amountTargetY;
-        input value float32 amountPosition;
-
         void main()
         {
             loop
@@ -264,19 +154,155 @@ namespace polishlab
                 );
 
                 thru <- sample;
-                out <- editorEnabled
-                    ? evaluateEditableCurve (
-                        driven, pointCount,
-                        p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y,
-                        p5x, p5y, p6x, p6y, p7x, p7y,
-                        b1, b2, b3, b4, b5, b6, b7,
-                        amountPoint, amountTargetX, amountTargetY, amountPosition
+                out <- evaluateCurve (
+                    driven,
+                    p1x, p1y, p1t,
+                    p2x, p2y, p2t,
+                    p3x, p3y, p3t
+                );
+                advance();
+            }
+        }
+    }
+
+    float32 evaluateBipolarSideCurve (
+        float32 magnitude,
+        float32 pointCountIn,
+        float32 p1xIn, float32 p1yIn,
+        float32 p2xIn, float32 p2yIn,
+        float32 p3xIn, float32 p3yIn,
+        float32 p4xIn, float32 p4yIn,
+        float32 p5xIn, float32 p5yIn,
+        float32 p6xIn, float32 p6yIn,
+        float32 p7xIn, float32 p7yIn,
+        float32 b1, float32 b2, float32 b3, float32 b4,
+        float32 b5, float32 b6, float32 b7,
+        float32 morphPointIn,
+        float32 morphTargetX,
+        float32 morphTargetY,
+        float32 morphPosition)
+    {
+        let count = int32 (std::intrinsics::clamp (pointCountIn, 1.0f, 7.0f) + 0.5f);
+        let requestedMorphPoint = int32 (std::intrinsics::clamp (morphPointIn, 0.0f, 7.0f) + 0.5f);
+        let morphPoint = requestedMorphPoint > count ? count : requestedMorphPoint;
+        let morph01 = clamp01 (morphPosition);
+        var p1xRaw = p1xIn; var p1yRaw = p1yIn;
+        var p2xRaw = p2xIn; var p2yRaw = p2yIn;
+        var p3xRaw = p3xIn; var p3yRaw = p3yIn;
+        var p4xRaw = p4xIn; var p4yRaw = p4yIn;
+        var p5xRaw = p5xIn; var p5yRaw = p5yIn;
+        var p6xRaw = p6xIn; var p6yRaw = p6yIn;
+        var p7xRaw = p7xIn; var p7yRaw = p7yIn;
+
+        if (morphPoint == 1) { p1xRaw += (morphTargetX - p1xRaw) * morph01; p1yRaw += (morphTargetY - p1yRaw) * morph01; }
+        if (morphPoint == 2) { p2xRaw += (morphTargetX - p2xRaw) * morph01; p2yRaw += (morphTargetY - p2yRaw) * morph01; }
+        if (morphPoint == 3) { p3xRaw += (morphTargetX - p3xRaw) * morph01; p3yRaw += (morphTargetY - p3yRaw) * morph01; }
+        if (morphPoint == 4) { p4xRaw += (morphTargetX - p4xRaw) * morph01; p4yRaw += (morphTargetY - p4yRaw) * morph01; }
+        if (morphPoint == 5) { p5xRaw += (morphTargetX - p5xRaw) * morph01; p5yRaw += (morphTargetY - p5yRaw) * morph01; }
+        if (morphPoint == 6) { p6xRaw += (morphTargetX - p6xRaw) * morph01; p6yRaw += (morphTargetY - p6yRaw) * morph01; }
+        if (morphPoint == 7) { p7xRaw += (morphTargetX - p7xRaw) * morph01; p7yRaw += (morphTargetY - p7yRaw) * morph01; }
+
+        let p1x = std::intrinsics::clamp (p1xRaw, 0.001f, 1.5f - 0.001f * float32 (count - 1));
+        var p2x = p1x;
+        var p3x = p1x;
+        var p4x = p1x;
+        var p5x = p1x;
+        var p6x = p1x;
+        var p7x = p1x;
+        if (count >= 2) p2x = std::intrinsics::clamp (p2xRaw, p1x + 0.001f, 1.5f - 0.001f * float32 (count - 2));
+        if (count >= 3) p3x = std::intrinsics::clamp (p3xRaw, p2x + 0.001f, 1.5f - 0.001f * float32 (count - 3));
+        if (count >= 4) p4x = std::intrinsics::clamp (p4xRaw, p3x + 0.001f, 1.5f - 0.001f * float32 (count - 4));
+        if (count >= 5) p5x = std::intrinsics::clamp (p5xRaw, p4x + 0.001f, 1.5f - 0.001f * float32 (count - 5));
+        if (count >= 6) p6x = std::intrinsics::clamp (p6xRaw, p5x + 0.001f, 1.5f - 0.001f * float32 (count - 6));
+        if (count >= 7) p7x = std::intrinsics::clamp (p7xRaw, p6x + 0.001f, 1.5f);
+
+        let p1y = std::intrinsics::clamp (p1yRaw, -1.5f, 1.5f);
+        let p2y = std::intrinsics::clamp (p2yRaw, -1.5f, 1.5f);
+        let p3y = std::intrinsics::clamp (p3yRaw, -1.5f, 1.5f);
+        let p4y = std::intrinsics::clamp (p4yRaw, -1.5f, 1.5f);
+        let p5y = std::intrinsics::clamp (p5yRaw, -1.5f, 1.5f);
+        let p6y = std::intrinsics::clamp (p6yRaw, -1.5f, 1.5f);
+        let p7y = std::intrinsics::clamp (p7yRaw, -1.5f, 1.5f);
+        let x = std::intrinsics::max (0.0f, magnitude);
+
+        if (x <= p1x) return evaluateBowSegment (x, 0.0f, 0.0f, p1x, p1y, b1);
+        if (count == 1) return p1y;
+        if (x <= p2x) return evaluateBowSegment (x, p1x, p1y, p2x, p2y, b2);
+        if (count == 2) return p2y;
+        if (x <= p3x) return evaluateBowSegment (x, p2x, p2y, p3x, p3y, b3);
+        if (count == 3) return p3y;
+        if (x <= p4x) return evaluateBowSegment (x, p3x, p3y, p4x, p4y, b4);
+        if (count == 4) return p4y;
+        if (x <= p5x) return evaluateBowSegment (x, p4x, p4y, p5x, p5y, b5);
+        if (count == 5) return p5y;
+        if (x <= p6x) return evaluateBowSegment (x, p5x, p5y, p6x, p6y, b6);
+        if (count == 6) return p6y;
+        if (x <= p7x) return evaluateBowSegment (x, p6x, p6y, p7x, p7y, b7);
+        return p7y;
+    }
+
+    processor BipolarShapeCoreChannel
+    {
+        input stream float32 in;
+        output stream float32 out;
+        output stream float32 thru;
+
+        input value float32 positivePointCount;
+        input value float32 positiveP1X; input value float32 positiveP1Y;
+        input value float32 positiveP2X; input value float32 positiveP2Y;
+        input value float32 positiveP3X; input value float32 positiveP3Y;
+        input value float32 positiveP4X; input value float32 positiveP4Y;
+        input value float32 positiveP5X; input value float32 positiveP5Y;
+        input value float32 positiveP6X; input value float32 positiveP6Y;
+        input value float32 positiveP7X; input value float32 positiveP7Y;
+        input value float32 positiveB1; input value float32 positiveB2; input value float32 positiveB3;
+        input value float32 positiveB4; input value float32 positiveB5; input value float32 positiveB6; input value float32 positiveB7;
+
+        input value float32 negativePointCount;
+        input value float32 negativeP1X; input value float32 negativeP1Y;
+        input value float32 negativeP2X; input value float32 negativeP2Y;
+        input value float32 negativeP3X; input value float32 negativeP3Y;
+        input value float32 negativeP4X; input value float32 negativeP4Y;
+        input value float32 negativeP5X; input value float32 negativeP5Y;
+        input value float32 negativeP6X; input value float32 negativeP6Y;
+        input value float32 negativeP7X; input value float32 negativeP7Y;
+        input value float32 negativeB1; input value float32 negativeB2; input value float32 negativeB3;
+        input value float32 negativeB4; input value float32 negativeB5; input value float32 negativeB6; input value float32 negativeB7;
+
+        input value float32 morphSide;
+        input value float32 morphPoint;
+        input value float32 morphTargetX;
+        input value float32 morphTargetY;
+        input value float32 morphPosition;
+
+        void main()
+        {
+            loop
+            {
+                let sample = in;
+                thru <- sample;
+                out <- sample < 0.0f
+                    ? evaluateBipolarSideCurve (
+                        -sample, negativePointCount,
+                        negativeP1X, negativeP1Y, negativeP2X, negativeP2Y,
+                        negativeP3X, negativeP3Y, negativeP4X, negativeP4Y,
+                        negativeP5X, negativeP5Y, negativeP6X, negativeP6Y,
+                        negativeP7X, negativeP7Y,
+                        negativeB1, negativeB2, negativeB3, negativeB4,
+                        negativeB5, negativeB6, negativeB7,
+                        morphSide < 0.0f ? morphPoint : 0.0f,
+                        morphTargetX, morphTargetY, morphPosition
                     )
-                    : evaluateCurve (
-                        driven,
-                        p1x, p1y, p1t,
-                        p2x, p2y, p2t,
-                        p3x, p3y, p3t
+                    : evaluateBipolarSideCurve (
+                        sample, positivePointCount,
+                        positiveP1X, positiveP1Y, positiveP2X, positiveP2Y,
+                        positiveP3X, positiveP3Y, positiveP4X, positiveP4Y,
+                        positiveP5X, positiveP5Y, positiveP6X, positiveP6Y,
+                        positiveP7X, positiveP7Y,
+                        positiveB1, positiveB2, positiveB3, positiveB4,
+                        positiveB5, positiveB6, positiveB7,
+                        morphSide >= 0.0f ? morphPoint : 0.0f,
+                        morphTargetX, morphTargetY, morphPosition
                     );
                 advance();
             }
@@ -292,91 +318,72 @@ processor PolishVoicingProcessor
     input value float32 hostSlot0Guard [[ name: "Host Slot Guard", group: "Internal", min: 0.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 0 ]];
 
     input value bool bypass [[ name: "Bypass", group: "Master", init: false, boolean ]];
-    input value float32 amount [[ name: "Amount", group: "Master", min: 0.0f, max: 100.0f, init: 0.0f, unit: "%", rampFrames: 256 ]];
-    input value float32 macroCurve [[ name: "Amount Curve", group: "Master", min: 0.25f, max: 4.0f, init: 1.0f, rampFrames: 256 ]];
-    input value float32 inputTrimDb [[ name: "Input Trim", group: "Master", min: -24.0f, max: 24.0f, init: -0.285017081f, unit: "dB", rampFrames: 256 ]];
-    input value float32 outputTrimDb [[ name: "Output Trim", group: "Master", min: -24.0f, max: 24.0f, init: 0.166666667f, unit: "dB", rampFrames: 256 ]];
-
-    input value float32 macroInputDriveDb [[ name: "Input Range", group: "Macro Wiring", min: 0.0f, max: 48.0f, init: 35.9712f, unit: "dB", rampFrames: 256 ]];
-    input value float32 macroMakeupDb [[ name: "Makeup Range", group: "Macro Wiring", min: -12.0f, max: 24.0f, init: 4.12f, unit: "dB", rampFrames: 256 ]];
-    input value float32 macroRatioTarget [[ name: "Ratio Target", group: "Macro Wiring", min: 1.0f, max: 1000.0f, init: 1000.0f, unit: ":1", rampFrames: 256 ]];
-
-    input value float32 lowCutMix [[ name: "Low Cut Mix", group: "Tone - Pre", min: 0.0f, max: 100.0f, init: 0.0f, unit: "%", rampFrames: 256 ]];
-    input value float32 lowCutHz [[ name: "Low Cut", group: "Tone - Pre", min: 20.0f, max: 300.0f, init: 35.0f, unit: "Hz", rampFrames: 256 ]];
-    input value float32 lowCutSlope [[ name: "Slope", group: "Tone - Pre", min: 0.0f, max: 2.0f, init: 1.0f, discrete: true, step: 1.0f, text: "6 dB/oct|12 dB/oct|24 dB/oct", rampFrames: 0 ]];
-
-    input value float32 colorFrequencyHz [[ name: "Color Frequency", group: "Tone - Post", min: 80.0f, max: 12000.0f, init: 1000.0f, unit: "Hz", rampFrames: 256 ]];
-    input value float32 colorGainDb [[ name: "Color Gain", group: "Tone - Post", min: -18.0f, max: 18.0f, init: 0.0f, unit: "dB", rampFrames: 256 ]];
-    input value float32 colorQ [[ name: "Color Q", group: "Tone - Post", min: 0.1f, max: 12.0f, init: 0.707107f, rampFrames: 256 ]];
 
     input value float32 thresholdDb [[ name: "Threshold", group: "Compressor", min: -36.0f, max: 6.0f, init: 0.0f, unit: "dB", rampFrames: 256 ]];
-    input value float32 ratio [[ name: "Ratio", group: "Compressor", min: 1.0f, max: 100.0f, init: 11.4155251f, unit: ":1", rampFrames: 256 ]];
-    input value float32 kneeDb [[ name: "Knee", group: "Compressor", min: 0.0f, max: 24.0f, init: 0.0f, unit: "dB", rampFrames: 256 ]];
-    input value float32 attackMs [[ name: "Attack", group: "Compressor", min: 0.05f, max: 100.0f, init: 0.205116218f, unit: "ms", rampFrames: 256 ]];
-    input value float32 releaseMs [[ name: "Release", group: "Compressor", min: 5.0f, max: 1000.0f, init: 26.7916832f, unit: "ms", rampFrames: 256 ]];
-    input value float32 makeupDb [[ name: "Makeup", group: "Compressor", min: -24.0f, max: 24.0f, init: -0.04f, unit: "dB", rampFrames: 256 ]];
-    input value float32 detectorMode [[ name: "Detector", group: "Compressor", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Peak|RMS", rampFrames: 0 ]];
-    input value float32 rmsWindowMs [[ name: "RMS Window", group: "Compressor", min: 1.0f, max: 100.0f, init: 10.0f, unit: "ms", rampFrames: 256 ]];
-    input value float32 detectorHpHz [[ name: "Detector HP", group: "Compressor", min: 0.0f, max: 500.0f, init: 0.0f, unit: "Hz", rampFrames: 256 ]];
-    input value float32 stereoLink [[ name: "Stereo Link", group: "Compressor", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 256 ]];
-    input value float32 compMix [[ name: "Comp Mix", group: "Compressor", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 256 ]];
+    input value float32 ratio [[ name: "Ratio", group: "Compressor", min: 1.0f, max: 100.0f, init: 4.0f, unit: ":1", rampFrames: 256 ]];
+    input value float32 kneeDb [[ name: "Knee", group: "Compressor", min: 0.0f, max: 24.0f, init: 6.0f, unit: "dB", rampFrames: 256 ]];
+    input value float32 attackMs [[ name: "Attack", group: "Compressor", min: 0.05f, max: 100.0f, init: 10.0f, unit: "ms", rampFrames: 256 ]];
+    input value float32 releaseMs [[ name: "Release", group: "Compressor", min: 5.0f, max: 1000.0f, init: 120.0f, unit: "ms", rampFrames: 256 ]];
+    input value float32 makeupDb [[ name: "Makeup", group: "Compressor", min: -24.0f, max: 24.0f, init: 0.0f, unit: "dB", rampFrames: 256 ]];
 
-    input value float32 clipDriveDb [[ name: "Drive", group: "Clipper", min: -24.0f, max: 36.0f, init: -0.0192f, unit: "dB", rampFrames: 256 ]];
-    input value float32 clipMix [[ name: "Clip Mix", group: "Clipper", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 256 ]];
-    input value float32 curveP1X [[ name: "Knot 1 In", group: "Clipper", min: 0.01f, max: 1.45f, init: 0.799438202f, rampFrames: 256 ]];
-    input value float32 curveP1Y [[ name: "Knot 1 Out", group: "Clipper", min: 0.0f, max: 1.45f, init: 0.717642209f, rampFrames: 256 ]];
-    input value float32 curveP1T [[ name: "Knot 1 Tension", group: "Clipper", min: -1.0f, max: 1.0f, init: 0.42f, rampFrames: 256 ]];
-    input value float32 curveP2X [[ name: "Knot 2 In", group: "Clipper", min: 0.01f, max: 1.48f, init: 0.927299703f, rampFrames: 256 ]];
-    input value float32 curveP2Y [[ name: "Knot 2 Out", group: "Clipper", min: 0.0f, max: 1.48f, init: 0.893592677f, rampFrames: 256 ]];
-    input value float32 curveP2T [[ name: "Knot 2 Tension", group: "Clipper", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 256 ]];
-    input value float32 curveP3X [[ name: "Ceiling In", group: "Clipper", min: 0.01f, max: 1.5f, init: 0.93620178f, rampFrames: 256 ]];
-    input value float32 curveP3Y [[ name: "Ceiling Out", group: "Clipper", min: 0.0f, max: 1.5f, init: 1.0f, rampFrames: 256 ]];
-    input value float32 curveP3T [[ name: "Ceiling Tension", group: "Clipper", min: -1.0f, max: 1.0f, init: -0.72f, rampFrames: 256 ]];
+    input value float32 curveP1X [[ name: "Positive Point 1 Input", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveP1Y [[ name: "Positive Point 1 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: 1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveP2X [[ name: "Positive Point 2 Input", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.08f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveP2Y [[ name: "Positive Point 2 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: 1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveP3X [[ name: "Positive Point 3 Input", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.16f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveP3Y [[ name: "Positive Point 3 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: 1.0f, hidden: true, rampFrames: 256 ]];
 
-    // Appended hidden state for the graph-first point editor. The decoded P1-P3
-    // coordinates stay authoritative in legacy mode; entering this mode is an
-    // explicit user action because its one-bow segments are a different model.
-    input value bool curveEditorEnabled [[ name: "Point Editor Enabled", group: "Clipper Editor State", init: false, boolean, hidden: true, rampFrames: 0 ]];
-    input value float32 curvePointCount [[ name: "Point Count", group: "Clipper Editor State", min: 2.0f, max: 7.0f, init: 3.0f, discrete: true, step: 1.0f, hidden: true, rampFrames: 0 ]];
-    input value float32 curveP4X [[ name: "Point 4 In", group: "Clipper Editor State", min: 0.01f, max: 1.5f, init: 1.05f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveP4Y [[ name: "Point 4 Out", group: "Clipper Editor State", min: 0.0f, max: 1.5f, init: 1.0f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveP5X [[ name: "Point 5 In", group: "Clipper Editor State", min: 0.01f, max: 1.5f, init: 1.2f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveP5Y [[ name: "Point 5 Out", group: "Clipper Editor State", min: 0.0f, max: 1.5f, init: 1.0f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveP6X [[ name: "Point 6 In", group: "Clipper Editor State", min: 0.01f, max: 1.5f, init: 1.35f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveP6Y [[ name: "Point 6 Out", group: "Clipper Editor State", min: 0.0f, max: 1.5f, init: 1.0f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveP7X [[ name: "Point 7 In", group: "Clipper Editor State", min: 0.01f, max: 1.5f, init: 1.5f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveP7Y [[ name: "Point 7 Out", group: "Clipper Editor State", min: 0.0f, max: 1.5f, init: 1.0f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveB1 [[ name: "Segment 1 Bend", group: "Clipper Editor State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveB2 [[ name: "Segment 2 Bend", group: "Clipper Editor State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveB3 [[ name: "Segment 3 Bend", group: "Clipper Editor State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveB4 [[ name: "Segment 4 Bend", group: "Clipper Editor State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveB5 [[ name: "Segment 5 Bend", group: "Clipper Editor State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveB6 [[ name: "Segment 6 Bend", group: "Clipper Editor State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveB7 [[ name: "Segment 7 Bend", group: "Clipper Editor State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveAmountPoint [[ name: "Amount Point", group: "Clipper Editor State", min: 0.0f, max: 7.0f, init: 0.0f, discrete: true, step: 1.0f, hidden: true, rampFrames: 0 ]];
-    input value float32 curveAmountTargetX [[ name: "Amount Target In", group: "Clipper Editor State", min: 0.01f, max: 1.5f, init: 0.799438202f, hidden: true, rampFrames: 256 ]];
-    input value float32 curveAmountTargetY [[ name: "Amount Target Out", group: "Clipper Editor State", min: 0.0f, max: 1.5f, init: 0.717642209f, hidden: true, rampFrames: 256 ]];
-    input value bool curveEditorInitialized [[ name: "Point Editor Initialized", group: "Clipper Editor State", init: false, boolean, hidden: true, rampFrames: 0 ]];
+    input value float32 curvePointCount [[ name: "Positive Point Count", group: "Waveshaper State", min: 1.0f, max: 7.0f, init: 1.0f, discrete: true, step: 1.0f, hidden: true, rampFrames: 0 ]];
+    input value float32 curveP4X [[ name: "Positive Point 4 Input", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.24f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveP4Y [[ name: "Positive Point 4 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: 1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveP5X [[ name: "Positive Point 5 Input", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.32f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveP5Y [[ name: "Positive Point 5 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: 1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveP6X [[ name: "Positive Point 6 Input", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.4f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveP6Y [[ name: "Positive Point 6 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: 1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveP7X [[ name: "Positive Point 7 Input", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.5f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveP7Y [[ name: "Positive Point 7 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: 1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveB1 [[ name: "Positive Segment 1 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveB2 [[ name: "Positive Segment 2 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveB3 [[ name: "Positive Segment 3 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveB4 [[ name: "Positive Segment 4 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveB5 [[ name: "Positive Segment 5 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveB6 [[ name: "Positive Segment 6 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveB7 [[ name: "Positive Segment 7 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
+
+    input value float32 morph [[ name: "Morph", group: "Waveshaper", min: 0.0f, max: 100.0f, init: 0.0f, unit: "%", rampFrames: 256 ]];
+    input value float32 morphSide [[ name: "Morph Side", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 1.0f, discrete: true, step: 2.0f, hidden: true, rampFrames: 0 ]];
+    input value float32 morphPoint [[ name: "Morph Point", group: "Waveshaper State", min: 1.0f, max: 7.0f, init: 1.0f, discrete: true, step: 1.0f, hidden: true, rampFrames: 0 ]];
+    input value float32 morphTargetX [[ name: "Morph B Input", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 0.72f, hidden: true, rampFrames: 256 ]];
+    input value float32 morphTargetY [[ name: "Morph B Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: 1.05f, hidden: true, rampFrames: 256 ]];
+
+    input value float32 curveNPointCount [[ name: "Negative Point Count", group: "Waveshaper State", min: 1.0f, max: 7.0f, init: 1.0f, discrete: true, step: 1.0f, hidden: true, rampFrames: 0 ]];
+    input value float32 curveN1X [[ name: "Negative Point 1 Input Magnitude", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveN1Y [[ name: "Negative Point 1 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: -1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveN2X [[ name: "Negative Point 2 Input Magnitude", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.08f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveN2Y [[ name: "Negative Point 2 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: -1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveN3X [[ name: "Negative Point 3 Input Magnitude", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.16f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveN3Y [[ name: "Negative Point 3 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: -1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveN4X [[ name: "Negative Point 4 Input Magnitude", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.24f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveN4Y [[ name: "Negative Point 4 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: -1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveN5X [[ name: "Negative Point 5 Input Magnitude", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.32f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveN5Y [[ name: "Negative Point 5 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: -1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveN6X [[ name: "Negative Point 6 Input Magnitude", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.4f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveN6Y [[ name: "Negative Point 6 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: -1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveN7X [[ name: "Negative Point 7 Input Magnitude", group: "Waveshaper State", min: 0.01f, max: 1.5f, init: 1.5f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveN7Y [[ name: "Negative Point 7 Output", group: "Waveshaper State", min: -1.5f, max: 1.5f, init: -1.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveNB1 [[ name: "Negative Segment 1 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveNB2 [[ name: "Negative Segment 2 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveNB3 [[ name: "Negative Segment 3 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveNB4 [[ name: "Negative Segment 4 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveNB5 [[ name: "Negative Segment 5 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveNB6 [[ name: "Negative Segment 6 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
+    input value float32 curveNB7 [[ name: "Negative Segment 7 Bend", group: "Waveshaper State", min: -1.0f, max: 1.0f, init: 0.0f, hidden: true, rampFrames: 256 ]];
 
     output event polishlab::MeterFrame meterOut;
 
-    node leftClipper = polishlab::ClipCoreChannel * polishlab::clipOversampleFactor;
-    node rightClipper = polishlab::ClipCoreChannel * polishlab::clipOversampleFactor;
+    node leftClipper = polishlab::BipolarShapeCoreChannel * polishlab::clipOversampleFactor;
+    node rightClipper = polishlab::BipolarShapeCoreChannel * polishlab::clipOversampleFactor;
 
-    var lowCut12 = std::filters (float32<2>, float64, 32)::butterworth (2)::create (
-        1, processor.frequency, 35.0f
-    );
-    var lowCut24 = std::filters (float32<2>, float64, 32)::butterworth (4)::create (
-        1, processor.frequency, 35.0f
-    );
-    std::filters::simper::Implementation[2] colorFilters;
-
-    float32 currentLowCutHz = 35.0f;
-    float32 currentColorHz;
-    float32 currentColorQ;
-    float32<2> detectorLowState;
-    float32<2> lowCutOnePoleState;
-    float32<2> rmsPowerState;
     float32 reductionDbLeft;
     float32 reductionDbRight;
     float32 currentCompressorInputDb;
@@ -399,117 +406,15 @@ processor PolishVoicingProcessor
     float32 meterClipInput;
     float32 meterClipOutput;
 
-    void updateToneFilters()
+    float32<2> compress (float32<2> signal)
     {
-        let nextLowCutHz = std::intrinsics::clamp (
-            lowCutHz,
-            20.0f,
-            std::intrinsics::min (300.0f, float32 (processor.frequency) * 0.45f)
-        );
-
-        if (std::intrinsics::abs (nextLowCutHz - currentLowCutHz) > 0.001f)
-        {
-            lowCut12.setFrequency (processor.frequency, nextLowCutHz);
-            lowCut24.setFrequency (processor.frequency, nextLowCutHz);
-            currentLowCutHz = nextLowCutHz;
-        }
-
-        let nextColorHz = std::intrinsics::clamp (
-            colorFrequencyHz,
-            80.0f,
-            std::intrinsics::min (12000.0f, float32 (processor.frequency) * 0.45f)
-        );
-        let nextColorQ = std::intrinsics::clamp (colorQ, 0.1f, 12.0f);
-
-        if (std::intrinsics::abs (nextColorHz - currentColorHz) > 0.001f
-            || std::intrinsics::abs (nextColorQ - currentColorQ) > 0.001f)
-        {
-            for (wrap<2> channel)
-            {
-                colorFilters[channel].setMode (std::filters::simper::Mode::bandPass);
-                colorFilters[channel].setFrequency (
-                    processor.frequency,
-                    nextColorHz,
-                    nextColorQ,
-                    0.0f
-                );
-            }
-
-            currentColorHz = nextColorHz;
-            currentColorQ = nextColorQ;
-        }
-    }
-
-    float32<2> applyLowCut (float32<2> signal)
-    {
-        let onePoleCoefficient = 1.0f - float32 (std::intrinsics::exp (
-            -2.0 * pi * float64 (currentLowCutHz) / processor.frequency
-        ));
-        lowCutOnePoleState += (signal - lowCutOnePoleState) * onePoleCoefficient;
-        let filtered6 = signal - lowCutOnePoleState;
-        let filtered12 = lowCut12.process (signal);
-        let filtered24 = lowCut24.process (signal);
-        let slope = int32 (std::intrinsics::clamp (lowCutSlope, 0.0f, 2.0f) + 0.5f);
-        let filtered = slope == 0 ? filtered6 : (slope == 2 ? filtered24 : filtered12);
-        let mix = polishlab::clamp01 (lowCutMix * 0.01f);
-        return signal + ((filtered - signal) * mix);
-    }
-
-    float32<2> applyColor (float32<2> signal)
-    {
-        let band = float32<2> (
-            colorFilters[0].process (signal[0]),
-            colorFilters[1].process (signal[1])
-        );
-        let gainDelta = std::levels::dBtoGain (
-            std::intrinsics::clamp (colorGainDb, -18.0f, 18.0f)
-        ) - 1.0f;
-
-        return signal + (band * gainDelta);
-    }
-
-    float32<2> applyDetectorHighPass (float32<2> signal)
-    {
-        let cutoff = std::intrinsics::clamp (detectorHpHz, 0.0f, 500.0f);
-
-        if (cutoff <= 0.001f)
-        {
-            detectorLowState = signal;
-            return signal;
-        }
-
-        let coefficient = 1.0f - float32 (std::intrinsics::exp (
-            -2.0 * pi * float64 (cutoff) / processor.frequency
-        ));
-        detectorLowState += (signal - detectorLowState) * coefficient;
-        return signal - detectorLowState;
-    }
-
-    float32<2> compress (float32<2> signal, float32 macro01)
-    {
-        let detectorInput = applyDetectorHighPass (signal);
-        let rmsCoefficient = float32 (std::intrinsics::exp (
-            -1.0 / (float64 (std::intrinsics::clamp (rmsWindowMs, 1.0f, 100.0f))
-                    * 0.001 * processor.frequency)
-        ));
-        rmsPowerState = (rmsPowerState * rmsCoefficient)
-                        + ((detectorInput * detectorInput) * (1.0f - rmsCoefficient));
-
-        let peakDetector = float32<2> (
+        let detectorInput = signal;
+        let detector = float32<2> (
             std::intrinsics::abs (detectorInput[0]),
             std::intrinsics::abs (detectorInput[1])
         );
-        let rmsDetector = float32<2> (
-            std::intrinsics::sqrt (std::intrinsics::max (rmsPowerState[0], 1.0e-12f)),
-            std::intrinsics::sqrt (std::intrinsics::max (rmsPowerState[1], 1.0e-12f))
-        );
-        let detector = detectorMode < 0.5f ? peakDetector : rmsDetector;
         let linkedDetector = std::intrinsics::max (detector[0], detector[1]);
-        let effectiveRatio = std::intrinsics::clamp (
-            ratio + ((macroRatioTarget - ratio) * macro01),
-            1.0f,
-            1000.0f
-        );
+        let effectiveRatio = std::intrinsics::clamp (ratio, 1.0f, 100.0f);
         let linkedTarget = polishlab::desiredGainReductionDb (
             linkedDetector, thresholdDb, effectiveRatio, kneeDb
         );
@@ -519,7 +424,7 @@ processor PolishVoicingProcessor
         var rightTarget = polishlab::desiredGainReductionDb (
             detector[1], thresholdDb, effectiveRatio, kneeDb
         );
-        let link = polishlab::clamp01 (stereoLink * 0.01f);
+        let link = 1.0f;
         leftTarget += (linkedTarget - leftTarget) * link;
         rightTarget += (linkedTarget - rightTarget) * link;
 
@@ -538,16 +443,12 @@ processor PolishVoicingProcessor
         reductionDbRight = (rightCoefficient * reductionDbRight)
                            + ((1.0f - rightCoefficient) * rightTarget);
 
-        let effectiveMakeupDb = std::intrinsics::clamp (
-            makeupDb + (macroMakeupDb * macro01),
-            -36.0f,
-            36.0f
-        );
+        let effectiveMakeupDb = std::intrinsics::clamp (makeupDb, -24.0f, 24.0f);
         let compressed = float32<2> (
             signal[0] * std::levels::dBtoGain (reductionDbLeft + effectiveMakeupDb),
             signal[1] * std::levels::dBtoGain (reductionDbRight + effectiveMakeupDb)
         );
-        let mix = polishlab::clamp01 (compMix * 0.01f);
+        let mix = 1.0f;
         let telemetryReductionDb = detector[0] >= detector[1] ? reductionDbLeft : reductionDbRight;
         let telemetryProcessedGain = std::levels::dBtoGain (
             telemetryReductionDb + effectiveMakeupDb
@@ -559,68 +460,82 @@ processor PolishVoicingProcessor
         return signal + ((compressed - signal) * mix);
     }
 
-    float32 effectiveFirstCurvePointX (float32 macro01)
+    float32 effectiveFirstCurvePointX()
     {
-        if (! curveEditorEnabled)
-            return std::intrinsics::clamp (curveP1X, 0.01f, 1.45f);
-
-        let count = int32 (std::intrinsics::clamp (curvePointCount, 2.0f, 7.0f) + 0.5f);
-        let amountPoint = int32 (std::intrinsics::clamp (curveAmountPoint, 0.0f, 7.0f) + 0.5f);
-        var x = curveP1X;
-        if (amountPoint == 1)
-            x += (curveAmountTargetX - x) * polishlab::clamp01 (macro01);
-
-        return std::intrinsics::clamp (
-            x,
-            0.01f,
-            1.5f - (0.001f * float32 (count - 1))
+        let morph01 = polishlab::clamp01 (morph * 0.01f);
+        var positiveX = curveP1X;
+        var negativeX = curveN1X;
+        if (int32 (morphPoint + 0.5f) == 1)
+        {
+            if (morphSide >= 0.0f) positiveX += (morphTargetX - positiveX) * morph01;
+            else negativeX += (morphTargetX - negativeX) * morph01;
+        }
+        return std::intrinsics::min (
+            std::intrinsics::clamp (positiveX, 0.001f, 1.5f),
+            std::intrinsics::clamp (negativeX, 0.001f, 1.5f)
         );
     }
 
-    float32<2> clip (float32<2> signal, float32 macro01)
+    float32<2> clip (float32<2> signal)
     {
         leftClipper.in <- signal[0];
-        leftClipper.driveDb <- clipDriveDb;
-        leftClipper.p1x <- curveP1X; leftClipper.p1y <- curveP1Y; leftClipper.p1t <- curveP1T;
-        leftClipper.p2x <- curveP2X; leftClipper.p2y <- curveP2Y; leftClipper.p2t <- curveP2T;
-        leftClipper.p3x <- curveP3X; leftClipper.p3y <- curveP3Y; leftClipper.p3t <- curveP3T;
-        leftClipper.editorEnabled <- curveEditorEnabled;
-        leftClipper.pointCount <- curvePointCount;
-        leftClipper.p4x <- curveP4X; leftClipper.p4y <- curveP4Y;
-        leftClipper.p5x <- curveP5X; leftClipper.p5y <- curveP5Y;
-        leftClipper.p6x <- curveP6X; leftClipper.p6y <- curveP6Y;
-        leftClipper.p7x <- curveP7X; leftClipper.p7y <- curveP7Y;
-        leftClipper.b1 <- curveB1; leftClipper.b2 <- curveB2; leftClipper.b3 <- curveB3; leftClipper.b4 <- curveB4;
-        leftClipper.b5 <- curveB5; leftClipper.b6 <- curveB6; leftClipper.b7 <- curveB7;
-        leftClipper.amountPoint <- curveAmountPoint;
-        leftClipper.amountTargetX <- curveAmountTargetX;
-        leftClipper.amountTargetY <- curveAmountTargetY;
-        leftClipper.amountPosition <- macro01;
+        leftClipper.positivePointCount <- curvePointCount;
+        leftClipper.positiveP1X <- curveP1X; leftClipper.positiveP1Y <- curveP1Y;
+        leftClipper.positiveP2X <- curveP2X; leftClipper.positiveP2Y <- curveP2Y;
+        leftClipper.positiveP3X <- curveP3X; leftClipper.positiveP3Y <- curveP3Y;
+        leftClipper.positiveP4X <- curveP4X; leftClipper.positiveP4Y <- curveP4Y;
+        leftClipper.positiveP5X <- curveP5X; leftClipper.positiveP5Y <- curveP5Y;
+        leftClipper.positiveP6X <- curveP6X; leftClipper.positiveP6Y <- curveP6Y;
+        leftClipper.positiveP7X <- curveP7X; leftClipper.positiveP7Y <- curveP7Y;
+        leftClipper.positiveB1 <- curveB1; leftClipper.positiveB2 <- curveB2; leftClipper.positiveB3 <- curveB3;
+        leftClipper.positiveB4 <- curveB4; leftClipper.positiveB5 <- curveB5; leftClipper.positiveB6 <- curveB6; leftClipper.positiveB7 <- curveB7;
+        leftClipper.negativePointCount <- curveNPointCount;
+        leftClipper.negativeP1X <- curveN1X; leftClipper.negativeP1Y <- curveN1Y;
+        leftClipper.negativeP2X <- curveN2X; leftClipper.negativeP2Y <- curveN2Y;
+        leftClipper.negativeP3X <- curveN3X; leftClipper.negativeP3Y <- curveN3Y;
+        leftClipper.negativeP4X <- curveN4X; leftClipper.negativeP4Y <- curveN4Y;
+        leftClipper.negativeP5X <- curveN5X; leftClipper.negativeP5Y <- curveN5Y;
+        leftClipper.negativeP6X <- curveN6X; leftClipper.negativeP6Y <- curveN6Y;
+        leftClipper.negativeP7X <- curveN7X; leftClipper.negativeP7Y <- curveN7Y;
+        leftClipper.negativeB1 <- curveNB1; leftClipper.negativeB2 <- curveNB2; leftClipper.negativeB3 <- curveNB3;
+        leftClipper.negativeB4 <- curveNB4; leftClipper.negativeB5 <- curveNB5; leftClipper.negativeB6 <- curveNB6; leftClipper.negativeB7 <- curveNB7;
+        leftClipper.morphSide <- morphSide;
+        leftClipper.morphPoint <- morphPoint;
+        leftClipper.morphTargetX <- morphTargetX;
+        leftClipper.morphTargetY <- morphTargetY;
+        leftClipper.morphPosition <- polishlab::clamp01 (morph * 0.01f);
         leftClipper.advance();
 
         rightClipper.in <- signal[1];
-        rightClipper.driveDb <- clipDriveDb;
-        rightClipper.p1x <- curveP1X; rightClipper.p1y <- curveP1Y; rightClipper.p1t <- curveP1T;
-        rightClipper.p2x <- curveP2X; rightClipper.p2y <- curveP2Y; rightClipper.p2t <- curveP2T;
-        rightClipper.p3x <- curveP3X; rightClipper.p3y <- curveP3Y; rightClipper.p3t <- curveP3T;
-        rightClipper.editorEnabled <- curveEditorEnabled;
-        rightClipper.pointCount <- curvePointCount;
-        rightClipper.p4x <- curveP4X; rightClipper.p4y <- curveP4Y;
-        rightClipper.p5x <- curveP5X; rightClipper.p5y <- curveP5Y;
-        rightClipper.p6x <- curveP6X; rightClipper.p6y <- curveP6Y;
-        rightClipper.p7x <- curveP7X; rightClipper.p7y <- curveP7Y;
-        rightClipper.b1 <- curveB1; rightClipper.b2 <- curveB2; rightClipper.b3 <- curveB3; rightClipper.b4 <- curveB4;
-        rightClipper.b5 <- curveB5; rightClipper.b6 <- curveB6; rightClipper.b7 <- curveB7;
-        rightClipper.amountPoint <- curveAmountPoint;
-        rightClipper.amountTargetX <- curveAmountTargetX;
-        rightClipper.amountTargetY <- curveAmountTargetY;
-        rightClipper.amountPosition <- macro01;
+        rightClipper.positivePointCount <- curvePointCount;
+        rightClipper.positiveP1X <- curveP1X; rightClipper.positiveP1Y <- curveP1Y;
+        rightClipper.positiveP2X <- curveP2X; rightClipper.positiveP2Y <- curveP2Y;
+        rightClipper.positiveP3X <- curveP3X; rightClipper.positiveP3Y <- curveP3Y;
+        rightClipper.positiveP4X <- curveP4X; rightClipper.positiveP4Y <- curveP4Y;
+        rightClipper.positiveP5X <- curveP5X; rightClipper.positiveP5Y <- curveP5Y;
+        rightClipper.positiveP6X <- curveP6X; rightClipper.positiveP6Y <- curveP6Y;
+        rightClipper.positiveP7X <- curveP7X; rightClipper.positiveP7Y <- curveP7Y;
+        rightClipper.positiveB1 <- curveB1; rightClipper.positiveB2 <- curveB2; rightClipper.positiveB3 <- curveB3;
+        rightClipper.positiveB4 <- curveB4; rightClipper.positiveB5 <- curveB5; rightClipper.positiveB6 <- curveB6; rightClipper.positiveB7 <- curveB7;
+        rightClipper.negativePointCount <- curveNPointCount;
+        rightClipper.negativeP1X <- curveN1X; rightClipper.negativeP1Y <- curveN1Y;
+        rightClipper.negativeP2X <- curveN2X; rightClipper.negativeP2Y <- curveN2Y;
+        rightClipper.negativeP3X <- curveN3X; rightClipper.negativeP3Y <- curveN3Y;
+        rightClipper.negativeP4X <- curveN4X; rightClipper.negativeP4Y <- curveN4Y;
+        rightClipper.negativeP5X <- curveN5X; rightClipper.negativeP5Y <- curveN5Y;
+        rightClipper.negativeP6X <- curveN6X; rightClipper.negativeP6Y <- curveN6Y;
+        rightClipper.negativeP7X <- curveN7X; rightClipper.negativeP7Y <- curveN7Y;
+        rightClipper.negativeB1 <- curveNB1; rightClipper.negativeB2 <- curveNB2; rightClipper.negativeB3 <- curveNB3;
+        rightClipper.negativeB4 <- curveNB4; rightClipper.negativeB5 <- curveNB5; rightClipper.negativeB6 <- curveNB6; rightClipper.negativeB7 <- curveNB7;
+        rightClipper.morphSide <- morphSide;
+        rightClipper.morphPoint <- morphPoint;
+        rightClipper.morphTargetX <- morphTargetX;
+        rightClipper.morphTargetY <- morphTargetY;
+        rightClipper.morphPosition <- polishlab::clamp01 (morph * 0.01f);
         rightClipper.advance();
 
         let shaped = float32<2> (leftClipper.out, rightClipper.out);
-        let alignedDry = float32<2> (leftClipper.thru, rightClipper.thru);
-        let mix = polishlab::clamp01 (clipMix * 0.01f);
-        let rendered = alignedDry + ((shaped - alignedDry) * mix);
+        let rendered = shaped;
         if (std::intrinsics::abs (signal[0]) >= std::intrinsics::abs (signal[1]))
         {
             currentClipInput = signal[0];
@@ -708,32 +623,15 @@ processor PolishVoicingProcessor
     {
         loop
         {
-            updateToneFilters();
-
             let dry = in;
-            let amount01 = polishlab::clamp01 (amount * 0.01f);
-            let shapedAmount = std::intrinsics::pow (
-                amount01,
-                std::intrinsics::clamp (macroCurve, 0.25f, 4.0f)
-            );
-            let lowCut = applyLowCut (dry);
-            let effectiveInputDb = std::intrinsics::clamp (
-                inputTrimDb + (macroInputDriveDb * shapedAmount),
-                -60.0f,
-                60.0f
-            );
-            let gained = lowCut * std::levels::dBtoGain (effectiveInputDb);
-            let compressed = compress (gained, shapedAmount);
-            let coloured = applyColor (compressed);
+            let compressed = compress (dry);
             let clipInputMagnitude = std::intrinsics::max (
-                std::intrinsics::abs (coloured[0]),
-                std::intrinsics::abs (coloured[1])
-            ) * std::levels::dBtoGain (std::intrinsics::clamp (clipDriveDb, -24.0f, 36.0f));
-            let firstCurvePointX = effectiveFirstCurvePointX (shapedAmount);
-            let clipped = clip (coloured, shapedAmount);
-            let wet = clipped * std::levels::dBtoGain (
-                std::intrinsics::clamp (outputTrimDb, -24.0f, 24.0f)
+                std::intrinsics::abs (compressed[0]),
+                std::intrinsics::abs (compressed[1])
             );
+            let firstCurvePointX = effectiveFirstCurvePointX();
+            let clipped = clip (compressed);
+            let wet = clipped;
             let rendered = bypass ? dry : wet;
 
             out <- rendered;

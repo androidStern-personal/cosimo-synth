@@ -1,275 +1,122 @@
-import {
-  CURVE_EDITOR_ENDPOINTS,
-  CURVE_DEFAULTS,
-  clamp,
-  finiteOr,
-} from "./curve-model.js";
 import { getControlHelp } from "./control-help.js";
+import { SHAPER_ENDPOINTS, SHAPER_RESET_VALUES } from "./curve-model.js";
 import { createPolishGraphStudio } from "./graph-studio.js";
 
-const PREVIEW_ENDPOINTS = [
-  ...Object.keys(CURVE_DEFAULTS),
-  "amount",
-  "macroCurve",
-  "inputTrimDb",
-  "macroInputDriveDb",
-  "makeupDb",
-  "macroMakeupDb",
+const COMPRESSOR_CONTROLS = Object.freeze([
   "thresholdDb",
   "ratio",
   "kneeDb",
-  "macroRatioTarget",
-  "compMix",
-  "clipDriveDb",
-  "clipMix",
+  "attackMs",
+  "releaseMs",
+  "makeupDb",
+]);
+const VISIBLE_CONTROLS = new Set([...COMPRESSOR_CONTROLS, "morph"]);
+const PREVIEW_ENDPOINTS = Object.freeze([
+  ...COMPRESSOR_CONTROLS,
   "bypass",
-  ...CURVE_EDITOR_ENDPOINTS,
-];
-const CURVE_ENDPOINTS = new Set(Object.keys(CURVE_DEFAULTS));
+  ...SHAPER_ENDPOINTS,
+]);
 
-const GROUP_NOTES = Object.freeze({
-  Master: "Decoded input/output trims plus the live Amount control.",
-  "Macro Wiring": "Decoded drive and makeup ranges; limiting target is an explicit lab approximation.",
-  "Tone - Pre": "Exploratory low-cut alternatives. The preset's embedded convolution IR is not reproduced.",
-  "Tone - Post": "Exploratory parametric color stage. The decoded preset is flat here at its saved default.",
-  Compressor: "Decoded values are the reset state. Detector, RMS, sidechain HP, link, and mix are lab controls.",
-  Clipper: "Drive and Mix stay immediate. Shape the curve in the graph; exact decoded coefficients remain available under Advanced Reference.",
+const RESET_VALUES = Object.freeze({
+  bypass: false,
+  thresholdDb: 0,
+  ratio: 4,
+  kneeDb: 6,
+  attackMs: 10,
+  releaseMs: 120,
+  makeupDb: 0,
+  morph: 0,
+  ...SHAPER_RESET_VALUES,
 });
-
-function formatDb(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return "--";
-  if (numeric <= -119.9) return "-∞";
-  return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(1)} dB`;
-}
 
 class PolishVoicingLabView extends HTMLElement {
   constructor(patchConnection) {
     super();
     this.patchConnection = patchConnection;
     this.Controls = patchConnection.utilities.ParameterControls;
-    this.allParameters = [];
     this.parameters = [];
     this.parameterValues = new Map();
     this.parameterListeners = new Map();
     this.controlCleanups = [];
-    this.lastMeterFingerprint = "";
     this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = this.getMarkup();
-    this.groupsHost = this.shadowRoot.querySelector("[data-groups]");
-    this.controlTooltip = this.shadowRoot.querySelector("[data-control-tooltip]");
+    this.compressorControls = this.shadowRoot.querySelector("[data-compressor-controls]");
+    this.morphControls = this.shadowRoot.querySelector("[data-morph-controls]");
     this.resetButton = this.shadowRoot.querySelector("[data-reset]");
     this.compareButton = this.shadowRoot.querySelector("[data-compare]");
+    this.tooltip = this.shadowRoot.querySelector("[data-tooltip]");
+    this.onHelpPointerOver = event => this.showHelp(event);
+    this.onHelpPointerMove = event => this.moveHelp(event.clientX, event.clientY);
+    this.onHelpPointerOut = event => {
+      const current = this.helpControlForEvent(event);
+      const next = event.relatedTarget?.closest?.("[data-control-help]");
+      if (current && next !== current) this.hideHelp();
+    };
+    this.onHelpFocusIn = event => this.showHelp(event);
+    this.onHelpFocusOut = () => this.hideHelp();
     this.graphStudio = createPolishGraphStudio({
       root: this.shadowRoot,
       patchConnection: this.patchConnection,
       parameterValues: this.parameterValues,
       sendParameter: (endpointID, value) => this.patchConnection.sendEventOrValue(endpointID, value, 0),
     });
-    this.onControlPointerOver = event => {
-      const control = event.target?.closest?.("[data-control-help]");
-      if (control) this.showControlTooltip(control);
-    };
-    this.onControlPointerOut = event => {
-      const control = event.target?.closest?.("[data-control-help]");
-      if (control && !control.contains(event.relatedTarget)) this.hideControlTooltip();
-    };
-    this.onControlFocusIn = event => {
-      const control = event.target?.closest?.("[data-control-help]");
-      if (control) this.showControlTooltip(control);
-    };
-    this.onControlFocusOut = event => {
-      const control = event.target?.closest?.("[data-control-help]");
-      if (control && !control.contains(event.relatedTarget)) this.hideControlTooltip();
-    };
-    this.onControlPointerDown = event => {
-      if (event.target?.closest?.("[data-control-help]")) this.hideControlTooltip();
-    };
-    this.onViewportChange = () => {
-      if (this.tooltipControl?.isConnected) this.showControlTooltip(this.tooltipControl);
-    };
-    this.groupsHost.addEventListener("pointerover", this.onControlPointerOver);
-    this.groupsHost.addEventListener("pointerout", this.onControlPointerOut);
-    this.groupsHost.addEventListener("focusin", this.onControlFocusIn);
-    this.groupsHost.addEventListener("focusout", this.onControlFocusOut);
-    this.groupsHost.addEventListener("pointerdown", this.onControlPointerDown);
-    this.resetButton.addEventListener("click", () => this.resetToDecodedStart());
+    this.resetButton.addEventListener("click", () => this.reset());
     this.compareButton.addEventListener("click", () => this.toggleBypass());
+    this.shadowRoot.addEventListener("pointerover", this.onHelpPointerOver);
+    this.shadowRoot.addEventListener("pointermove", this.onHelpPointerMove);
+    this.shadowRoot.addEventListener("pointerout", this.onHelpPointerOut);
+    this.shadowRoot.addEventListener("focusin", this.onHelpFocusIn);
+    this.shadowRoot.addEventListener("focusout", this.onHelpFocusOut);
   }
 
   connectedCallback() {
     this.statusListener = status => this.renderFromStatus(status);
-    this.meterListener = frame => this.renderMeter(frame);
+    this.meterListener = frame => this.graphStudio.pushTelemetry(frame);
     this.patchConnection.addStatusListener(this.statusListener);
     this.patchConnection.addEndpointListener?.("meterOut", this.meterListener);
-    window.addEventListener("scroll", this.onViewportChange, true);
-    window.addEventListener("resize", this.onViewportChange);
     this.patchConnection.requestStatusUpdate();
   }
 
   disconnectedCallback() {
-    this.clearParameterListeners();
-    this.clearControls();
-    this.hideControlTooltip();
-    this.patchConnection.removeStatusListener?.(this.statusListener);
-    this.patchConnection.removeEndpointListener?.("meterOut", this.meterListener);
-    window.removeEventListener("scroll", this.onViewportChange, true);
-    window.removeEventListener("resize", this.onViewportChange);
-    this.graphStudio.destroy();
-  }
-
-  clearControls() {
-    for (const cleanup of this.controlCleanups)
-      cleanup();
-    this.controlCleanups = [];
-  }
-
-  clearParameterListeners() {
     for (const [endpointID, listener] of this.parameterListeners)
       this.patchConnection.removeParameterListener?.(endpointID, listener);
-    this.parameterListeners.clear();
+    for (const cleanup of this.controlCleanups) cleanup();
+    this.patchConnection.removeStatusListener?.(this.statusListener);
+    this.patchConnection.removeEndpointListener?.("meterOut", this.meterListener);
+    this.graphStudio.destroy();
+    this.shadowRoot.removeEventListener("pointerover", this.onHelpPointerOver);
+    this.shadowRoot.removeEventListener("pointermove", this.onHelpPointerMove);
+    this.shadowRoot.removeEventListener("pointerout", this.onHelpPointerOut);
+    this.shadowRoot.removeEventListener("focusin", this.onHelpFocusIn);
+    this.shadowRoot.removeEventListener("focusout", this.onHelpFocusOut);
   }
 
   renderFromStatus(status) {
-    this.hideControlTooltip();
-    this.clearControls();
-    this.clearParameterListeners();
-    this.allParameters = (status?.details?.inputs ?? [])
+    for (const [endpointID, listener] of this.parameterListeners)
+      this.patchConnection.removeParameterListener?.(endpointID, listener);
+    for (const cleanup of this.controlCleanups) cleanup();
+    this.parameterListeners.clear();
+    this.controlCleanups = [];
+    this.compressorControls.replaceChildren();
+    this.morphControls.replaceChildren();
+
+    this.parameters = (status?.details?.inputs ?? [])
       .filter(endpoint => endpoint?.purpose === "parameter");
-    this.parameters = this.allParameters.filter(endpoint => !endpoint?.annotation?.hidden);
-    this.groupsHost.replaceChildren();
+    const parametersByID = new Map(this.parameters.map(parameter => [parameter.endpointID, parameter]));
 
-    const groups = new Map();
-    for (const parameter of this.parameters) {
-      const groupName = parameter.annotation?.group || "Other";
-      const entries = groups.get(groupName) ?? [];
-      entries.push(parameter);
-      groups.set(groupName, entries);
+    for (const endpointID of [...COMPRESSOR_CONTROLS, "morph"]) {
+      const endpoint = parametersByID.get(endpointID);
+      if (!endpoint || !VISIBLE_CONTROLS.has(endpointID)) continue;
+      const control = this.createParameterControl(endpoint);
+      if (!control) continue;
+      (endpointID === "morph" ? this.morphControls : this.compressorControls).append(control);
     }
 
-    for (const [groupName, parameters] of groups) {
-      const section = document.createElement("section");
-      section.className = `group group-${groupName.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`;
-      const header = document.createElement("header");
-      const title = document.createElement("h2");
-      const note = document.createElement("p");
-      const controls = document.createElement("div");
-      title.textContent = groupName;
-      note.textContent = GROUP_NOTES[groupName] ?? "Tunable lab parameters.";
-      controls.className = "controls";
-      header.append(title, note);
-      section.append(header, controls);
-
-      const primaryParameters = groupName === "Clipper"
-        ? parameters.filter(parameter => !CURVE_ENDPOINTS.has(parameter.endpointID))
-        : parameters;
-      const referenceParameters = groupName === "Clipper"
-        ? parameters.filter(parameter => CURVE_ENDPOINTS.has(parameter.endpointID))
-        : [];
-
-      for (const parameter of primaryParameters) {
-        const control = this.createParameterControl(parameter);
-        if (control) controls.append(control);
-      }
-
-      if (referenceParameters.length > 0) {
-        const details = document.createElement("details");
-        const summary = document.createElement("summary");
-        const explanation = document.createElement("p");
-        const referenceControls = document.createElement("div");
-        details.className = "curve-reference-details";
-        details.dataset.curveReferenceDetails = "";
-        summary.textContent = "Advanced Reference · exact decoded coefficients";
-        explanation.textContent = "For forensic reset and exact entry. These coefficients are not the primary sound-design interface.";
-        referenceControls.className = "controls curve-reference-controls";
-        for (const parameter of referenceParameters) {
-          const control = this.createParameterControl(parameter);
-          if (control) referenceControls.append(control);
-        }
-        details.append(summary, explanation, referenceControls);
-        section.append(details);
-      }
-
-      this.groupsHost.append(section);
-    }
-
-    this.bindPreviewParameters();
-  }
-
-  createParameterControl(endpointInfo) {
-    const control = this.Controls.createLabelledControl(this.patchConnection, endpointInfo);
-    if (!control) return undefined;
-
-    const innerControl = control.childControl || control;
-    const help = getControlHelp(endpointInfo);
-    control.dataset.endpointId = endpointInfo.endpointID;
-    control.dataset.controlHelp = help.text;
-    control.dataset.controlHelpSource = help.source;
-    control.setAttribute("aria-description", help.text);
-    innerControl.setAttribute?.("aria-description", help.text);
-    innerControl.beginGesture = () => {};
-    innerControl.endGesture = () => {};
-    this.controlCleanups.push(() => control.__cleanup?.());
-    return control;
-  }
-
-  showControlTooltip(control) {
-    const text = control?.dataset?.controlHelp;
-    if (!text) return;
-    this.tooltipControl = control;
-
-    const anchorRect = control.getBoundingClientRect();
-    const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
-    const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
-    const margin = 9;
-    const gap = 9;
-
-    this.controlTooltip.textContent = text;
-    this.controlTooltip.dataset.visible = "true";
-    this.controlTooltip.dataset.placement = "above";
-    this.controlTooltip.setAttribute("aria-hidden", "false");
-    this.controlTooltip.style.left = `${anchorRect.left + anchorRect.width * 0.5}px`;
-    this.controlTooltip.style.top = `${anchorRect.top - gap}px`;
-
-    let tooltipRect = this.controlTooltip.getBoundingClientRect();
-
-    if (tooltipRect.top < margin) {
-      this.controlTooltip.dataset.placement = "below";
-      this.controlTooltip.style.top = `${anchorRect.bottom + gap}px`;
-      tooltipRect = this.controlTooltip.getBoundingClientRect();
-    }
-
-    const halfWidth = tooltipRect.width * 0.5;
-    const minimumCenter = margin + halfWidth;
-    const maximumCenter = viewportWidth - margin - halfWidth;
-    const anchorCenter = anchorRect.left + anchorRect.width * 0.5;
-    const centeredLeft = minimumCenter <= maximumCenter
-      ? Math.min(maximumCenter, Math.max(minimumCenter, anchorCenter))
-      : viewportWidth * 0.5;
-    this.controlTooltip.style.left = `${centeredLeft}px`;
-
-    tooltipRect = this.controlTooltip.getBoundingClientRect();
-    if (tooltipRect.bottom > viewportHeight - margin && this.controlTooltip.dataset.placement === "below") {
-      this.controlTooltip.dataset.placement = "above";
-      this.controlTooltip.style.top = `${anchorRect.top - gap}px`;
-    }
-  }
-
-  hideControlTooltip() {
-    if (!this.controlTooltip) return;
-    this.tooltipControl = undefined;
-    this.controlTooltip.dataset.visible = "false";
-    this.controlTooltip.setAttribute("aria-hidden", "true");
-  }
-
-  bindPreviewParameters() {
-    const available = new Set(this.allParameters.map(parameter => parameter.endpointID));
-
-    for (const endpointID of PREVIEW_ENDPOINTS.filter(id => available.has(id))) {
+    for (const endpointID of PREVIEW_ENDPOINTS) {
+      if (!parametersByID.has(endpointID)) continue;
       const listener = value => {
         this.parameterValues.set(endpointID, value);
-        this.renderEffectiveSettings();
-        this.renderCompareState();
+        if (endpointID === "bypass") this.renderCompareState();
         this.graphStudio.render();
       };
       this.parameterListeners.set(endpointID, listener);
@@ -278,468 +125,288 @@ class PolishVoicingLabView extends HTMLElement {
     }
   }
 
-  resetToDecodedStart() {
-    for (const parameter of this.allParameters) {
-      if (parameter.annotation?.init === undefined) continue;
-      this.patchConnection.sendEventOrValue(parameter.endpointID, parameter.annotation.init, 0);
+  createParameterControl(endpointInfo) {
+    const control = this.Controls.createLabelledControl(this.patchConnection, endpointInfo);
+    if (!control) return undefined;
+    const help = getControlHelp(endpointInfo);
+    if (help) {
+      control.dataset.controlHelp = help;
+      control.setAttribute("aria-description", help);
+      control.setAttribute("title", help);
+      control.childControl?.setAttribute?.("aria-description", help);
     }
+    this.controlCleanups.push(() => control.__cleanup?.());
+    return control;
+  }
 
-    const status = this.shadowRoot.querySelector("[data-reset-status]");
-    status.textContent = "Decoded start restored";
-    window.setTimeout(() => {
-      if (status.textContent === "Decoded start restored") status.textContent = "";
-    }, 1600);
+  reset() {
+    for (const [endpointID, value] of Object.entries(RESET_VALUES))
+      this.patchConnection.sendEventOrValue(endpointID, value, 0);
   }
 
   toggleBypass() {
-    const next = !(this.parameterValues.get("bypass") === true || this.parameterValues.get("bypass") === 1);
-    this.patchConnection.sendEventOrValue("bypass", next, 0);
+    const bypassed = this.parameterValues.get("bypass") === true || this.parameterValues.get("bypass") === 1;
+    this.patchConnection.sendEventOrValue("bypass", !bypassed, 0);
   }
 
   renderCompareState() {
     const bypassed = this.parameterValues.get("bypass") === true || this.parameterValues.get("bypass") === 1;
+    this.compareButton.textContent = bypassed ? "Processed" : "Dry";
     this.compareButton.dataset.active = String(bypassed);
-    this.compareButton.textContent = bypassed ? "Hear processed" : "Hear dry";
   }
 
-  renderEffectiveSettings() {
-    const amount = clamp(finiteOr(this.parameterValues.get("amount"), 0) / 100, 0, 1);
-    const curve = clamp(finiteOr(this.parameterValues.get("macroCurve"), 1), 0.25, 4);
-    const macro = amount ** curve;
-    const inputDb = finiteOr(this.parameterValues.get("inputTrimDb"), -0.285017081)
-      + finiteOr(this.parameterValues.get("macroInputDriveDb"), 35.9712) * macro;
-    const makeupDb = finiteOr(this.parameterValues.get("makeupDb"), -0.04)
-      + finiteOr(this.parameterValues.get("macroMakeupDb"), 4.12) * macro;
-    const baseRatio = finiteOr(this.parameterValues.get("ratio"), 11.4155251);
-    const targetRatio = finiteOr(this.parameterValues.get("macroRatioTarget"), 1000);
-    const effectiveRatio = baseRatio + (targetRatio - baseRatio) * macro;
-    this.shadowRoot.querySelector("[data-effective-input]").textContent = formatDb(inputDb);
-    this.shadowRoot.querySelector("[data-effective-makeup]").textContent = formatDb(makeupDb);
-    this.shadowRoot.querySelector("[data-effective-ratio]").textContent = `${effectiveRatio.toFixed(effectiveRatio >= 100 ? 0 : 2)}:1`;
+  helpControlForEvent(event) {
+    return event.composedPath().find(element => element?.dataset?.controlHelp);
   }
 
-  renderMeter(frame = {}) {
-    this.graphStudio.pushTelemetry(frame);
-    const inputRms = Number(frame.inputRmsDb);
-    const outputRms = Number(frame.outputRmsDb);
-    const values = {
-      inPeak: formatDb(frame.inputPeakDb),
-      outPeak: formatDb(frame.outputPeakDb),
-      inRms: formatDb(inputRms),
-      outRms: formatDb(outputRms),
-      delta: Number.isFinite(inputRms) && Number.isFinite(outputRms)
-        ? formatDb(outputRms - inputRms)
-        : "--",
-      gainReduction: formatDb(-Math.abs(Number(frame.gainReductionDb) || 0)),
-      clipActivity: `${Math.max(0, Number(frame.clipActivityPercent) || 0).toFixed(1)}%`,
-    };
-    const fingerprint = Object.values(values).join("|");
-    if (fingerprint === this.lastMeterFingerprint) return;
-    this.lastMeterFingerprint = fingerprint;
+  showHelp(event) {
+    const control = this.helpControlForEvent(event);
+    if (!control) return;
+    this.tooltip.textContent = control.dataset.controlHelp;
+    this.tooltip.dataset.visible = "true";
+    if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+      this.moveHelp(event.clientX, event.clientY);
+    } else {
+      const bounds = control.getBoundingClientRect();
+      this.moveHelp(bounds.right, bounds.top);
+    }
+  }
 
-    this.shadowRoot.querySelector("[data-meter-in-peak]").textContent = values.inPeak;
-    this.shadowRoot.querySelector("[data-meter-out-peak]").textContent = values.outPeak;
-    this.shadowRoot.querySelector("[data-meter-in-rms]").textContent = values.inRms;
-    this.shadowRoot.querySelector("[data-meter-out-rms]").textContent = values.outRms;
-    this.shadowRoot.querySelector("[data-meter-delta]").textContent = values.delta;
-    this.shadowRoot.querySelector("[data-meter-gr]").textContent = values.gainReduction;
-    this.shadowRoot.querySelector("[data-meter-clip]").textContent = values.clipActivity;
+  moveHelp(clientX, clientY) {
+    if (this.tooltip.dataset.visible !== "true") return;
+    const left = Math.max(8, Math.min(window.innerWidth - 298, Number(clientX) + 14));
+    const top = Math.max(8, Math.min(window.innerHeight - 74, Number(clientY) + 14));
+    this.tooltip.style.left = left + "px";
+    this.tooltip.style.top = top + "px";
+  }
+
+  hideHelp() {
+    this.tooltip.dataset.visible = "false";
   }
 
   getMarkup() {
     return `
       <style>
         :host {
-          --ink: #f4f0e8;
-          --muted: rgba(244, 240, 232, 0.62);
-          --line: rgba(255, 255, 255, 0.11);
-          --panel: rgba(255, 255, 255, 0.045);
-          --accent: #ffb65d;
-          --accent-2: #67d6c7;
-          /* Required by Cmajor's stock control factory. Its knob, switch, and
-             options CSS maps every painted part through these two tokens. */
+          --ink: #f5f0e8;
+          --muted: rgba(245, 240, 232, .58);
+          --line: rgba(255, 255, 255, .12);
+          --panel: rgba(255, 255, 255, .045);
+          --accent: #ffb45a;
+          --cyan: #6edccd;
           --foreground: var(--accent);
-          --background: rgba(255, 255, 255, 0.10);
+          --background: rgba(255, 255, 255, .10);
           display: block;
-          width: 1180px;
+          width: 1120px;
           min-height: 820px;
           color: var(--ink);
-          background:
-            radial-gradient(circle at 4% 0%, rgba(255, 182, 93, 0.19), transparent 31%),
-            radial-gradient(circle at 95% 12%, rgba(103, 214, 199, 0.13), transparent 27%),
-            linear-gradient(155deg, #19191d 0%, #0d0e12 70%);
+          background: linear-gradient(155deg, #17181c, #0a0b0e 72%);
           font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
         }
-
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
         button { font: inherit; }
-
-        .shell { padding: 18px; }
-        .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 14px; }
-        .eyebrow { color: var(--accent); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; }
-        h1 { margin: 4px 0 4px; font-size: 25px; letter-spacing: 0.04em; }
-        .subtitle { margin: 0; max-width: 700px; color: var(--muted); font-size: 11px; line-height: 1.55; }
-        .actions { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
-        .actions button {
-          border: 1px solid var(--line); border-radius: 999px; padding: 9px 13px;
-          color: var(--ink); background: rgba(255,255,255,0.05); cursor: pointer;
+        .shell { padding: 16px; }
+        .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        h1 { margin: 0; font-size: 20px; letter-spacing: .04em; }
+        h2 { margin: 0; color: var(--accent); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+        .actions { display: flex; gap: 7px; }
+        .actions button, .tool-button {
+          min-height: 36px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 8px;
+          color: var(--ink); background: rgba(255,255,255,.045); cursor: pointer;
         }
-        .actions button:hover, .actions button[data-active="true"] { border-color: var(--accent); background: rgba(255,182,93,0.12); }
-        [data-reset-status] { min-width: 138px; color: var(--accent-2); font-size: 10px; }
-
-        .graph-studio, .analysis { margin-bottom: 14px; }
-        .graph-panel, .meter-panel, .group {
-          border: 1px solid var(--line); border-radius: 16px; background: var(--panel);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); backdrop-filter: blur(14px);
+        .actions button:hover, .actions button[data-active="true"], .tool-button:hover { border-color: var(--accent); }
+        .panel {
+          margin-bottom: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 14px;
+          background: var(--panel);
         }
-        .graph-panel { position: relative; padding: 12px 14px 10px; }
-        .graph-panel header { display: flex; justify-content: space-between; gap: 18px; align-items: baseline; }
-        .graph-panel header p { margin: 0; color: var(--muted); font-size: 9px; }
-        .graph-panel svg { display: block; width: 100%; height: 330px; touch-action: none; overflow: visible; }
-        .graph-grid { stroke: rgba(255,255,255,0.08); stroke-width: 1; }
-        .graph-unity { stroke: rgba(255,255,255,0.32); stroke-width: 1.2; stroke-dasharray: 7 6; }
-        .graph-knee-region { fill: rgba(103,214,199,.10); pointer-events: none; }
-        .clipped-region { fill: rgba(255,182,93,.09); pointer-events: none; }
-        .drive-guide { fill: none; stroke: rgba(103,214,199,.45); stroke-width: 1.5; stroke-dasharray: 3 4; pointer-events: none; }
-        .decoded-curve { fill: none; stroke: rgba(244,240,232,.42); stroke-width: 2; stroke-dasharray: 7 6; pointer-events: none; }
-        .graph-curve { fill: none; stroke: var(--accent); stroke-width: 3; }
-        .curve-segment-hit { fill: none; stroke: rgba(255,182,93,0); stroke-width: 44; pointer-events: stroke; cursor: ns-resize; }
-        .curve-segment-hit:hover, .curve-segment-hit:focus { stroke: rgba(255,182,93,.11); outline: none; }
-        .bend-grip { fill: #101114; stroke: var(--accent); stroke-width: 2.5; }
-        .amount-path { fill: none; stroke: var(--accent-2); stroke-width: 1.5; stroke-dasharray: 4 5; pointer-events: none; }
-        .amount-base-ghost { fill: #101114; stroke: var(--accent-2); stroke-width: 2; stroke-dasharray: 3 2; pointer-events: none; }
-        .amount-target-grip { fill: #101114; stroke: var(--accent-2); stroke-width: 2.5; }
-        .amount-current-grip { fill: var(--accent); stroke: #101114; stroke-width: 3; pointer-events: none; opacity: 0; }
-        [data-graph-control="amountCurrent"][data-visible="true"] .amount-current-grip { opacity: 1; }
-        .operating-guide { fill: none; stroke: rgba(103,214,199,.42); stroke-width: 1; stroke-dasharray: 3 4; opacity: 0; }
-        .operating-guide[data-active="true"] { opacity: 1; }
-        .operating-dot { fill: var(--accent-2); stroke: #101114; stroke-width: 4; opacity: 0; filter: drop-shadow(0 0 7px rgba(103,214,199,.75)); }
-        .operating-dot[data-active="true"] { opacity: 1; }
-        .operating-dot[data-active="true"][data-clipped="true"] { fill: var(--accent); filter: drop-shadow(0 0 8px rgba(255,182,93,.78)); }
-        .operating-label { fill: var(--accent-2); font-size: 10px; opacity: 0; }
-        .operating-label[data-active="true"] { opacity: 1; }
-        .graph-axis-label { fill: var(--muted); font-size: 10px; }
-        .threshold-line { stroke: var(--accent-2); stroke-width: 1.5; stroke-dasharray: 3 5; }
-        .threshold-grip, .ratio-grip, .knee-grip, .makeup-grip, .drive-grip, .knot-grip { fill: #101114; stroke: var(--accent-2); stroke-width: 2.5; }
-        .ratio-grip-mark, .knee-grip-mark, .makeup-grip-mark, .drive-grip-mark { stroke: var(--accent-2); stroke-width: 2; pointer-events: none; }
-        [data-graph-handle] { cursor: ew-resize; outline: none; }
-        [data-graph-handle]:not(.curve-segment-hit) { pointer-events: all; }
-        [data-graph-handle="ratio"] { cursor: ns-resize; }
-        [data-graph-handle="makeup"] { cursor: ns-resize; }
-        [data-graph-handle="drive"] { cursor: ew-resize; }
-        [data-graph-handle^="knot"] { cursor: move; }
-        [data-editor-point][data-selected="true"] .knot-grip { stroke: var(--accent); filter: drop-shadow(0 0 6px rgba(255,182,93,.5)); }
-        [data-graph-handle^="bend"] { cursor: ns-resize; }
-        [data-graph-handle="amountTarget"] { cursor: move; }
-        .knot-number { fill: var(--accent-2); font-size: 9px; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
-        [data-graph-handle]:not(.curve-segment-hit):focus { stroke: var(--ink); }
-        .graph-readout {
-          position: fixed; top: 18px; left: 50%; z-index: 1200; transform: translateX(-50%);
-          min-width: 170px; padding: 8px 12px; border: 1px solid rgba(103,214,199,.5);
-          border-radius: 999px; color: var(--ink); background: rgba(10,11,14,.94);
-          text-align: center; font-size: 11px; pointer-events: none; opacity: 0;
+        .panel-header { display: flex; align-items: center; justify-content: space-between; min-height: 24px; }
+        .summary { color: var(--muted); font-size: 9px; }
+        svg { display: block; width: 100%; touch-action: none; }
+        .compressor-graph { height: 250px; }
+        .shaper-graph { height: 430px; }
+        .plot-border, .zero-axis { fill: none; stroke: rgba(255,255,255,.12); stroke-width: 1; }
+        .unity-line { fill: none; stroke: rgba(255,255,255,.42); stroke-width: 1.5; }
+        .transfer-curve { fill: none; stroke: var(--accent); stroke-width: 3; }
+        .operating-point {
+          fill: var(--cyan); stroke: #0b0c0f; stroke-width: 4; opacity: 0;
+          filter: drop-shadow(0 0 6px rgba(110,220,205,.7));
         }
-        .graph-readout[data-visible="true"] { opacity: 1; }
-        .gr-history { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; align-items: center; margin-top: -8px; padding: 0 8px 4px; }
-        .gr-history-copy { color: var(--muted); font-size: 9px; line-height: 1.45; }
-        .gr-history-copy strong { display: block; margin-top: 4px; color: var(--accent-2); font-size: 14px; font-weight: 500; }
-        .gr-history svg { display: block; width: 100%; height: 72px; }
-        .gr-grid { stroke: rgba(255,255,255,.09); stroke-width: 1; }
-        .gr-trace { fill: none; stroke: var(--accent-2); stroke-width: 2.5; }
-
-        .curve-editor-tools {
-          display: flex; align-items: center; justify-content: space-between; gap: 12px;
-          margin-top: 9px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 11px;
-          background: rgba(0,0,0,.18);
+        .operating-point[data-active="true"] { opacity: 1; }
+        .graph-handle-hit, .shape-point-hit { fill: transparent; stroke: transparent; pointer-events: all; }
+        .graph-handle { fill: #101115; stroke: var(--cyan); stroke-width: 2.5; }
+        .graph-handle-label {
+          fill: var(--ink); font-size: 8px; font-weight: 800; text-anchor: middle;
+          dominant-baseline: central; pointer-events: none;
         }
-        .curve-editor-mode { min-width: 240px; }
-        .curve-editor-mode strong { display: block; color: var(--accent-2); font-size: 10px; }
-        .curve-editor-mode span { display: block; margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.4; }
-        .curve-editor-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-        .curve-editor-actions button {
-          min-height: 34px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
-          color: var(--ink); background: rgba(255,255,255,.04); cursor: pointer;
+        .graph-handle-connector { fill: none; stroke: rgba(110,220,205,.55); stroke-width: 1; pointer-events: none; }
+        .gesture-readout { opacity: 0; pointer-events: none; }
+        .gesture-readout[data-visible="true"] { opacity: 1; }
+        .gesture-readout rect { fill: rgba(10,11,14,.94); stroke: var(--cyan); stroke-width: 1; }
+        .gesture-readout text { fill: var(--ink); font-size: 11px; font-weight: 700; }
+        .shape-point { fill: #101115; stroke: var(--cyan); stroke-width: 3; }
+        .morph-endpoint-hit { fill: transparent; stroke: transparent; pointer-events: all; }
+        .morph-endpoint { fill: #101115; stroke: var(--accent); stroke-width: 3; }
+        [data-morph-endpoint="B"] .morph-endpoint { stroke: var(--cyan); }
+        .morph-endpoint-label {
+          fill: var(--ink); font-size: 9px; font-weight: 700; text-anchor: middle;
+          dominant-baseline: central; pointer-events: none;
         }
-        .curve-editor-actions button:hover:not(:disabled), .curve-editor-actions button[data-active="true"] {
-          border-color: var(--accent); background: rgba(255,182,93,.12);
+        [data-morph-endpoint] { cursor: move; }
+        .shape-segment-hit {
+          fill: none; stroke: rgba(255,180,90,0); stroke-width: 44; pointer-events: stroke; cursor: ns-resize;
         }
-        .curve-editor-actions button:disabled { opacity: .35; cursor: default; }
-        .curve-inspector {
-          display: grid; grid-template-columns: minmax(120px, 1.25fr) repeat(5, minmax(92px, .8fr));
-          gap: 8px; align-items: end; margin-top: 7px; padding: 0 10px;
-        }
-        .curve-inspector strong { align-self: center; color: var(--accent); font-size: 10px; font-weight: 500; }
-        .curve-inspector label { display: grid; gap: 4px; color: var(--muted); font-size: 8px; }
-        .curve-inspector input {
-          width: 100%; min-height: 31px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 7px;
-          color: var(--ink); background: rgba(0,0,0,.28); font: inherit; font-size: 9px; user-select: text; -webkit-user-select: text;
-        }
-        .curve-inspector input:focus { border-color: var(--accent-2); outline: none; }
-        .curve-inspector input:disabled { opacity: .35; }
-
-        .analysis { display: block; }
-        .meter-panel { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; overflow: hidden; }
-        .readout { min-height: 76px; padding: 13px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-        .readout:nth-child(4n) { border-right: 0; }
-        .readout-label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
-        .readout-value { color: var(--accent-2); font-size: 17px; }
-        .readout-effective .readout-value { color: var(--accent); }
-
-        .groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
-        .group { padding: 13px; min-height: 164px; }
-        .group-clipper { grid-column: span 2; }
-        .group header { min-height: 50px; margin-bottom: 8px; }
-        h2 { margin: 0 0 5px; color: var(--accent); font-size: 12px; letter-spacing: .09em; text-transform: uppercase; }
-        .group header p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
-        .controls { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 7px; }
-        .controls .labelled-control { --labelled-control-font-color: var(--ink); margin: 0; }
-        .controls .labelled-control-centered-control { width: 5.15rem; height: 4.75rem; }
-        .controls .labelled-control-label-container { max-width: 5.15rem; font-size: 9px; }
-        .controls .labelled-control-name, .controls .labelled-control-value { letter-spacing: .02em; }
-        .curve-reference-details { width: 100%; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); }
-        .curve-reference-details summary { color: var(--muted); font-size: 9px; cursor: pointer; list-style-position: inside; }
-        .curve-reference-details[open] summary { color: var(--accent); }
-        .curve-reference-details > p { margin: 8px 0 10px; color: var(--muted); font-size: 9px; line-height: 1.45; }
-
-        .control-tooltip {
-          position: fixed;
-          z-index: 1000;
-          width: max-content;
-          max-width: min(310px, calc(100vw - 18px));
-          padding: 9px 11px;
-          border: 1px solid rgba(255, 182, 93, 0.48);
-          border-radius: 9px;
-          color: var(--ink);
-          background: rgba(12, 13, 17, 0.97);
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.48);
-          font-size: 10px;
-          line-height: 1.45;
+        .shape-segment-hit:hover { stroke: rgba(255,180,90,.10); }
+        [data-shape-point-handle] { cursor: move; }
+        [data-shape-point-handle][data-selected="true"] .shape-point { stroke: var(--accent); }
+        .shape-point-label {
+          fill: var(--cyan); font-size: 10px; font-weight: 700; text-anchor: middle;
           pointer-events: none;
-          opacity: 0;
-          visibility: hidden;
-          transform: translate(-50%, -100%);
-          transition: opacity 70ms ease;
         }
-        .control-tooltip[data-placement="below"] { transform: translate(-50%, 0); }
-        .control-tooltip[data-visible="true"] { opacity: 1; visibility: visible; }
-
+        .axis-label { fill: var(--muted); font-size: 10px; }
+        .gr-strip { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 8px; height: 62px; }
+        .gr-strip span { color: var(--muted); font-size: 9px; }
+        .gr-trace { fill: none; stroke: var(--cyan); stroke-width: 2; }
+        .controls-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin-top: 8px; }
+        .controls-row .labelled-control { --labelled-control-font-color: var(--ink); margin: 0; }
+        .controls-row .labelled-control-centered-control { width: 5.4rem; height: 4.9rem; }
+        .controls-row .labelled-control-label-container { max-width: 5.4rem; font-size: 9px; }
+        .shaper-footer {
+          display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; min-height: 86px;
+          padding-top: 6px; border-top: 1px solid var(--line);
+        }
+        .shape-workbench { display: grid; gap: 7px; min-width: 0; }
+        .shape-tools { display: flex; align-items: center; gap: 7px; min-height: 36px; }
+        .shape-selection, .morph-owner { min-width: 128px; color: var(--cyan); font-size: 9px; }
+        .shape-inspector { display: flex; align-items: center; gap: 8px; min-height: 34px; }
+        .shape-inspector-label { min-width: 128px; color: var(--muted); font-size: 9px; }
+        .shape-exact-field { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 9px; }
+        .shape-exact-field[hidden] { display: none; }
+        .shape-exact-field input {
+          width: 86px; min-height: 30px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px;
+          color: var(--ink); background: #101115; font: inherit; user-select: text; -webkit-user-select: text;
+        }
+        .shape-exact-field input:focus { outline: 1px solid var(--cyan); border-color: var(--cyan); }
+        .tooltip {
+          position: fixed; z-index: 20; width: max-content; max-width: 280px; padding: 7px 9px;
+          border: 1px solid rgba(110,220,205,.5); border-radius: 7px; color: var(--ink);
+          background: rgba(12,13,16,.97); font-size: 9px; line-height: 1.4; pointer-events: none;
+          opacity: 0; transform: translateY(3px); transition: opacity 80ms linear, transform 80ms linear;
+        }
+        .tooltip[data-visible="true"] { opacity: 1; transform: translateY(0); }
         ${this.Controls.getAllCSS()}
       </style>
-
       <main class="shell">
         <header class="topbar">
-          <div>
-            <span class="eyebrow">T27 · isolated sound-design instrument</span>
-            <h1>Polish Voicing Lab</h1>
-            <p class="subtitle">Decoded values are one reset state. Orange controls shape the live chain; mint measurements are for level-matched A/B. Tone, detector variants, limiting target, and 4× oversampling are explicit Cosimo lab choices—not claims about a closed implementation.</p>
-          </div>
+          <h1>Curve Lab</h1>
           <div class="actions">
-            <span data-reset-status></span>
-            <button type="button" data-compare>Hear dry</button>
-            <button type="button" data-reset>Restore decoded start</button>
+            <button type="button" data-compare data-control-help="Toggle between dry input and processed output.">Dry</button>
+            <button type="button" data-reset data-control-help="Restore the neutral compressor and one ceiling per side.">Reset</button>
           </div>
         </header>
 
-        <section class="graph-studio">
-          <article class="graph-panel">
-            <header>
-              <div><h2>Compressor transfer</h2><p>Detector input dB → static output dB. Unity is dashed; knee shape is the DSP's fixed quadratic.</p></div>
-              <p data-compressor-graph-summary></p>
-            </header>
-            <output class="graph-readout" data-graph-readout data-visible="false"></output>
-            <svg
-              viewBox="0 0 780 380"
-              role="img"
-              aria-label="Interactive compressor input to output transfer graph"
-              data-transfer-graph="compressor"
-              data-input-min="-48"
-              data-input-max="12"
-              data-output-min="-48"
-              data-output-max="12"
-              data-plot-left="58"
-              data-plot-right="722"
-              data-plot-top="24"
-              data-plot-bottom="346"
-            >
-              <path class="graph-grid" d="M58 24V346 M224 24V346 M390 24V346 M556 24V346 M722 24V346 M58 24H722 M58 104.5H722 M58 185H722 M58 265.5H722 M58 346H722" />
-              <path class="graph-unity" d="M58 346L722 24" />
-              <rect class="graph-knee-region" data-compressor-knee-region y="24" height="322" x="0" width="0" />
-              <path class="graph-curve" data-compressor-curve d="" />
-              <path class="operating-guide" data-compressor-operating-input data-active="false" d="" />
-              <circle class="operating-dot" data-compressor-operating-point data-active="false" data-input-db="" data-output-db="" cx="0" cy="0" r="8" />
-              <text class="operating-label" data-compressor-operating-output data-active="false" x="0" y="0"></text>
-              <g
-                data-graph-control="threshold"
-                data-graph-handle="threshold"
-                role="slider"
-                tabindex="0"
-                aria-label="Compressor threshold"
-                aria-valuemin="-36"
-                aria-valuemax="6"
-              >
-                <rect
-                  x="-26"
-                  y="24"
-                  width="52"
-                  height="322"
-                  fill="transparent"
-                  stroke="transparent"
-                />
-                <path class="threshold-line" d="M0 24V346" />
-                <circle class="threshold-grip" cx="0" cy="346" r="10" />
-              </g>
-              <g
-                data-graph-control="ratio"
-                data-graph-handle="ratio"
-                role="slider"
-                tabindex="0"
-                aria-label="Effective compressor ratio"
-                aria-valuemin="1"
-                aria-valuemax="1000"
-              >
-                <rect x="-26" y="-26" width="52" height="52" fill="transparent" stroke="transparent" />
-                <circle class="ratio-grip" cx="0" cy="0" r="11" />
-                <path class="ratio-grip-mark" d="M-4 -2L0 -7L4 -2 M-4 2L0 7L4 2" />
-              </g>
-              <g
-                data-graph-control="knee"
-                data-graph-handle="knee"
-                role="slider"
-                tabindex="0"
-                aria-label="Compressor knee width"
-                aria-valuemin="0"
-                aria-valuemax="24"
-              >
-                <rect x="-26" y="-26" width="52" height="52" fill="transparent" stroke="transparent" />
-                <circle class="knee-grip" cx="0" cy="0" r="10" />
-                <path class="knee-grip-mark" d="M-7 0L-2 -4 M-7 0L-2 4 M7 0L2 -4 M7 0L2 4" />
-              </g>
-              <g
-                data-graph-control="makeup"
-                data-graph-handle="makeup"
-                role="slider"
-                tabindex="0"
-                aria-label="Compressor base makeup gain"
-                aria-valuemin="-24"
-                aria-valuemax="24"
-              >
-                <rect x="-26" y="-26" width="52" height="52" fill="transparent" stroke="transparent" />
-                <circle class="makeup-grip" cx="0" cy="0" r="10" />
-                <path class="makeup-grip-mark" d="M0 -7L-4 -2 M0 -7L4 -2 M0 7L-4 2 M0 7L4 2" />
-              </g>
-              <text class="graph-axis-label" x="58" y="369">−48 input dB</text>
-              <text class="graph-axis-label" x="722" y="369" text-anchor="end">+12 input dB</text>
-              <text class="graph-axis-label" x="66" y="38">+12 output dB</text>
-              <text class="graph-axis-label" x="66" y="339">−48 output dB</text>
-            </svg>
-            <div class="gr-history">
-              <div class="gr-history-copy">Gain reduction over time<br><span>Attack ↓ · Release ↑</span><strong data-gain-reduction-live-value>--</strong></div>
-              <svg viewBox="0 0 780 84" role="img" aria-label="Live compressor gain reduction history">
-                <path class="gr-grid" d="M42 12H758 M42 42H758 M42 72H758" />
-                <path class="gr-trace" data-gain-reduction-trace data-sample-count="0" d="" />
-              </svg>
-            </div>
-          </article>
-          <article class="graph-panel clipper-graph-panel">
-            <header>
-              <div><h2>Clipper transfer</h2><p>Positive magnitude; the negative side mirrors automatically. Dashed is decoded reference, orange is working curve.</p></div>
-              <p data-clipper-graph-summary></p>
-            </header>
-            <div class="curve-editor-tools">
-              <div class="curve-editor-mode">
-                <strong data-curve-editor-mode>Decoded curve</strong>
-                <span data-curve-editor-note>The decoded interpolation remains exact. Start the point editor to keep its anchors but replace its interpolation with straight, individually bendable segments.</span>
-              </div>
-              <div class="curve-editor-actions">
-                <button type="button" data-curve-start-editor>Start point editor</button>
-                <button type="button" data-curve-add disabled>+ Point</button>
-                <button type="button" data-curve-remove disabled>Remove point</button>
-                <button type="button" data-curve-link-amount disabled>Move with Amount</button>
-              </div>
-            </div>
-            <div class="curve-inspector">
-              <strong data-curve-selection>Select a point</strong>
-              <label>Input<input type="number" min="0.01" max="1.5" step="0.0001" inputmode="decimal" data-curve-exact-x disabled /></label>
-              <label>Output<input type="number" min="0" max="1.5" step="0.0001" inputmode="decimal" data-curve-exact-y disabled /></label>
-              <label>Incoming bend<input type="number" min="-1" max="1" step="0.001" inputmode="decimal" data-curve-exact-bend disabled /></label>
-              <label>Amount 100% input<input type="number" min="0.01" max="1.5" step="0.0001" inputmode="decimal" data-curve-amount-x disabled /></label>
-              <label>Amount 100% output<input type="number" min="0" max="1.5" step="0.0001" inputmode="decimal" data-curve-amount-y disabled /></label>
-            </div>
-            <svg
-              viewBox="0 0 780 380"
-              role="img"
-              aria-label="Interactive clipper input to output transfer graph"
-              data-transfer-graph="clipper"
-              data-input-min="0"
-              data-input-max="1.5"
-              data-output-min="0"
-              data-output-max="1.5"
-              data-plot-left="58"
-              data-plot-right="722"
-              data-plot-top="24"
-              data-plot-bottom="346"
-            >
-              <path class="graph-grid" d="M58 24V346 M224 24V346 M390 24V346 M556 24V346 M722 24V346 M58 24H722 M58 104.5H722 M58 185H722 M58 265.5H722 M58 346H722" />
-              <path class="graph-unity" d="M58 346L722 24" />
-              <rect class="clipped-region" data-clipped-region y="24" height="322" x="722" width="0" />
-              <path class="decoded-curve" data-decoded-clipper-curve d="" />
-              <path class="graph-curve" data-clipper-curve d="" />
-              <g data-curve-segments></g>
-              <path class="operating-guide" data-clipper-operating-guide data-active="false" d="" />
-              <circle class="operating-dot" data-clipper-operating-point data-active="false" data-clipped="false" data-input="" data-output="" cx="0" cy="0" r="8" />
-              <text class="operating-label" data-clipper-operating-label data-active="false" x="0" y="0"></text>
-              <path class="drive-guide" data-drive-guide d="" />
-              <g data-curve-bends></g>
-              <g data-curve-points></g>
-              <g data-curve-amount-visuals></g>
-              <g
-                data-graph-control="drive"
-                data-graph-handle="drive"
-                role="slider"
-                tabindex="0"
-                aria-label="Clipper Drive"
-                aria-valuemin="-24"
-                aria-valuemax="36"
-              >
-                <rect x="-26" y="-26" width="52" height="52" fill="transparent" stroke="transparent" />
-                <circle class="drive-grip" cx="0" cy="0" r="11" />
-                <path class="drive-grip-mark" d="M-7 0L-2 -4 M-7 0L-2 4 M7 0L2 -4 M7 0L2 4" />
-              </g>
-              <text class="graph-axis-label" x="58" y="369">0 input</text>
-              <text class="graph-axis-label" x="722" y="369" text-anchor="end">+1.5 input</text>
-              <text class="graph-axis-label" x="66" y="38">+1.5 output</text>
-              <text class="graph-axis-label" x="66" y="339">0 output</text>
-            </svg>
-          </article>
+        <section class="panel">
+          <div class="panel-header"><h2>Compressor</h2><span class="summary" data-compressor-summary></span></div>
+          <svg
+            class="compressor-graph"
+            viewBox="0 0 800 280"
+            role="img"
+            aria-label="Compressor input to output curve"
+            data-transfer-graph="compressor"
+            data-input-min="-48"
+            data-input-max="12"
+            data-output-min="-48"
+            data-output-max="12"
+            data-plot-left="54"
+            data-plot-right="746"
+            data-plot-top="18"
+            data-plot-bottom="262"
+          >
+            <rect class="plot-border" x="54" y="18" width="692" height="244" />
+            <path class="unity-line" d="M54 262L746 18" />
+            <path class="transfer-curve" data-compressor-curve />
+            <circle class="operating-point" data-compressor-operating-point data-active="false" r="7" />
+            <path class="graph-handle-connector" data-knee-connector />
+            <g data-graph-handle="threshold" data-control-help="Threshold: drag horizontally." role="slider" aria-label="Threshold"><circle class="graph-handle-hit" r="25"/><circle class="graph-handle" r="11"/><text class="graph-handle-label" y=".5">T</text></g>
+            <g data-graph-handle="ratio" data-control-help="Ratio: drag vertically." role="slider" aria-label="Ratio"><circle class="graph-handle-hit" r="25"/><circle class="graph-handle" r="11"/><text class="graph-handle-label" y=".5">R</text></g>
+            <g data-graph-handle="knee" data-control-help="Knee width: drag horizontally." role="slider" aria-label="Knee"><circle class="graph-handle-hit" r="25"/><circle class="graph-handle" r="11"/><text class="graph-handle-label" y=".5">K</text></g>
+            <g data-graph-handle="makeup" data-control-help="Makeup gain: drag vertically." role="slider" aria-label="Makeup"><circle class="graph-handle-hit" r="25"/><circle class="graph-handle" r="11"/><text class="graph-handle-label" y=".5">M</text></g>
+            <g class="gesture-readout" data-compressor-readout data-visible="false" transform="translate(64 30)">
+              <rect x="0" y="0" width="220" height="34" rx="7"/><text x="10" y="22" data-compressor-readout-text></text>
+            </g>
+          </svg>
+          <div class="gr-strip"><span>Gain reduction</span><svg viewBox="0 0 692 60"><path class="gr-trace" data-gain-reduction-trace data-sample-count="0"/></svg></div>
+          <div class="controls-row" data-compressor-controls></div>
         </section>
 
-        <section class="analysis">
-          <div class="meter-panel">
-            <div class="readout"><span class="readout-label">Input peak</span><span class="readout-value" data-meter-in-peak>--</span></div>
-            <div class="readout"><span class="readout-label">Output peak</span><span class="readout-value" data-meter-out-peak>--</span></div>
-            <div class="readout"><span class="readout-label">Input RMS</span><span class="readout-value" data-meter-in-rms>--</span></div>
-            <div class="readout"><span class="readout-label">Output RMS</span><span class="readout-value" data-meter-out-rms>--</span></div>
-            <div class="readout"><span class="readout-label">RMS delta</span><span class="readout-value" data-meter-delta>--</span></div>
-            <div class="readout"><span class="readout-label">Gain reduction</span><span class="readout-value" data-meter-gr>--</span></div>
-            <div class="readout"><span class="readout-label">Clip activity</span><span class="readout-value" data-meter-clip>--</span></div>
-            <div class="readout readout-effective"><span class="readout-label">Effective input</span><span class="readout-value" data-effective-input>--</span></div>
-            <div class="readout readout-effective"><span class="readout-label">Effective makeup</span><span class="readout-value" data-effective-makeup>--</span></div>
-            <div class="readout readout-effective"><span class="readout-label">Effective ratio</span><span class="readout-value" data-effective-ratio>--</span></div>
+        <section class="panel">
+          <div class="panel-header"><h2>Waveshaper</h2></div>
+          <svg
+            class="shaper-graph"
+            viewBox="0 0 800 430"
+            role="img"
+            aria-label="Editable bipolar input to output transfer curve"
+            data-transfer-graph="shaper"
+            data-input-min="-1.5"
+            data-input-max="1.5"
+            data-output-min="-1.5"
+            data-output-max="1.5"
+            data-plot-left="44"
+            data-plot-right="756"
+            data-plot-top="18"
+            data-plot-bottom="402"
+          >
+            <rect class="plot-border" x="44" y="18" width="712" height="384" />
+            <path class="zero-axis" d="M400 18V402 M44 210H756" />
+            <path class="unity-line" data-unity-line d="M44 402L756 18" />
+            <path class="transfer-curve" data-shaper-curve />
+            <g data-shape-segments></g>
+            <g data-shape-points></g>
+            <g data-morph-visuals></g>
+            <circle class="operating-point" data-shaper-operating-point data-active="false" r="8" />
+            <g class="gesture-readout" data-shaper-readout data-visible="false" transform="translate(54 28)">
+              <rect x="0" y="0" width="286" height="34" rx="7"/><text x="10" y="22" data-shaper-readout-text></text>
+            </g>
+            <text class="axis-label" data-shaper-axis-label data-axis="x" x="162.7" y="422" text-anchor="middle">−1</text>
+            <text class="axis-label" data-shaper-axis-label data-axis="x" x="400" y="422" text-anchor="middle">0</text>
+            <text class="axis-label" data-shaper-axis-label data-axis="x" x="637.3" y="422" text-anchor="middle">+1</text>
+            <text class="axis-label" data-shaper-axis-label data-axis="y" x="38" y="342" text-anchor="end">−1</text>
+            <text class="axis-label" data-shaper-axis-label data-axis="y" x="38" y="214" text-anchor="end">0</text>
+            <text class="axis-label" data-shaper-axis-label data-axis="y" x="38" y="86" text-anchor="end">+1</text>
+          </svg>
+          <div class="shaper-footer">
+            <div class="shape-workbench">
+              <div class="shape-tools">
+                <span class="shape-selection" data-shape-selection>Positive point 1</span>
+                <button class="tool-button" type="button" data-shape-add data-control-help="Insert a point halfway along the selected segment.">Add point</button>
+                <button class="tool-button" type="button" data-shape-delete data-control-help="Remove the selected point." disabled>Delete point</button>
+                <span class="morph-owner" data-morph-owner>Morph A: Positive point 1</span>
+                <button class="tool-button" type="button" data-morph-assign data-control-help="Make the selected point Morph position A; then drag B to set its destination.">Use selected as A</button>
+              </div>
+              <div class="shape-inspector" data-shape-inspector>
+                <span class="shape-inspector-label" data-shape-inspector-label>Positive point 1</span>
+                <label class="shape-exact-field" data-shape-exact-wrap="input">In
+                  <input type="number" step="0.000001" data-shape-exact-field="input" aria-label="Selected point input">
+                </label>
+                <label class="shape-exact-field" data-shape-exact-wrap="output">Out
+                  <input type="number" step="0.000001" min="-1.5" max="1.5" data-shape-exact-field="output" aria-label="Selected point output">
+                </label>
+                <label class="shape-exact-field" data-shape-exact-wrap="bend" hidden>Bend
+                  <input type="number" step="0.000001" min="-1" max="1" data-shape-exact-field="bend" aria-label="Selected segment bend">
+                </label>
+              </div>
+            </div>
+            <div class="controls-row" data-morph-controls></div>
           </div>
         </section>
-
-        <section class="groups" data-groups></section>
-        <div id="control-help-tooltip" class="control-tooltip" data-control-tooltip data-visible="false" data-placement="above" role="tooltip" aria-hidden="true"></div>
       </main>
+      <div class="tooltip" data-tooltip data-visible="false" role="tooltip"></div>
     `;
   }
 }
 
 export default function createPatchView(patchConnection) {
   const elementName = "cosimo-polish-voicing-lab-view";
-
   if (!window.customElements.get(elementName))
     window.customElements.define(elementName, PolishVoicingLabView);
-
   return new (window.customElements.get(elementName))(patchConnection);
 }

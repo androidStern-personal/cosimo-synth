@@ -1,11 +1,17 @@
 # Ableton Live 11 VST3 validation — 2026-08-26
 
+> **Current editor:** the chronological UI experiments below are retained as
+> evidence, not as current product descriptions. Every pre-existing clipper,
+> decoded-mode, dashed-reference, knot/tension, Drive, Mix, and Amount-editor
+> surface is superseded by the 2026-08-27 bipolar Curve Lab replacement recorded
+> below. The extraction/corpus evidence remains unchanged.
+
 This record proves the independently named Polish Voicing Lab was associated
 with the repo-patched generic Cmajor VST3 and instantiated by Ableton Live
 11.3.43 on the retained audio-loop test track. It does not claim an Ableton
 null test against any third-party product.
 
-## Installed artifacts
+## Initial installed artifacts (2026-08-26; superseded)
 
 - VST3 bundle: `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CmajPlugin.vst3`
 - VST3 binary SHA-256: `b7cf660de10a9bb381535db1df58775e6150ee449689a037d9ca19fad3846a87`
@@ -205,6 +211,63 @@ blocks, and passed plugin state, automation, parameters, and stereo buses. The
 new transcript remains at
 `build/pluginval-polish-point-editor/pluginval.txt`; build artifacts are not
 source-controlled evidence.
+
+## Bipolar Curve Lab replacement — 2026-08-27
+
+Andrew rejected the accumulated reference/editor machinery and requested a
+small usable sound-design tool. The installed editor now contains only the six
+compressor controls and one Morph knob. Its waveshaper is a full bipolar graph
+with one solid unity line, explicit `-1/0/+1` landmarks on both axes, one
+independent ceiling per side, freely moved points, direct segment bending,
+add/delete, exact entry, and visible Morph A/B positions. Morph linearly moves
+one assigned point and changes no other value. The live design surface contains
+no graph Drive, Clip Mix, macro wiring, tone stage, decoded mode, dashed
+reference, knot, or tension control.
+
+The complete final gate passed 14/14 Node/browser checks and 6/6 Cmajor checks.
+It includes real stock Cmajor controls, exact DSP-facing graph writes, Ratio-to-
+curve correspondence, independent positive/negative ceilings, bend sampling,
+add-point sound continuity, one-point Morph, reset/state replay, telemetry, and
+exact raw restoration on Escape, `pointercancel`, blur, disconnect, and teardown.
+The isolated reference gate independently remained 7/7 and reverified all 21
+WAVs and nine comparisons with worst RMS match `1.742e-7 dB`.
+
+`npm run fx:jit:install -- polish` rebuilt and associated the runtime. The
+installed VST3 passed strict deep code-sign verification. Current hashes are:
+
+- installed VST3 executable:
+  `b7cf660de10a9bb381535db1df58775e6150ee449689a037d9ca19fad3846a87`;
+- association:
+  `6862780413b71a932cdf286e40add2ecfbdb9ecf224f9e92ca6bbe66b8688fe5`;
+- compiled patch manifest:
+  `85b9fc79fb4b056cb9ac76564739d1d2e70353443a38d77d6b7dc2b78b463b26`;
+- compiled Cmajor source:
+  `7ce5b0801da3e27d0a1f600f55036022ffc9218b9f95021c526e72dcb74271b9`;
+- compiled UI:
+  `c1218142617d3719bdc85e63247e0f5874de88050d01206f6ac80760e78936a8`.
+
+A fresh pluginval 1.0.4 strictness-5 run with seed `0x27a8` finished with
+`SUCCESS`. It opened the editor cold and warm, opened it while processing,
+exercised editor automation, processed 44.1/48 kHz audio at 64/512-frame blocks,
+and passed plugin state, automation, parameters, and stereo buses. The generated
+transcript is at `build/pluginval-polish-curve-lab/pluginval.txt` and is not a
+source-controlled artifact.
+
+Ableton Live 11.3.43 loaded the rebuilt association onto a fresh audio track.
+The exact new host lines are:
+
+```text
+2026-08-27T19:27:39.095413: info: VST3: Going to create: CmajPlugin
+2026-08-27T19:27:39.129196: info: VST3: plugin processor successfully loaded: Cmajor Software Ltd 'CmajPlugin' v1.0.3066 (cid: {ABCDEF01-9182-FAEB-4D61-6E75436D616A})
+2026-08-27T19:27:39.130162: info: VST3: parameter count is 2081
+2026-08-27T19:27:39.130636: info: VST3: Created: CmajPlugin
+```
+
+Ableton's accessible surface could instantiate and select the device but could
+not invoke its non-accessible wrench, so this is a fresh processor-load check,
+not a fresh custom-editor gesture claim. The compiled editor was visually
+reviewed separately and its gestures were exercised by the real-control browser
+gate. No subjective listening or physical-touch acceptance is claimed.
 
 ## Independent host pass
 

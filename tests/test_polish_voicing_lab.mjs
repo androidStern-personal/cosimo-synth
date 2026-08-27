@@ -5,12 +5,12 @@ import test from "node:test";
 
 import { decodedSettings, mappingBySuffix } from "../reference_labs/polish_comp_clip/lib/fixture-settings.mjs";
 import {
-  CURVE_EDITOR_MAX_POINTS,
   CURVE_DEFAULTS,
-  effectiveEditorCurve,
-  evaluateEditableCurve,
+  SHAPER_MAX_POINTS,
+  effectiveShapePoints,
+  evaluateBipolarTransfer,
   evaluateCurve,
-  evaluateClipperTransfer,
+  morphOwner,
   sanitizeCurve,
 } from "../fx/polish_lab/view/curve-model.js";
 import {
@@ -46,49 +46,52 @@ function assertFloat32Default(actual, expected, label) {
     assert.equal(Math.fround(actual), Math.fround(expected), label);
 }
 
-test("the plugin reset state maps every reproducible decoded comp, clip, trim, and macro value", async () => {
+test("the extracted reference remains exact while the design lab starts from a neutral two-sided curve", async () => {
     const source = await fs.readFile(sourcePath, "utf8");
     const initial = parseInitialValues(source);
     const facts = decodedSettings.decodedPresetFacts;
     const derived = decodedSettings.cosimoDerivedValues;
 
-    assertFloat32Default(initial.get("inputTrimDb"), derived.inputToolGainDb, "input trim");
-    assertFloat32Default(initial.get("outputTrimDb"), derived.outputToolGainDb, "output trim");
-    assertFloat32Default(initial.get("thresholdDb"), facts.compressor.HIGH_THRESHOLD.value, "threshold");
-    assertFloat32Default(initial.get("ratio"), derived.compressorRatioFromStoredSlope, "ratio conversion");
-    assertFloat32Default(initial.get("kneeDb"), facts.compressor.HIGH_KNEE.value, "knee");
-    assertFloat32Default(initial.get("attackMs"), derived.compressorAttackSeconds * 1000, "attack");
-    assertFloat32Default(initial.get("releaseMs"), derived.compressorReleaseSeconds * 1000, "release");
-    assertFloat32Default(initial.get("makeupDb"), facts.compressor.OUTPUT_GAIN.value, "makeup");
-    assertFloat32Default(initial.get("clipDriveDb"), facts.curve.drive.value, "clip drive");
-
-    assertFloat32Default(initial.get("macroInputDriveDb"), mappingBySuffix("/AMPLITUDE").mappedAmount.value, "macro input mapping");
-    assertFloat32Default(initial.get("macroMakeupDb"), mappingBySuffix("/OUTPUT_GAIN").mappedAmount.value, "macro makeup mapping");
+    assertFloat32Default(facts.compressor.HIGH_THRESHOLD.value, 0, "retained reference threshold");
+    assertFloat32Default(derived.compressorRatioFromStoredSlope, 11.415525114155871, "retained ratio conversion");
+    assertFloat32Default(facts.compressor.HIGH_KNEE.value, 0, "retained reference knee");
+    assertFloat32Default(derived.compressorAttackSeconds * 1000, 0.20511621788255668, "retained attack");
+    assertFloat32Default(derived.compressorReleaseSeconds * 1000, 26.79168324819022, "retained release");
+    assertFloat32Default(facts.compressor.OUTPUT_GAIN.value, -0.04000000000000409, "retained makeup");
+    assertFloat32Default(
+        mappingBySuffix("/AMPLITUDE").mappedAmount.value,
+        35.9712,
+        "retained reference input mapping",
+    );
+    assertFloat32Default(
+        mappingBySuffix("/OUTPUT_GAIN").mappedAmount.value,
+        4.12,
+        "retained reference makeup mapping",
+    );
     assert.equal(mappingBySuffix("/HIGH_RATIO").mappedAmount.value, -0.025200000000000014);
-    assertFloat32Default(initial.get("macroRatioTarget"), 1000, "documented limiting approximation");
+    assertFloat32Default(facts.curve.drive.value, -0.0192, "retained reference drive");
 
-    const expectedCurve = facts.curve.points.slice(1).flatMap(point => [
-        point.input.value,
-        point.output.value,
-        point.tension.value,
-    ]);
-    const pluginCurve = [
-        initial.get("curveP1X"), initial.get("curveP1Y"), initial.get("curveP1T"),
-        initial.get("curveP2X"), initial.get("curveP2Y"), initial.get("curveP2T"),
-        initial.get("curveP3X"), initial.get("curveP3Y"), initial.get("curveP3T"),
-    ];
-    pluginCurve.forEach((value, index) => assertFloat32Default(value, expectedCurve[index], `curve field ${index}`));
+    assert.equal(initial.get("thresholdDb"), 0);
+    assert.equal(initial.get("ratio"), 4);
+    assert.equal(initial.get("kneeDb"), 6);
+    assert.equal(initial.get("attackMs"), 10);
+    assert.equal(initial.get("releaseMs"), 120);
+    assert.equal(initial.get("makeupDb"), 0);
 
-    assert.equal(initial.get("amount"), 0);
-    assert.equal(initial.get("lowCutMix"), 0);
-    assert.equal(initial.get("colorGainDb"), 0);
-    assert.equal(initial.get("detectorMode"), 0);
-    assert.equal(initial.get("stereoLink"), 100);
-    assert.equal(initial.get("compMix"), 100);
-    assert.equal(initial.get("clipMix"), 100);
+    assert.equal(initial.get("curvePointCount"), 1);
+    assert.equal(initial.get("curveP1X"), 1);
+    assert.equal(initial.get("curveP1Y"), 1);
+    assert.equal(initial.get("curveNPointCount"), 1);
+    assert.equal(initial.get("curveN1X"), 1);
+    assert.equal(initial.get("curveN1Y"), -1);
+    assert.equal(initial.get("morph"), 0);
+    assert.equal(initial.get("morphSide"), 1);
+    assert.equal(initial.get("morphPoint"), 1);
+    assert.equal(initial.get("morphTargetX"), 0.72);
+    assert.equal(initial.get("morphTargetY"), 1.05);
 });
 
-test("the live curve preview stays pinned to exact decoded points and sampled transfer fixtures", async () => {
+test("the isolated reference evaluator stays pinned to exact decoded points and sampled fixtures", async () => {
     const facts = decodedSettings.decodedPresetFacts;
     assert.deepEqual(CURVE_DEFAULTS, {
         curveP1X: facts.curve.points[1].input.value,
@@ -118,31 +121,34 @@ test("the live curve preview stays pinned to exact decoded points and sampled tr
     assert.ok(sanitized[0].y <= sanitized[1].y && sanitized[1].y <= sanitized[2].y && sanitized[2].y <= sanitized[3].y);
 });
 
-test("the interactive graphs sample the same compressor and driven clipper math as the DSP", () => {
+test("the interactive graph models use only the visible compressor and bipolar waveshaper state", () => {
     assert.ok(Math.abs(desiredGainReductionDbForLevel(0, 0, 4, 6) - (-0.5625)) < 1e-12);
-    assert.ok(Math.abs(evaluateCompressorTransfer(0, new Map()) - (-0.04)) < 1e-12);
-    assert.ok(Math.abs(evaluateCompressorTransfer(6, new Map()) - 0.48560000065174336) < 1e-12);
+    assert.ok(Math.abs(evaluateCompressorTransfer(0, new Map()) - (-0.5625)) < 1e-12);
+    assert.ok(Math.abs(evaluateCompressorTransfer(6, new Map()) - 1.5) < 1e-12);
 
-    const fullAmount = effectiveCompressorSettings(new Map([["amount", 100]]));
-    assert.deepEqual(fullAmount, {
-        macro: 1,
+    const unrelatedState = effectiveCompressorSettings(new Map([
+        ["amount", 100],
+        ["macroRatioTarget", 1000],
+        ["macroMakeupDb", 12],
+        ["ratio", 4],
+        ["makeupDb", 2],
+    ]));
+    assert.deepEqual(unrelatedState, {
         thresholdDb: 0,
-        ratio: 1000,
-        kneeDb: 0,
-        makeupDb: 4.08,
-        mix: 1,
+        ratio: 4,
+        kneeDb: 6,
+        makeupDb: 2,
     });
-
-    assert.ok(Math.abs(evaluateClipperTransfer(0.5) - 0.43030531109079617) < 1e-12);
-    assert.equal(evaluateClipperTransfer(0.5, { clipDriveDb: 6, clipMix: 50 }), 0.75);
-    assert.equal(evaluateClipperTransfer(-0.5, { clipDriveDb: 6, clipMix: 50 }), -0.75);
+    assert.equal(evaluateBipolarTransfer(0.5), 0.5);
+    assert.equal(evaluateBipolarTransfer(-0.5), -0.5);
+    assert.equal(evaluateBipolarTransfer(1.25), 1);
+    assert.equal(evaluateBipolarTransfer(-1.25), -1);
 });
 
-test("the point editor is an odd-symmetric monotonic piecewise-bow curve with an Amount-movable anchor", () => {
-    assert.equal(CURVE_EDITOR_MAX_POINTS, 7);
+test("the waveshaper supports independent sides, arbitrary output, bends, and one linear point morph", () => {
+    assert.equal(SHAPER_MAX_POINTS, 7);
 
     const values = {
-        curveEditorEnabled: true,
         curvePointCount: 2,
         curveP1X: 0.5,
         curveP1Y: 0.6,
@@ -150,32 +156,39 @@ test("the point editor is an odd-symmetric monotonic piecewise-bow curve with an
         curveP2Y: 0.8,
         curveB1: 0,
         curveB2: 1,
-        curveAmountPoint: 0,
-        clipDriveDb: 0,
-        clipMix: 100,
+        curveNPointCount: 1,
+        curveN1X: 1,
+        curveN1Y: -0.4,
+        curveNB1: 0,
+        morph: 0,
+        morphSide: 1,
+        morphPoint: 1,
+        morphTargetX: 0.25,
+        morphTargetY: 0.8,
     };
 
-    assert.ok(Math.abs(evaluateEditableCurve(0.25, values) - 0.3) < 1e-12);
-    assert.ok(Math.abs(evaluateEditableCurve(0.75, values) - 0.75) < 1e-12);
-    assert.equal(evaluateEditableCurve(1.2, values), 0.8);
-    assert.ok(Math.abs(evaluateEditableCurve(-0.75, values) + 0.75) < 1e-12);
-    assert.ok(Math.abs(evaluateClipperTransfer(0.75, values) - 0.75) < 1e-12);
+    assert.ok(Math.abs(evaluateBipolarTransfer(0.25, values) - 0.3) < 1e-12);
+    assert.ok(Math.abs(evaluateBipolarTransfer(0.75, values) - 0.75) < 1e-12);
+    assert.equal(evaluateBipolarTransfer(1.2, values), 0.8);
+    assert.equal(evaluateBipolarTransfer(-0.5, values), -0.2);
+    assert.equal(evaluateBipolarTransfer(-1.2, values), -0.4);
 
-    const amountValues = {
-        ...values,
-        curveAmountPoint: 1,
-        curveAmountTargetX: 0.25,
-        curveAmountTargetY: 0.8,
-        amount: 50,
-        macroCurve: 1,
-    };
-    let points = effectiveEditorCurve(amountValues);
-    assert.deepEqual(points[1], { x: 0.375, y: 0.7, bend: 0 });
+    const morphed = { ...values, morph: 50 };
+    assert.deepEqual(effectiveShapePoints(morphed, "positive")[1], {
+        side: "positive",
+        index: 1,
+        x: 0.375,
+        y: 0.7,
+        bend: 0,
+    });
+    assert.deepEqual(effectiveShapePoints(morphed, "negative"), effectiveShapePoints(values, "negative"));
+    assert.deepEqual(morphOwner({ ...values, curvePointCount: 1, morphPoint: 7 }), {
+        side: "positive",
+        index: 1,
+    });
 
-    points = effectiveEditorCurve({ ...amountValues, macroCurve: 2 });
-    assert.deepEqual(points[1], { x: 0.4375, y: 0.65, bend: 0 });
-
-    const sanitized = effectiveEditorCurve({
+    assert.equal(evaluateBipolarTransfer(1.2, { ...values, curveP2Y: -0.2 }), -0.2);
+    const sanitized = effectiveShapePoints({
         ...values,
         curvePointCount: 7,
         curveP1X: 1.49,
@@ -185,55 +198,41 @@ test("the point editor is an odd-symmetric monotonic piecewise-bow curve with an
         curveP5X: 0.1,
         curveP6X: 0.1,
         curveP7X: 0.1,
-        curveP1Y: 1.4,
-        curveP2Y: 0.2,
-        curveP3Y: 0.1,
-        curveP4Y: 0.1,
-        curveP5Y: 0.1,
-        curveP6Y: 0.1,
-        curveP7Y: 0.1,
-    });
+    }, "positive");
     assert.equal(sanitized.length, 8);
     for (let index = 1; index < sanitized.length; index += 1) {
         assert.ok(sanitized[index].x > sanitized[index - 1].x);
-        assert.ok(sanitized[index].y >= sanitized[index - 1].y);
     }
 });
 
-test("the plugin exposes the complete requested design surface while remaining isolated and independently named", async () => {
+test("the plugin exposes only the requested design surface while remaining isolated and independently named", async () => {
     const source = await fs.readFile(sourcePath, "utf8");
     const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
     const viewSource = await fs.readFile(path.join(repoRoot, "fx/polish_lab/view/source.js"), "utf8");
     const helpSource = await fs.readFile(path.join(repoRoot, "fx/polish_lab/view/control-help.js"), "utf8");
     const initial = parseInitialValues(source);
     const requiredControls = [
-        "amount", "macroCurve", "inputTrimDb", "outputTrimDb",
-        "macroInputDriveDb", "macroMakeupDb", "macroRatioTarget",
-        "lowCutMix", "lowCutHz", "lowCutSlope", "colorFrequencyHz", "colorGainDb", "colorQ",
         "thresholdDb", "ratio", "kneeDb", "attackMs", "releaseMs", "makeupDb",
-        "detectorMode", "rmsWindowMs", "detectorHpHz", "stereoLink", "compMix",
-        "clipDriveDb", "clipMix",
-        "curveP1X", "curveP1Y", "curveP1T",
-        "curveP2X", "curveP2Y", "curveP2T",
-        "curveP3X", "curveP3Y", "curveP3T",
-        "curveEditorEnabled", "curveEditorInitialized", "curvePointCount",
+        "morph", "morphSide", "morphPoint", "morphTargetX", "morphTargetY",
+        "curvePointCount", "curveNPointCount",
+        "curveP1X", "curveP1Y", "curveN1X", "curveN1Y",
         "curveP4X", "curveP4Y", "curveP5X", "curveP5Y",
         "curveP6X", "curveP6Y", "curveP7X", "curveP7Y",
         "curveB1", "curveB2", "curveB3", "curveB4", "curveB5", "curveB6", "curveB7",
-        "curveAmountPoint", "curveAmountTargetX", "curveAmountTargetY",
+        "curveN4X", "curveN4Y", "curveN5X", "curveN5Y",
+        "curveN6X", "curveN6Y", "curveN7X", "curveN7Y",
+        "curveNB1", "curveNB2", "curveNB3", "curveNB4", "curveNB5", "curveNB6", "curveNB7",
     ];
 
     for (const endpointID of requiredControls)
         assert.ok(initial.has(endpointID), `missing ${endpointID}`);
 
-    assert.equal(initial.get("curveEditorEnabled"), false);
-    assert.equal(initial.get("curveEditorInitialized"), false);
-    assert.equal(initial.get("curvePointCount"), 3);
-    assert.equal(initial.get("curveAmountPoint"), 0);
+    assert.equal(initial.get("curvePointCount"), 1);
+    assert.equal(initial.get("curveNPointCount"), 1);
 
     assert.equal(manifest.ID, "dev.cosimo.polish-voicing-lab");
     assert.equal(manifest.name, "Polish Voicing Lab");
-    assert.match(source, /ClipCoreChannel \* polishlab::clipOversampleFactor/);
+    assert.match(source, /BipolarShapeCoreChannel \* polishlab::clipOversampleFactor/);
     assert.match(source, /clipOversampleFactor = 4/);
     assert.match(source, /output event polishlab::MeterFrame meterOut/);
     assert.match(source, /currentCompressorInputDb = polishlab::gainToDb \(linkedDetector\)/);
@@ -243,8 +242,21 @@ test("the plugin exposes the complete requested design surface while remaining i
     assert.match(source, /frame\.compressorOutputDb = meterCompressorOutputDb/);
     assert.match(source, /frame\.clipInput = meterClipInput/);
     assert.match(source, /frame\.clipOutput = meterClipOutput/);
-    assert.match(viewSource, /RMS delta/);
-    assert.match(viewSource, /Restore decoded start/);
+    assert.match(viewSource, /COMPRESSOR_CONTROLS/);
+    assert.match(viewSource, /data-morph-controls/);
+    for (const removedEndpoint of [
+        "amount", "macroCurve", "inputTrimDb", "outputTrimDb", "macroInputDriveDb",
+        "macroMakeupDb", "macroRatioTarget", "lowCutMix", "lowCutHz", "lowCutSlope",
+        "colorFrequencyHz", "colorGainDb", "colorQ", "detectorMode", "rmsWindowMs",
+        "detectorHpHz", "stereoLink", "compMix", "clipDriveDb", "clipMix",
+        "curveEditorEnabled", "curveAmountPoint", "curveAmountTargetX", "curveAmountTargetY",
+    ]) {
+        assert.doesNotMatch(source, new RegExp(`input value (?:bool|float32) ${removedEndpoint}\\b`));
+    }
+    assert.doesNotMatch(
+        viewSource,
+        /Macro Wiring|Tone|Decoded|Reference|Amount Curve|Input Range|Clip Mix|Knot|Tension/i,
+    );
 
     for (const productSurface of [source, JSON.stringify(manifest), viewSource, helpSource]) {
         assert.doesNotMatch(productSurface, /Sausage|Fattener|Dada Life/i);

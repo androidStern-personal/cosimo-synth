@@ -60,41 +60,41 @@ processor PolishCurveContract [[ main ]]
 
 ## testProcessor()
 
-processor PolishEditableCurveContract [[ main ]]
+processor PolishBipolarShapeContract [[ main ]]
 {
     output stream int32 out;
-    node core = polishlab::ClipCoreChannel;
+    node core = polishlab::BipolarShapeCoreChannel;
 
-    float32 render (float32 sample, float32 amountPosition)
+    float32 render (float32 sample, float32 morphPosition)
     {
         core.in <- sample;
-        core.driveDb <- 0.0f;
-        core.editorEnabled <- true;
-        core.pointCount <- 2.0f;
-        core.p1x <- 0.5f;
-        core.p1y <- 0.6f;
-        core.p1t <- 0.0f;
-        core.p2x <- 1.0f;
-        core.p2y <- 0.8f;
-        core.p2t <- 0.0f;
-        core.p3x <- 1.1f;
-        core.p3y <- 0.9f;
-        core.p3t <- 0.0f;
-        core.p4x <- 1.2f; core.p4y <- 1.0f;
-        core.p5x <- 1.3f; core.p5y <- 1.0f;
-        core.p6x <- 1.4f; core.p6y <- 1.0f;
-        core.p7x <- 1.5f; core.p7y <- 1.0f;
-        core.b1 <- 0.0f;
-        core.b2 <- 1.0f;
-        core.b3 <- 0.0f;
-        core.b4 <- 0.0f;
-        core.b5 <- 0.0f;
-        core.b6 <- 0.0f;
-        core.b7 <- 0.0f;
-        core.amountPoint <- amountPosition > 0.0f ? 1.0f : 0.0f;
-        core.amountTargetX <- 0.25f;
-        core.amountTargetY <- 0.8f;
-        core.amountPosition <- amountPosition;
+        core.positivePointCount <- 1.0f;
+        core.positiveP1X <- 1.0f; core.positiveP1Y <- 1.0f;
+        core.positiveP2X <- 1.08f; core.positiveP2Y <- 1.0f;
+        core.positiveP3X <- 1.16f; core.positiveP3Y <- 1.0f;
+        core.positiveP4X <- 1.24f; core.positiveP4Y <- 1.0f;
+        core.positiveP5X <- 1.32f; core.positiveP5Y <- 1.0f;
+        core.positiveP6X <- 1.4f; core.positiveP6Y <- 1.0f;
+        core.positiveP7X <- 1.5f; core.positiveP7Y <- 1.0f;
+        core.positiveB1 <- 0.0f; core.positiveB2 <- 0.0f; core.positiveB3 <- 0.0f;
+        core.positiveB4 <- 0.0f; core.positiveB5 <- 0.0f; core.positiveB6 <- 0.0f; core.positiveB7 <- 0.0f;
+
+        core.negativePointCount <- 1.0f;
+        core.negativeP1X <- 1.0f; core.negativeP1Y <- -0.5f;
+        core.negativeP2X <- 1.08f; core.negativeP2Y <- -0.5f;
+        core.negativeP3X <- 1.16f; core.negativeP3Y <- -0.5f;
+        core.negativeP4X <- 1.24f; core.negativeP4Y <- -0.5f;
+        core.negativeP5X <- 1.32f; core.negativeP5Y <- -0.5f;
+        core.negativeP6X <- 1.4f; core.negativeP6Y <- -0.5f;
+        core.negativeP7X <- 1.5f; core.negativeP7Y <- -0.5f;
+        core.negativeB1 <- 0.0f; core.negativeB2 <- 0.0f; core.negativeB3 <- 0.0f;
+        core.negativeB4 <- 0.0f; core.negativeB5 <- 0.0f; core.negativeB6 <- 0.0f; core.negativeB7 <- 0.0f;
+
+        core.morphSide <- 1.0f;
+        core.morphPoint <- 7.0f; // restored host state clamps to the last active point
+        core.morphTargetX <- 0.6f;
+        core.morphTargetY <- 1.2f;
+        core.morphPosition <- morphPosition;
         core.advance();
         return core.out;
     }
@@ -106,15 +106,82 @@ processor PolishEditableCurveContract [[ main ]]
 
     void main()
     {
-        out <- close (render (0.25f, 0.0f), 0.3f) ? 1 : 0;
+        out <- close (render (0.5f, 0.0f), 0.5f) ? 1 : 0;
         advance();
-        out <- close (render (0.75f, 0.0f), 0.75f) ? 1 : 0;
+        out <- close (render (-0.5f, 0.0f), -0.25f) ? 1 : 0;
         advance();
-        out <- close (render (-0.75f, 0.0f), -0.75f) ? 1 : 0;
+        out <- close (render (1.2f, 0.0f), 1.0f) ? 1 : 0;
         advance();
-        out <- close (render (1.2f, 0.0f), 0.8f) ? 1 : 0;
+        out <- close (render (-1.2f, 0.0f), -0.5f) ? 1 : 0;
         advance();
-        out <- close (render (0.375f, 0.5f), 0.7f) ? 1 : 0;
+        out <- close (render (0.8f, 0.5f), 1.1f) ? 1 : 0;
+        advance();
+        out <- close (render (-0.8f, 0.5f), -0.4f) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+## testProcessor()
+
+processor PolishBipolarBendContract [[ main ]]
+{
+    output stream int32 out;
+    node core = polishlab::BipolarShapeCoreChannel;
+
+    float32 render (float32 sample)
+    {
+        core.in <- sample;
+        core.positivePointCount <- 2.0f;
+        core.positiveP1X <- 0.5f; core.positiveP1Y <- 0.6f;
+        core.positiveP2X <- 1.0f; core.positiveP2Y <- 0.8f;
+        core.positiveP3X <- 1.16f; core.positiveP3Y <- 0.8f;
+        core.positiveP4X <- 1.24f; core.positiveP4Y <- 0.8f;
+        core.positiveP5X <- 1.32f; core.positiveP5Y <- 0.8f;
+        core.positiveP6X <- 1.4f; core.positiveP6Y <- 0.8f;
+        core.positiveP7X <- 1.5f; core.positiveP7Y <- 0.8f;
+        core.positiveB1 <- -0.5f; core.positiveB2 <- 1.0f; core.positiveB3 <- 0.0f;
+        core.positiveB4 <- 0.0f; core.positiveB5 <- 0.0f; core.positiveB6 <- 0.0f; core.positiveB7 <- 0.0f;
+
+        core.negativePointCount <- 2.0f;
+        core.negativeP1X <- 0.4f; core.negativeP1Y <- -0.2f;
+        core.negativeP2X <- 0.9f; core.negativeP2Y <- -0.7f;
+        core.negativeP3X <- 1.16f; core.negativeP3Y <- -0.7f;
+        core.negativeP4X <- 1.24f; core.negativeP4Y <- -0.7f;
+        core.negativeP5X <- 1.32f; core.negativeP5Y <- -0.7f;
+        core.negativeP6X <- 1.4f; core.negativeP6Y <- -0.7f;
+        core.negativeP7X <- 1.5f; core.negativeP7Y <- -0.7f;
+        core.negativeB1 <- 0.5f; core.negativeB2 <- -1.0f; core.negativeB3 <- 0.0f;
+        core.negativeB4 <- 0.0f; core.negativeB5 <- 0.0f; core.negativeB6 <- 0.0f; core.negativeB7 <- 0.0f;
+
+        core.morphSide <- 1.0f;
+        core.morphPoint <- 1.0f;
+        core.morphTargetX <- 0.5f;
+        core.morphTargetY <- 0.6f;
+        core.morphPosition <- 0.0f;
+        core.advance();
+        return core.out;
+    }
+
+    bool close (float32 actual, float32 expected)
+    {
+        return std::intrinsics::abs (actual - expected) <= 2.0e-6f;
+    }
+
+    void main()
+    {
+        out <- close (render (0.25f), 0.225f) ? 1 : 0;
+        advance();
+        out <- close (render (0.75f), 0.75f) ? 1 : 0;
+        advance();
+        out <- close (render (-0.2f), -0.125f) ? 1 : 0;
+        advance();
+        out <- close (render (-0.65f), -0.325f) ? 1 : 0;
+        advance();
+        out <- close (render (1.2f), 0.8f) ? 1 : 0;
+        advance();
+        out <- close (render (-1.2f), -0.7f) ? 1 : 0;
         advance();
         out <- -1;
         advance();
@@ -174,12 +241,17 @@ processor PolishBypassContract [[ main ]]
             let signal = signalForFrame (frame);
             lab.in <- signal;
             lab.bypass <- true;
-            lab.amount <- 100.0f;
-            lab.lowCutMix <- 100.0f;
-            lab.colorGainDb <- 18.0f;
             lab.thresholdDb <- -36.0f;
             lab.ratio <- 100.0f;
-            lab.clipDriveDb <- 36.0f;
+            lab.kneeDb <- 24.0f;
+            lab.attackMs <- 0.05f;
+            lab.releaseMs <- 5.0f;
+            lab.makeupDb <- 24.0f;
+            lab.curveP1X <- 0.2f;
+            lab.curveP1Y <- -1.2f;
+            lab.curveN1X <- 0.3f;
+            lab.curveN1Y <- 1.1f;
+            lab.morph <- 100.0f;
             lab.advance();
 
             if (lab.out[0] != signal[0] || lab.out[1] != signal[1])
@@ -198,7 +270,7 @@ processor PolishBypassContract [[ main ]]
 processor PolishTunableSignalContract [[ main ]]
 {
     output stream int32 out;
-    node decoded = PolishVoicingProcessor;
+    node neutral = PolishVoicingProcessor;
     node tuned = PolishVoicingProcessor;
 
     float32<2> signalForFrame (int32 frame)
@@ -220,41 +292,35 @@ processor PolishTunableSignalContract [[ main ]]
         for (int32 frame = 0; frame < 8192; ++frame)
         {
             let signal = signalForFrame (frame);
-            decoded.in <- signal;
-            decoded.amount <- 0.0f;
-            decoded.advance();
+            neutral.in <- signal;
+            neutral.advance();
 
             tuned.in <- signal;
-            tuned.amount <- 100.0f;
-            tuned.macroCurve <- 0.65f;
-            tuned.lowCutMix <- 65.0f;
-            tuned.lowCutHz <- 85.0f;
-            tuned.lowCutSlope <- 2.0f;
-            tuned.colorFrequencyHz <- 1800.0f;
-            tuned.colorGainDb <- 5.0f;
-            tuned.colorQ <- 1.2f;
             tuned.thresholdDb <- -18.0f;
             tuned.ratio <- 32.0f;
             tuned.kneeDb <- 9.0f;
             tuned.attackMs <- 8.0f;
             tuned.releaseMs <- 180.0f;
             tuned.makeupDb <- -3.0f;
-            tuned.detectorMode <- 1.0f;
-            tuned.rmsWindowMs <- 24.0f;
-            tuned.detectorHpHz <- 120.0f;
-            tuned.stereoLink <- 70.0f;
-            tuned.compMix <- 80.0f;
-            tuned.clipDriveDb <- 12.0f;
-            tuned.clipMix <- 85.0f;
+            tuned.curvePointCount <- 2.0f;
             tuned.curveP1X <- 0.55f;
             tuned.curveP1Y <- 0.38f;
-            tuned.curveP1T <- -0.25f;
+            tuned.curveB1 <- -0.25f;
             tuned.curveP2X <- 0.82f;
             tuned.curveP2Y <- 0.7f;
-            tuned.curveP2T <- 0.35f;
-            tuned.curveP3X <- 1.05f;
-            tuned.curveP3Y <- 0.92f;
-            tuned.curveP3T <- -0.4f;
+            tuned.curveB2 <- 0.35f;
+            tuned.curveNPointCount <- 2.0f;
+            tuned.curveN1X <- 0.48f;
+            tuned.curveN1Y <- -0.31f;
+            tuned.curveNB1 <- 0.2f;
+            tuned.curveN2X <- 0.95f;
+            tuned.curveN2Y <- -0.76f;
+            tuned.curveNB2 <- -0.4f;
+            tuned.morphSide <- 1.0f;
+            tuned.morphPoint <- 2.0f;
+            tuned.morphTargetX <- 0.68f;
+            tuned.morphTargetY <- 0.92f;
+            tuned.morph <- 55.0f;
             tuned.advance();
 
             if (frame > 2048)
@@ -262,8 +328,8 @@ processor PolishTunableSignalContract [[ main ]]
                 maxDifference = std::intrinsics::max (
                     maxDifference,
                     std::intrinsics::max (
-                        std::intrinsics::abs (tuned.out[0] - decoded.out[0]),
-                        std::intrinsics::abs (tuned.out[1] - decoded.out[1])
+                        std::intrinsics::abs (tuned.out[0] - neutral.out[0]),
+                        std::intrinsics::abs (tuned.out[1] - neutral.out[1])
                     )
                 );
 

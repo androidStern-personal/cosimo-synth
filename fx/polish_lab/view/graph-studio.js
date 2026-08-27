@@ -1,511 +1,731 @@
 import {
   COMPRESSOR_DEFAULTS,
-  clampValue,
-  effectiveCompressorSettings,
   evaluateCompressorTransfer,
   finiteParameter,
 } from "./dynamics-model.js";
 import {
-  CLIPPER_STAGE_DEFAULTS,
-  CURVE_EDITOR_DEFAULTS,
-  CURVE_EDITOR_MAX_POINTS,
-  CURVE_DEFAULTS,
-  editorAmount,
-  editorPointCount,
-  effectiveEditorCurve,
-  evaluateEditableCurve,
-  evaluateClipperTransfer,
-  isCurveEditorEnabled,
-  sanitizeCurve,
+  SHAPER_MAX_POINTS,
+  effectiveShapePoints,
+  evaluateBipolarTransfer,
+  morphOwner,
+  quadraticBow,
+  rawShapePoint,
+  shapePointCount,
+  shapePointEndpointIDs,
 } from "./curve-model.js";
+
+const SVG_NS = "http://www.w3.org/2000/svg";
 
 const COMPRESSOR_AXIS = Object.freeze({
   minimum: -48,
   maximum: 12,
-  left: 58,
-  right: 722,
-  top: 24,
-  bottom: 346,
+  left: 54,
+  right: 746,
+  top: 18,
+  bottom: 262,
 });
 
-const CLIPPER_AXIS = Object.freeze({
-  minimum: 0,
+const SHAPER_AXIS = Object.freeze({
+  minimum: -1.5,
   maximum: 1.5,
-  left: 58,
-  right: 722,
-  top: 24,
-  bottom: 346,
+  left: 44,
+  right: 756,
+  top: 18,
+  bottom: 402,
 });
 
-const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
-
-function pointInSvg(svg, clientX, clientY) {
-  const point = svg.createSVGPoint();
-  point.x = clientX;
-  point.y = clientY;
-  return point.matrixTransform(svg.getScreenCTM().inverse());
+function clamp(value, minimum, maximum) {
+  return Math.min(maximum, Math.max(minimum, Number(value)));
 }
 
-function distanceToPathInScreen(path, clientX, clientY) {
-  const matrix = path.getScreenCTM();
-  if (!matrix) return Number.POSITIVE_INFINITY;
+function mapX(value, axis) {
+  return axis.left + ((value - axis.minimum) / (axis.maximum - axis.minimum)) * (axis.right - axis.left);
+}
 
-  const length = path.getTotalLength();
-  const sampleCount = Math.min(96, Math.max(12, Math.ceil(length / 4)));
-  let nearestDistance = Number.POSITIVE_INFINITY;
-  for (let index = 0; index <= sampleCount; index += 1) {
-    const point = path.getPointAtLength(length * index / sampleCount).matrixTransform(matrix);
-    nearestDistance = Math.min(
-      nearestDistance,
-      Math.hypot(clientX - point.x, clientY - point.y),
+function mapY(value, axis) {
+  return axis.bottom - ((value - axis.minimum) / (axis.maximum - axis.minimum)) * (axis.bottom - axis.top);
+}
+
+function sampledPath({ minimum, maximum, samples, evaluate, axis }) {
+  const commands = [];
+  for (let index = 0; index <= samples; index += 1) {
+    const input = minimum + ((maximum - minimum) * index) / samples;
+    const output = clamp(evaluate(input), axis.minimum, axis.maximum);
+    commands.push(
+      (index === 0 ? "M" : "L")
+        + mapX(input, axis).toFixed(2)
+        + ","
+        + mapY(output, axis).toFixed(2),
     );
   }
-  return nearestDistance;
+  return commands.join(" ");
 }
 
 function createSvgElement(name, attributes = {}) {
-  const element = document.createElementNS(SVG_NAMESPACE, name);
-  for (const [attribute, value] of Object.entries(attributes))
-    element.setAttribute(attribute, String(value));
+  const element = document.createElementNS(SVG_NS, name);
+  for (const [key, value] of Object.entries(attributes))
+    element.setAttribute(key, String(value));
   return element;
 }
 
-function setInputValue(input, value, enabled) {
-  input.disabled = !enabled;
-  input.value = enabled && Number.isFinite(value) ? Number(value).toFixed(6) : "";
-}
-
-function mapInputDb(value) {
-  const axis = COMPRESSOR_AXIS;
-  return axis.left + ((value - axis.minimum) / (axis.maximum - axis.minimum)) * (axis.right - axis.left);
-}
-
-function mapOutputDb(value) {
-  const axis = COMPRESSOR_AXIS;
-  return axis.bottom - ((value - axis.minimum) / (axis.maximum - axis.minimum)) * (axis.bottom - axis.top);
-}
-
-function mapClipperX(value) {
-  const axis = CLIPPER_AXIS;
-  return axis.left + ((value - axis.minimum) / (axis.maximum - axis.minimum)) * (axis.right - axis.left);
-}
-
-function mapClipperY(value) {
-  const axis = CLIPPER_AXIS;
-  return axis.bottom - ((value - axis.minimum) / (axis.maximum - axis.minimum)) * (axis.bottom - axis.top);
-}
-
-function formatDb(value) {
-  return `${Number(value) >= 0 ? "+" : ""}${Number(value).toFixed(2)} dB`;
-}
-
-function ratioProbeInput(settings) {
-  return Math.min(COMPRESSOR_AXIS.maximum, settings.thresholdDb + 12);
-}
-
-function solveRatioEndpoint({ parameterValues, endpointID, probeInput, targetOutput }) {
-  const minimum = 1;
-  const maximum = endpointID === "ratio" ? 100 : 1000;
-  const candidateParameters = new Map(parameterValues);
-  const outputAt = candidate => {
-    candidateParameters.set(endpointID, candidate);
-    return evaluateCompressorTransfer(probeInput, candidateParameters);
-  };
-  const outputAtMinimum = outputAt(minimum);
-  const outputAtMaximum = outputAt(maximum);
-  if (targetOutput >= outputAtMinimum) return minimum;
-  if (targetOutput <= outputAtMaximum) return maximum;
-
-  let low = minimum;
-  let high = maximum;
-  for (let iteration = 0; iteration < 42; iteration += 1) {
-    const middle = (low + high) * 0.5;
-    if (outputAt(middle) > targetOutput) low = middle;
-    else high = middle;
-  }
-  return (low + high) * 0.5;
+function sideLabel(side) {
+  return side === "negative" ? "Negative" : "Positive";
 }
 
 export function createPolishGraphStudio({ root, patchConnection, parameterValues, sendParameter }) {
+  const compressorCurve = root.querySelector("[data-compressor-curve]");
   const compressorSvg = root.querySelector('[data-transfer-graph="compressor"]');
-  const compressorPath = root.querySelector("[data-compressor-curve]");
-  const thresholdHandle = root.querySelector('[data-graph-handle="threshold"]');
-  const thresholdVisual = root.querySelector('[data-graph-control="threshold"]');
-  const ratioHandle = root.querySelector('[data-graph-handle="ratio"]');
-  const ratioVisual = root.querySelector('[data-graph-control="ratio"]');
-  const kneeHandle = root.querySelector('[data-graph-handle="knee"]');
-  const kneeVisual = root.querySelector('[data-graph-control="knee"]');
-  const kneeRegion = root.querySelector("[data-compressor-knee-region]");
-  const makeupHandle = root.querySelector('[data-graph-handle="makeup"]');
-  const makeupVisual = root.querySelector('[data-graph-control="makeup"]');
-  const readout = root.querySelector("[data-graph-readout]");
+  const compressorSummary = root.querySelector("[data-compressor-summary]");
   const compressorOperatingPoint = root.querySelector("[data-compressor-operating-point]");
-  const compressorOperatingInput = root.querySelector("[data-compressor-operating-input]");
-  const compressorOperatingOutput = root.querySelector("[data-compressor-operating-output]");
+  const kneeConnector = root.querySelector("[data-knee-connector]");
+  const compressorReadout = root.querySelector("[data-compressor-readout]");
+  const compressorReadoutText = root.querySelector("[data-compressor-readout-text]");
   const gainReductionTrace = root.querySelector("[data-gain-reduction-trace]");
-  const gainReductionValue = root.querySelector("[data-gain-reduction-live-value]");
-  const gainReductionHistory = [];
-  const clipperSvg = root.querySelector('[data-transfer-graph="clipper"]');
-  const decodedClipperPath = root.querySelector("[data-decoded-clipper-curve]");
-  const clipperPath = root.querySelector("[data-clipper-curve]");
-  const driveHandle = root.querySelector('[data-graph-handle="drive"]');
-  const driveVisual = root.querySelector('[data-graph-control="drive"]');
-  const driveGuide = root.querySelector("[data-drive-guide]");
-  const clipRegion = root.querySelector("[data-clipped-region]");
-  const curveSegmentsHost = root.querySelector("[data-curve-segments]");
-  const curveBendsHost = root.querySelector("[data-curve-bends]");
-  const curvePointsHost = root.querySelector("[data-curve-points]");
-  const curveAmountVisualsHost = root.querySelector("[data-curve-amount-visuals]");
-  const curveMode = root.querySelector("[data-curve-editor-mode]");
-  const curveModeNote = root.querySelector("[data-curve-editor-note]");
-  const startEditorButton = root.querySelector("[data-curve-start-editor]");
-  const addPointButton = root.querySelector("[data-curve-add]");
-  const removePointButton = root.querySelector("[data-curve-remove]");
-  const linkAmountButton = root.querySelector("[data-curve-link-amount]");
-  const curveSelection = root.querySelector("[data-curve-selection]");
-  const exactXInput = root.querySelector("[data-curve-exact-x]");
-  const exactYInput = root.querySelector("[data-curve-exact-y]");
-  const exactBendInput = root.querySelector("[data-curve-exact-bend]");
-  const amountXInput = root.querySelector("[data-curve-amount-x]");
-  const amountYInput = root.querySelector("[data-curve-amount-y]");
-  const clipperOperatingPoint = root.querySelector("[data-clipper-operating-point]");
-  const clipperOperatingGuide = root.querySelector("[data-clipper-operating-guide]");
-  const clipperOperatingLabel = root.querySelector("[data-clipper-operating-label]");
-  let activeGesture = null;
-  let selectedEditorPoint = 1;
-  let addPointArmed = false;
-
-  const segmentHandles = () => Array.from(curveSegmentsHost.querySelectorAll("[data-curve-segment]"));
-  const knotHandles = () => Array.from(curvePointsHost.querySelectorAll('[data-graph-handle^="knot"]'));
+  const shaperSvg = root.querySelector('[data-transfer-graph="shaper"]');
+  const shaperCurve = root.querySelector("[data-shaper-curve]");
+  const shaperSegments = root.querySelector("[data-shape-segments]");
+  const shaperPoints = root.querySelector("[data-shape-points]");
+  const morphVisuals = root.querySelector("[data-morph-visuals]");
+  const shaperOperatingPoint = root.querySelector("[data-shaper-operating-point]");
+  const shaperReadout = root.querySelector("[data-shaper-readout]");
+  const shaperReadoutText = root.querySelector("[data-shaper-readout-text]");
+  const selectionLabel = root.querySelector("[data-shape-selection]");
+  const morphOwnerLabel = root.querySelector("[data-morph-owner]");
+  const addPointButton = root.querySelector("[data-shape-add]");
+  const deletePointButton = root.querySelector("[data-shape-delete]");
+  const assignMorphButton = root.querySelector("[data-morph-assign]");
+  const inspectorLabel = root.querySelector("[data-shape-inspector-label]");
+  const exactFields = Object.fromEntries(
+    Array.from(root.querySelectorAll("[data-shape-exact-field]"))
+      .map(field => [field.dataset.shapeExactField, field]),
+  );
+  const exactFieldWraps = Object.fromEntries(
+    Array.from(root.querySelectorAll("[data-shape-exact-wrap]"))
+      .map(wrapper => [wrapper.dataset.shapeExactWrap, wrapper]),
+  );
+  const reductionHistory = [];
+  let selection = { kind: "point", side: "positive", index: 1 };
+  let activeGesture;
 
   function renderCompressor() {
-    const path = [];
-    for (let index = 0; index <= 240; index += 1) {
-      const inputDb = COMPRESSOR_AXIS.minimum
-        + (COMPRESSOR_AXIS.maximum - COMPRESSOR_AXIS.minimum) * index / 240;
-      const outputDb = evaluateCompressorTransfer(inputDb, parameterValues);
-      path.push(
-        `${index === 0 ? "M" : "L"}${mapInputDb(inputDb).toFixed(2)},${mapOutputDb(outputDb).toFixed(2)}`,
+    compressorCurve.setAttribute("d", sampledPath({
+      minimum: COMPRESSOR_AXIS.minimum,
+      maximum: COMPRESSOR_AXIS.maximum,
+      samples: 240,
+      evaluate: input => evaluateCompressorTransfer(input, parameterValues),
+      axis: COMPRESSOR_AXIS,
+    }));
+
+    const threshold = finiteParameter(parameterValues, "thresholdDb", COMPRESSOR_DEFAULTS.thresholdDb);
+    const ratio = finiteParameter(parameterValues, "ratio", COMPRESSOR_DEFAULTS.ratio);
+    const knee = finiteParameter(parameterValues, "kneeDb", COMPRESSOR_DEFAULTS.kneeDb);
+    const makeup = finiteParameter(parameterValues, "makeupDb", COMPRESSOR_DEFAULTS.makeupDb);
+    compressorSummary.textContent = threshold.toFixed(1)
+      + " dB · "
+      + ratio.toFixed(2)
+      + ":1 · "
+      + knee.toFixed(1)
+      + " dB knee";
+
+    const kneeInput = clamp(threshold + knee * 0.5, COMPRESSOR_AXIS.minimum, COMPRESSOR_AXIS.maximum);
+    const kneeCurveY = mapY(evaluateCompressorTransfer(kneeInput, parameterValues), COMPRESSOR_AXIS);
+    const kneeHandleY = clamp(kneeCurveY - 32, COMPRESSOR_AXIS.top, COMPRESSOR_AXIS.bottom);
+    const handles = {
+      threshold: [
+        threshold,
+        mapY(evaluateCompressorTransfer(threshold, parameterValues), COMPRESSOR_AXIS),
+      ],
+      ratio: [
+        COMPRESSOR_AXIS.maximum,
+        mapY(evaluateCompressorTransfer(COMPRESSOR_AXIS.maximum, parameterValues), COMPRESSOR_AXIS),
+      ],
+      knee: [
+        kneeInput,
+        kneeHandleY,
+      ],
+      makeup: [
+        -36,
+        mapY(evaluateCompressorTransfer(-36, parameterValues), COMPRESSOR_AXIS),
+      ],
+    };
+
+    kneeConnector.setAttribute(
+      "d",
+      "M" + mapX(kneeInput, COMPRESSOR_AXIS).toFixed(2) + "," + kneeHandleY.toFixed(2)
+        + "L" + mapX(kneeInput, COMPRESSOR_AXIS).toFixed(2) + ","
+        + clamp(kneeCurveY, COMPRESSOR_AXIS.top, COMPRESSOR_AXIS.bottom).toFixed(2),
+    );
+
+    for (const [name, position] of Object.entries(handles)) {
+      const handle = root.querySelector('[data-graph-handle="' + name + '"]');
+      handle?.setAttribute(
+        "transform",
+        "translate(" + mapX(position[0], COMPRESSOR_AXIS).toFixed(2)
+          + " " + clamp(position[1], COMPRESSOR_AXIS.top, COMPRESSOR_AXIS.bottom).toFixed(2) + ")",
       );
     }
-    compressorPath.setAttribute("d", path.join(" "));
-
-    const thresholdDb = finiteParameter(
-      parameterValues,
-      "thresholdDb",
-      COMPRESSOR_DEFAULTS.thresholdDb,
-    );
-    thresholdVisual.setAttribute("transform", `translate(${mapInputDb(thresholdDb).toFixed(3)} 0)`);
-    thresholdHandle.setAttribute("aria-valuenow", String(thresholdDb));
-    thresholdHandle.setAttribute("aria-valuetext", formatDb(thresholdDb));
-
-    const settings = effectiveCompressorSettings(parameterValues);
-    const kneeLeft = settings.thresholdDb - settings.kneeDb * 0.5;
-    const kneeRight = settings.thresholdDb + settings.kneeDb * 0.5;
-    kneeRegion.setAttribute("x", mapInputDb(kneeLeft).toFixed(3));
-    kneeRegion.setAttribute("width", Math.max(0, mapInputDb(kneeRight) - mapInputDb(kneeLeft)).toFixed(3));
-    const kneeOutput = evaluateCompressorTransfer(kneeRight, parameterValues);
-    kneeVisual.setAttribute(
-      "transform",
-      `translate(${mapInputDb(kneeRight).toFixed(3)} ${mapOutputDb(kneeOutput).toFixed(3)})`,
-    );
-    kneeHandle.setAttribute("aria-valuenow", String(settings.kneeDb));
-    kneeHandle.setAttribute("aria-valuetext", formatDb(settings.kneeDb));
-    const makeupProbeInput = -36;
-    const makeupProbeOutput = evaluateCompressorTransfer(makeupProbeInput, parameterValues);
-    makeupVisual.setAttribute(
-      "transform",
-      `translate(${mapInputDb(makeupProbeInput).toFixed(3)} ${mapOutputDb(makeupProbeOutput).toFixed(3)})`,
-    );
-    const baseMakeupDb = finiteParameter(parameterValues, "makeupDb", COMPRESSOR_DEFAULTS.makeupDb);
-    makeupHandle.setAttribute("aria-valuenow", String(baseMakeupDb));
-    makeupHandle.setAttribute("aria-valuetext", formatDb(baseMakeupDb));
-    const probeInput = ratioProbeInput(settings);
-    const probeOutput = evaluateCompressorTransfer(probeInput, parameterValues);
-    ratioVisual.setAttribute(
-      "transform",
-      `translate(${mapInputDb(probeInput).toFixed(3)} ${mapOutputDb(probeOutput).toFixed(3)})`,
-    );
-    ratioHandle.setAttribute("aria-valuenow", String(settings.ratio));
-    ratioHandle.setAttribute("aria-valuetext", `${settings.ratio.toFixed(settings.ratio >= 100 ? 0 : 2)} to 1`);
-    root.querySelector("[data-compressor-graph-summary]").textContent =
-      `${settings.ratio.toFixed(settings.ratio >= 100 ? 0 : 2)}:1 · ${formatDb(settings.makeupDb)} makeup`;
   }
 
-  function currentCurveValues() {
-    return Object.fromEntries(Object.keys(CURVE_DEFAULTS).map(endpointID => [
-      endpointID,
-      finiteParameter(parameterValues, endpointID, CURVE_DEFAULTS[endpointID]),
-    ]));
+  function segmentPath(side, left, right) {
+    const commands = [];
+    for (let sample = 0; sample <= 28; sample += 1) {
+      const position = sample / 28;
+      const magnitude = left.x + (right.x - left.x) * position;
+      const output = left.y + (right.y - left.y) * quadraticBow(position, right.bend);
+      const input = side === "negative" ? -magnitude : magnitude;
+      commands.push(
+        (sample === 0 ? "M" : "L")
+          + mapX(input, SHAPER_AXIS).toFixed(2)
+          + ","
+          + mapY(output, SHAPER_AXIS).toFixed(2),
+      );
+    }
+    return commands.join(" ");
   }
 
-  function rawEditorPointValue(index, axis) {
-    const endpointID = `curveP${index}${axis}`;
-    const fallback = index <= 3
-      ? CURVE_DEFAULTS[endpointID]
-      : CURVE_EDITOR_DEFAULTS[endpointID];
-    return finiteParameter(parameterValues, endpointID, fallback);
+  function currentShapeGeometry() {
+    const points = [];
+    const segments = [];
+    const owner = morphOwner(parameterValues);
+    for (const side of ["negative", "positive"]) {
+      const sidePoints = effectiveShapePoints(parameterValues, side);
+      for (let index = 1; index < sidePoints.length; index += 1) {
+        const point = sidePoints[index];
+        const ownsMorph = side === owner.side && point.index === owner.index;
+        const raw = ownsMorph ? rawShapePoint(parameterValues, side, point.index) : point;
+        const sign = side === "negative" ? -1 : 1;
+        points.push({
+          ...point,
+          side,
+          input: sign * point.x,
+          handleInput: sign * raw.x,
+          handleOutput: raw.y,
+        });
+        segments.push({
+          side,
+          index,
+          path: segmentPath(side, sidePoints[index - 1], point),
+        });
+      }
+    }
+    return { points, segments };
   }
 
-  function editorPointsAtAmount(amount) {
-    const values = new Map(parameterValues);
-    values.set("amount", amount);
-    return effectiveEditorCurve(values);
+  function renderSelection() {
+    const count = shapePointCount(parameterValues, selection.side);
+    if (selection.index > count) selection.index = count;
+    const selectionName = selection.kind === "morph"
+      ? "Morph B"
+      : sideLabel(selection.side) + " " + selection.kind + " " + selection.index;
+    selectionLabel.textContent = selectionName;
+    addPointButton.disabled = count >= SHAPER_MAX_POINTS || selection.kind === "morph";
+    deletePointButton.disabled = selection.kind !== "point" || count <= 1;
+    const owner = morphOwner(parameterValues);
+    morphOwnerLabel.textContent = "Morph A: " + sideLabel(owner.side) + " point " + owner.index;
+
+    inspectorLabel.textContent = selectionName;
+    const hasCoordinates = selection.kind === "point" || selection.kind === "morph";
+    exactFieldWraps.input.hidden = !hasCoordinates;
+    exactFieldWraps.output.hidden = !hasCoordinates;
+    exactFieldWraps.bend.hidden = hasCoordinates;
+    const point = rawShapePoint(parameterValues, selection.side, selection.index);
+    if (hasCoordinates) {
+      const inputMagnitude = selection.kind === "morph"
+        ? Number(parameterValues.get("morphTargetX"))
+        : point.x;
+      const output = selection.kind === "morph"
+        ? Number(parameterValues.get("morphTargetY"))
+        : point.y;
+      exactFields.input.min = selection.side === "negative" ? "-1.5" : "0.01";
+      exactFields.input.max = selection.side === "negative" ? "-0.01" : "1.5";
+      exactFields.input.value = String(selection.side === "negative" ? -inputMagnitude : inputMagnitude);
+      exactFields.output.value = String(output);
+    } else {
+      exactFields.bend.value = String(point.bend);
+    }
   }
 
-  function displayCurvePoint(point, driveGain, mix) {
-    const input = point.x / driveGain;
-    return {
-      input,
-      output: input + (point.y - input) * mix,
-    };
+  function updateStableGeometry(geometry) {
+    for (const segment of geometry.segments) {
+      shaperSegments.querySelector(
+        '[data-shape-side="' + segment.side + '"][data-shape-index="' + segment.index + '"]',
+      )?.setAttribute("d", segment.path);
+    }
+    for (const point of geometry.points) {
+      const handle = shaperPoints.querySelector(
+        '[data-shape-side="' + point.side + '"][data-shape-index="' + point.index + '"]',
+      );
+      handle?.setAttribute(
+        "transform",
+        "translate(" + mapX(point.handleInput, SHAPER_AXIS) + " " + mapY(point.handleOutput, SHAPER_AXIS) + ")",
+      );
+      if (handle) {
+        handle.dataset.shapeInput = String(point.input);
+        handle.dataset.shapeOutput = String(point.y);
+        handle.dataset.shapeHandleInput = String(point.handleInput);
+        handle.dataset.shapeHandleOutput = String(point.handleOutput);
+        if (handle.dataset.morphEndpoint === "A") {
+          handle.dataset.morphInput = String(point.handleInput);
+          handle.dataset.morphOutput = String(point.handleOutput);
+        }
+      }
+    }
   }
 
-  function renderCurveEditorUi() {
-    const enabled = isCurveEditorEnabled(parameterValues);
-    const initialized = finiteParameter(parameterValues, "curveEditorInitialized", 0) >= 0.5;
-    const count = enabled ? editorPointCount(parameterValues) : 0;
-    selectedEditorPoint = enabled
-      ? Math.round(clampValue(selectedEditorPoint, 1, count))
-      : 1;
-    for (const point of curvePointsHost.querySelectorAll("[data-editor-point]"))
-      point.dataset.selected = String(enabled && Number(point.dataset.editorPoint) === selectedEditorPoint);
-    const amountPoint = enabled
-      ? Math.round(clampValue(finiteParameter(parameterValues, "curveAmountPoint", 0), 0, count))
-      : 0;
+  function morphEndpointGeometry() {
+    const owner = morphOwner(parameterValues);
+    const point = rawShapePoint(parameterValues, owner.side, owner.index);
+    const targetXValue = Number(parameterValues.get("morphTargetX"));
+    const targetYValue = Number(parameterValues.get("morphTargetY"));
+    const targetX = Number.isFinite(targetXValue) ? targetXValue : point.x;
+    const targetY = Number.isFinite(targetYValue) ? targetYValue : point.y;
+    const sign = owner.side === "negative" ? -1 : 1;
+    return [
+      { endpoint: "A", side: owner.side, index: owner.index, x: point.x, y: point.y, input: point.x * sign },
+      { endpoint: "B", side: owner.side, index: owner.index, x: targetX, y: targetY, input: targetX * sign },
+    ];
+  }
 
-    curveMode.textContent = enabled ? "Point editor" : "Decoded curve";
-    curveModeNote.textContent = enabled
-      ? "Move anchors in two dimensions. Drag one diamond per segment to bend it; add a point whenever one bend is not enough."
-      : "The decoded interpolation remains exact. Start the point editor to keep its anchors but replace its interpolation with straight, individually bendable segments.";
-    startEditorButton.textContent = enabled
-      ? "Use decoded curve"
-      : initialized ? "Resume point editor" : "Start point editor";
-    addPointButton.disabled = !enabled || count >= CURVE_EDITOR_MAX_POINTS;
-    addPointButton.dataset.active = String(enabled && addPointArmed);
-    addPointButton.textContent = addPointArmed ? "Tap curve…" : "+ Point";
-    removePointButton.disabled = !enabled || count <= 2;
-    linkAmountButton.disabled = !enabled;
-    curveSelection.textContent = enabled ? `Point ${selectedEditorPoint}` : "Select a point";
+  function renderMorphVisuals() {
+    const endpoints = morphEndpointGeometry().filter(endpoint => endpoint.endpoint === "B");
+    if (!activeGesture) morphVisuals.replaceChildren();
+    for (const endpoint of endpoints) {
+      let handle = morphVisuals.querySelector('[data-morph-endpoint="' + endpoint.endpoint + '"]');
+      if (!handle) {
+        handle = createSvgElement("g", {
+          "data-morph-endpoint": endpoint.endpoint,
+          role: "slider",
+          tabindex: "0",
+          "aria-label": "Morph " + endpoint.endpoint + " position",
+          "aria-description": "Drag in two dimensions to set Morph position " + endpoint.endpoint + ".",
+          "data-control-help": "Morph " + endpoint.endpoint + ": drag in two dimensions.",
+        });
+        handle.append(
+          createSvgElement("circle", { class: "morph-endpoint-hit", r: 24 }),
+          createSvgElement("circle", { class: "morph-endpoint", r: 12 }),
+        );
+        const label = createSvgElement("text", { class: "morph-endpoint-label", x: 0, y: 0 });
+        label.textContent = endpoint.endpoint;
+        handle.append(label);
+        morphVisuals.append(handle);
+      }
+      handle.dataset.shapeSide = endpoint.side;
+      handle.dataset.shapeIndex = String(endpoint.index);
+      handle.dataset.shapeInput = String(endpoint.input);
+      handle.dataset.shapeOutput = String(endpoint.y);
+      handle.setAttribute(
+        "transform",
+        "translate(" + mapX(endpoint.input, SHAPER_AXIS) + " " + mapY(endpoint.y, SHAPER_AXIS) + ")",
+      );
+    }
+  }
 
-    if (!enabled) {
-      linkAmountButton.textContent = "Move with Amount";
-      setInputValue(exactXInput, NaN, false);
-      setInputValue(exactYInput, NaN, false);
-      setInputValue(exactBendInput, NaN, false);
-      setInputValue(amountXInput, NaN, false);
-      setInputValue(amountYInput, NaN, false);
+  function renderShaper() {
+    shaperCurve.setAttribute("d", sampledPath({
+      minimum: SHAPER_AXIS.minimum,
+      maximum: SHAPER_AXIS.maximum,
+      samples: 300,
+      evaluate: input => evaluateBipolarTransfer(input, parameterValues),
+      axis: SHAPER_AXIS,
+    }));
+
+    const geometry = currentShapeGeometry();
+    renderSelection();
+    if (activeGesture) {
+      updateStableGeometry(geometry);
+      renderMorphVisuals();
       return;
     }
 
-    const basePoints = editorPointsAtAmount(0);
-    const selected = basePoints[selectedEditorPoint];
-    const previous = basePoints[selectedEditorPoint - 1];
-    const next = basePoints[selectedEditorPoint + 1];
-    exactXInput.min = String(selectedEditorPoint === 1 ? 0.01 : previous.x + 0.001);
-    exactXInput.max = String(selectedEditorPoint === count ? 1.5 : next.x - 0.001);
-    exactYInput.min = String(selectedEditorPoint === 1 ? 0 : previous.y);
-    exactYInput.max = String(selectedEditorPoint === count ? 1.5 : next.y);
-    setInputValue(exactXInput, rawEditorPointValue(selectedEditorPoint, "X"), true);
-    setInputValue(exactYInput, rawEditorPointValue(selectedEditorPoint, "Y"), true);
-    setInputValue(
-      exactBendInput,
-      finiteParameter(parameterValues, `curveB${selectedEditorPoint}`, 0),
-      true,
-    );
-
-    const selectedOwnsAmount = amountPoint === selectedEditorPoint;
-    linkAmountButton.textContent = selectedOwnsAmount ? "Remove Amount motion" : "Move with Amount";
-    setInputValue(
-      amountXInput,
-      finiteParameter(parameterValues, "curveAmountTargetX", selected.x),
-      selectedOwnsAmount,
-    );
-    setInputValue(
-      amountYInput,
-      finiteParameter(parameterValues, "curveAmountTargetY", selected.y),
-      selectedOwnsAmount,
-    );
-    amountXInput.min = exactXInput.min;
-    amountXInput.max = exactXInput.max;
-    amountYInput.min = exactYInput.min;
-    amountYInput.max = exactYInput.max;
-  }
-
-  function renderClipper() {
-    const path = [];
-    const decodedPath = [];
-    const decodedValues = { ...CURVE_DEFAULTS, ...CLIPPER_STAGE_DEFAULTS };
-    for (let index = 0; index <= 300; index += 1) {
-      const input = CLIPPER_AXIS.minimum
-        + (CLIPPER_AXIS.maximum - CLIPPER_AXIS.minimum) * index / 300;
-      const output = evaluateClipperTransfer(input, parameterValues);
-      path.push(`${index === 0 ? "M" : "L"}${mapClipperX(input).toFixed(2)},${mapClipperY(output).toFixed(2)}`);
-      const decodedOutput = evaluateClipperTransfer(input, decodedValues);
-      decodedPath.push(
-        `${index === 0 ? "M" : "L"}${mapClipperX(input).toFixed(2)},${mapClipperY(decodedOutput).toFixed(2)}`,
-      );
-    }
-    clipperPath.setAttribute("d", path.join(" "));
-    decodedClipperPath.setAttribute("d", decodedPath.join(" "));
-
-    const editorEnabled = isCurveEditorEnabled(parameterValues);
-    const points = editorEnabled
-      ? effectiveEditorCurve(parameterValues)
-      : sanitizeCurve(currentCurveValues());
-    const driveDb = finiteParameter(parameterValues, "clipDriveDb", CLIPPER_STAGE_DEFAULTS.clipDriveDb);
-    const driveGain = 10 ** (driveDb / 20);
-    const clipBoundary = points[1].x / driveGain;
-    const displayedBoundary = clampValue(clipBoundary, 0.02, CLIPPER_AXIS.maximum);
-    const driveOutput = evaluateClipperTransfer(displayedBoundary, parameterValues);
-    driveVisual.setAttribute(
-      "transform",
-      `translate(${mapClipperX(displayedBoundary).toFixed(3)} ${(CLIPPER_AXIS.bottom - 14).toFixed(3)})`,
-    );
-    driveGuide.setAttribute(
-      "d",
-      `M${mapClipperX(displayedBoundary).toFixed(3)} ${CLIPPER_AXIS.bottom - 14}V${mapClipperY(driveOutput).toFixed(3)}`,
-    );
-    driveVisual.dataset.offscale = String(clipBoundary > CLIPPER_AXIS.maximum);
-    driveHandle.setAttribute("aria-valuenow", String(driveDb));
-    driveHandle.setAttribute("aria-valuetext", formatDb(driveDb));
-
-    const clipMix = clampValue(finiteParameter(parameterValues, "clipMix", 100) * 0.01, 0, 1);
-    curveSegmentsHost.replaceChildren();
-    curveBendsHost.replaceChildren();
-    curvePointsHost.replaceChildren();
-    curveAmountVisualsHost.replaceChildren();
-    for (let index = 1; index < points.length; index += 1) {
-      const point = points[index];
-      const left = points[index - 1];
-
-      const segmentPath = [];
-      for (let sample = 0; sample <= 36; sample += 1) {
-        const drivenInput = left.x + (point.x - left.x) * sample / 36;
-        const input = drivenInput / driveGain;
-        const output = evaluateClipperTransfer(input, parameterValues);
-        segmentPath.push(
-          `${sample === 0 ? "M" : "L"}${mapClipperX(input).toFixed(2)},${mapClipperY(output).toFixed(2)}`,
-        );
-      }
-      const segmentValue = editorEnabled ? point.bend : point.tension;
-      const segmentHandleName = editorEnabled ? `bend${index}` : `segment${index}`;
-      const segment = createSvgElement("path", {
-        class: "curve-segment-hit",
-        "data-curve-segment": index,
-        "data-segment-handle": segmentHandleName,
-        ...(!editorEnabled ? { "data-graph-handle": segmentHandleName } : {}),
-        role: "slider",
-        tabindex: 0,
-        "aria-label": editorEnabled
-          ? `Drag segment ${index} vertically to bend it`
-          : `Drag decoded segment ${index} vertically to change its roundness`,
-        "aria-valuemin": -1,
-        "aria-valuemax": 1,
-        "aria-valuenow": segmentValue,
-        "aria-valuetext": `${editorEnabled ? "Bend" : "Roundness"} ${segmentValue.toFixed(3)}`,
-        d: segmentPath.join(" "),
-      });
-      curveSegmentsHost.append(segment);
-
-      if (editorEnabled) {
-        const drivenMidpoint = (left.x + point.x) * 0.5;
-        const externalMidpoint = drivenMidpoint / driveGain;
-        const midpointOutput = evaluateClipperTransfer(externalMidpoint, parameterValues);
-        const bend = createSvgElement("g", {
-          transform: `translate(${mapClipperX(externalMidpoint).toFixed(3)} ${mapClipperY(midpointOutput).toFixed(3)})`,
-          "data-graph-control": `bend${index}`,
-          "data-graph-handle": `bend${index}`,
-          "data-editor-bend": index,
-          role: "slider",
-          tabindex: 0,
-          "aria-label": `Segment ${index} bend`,
-          "aria-valuemin": -1,
-          "aria-valuemax": 1,
-          "aria-valuenow": segmentValue,
-        });
-        bend.append(
-          createSvgElement("rect", { x: -28, y: -28, width: 56, height: 56, fill: "rgba(0,0,0,0.001)", stroke: "none" }),
-          createSvgElement("path", { class: "bend-grip", d: "M0 -9L9 0L0 9L-9 0Z" }),
-        );
-        curveBendsHost.append(bend);
-      }
-    }
-
-    const basePoints = editorEnabled ? editorPointsAtAmount(0) : points;
-    const amountPoint = editorEnabled
-      ? Math.round(clampValue(finiteParameter(parameterValues, "curveAmountPoint", 0), 0, points.length - 1))
-      : 0;
-    for (let index = 1; index < points.length; index += 1) {
-      const point = amountPoint === index ? basePoints[index] : points[index];
-      const displayed = displayCurvePoint(point, driveGain, clipMix);
-      const knot = createSvgElement("g", {
-        transform: `translate(${mapClipperX(displayed.input).toFixed(3)} ${mapClipperY(displayed.output).toFixed(3)})`,
-        "data-graph-control": `knot${index}`,
-        "data-graph-handle": `knot${index}`,
-        ...(editorEnabled ? { "data-editor-point": index } : {}),
-        "data-selected": String(editorEnabled && selectedEditorPoint === index),
-        role: "slider",
-        tabindex: 0,
-        "aria-label": `${index === points.length - 1 ? "Ceiling" : `Point ${index}`} input and output; drag freely`,
-        "aria-valuetext": `Input ${point.x.toFixed(3)}, output ${point.y.toFixed(3)}`,
-      });
-      knot.append(
-        createSvgElement("rect", { x: -26, y: -26, width: 52, height: 52, fill: "transparent", stroke: "transparent" }),
-        createSvgElement("circle", { class: "knot-grip", cx: 0, cy: 0, r: 11 }),
-      );
-      const number = createSvgElement("text", { class: "knot-number", x: 0, y: 0 });
-      number.textContent = String(index);
-      knot.append(number);
-      curvePointsHost.append(knot);
-    }
-
-    if (editorEnabled && amountPoint > 0) {
-      const targetPoints = editorPointsAtAmount(100);
-      const base = displayCurvePoint(basePoints[amountPoint], driveGain, clipMix);
-      const target = displayCurvePoint(targetPoints[amountPoint], driveGain, clipMix);
-      const current = displayCurvePoint(points[amountPoint], driveGain, clipMix);
-      curveAmountVisualsHost.append(createSvgElement("path", {
-        class: "amount-path",
-        d: `M${mapClipperX(base.input).toFixed(3)} ${mapClipperY(base.output).toFixed(3)}L${mapClipperX(target.input).toFixed(3)} ${mapClipperY(target.output).toFixed(3)}`,
+    shaperSegments.replaceChildren();
+    for (const segment of geometry.segments) {
+      shaperSegments.append(createSvgElement("path", {
+        class: "shape-segment-hit",
+        d: segment.path,
+        "data-shape-segment-handle": "",
+        "data-shape-side": segment.side,
+        "data-shape-index": segment.index,
+        "data-selected": String(
+          selection.kind === "segment"
+            && selection.side === segment.side
+            && selection.index === segment.index,
+        ),
+        "aria-label": sideLabel(segment.side) + " segment " + segment.index,
+        "aria-description": "Drag vertically on the curve to bend this segment.",
+        "data-control-help": "Drag vertically on the curve to bend this segment.",
       }));
-      const targetHandle = createSvgElement("g", {
-        transform: `translate(${mapClipperX(target.input).toFixed(3)} ${mapClipperY(target.output).toFixed(3)})`,
-        "data-graph-control": "amountTarget",
-        "data-graph-handle": "amountTarget",
-        role: "slider",
-        tabindex: 0,
-        "aria-label": `Point ${amountPoint} position at 100 percent Amount`,
-      });
-      targetHandle.append(
-        createSvgElement("rect", { x: -26, y: -26, width: 52, height: 52, fill: "rgba(0,0,0,0.001)", stroke: "none" }),
-        createSvgElement("path", { class: "amount-target-grip", d: "M0 -12L12 0L0 12L-12 0Z" }),
-      );
-      curveAmountVisualsHost.append(targetHandle);
-      const currentHandle = createSvgElement("g", {
-        transform: `translate(${mapClipperX(current.input).toFixed(3)} ${mapClipperY(current.output).toFixed(3)})`,
-        "data-graph-control": "amountCurrent",
-        "data-visible": String(editorAmount(parameterValues) > 0.001 && editorAmount(parameterValues) < 0.999),
-      });
-      currentHandle.append(createSvgElement("circle", { class: "amount-current-grip", cx: 0, cy: 0, r: 6 }));
-      curveAmountVisualsHost.append(currentHandle);
     }
 
-    const positiveBoundaryX = mapClipperX(Math.min(clipBoundary, CLIPPER_AXIS.maximum));
-    clipRegion.setAttribute("x", positiveBoundaryX.toFixed(3));
-    clipRegion.setAttribute("width", Math.max(0, CLIPPER_AXIS.right - positiveBoundaryX).toFixed(3));
-    root.querySelector("[data-clipper-graph-summary]").textContent = editorEnabled
-      ? `${points.length - 1} points · ${formatDb(driveDb)} drive · ${finiteParameter(parameterValues, "clipMix", 100).toFixed(1)}% mix`
-      : `${formatDb(driveDb)} drive · ${finiteParameter(parameterValues, "clipMix", 100).toFixed(1)}% mix`;
-    renderCurveEditorUi();
+    shaperPoints.replaceChildren();
+    const owner = morphOwner(parameterValues);
+    for (const point of geometry.points) {
+      const ownsMorph = point.side === owner.side && point.index === owner.index;
+      const attributes = {
+        transform: "translate(" + mapX(point.handleInput, SHAPER_AXIS) + " " + mapY(point.handleOutput, SHAPER_AXIS) + ")",
+        "data-shape-point-handle": "",
+        "data-shape-side": point.side,
+        "data-shape-index": point.index,
+        "data-shape-input": point.input,
+        "data-shape-output": point.y,
+        "data-shape-handle-input": point.handleInput,
+        "data-shape-handle-output": point.handleOutput,
+        "data-selected": String(
+          selection.kind === "point"
+            && selection.side === point.side
+            && selection.index === point.index,
+        ),
+        role: "slider",
+        tabindex: "0",
+        "aria-label": sideLabel(point.side) + " point " + point.index,
+        "aria-description": ownsMorph
+          ? "Morph position A. Drag in two dimensions."
+          : "Drag in two dimensions to move this point.",
+        "data-control-help": ownsMorph
+          ? "Morph A: drag in two dimensions."
+          : "Drag in two dimensions to move this point.",
+      };
+      if (ownsMorph) {
+        attributes["data-morph-endpoint"] = "A";
+        attributes["data-morph-input"] = point.handleInput;
+        attributes["data-morph-output"] = point.handleOutput;
+      }
+      const group = createSvgElement("g", attributes);
+      group.append(
+        createSvgElement("circle", { class: "shape-point-hit", r: 24 }),
+        createSvgElement("circle", { class: "shape-point", r: 10 }),
+      );
+      const label = createSvgElement("text", { class: "shape-point-label", x: 0, y: 4 });
+      label.textContent = ownsMorph ? "A" : point.side === "negative" ? "−" : "+";
+      group.append(label);
+      shaperPoints.append(group);
+    }
+    renderMorphVisuals();
   }
 
-  function renderGraphs() {
+  function render() {
     renderCompressor();
-    renderClipper();
+    renderShaper();
   }
 
-  function sendParameterTransaction(changes) {
+  function svgValueAt(clientX, clientY) {
+    const point = shaperSvg.createSVGPoint();
+    point.x = clientX;
+    point.y = clientY;
+    const local = point.matrixTransform(shaperSvg.getScreenCTM().inverse());
+    return {
+      input: SHAPER_AXIS.minimum
+        + ((local.x - SHAPER_AXIS.left) / (SHAPER_AXIS.right - SHAPER_AXIS.left))
+        * (SHAPER_AXIS.maximum - SHAPER_AXIS.minimum),
+      output: SHAPER_AXIS.minimum
+        + ((SHAPER_AXIS.bottom - local.y) / (SHAPER_AXIS.bottom - SHAPER_AXIS.top))
+        * (SHAPER_AXIS.maximum - SHAPER_AXIS.minimum),
+    };
+  }
+
+  function compressorValueAt(clientX, clientY) {
+    const point = compressorSvg.createSVGPoint();
+    point.x = clientX;
+    point.y = clientY;
+    const local = point.matrixTransform(compressorSvg.getScreenCTM().inverse());
+    return {
+      input: COMPRESSOR_AXIS.minimum
+        + ((local.x - COMPRESSOR_AXIS.left) / (COMPRESSOR_AXIS.right - COMPRESSOR_AXIS.left))
+        * (COMPRESSOR_AXIS.maximum - COMPRESSOR_AXIS.minimum),
+      output: COMPRESSOR_AXIS.minimum
+        + ((COMPRESSOR_AXIS.bottom - local.y) / (COMPRESSOR_AXIS.bottom - COMPRESSOR_AXIS.top))
+        * (COMPRESSOR_AXIS.maximum - COMPRESSOR_AXIS.minimum),
+    };
+  }
+
+  function endpointIDsForGesture(gesture) {
+    if (gesture.kind === "compressor") return [gesture.endpointID];
+    return gesture.kind === "point"
+      ? [gesture.endpointIDs.x, gesture.endpointIDs.y]
+      : [gesture.endpointID];
+  }
+
+  function showReadout(element, textElement, text) {
+    textElement.textContent = text;
+    element.dataset.visible = "true";
+  }
+
+  function hideReadout(element) {
+    element.dataset.visible = "false";
+  }
+
+  function compressorReadoutFor(control, value) {
+    if (control === "threshold") return "Threshold  " + value.toFixed(2) + " dB";
+    if (control === "ratio") return "Ratio  " + value.toFixed(2) + ":1";
+    if (control === "knee") return "Knee  " + value.toFixed(2) + " dB";
+    return "Makeup  " + value.toFixed(2) + " dB";
+  }
+
+  function finishGesture(cancelled) {
+    const gesture = activeGesture;
+    if (!gesture) return;
+    if (cancelled && gesture.changed) {
+      if (gesture.kind === "compressor") {
+        sendParameter(gesture.endpointID, gesture.startValue);
+      } else if (gesture.kind === "point") {
+        sendParameter(gesture.endpointIDs.x, gesture.startX);
+        sendParameter(gesture.endpointIDs.y, gesture.startY);
+      } else {
+        sendParameter(gesture.endpointID, gesture.startValue);
+      }
+    }
+    for (const endpointID of endpointIDsForGesture(gesture))
+      patchConnection.sendParameterGestureEnd?.(endpointID);
+    try {
+      if (gesture.handle.hasPointerCapture(gesture.pointerId))
+        gesture.handle.releasePointerCapture(gesture.pointerId);
+    } catch {
+      // Window-level lifecycle listeners remain authoritative.
+    }
+    activeGesture = undefined;
+    if (gesture.kind === "compressor") {
+      hideReadout(compressorReadout);
+      renderCompressor();
+    } else {
+      hideReadout(shaperReadout);
+      renderShaper();
+    }
+  }
+
+  function beginPointGesture(handle, event) {
+    const side = handle.dataset.shapeSide;
+    const index = Number(handle.dataset.shapeIndex);
+    selection = { kind: "point", side, index };
+    const raw = rawShapePoint(parameterValues, side, index);
+    const points = effectiveShapePoints(parameterValues, side);
+    const endpointIDs = shapePointEndpointIDs(side, index);
+    activeGesture = {
+      kind: "point",
+      pointerId: event.pointerId,
+      handle,
+      side,
+      endpointIDs,
+      startPointer: svgValueAt(event.clientX, event.clientY),
+      startX: raw.x,
+      startY: raw.y,
+      minimumX: points[index - 1].x + 0.001,
+      maximumX: points[index + 1]?.x - 0.001 || 1.5,
+      changed: false,
+    };
+    patchConnection.sendParameterGestureStart?.(endpointIDs.x);
+    patchConnection.sendParameterGestureStart?.(endpointIDs.y);
+    showReadout(
+      shaperReadout,
+      shaperReadoutText,
+      sideLabel(side) + " point " + index + "  in "
+        + (side === "negative" ? -raw.x : raw.x).toFixed(3)
+        + "  out " + raw.y.toFixed(3),
+    );
+  }
+
+  function beginSegmentGesture(handle, event) {
+    const side = handle.dataset.shapeSide;
+    const index = Number(handle.dataset.shapeIndex);
+    const endpointID = shapePointEndpointIDs(side, index).bend;
+    selection = { kind: "segment", side, index };
+    activeGesture = {
+      kind: "bend",
+      pointerId: event.pointerId,
+      handle,
+      side,
+      endpointID,
+      startPointer: svgValueAt(event.clientX, event.clientY),
+      startValue: rawShapePoint(parameterValues, side, index).bend,
+      changed: false,
+    };
+    patchConnection.sendParameterGestureStart?.(endpointID);
+    showReadout(
+      shaperReadout,
+      shaperReadoutText,
+      sideLabel(side) + " segment " + index + "  bend " + activeGesture.startValue.toFixed(3),
+    );
+  }
+
+  function beginMorphGesture(handle, event) {
+    const endpoint = handle.dataset.morphEndpoint;
+    const side = handle.dataset.shapeSide;
+    const index = Number(handle.dataset.shapeIndex);
+    const points = effectiveShapePoints(parameterValues, side);
+    const pointIDs = shapePointEndpointIDs(side, index);
+    const endpointIDs = endpoint === "A"
+      ? { x: pointIDs.x, y: pointIDs.y }
+      : { x: "morphTargetX", y: "morphTargetY" };
+    const raw = endpoint === "A"
+      ? rawShapePoint(parameterValues, side, index)
+      : {
+          x: Number(parameterValues.get("morphTargetX")),
+          y: Number(parameterValues.get("morphTargetY")),
+        };
+    selection = { kind: endpoint === "B" ? "morph" : "point", side, index };
+    activeGesture = {
+      kind: "point",
+      pointerId: event.pointerId,
+      handle,
+      side,
+      endpointIDs,
+      startPointer: svgValueAt(event.clientX, event.clientY),
+      startX: raw.x,
+      startY: raw.y,
+      minimumX: points[index - 1].x + 0.001,
+      maximumX: points[index + 1]?.x - 0.001 || 1.5,
+      changed: false,
+    };
+    patchConnection.sendParameterGestureStart?.(endpointIDs.x);
+    patchConnection.sendParameterGestureStart?.(endpointIDs.y);
+    showReadout(
+      shaperReadout,
+      shaperReadoutText,
+      (endpoint === "B" ? "Morph B" : "Morph A") + "  in "
+        + (side === "negative" ? -raw.x : raw.x).toFixed(3)
+        + "  out " + raw.y.toFixed(3),
+    );
+  }
+
+  function onPointerDown(event) {
+    if (activeGesture) return;
+    const morphHandle = event.target?.closest?.("[data-morph-endpoint]");
+    const pointHandle = event.target?.closest?.("[data-shape-point-handle]");
+    const segmentHandle = event.target?.closest?.("[data-shape-segment-handle]");
+    if (!morphHandle && !pointHandle && !segmentHandle) return;
+    if (morphHandle) beginMorphGesture(morphHandle, event);
+    else if (pointHandle) beginPointGesture(pointHandle, event);
+    else beginSegmentGesture(segmentHandle, event);
+    renderSelection();
+    try {
+      activeGesture.handle.setPointerCapture(event.pointerId);
+    } catch {
+      // Window listeners retain ownership if SVG pointer capture is unavailable.
+    }
+    event.preventDefault();
+  }
+
+  function beginCompressorGesture(handle, event) {
+    const control = handle.dataset.graphHandle;
+    const endpointID = control === "threshold"
+      ? "thresholdDb"
+      : control === "knee"
+        ? "kneeDb"
+        : control === "makeup"
+          ? "makeupDb"
+          : "ratio";
+    const fallback = endpointID === "thresholdDb"
+      ? COMPRESSOR_DEFAULTS.thresholdDb
+      : endpointID === "kneeDb"
+        ? COMPRESSOR_DEFAULTS.kneeDb
+        : endpointID === "makeupDb"
+          ? COMPRESSOR_DEFAULTS.makeupDb
+          : COMPRESSOR_DEFAULTS.ratio;
+    activeGesture = {
+      kind: "compressor",
+      control,
+      endpointID,
+      pointerId: event.pointerId,
+      handle,
+      startPointer: compressorValueAt(event.clientX, event.clientY),
+      startValue: finiteParameter(parameterValues, endpointID, fallback),
+      startOutput: evaluateCompressorTransfer(COMPRESSOR_AXIS.maximum, parameterValues),
+      changed: false,
+    };
+    patchConnection.sendParameterGestureStart?.(endpointID);
+    showReadout(compressorReadout, compressorReadoutText, compressorReadoutFor(control, activeGesture.startValue));
+    try { handle.setPointerCapture(event.pointerId); } catch { /* document listeners retain ownership */ }
+    event.preventDefault();
+  }
+
+  function onCompressorPointerDown(event) {
+    if (activeGesture) return;
+    const handle = event.target?.closest?.("[data-graph-handle]");
+    if (handle) beginCompressorGesture(handle, event);
+  }
+
+  function solveRatio(targetOutput) {
+    let lower = 1;
+    let upper = 100;
+    const values = Object.fromEntries(parameterValues);
+    for (let iteration = 0; iteration < 48; iteration += 1) {
+      const candidate = (lower + upper) * 0.5;
+      const output = evaluateCompressorTransfer(
+        COMPRESSOR_AXIS.maximum,
+        { ...values, ratio: candidate },
+      );
+      if (output > targetOutput) lower = candidate;
+      else upper = candidate;
+    }
+    return (lower + upper) * 0.5;
+  }
+
+  function onPointerMove(event) {
+    const gesture = activeGesture;
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    if (gesture.kind === "compressor") {
+      const pointer = compressorValueAt(event.clientX, event.clientY);
+      const inputDelta = pointer.input - gesture.startPointer.input;
+      const outputDelta = pointer.output - gesture.startPointer.output;
+      let value;
+      if (gesture.control === "threshold")
+        value = clamp(gesture.startValue + inputDelta, -36, 6);
+      else if (gesture.control === "knee")
+        value = clamp(gesture.startValue + inputDelta * 2, 0, 24);
+      else if (gesture.control === "makeup")
+        value = clamp(gesture.startValue + outputDelta, -24, 24);
+      else
+        value = solveRatio(gesture.startOutput + outputDelta);
+      if (Math.abs(value - Number(parameterValues.get(gesture.endpointID))) >= 1e-9)
+        sendParameter(gesture.endpointID, value);
+      showReadout(compressorReadout, compressorReadoutText, compressorReadoutFor(gesture.control, value));
+      gesture.changed = true;
+      event.preventDefault();
+      return;
+    }
+    const pointer = svgValueAt(event.clientX, event.clientY);
+    if (gesture.kind === "point") {
+      const horizontalDelta = pointer.input - gesture.startPointer.input;
+      const nextX = clamp(
+        gesture.startX + (gesture.side === "negative" ? -horizontalDelta : horizontalDelta),
+        gesture.minimumX,
+        gesture.maximumX,
+      );
+      const nextY = clamp(
+        gesture.startY + (pointer.output - gesture.startPointer.output),
+        -1.5,
+        1.5,
+      );
+      if (Math.abs(nextX - Number(parameterValues.get(gesture.endpointIDs.x))) >= 1e-9)
+        sendParameter(gesture.endpointIDs.x, nextX);
+      if (Math.abs(nextY - Number(parameterValues.get(gesture.endpointIDs.y))) >= 1e-9)
+        sendParameter(gesture.endpointIDs.y, nextY);
+      showReadout(
+        shaperReadout,
+        shaperReadoutText,
+        (gesture.endpointIDs.x === "morphTargetX" ? "Morph B" : sideLabel(gesture.side) + " point")
+          + "  in " + (gesture.side === "negative" ? -nextX : nextX).toFixed(3)
+          + "  out " + nextY.toFixed(3),
+      );
+    } else {
+      const visualDirection = gesture.side === "negative" ? -1 : 1;
+      const nextBend = clamp(
+        gesture.startValue
+          + (pointer.output - gesture.startPointer.output) * visualDirection,
+        -1,
+        1,
+      );
+      if (Math.abs(nextBend - Number(parameterValues.get(gesture.endpointID))) >= 1e-9)
+        sendParameter(gesture.endpointID, nextBend);
+      showReadout(
+        shaperReadout,
+        shaperReadoutText,
+        sideLabel(gesture.side) + " segment  bend " + nextBend.toFixed(3),
+      );
+    }
+    gesture.changed = true;
+    event.preventDefault();
+  }
+
+  function sendTransaction(changes) {
     const entries = Object.entries(changes);
     for (const [endpointID] of entries)
       patchConnection.sendParameterGestureStart?.(endpointID);
@@ -515,558 +735,143 @@ export function createPolishGraphStudio({ root, patchConnection, parameterValues
       patchConnection.sendParameterGestureEnd?.(endpointID);
   }
 
-  function toggleCurveEditor() {
-    finishGesture(true);
-    addPointArmed = false;
-    if (isCurveEditorEnabled(parameterValues)) {
-      sendParameterTransaction({ curveEditorEnabled: false });
-      return;
-    }
-
-    if (finiteParameter(parameterValues, "curveEditorInitialized", 0) >= 0.5) {
-      sendParameterTransaction({ curveEditorEnabled: true });
-      return;
-    }
-
-    const firstX = rawEditorPointValue(1, "X");
-    const firstY = rawEditorPointValue(1, "Y");
-    const changes = {
-      curvePointCount: Math.round(clampValue(
-        finiteParameter(parameterValues, "curvePointCount", 3),
-        2,
-        3,
-      )),
-      curveB1: 0,
-      curveB2: 0,
-      curveB3: 0,
-      curveB4: 0,
-      curveB5: 0,
-      curveB6: 0,
-      curveB7: 0,
-      curveAmountTargetX: firstX,
-      curveAmountTargetY: firstY,
-      curveAmountPoint: 0,
-      curveEditorInitialized: true,
-      curveEditorEnabled: true,
-    };
-    selectedEditorPoint = 1;
-    sendParameterTransaction(changes);
-  }
-
-  function bendFromControl(leftY, rightY, controlY) {
-    const span = rightY - leftY;
-    if (Math.abs(span) < 1e-9) return 0;
-    return clampValue(2 * (controlY - (leftY + rightY) * 0.5) / span, -1, 1);
-  }
-
-  function addEditorPointAt(clientX, clientY) {
-    if (!isCurveEditorEnabled(parameterValues)) return;
-    const count = editorPointCount(parameterValues);
-    if (count >= CURVE_EDITOR_MAX_POINTS) {
-      addPointArmed = false;
-      renderCurveEditorUi();
-      return;
-    }
-
-    const graphPoint = pointInSvg(clipperSvg, clientX, clientY);
-    const driveDb = finiteParameter(parameterValues, "clipDriveDb", CLIPPER_STAGE_DEFAULTS.clipDriveDb);
-    const driveGain = 10 ** (driveDb / 20);
-    const baseValues = new Map(parameterValues);
-    baseValues.set("amount", 0);
-    const points = effectiveEditorCurve(baseValues);
-    const externalInput = (graphPoint.x - CLIPPER_AXIS.left)
-      / (CLIPPER_AXIS.right - CLIPPER_AXIS.left)
-      * CLIPPER_AXIS.maximum;
-    const drivenInput = clampValue(
-      externalInput * driveGain,
-      0.005,
-      points.at(-1).x - 0.001,
-    );
-    let insertIndex = points.findIndex((point, index) => index > 0 && drivenInput < point.x);
-    if (insertIndex < 1) insertIndex = points.length - 1;
+  function addPoint() {
+    const side = selection.side;
+    const count = shapePointCount(parameterValues, side);
+    if (count >= SHAPER_MAX_POINTS) return;
+    const insertIndex = clamp(selection.index, 1, count);
+    const points = effectiveShapePoints(parameterValues, side);
     const left = points[insertIndex - 1];
     const right = points[insertIndex];
-    const position = clampValue((drivenInput - left.x) / (right.x - left.x), 0.001, 0.999);
-    const y = evaluateEditableCurve(drivenInput, baseValues);
-    const controlY = left.y + (0.5 + 0.5 * right.bend) * (right.y - left.y);
-    const leftControlY = left.y + (controlY - left.y) * position;
-    const rightControlY = controlY + (right.y - controlY) * position;
-    const leftBend = bendFromControl(left.y, y, leftControlY);
-    const rightBend = bendFromControl(y, right.y, rightControlY);
-    const nextPoints = points.slice(1).map(point => ({ ...point }));
-    nextPoints.splice(insertIndex - 1, 0, { x: drivenInput, y, bend: leftBend });
-    nextPoints[insertIndex].bend = rightBend;
+    const newX = (left.x + right.x) * 0.5;
+    const newY = evaluateBipolarTransfer(side === "negative" ? -newX : newX, parameterValues);
+    const splitPosition = (newX - left.x) / Math.max(0.001, right.x - left.x);
+    const existingBend = rawShapePoint(parameterValues, side, insertIndex).bend;
+    const leftBend = clamp(
+      existingBend * splitPosition
+        / Math.max(0.001, 1 + existingBend * (1 - splitPosition)),
+      -1,
+      1,
+    );
+    const rightBend = clamp(
+      existingBend * (1 - splitPosition)
+        / Math.max(0.001, 1 - existingBend * splitPosition),
+      -1,
+      1,
+    );
     const changes = {};
-    for (let index = 1; index <= nextPoints.length; index += 1) {
-      changes[`curveP${index}X`] = nextPoints[index - 1].x;
-      changes[`curveP${index}Y`] = nextPoints[index - 1].y;
-      changes[`curveB${index}`] = nextPoints[index - 1].bend;
+
+    for (let targetIndex = count + 1; targetIndex > insertIndex; targetIndex -= 1) {
+      const source = rawShapePoint(parameterValues, side, targetIndex - 1);
+      const targetIDs = shapePointEndpointIDs(side, targetIndex);
+      changes[targetIDs.x] = source.x;
+      changes[targetIDs.y] = source.y;
+      changes[targetIDs.bend] = source.bend;
     }
-    const amountPoint = Math.round(finiteParameter(parameterValues, "curveAmountPoint", 0));
-    if (amountPoint >= insertIndex)
-      changes.curveAmountPoint = amountPoint + 1;
-    changes.curvePointCount = count + 1;
-    selectedEditorPoint = insertIndex;
-    addPointArmed = false;
-    sendParameterTransaction(changes);
+
+    const insertedIDs = shapePointEndpointIDs(side, insertIndex);
+    changes[insertedIDs.x] = newX;
+    changes[insertedIDs.y] = newY;
+    changes[insertedIDs.bend] = leftBend;
+    changes[shapePointEndpointIDs(side, insertIndex + 1).bend] = rightBend;
+    const owner = morphOwner(parameterValues);
+    if (owner.side === side && owner.index >= insertIndex)
+      changes.morphPoint = owner.index + 1;
+    changes[side === "negative" ? "curveNPointCount" : "curvePointCount"] = count + 1;
+    selection = { kind: "point", side, index: insertIndex };
+    sendTransaction(changes);
+    renderShaper();
   }
 
-  function removeSelectedEditorPoint() {
-    if (!isCurveEditorEnabled(parameterValues)) return;
-    const count = editorPointCount(parameterValues);
-    if (count <= 2) return;
-    const removeIndex = Math.round(clampValue(selectedEditorPoint, 1, count));
-    const baseValues = new Map(parameterValues);
-    baseValues.set("amount", 0);
-    const points = effectiveEditorCurve(baseValues);
-    let mergedBend;
-    if (removeIndex < count) {
-      const left = points[removeIndex - 1];
-      const removed = points[removeIndex];
-      const right = points[removeIndex + 1];
-      const position = (removed.x - left.x) / (right.x - left.x);
-      const outputPosition = Math.abs(right.y - left.y) < 1e-9
-        ? position
-        : (removed.y - left.y) / (right.y - left.y);
-      mergedBend = clampValue(
-        (outputPosition - position) / Math.max(1e-9, position * (1 - position)),
-        -1,
-        1,
-      );
+  function deletePoint() {
+    if (selection.kind !== "point") return;
+    const side = selection.side;
+    const count = shapePointCount(parameterValues, side);
+    if (count <= 1) return;
+    const deleteIndex = clamp(selection.index, 1, count);
+    const changes = {};
+
+    for (let targetIndex = deleteIndex; targetIndex < count; targetIndex += 1) {
+      const source = rawShapePoint(parameterValues, side, targetIndex + 1);
+      const targetIDs = shapePointEndpointIDs(side, targetIndex);
+      changes[targetIDs.x] = source.x;
+      changes[targetIDs.y] = source.y;
+      changes[targetIDs.bend] = source.bend;
     }
 
-    const nextPoints = points.slice(1).map(point => ({ ...point }));
-    nextPoints.splice(removeIndex - 1, 1);
-    if (mergedBend !== undefined)
-      nextPoints[removeIndex - 1].bend = mergedBend;
-    const changes = {};
-    for (let index = 1; index <= nextPoints.length; index += 1) {
-      changes[`curveP${index}X`] = nextPoints[index - 1].x;
-      changes[`curveP${index}Y`] = nextPoints[index - 1].y;
-      changes[`curveB${index}`] = nextPoints[index - 1].bend;
+    const owner = morphOwner(parameterValues);
+    if (owner.side === side) {
+      if (owner.index > deleteIndex) {
+        changes.morphPoint = owner.index - 1;
+      } else if (owner.index === deleteIndex) {
+        const replacementIndex = Math.min(deleteIndex, count - 1);
+        const replacement = deleteIndex < count
+          ? rawShapePoint(parameterValues, side, deleteIndex + 1)
+          : rawShapePoint(parameterValues, side, deleteIndex - 1);
+        changes.morphPoint = replacementIndex;
+        changes.morphTargetX = replacement.x;
+        changes.morphTargetY = replacement.y;
+      }
     }
-    const amountPoint = Math.round(finiteParameter(parameterValues, "curveAmountPoint", 0));
-    if (amountPoint === removeIndex)
-      changes.curveAmountPoint = 0;
-    else if (amountPoint > removeIndex)
-      changes.curveAmountPoint = amountPoint - 1;
-    changes.curvePointCount = count - 1;
-    selectedEditorPoint = Math.min(removeIndex, count - 1);
-    sendParameterTransaction(changes);
+    changes[side === "negative" ? "curveNPointCount" : "curvePointCount"] = count - 1;
+    selection = { kind: "point", side, index: Math.min(deleteIndex, count - 1) };
+    sendTransaction(changes);
+    renderShaper();
   }
 
-  function toggleSelectedAmountMotion() {
-    if (!isCurveEditorEnabled(parameterValues)) return;
-    const amountPoint = Math.round(finiteParameter(parameterValues, "curveAmountPoint", 0));
-    if (amountPoint === selectedEditorPoint) {
-      sendParameterTransaction({ curveAmountPoint: 0 });
+  function assignSelectedPointToMorph() {
+    if (selection.kind !== "point") return;
+    const point = rawShapePoint(parameterValues, selection.side, selection.index);
+    sendTransaction({
+      morphSide: selection.side === "negative" ? -1 : 1,
+      morphPoint: selection.index,
+      morphTargetX: point.x,
+      morphTargetY: point.y,
+    });
+    renderShaper();
+  }
+
+  function commitExactField(field) {
+    const value = Number(field.value);
+    if (!Number.isFinite(value)) {
+      renderSelection();
       return;
     }
-    const base = editorPointsAtAmount(0)[selectedEditorPoint];
-    sendParameterTransaction({
-      curveAmountTargetX: base.x,
-      curveAmountTargetY: base.y,
-      curveAmountPoint: selectedEditorPoint,
-    });
+    const endpointIDs = shapePointEndpointIDs(selection.side, selection.index);
+    if (field.dataset.shapeExactField === "input") {
+      const signed = selection.side === "negative"
+        ? clamp(value, -1.5, -0.01)
+        : clamp(value, 0.01, 1.5);
+      sendTransaction({
+        [selection.kind === "morph" ? "morphTargetX" : endpointIDs.x]: Math.abs(signed),
+      });
+    } else if (field.dataset.shapeExactField === "output") {
+      sendTransaction({
+        [selection.kind === "morph" ? "morphTargetY" : endpointIDs.y]: clamp(value, -1.5, 1.5),
+      });
+    } else {
+      sendTransaction({ [endpointIDs.bend]: clamp(value, -1, 1) });
+    }
+    renderShaper();
   }
 
-  function applyExactEditorInput(input) {
-    if (!isCurveEditorEnabled(parameterValues) || input.disabled) return;
-    const numeric = Number(input.value);
-    if (!Number.isFinite(numeric)) return;
-    const value = clampValue(numeric, Number(input.min), Number(input.max));
-    const endpointID = input === exactXInput
-      ? `curveP${selectedEditorPoint}X`
-      : input === exactYInput
-        ? `curveP${selectedEditorPoint}Y`
-        : input === exactBendInput
-          ? `curveB${selectedEditorPoint}`
-          : input === amountXInput
-            ? "curveAmountTargetX"
-            : "curveAmountTargetY";
-    sendParameterTransaction({ [endpointID]: value });
+  function onExactFieldChange(event) {
+    commitExactField(event.currentTarget);
   }
 
-  function onExactInputKeyDown(event) {
+  function onExactFieldKeyDown(event) {
     if (event.key !== "Enter") return;
     event.preventDefault();
-    applyExactEditorInput(event.currentTarget);
+    commitExactField(event.currentTarget);
+    event.currentTarget.select();
   }
 
-  function setReadout(label, formattedValue, visible) {
-    readout.textContent = `${label}  ${formattedValue}`;
-    readout.dataset.visible = String(visible);
+  function onPointerUp() {
+    if (activeGesture) finishGesture(false);
   }
 
-  function finishGesture(cancelled) {
-    const gesture = activeGesture;
-    if (!gesture) return;
-    activeGesture = null;
-
-    const endpointIDs = gesture.endpointIDs ?? (gesture.endpointID ? [gesture.endpointID] : []);
-    if (cancelled && gesture.changed) {
-      for (const endpointID of endpointIDs) {
-        const startValue = gesture.startValues?.[endpointID] ?? gesture.startValue;
-        sendParameter(endpointID, startValue);
-      }
-    }
-
-    try {
-      if (gesture.handle.hasPointerCapture(gesture.pointerId))
-        gesture.handle.releasePointerCapture(gesture.pointerId);
-    } catch {
-      // Capture can already be gone on host cancellation.
-    }
-
-    for (const endpointID of endpointIDs)
-      patchConnection.sendParameterGestureEnd?.(endpointID);
-    if (gesture.label && gesture.formatValue) {
-      const resetValue = gesture.startValues
-        ? `in ${gesture.startXValue.toFixed(4)} · out ${gesture.startYValue.toFixed(4)}`
-        : gesture.formatValue(gesture.startValue);
-      setReadout(gesture.label, resetValue, false);
-    }
-  }
-
-  function onPointerDown(event) {
-    if (event.currentTarget === clipperSvg && addPointArmed && event.button === 0) {
-      event.preventDefault();
-      addEditorPointAt(event.clientX, event.clientY);
-      return;
-    }
-    const explicitHandle = event.target?.closest?.("[data-graph-handle]");
-    let handle = explicitHandle;
-    const explicitName = explicitHandle?.dataset.graphHandle;
-    const explicitBendGrip = /^(?:bend|segment)[1-7]$/.test(explicitName ?? "");
-    if (event.currentTarget === clipperSvg && explicitName !== "drive" && !explicitBendGrip) {
-      let nearestKnot;
-      for (const candidate of knotHandles()) {
-        const bounds = candidate.getBoundingClientRect();
-        const distance = Math.hypot(
-          event.clientX - (bounds.left + bounds.width * 0.5),
-          event.clientY - (bounds.top + bounds.height * 0.5),
-        );
-        if (!nearestKnot || distance < nearestKnot.distance)
-          nearestKnot = { handle: candidate, distance };
-      }
-
-      let nearestSegment;
-      for (const candidate of segmentHandles()) {
-        const distance = distanceToPathInScreen(candidate, event.clientX, event.clientY);
-        if (!nearestSegment || distance < nearestSegment.distance)
-          nearestSegment = { handle: candidate, distance };
-      }
-
-      if (explicitName === "amountTarget") {
-        const targetBounds = explicitHandle.getBoundingClientRect();
-        const targetDistance = Math.hypot(
-          event.clientX - (targetBounds.left + targetBounds.width * 0.5),
-          event.clientY - (targetBounds.top + targetBounds.height * 0.5),
-        );
-        // The target diamond owns its own centre, but its touch square must not
-        // steal the exact centre of a nearby ordinary point.
-        if (nearestKnot?.distance <= 8 && nearestKnot.distance + 1 < targetDistance)
-          handle = nearestKnot.handle;
-      } else {
-        // A point owns its exact centre. Between point centres, the visible
-        // curve owns the gesture even when a point's larger target is on top.
-        if (nearestKnot?.distance <= 8)
-          handle = nearestKnot.handle;
-        else if (nearestSegment?.distance <= 22)
-          handle = nearestSegment.handle;
-        else if (nearestKnot?.distance <= 34)
-          handle = nearestKnot.handle;
-      }
-    }
-    if (!handle || activeGesture || event.button !== 0) return;
-    const handleName = handle.dataset.graphHandle ?? handle.dataset.segmentHandle;
-    const knotMatch = /^knot([1-7])$/.exec(handleName);
-    const segmentMatch = /^segment([1-7])$/.exec(handleName);
-    const bendMatch = /^bend([1-7])$/.exec(handleName);
-    if (!["threshold", "ratio", "knee", "makeup", "drive"].includes(handleName)
-        && handleName !== "amountTarget" && !knotMatch && !segmentMatch && !bendMatch) return;
-
-    event.preventDefault();
-    if (handleName === "drive") {
-      const startValue = finiteParameter(parameterValues, "clipDriveDb", CLIPPER_STAGE_DEFAULTS.clipDriveDb);
-      const p1x = isCurveEditorEnabled(parameterValues)
-        ? effectiveEditorCurve(parameterValues)[1].x
-        : sanitizeCurve(currentCurveValues())[1].x;
-      const trueBoundary = p1x / (10 ** (startValue / 20));
-      activeGesture = {
-        pointerId: event.pointerId,
-        handle,
-        handleName,
-        svg: clipperSvg,
-        endpointID: "clipDriveDb",
-        startPoint: pointInSvg(clipperSvg, event.clientX, event.clientY),
-        startValue,
-        startDisplayedBoundary: clampValue(trueBoundary, 0.02, CLIPPER_AXIS.maximum),
-        changed: false,
-        label: "Drive",
-        formatValue: formatDb,
-      };
-      try { handle.setPointerCapture(event.pointerId); } catch { /* window listeners remain authoritative */ }
-      patchConnection.sendParameterGestureStart?.("clipDriveDb");
-      setReadout("Drive", formatDb(startValue), true);
-      return;
-    }
-    if (handleName === "amountTarget" || knotMatch) {
-      const editorEnabled = isCurveEditorEnabled(parameterValues);
-      const knotIndex = handleName === "amountTarget"
-        ? Math.round(finiteParameter(parameterValues, "curveAmountPoint", 0))
-        : Number(knotMatch[1]);
-      if (knotIndex < 1) return;
-      if (editorEnabled) {
-        selectedEditorPoint = knotIndex;
-        renderCurveEditorUi();
-      }
-      const rawCurveValues = editorEnabled
-        ? {
-          [`curveP${knotIndex}X`]: rawEditorPointValue(knotIndex, "X"),
-          [`curveP${knotIndex}Y`]: rawEditorPointValue(knotIndex, "Y"),
-          curveAmountTargetX: finiteParameter(parameterValues, "curveAmountTargetX", rawEditorPointValue(knotIndex, "X")),
-          curveAmountTargetY: finiteParameter(parameterValues, "curveAmountTargetY", rawEditorPointValue(knotIndex, "Y")),
-        }
-        : currentCurveValues();
-      const points = editorEnabled
-        ? (handleName === "amountTarget" ? editorPointsAtAmount(100) : editorPointsAtAmount(0))
-        : sanitizeCurve(rawCurveValues);
-      const driveDb = finiteParameter(parameterValues, "clipDriveDb", CLIPPER_STAGE_DEFAULTS.clipDriveDb);
-      const driveGain = 10 ** (driveDb / 20);
-      const mix = clampValue(finiteParameter(parameterValues, "clipMix", 100) * 0.01, 0, 1);
-      const point = points[knotIndex];
-      const previous = points[knotIndex - 1];
-      const next = points[knotIndex + 1];
-      const externalInput = point.x / driveGain;
-      const xEndpointID = handleName === "amountTarget" ? "curveAmountTargetX" : `curveP${knotIndex}X`;
-      const yEndpointID = handleName === "amountTarget" ? "curveAmountTargetY" : `curveP${knotIndex}Y`;
-      const finalIndex = points.length - 1;
-      activeGesture = {
-        pointerId: event.pointerId,
-        handle,
-        handleName,
-        kind: "point",
-        svg: clipperSvg,
-        endpointIDs: [xEndpointID, yEndpointID],
-        startValues: {
-          [xEndpointID]: rawCurveValues[xEndpointID],
-          [yEndpointID]: rawCurveValues[yEndpointID],
-        },
-        startPoint: pointInSvg(clipperSvg, event.clientX, event.clientY),
-        knotIndex,
-        startXValue: point.x,
-        startYValue: point.y,
-        externalInput,
-        startOutput: externalInput + (point.y - externalInput) * mix,
-        driveGain,
-        mix,
-        minimumX: knotIndex === 1 ? 0.01 : previous.x + 0.001,
-        maximumX: knotIndex === finalIndex
-          ? 1.5
-          : next.x - 0.001,
-        minimumY: knotIndex === 1 ? 0 : previous.y,
-        maximumY: knotIndex === finalIndex
-          ? 1.5
-          : next.y,
-        changed: false,
-        label: handleName === "amountTarget"
-          ? `Point ${knotIndex} · Amount 100%`
-          : knotIndex === finalIndex ? "Ceiling" : `Point ${knotIndex}`,
-        formatValue: value => Number(value).toFixed(4),
-      };
-      try { handle.setPointerCapture(event.pointerId); } catch { /* window listeners remain authoritative */ }
-      for (const endpointID of activeGesture.endpointIDs)
-        patchConnection.sendParameterGestureStart?.(endpointID);
-      setReadout(
-        activeGesture.label,
-        `in ${point.x.toFixed(4)} · out ${point.y.toFixed(4)}`,
-        true,
-      );
-      return;
-    }
-    if (segmentMatch || bendMatch) {
-      const editorBend = Boolean(bendMatch);
-      const segmentIndex = Number((bendMatch ?? segmentMatch)[1]);
-      const endpointID = editorBend ? `curveB${segmentIndex}` : `curveP${segmentIndex}T`;
-      const startValue = finiteParameter(
-        parameterValues,
-        endpointID,
-        editorBend ? 0 : CURVE_DEFAULTS[endpointID],
-      );
-      activeGesture = {
-        pointerId: event.pointerId,
-        handle,
-        handleName,
-        kind: "bend",
-        svg: clipperSvg,
-        endpointID,
-        startPoint: pointInSvg(clipperSvg, event.clientX, event.clientY),
-        startValue,
-        changed: false,
-        label: editorBend
-          ? `Segment ${segmentIndex} bend`
-          : segmentIndex === 3 ? "Ceiling roundness" : `Segment ${segmentIndex} roundness`,
-        formatValue: value => Number(value).toFixed(3),
-      };
-      try { handle.setPointerCapture(event.pointerId); } catch { /* window listeners remain authoritative */ }
-      patchConnection.sendParameterGestureStart?.(endpointID);
-      setReadout(activeGesture.label, activeGesture.formatValue(startValue), true);
-      return;
-    }
-    const settings = effectiveCompressorSettings(parameterValues);
-    const endpointID = handleName === "threshold"
-      ? "thresholdDb"
-      : handleName === "knee"
-        ? "kneeDb"
-        : handleName === "makeup"
-          ? "makeupDb"
-        : settings.macro < 0.5 ? "ratio" : "macroRatioTarget";
-    const startValue = finiteParameter(parameterValues, endpointID, endpointID === "thresholdDb"
-      ? COMPRESSOR_DEFAULTS.thresholdDb
-      : endpointID === "kneeDb" ? COMPRESSOR_DEFAULTS.kneeDb
-        : endpointID === "makeupDb" ? COMPRESSOR_DEFAULTS.makeupDb
-        : endpointID === "ratio" ? COMPRESSOR_DEFAULTS.ratio : COMPRESSOR_DEFAULTS.macroRatioTarget);
-    activeGesture = {
-      pointerId: event.pointerId,
-      handle,
-      svg: compressorSvg,
-      handleName,
-      endpointID,
-      startPoint: pointInSvg(compressorSvg, event.clientX, event.clientY),
-      startValue,
-      changed: false,
-      label: handleName === "threshold"
-        ? "Threshold"
-        : handleName === "knee" ? "Knee width"
-          : handleName === "makeup" ? "Makeup"
-          : endpointID === "ratio" ? "Ratio" : "Ratio target",
-      formatValue: handleName === "threshold" || handleName === "knee" || handleName === "makeup"
-        ? formatDb
-        : value => `${Number(value).toFixed(Number(value) >= 100 ? 0 : 2)}:1`,
-      probeInput: handleName === "ratio" ? ratioProbeInput(settings) : undefined,
-      startOutput: handleName === "ratio"
-        ? evaluateCompressorTransfer(ratioProbeInput(settings), parameterValues)
-        : undefined,
-    };
-    try { handle.setPointerCapture(event.pointerId); } catch { /* window listeners remain authoritative */ }
-    patchConnection.sendParameterGestureStart?.(endpointID);
-    setReadout(activeGesture.label, activeGesture.formatValue(startValue), true);
-  }
-
-  function onPointerMove(event) {
-    const gesture = activeGesture;
-    if (!gesture || event.pointerId !== gesture.pointerId) return;
-    event.preventDefault();
-    const point = pointInSvg(gesture.svg, event.clientX, event.clientY);
-    if (gesture.handleName === "drive") {
-      const plotWidth = CLIPPER_AXIS.right - CLIPPER_AXIS.left;
-      const graphRange = CLIPPER_AXIS.maximum - CLIPPER_AXIS.minimum;
-      const targetBoundary = clampValue(
-        gesture.startDisplayedBoundary + (point.x - gesture.startPoint.x) * graphRange / plotWidth,
-        0.02,
-        CLIPPER_AXIS.maximum,
-      );
-      const value = clampValue(
-        gesture.startValue - 20 * Math.log10(targetBoundary / gesture.startDisplayedBoundary),
-        -24,
-        36,
-      );
-      if (Math.abs(value - finiteParameter(parameterValues, gesture.endpointID, gesture.startValue)) < 1e-9)
-        return;
-      gesture.changed = true;
-      sendParameter(gesture.endpointID, value);
-      setReadout(gesture.label, gesture.formatValue(value), true);
-      return;
-    }
-    if (gesture.kind === "point") {
-      const graphRange = CLIPPER_AXIS.maximum - CLIPPER_AXIS.minimum;
-      const plotWidth = CLIPPER_AXIS.right - CLIPPER_AXIS.left;
-      const plotHeight = CLIPPER_AXIS.bottom - CLIPPER_AXIS.top;
-      const externalTarget = gesture.externalInput
-        + (point.x - gesture.startPoint.x) * graphRange / plotWidth;
-      const xValue = clampValue(externalTarget * gesture.driveGain, gesture.minimumX, gesture.maximumX);
-      const targetOutput = gesture.startOutput
-        - (point.y - gesture.startPoint.y) * graphRange / plotHeight;
-      const yValue = gesture.mix <= 0.0001
-        ? gesture.startYValue
-        : clampValue(
-          (targetOutput - externalTarget * (1 - gesture.mix)) / gesture.mix,
-          gesture.minimumY,
-          gesture.maximumY,
-        );
-      const [xEndpointID, yEndpointID] = gesture.endpointIDs;
-      let wrote = false;
-      if (Math.abs(xValue - finiteParameter(parameterValues, xEndpointID, gesture.startXValue)) >= 1e-9) {
-        sendParameter(xEndpointID, xValue);
-        wrote = true;
-      }
-      if (Math.abs(yValue - finiteParameter(parameterValues, yEndpointID, gesture.startYValue)) >= 1e-9) {
-        sendParameter(yEndpointID, yValue);
-        wrote = true;
-      }
-      if (!wrote) return;
-      gesture.changed = true;
-      setReadout(gesture.label, `in ${xValue.toFixed(4)} · out ${yValue.toFixed(4)}`, true);
-      return;
-    }
-    if (gesture.kind === "bend") {
-      const plotHeight = CLIPPER_AXIS.bottom - CLIPPER_AXIS.top;
-      const value = clampValue(
-        gesture.startValue - (point.y - gesture.startPoint.y) * 2 / plotHeight,
-        -1,
-        1,
-      );
-      if (Math.abs(value - finiteParameter(parameterValues, gesture.endpointID, gesture.startValue)) < 1e-9)
-        return;
-      gesture.changed = true;
-      sendParameter(gesture.endpointID, value);
-      setReadout(gesture.label, gesture.formatValue(value), true);
-      return;
-    }
-    const graphRange = COMPRESSOR_AXIS.maximum - COMPRESSOR_AXIS.minimum;
-    let value;
-    if (gesture.handleName === "threshold" || gesture.handleName === "knee") {
-      const plotWidth = COMPRESSOR_AXIS.right - COMPRESSOR_AXIS.left;
-      value = clampValue(
-        gesture.startValue
-          + (point.x - gesture.startPoint.x) * graphRange / plotWidth * (gesture.handleName === "knee" ? 2 : 1),
-        gesture.handleName === "knee" ? 0 : -36,
-        gesture.handleName === "knee" ? 24 : 6,
-      );
-    } else if (gesture.handleName === "makeup") {
-      const plotHeight = COMPRESSOR_AXIS.bottom - COMPRESSOR_AXIS.top;
-      value = clampValue(
-        gesture.startValue - (point.y - gesture.startPoint.y) * graphRange / plotHeight,
-        -24,
-        24,
-      );
-    } else {
-      const plotHeight = COMPRESSOR_AXIS.bottom - COMPRESSOR_AXIS.top;
-      const targetOutput = gesture.startOutput
-        - (point.y - gesture.startPoint.y) * graphRange / plotHeight;
-      value = solveRatioEndpoint({
-        parameterValues,
-        endpointID: gesture.endpointID,
-        probeInput: gesture.probeInput,
-        targetOutput,
-      });
-    }
-    if (Math.abs(value - finiteParameter(parameterValues, gesture.endpointID, gesture.startValue)) < 1e-9)
-      return;
-    gesture.changed = true;
-    sendParameter(gesture.endpointID, value);
-    setReadout(gesture.label, gesture.formatValue(value), true);
-  }
-
-  function onPointerUp(event) {
-    if (activeGesture && event.pointerId === activeGesture.pointerId)
-      finishGesture(false);
-  }
-
-  function onPointerCancel(event) {
-    if (activeGesture && event.pointerId === activeGesture.pointerId)
-      finishGesture(true);
+  function onPointerCancel() {
+    if (activeGesture) finishGesture(true);
   }
 
   function onKeyDown(event) {
@@ -1076,119 +881,78 @@ export function createPolishGraphStudio({ root, patchConnection, parameterValues
     }
   }
 
+  function onVisibilityChange() {
+    if (document.visibilityState !== "visible") finishGesture(true);
+  }
+
   function onWindowBlur() {
     finishGesture(true);
   }
 
-  function onVisibilityChange() {
-    if (document.visibilityState === "hidden") finishGesture(true);
-  }
-
-  function onAddPointClick() {
-    if (!isCurveEditorEnabled(parameterValues)) return;
-    addPointArmed = !addPointArmed;
-    renderCurveEditorUi();
-  }
-
   function pushTelemetry(frame = {}) {
-    const compressorInputDb = Number(frame.compressorInputDb);
-    const compressorOutputDb = Number(frame.compressorOutputDb);
-    const hasOperatingPoint = Number.isFinite(compressorInputDb) && Number.isFinite(compressorOutputDb);
-    compressorOperatingPoint.dataset.active = String(hasOperatingPoint);
-    compressorOperatingInput.dataset.active = String(hasOperatingPoint);
-    compressorOperatingOutput.dataset.active = String(hasOperatingPoint);
-    if (hasOperatingPoint) {
-      const x = mapInputDb(compressorInputDb);
-      const y = mapOutputDb(compressorOutputDb);
-      compressorOperatingPoint.setAttribute("cx", x.toFixed(3));
-      compressorOperatingPoint.setAttribute("cy", y.toFixed(3));
-      compressorOperatingPoint.dataset.inputDb = String(compressorInputDb);
-      compressorOperatingPoint.dataset.outputDb = String(compressorOutputDb);
-      compressorOperatingInput.setAttribute("d", `M${x.toFixed(3)} ${COMPRESSOR_AXIS.bottom}V${y.toFixed(3)}H${COMPRESSOR_AXIS.left}`);
-      compressorOperatingOutput.setAttribute("x", (COMPRESSOR_AXIS.left + 8).toFixed(3));
-      compressorOperatingOutput.setAttribute("y", (y - 8).toFixed(3));
-      compressorOperatingOutput.textContent = `${formatDb(compressorInputDb)} → ${formatDb(compressorOutputDb)}`;
+    const compressorInput = Number(frame.compressorInputDb);
+    const compressorOutput = Number(frame.compressorOutputDb);
+    if (Number.isFinite(compressorInput) && Number.isFinite(compressorOutput)) {
+      compressorOperatingPoint.setAttribute("cx", mapX(clamp(compressorInput, -48, 12), COMPRESSOR_AXIS));
+      compressorOperatingPoint.setAttribute("cy", mapY(clamp(compressorOutput, -48, 12), COMPRESSOR_AXIS));
+      compressorOperatingPoint.dataset.active = "true";
     }
 
-    const gainReductionDb = Math.max(0, Math.abs(Number(frame.gainReductionDb) || 0));
-    gainReductionHistory.push(gainReductionDb);
-    if (gainReductionHistory.length > 120) gainReductionHistory.shift();
-    const traceWidth = 716;
-    const traceLeft = 42;
-    const traceTop = 12;
-    const traceBottom = 72;
-    const path = gainReductionHistory.map((value, index) => {
-      const x = gainReductionHistory.length <= 1
-        ? traceLeft + traceWidth
-        : traceLeft + traceWidth * index / (gainReductionHistory.length - 1);
-      const y = traceTop + Math.min(24, value) / 24 * (traceBottom - traceTop);
-      return `${index === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
-    });
-    gainReductionTrace.setAttribute("d", path.join(" "));
-    gainReductionTrace.dataset.sampleCount = String(gainReductionHistory.length);
-    gainReductionValue.textContent = formatDb(-gainReductionDb);
-
-    const clipInput = Number(frame.clipInput);
-    const clipOutput = Number(frame.clipOutput);
-    const hasClipPoint = Number.isFinite(clipInput) && Number.isFinite(clipOutput);
-    clipperOperatingPoint.dataset.active = String(hasClipPoint);
-    clipperOperatingGuide.dataset.active = String(hasClipPoint);
-    clipperOperatingLabel.dataset.active = String(hasClipPoint);
-    if (hasClipPoint) {
-      const x = mapClipperX(Math.abs(clipInput));
-      const y = mapClipperY(Math.abs(clipOutput));
-      const driveDb = finiteParameter(parameterValues, "clipDriveDb", CLIPPER_STAGE_DEFAULTS.clipDriveDb);
-      const firstKnotInput = isCurveEditorEnabled(parameterValues)
-        ? effectiveEditorCurve(parameterValues)[1].x
-        : sanitizeCurve(currentCurveValues())[1].x;
-      const clipped = Math.abs(clipInput) * (10 ** (driveDb / 20)) >= firstKnotInput;
-      clipperOperatingPoint.setAttribute("cx", x.toFixed(3));
-      clipperOperatingPoint.setAttribute("cy", y.toFixed(3));
-      clipperOperatingPoint.dataset.input = String(clipInput);
-      clipperOperatingPoint.dataset.output = String(clipOutput);
-      clipperOperatingPoint.dataset.clipped = String(clipped);
-      clipperOperatingGuide.setAttribute("d", `M${x.toFixed(3)} ${CLIPPER_AXIS.bottom}V${y.toFixed(3)}H${CLIPPER_AXIS.left}`);
-      clipperOperatingLabel.setAttribute("x", (CLIPPER_AXIS.left + 8).toFixed(3));
-      clipperOperatingLabel.setAttribute("y", (y - 8).toFixed(3));
-      clipperOperatingLabel.textContent = `${clipInput.toFixed(3)} → ${clipOutput.toFixed(3)}${clipped ? " · CLIPPED" : " · CLEAN"}`;
+    const shapeInput = Number(frame.clipInput);
+    const shapeOutput = Number(frame.clipOutput);
+    if (Number.isFinite(shapeInput) && Number.isFinite(shapeOutput)) {
+      shaperOperatingPoint.setAttribute("cx", mapX(clamp(shapeInput, -1.5, 1.5), SHAPER_AXIS));
+      shaperOperatingPoint.setAttribute("cy", mapY(clamp(shapeOutput, -1.5, 1.5), SHAPER_AXIS));
+      shaperOperatingPoint.dataset.active = "true";
     }
+
+    const reduction = Math.max(0, Number(frame.gainReductionDb) || 0);
+    reductionHistory.push(reduction);
+    if (reductionHistory.length > 120) reductionHistory.shift();
+    gainReductionTrace.setAttribute("d", reductionHistory.map((value, index) => {
+      const x = reductionHistory.length <= 1 ? 0 : (index / (reductionHistory.length - 1)) * 692;
+      const y = 54 - clamp(value, 0, 24) / 24 * 48;
+      return (index === 0 ? "M" : "L") + x.toFixed(2) + "," + y.toFixed(2);
+    }).join(" "));
+    gainReductionTrace.dataset.sampleCount = String(reductionHistory.length);
   }
 
-  compressorSvg.addEventListener("pointerdown", onPointerDown);
-  clipperSvg.addEventListener("pointerdown", onPointerDown);
-  startEditorButton.addEventListener("click", toggleCurveEditor);
-  addPointButton.addEventListener("click", onAddPointClick);
-  removePointButton.addEventListener("click", removeSelectedEditorPoint);
-  linkAmountButton.addEventListener("click", toggleSelectedAmountMotion);
-  for (const input of [exactXInput, exactYInput, exactBendInput, amountXInput, amountYInput]) {
-    input.addEventListener("change", () => applyExactEditorInput(input));
-    input.addEventListener("keydown", onExactInputKeyDown);
+  compressorSvg.addEventListener("pointerdown", onCompressorPointerDown);
+  shaperSvg.addEventListener("pointerdown", onPointerDown);
+  addPointButton.addEventListener("click", addPoint);
+  deletePointButton.addEventListener("click", deletePoint);
+  assignMorphButton.addEventListener("click", assignSelectedPointToMorph);
+  for (const field of Object.values(exactFields)) {
+    field.addEventListener("change", onExactFieldChange);
+    field.addEventListener("keydown", onExactFieldKeyDown);
   }
   window.addEventListener("pointermove", onPointerMove, { passive: false });
-  window.addEventListener("pointerup", onPointerUp);
-  window.addEventListener("pointercancel", onPointerCancel);
+  document.addEventListener("pointerup", onPointerUp, true);
+  document.addEventListener("pointercancel", onPointerCancel, true);
+  document.addEventListener("mouseup", onPointerUp, true);
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("blur", onWindowBlur);
   document.addEventListener("visibilitychange", onVisibilityChange);
-
-  renderGraphs();
+  render();
 
   return {
-    render: renderGraphs,
+    render,
     pushTelemetry,
     destroy() {
       finishGesture(true);
-      compressorSvg.removeEventListener("pointerdown", onPointerDown);
-      clipperSvg.removeEventListener("pointerdown", onPointerDown);
-      startEditorButton.removeEventListener("click", toggleCurveEditor);
-      addPointButton.removeEventListener("click", onAddPointClick);
-      removePointButton.removeEventListener("click", removeSelectedEditorPoint);
-      linkAmountButton.removeEventListener("click", toggleSelectedAmountMotion);
-      for (const input of [exactXInput, exactYInput, exactBendInput, amountXInput, amountYInput])
-        input.removeEventListener("keydown", onExactInputKeyDown);
+      compressorSvg.removeEventListener("pointerdown", onCompressorPointerDown);
+      shaperSvg.removeEventListener("pointerdown", onPointerDown);
+      addPointButton.removeEventListener("click", addPoint);
+      deletePointButton.removeEventListener("click", deletePoint);
+      assignMorphButton.removeEventListener("click", assignSelectedPointToMorph);
+      for (const field of Object.values(exactFields)) {
+        field.removeEventListener("change", onExactFieldChange);
+        field.removeEventListener("keydown", onExactFieldKeyDown);
+      }
       window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointercancel", onPointerCancel);
+      document.removeEventListener("pointerup", onPointerUp, true);
+      document.removeEventListener("pointercancel", onPointerCancel, true);
+      document.removeEventListener("mouseup", onPointerUp, true);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("blur", onWindowBlur);
       document.removeEventListener("visibilitychange", onVisibilityChange);
