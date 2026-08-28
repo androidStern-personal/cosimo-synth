@@ -14,6 +14,7 @@ import { RACK_EFFECT_DESCRIPTORS, rackModulationIdentityEndpointID, } from "./ra
 import { casesHandled, err, ok, shouldNeverHappen } from "./result.js";
 import { GLOBAL_TUNE_ENDPOINT_ID, GLOBAL_TUNE_INITIAL_SEMITONES, GLOBAL_TUNE_MAX_SEMITONES, GLOBAL_TUNE_MIN_SEMITONES, GLOBAL_TUNE_MODULATION_MAX_SEMITONES, GLOBAL_TUNE_MODULATION_MIN_SEMITONES, GLOBAL_TUNE_TARGET_KIND, } from "./global-tune.js";
 import { OSCILLATOR_DEFAULT_VOLUME_NORMALIZED } from "./oscillator-defaults.js";
+import { VOICE_ENHANCER_PARAMETER_DESCRIPTORS, denormalizeVoiceEnhancerValue, normalizeVoiceEnhancerValue, } from "./voice-enhancer.js";
 function parameter(id, label, initialPercent, defaultPercent, format = "percent", compound = null) {
     return { id, label, initialPercent, defaultPercent, format, compound };
 }
@@ -238,6 +239,32 @@ const GLOBAL_TUNE_TARGET_DESCRIPTOR = Object.freeze({
     articulationParameterId: null,
     modulationTargetKind: GLOBAL_TUNE_TARGET_KIND,
 });
+function createVoiceEnhancerTargetDescriptor(descriptor) {
+    const targetId = catalogTargetId("voice-enhancer", descriptor.key);
+    const initialValue = normalized(normalizeVoiceEnhancerValue(descriptor, descriptor.initial), `${descriptor.endpointID} initial value`);
+    return Object.freeze({
+        targetId,
+        moduleId: "voice-enhancer",
+        workspace: "voice",
+        label: descriptor.label,
+        defaultValue: initialValue,
+        initialValue,
+        format: descriptor.unit === "Hz"
+            ? { kind: "frequency", minHz: descriptor.min, maxHz: descriptor.max }
+            : { kind: "percent" },
+        modAmount: descriptor.modulationApplication === "octaves"
+            ? { min: -6, max: 6, unit: "oct", digits: 2 }
+            : descriptor.unit === "Q"
+                ? { min: -9.9, max: 9.9, unit: "Q", digits: 2 }
+                : { min: -100, max: 100, unit: "%", digits: 0 },
+        binding: boundEndpoint(descriptor.endpointID, (value) => denormalizeVoiceEnhancerValue(descriptor, value), (value) => normalized(normalizeVoiceEnhancerValue(descriptor, value), `${descriptor.endpointID} endpoint conversion`)),
+        isQuick: false,
+        compound: null,
+        articulationParameterId: null,
+        modulationTargetKind: descriptor.targetKind,
+    });
+}
+const VOICE_ENHANCER_TARGET_DESCRIPTORS = Object.freeze(Object.values(VOICE_ENHANCER_PARAMETER_DESCRIPTORS).map(createVoiceEnhancerTargetDescriptor));
 const GENERATOR_TARGET_DEFINITIONS = Object.freeze([
     { moduleId: "mseg1", targetIdSuffix: "morph", endpointID: "mseg1Morph", targetKind: "mseg1Morph", label: "MSEG 1 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph1" },
     { moduleId: "mseg2", targetIdSuffix: "morph", endpointID: "mseg2Morph", targetKind: "mseg2Morph", label: "MSEG 2 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph2" },
@@ -382,6 +409,7 @@ const TARGET_DESCRIPTORS = Object.freeze([
     ...RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters.map(createRackTargetDescriptor)),
     ...FREQUENCY_SPLIT_TARGET_DESCRIPTORS,
     GLOBAL_TUNE_TARGET_DESCRIPTOR,
+    ...VOICE_ENHANCER_TARGET_DESCRIPTORS,
     ...OSCILLATOR_MODULATION_DESCRIPTORS,
     ...GENERATOR_TARGET_DESCRIPTORS,
     ...MODULE_DEFINITIONS.flatMap((moduleDefinition) => moduleDefinition.parameters.map((parameterDefinition) => createDescriptor(moduleDefinition, parameterDefinition))),

@@ -15946,7 +15946,10 @@ const SHARED_VOICE_MODULATION_TARGET_KINDS = [
   "ampAttack",
   "ampDecay",
   "ampSustain",
-  "ampRelease"
+  "ampRelease",
+  "voiceEnhancerFrequencyOctaves",
+  "voiceEnhancerQ",
+  "voiceEnhancerAmount"
 ];
 const MODULATION_SOURCE_IDENTITIES = Object.freeze([
   { id: "mseg-1", sourceKind: "mseg", sourceSlot: 1, group: "voice", runtimeIndex: 0 },
@@ -16031,7 +16034,7 @@ const sourceIdentityByAddress = new Map(MODULATION_SOURCE_IDENTITIES.map((identi
 ]));
 const targetIdentityByKind = new Map(MODULATION_TARGET_IDENTITIES.map((identity) => [identity.kind, identity]));
 function assertCanonicalIdentities() {
-  if (MODULATION_SOURCE_COUNT !== 14 || MODULATION_VOICE_TARGET_COUNT$1 !== 56 || MODULATION_RACK_TARGET_COUNT$1 !== 39 || MODULATION_LEGAL_PAIR_COUNT !== 1330) {
+  if (MODULATION_SOURCE_COUNT !== 14 || MODULATION_VOICE_TARGET_COUNT$1 !== 59 || MODULATION_RACK_TARGET_COUNT$1 !== 39 || MODULATION_LEGAL_PAIR_COUNT !== 1372) {
     throw new Error("Unexpected modulation domain size");
   }
   for (const [group, expectedCount] of [["voice", 10], ["macro", 4]]) {
@@ -16040,7 +16043,7 @@ function assertCanonicalIdentities() {
       throw new Error(`Bad modulation ${group} source indexes`);
     }
   }
-  for (const [group, expectedCount] of [["voice", 56], ["rack", 39]]) {
+  for (const [group, expectedCount] of [["voice", 59], ["rack", 39]]) {
     const identities = MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
     if (identities.length !== expectedCount || identities.some((identity, position) => identity.runtimeIndex !== position)) {
       throw new Error(`Bad modulation ${group} target indexes`);
@@ -16281,6 +16284,67 @@ const OSCILLATOR_DEFAULT_MUTE_BY_ID = Object.freeze({
 function getOscillatorDefaultMute(oscillatorID) {
   return OSCILLATOR_DEFAULT_MUTE_BY_ID[oscillatorID];
 }
+const VOICE_ENHANCER_FREQUENCY_ENDPOINT_ID = "voiceEnhancerFrequency";
+const VOICE_ENHANCER_Q_ENDPOINT_ID = "voiceEnhancerQ";
+const VOICE_ENHANCER_AMOUNT_ENDPOINT_ID = "voiceEnhancerAmount";
+const VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID = "voiceEnhancerKeyTrackEnabled";
+const VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID = "voiceEnhancerKeyTrackOffsetSemitones";
+const VOICE_ENHANCER_FREQUENCY_TARGET_KIND = "voiceEnhancerFrequencyOctaves";
+const VOICE_ENHANCER_Q_TARGET_KIND = "voiceEnhancerQ";
+const VOICE_ENHANCER_AMOUNT_TARGET_KIND = "voiceEnhancerAmount";
+const VOICE_ENHANCER_KEY_TRACK_CONTROL_ID = "voice.enhancerFrequency";
+const VOICE_ENHANCER_PARAMETER_DESCRIPTORS = Object.freeze({
+  frequency: Object.freeze({
+    key: "frequency",
+    endpointID: VOICE_ENHANCER_FREQUENCY_ENDPOINT_ID,
+    targetKind: VOICE_ENHANCER_FREQUENCY_TARGET_KIND,
+    label: "Frequency",
+    shortLabel: "Freq",
+    min: 20,
+    max: 2e4,
+    initial: 130,
+    step: 1,
+    scale: "log",
+    unit: "Hz",
+    modulationApplication: "octaves"
+  }),
+  q: Object.freeze({
+    key: "q",
+    endpointID: VOICE_ENHANCER_Q_ENDPOINT_ID,
+    targetKind: VOICE_ENHANCER_Q_TARGET_KIND,
+    label: "Q",
+    shortLabel: "Q",
+    min: 0.1,
+    max: 10,
+    initial: 0.71,
+    step: 0.01,
+    scale: "log",
+    unit: "Q",
+    modulationApplication: "linear"
+  }),
+  amount: Object.freeze({
+    key: "amount",
+    endpointID: VOICE_ENHANCER_AMOUNT_ENDPOINT_ID,
+    targetKind: VOICE_ENHANCER_AMOUNT_TARGET_KIND,
+    label: "Amount",
+    shortLabel: "Amt",
+    min: 0,
+    max: 1,
+    initial: 0,
+    step: 0.01,
+    scale: "linear",
+    unit: "%",
+    modulationApplication: "linear"
+  })
+});
+function normalizeVoiceEnhancerValue(descriptor, value) {
+  const clamped = Math.min(descriptor.max, Math.max(descriptor.min, value));
+  return descriptor.scale === "log" ? Math.log(clamped / descriptor.min) / Math.log(descriptor.max / descriptor.min) : (clamped - descriptor.min) / (descriptor.max - descriptor.min);
+}
+function denormalizeVoiceEnhancerValue(descriptor, normalizedValue2) {
+  const clamped = Math.min(1, Math.max(0, normalizedValue2));
+  return descriptor.scale === "log" ? descriptor.min * (descriptor.max / descriptor.min) ** clamped : descriptor.min + (descriptor.max - descriptor.min) * clamped;
+}
 function parameter(id, label, initialPercent, defaultPercent, format = "percent", compound = null) {
   return { id, label, initialPercent, defaultPercent, format, compound };
 }
@@ -16501,6 +16565,38 @@ const GLOBAL_TUNE_TARGET_DESCRIPTOR = Object.freeze({
   articulationParameterId: null,
   modulationTargetKind: GLOBAL_TUNE_TARGET_KIND
 });
+function createVoiceEnhancerTargetDescriptor(descriptor) {
+  const targetId = catalogTargetId("voice-enhancer", descriptor.key);
+  const initialValue = normalized(
+    normalizeVoiceEnhancerValue(descriptor, descriptor.initial),
+    `${descriptor.endpointID} initial value`
+  );
+  return Object.freeze({
+    targetId,
+    moduleId: "voice-enhancer",
+    workspace: "voice",
+    label: descriptor.label,
+    defaultValue: initialValue,
+    initialValue,
+    format: descriptor.unit === "Hz" ? { kind: "frequency", minHz: descriptor.min, maxHz: descriptor.max } : { kind: "percent" },
+    modAmount: descriptor.modulationApplication === "octaves" ? { min: -6, max: 6, unit: "oct", digits: 2 } : descriptor.unit === "Q" ? { min: -9.9, max: 9.9, unit: "Q", digits: 2 } : { min: -100, max: 100, unit: "%", digits: 0 },
+    binding: boundEndpoint(
+      descriptor.endpointID,
+      (value) => denormalizeVoiceEnhancerValue(descriptor, value),
+      (value) => normalized(
+        normalizeVoiceEnhancerValue(descriptor, value),
+        `${descriptor.endpointID} endpoint conversion`
+      )
+    ),
+    isQuick: false,
+    compound: null,
+    articulationParameterId: null,
+    modulationTargetKind: descriptor.targetKind
+  });
+}
+const VOICE_ENHANCER_TARGET_DESCRIPTORS = Object.freeze(
+  Object.values(VOICE_ENHANCER_PARAMETER_DESCRIPTORS).map(createVoiceEnhancerTargetDescriptor)
+);
 const GENERATOR_TARGET_DEFINITIONS = Object.freeze([
   { moduleId: "mseg1", targetIdSuffix: "morph", endpointID: "mseg1Morph", targetKind: "mseg1Morph", label: "MSEG 1 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph1" },
   { moduleId: "mseg2", targetIdSuffix: "morph", endpointID: "mseg2Morph", targetKind: "mseg2Morph", label: "MSEG 2 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph2" },
@@ -16638,6 +16734,7 @@ const TARGET_DESCRIPTORS = Object.freeze(
     ...RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters.map(createRackTargetDescriptor)),
     ...FREQUENCY_SPLIT_TARGET_DESCRIPTORS,
     GLOBAL_TUNE_TARGET_DESCRIPTOR,
+    ...VOICE_ENHANCER_TARGET_DESCRIPTORS,
     ...OSCILLATOR_MODULATION_DESCRIPTORS,
     ...GENERATOR_TARGET_DESCRIPTORS,
     ...MODULE_DEFINITIONS.flatMap(
@@ -16703,6 +16800,7 @@ const ENV_MIN_SECONDS = 1e-3;
 const ENV_MAX_SECONDS = 10;
 const FILTER_Q_MIN = 0.1;
 const FILTER_Q_MAX = 20;
+const VOICE_ENHANCER_Q_SPAN = 10 - 0.1;
 const ROUTE_AMOUNT_LIMITS = {
   wavetablePosition: { min: -1, max: 1 },
   warpAmount: { min: -1, max: 1 },
@@ -16743,7 +16841,10 @@ const ROUTE_AMOUNT_LIMITS = {
   ampAttack: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
   ampDecay: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
   ampSustain: { min: -1, max: 1 },
-  ampRelease: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS }
+  ampRelease: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+  voiceEnhancerFrequencyOctaves: { min: -6, max: 6 },
+  voiceEnhancerQ: { min: -VOICE_ENHANCER_Q_SPAN, max: VOICE_ENHANCER_Q_SPAN },
+  voiceEnhancerAmount: { min: -1, max: 1 }
 };
 const ROUTE_AMOUNT_STEPS = {
   wavetablePosition: 1e-3,
@@ -16781,7 +16882,10 @@ const ROUTE_AMOUNT_STEPS = {
   ampAttack: 1e-3,
   ampDecay: 1e-3,
   ampSustain: 1e-3,
-  ampRelease: 1e-3
+  ampRelease: 1e-3,
+  voiceEnhancerFrequencyOctaves: 1e-3,
+  voiceEnhancerQ: 1e-3,
+  voiceEnhancerAmount: 1e-3
 };
 const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors().filter((parameter2) => parameter2.modulationTargetIndex !== null);
 const RACK_MODULATION_PARAMETER_BY_KIND = new Map(
@@ -17030,6 +17134,7 @@ function formatModulationAmountReadout(rawTargetKind, amount, polarity = "unipol
     case "mseg2Morph":
     case "mseg3Morph":
     case "filterMix":
+    case "voiceEnhancerAmount":
     case "env1Sustain":
     case "env2Sustain":
     case "env3Sustain":
@@ -17052,8 +17157,10 @@ function formatModulationAmountReadout(rawTargetKind, amount, polarity = "unipol
     case "ampRelease":
       return `${prefix}${formatMagnitude(clampedAmount, 3)} s`;
     case "filterCutoffOctaves":
+    case "voiceEnhancerFrequencyOctaves":
       return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
     case "filterQ":
+    case "voiceEnhancerQ":
       return `${prefix}${formatMagnitude(clampedAmount, 2)} Q`;
     case "pitchSemitones":
       return `${prefix}${formatMagnitude(clampedAmount, 1)} st`;
@@ -17089,10 +17196,16 @@ function getModulationTargetClampHint(targetKind) {
       return "Warp amount still clamps to the oscillator's warp range.";
     case "filterCutoffOctaves":
       return "Requested cutoff movement is converted to Hz and still clamps to the filter range.";
+    case "voiceEnhancerFrequencyOctaves":
+      return "Enhancer frequency movement remains octave-backed and clamps to its safe bell range.";
     case "filterQ":
       return "Resonance still clamps to the synth's Q range.";
+    case "voiceEnhancerQ":
+      return "Enhancer Q still clamps to its 0.1-10 range.";
     case "filterMix":
       return "Mix clamps to 0-100%.";
+    case "voiceEnhancerAmount":
+      return "Enhancer Amount clamps to 0-100%.";
     case "pitchSemitones":
       return "Pitch depth adds on top of note, glide, and bend.";
     case "globalTuneSemitones":
@@ -20883,6 +20996,16 @@ const KEY_TRACK_RANGES = Object.freeze({
     unit: "st",
     reason: "Five knob octaves cover sub through air bands; routes retain the established six-octave filter sweep."
   }),
+  "enhancer-frequency": Object.freeze({
+    center: 0,
+    knobMin: -12,
+    knobMax: 60,
+    routeMin: -72,
+    routeMax: 72,
+    step: 0.01,
+    unit: "st",
+    reason: "The locked 0.5x-32x Ratio span stays continuous while octave-backed routes retain a six-octave offset window."
+  }),
   "crossover-frequency": Object.freeze({
     center: 0,
     knobMin: -48,
@@ -20959,6 +21082,7 @@ function requireKeyTrackRange(family) {
 }
 const KEY_TRACK_CURRENT_CONTROL_IDS = Object.freeze([
   "voice.filterCutoff",
+  VOICE_ENHANCER_KEY_TRACK_CONTROL_ID,
   "lane.globalFilterCutoff",
   "lane.distortionWetHPHz",
   "lane.distortionWetLPHz",
@@ -20972,6 +21096,7 @@ const KEY_TRACK_CURRENT_CONTROL_IDS = Object.freeze([
 ]);
 const familyByControlID = Object.freeze({
   "voice.filterCutoff": "filter-frequency",
+  [VOICE_ENHANCER_KEY_TRACK_CONTROL_ID]: "enhancer-frequency",
   "lane.globalFilterCutoff": "filter-frequency",
   "lane.distortionWetHPHz": "filter-frequency",
   "lane.distortionWetLPHz": "filter-frequency",
@@ -22736,6 +22861,7 @@ function voiceAmountSpec(targetKind, baseValue) {
   const parameterKind = getVoiceModulationParameterKind(targetKind);
   switch (parameterKind) {
     case "filterCutoffOctaves":
+    case "voiceEnhancerFrequencyOctaves":
       requirePositiveLogarithmicBase(baseValue);
       return amountSpec({
         ...bounds,
@@ -22747,6 +22873,7 @@ function voiceAmountSpec(targetKind, baseValue) {
         physicalIntervalUnit: "frequency"
       });
     case "filterQ":
+    case "voiceEnhancerQ":
       return amountSpec({ ...bounds, defaultUnit: "Q", canonicalPerDisplayedUnit: 1, digits: 3, percentMeaning: "depth", baseValue: null, physicalIntervalUnit: null });
     case "pitchSemitones":
     case "globalTuneSemitones":
@@ -22774,6 +22901,7 @@ function voiceAmountSpec(targetKind, baseValue) {
     case "wavetablePosition":
     case "warpAmount":
     case "filterMix":
+    case "voiceEnhancerAmount":
     case "unisonDetune":
     case "unisonBlend":
     case "unisonWidth":
@@ -30244,6 +30372,43 @@ function useSynthPatchViewModel({
       return clamp$3(Number.isFinite(numeric) ? numeric : 1, 0, 1);
     }
   });
+  const voiceEnhancerFrequency = usePatchParameterBinding({
+    endpointID: VOICE_ENHANCER_FREQUENCY_ENDPOINT_ID,
+    initialValue: VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency.initial,
+    coerce: (value) => clamp$3(
+      Number(value) || VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency.initial,
+      VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency.min,
+      VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency.max
+    )
+  });
+  const voiceEnhancerQ = usePatchParameterBinding({
+    endpointID: VOICE_ENHANCER_Q_ENDPOINT_ID,
+    initialValue: VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q.initial,
+    coerce: (value) => clamp$3(
+      Number(value) || VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q.initial,
+      VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q.min,
+      VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q.max
+    )
+  });
+  const voiceEnhancerAmount = usePatchParameterBinding({
+    endpointID: VOICE_ENHANCER_AMOUNT_ENDPOINT_ID,
+    initialValue: VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount.initial,
+    coerce: (value) => clamp$3(
+      Number.isFinite(Number(value)) ? Number(value) : VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount.initial,
+      VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount.min,
+      VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount.max
+    )
+  });
+  const voiceEnhancerKeyTrackEnabled = usePatchParameterBinding({
+    endpointID: VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => Number(value) >= 0.5 ? 1 : 0
+  });
+  const voiceEnhancerKeyTrackOffsetSemitones = usePatchParameterBinding({
+    endpointID: VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$3(Number(value) || 0, -12, 60)
+  });
   const unisonVoices = usePatchParameterBinding({
     endpointID: oscillatorEndpointID("unisonVoices"),
     initialValue: 1,
@@ -31855,6 +32020,11 @@ function useSynthPatchViewModel({
     filterCutoffKeyTrackOffsetSemitones,
     filterQ,
     filterMix,
+    voiceEnhancerFrequency,
+    voiceEnhancerQ,
+    voiceEnhancerAmount,
+    voiceEnhancerKeyTrackEnabled,
+    voiceEnhancerKeyTrackOffsetSemitones,
     unisonVoices,
     unisonDetune,
     unisonBlend,

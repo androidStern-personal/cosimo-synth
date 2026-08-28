@@ -43,6 +43,9 @@ export const SHARED_VOICE_MODULATION_TARGET_KINDS = [
     "ampDecay",
     "ampSustain",
     "ampRelease",
+    "voiceEnhancerFrequencyOctaves",
+    "voiceEnhancerQ",
+    "voiceEnhancerAmount",
 ];
 /** The complete source domain; display names live with presentation metadata. */
 export const MODULATION_SOURCE_IDENTITIES = Object.freeze([
@@ -129,9 +132,9 @@ const sourceIdentityByAddress = new Map(MODULATION_SOURCE_IDENTITIES.map((identi
 const targetIdentityByKind = new Map(MODULATION_TARGET_IDENTITIES.map((identity) => [identity.kind, identity]));
 function assertCanonicalIdentities() {
     if (MODULATION_SOURCE_COUNT !== 14
-        || MODULATION_VOICE_TARGET_COUNT !== 56
+        || MODULATION_VOICE_TARGET_COUNT !== 59
         || MODULATION_RACK_TARGET_COUNT !== 39
-        || MODULATION_LEGAL_PAIR_COUNT !== 1330) {
+        || MODULATION_LEGAL_PAIR_COUNT !== 1372) {
         throw new Error("Unexpected modulation domain size");
     }
     for (const [group, expectedCount] of [["voice", 10], ["macro", 4]]) {
@@ -143,7 +146,7 @@ function assertCanonicalIdentities() {
             throw new Error(`Bad modulation ${group} source indexes`);
         }
     }
-    for (const [group, expectedCount] of [["voice", 56], ["rack", 39]]) {
+    for (const [group, expectedCount] of [["voice", 59], ["rack", 39]]) {
         const identities = MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
         if (identities.length !== expectedCount
             || identities.some((identity, position) => identity.runtimeIndex !== position)) {
