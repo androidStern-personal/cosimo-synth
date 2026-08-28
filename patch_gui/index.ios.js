@@ -19219,6 +19219,7 @@ const LANE_TOPOLOGY_ENDPOINT_ID = "laneTopology";
 const LANE_SOLO_ENDPOINT_ID = "laneSolo";
 const LANE_SLOT_PARAMS_ENDPOINT_ID = "laneSlotParams";
 const LANE_SLOT_PARAM_VALUE_ENDPOINT_ID = "laneSlotParamValue";
+const LANE_OUTPUT_CONTROL_ENDPOINT_ID = "laneOutputControl";
 const LANE_MAX_CHAIN_LENGTH = 16;
 const LANE_BRANCH_TAG_SHIFT = 8;
 const LANE_MAX_BRANCHES_PER_GROUP = 4;
@@ -19666,6 +19667,18 @@ function parsePlacement(input, deviceIds) {
 function isValidCrossoverHz(value) {
   return typeof value === "number" && Number.isFinite(value) && value >= LANE_SPLIT_XOVER_MIN_HZ && value <= LANE_SPLIT_XOVER_MAX_HZ;
 }
+function createDefaultLaneOutputState() {
+  return { mix: 1, bypassed: false };
+}
+function parseLaneOutputState(input) {
+  if (!isRecord$2(input) || !hasExactKeys(input, ["mix", "bypassed"])) {
+    return null;
+  }
+  if (typeof input.mix !== "number" || !Number.isFinite(input.mix) || input.mix < 0 || input.mix > 1 || typeof input.bypassed !== "boolean") {
+    return null;
+  }
+  return { mix: input.mix, bypassed: input.bypassed };
+}
 function parseLaneStateV2(input) {
   let document2 = input;
   if (typeof input === "string") {
@@ -19676,8 +19689,8 @@ function parseLaneStateV2(input) {
       return err(`is not valid JSON: ${detail}`);
     }
   }
-  if (!isRecord$2(document2) || !hasExactKeys(document2, ["format", "version", "devices", "chain"])) {
-    return err("must be { format, version, devices, chain }");
+  if (!isRecord$2(document2) || !hasExactKeys(document2, ["format", "version", "output", "devices", "chain"])) {
+    return err("must be { format, version, output, devices, chain }");
   }
   if (document2.format !== "cosimo.lane" || document2.version !== 2) {
     return err("must be cosimo.lane version 2");
@@ -19687,6 +19700,10 @@ function parseLaneStateV2(input) {
   }
   if (!Array.isArray(document2.chain)) {
     return err("chain must be an array");
+  }
+  const output = parseLaneOutputState(document2.output);
+  if (output === null) {
+    return err("output must be { mix: 0..1, bypassed: boolean }");
   }
   const devices = {};
   for (const deviceId of Reflect.ownKeys(document2.devices)) {
@@ -19812,7 +19829,7 @@ function parseLaneStateV2(input) {
   if (wireEntryCount > LANE_MAX_CHAIN_LENGTH) {
     return err(`flattens to ${wireEntryCount} wire entries; the topology upload holds ${LANE_MAX_CHAIN_LENGTH}`);
   }
-  return { _tag: "ok", value: { format: "cosimo.lane", version: 2, devices, chain } };
+  return { _tag: "ok", value: { format: "cosimo.lane", version: 2, output, devices, chain } };
 }
 function upgradeLaneStateV1(state2) {
   const devices = {};
@@ -19825,6 +19842,7 @@ function upgradeLaneStateV1(state2) {
   return {
     format: "cosimo.lane",
     version: 2,
+    output: createDefaultLaneOutputState(),
     devices,
     chain: state2.order.map((effectId) => ({
       kind: "device",
@@ -19847,6 +19865,7 @@ function createDefaultLaneStateV2() {
   return {
     format: "cosimo.lane",
     version: 2,
+    output: createDefaultLaneOutputState(),
     devices,
     chain: legacy.chain.filter((node) => node.kind === "device" && STARTER_DEVICE_IDS.includes(node.deviceId))
   };
@@ -19869,6 +19888,7 @@ function serializeLaneStateV2(state2) {
   return JSON.stringify({
     format: "cosimo.lane",
     version: 2,
+    output: state2.output,
     devices: state2.devices,
     chain: state2.chain
   });
@@ -19937,7 +19957,10 @@ function buildLaneSplitParamValues(group) {
   return values;
 }
 function buildLaneRuntimeEventsV2(state2) {
-  const events = [];
+  const events = [{
+    endpointID: LANE_OUTPUT_CONTROL_ENDPOINT_ID,
+    value: state2.output
+  }];
   let deliverySerial = 0;
   for (const device of listLaneDeviceInstancesV2(state2)) {
     deliverySerial += 1;
@@ -20018,6 +20041,18 @@ function setLaneKeyTrackEnabled(state2, deviceId, ordinaryEndpointID, enabled) {
     ...state2,
     devices: { ...state2.devices, [deviceId]: { params } }
   };
+}
+function setLaneOutputMix(state2, mix) {
+  if (!Number.isFinite(mix) || mix < 0 || mix > 1) {
+    return null;
+  }
+  return { ...state2, output: { ...state2.output, mix } };
+}
+function setLaneOutputBypassed(state2, bypassed) {
+  if (typeof bypassed !== "boolean") {
+    return null;
+  }
+  return { ...state2, output: { ...state2.output, bypassed } };
 }
 function setLaneSplitCrossoverHz(state2, groupId, which, hz) {
   if (!Number.isFinite(hz) || hz < LANE_SPLIT_XOVER_MIN_HZ || hz > LANE_SPLIT_XOVER_MAX_HZ) {
@@ -20383,6 +20418,22 @@ function useLaneStateDoc() {
     const value = which === "low" ? group.xoverLowKeyTrackOffsetSemitones : group.xoverHighKeyTrackOffsetSemitones;
     sendSplitField(groupId, which === "low" ? LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES : LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_OFFSET_SEMITONES, value);
   }, [sendSplitField, store]);
+  const setOutputMix = reactExports.useCallback((mix) => {
+    const next = setLaneOutputMix(store.state, mix);
+    if (next === null) {
+      return;
+    }
+    acceptLaneState(store, next);
+    patchConnection.sendEventOrValue?.(LANE_OUTPUT_CONTROL_ENDPOINT_ID, next.output);
+  }, [patchConnection, store]);
+  const setOutputBypassed = reactExports.useCallback((bypassed) => {
+    const next = setLaneOutputBypassed(store.state, bypassed);
+    if (next === null) {
+      return;
+    }
+    acceptLaneState(store, next);
+    patchConnection.sendEventOrValue?.(LANE_OUTPUT_CONTROL_ENDPOINT_ID, next.output);
+  }, [patchConnection, store]);
   const persist = reactExports.useCallback(() => {
     patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(store.state));
   }, [patchConnection, store]);
@@ -20391,6 +20442,8 @@ function useLaneStateDoc() {
     commit,
     setParamValue,
     setKeyTrackEnabled,
+    setOutputMix,
+    setOutputBypassed,
     setSplitCrossover,
     setSplitKeyTrackEnabled,
     setSplitKeyTrackOffset,
@@ -20400,6 +20453,8 @@ function useLaneStateDoc() {
     commit,
     setParamValue,
     setKeyTrackEnabled,
+    setOutputMix,
+    setOutputBypassed,
     setSplitCrossover,
     setSplitKeyTrackEnabled,
     setSplitKeyTrackOffset,

@@ -267,9 +267,7 @@ function parseLaneOutputState(input: unknown): LaneOutputState | null {
     return { mix: input.mix, bypassed: input.bypassed };
 }
 
-/** Parse unknown persisted data into the complete clean lane.v2 schema.
-    The exact pre-T63 v2 shape is the sole legacy exception and receives the
-    output defaults; partial/unknown output documents still fail closed. */
+/** Parse unknown persisted data into the complete current lane.v2 schema. */
 export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
     let document: unknown = input;
     if (typeof input === "string") {
@@ -280,12 +278,8 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
             return err(`is not valid JSON: ${detail}`);
         }
     }
-    if (!isRecord(document)) {
-        return err("must be an object");
-    }
-    const isLegacyDocument = hasExactKeys(document, ["format", "version", "devices", "chain"]);
-    if (!isLegacyDocument
-            && !hasExactKeys(document, ["format", "version", "output", "devices", "chain"])) {
+    if (!isRecord(document)
+            || !hasExactKeys(document, ["format", "version", "output", "devices", "chain"])) {
         return err("must be { format, version, output, devices, chain }");
     }
     if (document.format !== "cosimo.lane" || document.version !== 2) {
@@ -297,7 +291,7 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
     if (!Array.isArray(document.chain)) {
         return err("chain must be an array");
     }
-    const output = isLegacyDocument ? createDefaultLaneOutputState() : parseLaneOutputState(document.output);
+    const output = parseLaneOutputState(document.output);
     if (output === null) {
         return err("output must be { mix: 0..1, bypassed: boolean }");
     }

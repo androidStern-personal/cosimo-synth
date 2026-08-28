@@ -223,6 +223,7 @@
 
 .rack-lane-mix > input[type="range"] {
     width: 100%;
+    height: var(--cosimo-hit-min);
     min-width: 0;
     margin: 0;
     accent-color: #69d5c5;

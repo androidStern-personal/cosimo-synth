@@ -29,6 +29,7 @@ async function makeParallelDoc() {
     return {
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices: {
             "delay#1": { params: { ...params.delay } },
             "delay#2": { params: { ...params.delay } },
@@ -58,6 +59,7 @@ async function makeSplitDoc() {
     return {
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices: {
             "ott#1": { params: { ...params.ott } },
             "reverb#1": { params: { ...params.reverb } },
@@ -214,17 +216,15 @@ test("lane.v2 default document is the compact starter trio and round-trips", asy
     assert.deepEqual(reparsed.value, state);
 });
 
-test("lane output defaults, legacy migration, editing, and runtime replay keep Mix independent from Bypass", async () => {
+test("lane output defaults, strict parsing, editing, and runtime replay keep Mix independent from Bypass", async () => {
     const laneV2 = await laneV2Promise;
     const state = laneV2.createDefaultLaneStateV2();
 
     assert.deepEqual(state.output, { mix: 1, bypassed: false });
 
-    const legacyV2 = JSON.parse(laneV2.serializeLaneStateV2(state));
-    delete legacyV2.output;
-    const migrated = laneV2.parseLaneStateV2(legacyV2);
-    assert.equal(migrated._tag, "ok");
-    assert.deepEqual(migrated.value.output, { mix: 1, bypassed: false });
+    const incompleteV2 = JSON.parse(laneV2.serializeLaneStateV2(state));
+    delete incompleteV2.output;
+    assert.equal(laneV2.parseLaneStateV2(incompleteV2)._tag, "err");
 
     const mixed = laneV2.setLaneOutputMix(state, 0.37);
     const bypassed = laneV2.setLaneOutputBypassed(mixed, true);
@@ -391,13 +391,20 @@ test("lane.v2 caps the WIRE length: placements plus markers fit one topology upl
     ));
 
     // 13 placements + 4 markers = 17 wire entries: one too many.
-    const overflowing = { format: "cosimo.lane", version: 2, devices, chain: [...trunk, ...groups] };
+    const overflowing = {
+        format: "cosimo.lane",
+        version: 2,
+        output: { mix: 1, bypassed: false },
+        devices,
+        chain: [...trunk, ...groups],
+    };
     assert.equal(laneV2.parseLaneStateV2(overflowing)._tag, "err");
 
     // Drop one device: 12 + 4 = 16 fits exactly.
     const fitting = {
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices: Object.fromEntries(Object.entries(devices).filter(([id]) => id !== "chorus#3")),
         chain: [...trunk.filter((node) => node.deviceId !== "chorus#3"), ...groups],
     };

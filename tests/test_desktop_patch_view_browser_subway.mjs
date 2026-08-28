@@ -939,11 +939,19 @@ test("lane output controls stay inside the composed graph without covering its i
                     sliderRect.left + (sliderRect.right - sliderRect.left) / 2,
                     sliderRect.top + (sliderRect.bottom - sliderRect.top) / 2,
                 );
+                const sliderHitOwners = [
+                    [sliderRect.left + 3, (sliderRect.top + sliderRect.bottom) / 2],
+                    [sliderRect.right - 3, (sliderRect.top + sliderRect.bottom) / 2],
+                    [(sliderRect.left + sliderRect.right) / 2, sliderRect.top + 3],
+                    [(sliderRect.left + sliderRect.right) / 2, sliderRect.bottom - 3],
+                ].map(([x, y]) => slider.contains(document.elementFromPoint(x, y)));
                 return {
                     graph: graphRect,
                     mix: mixRect,
+                    slider: sliderRect,
                     mixIntersections: interactive.filter((node) => intersects(mixRect, rectOf(node))).length,
                     sliderReachable: slider.contains(sliderHit),
+                    sliderHitOwners,
                     sliderTouchAction: getComputedStyle(slider).touchAction,
                     scrollAtBottom: element.scrollTop + element.clientHeight >= element.scrollHeight - 1,
                     modulationAttributes: mix.querySelectorAll("[data-modulation-target-kind]").length,
@@ -956,8 +964,12 @@ test("lane output controls stay inside the composed graph without covering its i
                 `${fixture.name}: Mix hugs the inside bottom edge`);
             assert.equal(bottomGeometry.mix.bottom - bottomGeometry.mix.top >= 43.5, true,
                 `${fixture.name}: Mix keeps a touch-sized row`);
+            assert.equal(bottomGeometry.slider.bottom - bottomGeometry.slider.top >= 43.5, true,
+                `${fixture.name}: Mix slider itself keeps a touch-sized hit box`);
             assert.equal(bottomGeometry.mixIntersections, 0, `${fixture.name}: Mix clears graph interactions`);
             assert.equal(bottomGeometry.sliderReachable, true, `${fixture.name}: Mix slider reachable`);
+            assert.deepEqual(bottomGeometry.sliderHitOwners, [true, true, true, true],
+                `${fixture.name}: Mix slider owns all four hit-box edges`);
             assert.equal(bottomGeometry.sliderTouchAction, "pan-y",
                 `${fixture.name}: vertical graph scrolling remains available over Mix`);
             assert.equal(bottomGeometry.scrollAtBottom, true, `${fixture.name}: graph still scrolls to its true bottom`);
