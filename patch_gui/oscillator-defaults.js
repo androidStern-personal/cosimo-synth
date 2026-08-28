@@ -2,7 +2,7 @@
 /** Current catalog identity for the authored Core Shapes Init table. */
 export const OSCILLATOR_DEFAULT_WAVETABLE_ID = "core-shapes";
 /** Current catalog index of the Core Shapes table. */
-export const OSCILLATOR_DEFAULT_WAVETABLE_INDEX = 238;
+export const OSCILLATOR_DEFAULT_WAVETABLE_INDEX = 35;
 /** Lowest valid factory wavetable selector index. */
 export const OSCILLATOR_WAVETABLE_MIN_INDEX = 0;
 /** Highest valid factory wavetable selector index. */

@@ -272,14 +272,14 @@ async function loadCurrentBank() {
     };
 }
 
-test("initialized factory table identity remains PWM MedicineHat", async () => {
+test("initialized factory table identity is Core Shapes", async () => {
     const catalog = getFactoryBankCatalogValue(
         JSON.parse(await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"), "utf8"))
     );
-    const defaultTable = catalog.tables[34];
+    const defaultTable = catalog.tables[35];
 
-    assert.equal(defaultTable?.tableId, "pwm-medicinehat");
-    assert.equal(defaultTable?.name, "PWM MedicineHat");
+    assert.equal(defaultTable?.tableId, "core-shapes");
+    assert.equal(defaultTable?.name, "Core Shapes");
 });
 
 test("wave bank parser reads the current display source wavetable", async () => {

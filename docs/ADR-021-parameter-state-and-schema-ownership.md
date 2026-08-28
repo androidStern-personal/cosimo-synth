@@ -140,7 +140,10 @@ the separate ledger would fail to protect DAW automation. Both checks are requir
 `wavetableSelect` is numeric because it is host-automatable. The accepted current product
 contract keeps a test-only ledger binding every occupied index to its stable `tableId` and
 canonical source/derived content digests. T59 is a greenfield hard cut: it expands the
-fully occupied range to 0–238 and places the four-frame `core-shapes` table at index 238.
+fully occupied range to 0–238 and places the four-frame `core-shapes` table at index 35,
+immediately after the previously curated Sites bank. The old indices 35–237 shift once as
+part of this explicitly accepted greenfield contract so Sites can ship the new default
+without bundling the complete 124 MB factory source library.
 Unpublished older saved sounds, browser state, shared URLs, and host automation impose no
 compatibility requirement, and no migration, alias, or dual catalog is added for them.
 Within this accepted contract, reorder, insertion below an occupied index, replacement,

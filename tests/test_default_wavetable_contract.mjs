@@ -39,7 +39,7 @@ test("brand-new synth surfaces select the stable Core Shapes factory table for A
     const sourceCatalog = JSON.parse(sourceCatalogText);
 
     assert.equal(defaults.OSCILLATOR_DEFAULT_WAVETABLE_ID, "core-shapes");
-    assert.equal(defaults.OSCILLATOR_DEFAULT_WAVETABLE_INDEX, 238);
+    assert.equal(defaults.OSCILLATOR_DEFAULT_WAVETABLE_INDEX, 35);
     assert.equal(defaults.OSCILLATOR_WAVETABLE_MIN_INDEX, 0);
     assert.equal(defaults.OSCILLATOR_WAVETABLE_MAX_INDEX, sourceCatalog.length - 1);
     assert.equal(
@@ -92,4 +92,16 @@ test("brand-new synth surfaces select the stable Core Shapes factory table for A
     }
     assert.equal(debug.runtimeState.desiredTableIndex, defaults.OSCILLATOR_DEFAULT_WAVETABLE_INDEX);
     assert.equal(debug.runtimeState.activeTableIndex, defaults.OSCILLATOR_DEFAULT_WAVETABLE_INDEX);
+});
+
+test("the curated Sites bank includes Core Shapes without shipping the complete factory library", async () => {
+    const [sitesBuildSource, sourceCatalogText] = await Promise.all([
+        fs.readFile(path.join(repoRoot, "web/build-sites.mjs"), "utf8"),
+        fs.readFile(path.join(repoRoot, "assets/factory-table-catalog.json"), "utf8"),
+    ]);
+    const sourceCatalog = JSON.parse(sourceCatalogText);
+
+    assert.match(sitesBuildSource, /const sitesDefaultTableName = "Core Shapes";/);
+    assert.equal(sourceCatalog[35]?.tableId, "core-shapes");
+    assert.ok(sourceCatalog.length > 36, "the curated Sites bank must remain a strict subset");
 });

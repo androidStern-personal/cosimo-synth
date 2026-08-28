@@ -9,7 +9,7 @@ const webDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webDirectory, "..");
 const webBuildDirectory = path.join(repoRoot, "build", "web");
 const distDirectory = path.join(repoRoot, "dist");
-const sitesDefaultTableName = "PWM MedicineHat";
+const sitesDefaultTableName = "Core Shapes";
 const ordinaryBuildEnvironment = { ...process.env };
 delete ordinaryBuildEnvironment.VITE_COSIMO_DEVELOPER_SETTINGS;
 const sitesBuildEnvironment = {

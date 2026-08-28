@@ -211,6 +211,12 @@
       "sourceWav": "assets/factory_sources/imported/PWM MedicineHat.wav"
     },
     {
+      "tableId": "core-shapes",
+      "name": "Core Shapes",
+      "frameCount": 4,
+      "sourceWav": "assets/factory_sources/core-shapes.wav"
+    },
+    {
       "tableId": "pwm-mini",
       "name": "PWM Mini",
       "frameCount": 180,
@@ -1427,12 +1433,6 @@
       "name": "XLNT-Xello",
       "frameCount": 19,
       "sourceWav": "assets/factory_sources/imported/XLNT-Xello.wav"
-    },
-    {
-      "tableId": "core-shapes",
-      "name": "Core Shapes",
-      "frameCount": 4,
-      "sourceWav": "assets/factory_sources/core-shapes.wav"
     }
   ]
 }

@@ -31,7 +31,7 @@ function currentContract(buildCanonicalPluginStateContract) {
         effectID: "wavetable-synth",
         parameters: [
             { endpointID: "sourceMode", type: "number", min: 0, max: 1, defaultValue: 0 },
-            { endpointID: "oscAWavetableSelect", type: "number", min: 0, max: 238, defaultValue: 238 },
+            { endpointID: "oscAWavetableSelect", type: "number", min: 0, max: 238, defaultValue: 35 },
             { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
             { endpointID: "ampRelease", type: "number", min: 0.005, max: 10, defaultValue: 0.2 },
             { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },

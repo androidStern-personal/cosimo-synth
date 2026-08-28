@@ -4,7 +4,7 @@ import type { OscillatorID } from "./modulation-targets";
 export const OSCILLATOR_DEFAULT_WAVETABLE_ID = "core-shapes";
 
 /** Current catalog index of the Core Shapes table. */
-export const OSCILLATOR_DEFAULT_WAVETABLE_INDEX = 238;
+export const OSCILLATOR_DEFAULT_WAVETABLE_INDEX = 35;
 
 /** Lowest valid factory wavetable selector index. */
 export const OSCILLATOR_WAVETABLE_MIN_INDEX = 0;
