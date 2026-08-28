@@ -901,5 +901,8 @@ T28 fixed end-of-chain Polish section — integrated 2026-08-28
 - Fresh HMR verified the exact T28 worktree and was stopped. The final compiled VST3 is installed and strict-signed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`, executable SHA-256 `f3aebc8d67c2085074fbd0145e625ce2b4792e7ea204e01873228f54e60ddc52`. No post-build level-matched listening, Ableton interaction, pluginval, or physical iPhone/AUv3 acceptance is claimed.
 
 T67 current integration queue — updated 2026-08-28
-- T28 is reviewed and fast-forwarded locally; master push and Sites deployment remain.
+- T28 is reviewed, integrated, pushed to master at `fef3aec8`, and deployed as Sites version 60. No T28 merge, push, install, or deployment work remains.
 - The coordinator-managed `Migrate Cmajor CHOC JUCE to CPM` task is active in thread `01a04a22-16f6-7c52-86be-55d5da70ac26`, branch `codex/builder-kit-cpm-dependency-migration`, worktree `/Users/winterfell/.codex/worktrees/7076/cosimo-synth`, starting from roadmap checkpoint `531f8fed`. No completion handoff or coordinator review exists yet. Private dependency-fork creation/push is authorized; master integration, installs, deployments, product changes, public pushes, and Cmajor CLI work remain outside the implementation task.
+
+Current hosted synth delivery after T28 — deployed 2026-08-28
+- Sites version 60 was built, saved, and publicly deployed from pushed integration commit `fef3aec8` to `https://cosimo-synth.andrew-martin-stern.chatgpt.site`. The live app, web host, Cmajor engine, factory catalog, and compiled desktop interface all return HTTP 200; the published interface and engine contain the new Polish controls.
