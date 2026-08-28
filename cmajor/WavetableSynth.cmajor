@@ -1361,6 +1361,11 @@ graph WavetableSynth [[ main ]]
     input value float32 voiceEnhancerAmount [[ name: "Voice Enhancer Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 voiceEnhancerKeyTrackEnabled [[ name: "Voice Enhancer Key Track", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
     input value float32 voiceEnhancerKeyTrackOffsetSemitones [[ name: "Voice Enhancer Key Track Offset", min: -12.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
+    // T28 follows the moving append-only host contract after T62. These are
+    // the whole fixed Polish surface; baked stage settings never become endpoints.
+    input value float32 polishEnhancerAmount [[ name: "Polish Enhancer Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+    input value float32 polishCompressionClipAmount [[ name: "Polish Compression / Clip Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+    input value float32 polishOutputTrimDb [[ name: "Polish Output Trim", min: -24.0f, max: 12.0f, init: 0.0f, unit: "dB", rampFrames: 0 ]];
     // Effects Lane structure and parameter records/fields are patch state and
     // live edits (ADR-007); Solo is runtime-only audition state. These struct
     // events carry no parameter purpose, so none become host automation slots.
@@ -1404,6 +1409,8 @@ graph WavetableSynth [[ main ]]
     output event wt::BounceBankRuntimeState bounceBankRuntimeState;
     // Append-only engine metadata used by Bounce capture.
     output event wt::EngineStatus engineStatus;
+    // Append-only, post-trim Polish telemetry. The observer never changes audio.
+    output event wt::PolishMeterFrame polishMeter;
 
     let voiceCount = 16;
 
@@ -1411,14 +1418,11 @@ graph WavetableSynth [[ main ]]
     node noteDispatcher = wt::NoteDispatcher (voiceCount);
     node sharedEngine = wt::SharedVoiceEngine (voiceCount);
     node trim = wt::StereoTrim (0.18f);
-    // The eight reorderable effects, and then the one stage the user cannot reorder,
-    // disable or bypass. Output limiting used to be a POSITIONAL property of the fixed
-    // chain - wt::ChorusBus was terminal and soft-limited every sample - and once effect
-    // order is a runtime choice that guarantee evaporates in seven orders out of eight.
-    // ADR-006: "A final safety limiter, if present, remains fixed after the creative rack
-    // and is not a reorderable module."
+    // The editable, zero-latency lane ends here. Polish is a separate permanent
+    // boundary: it is fixed after whole-lane Mix/Bypass and owns the only
+    // declared instrument latency.
     node rack = wt::EffectsRack;
-    node outputStage = wt::RackOutputStage;
+    node polish = wt::PolishBus;
     node rackStateMonitor = wt::RackStateMonitor;
     node tempoMonitor = wt::TempoMonitor;
     node engineStatusMonitor = wt::EngineStatusMonitor;
@@ -1492,6 +1496,9 @@ graph WavetableSynth [[ main ]]
         voiceEnhancerAmount -> sharedEngine.voiceEnhancerAmountIn;
         voiceEnhancerKeyTrackEnabled -> sharedEngine.voiceEnhancerKeyTrackEnabledIn;
         voiceEnhancerKeyTrackOffsetSemitones -> sharedEngine.voiceEnhancerKeyTrackOffsetSemitonesIn;
+        polishEnhancerAmount -> polish.enhancerAmountIn;
+        polishCompressionClipAmount -> polish.compressionClipAmountIn;
+        polishOutputTrimDb -> polish.outputTrimDbIn;
         oscAWavetableSelect -> desiredTableMonitorA.tableSelectIn;
         oscBWavetableSelect -> desiredTableMonitorB.tableSelectIn;
         oscCWavetableSelect -> desiredTableMonitorC.tableSelectIn;
@@ -1598,8 +1605,9 @@ graph WavetableSynth [[ main ]]
         rack.previewInputRight -> distortionHistoryAnalyzer.previewInputRight;
         rack.previewOutputLeft -> distortionHistoryAnalyzer.previewOutputLeft;
         rack.previewOutputRight -> distortionHistoryAnalyzer.previewOutputRight;
-        rack.out -> outputStage.in;
-        outputStage.out -> audioOut;
+        rack.out -> polish.in;
+        polish.out -> audioOut;
+        polish.meterOut -> polishMeter;
         rack.laneCommittedChainLength -> rackStateMonitor.laneCommittedChainLengthIn;
         rack.laneCommittedChainCode -> rackStateMonitor.laneCommittedChainCodeIn;
         rack.laneCommittedPositionMask -> rackStateMonitor.laneCommittedPositionMaskIn;
@@ -1613,4 +1621,9 @@ graph WavetableSynth [[ main ]]
         sharedEngine.bounceBankRuntimeStateOut -> bounceBankRuntimeState;
         engineStatusMonitor.engineStatusOut -> engineStatus;
     }
+
+    // A GRAPH propagates child latency to generated browser/native/host seams.
+    // Pin the public graph to the physical 60 + 96 frame signal path.
+    static_assert (processor.latency == wt::polishLatencyFrames,
+                   "WavetableSynth must report the fixed Polish latency");
 }

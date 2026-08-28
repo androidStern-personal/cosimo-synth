@@ -243,10 +243,11 @@ test("the saved sound and routing settings cannot enter host automation, modulat
     assert.equal(rack.RACK_EFFECT_DESCRIPTORS.some(({ id }) => id === "enhancer"), false);
 });
 
-test("the isolated DSP metadata and composition fence encode the T26 ownership boundary", async () => {
-    const [enhancer, source, desktopManifest, iosManifest, synth, rack] = await Promise.all([
+test("the accepted DSP metadata survives composition only inside the fixed T28 Polish boundary", async () => {
+    const [enhancer, source, polish, desktopManifest, iosManifest, synth, rack] = await Promise.all([
         loadEnhancerState(),
         fs.readFile(path.join(repoRoot, "cmajor/Enhancer.cmajor"), "utf8"),
+        fs.readFile(path.join(repoRoot, "cmajor/Polish.cmajor"), "utf8"),
         fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8").then(JSON.parse),
         fs.readFile(path.join(repoRoot, "WavetableSynth.iOS.cmajorpatch"), "utf8").then(JSON.parse),
         fs.readFile(path.join(repoRoot, "cmajor/WavetableSynth.cmajor"), "utf8"),
@@ -289,8 +290,14 @@ test("the isolated DSP metadata and composition fence encode the T26 ownership b
         assert.match(smoothingSection, new RegExp(`\\b${dspEndpointID}\\b`));
     }
 
-    assert.equal(desktopManifest.source.includes("cmajor/Enhancer.cmajor"), false);
-    assert.equal(iosManifest.source.includes("cmajor/Enhancer.cmajor"), false);
+    assert.equal(desktopManifest.source.includes("cmajor/Enhancer.cmajor"), true);
+    assert.equal(iosManifest.source.includes("cmajor/Enhancer.cmajor"), true);
+    assert.equal(desktopManifest.source.includes("cmajor/Polish.cmajor"), true);
+    assert.equal(iosManifest.source.includes("cmajor/Polish.cmajor"), true);
+    assert.match(polish, /node enhancer = EnhancerBus;/);
+    assert.match(polish, /enhancer\.b1MidAmountIn <- 0\.70f \* enhancerAmount;/);
+    assert.match(polish, /enhancer\.b2SideAmountIn <- 0\.70f \* enhancerAmount;/);
+    assert.match(synth, /node polish = wt::PolishBus;/);
     assert.doesNotMatch(synth, /EnhancerBus/);
     assert.doesNotMatch(rack, /EnhancerBus/);
 });

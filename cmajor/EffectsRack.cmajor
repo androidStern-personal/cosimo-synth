@@ -38,8 +38,8 @@ namespace wt
     // profiling pass changes it.
     //
     // WHAT THE RACK DOES NOT DO. It does not terminate the signal path. Output limiting
-    // lives in wt::RackOutputStage, fixed and non-reorderable, between rack.out and
-    // audioOut (ADR-006) - see RackOutputStage.cmajor for why that is not optional.
+    // lives in wt::PolishBus, fixed and non-reorderable, between rack.out and
+    // audioOut. Whole-lane Mix/Bypass therefore remains upstream of Polish.
     //
     // INTEGRATION NOTES for whoever wires this into graph WavetableSynth:
     //   - Hoist with MODULE-PREFIX wildcards only (`input rack.distortion*;` and so on).
@@ -123,7 +123,7 @@ namespace wt
     // carry tags 1..N, monotone non-decreasing with skips allowed (an empty
     // branch is representable). A trunk device (tag 0), the next marker, or
     // the chain's end closes the group. Branch outputs are SUMMED at the
-    // merge (no per-branch level in v1; wt::RackOutputStage owns overload,
+    // merge (no per-branch level in v1; the post-lane Polish section owns finishing,
     // and overload glitching is the decided policy, not a governor's job).
     //
     // Markers are slots: single-use per chain, addressed by the same param

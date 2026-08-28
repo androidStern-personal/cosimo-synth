@@ -1,5 +1,5 @@
 // Behavioural contract for the effects rack shell: wt::EffectsRack, its structure
-// uploads, the ADR-003 transition, and wt::RackOutputStage.
+// uploads and the ADR-003 transition.
 //
 // The rack is driven here exactly as the main graph drives it, and every child is a
 // REAL production module - there are no placeholders in this file. What is pinned:
@@ -29,9 +29,6 @@
 //      direction - reverses the ramp and is never stranded.
 //   5. A redundant structure upload, which is what the adapter sends on every patch
 //      load, costs ZERO dipped frames and burns no structure generation.
-//   6. wt::RackOutputStage is bit-exact below its transparent ceiling and hard-bounded
-//      above it, and the rack driven into abuse actually needs it.
-//
 // A node cannot be passed to a function ("error: Cannot use a processor name as a
 // type"), so every rack is configured and driven inline.
 //
@@ -39,7 +36,7 @@
 // output endpoint: <0 stops, >0 is a pass, ==0 is a failure. Child nodes are advanced
 // by hand inside main(), so tails longer than 100 frames are reachable.
 
-## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/VoiceEnhancer.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "../../cmajor/GlobalFilter.cmajor", "../../cmajor/Distortion.cmajor", "../../cmajor/Ott.cmajor", "../../cmajor/Chorus.cmajor", "../../cmajor/Flanger.cmajor", "../../cmajor/Phaser.cmajor", "../../cmajor/Delay.cmajor", "../../cmajor/Reverb.cmajor", "../../cmajor/EffectsRack.cmajor", "../../cmajor/RackOutputStage.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/VoiceEnhancer.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "../../cmajor/GlobalFilter.cmajor", "../../cmajor/Distortion.cmajor", "../../cmajor/Ott.cmajor", "../../cmajor/Chorus.cmajor", "../../cmajor/Flanger.cmajor", "../../cmajor/Phaser.cmajor", "../../cmajor/Delay.cmajor", "../../cmajor/Reverb.cmajor", "../../cmajor/EffectsRack.cmajor")
 
 //==============================================================================
 // Order, structure-upload validation, and hard audible bypass.
@@ -733,245 +730,6 @@ processor RackTransitionTest [[ main ]]
 }
 
 //==============================================================================
-// wt::RackOutputStage - the fixed, non-reorderable output stage.
-//
-// The rack cannot be allowed to terminate the signal path. Today wt::ChorusBus is the
-// terminal node into audioOut and applies chorusOutputLimit to every sample
-// unconditionally (Chorus.cmajor:571-574) - a POSITIONAL property of a fixed chain.
-// Once Chorus is reorderable it is last in one order out of eight and absent from the
-// wet path whenever it is disabled, so that limit stops protecting the output. This
-// stage is what replaces it (ADR-006 sanctions exactly this).
-
-## testProcessor()
-
-processor RackOutputStageTest [[ main ]]
-{
-    output stream int32 out;
-
-    node stage = wt::RackOutputStage;
-    node rack = wt::EffectsRack;
-
-    // The regenerating modules need time to build: their peak is not on frame one.
-    let abuseFrames = 32768;
-
-    float32<2> renderStage (float32 left, float32 right)
-    {
-        stage.in <- float32<2> (left, right);
-        stage.advance();
-        return stage.out;
-    }
-
-    // Deliberately hot - the instrument's own bus already reaches this on a heavy
-    // chord after wt::StereoTrim.
-    float32 abuseSignal (int32 frame)
-    {
-        return float32 (std::intrinsics::sin (float32 (frame) * 0.041f))
-             + 0.9f * float32 (std::intrinsics::sin (float32 (frame) * 0.37f));
-    }
-
-    wt::LaneTopologyUpload regenerationChain()
-    {
-        wt::LaneTopologyUpload upload;
-        upload.chainLength = 3;
-        upload.slotIds.at (0) = wt::rackModuleFlanger;
-        upload.slotIds.at (1) = wt::rackModuleDelay;
-        upload.slotIds.at (2) = wt::rackModuleReverb;
-        upload.enabledMask = 0b111;
-        return upload;
-    }
-
-    wt::LaneTopologyUpload emptyChain()
-    {
-        wt::LaneTopologyUpload upload;
-        upload.chainLength = 0;
-        return upload;
-    }
-
-    // The three regenerating modules in series, each at 0.95 feedback and a mix that
-    // ADDS to the dry signal rather than replacing it. This is the configuration the
-    // refutation was worried about, and it is one drag-and-drop away in the UI.
-    void configureRegeneration()
-    {
-        rack.laneTopology <- regenerationChain();
-
-        wt::LaneSlotParamsUpload flangerParams;
-        flangerParams.slotId = wt::rackModuleFlanger;
-        flangerParams.deliverySerial = 1;
-        flangerParams.values[wt::laneFlangerParamRate] = 0.35f;
-        flangerParams.values[wt::laneFlangerParamDepth] = 1.0f;
-        flangerParams.values[wt::laneFlangerParamFeedback] = 0.95f;
-        flangerParams.values[wt::laneFlangerParamMix] = 0.6f;
-        rack.laneSlotParams <- flangerParams;
-
-        wt::LaneSlotParamsUpload delayParams;
-        delayParams.slotId = wt::rackModuleDelay;
-        delayParams.deliverySerial = 2;
-        delayParams.values[wt::laneDelayParamTimeMs] = 13.0f;
-        delayParams.values[wt::laneDelayParamFeedback] = 0.95f;
-        delayParams.values[wt::laneDelayParamFilterHz] = 18000.0f;
-        delayParams.values[wt::laneDelayParamMix] = 0.6f;
-        rack.laneSlotParams <- delayParams;
-
-        wt::LaneSlotParamsUpload reverbParams;
-        reverbParams.slotId = wt::rackModuleReverb;
-        reverbParams.deliverySerial = 3;
-        reverbParams.values[wt::laneReverbParamSize] = 1.0f;
-        reverbParams.values[wt::laneReverbParamDecay] = 1.0f;
-        reverbParams.values[wt::laneReverbParamDamping] = 0.0f;
-        reverbParams.values[wt::laneReverbParamMix] = 0.6f;
-        rack.laneSlotParams <- reverbParams;
-    }
-
-    float32 measureRackPeak (bool throughStage)
-    {
-        var peak = 0.0f;
-
-        for (int32 frame = 0; frame < abuseFrames; ++frame)
-        {
-            let signal = abuseSignal (frame);
-            rack.in <- float32<2> (signal, -signal);
-            rack.trackingPitchHzIn <- 220.0f;
-            rack.advance();
-
-            var measured = rack.out;
-
-            if (throughStage)
-            {
-                stage.in <- measured;
-                stage.advance();
-                measured = stage.out;
-            }
-
-            peak = std::intrinsics::max (peak,
-                     std::intrinsics::max (std::intrinsics::abs (measured[0]),
-                                           std::intrinsics::abs (measured[1])));
-
-            if (measured[0] != measured[0] || measured[1] != measured[1])
-                return -1.0f;
-        }
-
-        return peak;
-    }
-
-    void main()
-    {
-        // 1. BIT-EXACT below the transparent ceiling. This is what makes the stage
-        //    droppable into the shipping signal path without changing the shipping
-        //    sound: everything that was not already over full scale is untouched.
-        bool transparent = true;
-
-        for (int32 step = 0; step <= 2000; ++step)
-        {
-            // Formed as a quotient rather than by accumulating 0.001f, which overshoots
-            // 1.0 in float32 and would put the sweep outside the transparent band.
-            let level = (float32 (step) - 1000.0f) / 1000.0f;
-            let rendered = renderStage (level, -level);
-
-            if (rendered[0] != level || rendered[1] != -level)
-                transparent = false;
-        }
-
-        out <- transparent ? 1 : 0;
-        advance();
-
-        // 2. Exactly at the transparent ceiling it is still the identity.
-        let atCeiling = renderStage (wt::rackOutputTransparentCeiling, -wt::rackOutputTransparentCeiling);
-        out <- (atCeiling[0] == wt::rackOutputTransparentCeiling
-                 && atCeiling[1] == -wt::rackOutputTransparentCeiling) ? 1 : 0;
-        advance();
-
-        // 3. CONTINUOUS across the knee - a limiter that steps at its threshold clicks
-        //    on every transient that crosses it.
-        let justBelow = renderStage (wt::rackOutputTransparentCeiling - 0.0001f, 0.0f)[0];
-        let justAbove = renderStage (wt::rackOutputTransparentCeiling + 0.0001f, 0.0f)[0];
-        out <- (std::intrinsics::abs (justAbove - justBelow) < 0.001f) ? 1 : 0;
-        advance();
-
-        // 4. HARD CEILING. No input, however absurd, gets past it. The bound is <=
-        //    rather than <: tanh saturates to exactly 1.0f in float32, so the ceiling is
-        //    reached and then held, which is what a ceiling is for.
-        bool bounded = true;
-        bool monotonic = true;
-        var previous = renderStage (wt::rackOutputTransparentCeiling, 0.0f)[0];
-
-        for (int32 step = 1; step <= 4000; ++step)
-        {
-            let level = wt::rackOutputTransparentCeiling + (float32 (step) * 0.25f);
-            let rendered = renderStage (level, -level)[0];
-
-            if (rendered > wt::rackOutputHardCeiling || rendered < -wt::rackOutputHardCeiling)
-                bounded = false;
-
-            if (rendered < previous)
-                monotonic = false;
-
-            previous = rendered;
-        }
-
-        out <- bounded ? 1 : 0;
-        advance();
-
-        out <- monotonic ? 1 : 0;
-        advance();
-
-        // 5. It is a limiter, not a gate: a signal well over the ceiling still comes
-        //    out loud.
-        out <- (renderStage (8.0f, -8.0f)[0] > 1.05f) ? 1 : 0;
-        advance();
-
-        // 6. Symmetric.
-        let positive = renderStage (4.0f, 0.0f)[0];
-        let negative = renderStage (-4.0f, 0.0f)[0];
-        out <- (positive == -negative) ? 1 : 0;
-        advance();
-
-        //----------------------------------------------------------------------
-        // 7. THE REAL LEVEL ASSERTION, on real DSP.
-        //
-        // Measured, not assumed: with the three regenerating modules in series at 0.95
-        // feedback the rack output peaks between 1.5 and 2.0 on this input, so it clears
-        // not just the transparent ceiling but the hard one. The stage is load-bearing,
-        // not decorative, and this is a level in dBFS rather than "finite and below 8.0".
-
-        configureRegeneration();
-
-        let regenerationRawPeak = measureRackPeak (false);
-        let regenerationStagedPeak = measureRackPeak (true);
-
-        out <- (regenerationRawPeak > wt::rackOutputHardCeiling) ? 1 : 0;
-        advance();
-
-        out <- (regenerationStagedPeak > 0.0f
-                 && regenerationStagedPeak <= wt::rackOutputHardCeiling) ? 1 : 0;
-        advance();
-
-        // 8. AND WITHOUT ANY EFFECT AT ALL. An empty lane passes a hot bus
-        //    straight through, so the instrument was already capable of leaving full
-        //    scale before the rack existed - which is the other half of why this stage
-        //    is not optional. wt::ChorusBus used to be the only thing catching it.
-
-        rack.laneTopology <- emptyChain();
-
-        let bypassedRawPeak = measureRackPeak (false);
-        let bypassedStagedPeak = measureRackPeak (true);
-
-        out <- (bypassedRawPeak > wt::rackOutputTransparentCeiling) ? 1 : 0;
-        advance();
-
-        out <- (bypassedStagedPeak > 0.0f
-                 && bypassedStagedPeak <= wt::rackOutputHardCeiling) ? 1 : 0;
-        advance();
-
-        // 9. The stage adds no latency of its own and declares none.
-        out <- (processor.latency == 0) ? 1 : 0;
-        advance();
-
-        out <- -1;
-        advance();
-    }
-}
-
-//==============================================================================
 // C10, THE STANDING CHECK: NO RACK MODULE MAY DECLARE processor.latency.
 //
 // This one is a compile-time assertion rather than a behavioural one, because there is
@@ -988,9 +746,9 @@ processor RackOutputStageTest [[ main ]]
 //     rack. No test of rack.latency and no test of rack audio can catch it.
 //
 // A GRAPH's latency, however, sums its children's. The probe below chains all eight
-// modules, the rack itself and the output stage behind a witness that declares exactly
-// one frame, and asserts the total is exactly one - which can only hold if every one of
-// them contributes zero. The rack has to be in the chain in its own right: its
+// modules and the rack itself behind a witness that declares exactly one frame, and
+// asserts the total is exactly one - which can only hold if every one of them contributes
+// zero. The rack has to be in the chain in its own right: its
 // children's latency does not propagate to it, so covering the modules does not cover
 // it.
 //
@@ -1039,7 +797,6 @@ graph RackChildLatencyProbe
     node delay        = wt::DelayBus;
     node reverb       = wt::ReverbBus;
     node rack         = wt::EffectsRack;
-    node outputStage  = wt::RackOutputStage;
 
     connection
     {
@@ -1053,8 +810,7 @@ graph RackChildLatencyProbe
         phaser.out -> delay.in;
         delay.out -> reverb.in;
         reverb.out -> rack.in;
-        rack.out -> outputStage.in;
-        outputStage.out -> out;
+        rack.out -> out;
     }
 
     static_assert (processor.latency == 1,

@@ -1,9 +1,11 @@
 # Polish Chain Design
 
-Status: **concept locked; lineup and stage specs are the current brainstorm state,
-2026-08-25** (Andrew + assistant session). Companion to `ENHANCER_DESIGN.md`,
-`DISTORTION_QUALITY_DESIGN.md`, and `SAUSAGE_FATTENER_ANALYSIS.md`. Decided items
-are marked **locked**; everything else is direction, not commitment.
+Status: **candidate selected for T28 objective implementation qualification,
+2026-08-28**. Companion to `ENHANCER_DESIGN.md`,
+`DISTORTION_QUALITY_DESIGN.md`, and `SAUSAGE_FATTENER_ANALYSIS.md`. The exact
+candidate below is intentionally conservative and evidence-backed. It is selected
+for implementation and automated qualification; Andrew's later level-matched
+listening remains a separate, unperformed product-acceptance gate.
 
 ## 1. Properties
 
@@ -48,8 +50,10 @@ are marked **locked**; everything else is direction, not commitment.
     delay-compensation path must be verified to carry it.
   - Latency is **constant** regardless of settings and reported once — never
     settings-dependent. The accepted high-quality T26 Enhancer contributes a fixed
-    declared 60 samples. The compressor may add 0–4 ms of fixed lookahead (up to
-    another 192 samples at 48 kHz). The reported total is their exact sum; do not
+    declared 60 samples. The compressor adds exactly **96 frames** of fixed
+    lookahead (2.00 ms at 48 kHz, 2.18 ms at 44.1 kHz). The complete section
+    therefore applies and reports exactly **156 frames** at every supported sample
+    rate. The reported total is their exact sum; do not
     replace the Enhancer with Lite's cheaper wrapper merely to avoid that latency.
   - Neutral behavior is pinned per stage. The T26 Enhancer contributes exactly zero
     nonlinear signal at zero Amount and matches its retained FIR neutral impulse
@@ -83,9 +87,15 @@ covered by SAFE BASS plus the enhancer's side amounts; revive only by explicit a
 High-pass on the side channel only; mid untouched. This is classic **elliptical
 EQ** from vinyl mastering (bass summed to mono so the cutter head survived), still
 standard practice: phasey stereo bass wastes clipper headroom and muddies small
-speakers. Starting spec: 6–12 dB/oct on S below ~120 Hz. Mono input ⇒ S = 0 ⇒
-no-op. The public surface is locked: no Safe Bass control. Cutoff and slope remain
-development-tuning decisions and are baked after acceptance.
+speakers. The baked curve is a **120 Hz, second-order Butterworth high-pass** on S
+(12 dB/oct, Q = 1/sqrt(2)); M is untouched. Mono input ⇒ S = 0 ⇒ no-op. The
+filtered and unfiltered S paths crossfade with a sample-rate-aware 20 ms one-pole
+ramp. Its target is derived from `(Enhancer Amount > 0) OR (Compression/Clip
+Amount > 0)`: at the all-zero state the dry S path is exact, while raising either
+macro engages the one fixed curve without a click. The filter continues running
+while bypassed so re-entry does not expose stale history. This chooses the steeper
+end of the researched 6–12 dB/oct range because it removes more sub-120 Hz side
+energy without moving the cutoff upward; listening approval is still pending.
 
 ### 2.2 ENHANCER
 
@@ -93,12 +103,22 @@ As `ENHANCER_DESIGN.md`: two parametric bells; per-band Stereo or Mid/Side routi
 linked Stereo Amount or independent Mid and Side amounts; Tube/Solid; shared
 Subtle/Medium; continuous de-emphasis. All settings are static per §1.
 
-The Polish surface exposes one dedicated **Enhancer Amount** macro. Frequency, Q,
-routing, Tube/Solid choice, Subtle/Medium choice, de-emphasis, and relative
-per-band Mid/Side balance remain baked internal settings. The macro scales the
-accepted per-band amounts together from neutral to the tuned Polish setting. Its
-exact response is tuned by ear during development; it does not replace or delete
-T26's full internal contract.
+The Polish surface exposes one dedicated **Enhancer Amount** macro `e` in 0..1.
+It retains the complete T26 processor and its fixed 60-frame FIR latency, with the
+musical-material regression settings baked exactly:
+
+- band 1: 130 Hz, Q 0.71, Stereo, Solid, Mid/linked Amount `0.70 * e`
+  (the retained Side endpoint is fed `0.35 * e`, though Stereo routing does not
+  consume it);
+- band 2: 9 kHz, Q 0.71, Mid/Side, Tube, Mid Amount `0.35 * e`, Side Amount
+  `0.70 * e`;
+- shared saturation Subtle and de-emphasis 1.0.
+
+The macro is linear in T26's existing 0..1 Amount domain, so the underlying
+Spectre gain law remains the accepted nonlinear `10^(12*Amount/20)-1` rather than
+being approximated or replaced. The macro is smoothed for 20 ms before entering
+T26's retained 15 ms control smoother. Frequency, Q, routing, character,
+intensity, de-emphasis, and relative balance are not public controls.
 
 ### 2.3 COMP/CLIP (the finisher)
 
@@ -111,10 +131,32 @@ reaching the ceiling at 0.94 of full scale. Cosimo's version adapts that recipe
 with the two rules above: up to 4 ms lookahead (same speed as SF's 0.2 ms attack
 without its overshoot-or-distort tradeoff), release ≥ the 60 Hz floor (SF's
 26.8 ms already is), detector HP as the cleaner alternative for bass-heavy
-material. "Medium" compression (Andrew) rather than SF's near-limiting ratio —
-exact threshold/ratio remain open. The public surface is locked to one separate
-**Compression/Clip Amount** macro that drives both stages together; there are no
-independent Compression and Clip knobs.
+material. "Medium" compression (Andrew) rather than SF's near-limiting ratio. The
+public **Compression/Clip Amount** macro `a` is clamped to 0..1 and smoothed with a
+sample-rate-aware 20 ms one-pole. It drives the fixed stages as follows:
+
+- stereo-linked instantaneous peak detector; threshold 0 dBFS; quadratic 6 dB
+  knee; ratio `1 + 3a` (1:1 at zero, 4:1 at full); no makeup gain and no detector
+  high-pass;
+- 20 ms attack and 120 ms release gain smoothing. The detector sees the current
+  input while gain is applied to audio delayed by the fixed 96-frame lookahead.
+  The 20 ms attack and 120 ms recovery both respect the 60 Hz gain-change floor;
+  lookahead reduces transient overshoot without turning the compressor into a
+  peak limiter;
+- a symmetric soft clipper after the compressor, mixed as
+  `compressed + a * (softClip(compressed) - compressed)`. For magnitude `m`,
+  `softClip` is exact identity through the -3 dBFS knee
+  `k = 10^(-3/20)`, then `k + (1-k) * tanh((m-k)/(1-k))`, with the original sign.
+  It approaches but never exceeds 0 dBFS. The matching unit slope at the knee
+  makes the transition continuous and click-free.
+
+These values take T27 Curve Lab's 0 dBFS threshold, 4:1 ratio, 6 dB knee, and
+120 ms release as the closest open, independently implemented evidence, then move
+its 10 ms attack to 20 ms to honor the locked 60 Hz rule. Omitting makeup and
+input drive is deliberate: the compressor only evens the top of the signal and
+the clipper only shaves the last 3 dB, rather than making the macro a hidden
+loudness boost. At `a = 0`, the compressor gain is exactly one and clip wet is
+exactly zero, but the 96-frame timing path remains active.
 
 T27's repeatable, isolated comparison package is
 `reference_labs/polish_comp_clip/`. Its exact decoded fixtures are source facts;
@@ -124,7 +166,22 @@ The independently named `fx/polish_lab/` VST3 exposes those defaults plus the
 open detector, macro, tone, and curve decisions for live Ableton tuning; it has
 no production signal-path connection.
 
-### 2.4 Interface placement
+### 2.4 OUTPUT TRIM AND METER
+
+Output Trim is the final audible operation, ranges from -24 to +12 dB, starts at
+0 dB, and follows a sample-rate-aware 20 ms gain ramp. It is not a safety stage:
+values over 0 dB may overload, and the meter reports that honestly.
+
+The post-trim meter observes without altering audio. `P` receives the maximum
+ordinary sample magnitude between 60 Hz telemetry frames, expressed in dBFS. `L`
+is the ungated 400 ms sliding stereo mean-square level, expressed in dBFS; it is
+not true peak, integrated loudness, or a selectable mastering mode. The UI owns
+the peak display ballistics: a higher value appears on the next visual frame,
+holds for 1.0 s, then decays at 24 dB/s toward the current peak. The loudness value
+drives pulse strength directly. This exact definition avoids implying EBU gating
+or K-weighting that the compact `L` readout does not claim.
+
+### 2.5 Interface placement
 
 The FX graph always ends with one permanent **POLISH** node after the complete
 editable Effects Lane. It makes the true signal position visible without adding
@@ -147,7 +204,7 @@ real 320 px layout proof before acceptance.
 - The sound-design saturator (`DISTORTION_QUALITY_DESIGN.md`) — rack citizen,
   fully modulatable, never merged with this.
 - Linear-phase anything; multiband dynamics (the rack's OTT covers it); upward
-  maximization; metering DSP in v1.
+  maximization; any metering beyond the fixed compact post-trim observer.
 
 ## 4. Reference knowledge (from the session's research)
 
@@ -172,15 +229,11 @@ real 320 px layout proof before acceptance.
   permitted, the comp can be fast *and* clean — the clipper still takes what the
   comp shouldn't chase.
 
-## 5. Open items
+## 5. Remaining acceptance items
 
-1. Enhancer: exact baked settings and the response of the dedicated Enhancer
-   Amount macro.
-2. COMP/CLIP: exact "medium" threshold/ratio, soft-clip tuning, macro response,
-   and compressor lookahead within the approved 0–4 ms range.
-3. SAFE BASS: fixed cutoff near the starting 120 Hz value and slope of 6 vs
-   12 dB/oct. These are tuning choices, not user controls.
-4. Transient/PUNCH mode (floated earlier): parked; revisit only if voicing shows
+1. Andrew's level-matched listening approval for the Safe Bass curve, both macro
+   responses, compressor/clip character, and comparison with the T27 bundle.
+2. Transient/PUNCH mode (floated earlier): parked; revisit only if voicing shows
    the finisher kills material worth keeping.
-5. Name (working: "Polish").
-6. WIDTH stage: out of the lineup unless Andrew re-adds it.
+3. Name (working: "Polish").
+4. WIDTH stage: out of the lineup unless Andrew re-adds it.

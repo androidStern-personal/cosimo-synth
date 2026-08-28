@@ -1,0 +1,394 @@
+// Production contract for the fixed, post-lane wt::PolishBus.
+// The accepted T26 Enhancer is a real child; T27's comparison renderer is not
+// imported into this path.
+
+function requirePolishLatency (relativePath)
+{
+    const section = getCurrentTestSection();
+    const source = new File (section.getAbsolutePath (relativePath)).read();
+    const code = source.replace (/\/\*[\s\S]*?\*\//g, "").replace (/\/\/[^\n]*/g, "");
+
+    if (! /processor\.latency\s*=\s*156/.test (code)
+        || ! /let\s+polishCompressorLookaheadFrames\s*=\s*96/.test (code))
+        throw new Error ("Polish must declare the exact 156-frame stage sum: " + relativePath);
+
+    return undefined;
+}
+
+## global ("../../cmajor/Enhancer.cmajor", "../../cmajor/Polish.cmajor")
+
+//==============================================================================
+// The all-zero sound is neutral but never changes timing: the production bus
+// must equal the accepted Enhancer's neutral FIR path plus the fixed 96-frame
+// compressor alignment delay.
+
+## testProcessor (requirePolishLatency ("../../cmajor/Polish.cmajor"))
+
+processor PolishNeutralTimingContract [[ main ]]
+{
+    output stream int32 out;
+
+    node polish = wt::PolishBus;
+    node enhancerReference = wt::EnhancerBus;
+
+    float32<2>[wt::polishCompressorLookaheadFrames] referenceDelay;
+    wrap<wt::polishCompressorLookaheadFrames> referenceWritePosition;
+
+    void configureReference()
+    {
+        enhancerReference.b1FreqHzIn <- 130.0f;
+        enhancerReference.b1QIn <- 0.71f;
+        enhancerReference.b1ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancerReference.b1MidAmountIn <- 0.0f;
+        enhancerReference.b1SideAmountIn <- 0.0f;
+        enhancerReference.b1CurveIn <- float32 (wt::enhancerCurveSolid);
+        enhancerReference.b2FreqHzIn <- 9000.0f;
+        enhancerReference.b2QIn <- 0.71f;
+        enhancerReference.b2ModeIn <- float32 (wt::enhancerModeMidSide);
+        enhancerReference.b2MidAmountIn <- 0.0f;
+        enhancerReference.b2SideAmountIn <- 0.0f;
+        enhancerReference.b2CurveIn <- float32 (wt::enhancerCurveTube);
+        enhancerReference.saturationModeIn <- float32 (wt::enhancerSaturationModeSubtle);
+        enhancerReference.deEmphasisIn <- 1.0f;
+    }
+
+    float32<2> delayedReference (float32<2> current)
+    {
+        let delayed = referenceDelay[referenceWritePosition];
+        referenceDelay[referenceWritePosition] = current;
+        ++referenceWritePosition;
+        return delayed;
+    }
+
+    void main()
+    {
+        static_assert (wt::polishEnhancerLatencyFrames == 60,
+                       "Polish must retain T26's accepted 60-frame Enhancer");
+        static_assert (wt::polishCompressorLookaheadFrames == 96,
+                       "Polish compressor lookahead changed");
+        static_assert (wt::polishLatencyFrames == 156,
+                       "Polish total latency must be the exact stage sum");
+        bool exact = true;
+        for (int32 frame = 0; frame < 8192; ++frame)
+        {
+            let sampleFrame = float32<2> (
+                frame == 0 ? 1.0f : 0.23f * float32 (std::intrinsics::sin (float32 (frame) * 0.071f)),
+                frame == 0 ? -0.5f : 0.19f * float32 (std::intrinsics::sin (float32 (frame) * 0.047f + 0.3f))
+            );
+
+            polish.enhancerAmountIn <- 0.0f;
+            polish.compressionClipAmountIn <- 0.0f;
+            polish.outputTrimDbIn <- 0.0f;
+            polish.in <- sampleFrame;
+
+            configureReference();
+            enhancerReference.in <- sampleFrame;
+
+            polish.advance();
+            enhancerReference.advance();
+
+            let expected = delayedReference (enhancerReference.out);
+            if (polish.out[0] != expected[0] || polish.out[1] != expected[1])
+                exact = false;
+        }
+
+        out <- exact ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Candidate static laws: a medium quadratic-knee compressor and an intentional
+// symmetric soft clipper. These are objective choices, not listening approval.
+
+## testProcessor()
+
+processor PolishStaticLawContract [[ main ]]
+{
+    output stream int32 out;
+
+    bool near (float32 actual, float32 expected, float32 tolerance)
+    {
+        return std::intrinsics::abs (actual - expected) <= tolerance;
+    }
+
+    void main()
+    {
+        let knee = wt::polishSoftClipKnee;
+
+        out <- near (wt::polishSoftClip (0.5f), 0.5f, 0.0f) ? 1 : 0;
+        advance();
+        out <- near (wt::polishSoftClip (-0.5f), -0.5f, 0.0f) ? 1 : 0;
+        advance();
+        out <- near (wt::polishSoftClip (knee), knee, 0.000001f) ? 1 : 0;
+        advance();
+        out <- near (wt::polishSoftClip (-1.4f), -wt::polishSoftClip (1.4f), 0.000001f) ? 1 : 0;
+        advance();
+        out <- wt::polishSoftClip (100.0f) <= 1.0f ? 1 : 0;
+        advance();
+
+        // Macro zero is mathematically neutral, including inside the knee.
+        out <- near (wt::polishDesiredGainReductionDb (2.0f, 0.0f), 0.0f, 0.0f) ? 1 : 0;
+        advance();
+        // At full macro, +6 dB input under the 4:1 straight segment gives
+        // -4.5 dB of gain reduction.
+        out <- near (wt::polishDesiredGainReductionDb (
+            std::levels::dBtoGain (6.0f), 1.0f
+        ), -4.5f, 0.0001f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// The public Enhancer macro drives the accepted T26 bus, with exactly the baked
+// two-band routing and amounts. Mono makes Safe Bass mathematically inert, so a
+// direct T26 reference plus the fixed compressor delay must null bit-for-bit.
+
+## testProcessor()
+
+processor PolishEnhancerCompositionContract [[ main ]]
+{
+    output stream int32 out;
+    node polish = wt::PolishBus;
+    node enhancerReference = wt::EnhancerBus;
+    float32<2>[wt::polishCompressorLookaheadFrames] referenceDelay;
+    wrap<wt::polishCompressorLookaheadFrames> referenceWritePosition;
+    float32 smoothedAmount;
+    let smoothingCoefficient = 1.0f - float32 (std::intrinsics::exp (
+        -1.0 / (float64 (wt::polishMacroSmoothingMs) * 0.001 * processor.frequency)
+    ));
+
+    void main()
+    {
+        bool exact = true;
+        float64 changedPower;
+
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            let target = frame < 8192 ? 1.0f : 0.32f;
+            smoothedAmount = wt::smoothPolishControl (
+                smoothedAmount, target, smoothingCoefficient, wt::polishControlSnapEpsilon
+            );
+            let mono = 0.31f * float32 (std::intrinsics::sin (
+                twoPi * 130.0f * float32 (frame) / float32 (processor.frequency)
+            ));
+            let sampleFrame = float32<2> (mono, mono);
+
+            polish.enhancerAmountIn <- target;
+            polish.compressionClipAmountIn <- 0.0f;
+            polish.outputTrimDbIn <- 0.0f;
+            polish.in <- sampleFrame;
+
+            enhancerReference.in <- sampleFrame;
+            enhancerReference.b1FreqHzIn <- 130.0f;
+            enhancerReference.b1QIn <- 0.71f;
+            enhancerReference.b1ModeIn <- float32 (wt::enhancerModeStereo);
+            enhancerReference.b1MidAmountIn <- 0.70f * smoothedAmount;
+            enhancerReference.b1SideAmountIn <- 0.35f * smoothedAmount;
+            enhancerReference.b1CurveIn <- float32 (wt::enhancerCurveSolid);
+            enhancerReference.b2FreqHzIn <- 9000.0f;
+            enhancerReference.b2QIn <- 0.71f;
+            enhancerReference.b2ModeIn <- float32 (wt::enhancerModeMidSide);
+            enhancerReference.b2MidAmountIn <- 0.35f * smoothedAmount;
+            enhancerReference.b2SideAmountIn <- 0.70f * smoothedAmount;
+            enhancerReference.b2CurveIn <- float32 (wt::enhancerCurveTube);
+            enhancerReference.saturationModeIn <- float32 (wt::enhancerSaturationModeSubtle);
+            enhancerReference.deEmphasisIn <- 1.0f;
+
+            polish.advance();
+            enhancerReference.advance();
+
+            let expected = referenceDelay[referenceWritePosition];
+            referenceDelay[referenceWritePosition] = enhancerReference.out;
+            ++referenceWritePosition;
+
+            if (polish.out[0] != expected[0] || polish.out[1] != expected[1])
+                exact = false;
+            if (frame >= 4096)
+            {
+                let difference = polish.out[0] - mono;
+                changedPower += float64 (difference) * float64 (difference);
+            }
+        }
+
+        out <- exact ? 1 : 0;
+        advance();
+        out <- changedPower > 0.000001 ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Safe Bass is a running 120 Hz / 12 dB-oct side filter with a derived smooth
+// crossfade. Its objective response is pinned independently of the Enhancer.
+
+## testProcessor()
+
+processor PolishSafeBassContract [[ main ]]
+{
+    output stream int32 out;
+    wt::PolishSafeBassHighpass lowFrequencyFilter;
+    wt::PolishSafeBassHighpass highFrequencyFilter;
+
+    void main()
+    {
+        lowFrequencyFilter.prepare (processor.frequency);
+        highFrequencyFilter.prepare (processor.frequency);
+        float64 lowInputPower;
+        float64 lowOutputPower;
+        float64 highInputPower;
+        float64 highOutputPower;
+
+        for (int32 frame = 0; frame < 48000; ++frame)
+        {
+            let lowInput = float32 (std::intrinsics::sin (
+                twoPi * 40.0f * float32 (frame) / float32 (processor.frequency)
+            ));
+            let highInput = float32 (std::intrinsics::sin (
+                twoPi * 1200.0f * float32 (frame) / float32 (processor.frequency)
+            ));
+            let lowOutput = lowFrequencyFilter.process (lowInput);
+            let highOutput = highFrequencyFilter.process (highInput);
+            if (frame >= 12000)
+            {
+                lowInputPower += float64 (lowInput) * float64 (lowInput);
+                lowOutputPower += float64 (lowOutput) * float64 (lowOutput);
+                highInputPower += float64 (highInput) * float64 (highInput);
+                highOutputPower += float64 (highOutput) * float64 (highOutput);
+            }
+        }
+
+        let lowGain = float32 (std::intrinsics::sqrt (lowOutputPower / lowInputPower));
+        let highGain = float32 (std::intrinsics::sqrt (highOutputPower / highInputPower));
+        out <- lowGain < 0.12f ? 1 : 0;
+        advance();
+        out <- highGain > 0.999f && highGain <= 1.001f ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Meter math is ordinary post-trim sample peak plus an ungated 400 ms sliding
+// stereo mean-square level. It is deliberately not true peak or EBU loudness.
+
+## testProcessor()
+
+processor PolishMeterAccumulatorContract [[ main ]]
+{
+    output stream int32 out;
+    wt::PolishMeterAccumulator meter;
+
+    void main()
+    {
+        meter.prepare (processor.frequency);
+        int32 emittedFrames;
+        int32 previousEmission = -1;
+        bool cadenceExact = true;
+        bool constantLevelExact = false;
+        bool nextFrameCapturedPeak = false;
+
+        let totalFrames = meter.telemetryFrameCount * 60;
+        let impulseFrame = meter.windowFrameCount + 1;
+        for (int32 frame = 0; frame < totalFrames; ++frame)
+        {
+            let sample = frame == impulseFrame ? 1.0f : 0.5f;
+            if (meter.push (float32<2> (sample, sample)))
+            {
+                if (previousEmission >= 0
+                    && frame - previousEmission != meter.telemetryFrameCount)
+                    cadenceExact = false;
+                previousEmission = frame;
+                emittedFrames += 1;
+
+                if (frame >= meter.windowFrameCount - 1 && frame < impulseFrame)
+                    constantLevelExact = std::intrinsics::abs (meter.peakDbfs + 6.0206f) < 0.001f
+                        && std::intrinsics::abs (meter.loudnessDbfs + 6.0206f) < 0.001f;
+                if (frame >= impulseFrame
+                    && frame < impulseFrame + meter.telemetryFrameCount
+                    && meter.peakDbfs == 0.0f)
+                    nextFrameCapturedPeak = true;
+            }
+        }
+
+        out <- cadenceExact && emittedFrames == 60 ? 1 : 0;
+        advance();
+        out <- constantLevelExact ? 1 : 0;
+        advance();
+        out <- nextFrameCapturedPeak ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// The finisher clips before trim, and trim is intentionally the final audible
+// operation. Positive trim can exceed full scale; no hidden safety waveshaper
+// may silently reappear after it.
+
+## testProcessor()
+
+processor PolishFinishAndTrimContract [[ main ]]
+{
+    output stream int32 out;
+    node polish = wt::PolishBus;
+
+    void main()
+    {
+        float32 fullMacroPeak;
+        bool allFinite = true;
+        for (int32 frame = 0; frame < 24000; ++frame)
+        {
+            polish.in <- float32<2> (2.0f, 2.0f);
+            polish.enhancerAmountIn <- 0.0f;
+            polish.compressionClipAmountIn <- 1.0f;
+            polish.outputTrimDbIn <- 0.0f;
+            polish.advance();
+            if (frame >= 12000)
+            {
+                fullMacroPeak = std::intrinsics::max (
+                    fullMacroPeak,
+                    std::intrinsics::max (
+                        std::intrinsics::abs (polish.out[0]),
+                        std::intrinsics::abs (polish.out[1])
+                    )
+                );
+                if (polish.out[0] != polish.out[0] || polish.out[1] != polish.out[1])
+                    allFinite = false;
+            }
+        }
+
+        float32 positiveTrimMinimum = 1000.0f;
+        for (int32 frame = 0; frame < 36000; ++frame)
+        {
+            polish.in <- float32<2> (0.5f, 0.5f);
+            polish.enhancerAmountIn <- 0.0f;
+            polish.compressionClipAmountIn <- 0.0f;
+            polish.outputTrimDbIn <- 12.0f;
+            polish.advance();
+            if (frame >= 24000)
+                positiveTrimMinimum = std::intrinsics::min (
+                    positiveTrimMinimum,
+                    std::intrinsics::min (polish.out[0], polish.out[1])
+                );
+        }
+
+        out <- allFinite ? 1 : 0;
+        advance();
+        out <- fullMacroPeak > wt::polishSoftClipKnee && fullMacroPeak <= 1.0f ? 1 : 0;
+        advance();
+        out <- positiveTrimMinimum > 1.9f ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}

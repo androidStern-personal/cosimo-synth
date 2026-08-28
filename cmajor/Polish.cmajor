@@ -1,0 +1,361 @@
+namespace wt
+{
+    // Fixed end-of-chain mastering section. Its three value endpoints are the
+    // complete public surface; every other choice is baked and intentionally
+    // absent from modulation, lane topology, bypass, and reorder documents.
+    let polishEnhancerLatencyFrames = enhancerLatencySamples;
+    let polishCompressorLookaheadFrames = 96;
+    let polishLatencyFrames = polishEnhancerLatencyFrames + polishCompressorLookaheadFrames;
+
+    let polishSafeBassCutoffHz = 120.0f;
+    let polishSafeBassQ = 0.7071067811865475f;
+    let polishMacroSmoothingMs = 20.0f;
+    let polishCompressorThresholdDb = 0.0f;
+    let polishCompressorKneeDb = 6.0f;
+    let polishCompressorAttackMs = 20.0f;
+    let polishCompressorReleaseMs = 120.0f;
+    let polishOutputTrimMinDb = -24.0f;
+    let polishOutputTrimMaxDb = 12.0f;
+    let polishSoftClipKnee = 0.7079457843841379f; // -3 dBFS
+    let polishControlSnapEpsilon = 0.000001f;
+    let polishMeterMomentarySeconds = 0.4;
+    let polishMeterFramesPerSecond = 60.0;
+    // 400 ms at 480 kHz. Cmajor's supported production rates sit below this
+    // ceiling; clamping is still explicit so an exotic host cannot overrun it.
+    let polishMeterMaxWindowFrames = 192000;
+
+    struct PolishMeterFrame
+    {
+        float32 peakDbfs;
+        float32 loudnessDbfs;
+    }
+
+    float32 clampPolishAmount (float32 value)
+    {
+        return std::intrinsics::clamp (value, 0.0f, 1.0f);
+    }
+
+    float32 smoothPolishControl (float32 current,
+                                 float32 target,
+                                 float32 coefficient,
+                                 float32 snapEpsilon)
+    {
+        let next = current + (target - current) * coefficient;
+        return std::intrinsics::abs (target - next) <= snapEpsilon ? target : next;
+    }
+
+    float32 polishDesiredGainReductionDb (float32 detectorAmplitude, float32 amount)
+    {
+        let amount01 = clampPolishAmount (amount);
+        if (amount01 == 0.0f)
+            return 0.0f;
+
+        let ratio = 1.0f + 3.0f * amount01;
+        let slope = 1.0f - 1.0f / ratio;
+        let levelDb = std::levels::gainTodB (
+            std::intrinsics::max (detectorAmplitude, 0.000001f)
+        );
+        let distance = levelDb - polishCompressorThresholdDb;
+        let halfKnee = polishCompressorKneeDb * 0.5f;
+
+        if (distance <= -halfKnee)
+            return 0.0f;
+        if (distance >= halfKnee)
+            return -slope * distance;
+
+        let kneeDistance = distance + halfKnee;
+        return -slope * kneeDistance * kneeDistance
+               / (2.0f * polishCompressorKneeDb);
+    }
+
+    float32 polishSoftClip (float32 value)
+    {
+        let magnitude = std::intrinsics::abs (value);
+        if (magnitude <= polishSoftClipKnee)
+            return value;
+
+        let span = 1.0f - polishSoftClipKnee;
+        let shaped = polishSoftClipKnee + span * std::intrinsics::tanh (
+            (magnitude - polishSoftClipKnee) / span
+        );
+        return value < 0.0f ? -shaped : shaped;
+    }
+
+    struct PolishSafeBassHighpass
+    {
+        float64 b0;
+        float64 b1;
+        float64 b2;
+        float64 a1;
+        float64 a2;
+        float64 z1;
+        float64 z2;
+
+        void prepare (float64 sampleRate)
+        {
+            let omega = twoPi * float64 (polishSafeBassCutoffHz) / sampleRate;
+            let cosine = std::intrinsics::cos (omega);
+            let sine = std::intrinsics::sin (omega);
+            let alpha = sine / (2.0 * float64 (polishSafeBassQ));
+            let a0 = 1.0 + alpha;
+            this.b0 = ((1.0 + cosine) * 0.5) / a0;
+            this.b1 = -(1.0 + cosine) / a0;
+            this.b2 = this.b0;
+            this.a1 = (-2.0 * cosine) / a0;
+            this.a2 = (1.0 - alpha) / a0;
+        }
+
+        float32 process (float32 sample)
+        {
+            let input64 = float64 (sample);
+            let rendered = this.b0 * input64 + this.z1;
+            this.z1 = this.b1 * input64 - this.a1 * rendered + this.z2;
+            this.z2 = this.b2 * input64 - this.a2 * rendered;
+            return float32 (rendered);
+        }
+    }
+
+    struct PolishMeterAccumulator
+    {
+        float32[polishMeterMaxWindowFrames] powerHistory;
+        int32 writePosition;
+        int32 windowFrameCount;
+        int32 populatedFrameCount;
+        int32 telemetryFrameCount;
+        int32 telemetryCountdown;
+        float64 powerSum;
+        float32 intervalPeak;
+        float32 peakDbfs;
+        float32 loudnessDbfs;
+
+        void prepare (float64 sampleRate)
+        {
+            let requestedWindowFrames = int32 (
+                sampleRate * polishMeterMomentarySeconds + 0.5
+            );
+            this.windowFrameCount = std::intrinsics::max (
+                1,
+                std::intrinsics::min (requestedWindowFrames, polishMeterMaxWindowFrames)
+            );
+            this.telemetryFrameCount = std::intrinsics::max (
+                1,
+                int32 (sampleRate / polishMeterFramesPerSecond + 0.5)
+            );
+            this.telemetryCountdown = this.telemetryFrameCount;
+            this.peakDbfs = -120.0f;
+            this.loudnessDbfs = -120.0f;
+        }
+
+        bool push (float32<2> sampleFrame)
+        {
+            let framePower = float32 (0.5 * (
+                float64 (sampleFrame[0]) * float64 (sampleFrame[0])
+                + float64 (sampleFrame[1]) * float64 (sampleFrame[1])
+            ));
+
+            if (this.populatedFrameCount >= this.windowFrameCount)
+                this.powerSum -= float64 (this.powerHistory.at (this.writePosition));
+            else
+                this.populatedFrameCount += 1;
+
+            this.powerHistory.at (this.writePosition) = framePower;
+            this.powerSum += float64 (framePower);
+            this.writePosition += 1;
+            if (this.writePosition >= this.windowFrameCount)
+                this.writePosition = 0;
+
+            this.intervalPeak = std::intrinsics::max (
+                this.intervalPeak,
+                std::intrinsics::max (
+                    std::intrinsics::abs (sampleFrame[0]),
+                    std::intrinsics::abs (sampleFrame[1])
+                )
+            );
+            this.telemetryCountdown -= 1;
+            if (this.telemetryCountdown > 0)
+                return false;
+
+            let meanPower = this.powerSum / float64 (
+                std::intrinsics::max (1, this.populatedFrameCount)
+            );
+            this.peakDbfs = std::levels::gainTodB (
+                std::intrinsics::max (this.intervalPeak, 0.000001f)
+            );
+            this.loudnessDbfs = std::levels::gainTodB (float32 (
+                std::intrinsics::sqrt (std::intrinsics::max (meanPower, 0.000000000001))
+            ));
+            this.intervalPeak = 0.0f;
+            this.telemetryCountdown = this.telemetryFrameCount;
+            return true;
+        }
+    }
+
+    processor PolishBus
+    {
+        input stream float32<2> in;
+        input value float32 enhancerAmountIn [[ name: "Enhancer Amount", group: "Polish", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+        input value float32 compressionClipAmountIn [[ name: "Compression / Clip Amount", group: "Polish", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+        input value float32 outputTrimDbIn [[ name: "Output Trim", group: "Polish", min: polishOutputTrimMinDb, max: polishOutputTrimMaxDb, init: 0.0f, unit: "dB", rampFrames: 0 ]];
+        output stream float32<2> out;
+        output event PolishMeterFrame meterOut [[ name: "Polish Meter" ]];
+
+        // Cmajor 1.0.3066 does not propagate a child's declaration through a
+        // composing processor. This literal is therefore the host contract;
+        // the assertions pin it to the two physical timing stages below.
+        processor.latency = 156;
+        static_assert (enhancerLatencySamples == 60,
+                       "Polish must retain the accepted T26 Enhancer latency");
+        static_assert (polishLatencyFrames == 156,
+                       "Update PolishBus's declared latency with its stage sum");
+
+        node enhancer = EnhancerBus;
+        PolishSafeBassHighpass safeBassFilter;
+        PolishMeterAccumulator meter;
+        float32<2>[polishCompressorLookaheadFrames] compressorDelay;
+        wrap<polishCompressorLookaheadFrames> compressorWritePosition;
+
+        float32 enhancerAmount;
+        float32 compressionClipAmount;
+        float32 safeBassMix;
+        float32 outputTrimGain = 1.0f;
+        float32 compressorReductionDb;
+        float32 macroSmoothingCoefficient;
+        float32 compressorAttackCoefficient;
+        float32 compressorReleaseCoefficient;
+
+        void init()
+        {
+            let sampleRate = processor.frequency;
+            safeBassFilter.prepare (sampleRate);
+            meter.prepare (sampleRate);
+            macroSmoothingCoefficient = 1.0f - float32 (std::intrinsics::exp (
+                -1.0 / (float64 (polishMacroSmoothingMs) * 0.001 * sampleRate)
+            ));
+            compressorAttackCoefficient = float32 (std::intrinsics::exp (
+                -1.0 / (float64 (polishCompressorAttackMs) * 0.001 * sampleRate)
+            ));
+            compressorReleaseCoefficient = float32 (std::intrinsics::exp (
+                -1.0 / (float64 (polishCompressorReleaseMs) * 0.001 * sampleRate)
+            ));
+        }
+
+        float32<2> applySafeBass (float32<2> signal)
+        {
+            let mid = 0.5f * (signal[0] + signal[1]);
+            let side = 0.5f * (signal[0] - signal[1]);
+            let filteredSide = safeBassFilter.process (side);
+
+            // Preserve the all-zero sound bit-for-bit; the filter still runs so
+            // engaging the derived path never reveals uninitialised history.
+            if (safeBassMix == 0.0f)
+                return signal;
+
+            let renderedSide = side + (filteredSide - side) * safeBassMix;
+            return float32<2> (mid + renderedSide, mid - renderedSide);
+        }
+
+        void driveEnhancer (float32<2> signal)
+        {
+            enhancer.in <- signal;
+            enhancer.b1FreqHzIn <- 130.0f;
+            enhancer.b1QIn <- 0.71f;
+            enhancer.b1ModeIn <- float32 (enhancerModeStereo);
+            enhancer.b1MidAmountIn <- 0.70f * enhancerAmount;
+            enhancer.b1SideAmountIn <- 0.35f * enhancerAmount;
+            enhancer.b1CurveIn <- float32 (enhancerCurveSolid);
+            enhancer.b2FreqHzIn <- 9000.0f;
+            enhancer.b2QIn <- 0.71f;
+            enhancer.b2ModeIn <- float32 (enhancerModeMidSide);
+            enhancer.b2MidAmountIn <- 0.35f * enhancerAmount;
+            enhancer.b2SideAmountIn <- 0.70f * enhancerAmount;
+            enhancer.b2CurveIn <- float32 (enhancerCurveTube);
+            enhancer.saturationModeIn <- float32 (enhancerSaturationModeSubtle);
+            enhancer.deEmphasisIn <- 1.0f;
+            enhancer.advance();
+        }
+
+        float32<2> applyCompressionAndClip (float32<2> signal)
+        {
+            let detector = std::intrinsics::max (
+                std::intrinsics::abs (signal[0]),
+                std::intrinsics::abs (signal[1])
+            );
+            let targetReductionDb = polishDesiredGainReductionDb (
+                detector, compressionClipAmount
+            );
+            let coefficient = targetReductionDb < compressorReductionDb
+                ? compressorAttackCoefficient
+                : compressorReleaseCoefficient;
+            compressorReductionDb = coefficient * compressorReductionDb
+                                    + (1.0f - coefficient) * targetReductionDb;
+
+            if (compressionClipAmount == 0.0f)
+                compressorReductionDb = 0.0f;
+
+            let delayed = compressorDelay[compressorWritePosition];
+            compressorDelay[compressorWritePosition] = signal;
+            ++compressorWritePosition;
+
+            let gain = std::levels::dBtoGain (compressorReductionDb);
+            let compressed = delayed * gain;
+            let clipped = float32<2> (
+                polishSoftClip (compressed[0]),
+                polishSoftClip (compressed[1])
+            );
+            return compressed + (clipped - compressed) * compressionClipAmount;
+        }
+
+        void updateControls()
+        {
+            enhancerAmount = smoothPolishControl (
+                enhancerAmount,
+                clampPolishAmount (enhancerAmountIn),
+                macroSmoothingCoefficient,
+                polishControlSnapEpsilon
+            );
+            compressionClipAmount = smoothPolishControl (
+                compressionClipAmount,
+                clampPolishAmount (compressionClipAmountIn),
+                macroSmoothingCoefficient,
+                polishControlSnapEpsilon
+            );
+            let safeBassTarget = (enhancerAmountIn > 0.0f || compressionClipAmountIn > 0.0f)
+                ? 1.0f : 0.0f;
+            safeBassMix = smoothPolishControl (
+                safeBassMix,
+                safeBassTarget,
+                macroSmoothingCoefficient,
+                polishControlSnapEpsilon
+            );
+            let trimTarget = std::levels::dBtoGain (std::intrinsics::clamp (
+                outputTrimDbIn, polishOutputTrimMinDb, polishOutputTrimMaxDb
+            ));
+            outputTrimGain = smoothPolishControl (
+                outputTrimGain,
+                trimTarget,
+                macroSmoothingCoefficient,
+                polishControlSnapEpsilon
+            );
+        }
+
+        void main()
+        {
+            loop
+            {
+                updateControls();
+                driveEnhancer (applySafeBass (in));
+                let finished = applyCompressionAndClip (enhancer.out);
+                let rendered = finished * outputTrimGain;
+                out <- rendered;
+                if (meter.push (rendered))
+                {
+                    PolishMeterFrame frame;
+                    frame.peakDbfs = meter.peakDbfs;
+                    frame.loudnessDbfs = meter.loudnessDbfs;
+                    meterOut <- frame;
+                }
+                advance();
+            }
+        }
+    }
+}
