@@ -5,7 +5,6 @@ import {
     useMemo,
     useRef,
     type KeyboardEvent as ReactKeyboardEvent,
-    type PointerEvent as ReactPointerEvent,
 } from "react";
 
 const VIEWBOX_WIDTH = 800;
@@ -46,9 +45,14 @@ export function VoiceEnhancerGraph({
     onFrequencyNormalizedChange,
     onAmountChange,
 }: VoiceEnhancerGraphProps) {
+    const graphRef = useRef<SVGSVGElement | null>(null);
     const activePointerRef = useRef<number | null>(null);
     const onGestureEndRef = useRef(onGestureEnd);
+    const onFrequencyNormalizedChangeRef = useRef(onFrequencyNormalizedChange);
+    const onAmountChangeRef = useRef(onAmountChange);
     onGestureEndRef.current = onGestureEnd;
+    onFrequencyNormalizedChangeRef.current = onFrequencyNormalizedChange;
+    onAmountChangeRef.current = onAmountChange;
     const gradientID = useId();
     const normalizedFrequency = clamp01(frequencyNormalized);
     const normalizedAmount = clamp01(amount);
@@ -69,18 +73,19 @@ export function VoiceEnhancerGraph({
         return points.join(" ");
     }, [normalizedAmount, normalizedFrequency, q]);
 
-    const applyPointer = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
-        const bounds = event.currentTarget.getBoundingClientRect();
+    const applyPointer = useCallback((event: Pick<PointerEvent, "clientX" | "clientY">) => {
+        const bounds = graphRef.current?.getBoundingClientRect();
+        if (!bounds) return;
         if (bounds.width <= 0 || bounds.height <= 0) return;
         const viewboxX = ((event.clientX - bounds.left) / bounds.width) * VIEWBOX_WIDTH;
         const viewboxY = ((event.clientY - bounds.top) / bounds.height) * VIEWBOX_HEIGHT;
-        onFrequencyNormalizedChange(clamp01(
+        onFrequencyNormalizedChangeRef.current(clamp01(
             (viewboxX - GRAPH_LEFT) / (GRAPH_RIGHT - GRAPH_LEFT),
         ));
-        onAmountChange(clamp01(
+        onAmountChangeRef.current(clamp01(
             (GRAPH_BASELINE - viewboxY) / (GRAPH_BASELINE - GRAPH_TOP),
         ));
-    }, [onAmountChange, onFrequencyNormalizedChange]);
+    }, []);
 
     const finishGesture = useCallback((pointerID?: number) => {
         if (activePointerRef.current === null
@@ -90,18 +95,31 @@ export function VoiceEnhancerGraph({
     }, []);
 
     useEffect(() => {
+        const handleFallbackPointerMove = (event: PointerEvent) => {
+            if (activePointerRef.current !== event.pointerId) return;
+            const graph = graphRef.current;
+            if (event.target instanceof Node && graph?.contains(event.target)) return;
+            applyPointer(event);
+        };
+        const handlePointerEnd = (event: PointerEvent) => finishGesture(event.pointerId);
         const handleWindowBlur = () => finishGesture();
         const handleVisibilityChange = () => {
             if (document.visibilityState !== "visible") finishGesture();
         };
+        window.addEventListener("pointermove", handleFallbackPointerMove, true);
+        window.addEventListener("pointerup", handlePointerEnd, true);
+        window.addEventListener("pointercancel", handlePointerEnd, true);
         window.addEventListener("blur", handleWindowBlur);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
+            window.removeEventListener("pointermove", handleFallbackPointerMove, true);
+            window.removeEventListener("pointerup", handlePointerEnd, true);
+            window.removeEventListener("pointercancel", handlePointerEnd, true);
             window.removeEventListener("blur", handleWindowBlur);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             finishGesture();
         };
-    }, [finishGesture]);
+    }, [applyPointer, finishGesture]);
 
     const handleKeyDown = (event: ReactKeyboardEvent<SVGSVGElement>) => {
         if (disabled) return;
@@ -125,6 +143,7 @@ export function VoiceEnhancerGraph({
 
     return (
         <svg
+            ref={graphRef}
             viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
             preserveAspectRatio="none"
             data-role="voice-enhancer-graph"
@@ -143,7 +162,11 @@ export function VoiceEnhancerGraph({
                 if (disabled || event.button !== 0 || activePointerRef.current !== null) return;
                 event.preventDefault();
                 activePointerRef.current = event.pointerId;
-                event.currentTarget.setPointerCapture(event.pointerId);
+                try {
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                } catch {
+                    // Window fallbacks continue the gesture when capture is unavailable.
+                }
                 onGestureStart();
                 applyPointer(event);
             }}

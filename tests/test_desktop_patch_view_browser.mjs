@@ -2055,6 +2055,107 @@ test("the per-voice Enhancer graph closes active gestures when focus, visibility
     }
 });
 
+test("the per-voice Enhancer graph keeps dragging when pointer capture is unavailable", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.locator('[data-role="voice-tone-stage-enhancer"]').click();
+        const graph = page.locator('[data-role="voice-enhancer-graph"]');
+        const graphBox = await graph.boundingBox();
+        assert.ok(graphBox);
+        await graph.evaluate((element) => {
+            element.setPointerCapture = () => {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            };
+        });
+
+        await clearHarnessDebugLog(page);
+        const pointerId = 86;
+        const start = {
+            x: graphBox.x + graphBox.width * 0.34,
+            y: graphBox.y + graphBox.height * 0.72,
+        };
+        const moved = {
+            x: graphBox.x + graphBox.width + 40,
+            y: graphBox.y - 40,
+        };
+        await graph.dispatchEvent("pointerdown", {
+            pointerId,
+            pointerType: "touch",
+            button: 0,
+            buttons: 1,
+            clientX: start.x,
+            clientY: start.y,
+        });
+        const afterPointerDown = await waitForHarnessSnapshot(
+            page,
+            "capture-free Enhancer gesture start",
+            (snapshot) => snapshot.gestureStarts.length === 2,
+        );
+        assert.deepEqual(afterPointerDown.gestureStarts, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+        assert.deepEqual(afterPointerDown.gestureEnds, []);
+
+        await page.evaluate(({ pointerId: activePointerId, moved: pointerPosition }) => {
+            window.dispatchEvent(new PointerEvent("pointermove", {
+                pointerId: activePointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 1,
+                clientX: pointerPosition.x,
+                clientY: pointerPosition.y,
+                bubbles: true,
+            }));
+        }, { pointerId, moved });
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "capture-free Enhancer drag outside the graph",
+            (candidate) => (
+                Number(candidate.parameterValues.voiceEnhancerFrequency)
+                    > Number(afterPointerDown.parameterValues.voiceEnhancerFrequency)
+                && Number(candidate.parameterValues.voiceEnhancerAmount)
+                    > Number(afterPointerDown.parameterValues.voiceEnhancerAmount)
+            ),
+        );
+        assert.deepEqual(snapshot.gestureStarts, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+        assert.deepEqual(snapshot.gestureEnds, []);
+
+        await page.evaluate(({ pointerId: activePointerId, moved: pointerPosition }) => {
+            window.dispatchEvent(new PointerEvent("pointerup", {
+                pointerId: activePointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX: pointerPosition.x,
+                clientY: pointerPosition.y,
+                bubbles: true,
+            }));
+        }, { pointerId, moved });
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "capture-free Enhancer gesture end",
+            (candidate) => candidate.gestureEnds.length === 2,
+        );
+        assert.deepEqual(snapshot.gestureStarts, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+        assert.deepEqual(snapshot.gestureEnds, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+
+        await page.evaluate((activePointerId) => {
+            window.dispatchEvent(new PointerEvent("pointercancel", {
+                pointerId: activePointerId,
+                pointerType: "touch",
+                bubbles: true,
+            }));
+        }, pointerId);
+        await waitForReactFrames(page, 2);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureStarts, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+        assert.deepEqual(snapshot.gestureEnds, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("the compact filter knob row exposes Cut/Res/Mix as modulation destinations and Off greys everything but the mode chip", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
