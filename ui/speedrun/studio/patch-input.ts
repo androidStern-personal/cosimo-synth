@@ -32,7 +32,11 @@ export type StudioShareLinkAvailability =
 
 export async function readStudioPatchSelection(selection: StudioPatchSelection): Promise<unknown> {
     try {
-        if (selection.kind === "current") return readBrowserPatchState();
+        if (selection.kind === "current") {
+            const currentSound = readBrowserPatchState();
+            if (currentSound === null) throw new Error("No complete browser sound has been saved yet.");
+            return currentSound;
+        }
         if (selection.kind === "file") return JSON.parse(await selection.file.text()) as unknown;
 
         const raw = selection.value.trim();

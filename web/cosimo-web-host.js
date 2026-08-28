@@ -1,10 +1,7 @@
 import * as patch from "./cmaj_Cosimo_Synth.js";
 import { createPatchViewHolder } from "./cmaj_api/cmaj-patch-view.js";
 import { createBrowserAudioLifecycle } from "./browser-audio-lifecycle.mjs";
-import {
-    installBrowserPatchStatePersistence,
-    readBrowserPatchState,
-} from "./browser-patch-state.mjs";
+import { installBrowserPatchStatePersistence } from "./browser-patch-state.mjs";
 import { createBrowserBounceBankStore } from "./bounce/browser-bank-store.mjs";
 import { BOUNCE_STATE_KEY } from "./bounce/document.mjs";
 import { createBounceRuntimeRestorer } from "./bounce/runtime-restorer.mjs";
@@ -64,6 +61,7 @@ const state = {
     bounceRestore: { status: "idle", digest: null, error: null },
     bounceRestorer: null,
     bounceRestorePromise: null,
+    browserPatchPersistence: null,
     heldNotes: new Set(),
     silentHeldNotePollCount: 0,
     connection: null,
@@ -399,7 +397,7 @@ async function startAudio() {
     if (state.bounceRestorer) {
         state.bounceRestorer.start();
         state.bounceRestorePromise ??= state.bounceRestorer.restore(
-            readBrowserPatchState().sound.storedState[BOUNCE_STATE_KEY] ?? null,
+            state.browserPatchPersistence?.browserState.sound.storedState[BOUNCE_STATE_KEY] ?? null,
         ).finally(() => {
             state.bounceRestorePromise = null;
         });
@@ -430,6 +428,7 @@ async function startAudio() {
 function getSnapshot() {
     updateAudioPeak();
     const audioLifecycle = state.audioLifecycle?.getSnapshot() ?? null;
+    const persistedState = state.browserPatchPersistence?.browserState ?? null;
 
     return {
         audioConnected: state.audioConnected,
@@ -495,8 +494,8 @@ function getSnapshot() {
         parameterValues: { ...state.parameterValues },
         phase: state.phase,
         persistedStateKeys: [
-            ...Object.keys(readBrowserPatchState().sound.storedState),
-            ...Object.keys(readBrowserPatchState().auxiliary),
+            ...Object.keys(persistedState?.sound.storedState ?? {}),
+            ...Object.keys(persistedState?.auxiliary ?? {}),
         ].sort(),
         silentHeldNotePollCount: state.silentHeldNotePollCount,
         heldNoteCount: state.heldNotes.size,
@@ -627,6 +626,7 @@ async function initialise() {
             && browserState.sound.storedState[BOUNCE_STATE_KEY] != null
         ),
     });
+    state.browserPatchPersistence = persistence;
     const bounceRestorer = createBounceRuntimeRestorer({
         connection,
         store: createBrowserBounceBankStore(),

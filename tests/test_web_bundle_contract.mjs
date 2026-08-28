@@ -16,7 +16,10 @@ import {
     fixCosimoAudioWorkletListenerRemoval,
     instrumentCosimoAudioWorkletSource,
 } from "../web/audio-worklet-instrumentation.mjs";
-import { installBrowserPatchStatePersistence } from "../web/browser-patch-state.mjs";
+import {
+    installBrowserPatchStatePersistence,
+    readBrowserPatchState,
+} from "../web/browser-patch-state.mjs";
 import { copyWebHostAssets } from "../web/web-host-assets.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -305,6 +308,38 @@ test("browser patch persistence never blocks a runtime state write when storage 
     assert.deepEqual(runtimeWrites, [["lane.v1", "enabled"]]);
 });
 
+test("browser patch state distinguishes no saved sound from a complete current document", () => {
+    const missingStorage = { getItem: () => null };
+    const currentDocument = {
+        format: "cosimo.browserPatchState",
+        version: 4,
+        sound: {
+            parameters: {
+                filterCutoff: 2_400,
+                voiceEnhancerFrequency: 130,
+                voiceEnhancerQ: 0.71,
+                voiceEnhancerAmount: 0,
+                voiceEnhancerKeyTrackEnabled: 0,
+                voiceEnhancerKeyTrackOffsetSemitones: 0,
+                polishEnhancerAmount: 0,
+                polishCompressionClipAmount: 0,
+                polishOutputTrimDb: 0,
+            },
+            storedState: {
+                "modulation.v6": "current-modulation",
+                "articulations.v4": "current-articulations",
+                "bounce.v1": null,
+                "lane.v1": "current-lane",
+            },
+        },
+        auxiliary: {},
+    };
+    const currentStorage = { getItem: () => JSON.stringify(currentDocument) };
+
+    assert.equal(readBrowserPatchState({ storage: missingStorage }), null);
+    assert.deepEqual(readBrowserPatchState({ storage: currentStorage }), currentDocument);
+});
+
 test("browser patch persistence does not store a state write rejected by the runtime", () => {
     const storageWrites = [];
     const connection = {
@@ -330,14 +365,10 @@ test("browser patch persistence does not store a state write rejected by the run
     assert.deepEqual(storageWrites, []);
 });
 
-test("browser patch persistence restores once and coalesces echoed storage writes", () => {
+test("a zero-parameter inventory cannot qualify lane-only v4 state as a saved sound", () => {
     const runtimeWrites = [];
-    const storageWrites = [];
-    let storedStateListener;
     const connection = {
-        addStoredStateValueListener(listener) {
-            storedStateListener = listener;
-        },
+        inputEndpoints: [],
         sendStoredStateValue(key, value) {
             runtimeWrites.push([key, value]);
         },
@@ -349,6 +380,44 @@ test("browser patch persistence restores once and coalesces echoed storage write
                 version: 4,
                 sound: {
                     parameters: {},
+                    storedState: { "lane.v1": "partial" },
+                },
+                auxiliary: {},
+            });
+        },
+    };
+
+    installBrowserPatchStatePersistence(connection, {
+        storage,
+        requiredStoredStateKeys: ["lane.v1"],
+    });
+
+    assert.deepEqual(runtimeWrites, []);
+});
+
+test("browser patch persistence restores once and coalesces echoed storage writes", () => {
+    const runtimeWrites = [];
+    const storageWrites = [];
+    let storedStateListener;
+    const connection = {
+        inputEndpoints: [{ endpointID: "filterCutoff", purpose: "parameter" }],
+        addStoredStateValueListener(listener) {
+            storedStateListener = listener;
+        },
+        sendEventOrValue(endpointID, value) {
+            runtimeWrites.push([endpointID, value]);
+        },
+        sendStoredStateValue(key, value) {
+            runtimeWrites.push([key, value]);
+        },
+    };
+    const storage = {
+        getItem() {
+            return JSON.stringify({
+                format: "cosimo.browserPatchState",
+                version: 4,
+                sound: {
+                    parameters: { filterCutoff: 2_400 },
                     storedState: { "lane.v1": "restored" },
                 },
                 auxiliary: {},
@@ -359,13 +428,21 @@ test("browser patch persistence restores once and coalesces echoed storage write
         },
     };
 
-    installBrowserPatchStatePersistence(connection, { storage, storageKey: "test.patch-state" });
+    installBrowserPatchStatePersistence(connection, {
+        storage,
+        storageKey: "test.patch-state",
+        requiredStoredStateKeys: ["lane.v1"],
+    });
 
-    assert.deepEqual(runtimeWrites, [["lane.v1", "restored"]]);
+    assert.deepEqual(runtimeWrites, [
+        ["filterCutoff", 2_400],
+        ["lane.v1", "restored"],
+    ]);
     connection.sendStoredStateValue("lane.v1", "updated");
     storedStateListener({ event: { key: "lane.v1", value: "updated" } });
 
     assert.deepEqual(runtimeWrites, [
+        ["filterCutoff", 2_400],
         ["lane.v1", "restored"],
         ["lane.v1", "updated"],
     ]);
@@ -375,7 +452,7 @@ test("browser patch persistence restores once and coalesces echoed storage write
             format: "cosimo.browserPatchState",
             version: 4,
             sound: {
-                parameters: {},
+                parameters: { filterCutoff: 2_400 },
                 storedState: { "lane.v1": "updated" },
             },
             auxiliary: {},
@@ -422,14 +499,176 @@ test("the complete-sound cut discards a version-3 browser snapshot as one unit",
     });
 });
 
-test("browser patch persistence restores distinct A/B/C parameters before structured state", () => {
+test("a version-4 browser snapshot missing every T62 and Polish value emits no runtime writes", () => {
     const runtimeWrites = [];
+    const currentParameterEndpointIDs = [
+        "filterCutoff",
+        "voiceEnhancerFrequency",
+        "voiceEnhancerQ",
+        "voiceEnhancerAmount",
+        "voiceEnhancerKeyTrackEnabled",
+        "voiceEnhancerKeyTrackOffsetSemitones",
+        "polishEnhancerAmount",
+        "polishCompressionClipAmount",
+        "polishOutputTrimDb",
+    ];
+    const connection = {
+        inputEndpoints: currentParameterEndpointIDs.map((endpointID) => ({
+            endpointID,
+            purpose: "parameter",
+        })),
+        sendEventOrValue(endpointID, value) {
+            runtimeWrites.push(["parameter", endpointID, value]);
+        },
+        sendStoredStateValue(key, value) {
+            runtimeWrites.push(["stored", key, value]);
+        },
+    };
+    const storage = {
+        getItem() {
+            return JSON.stringify({
+                format: "cosimo.browserPatchState",
+                version: 4,
+                sound: {
+                    parameters: { filterCutoff: 2_400 },
+                    storedState: {
+                        "modulation.v6": "partial-modulation",
+                        "articulations.v4": "partial-articulations",
+                        "bounce.v1": "partial-bounce",
+                        "lane.v1": "partial-rack",
+                    },
+                },
+                auxiliary: {},
+            });
+        },
+        setItem() {
+            throw new Error("A rejected partial sound must not become durable.");
+        },
+    };
+
+    const persistence = installBrowserPatchStatePersistence(connection, { storage });
+
+    assert.deepEqual(runtimeWrites, []);
+    assert.deepEqual(persistence.browserState.sound, { parameters: {}, storedState: {} });
+});
+
+test("browser patch host restores Bounce only from the accepted atomic snapshot", async () => {
+    const hostSource = await fs.readFile(path.join(repoRoot, "web", "cosimo-web-host.js"), "utf8");
+
+    assert.doesNotMatch(hostSource, /readBrowserPatchState/);
+    assert.match(
+        hostSource,
+        /state\.browserPatchPersistence\?\.browserState\.sound\.storedState\[BOUNCE_STATE_KEY\]/,
+    );
+});
+
+test("browser persistence writes v4 only after the complete live sound image is captured", () => {
+    const parameterListeners = new Map();
     const storageWrites = [];
+    let fullStoredStateCallback;
+    let storedStateListener;
     const connection = {
         inputEndpoints: [
-            { endpointID: "oscAPan", purpose: "parameter" },
-            { endpointID: "oscBPan", purpose: "parameter" },
-            { endpointID: "oscCPan", purpose: "parameter" },
+            { endpointID: "voiceEnhancerAmount", purpose: "parameter" },
+            { endpointID: "polishEnhancerAmount", purpose: "parameter" },
+            {
+                endpointID: "hostSlot0Guard",
+                purpose: "parameter",
+                annotation: { hidden: true },
+            },
+        ],
+        addParameterListener(endpointID, listener) {
+            parameterListeners.set(endpointID, listener);
+        },
+        requestParameterValue() {},
+        requestFullStoredState(callback) {
+            fullStoredStateCallback = callback;
+        },
+        addStoredStateValueListener(listener) {
+            storedStateListener = listener;
+        },
+        sendEventOrValue() {},
+        sendStoredStateValue() {},
+    };
+    const storage = {
+        getItem() {
+            return null;
+        },
+        setItem(_key, value) {
+            storageWrites.push(JSON.parse(value));
+        },
+    };
+
+    const persistence = installBrowserPatchStatePersistence(connection, {
+        storage,
+        requiredStoredStateKeys: ["modulation.v6", "lane.v1"],
+    });
+
+    assert.equal(parameterListeners.has("hostSlot0Guard"), false);
+    parameterListeners.get("voiceEnhancerAmount")(0.35);
+    assert.deepEqual(storageWrites, []);
+    parameterListeners.get("polishEnhancerAmount")(0.6);
+    assert.deepEqual(storageWrites, []);
+    storedStateListener({ key: "modulation.v6", value: "current-modulation" });
+    storedStateListener({ key: "lane.v1", value: "current-lane" });
+    assert.deepEqual(
+        storageWrites,
+        [],
+        "Individual state events are not an atomic full-state capture.",
+    );
+    assert.equal(typeof fullStoredStateCallback, "function");
+
+    fullStoredStateCallback({
+        "modulation.v6": "current-modulation",
+        "lane.v1": "current-lane",
+    });
+
+    assert.deepEqual(storageWrites, [{
+        format: "cosimo.browserPatchState",
+        version: 4,
+        sound: {
+            parameters: {
+                voiceEnhancerAmount: 0.35,
+                polishEnhancerAmount: 0.6,
+            },
+            storedState: {
+                "modulation.v6": "current-modulation",
+                "lane.v1": "current-lane",
+            },
+        },
+        auxiliary: {},
+    }]);
+    assert.deepEqual(persistence.browserState, storageWrites[0]);
+});
+
+test("a complete current browser snapshot restores every parameter before structured state", () => {
+    const runtimeWrites = [];
+    const storageWrites = [];
+    const parameterValues = {
+        oscAPan: -0.25,
+        oscBPan: 0.5,
+        oscCPan: 0.75,
+        voiceEnhancerFrequency: 180,
+        voiceEnhancerQ: 0.82,
+        voiceEnhancerAmount: 0.4,
+        voiceEnhancerKeyTrackEnabled: 1,
+        voiceEnhancerKeyTrackOffsetSemitones: 7.5,
+        polishEnhancerAmount: 0.3,
+        polishCompressionClipAmount: 0.55,
+        polishOutputTrimDb: -2.5,
+    };
+    const storedState = {
+        "modulation.v6": "restored-modulation",
+        "articulations.v4": "restored-articulations",
+        "bounce.v1": null,
+        "lane.v1": "restored-rack",
+    };
+    const connection = {
+        inputEndpoints: [
+            ...Object.keys(parameterValues).map((endpointID) => ({
+                endpointID,
+                purpose: "parameter",
+            })),
             { endpointID: "runtimeState", purpose: "event" },
         ],
         sendEventOrValue(endpointID, value) {
@@ -445,8 +684,8 @@ test("browser patch persistence restores distinct A/B/C parameters before struct
                 format: "cosimo.browserPatchState",
                 version: 4,
                 sound: {
-                    parameters: { oscAPan: -0.25, oscBPan: 0.5, oscCPan: 0.75 },
-                    storedState: { "lane.v1": "restored-rack" },
+                    parameters: parameterValues,
+                    storedState,
                 },
                 auxiliary: {},
             });
@@ -459,10 +698,10 @@ test("browser patch persistence restores distinct A/B/C parameters before struct
     installBrowserPatchStatePersistence(connection, { storage, storageKey: "test.patch-state" });
 
     assert.deepEqual(runtimeWrites, [
-        ["parameter", "oscAPan", -0.25],
-        ["parameter", "oscBPan", 0.5],
-        ["parameter", "oscCPan", 0.75],
-        ["stored", "lane.v1", "restored-rack"],
+        ...Object.entries(parameterValues).map(([endpointID, value]) => (
+            ["parameter", endpointID, value]
+        )),
+        ...Object.entries(storedState).map(([key, value]) => ["stored", key, value]),
     ]);
 
     connection.sendEventOrValue("oscBPan", -0.6);
@@ -470,8 +709,8 @@ test("browser patch persistence restores distinct A/B/C parameters before struct
         format: "cosimo.browserPatchState",
         version: 4,
         sound: {
-            parameters: { oscAPan: -0.25, oscBPan: -0.6, oscCPan: 0.75 },
-            storedState: { "lane.v1": "restored-rack" },
+            parameters: { ...parameterValues, oscBPan: -0.6 },
+            storedState,
         },
         auxiliary: {},
     });
@@ -512,6 +751,7 @@ test("deferred sampled mode ignores safety echoes until an explicit user write",
     const persistence = installBrowserPatchStatePersistence(connection, {
         storage,
         deferParameterRestore: (endpointID) => endpointID === "sourceMode",
+        requiredStoredStateKeys: ["bounce.v1"],
     });
     // Another host observer may request the temporary engine default. It is
     // runtime state, not a durable edit.

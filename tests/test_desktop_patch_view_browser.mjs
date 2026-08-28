@@ -5698,6 +5698,103 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
         assert.equal(activeMeter.overload, "true");
         assert.equal(activeMeter.lightColor, "rgb(255, 92, 82)");
         assert.equal(activeMeter.lightOpacity > 0.8, true);
+
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('button[aria-label="Open MSEG editor"]');
+        const dialog = page.locator('[data-role="mseg-editor-dialog"]');
+        await dialog.waitFor();
+
+        const focusedLayout = await host.evaluate((element) => {
+            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
+            const presetBar = shadow?.querySelector(".preset-bar");
+            const back = shadow?.querySelector('[data-el="shell-back"]');
+            const meter = shadow?.querySelector('[data-el="polish-meter"]');
+            const nameRegion = shadow?.querySelector(".name-region");
+            const presetName = shadow?.querySelector('[data-el="preset-name"]');
+            const more = shadow?.querySelector('[data-el="shell-more"]');
+            const dialogElement = document.querySelector('[data-role="mseg-editor-dialog"]');
+            const rectOf = (node) => {
+                if (!(node instanceof HTMLElement)) return null;
+                const rect = node.getBoundingClientRect();
+                return {
+                    top: rect.top,
+                    bottom: rect.bottom,
+                    left: rect.left,
+                    right: rect.right,
+                    width: rect.width,
+                    height: rect.height,
+                    center: (rect.left + rect.right) / 2,
+                };
+            };
+            const backRect = rectOf(back);
+            const backHit = backRect === null || shadow === undefined
+                ? null
+                : shadow.elementFromPoint(
+                    (backRect.left + backRect.right) / 2,
+                    (backRect.top + backRect.bottom) / 2,
+                );
+            return {
+                hostDisplay: getComputedStyle(element).display,
+                hostInert: element.inert,
+                bar: rectOf(presetBar),
+                back: backRect,
+                backDisabled: back instanceof HTMLButtonElement ? back.disabled : null,
+                backVisibility: back instanceof HTMLElement ? getComputedStyle(back).visibility : null,
+                backHitOwned: back instanceof HTMLElement
+                    ? backHit === back || (backHit instanceof Node && back.contains(backHit))
+                    : false,
+                meter: rectOf(meter),
+                meterDisplay: meter instanceof HTMLElement ? getComputedStyle(meter).display : null,
+                nameRegion: rectOf(nameRegion),
+                nameOverflow: presetName instanceof HTMLElement ? getComputedStyle(presetName).textOverflow : null,
+                more: rectOf(more),
+                dialog: rectOf(dialogElement),
+            };
+        });
+
+        assert.notEqual(focusedLayout.hostDisplay, "none");
+        assert.equal(focusedLayout.hostInert, false);
+        assert.ok(
+            focusedLayout.bar
+                && focusedLayout.back
+                && focusedLayout.meter
+                && focusedLayout.nameRegion
+                && focusedLayout.more
+                && focusedLayout.dialog,
+        );
+        assert.equal(focusedLayout.bar.height, 40);
+        assert.equal(focusedLayout.bar.height, layout.presetBarHeight);
+        assert.equal(focusedLayout.backDisabled, false);
+        assert.equal(focusedLayout.backVisibility, "visible");
+        assert.equal(focusedLayout.backHitOwned, true);
+        assert.notEqual(focusedLayout.meterDisplay, "none");
+        assert.equal(focusedLayout.back.right <= focusedLayout.meter.left + 0.5, true);
+        assert.equal(focusedLayout.nameRegion.left >= focusedLayout.meter.right - 0.5, true);
+        assert.equal(focusedLayout.nameRegion.right <= focusedLayout.more.left + 0.5, true);
+        assert.equal(Math.abs(focusedLayout.nameRegion.center - focusedLayout.bar.center) <= 0.5, true);
+        assert.equal(Math.abs(focusedLayout.more.right - focusedLayout.bar.right) <= 0.5, true);
+        assert.equal(focusedLayout.nameOverflow, "ellipsis");
+        assert.equal(focusedLayout.dialog.top >= focusedLayout.bar.bottom - 0.5, true);
+
+        assert.equal(await host.evaluate((element) => {
+            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
+            return shadow?.activeElement === shadow?.querySelector('[data-action="shell-back"]');
+        }), true, "Focused compact MSEG must initially include universal Back in its focus scope.");
+        await page.keyboard.press("Tab");
+        assert.equal(
+            await page.locator('[data-role="mseg-shape-a"]').evaluate(
+                (element) => document.activeElement === element,
+            ),
+            true,
+            "Tab from universal Back must enter the focused MSEG controls.",
+        );
+        await page.keyboard.press("Shift+Tab");
+        assert.equal(await host.evaluate((element) => {
+            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
+            return shadow?.activeElement === shadow?.querySelector('[data-action="shell-back"]');
+        }), true, "Shift+Tab must make the retained Back action reachable again.");
+        await page.keyboard.press("Enter");
+        await dialog.waitFor({ state: "detached" });
     } finally {
         await page.close();
     }

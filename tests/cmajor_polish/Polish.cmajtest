@@ -15,7 +15,7 @@ function requirePolishLatency (relativePath)
     return undefined;
 }
 
-## global ("../../cmajor/Enhancer.cmajor", "../../cmajor/Polish.cmajor")
+## global ("../../cmajor/Enhancer.cmajor", "../../cmajor/Polish.cmajor", "PolishRateProbes.cmajor")
 
 //==============================================================================
 // The all-zero sound is neutral but never changes timing: the production bus
@@ -369,6 +369,63 @@ processor PolishSafeBassActivationContract [[ main ]]
         out <- -1;
         advance();
     }
+}
+
+//==============================================================================
+// The precise Safe Bass corner and its production activation are exercised at
+// both required rates. These replace inference from the older broad 40/1200 Hz
+// bounds with a -3.01 dB Butterworth corner and a frame-counted 20 ms step.
+
+## testProcessor (undefined, { frequency: 44100, maxFrequency: 48000 })
+graph PolishSafeBassResponseAt44100 [[ main ]]
+{
+    output stream int32 out;
+    node probe = PolishSafeBassResponseProbe;
+    connection { probe.out -> out; }
+}
+
+## testProcessor (undefined, { frequency: 48000, maxFrequency: 48000 })
+graph PolishSafeBassResponseAt48000 [[ main ]]
+{
+    output stream int32 out;
+    node probe = PolishSafeBassResponseProbe;
+    connection { probe.out -> out; }
+}
+
+## testProcessor (undefined, { frequency: 44100, maxFrequency: 48000 })
+graph PolishSafeBassActivationAt44100 [[ main ]]
+{
+    output stream int32 out;
+    node probe = PolishSafeBassActivationRateProbe;
+    connection { probe.out -> out; }
+}
+
+## testProcessor (undefined, { frequency: 48000, maxFrequency: 48000 })
+graph PolishSafeBassActivationAt48000 [[ main ]]
+{
+    output stream int32 out;
+    node probe = PolishSafeBassActivationRateProbe;
+    connection { probe.out -> out; }
+}
+
+//==============================================================================
+// A literal-timed reference follows the real production bus through attack and
+// recovery. The two rates pin 20/120 ms and the >= one 60 Hz cycle floor.
+
+## testProcessor (undefined, { frequency: 44100, maxFrequency: 48000 })
+graph PolishCompressorStepAt44100 [[ main ]]
+{
+    output stream int32 out;
+    node probe = PolishCompressorStepResponseProbe;
+    connection { probe.out -> out; }
+}
+
+## testProcessor (undefined, { frequency: 48000, maxFrequency: 48000 })
+graph PolishCompressorStepAt48000 [[ main ]]
+{
+    output stream int32 out;
+    node probe = PolishCompressorStepResponseProbe;
+    connection { probe.out -> out; }
 }
 
 //==============================================================================

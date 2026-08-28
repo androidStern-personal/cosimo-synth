@@ -74,6 +74,7 @@ const synthStatus = {
                 max: 1,
                 discrete: true,
                 step: 1,
+                text: "Off|On",
             }),
             parameter("voiceEnhancerKeyTrackOffsetSemitones", {
                 init: 0,

@@ -548,6 +548,7 @@ type VoiceToneSectionProps = FilterSectionProps & {
 
 type MsegEditorModalProps = {
     isOpen: boolean;
+    compactShellBack: boolean;
     slotIndex: number;
     slotLabel: string;
     msegState: MsegState | null;
@@ -2020,6 +2021,7 @@ function StatusHeader({ statusText }: HeaderProps) {
 
 function SynthPresetBarHost({
     isHidden,
+    focusedEditorOpen = false,
     storedStateAdapters,
     polishMeter,
     compactSynth = false,
@@ -2033,6 +2035,7 @@ function SynthPresetBarHost({
     onBounceVideo,
 }: {
     isHidden: boolean;
+    focusedEditorOpen?: boolean;
     storedStateAdapters: EffectStoredStateAdapter[];
     polishMeter: SynthPatchViewModel["observedPolishMeter"];
     /** ADR-026 compact synth composition: Back slot, centered name, … popover. */
@@ -2141,6 +2144,7 @@ function SynthPresetBarHost({
             ref={hostRef}
             data-role="synth-preset-bar-host"
             hidden={isHidden}
+            style={focusedEditorOpen ? { zIndex: 70 } : undefined}
             className={`relative z-40 min-w-0 shrink-0 overflow-visible rounded-[12px] ${
                 // The compact shell row is exactly the 40px token: the bar's own
                 // chrome is the only border, so the host adds none (ADR-026).
@@ -3525,6 +3529,7 @@ function KeyboardSection({
 
 function MsegEditorModal({
     isOpen,
+    compactShellBack,
     slotIndex,
     slotLabel,
     msegState,
@@ -3569,9 +3574,18 @@ function MsegEditorModal({
 
         const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const modalRoot = backdropRef.current;
+        const shellBack = compactShellBack
+            ? modalRoot.parentElement
+                ?.querySelector<HTMLElement>('[data-role="synth-preset-bar-host"] cosimo-preset-bar')
+                ?.shadowRoot
+                ?.querySelector<HTMLButtonElement>('[data-action="shell-back"]') ?? null
+            : null;
         const siblings = Array.from(modalRoot.parentElement?.children ?? []).filter(
             (candidate): candidate is HTMLElement => candidate instanceof HTMLElement
                 && candidate !== modalRoot
+                // T28 keeps the compact preset/Back row as live global shell
+                // above focused editors; universal Back owns dismissal.
+                && candidate.getAttribute("data-role") !== "synth-preset-bar-host"
                 // The floating Mod bar is the universal play surface (T11);
                 // editing a shape while auditioning it is the point, so the
                 // modal must never deaden it.
@@ -3585,19 +3599,30 @@ function MsegEditorModal({
         for (const sibling of siblings) {
             sibling.inert = true;
         }
-        doneButtonRef.current?.focus({ preventScroll: true });
+        (shellBack ?? doneButtonRef.current)?.focus({ preventScroll: true });
+
+        const focusedElement = () => {
+            let activeElement: Element | null = document.activeElement;
+            while (activeElement instanceof HTMLElement && activeElement.shadowRoot?.activeElement) {
+                activeElement = activeElement.shadowRoot.activeElement;
+            }
+            return activeElement;
+        };
 
         const keepFocusInside = (event: KeyboardEvent) => {
             if (event.key !== "Tab") {
                 return;
             }
-            const focusable = Array.from(modalRoot.querySelectorAll<HTMLElement>(
+            const modalFocusable = Array.from(modalRoot.querySelectorAll<HTMLElement>(
                 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
             ));
+            const focusable = shellBack === null
+                ? modalFocusable
+                : [shellBack, ...modalFocusable];
             if (focusable.length === 0) {
                 return;
             }
-            const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+            const currentIndex = focusable.indexOf(focusedElement() as HTMLElement);
             const nextIndex = event.shiftKey
                 ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
                 : (currentIndex >= focusable.length - 1 ? 0 : currentIndex + 1);
@@ -3605,15 +3630,15 @@ function MsegEditorModal({
             focusable[nextIndex]?.focus();
         };
 
-        modalRoot.addEventListener("keydown", keepFocusInside);
+        window.addEventListener("keydown", keepFocusInside, true);
         return () => {
-            modalRoot.removeEventListener("keydown", keepFocusInside);
+            window.removeEventListener("keydown", keepFocusInside, true);
             for (const state of inertStates) {
                 state.element.inert = state.inert;
             }
             previouslyFocused?.focus({ preventScroll: true });
         };
-    }, [isOpen]);
+    }, [compactShellBack, isOpen]);
 
     if (!isOpen || !msegState) {
         return null;
@@ -3628,7 +3653,7 @@ function MsegEditorModal({
                 dataRole="mseg-editor-dialog"
                 dataSectionAccent="mint"
                 role="dialog"
-                ariaModal
+                ariaModal={!compactShellBack}
                 ariaLabel={`${slotLabel} editor`}
                 headerActions={(
                     <>
@@ -3641,15 +3666,17 @@ function MsegEditorModal({
                         >
                             Undo
                         </button>
-                        <button
-                            ref={doneButtonRef}
-                            type="button"
-                            data-role="mseg-editor-done"
-                            className="cosimo-button mseg-editor-action"
-                            onClick={onClose}
-                        >
-                            Done
-                        </button>
+                        {!compactShellBack ? (
+                            <button
+                                ref={doneButtonRef}
+                                type="button"
+                                data-role="mseg-editor-done"
+                                className="cosimo-button mseg-editor-action"
+                                onClick={onClose}
+                            >
+                                Done
+                            </button>
+                        ) : null}
                     </>
                 )}
                 controls={(
@@ -5656,8 +5683,12 @@ function DesktopPatchViewBody({
     const quickMacroBindings = [quickMacro1, quickMacro2, quickMacro3];
 
     const handleUniversalBack = useCallback(() => {
+        if (synthView.msegEditor.isOpen) {
+            closeMsegEditor();
+            return;
+        }
         setWorkspaceShell(universalBack);
-    }, []);
+    }, [closeMsegEditor, synthView.msegEditor.isOpen]);
 
     const resolveMobileVoiceScrollLocks = useCallback(() => (
         Array.from(workspacePanelsRef.current.values())
@@ -6051,11 +6082,12 @@ function DesktopPatchViewBody({
         <div className={`cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isCompactViewport ? " is-mobile-shell" : ""}${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`}>
             {!isCompactViewport ? <StatusHeader statusText={synthView.topStatus} /> : null}
             <SynthPresetBarHost
-                isHidden={synthView.msegEditor.isOpen}
+                isHidden={synthView.msegEditor.isOpen && !isCompactViewport}
+                focusedEditorOpen={isCompactViewport && synthView.msegEditor.isOpen}
                 storedStateAdapters={synthView.presetStoredStateAdapters}
                 polishMeter={synthView.observedPolishMeter}
                 compactSynth={isCompactViewport}
-                backAvailable={mobileReturnTarget !== null}
+                backAvailable={synthView.msegEditor.isOpen || mobileReturnTarget !== null}
                 onShellBack={handleUniversalBack}
                 perfTuningAvailable={PERF_TUNING_AVAILABLE}
                 onOpenPerfTuning={openPerfTuning}
@@ -6268,6 +6300,7 @@ function DesktopPatchViewBody({
 
             <MsegEditorModal
                 isOpen={synthView.msegEditor.isOpen}
+                compactShellBack={isCompactViewport}
                 slotIndex={synthView.selectedMsegSlot}
                 slotLabel={`MSEG ${synthView.selectedMsegSlot + 1}`}
                 msegState={synthView.msegState}

@@ -11,4 +11,4 @@ export type BrowserPatchState = {
 export function readBrowserPatchState(options?: {
     readonly storage?: Storage;
     readonly storageKey?: string;
-}): BrowserPatchState;
+}): BrowserPatchState | null;

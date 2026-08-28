@@ -216,6 +216,18 @@
     overscroll-behavior: contain;
 }
 
+/* T28's compact shell row survives focused MSEG editing. The editor owns all
+   space below that one 40px row; tabs, keyboard, and workspace content remain
+   behind the focused layer exactly as ADR-026 otherwise specifies. */
+@media (max-width: 639px) {
+    .is-mobile-shell > .mseg-editor-backdrop {
+        top: calc(var(--cosimo-shell-pad) + var(--compact-shell-row) + var(--cosimo-space-1));
+        right: var(--cosimo-shell-pad);
+        bottom: var(--cosimo-shell-pad);
+        left: var(--cosimo-shell-pad);
+    }
+}
+
 .mseg-editor-frame {
     width: 100%;
     height: 100%;

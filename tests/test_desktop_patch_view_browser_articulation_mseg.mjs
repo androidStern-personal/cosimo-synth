@@ -2854,12 +2854,19 @@ test("keyboard octave buttons disable at the configured minimum and maximum root
     }
 });
 
-test("MSEG editor wiring can open, add a point, move it, and close with Escape", async () => {
+test("MSEG editor wiring keeps noncompact Done and Escape dismissal", async () => {
     const page = await openHarnessPage();
 
     try {
         await page.click('button[aria-label="Open MSEG editor"]');
         await page.waitForSelector('[data-role="mseg-editor-dialog"]');
+        const desktopDone = page.locator('[data-role="mseg-editor-done"]');
+        assert.equal(await desktopDone.count(), 1);
+        assert.equal(await desktopDone.isVisible(), true);
+        assert.equal(
+            await page.locator('[data-role="mseg-editor-dialog"]').getAttribute("aria-modal"),
+            "true",
+        );
 
         const presetBarHost = page.locator('[data-role="synth-preset-bar-host"]');
         assert.equal(
@@ -2942,13 +2949,18 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
             false,
         );
 
-        await page.keyboard.press("Escape");
+        await desktopDone.click();
         await page.waitForSelector('[data-role="mseg-editor-dialog"]', { state: "detached" });
         assert.notEqual(
             await presetBarHost.evaluate((element) => getComputedStyle(element).display),
             "none",
             "The preset bar must return after the MSEG editor closes.",
         );
+
+        await page.click('button[aria-label="Open MSEG editor"]');
+        await page.waitForSelector('[data-role="mseg-editor-dialog"]');
+        await page.keyboard.press("Escape");
+        await page.waitForSelector('[data-role="mseg-editor-dialog"]', { state: "detached" });
     } finally {
         await page.close();
     }
@@ -2966,7 +2978,7 @@ test("mobile MSEG editor expands the drawer into a dominant graph with working r
         const dialog = page.locator('[data-role="mseg-editor-dialog"]');
         await dialog.waitFor();
         assert.equal(await dialog.getAttribute("role"), "dialog");
-        assert.equal(await dialog.getAttribute("aria-modal"), "true");
+        assert.equal(await dialog.getAttribute("aria-modal"), "false");
         assert.equal(await dialog.getAttribute("aria-label"), "MSEG 1 editor");
         assert.equal(await dialog.locator('text="Modulation Shape Editor"').count(), 0);
         assert.equal(await dialog.locator('text=/Drag a point to move/i').count(), 0);
@@ -2995,9 +3007,14 @@ test("mobile MSEG editor expands the drawer into a dominant graph with working r
         assert.equal(layout.documentScrollWidth <= 393 && layout.bodyScrollWidth <= 393, true);
         assert.equal(layout.graphHeight > layout.controlsHeight * 1.5, true);
         assert.equal(layout.graphHeight >= layout.bounds.height * 0.48, true);
-        assert.equal(layout.activeRole, "mseg-editor-done");
+        assert.equal(layout.activeRole, "");
+        assert.equal(await dialog.locator('[data-role="mseg-editor-done"]').count(), 0);
+        assert.equal(await page.evaluate(() => {
+            const shadow = document.querySelector("cosimo-preset-bar")?.shadowRoot;
+            return shadow?.activeElement === shadow?.querySelector('[data-action="shell-back"]');
+        }), true);
 
-        for (const role of ["mseg-editor-done", "mseg-shape-a", "mseg-shape-b", "mseg-editor-undo", "mseg-loop-toggle"]) {
+        for (const role of ["mseg-shape-a", "mseg-shape-b", "mseg-editor-undo", "mseg-loop-toggle"]) {
             const target = dialog.locator(`[data-role="${role}"]`);
             const box = await target.boundingBox();
             assert.ok(box, `${role} should be visible`);
@@ -4779,7 +4796,7 @@ test("the Mod page's shape graph opens the MSEG the page shows, and page/bar sel
             "MSEG 2 editor",
             "Tapping the shape graph must open the MSEG the page displays.",
         );
-        await page.click('[data-role="mseg-editor-done"]');
+        await page.click('[data-action="shell-back"]');
         await page.waitForSelector('[data-role="mseg-editor-dialog"]', { state: "detached" });
 
         // Bar → page: arming ENV 1 on the bar moves the same one selection.

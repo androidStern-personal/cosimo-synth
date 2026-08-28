@@ -579,7 +579,6 @@ function buildHarnessStatus(manifest: unknown) {
                         min: descriptor.min,
                         max: descriptor.max,
                         init: descriptor.initial,
-                        step: descriptor.step,
                         unit: descriptor.unit,
                     },
                 })),
@@ -593,6 +592,7 @@ function buildHarnessStatus(manifest: unknown) {
                         init: 0,
                         discrete: true,
                         step: 1,
+                        text: "Off|On",
                     },
                 },
                 {

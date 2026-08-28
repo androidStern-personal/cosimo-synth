@@ -2281,7 +2281,7 @@ test("T60 hide and restore keep quick and full MSEG editors mounted without dead
             true,
             "Restoring must not replace the full-editor instance.",
         );
-        await fullEditor.locator('[data-role="mseg-editor-done"]').click();
+        await page.locator('[data-action="shell-back"]').click();
     } finally {
         await page.evaluate(() => {
             localStorage.removeItem("cosimo.mod-bar.preferences.v1");
@@ -5503,7 +5503,7 @@ test("T13: the quick sheet opens from the bar over Voice/FX, resizes, dismisses,
         await dragGripBy(-400);
         await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
         assert.equal(await sheet.count(), 0, "The full editor replaces the sheet — never a near-full duplicate.");
-        await page.click('[data-role="mseg-editor-done"]');
+        await page.click('[data-action="shell-back"]');
         await page.locator('[data-role="mseg-editor-dialog"]').waitFor({ state: "detached" });
 
         // Reopen; the explicit Full editor button is the discoverable route.
@@ -5511,7 +5511,7 @@ test("T13: the quick sheet opens from the bar over Voice/FX, resizes, dismisses,
         await sheet.waitFor();
         await page.click('[data-role="quick-source-sheet-full-editor"]');
         await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
-        await page.click('[data-role="mseg-editor-done"]');
+        await page.click('[data-action="shell-back"]');
         await page.locator('[data-role="mseg-editor-dialog"]').waitFor({ state: "detached" });
 
         // Reopen; a downward drag past the threshold dismisses, revealing the
@@ -6091,7 +6091,7 @@ test("T14: the SOURCE graph edits points directly with Expand explicit; the 320p
         // The explicit Expand control opens the real full-screen editor.
         await page.click('[data-role="mod-source-mseg-expand"]');
         await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
-        await page.click('[data-role="mseg-editor-done"]');
+        await page.click('[data-action="shell-back"]');
         await page.locator('[data-role="mseg-editor-dialog"]').waitFor({ state: "detached" });
 
         // 320px: the toolbar keeps ONE composed row — every control inside

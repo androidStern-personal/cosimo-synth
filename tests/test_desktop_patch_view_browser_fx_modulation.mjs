@@ -675,12 +675,12 @@ test("a rack-source tap opens the quick sheet over FX; the full editor round-tri
         assert.equal(await page.locator('[data-role="rack-editor-drive"]').count(), 1);
 
         // The Full editor button is the route into the REAL editor for the
-        // source kind — the full-screen MSEG editor here — and Done lands
-        // back on the untouched FX context with the source still armed.
+        // source kind — the full-screen MSEG editor here — and universal Back
+        // lands on the untouched FX context with the source still armed.
         await page.click('[data-role="quick-source-sheet-full-editor"]');
         await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
         assert.equal(await sheet.count(), 0, "The full editor replaces the sheet.");
-        await page.click('[data-role="mseg-editor-done"]');
+        await page.click('[data-action="shell-back"]');
         await page.locator('[data-role="mseg-editor-dialog"]').waitFor({ state: "detached" });
         assert.equal(
             await page.locator('[data-role="mobile-workspace-tab-fx"]').getAttribute("aria-selected"),

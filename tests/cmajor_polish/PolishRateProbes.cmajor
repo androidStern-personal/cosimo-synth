@@ -1,0 +1,237 @@
+// Focused sample-rate probes for the production wt::PolishBus. Timing literals
+// here are deliberate independent expectations: changing the source constants
+// or their production application must fail these tests.
+
+processor PolishSafeBassResponseProbe
+{
+    output stream int32 out;
+    wt::PolishSafeBassHighpass filter;
+
+    void main()
+    {
+        static_assert (wt::polishSafeBassCutoffHz == 120.0f,
+                       "Safe Bass cutoff must remain 120 Hz");
+        static_assert (wt::polishSafeBassQ == 0.7071067811865475f,
+                       "Safe Bass must remain Butterworth");
+
+        filter.prepare (processor.frequency);
+        let settleFrames = int32 (processor.frequency * 0.5);
+        let totalFrames = int32 (processor.frequency * 2.0);
+        float64 inputPower;
+        float64 outputPower;
+
+        for (int32 frame = 0; frame < totalFrames; ++frame)
+        {
+            let sample = float32 (std::intrinsics::sin (
+                twoPi * 120.0f * float32 (frame) / float32 (processor.frequency)
+            ));
+            let rendered = filter.process (sample);
+            if (frame >= settleFrames)
+            {
+                inputPower += float64 (sample) * float64 (sample);
+                outputPower += float64 (rendered) * float64 (rendered);
+            }
+        }
+
+        let gain = float32 (std::intrinsics::sqrt (outputPower / inputPower));
+        let responseDb = std::levels::gainTodB (gain);
+        out <- std::intrinsics::abs (responseDb + 3.0103f) <= 0.015f ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+processor PolishSafeBassActivationRateProbe
+{
+    output stream int32 out;
+    node polish = wt::PolishBus;
+
+    float32 render (float32 enhancerAmount)
+    {
+        // Pure side DC makes the settled 120 Hz high-pass output zero. The
+        // microscopic Enhancer amount engages Safe Bass without adding a
+        // measurable competing T26 contribution.
+        polish.in <- float32<2> (0.25f, -0.25f);
+        polish.enhancerAmountIn <- enhancerAmount;
+        polish.compressionClipAmountIn <- 0.0f;
+        polish.outputTrimDbIn <- 0.0f;
+        polish.advance();
+        return polish.out[0];
+    }
+
+    void main()
+    {
+        static_assert (wt::polishMacroSmoothingMs == 20.0f,
+                       "Safe Bass activation must remain 20 ms");
+
+        let settleFrames = int32 (processor.frequency * 0.5);
+        float32 baseline;
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            baseline = std::intrinsics::abs (render (0.0f));
+
+        let threshold = baseline * 0.3678794411714423f;
+        let searchFrames = wt::polishLatencyFrames + int32 (processor.frequency * 0.1);
+        int32 crossingFrame = -1;
+        for (int32 frame = 0; frame < searchFrames; ++frame)
+        {
+            let rendered = std::intrinsics::abs (render (0.0000001f));
+            if (crossingFrame < 0 && rendered <= threshold)
+                crossingFrame = frame;
+        }
+
+        let observedActivationFrames = crossingFrame - wt::polishLatencyFrames;
+        let expectedActivationFrames = int32 (processor.frequency * 0.020 + 0.5);
+        let errorFrames = observedActivationFrames > expectedActivationFrames
+            ? observedActivationFrames - expectedActivationFrames
+            : expectedActivationFrames - observedActivationFrames;
+        let expectedRateCount = (processor.frequency == 44100.0
+                                 && expectedActivationFrames == 882)
+            || (processor.frequency == 48000.0 && expectedActivationFrames == 960);
+
+        out <- crossingFrame >= 0 && expectedRateCount && errorFrames <= 8 ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+processor PolishCompressorStepResponseProbe
+{
+    output stream int32 out;
+    node polish = wt::PolishBus;
+    node enhancerReference = wt::EnhancerBus;
+
+    float32<2>[wt::polishCompressorLookaheadFrames] referenceDelay;
+    wrap<wt::polishCompressorLookaheadFrames> referenceWritePosition;
+    float32 referenceAmount;
+    float32 referenceReductionDb;
+
+    let expectedMacroCoefficient = 1.0f - float32 (std::intrinsics::exp (
+        -1.0 / (20.0 * 0.001 * processor.frequency)
+    ));
+    let expectedAttackCoefficient = float32 (std::intrinsics::exp (
+        -1.0 / (20.0 * 0.001 * processor.frequency)
+    ));
+    let expectedReleaseCoefficient = float32 (std::intrinsics::exp (
+        -1.0 / (120.0 * 0.001 * processor.frequency)
+    ));
+
+    void configureReferenceEnhancer()
+    {
+        enhancerReference.b1FreqHzIn <- 130.0f;
+        enhancerReference.b1QIn <- 0.71f;
+        enhancerReference.b1ModeIn <- float32 (wt::enhancerModeStereo);
+        enhancerReference.b1MidAmountIn <- 0.0f;
+        enhancerReference.b1SideAmountIn <- 0.0f;
+        enhancerReference.b1CurveIn <- float32 (wt::enhancerCurveSolid);
+        enhancerReference.b2FreqHzIn <- 9000.0f;
+        enhancerReference.b2QIn <- 0.71f;
+        enhancerReference.b2ModeIn <- float32 (wt::enhancerModeMidSide);
+        enhancerReference.b2MidAmountIn <- 0.0f;
+        enhancerReference.b2SideAmountIn <- 0.0f;
+        enhancerReference.b2CurveIn <- float32 (wt::enhancerCurveTube);
+        enhancerReference.saturationModeIn <- float32 (wt::enhancerSaturationModeSubtle);
+        enhancerReference.deEmphasisIn <- 1.0f;
+    }
+
+    float32 compareFrame (float32 inputSample)
+    {
+        let sampleFrame = float32<2> (inputSample, inputSample);
+        polish.in <- sampleFrame;
+        polish.enhancerAmountIn <- 0.0f;
+        polish.compressionClipAmountIn <- 1.0f;
+        polish.outputTrimDbIn <- 0.0f;
+
+        referenceAmount = wt::smoothPolishControl (
+            referenceAmount, 1.0f, expectedMacroCoefficient, wt::polishControlSnapEpsilon
+        );
+        configureReferenceEnhancer();
+        enhancerReference.in <- sampleFrame;
+
+        polish.advance();
+        enhancerReference.advance();
+
+        let signal = enhancerReference.out;
+        let detector = std::intrinsics::max (
+            std::intrinsics::abs (signal[0]),
+            std::intrinsics::abs (signal[1])
+        );
+        let targetReductionDb = wt::polishDesiredGainReductionDb (detector, referenceAmount);
+        let coefficient = targetReductionDb < referenceReductionDb
+            ? expectedAttackCoefficient
+            : expectedReleaseCoefficient;
+        referenceReductionDb = coefficient * referenceReductionDb
+                               + (1.0f - coefficient) * targetReductionDb;
+
+        let delayed = referenceDelay[referenceWritePosition];
+        referenceDelay[referenceWritePosition] = signal;
+        ++referenceWritePosition;
+
+        let compressed = delayed * std::levels::dBtoGain (referenceReductionDb);
+        let expected = float32<2> (
+            wt::polishSoftClip (compressed[0]),
+            wt::polishSoftClip (compressed[1])
+        );
+        return std::intrinsics::max (
+            std::intrinsics::abs (polish.out[0] - expected[0]),
+            std::intrinsics::abs (polish.out[1] - expected[1])
+        );
+    }
+
+    void main()
+    {
+        static_assert (wt::polishCompressorAttackMs == 20.0f,
+                       "Polish compressor attack must remain 20 ms");
+        static_assert (wt::polishCompressorReleaseMs == 120.0f,
+                       "Polish compressor recovery must remain 120 ms");
+
+        let warmFrames = int32 (processor.frequency * 0.5);
+        let attackFrames = int32 (processor.frequency * 0.3);
+        let recoveryFrames = int32 (processor.frequency * 1.0);
+        float32 maximumAttackError;
+        float32 maximumRecoveryError;
+        float32 minimumReductionDb;
+
+        for (int32 frame = 0; frame < warmFrames; ++frame)
+            compareFrame (0.1f);
+
+        for (int32 frame = 0; frame < attackFrames; ++frame)
+        {
+            maximumAttackError = std::intrinsics::max (
+                maximumAttackError, compareFrame (1.0f)
+            );
+            minimumReductionDb = std::intrinsics::min (
+                minimumReductionDb, referenceReductionDb
+            );
+        }
+
+        for (int32 frame = 0; frame < recoveryFrames; ++frame)
+            maximumRecoveryError = std::intrinsics::max (
+                maximumRecoveryError, compareFrame (0.1f)
+            );
+
+        let expectedAttackFrames = int32 (processor.frequency * 0.020 + 0.5);
+        let expectedRecoveryFrames = int32 (processor.frequency * 0.120 + 0.5);
+        let floorFrames = int32 (processor.frequency / 60.0 + 0.999999);
+        let expectedRateCounts = (processor.frequency == 44100.0
+                                  && expectedAttackFrames == 882
+                                  && expectedRecoveryFrames == 5292)
+            || (processor.frequency == 48000.0
+                && expectedAttackFrames == 960
+                && expectedRecoveryFrames == 5760);
+
+        out <- expectedRateCounts
+            && expectedAttackFrames >= floorFrames
+            && expectedRecoveryFrames >= floorFrames ? 1 : 0;
+        advance();
+        out <- minimumReductionDb < -0.5f
+            && maximumAttackError <= 0.00001f ? 1 : 0;
+        advance();
+        out <- std::intrinsics::abs (referenceReductionDb) < 0.001f
+            && maximumRecoveryError <= 0.00001f ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}

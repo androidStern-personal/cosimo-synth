@@ -883,6 +883,19 @@ Until those files are reconciled, this later transcript ledger takes precedence:
   Voice and Effects now have an accepted carousel interaction; only the additional
   workspace inventory remains open. `[U49] [U58]`
 
+### 22.4 2026-08-28 amendment: focused editors retain the compact shell row
+
+T28 supersedes ADR-026's focused-editor clause on one narrow point: a focused detail
+editor, including the full MSEG editor, keeps the same 40 px compact preset/Back row.
+Universal Back immediately precedes the always-visible Polish meter and closes the
+focused detail. The preset name remains independently centered and truncates before
+either side; the preset-actions menu remains fixed at the right. A focused editor must
+not add a second Done or Back control that competes with universal Back.
+
+Everything else in ADR-026's focused-editor behavior remains accepted. The primary
+tabs, piano keyboard, and normal workspace content stay replaced while MSEG is open,
+and the permanent Mod widget retains its existing visible, movable, usable behavior.
+
 ## 23. Frameworks Used In The Discussion
 
 - **Grill With Docs** was explicitly invoked for the reorderable rack. It produced

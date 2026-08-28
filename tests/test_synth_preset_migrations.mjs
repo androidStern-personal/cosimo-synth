@@ -21,16 +21,71 @@ const LEGACY_PARAMETERS = [
     { endpointID: "filterCutoff", type: "number", min: 20, max: 20_000, defaultValue: 1_000 },
 ];
 
+const VOICE_ENHANCER_PARAMETERS = [
+    { endpointID: "voiceEnhancerFrequency", type: "number", min: 20, max: 20_000, defaultValue: 130 },
+    { endpointID: "voiceEnhancerQ", type: "number", min: 0.1, max: 10, defaultValue: 0.71 },
+    { endpointID: "voiceEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+    {
+        endpointID: "voiceEnhancerKeyTrackEnabled",
+        type: "integer",
+        min: 0,
+        max: 1,
+        step: 1,
+        defaultValue: 0,
+        discrete: true,
+        text: "Off|On",
+    },
+    { endpointID: "voiceEnhancerKeyTrackOffsetSemitones", type: "number", min: -12, max: 60, defaultValue: 0 },
+];
+
 const POLISH_PARAMETERS = [
     { endpointID: "polishEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
     { endpointID: "polishCompressionClipAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
     { endpointID: "polishOutputTrimDb", type: "number", min: -24, max: 12, defaultValue: 0 },
 ];
 
-function buildCurrentContract(buildCanonicalPluginStateContract, polishParameters = POLISH_PARAMETERS) {
+const REAL_STYLE_VOICE_ENHANCER_ENDPOINTS = [
+    {
+        endpointID: "voiceEnhancerFrequency",
+        purpose: "parameter",
+        annotation: { min: 20, max: 20_000, init: 130, unit: "Hz" },
+    },
+    {
+        endpointID: "voiceEnhancerQ",
+        purpose: "parameter",
+        annotation: { min: 0.1, max: 10, init: 0.71 },
+    },
+    {
+        endpointID: "voiceEnhancerAmount",
+        purpose: "parameter",
+        annotation: { min: 0, max: 1, init: 0 },
+    },
+    {
+        endpointID: "voiceEnhancerKeyTrackEnabled",
+        purpose: "parameter",
+        annotation: {
+            min: 0,
+            max: 1,
+            init: 0,
+            discrete: true,
+            step: 1,
+            text: "Off|On",
+        },
+    },
+    {
+        endpointID: "voiceEnhancerKeyTrackOffsetSemitones",
+        purpose: "parameter",
+        annotation: { min: -12, max: 60, init: 0, unit: "st" },
+    },
+];
+
+function buildCurrentContract(buildCanonicalPluginStateContract, {
+    voiceEnhancerParameters = VOICE_ENHANCER_PARAMETERS,
+    polishParameters = POLISH_PARAMETERS,
+} = {}) {
     return buildCanonicalPluginStateContract({
         effectID: "wavetable-synth",
-        parameters: [...LEGACY_PARAMETERS, ...polishParameters],
+        parameters: [...LEGACY_PARAMETERS, ...voiceEnhancerParameters, ...polishParameters],
         storedState: [{ key: "lane.v1", schemaVersion: 2, required: true }],
     });
 }
@@ -39,6 +94,28 @@ test("the complete-sound cut registers no migration from a pre-Polish contract",
     const { contractModule, migrationsModule } = await loadModules();
     const currentContract = buildCurrentContract(contractModule.buildCanonicalPluginStateContract);
 
+    assert.deepEqual(migrationsModule.buildSynthPresetMigrations(currentContract), []);
+});
+
+test("the current guard accepts the real-style discrete T62 endpoint contract", async () => {
+    const { contractModule, migrationsModule } = await loadModules();
+    const currentContract = buildCurrentContract(contractModule.buildCanonicalPluginStateContract, {
+        voiceEnhancerParameters: REAL_STYLE_VOICE_ENHANCER_ENDPOINTS,
+    });
+    const keyTrack = currentContract.parameters.find(
+        ({ endpointID }) => endpointID === "voiceEnhancerKeyTrackEnabled",
+    );
+
+    assert.deepEqual(keyTrack, {
+        endpointID: "voiceEnhancerKeyTrackEnabled",
+        type: "integer",
+        min: 0,
+        max: 1,
+        step: 1,
+        defaultValue: 0,
+        discrete: true,
+        text: "Off|On",
+    });
     assert.deepEqual(migrationsModule.buildSynthPresetMigrations(currentContract), []);
 });
 
@@ -93,6 +170,11 @@ test("a current Polish preset keeps all three saved values exact", async () => {
         parameters: {
             filterMode: 2,
             filterCutoff: 4_800,
+            voiceEnhancerFrequency: 180,
+            voiceEnhancerQ: 0.82,
+            voiceEnhancerAmount: 0.38,
+            voiceEnhancerKeyTrackEnabled: 1,
+            voiceEnhancerKeyTrackOffsetSemitones: 7.5,
             polishEnhancerAmount: 0.42,
             polishCompressionClipAmount: 0.73,
             polishOutputTrimDb: -3.5,
@@ -111,6 +193,62 @@ test("a current Polish preset keeps all three saved values exact", async () => {
             polishOutputTrimDb: -3.5,
         },
     );
+});
+
+test("the current-format guard rejects every missing or wrong T62 endpoint", async () => {
+    const { contractModule, migrationsModule } = await loadModules();
+
+    for (const expectedParameter of VOICE_ENHANCER_PARAMETERS) {
+        const missing = VOICE_ENHANCER_PARAMETERS.filter(
+            ({ endpointID }) => endpointID !== expectedParameter.endpointID,
+        );
+        assert.throws(
+            () => migrationsModule.buildSynthPresetMigrations(buildCurrentContract(
+                contractModule.buildCanonicalPluginStateContract,
+                { voiceEnhancerParameters: missing },
+            )),
+            new RegExp(expectedParameter.endpointID),
+        );
+
+        const wrong = VOICE_ENHANCER_PARAMETERS.map((parameter) => (
+            parameter.endpointID === expectedParameter.endpointID
+                ? { ...parameter, defaultValue: parameter.defaultValue + 0.25 }
+                : parameter
+        ));
+        assert.throws(
+            () => migrationsModule.buildSynthPresetMigrations(buildCurrentContract(
+                contractModule.buildCanonicalPluginStateContract,
+                { voiceEnhancerParameters: wrong },
+            )),
+            new RegExp(expectedParameter.endpointID),
+        );
+    }
+
+    const enabledIndex = VOICE_ENHANCER_PARAMETERS.findIndex(
+        ({ endpointID }) => endpointID === "voiceEnhancerKeyTrackEnabled",
+    );
+    for (const wrongEnabled of [
+        {
+            endpointID: "voiceEnhancerKeyTrackEnabled",
+            type: "number",
+            min: 0,
+            max: 1,
+            defaultValue: 0,
+        },
+        {
+            ...VOICE_ENHANCER_PARAMETERS[enabledIndex],
+            text: "No|Yes",
+        },
+    ]) {
+        const wrong = VOICE_ENHANCER_PARAMETERS.with(enabledIndex, wrongEnabled);
+        assert.throws(
+            () => migrationsModule.buildSynthPresetMigrations(buildCurrentContract(
+                contractModule.buildCanonicalPluginStateContract,
+                { voiceEnhancerParameters: wrong },
+            )),
+            /voiceEnhancerKeyTrackEnabled/,
+        );
+    }
 });
 
 test("the migration boundary rejects missing, duplicate, or non-neutral Polish contracts", async () => {
@@ -146,7 +284,7 @@ test("the migration boundary rejects missing, duplicate, or non-neutral Polish c
         assert.throws(
             () => migrationsModule.buildSynthPresetMigrations(buildCurrentContract(
                 contractModule.buildCanonicalPluginStateContract,
-                parameters,
+                { polishParameters: parameters },
             )),
             expected,
         );
