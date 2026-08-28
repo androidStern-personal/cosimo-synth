@@ -1,12 +1,16 @@
 # Enhancer Lite Builder Kit — Product, GTM, and Release Roadmap
 
-Status: **execution-grade plan; Gate 0 unresolved**
+Status: **execution-grade plan; combined launch HOLD — Gate 0 and Gate 3 unresolved**
 
-Date: 2026-08-27
+Date: 2026-08-28
 
-Planning branch: `codex/enhancer-lite-builder-kit-roadmap`
+Planning branch: `codex/enhancer-lite-builder-kit-roadmap-cpm`
+
+Roadmap checkpoint reconciled: `d005c4e8f88f153bc1904170d99a0aeee41d4ba0`
 
 Source baseline inspected: `origin/master@6dbc94884b173d66c3885e991faeff541bcf0091`
+
+Dependency-migration authority: `BUILDER_KIT_CPM_DEPENDENCY_MIGRATION.md`. Andrew approved one CPM resolver for the exact patched Cmajor and CHOC private forks plus pinned JUCE, with no post-download patching, alternate source, manual worktree setup, or Cmajor CLI work in this migration.
 
 Historical DSP checkpoint: `codex/t26-spectre-wrapper-prototype@2a652a4035519be1fbe12de9a8c6487ed736e3c5`
 
@@ -18,14 +22,21 @@ The roadmap is intentionally gated. The current plugin is a strong development p
 
 ### Product
 
-Name: **Enhancer Lite Builder Kit**
+Public base name: **TBD — Andrew rejected “Enhancer” on August 28, 2026**
+
+Locked naming structure:
+
+- Free plugin: **[Base Name]**
+- Paid product: **[Base Name] Builder Kit**
+
+Internal working label until the rename is complete: **Enhancer Lite Builder Kit**. This label may remain in code paths and planning files temporarily, but it must not be treated as approved customer-facing branding.
 
 Descriptor: *The finished plugin, plus all the building blocks to make it your own.*
 
 The public funnel has two products:
 
-1. **Free Cosimo Enhancer Lite:** a genuinely useful, finished macOS audio effect.
-2. **Paid Builder Kit:** a clean, editable plugin project that a musician can hand to a coding agent, build locally, modify, test, and install.
+1. **[Base Name]:** a genuinely useful, finished macOS audio effect.
+2. **[Base Name] Builder Kit:** a clean, editable plugin project that a musician can hand to a coding agent, build locally, modify, test, and install.
 
 The founding offer is **$29 for the first 50 buyers**, including lifetime access to upstream kit releases. A later **$49** price is only a hypothesis and requires activation, support, and customer-example evidence.
 
@@ -35,68 +46,74 @@ A Mac-based musician or producer who already uses, or is willing to use, a files
 
 ### Observable promise
 
-A buyer can give the downloaded kit and its setup prompt to the supported reference agent, get the baseline plugin built and installed, request one bounded DSP/UI modification, rebuild it under a collision-safe identity, and use the result in a supported DAW.
+A buyer can copy the purchase-specific setup prompt to a filesystem-capable coding agent, get the baseline plugin retrieved, built, and installed, request one bounded DSP/UI modification, rebuild it under a collision-safe identity, and use the result in a supported DAW.
 
 ### Gate 0: commercial-rights go/no-go
 
-Do **not** publicly promise that buyers may commercially distribute proprietary derivatives until Cmajor and JUCE provide written terms supporting this exact source-kit model, or qualified counsel confirms another compliant route.
+Do **not** publicly promise that buyers may commercially distribute proprietary derivatives until the reported Cmajor clearance is preserved with the roadmap evidence, the final customer build is proven not to embed Cmajor's JIT engine, JUCE provides written terms supporting this exact source-kit model, and Cosimo's own source/provenance terms support the promise.
 
 Current evidence:
 
-- Cmajor is dual GPLv3/commercial. Its official terms say generated C++ from a customer's own Cmajor source is theirs to use, but closed-source products embedding Cmajor code or engine components require commercial licensing. The generated JUCE wrapper and customer-modification workflow need written classification. [Cmajor licensing](https://cmajor.dev/docs/Licence) · [Cmajor repository license](https://github.com/cmajor-lang/cmajor/blob/main/LICENSE.md)
+- Andrew reports that the Cmajor team replied in writing through Discord that the proposed model is clear without a Cmajor license unless the JIT engine is embedded. The Builder Kit therefore takes the no-JIT path. Save the exact reply with the roadmap evidence, and prove from the final customer files and binaries that the JIT engine is absent. Embedding it would reopen licensing. [Cmajor licensing](https://cmajor.dev/docs/Licence) · [Cmajor repository license](https://github.com/cmajor-lang/cmajor/blob/main/LICENSE.md)
 - JUCE is dual AGPLv3/commercial. The current JUCE 9 EULA separately restricts “Products That Create Products” without an alternative agreement. A paid source kit designed to create derivative plugins needs written JUCE clearance. [JUCE licensing](https://juce.com/get-juce/) · [JUCE 9 EULA](https://juce.com/legal/juce-9-licence/)
 - The current repository has no root customer license and therefore grants no explicit source modification or redistribution rights.
+- Read-only audit task `01a047d0-d360-7481-9cf1-a9f987066c17`, run from the exact clean checkpoint `d005c4e8f88f153bc1904170d99a0aeee41d4ba0`, confirmed that the proposed customer boundary does not itself solve these rights questions.
+- The Spectre-derived DSP provenance position remains a human/legal question. Andrew rejected the “Enhancer” name, so the current wordmark is excluded rather than cleared; whatever replaces it must have documented ownership.
 
-Required written question to both licensors:
+The Cmajor question is answered for a no-JIT customer build. The remaining written JUCE question is:
 
-> May Cosimo sell an editable source kit to an unlimited number of individual customers, allow each customer and their coding agent to modify the Cmajor/JUCE-dependent project, and allow each customer to compile, rename, sign, distribute, and sell proprietary derivative plugins without Cosimo purchasing a developer seat for every customer?
+> May Cosimo sell an editable source kit to an unlimited number of individual customers, allow each customer and their coding agent to modify the JUCE-dependent project, and allow each customer to compile, rename, sign, distribute, and sell proprietary derivative plugins without Cosimo purchasing a developer seat for every customer?
 
-If the answer is no or economically unreasonable, Andrew chooses one fallback before further launch investment:
+If the answer is no or economically unreasonable, Andrew chooses one lawful path before further launch investment. The paid Builder Kit remains part of the current launch plan; a free-only release is not the default response to a missed deadline:
 
 1. **Open-source kit:** GPL/AGPL-compatible source and derivative obligations; buyers may also redistribute the underlying kit.
 2. **Personal-use kit:** paid editing/building workflow, but no promise of proprietary commercial distribution.
 3. **Permissive wrapper:** replace the Cmajor/JUCE-dependent customer build path; highest engineering cost, strongest long-term commercial freedom.
-4. **Do not launch the Builder Kit:** release the free plugin only and retain the work internally.
+4. **Explicitly stop the Builder Kit:** a terminal business decision Andrew may make later if no acceptable route exists, not an automatic sprint fallback.
 
 ## 2. Locked decisions, recommendations, and unresolved gates
 
 | Topic | Status | Decision or recommendation | Consequence |
 |---|---|---|---|
-| Name | Locked | `Enhancer Lite Builder Kit` | Use consistently in planning and customer copy, subject to trademark clearance. |
+| Name | Structure locked; base name open | Free plugin is **[Base Name]**; paid product is **[Base Name] Builder Kit**. Andrew rejected “Enhancer.” | Use a generic description in tester messages. Do not create replacement branding or public copy until the base name is selected and checked. Existing code/file names remain internal working labels until a later authorized migration. |
 | Descriptor | Locked | “The finished plugin, plus all the building blocks to make it your own.” | Avoid generic “AI plugin generator” positioning. |
 | Headline | Provisional | “Your first plugin is already built.” | Test against the hero demonstration before GA. |
 | Free product | Locked | Full Enhancer Lite binary; not intentionally crippled. | The paid product sells ownership and workflow, not missing sound features. |
 | Paid product | Locked | Sanitized editable project, setup/update prompts, build system, onboarding, Wavefold example, and lifetime upstream releases. | Never ship the Cosimo monorepo or its full history. |
+| Build dependencies | Locked | Every supported build resolves the same patched Cmajor and CHOC commits plus pinned JUCE through the single CPM system specified in `BUILDER_KIT_CPM_DEPENDENCY_MIGRATION.md`. | Patches live as commits in private GitHub repositories; no build may patch retrieved source, select another source, or require manual worktree dependency setup. The Cmajor CLI is a separate later decision. |
 | Founding price | Locked for validation | $29, first 50 buyers. | Maximum gross revenue is $1,450; this is a validation cohort, not a profit proof. |
 | Later price | Hypothesis | $49 after evidence. | No automatic increase after customer 50; require the Gate 6 metrics. |
-| Platforms | Locked | macOS desktop only; Apple Silicon and Intel. | No Windows or Linux in v1. |
+| Platforms | Locked | Apple Silicon Macs only, M1 or newer, running macOS 15 Sequoia or macOS 26 Tahoe. | Ship arm64 only. No Intel/Rosetta, macOS 14 or older, Windows, or Linux support in v1. |
 | Formats | Locked target | VST3 and macOS AU component. | AU/Logic claims remain blocked until a real AU passes Gate 3. |
-| Official hosts | Locked target | Ableton Live for VST3 and Logic Pro for AU. | Other macOS hosts are best effort. If AU misses the gate, launch scope must be explicitly reduced before publication. |
-| Host automation | Unresolved human choice | The current Lite endpoints are saved but deliberately non-automatable. | Andrew must accept that limitation for v1 or authorize a separate automation/state migration before product freeze. |
+| Official hosts | Locked target | Ableton Live for VST3 and Logic Pro for AU. The exact supported releases or minimum versions are chosen on Day 2 from the machines and testers actually available. | Public compatibility copy may name only the exact DAW versions later proven on both supported macOS releases. Other hosts are best effort. If AU misses the gate, launch scope must be explicitly reduced before publication. |
+| Host automation | Locked for v1 | Every user-editable Enhancer Lite sound control is exposed to DAW automation in VST3 and AU, with stable host IDs/order and saved-state parity. | The current endpoints are non-automatable, so implementation requires an explicit host-parameter migration and Ableton/Logic record/playback validation. |
 | Standalone Lite behavior | Locked | Preserve current master composition: Low/Bell/High, Stereo/M/S, independent Mid/Side amounts, Tube/Solid, Subtle/Medium, aligned analyzer, direct graph/readout gestures, no de-emphasis circuit. | This is separate from T26 and T62. |
-| MIDI tracking | Excluded from Builder Kit v1 | No MIDI/key tracking. | Current T61 says otherwise; reconcile the tracker before implementation. |
-| iOS AUv3 | Excluded from Builder Kit v1 | No iPhone/iPad product. | Current T61 includes iOS; it remains a separate product task. |
+| MIDI tracking | Excluded from Builder Kit v1 | No MIDI/key tracking. | T61's MIDI scope remains intact in its separate product task; this roadmap does not narrow it. |
+| iOS AUv3 | Excluded from Builder Kit v1 | No iPhone/iPad product. | T61's iOS AUv3 scope remains intact in its separate product task; this roadmap does not narrow it. |
 | Example modification | Locked | Add Wavefold and a distinct solid-color visual identity; invite buyers to ask their agent for another algorithm. | Ship a reproducible completed reference branch plus the starting prompt. |
-| Free download | Locked | Email-gated lead magnet. | Show HN is not a launch priority because it favors barrier-free trials. Marketing consent still requires legal review. |
-| Checkout | Recommended and researched | Lemon Squeezy merchant-of-record. | Use one-time product, lead magnet, license keys, secure files, My Orders recovery, and replacement files for lifetime releases. |
-| License key use | Locked recommendation | Purchase/update entitlement only; no runtime plugin activation. | Do not add DRM or require the free/modified plugin to call home. |
-| Source delivery | Locked recommendation | Versioned private release archive containing a Git bundle; no GitHub membership automation. | Customer clones locally and owns a customization branch. Lemon Squeezy is the private update channel, not a Git remote. |
-| Updates | Locked definition | Lifetime access to new upstream release bundles, not lifetime bespoke merge support. | Update prompt checkpoints, imports, rebases, tests, and installs only on success. Conflicts may require customer action. |
-| Supported agent | Recommendation awaiting Andrew | Codex is the reference workflow; other filesystem-capable coding agents are best effort until beta evidence expands support. | Limits support surface while keeping the source ordinary and portable. |
-| Support | Locked direction | Self-service diagnostics and documentation; minimal community Discord only if repeated demand appears. | No promised one-to-one development consulting. |
+| Free download | Locked | Email-gated lead magnet with a separate, unchecked marketing opt-in. | The delivery email goes to Polar. Only an affirmative opt-in goes to Resend; declining marketing does not block the download. Show HN is not a launch priority because it favors barrier-free trials. Final consent copy still requires legal review. |
+| Checkout | Locked for v1 | Polar merchant-of-record; supersedes Lemon Squeezy. | Agent-operable production/sandbox MCP plus scoped API; use free and one-time products, hosted checkout, license/file benefits, and Customer Portal recovery. Polar owns transactional commerce email. |
+| Marketing email | Locked for v1 | Resend free plan; enrollment requires a separate unchecked opt-in. | Resend owns explicitly consented nurture, broadcasts, and automated sequences. The required delivery email alone never enrolls a contact. Stay on the free plan until Andrew separately authorizes spending. |
+| Plugin activation | Locked | None. A purchase-specific credential gates setup and future source updates outside the plugin. | The free, paid, and modified plugins never receive a license key, add DRM, or call home; all builds work offline. |
+| Source delivery | Locked | The post-purchase page offers only **Download the finished plugin** and **Copy the agent setup prompt**. | The prompt retrieves and initializes the verified Git project through an authenticated signed Git-bundle feed. No manual source-kit download, GitHub account, or repository invitation is part of the customer flow. |
+| Updates | Locked definition | One purchase grants permanent access to every future Enhancer Lite source-project update through the private feed, not lifetime bespoke merge support. | “Update my kit” checkpoints local work, retrieves the newest signed bundle, rebases the customer's changes, tests, and installs only on success. Conflicts may require customer action. |
+| Internal vendor automation | Locked operational requirement | Andrew's authorized agent must be able to operate selected vendors through official MCP, API, or CLI surfaces. | Internal only: this creates no customer-facing agent endorsement, compatibility promise, or vendor feature. Human account, credential, spending, and publication gates remain. |
+| Launch domain and support address | Domain confirmed; mailbox provisional | Use `song-machines.com` for the launch. The proposed support address is `support@song-machines.com`. | Public records checked August 28, 2026 show Name.com as registrar, Vercel nameservers and website hosting, and Forward Email mail routing. Do not publish the support address until that exact mailbox or alias passes a receive-and-reply test. |
+| Support | Locked | Self-service documentation plus email help for purchase, download, and genuine setup problems. | No custom plugin development, unlimited one-to-one help, or bespoke update/merge support. No Discord commitment at launch. |
 | Acquisition | Locked | Free plugin coverage → email/download → modification demo → Builder Kit purchase. | No paid ads before organic conversion evidence. |
-| Founder visibility | Unresolved human choice | Andrew appears or narrates the modification story, or an equally credible alternative is produced. | The video must still show the real workflow and not a fictional one-click build. |
-| Telemetry | Excluded from v1 plugin | No hidden plugin or source-kit telemetry. | Use Lemon events, explicit surveys, and personal beta follow-up for activation evidence. |
+| Founder visibility | Locked direction | Andrew appears in or narrates the real modification demonstration; the exact presentation is deferred. | The video must show the real workflow and not a fictional one-click build. |
+| Telemetry | Excluded from v1 plugin | No hidden plugin or source-kit telemetry. | Use Polar order/benefit events, explicit surveys, and personal beta follow-up for activation evidence. |
 
 ## 3. Scope and non-goals
 
 ### Minimum valuable slice
 
-The minimum valuable slice is a finished macOS Enhancer Lite effect plus a clean editable project that lets a minimally technical musician use the reference coding agent to install the baseline, make one bounded DSP/UI change, recover from failure, and keep receiving upstream release bundles without destroying local changes.
+The minimum valuable slice is a finished macOS Enhancer Lite effect plus a clean editable project that lets a minimally technical musician use a filesystem-capable coding agent to install the baseline, make one bounded DSP/UI change, recover from failure, and keep receiving upstream release bundles without destroying local changes.
 
 ### Explicitly excluded from v1
 
 - Windows, Linux, VST2, AAX, CLAP, and iOS AUv3.
+- Intel Macs, Rosetta support, and macOS releases other than macOS 15 Sequoia or macOS 26 Tahoe.
 - MIDI or per-note pitch tracking.
 - The fixed two-band T26 Enhancer, T28 Polish chain, and per-voice T62 implementation.
 - A hosted prompt-to-plugin generator.
@@ -115,8 +132,9 @@ The minimum valuable slice is a finished macOS Enhancer Lite effect plus a clean
 
 Release contents:
 
-- Universal macOS VST3.
-- Universal macOS AU component after it passes Gate 3.
+- Email-gated access to the installer; the email requirement is a delivery/acquisition step, not plugin activation or DRM.
+- Apple Silicon arm64 macOS VST3 for M1-or-newer Macs on macOS 15 Sequoia and macOS 26 Tahoe.
+- Apple Silicon arm64 macOS AU component after it passes Gate 3 on both supported macOS releases.
 - Signed and notarized installer package.
 - Checksums, release manifest, versioned release notes, third-party notices, install instructions, and uninstall instructions.
 - No source project and no license activation.
@@ -131,18 +149,19 @@ Required retained behavior from current master:
 - No de-emphasis path.
 - Direct graph editing and draggable Frequency, Amount/Mid, Side, and Q readouts.
 - Logarithmic Frequency and Q gesture laws.
+- DAW automation for every user-editable sound control, with stable parameter identity across VST3/AU and release updates.
 - Before/after analyzer aligned to the response graph.
-- Solid-black neon base interface and packaged Enhancer Lite wordmark.
+- Solid-black neon base interface. The current Enhancer Lite wordmark is excluded; create replacement branding only after the new public name is selected and its ownership is documented.
 - Saved state, control smoothing, finite output, mono/stereo coherence, zero-effect dry behavior, and the accepted shelf/audio corpus.
 
 Public release claims must be regenerated from the final release commit. Historical pluginval, Ableton, Spectre, measurement, and checksum evidence cannot substitute for final artifact provenance.
 
 ### 4.2 Paid Builder Kit
 
-The purchased download contains:
+The paid entitlement includes:
 
 - The same finished VST3/AU installer as the free product.
-- `enhancer-lite-builder-kit-<version>.bundle`: a sanitized Git bundle with release tags and no private Cosimo history.
+- Access through the copied setup prompt to `enhancer-lite-builder-kit-<version>.bundle`: a signed, sanitized Git bundle with release tags and no private Cosimo history. The customer does not manually download the source bundle.
 - `START-HERE.md`: the single copied setup prompt and a plain-language fallback path.
 - `README.md`, `AGENTS.md`, `BUILDING.md`, `MODIFYING.md`, `UPDATING.md`, `PUBLISHING.md`, `TROUBLESHOOTING.md`, and `SUPPORT.md`.
 - `onboarding/index.html`: a local, branded welcome page opened after a successful setup.
@@ -188,10 +207,10 @@ Personal local experimentation may retain the Cosimo identity, but a distributab
 
 The project distinguishes two modes:
 
-- **Local mode:** deterministic universal build, ad-hoc signing, user-level installation, and supported-host smoke on the customer's Mac. This is the core activation path.
+- **Local mode:** deterministic arm64 build, ad-hoc signing, user-level installation, and supported-host smoke on the customer's M1-or-newer Mac running macOS 15 or 26. This is the core activation path.
 - **Distribution mode:** customer-specific identity, Developer ID Application/Installer signing, hardened-runtime review, notarization, stapling, distributable installer, and clean-machine verification. This requires the customer's own Apple Developer credentials and only ships if Gate 0 permits commercial derivatives.
 
-Cosimo's Apple certificates, Lemon Squeezy credentials, notary credentials, and signing secrets never enter the customer repository, release archive, logs, prompts, or support bundles.
+Cosimo's Apple certificates, Polar organization tokens/MCP credentials, notary credentials, and signing secrets never enter the customer repository, release archive, logs, prompts, or support bundles.
 
 Apple requires Developer ID signing and notarization for trustworthy distribution of downloaded macOS plug-ins and installer packages. [Apple notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) · [Apple packaging](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution)
 
@@ -201,7 +220,7 @@ Apple requires Developer ID signing and notarization for trustworthy distributio
 
 1. Visitor reaches the landing page through a review, product database, video, press item, or referral.
 2. Visitor chooses the free Enhancer Lite download and sees the exact macOS/DAW requirements.
-3. Lemon Squeezy collects the delivery email and legally reviewed marketing consent.
+3. Polar's free-product checkout collects the required delivery email. A separate marketing checkbox is unchecked by default; only an affirmative opt-in is handed to Resend, and declining it does not block delivery. Final copy remains subject to legal review.
 4. Visitor receives the current signed/notarized installer and checksum.
 5. Installer places VST3 and AU in standard user locations.
 6. The user rescans/restarts the host if required and loads the plugin.
@@ -210,16 +229,16 @@ Apple requires Developer ID signing and notarization for trustworthy distributio
 Failure behavior:
 
 - Unsupported OS/architecture is shown before download.
-- Expired download access is recoverable through Lemon Squeezy My Orders.
+- Lost download access is recoverable through Polar's email-authenticated Customer Portal.
 - A failed installer provides a diagnostic log and manual uninstall path.
 - A missing host scan is documented without claiming the install failed.
 
 ### 5.2 Paid setup
 
 1. Buyer purchases the founding Builder Kit.
-2. Lemon Squeezy issues the entitlement/license key and exposes the versioned files in My Orders.
-3. Buyer downloads the finished installer and Git bundle, then copies the setup prompt.
-4. The agent locates the downloaded bundle, verifies its published checksum, clones it locally, and creates `customer/main` from the release tag.
+2. The purchase-success page presents exactly two customer actions: **Download the finished plugin** and **Copy the agent setup prompt**. There is no manual source-setup path.
+3. Polar records the purchase and exposes the finished download, receipt, and purchase-specific setup/update credential for recovery. The credential never activates the plugin.
+4. The copied prompt contains the purchase-specific setup command. The agent authenticates to the private feed, retrieves and verifies the signed Git bundle, clones it locally, and creates the customer customization branch from the immutable release tag. Downloading the source and creating the repository are one invisible user-facing step.
 5. `doctor` inventories the machine without changing it and explains missing requirements in plain language.
 6. With permission, `setup` installs only the documented build tools and pinned dependencies.
 7. `test`, `build`, and `install` produce and install the baseline local-mode plugin.
@@ -241,14 +260,15 @@ The launch example adds Wavefold plus a distinct solid-color treatment. Marketin
 
 ### 5.4 Update while preserving customer changes
 
-1. Customer obtains the latest signed Git bundle through My Orders.
-2. Update prompt verifies the bundle checksum and the local repository state.
-3. Agent commits or archives every local change and creates a recovery branch/tag.
-4. Agent fetches the new immutable upstream release tag from the bundle.
-5. Agent rebases the customer customization branch onto the new tag.
-6. On conflict, the operation stops with the original branch and working build intact; no plugin is installed.
-7. After a clean or deliberately resolved rebase, the complete customer test gate runs.
-8. Only a green build is installed. The prior installed version remains recoverable.
+1. Customer asks the agent to “Update my kit”; the customer does not manually download or import source.
+2. The update workflow reads the purchase-specific credential from ignored local project configuration, or asks the customer to recover it from the Polar order if missing. It never prints or commits the credential.
+3. The agent authenticates to the private update feed, retrieves the newest entitled signed Git bundle, and verifies its signature/checksum and the local repository state.
+4. Agent commits or archives every local change and creates a recovery branch/tag.
+5. Agent fetches the new immutable upstream release tag from the bundle.
+6. Agent rebases the customer customization branch onto the new tag.
+7. On conflict, the operation stops with the original branch and working build intact; no plugin is installed.
+8. After a clean or deliberately resolved rebase, the complete customer test gate runs.
+9. Only a green build is installed. The prior installed version remains recoverable.
 
 Lifetime updates mean access to these upstream bundles. They do not guarantee conflict-free rebases or bespoke repair of every customer modification.
 
@@ -329,7 +349,7 @@ enhancer-lite-builder-kit/
 `toolchain.lock.json` pins versions, commits, download URLs, and checksums for every build dependency. At minimum:
 
 - Stable Xcode and Command Line Tools range.
-- macOS deployment target.
+- macOS 15.0 deployment target plus explicit macOS 15 Sequoia and macOS 26 Tahoe qualification targets.
 - Node and npm.
 - CMake.
 - Cmajor CLI and source/runtime commit.
@@ -343,10 +363,10 @@ The current repository pins Cmajor and CHOC but takes `cmaj` from `PATH` and sha
 
 | Command | Required behavior |
 |---|---|
-| `doctor` | Read-only inventory; identifies OS, architecture, disk, Xcode agreement, Node/npm, CMake, Cmajor, JUCE, agent, DAW paths, signing mode, and unsupported conditions. Emits a redacted support report. |
+| `doctor` | Read-only inventory; requires Apple Silicon M1 or newer and macOS 15 or 26; identifies disk, Xcode agreement, Node/npm, CMake, Cmajor, JUCE, agent, DAW paths, signing mode, and unsupported conditions. Emits a redacted support report and rejects Intel/Rosetta or other macOS releases before mutation. |
 | `setup` | Installs/fetches only pinned dependencies after consent; verifies checksums and licenses; is safe to rerun. |
 | `test` | Runs customer-contained DSP, finite-output, dry, state, UI, audio, and build-contract tests. No proprietary corpus or network required after setup. |
-| `build` | Produces deterministic universal local-mode VST3/AU artifacts from a clean tree. |
+| `build` | Produces deterministic arm64 local-mode VST3/AU artifacts from a clean tree. |
 | `install` | Backs up/replaces only the exact target plugin bundles, signs locally, verifies, and prints rescan/restart instructions. |
 | `configure` | Creates customer identity from `product.json`, validates collisions, removes publishing-forbidden Cosimo marks, and checkpoints first. |
 | `package` | Builds a customer-signed distribution artifact only when distribution prerequisites and Gate 0 policy permit it. |
@@ -364,49 +384,109 @@ Two test layers are required:
 
 The current shelf-corpus test points at the ignored `build/t26-spectre-shelves` measurement corpus, and `ui/shared/enhancer-lite-state.ts` imports shared mode/curve vocabulary from the two-band state module. Both dependencies must be audited and severed before customer export. Customer tests may use newly authored redistributable fixtures and summarized numeric tolerances, never private reference audio.
 
+### 6.6 Read-only release-boundary and SBOM checkpoint
+
+Evidence status: **completed read-only proposed-boundary audit at exact roadmap checkpoint `d005c4e8f88f153bc1904170d99a0aeee41d4ba0`; not an actual-build SBOM and not release approval.** Audit task `01a047d0-d360-7481-9cf1-a9f987066c17` used a clean worktree, created no build directory or artifact, and made no build, install, package, account, publication, merge, push, or deployment changes.
+
+Audit verdict: **HOLD.** BK-03 now has an evidence-backed proposed customer boundary, but it remains open until the exact Cmajor reply is preserved, the no-JIT boundary is proven, and the Cosimo source license, JUCE delivery terms, Spectre-derived DSP provenance, replacement-brand ownership, exact approved dependency pins, and notices are resolved. BK-32 must still regenerate the final inventory from the exact checksummed build that would ship.
+
+Observed workstation versions are macOS 26.5.1 on arm64, Xcode 26.5, Node 22.16.0, npm 11.4.1, CMake 4.2.3, and `cmaj` 1.0.3066. They describe the inspected machine, not the eventual supported range or locked customer toolchain.
+
+| Component | Observed evidence | Release disposition / open proof |
+|---|---|---|
+| Cosimo Enhancer Lite source | Relevant source first appears in Andrew-authored Git commits, including `71f106b9`, `887757f3`, and `47dadd75`; the repository has no root customer license. | Git authorship is provenance evidence, not a customer rights grant. Gate 0 must supply the Cosimo license/EULA and commercial promise. |
+| Cmajor | Runtime provisioner pins Cmajor 1.0.3066 at `172db53232337154d5a1c0f9a448318129dfacd9`. Andrew reports written Cmajor clearance unless the JIT engine is embedded. | Use a no-JIT customer build, preserve the exact reply, and prove which generated/runtime components enter the final customer project and binaries. Any embedded JIT engine requires separate licensing. |
+| CHOC | Provisioner pins Andrew's patched fork at `e50b21a272a1729bc1dd1fd368c112095cb18d5a`. | Verify upstream ISC notice, patch provenance, and the minimal patch subset actually required by Lite. Do not export the full shared runtime patch stack by assumption. |
+| JUCE | `fx/prod-effect.mjs` shallow-clones the moving head of the JUCE repository. | Critical reproducibility and SBOM gap. Pin an exact approved version/commit, enumerate the VST3/AU wrapper contents, and resolve Gate 0 before customer packaging. |
+| VST3 SDK and wrapper dependencies | Enter transitively through the generated JUCE project; no exact release inventory is locked in the current Lite path. | Record exact versions, licenses, notices, and binary inclusion from the final pinned build. |
+| Apple SDK, WebKit, and Audio Unit APIs | Supplied by Xcode/macOS rather than copied from this repository. | Lock the supported Xcode/deployment range and document customer prerequisites; actual distribution still needs signing/notarization proof. |
+| JavaScript build/test tooling | The root lock contains 316 dependency entries plus the root project and includes unrelated product/media dependencies. Lite UI is vanilla TypeScript, while the shared build script also loads React tooling. | Create a dedicated minimal package and lock after authorization. Vite/esbuild and Playwright are build/test-only candidates; recompute licenses from the exact customer closure. |
+| Spectre-derived research evidence | Committed findings describe black-box measurements and state that no Spectre source or audio is retained in the implementation runner. Lite DSP comments preserve measured transfer targets and cite public RBJ/JUCE filter methods. | Keep all Spectre captures, audio, corpora, fixtures, and measurement tools internal. Counsel must review the black-box-derived constants/claims; never market source-code identity. |
+| Current Enhancer Lite wordmark PNG | First appears in `71f106b9`; the PNG contains no embedded authorship/license metadata and no source artwork or origin declaration was found. Andrew subsequently rejected the “Enhancer” name. | Exclude it from the release. Its provenance no longer blocks launch unless Andrew later chooses to reuse it. Any replacement branding must have documented ownership. |
+
+The proposed export is an **allowlist design, not a shippable archive**:
+
+| Disposition | Current source | Required release treatment |
+|---|---|---|
+| Candidate include | `cmajor/EnhancerLite.cmajor`; `cmajor/EnhancerLiteSpectrumAnalyzer.cmajor`; `fx/enhancer_lite/EnhancerLitePlugin.cmajor`; `fx/enhancer_lite/EnhancerLite.cmajorpatch`; `fx/enhancer_lite/view/{source.ts,gesture-policy.ts,spectrum.ts}` | Copy into product-local `dsp/`, `plugin/`, and `ui/` paths only after Cosimo/Spectre provenance and file-level rights are cleared. |
+| Include after isolation | `ui/shared/enhancer-lite-state.ts` | Remove its import of the full T26 `ui/shared/enhancer-state.ts`; make Lite vocabulary product-local or depend on a tiny explicitly approved module. |
+| Excluded working-name asset | `fx/enhancer_lite/assets/enhancer-lite-wordmark.png` | Do not include it in the release or use it as the basis for replacement branding. |
+| Candidate customer tests | `tests/cmajor_enhancer_lite/*.cmajor` | Repath into the product repository and verify every fixture is redistributable. |
+| Rewrite/split | `tests/test_enhancer_lite_state.mjs`; `tests/test_enhancer_lite_view_browser.mjs` | Remove WavetableSynth, EffectsRack, monorepo helper, and shared-build assumptions; retain only standalone Lite behavior. |
+| Author product-only | Manifest/identity, independent Lite state, production loader, build/setup/update/recovery tooling, documentation, minimal `package.json` and lock, customer-contained tests, and SBOM/notices | These customer files do not exist as an isolated product today. Rewrite them against the clean boundary; do not copy monorepo-wide helpers or dependency manifests. |
+| Fetch only after approval | Exact Cmajor, CHOC, JUCE, VST3 SDK, generated wrapper, and other transitive framework components | Do not bundle the current framework trees as-is. Use only a proven no-JIT Cmajor path; after the remaining written terms permit the model, fetch exact approved pins after customer consent, verify checksums, and generate notices and the actual-build SBOM. |
+| Internal only | `fx/enhancer_lite/EnhancerLiteShelvesAudition.cmajorpatch`; `scripts/measure_enhancer_lite*.mjs`; Spectre fixtures/corpora/audio and measurement scripts; full T26 state/DSP; T28/T61/T62 sources; WavetableSynth/EffectsRack; TODO/PROGRESS/roadmap/ADR files; unrelated fonts/icons/images/audio; caches; installed/generated artifacts; secrets; private paths; monorepo helpers and history | Forbidden by the customer export and negative leak tests. Summarized redistributable tolerances and newly authored fixtures may be created later. |
+
+This boundary preserves six distinct authorities: standalone Enhancer Lite, its Builder Kit launch, T26, T61, T62, and T28. The Builder Kit is a distinct launch workstream and does not revise any of the other product contracts.
+
+### 6.7 AU and Logic technical-feasibility checkpoint
+
+Verdict: **source-level AU feasibility is plausible; a releasable Lite AU is unproven.** The Lite patch is a stereo, non-instrument effect without MIDI, and Cmajor's JUCE generator is documented as supporting AU as well as VST. [Cmajor patch format](https://cmajor.dev/docs/PatchFormat) · [Cmajor getting started](https://cmajor.dev/docs/GettingStarted)
+
+The current production script nevertheless builds only `${cmakeTarget}_VST3`, installs only a `.vst3`, explicitly avoids AU installation, takes `cmaj` from `PATH`, obtains JUCE from a moving shallow clone, applies the full monorepo Cmajor/CHOC patch stack, and provides only ad-hoc signing. No Enhancer Lite `.component`, arm64-architecture inspection, `auval` result, Logic load/state/WebView/latency test, Developer ID signing record, notarization ticket, macOS 15 clean-install result, or cross-format saved-state evidence was found.
+
+The audit also confirmed that all eight current sound endpoints—Frequency, Q, Routing, Amount/Mid, Side, Character, Intensity, and Shape—are explicitly non-automatable, and no begin/end host-gesture bracketing was found in the UI. This is verified current behavior, not an open v1 product choice: Andrew already locked DAW automation for every sound control. Future BK-12 work must therefore use a versioned, stable parameter/state migration and add host gesture handling before VST3/AU parity can pass. No implementation of that migration is currently authorized.
+
+Gate 3 therefore remains failed. After Gate 0 and explicit implementation authorization, the order is: build the clean allowlist and negative leak tests; isolate state/tests and pin the minimal approved toolchain; run a private disposable real-AU spike; then, only after the product and rights are frozen, complete Developer ID signing/notarization and clean Logic/Ableton qualification on macOS 15 and 26. Existing Cosimo Synth AU/iOS AUv3 work is not Enhancer Lite AU proof.
+
 ## 7. Commerce and entitlement
 
 ### 7.1 Provider
 
-Use Lemon Squeezy for v1, subject to account/store approval and one complete test purchase.
+Use **Polar** for v1. Andrew selected it on August 28, 2026. Launch remains subject to organization/compliance approval and complete sandbox and live purchase tests. This supersedes the roadmap's older Lemon Squeezy recommendation.
 
 Verified current capabilities:
 
 - Merchant-of-record handling for checkout and sales-tax/VAT collection.
-- One-time digital products.
-- Secure downloadable files.
-- Generated license keys visible in receipts and My Orders.
-- Existing buyers receive current replacement files when a product is updated.
-- Lead-magnet products for the free-plugin funnel.
-- Customer recovery through email magic link.
-- Base transaction fee of 5% + $0.50, with additional fees possible for international/PayPal payments and payouts.
+- Free and one-time digital products.
+- Hosted Checkout Links, API-created Checkout Sessions, and optional embedded checkout.
+- File-download benefits with signed customer URLs, SHA-256 checksums, and files up to 10 GB.
+- Generated purchase-specific credentials accessible for recovery; v1 uses the credential only to authorize setup and source-update feed access, never to activate a plugin.
+- Email-authenticated Customer Portal access to orders, receipts, purchase credentials, and finished-plugin file benefits.
+- Transactional order/customer-portal emails.
+- First-party production and sandbox MCP servers, scoped organization access tokens, a documented REST API, SDKs, and webhooks.
+- Published Starter pricing beginning at 5% + $0.50 per transaction; final fees and payout terms require account verification.
 
-[Lemon Squeezy pricing](https://www.lemonsqueezy.com/pricing) · [Products and updates](https://docs.lemonsqueezy.com/help/products/adding-products) · [My Orders](https://docs.lemonsqueezy.com/help/online-store/my-orders)
+[Polar MCP](https://polar.sh/docs/integrate/mcp) · [Products](https://polar.sh/docs/features/products) · [Checkout Links](https://polar.sh/docs/features/checkout/links) · [File downloads](https://polar.sh/docs/features/benefits/file-downloads) · [License keys](https://polar.sh/docs/features/benefits/license-keys) · [Customer Portal](https://polar.sh/docs/features/customer-portal/introduction) · [Merchant of Record](https://polar.sh/docs/merchant-of-record/introduction)
 
-Lemon Squeezy does not provide a private Git remote or preserve customer branches. For v1, My Orders is the private update channel and the downloaded Git bundle is the update transport.
+Polar's agent-operability is the decisive advantage for Andrew's internal launch operations, but it is not a customer-facing feature or permission for unattended production mutation. BK-51 must prove the exact required MCP/API actions in Polar's sandbox with least-privilege credentials before the roadmap relies on them. Andrew retains account creation, credential authorization, compliance, banking, refunds, and publication gates.
+
+Polar is not the marketing-email system. Its transactional messages deliver purchase/portal access; Resend handles explicitly consented nurture, broadcasts, and automated sequences. Polar also does not preserve customer branches or act as a private Git remote. Polar records entitlement and recovers the purchase credential; the separate authenticated signed Git-bundle feed transports source setup and lifetime updates through the copied agent prompt.
 
 ### 7.2 Product catalog
 
 | Product | Price | Entitlement | State at launch |
 |---|---:|---|---|
-| Cosimo Enhancer Lite | Free | Current signed/notarized installer and release notices | Active |
-| Enhancer Lite Builder Kit — Founding | $29 one time | Current Builder Kit bundle plus lifetime upstream releases | Active; hard cap 50 |
-| Enhancer Lite Builder Kit | $49 one time | Same entitlement | Disabled until Gate 6 evidence |
+| Free plugin — public name TBD | Free | Current signed/notarized installer and release notices | Active after naming and release gates pass |
+| Paid Builder Kit — Founding, public name TBD | $29 one time | Current Builder Kit bundle plus lifetime upstream releases | Active after naming and release gates pass; hard cap 50 |
+| Paid Builder Kit — public name TBD | $49 one time | Same entitlement | Disabled until Gate 6 evidence |
 
 ### 7.3 Data and consent
 
-- Lemon Squeezy is the source of truth for purchase, refund, license key, and download entitlement.
-- Cosimo's mailing system may receive customers only under the final privacy/consent policy.
-- Transactional delivery and marketing messages are treated separately unless counsel approves another lawful basis.
-- No license key is embedded in a public URL, persistent repository, support log, or reusable prompt.
+- Polar is the source of truth for purchase, refund, finished-download entitlement, and recovery of the setup/update credential.
+- Resend may receive contacts only under the final privacy/consent policy and only after the visitor affirmatively selects a separate marketing opt-in that is unchecked by default.
+- The email required for Polar's free-product delivery is not itself marketing consent. Declining the Resend opt-in does not block the download. Polar's transactional delivery and Resend's marketing messages remain separate.
+- The purchase-specific setup/update credential may be templated into the copied prompt and saved only in ignored local project configuration. It is never printed, committed, pushed, embedded in an archive, or consumed by a plugin.
 - Refunds disable future paid-file entitlement where supported, but cannot revoke already downloaded source; the policy must say this honestly.
 - KYC/KYB, payout identity, banking, tax treatment, privacy notice, refund policy, and marketing consent require Andrew's human completion and approval.
 
-Recommended founding refund promise, pending counsel and Lemon policy review:
+Recommended founding refund promise, pending counsel and Polar policy review:
 
-> If the supported reference agent cannot get the unmodified baseline built and installed on a declared supported Mac after the documented diagnostics, request a refund within 14 days.
+> If the documented coding-agent workflow cannot get the unmodified baseline built and installed on a declared supported Mac after the documented diagnostics, request a refund within 14 days.
 
 This does not promise support for arbitrary modifications or commercial publishing.
+
+### 7.4 Marketing email provider
+
+Use **Resend** for v1. Andrew selected it on August 28, 2026. This is a provider decision only; it does not authorize account creation, credential access, production broadcasts, or paid-plan spending.
+
+- Resend owns opted-in contacts, broadcasts, and automated email sequences; Polar remains the system for transactional purchase, download, receipt, and Customer Portal email.
+- A Polar-to-Resend handoff must transmit only contacts who affirmatively selected the separate unchecked marketing opt-in, and must preserve consent evidence, unsubscribe state, and suppression state.
+- Agents may operate the authorized email surface through Resend's official MCP, API, or CLI with least-privilege credentials. Andrew retains account creation, token authorization, production activation, and campaign-send gates.
+- At selection time, Resend's published free plan permits up to 1,000 marketing contacts and 10,000 automation runs per month. The system must not upgrade, incur spend, or silently exceed a free limit; it pauses enrollment/imports and asks Andrew to approve the next action.
+- The exact launch sequence, content, timing, and enrollment rules remain open until Andrew's Day 9 approval. That approval must name every email's subject and body, who receives it, when it sends, and what removes a person from the sequence; nothing sends before launch.
+
+[Resend MCP](https://resend.com/mcp) · [Automations](https://resend.com/docs/dashboard/automations/introduction) · [Account limits](https://resend.com/docs/knowledge-base/account-quotas-and-limits) · [Pricing limits](https://resend.com/docs/knowledge-base/what-is-resend-pricing)
 
 ## 8. Go-to-market system
 
@@ -436,7 +516,7 @@ Primary launch distribution:
 
 - KVR developer product listing and factual launch-news submission. [KVR submissions](https://www.kvraudio.com/submissions/)
 - Editorial pitches to Bedroom Producers Blog, Rekkerd, Audio Plugin Guy, and comparable free-plugin/news outlets.
-- Advance access for 20–30 small, relevant music-production, audio-development, and agent-workflow creators.
+- Launch-day outreach to 20–30 small, relevant music-production, audio-development, and agent-workflow creators after the controlled beta passes.
 - The owned full workflow video, cut into focused short clips.
 - A legitimate educational contribution or partnership pitch to The Audio Programmer community, not drive-by link spam. [The Audio Programmer](https://www.theaudioprogrammer.com/)
 
@@ -472,6 +552,7 @@ Ten target users receive the kit without payment and without Andrew silently rep
 - Every repeated setup failure is fixed or explicitly declared unsupported.
 - At least 3 permissioned quotes/examples exist before public launch; 5 is preferred.
 - Median and worst-case support time are recorded.
+- Andrew confirms that the observed support time and the named launch coverage are manageable for the capped 50-buyer offer; otherwise the launch is held.
 
 ### 9.2 First 60-day targets
 
@@ -511,37 +592,37 @@ Owner codes:
 | ID | Work item | Owner | Depends on | Deliverable and completion test | Estimate |
 |---|---|---|---|---|---:|
 | BK-00 | Lock roadmap | A/H | — | This document committed on its dedicated current-master branch; Andrew approves material product decisions. | 1–2 d |
-| BK-01 | Cmajor builder/OEM inquiry | H | BK-00 | Written answer covering editable kit, agent contributors, proprietary derivatives, seats, generated C++, lifetime versions, and distribution. | External |
+| BK-01 | Cmajor builder/OEM inquiry | H | BK-00 | **Substantively answered:** Andrew reports written clearance unless the JIT engine is embedded. Complete evidence capture by saving the exact reply; the release must then prove the customer project and binaries contain no JIT engine. | External |
 | BK-02 | JUCE builder/OEM inquiry | H | BK-00 | Written answer covering source kit, “Products That Create Products,” customer contributors, derivative distribution, seats, and framework delivery. | External |
-| BK-03 | Dependency and asset SBOM | A | BK-00 | Complete file-to-license inventory from the proposed customer allowlist; actual-build SBOM; missing terms identified. | 2–3 d |
+| BK-03 | Dependency and asset SBOM | A | BK-00 | The checkpoint audit supplies the proposed customer-file boundary. Before implementation, every file/library/asset is classified and every missing term is resolved or explicitly blocks release; BK-32 later regenerates the final list from the exact build being shipped. | 2–3 d |
 | BK-04 | Legal/provenance review | H | BK-01–03 | Counsel-approved Cosimo source license/EULA, third-party obligations, Spectre provenance position, warranty/support limits, and refund terms. | External |
-| BK-05 | Name/trademark clearance | H | BK-00 | Search and counsel/business decision for Cosimo Enhancer Lite and Builder Kit naming; conflicting “Enhancer Lite” products considered. | External |
+| BK-05 | Choose and check the public name | H | BK-00 | Andrew selects replacement names for the free plugin and paid kit; searches then check the exact candidates before branding or public copy proceeds. “Enhancer” is rejected. | External |
 | BK-06 | Choose Gate 0 path | H | BK-01–05 | Written choice: proprietary, open-source, personal-use, permissive wrapper, or no Builder Kit. Public promise updated accordingly. | 0.5 d |
-| BK-07 | Reconcile repo task authority | A/H | BK-06 | Decide whether this is a new release ticket or a Builder Kit subset; record that v1 excludes T61's iOS/MIDI requirements without altering T26/T62. | 0.5 d |
-| BK-10 | Freeze release feature contract | A/H | BK-06–07 | Current master composition enumerated and state/ID/version contract frozen; Andrew approves sound, controls, shelves, analyzer, gestures, wordmark, and no-MIDI stance. | 1 d |
+| BK-07 | Reconcile repo task authority | A/H | BK-00 | Record the Builder Kit as a distinct launch workstream: its v1 excludes iOS/MIDI without narrowing T61 and does not alter standalone Lite, T26, T62, or T28. Reconcile the tracker before implementation. | 0.5 d |
+| BK-10 | Freeze release feature contract | A/H | BK-06–07 | Current master composition enumerated and state/ID/version contract frozen; Andrew approves sound, controls, shelves, analyzer, gestures, replacement branding, no-MIDI stance, DAW-automation parameter map, and the exact supported Ableton Live and Logic Pro releases or minimum versions. | 1 d |
 | BK-11 | Create sanitized export | A | BK-03, BK-10 | Allowlist exporter produces standalone repository with no forbidden files, secrets, private history, or unrelated dependencies. Negative leak tests pass. | 3–5 d |
-| BK-12 | Isolate product state and tests | A | BK-10–11 | Lite state has no two-band/product imports; customer tests have redistributable fixtures and no proprietary corpus/monorepo dependency. | 3–5 d |
+| BK-12 | Isolate product state, host parameters, and tests | A | BK-10–11 | Lite state has no two-band/product imports; every user-editable sound control has a stable automatable host parameter; state/automation migration tests pass; customer tests have redistributable fixtures and no proprietary corpus/monorepo dependency. | 3–5 d |
 | BK-13 | Create product identity system | A | BK-11 | `product.json` drives manifest, bundle IDs, codes, names, files, branding, version, and support URLs; collision tests pass. | 3–4 d |
 | BK-14 | Build Wavefold reference | A/H | BK-12–13 | Separate example branch/tag adds Wavefold plus solid-color visual treatment, focused safety/state/UI/audio tests, and Andrew's audible/visual approval. | 2–4 d |
 | BK-15 | Customer repo history/package | A | BK-11–14 | Clean release history and immutable version tag exported as reproducible Git bundle with checksum. | 1–2 d |
-| BK-20 | Pin toolchain | A | BK-03, BK-11 | Exact stable Xcode range, deployment target, Node/npm, CMake, cmaj, Cmajor/CHOC, JUCE, SDK versions and hashes locked; moving clones removed. | 2–4 d |
+| BK-20 | Pin toolchain | A | BK-03, BK-11 | Exact stable Xcode range, macOS 15.0 deployment target, macOS 15/26 qualification environments, arm64 architecture, Node/npm, CMake, cmaj, Cmajor/CHOC, JUCE, SDK versions and hashes locked; moving clones removed. | 2–4 d |
 | BK-21 | Implement doctor/setup | A | BK-20 | Clean-account read-only diagnosis and idempotent setup; explicit consent/licensing stops; redacted support report. | 3–5 d |
-| BK-22 | Implement test/build/install | A | BK-12, BK-20–21 | One-command customer gate and universal local VST3/AU build/install with checkpoint, exact targets, dry-run, and safe failure. | 4–7 d |
+| BK-22 | Implement test/build/install | A | BK-12, BK-20–21 | One-command customer gate and arm64 local VST3/AU build/install for M1-or-newer Macs on macOS 15/26, with checkpoint, exact targets, dry-run, safe failure, and host-automation contract checks. If Gate 0 permits customer distribution, the customer-specific package path is also proven with replaceable identity and customer-owned signing credentials. | 4–7 d |
 | BK-23 | Implement update/recover | A | BK-15, BK-22 | Bundle import, checkpoint, rebase, conflict stop, green-only install, and recovery proven against clean, changed, dirty, and conflicting fixtures. | 4–6 d |
-| BK-30 | Real AU production build | A | BK-10, BK-20 | Non-empty universal AU component builds, installs, appears to `auval`, and shares state/identity with VST3 where required. | 3–6 d |
+| BK-30 | Real AU production build | A | BK-10, BK-20 | Non-empty arm64 AU component builds, installs, appears to `auval` on macOS 15 and 26, and shares state and stable automation identities with VST3 where required. | 3–6 d |
 | BK-31 | Vendor signing/notarization | A/H | BK-22, BK-30 | Developer ID signed VST3/AU, signed installer, notarization ticket, stapling, checksums, manifest, and secret-safe automation. Human supplies credentials/2FA. | 3–5 d |
-| BK-32 | Release qualification automation | A | BK-22, BK-30–31 | Final-source tests, pluginval, `auval`, codesign, `spctl`, package inspection, install/uninstall, state/update tests, and provenance report pass. | 3–5 d |
-| BK-33 | Host and musical acceptance | H | BK-32 | Andrew validates exact VST3 in Ableton and AU in Logic: load, resize, gestures, analyzer, presets/state, M/S, Side-only, shelves, rates, listening, and restart recall. | 1–2 d |
-| BK-34 | Clean-machine matrix | A/H | BK-32 | Fresh user account/Mac verifies Gatekeeper, installer, host scan, first build, uninstall, supported minimum macOS, Apple Silicon, and Intel. | 2–4 d + hardware |
+| BK-32 | Release qualification automation | A | BK-22, BK-30–31 | Final-source tests, pluginval, `auval`, codesign, `spctl`, package inspection, install/uninstall, state/update tests, the actual-build file/library/asset/license list, and provenance report pass against the exact checksummed build being shipped. | 3–5 d |
+| BK-33 | Host and musical acceptance | H | BK-32 | Andrew validates exact VST3 in Ableton and AU in Logic: load, resize, gestures, analyzer, presets/state, automation discovery/write/read/playback, M/S, Side-only, shelves, rates, listening, and restart recall. | 1–2 d |
+| BK-34 | Clean-machine matrix | A/H | BK-32 | Known-clean macOS installations, reset test volumes, or equivalent clean snapshots on M1-or-newer Macs verify Gatekeeper, installer, host scan, first build, uninstall, and the exact supported Ableton/Logic versions on macOS 15 Sequoia and macOS 26 Tahoe; an Intel or unsupported-macOS machine proves the pre-mutation rejection path. | 2–4 d + hardware |
 | BK-40 | Setup and update prompts | A/H | BK-21–23 | Plain-language reference-agent prompts cover setup, modify, update, recover, and publish; Andrew approves tone and boundaries. | 2–3 d |
 | BK-41 | Documentation/onboarding HTML | A/H | BK-21–23, BK-40 | Complete docs plus branded local onboarding page open after success; novice comprehension test passes. | 3–5 d |
-| BK-42 | Support system | A/H | BK-21, BK-41 | Issue template, diagnostic intake, supported/unsupported matrix, response boundaries, refund escalation, and optional Discord trigger. | 1–2 d |
-| BK-50 | Lemon Squeezy store approval | H | BK-06 | KYC/KYB, payout, tax identity, domain, and store approval complete. | External |
-| BK-51 | Commerce integration | A | BK-50 | Test-mode and live-mode proof for free lead magnet, capped founding product, license receipt, secure files, My Orders recovery, refund event, and consent records. | 2–4 d |
-| BK-52 | Landing page and email flow | A/H | BK-10, BK-41, BK-51 | Approved page, compatibility copy, FAQ, legal links, free delivery, one paid follow-up, analytics events, and no unsupported claims. | 3–5 d |
-| BK-60 | Demo production | A/H | BK-14, BK-33, BK-41 | Honest long workflow plus 90-second hero edit, matched audio, captions, thumbnails, and final claims approval. Andrew supplies/approves authentic performance and voice. | 3–6 d |
+| BK-42 | Support system | A/H | BK-21, BK-41 | Self-service docs, diagnostic intake, supported/unsupported matrix, and support email for purchase, download, and genuine setup problems. Explicitly exclude custom development, unlimited one-to-one help, and bespoke update/merge work. | 1–2 d |
+| BK-50 | Polar organization/compliance approval | H | BK-00 | Andrew explicitly authorizes account work; organization, KYC/KYB, payout, tax identity, domain, support email, and production approval complete. This may run beside Gate 0 but does not authorize a product launch. | External |
+| BK-51 | Agent-operable commerce integration | A | BK-50 | Least-privilege Polar test proof, followed by authorized live proof, for free email-gated delivery, separate unchecked marketing opt-in, capped founding product, hosted checkout, the two-action paid success page, finished-plugin downloads, and recoverable setup/update credentials. This task also owns the private signed-bundle feed: standard hosted storage, Polar purchase validation, short-lived downloads, bundle publication, refund/revocation behavior, credential rotation/recovery, rate limits, redacted logs, backup, outage behavior, and the opt-in-only Resend handoff. | 2–4 d |
+| BK-52 | Landing page and Resend email flow | A/H | BK-10, BK-41, BK-51 | Domain/DNS and zero-cost-or-approved hosting are working; Resend's sending domain is verified; the approved page, compatibility copy, FAQ, legal links, free delivery regardless of marketing choice, consented email sequence, unsubscribe/suppression behavior, free-plan limit guard, and simple launch measurement all pass without unsupported claims. | 3–5 d |
+| BK-60 | Demo production | A/H | BK-14, BK-33, BK-41 | Honest long workflow plus 90-second hero edit, before-and-after audio adjusted to the same perceived loudness, captions, thumbnails, and final claims approval. Andrew appears in or narrates the authentic workflow; exact presentation is chosen during production. | 3–6 d |
 | BK-61 | Press/outreach package | A/H | BK-52, BK-60 | KVR submission, factual press release, outlet/creator list, personalized pitches, embargo files, tracking links. Human sends relationship-bearing outreach. | 2–4 d |
-| BK-70 | Beta protocol and recruitment | A/H | BK-41, BK-51, BK-60 | Ten target users, consent, task script, observation sheet, seven-day survey, permission forms, and no hidden coaching. Human recruits/observes. | 1–2 d prep |
+| BK-70 | Beta protocol and recruitment | A/H | BK-00 to recruit; BK-41, BK-51 before testing starts | Ten target users and two backups agree to test when the beta is ready and provide their Mac, macOS, and DAW versions. No sessions need to be scheduled during recruitment; the feedback deadline is supplied with the beta. Before testing begins, the consent form, task script, observation sheet, survey, permission forms, support route, and short factual workflow introduction are complete. Human recruits/observes without hidden coaching. The final marketing video is not a beta prerequisite. | 1–2 d prep |
 | BK-71 | Run private beta | H | BK-70 | 8/10 baseline installs, 6/10 modifications, support-time evidence, repeat failures classified, testimonials permissioned. | 7–14 calendar d |
 | BK-72 | Beta repair and requalification | A/H | BK-71 | Repeated failures repaired; full release and customer gates rerun once; Andrew accepts revised onboarding. | 3–8 d |
 | BK-80 | Founding launch | A/H | BK-04–06, BK-32–34, BK-51–52, BK-60–72 | Final artifacts published, 50-unit $29 offer active, free listing/news live, outreach sent, support coverage ready, rollback assets retained. | 1–2 d |
@@ -563,8 +644,8 @@ flowchart TD
     L2 --> LEGAL
     SBOM --> LEGAL
     LEGAL --> GO[BK-06 Gate 0 path]
+    P --> STORE[BK-50 Polar approval]
     GO --> FREEZE[BK-10 Product freeze]
-    GO --> STORE[BK-50 Store approval]
     FREEZE --> REPO[BK-11–15 Customer repository]
     REPO --> TOOL[BK-20–23 Toolchain and updates]
     FREEZE --> AU[BK-30 AU]
@@ -576,9 +657,9 @@ flowchart TD
     REPO --> DEMO[BK-60 Demo]
     RELEASE --> DEMO
     COMMERCE --> BETA[BK-70–72 Beta]
-    DEMO --> BETA
     BETA --> LAUNCH[BK-80 Launch]
     RELEASE --> LAUNCH
+    DEMO --> LAUNCH
 ```
 
 ### 11.2 Safe agent lanes
@@ -591,16 +672,16 @@ After Gate 0 and product freeze, these lanes can run concurrently in separate wo
 | Customer repository | Exporter, state/test isolation, identity system, Wavefold branch | Feature, sound, and UI approval | One integration owner for customer `package.json` and exported history. |
 | Release engineering | Toolchain lock, AU, build/install, signing/notarization scripts, qualification | Credentials, 2FA, DAW/listening, minimum-OS hardware | Serialize installed plugin paths, native builds, and DAW automation. |
 | Onboarding/update | Doctor/setup, prompts, docs, HTML, update/recovery fixtures | Novice comprehension and support promise | Coordinate command names with release lane before docs freeze. |
-| Commerce/site | Lemon proof, landing code, emails, analytics schema | KYC/KYB, policies, publishing | Never use production credentials in agent worktrees. |
+| Commerce/site | Polar sandbox MCP/API proof, landing code, transactional handoff, consent-safe Resend integration, analytics schema | KYC/KYB, token authorization, policies, publishing | Never use production credentials in agent worktrees; prove least privilege in sandbox first. |
 | Marketing | Script, edits, captions, press kit, channel research | Andrew's performance/voice, relationship outreach, claims approval | Final screenshots/audio wait for release candidate. |
 | Beta | Protocol, survey, diagnostics, issue clustering | Recruitment, observation, consent/testimonial permission | Do not let agents infer successful setup from downloads. |
 
-Before Gate 0 resolves, safe work is limited to the SBOM, licensor questions, name/provenance research, release-boundary inventory, and disposable feasibility spikes. Do not invest in polished packaging or advertise derivative rights.
+Before Gate 0 resolves, safe work is limited to the SBOM, licensor questions, name/provenance research, and release-boundary inventory. A private disposable feasibility spike still requires Andrew's separate implementation/build authorization; none is granted by this roadmap or audit. Do not invest in polished packaging or advertise derivative rights.
 
 ### 11.3 Human-only work
 
 - Accept or reject product, price, audience, rights model, support promise, and public claims.
-- Communicate with Cmajor, JUCE, counsel, Apple, Lemon Squeezy, reviewers, and beta users.
+- Communicate with Cmajor, JUCE, counsel, Apple, Polar, Resend, reviewers, and beta users.
 - Control Apple Developer, notary, banking, tax, domain, email, and commerce credentials.
 - Approve audio character, UI feel, branding, level-matched examples, and supported-host behavior.
 - Recruit and observe beta users; obtain testimonial and audio permissions.
@@ -611,7 +692,7 @@ Before Gate 0 resolves, safe work is limited to the SBOM, licensor questions, na
 - Rebase/merge to the canonical release branch.
 - Changes to shared manifests, `package.json`, lockfiles, and production build scripts.
 - Final generated UI/runtime bundle.
-- Native universal builds and signing/notarization.
+- Native arm64 builds for macOS 15/26 and signing/notarization.
 - Installation into shared VST3/AU directories.
 - Ableton/Logic restarts, scans, and saved-session tests.
 - Final artifact checksums and release publication.
@@ -629,7 +710,7 @@ This is a dependency model, not a launch-date commitment:
 | Weeks 9–10 | Demo completion and ten-person private beta | Gate 5 evidence exists. |
 | Weeks 11–14 | Repeat-failure repairs, one final qualification pass, founding launch preparation | Gate 6 passes or launch is held. |
 
-The responsible planning range is therefore roughly **10–14 calendar weeks after Gate 0** with three coordinated agent lanes, prompt human decisions/credentials, required test hardware, and no major beta failure. A permissive-wrapper fallback, missing Intel/minimum-OS hardware, or difficult AU/signing work requires a new estimate. A single serialized implementer should not be scheduled against this parallel range.
+The responsible planning range is therefore roughly **10–14 calendar weeks after Gate 0** with three coordinated agent lanes, prompt human decisions/credentials, required macOS 15/26 test hardware, and no major beta failure. A permissive-wrapper fallback, missing supported-OS hardware, or difficult AU/signing work requires a new estimate. A single serialized implementer should not be scheduled against this parallel range.
 
 ## 12. Milestone gates
 
@@ -638,10 +719,10 @@ The responsible planning range is therefore roughly **10–14 calendar weeks aft
 | Gate 0 — Rights | Written Cmajor/JUCE path, Cosimo license model, provenance/name review, and viable customer promise. | Select fallback or stop paid kit. |
 | Gate 1 — Product freeze | Current master-based feature/state/identity contract approved; T61 mismatch reconciled. | Return to product decision; no release work. |
 | Gate 2 — Customer project | Sanitized repo, pinned toolchain, self-contained tests, identity, commands, Wavefold, update/recovery all green. | Fix package before signing/site claims. |
-| Gate 3 — Release artifacts | Universal VST3 and real AU, Developer ID signatures, notarized/stapled installer, pluginval/auval/Gatekeeper/package checks. | Reduce advertised format/host only by explicit human decision, otherwise block launch. |
-| Gate 4 — Human acceptance | Ableton/Logic, sound, UI, state, clean install, minimum OS/architectures approved. | Repair and requalify exact artifact. |
-| Gate 5 — Beta | 8/10 baseline, 6/10 modification, repeat failures handled, support cost measured, at least three proof assets. | Do not broaden launch. |
-| Gate 6 — Founding launch | Final page/files/email/outreach/support/rollback ready; $29 cap enforced. | Hold publication. |
+| Gate 3 — Release artifacts | arm64 VST3 and real AU for macOS 15/26, Developer ID signatures, notarized/stapled installer, pluginval/auval/Gatekeeper/package checks. | Reduce advertised format/host only by explicit human decision, otherwise block launch. |
+| Gate 4 — Human acceptance | Exact supported Ableton/Logic versions, sound, UI, state, automation, and known-clean installs approved on M1-or-newer Macs running macOS 15 and 26. | Repair and requalify exact artifact. |
+| Gate 5 — Beta | One signed list proves every tester-facing file stayed unchanged for seven full days; 8/10 baseline, 6/10 modification, repeat failures handled, at least three proof assets, and Andrew accepts the measured support burden as manageable for 50 buyers. | Do not broaden launch. |
+| Gate 6 — Founding launch | Final page/files/email/outreach/support/rollback ready; an unlisted real free delivery and paid purchase pass in the live Polar account; $29 cap enforced. | Hold publication. |
 | Gate 7 — Scale | Activation, modifications, refunds, support, and examples justify continuation and any $49 price. | Hold price, repair, reposition, or stop. |
 
 ## 13. Acceptance scenarios
@@ -652,7 +733,7 @@ Given a clean supported Mac and no prior Cosimo Enhancer Lite installation, when
 
 ### AC-02: Baseline agent setup
 
-Given the purchased Git bundle and supported reference agent, when the customer supplies the setup prompt, then the agent verifies the bundle, clones from the release tag, creates `customer/main`, diagnoses and prepares the supported toolchain, runs tests, builds, and installs the baseline without Andrew's caches or credentials.
+Given the copied purchase-specific setup prompt and a filesystem-capable coding agent, when the customer supplies the prompt, then the agent authenticates to the private feed, retrieves and verifies the signed bundle, clones from the release tag, creates the customer customization branch, diagnoses and prepares the supported toolchain, runs tests, builds, and installs the baseline without Andrew's caches or credentials.
 
 ### AC-03: Unsupported environment
 
@@ -676,21 +757,61 @@ Given an upstream change conflicts with customer code, when update runs, then it
 
 ### AC-08: Purchase recovery
 
-Given a buyer loses the original email or local download, when they authenticate through Lemon Squeezy My Orders using the purchase email, then they can recover the current entitled release and license information without support intervention.
+Given a buyer loses local access, when they authenticate to Polar's Customer Portal using the purchase email, then they can recover the finished plugin, receipt, and purchase-specific setup/update credential without support intervention; the copied prompt uses that credential to retrieve the current source release from the private feed.
 
 ### AC-09: No secret leakage
 
-Given any customer archive, log, support bundle, generated source, or Git history, when automated secret/forbidden-file scans run, then no Apple, Lemon Squeezy, notary, private repository, personal path, user audio, or internal product artifact is present.
+Given any customer archive, log, support bundle, generated source, or Git history, when automated secret/forbidden-file scans run, then no Apple, Polar, Resend, notary, private repository, personal path, user audio, or internal product secret/artifact is present.
 
 ### AC-10: Commercial publishing gate
 
 Given Gate 0 has not passed, when customer/public copy or distribution tooling is generated, then it does not claim proprietary commercial redistribution and distribution mode remains disabled.
 
+### AC-11: Agent-operated commerce boundary
+
+Given a Polar sandbox organization and least-privilege authorization, when Andrew's authorized agent performs the documented commerce workflow, then it can create or update test products and benefits, create hosted checkout, inspect orders and entitlements, exercise Customer Portal recovery, and observe webhooks without receiving banking/KYC access or an unrestricted production credential. Every production mutation and refund remains behind Andrew's explicit action-time authorization. If MCP lacks a required operation, the scoped REST API may be used and the gap is recorded rather than silently switching vendors or using browser automation.
+
+### AC-12: DAW automation
+
+Given the release VST3 in Ableton or AU in Logic, when a user discovers, records, edits, and replays automation for any user-editable Enhancer Lite sound control, then the plugin follows the host accurately without gesture feedback loops, zippering, state disagreement, parameter reordering, or format-specific identity drift. Existing saved presets/state restore to the intended values after the migration.
+
+### AC-13: Free email and optional marketing
+
+Given one visitor declines the unchecked marketing box and another affirmatively selects it, when both request the free plugin, then both receive the same download through Polar, only the second enters Resend, and a later unsubscribe prevents every future marketing send without blocking transactional download recovery.
+
+### AC-14: Exact paid-success flow
+
+Given a successful paid checkout, when the success page opens, then it presents only **Download the finished plugin** and **Copy the agent setup prompt**; the copied prompt retrieves the signed source bundle through the authenticated feed without a manual source download or Git-host account.
+
+### AC-15: Refund boundary
+
+Given a paid order is refunded, when the refund event is processed or replayed, then future private-feed access is disabled once, the event can be retried safely, the customer receives the promised notice, and no copy claims that already-downloaded source can be revoked.
+
+### AC-16: Private-feed failure safety
+
+Given an expired, revoked, replayed, or invalid credential; an unavailable feed; a bad signature/checksum; or a logging failure, when setup or update runs, then it stops without leaking credentials or altering the working project and gives a specific recovery action.
+
+### AC-17: Founding-offer cap
+
+Given simultaneous purchases approach the 50-buyer limit, when checkout requests race or webhook events are retried, then no more than 50 founding entitlements are created and later buyers see the approved unavailable/next-step message.
+
+### AC-18: Customer distribution, only if permitted
+
+Given Gate 0 expressly permits the advertised customer-distribution model and a customer supplies their own valid identity and Apple credentials, when the documented package flow runs, then it produces renamed VST3/AU bundles and an installer that do not collide with Cosimo's product, pass the required Apple checks, and contain no Cosimo credential or branding that must be replaced. If Gate 0 does not permit this promise, the flow and claim remain disabled.
+
+### AC-19: Valid beta evidence
+
+Given the ten-person beta begins, every participant receives the same installer, immutable source-feed release, setup prompt, instructions, and other tester-facing files recorded in one signed list with a version and checksum for each item. That complete set remains unchanged for seven full days. A safety, data-loss, rights, secret-leak, or supported-path blocker stops the beta immediately; any participant-facing product or onboarding change invalidates the affected evidence and moves the launch rather than silently substituting a new build.
+
+### AC-20: Launch rollback
+
+Given the final rehearsal or live launch finds a stop condition, when rollback is invoked, then new paid sales and new credentials are disabled, the last approved page/files can be restored, unsent messages are cancelled, compromised credentials can be revoked, the support message is published, and a named human owns the decision and verification. Existing buyers retain lifetime entitlement; if a file is unsafe, only the affected version is withdrawn and replaced with a safe version.
+
 ## 14. Non-functional requirements
 
 | Area | Requirement | Verification |
 |---|---|---|
-| Reproducibility | Clean machines at the same release tag and lock produce equivalent universal binaries apart from expected signatures/timestamps. | Artifact manifests and normalized hashes. |
+| Reproducibility | Clean supported arm64 Macs at the same release tag and lock produce equivalent binaries apart from expected signatures/timestamps. | Artifact manifests and normalized hashes. |
 | Safety | Generated DSP tests finite output, reset, dry path, representative levels/rates, and state before local install. | Customer and internal audio gates. |
 | Recoverability | Every mutating configure/update/install operation creates an explicit recovery point. | Failure-injection tests. |
 | Security | No production secret is stored in source, prompts, logs, bundles, or CI artifacts. | Secret scanning and manual release review. |
@@ -707,17 +828,23 @@ Given Gate 0 has not passed, when customer/public copy or distribution tooling i
 | Cmajor/JUCE terms invalidate proprietary $29 kit | High | Critical | Gate 0 before packaging; choose explicit fallback. |
 | Customer publishing requires licenses/signing they did not expect | High | High | State costs before purchase; separate local and distribution modes. |
 | Monorepo export leaks private/unrelated IP | High without controls | Critical | Allowlist export, forbidden-file tests, clean history, manual review. |
+| Moving JUCE head or oversized shared patch stack makes builds irreproducible or rights ambiguous | High | Critical | Pin the approved JUCE version and exact transitive SDKs; reduce the customer runtime patch set; generate an actual-build SBOM. |
+| Wordmark or black-box-derived material lacks adequate release provenance | Medium | High | Obtain Andrew's asset declaration/source or replace the mark; keep Spectre material internal and obtain counsel's provenance position. |
 | Current AU is not real/releasable | High | High | Dedicated AU task and Gate 3; no Logic claim beforehand. |
+| Automatable host-parameter migration breaks saved state or parameter identity | Medium | High | Freeze an append-only parameter map; test legacy-state migration plus Ableton/Logic discovery, write/read/playback, gestures, and restart recall. |
 | Clean customer build fails outside Andrew's caches | High | High | Pin toolchain; clean account/Mac beta; doctor/setup idempotency. |
 | Agent generates unsafe or poor DSP | Medium | High | Recovery checkpoints, finite/safety tests, bounded examples, honest support boundary. |
 | Update rebases overwhelm nontechnical buyers | Medium | High | Immutable tags, recovery, conflict stop, lifetime-access definition, support metrics. |
-| Support cost exceeds $29 economics | High | High | One reference agent, ten-person beta, support-minute metric, no scale until viable. |
+| Support cost exceeds $29 economics | High | High | One documented coding-agent workflow, ten-person beta, support-minute metric, no scale until viable; do not turn the internal vendor-agent requirement into a customer support promise. |
+| Polar MCP omits a required operation or grants an overly broad account surface | Medium | High | Prove the full workflow in sandbox; use scoped REST endpoints for documented gaps; keep KYC, banking, production publication, and refunds human-gated. |
+| Transactional delivery and marketing email are conflated | Medium | High | Polar owns transactional receipts/download/portal access; Resend owns consented nurture. Test consent handoff, unsubscribe, and suppression before campaigns. |
+| Resend's free contact limit is lower than the 1,500-subscriber validation target | Medium | Medium | Do not upgrade automatically. Pause new marketing enrollment/imports at the published free limit and require Andrew to approve spend, pruning, or a provider/target change. Transactional Polar delivery continues. |
 | Free-plugin audience does not want source | Medium | Medium | Separate funnel metrics; target aspiring plugin creators in paid copy. |
 | Email gate suppresses discovery | Medium | Medium | Measure landing-to-free conversion; direct editorial downloads only if strategically justified. |
 | Name/trade dress or Spectre marketing creates legal risk | Medium | High | Trademark/provenance review; hero story focuses on ownership workflow. |
 | Source piracy/redistribution | High | Medium | Accept as a digital-source reality; clear license and controlled updates, no invasive DRM. |
 | Framework or agent evolution breaks kit | Medium | Medium | Immutable toolchain, release tags, compatibility updates, no promise of every future version. |
-| Intel or oldest-supported macOS lacks test hardware | Medium | High | Do not claim support without physical/CI evidence; narrow matrix explicitly if needed. |
+| macOS 15 or macOS 26 lacks representative M1-or-newer test hardware | Medium | High | Do not claim that OS without physical/CI evidence; both declared releases must pass or the launch scope changes explicitly. |
 
 ## 16. Decision provenance
 
@@ -725,22 +852,39 @@ Given Gate 0 has not passed, when customer/public copy or distribution tooling i
 2. **Free binary as acquisition, paid source as conversion.** A cold source-kit launch has weak discovery. A useful free effect creates a legitimate reason for plugin outlets and musicians to engage.
 3. **Sanitized repository over monorepo access.** The monorepo contains unrelated products, research, private history, and unlicensed customer scope. “Complete source” means complete source for this product, not complete Cosimo source.
 4. **Milestone gates over a promised date.** Licensing, AU, notarization, clean-machine setup, and beta support are unresolved critical-path dependencies. Effort estimates do not justify a public date.
-5. **Entitlement without runtime activation.** The customer buys source access and updates; plugin DRM adds failure modes and conflicts with editability without improving the musical result.
-6. **Private release bundles over GitHub membership.** Lemon Squeezy already handles entitlement and file recovery. Git bundles preserve real local history without repository-account provisioning.
+5. **No plugin activation or DRM.** Andrew locked this on August 28, 2026. A purchase-specific credential authorizes setup and source updates outside the plugin; free, paid, and customer-modified builds run offline without a runtime license key or call-home. This avoids failure modes that conflict with editability while preserving lifetime-update entitlement.
+6. **Two-action purchase flow and authenticated Git feed over manual source delivery or GitHub membership.** Andrew selected **Download the finished plugin** and **Copy the agent setup prompt** as the only post-purchase actions. The prompt retrieves and initializes the source from a private signed Git-bundle feed, and “Update my kit” retrieves later bundles and rebases the customer's local changes. Polar records entitlement and recovers the credential; it is not the Git transport. One purchase grants permanent access to every future Enhancer Lite source-project update.
 7. **Local modification before customer distribution.** Local ad-hoc builds are the core learning experience. Commercial publishing adds separate framework rights, Apple identities, notarization, support, and liability.
-8. **One reference agent before multi-agent guarantees.** Support is the main economic risk. Ordinary files and prompts remain portable, but official support expands only after evidence.
+8. **One documented workflow before agent-compatibility guarantees.** Support is the main economic risk. Ordinary files and prompts remain portable, but no customer-facing agent endorsement or broad compatibility guarantee is made without beta evidence.
 9. **Edited hero plus honest long demo.** A short transformation earns attention; the longer workflow prevents a misleading “one sentence, 90 seconds” promise.
-10. **Manual founding learning over product telemetry.** Fifty buyers do not justify a telemetry system. Lemon events and explicit follow-up provide enough evidence without hidden plugin tracking.
+10. **Manual founding learning over product telemetry.** Fifty buyers do not justify a telemetry system. Polar events and explicit follow-up provide enough evidence without hidden plugin tracking.
+11. **Twenty-day fast-track is conditional and cannot be guaranteed.** Andrew selected a 20-calendar-day launch target beginning August 28, 2026. Three independent schedule reviews on August 28 rejected the first daily calendar because it hid scope, violated task order, changed builds during beta, and left work unowned. The rewritten calendar names the fastest coherent attempt and exact stop conditions, while the task-based forecast remains roughly 10–14 weeks after legal clearance. Missing evidence moves the combined launch; it never authorizes unsupported rights, formats, compatibility, or customer claims.
+12. **Email-gated free access without runtime activation.** Andrew requires an email address for the free download. This supersedes the earlier frictionless-download direction but does not introduce plugin DRM, call-home behavior, or bundled marketing consent.
+13. **Founder-led proof with presentation deferred.** Andrew will appear in or narrate the real modification demo. Production may decide the precise mix of face, voice, screen, and performance later, while retaining an honest workflow.
+14. **Bounded launch support.** Initial support is self-service documentation plus email assistance for purchase, download, and genuine setup failures. The $29 offer does not include custom plugin development, unlimited personal help, or bespoke update/merge repair.
+15. **Paid kit retained; lawful route is critical.** The Builder Kit remains part of the launch plan. A missed Gate 0 date holds or moves the combined launch, or forces Andrew to approve another lawful framework/license model; it does not silently turn the plan into a free-only launch or create unsupported derivative rights.
+16. **The completed read-only boundary audit is not release qualification.** Task `01a047d0-d360-7481-9cf1-a9f987066c17` at exact checkpoint `d005c4e8f88f153bc1904170d99a0aeee41d4ba0` confirmed a plausible standalone source nucleus and AU-capable graph, but also a full-T26 state import, multi-product build scripts, moving JUCE dependency, oversized shared runtime patch surface, unresolved Spectre provenance, an unproven working-name wordmark that is now excluded, and no real Lite AU/Logic evidence. These findings define BK-03/BK-11/BK-12/BK-20/BK-30 work; they do not authorize it.
+17. **Polar supersedes Lemon Squeezy because internal agent operation is an operational requirement.** Andrew selected Polar for v1 on August 28, 2026. The original checkpoint selected Lemon Squeezy for its merchant-of-record, download, and license stack; the later commerce review made Andrew's ability to delegate routine account work to his authorized agent decisive. Polar retains the required commerce primitives while adding first-party production/sandbox MCP and scoped API access. This changes BK-50/BK-51 and every entitlement/recovery reference. Marketing campaigns use separately selected Resend, and selecting Polar does not itself authorize account creation or credential access.
+18. **DAW automation is required in v1.** Andrew rejected the current saved-but-non-automatable limitation. The audit confirmed all eight endpoints are currently non-automatable and the UI lacks host gesture brackets, so the resolved product choice requires a versioned automation/state migration. Every user-editable Lite sound control must have stable VST3/AU host identity and pass real Ableton/Logic automation recording and playback; this expands BK-10/BK-12/BK-22/BK-30/BK-33 rather than creating a separate product or changing T26/T61/T62/T28.
+19. **Day 2 compatibility scope is complete.** V1 supports Apple Silicon Macs only, M1 or newer, running macOS 15 Sequoia or macOS 26 Tahoe. Intel/Rosetta and every other macOS release are unsupported. This removes universal-binary work but requires explicit build, installer, DAW, Gatekeeper, and clean-machine qualification on both supported OS generations.
+20. **Resend is the v1 marketing-email provider.** Andrew selected Resend on August 28, 2026 because it provides a no-cost entry point, automated sequences, and agent-operable MCP/API/CLI surfaces. Polar remains transactional; Resend receives only valid marketing opt-ins. No account creation, production send, or paid upgrade is authorized by this selection, and the exact launch sequence remains open.
+21. **Vendor agent-friendliness is internal, not a customer feature.** Andrew's requirement is that his authorized agent can operate his launch tools through official automation surfaces. It does not select, endorse, or constrain the coding agents customers may use with the Builder Kit, and it must not appear as a customer-facing feature claim. Customer workflow compatibility remains evidence-led and vendor-neutral.
+22. **Free-product delivery and Resend enrollment are separate.** Andrew locked this on August 28, 2026. Polar requires an email to deliver the free product, but that address enters Resend only when the visitor affirmatively selects a separate checkbox that is unchecked by default. Declining marketing never blocks the download. This governs the form, consent record, Polar-to-Resend handoff, automation enrollment, privacy copy, and acceptance tests.
+23. **The controlled beta stays separate from creator outreach.** The twenty-day fast-track sends the frozen tester package only to the booked ten-person cohort before launch. Outreach to the separate 20–30 creator list begins on launch day only after the beta and launch rehearsal pass, avoiding an unmeasured advance-access cohort and preserving one clear support and evidence boundary.
+24. **The audit HOLD has two independent causes.** Written rights and provenance are required for the paid customer promise, while a clean export, pinned toolchain, versioned automation/state migration, and real AU/Logic proof are required for technical release. Clearing either side alone does not clear the combined launch.
+25. **“Enhancer” is no longer the public name; the replacement structure is locked.** Andrew rejected it on August 28, 2026. The free plugin will be **[Base Name]** and the paid product **[Base Name] Builder Kit**. The base name remains open and must be selected before name-conflict research, replacement branding, commerce products, demo titles, or public copy are finalized. Existing code and roadmap filenames may keep the old wording temporarily as internal working labels so naming does not silently trigger an implementation-wide rename.
 
 ## 17. Immediate next actions
 
 The roadmap begins with these actions, in order:
 
-1. Andrew approves or corrects the locked/provisional decisions in this document.
-2. Draft and send the exact Cmajor and JUCE commercial-model inquiries in BK-01/BK-02.
-3. Run BK-03's customer-allowlist SBOM and name/provenance research in parallel while waiting.
-4. Do not advertise commercial derivative rights, record final marketing, or build polished packaging before BK-06.
-5. After Gate 0, assign one integration owner and create isolated worktrees for the customer-repo, release, onboarding, commerce, and marketing lanes.
+1. Treat Andrew's email gate, founder-led demo, bounded support, paid-kit inclusion, and product separation as current authority.
+2. Select replacement public names for the free plugin and paid kit, then check those exact candidates before making a new wordmark or final tester/demo/store copy.
+3. Obtain written Cmajor/JUCE clearance or approve another lawful rights/framework path. Do not advertise commercial derivative rights before BK-06.
+4. Resolve the Cosimo customer source license and Spectre-derived DSP provenance position. The current wordmark is excluded; document ownership of whatever replaces it.
+5. Keep all implementation, accounts, further vendor contact, publishing, merging, pushing, installation, signing/notarization, and deployment paused until Andrew explicitly authorizes the relevant action.
+6. After Gate 0 and explicit implementation authorization, implement the allowlist plus negative leak tests; isolate state/tests and pin the minimal approved toolchain; then run the private real-AU spike. Signing/notarization and clean Logic/Ableton qualification wait for the product and rights freeze.
+7. Regenerate and compare the final actual-build inventory under BK-32; never treat the checkpoint audit as the shipped-build SBOM.
 
 ## 18. Completeness audit
 
@@ -751,10 +895,82 @@ The roadmap begins with these actions, in order:
 | Evidence separated from assumptions | PASS | Current prototype evidence, commercial unknowns, and targets are labeled. |
 | Minimum slice and non-goals explicit | PASS | Section 3. |
 | Requirements and journeys testable | PASS | Sections 4–6 and 13. |
-| External dependencies/failures covered | PASS | Cmajor, JUCE, Apple, Lemon, agent, DAWs. |
+| External dependencies/failures covered | PASS | Cmajor, JUCE, Apple, Polar, Resend, agent, DAWs. |
 | Security/privacy reviewed | PASS | No secrets/telemetry; consent and legal review gated. |
-| Task dependencies and parallel lanes defined | PASS | Sections 10–12. |
+| Task dependencies and parallel lanes defined | PARTIAL / FAST-TRACK RISK | Sections 10–12 define the full task order and the coverage appendix maps all 37 tasks. Independent review found that the complete scope cannot be guaranteed in 20 days; Section 19 is a conditional attempt with explicit stop rules. |
 | Metrics tied to behavior | PASS | Section 9. |
-| Legal right to deliver commercial promise | FAIL / GATE 0 | Written vendor/counsel answer required. |
-| AU/Logic release readiness | FAIL / GATE 3 | Current production path is VST3 development-only. |
+| Customer release boundary and SBOM | PARTIAL / BK-03 | The checkpoint audit records the proposed allowlist and exclusions; missing rights/pins remain, and the actual-build inventory is still required. |
+| Public product name | OPEN / BK-05 | “Enhancer” is rejected. Replacement names must be selected and checked before branding or public copy is finalized. |
+| Legal right to deliver commercial promise | FAIL / GATE 0 | No customer source license; written Cmajor/JUCE path and human resolution of Spectre provenance remain required. Replacement branding must have documented ownership. |
+| DAW automation/state migration | FAIL / BK-12 | All eight endpoints are currently non-automatable, the UI lacks host gesture brackets, and no versioned migration or real host proof exists. |
+| AU/Logic release readiness | FAIL / GATE 3 | Current production tooling is VST3-only; there is no AU, `auval`, Logic, notarization, macOS 15, or cross-format state proof. |
 | Customer clean-machine workflow | FAIL / GATE 2–5 | Must be built and beta-proven. |
+| Combined launch decision | HOLD | Rights and technical release evidence fail independently; neither may be inferred from the other. |
+
+## 19. Twenty-day fast-track
+
+Start: **Friday, August 28, 2026**
+
+Target launch: **Wednesday, September 16, 2026**
+
+Status: **HOLD on implementation and commercial claims; recruitment/read-only planning may continue. The target remains conditional, not guaranteed.**
+
+Three independent reviews on August 28 rejected the previous calendar. The roadmap's own task order supports a roughly 10–14-week plan after legal clearance, and vendor, lawyer, account, Apple, hardware, and beta timing cannot be guaranteed. The schedule below is the fastest coherent attempt: September 16 remains possible only if every stop condition passes and the beta finds nothing that needs a product or onboarding change.
+
+This schedule does not authorize implementation, account creation, vendor contact, credential access, installation, publication, or deployment. Andrew must explicitly authorize each such action. The complete technical accounting is kept separately in [ENHANCER_LITE_BUILDER_KIT_20_DAY_COVERAGE.md](ENHANCER_LITE_BUILDER_KIT_20_DAY_COVERAGE.md) so the morning checklist stays short.
+
+### 19.1 Rules for using the schedule
+
+1. Decisions already marked locked in Section 2 are not daily work and are not reopened without new evidence.
+2. Each row names all planned work for that day: what Andrew does, what agents hand back, and what must be true before the next day starts.
+3. The ten testers receive one unchanged build for seven full days. A safety, data-loss, rights, secret-leak, or supported-path blocker stops the test and moves the launch; no replacement build is slipped into the same result.
+4. Work done before written commercial rights exist remains private and makes no customer-rights claim. Starting any implementation while the legal answer is pending requires Andrew's explicit authorization.
+5. “Done” means the stated proof exists. “Started,” “almost finished,” and “we can fix it tomorrow” do not count.
+
+### 19.2 Dates that cannot slip
+
+1. **September 1:** Written terms must support the exact paid promise, or a lawyer must approve a different lawful model. Andrew's preference alone is not legal clearance. If this is missing, the combined launch moves.
+2. **September 4:** The VST3 must work in Ableton and the AU must work in Logic, including saved settings and recorded control automation. If AU fails, Andrew must explicitly remove AU/Logic from launch or move the date.
+3. **September 7:** One exact signed, Apple-approved build must pass on known-clean macOS 15 and macOS 26 installations and the exact supported Ableton/Logic versions. One signed list must also record the immutable source-feed release and the version and checksum of the installer, setup prompt, instructions, and every other tester-facing file. If not, the ten-person test cannot start on time.
+4. **September 15:** That complete tester package must have remained unchanged for seven full days, with at least 8/10 successful installs, 6/10 successful modifications, manageable support time for the capped 50-buyer offer, and at least three approved examples or quotes. Any required product or onboarding repair moves the launch.
+5. **September 15:** While all public promotion remains held, one real free delivery and one real paid purchase must pass through the live Polar account, including consent, recovery, source retrieval, refund, and loss of future source-feed access after refund. The final install, support, and rollback rehearsal must also pass without changing the tested files. Otherwise nothing is published on September 16.
+
+### 19.3 Daily schedule
+
+Day 1 status recorded on August 28, 2026:
+
+- Andrew reports that the Cmajor inquiry was sent to Jules through Discord; the reply is pending and Gate 0 remains unresolved.
+- The JUCE inquiry was sent to `sales@juce.com`; the reply is pending.
+- Andrew has no lawyer budget. Legal review is therefore unavailable unless a free or separately funded route appears; this is an explicit funding gap, not legal approval.
+- Apple Developer membership, signing identities, and notarization access were verified.
+- The read-only customer-file/license and AU/build audit is complete and incorporated as planning authority. Its verdict is HOLD; it is neither legal approval nor an actual-build release inventory.
+
+| Day | Date | What Andrew does | What agents hand back | Finished only when |
+|---:|---|---|---|---|
+| 1 | Fri Aug 28 | Send the Cmajor and JUCE messages in [ENHANCER_LITE_BUILDER_KIT_RIGHTS_MESSAGES.md](ENHANCER_LITE_BUILDER_KIT_RIGHTS_MESSAGES.md) and save copies. If a lawyer is available, send the included brief; otherwise record the missing legal help and likely cost. Confirm the paid Apple Developer account, two-factor login, signing certificates, and notarization access. | A plain list of every source file, library, font, graphic, and other asset proposed for customers, who owns it, its license, and every missing answer; plus the exact current AU/build gaps. | The vendor messages are saved as sent, lawyer availability is recorded, Apple access is proven, and the proposed customer-file list is accepted or returned with named corrections. |
+| 2 | Sat Aug 29 | First choose replacement public names for the free plugin and paid kit; until then, recruit testers using “a new editable audio plugin.” Find ten willing testers and two backups, and record each person's Mac chip, macOS version, and exact Ableton or Logic version. Do not schedule sessions now; give them a feedback deadline when the beta is actually sent. Then choose the exact DAW versions v1 will support. Provide the domain, working support mailbox, two Macs with clean or resettable test installations, and every unavoidable cost that still lacks funding. | Conflict checks for the exact name candidates, the tester coverage sheet, exact list of sound controls the DAWs must record, and the old saved projects or presets with the values they must restore. | Replacement names are chosen or clearly still blocking branding; ten testers plus two backups have agreed to participate when the beta is ready; both macOS versions and chosen DAW versions are covered; every required account/machine has an owner; and unfunded costs are explicit. |
+| 3 | Sun Aug 30 | Finish the public-name decision. Check whether JUCE has replied; if not, keep the commercial customer-rights claim blocked and retain the already-chosen fallback of moving the combined launch rather than guessing. Explicitly authorize—or decline—the named private technical work needed for the fast-track. | Conflict results for the chosen name, a one-page record of the remaining JUCE and provenance questions, and the separate agent work that may start without publishing or making rights claims. | The name is selected or clearly remains the blocker, the paid promise still makes no unsupported claim, and every agent knows exactly what it may and may not change. |
+| 4 | Mon Aug 31 | Follow up with JUCE if needed. Submit Polar's identity, payout, and tax information; verify Resend can send from the chosen domain; choose existing or approved-cost hosting that Andrew's agent can operate through the vendor's official automation tools; authorize only test credentials. | If authorized: the customer-project file list and leak-test result; first AU build result; failing automation test for every sound control; setup/update test cases; local private-source access test; and complete first drafts of the purchase page, free-download page, emails, instructions, and demo script. | Every needed outside request is submitted, each account shows its real status, and every named result exists or has one exact recorded blocker and owner. |
+| 5 | Tue Sep 1 | Make the legal go/hold decision. If the exact customer rights are supported in writing, approve the final product promise and authorize the paid work; otherwise move the combined launch. | The complete proposed customer-file/license list, final product description, and implementation boundaries updated to match the lawful promise. | The paid promise is lawful and written, the name and customer license are approved, and authorized work can continue without guessing. |
+| 6 | Wed Sep 2 | Check that the work matches the already-locked customer-facing product name, sound, interface, logo, and support address. | A standalone customer project with private material removed; fixed development-tool versions; generated collision-free plug-in and maker codes plus package name; permanent DAW name and ID for each sound control; stable saved settings; and the first real AU build. | The customer project passes leak checks, old settings restore correctly, and the VST3 and AU can both be built for Apple Silicon without naming or file collisions. |
+| 7 | Thu Sep 3 | Run the setup prompt on a clean or reset test installation and report every unclear, unsafe, or manual step. Approve the Wavefold look and handle Apple two-factor prompts. | The source project retrieves through the copied prompt, then tests, builds, and installs both plug-in formats; Wavefold exists as a separate example. | The clean test installation reaches working VST3 and AU files without secret hand-fixes, and every failure leaves the machine and prior plug-in safe. |
+| 8 | Fri Sep 4 | Load the VST3 in Ableton and the AU in Logic. Test every control, saved setting, recorded automation move, interface gesture, and the Wavefold sound; decide immediately whether an AU failure removes AU/Logic or moves launch. | Working clean-update, conflicting-update, and recovery flows; a working private source-download test; and a test purchase that reaches the exact two post-purchase actions. | The complete baseline and Wavefold example build, install, open, save, automate, update, and recover successfully, or the launch scope/date changes explicitly. |
+| 9 | Sat Sep 5 | Act as a new buyer using only **Download the finished plugin** and **Copy the agent setup prompt**. Approve the support, refund, privacy, and customer-rights wording. Read and approve every Resend email, who receives it, when it sends, and what stops it; keep all sends disabled. | Complete drafts of the setup/update instructions, welcome page, support replies, website, Polar flow, and both Resend paths: decline marketing or opt in and later unsubscribe. | The test purchase reaches the two promised actions, every broken setup step is named for Day 10, and all wording and email decisions are approved or returned with exact corrections. |
+| 10 | Sun Sep 6 | Ask for one real custom change, audition it, then test update and recovery. Approve the corrected instructions and support replies, and record a rehearsal of the real screen/audio workflow. | The first complete build intended for release, with a version and checksum, complete customer tests, signed source bundle, and final setup, update, recovery, and support instructions. | The exact customer journey works from purchase through modification and recovery, the instructions match what actually happened, and the rehearsal recording shows the real process. |
+| 11 | Mon Sep 7 | Handle Apple two-factor prompts. On known-clean macOS 15 and macOS 26 installations, test the exact build in the chosen Ableton and Logic versions; approve the tester instructions and support route. | Apple accepts the installer; both plug-in formats pass every automated and clean-install test; the exact final file/library/license list is generated; store, private downloads, instructions, and support all pass. One signed list records the version and checksum of the installer, immutable source release, copied prompt, instructions, and every other tester file. | That complete tester package is frozen for seven days. If anything required is unfinished, the September 16 launch moves. |
+| 12 | Tue Sep 8 | At the recorded start time, send the complete frozen package, consent form, and task instructions to all ten testers. Using that same build, record the final product screen/audio plus narration or on-camera material without changing anything testers received. | The locked tester roster and signed file list, live issue log, one complete video rough cut, one complete landing-page draft, and complete press-release and outreach-message drafts using only facts from the frozen build. | All ten testers received the same recorded files and know the task, support route, deadline, and permission choices; every named draft is saved for review. |
+| 13 | Wed Sep 9 | Observe two testers without coaching; record whether setup and modification worked and how many support minutes they needed. | Each issue reproduced and classified by severity; only launch material that does not alter tester instructions or product behavior may change. | Two complete records exist; any safety, data-loss, rights, secret-leak, or supported-path blocker has stopped the beta and launch. |
+| 14 | Thu Sep 10 | Observe two more testers under the same rules. | Four total tester records and issue totals; a second complete video cut with draft captions; and revised complete landing-page, press-release, and outreach-message drafts. None may replace the tested build or instructions. | Four users are accounted for, every named draft is saved, and no evidence has been reset or mixed across versions. |
+| 15 | Fri Sep 11 | Observe two more testers. In Polar and Resend test mode, request the free product once with marketing declined and once with it accepted, unsubscribe, buy the paid product, recover access, request a refund, and replay the same purchase and refund notices. After agents safely preload or simulate fifty founding purchases, attempt the blocked fifty-first purchase. Approve or reject the first video cut. | Recorded proof for both free paths, unsubscribe, paid purchase, the two-action page, source retrieval, recovery, refund and future-source revocation, safe duplicate notices, and the 50-buyer limit. | Six users are accounted for and every purchase/email action has a recorded pass or a launch-stopping failure. |
+| 16 | Sat Sep 12 | Observe two more testers. Approve the final screenshots, before-and-after clips adjusted to the same perceived loudness, captions, thumbnail, and factual page wording. | Eight total tester records plus the final video, captions, thumbnail, product page, FAQ, support material, and public wording based on the unchanged build. | Eight users are accounted for and every public claim points to tested behavior. |
+| 17 | Sun Sep 13 | Observe the final two testers and obtain specific written permission for every quote, audio clip, screen recording, or modified plug-in you may publish. | Ten tester records; at least three permitted quotes, audio clips, screens, or examples; the final outlet/contact list, KVR text, press release, individual messages, and file/link list; and exact steps to hide the page, stop new Polar sales and credentials, pause Resend, restore the prior page, and notify affected buyers. Existing buyers keep their entitlement; if a file is unsafe, only that version is withdrawn and replaced. | All ten users are accounted for; each permission names exactly what may be used; every launch and stop action has a named owner; nothing is published. |
+| 18 | Mon Sep 14 | Send reminders for missing logs and the September 15 closing session, review support time and failures so far, and approve only corrections to unpublished marketing material. Do not collect final surveys before the recorded seven-day end time, and do not change the tested product or instructions. | A score sheet with every currently due record and clearly blank final-survey fields, final unchanged public files, held messages, the exact beta end time, and a list of anything that would require repair. | Every currently due record is present, all ten closing responses are scheduled, and no one has claimed the beta passed early. |
+| 19 | Tue Sep 15 | After the exact seven-day end time, collect the final surveys and score the test. If nothing needs a product or instruction change, test the frozen build again in Ableton and Logic, use the actual live Polar account for one unlisted free delivery and one real paid purchase, then prove recovery, source retrieval, consent, unsubscribe, refund, and loss of future source access. Verify the already-locked $29 price and 50-sale limit, decide whether measured support time is manageable, name the launch support person and hours, and approve the outreach and stop actions; otherwise hold launch. | The signed tester-file list is still identical; every automated release check and both known-clean macOS tests pass again; and the live purchase, email, install, support, sale-limit, and full stop-and-restore rehearsal pass while public promotion remains held. | At least 8/10 installed, 6/10 modified, three permitted examples exist, the support burden is accepted for 50 buyers, every proof passes on unchanged files, and nothing needs repair. |
+| 20 | Wed Sep 16 | Make the morning go/hold decision. If every prior condition passed, publish the approved files and messages. Andrew covers support for the first two hours and checks again at hours four and eight; otherwise publish nothing. | During the same eight-hour window, agents verify the page, emails, downloads, source retrieval, checksums, $29 price, 50-sale limit, support mailbox, and stop actions, and open the 60-day follow-up log. | A wrong charge or 51st sale, marketing without consent, failed payment/download/source/refund path, mismatched file, unsafe data loss, secret leak, or unsupported rights claim immediately hides the page, stops new sales and new credentials, pauses email, and starts the approved customer notice. Existing buyers keep their entitlement; an unsafe file version is withdrawn and replaced. If no stop occurs, real customers can receive exactly what was promised and the first launch-day watch is complete. |
+
+### 19.4 Work outside the twenty days
+
+- Follow-up continues for 60 days after launch: installation success, modifications, refunds, support time, permissioned examples, and customer problems are recorded.
+- The $49 price is considered only after that evidence exists. It is not activated automatically after the first 50 sales.
+- Paid ads, affiliates, iOS, MIDI tracking, extra algorithms beyond Wavefold, Windows, Intel Macs, and unsupported macOS/DAW versions remain outside this launch.
+- The sprint does not change the separate standalone Enhancer Lite, T26, T61, T62, or T28 product contracts.

@@ -116,3 +116,5 @@
 - `spectralModeIn` set to Resonator preserves the original spectral feedback algorithm. `spectralModeIn` set to Imprint is source-driven: it filters the current audio frame through held-note harmonic masks and must not synthesize or inject fake excitation.
 - Changing `voiceModeIn` must preserve the currently held MIDI note state. Do not reset the voice dispatcher on a Mono/Poly mode change and wait for the host to resend held notes; Ableton and other hosts generally will not send fresh note-ons just because an effect parameter changed.
 - Keep `hostSlot0Guard` as the first Spectral host parameter. Ableton plus the Cmajor JUCE wrapper can treat host parameter slot 0 specially; visible/effective Spectral controls such as `magFeedbackIn` must start after that hidden no-op guard.
+
+- The launch journal is in `launch-journal/YYYY-MM-DD.md`.
