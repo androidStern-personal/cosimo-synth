@@ -1041,7 +1041,7 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
 
 [ ] T40 — Make the drag heads-up display match the parameter being changed
     Active owner (2026-08-28):
-    - Combined T40/T40A Codex task `Build parameter-aware drag HUD`, thread `01a048c7-cf23-77c3-8299-8353a3ee46aa`, branch `codex/t40-t40a-parameter-hud`, worktree `/Users/winterfell/.codex/worktrees/cc39/cosimo-synth`, base `35f4e3b6`, model SOL, reasoning max.
+    - Combined T40/T40A Codex task `Build parameter-aware drag HUD`, active implementation thread `01a048d3-730c-7f62-a5dd-01a5eecc94cd`, branch `codex/t40-t40a-parameter-hud`, worktree `/Users/winterfell/.codex/worktrees/cc39/cosimo-synth`, base `35f4e3b6`, model SOL, reasoning max. Setup thread `01a048c7-cf23-77c3-8299-8353a3ee46aa` was replaced before source edits after it stalled in an approval panel.
     - This coordinator-managed task owns the one shared HUD, production wavetable/filter/MSEG/Distortion presentations, direct-filter-drag suppression, generic fallback, and composed browser proof. Final review, rebase, merge, push, native/install gates, and deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
     Required result:
     - Keep the existing generic knob display for ordinary parameters, but allow the shared heads-up display to choose a purpose-built presentation for named controls.
@@ -1054,7 +1054,7 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
 
 [ ] T40A — Show the real Distortion Drive graphic instead of a knob in the heads-up display
     Active owner (2026-08-28):
-    - Owned by the combined T40/T40A task above: thread `01a048c7-cf23-77c3-8299-8353a3ee46aa`, branch `codex/t40-t40a-parameter-hud`, worktree `/Users/winterfell/.codex/worktrees/cc39/cosimo-synth`, base `35f4e3b6`, model SOL, reasoning max.
+    - Owned by the combined T40/T40A task above: active implementation thread `01a048d3-730c-7f62-a5dd-01a5eecc94cd`, branch `codex/t40-t40a-parameter-hud`, worktree `/Users/winterfell/.codex/worktrees/cc39/cosimo-synth`, base `35f4e3b6`, model SOL, reasoning max.
     Required result:
     - While the Distortion Drive control is being adjusted, replace the generic knob picture in the heads-up display with the production Drive transfer-curve graphic.
     - Update the curve live as Drive changes, using the selected Symmetric, Asymmetric, or Wavefold shape and the same drawing code and curve math as the Distortion editor. Do not use a decorative copy or change the sound-processing behavior.
@@ -1794,7 +1794,7 @@ Source note (2026-08-25):
 
 [ ] T28 — Build the fixed end-of-chain Polish section
     Active owner (2026-08-28):
-    - Codex task `Build fixed Polish section`, thread `01a048c7-8629-71d3-935d-a95860faefb5`, branch `codex/t28-fixed-polish-section`, worktree `/Users/winterfell/.codex/worktrees/4324/cosimo-synth`, base `35f4e3b6`, model SOL, reasoning max.
+    - Codex task `Build fixed Polish section`, active implementation thread `01a048d3-a92c-76f2-b361-999c7ef1cef7`, branch `codex/t28-fixed-polish-section`, worktree `/Users/winterfell/.codex/worktrees/4324/cosimo-synth`, base `35f4e3b6`, model SOL, reasoning max. Setup/audit thread `01a048c7-8629-71d3-935d-a95860faefb5` was replaced before source edits after it stalled in an approval panel.
     - This coordinator-managed task owns the fixed Safe Bass/accepted Enhancer/compressor/clipper/trim chain, permanent POLISH node, compact output meter, exact constant latency, and complete greenfield saved-sound hard cut. It may develop in parallel, but final rebase/state/factory qualification and integration must follow landed T62. Final review, rebase, merge, push, native/install gates, and deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the protected T26 product thread must not be directed.
     Design authority: `POLISH_CHAIN_DESIGN.md`.
     Locked signal chain:
