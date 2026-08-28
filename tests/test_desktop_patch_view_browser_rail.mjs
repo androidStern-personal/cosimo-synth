@@ -1645,9 +1645,9 @@ test("T60 live preferences park, scale, hide, restore, and float the Mod bar wit
 
 test("T60 parked 320px source and tool targets grow with scale and own their inset hit area", async () => {
     const scales = [
-        { scale: 0.85, sourceWidth: 58.8281, toolWidth: 44.1094 },
-        { scale: 1.1, sourceWidth: 62.6563, toolWidth: 46.9844 },
-        { scale: 1.3, sourceWidth: 65.7188, toolWidth: 49.2813 },
+        { scale: 0.85, sourceWidth: 44.1094, toolWidth: 44.1094 },
+        { scale: 1.1, sourceWidth: 46.9844, toolWidth: 46.9844 },
+        { scale: 1.3, sourceWidth: 49.2813, toolWidth: 49.2813 },
     ];
     const measuredSourceWidths = [];
     const measuredToolWidths = [];
@@ -1712,7 +1712,7 @@ test("T60 parked 320px source and tool targets grow with scale and own their ins
             const tools = await readTargetOwnership(
                 '[data-role="mobile-global-mod-rail"] .mobile-global-mod-rail-parked-tools > button',
             );
-            assert.equal(tools.length, 4);
+            assert.equal(tools.length, 3);
             for (const tool of tools) {
                 assert.equal(Math.abs(tool.width - expected.toolWidth) <= 0.15, true);
                 assert.equal(Math.abs(tool.height - 40) <= 0.5, true);
@@ -1742,6 +1742,89 @@ test("T60 parked 320px source and tool targets grow with scale and own their ins
         [...measuredToolWidths].sort((left, right) => left - right),
         "Increasing scale must never shrink a parked tool target.",
     );
+});
+
+test("T60 parked trigger note stays fixed immediately before the right paddle on every page", async () => {
+    for (const viewport of [
+        { width: 320, height: 568 },
+        { width: 393, height: 852 },
+    ]) {
+        const page = await openHarnessPage({
+            beforeGoto: async (nextPage) => {
+                await nextPage.setViewportSize(viewport);
+                await nextPage.addInitScript(() => {
+                    localStorage.setItem("cosimo.mod-bar.preferences.v1", JSON.stringify({
+                        version: 1,
+                        scale: 1.1,
+                        placement: "parked",
+                        parkedVisibility: "visible",
+                    }));
+                });
+            },
+        });
+
+        try {
+            const rail = page.locator('[data-role="mobile-global-mod-rail"][data-placement="parked"]');
+            await rail.waitFor();
+            await page.waitForTimeout(220);
+
+            for (let pageIndex = 0; pageIndex < 4; pageIndex += 1) {
+                const geometry = await rail.evaluate((element) => {
+                    const note = element.querySelector('[data-role="mobile-global-mod-rail-note"]');
+                    const next = element.querySelector('[data-role="mobile-global-mod-rail-parked-next"]');
+                    const pageBody = element.querySelector('[data-role="mobile-global-mod-rail-parked-page"]');
+                    if (!(note instanceof HTMLButtonElement)
+                            || !(next instanceof HTMLButtonElement)
+                            || !(pageBody instanceof HTMLElement)) {
+                        return null;
+                    }
+                    const noteRect = note.getBoundingClientRect();
+                    const nextRect = next.getBoundingClientRect();
+                    const bodyRect = pageBody.getBoundingClientRect();
+                    const inset = 3;
+                    const hitPoints = [
+                        [noteRect.left + inset, noteRect.top + inset],
+                        [noteRect.right - inset, noteRect.top + inset],
+                        [noteRect.left + inset, noteRect.bottom - inset],
+                        [noteRect.right - inset, noteRect.bottom - inset],
+                        [noteRect.left + (noteRect.width / 2), noteRect.top + (noteRect.height / 2)],
+                    ];
+                    return {
+                        pageIndex: element.getAttribute("data-page-index"),
+                        pageKind: element.getAttribute("data-page-kind"),
+                        noteWidth: noteRect.width,
+                        noteHeight: noteRect.height,
+                        pageEndsBeforeNote: bodyRect.right <= noteRect.left + 0.5,
+                        noteTouchesNext: Math.abs(noteRect.right - nextRect.left) <= 0.5,
+                        immediatelyBeforeNext: note.nextElementSibling === next,
+                        hitOwners: hitPoints.map(([x, y]) => (
+                            document.elementFromPoint(x, y)?.closest("button") === note
+                        )),
+                    };
+                });
+
+                assert.ok(geometry, `${viewport.width}px page ${pageIndex}: note and paddle exist`);
+                assert.equal(geometry.pageIndex, String(pageIndex));
+                assert.equal(geometry.pageKind, pageIndex === 3 ? "tools" : "sources");
+                assert.equal(geometry.noteWidth >= 43.5, true);
+                assert.equal(geometry.noteHeight >= 39.5, true);
+                assert.equal(geometry.pageEndsBeforeNote, true);
+                assert.equal(geometry.noteTouchesNext, true);
+                assert.equal(geometry.immediatelyBeforeNext, true);
+                assert.deepEqual(geometry.hitOwners, [true, true, true, true, true]);
+
+                if (pageIndex < 3) {
+                    await rail.getByRole("button", { name: "Next Mod bar group" }).click();
+                    await rail.locator(`xpath=self::*[@data-page-index="${pageIndex + 1}"]`).waitFor();
+                }
+            }
+        } finally {
+            await page.evaluate(() => {
+                localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+            }).catch(() => {});
+            await page.close();
+        }
+    }
 });
 
 test("T60 preserves the explicitly visible source group in both placement directions", async () => {
@@ -2180,7 +2263,7 @@ test("T60 parked row stays fixed, fully hittable, and drag-owned across compact 
             assert.equal(Math.abs(measured.selectedIcon.width - (16 * layout.scale)) <= 0.5, true);
             assert.equal(Math.abs(measured.routeCount.height - (13 * layout.scale)) <= 0.5, true);
             assert.equal(Math.abs(measured.nextChevronCssWidth - (7 * layout.scale)) <= 0.5, true);
-            assert.equal(measured.buttonBounds.length, 7);
+            assert.equal(measured.buttonBounds.length, 8);
             assert.deepEqual(measured.hitOwners, measured.hitOwners.map(() => true));
             for (const bounds of measured.buttonBounds) {
                 assert.ok(bounds);

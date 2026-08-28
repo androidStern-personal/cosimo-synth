@@ -2029,8 +2029,10 @@ const MOBILE_MOD_RAIL_STOP_VELOCITY_PX_PER_MS = 0.02;
 const MOBILE_MOD_RAIL_DECELERATION_RATE_PER_MS = 0.99;
 const MOBILE_MOD_RAIL_SETTLE_X_MS = 220;
 const MOBILE_MOD_RAIL_DEFAULT_DOCK: RailDock = { edge: "right", normalizedY: 0.42 };
-const PARKED_PAGE_SHARE_AT_MIN_SCALE = 0.555;
-const PARKED_PAGE_SHARE_AT_MAX_SCALE = 0.62;
+// The note keeps its own 44px slot. These page shares preserve the previous
+// three-across source/tool target widths in the remaining compact space.
+const PARKED_PAGE_SHARE_AT_MIN_SCALE = 0.41625;
+const PARKED_PAGE_SHARE_AT_MAX_SCALE = 0.465;
 
 function parkedPageShare(scale: number) {
     const scaleProgress = (clamp(scale, MOD_BAR_MIN_SCALE, MOD_BAR_MAX_SCALE) - MOD_BAR_MIN_SCALE)
@@ -3033,7 +3035,6 @@ function MobileGlobalModRail({
                         >
                             {parkedPageIndex === parkedToolPageIndex ? (
                                 <div className="mobile-global-mod-rail-parked-tools" role="group" aria-label="Audition controls">
-                                    {noteButton}
                                     {auditionToolButtons}
                                 </div>
                             ) : (
@@ -3060,6 +3061,7 @@ function MobileGlobalModRail({
                                 </div>
                             )}
                         </div>
+                        {noteButton}
                         <button
                             type="button"
                             data-role="mobile-global-mod-rail-parked-next"

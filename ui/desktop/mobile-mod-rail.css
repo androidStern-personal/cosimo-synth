@@ -749,6 +749,7 @@
             minmax(0, 36fr)
             minmax(0, 27fr)
             minmax(0, var(--parked-page-share))
+            44px
             minmax(0, 27fr)
             minmax(0, 25fr);
         box-sizing: border-box;
@@ -833,10 +834,6 @@
         width: 100%;
         height: 100%;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .mobile-global-mod-rail-parked-tools {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
     .mobile-global-mod-rail.is-parked .mobile-global-mod-rail-parked-sources .rack-mod-source {
