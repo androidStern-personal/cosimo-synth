@@ -2529,10 +2529,19 @@ function VoiceEnhancerSection({
             data-role="voice-enhancer-card"
             data-section-accent="violet"
             className={compact
-                ? "mobile-filter-card h-full"
+                ? "mobile-filter-card voice-tone-stage-content h-full"
                 : `${SYNTH_GRID_CARD_SHELL_CLASS} flex h-full w-full min-h-0 flex-col overflow-hidden border`}
         >
             {compact ? null : <div className={SYNTH_GRID_CARD_INSET_SHADOW_CLASS} />}
+            {compact ? (
+                <button
+                    type="button"
+                    data-role="key-track-voiceEnhancerFrequency-graph"
+                    aria-pressed={keyTrackEnabled}
+                    className="key-track-button voice-enhancer-key-track-button"
+                    onClick={toggleKeyTrack}
+                >Key Track</button>
+            ) : null}
             <div
                 className="relative min-h-0 flex-1"
                 data-role="voice-enhancer-graph-drop-surface"
@@ -2568,13 +2577,15 @@ function VoiceEnhancerSection({
                         className="h-full w-full touch-none"
                     />
                 </div>
-                <button
-                    type="button"
-                    data-role="key-track-voiceEnhancerFrequency-graph"
-                    aria-pressed={keyTrackEnabled}
-                    className="key-track-button absolute right-2 top-2 z-20"
-                    onClick={toggleKeyTrack}
-                >Key Track</button>
+                {compact ? null : (
+                    <button
+                        type="button"
+                        data-role="key-track-voiceEnhancerFrequency-graph"
+                        aria-pressed={keyTrackEnabled}
+                        className="key-track-button absolute right-2 top-2 z-20"
+                        onClick={toggleKeyTrack}
+                    >Key Track</button>
+                )}
             </div>
             <div
                 data-role="voice-enhancer-knob-row"
@@ -2644,7 +2655,7 @@ function VoiceToneSection(props: VoiceToneSectionProps) {
                 <FilterSection
                     {...filterProps}
                     compact={compact}
-                    className="h-full"
+                    className={compact ? "voice-tone-stage-content h-full" : "h-full"}
                 />
             ) : (
                 <VoiceEnhancerSection
@@ -2660,7 +2671,7 @@ function VoiceToneSection(props: VoiceToneSectionProps) {
             )}
             <div
                 data-role="voice-tone-stage-selector"
-                className="absolute left-1/2 top-1.5 z-30 flex -translate-x-1/2 overflow-hidden rounded-full border border-white/[0.09] bg-[#080d10]/90 p-0.5 shadow-lg backdrop-blur"
+                className={`voice-tone-stage-selector absolute left-1/2 top-1.5 z-30 flex -translate-x-1/2 overflow-hidden rounded-full border border-white/[0.09] bg-[#080d10]/90 p-0.5 shadow-lg backdrop-blur ${compact ? "is-compact" : ""}`}
             >
                 {(["filter", "enhancer"] as const).map((candidate) => (
                     <button
@@ -2668,7 +2679,7 @@ function VoiceToneSection(props: VoiceToneSectionProps) {
                         type="button"
                         data-role={`voice-tone-stage-${candidate}`}
                         aria-pressed={stage === candidate}
-                        className={`rounded-full px-2 py-0.5 text-[9px] font-semibold tracking-[0.16em] transition ${stage === candidate
+                        className={`voice-tone-stage-button rounded-full px-2 py-0.5 text-[9px] font-semibold tracking-[0.16em] transition ${stage === candidate
                             ? "bg-violet-400/20 text-violet-100"
                             : "text-white/45 hover:text-white/75"}`}
                         onClick={() => setStage(candidate)}

@@ -1925,6 +1925,129 @@ test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and
     }
 });
 
+test("the per-voice Enhancer phone controls own reachable touch targets without blocking graph edits", async () => {
+    const phoneViewports = [
+        { width: 320, height: 568 },
+        { width: 393, height: 852 },
+    ];
+    const assertTouchTarget = async (locator, label) => {
+        const geometry = await locator.evaluate((element) => {
+            const bounds = element.getBoundingClientRect();
+            const inset = 4;
+            const points = [
+                { name: "center", x: bounds.left + (bounds.width / 2), y: bounds.top + (bounds.height / 2) },
+                { name: "top-left", x: bounds.left + inset, y: bounds.top + inset },
+                { name: "top-right", x: bounds.right - inset, y: bounds.top + inset },
+                { name: "bottom-left", x: bounds.left + inset, y: bounds.bottom - inset },
+                { name: "bottom-right", x: bounds.right - inset, y: bounds.bottom - inset },
+            ];
+            return {
+                width: bounds.width,
+                height: bounds.height,
+                hits: points.map((point) => {
+                    const hit = document.elementFromPoint(point.x, point.y);
+                    return {
+                        name: point.name,
+                        ownsPoint: hit === element || (hit instanceof Node && element.contains(hit)),
+                        hitRole: hit instanceof Element
+                            ? hit.getAttribute("data-role") ?? hit.tagName.toLowerCase()
+                            : null,
+                    };
+                }),
+            };
+        });
+        assert.ok(geometry.width >= 44, `${label} width was ${geometry.width}px`);
+        assert.ok(geometry.height >= 44, `${label} height was ${geometry.height}px`);
+        assert.deepEqual(
+            geometry.hits.map(({ ownsPoint }) => ownsPoint),
+            [true, true, true, true, true],
+            `${label} did not own every center/inset point: ${JSON.stringify(geometry.hits)}`,
+        );
+    };
+
+    for (const viewport of phoneViewports) {
+        const viewportLabel = `${viewport.width}x${viewport.height}`;
+        const page = await openHarnessPage({
+            beforeGoto: (nextPage) => nextPage.setViewportSize(viewport),
+        });
+
+        try {
+            const footprint = page.locator('[data-role="voice-filter-enhancer-footprint"]');
+            const footprintBefore = await footprint.boundingBox();
+            assert.ok(footprintBefore);
+            const filterStageButton = page.locator('[data-role="voice-tone-stage-filter"]');
+            const enhancerStageButton = page.locator('[data-role="voice-tone-stage-enhancer"]');
+            await assertTouchTarget(filterStageButton, `${viewportLabel} Filter stage`);
+            await assertTouchTarget(enhancerStageButton, `${viewportLabel} Enhancer stage`);
+
+            await enhancerStageButton.click();
+            await page.waitForFunction(() => (
+                document.querySelector('[data-role="voice-filter-enhancer-footprint"]')
+                    ?.getAttribute("data-selected-stage") === "enhancer"
+            ));
+            const footprintAfter = await footprint.boundingBox();
+            assert.ok(footprintAfter);
+            assert.ok(Math.abs(footprintAfter.width - footprintBefore.width) <= 1);
+            assert.ok(Math.abs(footprintAfter.height - footprintBefore.height) <= 1);
+
+            const keyTrackButton = page.locator('[data-role="key-track-voiceEnhancerFrequency-graph"]');
+            await assertTouchTarget(keyTrackButton, `${viewportLabel} graph Key Track`);
+
+            const graph = page.locator('[data-role="voice-enhancer-graph"]');
+            const graphHandle = page.locator('[data-role="voice-enhancer-graph-handle"]');
+            const graphBox = await graph.boundingBox();
+            const handleBox = await graphHandle.boundingBox();
+            assert.ok(graphBox);
+            assert.ok(handleBox);
+            const dragStart = {
+                x: graphBox.x + graphBox.width * 0.22,
+                y: graphBox.y + graphBox.height * 0.72,
+            };
+            const dragEnd = {
+                x: graphBox.x + graphBox.width * 0.72,
+                y: graphBox.y + graphBox.height * 0.34,
+            };
+            const graphOwnsEditPoints = await graph.evaluate((element, points) => points.map((point) => {
+                const hit = document.elementFromPoint(point.x, point.y);
+                return hit instanceof Node && element.contains(hit);
+            }), [
+                {
+                    x: handleBox.x + (handleBox.width / 2),
+                    y: handleBox.y + (handleBox.height / 2),
+                },
+                dragStart,
+                dragEnd,
+            ]);
+            assert.deepEqual(
+                graphOwnsEditPoints,
+                [true, true, true],
+                `${viewportLabel} controls covered the Enhancer handle or ordinary drag path`,
+            );
+
+            const beforeDrag = await getHarnessSnapshot(page);
+            await clearHarnessDebugLog(page);
+            await page.mouse.move(dragStart.x, dragStart.y);
+            await page.mouse.down();
+            await page.mouse.move(dragEnd.x, dragEnd.y, { steps: 4 });
+            await page.mouse.up();
+            const afterDrag = await waitForHarnessSnapshot(
+                page,
+                `${viewportLabel} unobstructed Enhancer graph drag`,
+                (snapshot) => (
+                    Number(snapshot.parameterValues.voiceEnhancerFrequency)
+                        > Number(beforeDrag.parameterValues.voiceEnhancerFrequency)
+                    && Number(snapshot.parameterValues.voiceEnhancerAmount)
+                        > Number(beforeDrag.parameterValues.voiceEnhancerAmount)
+                ),
+            );
+            assert.deepEqual(afterDrag.gestureStarts, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+            assert.deepEqual(afterDrag.gestureEnds, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+        } finally {
+            await page.close();
+        }
+    }
+});
+
 test("the per-voice Enhancer graph closes active gestures when focus, visibility, or capture is lost", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),

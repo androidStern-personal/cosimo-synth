@@ -105,6 +105,74 @@
         background: var(--cosimo-card-bg);
     }
 
+    /* T62's phone controls occupy a header inside the existing tone-card
+       footprint, leaving the response graph's handle and drag plane clear. */
+    .voice-tone-stage-content {
+        box-sizing: border-box;
+        padding-top: var(--cosimo-module-lg);
+    }
+
+    .voice-tone-stage-selector.is-compact {
+        top: 1px;
+        overflow: visible;
+        padding: 0;
+    }
+
+    .voice-tone-stage-selector.is-compact .voice-tone-stage-button {
+        position: relative;
+        min-width: var(--cosimo-hit-min);
+        min-height: var(--cosimo-hit-min);
+        padding: 0 var(--cosimo-space-2);
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .voice-tone-stage-selector.is-compact .voice-tone-stage-button::before {
+        position: absolute;
+        border-radius: var(--cosimo-radius-full);
+        content: "";
+        inset: 2px;
+        pointer-events: none;
+    }
+
+    .voice-tone-stage-selector.is-compact .voice-tone-stage-button[aria-pressed="true"]::before {
+        background: rgb(var(--cosimo-accent-violet-rgb) / 0.20);
+    }
+
+    .voice-enhancer-key-track-button {
+        position: absolute;
+        z-index: 20;
+        top: 2px;
+        right: auto;
+        left: var(--cosimo-space-1);
+        min-width: var(--cosimo-hit-min);
+        min-height: var(--cosimo-hit-min);
+        padding: 0 var(--cosimo-space-1);
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .cosimo-surface[data-mod-rail-edge="left"] .voice-enhancer-key-track-button {
+        right: var(--cosimo-space-1);
+        left: auto;
+    }
+
+    .voice-enhancer-key-track-button::before {
+        position: absolute;
+        border: 1px solid rgb(255 255 255 / 0.16);
+        border-radius: var(--cosimo-radius-full);
+        background: rgb(5 9 11 / 0.9);
+        content: "";
+        inset: 3px;
+        pointer-events: none;
+    }
+
+    .voice-enhancer-key-track-button[aria-pressed="true"]::before {
+        border-color: color-mix(in srgb, var(--key-track-accent, var(--cosimo-accent-violet)) 78%, transparent);
+        background: color-mix(in srgb, var(--key-track-accent, var(--cosimo-accent-violet)) 14%, #070b0d);
+    }
+
     .mobile-filter-stage {
         position: relative;
         min-height: 0;
