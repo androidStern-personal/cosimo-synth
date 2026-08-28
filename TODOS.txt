@@ -1468,6 +1468,7 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Complete Cmajor rack qualification passes 100/100 and orphan/unit qualification passes 752/752. Source review repaired Ratio conversion, phone touch ownership, pointer-capture fallback/teardown, saved-sound fixtures, and the shipping benchmark harness. Final focused browser/provenance checks pass 5/5.
     - The full generated-C++ shipping benchmark runs 4,096 blocks per profile across three repeats. All 1,372 active routes are bit-identical to the empty-route audio (`maximumAbsoluteSampleDelta=0`), one voice uses 0.2504 of the sixteen-voice median render time against the 0.40 ceiling, and the 100-route rack profile adds 1.412 render-load percentage points against the 10-point budget.
     - Fresh HMR launched the exact `d962` standalone and reported `usesViteClient:true`; it was stopped after verification. The final self-contained compiled VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`, passes strict deep code-sign verification, and has executable SHA-256 `8c54c02a697a4fd42235f2664bbedce15c7ad4b16e58dc418445ea5fb05e07c1`. Ableton listening/host acceptance and physical iPhone touch/audio acceptance remain unperformed.
+    - Pushed master commit `73000035` is published as Sites version 59 at `https://cosimo-synth.andrew-martin-stern.chatgpt.site`; the live app, engine, catalog, and Core Shapes table return HTTP 200.
 
 [x] T63 — Discuss and build whole-Effects-chain Mix and Bypass
     Active owner (2026-08-27):
