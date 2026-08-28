@@ -4672,7 +4672,20 @@ function DesktopPatchViewBody({
     const modRailVoiceSettings = useMemo<ModRailVoiceSettings>(() => ({
         playMode: synthView.playMode,
         glideTime: synthView.glideTime,
-    }), [synthView.glideTime, synthView.playMode]);
+        globalTuneControl: (
+            <GlobalTuneKnob
+                binding={synthView.globalTune}
+                routes={synthView.routes}
+                armedSource={globalModRailState.selectedSource}
+            />
+        ),
+    }), [
+        globalModRailState.selectedSource,
+        synthView.glideTime,
+        synthView.globalTune,
+        synthView.playMode,
+        synthView.routes,
+    ]);
     useEffect(() => {
         postNativeKeyboardProbeStatus(`cosimo-keyboard-router-ready:${keyboardInputMode}`);
     }, [keyboardInputMode]);
@@ -5270,15 +5283,6 @@ function DesktopPatchViewBody({
             className="mobile-voice-grid grid min-h-0 grid-cols-1 items-stretch gap-4"
         >
             {isCompactViewport ? (
-                <div data-role="global-tune-control" className="mobile-global-tune-row">
-                    <GlobalTuneKnob
-                        binding={synthView.globalTune}
-                        routes={synthView.routes}
-                        armedSource={globalModRailState.selectedSource}
-                    />
-                </div>
-            ) : null}
-            {isCompactViewport ? (
                 <DesktopOscillatorConnectionBoundary
                     selectedOscillator={oscillatorSelection.selectedOscillator}
                     content={(
@@ -5420,17 +5424,7 @@ function DesktopPatchViewBody({
                 data-liquid-detail="edge-rail"
                 className={`${SYNTH_GRID_CARD_SHELL_CLASS} min-w-0 border p-3`}
             >
-                <div className="grid min-w-0 grid-cols-[104px_minmax(0,1fr)] gap-3">
-                    <div
-                        data-role="global-tune-control"
-                        className="relative min-w-0 rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5"
-                    >
-                        <GlobalTuneKnob
-                            binding={synthView.globalTune}
-                            routes={synthView.routes}
-                            armedSource={globalModRailState.selectedSource}
-                        />
-                    </div>
+                <div className="grid min-w-0 grid-cols-1 gap-3">
                     {keyboardToolbarOverride}
                 </div>
             </section>

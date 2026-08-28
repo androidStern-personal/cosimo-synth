@@ -11,6 +11,8 @@ import {
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
+    type ReactNode,
+    type Ref,
 } from "react";
 import { parseLaneModulationTargetKind } from "../shared/lane-modulation-targets";
 import { createPortal } from "react-dom";
@@ -227,13 +229,85 @@ export type ModRailAuditionBindings = {
 };
 
 /**
- * T05: Play Mode/Glide live in the rail drawer's voice-settings popover (the
- * keyboard menu button was rejected; this placement is provisional).
+ * Voice settings share one popout whether the Mod bar is floating, parked, or
+ * rendered horizontally. The caller supplies the one composed Global Tune
+ * control so this module does not duplicate its state or modulation wiring.
  */
 export type ModRailVoiceSettings = {
     readonly playMode: PatchControlBinding<number>;
     readonly glideTime: PatchControlBinding<number>;
+    readonly globalTuneControl: ReactNode;
 };
+
+function ModRailVoiceSettingsPopover({
+    settings,
+    scale,
+    dataRole,
+    className,
+    popoverRef,
+    style,
+}: {
+    readonly settings: ModRailVoiceSettings;
+    readonly scale: number;
+    readonly dataRole: string;
+    readonly className: string;
+    readonly popoverRef: Ref<HTMLDivElement>;
+    readonly style?: CSSProperties;
+}) {
+    const glideDisabled = settings.playMode.value === VOICE_MODE_OPTIONS[0].value;
+    const glideEntrySpec = parameterEntrySpecForSeconds({
+        minSeconds: GLIDE_TIME_MIN_SECONDS,
+        maxSeconds: GLIDE_TIME_MAX_SECONDS,
+        stepSeconds: GLIDE_TIME_STEP_SECONDS,
+        currentSeconds: settings.glideTime.value,
+    });
+
+    return (
+        <div
+            ref={popoverRef}
+            data-role={dataRole}
+            className={className}
+            role="dialog"
+            aria-label="Voice settings"
+            style={style}
+        >
+            <div className="mobile-global-mod-rail-voice-modes" role="radiogroup" aria-label="Play mode">
+                {VOICE_MODE_OPTIONS.map((option) => (
+                    <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={option.value === settings.playMode.value}
+                        className="mobile-global-mod-rail-voice-mode"
+                        onClick={() => settings.playMode.commitValue(option.value)}
+                    >
+                        {option.label}
+                    </button>
+                ))}
+            </div>
+            <div className="mobile-global-mod-rail-global-tune">
+                {settings.globalTuneControl}
+            </div>
+            <div
+                className="mobile-global-mod-rail-voice-glide"
+                data-disabled={glideDisabled}
+                inert={glideDisabled}
+            >
+                <PrecisionNumberField
+                    ariaLabel="Glide time"
+                    binding={settings.glideTime}
+                    entrySpec={glideEntrySpec}
+                    suffix={glideEntrySpec.defaultUnit}
+                    leadingLabel="Glide"
+                    variant="inlineDark"
+                    dataRole="mobile-global-mod-rail-glide-field"
+                    width={64 * scale}
+                    height={22 * scale}
+                />
+            </div>
+        </div>
+    );
+}
 
 type SelectedSource = Pick<RackModulationSource, "sourceKind" | "sourceSlot">;
 
@@ -1893,6 +1967,7 @@ function ModSourceCarousel({
     selectedSource,
     sourceIsArmed,
     orientation = "horizontal",
+    headerAccessory = null,
     onPageChange,
     sourceHandlers,
 }: {
@@ -1900,6 +1975,7 @@ function ModSourceCarousel({
     selectedSource: SelectedSource;
     sourceIsArmed: boolean;
     orientation?: "horizontal" | "vertical";
+    headerAccessory?: ReactNode;
     onPageChange: (pageIndex: number) => void;
     sourceHandlers: ModSourceGestureHandlers;
 }) {
@@ -1912,7 +1988,10 @@ function ModSourceCarousel({
         <div className={`rack-mod-dock${vertical ? " is-vertical" : ""}`} role="group" aria-label="Rack modulation sources">
             <header className="rack-mod-header">
                 <strong>MOD BAR{armedSourceLabel === null ? "" : ` · ${armedSourceLabel}`}</strong>
-                <span>GROUP {pageIndex + 1} / {RACK_MODULATION_SOURCE_PAGES.length}</span>
+                <span className="rack-mod-header-actions">
+                    {headerAccessory}
+                    <span>GROUP {pageIndex + 1} / {RACK_MODULATION_SOURCE_PAGES.length}</span>
+                </span>
             </header>
             <div className="rack-mod-row">
                 <button
@@ -2228,6 +2307,17 @@ function MobileGlobalModRail({
     const silhouetteGradientId = `mobile-mod-rail-fill-${useId().replaceAll(":", "")}`;
     const mappingActive = sourceDrag !== null;
 
+    const toggleExpanded = useCallback(() => {
+        setExpanded((current) => {
+            if (current) {
+                // A deliberate grip collapse is an explicit Voice-popout
+                // dismissal. Source-driven collapse uses its own path below.
+                setVoiceSettingsOpen(false);
+            }
+            return !current;
+        });
+    }, []);
+
     useEffect(() => {
         setParkedPageIndex(selectedSource.sourceSlot - 1);
     }, [selectedSource.sourceSlot]);
@@ -2289,22 +2379,15 @@ function MobileGlobalModRail({
 
     // Parked tools float independently. Moving an open Voice popover back to
     // a floating edge reopens its drawer so the control and popover survive
-    // the placement change together.
+    // the placement change together. Source selection, source-driven drawer
+    // collapse, and active mapping do not dismiss Voice settings.
     useEffect(() => {
         const previousPlacement = previousPlacementRef.current;
         previousPlacementRef.current = preferences.placement;
-        if (mappingActive) {
-            setVoiceSettingsOpen(false);
-            return;
+        if (floating && !expanded && previousPlacement === "parked" && voiceSettingsOpen) {
+            setExpanded(true);
         }
-        if (floating && !expanded) {
-            if (previousPlacement === "parked" && voiceSettingsOpen) {
-                setExpanded(true);
-            } else {
-                setVoiceSettingsOpen(false);
-            }
-        }
-    }, [expanded, floating, mappingActive, preferences.placement, voiceSettingsOpen]);
+    }, [expanded, floating, preferences.placement, voiceSettingsOpen]);
 
     useEffect(() => {
         if (!voiceSettingsOpen) {
@@ -2315,6 +2398,9 @@ function MobileGlobalModRail({
             const preservesPresentation = eventPath.some((target) => (
                 target instanceof Element
                 && target.closest([
+                    '[data-role^="rack-mod-source-"]',
+                    '[data-role="mobile-global-mod-rail-selected"]',
+                    '[data-role="mobile-global-mod-rail-grip"]',
                     '[data-role="perf-tuning-page"]',
                     '[data-role="mobile-global-mod-rail-hide"]',
                     '[data-role="mobile-global-mod-rail-restore"]',
@@ -2659,7 +2745,7 @@ function MobileGlobalModRail({
         }
         if (!gesture.moved) {
             if (!gesture.interruptedDeceleration) {
-                setExpanded((current) => !current);
+                toggleExpanded();
             }
             return;
         }
@@ -2689,7 +2775,7 @@ function MobileGlobalModRail({
         ) {
             settleRailPosition(positionRef.current);
         }
-    }, [applyDragX, railGeometry.width, settleDragXHome, settleRailPosition, startRailDeceleration, stopRailDeceleration, updateDrawerPlacement]);
+    }, [applyDragX, railGeometry.width, settleDragXHome, settleRailPosition, startRailDeceleration, stopRailDeceleration, toggleExpanded, updateDrawerPlacement]);
 
     const releaseNoteKey = useCallback((pointerId: number) => {
         if (noteKeyPointerRef.current !== pointerId) {
@@ -2760,14 +2846,6 @@ function MobileGlobalModRail({
     if (!activePlayMode) {
         throw new Error(`Unknown play mode value: ${voiceSettings.playMode.value}`);
     }
-    // Glide only applies while notes steal a voice (Mono/Legato); Poly greys it.
-    const glideDisabled = voiceSettings.playMode.value === VOICE_MODE_OPTIONS[0].value;
-    const glideEntrySpec = parameterEntrySpecForSeconds({
-        minSeconds: GLIDE_TIME_MIN_SECONDS,
-        maxSeconds: GLIDE_TIME_MAX_SECONDS,
-        stepSeconds: GLIDE_TIME_STEP_SECONDS,
-        currentSeconds: voiceSettings.glideTime.value,
-    });
     const silhouetteHeight = railGeometry.tabContentHeight
         + (2 * railGeometry.shoulder)
         + (drawerOpen ? drawerPlacement.extent : 0);
@@ -2915,45 +2993,13 @@ function MobileGlobalModRail({
     );
 
     const voicePopover = voiceSettingsOpen ? (
-        <div
-            ref={voicePopoverRef}
-            data-role="mobile-global-mod-rail-voice-popover"
+        <ModRailVoiceSettingsPopover
+            settings={voiceSettings}
+            scale={preferences.scale}
+            dataRole="mobile-global-mod-rail-voice-popover"
             className="mobile-global-mod-rail-voice-popover"
-            role="dialog"
-            aria-label="Voice settings"
-        >
-            <div className="mobile-global-mod-rail-voice-modes" role="radiogroup" aria-label="Play mode">
-                {VOICE_MODE_OPTIONS.map((option) => (
-                    <button
-                        key={option.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={option.value === voiceSettings.playMode.value}
-                        className="mobile-global-mod-rail-voice-mode"
-                        onClick={() => voiceSettings.playMode.commitValue(option.value)}
-                    >
-                        {option.label}
-                    </button>
-                ))}
-            </div>
-            <div
-                className="mobile-global-mod-rail-voice-glide"
-                data-disabled={glideDisabled}
-                inert={glideDisabled}
-            >
-                <PrecisionNumberField
-                    ariaLabel="Glide time"
-                    binding={voiceSettings.glideTime}
-                    entrySpec={glideEntrySpec}
-                    suffix={glideEntrySpec.defaultUnit}
-                    leadingLabel="Glide"
-                    variant="inlineDark"
-                    dataRole="mobile-global-mod-rail-glide-field"
-                    width={64 * preferences.scale}
-                    height={22 * preferences.scale}
-                />
-            </div>
-        </div>
+            popoverRef={voicePopoverRef}
+        />
     ) : null;
 
     if (!floating) {
@@ -3193,7 +3239,7 @@ function MobileGlobalModRail({
                                     return;
                                 }
                                 event.preventDefault();
-                                setExpanded((current) => !current);
+                                toggleExpanded();
                             }}
                             onPointerDown={(event) => {
                                 if (event.pointerType === "mouse" && event.button !== 0) {
@@ -3411,47 +3457,7 @@ function MobileGlobalModRail({
                         </div>
                     </div>
                 </div>
-                {voiceSettingsOpen ? (
-                    <div
-                        ref={voicePopoverRef}
-                        data-role="mobile-global-mod-rail-voice-popover"
-                        className="mobile-global-mod-rail-voice-popover"
-                        role="dialog"
-                        aria-label="Voice settings"
-                    >
-                        <div className="mobile-global-mod-rail-voice-modes" role="radiogroup" aria-label="Play mode">
-                            {VOICE_MODE_OPTIONS.map((option) => (
-                                <button
-                                    key={option.value}
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={option.value === voiceSettings.playMode.value}
-                                    className="mobile-global-mod-rail-voice-mode"
-                                    onClick={() => voiceSettings.playMode.commitValue(option.value)}
-                                >
-                                    {option.label}
-                                </button>
-                            ))}
-                        </div>
-                        <div
-                            className="mobile-global-mod-rail-voice-glide"
-                            data-disabled={glideDisabled}
-                            inert={glideDisabled}
-                        >
-                            <PrecisionNumberField
-                                ariaLabel="Glide time"
-                                binding={voiceSettings.glideTime}
-                                entrySpec={glideEntrySpec}
-                                suffix={glideEntrySpec.defaultUnit}
-                                leadingLabel="Glide"
-                                variant="inlineDark"
-                                dataRole="mobile-global-mod-rail-glide-field"
-                                width={64 * preferences.scale}
-                                height={22 * preferences.scale}
-                            />
-                        </div>
-                    </div>
-                ) : null}
+                {voicePopover}
             </aside>
             {sourceDrag && ghostLayerPoint ? (
                 <div
@@ -4080,6 +4086,84 @@ export function EffectsRackWorkspace({
     const [hoverTargetEndpointID, setHoverTargetEndpointID] = useState<string | null>(null);
     const [routeStatus, setRouteStatus] = useState("");
     const feedbackToastLayer = useContext(ParameterHudLayerContext);
+    const [desktopVoiceSettingsOpen, setDesktopVoiceSettingsOpen] = useState(false);
+    const [desktopVoicePopoverPosition, setDesktopVoicePopoverPosition] = useState({ left: 8, top: 8 });
+    const desktopVoiceToggleRef = useRef<HTMLButtonElement | null>(null);
+    const desktopVoicePopoverRef = useRef<HTMLDivElement | null>(null);
+    const positionDesktopVoicePopover = useCallback(() => {
+        const layer = feedbackToastLayer;
+        const toggle = desktopVoiceToggleRef.current;
+        if (layer === null || toggle === null) {
+            return;
+        }
+        const layerBounds = layer.getBoundingClientRect();
+        const toggleBounds = toggle.getBoundingClientRect();
+        const popoverWidth = desktopVoicePopoverRef.current?.offsetWidth ?? 220;
+        const popoverHeight = desktopVoicePopoverRef.current?.offsetHeight ?? 180;
+        const gap = 6;
+        const maxLeft = Math.max(8, layerBounds.width - popoverWidth - 8);
+        const left = clamp(toggleBounds.right - layerBounds.left - popoverWidth, 8, maxLeft);
+        const preferredAbove = toggleBounds.top - layerBounds.top - popoverHeight - gap;
+        const preferredBelow = toggleBounds.bottom - layerBounds.top + gap;
+        const maxTop = Math.max(8, layerBounds.height - popoverHeight - 8);
+        const top = clamp(preferredAbove >= 8 ? preferredAbove : preferredBelow, 8, maxTop);
+        setDesktopVoicePopoverPosition((current) => (
+            Math.abs(current.left - left) <= 0.5 && Math.abs(current.top - top) <= 0.5
+                ? current
+                : { left, top }
+        ));
+    }, [feedbackToastLayer]);
+    useLayoutEffect(() => {
+        if (!desktopVoiceSettingsOpen) {
+            return;
+        }
+        positionDesktopVoicePopover();
+        const observer = typeof ResizeObserver === "undefined"
+            ? null
+            : new ResizeObserver(positionDesktopVoicePopover);
+        if (desktopVoiceToggleRef.current !== null) {
+            observer?.observe(desktopVoiceToggleRef.current);
+        }
+        if (desktopVoicePopoverRef.current !== null) {
+            observer?.observe(desktopVoicePopoverRef.current);
+        }
+        window.addEventListener("resize", positionDesktopVoicePopover);
+        return () => {
+            observer?.disconnect();
+            window.removeEventListener("resize", positionDesktopVoicePopover);
+        };
+    }, [desktopVoiceSettingsOpen, positionDesktopVoicePopover]);
+    useEffect(() => {
+        if (!desktopVoiceSettingsOpen) {
+            return;
+        }
+        const handlePointerDown = (event: PointerEvent) => {
+            const eventPath = event.composedPath();
+            const sourceInteraction = eventPath.some((target) => (
+                target instanceof Element
+                && target.closest('[data-role^="rack-mod-source-"]') !== null
+            ));
+            if (
+                sourceInteraction
+                || (desktopVoicePopoverRef.current !== null && eventPath.includes(desktopVoicePopoverRef.current))
+                || (desktopVoiceToggleRef.current !== null && eventPath.includes(desktopVoiceToggleRef.current))
+            ) {
+                return;
+            }
+            setDesktopVoiceSettingsOpen(false);
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setDesktopVoiceSettingsOpen(false);
+            }
+        };
+        window.addEventListener("pointerdown", handlePointerDown, true);
+        window.addEventListener("keydown", handleKeyDown);
+        return () => {
+            window.removeEventListener("pointerdown", handlePointerDown, true);
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [desktopVoiceSettingsOpen]);
     // ADR-025: duplicate and failure reports are top-of-screen toasts, never
     // silent inline text. One at a time; the newest replaces the current.
     const [feedbackToast, setFeedbackToast] = useState<{ id: number; text: string } | null>(null);
@@ -4824,12 +4908,42 @@ export function EffectsRackWorkspace({
         },
     });
 
+    const desktopActivePlayMode = modRailVoiceSettings === undefined
+        ? null
+        : VOICE_MODE_OPTIONS.find((option) => option.value === modRailVoiceSettings.playMode.value);
+    if (modRailVoiceSettings !== undefined && desktopActivePlayMode === undefined) {
+        throw new Error(`Unknown play mode value: ${modRailVoiceSettings.playMode.value}`);
+    }
+    const desktopVoiceSettingsToggle = !mobileGlobalModRail
+        && modRailVoiceSettings !== undefined
+        && desktopActivePlayMode !== null
+        && desktopActivePlayMode !== undefined ? (
+            <button
+                ref={desktopVoiceToggleRef}
+                type="button"
+                data-role="desktop-global-mod-rail-voice-toggle"
+                className="rack-mod-voice-toggle"
+                aria-pressed={desktopVoiceSettingsOpen}
+                aria-haspopup="dialog"
+                aria-label={`Voice settings (${desktopActivePlayMode.label})`}
+                onClick={() => {
+                    if (!desktopVoiceSettingsOpen) {
+                        positionDesktopVoicePopover();
+                    }
+                    setDesktopVoiceSettingsOpen((current) => !current);
+                }}
+            >
+                {desktopActivePlayMode.label}
+            </button>
+        ) : null;
+
     const modulationSourceControls = (
         <ModSourceCarousel
             pageIndex={sourcePageIndex}
             selectedSource={selectedSource}
             sourceIsArmed={sourceIsArmed}
             orientation={mobileGlobalModRail ? "vertical" : "horizontal"}
+            headerAccessory={desktopVoiceSettingsToggle}
             onPageChange={changeSourcePage}
             sourceHandlers={sourceHandlers}
         />
@@ -4870,6 +4984,20 @@ export function EffectsRackWorkspace({
                 >
                     {feedbackToast.text}
                 </output>,
+                feedbackToastLayer,
+            ) : null}
+            {!mobileGlobalModRail
+                    && desktopVoiceSettingsOpen
+                    && modRailVoiceSettings !== undefined
+                    && feedbackToastLayer !== null ? createPortal(
+                <ModRailVoiceSettingsPopover
+                    settings={modRailVoiceSettings}
+                    scale={1}
+                    dataRole="desktop-global-mod-rail-voice-popover"
+                    className="desktop-global-mod-rail-voice-popover"
+                    popoverRef={desktopVoicePopoverRef}
+                    style={desktopVoicePopoverPosition}
+                />,
                 feedbackToastLayer,
             ) : null}
             {parameterMenu ? (

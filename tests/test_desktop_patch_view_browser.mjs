@@ -185,6 +185,8 @@ test("Global Tune stays continuous, brackets edits for host undo, and accepts ho
 
     try {
         await showVoiceControls(page);
+        await page.locator('[data-role="desktop-global-mod-rail-voice-toggle"]').click();
+        await page.locator('[data-role="desktop-global-mod-rail-voice-popover"]').waitFor({ state: "visible" });
         const knob = page.locator('[data-role="global-tune-knob"]');
         await knob.waitFor({ state: "visible" });
         assert.equal(await knob.getAttribute("aria-valuemin"), "-24");

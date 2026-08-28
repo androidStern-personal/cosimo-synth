@@ -597,6 +597,26 @@
         left: calc(100% + var(--rail-gap));
     }
 
+    /* Source mapping retreats the Mod bar itself. Voice settings remains a
+       stable composed drop surface by cancelling only that horizontal
+       retreat, while the drawer and the rest of the bar stay hit-transparent
+       under ADR-019. Matching transitions keep the popout visually fixed. */
+    .mobile-global-mod-rail[data-edge="right"][data-mapping-active="true"]
+    > .mobile-global-mod-rail-voice-popover {
+        translate: calc(var(--rail-dodge-distance) * -1) 0;
+        pointer-events: auto;
+    }
+
+    .mobile-global-mod-rail[data-edge="left"][data-mapping-active="true"]
+    > .mobile-global-mod-rail-voice-popover {
+        translate: var(--rail-dodge-distance) 0;
+        pointer-events: auto;
+    }
+
+    .mobile-global-mod-rail > .mobile-global-mod-rail-voice-popover {
+        transition: translate var(--rail-dodge-duration) cubic-bezier(0.22, 0.72, 0.22, 1);
+    }
+
     .mobile-global-mod-rail-voice-modes {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -623,6 +643,25 @@
         border-color: var(--cosimo-line);
         background: var(--cosimo-line);
         color: var(--cosimo-ink);
+    }
+
+    .mobile-global-mod-rail-global-tune {
+        height: calc(76px * var(--rail-scale));
+        min-height: 0;
+        border-block: var(--rail-outline) solid var(--cosimo-line);
+    }
+
+    .mobile-global-mod-rail-global-tune .global-tune-knob-cell {
+        width: 100%;
+    }
+
+    .mobile-global-mod-rail-global-tune .rack-parameter-knob {
+        min-height: calc(72px * var(--rail-scale));
+    }
+
+    .mobile-global-mod-rail-global-tune .rack-knob-art {
+        width: calc(48px * var(--rail-scale));
+        height: calc(48px * var(--rail-scale));
     }
 
     .mobile-global-mod-rail-voice-glide {

@@ -825,6 +825,139 @@ test("the drawer's voice-settings popover owns Play Mode and greys Glide while P
     }
 });
 
+test("T39A: Voice settings keeps Global Tune open for live source selection, drop, and route editing", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+        await rail.waitFor();
+        await page.waitForTimeout(240);
+        await expandGlobalModRail(page);
+
+        const voiceToggle = rail.locator('[data-role="mobile-global-mod-rail-voice-toggle"]');
+        await voiceToggle.click();
+        const popover = page.locator('[data-role="mobile-global-mod-rail-voice-popover"]');
+        await popover.waitFor({ state: "visible" });
+        const tuneKnob = popover.locator('[data-role="global-tune-knob"]');
+
+        assert.equal(
+            await page.locator('[data-role="global-tune-control"]').count(),
+            0,
+            "The rejected Voice-card Global Tune presentation must be removed.",
+        );
+        assert.equal(await tuneKnob.count(), 1, "Voice settings must own the one Global Tune control.");
+        assert.equal(await page.locator('[data-role="global-tune-knob"]').count(), 1);
+        assert.equal(await tuneKnob.getAttribute("aria-valuemin"), "-24");
+        assert.equal(await tuneKnob.getAttribute("aria-valuemax"), "24");
+
+        // A real source tap changes the armed source and opens its accepted
+        // quick editor. Neither that tap nor the source-driven rail collapse
+        // is an outside dismissal of Voice settings.
+        await rail.locator('[data-role="rack-mod-source-env-1"]').click();
+        await page.locator('[data-role="quick-source-sheet"][data-source-kind="env"][data-source-slot="1"]').waitFor();
+        assert.equal(await popover.isVisible(), true, "Touching Envelope 1 must preserve Voice settings.");
+        assert.equal(
+            await rail.locator('[data-role="mobile-global-mod-rail-selected"]').getAttribute("aria-label"),
+            "Envelope 1 selected",
+        );
+
+        await expandGlobalModRail(page);
+        assert.equal(await popover.isVisible(), true, "Expanding after a source-owned collapse must preserve Voice settings.");
+        await rail.locator('[data-role="rack-mod-source-macro-1"]').click();
+        await page.locator('[data-role="quick-source-sheet"][data-source-kind="macro"][data-source-slot="1"]').waitFor();
+        assert.equal(
+            await popover.isVisible(),
+            true,
+            "Switching the armed source must preserve Voice settings.",
+        );
+        assert.equal(
+            await rail.locator('[data-role="mobile-global-mod-rail-selected"]').getAttribute("aria-label"),
+            "Macro 1 selected",
+        );
+
+        await expandGlobalModRail(page);
+        const source = rail.locator('[data-role="rack-mod-source-macro-1"]');
+        const sourceBox = await source.boundingBox();
+        assert.ok(sourceBox);
+        const sourceStart = {
+            x: sourceBox.x + (sourceBox.width / 2),
+            y: sourceBox.y + (sourceBox.height / 2),
+        };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...sourceStart, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: sourceStart.x - 18, y: sourceStart.y, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await rail.locator('xpath=self::*[@data-mapping-active="true"]').waitFor();
+        await page.waitForTimeout(180);
+
+        assert.equal(await popover.isVisible(), true, "The Voice popout must stay visibly open while mapping.");
+        const mappingTargetBox = await tuneKnob.boundingBox();
+        assert.ok(mappingTargetBox, "Global Tune must remain a composed visible target while the Mod bar retreats.");
+        assert.equal(mappingTargetBox.x >= 0 && mappingTargetBox.x + mappingTargetBox.width <= 393, true);
+
+        const targetFinger = touchPointForModSourcePreviewTarget(
+            sourceStart,
+            {
+                x: mappingTargetBox.x + (mappingTargetBox.width / 2),
+                y: mappingTargetBox.y + (mappingTargetBox.height / 2),
+            },
+            393,
+        );
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ ...targetFinger, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+        await waitForHarnessSnapshot(
+            page,
+            "Global Tune source drop",
+            (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "macro"
+                && route.sourceSlot === 1
+                && route.targetKind === "globalTuneSemitones"
+                && route.amount === 0
+            )),
+        );
+        assert.equal(await popover.isVisible(), true, "A successful Global Tune drop must preserve Voice settings.");
+        assert.equal(await popover.locator('[data-role="global-tune-route-count"]').textContent(), "1");
+
+        await clearHarnessDebugLog(page);
+        await dispatchRackKnobPointerEvents(tuneKnob, [
+            { type: "pointerdown", pointerId: 139, buttons: 1 },
+            { type: "pointermove", pointerId: 139, buttons: 1, deltaY: -8 },
+            { type: "pointermove", pointerId: 139, buttons: 1, deltaY: -64 },
+            { type: "pointerup", pointerId: 139, buttons: 0, deltaY: -64 },
+        ]);
+        const editedSnapshot = await waitForHarnessSnapshot(
+            page,
+            "Global Tune route amount edit",
+            (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "macro"
+                && route.sourceSlot === 1
+                && route.targetKind === "globalTuneSemitones"
+                && route.amount > 0
+            )),
+        );
+        assert.equal(editedSnapshot.sentMessages.some(({ endpointID, value }) => (
+            endpointID === "modulationAmount" && Number(value?.amount) > 0
+        )), true, "Global Tune must use the canonical small route-amount update path.");
+
+        await page.mouse.click(5, 5);
+        await popover.waitFor({ state: "detached" });
+    } finally {
+        await cdp.detach();
+        await page.close();
+    }
+});
+
 test("the Note key triggers audible output from every mobile editor state", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
@@ -2438,6 +2571,62 @@ test("T60 application preferences cross plugin and desktop breakpoints without c
             await page.evaluate(() => {
                 localStorage.removeItem("cosimo.mod-bar.preferences.v1");
             }).catch(() => {});
+            await page.close();
+        }
+    }
+});
+
+test("T39A: the horizontal Mod bar reaches the same Voice-settings Global Tune at plugin and desktop sizes", async () => {
+    for (const layout of [
+        { name: "plugin", width: 1120, height: 680 },
+        { name: "desktop", width: 1440, height: 900 },
+    ]) {
+        const page = await openHarnessPage({
+            beforeGoto: (nextPage) => nextPage.setViewportSize(layout),
+        });
+
+        try {
+            const toggle = page.locator('[data-role="desktop-global-mod-rail-voice-toggle"]');
+            await toggle.waitFor({ state: "visible" });
+            assert.equal(await page.locator('[data-role="global-tune-control"]').count(), 0);
+            assert.equal(await page.locator('[data-role="global-tune-knob"]').count(), 0);
+
+            await toggle.click();
+            const popover = page.locator('[data-role="desktop-global-mod-rail-voice-popover"]');
+            await popover.waitFor({ state: "visible" });
+            const knob = popover.locator('[data-role="global-tune-knob"]');
+            assert.equal(await knob.count(), 1, `${layout.name}: Voice settings owns Global Tune.`);
+            assert.equal(await page.locator('[data-role="global-tune-knob"]').count(), 1);
+            assert.equal(await knob.getAttribute("aria-valuemin"), "-24");
+            assert.equal(await knob.getAttribute("aria-valuemax"), "24");
+            assert.equal(
+                await knob.evaluate((element) => (
+                    element.closest('[data-modulation-target-kind="globalTuneSemitones"]') !== null
+                )),
+                true,
+                `${layout.name}: the composed knob remains the real Global Tune drop target.`,
+            );
+
+            await page.locator('[data-role="rack-mod-source-mseg-1"]').click();
+            assert.equal(await popover.isVisible(), true, `${layout.name}: source selection preserves Voice settings.`);
+            await createRackMappingByDrop(
+                page,
+                '[data-role="rack-mod-source-mseg-1"]',
+                '[data-role="global-tune-knob"]',
+            );
+            await waitForHarnessSnapshot(
+                page,
+                `${layout.name} Global Tune source drop`,
+                (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                    route.sourceKind === "mseg"
+                    && route.sourceSlot === 1
+                    && route.targetKind === "globalTuneSemitones"
+                )),
+            );
+            assert.equal(await popover.isVisible(), true, `${layout.name}: source drop preserves Voice settings.`);
+            await page.mouse.click(5, 5);
+            await popover.waitFor({ state: "detached" });
+        } finally {
             await page.close();
         }
     }

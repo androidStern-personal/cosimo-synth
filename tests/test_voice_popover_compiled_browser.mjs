@@ -251,6 +251,15 @@ test("compiled shadow-root Voice popover accepts touch controls and preserves di
         await waitForBuiltVoicePopover(page, true);
 
         const popover = page.locator('[data-role="mobile-global-mod-rail-voice-popover"]');
+        const globalTune = popover.locator('[data-role="global-tune-knob"]');
+        assert.equal(await globalTune.count(), 1, "The compiled Voice popover must own Global Tune.");
+        assert.equal(await globalTune.getAttribute("aria-valuemin"), "-24");
+        assert.equal(await globalTune.getAttribute("aria-valuemax"), "24");
+        assert.equal(
+            await page.locator('[data-role="global-tune-control"]').count(),
+            0,
+            "The compiled bundle must not retain the rejected Global Tune presentation.",
+        );
         const monoOption = popover.locator(".mobile-global-mod-rail-voice-mode", { hasText: "Mono" });
         let popoverOpenDuringMonoTouch = false;
         await touchTap(page, cdp, monoOption, async () => {

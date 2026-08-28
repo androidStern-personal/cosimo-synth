@@ -1431,6 +1431,112 @@
 
 .rack-mod-header > strong { color: #cbd2d4; font-size: 8px; font-weight: 500; }
 
+.rack-mod-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.rack-mod-voice-toggle {
+    min-width: 34px;
+    height: 16px;
+    padding: 0 5px;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 5px;
+    background: rgb(255 255 255 / 0.035);
+    box-shadow: none;
+    color: #aeb8bb;
+    cursor: pointer;
+    font-family: var(--cosimo-font-label, sans-serif);
+    font-size: 7px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.rack-mod-voice-toggle[aria-pressed="true"] {
+    border-color: rgb(198 219 63 / 0.38);
+    background: rgb(198 219 63 / 0.1);
+    color: #dbe79a;
+}
+
+/* The noncompact Mod bar is clipped inside the FX editor, so its Voice
+   settings popout is portalled into the shared surface overlay. It uses the
+   same content component and exact Global Tune control as the phone rail. */
+.desktop-global-mod-rail-voice-popover {
+    --rail-scale: 1;
+    position: absolute;
+    z-index: 2;
+    display: grid;
+    width: 220px;
+    gap: 8px;
+    box-sizing: border-box;
+    padding: 10px;
+    border: 1px solid var(--cosimo-line);
+    border-radius: 12px;
+    background: rgb(var(--cosimo-ground-rgb) / 0.98);
+    box-shadow: 0 12px 28px var(--cosimo-cast-shadow);
+    pointer-events: auto;
+}
+
+.desktop-global-mod-rail-voice-popover .mobile-global-mod-rail-voice-modes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.desktop-global-mod-rail-voice-popover .mobile-global-mod-rail-voice-mode {
+    height: 26px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--cosimo-radius-sm);
+    background: var(--cosimo-wash);
+    box-shadow: none;
+    color: var(--cosimo-ink-muted);
+    cursor: pointer;
+    font-family: var(--cosimo-font-label, sans-serif);
+    font-size: var(--cosimo-type-label);
+    font-weight: 600;
+    letter-spacing: var(--cosimo-track);
+    text-transform: uppercase;
+}
+
+.desktop-global-mod-rail-voice-popover .mobile-global-mod-rail-voice-mode[aria-checked="true"] {
+    border-color: var(--cosimo-line);
+    background: var(--cosimo-line);
+    color: var(--cosimo-ink);
+}
+
+.desktop-global-mod-rail-voice-popover .mobile-global-mod-rail-global-tune {
+    height: 82px;
+    min-height: 0;
+    border-block: 1px solid var(--cosimo-line);
+}
+
+.desktop-global-mod-rail-voice-popover .global-tune-knob-cell {
+    width: 100%;
+}
+
+.desktop-global-mod-rail-voice-popover .rack-parameter-knob {
+    min-height: 78px;
+}
+
+.desktop-global-mod-rail-voice-popover .rack-knob-art {
+    width: 52px;
+    height: 52px;
+}
+
+.desktop-global-mod-rail-voice-popover .mobile-global-mod-rail-voice-glide {
+    display: grid;
+    justify-items: start;
+}
+
+.desktop-global-mod-rail-voice-popover .mobile-global-mod-rail-voice-glide[data-disabled="true"] {
+    opacity: 0.38;
+}
+
 .rack-mod-row {
     display: grid;
     grid-template-columns: 20px minmax(0, 1fr) 20px;

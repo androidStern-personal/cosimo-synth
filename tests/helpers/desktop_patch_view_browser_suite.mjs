@@ -904,7 +904,7 @@ export async function openHarnessPage({
 }
 
 export async function showVoiceControls(page) {
-    await page.getByRole("button", { name: "Voice" }).click();
+    await page.getByRole("button", { name: "Voice", exact: true }).click();
     await page.locator('[aria-label="Glide"]').waitFor({ state: "visible" });
 }
 
