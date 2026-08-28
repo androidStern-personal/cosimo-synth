@@ -1440,7 +1440,7 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Clean release artifacts for VST3 and iOS AUv3 build from documented commands, retain state across reload/update, pass signing and host validation, and are installable by someone without the development checkout.
     - Andrew approves the sound, MIDI tracking, interface, free-product branding, and installation flow.
 
-[ ] T62 — Put a lightweight one-band Enhancer after the filter inside every synth voice
+[x] T62 — Put a lightweight one-band Enhancer after the filter inside every synth voice
     Active owner (2026-08-28):
     - Codex task `T62 Build Per-Voice Enhancer`, thread `01a04953-81b0-7261-b118-8660a597bb95`, branch `codex/t62-per-voice-enhancer`, worktree `/Users/winterfell/.codex/worktrees/d962/cosimo-synth`, starting checkpoint `ffd49938`, model SOL, reasoning max. Earlier permission-restricted tasks were superseded; this task preserves and reviews the committed checkpoint before rebasing.
     - This coordinator-managed task owns only the approved post-filter/pre-Amp-Envelope per-voice processor, shared T39/T50 pitch authority, fixed linked Mid/Side ADAA design, Filter-footprint UI, state/modulation seams, and focused qualification. T62 must integrate before T28. Final review, rebase, merge, push, native/install gates, and deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
@@ -1463,6 +1463,11 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Preserve complete sound save/restore, Init, URL sharing, modulation, exact entry, and host state. Keep the continuous tracked offset modulatable, and prove polyphonic notes, glide, pitch bend, Global Tune, note stealing, mono, and legato all follow the existing voice rules.
     Done when:
     - The approved three-value Voice interface fits in the existing Filter footprint without shrinking or covering either stage, and tests prove the Enhancer processes each voice after its filter but before voices are combined, fixed linked Mid/Side uses one Amount with no hidden mode state, optional pitch tracking works independently across simultaneous notes, zero Amount is bit-identical, state round trips are complete, retained-voice CPU is acceptable, and the fixed T26/T28 Polish Enhancer is unchanged.
+    Completion evidence (2026-08-28):
+    - Coordinator fast-forwarded the clean, current-master-based implementation through final tip `371962ca`. Every voice now owns the fixed linked-Mid/Side, first-order-ADAA one-band Enhancer after its filter and before its Amp Envelope. Frequency/Ratio, Q, Amount, Key Track, exact entry, modulation, host/state, Init, preset, and URL paths are composed without changing either standalone Enhancer product.
+    - Complete Cmajor rack qualification passes 100/100 and orphan/unit qualification passes 752/752. Source review repaired Ratio conversion, phone touch ownership, pointer-capture fallback/teardown, saved-sound fixtures, and the shipping benchmark harness. Final focused browser/provenance checks pass 5/5.
+    - The full generated-C++ shipping benchmark runs 4,096 blocks per profile across three repeats. All 1,372 active routes are bit-identical to the empty-route audio (`maximumAbsoluteSampleDelta=0`), one voice uses 0.2504 of the sixteen-voice median render time against the 0.40 ceiling, and the 100-route rack profile adds 1.412 render-load percentage points against the 10-point budget.
+    - Fresh HMR launched the exact `d962` standalone and reported `usesViteClient:true`; it was stopped after verification. The final self-contained compiled VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`, passes strict deep code-sign verification, and has executable SHA-256 `8c54c02a697a4fd42235f2664bbedce15c7ad4b16e58dc418445ea5fb05e07c1`. Ableton listening/host acceptance and physical iPhone touch/audio acceptance remain unperformed.
 
 [x] T63 — Discuss and build whole-Effects-chain Mix and Bypass
     Active owner (2026-08-27):

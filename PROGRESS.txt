@@ -883,3 +883,10 @@ T40/T40A parameter-aware HUD — integrated 2026-08-28
 
 Current hosted synth delivery after T39A/T40 — deployed 2026-08-28
 - Sites version 58 was built, saved, and publicly deployed from pushed integration commit `5425fa09` to `https://cosimo-synth.andrew-martin-stern.chatgpt.site`. It includes the one Global Tune Voice-settings popout and the production-backed Wavetable Index, Filter Cutoff, MSEG Morph, and Distortion Drive heads-up displays.
+
+T62 per-voice Enhancer — integrated 2026-08-28
+- Every allocated voice now runs its own lightweight one-band Enhancer after the Voice Filter and before the Amp Envelope. It uses fixed linked Mid/Side processing, one Tube-family first-order-ADAA residue path, independent per-voice history/reset, and hard Amount-zero identity without importing either standalone Enhancer's oversampling wrapper.
+- The existing Voice Filter footprint switches explicitly between FILTER and ENHANCER. The Enhancer surface exposes Frequency or tracked Ratio, Q, Amount, and the Key Track switch; state, host, modulation, exact-entry, Init, preset, and URL paths use the landed shared-pitch authority.
+- Source review repaired tracked Ratio conversion, 320/393 px touch ownership, pointer-capture rejection and loss, stale current-format sound fixtures, and a silent benchmark harness. Final focused browser/provenance proof passes 5/5; complete Cmajor rack is 100/100 and orphan/unit qualification is 752/752.
+- The shipping generated-C++ benchmark passes three 4,096-block repeats. All 1,372 active routes are bit-identical to the empty-route audio, the one-to-sixteen-voice median ratio is 0.2504 against a 0.40 ceiling, and the 100-route rack profile adds 1.412 render-load points against a 10-point budget.
+- Fresh HMR verified the exact implementation worktree and was stopped. The final compiled VST3 is installed and strict-signed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`, executable SHA-256 `8c54c02a697a4fd42235f2664bbedce15c7ad4b16e58dc418445ea5fb05e07c1`. No Ableton listening/host acceptance or physical iPhone acceptance is claimed.
