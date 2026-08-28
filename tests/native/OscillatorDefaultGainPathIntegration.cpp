@@ -12,6 +12,10 @@
  #error "COSIMO_GENERATED_CPP_PATH must point to generated production Cmajor C++"
 #endif
 
+#ifndef COSIMO_DEFAULT_WAVETABLE_INDEX
+ #error "COSIMO_DEFAULT_WAVETABLE_INDEX must match the generated production metadata"
+#endif
+
 namespace gain_path_probe
 {
 using namespace cosimo::three_osc::bridge;
@@ -56,7 +60,7 @@ constexpr auto mipCount = std::int32_t { 11 };
 constexpr auto blockFrames = std::int32_t { 128 };
 constexpr auto measurementFrames = std::int32_t { 8192 };
 constexpr auto measurementWarmupFrames = std::int32_t { 512 };
-constexpr auto defaultTableIndex = std::int32_t { 34 };
+constexpr auto defaultTableIndex = std::int32_t { COSIMO_DEFAULT_WAVETABLE_INDEX };
 constexpr auto noteNumber = std::uint8_t { 60 };
 constexpr auto oldQuietLevelDb = -9.542425f;
 
@@ -149,6 +153,9 @@ void setOscillatorDefaults (WavetableSynth& performer,
     setValue (performer, Handles::filterCutoff, 1000.0f);
     setValue (performer, Handles::filterQ, 0.707107f);
     setValue (performer, Handles::filterMix, 1.0f);
+    setValue (performer, Handles::ampAttack, 0.01f);
+    setValue (performer, Handles::ampDecay, 0.001f);
+    setValue (performer, Handles::ampSustain, 1.0f);
     setValue (performer, Handles::ampRelease, 0.2f);
     setValue (performer, Handles::sourceMode, 0.0f);
 

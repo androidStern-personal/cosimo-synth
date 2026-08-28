@@ -25,11 +25,31 @@ for endpoint in oscAVolumeDb oscBVolumeDb oscCVolumeDb oscAMute oscBMute oscCMut
     rg -Fq "\"endpointID\": \"$endpoint\"" "$generated_metadata"
 done
 
+default_table_index="$({
+    python3 - "$generated_metadata" <<'PY'
+import json
+import sys
+
+metadata = json.load(open(sys.argv[1], encoding="utf-8"))
+inputs = {entry.get("endpointID"): entry for entry in metadata["inputs"]}
+defaults = [
+    inputs[f"osc{oscillator}WavetableSelect"]["annotation"]["init"]
+    for oscillator in ("A", "B", "C")
+]
+if any(value != defaults[0] for value in defaults[1:]):
+    raise SystemExit(f"oscillator wavetable defaults disagree: {defaults}")
+if int(defaults[0]) != defaults[0]:
+    raise SystemExit(f"wavetable default is not an integer: {defaults[0]}")
+print(int(defaults[0]))
+PY
+})"
+
 "${CXX:-c++}" \
     -std=c++17 -O1 -g0 -Wall -Wextra -Werror \
     -Wno-unused-local-typedefs -Wno-unused-function \
     -I"$renderer_dir" \
     -I"$renderer_dir/third_party/xsimd/include" \
+    -DCOSIMO_DEFAULT_WAVETABLE_INDEX="$default_table_index" \
     -DCOSIMO_GENERATED_CPP_PATH=\"$generated_cpp\" \
     "$test_dir/OscillatorDefaultGainPathIntegration.cpp" \
     "$renderer_dir/RendererBridge.cpp" \

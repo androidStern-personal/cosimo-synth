@@ -69,7 +69,6 @@
     "warp:update-reference": "npm run warp:fixtures:update-inputs && npm run warp:reference:update",
     "test:synth:engine": "tests/native/run_three_oscillator_renderer_oracle.sh && tests/native/run_three_oscillator_generated_integration.sh && tests/native/run_three_oscillator_shared_voice_engine.sh",
     "test:default-wavetable": "uv run pytest tests/test_default_factory_wavetable.py && node --test tests/test_default_wavetable_contract.mjs",
-    "test:t59:scope": "node scripts/check_t59_index_scope.mjs b8c727c6",
     "test:synth:defaults": "npm run test:default-wavetable && node --test tests/test_oscillator_binding_contract.mjs tests/test_synth_init_presets.mjs && tests/native/run_oscillator_default_gain_path.sh",
     "test:cmajor:warp": "npm run test:python:warp-alias && npm run test:synth:engine",
     "test:cmajor:filter": "npm run test:python:filter-stability && npm run test:synth:engine",

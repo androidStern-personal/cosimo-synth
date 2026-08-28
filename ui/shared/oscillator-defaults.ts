@@ -1,9 +1,9 @@
 import type { OscillatorID } from "./modulation-targets";
 
-/** Stable catalog identity for the authored Core Shapes Init table. */
+/** Current catalog identity for the authored Core Shapes Init table. */
 export const OSCILLATOR_DEFAULT_WAVETABLE_ID = "core-shapes";
 
-/** Append-only catalog index of the Core Shapes table. */
+/** Current catalog index of the Core Shapes table. */
 export const OSCILLATOR_DEFAULT_WAVETABLE_INDEX = 238;
 
 /** Lowest valid factory wavetable selector index. */

@@ -212,9 +212,9 @@ Symbol names should survive; line numbers may not.
    to JIT-link 18 MiB of PCM); rebuilding the performer per bounce; a
    host-side sampler outside the engine (breaks rack routing); shipping PCM
    through the realtime acked event lane as the *permanent* transport.
-9. **Identity/persistence facts.** `wavetableSelect` is an append-only 0..238
-   factory-catalog index; the historical 0..237 mappings stay frozen. Bank
-   identity must be a content digest in a new
+9. **Identity/persistence facts.** `wavetableSelect` is the current 0..238
+   factory-catalog index. This greenfield format makes no compatibility claim
+   for unpublished older catalogs. Bank identity must be a content digest in a new
    stored document, not a selector value. Stored-state values on native ride
    the JUCE ValueTree binary chunk (binary-safe, no base64 bloat; desktop
    restore is synchronous). ADR-027 (undo/history) is UNIMPLEMENTED and its
