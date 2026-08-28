@@ -1353,6 +1353,14 @@ graph WavetableSynth [[ main ]]
     // Existing automation slots and parameter IDs remain untouched.
     input value float32 filterCutoffKeyTrackEnabled [[ name: "Voice Filter Key Track", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
     input value float32 filterCutoffKeyTrackOffsetSemitones [[ name: "Voice Filter Key Track Offset", min: -60.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
+    // T62 appends one shared surface for every voice-owned Enhancer instance.
+    // Frequency remains stored while Key Track swaps the first UI value to the
+    // independent Ratio offset; no host identity is repurposed.
+    input value float32 voiceEnhancerFrequency [[ name: "Voice Enhancer Frequency", min: 20.0f, max: 20000.0f, init: 130.0f, unit: "Hz", rampFrames: 0 ]];
+    input value float32 voiceEnhancerQ [[ name: "Voice Enhancer Q", min: 0.1f, max: 10.0f, init: 0.71f, rampFrames: 0 ]];
+    input value float32 voiceEnhancerAmount [[ name: "Voice Enhancer Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 voiceEnhancerKeyTrackEnabled [[ name: "Voice Enhancer Key Track", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+    input value float32 voiceEnhancerKeyTrackOffsetSemitones [[ name: "Voice Enhancer Key Track Offset", min: -12.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
     // Effects Lane structure and parameter records/fields are patch state and
     // live edits (ADR-007); Solo is runtime-only audition state. These struct
     // events carry no parameter purpose, so none become host automation slots.
@@ -1479,6 +1487,11 @@ graph WavetableSynth [[ main ]]
         globalTune -> sharedEngine.globalTuneIn;
         filterCutoffKeyTrackEnabled -> sharedEngine.filterCutoffKeyTrackEnabledIn;
         filterCutoffKeyTrackOffsetSemitones -> sharedEngine.filterCutoffKeyTrackOffsetSemitonesIn;
+        voiceEnhancerFrequency -> sharedEngine.voiceEnhancerFrequencyIn;
+        voiceEnhancerQ -> sharedEngine.voiceEnhancerQIn;
+        voiceEnhancerAmount -> sharedEngine.voiceEnhancerAmountIn;
+        voiceEnhancerKeyTrackEnabled -> sharedEngine.voiceEnhancerKeyTrackEnabledIn;
+        voiceEnhancerKeyTrackOffsetSemitones -> sharedEngine.voiceEnhancerKeyTrackOffsetSemitonesIn;
         oscAWavetableSelect -> desiredTableMonitorA.tableSelectIn;
         oscBWavetableSelect -> desiredTableMonitorB.tableSelectIn;
         oscCWavetableSelect -> desiredTableMonitorC.tableSelectIn;

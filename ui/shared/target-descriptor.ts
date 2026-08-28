@@ -40,6 +40,12 @@ import {
     GLOBAL_TUNE_TARGET_KIND,
 } from "./global-tune";
 import { OSCILLATOR_DEFAULT_VOLUME_NORMALIZED } from "./oscillator-defaults";
+import {
+    VOICE_ENHANCER_PARAMETER_DESCRIPTORS,
+    denormalizeVoiceEnhancerValue,
+    normalizeVoiceEnhancerValue,
+    type VoiceEnhancerParameterDescriptor,
+} from "./voice-enhancer";
 
 /** The eight fixed rack effects (ADR-006 v1 inventory; identity ≠ position). */
 export type EffectModuleId =
@@ -53,7 +59,7 @@ export type EffectModuleId =
     | "reverb";
 
 /** The per-note voice modules. */
-export type VoiceModuleId = `osc${OscillatorID}` | "voice" | "voice-filter";
+export type VoiceModuleId = `osc${OscillatorID}` | "voice" | "voice-filter" | "voice-enhancer";
 
 /** The modulation-generator modules shown in the voice workspace. */
 export type ModulationGeneratorModuleId = `mseg${1 | 2 | 3}` | `env${1 | 2 | 3}` | "ampEnvelope";
@@ -81,7 +87,7 @@ export type ValueFormat =
 export type ModAmountSpec = {
     readonly min: number;
     readonly max: number;
-    readonly unit: "%" | "oct" | "st" | "dB" | "pan" | "s";
+    readonly unit: "%" | "oct" | "st" | "dB" | "pan" | "s" | "Q";
     readonly digits: number;
 };
 
@@ -163,6 +169,9 @@ type BoundEndpointId =
     | "ampDecay"
     | "ampSustain"
     | "ampRelease"
+    | "voiceEnhancerFrequency"
+    | "voiceEnhancerQ"
+    | "voiceEnhancerAmount"
     | `mseg${1 | 2 | 3}${"Morph" | "Rate"}`
     | `env${1 | 2 | 3}${"Attack" | "Decay" | "Sustain" | "Release"}`;
 
@@ -471,6 +480,48 @@ const GLOBAL_TUNE_TARGET_DESCRIPTOR = Object.freeze<TargetDescriptor>({
     modulationTargetKind: GLOBAL_TUNE_TARGET_KIND,
 });
 
+function createVoiceEnhancerTargetDescriptor(
+    descriptor: VoiceEnhancerParameterDescriptor,
+): TargetDescriptor {
+    const targetId = catalogTargetId("voice-enhancer", descriptor.key);
+    const initialValue = normalized(
+        normalizeVoiceEnhancerValue(descriptor, descriptor.initial),
+        `${descriptor.endpointID} initial value`,
+    );
+    return Object.freeze({
+        targetId,
+        moduleId: "voice-enhancer" as const,
+        workspace: "voice" as const,
+        label: descriptor.label,
+        defaultValue: initialValue,
+        initialValue,
+        format: descriptor.unit === "Hz"
+            ? { kind: "frequency" as const, minHz: descriptor.min, maxHz: descriptor.max }
+            : { kind: "percent" as const },
+        modAmount: descriptor.modulationApplication === "octaves"
+            ? { min: -6, max: 6, unit: "oct" as const, digits: 2 }
+            : descriptor.unit === "Q"
+                ? { min: -9.9, max: 9.9, unit: "Q" as const, digits: 2 }
+                : { min: -100, max: 100, unit: "%" as const, digits: 0 },
+        binding: boundEndpoint(
+            descriptor.endpointID,
+            (value) => denormalizeVoiceEnhancerValue(descriptor, value),
+            (value) => normalized(
+                normalizeVoiceEnhancerValue(descriptor, value),
+                `${descriptor.endpointID} endpoint conversion`,
+            ),
+        ),
+        isQuick: false,
+        compound: null,
+        articulationParameterId: null,
+        modulationTargetKind: descriptor.targetKind,
+    });
+}
+
+const VOICE_ENHANCER_TARGET_DESCRIPTORS: ReadonlyArray<TargetDescriptor> = Object.freeze(
+    Object.values(VOICE_ENHANCER_PARAMETER_DESCRIPTORS).map(createVoiceEnhancerTargetDescriptor),
+);
+
 type GeneratorTargetDefinition = {
     readonly moduleId: ModulationGeneratorModuleId;
     readonly targetIdSuffix: string;
@@ -645,6 +696,7 @@ const TARGET_DESCRIPTORS: ReadonlyArray<TargetDescriptor> = Object.freeze(
         ...RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters.map(createRackTargetDescriptor)),
         ...FREQUENCY_SPLIT_TARGET_DESCRIPTORS,
         GLOBAL_TUNE_TARGET_DESCRIPTOR,
+        ...VOICE_ENHANCER_TARGET_DESCRIPTORS,
         ...OSCILLATOR_MODULATION_DESCRIPTORS,
         ...GENERATOR_TARGET_DESCRIPTORS,
         ...MODULE_DEFINITIONS.flatMap((moduleDefinition) =>

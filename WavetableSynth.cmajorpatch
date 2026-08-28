@@ -21,6 +21,7 @@
     "cmajor/Phaser.cmajor",
     "cmajor/Delay.cmajor",
     "cmajor/Reverb.cmajor",
+    "cmajor/VoiceEnhancer.cmajor",
     "cmajor/ThreeOscillatorRendererExternal.cmajor",
     "cmajor/FixedFrameOscillator.cmajor",
     "cmajor/VoiceReducer.cmajor",

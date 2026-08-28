@@ -57,9 +57,10 @@ namespace wt
     // Runtime order matches ui/shared/modulation-targets.ts: ten local targets
     // for each oscillator, the two established shared filter targets, the
     // continuous MSEG/envelope controls, append-only Filter Mix and Global
-    // Tune, then the complete Amp Envelope controls.
+    // Tune, the complete Amp Envelope controls, then T62's three append-only
+    // per-voice Enhancer destinations.
     let modulationOscillatorTargetCount = 10;
-    let modulationVoiceTargetCount = (oscillatorCount * modulationOscillatorTargetCount) + 26;
+    let modulationVoiceTargetCount = (oscillatorCount * modulationOscillatorTargetCount) + 29;
     // Keep the established 32-wide SIMD block intact and place appended
     // destinations in a second padded SIMD block. A single 56-wide
     // vector scalarises in the pinned browser backend and cannot meet the
@@ -215,6 +216,9 @@ namespace wt
     let modulationTargetAmpDecay = modulationTargetAmpAttack + 1;
     let modulationTargetAmpSustain = modulationTargetAmpDecay + 1;
     let modulationTargetAmpRelease = modulationTargetAmpSustain + 1;
+    let modulationTargetVoiceEnhancerFrequencyOctaves = modulationTargetAmpRelease + 1;
+    let modulationTargetVoiceEnhancerQ = modulationTargetVoiceEnhancerFrequencyOctaves + 1;
+    let modulationTargetVoiceEnhancerAmount = modulationTargetVoiceEnhancerQ + 1;
     let articulationSlotCount = 128;
     let articulationSelectorNone = -1;
     // Frozen Cmajor/native address book for the 16-note, three-oscillator
@@ -1579,6 +1583,11 @@ namespace wt
         input value float32 filterCutoffKeyTrackOffsetSemitonesIn [[ name: "Voice Filter Key Track Offset", min: -60.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
         input value float32 filterQIn [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
         input value float32 filterMixIn [[ name: "Filter Mix", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
+        input value float32 voiceEnhancerFrequencyIn [[ name: "Voice Enhancer Frequency", min: voiceEnhancerFrequencyMinHz, max: voiceEnhancerFrequencyMaxHz, init: voiceEnhancerFrequencyDefaultHz, unit: "Hz", rampFrames: 0 ]];
+        input value float32 voiceEnhancerKeyTrackEnabledIn [[ name: "Voice Enhancer Key Track", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+        input value float32 voiceEnhancerKeyTrackOffsetSemitonesIn [[ name: "Voice Enhancer Key Track Offset", min: -12.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
+        input value float32 voiceEnhancerQIn [[ name: "Voice Enhancer Q", min: voiceEnhancerQMin, max: voiceEnhancerQMax, init: voiceEnhancerQDefault, rampFrames: 0 ]];
+        input value float32 voiceEnhancerAmountIn [[ name: "Voice Enhancer Amount", min: voiceEnhancerAmountMin, max: voiceEnhancerAmountMax, init: voiceEnhancerAmountDefault, rampFrames: 64 ]];
         input value float32 macro1In [[ name: "Macro 1", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         input value float32 macro2In [[ name: "Macro 2", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         input value float32 macro3In [[ name: "Macro 3", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
@@ -1637,6 +1646,8 @@ namespace wt
 
         std::filters::simper::Implementation[voiceCount] unisonLeftFilters;
         std::filters::simper::Implementation[voiceCount] unisonRightFilters;
+        VoiceEnhancerVoice[voiceCount] voiceEnhancers;
+        VoiceEnhancerResidueDcBlocker voiceEnhancerResidueDcBlocker;
         int32[voiceCount * oscillatorCount] voiceOscillatorGeneration;
         int32[voiceCount] voiceChannel;
         float32[voiceCount] voiceBasePitch;
@@ -1666,6 +1677,9 @@ namespace wt
         float32[voiceCount] voiceEffectiveFilterCutoffHz;
         float32[voiceCount] voiceEffectiveFilterQ;
         float32[voiceCount] voiceEffectiveFilterMix;
+        float32[voiceCount] voiceEffectiveEnhancerFrequencyHz;
+        float32[voiceCount] voiceEffectiveEnhancerQ;
+        float32[voiceCount] voiceEffectiveEnhancerAmount;
         float32[voiceCount] voiceEffectivePan;
         int32[voiceCount] voiceEffectiveUnisonVoices;
         float32[voiceCount] voiceEffectiveUnisonDetune;
@@ -2590,6 +2604,7 @@ namespace wt
             let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
             unisonLeftFilters.at (resolvedVoice).reset();
             unisonRightFilters.at (resolvedVoice).reset();
+            voiceEnhancers.at (resolvedVoice).reset();
             voiceFilterKeyTrackSmoothedHz.at (resolvedVoice) = 0.0f;
         }
 
@@ -5639,6 +5654,9 @@ namespace wt
                 rackModSmoothingMs, float32 (processor.frequency));
             keyTrackSmoothingCoefficientState = keyTrackOnePoleCoefficient (
                 float32 (processor.frequency));
+            for (wrap<voiceCount> voice)
+                voiceEnhancers[voice].prepare (float32 (processor.frequency));
+            voiceEnhancerResidueDcBlocker.prepare (float32 (processor.frequency));
             resetAllFilterState();
 
             for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
@@ -5688,6 +5706,9 @@ namespace wt
 
                 float32 leftMix = 0.0f;
                 float32 rightMix = 0.0f;
+                float32 enhancerResidueLeftMix = 0.0f;
+                float32 enhancerResidueRightMix = 0.0f;
+                bool hasEnhancerResidue = false;
                 float32 trackingPitchHz = trackingPitchHzState;
                 int32 trackingSerial = -1;
 
@@ -5810,6 +5831,24 @@ namespace wt
                     voiceEffectiveFilterCutoffHz.at (voice) = effectiveFilterCutoffHz;
                     voiceEffectiveFilterQ.at (voice) = effectiveFilterQ;
                     voiceEffectiveFilterMix.at (voice) = effectiveFilterMix;
+                    let routeVoiceEnhancerFrequencyOctaves = voiceTargetOffset (
+                        voiceIndex,
+                        modulationTargetVoiceEnhancerFrequencyOctaves);
+                    voiceEffectiveEnhancerFrequencyHz.at (voice)
+                        = resolveVoiceEnhancerFrequencyHz (
+                            voiceEnhancerKeyTrackEnabledIn,
+                            voiceEnhancerFrequencyIn,
+                            std::notes::noteToFrequency (sharedPlayedPitchSemitones),
+                            voiceEnhancerKeyTrackOffsetSemitonesIn,
+                            routeVoiceEnhancerFrequencyOctaves,
+                            processorFrequency);
+                    voiceEffectiveEnhancerQ.at (voice) = clampVoiceEnhancerQ (
+                        voiceEnhancerQIn + voiceTargetOffset (
+                            voiceIndex, modulationTargetVoiceEnhancerQ));
+                    voiceEffectiveEnhancerAmount.at (voice)
+                        = clampVoiceEnhancerAmount (
+                            voiceEnhancerAmountIn + voiceTargetOffset (
+                                voiceIndex, modulationTargetVoiceEnhancerAmount));
 
                     for (wrap<oscillatorCount> oscillatorWrapped)
                     {
@@ -5983,20 +6022,45 @@ namespace wt
 
                     // Oscillators A/B/C are already combined by the renderer,
                     // and Bounce is the alternative combined source. The
-                    // Voice Filter above processes that note before this one
-                    // shared per-note Amp Envelope; voices are summed only now.
+                    // Voice Filter above feeds this note-owned Enhancer; the
+                    // shared per-note Amp Envelope then scales both dry and
+                    // residue before voices are summed.
+                    let enhancerResidue = voiceEnhancers.at (voice).process (
+                        float32<2> (noteLeft, noteRight),
+                        voiceEffectiveEnhancerFrequencyHz.at (voice),
+                        voiceEffectiveEnhancerQ.at (voice),
+                        voiceEffectiveEnhancerAmount.at (voice));
                     let gain = ampEnvelopes[voice].gainOut;
                     leftMix += noteLeft * gain;
                     rightMix += noteRight * gain;
+                    enhancerResidueLeftMix += enhancerResidue[0] * gain;
+                    enhancerResidueRightMix += enhancerResidue[1] * gain;
+                    hasEnhancerResidue = hasEnhancerResidue
+                        || voiceEffectiveEnhancerAmount.at (voice) > 0.0f;
                 }
 
                 updateRackModulationOutputs();
 
                 trackingPitchHzState = trackingPitchHz;
 
+                float32<2> blockedEnhancerResidue;
+                if (hasEnhancerResidue)
+                {
+                    blockedEnhancerResidue = voiceEnhancerResidueDcBlocker.process (
+                        float32<2> (
+                            enhancerResidueLeftMix,
+                            enhancerResidueRightMix));
+                }
+                else
+                {
+                    // Amount 0 is a hard identity even after prior use.
+                    voiceEnhancerResidueDcBlocker.reset();
+                    blockedEnhancerResidue = ();
+                }
+
                 out <- float32<2> (
-                    leftMix * sourceModeGain,
-                    rightMix * sourceModeGain);
+                    (leftMix + blockedEnhancerResidue[0]) * sourceModeGain,
+                    (rightMix + blockedEnhancerResidue[1]) * sourceModeGain);
                 trackingPitchHzOut <- trackingPitchHz;
                 maybeEmitMonitorUpdate();
                 advance();

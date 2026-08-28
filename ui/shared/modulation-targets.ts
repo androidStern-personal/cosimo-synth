@@ -56,6 +56,9 @@ export const SHARED_VOICE_MODULATION_TARGET_KINDS = [
     "ampDecay",
     "ampSustain",
     "ampRelease",
+    "voiceEnhancerFrequencyOctaves",
+    "voiceEnhancerQ",
+    "voiceEnhancerAmount",
 ] as const;
 
 /** One voice-global modulation destination. */
@@ -225,9 +228,9 @@ const targetIdentityByKind = new Map(MODULATION_TARGET_IDENTITIES.map((identity)
 
 function assertCanonicalIdentities(): void {
     if (MODULATION_SOURCE_COUNT !== 14
-        || MODULATION_VOICE_TARGET_COUNT !== 56
+        || MODULATION_VOICE_TARGET_COUNT !== 59
         || MODULATION_RACK_TARGET_COUNT !== 39
-        || MODULATION_LEGAL_PAIR_COUNT !== 1330) {
+        || MODULATION_LEGAL_PAIR_COUNT !== 1372) {
         throw new Error("Unexpected modulation domain size");
     }
 
@@ -241,7 +244,7 @@ function assertCanonicalIdentities(): void {
         }
     }
 
-    for (const [group, expectedCount] of [["voice", 56], ["rack", 39]] as const) {
+    for (const [group, expectedCount] of [["voice", 59], ["rack", 39]] as const) {
         const identities = MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
         if (identities.length !== expectedCount
             || identities.some((identity, position) => identity.runtimeIndex !== position)) {

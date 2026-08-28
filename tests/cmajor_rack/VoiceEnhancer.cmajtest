@@ -1,0 +1,715 @@
+// T62's per-voice Enhancer is transparent at Amount 0. This exercises the
+// production SharedVoiceEngine seam so the assertion includes its required
+// post-filter, pre-Amp-Envelope placement rather than only a DSP helper.
+
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/VoiceEnhancer.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "ConstantThreeOscillatorRenderer.cmajor")
+
+## testProcessor (undefined, { frequency: 600 })
+
+graph VoiceEnhancerZeroAmountIdentity [[ main ]]
+{
+    output event int32 out;
+
+    node source = VoiceEnhancerZeroAmountSource;
+    node engine = wt::SharedVoiceEngine (1);
+    node reference = wt::RetriggerableAmpAdsr;
+    node witness = VoiceEnhancerZeroAmountWitness;
+
+    connection
+    {
+        source.noteOut -> engine.voiceEventIn[0], reference.eventIn;
+        source.attackOut -> engine.ampAttackIn, reference.attackSecondsIn;
+        source.decayOut -> engine.ampDecayIn, reference.decaySecondsIn;
+        source.sustainOut -> engine.ampSustainIn, reference.sustainIn;
+        source.releaseOut -> engine.ampReleaseIn, reference.releaseSecondsIn;
+        source.filterModeOut -> engine.filterModeIn;
+        source.frequencyOut -> engine.voiceEnhancerFrequencyIn;
+        source.qOut -> engine.voiceEnhancerQIn;
+        source.amountOut -> engine.voiceEnhancerAmountIn;
+        engine.out -> witness.audioIn;
+        reference.gainOut -> witness.gainIn;
+        witness.out -> out;
+    }
+}
+
+processor VoiceEnhancerZeroAmountSource
+{
+    output event std::notes::NoteOn noteOut;
+    output value float32 attackOut;
+    output value float32 decayOut;
+    output value float32 sustainOut;
+    output value float32 releaseOut;
+    output value float32 filterModeOut;
+    output value float32 frequencyOut;
+    output value float32 qOut;
+    output value float32 amountOut;
+
+    std::notes::NoteOn noteOn()
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        note.velocity = 1.0f;
+        return note;
+    }
+
+    void main()
+    {
+        attackOut <- 0.01f;
+        decayOut <- 0.001f;
+        sustainOut <- 1.0f;
+        releaseOut <- 0.02f;
+        filterModeOut <- 0.0f;
+        frequencyOut <- 130.0f;
+        qOut <- 0.71f;
+        amountOut <- 0.0f;
+        advance();
+        noteOut <- noteOn();
+        loop advance();
+    }
+}
+
+processor VoiceEnhancerZeroAmountWitness
+{
+    input stream float32<2> audioIn;
+    input stream float32 gainIn;
+    output event int32 out;
+
+    bool exactOnEveryFrame = true;
+    bool sawSound;
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            let expected = float32<2> (0.75f * gainIn, -0.5f * gainIn);
+            if (audioIn[0] != expected[0] || audioIn[1] != expected[1])
+                exactOnEveryFrame = false;
+            if (gainIn > 0.0f)
+                sawSound = true;
+
+            if (frame == 70) out <- exactOnEveryFrame ? 1 : 0;
+            if (frame == 71) out <- sawSound ? 1 : 0;
+            if (frame == 72) out <- -1;
+            advance();
+        }
+    }
+}
+
+// The voice-owned processor emits residue only. Linked Mid/Side is fixed:
+// mono input can only create equal L/R residue, while pure-side input can
+// only create opposite L/R residue. No routing or character mode exists.
+
+## testProcessor()
+
+processor VoiceEnhancerLinkedMidSideResidue [[ main ]]
+{
+    output stream int32 out;
+    wt::VoiceEnhancerVoice enhancer;
+
+    bool finite (float32 value)
+    {
+        return ! std::intrinsics::isnan (value)
+            && ! std::intrinsics::isinf (value)
+            && std::intrinsics::abs (value) < 100.0f;
+    }
+
+    void main()
+    {
+        enhancer.prepare (float32 (processor.frequency));
+
+        bool zeroIsExact;
+        let zeroResidue = enhancer.process (
+            float32<2> (0.375f, -0.1875f), 130.0f, 0.71f, 0.0f);
+        zeroIsExact = zeroResidue[0] == 0.0f && zeroResidue[1] == 0.0f;
+        enhancer.reset();
+
+        bool monoStayedMono = true;
+        bool monoChanged;
+        bool remainedFinite = true;
+        for (int32 frame = 0; frame < 4096; ++frame)
+        {
+            let sample = 0.35f * float32 (std::intrinsics::sin (
+                twoPi * 1000.0f * float32 (frame) / float32 (processor.frequency)));
+            let residue = enhancer.process (
+                float32<2> (sample, sample), 1000.0f, 0.71f, 0.8f);
+            if (residue[0] != residue[1]) monoStayedMono = false;
+            if (std::intrinsics::abs (residue[0]) > 0.0000001f) monoChanged = true;
+            if (! finite (residue[0]) || ! finite (residue[1])) remainedFinite = false;
+        }
+
+        enhancer.reset();
+        bool sideStayedSide = true;
+        bool sideChanged;
+        for (int32 frame = 0; frame < 4096; ++frame)
+        {
+            let sample = 0.31f * float32 (std::intrinsics::sin (
+                twoPi * 700.0f * float32 (frame) / float32 (processor.frequency)));
+            let residue = enhancer.process (
+                float32<2> (sample, -sample), 700.0f, 1.2f, 0.9f);
+            if (residue[0] != -residue[1]) sideStayedSide = false;
+            if (std::intrinsics::abs (residue[0]) > 0.0000001f) sideChanged = true;
+            if (! finite (residue[0]) || ! finite (residue[1])) remainedFinite = false;
+        }
+
+        enhancer.reset();
+        let resetResidue = enhancer.process (float32<2> (0.0f), 700.0f, 1.2f, 0.9f);
+        let resetIsSilent = resetResidue[0] == 0.0f && resetResidue[1] == 0.0f;
+
+        out <- zeroIsExact ? 1 : 0;
+        advance();
+        out <- (monoStayedMono && monoChanged) ? 1 : 0;
+        advance();
+        out <- (sideStayedSide && sideChanged) ? 1 : 0;
+        advance();
+        out <- remainedFinite ? 1 : 0;
+        advance();
+        out <- resetIsSilent ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+// The nonlinear stage belongs to each note before that note's Amp Envelope
+// and before the voice sum. Therefore velocity scales the already-shaped
+// result linearly, and two identical voices equal two independent one-voice
+// results instead of shaping the combined signal.
+
+## testProcessor (undefined, { frequency: 600 })
+
+graph VoiceEnhancerPerVoicePlacement [[ main ]]
+{
+    output event int32 out;
+
+    node source = VoiceEnhancerPlacementSource;
+    node high = wt::SharedVoiceEngine (1);
+    node low = wt::SharedVoiceEngine (1);
+    node dry = wt::SharedVoiceEngine (1);
+    node doubled = wt::SharedVoiceEngine (2);
+    node witness = VoiceEnhancerPlacementWitness;
+
+    connection
+    {
+        source.highNoteOut -> high.voiceEventIn[0], dry.voiceEventIn[0],
+                              doubled.voiceEventIn[0], doubled.voiceEventIn[1];
+        source.lowNoteOut -> low.voiceEventIn[0];
+        source.attackOut -> high.ampAttackIn, low.ampAttackIn,
+                            dry.ampAttackIn, doubled.ampAttackIn;
+        source.decayOut -> high.ampDecayIn, low.ampDecayIn,
+                           dry.ampDecayIn, doubled.ampDecayIn;
+        source.sustainOut -> high.ampSustainIn, low.ampSustainIn,
+                             dry.ampSustainIn, doubled.ampSustainIn;
+        source.releaseOut -> high.ampReleaseIn, low.ampReleaseIn,
+                             dry.ampReleaseIn, doubled.ampReleaseIn;
+        source.filterModeOut -> high.filterModeIn, low.filterModeIn,
+                                dry.filterModeIn, doubled.filterModeIn;
+        source.frequencyOut -> high.voiceEnhancerFrequencyIn,
+                               low.voiceEnhancerFrequencyIn,
+                               dry.voiceEnhancerFrequencyIn,
+                               doubled.voiceEnhancerFrequencyIn;
+        source.qOut -> high.voiceEnhancerQIn, low.voiceEnhancerQIn,
+                       dry.voiceEnhancerQIn, doubled.voiceEnhancerQIn;
+        source.amountOut -> high.voiceEnhancerAmountIn,
+                            low.voiceEnhancerAmountIn,
+                            doubled.voiceEnhancerAmountIn;
+        source.zeroAmountOut -> dry.voiceEnhancerAmountIn;
+        high.out -> witness.highIn;
+        low.out -> witness.lowIn;
+        dry.out -> witness.dryIn;
+        doubled.out -> witness.doubledIn;
+        witness.out -> out;
+    }
+}
+
+processor VoiceEnhancerPlacementSource
+{
+    output event std::notes::NoteOn highNoteOut;
+    output event std::notes::NoteOn lowNoteOut;
+    output value float32 attackOut;
+    output value float32 decayOut;
+    output value float32 sustainOut;
+    output value float32 releaseOut;
+    output value float32 filterModeOut;
+    output value float32 frequencyOut;
+    output value float32 qOut;
+    output value float32 amountOut;
+    output value float32 zeroAmountOut;
+
+    std::notes::NoteOn noteOn (float32 velocity)
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        note.velocity = velocity;
+        return note;
+    }
+
+    void main()
+    {
+        attackOut <- 0.001f;
+        decayOut <- 0.001f;
+        sustainOut <- 1.0f;
+        releaseOut <- 0.02f;
+        filterModeOut <- 0.0f;
+        frequencyOut <- 1000.0f;
+        qOut <- 0.71f;
+        amountOut <- 0.9f;
+        zeroAmountOut <- 0.0f;
+        advance();
+        highNoteOut <- noteOn (1.0f);
+        lowNoteOut <- noteOn (0.5f);
+        loop advance();
+    }
+}
+
+processor VoiceEnhancerPlacementWitness
+{
+    input stream float32<2> highIn;
+    input stream float32<2> lowIn;
+    input stream float32<2> dryIn;
+    input stream float32<2> doubledIn;
+    output event int32 out;
+
+    bool velocityScaled = true;
+    bool voicesStayedIndependent = true;
+    bool heardResidue;
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame >= 12 && frame < 96)
+            {
+                if (std::intrinsics::abs (highIn[0] - lowIn[0] * 2.0f) > 0.000001f
+                    || std::intrinsics::abs (highIn[1] - lowIn[1] * 2.0f) > 0.000001f)
+                    velocityScaled = false;
+
+                if (std::intrinsics::abs (doubledIn[0] - highIn[0] * 2.0f) > 0.000001f
+                    || std::intrinsics::abs (doubledIn[1] - highIn[1] * 2.0f) > 0.000001f)
+                    voicesStayedIndependent = false;
+
+                if (std::intrinsics::abs (highIn[0] - dryIn[0]) > 0.000001f
+                    || std::intrinsics::abs (highIn[1] - dryIn[1]) > 0.000001f)
+                    heardResidue = true;
+            }
+
+            if (frame == 96) out <- velocityScaled ? 1 : 0;
+            if (frame == 97) out <- voicesStayedIndependent ? 1 : 0;
+            if (frame == 98) out <- heardResidue ? 1 : 0;
+            if (frame == 99) out <- -1;
+            advance();
+        }
+    }
+}
+
+## testFunction()
+
+bool testVoiceEnhancerFixedFrequencyPreservesItsOctaveRouteLaw()
+{
+    let ordinaryHz = 1234.5f;
+    let routeOctaves = 0.089837f;
+    let expected = ordinaryHz * std::intrinsics::pow (2.0f, routeOctaves);
+    return std::intrinsics::abs (wt::resolveVoiceEnhancerFrequencyHz (
+        0.0f, ordinaryHz, 440.0f, 17.0f, routeOctaves, 48000.0f)
+        - expected) <= 0.001f;
+}
+
+bool testVoiceEnhancerTrackedFrequencyUsesTheLockedContinuousRatioRange()
+{
+    let actual = wt::resolveVoiceEnhancerFrequencyHz (
+        1.0f, 1234.5f, 220.0f, 3.25f, 0.0625f, 48000.0f);
+    let expected = 220.0f * std::intrinsics::pow (2.0f, 4.0f / 12.0f);
+    let low = wt::resolveVoiceEnhancerFrequencyHz (
+        1.0f, 1234.5f, 220.0f, -12.0f, 0.0f, 48000.0f);
+    let high = wt::resolveVoiceEnhancerFrequencyHz (
+        1.0f, 1234.5f, 30.0f, 60.0f, 0.0f, 48000.0f);
+    return std::intrinsics::abs (actual - expected) <= 0.001f
+        && std::intrinsics::abs (low - 110.0f) <= 0.001f
+        && std::intrinsics::abs (high - 960.0f) <= 0.001f;
+}
+
+bool testVoiceEnhancerFrequencyClampsAtPointFourFiveSampleRate()
+{
+    return wt::resolveVoiceEnhancerFrequencyHz (
+        1.0f, 130.0f, 20000.0f, 60.0f, 6.0f, 48000.0f)
+        == 21600.0f;
+}
+
+## testProcessor()
+
+graph VoiceEnhancerPolyphonicKeyTrack [[ main ]]
+{
+    output event int32 out;
+
+    node source = VoiceEnhancerPolyphonicKeyTrackSource;
+    node combined = wt::SharedVoiceEngine (2);
+    node low = wt::SharedVoiceEngine (1);
+    node high = wt::SharedVoiceEngine (1);
+    node witness = VoiceEnhancerPolyphonicKeyTrackWitness;
+
+    connection
+    {
+        source.lowNoteOut -> combined.voiceEventIn[0], low.voiceEventIn[0];
+        source.highNoteOut -> combined.voiceEventIn[1], high.voiceEventIn[0];
+        source.attackOut -> combined.ampAttackIn, low.ampAttackIn, high.ampAttackIn;
+        source.decayOut -> combined.ampDecayIn, low.ampDecayIn, high.ampDecayIn;
+        source.sustainOut -> combined.ampSustainIn, low.ampSustainIn, high.ampSustainIn;
+        source.releaseOut -> combined.ampReleaseIn, low.ampReleaseIn, high.ampReleaseIn;
+        source.filterModeOut -> combined.filterModeIn, low.filterModeIn, high.filterModeIn;
+        source.frequencyOut -> combined.voiceEnhancerFrequencyIn,
+                               low.voiceEnhancerFrequencyIn,
+                               high.voiceEnhancerFrequencyIn;
+        source.qOut -> combined.voiceEnhancerQIn,
+                       low.voiceEnhancerQIn,
+                       high.voiceEnhancerQIn;
+        source.amountOut -> combined.voiceEnhancerAmountIn,
+                            low.voiceEnhancerAmountIn,
+                            high.voiceEnhancerAmountIn;
+        source.keyTrackEnabledOut -> combined.voiceEnhancerKeyTrackEnabledIn,
+                                     low.voiceEnhancerKeyTrackEnabledIn,
+                                     high.voiceEnhancerKeyTrackEnabledIn;
+        source.keyTrackOffsetOut -> combined.voiceEnhancerKeyTrackOffsetSemitonesIn,
+                                    low.voiceEnhancerKeyTrackOffsetSemitonesIn,
+                                    high.voiceEnhancerKeyTrackOffsetSemitonesIn;
+        combined.out -> witness.combinedIn;
+        low.out -> witness.lowIn;
+        high.out -> witness.highIn;
+        witness.out -> out;
+    }
+}
+
+processor VoiceEnhancerPolyphonicKeyTrackSource
+{
+    output event std::notes::NoteOn lowNoteOut;
+    output event std::notes::NoteOn highNoteOut;
+    output value float32 attackOut;
+    output value float32 decayOut;
+    output value float32 sustainOut;
+    output value float32 releaseOut;
+    output value float32 filterModeOut;
+    output value float32 frequencyOut;
+    output value float32 qOut;
+    output value float32 amountOut;
+    output value float32 keyTrackEnabledOut;
+    output value float32 keyTrackOffsetOut;
+
+    std::notes::NoteOn noteOn (float32 pitch)
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = pitch;
+        note.velocity = 1.0f;
+        return note;
+    }
+
+    void main()
+    {
+        attackOut <- 0.001f;
+        decayOut <- 0.001f;
+        sustainOut <- 1.0f;
+        releaseOut <- 0.02f;
+        filterModeOut <- 0.0f;
+        frequencyOut <- 130.0f;
+        qOut <- 0.71f;
+        amountOut <- 0.9f;
+        keyTrackEnabledOut <- 1.0f;
+        keyTrackOffsetOut <- 0.0f;
+        advance();
+        lowNoteOut <- noteOn (36.0f);
+        highNoteOut <- noteOn (72.0f);
+        loop advance();
+    }
+}
+
+processor VoiceEnhancerPolyphonicKeyTrackWitness
+{
+    input stream float32<2> combinedIn;
+    input stream float32<2> lowIn;
+    input stream float32<2> highIn;
+    output event int32 out;
+
+    bool matchedIndependentNotes = true;
+    bool heardDifferentCentres;
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame >= 16 && frame < 96)
+            {
+                if (std::intrinsics::abs (
+                        combinedIn[0] - (lowIn[0] + highIn[0])) > 0.0001f
+                    || std::intrinsics::abs (
+                        combinedIn[1] - (lowIn[1] + highIn[1])) > 0.0001f)
+                    matchedIndependentNotes = false;
+                if (std::intrinsics::abs (lowIn[0] - highIn[0]) > 0.000002f
+                    || std::intrinsics::abs (lowIn[1] - highIn[1]) > 0.000002f)
+                    heardDifferentCentres = true;
+            }
+
+            if (frame == 96) out <- matchedIndependentNotes ? 1 : 0;
+            if (frame == 97) out <- heardDifferentCentres ? 1 : 0;
+            if (frame == 98) out <- -1;
+            advance();
+        }
+    }
+}
+
+// Frequency, Q, and Amount are three ordinary per-voice modulation targets.
+// The same frequency route is interpreted as octave motion while fixed and
+// as a continuous ratio offset while tracked.
+
+## testProcessor (undefined, { frequency: 600 })
+
+graph VoiceEnhancerModulationExecution [[ main ]]
+{
+    output event int32 out;
+
+    node source = VoiceEnhancerModulationSource;
+    node routed = wt::SharedVoiceEngine (1);
+    node direct = wt::SharedVoiceEngine (1);
+    node witness = VoiceEnhancerModulationWitness;
+
+    connection
+    {
+        source.noteOut -> routed.voiceEventIn[0], direct.voiceEventIn[0];
+        source.programOut -> routed.modulationProgramIn;
+        source.attackOut -> routed.ampAttackIn, direct.ampAttackIn;
+        source.decayOut -> routed.ampDecayIn, direct.ampDecayIn;
+        source.sustainOut -> routed.ampSustainIn, direct.ampSustainIn;
+        source.releaseOut -> routed.ampReleaseIn, direct.ampReleaseIn;
+        source.filterModeOut -> routed.filterModeIn, direct.filterModeIn;
+        source.routedFrequencyOut -> routed.voiceEnhancerFrequencyIn;
+        source.directFrequencyOut -> direct.voiceEnhancerFrequencyIn;
+        source.routedQOut -> routed.voiceEnhancerQIn;
+        source.directQOut -> direct.voiceEnhancerQIn;
+        source.routedAmountOut -> routed.voiceEnhancerAmountIn;
+        source.directAmountOut -> direct.voiceEnhancerAmountIn;
+        routed.out -> witness.routedIn;
+        direct.out -> witness.directIn;
+        witness.out -> out;
+    }
+}
+
+processor VoiceEnhancerModulationSource
+{
+    output event std::notes::NoteOn noteOut;
+    output event wt::ModulationProgramUpload programOut;
+    output value float32 attackOut;
+    output value float32 decayOut;
+    output value float32 sustainOut;
+    output value float32 releaseOut;
+    output value float32 filterModeOut;
+    output value float32 routedFrequencyOut;
+    output value float32 directFrequencyOut;
+    output value float32 routedQOut;
+    output value float32 directQOut;
+    output value float32 routedAmountOut;
+    output value float32 directAmountOut;
+
+    wt::ModulationProgramUpload program()
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = 1;
+        let velocitySource = 6;
+        let frequencyCell = velocitySource * wt::modulationVoiceTargetCount
+            + wt::modulationTargetVoiceEnhancerFrequencyOctaves;
+        let qCell = velocitySource * wt::modulationVoiceTargetCount
+            + wt::modulationTargetVoiceEnhancerQ;
+        let amountCell = velocitySource * wt::modulationVoiceTargetCount
+            + wt::modulationTargetVoiceEnhancerAmount;
+        upload.voiceRouteCount = 3;
+        upload.voiceRouteCells[0] = frequencyCell;
+        upload.voiceRouteCells[1] = qCell;
+        upload.voiceRouteCells[2] = amountCell;
+        upload.voiceRouteSources[0] = velocitySource;
+        upload.voiceRouteSources[1] = velocitySource;
+        upload.voiceRouteSources[2] = velocitySource;
+        upload.voiceRouteTargets[0]
+            = wt::modulationTargetVoiceEnhancerFrequencyOctaves;
+        upload.voiceRouteTargets[1] = wt::modulationTargetVoiceEnhancerQ;
+        upload.voiceRouteTargets[2] = wt::modulationTargetVoiceEnhancerAmount;
+        upload.voiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.voiceRoutePolarities[1] = wt::modulationPolarityUnipolar;
+        upload.voiceRoutePolarities[2] = wt::modulationPolarityUnipolar;
+        upload.voiceRouteAmounts[frequencyCell] = 1.0f;
+        upload.voiceRouteAmounts[qCell] = 0.49f;
+        upload.voiceRouteAmounts[amountCell] = 0.4f;
+        return upload;
+    }
+
+    std::notes::NoteOn noteOn()
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        note.velocity = 1.0f;
+        return note;
+    }
+
+    void main()
+    {
+        attackOut <- 0.001f;
+        decayOut <- 0.001f;
+        sustainOut <- 1.0f;
+        releaseOut <- 0.02f;
+        filterModeOut <- 0.0f;
+        routedFrequencyOut <- 130.0f;
+        directFrequencyOut <- 260.0f;
+        routedQOut <- 0.71f;
+        directQOut <- 1.2f;
+        routedAmountOut <- 0.5f;
+        directAmountOut <- 0.9f;
+        programOut <- program();
+        advance();
+        noteOut <- noteOn();
+        loop advance();
+    }
+}
+
+processor VoiceEnhancerModulationWitness
+{
+    input stream float32<2> routedIn;
+    input stream float32<2> directIn;
+    output event int32 out;
+
+    bool matched = true;
+    bool heardEffect;
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame >= 12 && frame < 90)
+            {
+                if (std::intrinsics::abs (routedIn[0] - directIn[0]) > 0.000002f
+                    || std::intrinsics::abs (routedIn[1] - directIn[1]) > 0.000002f)
+                    matched = false;
+                if (std::intrinsics::abs (directIn[0] - 0.75f) > 0.000002f
+                    || std::intrinsics::abs (directIn[1] + 0.5f) > 0.000002f)
+                    heardEffect = true;
+            }
+
+            if (frame == 90) out <- matched ? 1 : 0;
+            if (frame == 91) out <- heardEffect ? 1 : 0;
+            if (frame == 92) out <- -1;
+            advance();
+        }
+    }
+}
+
+// A stolen/retriggered slot resets its Mid, Side, coefficient, and ADAA
+// histories. The shared post-sum blocker is flushed at Amount 0 first so this
+// comparison isolates the voice-owned lifecycle from intentional bus history.
+
+## testProcessor (undefined, { frequency: 600 })
+
+graph VoiceEnhancerStealReset [[ main ]]
+{
+    output event int32 out;
+
+    node source = VoiceEnhancerStealResetSource;
+    node reused = wt::SharedVoiceEngine (1);
+    node fresh = wt::SharedVoiceEngine (1);
+    node witness = VoiceEnhancerStealResetWitness;
+
+    connection
+    {
+        source.firstNoteOut -> reused.voiceEventIn[0];
+        source.secondNoteOut -> reused.voiceEventIn[0], fresh.voiceEventIn[0];
+        source.attackOut -> reused.ampAttackIn, fresh.ampAttackIn;
+        source.decayOut -> reused.ampDecayIn, fresh.ampDecayIn;
+        source.sustainOut -> reused.ampSustainIn, fresh.ampSustainIn;
+        source.releaseOut -> reused.ampReleaseIn, fresh.ampReleaseIn;
+        source.filterModeOut -> reused.filterModeIn, fresh.filterModeIn;
+        source.frequencyOut -> reused.voiceEnhancerFrequencyIn,
+                               fresh.voiceEnhancerFrequencyIn;
+        source.qOut -> reused.voiceEnhancerQIn, fresh.voiceEnhancerQIn;
+        source.amountOut -> reused.voiceEnhancerAmountIn,
+                            fresh.voiceEnhancerAmountIn;
+        source.keyTrackEnabledOut -> reused.voiceEnhancerKeyTrackEnabledIn,
+                                     fresh.voiceEnhancerKeyTrackEnabledIn;
+        reused.out -> witness.reusedIn;
+        fresh.out -> witness.freshIn;
+        witness.out -> out;
+    }
+}
+
+processor VoiceEnhancerStealResetSource
+{
+    output event std::notes::NoteOn firstNoteOut;
+    output event std::notes::NoteOn secondNoteOut;
+    output value float32 attackOut;
+    output value float32 decayOut;
+    output value float32 sustainOut;
+    output value float32 releaseOut;
+    output value float32 filterModeOut;
+    output value float32 frequencyOut;
+    output value float32 qOut;
+    output value float32 amountOut;
+    output value float32 keyTrackEnabledOut;
+
+    std::notes::NoteOn noteOn (float32 pitch)
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = pitch;
+        note.velocity = 1.0f;
+        return note;
+    }
+
+    void main()
+    {
+        attackOut <- 0.001f;
+        decayOut <- 0.001f;
+        sustainOut <- 1.0f;
+        releaseOut <- 0.02f;
+        filterModeOut <- 0.0f;
+        frequencyOut <- 130.0f;
+        qOut <- 0.71f;
+        amountOut <- 0.9f;
+        keyTrackEnabledOut <- 1.0f;
+        advance();
+        firstNoteOut <- noteOn (36.0f);
+        for (int32 frame = 0; frame < 36; ++frame)
+            advance();
+
+        amountOut <- 0.0f;
+        advance();
+        amountOut <- 0.9f;
+        secondNoteOut <- noteOn (72.0f);
+        loop advance();
+    }
+}
+
+processor VoiceEnhancerStealResetWitness
+{
+    input stream float32<2> reusedIn;
+    input stream float32<2> freshIn;
+    output event int32 out;
+
+    bool matchedFresh = true;
+    bool heardSecondNote;
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame >= 40 && frame < 88)
+            {
+                if (reusedIn[0] != freshIn[0] || reusedIn[1] != freshIn[1])
+                    matchedFresh = false;
+                if (std::intrinsics::abs (freshIn[0]) > 0.01f
+                    || std::intrinsics::abs (freshIn[1]) > 0.01f)
+                    heardSecondNote = true;
+            }
+
+            if (frame == 88) out <- matchedFresh ? 1 : 0;
+            if (frame == 89) out <- heardSecondNote ? 1 : 0;
+            if (frame == 90) out <- -1;
+            advance();
+        }
+    }
+}

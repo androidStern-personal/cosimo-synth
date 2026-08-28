@@ -6,8 +6,11 @@
  * conversion functions. Ordinary Hz/ms values never enter this model.
  */
 
+import { VOICE_ENHANCER_KEY_TRACK_CONTROL_ID } from "./voice-enhancer";
+
 export type KeyTrackParameterFamily =
     | "filter-frequency"
+    | "enhancer-frequency"
     | "crossover-frequency"
     | "ring-frequency"
     | "phaser-frequency"
@@ -36,6 +39,10 @@ export const KEY_TRACK_RANGES: Readonly<Record<KeyTrackParameterFamily, KeyTrack
     "filter-frequency": Object.freeze({
         center: 0, knobMin: -60, knobMax: 60, routeMin: -72, routeMax: 72, step: 0.01, unit: "st",
         reason: "Five knob octaves cover sub through air bands; routes retain the established six-octave filter sweep.",
+    }),
+    "enhancer-frequency": Object.freeze({
+        center: 0, knobMin: -12, knobMax: 60, routeMin: -72, routeMax: 72, step: 0.01, unit: "st",
+        reason: "The locked 0.5x-32x Ratio span stays continuous while octave-backed routes retain a six-octave offset window.",
     }),
     "crossover-frequency": Object.freeze({
         center: 0, knobMin: -48, knobMax: 48, routeMin: -48, routeMax: 48, step: 0.01, unit: "st",
@@ -159,6 +166,7 @@ export type KeyTrackControlDefinition = {
 
 export const KEY_TRACK_CURRENT_CONTROL_IDS = Object.freeze([
     "voice.filterCutoff",
+    VOICE_ENHANCER_KEY_TRACK_CONTROL_ID,
     "lane.globalFilterCutoff",
     "lane.distortionWetHPHz",
     "lane.distortionWetLPHz",
@@ -173,6 +181,7 @@ export const KEY_TRACK_CURRENT_CONTROL_IDS = Object.freeze([
 
 const familyByControlID: Readonly<Record<(typeof KEY_TRACK_CURRENT_CONTROL_IDS)[number], KeyTrackParameterFamily>> = Object.freeze({
     "voice.filterCutoff": "filter-frequency",
+    [VOICE_ENHANCER_KEY_TRACK_CONTROL_ID]: "enhancer-frequency",
     "lane.globalFilterCutoff": "filter-frequency",
     "lane.distortionWetHPHz": "filter-frequency",
     "lane.distortionWetLPHz": "filter-frequency",

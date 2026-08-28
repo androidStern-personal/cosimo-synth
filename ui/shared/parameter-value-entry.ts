@@ -376,6 +376,7 @@ function voiceAmountSpec(
     const parameterKind = getVoiceModulationParameterKind(targetKind);
     switch (parameterKind) {
         case "filterCutoffOctaves":
+        case "voiceEnhancerFrequencyOctaves":
             requirePositiveLogarithmicBase(baseValue);
             return amountSpec({
                 ...bounds,
@@ -387,6 +388,7 @@ function voiceAmountSpec(
                 physicalIntervalUnit: "frequency",
             });
         case "filterQ":
+        case "voiceEnhancerQ":
             return amountSpec({ ...bounds, defaultUnit: "Q", canonicalPerDisplayedUnit: 1, digits: 3, percentMeaning: "depth", baseValue: null, physicalIntervalUnit: null });
         case "pitchSemitones":
         case "globalTuneSemitones":
@@ -414,6 +416,7 @@ function voiceAmountSpec(
         case "wavetablePosition":
         case "warpAmount":
         case "filterMix":
+        case "voiceEnhancerAmount":
         case "unisonDetune":
         case "unisonBlend":
         case "unisonWidth":

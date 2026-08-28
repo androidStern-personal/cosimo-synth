@@ -338,6 +338,7 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
         "cmajor/Phaser.cmajor",
         "cmajor/Delay.cmajor",
         "cmajor/Reverb.cmajor",
+        "cmajor/VoiceEnhancer.cmajor",
         "cmajor/ThreeOscillatorRendererExternal.cmajor",
         "cmajor/FixedFrameOscillator.cmajor",
         "cmajor/VoiceReducer.cmajor",
@@ -372,7 +373,7 @@ test("desktop synth reserves Cmajor host parameter slot 0 away from musical cont
     );
 });
 
-test("Bounce, Global Tune, Amp Envelope, and Voice Filter Key Track preserve the frozen synth host-parameter order", async () => {
+test("Bounce, Global Tune, Amp Envelope, Key Track, and Voice Enhancer preserve the frozen synth host-parameter order", async () => {
     const synthSource = await fs.readFile(path.join(repoRoot, "cmajor", "WavetableSynth.cmajor"), "utf8");
     const parameterOrder = parseGraphHostParameterIdentifiers(synthSource, "WavetableSynth");
     const inputValues = parseGraphInputValues(synthSource, "WavetableSynth");
@@ -389,13 +390,24 @@ test("Bounce, Global Tune, Amp Envelope, and Voice Filter Key Track preserve the
     const filterCutoffKeyTrackOffset = inputValues.find(
         ({ identifier }) => identifier === "filterCutoffKeyTrackOffsetSemitones",
     );
+    const voiceEnhancerFrequency = inputValues.find(
+        ({ identifier }) => identifier === "voiceEnhancerFrequency",
+    );
+    const voiceEnhancerQ = inputValues.find(({ identifier }) => identifier === "voiceEnhancerQ");
+    const voiceEnhancerAmount = inputValues.find(({ identifier }) => identifier === "voiceEnhancerAmount");
+    const voiceEnhancerKeyTrackEnabled = inputValues.find(
+        ({ identifier }) => identifier === "voiceEnhancerKeyTrackEnabled",
+    );
+    const voiceEnhancerKeyTrackOffset = inputValues.find(
+        ({ identifier }) => identifier === "voiceEnhancerKeyTrackOffsetSemitones",
+    );
 
     assert.deepEqual(
-        parameterOrder.slice(0, -9),
+        parameterOrder.slice(0, -14),
         EXISTING_SYNTH_HOST_PARAMETER_ORDER,
         "appending synth controls must not move any existing DAW automation slot",
     );
-    assert.deepEqual(parameterOrder.slice(-9), [
+    assert.deepEqual(parameterOrder.slice(-14), [
         "filterMix",
         "ampRelease",
         "sourceMode",
@@ -405,8 +417,13 @@ test("Bounce, Global Tune, Amp Envelope, and Voice Filter Key Track preserve the
         "ampSustain",
         "filterCutoffKeyTrackEnabled",
         "filterCutoffKeyTrackOffsetSemitones",
+        "voiceEnhancerFrequency",
+        "voiceEnhancerQ",
+        "voiceEnhancerAmount",
+        "voiceEnhancerKeyTrackEnabled",
+        "voiceEnhancerKeyTrackOffsetSemitones",
     ]);
-    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 9);
+    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 14);
     assert.notEqual(filterMix, undefined);
     assert.equal(filterMix.type, "float32");
     assert.match(filterMix.annotation, /name:\s*"Filter Mix"/);
@@ -474,6 +491,36 @@ test("Bounce, Global Tune, Amp Envelope, and Voice Filter Key Track preserve the
     assert.match(filterCutoffKeyTrackOffset.annotation, /max:\s*60(?:\.0)?f?/);
     assert.match(filterCutoffKeyTrackOffset.annotation, /unit:\s*"st"/);
     assert.match(filterCutoffKeyTrackOffset.annotation, /rampFrames:\s*0/);
+    assert.notEqual(voiceEnhancerFrequency, undefined);
+    assert.match(voiceEnhancerFrequency.annotation, /name:\s*"Voice Enhancer Frequency"/);
+    assert.match(voiceEnhancerFrequency.annotation, /min:\s*20(?:\.0)?f?/);
+    assert.match(voiceEnhancerFrequency.annotation, /max:\s*20000(?:\.0)?f?/);
+    assert.match(voiceEnhancerFrequency.annotation, /init:\s*130(?:\.0)?f?/);
+    assert.match(voiceEnhancerFrequency.annotation, /unit:\s*"Hz"/);
+    assert.match(voiceEnhancerFrequency.annotation, /rampFrames:\s*0/);
+    assert.notEqual(voiceEnhancerQ, undefined);
+    assert.match(voiceEnhancerQ.annotation, /name:\s*"Voice Enhancer Q"/);
+    assert.match(voiceEnhancerQ.annotation, /min:\s*0\.1f?/);
+    assert.match(voiceEnhancerQ.annotation, /max:\s*10(?:\.0)?f?/);
+    assert.match(voiceEnhancerQ.annotation, /init:\s*0\.71f?/);
+    assert.match(voiceEnhancerQ.annotation, /rampFrames:\s*0/);
+    assert.notEqual(voiceEnhancerAmount, undefined);
+    assert.match(voiceEnhancerAmount.annotation, /name:\s*"Voice Enhancer Amount"/);
+    assert.match(voiceEnhancerAmount.annotation, /min:\s*0(?:\.0)?f?/);
+    assert.match(voiceEnhancerAmount.annotation, /max:\s*1(?:\.0)?f?/);
+    assert.match(voiceEnhancerAmount.annotation, /init:\s*0(?:\.0)?f?/);
+    assert.match(voiceEnhancerAmount.annotation, /rampFrames:\s*64/);
+    assert.notEqual(voiceEnhancerKeyTrackEnabled, undefined);
+    assert.match(voiceEnhancerKeyTrackEnabled.annotation, /name:\s*"Voice Enhancer Key Track"/);
+    assert.match(voiceEnhancerKeyTrackEnabled.annotation, /init:\s*0(?:\.0)?f?/);
+    assert.match(voiceEnhancerKeyTrackEnabled.annotation, /discrete:\s*true/);
+    assert.match(voiceEnhancerKeyTrackEnabled.annotation, /rampFrames:\s*0/);
+    assert.notEqual(voiceEnhancerKeyTrackOffset, undefined);
+    assert.match(voiceEnhancerKeyTrackOffset.annotation, /name:\s*"Voice Enhancer Key Track Offset"/);
+    assert.match(voiceEnhancerKeyTrackOffset.annotation, /min:\s*-12(?:\.0)?f?/);
+    assert.match(voiceEnhancerKeyTrackOffset.annotation, /max:\s*60(?:\.0)?f?/);
+    assert.match(voiceEnhancerKeyTrackOffset.annotation, /unit:\s*"st"/);
+    assert.match(voiceEnhancerKeyTrackOffset.annotation, /rampFrames:\s*0/);
 });
 
 test("whole Effects Lane Mix and Bypass are struct state, never DAW automation slots", async () => {

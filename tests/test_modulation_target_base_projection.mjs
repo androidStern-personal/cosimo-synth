@@ -70,6 +70,40 @@ test("the voice filter's octave target projects the same octave language", async
     assert.ok(Math.abs(band.highNormalized - baseNormalized) < CLOSE);
 });
 
+test("the Voice Enhancer exposes all three bases and swaps Frequency to its locked Ratio rail", async () => {
+    const {
+        keyTrackModulationTargetBasePresentation,
+        resolveModulationTargetBase,
+    } = await loadResolver();
+    const frequency = resolveModulationTargetBase("voiceEnhancerFrequencyOctaves");
+    const q = resolveModulationTargetBase("voiceEnhancerQ");
+    const amount = resolveModulationTargetBase("voiceEnhancerAmount");
+
+    assert.equal(frequency.endpointID, "voiceEnhancerFrequency");
+    assert.equal(frequency.entrySpec._tag, "frequency");
+    assert.equal(frequency.initialValue, 130);
+    assert.equal(frequency.keyTrack.definition.family, "enhancer-frequency");
+    assert.equal(frequency.keyTrack.storage, "octaves");
+    assert.deepEqual(frequency.keyTrack.binding, {
+        kind: "host",
+        enabledEndpointID: "voiceEnhancerKeyTrackEnabled",
+        offsetEndpointID: "voiceEnhancerKeyTrackOffsetSemitones",
+    });
+    const ratio = keyTrackModulationTargetBasePresentation(frequency.keyTrack);
+    assert.equal(ratio.entrySpec.min, -12);
+    assert.equal(ratio.entrySpec.max, 60);
+    assert.equal(ratio.canonicalAmountBounds.min, -6);
+    assert.equal(ratio.canonicalAmountBounds.max, 6);
+
+    assert.equal(q.endpointID, "voiceEnhancerQ");
+    assert.equal(q.entrySpec.defaultUnit, "Q");
+    assert.equal(q.initialValue, 0.71);
+    assert.equal(q.amountDragStyle, "effective-value");
+    assert.equal(amount.endpointID, "voiceEnhancerAmount");
+    assert.equal(amount.entrySpec.defaultUnit, "%");
+    assert.equal(amount.initialValue, 0);
+});
+
 test("linear targets keep the plain additive band", async () => {
     const { resolveModulationTargetBase } = await loadResolver();
     const projection = resolveModulationTargetBase("lane.flanger#1.flangerDepth").railProjection;

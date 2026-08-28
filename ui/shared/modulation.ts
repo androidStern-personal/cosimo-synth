@@ -71,6 +71,7 @@ const ENV_MIN_SECONDS = 0.001;
 const ENV_MAX_SECONDS = 10.0;
 const FILTER_Q_MIN = 0.1;
 const FILTER_Q_MAX = 20.0;
+const VOICE_ENHANCER_Q_SPAN = 10.0 - 0.1;
 const ROUTE_AMOUNT_LIMITS = {
     wavetablePosition: { min: -1.0, max: 1.0 },
     warpAmount: { min: -1.0, max: 1.0 },
@@ -112,6 +113,9 @@ const ROUTE_AMOUNT_LIMITS = {
     ampDecay: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
     ampSustain: { min: -1.0, max: 1.0 },
     ampRelease: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+    voiceEnhancerFrequencyOctaves: { min: -6.0, max: 6.0 },
+    voiceEnhancerQ: { min: -VOICE_ENHANCER_Q_SPAN, max: VOICE_ENHANCER_Q_SPAN },
+    voiceEnhancerAmount: { min: -1.0, max: 1.0 },
 } as const;
 const ROUTE_AMOUNT_STEPS = {
     wavetablePosition: 0.001,
@@ -150,6 +154,9 @@ const ROUTE_AMOUNT_STEPS = {
     ampDecay: 0.001,
     ampSustain: 0.001,
     ampRelease: 0.001,
+    voiceEnhancerFrequencyOctaves: 0.001,
+    voiceEnhancerQ: 0.001,
+    voiceEnhancerAmount: 0.001,
 } as const;
 
 const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors()
@@ -603,6 +610,7 @@ export function formatModulationAmountReadout(
         case "mseg2Morph":
         case "mseg3Morph":
         case "filterMix":
+        case "voiceEnhancerAmount":
         case "env1Sustain":
         case "env2Sustain":
         case "env3Sustain":
@@ -625,8 +633,10 @@ export function formatModulationAmountReadout(
         case "ampRelease":
             return `${prefix}${formatMagnitude(clampedAmount, 3)} s`;
         case "filterCutoffOctaves":
+        case "voiceEnhancerFrequencyOctaves":
             return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
         case "filterQ":
+        case "voiceEnhancerQ":
             return `${prefix}${formatMagnitude(clampedAmount, 2)} Q`;
         case "pitchSemitones":
             return `${prefix}${formatMagnitude(clampedAmount, 1)} st`;
@@ -666,10 +676,16 @@ export function getModulationTargetClampHint(targetKind: ModulationTargetKind) {
             return "Warp amount still clamps to the oscillator's warp range.";
         case "filterCutoffOctaves":
             return "Requested cutoff movement is converted to Hz and still clamps to the filter range.";
+        case "voiceEnhancerFrequencyOctaves":
+            return "Enhancer frequency movement remains octave-backed and clamps to its safe bell range.";
         case "filterQ":
             return "Resonance still clamps to the synth's Q range.";
+        case "voiceEnhancerQ":
+            return "Enhancer Q still clamps to its 0.1-10 range.";
         case "filterMix":
             return "Mix clamps to 0-100%.";
+        case "voiceEnhancerAmount":
+            return "Enhancer Amount clamps to 0-100%.";
         case "pitchSemitones":
             return "Pitch depth adds on top of note, glide, and bend.";
         case "globalTuneSemitones":

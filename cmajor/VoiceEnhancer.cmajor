@@ -1,0 +1,304 @@
+namespace wt
+{
+    // T62's shared surface values. The DSP implementation grows behind the
+    // SharedVoiceEngine seam so the host/UI do not own per-note instances.
+    let voiceEnhancerFrequencyMinHz = 20.0f;
+    let voiceEnhancerFrequencyMaxHz = 20000.0f;
+    let voiceEnhancerFrequencyDefaultHz = 130.0f;
+    let voiceEnhancerQMin = 0.1f;
+    let voiceEnhancerQMax = 10.0f;
+    let voiceEnhancerQDefault = 0.71f;
+    let voiceEnhancerAmountMin = 0.0f;
+    let voiceEnhancerAmountMax = 1.0f;
+    let voiceEnhancerAmountDefault = 0.0f;
+    let voiceEnhancerBandGainRangeDb = 12.0f;
+    let voiceEnhancerCoefficientUpdateFrames = 16;
+    let voiceEnhancerCoefficientSmoothingSeconds = 0.005f;
+    let voiceEnhancerAdaaDifferenceEpsilon = 0.00001f;
+
+    float32 clampVoiceEnhancerFrequencyHz (float32 value, float32 sampleRateHz)
+    {
+        return std::intrinsics::clamp (
+            value,
+            voiceEnhancerFrequencyMinHz,
+            std::intrinsics::min (
+                voiceEnhancerFrequencyMaxHz,
+                sampleRateHz * 0.45f));
+    }
+
+    float32 clampVoiceEnhancerQ (float32 value)
+    {
+        return std::intrinsics::clamp (
+            value, voiceEnhancerQMin, voiceEnhancerQMax);
+    }
+
+    float32 clampVoiceEnhancerAmount (float32 value)
+    {
+        return std::intrinsics::clamp (
+            value, voiceEnhancerAmountMin, voiceEnhancerAmountMax);
+    }
+
+    /** T50-compatible frequency resolver with the Enhancer's locked ratio span.
+        Routes remain in the voice runtime's octave storage. */
+    float32 resolveVoiceEnhancerFrequencyHz (float32 enabled,
+                                              float32 ordinaryHz,
+                                              float32 playedPitchHz,
+                                              float32 baseOffsetSemitones,
+                                              float32 routeOffsetOctaves,
+                                              float32 sampleRateHz)
+    {
+        let maximumHz = sampleRateHz * 0.45f;
+        if (enabled >= 0.5f)
+            return keyTrackFrequencyHz (
+                playedPitchHz,
+                std::intrinsics::clamp (baseOffsetSemitones, -12.0f, 60.0f)
+                    + routeOffsetOctaves * 12.0f,
+                voiceEnhancerFrequencyMinHz,
+                maximumHz);
+
+        return std::intrinsics::clamp (
+            ordinaryHz * std::intrinsics::pow (2.0f, routeOffsetOctaves),
+            voiceEnhancerFrequencyMinHz,
+            std::intrinsics::min (voiceEnhancerFrequencyMaxHz, maximumHz));
+    }
+
+    float32 voiceEnhancerAmountDrive (float32 amount)
+    {
+        return std::levels::dBtoGain (
+            voiceEnhancerBandGainRangeDb * clampVoiceEnhancerAmount (amount))
+            - 1.0f;
+    }
+
+    float32 voiceEnhancerEffectiveBellQ (float32 q, float32 amount)
+    {
+        return clampVoiceEnhancerQ (q) * std::levels::dBtoGain (
+            0.5f * voiceEnhancerBandGainRangeDb
+                * clampVoiceEnhancerAmount (amount));
+    }
+
+    // Fixed algebraic Tube-family curve and the dedicated residue primitive.
+    float32 voiceEnhancerShape (float32 sample)
+    {
+        return sample / std::intrinsics::sqrt (1.0f + sample * sample);
+    }
+
+    float32 voiceEnhancerResidue (float32 sample)
+    {
+        return voiceEnhancerShape (sample) - sample;
+    }
+
+    // Antiderivative of r(x) = x/sqrt(1+x^2) - x. The additive constant is
+    // deliberately omitted because first-order ADAA uses only differences.
+    float32 voiceEnhancerResidueAntiderivative (float32 sample)
+    {
+        return std::intrinsics::sqrt (1.0f + sample * sample)
+            - 0.5f * sample * sample;
+    }
+
+    struct VoiceEnhancerAdaaResidue
+    {
+        float32 previousInput;
+
+        void reset()
+        {
+            this.previousInput = 0.0f;
+        }
+
+        float32 process (float32 sample)
+        {
+            let difference = sample - this.previousInput;
+            let useDividedDifference = std::intrinsics::abs (difference)
+                > voiceEnhancerAdaaDifferenceEpsilon;
+            let safeDifference = useDividedDifference ? difference : 1.0f;
+            let dividedDifference = (
+                voiceEnhancerResidueAntiderivative (sample)
+                    - voiceEnhancerResidueAntiderivative (this.previousInput)
+            ) / safeDifference;
+            let midpointResidue = voiceEnhancerResidue (
+                0.5f * (sample + this.previousInput));
+            this.previousInput = sample;
+            return useDividedDifference ? dividedDifference : midpointResidue;
+        }
+    }
+
+    struct VoiceEnhancerTptBandpass
+    {
+        float32 integrator1;
+        float32 integrator2;
+
+        void reset()
+        {
+            this.integrator1 = 0.0f;
+            this.integrator2 = 0.0f;
+        }
+
+        float32 process (float32 sample, float32 g, float32 inverseQ)
+        {
+            let a1 = 1.0f / (1.0f + g * (g + inverseQ));
+            let a2 = g * a1;
+            let a3 = g * a2;
+            let v3 = sample - this.integrator2;
+            let bandpass = a1 * this.integrator1 + a2 * v3;
+            let lowpass = this.integrator2
+                + a2 * this.integrator1 + a3 * v3;
+            this.integrator1 = 2.0f * bandpass - this.integrator1;
+            this.integrator2 = 2.0f * lowpass - this.integrator2;
+            return bandpass;
+        }
+    }
+
+    struct VoiceEnhancerCoefficientState
+    {
+        float32 sampleRate;
+        float32 currentG;
+        float32 currentInverseQ;
+        float32 targetG;
+        float32 targetInverseQ;
+        float32 smoothingCoefficient;
+        int32 framesUntilUpdate;
+        bool initialized;
+
+        void prepare (float32 sampleRateHz)
+        {
+            this.sampleRate = sampleRateHz;
+            let smoothingFrames = std::intrinsics::max (
+                1.0f,
+                sampleRateHz * voiceEnhancerCoefficientSmoothingSeconds);
+            this.smoothingCoefficient = 1.0f
+                - std::intrinsics::exp (-1.0f / smoothingFrames);
+            this.reset();
+        }
+
+        void reset()
+        {
+            this.currentG = 0.0f;
+            this.currentInverseQ = 1.0f / voiceEnhancerQDefault;
+            this.targetG = 0.0f;
+            this.targetInverseQ = this.currentInverseQ;
+            this.framesUntilUpdate = 0;
+            this.initialized = false;
+        }
+
+        float32<2> process (float32 frequencyHz, float32 effectiveQ)
+        {
+            if (this.framesUntilUpdate <= 0)
+            {
+                let safeFrequencyHz = clampVoiceEnhancerFrequencyHz (
+                    frequencyHz, this.sampleRate);
+                this.targetG = std::intrinsics::tan (
+                    float32 (pi) * safeFrequencyHz / this.sampleRate);
+                this.targetInverseQ = 1.0f / std::intrinsics::max (
+                    voiceEnhancerQMin, effectiveQ);
+                this.framesUntilUpdate = voiceEnhancerCoefficientUpdateFrames - 1;
+            }
+            else
+            {
+                this.framesUntilUpdate -= 1;
+            }
+
+            if (! this.initialized)
+            {
+                this.currentG = this.targetG;
+                this.currentInverseQ = this.targetInverseQ;
+                this.initialized = true;
+            }
+            else
+            {
+                this.currentG += (this.targetG - this.currentG)
+                    * this.smoothingCoefficient;
+                this.currentInverseQ += (
+                    this.targetInverseQ - this.currentInverseQ
+                ) * this.smoothingCoefficient;
+            }
+
+            return float32<2> (this.currentG, this.currentInverseQ);
+        }
+    }
+
+    /** One voice's independent Mid/Side selection and ADAA histories. */
+    struct VoiceEnhancerVoice
+    {
+        VoiceEnhancerCoefficientState coefficients;
+        VoiceEnhancerTptBandpass midFilter;
+        VoiceEnhancerTptBandpass sideFilter;
+        VoiceEnhancerAdaaResidue midResidue;
+        VoiceEnhancerAdaaResidue sideResidue;
+
+        void prepare (float32 sampleRateHz)
+        {
+            this.coefficients.prepare (sampleRateHz);
+            this.reset();
+        }
+
+        void reset()
+        {
+            this.coefficients.reset();
+            this.midFilter.reset();
+            this.sideFilter.reset();
+            this.midResidue.reset();
+            this.sideResidue.reset();
+        }
+
+        float32<2> process (float32<2> sampleFrame,
+                            float32 frequencyHz,
+                            float32 q,
+                            float32 amount)
+        {
+            let amount01 = clampVoiceEnhancerAmount (amount);
+            let effectiveQ = voiceEnhancerEffectiveBellQ (q, amount01);
+            let coefficientFrame = this.coefficients.process (
+                frequencyHz, effectiveQ);
+            let mid = 0.5f * (sampleFrame[0] + sampleFrame[1]);
+            let side = 0.5f * (sampleFrame[0] - sampleFrame[1]);
+            let driveOverQ = voiceEnhancerAmountDrive (amount01) / effectiveQ;
+            let selectedMid = this.midFilter.process (
+                mid, coefficientFrame[0], coefficientFrame[1]) * driveOverQ;
+            let selectedSide = this.sideFilter.process (
+                side, coefficientFrame[0], coefficientFrame[1]) * driveOverQ;
+            let shapedMid = this.midResidue.process (selectedMid);
+            let shapedSide = this.sideResidue.process (selectedSide);
+
+            // The hard-zero select is the product identity contract. Histories
+            // still advance at x=0 so re-enabling starts from a coherent state.
+            let active = amount01 > 0.0f;
+            let residueMid = active ? shapedMid : 0.0f;
+            let residueSide = active ? shapedSide : 0.0f;
+            return float32<2> (
+                residueMid + residueSide,
+                residueMid - residueSide);
+        }
+    }
+
+    let voiceEnhancerDcBlockerCutoffHz = 20.016318f;
+
+    /** One linear stereo blocker for the sum of all enveloped voice residues. */
+    struct VoiceEnhancerResidueDcBlocker
+    {
+        float32<2> previousInput;
+        float32<2> previousOutput;
+        float32 coefficient;
+
+        void prepare (float32 sampleRateHz)
+        {
+            this.coefficient = float32 (std::intrinsics::exp (
+                -twoPi * float64 (voiceEnhancerDcBlockerCutoffHz)
+                    / float64 (sampleRateHz)));
+            this.reset();
+        }
+
+        void reset()
+        {
+            this.previousInput = ();
+            this.previousOutput = ();
+        }
+
+        float32<2> process (float32<2> sampleFrame)
+        {
+            let result = sampleFrame - this.previousInput
+                + this.previousOutput * this.coefficient;
+            this.previousInput = sampleFrame;
+            this.previousOutput = result;
+            return result;
+        }
+    }
+}

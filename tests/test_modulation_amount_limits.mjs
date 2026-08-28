@@ -36,6 +36,9 @@ const VOICE_TARGET_KINDS_BY_PARAMETER = {
     filterMix: "filterMix",
     pitchSemitones: "oscA.pitchSemitones",
     globalTuneSemitones: "globalTuneSemitones",
+    voiceEnhancerFrequencyOctaves: "voiceEnhancerFrequencyOctaves",
+    voiceEnhancerQ: "voiceEnhancerQ",
+    voiceEnhancerAmount: "voiceEnhancerAmount",
     ampGainDb: "oscA.ampGainDb",
     pan: "oscA.pan",
     unisonDetune: "oscA.unisonDetune",
@@ -79,6 +82,8 @@ test("full-span offset destinations reach both rails from any base value", async
         { parameterKind: "warpAmount", span: 1 },
         { parameterKind: "filterQ", span: 19.9 },
         { parameterKind: "filterMix", span: 1 },
+        { parameterKind: "voiceEnhancerQ", span: 9.9 },
+        { parameterKind: "voiceEnhancerAmount", span: 1 },
         { parameterKind: "ampGainDb", span: AMP_GAIN_DB_SPAN },
         { parameterKind: "unisonDetune", span: 1 },
         { parameterKind: "unisonBlend", span: 1 },
@@ -101,6 +106,7 @@ test("deliberately narrower musical offset caps are pinned exactly", async () =>
         { parameterKind: "pitchSemitones", min: -48, max: 48 },
         { parameterKind: "globalTuneSemitones", min: -48, max: 48 },
         { parameterKind: "filterCutoffOctaves", min: -6, max: 6 },
+        { parameterKind: "voiceEnhancerFrequencyOctaves", min: -6, max: 6 },
         { parameterKind: "pan", min: -1, max: 1 },
     ];
     for (const { parameterKind, min, max } of pinned) {

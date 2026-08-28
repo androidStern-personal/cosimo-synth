@@ -52,6 +52,7 @@ test("each musical parameter family owns a documented continuous range", async (
     const keyTrack = await keyTrackPromise;
     const families = [
         "filter-frequency",
+        "enhancer-frequency",
         "crossover-frequency",
         "ring-frequency",
         "phaser-frequency",
@@ -77,6 +78,7 @@ test("the inventory contains every approved current control and no explicit excl
     const keyTrack = await keyTrackPromise;
     const eligible = [
         "voice.filterCutoff",
+        "voice.enhancerFrequency",
         "lane.globalFilterCutoff",
         "lane.distortionWetHPHz",
         "lane.distortionWetLPHz",
@@ -113,6 +115,16 @@ test("the inventory contains every approved current control and no explicit excl
         assert.equal(keyTrack.getKeyTrackDefinition(id), null, `${id} must remain excluded`);
     }
     assert.deepEqual(keyTrack.KEY_TRACK_CURRENT_CONTROL_IDS, eligible);
+    assert.deepEqual(keyTrack.requireKeyTrackRange("enhancer-frequency"), {
+        center: 0,
+        knobMin: -12,
+        knobMax: 60,
+        routeMin: -72,
+        routeMax: 72,
+        step: 0.01,
+        unit: "st",
+        reason: keyTrack.requireKeyTrackRange("enhancer-frequency").reason,
+    });
 });
 
 test("Key Track exact entry is continuous semitones and cents", async () => {

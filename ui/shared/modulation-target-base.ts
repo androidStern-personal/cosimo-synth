@@ -67,6 +67,12 @@ import {
     LANE_SPLIT_XOVER_MAX_HZ,
     LANE_SPLIT_XOVER_MIN_HZ,
 } from "./lane-state-v2";
+import {
+    VOICE_ENHANCER_KEY_TRACK_CONTROL_ID,
+    VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID,
+    VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID,
+    VOICE_ENHANCER_PARAMETER_DESCRIPTORS,
+} from "./voice-enhancer";
 
 export type ModulationTargetRailProjection = {
     /** Value -> [0,1] track position in the parameter's own display scale. */
@@ -120,8 +126,12 @@ export type ModulationTargetKeyTrackBase = {
         readonly which: "low" | "high";
     } | {
         readonly kind: "host";
-        readonly enabledEndpointID: "filterCutoffKeyTrackEnabled";
-        readonly offsetEndpointID: "filterCutoffKeyTrackOffsetSemitones";
+        readonly enabledEndpointID:
+            | "filterCutoffKeyTrackEnabled"
+            | typeof VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID;
+        readonly offsetEndpointID:
+            | "filterCutoffKeyTrackOffsetSemitones"
+            | typeof VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID;
     };
 };
 
@@ -436,6 +446,55 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
             }),
             amountDragStyle: "amount-span",
             keyTrack: null,
+        };
+    }
+    const voiceEnhancerDescriptor = Object.values(VOICE_ENHANCER_PARAMETER_DESCRIPTORS)
+        .find((candidate) => candidate.endpointID === binding.endpointId);
+    if (voiceEnhancerDescriptor !== undefined) {
+        const entrySpec = voiceEnhancerDescriptor.unit === "Hz"
+            ? parameterEntrySpecForFrequency({
+                minHz: voiceEnhancerDescriptor.min,
+                maxHz: voiceEnhancerDescriptor.max,
+                stepHz: voiceEnhancerDescriptor.step,
+                allowLogPercent: true,
+            })
+            : parameterEntrySpecForScalar({
+                min: voiceEnhancerDescriptor.min,
+                max: voiceEnhancerDescriptor.max,
+                step: voiceEnhancerDescriptor.step,
+                unit: voiceEnhancerDescriptor.unit,
+                canonicalPerDisplayedUnit: voiceEnhancerDescriptor.unit === "%" ? 0.01 : 1,
+                digits: voiceEnhancerDescriptor.unit === "Q" ? 2 : 3,
+            });
+        return {
+            endpointID: voiceEnhancerDescriptor.endpointID,
+            entrySpec,
+            label: voiceEnhancerDescriptor.label,
+            initialValue: voiceEnhancerDescriptor.initial,
+            railProjection: buildRailProjection({
+                min: voiceEnhancerDescriptor.min,
+                max: voiceEnhancerDescriptor.max,
+                scale: voiceEnhancerDescriptor.scale,
+                application: voiceEnhancerDescriptor.modulationApplication,
+            }),
+            amountDragStyle: voiceEnhancerDescriptor.key === "q" ? "effective-value" : "amount-span",
+            keyTrack: voiceEnhancerDescriptor.key === "frequency"
+                ? (() => {
+                    const definition = getKeyTrackDefinition(VOICE_ENHANCER_KEY_TRACK_CONTROL_ID);
+                    if (definition === null) {
+                        throw new Error("Voice Enhancer Frequency is missing its Key Track definition.");
+                    }
+                    return {
+                        definition,
+                        storage: "octaves" as const,
+                        binding: {
+                            kind: "host" as const,
+                            enabledEndpointID: VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID,
+                            offsetEndpointID: VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID,
+                        },
+                    };
+                })()
+                : null,
         };
     }
     const voiceFilterDescriptor = Object.values(VOICE_FILTER_KNOB_DESCRIPTORS)
