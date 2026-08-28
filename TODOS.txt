@@ -1019,6 +1019,9 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - Zero is neutral, the full knob and modulation ranges work continuously, and complete sound save/restore reproduces the same setting and routes.
 
 [ ] T39A — Move Global Tune into the Voice settings popout and make it a usable modulation target
+    Active owner (2026-08-28):
+    - Codex task `Move Global Tune into Voice settings`, thread `01a048c7-a780-7022-ae0c-c6d5fe1c13a7`, branch `codex/t39a-global-tune-popout`, worktree `/Users/winterfell/.codex/worktrees/3560/cosimo-synth`, base `35f4e3b6`, model SOL, reasoning max.
+    - This coordinator-managed task owns only the approved move, popout persistence during Mod-source interaction, real Global Tune drop routing, and representative-layout proof. Final review, rebase, merge, push, native/install gates, and deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
     Reported problem (2026-08-26):
     - The Global Tune control works, but its current location in the top-level Voice layout is wrong and is not accepted as the product design.
     Product placement decided (2026-08-27):
@@ -1037,6 +1040,9 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - Browser and state tests prove exactly one Global Tune control appears in the Voice popout, the rejected location is gone, ordinary explicit/outside dismissal still works, and every existing T39 interaction and saved/automated value still drives the same underlying parameter.
 
 [ ] T40 — Make the drag heads-up display match the parameter being changed
+    Active owner (2026-08-28):
+    - Combined T40/T40A Codex task `Build parameter-aware drag HUD`, thread `01a048c7-cf23-77c3-8299-8353a3ee46aa`, branch `codex/t40-t40a-parameter-hud`, worktree `/Users/winterfell/.codex/worktrees/cc39/cosimo-synth`, base `35f4e3b6`, model SOL, reasoning max.
+    - This coordinator-managed task owns the one shared HUD, production wavetable/filter/MSEG/Distortion presentations, direct-filter-drag suppression, generic fallback, and composed browser proof. Final review, rebase, merge, push, native/install gates, and deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
     Required result:
     - Keep the existing generic knob display for ordinary parameters, but allow the shared heads-up display to choose a purpose-built presentation for named controls.
     - Wavetable Index shows the real wavetable graphic moving through its index plus a large numeric value; it must reuse the production wavetable data and renderer rather than a decorative stand-in.
@@ -1047,6 +1053,8 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - Browser tests select each named parameter and prove the correct graphic and current value appear, direct filter-graph dragging produces no duplicate display, MSEG Morph shows its realized curve at 0%, midpoint, and 100% with no generic knob, and an unrelated parameter still gets the generic knob.
 
 [ ] T40A — Show the real Distortion Drive graphic instead of a knob in the heads-up display
+    Active owner (2026-08-28):
+    - Owned by the combined T40/T40A task above: thread `01a048c7-cf23-77c3-8299-8353a3ee46aa`, branch `codex/t40-t40a-parameter-hud`, worktree `/Users/winterfell/.codex/worktrees/cc39/cosimo-synth`, base `35f4e3b6`, model SOL, reasoning max.
     Required result:
     - While the Distortion Drive control is being adjusted, replace the generic knob picture in the heads-up display with the production Drive transfer-curve graphic.
     - Update the curve live as Drive changes, using the selected Symmetric, Asymmetric, or Wavefold shape and the same drawing code and curve math as the Distortion editor. Do not use a decorative copy or change the sound-processing behavior.
@@ -1423,6 +1431,9 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Andrew approves the sound, MIDI tracking, interface, free-product branding, and installation flow.
 
 [ ] T62 — Put a lightweight one-band Enhancer after the filter inside every synth voice
+    Active owner (2026-08-28):
+    - Codex task `Build per-voice Enhancer`, thread `01a048c7-510a-7700-850d-81f163efa2e5`, branch `codex/t62-per-voice-enhancer`, worktree `/Users/winterfell/.codex/worktrees/43c9/cosimo-synth`, base `35f4e3b6`, model SOL, reasoning max.
+    - This coordinator-managed task owns only the approved post-filter/pre-Amp-Envelope per-voice processor, shared T39/T50 pitch authority, fixed linked Mid/Side ADAA design, Filter-footprint UI, state/modulation seams, and focused qualification. T62 must integrate before T28. Final review, rebase, merge, push, native/install gates, and deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
     Dependency:
     - Build on T39's shared played pitch and T50's approved `Key Track` state, offset, exact-entry, modulation, and last-held-note behavior. Do not create a third pitch-tracking formula specifically for this effect.
     Product decisions (2026-08-27):
@@ -1782,6 +1793,9 @@ Source note (2026-08-25):
     - Fresh integration-time pluginval 1.0.4 strictness 5 with seed `0x27a8` succeeds, including cold/warm editor, editor-while-processing, automation, state, stereo buses, and 44.1/48 kHz at 64/512 frames. Earlier branch evidence records a successful Ableton processor load; no fresh integration-time Ableton custom-editor gesture/listening pass or physical touch acceptance is claimed.
 
 [ ] T28 — Build the fixed end-of-chain Polish section
+    Active owner (2026-08-28):
+    - Codex task `Build fixed Polish section`, thread `01a048c7-8629-71d3-935d-a95860faefb5`, branch `codex/t28-fixed-polish-section`, worktree `/Users/winterfell/.codex/worktrees/4324/cosimo-synth`, base `35f4e3b6`, model SOL, reasoning max.
+    - This coordinator-managed task owns the fixed Safe Bass/accepted Enhancer/compressor/clipper/trim chain, permanent POLISH node, compact output meter, exact constant latency, and complete greenfield saved-sound hard cut. It may develop in parallel, but final rebase/state/factory qualification and integration must follow landed T62. Final review, rebase, merge, push, native/install gates, and deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the protected T26 product thread must not be directed.
     Design authority: `POLISH_CHAIN_DESIGN.md`.
     Locked signal chain:
     - This is one fixed, non-reorderable, non-modulatable end-of-chain section: Safe Bass into the T26 Enhancer, then medium compression into an intentional soft clipper, followed by Output Trim.
