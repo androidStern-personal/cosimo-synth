@@ -53,10 +53,11 @@ codesign --verify --deep --strict --verbose=4 build/seqfx_juce/_build/CosimoSeqF
 lipo -archs build/seqfx_juce/_build/CosimoSeqFX_artefacts/Release/VST3/CosimoSeqFX.vst3/Contents/MacOS/CosimoSeqFX
 ```
 
-If Cmajor runtime setup races in a fresh worktree, run this once before browser-heavy tests:
+Dependency source resolves automatically through the shared CPM cache. To verify
+the locked graph before browser-heavy tests, run:
 
 ```bash
-python3 scripts/ensure_cmajor_runtime.py --path
+python3 scripts/resolve_build_dependencies.py
 ```
 
 ## Clean Release Build

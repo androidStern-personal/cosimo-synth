@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,24 +21,24 @@ const CONTENT_TYPES = new Map([
 ]);
 
 async function findCmajorApiRoot() {
-    const depsRoot = path.join(repoRoot, "build", "deps");
-    for (const entry of await fs.readdir(depsRoot)) {
-        if (!entry.startsWith("cmajor-")) continue;
-        const candidate = path.join(depsRoot, entry, "javascript", "cmaj_api");
-        try {
-            if ((await fs.stat(candidate)).isDirectory()) return candidate;
-        } catch {
-            // keep looking
-        }
-    }
-    throw new Error("No Cmajor browser API directory under build/deps.");
+    const result = execFileSync(
+        "python3",
+        [path.join(repoRoot, "scripts", "resolve_build_dependencies.py")],
+        { cwd: repoRoot, encoding: "utf8" },
+    );
+    const resolution = JSON.parse(result);
+    const { cmajor, choc, juce } = resolution.dependencies;
+    console.log(
+        `Cosimo CPM dependencies: Cmajor@${cmajor.commit}, CHOC@${choc.commit}, JUCE@${juce.commit} (${resolution.cacheRoot})`,
+    );
+    return path.join(cmajor.path, "javascript", "cmaj_api");
 }
 
 /**
  * Static server for live-performance pages in environments without a full
  * web build: build/web first, repo root as a fallback (factory catalogs and
  * wavetable sources live in assets/), and /cmaj_api/ mapped to the Cmajor
- * runtime under build/deps.
+ * source returned by the canonical CPM resolver.
  */
 export async function startLiveReviewServer() {
     const cmajorApiRoot = await findCmajorApiRoot();

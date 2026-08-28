@@ -183,9 +183,10 @@ already models everything needed) that replays, per frame:
 - **MIDI** — `midiIn` events at exact frames derived from the same
   `performanceEvents()` math (`ui/speedrun/audio/checkpoint-renderer.ts:199`),
   so the keyboard lights the real keys in sync with the heard notes.
-- **Utilities**: supply the real `PianoKeyboard` class
-  (`build/deps/cmajor-*/javascript/cmaj_api/cmaj-piano-keyboard.js` — key
-  highlights are pure `midiIn` endpoint listeners, `:157-172`, zero clocks).
+- **Utilities**: supply the real `PianoKeyboard` class from the Cmajor path
+  returned by `scripts/resolve_build_dependencies.py` under
+  `javascript/cmaj_api/cmaj-piano-keyboard.js` (key highlights are pure
+  `midiIn` endpoint listeners, `:157-172`, zero clocks).
   `MockPianoKeyboard` renders no keys — do not use it for video.
 - **Resources**: `getResourceAddress`/`readResource` served from the same
   origin (wavetable catalog JSON + per-table WAVs) so the real stage draws the

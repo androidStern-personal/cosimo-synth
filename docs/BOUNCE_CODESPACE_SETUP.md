@@ -10,7 +10,7 @@ does not replace the macOS developer path.
 - Node 24.18.1 and npm 11.16.0
 - CMake 3.28.3 and Ninja 1.11.1
 - LLVM/Clang 18.1.3
-- Cmajor 1.0.3066 at `172db53232337154d5a1c0f9a448318129dfacd9`
+- Cmajor CLI 1.0.3066; Cmajor/CHOC/JUCE source identities come only from `cmake/dependencies.lock.cmake`
 - Playwright Chromium revision 1217
 
 Codespaces expose shared CPUs and no realtime audio device. Treat absolute
@@ -40,34 +40,20 @@ copied headers are needed.
 
 ## Pinned Cmajor CLI
 
-Fetch the pinned source and patched CHOC checkout, then build serially. The
-Codespace used for M0 had 7.8 GiB RAM and killed a four-way C++ build; `-j 1`
-is deliberate.
-
-```bash
-runtime_path=$(python3 scripts/ensure_cmajor_runtime.py --path)
-cmake -S "$runtime_path" -B build/cmajor-cli-linux -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_CMAJ_LIB=OFF \
-  -DBUILD_PLUGIN=OFF \
-  -DBUILD_EXAMPLES=OFF
-cmake --build build/cmajor-cli-linux --target cmaj -j 1
-build/cmajor-cli-linux/tools/command/cmaj version
-```
-
-The final command must print `Cmajor Version: 1.0.3066`.
+Cmajor CLI acquisition and distribution are outside the repository's CPM source
+resolver. Provision the existing pinned CLI workflow separately and confirm that
+`cmaj version` prints `Cmajor Version: 1.0.3066`. Do not derive a second Cmajor
+source checkout from these Codespace notes.
 
 ## External-aware code generator
 
-The stock CLI cannot resolve Cosimo's external renderer import. Build the
-repository generator against the same pinned runtime:
+The stock CLI cannot resolve Cosimo's external renderer import. The repository
+generator resolves the same locked source graph internally:
 
 ```bash
-runtime_path=$(python3 scripts/ensure_cmajor_runtime.py --path)
 cmake -S tools/cmajor_external_codegen \
   -B build/cmajor_external_codegen-host -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAJOR_SOURCE_PATH="$runtime_path"
+  -DCMAKE_BUILD_TYPE=Release
 cmake --build build/cmajor_external_codegen-host \
   --target cosimo_cmajor_external_codegen -j 1
 ```
@@ -78,8 +64,6 @@ Ubuntu's WASI headers and libraries live under `/usr`, while Clang and the
 C++ WASI headers live under `/usr/lib/llvm-18`:
 
 ```bash
-runtime_path=$(python3 scripts/ensure_cmajor_runtime.py --path)
-CMAJOR_SOURCE_PATH="$runtime_path" \
 COSIMO_CMAJOR_EXTERNAL_CODEGEN_BUILD_DIR="$PWD/build/cmajor_external_codegen-host" \
 COSIMO_CMAJOR_BUILD_JOBS=1 \
 COSIMO_RENDERER_LLVM_DIR=/usr/lib/llvm-18 \
@@ -120,8 +104,6 @@ QuickJS probe builds the pinned `CmajPerformer` shared library serially on
 Linux, then drives the production patch from a background thread:
 
 ```bash
-runtime_path=$(python3 scripts/ensure_cmajor_runtime.py --path)
-CMAJOR_SOURCE_PATH="$runtime_path" \
 COSIMO_CMAJOR_EXTERNAL_CODEGEN_BUILD_DIR="$PWD/build/cmajor_external_codegen-host" \
 COSIMO_CMAJOR_BUILD_JOBS=1 \
 npm run test:bounce:native

@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cmajor_version="$(cmaj version | awk '/Cmajor Version:/ { print $3; exit }')"
-cmajor_source_path="${CMAJOR_SOURCE_PATH:-$(python3 "$repo_root/scripts/ensure_cmajor_runtime.py" --path)}"
+cmajor_source_path="$(python3 "$repo_root/scripts/resolve_build_dependencies.py" --path cmajor)"
 native_build_dir="$repo_root/build/native_quickjs"
 pending_jobs_source="$repo_root/tests/native_quickjs/QuickJSPendingJobs.cpp"
 pending_jobs_binary="$native_build_dir/QuickJSPendingJobs"
@@ -37,8 +37,6 @@ if [[ -z "$runtime_dylib" ]]; then
 fi
 
 mkdir -p "$native_build_dir"
-
-uv run --project "$repo_root" pytest -q "$repo_root/tests/test_ensure_cmajor_runtime.py"
 
 compile_native_test() {
     local source_path="$1"

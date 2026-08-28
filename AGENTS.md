@@ -6,7 +6,7 @@
 
 ## Isolated Worktrees
 
-- If `build/deps` is not already linked in an isolated worktree, link it to the primary checkout's existing pinned `build/deps` before running builds or tests. Do not provision a second Cmajor checkout.
+- Build and test entrypoints resolve Cmajor, CHOC, and JUCE through `scripts/resolve_build_dependencies.py`. The resolver uses the shared user-level CPM source cache automatically; do not link dependency trees or prepare a worktree-specific checkout.
 
 ## Codex Task Integration
 
@@ -106,7 +106,7 @@
 - The official generic VST3 loader `CmajPlugin.vst3` did not reproduce that crash with the same OTT lab patch, but it does not contain the patched CHOC keyboard bridge. For fast Ableton lab testing, use the repo-built patched generic VST3 from `npm run cmajplugin:build` and `npm run cmajplugin:install`, then point it at one effect with `npm run fx:jit:install -- ott` or `npm run fx:jit:install -- chorus`.
 - Do not install or recommend the official generic AU loader `~/Library/Audio/Plug-Ins/Components/CmajPlugin.component` for Ableton WebView knob testing unless the task is specifically to reproduce the AU crash.
 - `scripts/install_fx_cmajplugin.sh` validates migrated effect patches such as OTT Lab and Chorus Lab, verifies that the installed generic `CmajPlugin.vst3` contains the patched CHOC keyboard bridge, and writes only the VST3 `CmajPlugin.json`. It does not install `CmajPlugin.vst3` and does not touch any AU loader.
-- `scripts/ensure_cmajor_runtime.py` is the default Cmajor source provider for effect production builds, the desktop native wrapper build, and the repo-built generic `CmajPlugin.vst3`. It creates `build/deps/cmajor-1.0.3066-choc-e50b21a2`, where Cmajor is pinned to `172db53232337154d5a1c0f9a448318129dfacd9` and `include/choc` is pinned to `e50b21a272a1729bc1dd1fd368c112095cb18d5a` before the script applies Cosimo's reproducible runtime patches.
+- `scripts/resolve_build_dependencies.py` is the sole Cmajor/CHOC/JUCE source resolver for effect production builds, the desktop native wrapper, iOS AUv3, web/codegen builds, and the repo-built generic `CmajPlugin.vst3`. `cmake/dependencies.lock.cmake` alone owns the immutable repositories and commits. CPM retrieves the private patched Cmajor tree, its pinned private CHOC submodule, and pinned JUCE into a shared user cache; callers receive validated, clean, read-only source paths and keep build output inside their own worktree.
 
 ## Spectral Chord Resonator I/O
 

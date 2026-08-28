@@ -3,7 +3,7 @@ set -euo pipefail
 
 test_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_dir="$(cd "$test_dir/../.." && pwd -P)"
-cmajor_source_path="${CMAJOR_SOURCE_PATH:-$(python3 "$repo_dir/scripts/ensure_cmajor_runtime.py" --path)}"
+cmajor_source_path="$(python3 "$repo_dir/scripts/resolve_build_dependencies.py" --path cmajor)"
 runtime_build_dir="${COSIMO_CMAJOR_RUNTIME_BUILD_DIR:-$repo_dir/build/cmajor-runtime-linux}"
 probe_build_dir="$repo_dir/build/native_bounce_quickjs"
 runtime_library="${COSIMO_CMAJOR_RUNTIME_LIBRARY:-}"

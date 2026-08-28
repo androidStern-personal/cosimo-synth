@@ -117,14 +117,11 @@ dynamic compensation. Re-run the full T26 dry identity, mono/side, reset, finite
 sample-rate, state, musical, pluginval, install, and Ableton gates after production
 integration. T26 is not complete until those gates pass.
 
-## Reproduction
+## Archived reproduction
 
-```sh
-npm run prototype:enhancer-deemphasis
-```
-
-The ignored primary report is
+The independent JUCE runner and its package command were retired when Cosimo
+adopted the single CPM dependency resolver. The ignored primary report was
 `build/t26-deemphasis-prototype/report.json`; the endpoint and derived-intermediate
-A/B files are under `build/t26-deemphasis-prototype/listening/`. The retained report
+A/B files were under `build/t26-deemphasis-prototype/listening/`. The retained report
 SHA-256 for this pass is
 `baf4eb5ebb3c7aa2c5feda6bb8d35dd771008882d40f611939a6ff725d02224f`.

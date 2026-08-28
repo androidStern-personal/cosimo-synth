@@ -7,7 +7,7 @@ Completed on 2026-03-30.
 What landed:
 
 - `scripts/generate_ios_auv3_plugin.sh` now emits raw `cmaj generate --target=cpp` performer output instead of a generated JUCE plug-in shell.
-- The repo now fetches the pinned Cmajor helper runtime, CHOC headers, and browser `cmaj_api` files into `build/deps/` instead of checking that runtime tree into source control.
+- The repository now resolves the pinned Cmajor helper runtime, CHOC headers, and JUCE source through its shared CPM cache instead of checking dependency source into this repository.
 - The iOS target now builds through `ios_auv3/Source/CosimoPluginMain.cpp`, which includes the raw generated performer and the pinned runtime instead of compiling generated `cmajor_plugin.cpp`.
 - The bundle packaging step now copies real `patch_gui/`, `cmaj_api/`, `assets/`, and `WavetableSynth.iOS.cmajorpatch` files into the standalone app and AUv3 extension bundles.
 - The visible WebView bridge keeps the full Cmajor `PatchWebView` protocol and now has a development-server loader with fallback to bundled files.

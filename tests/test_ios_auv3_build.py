@@ -49,7 +49,7 @@ IOS_HOST_SOURCE_RUNTIME = REPO_ROOT / "ui" / "ios" / "runtime-host.js"
 IOS_PATCH_HOST_HTML = REPO_ROOT / "patch_gui" / "index.ios.html"
 IOS_PATCH_HOST_RUNTIME = REPO_ROOT / "patch_gui" / "index.ios-host.js"
 PACKAGE_JSON = REPO_ROOT / "package.json"
-CMAJOR_RUNTIME_HELPER = REPO_ROOT / "scripts" / "ensure_cmajor_runtime.py"
+DEPENDENCY_RESOLVER = REPO_ROOT / "scripts" / "resolve_build_dependencies.py"
 
 CONTAINER_BUNDLE_ID = "dev.cosimo.wavetable-synth"
 HOST_BUNDLE_ID = "dev.cosimo.wavetable-synth-host"
@@ -61,40 +61,10 @@ def _normalise_whitespace(text: str) -> str:
     return " ".join(text.split())
 
 
-def _write_fake_juce_checkout(root: Path) -> Path:
-    root.mkdir(parents=True, exist_ok=True)
-    (root / ".git").mkdir(exist_ok=True)
-    (root / "juce_plugin_stub.cpp").write_text(
-        "void cosimo_fake_juce_plugin_stub() {}\n",
-        encoding="utf-8",
-    )
-    (root / "CMakeLists.txt").write_text(
-        """
-cmake_minimum_required(VERSION 3.22)
-project(FakeJUCE LANGUAGES CXX C)
-
-add_library(juce_audio_utils INTERFACE)
-add_library(juce::juce_audio_utils ALIAS juce_audio_utils)
-
-function(juce_add_plugin target)
-    add_library(${target} STATIC "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/juce_plugin_stub.cpp")
-    add_library(${target}_Standalone STATIC "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/juce_plugin_stub.cpp")
-    add_library(${target}_AUv3 STATIC "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/juce_plugin_stub.cpp")
-endfunction()
-
-function(juce_generate_juce_header target)
-endfunction()
-""".strip()
-        + "\n",
-        encoding="utf-8",
-    )
-    return root
-
-
 @functools.lru_cache(maxsize=1)
 def _cmajor_runtime_root() -> Path:
     result = subprocess.run(
-        ["python3", str(CMAJOR_RUNTIME_HELPER), "--path"],
+        ["python3", str(DEPENDENCY_RESOLVER), "--path", "cmajor"],
         cwd=REPO_ROOT,
         check=True,
         capture_output=True,
@@ -774,14 +744,14 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert "LANGUAGES CXX C OBJC OBJCXX" in cmake
     assert "FORMATS Standalone AUv3" in cmake
     assert "generate_ios_auv3_plugin.sh" in cmake_text
-    assert "ensure_cmajor_runtime.py" in cmake_text
+    assert "ResolveBuildDependencies.cmake" in cmake_text
     assert "CosimoPluginMain.cpp" in cmake_text
     assert "CosimoSharedWavetableLibrary.mm" in cmake_text
     assert "BounceNativeDriver.cpp" in cmake_text
     assert "BounceNativePlatform.cpp" in cmake_text
     assert "BounceNativeBankStore.cpp" in cmake_text
     assert "CmajorBounceOfflinePerformer.cpp" in cmake_text
-    assert "COSIMO_CMAJOR_RUNTIME_DIR" in cmake_text
+    assert "COSIMO_CMAJOR_SOURCE_DIR" in cmake_text
     assert "COSIMO_REACT_UI_FILES" in cmake_text
     assert "COSIMO_WORKER_UI_FILES" in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/ios/*' in cmake_text
@@ -1737,7 +1707,7 @@ def test_ios_ui_dev_server_configuration_exists() -> None:
     assert "ui:ios:dev" not in package_json["scripts"]
     assert "ui:ios:build" not in package_json["scripts"]
     assert "vite" in package_json["devDependencies"]
-    assert "ensure_cmajor_runtime.py" in shared_vite_helpers
+    assert "resolve_build_dependencies.py" in shared_vite_helpers
     assert "export function createViteRepoContext" in shared_vite_helpers
     assert "export function serveStaticDirectory" in shared_vite_helpers
     assert "export function serveStaticFile" in shared_vite_helpers
@@ -1778,10 +1748,8 @@ def test_ios_patch_manifest_points_at_the_mobile_editor_entry() -> None:
     reason="Xcode project generation is only available on macOS with Xcode installed",
 )
 def test_ios_auv3_xcode_project_script_generates_an_xcode_project(tmp_path: Path) -> None:
-    fake_juce = _write_fake_juce_checkout(tmp_path / "fake-juce")
     build_dir = tmp_path / "xcode-build"
     env = os.environ.copy()
-    env["JUCE_PATH"] = str(fake_juce)
     env["COSIMO_IOS_SYSROOT"] = "iphonesimulator"
 
     result = subprocess.run(

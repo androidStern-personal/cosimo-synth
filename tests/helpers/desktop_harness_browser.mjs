@@ -1,6 +1,6 @@
 import { createServer as createHttpServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -32,27 +32,17 @@ export function pathStaysWithinRepoRoot(rootPath, candidatePath) {
 async function resolveCmajorApiRoot(rootPath) {
     if (!cmajorApiRootPromise) {
         cmajorApiRootPromise = (async () => {
-            const depsRoot = path.join(rootPath, "build", "deps");
-            const entries = await fs.readdir(depsRoot, { withFileTypes: true });
-
-            for (const entry of entries) {
-                if (!entry.name.startsWith("cmajor-")) {
-                    continue;
-                }
-
-                const candidate = path.join(depsRoot, entry.name, "javascript", "cmaj_api");
-
-                try {
-                    const stat = await fs.stat(candidate);
-                    if (stat.isDirectory()) {
-                        return candidate;
-                    }
-                } catch {
-                    // Ignore missing runtime folders and keep searching.
-                }
-            }
-
-            throw new Error(`Could not find a Cmajor browser API directory under ${depsRoot}`);
+            const result = execFileSync(
+                "python3",
+                [path.join(rootPath, "scripts", "resolve_build_dependencies.py")],
+                { cwd: rootPath, encoding: "utf8" },
+            );
+            const resolution = JSON.parse(result);
+            const { cmajor, choc, juce } = resolution.dependencies;
+            console.log(
+                `Cosimo CPM dependencies: Cmajor@${cmajor.commit}, CHOC@${choc.commit}, JUCE@${juce.commit} (${resolution.cacheRoot})`,
+            );
+            return path.join(cmajor.path, "javascript", "cmaj_api");
         })();
     }
 

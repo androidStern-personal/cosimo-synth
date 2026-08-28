@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 build_dir="${CMAJPLUGIN_BUILD_DIR:-$repo_root/build/cmajplugin_vst3}"
-built_vst3="$build_dir/tools/CmajPlugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3"
+built_vst3="$build_dir/cmajplugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3"
 built_binary="$built_vst3/Contents/MacOS/CmajPlugin"
 install_dir="$HOME/Library/Audio/Plug-Ins/VST3"
 installed_vst3="$install_dir/CmajPlugin.vst3"

@@ -35,7 +35,7 @@ Why:
 
 - Serum manual: <https://www.xferrecords.com/manual/serum-2/docs>
 - Cmajor standard filter source:
-  - `/Users/winterfell/Library/Caches/cosimo-synth-dev/cmajor-source-1.0.3066/standard_library/std_library_filters.cmajor`
+  - `standard_library/std_library_filters.cmajor` in the locked Cmajor tree returned by `scripts/resolve_build_dependencies.py --path cmajor`
 - Andy Simper SVF paper:
   - <https://www.cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf>
 - Faust filters library:

@@ -85,12 +85,12 @@ the iPhone AUv3 here. What you CAN do on Linux:
 
 Toolchain bring-up is Milestone 0 and has real friction:
 
-- `python3 scripts/ensure_cmajor_runtime.py --path` clones the pinned Cmajor
-  (tag 1.0.3066, commit `172db532…`) + patched CHOC and applies the repo's
-  patches. You must then **build the `cmaj` tool and the repo's
-  `tools/cmajor_external_codegen` on Linux** (cmake; upstream Cmajor supports
-  Linux). This is on the critical path: the stock `cmaj` CLI cannot resolve
-  the synth's external renderer function; only the repo's codegen tool can.
+- `scripts/resolve_build_dependencies.py` resolves the immutable patched
+  Cmajor/CHOC and JUCE source graph through the shared CPM cache. The
+  repository's `tools/cmajor_external_codegen` CMake project uses that resolver
+  itself. Provisioning the pinned `cmaj` executable remains a separate toolchain
+  concern. This is on the critical path: the stock `cmaj` CLI cannot resolve the
+  synth's external renderer function; only the repo's codegen tool can.
 - The renderer-WASM build script defaults to Homebrew paths but honors
   `COSIMO_RENDERER_LLVM_DIR`, `COSIMO_RENDERER_WASI_C_DIR`,
   `COSIMO_RENDERER_WASI_CXX_DIR` (see

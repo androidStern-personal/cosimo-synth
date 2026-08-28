@@ -62,48 +62,12 @@ if (NOT EXISTS "${COSIMO_IOS_GENERATOR_SCRIPT}")
     message(FATAL_ERROR "Generator script not found: ${COSIMO_IOS_GENERATOR_SCRIPT}")
 endif()
 
-set(COSIMO_CMAJOR_RUNTIME_SCRIPT "${COSIMO_REPO_ROOT}/scripts/ensure_cmajor_runtime.py")
-
-if (NOT EXISTS "${COSIMO_CMAJOR_RUNTIME_SCRIPT}")
-    message(FATAL_ERROR "Pinned Cmajor runtime fetch helper not found: ${COSIMO_CMAJOR_RUNTIME_SCRIPT}")
-endif()
-
-execute_process(
-    COMMAND
-        "${Python3_EXECUTABLE}"
-        "${COSIMO_CMAJOR_RUNTIME_SCRIPT}"
-        --path
-    WORKING_DIRECTORY
-        "${COSIMO_REPO_ROOT}"
-    RESULT_VARIABLE
-        COSIMO_CMAJOR_RUNTIME_RESULT
-    OUTPUT_VARIABLE
-        COSIMO_CMAJOR_RUNTIME_DIR
-    ERROR_VARIABLE
-        COSIMO_CMAJOR_RUNTIME_ERROR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
+include("${COSIMO_REPO_ROOT}/cmake/ResolveBuildDependencies.cmake")
+cosimo_resolve_build_dependencies(
+    COSIMO_CMAJOR_SOURCE_DIR
+    COSIMO_CHOC_SOURCE_DIR
+    COSIMO_JUCE_SOURCE_DIR
 )
-
-if (NOT COSIMO_CMAJOR_RUNTIME_RESULT EQUAL 0)
-    string(STRIP "${COSIMO_CMAJOR_RUNTIME_ERROR}" COSIMO_CMAJOR_RUNTIME_ERROR)
-    message(FATAL_ERROR "Failed to fetch the pinned Cmajor runtime: ${COSIMO_CMAJOR_RUNTIME_ERROR}")
-endif()
-
-if (NOT EXISTS "${COSIMO_CMAJOR_RUNTIME_DIR}/include/cmajor/helpers/cmaj_Patch.h")
-    message(FATAL_ERROR "Pinned Cmajor helper runtime is incomplete: ${COSIMO_CMAJOR_RUNTIME_DIR}")
-endif()
-
-if (NOT EXISTS "${COSIMO_CMAJOR_RUNTIME_DIR}/javascript/cmaj_api/cmaj-patch-view.js")
-    message(FATAL_ERROR "Pinned Cmajor web API files are incomplete: ${COSIMO_CMAJOR_RUNTIME_DIR}")
-endif()
-
-if (NOT JUCE_PATH)
-    message(FATAL_ERROR "Set JUCE_PATH to a local JUCE checkout before configuring ios_auv3")
-endif()
-
-if (NOT EXISTS "${JUCE_PATH}/CMakeLists.txt")
-    message(FATAL_ERROR "JUCE_PATH does not look like a JUCE checkout: ${JUCE_PATH}")
-endif()
 
 set(
     CMAJOR_VERSION
@@ -122,7 +86,7 @@ endif()
 
 set(JUCE_ENABLE_MODULE_SOURCE_GROUPS ON)
 
-add_subdirectory("${JUCE_PATH}" juce)
+add_subdirectory("${COSIMO_JUCE_SOURCE_DIR}" juce)
 
 file(
     GLOB_RECURSE COSIMO_REACT_UI_FILES
@@ -143,7 +107,7 @@ file(
 file(
     GLOB_RECURSE COSIMO_CMAJOR_WEB_FILES
     CONFIGURE_DEPENDS
-    "${COSIMO_CMAJOR_RUNTIME_DIR}/javascript/cmaj_api/*"
+    "${COSIMO_CMAJOR_SOURCE_DIR}/javascript/cmaj_api/*"
 )
 
 set(
@@ -258,8 +222,8 @@ target_compile_definitions(CosimoSynth PRIVATE
 )
 
 target_include_directories(CosimoSynth PRIVATE
-    "${COSIMO_CMAJOR_RUNTIME_DIR}/include"
-    "${COSIMO_CMAJOR_RUNTIME_DIR}/include/choc"
+    "${COSIMO_CMAJOR_SOURCE_DIR}/include"
+    "${COSIMO_CHOC_SOURCE_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}/Source"
     "${COSIMO_REPO_ROOT}/native/bounce"
     "${COSIMO_REPO_ROOT}/native/three_oscillator_renderer"
@@ -318,7 +282,7 @@ foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)
             "$<TARGET_FILE_DIR:${bundle_target}>/cmaj_api"
         COMMAND
             "${CMAKE_COMMAND}" -E copy_directory
-            "${COSIMO_CMAJOR_RUNTIME_DIR}/javascript/cmaj_api"
+            "${COSIMO_CMAJOR_SOURCE_DIR}/javascript/cmaj_api"
             "$<TARGET_FILE_DIR:${bundle_target}>/cmaj_api"
         COMMAND
             "${CMAKE_COMMAND}" -E rm -rf

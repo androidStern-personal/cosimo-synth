@@ -4,16 +4,17 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 export function resolveCmajorRuntimeRoot(workspaceRoot) {
-    if (process.env.COSIMO_CMAJOR_RUNTIME_DIR) {
-        return path.resolve(process.env.COSIMO_CMAJOR_RUNTIME_DIR);
-    }
-
-    const runtimeScript = path.join(workspaceRoot, "scripts", "ensure_cmajor_runtime.py");
-
-    return execFileSync("python3", [runtimeScript, "--path"], {
+    const resolver = path.join(workspaceRoot, "scripts", "resolve_build_dependencies.py");
+    const result = execFileSync("python3", [resolver], {
         cwd: workspaceRoot,
         encoding: "utf8",
-    }).trim();
+    });
+    const resolution = JSON.parse(result);
+    const { cmajor, choc, juce } = resolution.dependencies;
+    console.log(
+        `Cosimo CPM dependencies: Cmajor@${cmajor.commit}, CHOC@${choc.commit}, JUCE@${juce.commit} (${resolution.cacheRoot})`,
+    );
+    return cmajor.path;
 }
 
 export function createViteRepoContext(importMetaUrl) {
