@@ -30,6 +30,7 @@ import {
     PARAMETER_HUD_LINGER_MS,
     hexToRgbTriplet,
     type ParameterHudModel,
+    type ParameterHudVisualization,
 } from "../shared/parameter-hud";
 import { BYPASSED_GREY as KNOB_BYPASSED_GREY, type ParameterKnobModRing } from "../shared/parameter-knob-artwork";
 import type { PatchControlBinding } from "../shared/patch-controls";
@@ -85,6 +86,8 @@ export type BaseParameterKnobProps = {
     readonly modulationTargetKind?: ModulationTargetKind;
     /** Accent the precision HUD frames this control's owner with. */
     readonly ownerAccent?: string;
+    /** Production-backed replacement for the ordinary HUD knob. */
+    readonly presentHudVisualization?: (value: number) => ParameterHudVisualization;
     /** Exact-entry spec: with a shell menu present, long-press opens the
         ADR-017 parameter menu built from this spec (T20: every control). */
     readonly entrySpec?: ParameterEntrySpec;
@@ -109,6 +112,8 @@ export type RackParameterKnobProps = {
     readonly formatValue?: (value: number) => string;
     /** Accent the precision HUD frames this control's owner with. */
     readonly ownerAccent?: string;
+    /** Production-backed replacement for the ordinary HUD knob. */
+    readonly presentHudVisualization?: (value: number) => ParameterHudVisualization;
     /**
      * How vertical travel maps onto the modulation amount.
      * "amount-span" (default): travel is linear across the amount domain.
@@ -266,6 +271,7 @@ type ParameterKnobSurfaceProps = {
     readonly onRequestContextMenu: (clientX: number, clientY: number) => void;
     readonly modulationTargetKind?: ModulationTargetKind;
     readonly ownerAccent?: string;
+    readonly presentHudVisualization?: (value: number) => ParameterHudVisualization;
     readonly modulationDragStyle?: "amount-span" | "effective-value";
     readonly modulationAmountBounds?: { readonly min: number; readonly max: number };
     readonly formatModulationAmount?: (
@@ -295,6 +301,7 @@ function ParameterKnobSurface({
     onRequestContextMenu,
     modulationTargetKind,
     ownerAccent,
+    presentHudVisualization,
     modulationDragStyle = "amount-span",
     modulationAmountBounds,
     formatModulationAmount,
@@ -572,6 +579,7 @@ function ParameterKnobSurface({
             highText: formatValue(routeTravel?.values[1] ?? binding.value),
             limitsVisible: route !== null && Math.abs(modulationAmount) > 1e-9,
             modRing,
+            visualization: presentHudVisualization?.(binding.value),
             liveLight: liveLightRoute !== null && liveLightProject !== null
                 ? {
                     source: {

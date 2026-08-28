@@ -17,7 +17,11 @@ import {
 import { parseLaneModulationTargetKind } from "../shared/lane-modulation-targets";
 import { createPortal } from "react-dom";
 
-import { ParameterHudLayerContext } from "../shared/parameter-hud";
+import {
+    ParameterHudLayerContext,
+    useParameterHudSuppression,
+    type ParameterHudVisualization,
+} from "../shared/parameter-hud";
 
 import { usePatchConnection } from "../shared/cmajor-react";
 import {
@@ -809,6 +813,7 @@ function RackParameterControl({
     onSelect,
     onRecentParameter,
     onRequestContextMenu,
+    presentHudVisualization,
 }: {
     descriptor: RackParameterDescriptor;
     routes: ReadonlyArray<ModulationRoute>;
@@ -825,6 +830,7 @@ function RackParameterControl({
     onSelect: () => void;
     onRecentParameter: (endpointID: string) => void;
     onRequestContextMenu: (endpointID: string, clientX: number, clientY: number) => void;
+    presentHudVisualization?: (value: number) => ParameterHudVisualization;
 }) {
     const keyTrack = useRackKeyTrackBinding(descriptor);
     const definition = getKeyTrackDefinition(`lane.${descriptor.endpointID}`);
@@ -945,6 +951,7 @@ function RackParameterControl({
                 ownerAccent={EFFECT_ACCENTS[descriptor.effectId]}
                 modulationDragStyle={descriptor.modulationDragStyle}
                 modulationTargetKind={controlTargetKind}
+                presentHudVisualization={keyTrack.enabled ? undefined : presentHudVisualization}
                 modulationAmountBounds={keyTrack.enabled && definition !== null
                     ? (() => {
                         const range = requireKeyTrackRange(definition.family);
@@ -984,6 +991,7 @@ function FilterRackVisual({
     spectrum: SynthPatchViewModel["observedFilterSpectrum"];
     onRecentParameter: (endpointID: string) => void;
 }) {
+    const parameterHudSuppression = useParameterHudSuppression();
     const effect = getRackEffectDescriptor("filter");
     const modeDescriptor = effect.parameters.find((parameter) => parameter.endpointID === "globalFilterMode")!;
     const cutoffDescriptor = effect.parameters.find((parameter) => parameter.endpointID === "globalFilterCutoff")!;
@@ -1007,10 +1015,12 @@ function FilterRackVisual({
                 cutoff.beginGesture();
                 resonance.beginGesture();
                 onRecentParameter(cutoff.endpointID);
+                parameterHudSuppression.suppress();
             }}
             onGestureEnd={() => {
                 cutoff.endGesture();
                 resonance.endGesture();
+                parameterHudSuppression.release();
             }}
             onCutoffSet={(value) => {
                 if (!cutoffKeyTrack.enabled) cutoff.setValue(value);
@@ -1300,6 +1310,25 @@ function ParameterList({
         );
     }
 
+    if (effectId === "drive") {
+        return (
+            <DistortionParameterList
+                routes={routes}
+                selectedTargetEndpointID={selectedTargetEndpointID}
+                hoverTargetEndpointID={hoverTargetEndpointID}
+                activeSource={activeSource}
+                sourceIsSelected={sourceIsSelected}
+                effectEnabled={effectEnabled}
+                pendingRouteKey={pendingRouteKey}
+                confirmedEndpointID={confirmedEndpointID}
+                dragSource={dragSource}
+                onSelectTarget={onSelectTarget}
+                onRecentParameter={onRecentParameter}
+                onRequestContextMenu={onRequestContextMenu}
+            />
+        );
+    }
+
     if (effectId === "filter") {
         return (
             <FilterParameterList
@@ -1344,6 +1373,63 @@ function ParameterList({
     );
 }
 
+function DistortionParameterList({
+    routes,
+    selectedTargetEndpointID,
+    hoverTargetEndpointID,
+    activeSource,
+    sourceIsSelected,
+    effectEnabled,
+    pendingRouteKey,
+    confirmedEndpointID,
+    dragSource,
+    onSelectTarget,
+    onRecentParameter,
+    onRequestContextMenu,
+}: Omit<Parameters<typeof ParameterList>[0], "effectId">) {
+    const descriptor = getRackEffectDescriptor("drive");
+    const kneeDescriptor = getRackParameterDescriptor("distortionKnee");
+    const typeDescriptor = getRackParameterDescriptor("distortionType");
+    if (kneeDescriptor === null || typeDescriptor === null) {
+        throw new Error("The Distortion HUD requires Knee and Type parameter descriptors.");
+    }
+    const kneeBinding = useRackParameterBinding(kneeDescriptor);
+    const typeBinding = useRackParameterBinding(typeDescriptor);
+    const presentDistortionHudVisualization = useCallback((driveDb: number): ParameterHudVisualization => ({
+        kind: "distortion",
+        driveDb,
+        knee: kneeBinding.value,
+        type: typeBinding.value,
+    }), [kneeBinding.value, typeBinding.value]);
+
+    return (
+        <>
+            {descriptor.parameters.map((parameter) => (
+                <RackParameterControl
+                    key={parameter.endpointID}
+                    descriptor={parameter}
+                    routes={routes}
+                    selected={selectedTargetEndpointID === parameter.endpointID}
+                    activeSource={activeSource}
+                    sourceIsSelected={sourceIsSelected}
+                    effectEnabled={effectEnabled}
+                    targetEffective
+                    pending={pendingRouteKey === `${activeSource.sourceKind}:${activeSource.sourceSlot}:rack.${parameter.endpointID}`}
+                    confirmed={confirmedEndpointID === parameter.endpointID}
+                    dragSource={dragSource}
+                    hovered={hoverTargetEndpointID === parameter.endpointID}
+                    onSelect={() => onSelectTarget(parameter.endpointID)}
+                    onRecentParameter={onRecentParameter}
+                    onRequestContextMenu={onRequestContextMenu}
+                    presentHudVisualization={parameter.endpointID === "distortionDriveDb"
+                        ? presentDistortionHudVisualization
+                        : undefined}
+                />
+            ))}
+        </>
+    );
+}
+
 function FilterParameterList({
     routes,
     selectedTargetEndpointID,
@@ -1359,9 +1445,20 @@ function FilterParameterList({
     onRequestContextMenu,
 }: Omit<Parameters<typeof ParameterList>[0], "effectId">) {
     const descriptor = getRackEffectDescriptor("filter");
-    const modeDescriptor = descriptor.parameters.find((parameter) => parameter.endpointID === "globalFilterMode")!;
+    const modeDescriptor = getRackParameterDescriptor("globalFilterMode");
+    const resonanceDescriptor = getRackParameterDescriptor("globalFilterResonance");
+    if (modeDescriptor === null || resonanceDescriptor === null) {
+        throw new Error("The Filter HUD requires Mode and Resonance parameter descriptors.");
+    }
     const modeBinding = useRackParameterBinding(modeDescriptor);
+    const resonanceBinding = useRackParameterBinding(resonanceDescriptor);
     const filterIsAudible = modeBinding.value >= 0.5;
+    const presentFilterHudVisualization = useCallback((cutoffHz: number): ParameterHudVisualization => ({
+        kind: "filter",
+        mode: modeBinding.value,
+        cutoffHz,
+        q: resonanceBinding.value,
+    }), [modeBinding.value, resonanceBinding.value]);
 
     return (
         <>
@@ -1382,6 +1479,9 @@ function FilterParameterList({
                     onSelect={() => onSelectTarget(parameter.endpointID)}
                     onRecentParameter={onRecentParameter}
                     onRequestContextMenu={onRequestContextMenu}
+                    presentHudVisualization={parameter.endpointID === "globalFilterCutoff"
+                        ? presentFilterHudVisualization
+                        : undefined}
                 />
             ))}
         </>

@@ -478,6 +478,47 @@
     margin: 2px auto 0;
 }
 
+.mobile-voice-hud-visual {
+    position: relative;
+    width: 100%;
+    height: 132px;
+}
+
+.mobile-voice-hud-graphic {
+    position: absolute;
+    inset: 3px 8px 27px;
+    overflow: hidden;
+    border-radius: var(--cosimo-radius-md);
+    background: rgb(var(--cosimo-ground-rgb) / 0.54);
+}
+
+.mobile-voice-hud-visual-value {
+    position: absolute;
+    right: var(--cosimo-space-2);
+    bottom: 2px;
+    left: var(--cosimo-space-2);
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: var(--cosimo-space-2);
+}
+
+.mobile-voice-hud-visual-value span {
+    color: var(--cosimo-ink-faint);
+    font-family: var(--cosimo-font-readout, monospace);
+    font-size: var(--cosimo-type-caption);
+    font-weight: 700;
+    letter-spacing: var(--cosimo-track-wide);
+    text-transform: uppercase;
+}
+
+.mobile-voice-hud-visual-value strong {
+    color: var(--cosimo-ink);
+    font-family: var(--cosimo-font-readout, monospace);
+    font-size: var(--cosimo-type-display);
+    font-weight: 400;
+}
+
 .mobile-voice-hud-knob svg {
     position: absolute;
     top: 1px;

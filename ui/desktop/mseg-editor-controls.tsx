@@ -19,6 +19,7 @@ import type { SynthFocusBindings } from "../shared/synth-input-router";
 import {
     MSEG_RATE_MAX_SECONDS,
     MSEG_RATE_MIN_SECONDS,
+    type MsegShape,
 } from "../shared/mseg";
 import { findRackModulationSource } from "../shared/rack-modulation-sources";
 
@@ -43,6 +44,8 @@ export type MsegEditorControlStripProps = {
     readonly slotIndex: number;
     readonly rateBinding: PatchControlBinding<number>;
     readonly morphBinding: PatchControlBinding<number>;
+    readonly morphShapeAPoints: MsegShape["points"] | null;
+    readonly morphShapeBPoints: MsegShape["points"] | null;
     readonly routes: ReadonlyArray<ModulationRoute>;
     readonly armedSource: ReadoutStripSource | null;
     readonly hudContainer: Element | null;
@@ -66,6 +69,8 @@ export function MsegEditorControlStrip({
     slotIndex,
     rateBinding,
     morphBinding,
+    morphShapeAPoints,
+    morphShapeBPoints,
     routes,
     armedSource,
     hudContainer,
@@ -109,8 +114,16 @@ export function MsegEditorControlStrip({
             formatValue: formatPercentValue,
             targetKind: `mseg${slot}Morph` as ModulationTargetKind,
             presentation: "compact-knob",
+            presentHudVisualization: morphShapeAPoints !== null && morphShapeBPoints !== null
+                ? (value: number) => ({
+                    kind: "mseg-morph" as const,
+                    shapeAPoints: morphShapeAPoints,
+                    shapeBPoints: morphShapeBPoints,
+                    morph: value,
+                })
+                : undefined,
         },
-    ], [slot, variant]);
+    ], [morphShapeAPoints, morphShapeBPoints, slot, variant]);
     const bindings = useMemo<Readonly<Record<string, PatchControlBinding<number>>>>(() => ({
         morph: morphBinding,
         rate: rateBinding,

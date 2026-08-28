@@ -107,7 +107,12 @@ import {
     RackParameterKnob,
     type ParameterKnobDescriptor,
 } from "./rack-parameter-knob";
-import { ParameterHudLayerContext } from "../shared/parameter-hud";
+import {
+    ParameterHudLayerContext,
+    ParameterHudSuppressionProvider,
+    useParameterHudSuppression,
+    type ParameterHudVisualization,
+} from "../shared/parameter-hud";
 import {
     formatParameterEntry,
     parameterEntrySpecForFrequency,
@@ -2097,6 +2102,7 @@ function VoiceFilterKnob({
     disabled,
     formatValue,
     modulationDragStyle,
+    presentHudVisualization,
     keyTrackEnabled = false,
     onKeyTrackToggle,
 }: {
@@ -2108,6 +2114,7 @@ function VoiceFilterKnob({
     disabled: boolean;
     formatValue: (value: number) => string;
     modulationDragStyle?: "amount-span" | "effective-value";
+    presentHudVisualization?: (value: number) => ParameterHudVisualization;
     keyTrackEnabled?: boolean;
     onKeyTrackToggle?: () => void;
 }) {
@@ -2151,6 +2158,7 @@ function VoiceFilterKnob({
                 formatValue={formatValue}
                 ownerAccent={VOICE_FILTER_OWNER_ACCENT}
                 modulationDragStyle={modulationDragStyle}
+                presentHudVisualization={presentHudVisualization}
                 modulationAmountBounds={keyTrackEnabled
                     ? {
                         min: VOICE_FILTER_KEY_TRACK_RANGE.routeMin,
@@ -2294,6 +2302,7 @@ function FilterSection({
     armedSource,
 }: FilterSectionProps) {
     const [spectrumRenderMode, setSpectrumRenderMode] = useState<FilterSpectrumRenderMode>("graph");
+    const parameterHudSuppression = useParameterHudSuppression();
     const keyTrackEnabled = filterCutoffKeyTrackEnabled.value >= 0.5;
     const displayedFilterCutoff = keyTrackEnabled
         ? filterCutoffKeyTrackOffsetSemitones
@@ -2403,6 +2412,7 @@ function FilterSection({
             // gestures exactly like the base handle does.
             displayedFilterCutoff.beginGesture();
             filterQ.beginGesture();
+            parameterHudSuppression.suppress();
         };
         const handleTravelGestureEnd = () => {
             if (travelDragRef.current === null) {
@@ -2411,6 +2421,7 @@ function FilterSection({
             travelDragRef.current = null;
             displayedFilterCutoff.endGesture();
             filterQ.endGesture();
+            parameterHudSuppression.release();
         };
         const handleTravelEndpointSet = (side: FilterTravelEndpointSide, state: FilterEndpointState) => {
             const anchor = travelDragRef.current;
@@ -2584,10 +2595,12 @@ function FilterSection({
                         onGestureStart={() => {
                             displayedFilterCutoff.beginGesture();
                             filterQ.beginGesture();
+                            parameterHudSuppression.suppress();
                         }}
                         onGestureEnd={() => {
                             displayedFilterCutoff.endGesture();
                             filterQ.endGesture();
+                            parameterHudSuppression.release();
                         }}
                         onCutoffSet={(nextValue) => {
                             if (!keyTrackEnabled) filterCutoff.setValue(nextValue);
@@ -2626,6 +2639,12 @@ function FilterSection({
                             ? (value) => `${Number(value.toFixed(2))} st`
                             : formatCutoffDisplay}
                         keyTrackEnabled={keyTrackEnabled}
+                        presentHudVisualization={keyTrackEnabled ? undefined : (cutoffHz) => ({
+                            kind: "filter",
+                            mode: filterMode.value,
+                            cutoffHz,
+                            q: filterQ.value,
+                        })}
                         onKeyTrackToggle={toggleKeyTrack}
                     />
                     <VoiceFilterKnob
@@ -2683,10 +2702,12 @@ function FilterSection({
                     onGestureStart={() => {
                         filterCutoff.beginGesture();
                         filterQ.beginGesture();
+                        parameterHudSuppression.suppress();
                     }}
                     onGestureEnd={() => {
                         filterCutoff.endGesture();
                         filterQ.endGesture();
+                        parameterHudSuppression.release();
                     }}
                     onCutoffSet={(nextValue) => {
                         if (!keyTrackEnabled) filterCutoff.setValue(nextValue);
@@ -3221,6 +3242,8 @@ function MsegEditorModal({
                         slotIndex={slotIndex}
                         rateBinding={rateBinding}
                         morphBinding={morphBinding}
+                        morphShapeAPoints={msegState.shapeA?.points ?? null}
+                        morphShapeBPoints={msegState.shapeB?.points ?? null}
                         routes={routes}
                         armedSource={armedSource}
                         hudContainer={modalHudContainer}
@@ -5599,6 +5622,7 @@ function DesktopPatchViewBody({
     );
 
     return (
+        <ParameterHudSuppressionProvider>
         <ParameterHudLayerContext.Provider value={mobileVoiceHudLayer}>
         <ParameterMenuContext.Provider value={openShellParameterMenu}>
         <div className={`cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isCompactViewport ? " is-mobile-shell" : ""}${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`}>
@@ -5792,6 +5816,8 @@ function DesktopPatchViewBody({
                     msegEditShapeIndex={synthView.msegState?.editShapeIndex ?? 0}
                     onSelectMsegShape={synthView.handleSelectMsegShape}
                     msegMorphBinding={synthView.selectedMsegMorph}
+                    msegMorphShapeAPoints={synthView.msegState?.shapeA?.points ?? null}
+                    msegMorphShapeBPoints={synthView.msegState?.shapeB?.points ?? null}
                     onMsegMorphAdjustingChange={setIsQuickMsegMorphAdjusting}
                     msegLoopEnabled={synthView.msegState?.playback.loop !== null}
                     onToggleMsegLoop={synthView.handleToggleMsegLoop}
@@ -5864,6 +5890,7 @@ function DesktopPatchViewBody({
         </div>
         </ParameterMenuContext.Provider>
         </ParameterHudLayerContext.Provider>
+        </ParameterHudSuppressionProvider>
     );
 }
 

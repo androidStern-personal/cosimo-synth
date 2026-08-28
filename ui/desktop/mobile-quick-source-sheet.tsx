@@ -37,6 +37,7 @@ import { findRackModulationSource, type RackModulationSourceKind } from "../shar
 import { hexToRgbTriplet } from "../shared/parameter-hud";
 import type { ParameterMenuRequest } from "../shared/parameter-context-menu";
 import type { SynthCallbackControlReadiness } from "../shared/synth-hooks";
+import type { MsegShape } from "../shared/mseg";
 import { MsegEditorControlStrip } from "./mseg-editor-controls";
 import { MsegEditorShell } from "./mseg-editor-shell";
 import {
@@ -174,6 +175,8 @@ export type MobileQuickSourceSheetProps = {
     readonly msegEditShapeIndex: 0 | 1;
     readonly onSelectMsegShape: (shapeIndex: 0 | 1) => void;
     readonly msegMorphBinding: PatchControlBinding<number>;
+    readonly msegMorphShapeAPoints: MsegShape["points"] | null;
+    readonly msegMorphShapeBPoints: MsegShape["points"] | null;
     readonly onMsegMorphAdjustingChange: (isAdjusting: boolean) => void;
     readonly msegLoopEnabled: boolean;
     readonly onToggleMsegLoop: () => void;
@@ -203,6 +206,8 @@ export function MobileQuickSourceSheet({
     msegEditShapeIndex,
     onSelectMsegShape,
     msegMorphBinding,
+    msegMorphShapeAPoints,
+    msegMorphShapeBPoints,
     onMsegMorphAdjustingChange,
     msegLoopEnabled,
     onToggleMsegLoop,
@@ -433,6 +438,8 @@ export function MobileQuickSourceSheet({
             slotIndex={slot - 1}
             rateBinding={msegRateBinding}
             morphBinding={msegMorphBinding}
+            morphShapeAPoints={msegMorphShapeAPoints}
+            morphShapeBPoints={msegMorphShapeBPoints}
             routes={routes}
             armedSource={armedSource}
             hudContainer={hudContainer}

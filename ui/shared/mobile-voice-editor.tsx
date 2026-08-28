@@ -363,9 +363,18 @@ export function MobileVoiceFocusedEditor({
                         };
                     }
                     : undefined,
+                presentHudVisualization: controlID === "framePosition"
+                    ? (value: number) => ({
+                        kind: "wavetable" as const,
+                        frames: stage.frames,
+                        position: value,
+                        warpMode: bindingsRef.current.warpMode.value,
+                        warpAmount: bindingsRef.current.warpAmount.value,
+                    })
+                    : undefined,
             };
         })
-    ), [targetKindFor]);
+    ), [stage.frames, targetKindFor]);
 
     const cellApi = useReadoutCells({
         cells: cellSpecs,

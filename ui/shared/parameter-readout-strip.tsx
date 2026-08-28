@@ -33,7 +33,11 @@ import {
     type ParameterGestureChannel,
     type useParameterGesture,
 } from "./parameter-gesture";
-import { ParameterPrecisionHud, type ParameterHudModel } from "./parameter-hud";
+import {
+    ParameterPrecisionHud,
+    type ParameterHudModel,
+    type ParameterHudVisualization,
+} from "./parameter-hud";
 import {
     MOD_LIGHT_RADIUS,
     ParameterKnobArtwork,
@@ -139,6 +143,8 @@ export type ReadoutCellSpec = {
     readonly presentHudTravel?: (
         route: Pick<ModulationRoute, "amount" | "polarity"> | null,
     ) => ReadoutCellHudTravel;
+    /** Resolve a production-backed replacement for the ordinary HUD knob. */
+    readonly presentHudVisualization?: (value: number) => ParameterHudVisualization;
 };
 
 export type ReadoutCellPresentation = {
@@ -643,6 +649,7 @@ export function useReadoutCells({
             highText,
             limitsVisible,
             modRing,
+            visualization: cell.presentHudVisualization?.(bindings[cell.id].value),
             liveLight: liveLightProjection !== null && presentation.route !== null
                 ? {
                     source: {
