@@ -16,7 +16,12 @@ function assertApproximately(actual, expected, tolerance = 1e-9) {
 
 async function parseDoc(chainAndDevices) {
     const laneV2 = await laneV2Promise;
-    const parsed = laneV2.parseLaneStateV2({ format: "cosimo.lane", version: 2, ...chainAndDevices });
+    const parsed = laneV2.parseLaneStateV2({
+        format: "cosimo.lane",
+        version: 2,
+        output: { mix: 1, bypassed: false },
+        ...chainAndDevices,
+    });
     assert.equal(parsed._tag, "ok", parsed._tag === "err" ? parsed.message : "");
     return parsed.value;
 }
