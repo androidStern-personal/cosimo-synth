@@ -277,6 +277,101 @@ processor PolishSafeBassContract [[ main ]]
 }
 
 //==============================================================================
+// Safe Bass is derived rather than saved: either public Amount engages the one
+// curve, and returning both to zero restores the exact dry-side target. A
+// below-knee constant side signal isolates this crossfade from the compressor
+// and clipper so the production bus itself can prove the transition is smooth.
+
+## testProcessor()
+
+processor PolishSafeBassActivationContract [[ main ]]
+{
+    output stream int32 out;
+    node polish = wt::PolishBus;
+
+    float32 render (float32 enhancerAmount, float32 compressionClipAmount)
+    {
+        polish.in <- float32<2> (0.25f, -0.25f);
+        polish.enhancerAmountIn <- enhancerAmount;
+        polish.compressionClipAmountIn <- compressionClipAmount;
+        polish.outputTrimDbIn <- 0.0f;
+        polish.advance();
+        return polish.out[0];
+    }
+
+    void main()
+    {
+        // Settle the accepted Enhancer timing path and the running side filter
+        // while the derived crossfade remains exactly dry.
+        float32 previous;
+        for (int32 frame = 0; frame < 24000; ++frame)
+            previous = render (0.0f, 0.0f);
+
+        float32 maximumStep;
+        float32 compressionActivatedMagnitude;
+        for (int32 frame = 0; frame < 24000; ++frame)
+        {
+            let current = render (0.0f, 0.01f);
+            maximumStep = std::intrinsics::max (
+                maximumStep,
+                std::intrinsics::abs (current - previous)
+            );
+            previous = current;
+            if (frame >= 12000)
+                compressionActivatedMagnitude = std::intrinsics::max (
+                    compressionActivatedMagnitude,
+                    std::intrinsics::abs (current)
+                );
+        }
+
+        float32 recoveredMinimum = 1.0f;
+        for (int32 frame = 0; frame < 24000; ++frame)
+        {
+            let current = render (0.0f, 0.0f);
+            maximumStep = std::intrinsics::max (
+                maximumStep,
+                std::intrinsics::abs (current - previous)
+            );
+            previous = current;
+            if (frame >= 12000)
+                recoveredMinimum = std::intrinsics::min (
+                    recoveredMinimum,
+                    std::intrinsics::abs (current)
+                );
+        }
+
+        // A minute Enhancer amount is deliberately enough to activate the
+        // derived full Safe Bass curve while contributing negligible residue.
+        float32 enhancerActivatedMagnitude;
+        for (int32 frame = 0; frame < 24000; ++frame)
+        {
+            let current = render (0.00001f, 0.0f);
+            maximumStep = std::intrinsics::max (
+                maximumStep,
+                std::intrinsics::abs (current - previous)
+            );
+            previous = current;
+            if (frame >= 12000)
+                enhancerActivatedMagnitude = std::intrinsics::max (
+                    enhancerActivatedMagnitude,
+                    std::intrinsics::abs (current)
+                );
+        }
+
+        out <- compressionActivatedMagnitude < 0.001f ? 1 : 0;
+        advance();
+        out <- recoveredMinimum > 0.249f ? 1 : 0;
+        advance();
+        out <- enhancerActivatedMagnitude < 0.001f ? 1 : 0;
+        advance();
+        out <- maximumStep < 0.002f ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
 // Meter math is ordinary post-trim sample peak plus an ungated 400 ms sliding
 // stereo mean-square level. It is deliberately not true peak or EBU loudness.
 
