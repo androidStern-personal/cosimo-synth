@@ -18,7 +18,7 @@ async function loadModules() {
     return { share, contract, preset, migrations };
 }
 
-async function deflateFragment(text, version = 1) {
+async function deflateFragment(text, version = 2) {
     const bytes = new TextEncoder().encode(text);
     const compressed = new Uint8Array(await new Response(
         new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate")),
@@ -39,6 +39,9 @@ function currentContract(buildCanonicalPluginStateContract) {
             { endpointID: "ampAttack", type: "number", min: 0.001, max: 10, defaultValue: 0.01 },
             { endpointID: "ampDecay", type: "number", min: 0.001, max: 10, defaultValue: 0.001 },
             { endpointID: "ampSustain", type: "number", min: 0, max: 1, defaultValue: 1 },
+            { endpointID: "polishEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+            { endpointID: "polishCompressionClipAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+            { endpointID: "polishOutputTrimDb", type: "number", min: -24, max: 12, defaultValue: 0 },
         ],
         storedState: [
             { key: "bounce.v1", schemaVersion: 1, required: true },
@@ -55,6 +58,9 @@ const soundDocumentArbitrary = fc.record({
     ampSustain: fc.integer({ min: 0, max: 1_000 }).map((value) => value / 1_000),
     ampRelease: fc.integer({ min: 5, max: 10_000 }).map((value) => value / 1_000),
     globalTune: fc.integer({ min: -2_400, max: 2_400 }).map((value) => value / 100),
+    polishEnhancerAmount: fc.integer({ min: 0, max: 1_000 }).map((value) => value / 1_000),
+    polishCompressionClipAmount: fc.integer({ min: 0, max: 1_000 }).map((value) => value / 1_000),
+    polishOutputTrimDb: fc.integer({ min: -2_400, max: 1_200 }).map((value) => value / 100),
     voiceEnabled: fc.boolean(),
     routes: fc.array(fc.record({
         id: fc.string({ minLength: 1, maxLength: 16 }),
@@ -89,6 +95,9 @@ test("random valid complete sounds survive deflate/base64url round trips exactly
                 ampAttack: document.ampAttack,
                 ampDecay: document.ampDecay,
                 ampSustain: document.ampSustain,
+                polishEnhancerAmount: document.polishEnhancerAmount,
+                polishCompressionClipAmount: document.polishCompressionClipAmount,
+                polishOutputTrimDb: document.polishOutputTrimDb,
             },
             storedState: {
                 "bounce.v1": null,
@@ -97,7 +106,7 @@ test("random valid complete sounds survive deflate/base64url round trips exactly
         }, { currentContract: soundContract });
         const envelope = {
             format: "cosimo.soundShare",
-            version: 1,
+            version: 2,
             preset: validPreset,
             supplementalStoredState: {
                 "lane.v1": {
@@ -116,7 +125,7 @@ test("random valid complete sounds survive deflate/base64url round trips exactly
     }), { numRuns: 150 });
 });
 
-test("version skew uses the existing synth preset migrations after link decode", async () => {
+test("a decoded pre-Polish shared sound has no compatibility path into the current contract", async () => {
     const { share, contract, preset, migrations } = await loadModules();
     const legacyParameters = [
         { endpointID: "sourceMode", type: "number", min: 0, max: 1, defaultValue: 0 },
@@ -145,6 +154,9 @@ test("version skew uses the existing synth preset migrations after link decode",
             { endpointID: "voiceEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
             { endpointID: "voiceEnhancerKeyTrackEnabled", type: "number", min: 0, max: 1, defaultValue: 0 },
             { endpointID: "voiceEnhancerKeyTrackOffsetSemitones", type: "number", min: -12, max: 60, defaultValue: 0 },
+            { endpointID: "polishEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+            { endpointID: "polishCompressionClipAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+            { endpointID: "polishOutputTrimDb", type: "number", min: -24, max: 12, defaultValue: 0 },
         ],
         storedState: [
             { key: "modulation.v6", schemaVersion: 6, required: true },
@@ -163,7 +175,7 @@ test("version skew uses the existing synth preset migrations after link decode",
     };
     const encoded = await share.encodeSoundShareFragment({
         format: "cosimo.soundShare",
-        version: 1,
+        version: 2,
         preset: legacyPreset,
         supplementalStoredState: { "lane.v1": { version: 2, order: [] } },
     });
@@ -171,41 +183,30 @@ test("version skew uses the existing synth preset migrations after link decode",
     const decoded = await share.decodeSoundShareFragment(encoded.value);
     assert.equal(decoded.ok, true, decoded.ok ? undefined : decoded.error.message);
 
-    const normalized = preset.normalizeEffectPresetV2(decoded.value.preset, {
-        currentContract: nextContract,
-        migrations: migrations.buildSynthPresetMigrations(nextContract),
-    });
-    assert.equal(normalized.parameters.filterMix, 1);
-    assert.equal(normalized.parameters.globalTune, 0);
-    assert.equal(normalized.parameters.ampAttack, 0.01);
-    assert.equal(normalized.parameters.ampDecay, 0.001);
-    assert.equal(normalized.parameters.ampSustain, 1);
-    assert.equal(normalized.parameters.ampRelease, 1.73);
-    assert.equal(normalized.parameters.filterCutoffKeyTrackEnabled, 0);
-    assert.equal(normalized.parameters.filterCutoffKeyTrackOffsetSemitones, 0);
-    assert.equal(normalized.parameters.voiceEnhancerFrequency, 130);
-    assert.equal(normalized.parameters.voiceEnhancerQ, 0.71);
-    assert.equal(normalized.parameters.voiceEnhancerAmount, 0);
-    assert.equal(normalized.parameters.voiceEnhancerKeyTrackEnabled, 0);
-    assert.equal(normalized.parameters.voiceEnhancerKeyTrackOffsetSemitones, 0);
-    assert.equal(normalized.storedState["bounce.v1"], null);
-    assert.deepEqual(normalized.storedState["modulation.v6"], legacyPreset.storedState["modulation.v6"]);
+    assert.throws(
+        () => preset.normalizeEffectPresetV2(decoded.value.preset, {
+            currentContract: nextContract,
+            migrations: migrations.buildSynthPresetMigrations(nextContract),
+        }),
+        /No migration is registered/,
+    );
 });
 
 test("malformed, corrupt, oversized, and unsupported fragments are rejected as values", async () => {
     const { share } = await loadModules();
     const invalidJSON = await deflateFragment("not-json");
     const duplicateKeys = await deflateFragment(
-        '{"format":"cosimo.soundShare","format":"cosimo.soundShare","version":1,"preset":{},"supplementalStoredState":{}}',
+        '{"format":"cosimo.soundShare","format":"cosimo.soundShare","version":2,"preset":{},"supplementalStoredState":{}}',
     );
     const cases = [
         ["#p=", "InvalidFragment"],
-        ["#p=1.!", "InvalidFragment"],
-        ["#p=1.AAAA", "DecompressionFailed"],
+        ["#p=2.!", "InvalidFragment"],
+        ["#p=2.AAAA", "DecompressionFailed"],
         [invalidJSON, "InvalidEnvelope"],
         [duplicateKeys, "InvalidEnvelope"],
-        ["#p=2.AAAA", "UnsupportedVersion"],
-        [`#p=1.${"A".repeat(8_001)}`, "PayloadTooLarge"],
+        ["#p=1.AAAA", "UnsupportedVersion"],
+        ["#p=3.AAAA", "UnsupportedVersion"],
+        [`#p=2.${"A".repeat(8_001)}`, "PayloadTooLarge"],
     ];
 
     for (const [fragment, expectedTag] of cases) {
@@ -229,14 +230,14 @@ test("the envelope boundary rejects extra fields, non-JSON values, and invalid e
     for (const envelope of [
         {
             format: "cosimo.soundShare",
-            version: 1,
+            version: 2,
             preset: {},
             supplementalStoredState: {},
             unexpected: true,
         },
         {
             format: "cosimo.soundShare",
-            version: 1,
+            version: 2,
             preset: { invalid: undefined },
             supplementalStoredState: {},
         },

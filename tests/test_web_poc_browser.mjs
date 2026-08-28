@@ -1575,7 +1575,7 @@ test("the production worker installs the current v6 100-route rack profile end t
     await page.addInitScript(({ modulationState, modulationStateKey }) => {
         localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
             format: "cosimo.browserPatchState",
-            version: 3,
+            version: 4,
             sound: { parameters: {}, storedState: { [modulationStateKey]: modulationState } },
             auxiliary: {},
         }));
@@ -1668,7 +1668,7 @@ test("mobile product stays realtime with four-way unison and one MSEG filter rou
     await page.addInitScript(({ modulationState, modulationStateKey, parameters }) => {
         localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
             format: "cosimo.browserPatchState",
-            version: 3,
+            version: 4,
             sound: { parameters, storedState: { [modulationStateKey]: modulationState } },
             auxiliary: {},
         }));
@@ -2830,7 +2830,7 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
             oscBMute: 1,
             oscCMute: 1,
         });
-        assert.equal(result.version, 3);
+        assert.equal(result.version, 4);
         assert.deepEqual(result.rack, expectedRack);
         assert.equal(result.oscBPan, 0);
         assert.deepEqual(result.oscillatorDefaults, initialState.oscillatorDefaults);
@@ -2849,7 +2849,7 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
     }
 });
 
-test("generated product preserves explicit version-3 oscillator enable and level values", async () => {
+test("generated product preserves explicit version-4 oscillator enable and level values", async () => {
     const page = await browser.newPage({ ...devices["iPhone 13"] });
     const pageFailures = observePageFailures(page);
     const explicitOscillatorState = {
@@ -2863,7 +2863,7 @@ test("generated product preserves explicit version-3 oscillator enable and level
     await page.addInitScript((parameters) => {
         localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
             format: "cosimo.browserPatchState",
-            version: 3,
+            version: 4,
             sound: { parameters, storedState: {} },
             auxiliary: {},
         }));
@@ -2914,7 +2914,7 @@ test("generated product preserves explicit version-3 oscillator enable and level
                 ].map((endpointID) => [endpointID, saved.sound?.parameters?.[endpointID]])),
             };
         });
-        assert.deepEqual(preserved, { version: 3, parameters: explicitOscillatorState });
+        assert.deepEqual(preserved, { version: 4, parameters: explicitOscillatorState });
         pageFailures.assertClean();
     } finally {
         await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v2")).catch(() => {});

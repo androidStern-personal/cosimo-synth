@@ -29,7 +29,7 @@ import {
 import { getModulationArticulationCellIndex } from "../shared/modulation-runtime-program";
 import {
     parseSoundShareEnvelope,
-    type SoundShareEnvelopeV1,
+    type SoundShareEnvelopeV2,
 } from "../shared/sound-share-envelope";
 
 // bounce/document.mjs owns this key; restated here because that module is
@@ -37,7 +37,7 @@ import {
 const BOUNCE_STATE_KEY = "bounce.v1";
 
 const BROWSER_PATCH_STATE_FORMAT = "cosimo.browserPatchState";
-const BROWSER_PATCH_STATE_VERSION = 3;
+const BROWSER_PATCH_STATE_VERSION = 4;
 const SPEEDRUN_BOUNCE_REFUSAL = "Speedrun videos for bounced sounds come later";
 
 export type EndpointAnnotation = {
@@ -296,7 +296,7 @@ function ensureOscillatorMode(parameters: Readonly<Record<string, number>>, boun
     }
 }
 
-function requireShareLane(envelope: SoundShareEnvelopeV1): unknown {
+function requireShareLane(envelope: SoundShareEnvelopeV2): unknown {
     const keys = Object.keys(envelope.supplementalStoredState);
     if (keys.length !== 1 || keys[0] !== LANE_STATE_KEY) {
         throw new PatchIntakeError(

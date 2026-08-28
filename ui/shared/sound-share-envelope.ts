@@ -2,7 +2,7 @@ import type { EffectPresetV2 } from "./effects/effect-preset-v2";
 import { assertNoDuplicateJsonKeys } from "./effects/effect-preset-schema";
 
 export const SOUND_SHARE_ENVELOPE_FORMAT = "cosimo.soundShare";
-export const SOUND_SHARE_ENVELOPE_VERSION = 1;
+export const SOUND_SHARE_ENVELOPE_VERSION = 2;
 
 export type SoundShareErrorTag =
     | "InvalidEnvelope"
@@ -31,7 +31,7 @@ export type SoundShareResult<T> =
     | { readonly ok: true; readonly value: T }
     | { readonly ok: false; readonly error: SoundShareError };
 
-export type SoundShareEnvelopeV1<TPreset = unknown> = {
+export type SoundShareEnvelopeV2<TPreset = unknown> = {
     readonly format: typeof SOUND_SHARE_ENVELOPE_FORMAT;
     readonly version: typeof SOUND_SHARE_ENVELOPE_VERSION;
     /** The preset-v2 carrier owns public parameters, contract identity, and
@@ -88,7 +88,7 @@ function errorFromUnknown(cause: unknown): SoundShareError {
 
 /** Parse the versioned carrier only. The preset and supplemental documents
     remain boundary values until the live synth contract/adapters parse them. */
-export function parseSoundShareEnvelope(value: unknown): SoundShareResult<SoundShareEnvelopeV1> {
+export function parseSoundShareEnvelope(value: unknown): SoundShareResult<SoundShareEnvelopeV2> {
     try {
         if (!isPlainObject(value)) {
             throw new SoundShareError("InvalidEnvelope", "Shared sound payload must be an object.");
@@ -129,7 +129,7 @@ export function parseSoundShareEnvelope(value: unknown): SoundShareResult<SoundS
     }
 }
 
-export function parseSoundShareEnvelopeText(text: string): SoundShareResult<SoundShareEnvelopeV1> {
+export function parseSoundShareEnvelopeText(text: string): SoundShareResult<SoundShareEnvelopeV2> {
     try {
         assertNoDuplicateJsonKeys(text);
         const value: unknown = JSON.parse(text);
@@ -146,7 +146,7 @@ export function createSoundShareEnvelope({
 }: {
     readonly preset: EffectPresetV2;
     readonly supplementalStoredState: Readonly<Record<string, unknown>>;
-}): SoundShareEnvelopeV1<EffectPresetV2> {
+}): SoundShareEnvelopeV2<EffectPresetV2> {
     const parsed = parseSoundShareEnvelope({
         format: SOUND_SHARE_ENVELOPE_FORMAT,
         version: SOUND_SHARE_ENVELOPE_VERSION,
@@ -156,5 +156,5 @@ export function createSoundShareEnvelope({
     if (!parsed.ok) {
         throw parsed.error;
     }
-    return parsed.value as SoundShareEnvelopeV1<EffectPresetV2>;
+    return parsed.value as SoundShareEnvelopeV2<EffectPresetV2>;
 }

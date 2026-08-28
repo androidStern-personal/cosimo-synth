@@ -155,8 +155,8 @@
     flex: 0 0 auto;
 }
 
-/* Content owns the trailing insertion row; the viewport owns only this
-   remainder, so a short rack reaches the lower cut without moving its +. */
+/* T28: unused height sits before the tail insertion row. That keeps the final
+   editable + immediately against the fixed POLISH boundary at every height. */
 .rack-list.subway-map > .subway-trunk-tail-fill {
     position: relative;
     flex: 1 0 13px;
@@ -240,6 +240,75 @@
     color: #d6e6e4;
     font-variant-numeric: tabular-nums;
     text-align: right;
+}
+
+/* T28: the lane terminates at one visible, immutable boundary. This is a
+   selector only—there are deliberately no drag, menu, power, or add affordances. */
+.rack-polish-boundary {
+    position: relative;
+    z-index: 4;
+    display: grid;
+    min-height: 58px;
+    place-items: center;
+    padding: 7px 8px 8px;
+    border-top: 1px solid rgb(244 200 106 / 0.2);
+    background: linear-gradient(180deg, #0d0e10, rgb(23 19 12 / 0.98));
+}
+
+.rack-polish-boundary::before {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 9px;
+    background: linear-gradient(180deg, #69d5c5, #f4c86a);
+    transform: translateX(-50%);
+    content: "";
+}
+
+.rack-polish-node {
+    display: grid;
+    width: min(126px, calc(100% - 8px));
+    min-height: var(--cosimo-hit-min);
+    grid-template-columns: 9px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+    padding: 0 9px;
+    border: 1px solid rgb(244 200 106 / 0.4);
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgb(54 45 25 / 0.94), rgb(27 23 15 / 0.98));
+    box-shadow: inset 0 1px rgb(255 255 255 / 0.08), 0 4px 12px rgb(0 0 0 / 0.32);
+    color: #f8e2aa;
+    cursor: pointer;
+    font-family: "Departure Mono", ui-monospace, monospace;
+}
+
+.rack-polish-node.is-selected {
+    border-color: #f4c86a;
+    background: linear-gradient(180deg, rgb(78 62 29 / 0.98), rgb(35 28 16 / 0.98));
+    box-shadow: inset 0 0 0 1px rgb(244 200 106 / 0.18), 0 0 12px rgb(244 200 106 / 0.18);
+}
+
+.rack-polish-node-light {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #f4c86a;
+    box-shadow: 0 0 7px rgb(244 200 106 / 0.68);
+}
+
+.rack-polish-node > strong {
+    overflow: hidden;
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.12em;
+    text-overflow: ellipsis;
+}
+
+.rack-polish-node > small {
+    color: rgb(248 226 170 / 0.55);
+    font-size: 7px;
+    letter-spacing: 0.08em;
 }
 
 .subway-trunk-tail-fill::before {
@@ -1197,6 +1266,51 @@
 .rack-effect-editor[data-selected-effect="delay"] .rack-editor-name { font-family: "Rack Zen Dots", fantasy; }
 .rack-effect-editor[data-selected-effect="reverb"] .rack-editor-name { font-family: "Rack Unifraktur", fantasy; font-size: 23px; }
 
+.polish-editor {
+    background:
+        radial-gradient(circle at 70% 6%, rgb(244 200 106 / 0.16), transparent 28%),
+        linear-gradient(180deg, rgb(29 27 21 / 0.98), rgb(12 13 14 / 0.98));
+}
+
+.polish-editor-header {
+    grid-template-columns: minmax(0, 1fr);
+    background-image:
+        linear-gradient(90deg, rgb(17 16 13 / 0.65), rgb(17 16 13 / 0.94)),
+        url("../assets/rack/rack-faceplates-v2.jpg");
+    background-position: center, center 86%;
+}
+
+.polish-editor-flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding-inline: 10px;
+    color: rgb(244 225 181 / 0.72);
+    font: 600 8px/1.2 "Departure Mono", ui-monospace, monospace;
+    letter-spacing: 0.07em;
+    text-align: center;
+}
+
+.polish-editor-flow > i {
+    width: 13px;
+    height: 1px;
+    flex: 0 1 13px;
+    background: #f4c86a;
+    box-shadow: 0 0 5px rgb(244 200 106 / 0.38);
+}
+
+.polish-editor-controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.polish-editor-control .oscillator-parameter-knob {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    max-width: none;
+}
+
 .rack-editor-visual {
     position: relative;
     height: 102px;
@@ -1877,6 +1991,19 @@
         grid-auto-rows: 72px;
         gap: 4px;
         padding-inline: 4px;
+    }
+
+    .polish-editor-flow {
+        display: grid;
+        height: 58px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-content: center;
+        gap: 6px;
+        padding: 6px;
+    }
+
+    .polish-editor-flow > i {
+        display: none;
     }
 
     .rack-editor-control,

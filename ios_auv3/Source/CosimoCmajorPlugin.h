@@ -820,6 +820,11 @@ public:
 
     void setStateInformation (const void* data, int sizeInBytes) override
     {
+        auto restoredState = juce::ValueTree::readFromData (
+            data, static_cast<size_t> (sizeInBytes));
+        if (! isCurrentCompleteSoundState (restoredState))
+            return;
+
         choc::hash::xxHash64 hash (1);
         hash.addInput (data, static_cast<size_t> (sizeInBytes));
         const auto stateHash = hash.getHash();
@@ -827,7 +832,7 @@ public:
         if (lastLoadedStateHash != stateHash)
         {
             lastLoadedStateHash = stateHash;
-            setNewStateAsync (juce::ValueTree::readFromData (data, static_cast<size_t> (sizeInBytes)));
+            setNewStateAsync (std::move (restoredState));
         }
     }
 
@@ -1898,7 +1903,10 @@ private:
         const juce::Identifier binaryValue { "value" };
         const juce::Identifier viewWidth { "viewWidth" };
         const juce::Identifier viewHeight { "viewHeight" };
+        const juce::Identifier completeSoundVersion { "completeSoundVersion" };
     } ids;
+
+    static constexpr int completeSoundStateVersion = 1;
 
     struct NewStateMessage final : public juce::Message
     {
@@ -1907,7 +1915,17 @@ private:
 
     juce::ValueTree createEmptyState() const
     {
-        return juce::ValueTree (ids.cmajor);
+        juce::ValueTree state (ids.cmajor);
+        state.setProperty (ids.completeSoundVersion, completeSoundStateVersion, nullptr);
+        return state;
+    }
+
+    bool isCurrentCompleteSoundState (const juce::ValueTree& state) const
+    {
+        return state.isValid()
+            && state.hasType (ids.cmajor)
+            && static_cast<int> (state.getProperty (ids.completeSoundVersion, -1))
+                == completeSoundStateVersion;
     }
 
     juce::ValueTree getUpdatedState()
@@ -1959,8 +1977,8 @@ private:
 
     void setNewState (const juce::ValueTree& newState)
     {
-        if (newState.isValid() && ! newState.hasType (ids.cmajor))
-            return unload ("Failed to load: invalid state", true);
+        if (! isCurrentCompleteSoundState (newState))
+            return;
 
         cmaj::Patch::LoadParams loadParams;
         loadParams.manifest.needsToBuildSource = false;

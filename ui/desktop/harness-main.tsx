@@ -54,6 +54,7 @@ declare global {
             emitFilterSpectrum: (nextState: Parameters<MockPatchConnection["emitFilterSpectrum"]>[0]) => void;
             emitDistortionHistory: (nextState: Parameters<MockPatchConnection["emitDistortionHistory"]>[0]) => void;
             emitDistortionScope: (nextState: Parameters<MockPatchConnection["emitDistortionScope"]>[0]) => void;
+            emitPolishMeter: (nextState: Parameters<MockPatchConnection["emitPolishMeter"]>[0]) => void;
             setStoredStateValue: (key: string, value: unknown) => void;
         };
     }
@@ -314,6 +315,9 @@ try {
         },
         emitDistortionScope: (nextState) => {
             patchConnection.emitDistortionScope(nextState);
+        },
+        emitPolishMeter: (nextState) => {
+            patchConnection.emitPolishMeter(nextState);
         },
         setStoredStateValue: (key, value) => patchConnection.setStoredStateValue(key, value),
     };

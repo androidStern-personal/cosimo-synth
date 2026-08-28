@@ -108,7 +108,7 @@ test("configure → share → fresh browser context → confirm reproduces the c
             return dialog instanceof HTMLElement
                 && !dialog.hidden
                 && input instanceof HTMLInputElement
-                && input.value.includes("#p=1.");
+                && input.value.includes("#p=2.");
         });
         const sharedURL = await sourcePage.evaluate(() => {
             const input = document.querySelector("cosimo-preset-bar")?.shadowRoot
@@ -116,7 +116,7 @@ test("configure → share → fresh browser context → confirm reproduces the c
             if (!(input instanceof HTMLInputElement)) throw new Error("Share link field is missing.");
             return input.value;
         });
-        assert.match(sharedURL, /#p=1\.[A-Za-z0-9_-]+$/);
+        assert.match(sharedURL, /#p=2\.[A-Za-z0-9_-]+$/);
         await sourcePage.waitForFunction(async (expectedURL) => {
             try {
                 return await navigator.clipboard.readText() === expectedURL;

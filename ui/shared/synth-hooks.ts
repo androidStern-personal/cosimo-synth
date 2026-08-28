@@ -179,6 +179,15 @@ import {
     BROWSER_AUDIO_RETURN_EVENT,
 } from "./browser-audio-events";
 import {
+    POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
+    POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,
+    POLISH_METER_ENDPOINT_ID,
+    POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID,
+    SILENT_POLISH_METER_FRAME,
+    normalizePolishMeterMessage,
+    type PolishMeterFrame,
+} from "./polish";
+import {
     DEFAULT_FACTORY_TABLE_INDEX,
     loadFactoryBankCatalog,
     loadFactoryBankFrames,
@@ -482,6 +491,9 @@ export type SynthPatchViewModel = {
     voiceEnhancerAmount: PatchControlBinding<number>;
     voiceEnhancerKeyTrackEnabled: PatchControlBinding<number>;
     voiceEnhancerKeyTrackOffsetSemitones: PatchControlBinding<number>;
+    polishEnhancerAmount: PatchControlBinding<number>;
+    polishCompressionClipAmount: PatchControlBinding<number>;
+    polishOutputTrimDb: PatchControlBinding<number>;
     unisonVoices: PatchControlBinding<number>;
     unisonDetune: PatchControlBinding<number>;
     unisonBlend: PatchControlBinding<number>;
@@ -515,6 +527,7 @@ export type SynthPatchViewModel = {
     observedMsegPlayhead: MsegPreviewPlayheadState;
     observedWarpState: EffectiveWarpState;
     observedUnisonState: EffectiveUnisonState;
+    observedPolishMeter: PolishMeterFrame;
     modulationState: ModulationState | null;
     articulationBank: ArticulationEditorState;
     articulationSlots: ArticulationSlot[];
@@ -2767,6 +2780,21 @@ export function useSynthPatchViewModel({
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, -12, 60),
     });
+    const polishEnhancerAmount = usePatchParameterBinding<number>({
+        endpointID: POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const polishCompressionClipAmount = usePatchParameterBinding<number>({
+        endpointID: POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const polishOutputTrimDb = usePatchParameterBinding<number>({
+        endpointID: POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, -24, 12),
+    });
     const unisonVoices = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("unisonVoices"),
         initialValue: 1,
@@ -3004,6 +3032,14 @@ export function useSynthPatchViewModel({
     const observedDistortionHistory = useObservedDistortionHistory(observeDistortionVisuals);
     const observedDistortionScope = useObservedDistortionScope(observeDistortionVisuals);
     const observedMsegState = useObservedMsegState(observeMsegPlayhead);
+    const polishMeterMessage = usePatchVisualEndpoint<unknown | null>(
+        POLISH_METER_ENDPOINT_ID,
+        null,
+    );
+    const observedPolishMeter = useMemo(
+        () => normalizePolishMeterMessage(polishMeterMessage) ?? SILENT_POLISH_METER_FRAME,
+        [polishMeterMessage],
+    );
     const voiceArticulationStartMessage = usePatchEndpoint<VoiceArticulationStartMessage | null>(
         VOICE_ARTICULATION_START_ENDPOINT_ID,
         null,
@@ -4730,6 +4766,9 @@ export function useSynthPatchViewModel({
         voiceEnhancerAmount,
         voiceEnhancerKeyTrackEnabled,
         voiceEnhancerKeyTrackOffsetSemitones,
+        polishEnhancerAmount,
+        polishCompressionClipAmount,
+        polishOutputTrimDb,
         unisonVoices,
         unisonDetune,
         unisonBlend,
@@ -4763,6 +4802,7 @@ export function useSynthPatchViewModel({
         observedMsegPlayhead,
         observedWarpState,
         observedUnisonState,
+        observedPolishMeter,
         modulationState,
         articulationBank,
         articulationSlots,

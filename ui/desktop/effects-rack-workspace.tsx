@@ -46,6 +46,7 @@ import {
     parameterEntrySpecForKeyTrackOffset,
     parameterEntrySpecForFrequency,
     parameterEntrySpecForRackParameter,
+    parameterEntrySpecForScalar,
     parameterEntrySpecForSeconds,
     parseParameterEntry,
     type ParameterEntryCommit,
@@ -172,15 +173,25 @@ import {
     useParameterGesture,
 } from "../shared/parameter-gesture";
 import {
+    BaseParameterKnob,
     RackParameterKnob,
+    type ParameterKnobDescriptor,
 } from "./rack-parameter-knob";
 import { SubwayMapColumn, formatCrossoverHz, type SubwayGroupMenuRequest, type SubwayStationMenuRequest } from "./subway-map-column";
+import {
+    POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
+    POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,
+    POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID,
+} from "../shared/polish";
 
 type EffectsRackWorkspaceProps = {
     routes: ModulationRoute[];
     observedFilterSpectrum: SynthPatchViewModel["observedFilterSpectrum"];
     observedDistortionHistory: SynthPatchViewModel["observedDistortionHistory"];
     observedDistortionScope: SynthPatchViewModel["observedDistortionScope"];
+    polishEnhancerAmount: PatchControlBinding<number>;
+    polishCompressionClipAmount: PatchControlBinding<number>;
+    polishOutputTrimDb: PatchControlBinding<number>;
     onAddRouteWithOverrides: (overrides: GeneratedModulationRouteInput) => boolean;
     onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
@@ -312,6 +323,65 @@ function ModRailVoiceSettingsPopover({
         </div>
     );
 }
+
+const POLISH_ACCENT = "#f4c86a";
+
+const POLISH_CONTROL_DESCRIPTORS: ReadonlyArray<{
+    readonly descriptor: ParameterKnobDescriptor;
+    readonly bindingKey: "enhancer" | "compressionClip" | "trim";
+    readonly unit: "%" | "dB";
+    readonly canonicalPerDisplayedUnit: number;
+    readonly digits: number;
+}> = [
+    {
+        descriptor: {
+            endpointID: POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,
+            label: "Enhancer Amount",
+            shortLabel: "ENH",
+            min: 0,
+            max: 1,
+            initial: 0,
+            step: 0.01,
+            scale: "linear",
+        },
+        bindingKey: "enhancer",
+        unit: "%",
+        canonicalPerDisplayedUnit: 0.01,
+        digits: 0,
+    },
+    {
+        descriptor: {
+            endpointID: POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
+            label: "Compression / Clip Amount",
+            shortLabel: "COMP",
+            min: 0,
+            max: 1,
+            initial: 0,
+            step: 0.01,
+            scale: "linear",
+        },
+        bindingKey: "compressionClip",
+        unit: "%",
+        canonicalPerDisplayedUnit: 0.01,
+        digits: 0,
+    },
+    {
+        descriptor: {
+            endpointID: POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID,
+            label: "Output Trim",
+            shortLabel: "TRIM",
+            min: -24,
+            max: 12,
+            initial: 0,
+            step: 0.1,
+            scale: "linear",
+        },
+        bindingKey: "trim",
+        unit: "dB",
+        canonicalPerDisplayedUnit: 1,
+        digits: 1,
+    },
+];
 
 type SelectedSource = Pick<RackModulationSource, "sourceKind" | "sourceSlot">;
 
@@ -4010,11 +4080,89 @@ function GroupEditorPane({
     );
 }
 
+function PolishEditor({
+    enhancerAmount,
+    compressionClipAmount,
+    outputTrimDb,
+}: {
+    readonly enhancerAmount: PatchControlBinding<number>;
+    readonly compressionClipAmount: PatchControlBinding<number>;
+    readonly outputTrimDb: PatchControlBinding<number>;
+}) {
+    const bindings = {
+        enhancer: enhancerAmount,
+        compressionClip: compressionClipAmount,
+        trim: outputTrimDb,
+    } as const;
+
+    return (
+        <section
+            data-role="rack-editor-polish"
+            className="rack-effect-editor polish-editor"
+            style={{ "--editor-accent": POLISH_ACCENT } as CSSProperties}
+            aria-label="Polish editor"
+        >
+            <header className="rack-editor-header polish-editor-header">
+                <div className="rack-editor-heading">
+                    <span>FIXED OUTPUT SECTION</span>
+                    <strong className="rack-editor-name">POLISH</strong>
+                    <p>Safe Bass → Enhancer → Compression / Clip → Trim</p>
+                </div>
+            </header>
+            <div className="rack-editor-visual polish-editor-flow" aria-hidden="true">
+                <span>SAFE BASS</span>
+                <i />
+                <span>ENHANCER</span>
+                <i />
+                <span>COMP / CLIP</span>
+                <i />
+                <span>TRIM</span>
+            </div>
+            <div className="rack-editor-controls polish-editor-controls">
+                {POLISH_CONTROL_DESCRIPTORS.map((control) => {
+                    const binding = bindings[control.bindingKey];
+                    return (
+                        <div
+                            key={control.descriptor.endpointID}
+                            className="rack-editor-control polish-editor-control"
+                            data-role={`polish-control-${control.descriptor.endpointID}`}
+                        >
+                            <BaseParameterKnob
+                                descriptor={control.descriptor}
+                                binding={binding}
+                                ownerAccent={POLISH_ACCENT}
+                                dataRole={`polish-knob-${control.descriptor.endpointID}`}
+                                trackDataRole={`polish-knob-track-${control.descriptor.endpointID}`}
+                                handleDataRole={`polish-knob-handle-${control.descriptor.endpointID}`}
+                                detentStep={null}
+                                entrySpec={parameterEntrySpecForScalar({
+                                    min: control.descriptor.min,
+                                    max: control.descriptor.max,
+                                    step: control.descriptor.step,
+                                    unit: control.unit,
+                                    canonicalPerDisplayedUnit: control.canonicalPerDisplayedUnit,
+                                    digits: control.digits,
+                                })}
+                                formatValue={(value) => control.bindingKey === "trim"
+                                    ? `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`
+                                    : `${Math.round(value * 100)}%`}
+                            />
+                        </div>
+                    );
+                })}
+            </div>
+        </section>
+    );
+}
+
 export function EffectsRackWorkspace({
     routes,
     observedFilterSpectrum,
     observedDistortionHistory,
     observedDistortionScope,
+    polishEnhancerAmount,
+    polishCompressionClipAmount,
+    polishOutputTrimDb,
     onAddRouteWithOverrides,
     onRemoveRoute,
     onRouteChange,
@@ -4059,6 +4207,7 @@ export function EffectsRackWorkspace({
     } = useRackState();
     const { soloState, toggleSolo } = useLaneSoloAudition(rackState);
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+    const [polishSelected, setPolishSelected] = useState(false);
     const [groupMenu, setGroupMenu] = useState<SubwayGroupMenuRequest | null>(null);
     // Selection is a DEVICE INSTANCE (T6): the effect id derives from it.
     const [selectedDeviceId, setSelectedDeviceId] = useState<string>("distortion#1");
@@ -4804,6 +4953,7 @@ export function EffectsRackWorkspace({
 
     const selectDevice = useCallback((deviceId: string) => {
         const effectId = effectIdForLaneDeviceId(deviceId);
+        setPolishSelected(false);
         setSelectedGroupId(null);
         setSelectedDeviceId(deviceId);
         onSelectedEffectChange?.(effectId);
@@ -5458,12 +5608,41 @@ export function EffectsRackWorkspace({
                             focusedBranchIndices={focusedBranchIndices}
                             accents={EFFECT_ACCENTS}
                             onSelect={selectDevice}
-                            onSelectGroup={(groupId) => setSelectedGroupId(groupId)}
+                            onSelectGroup={(groupId) => {
+                                setPolishSelected(false);
+                                setSelectedGroupId(groupId);
+                            }}
                             onFocusBranch={focusRackBranch}
                             onOpenStationMenu={setStationMenu}
                             onOpenGroupMenu={setGroupMenu}
                             onArmReorder={armStationReorder}
                             onKeyboardMove={moveDeviceByOffset}
+                            tailPrefix={(
+                                <label className="rack-lane-mix" data-role="rack-lane-mix">
+                                    <span className="rack-lane-mix-label">MIX</span>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="1"
+                                        step="0.01"
+                                        value={rackState.output.mix}
+                                        disabled={rackState.output.bypassed}
+                                        data-role="rack-lane-mix-slider"
+                                        aria-label="Effects Lane Mix"
+                                        onChange={(event) => setOutputMix(Number(event.currentTarget.value))}
+                                        onPointerUp={persist}
+                                        onPointerCancel={persist}
+                                        onKeyUp={persist}
+                                        onBlur={persist}
+                                    />
+                                    <output
+                                        className="rack-lane-mix-value"
+                                        data-role="rack-lane-mix-value"
+                                    >
+                                        {Math.round(rackState.output.mix * 100)}%
+                                    </output>
+                                </label>
+                            )}
                             onRequestAdd={(path, clientX, clientY) => setAddSheet({ path, clientX, clientY })}
                         />
                         <button
@@ -5480,30 +5659,23 @@ export function EffectsRackWorkspace({
                             <span className="rack-lane-bypass-label">BYPASS</span>
                             <span className="rack-lane-bypass-label-compact" aria-hidden="true">BYP</span>
                         </button>
-                        <label className="rack-lane-mix" data-role="rack-lane-mix">
-                            <span className="rack-lane-mix-label">MIX</span>
-                            <input
-                                type="range"
-                                min="0"
-                                max="1"
-                                step="0.01"
-                                value={rackState.output.mix}
-                                disabled={rackState.output.bypassed}
-                                data-role="rack-lane-mix-slider"
-                                aria-label="Effects Lane Mix"
-                                onChange={(event) => setOutputMix(Number(event.currentTarget.value))}
-                                onPointerUp={persist}
-                                onPointerCancel={persist}
-                                onKeyUp={persist}
-                                onBlur={persist}
-                            />
-                            <output
-                                className="rack-lane-mix-value"
-                                data-role="rack-lane-mix-value"
+                        <div className="rack-polish-boundary" data-role="rack-polish-boundary">
+                            <button
+                                type="button"
+                                className={`rack-polish-node${polishSelected ? " is-selected" : ""}`}
+                                data-role="rack-polish-node"
+                                aria-label="Open fixed Polish output section"
+                                aria-pressed={polishSelected}
+                                onClick={() => {
+                                    setSelectedGroupId(null);
+                                    setPolishSelected(true);
+                                }}
                             >
-                                {Math.round(rackState.output.mix * 100)}%
-                            </output>
-                        </label>
+                                <span className="rack-polish-node-light" aria-hidden="true" />
+                                <strong>POLISH</strong>
+                                <small>FIXED</small>
+                            </button>
+                        </div>
                     </div>
                     <span
                         className={`subway-scroll-cue subway-scroll-cue-top${rackScrollPresentation.overflow && !rackScrollPresentation.atTop ? " is-visible" : ""}`}
@@ -5515,7 +5687,13 @@ export function EffectsRackWorkspace({
                     >⌄</span>
                 </div>
 
-                {selectedGroup !== null && selectedGroup.kind !== "device" ? (
+                {polishSelected ? (
+                    <PolishEditor
+                        enhancerAmount={polishEnhancerAmount}
+                        compressionClipAmount={polishCompressionClipAmount}
+                        outputTrimDb={polishOutputTrimDb}
+                    />
+                ) : selectedGroup !== null && selectedGroup.kind !== "device" ? (
                     <GroupEditorPane
                         group={selectedGroup}
                         soloedBranchIndex={soloState.selectedBranchByGroup[selectedGroup.groupId] ?? null}

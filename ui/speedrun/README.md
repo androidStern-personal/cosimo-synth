@@ -41,7 +41,7 @@ Sound input accepts:
 
 - the same-origin current browser patch;
 - current preset-v2, browser-patch-v2, or bare patch JSON files;
-- a Cosimo `#p=1` sound-share link.
+- a current Cosimo `#p=2` sound-share link.
 
 Performance input accepts SMF format 0/1 MIDI, including tempo changes,
 running status, CC, and pitch bend; the JSON note-list format; or the bundled

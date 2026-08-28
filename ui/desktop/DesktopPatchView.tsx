@@ -2021,6 +2021,7 @@ function StatusHeader({ statusText }: HeaderProps) {
 function SynthPresetBarHost({
     isHidden,
     storedStateAdapters,
+    polishMeter,
     compactSynth = false,
     backAvailable = false,
     onShellBack,
@@ -2033,6 +2034,7 @@ function SynthPresetBarHost({
 }: {
     isHidden: boolean;
     storedStateAdapters: EffectStoredStateAdapter[];
+    polishMeter: SynthPatchViewModel["observedPolishMeter"];
     /** ADR-026 compact synth composition: Back slot, centered name, … popover. */
     compactSynth?: boolean;
     backAvailable?: boolean;
@@ -2126,6 +2128,13 @@ function SynthPresetBarHost({
         presetBar.audioBounceAvailable = bounceAudioAvailable;
         presetBar.videoBounceAvailable = isVideoBounceAvailable();
     }, [backAvailable, bounceAudioAvailable, compactSynth, perfTuningAvailable, presetController]);
+
+    useEffect(() => {
+        const presetBar = presetBarRef.current;
+        if (presetBar !== null) {
+            presetBar.polishMeterFrame = polishMeter;
+        }
+    }, [polishMeter, presetController]);
 
     return (
         <div
@@ -6001,6 +6010,9 @@ function DesktopPatchViewBody({
             observedFilterSpectrum={synthView.observedFilterSpectrum}
             observedDistortionHistory={synthView.observedDistortionHistory}
             observedDistortionScope={synthView.observedDistortionScope}
+            polishEnhancerAmount={synthView.polishEnhancerAmount}
+            polishCompressionClipAmount={synthView.polishCompressionClipAmount}
+            polishOutputTrimDb={synthView.polishOutputTrimDb}
             onAddRouteWithOverrides={synthView.handleAddRouteWithOverrides}
             onRemoveRoute={synthView.handleRemoveRoute}
             onRouteChange={synthView.handleRouteChange}
@@ -6041,6 +6053,7 @@ function DesktopPatchViewBody({
             <SynthPresetBarHost
                 isHidden={synthView.msegEditor.isOpen}
                 storedStateAdapters={synthView.presetStoredStateAdapters}
+                polishMeter={synthView.observedPolishMeter}
                 compactSynth={isCompactViewport}
                 backAvailable={mobileReturnTarget !== null}
                 onShellBack={handleUniversalBack}

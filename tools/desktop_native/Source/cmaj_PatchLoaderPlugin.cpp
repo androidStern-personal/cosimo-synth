@@ -563,13 +563,25 @@ public:
             cosimo::future_daw::createTriggerConfigFromJSONString (serializedConfig));
     }
 
+    void getStateInformation (juce::MemoryBlock& destinationData) override
+    {
+        auto state = getUpdatedState();
+        state.setProperty (completeSoundVersionID, completeSoundStateVersion, nullptr);
+        juce::MemoryOutputStream output (destinationData, false);
+        state.writeToStream (output);
+    }
+
     void setStateInformation (const void* data, int size) override
     {
         auto restoredState = juce::ValueTree::readFromData (data, static_cast<size_t> (size));
 
-        // Live may send an empty or non-Cmajor state chunk when opening the device.
-        // Keep the already-loaded fixed patch alive instead of unloading it.
-        if (! restoredState.isValid() || ! restoredState.hasType (ids.Cmajor))
+        // Live may send an empty, non-Cmajor, or pre-Polish state chunk when
+        // opening the device. The T28 sound cut rejects each whole document,
+        // leaving the already-running sound untouched.
+        if (! restoredState.isValid()
+            || ! restoredState.hasType (ids.Cmajor)
+            || static_cast<int> (restoredState.getProperty (completeSoundVersionID, -1))
+                != completeSoundStateVersion)
             return;
 
         choc::hash::xxHash64 hash (1);
@@ -611,6 +623,9 @@ public:
     void refreshExtraComp (juce::Component*) {}
 
 private:
+    static constexpr int completeSoundStateVersion = 1;
+    const juce::Identifier completeSoundVersionID { "completeSoundVersion" };
+
     void setPendingArticulationTriggerConfig (cosimo::future_daw::ArticulationTriggerConfig config)
     {
         std::atomic_store (&pendingArticulationTriggerConfig,

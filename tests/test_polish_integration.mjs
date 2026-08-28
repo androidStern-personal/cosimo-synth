@@ -68,6 +68,86 @@ test("native plugin seams forward the compiled graph latency to their hosts", as
     assert.match(desktopHost, /public cmaj::plugin::JUCEPluginBase</);
 });
 
+test("native host state stamps the current complete sound and rejects older chunks before mutation", async () => {
+    const [iosHost, desktopHost] = await Promise.all([
+        read("ios_auv3/Source/CosimoCmajorPlugin.h"),
+        read("tools/desktop_native/Source/cmaj_PatchLoaderPlugin.cpp"),
+    ]);
+
+    assert.match(desktopHost, /completeSoundVersionID \{ "completeSoundVersion" \}/);
+    assert.match(desktopHost, /state\.setProperty \(completeSoundVersionID, completeSoundStateVersion, nullptr\)/);
+    assert.match(desktopHost, /getProperty \(completeSoundVersionID, -1\)[\s\S]*?!= completeSoundStateVersion\)[\s\S]*?return;/);
+    assert.ok(
+        desktopHost.indexOf("getProperty (completeSoundVersionID, -1)")
+            < desktopHost.indexOf("lastLoadedStateHash != stateHash"),
+    );
+
+    assert.match(iosHost, /completeSoundVersion \{ "completeSoundVersion" \}/);
+    assert.match(iosHost, /state\.setProperty \(ids\.completeSoundVersion, completeSoundStateVersion, nullptr\)/);
+    assert.match(iosHost, /if \(! isCurrentCompleteSoundState \(restoredState\)\)\s*return;/);
+    assert.match(iosHost, /void setNewState \(const juce::ValueTree& newState\)[\s\S]*?if \(! isCurrentCompleteSoundState \(newState\)\)\s*return;/);
+    assert.ok(
+        iosHost.indexOf("isCurrentCompleteSoundState (restoredState)")
+            < iosHost.indexOf("lastLoadedStateHash != stateHash"),
+    );
+});
+
+test("every non-host complete-sound transport hard-cuts to the Polish version", async () => {
+    const [browserState, speedrun, envelope, shareLink, migrations] = await Promise.all([
+        read("web/browser-patch-state.mjs"),
+        read("ui/speedrun/patch-io.ts"),
+        read("ui/shared/sound-share-envelope.ts"),
+        read("ui/shared/sound-share-link.ts"),
+        read("ui/shared/effects/synth-preset-migrations.ts"),
+    ]);
+
+    assert.match(browserState, /BROWSER_PATCH_STATE_VERSION = 4/);
+    assert.match(speedrun, /BROWSER_PATCH_STATE_VERSION = 4/);
+    assert.match(envelope, /SOUND_SHARE_ENVELOPE_VERSION = 2/);
+    assert.match(shareLink, /SOUND_SHARE_FRAGMENT_VERSION = 2/);
+    assert.match(migrations, /return \[\];/);
+    assert.doesNotMatch(migrations, /fromHash|migrate:/);
+});
+
+test("the product UI exposes one permanent non-modulatable Polish node and three controls", async () => {
+    const [workspace, subway, meter, modulationTargets] = await Promise.all([
+        read("ui/desktop/effects-rack-workspace.tsx"),
+        read("ui/desktop/subway-map-column.tsx"),
+        read("ui/shared/effects/preset-bar.ts"),
+        read("ui/shared/modulation-targets.ts"),
+    ]);
+
+    assert.match(workspace, /data-role="rack-polish-node"/);
+    assert.match(workspace, /tailPrefix=\{\(/);
+    assert.match(subway, /rack-trunk-tail-fill[\s\S]*?\{tailPrefix\}[\s\S]*?\{trunkTail\}/);
+    for (const [endpointID, symbol] of [
+        ["polishEnhancerAmount", "POLISH_ENHANCER_AMOUNT_ENDPOINT_ID"],
+        ["polishCompressionClipAmount", "POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID"],
+        ["polishOutputTrimDb", "POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID"],
+    ]) {
+        assert.match(workspace, new RegExp(symbol));
+        assert.doesNotMatch(modulationTargets, new RegExp(endpointID));
+    }
+    const fixedNode = workspace.slice(
+        workspace.indexOf('className={`rack-polish-node'),
+        workspace.indexOf("</button>", workspace.indexOf('className={`rack-polish-node')),
+    );
+    assert.doesNotMatch(fixedNode, /draggable|onContextMenu|onPointerDown|bypass|power/i);
+
+    assert.match(meter, /height: var\(--compact-shell-row, 40px\)/);
+    assert.match(meter, /width: 92px/);
+    assert.match(meter, /font-variant-numeric: tabular-nums/);
+    assert.ok(meter.indexOf('data-el="shell-back"') < meter.indexOf('data-el="polish-meter"'));
+    assert.ok(meter.indexOf('data-el="polish-meter"') < meter.indexOf('data-el="preset-name"'));
+});
+
+test("the factory inventory contains no old-format synth sound to retain", async () => {
+    const descriptors = await read("ui/shared/effects/effect-preset-descriptors.ts");
+
+    assert.doesNotMatch(descriptors, /cosimo-synth|wavetable-synth/);
+    assert.match(descriptors, /EFFECT_FACTORY_PRESETS[\s\S]*?chorus:[\s\S]*?ott:/);
+});
+
 test("the retired memoryless RackOutputStage is absent from production", async () => {
     await assert.rejects(
         fs.stat(path.join(repoRoot, "cmajor/RackOutputStage.cmajor")),

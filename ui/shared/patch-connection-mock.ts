@@ -36,6 +36,13 @@ import {
     VOICE_ENHANCER_PARAMETER_DESCRIPTORS,
     VOICE_ENHANCER_Q_ENDPOINT_ID,
 } from "./voice-enhancer";
+import {
+    POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
+    POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,
+    POLISH_METER_ENDPOINT_ID,
+    POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID,
+    type PolishMeterFrame,
+} from "./polish";
 
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "oscAWavetablePosition";
@@ -373,6 +380,9 @@ function createInitialParameterValues(): Map<string, unknown> {
         [VOICE_ENHANCER_AMOUNT_ENDPOINT_ID, VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount.initial],
         [VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID, 0],
         [VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID, 0],
+        [POLISH_ENHANCER_AMOUNT_ENDPOINT_ID, 0],
+        [POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID, 0],
+        [POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID, 0],
         [unisonVoicesEndpointID, 1],
         [unisonDetuneEndpointID, 0.1],
         [unisonBlendEndpointID, 0.75],
@@ -700,6 +710,37 @@ function buildHarnessStatus(manifest: unknown) {
                         min: 0,
                         max: 1,
                         init: 0.42,
+                    },
+                },
+                {
+                    endpointID: POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Polish Enhancer Amount",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                    },
+                },
+                {
+                    endpointID: POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Polish Compression / Clip Amount",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                    },
+                },
+                {
+                    endpointID: POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Polish Output Trim",
+                        min: -24,
+                        max: 12,
+                        init: 0,
+                        unit: "dB",
                     },
                 },
                 ...buildModulationGeneratorStatusInputs(),
@@ -1269,6 +1310,11 @@ export class MockPatchConnection implements PatchConnectionLike {
             sampleRateHz,
             magnitudes,
         });
+    }
+
+    /** Emit one read-only post-trim Polish meter frame. */
+    emitPolishMeter(frame: PolishMeterFrame) {
+        this.emitEndpoint(POLISH_METER_ENDPOINT_ID, frame);
     }
 
     emitDistortionScope(

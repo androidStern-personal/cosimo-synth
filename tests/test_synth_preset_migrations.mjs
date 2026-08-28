@@ -19,307 +19,136 @@ async function loadModules() {
 const LEGACY_PARAMETERS = [
     { endpointID: "filterMode", type: "number", min: 0, max: 5, defaultValue: 0 },
     { endpointID: "filterCutoff", type: "number", min: 20, max: 20_000, defaultValue: 1_000 },
-    { endpointID: "filterQ", type: "number", min: 0.1, max: 20, defaultValue: 0.707107 },
-    { endpointID: "ampRelease", type: "number", min: 0.005, max: 10, defaultValue: 0.2 },
 ];
 
-const AMP_STAGE_PARAMETERS = [
-    { endpointID: "ampAttack", type: "number", min: 0.001, max: 10, defaultValue: 0.01 },
-    { endpointID: "ampDecay", type: "number", min: 0.001, max: 10, defaultValue: 0.001 },
-    { endpointID: "ampSustain", type: "number", min: 0, max: 1, defaultValue: 1 },
+const POLISH_PARAMETERS = [
+    { endpointID: "polishEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+    { endpointID: "polishCompressionClipAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+    { endpointID: "polishOutputTrimDb", type: "number", min: -24, max: 12, defaultValue: 0 },
 ];
 
-const KEY_TRACK_PARAMETERS = [
-    { endpointID: "filterCutoffKeyTrackEnabled", type: "number", min: 0, max: 1, defaultValue: 0 },
-    { endpointID: "filterCutoffKeyTrackOffsetSemitones", type: "number", min: -60, max: 60, defaultValue: 0 },
-];
+function buildCurrentContract(buildCanonicalPluginStateContract, polishParameters = POLISH_PARAMETERS) {
+    return buildCanonicalPluginStateContract({
+        effectID: "wavetable-synth",
+        parameters: [...LEGACY_PARAMETERS, ...polishParameters],
+        storedState: [{ key: "lane.v1", schemaVersion: 2, required: true }],
+    });
+}
 
-const VOICE_ENHANCER_PARAMETERS = [
-    { endpointID: "voiceEnhancerFrequency", type: "number", min: 20, max: 20_000, defaultValue: 130 },
-    { endpointID: "voiceEnhancerQ", type: "number", min: 0.1, max: 10, defaultValue: 0.71 },
-    { endpointID: "voiceEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
-    { endpointID: "voiceEnhancerKeyTrackEnabled", type: "number", min: 0, max: 1, defaultValue: 0 },
-    { endpointID: "voiceEnhancerKeyTrackOffsetSemitones", type: "number", min: -12, max: 60, defaultValue: 0 },
-];
+test("the complete-sound cut registers no migration from a pre-Polish contract", async () => {
+    const { contractModule, migrationsModule } = await loadModules();
+    const currentContract = buildCurrentContract(contractModule.buildCanonicalPluginStateContract);
 
-test("the derived synth migration applies a pre-Mix preset with filterMix at fully wet", async () => {
+    assert.deepEqual(migrationsModule.buildSynthPresetMigrations(currentContract), []);
+});
+
+test("a pre-Polish preset is rejected atomically before parameter or stored-state writes", async () => {
     const { contractModule, presetModule, migrationsModule } = await loadModules();
     const legacyContract = contractModule.buildCanonicalPluginStateContract({
         effectID: "wavetable-synth",
         parameters: LEGACY_PARAMETERS,
+        storedState: [{ key: "lane.v1", schemaVersion: 2, required: true }],
     });
-    const currentContract = contractModule.buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters: [
-            ...LEGACY_PARAMETERS,
-            { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
-            { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
-            ...AMP_STAGE_PARAMETERS,
-            ...KEY_TRACK_PARAMETERS,
-            ...VOICE_ENHANCER_PARAMETERS,
-        ],
-        storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
-    });
-    const legacyPreset = {
-        kind: "cosimo.effectPreset",
-        version: 2,
-        effectID: "wavetable-synth",
-        presetID: "user.pre-mix",
-        label: "Pre-Mix",
-        contract: legacyContract,
-        parameters: { filterMode: 1, filterCutoff: 2_400, filterQ: 4, ampRelease: 1.7 },
-        storedState: {},
-    };
+    const currentContract = buildCurrentContract(contractModule.buildCanonicalPluginStateContract);
     const writes = [];
 
-    const normalized = presetModule.applyEffectPresetV2({
-        preset: legacyPreset,
-        currentContract,
-        patchConnection: {
-            sendEventOrValue(endpointID, value) {
-                writes.push({ endpointID, value });
+    assert.throws(
+        () => presetModule.applyEffectPresetV2({
+            preset: {
+                kind: "cosimo.effectPreset",
+                version: 2,
+                effectID: "wavetable-synth",
+                presetID: "user.pre-polish",
+                label: "Pre-Polish",
+                contract: legacyContract,
+                parameters: { filterMode: 1, filterCutoff: 2_400 },
+                storedState: { "lane.v1": { version: 2, chain: [] } },
             },
-        },
-        migrations: migrationsModule.buildSynthPresetMigrations(currentContract),
-    });
-
-    assert.equal(normalized.parameters.filterMix, 1);
-    assert.equal(normalized.parameters.globalTune, 0);
-    assert.equal(normalized.parameters.filterCutoffKeyTrackEnabled, 0);
-    assert.equal(normalized.parameters.filterCutoffKeyTrackOffsetSemitones, 0);
-    assert.equal(normalized.parameters.voiceEnhancerFrequency, 130);
-    assert.equal(normalized.parameters.voiceEnhancerQ, 0.71);
-    assert.equal(normalized.parameters.voiceEnhancerAmount, 0);
-    assert.equal(normalized.parameters.voiceEnhancerKeyTrackEnabled, 0);
-    assert.equal(normalized.parameters.voiceEnhancerKeyTrackOffsetSemitones, 0);
-    assert.deepEqual(
-        writes.filter(({ endpointID }) => endpointID === "filterMix"),
-        [{ endpointID: "filterMix", value: 1 }],
+            currentContract,
+            patchConnection: {
+                sendEventOrValue(endpointID, value) {
+                    writes.push({ kind: "parameter", endpointID, value });
+                },
+                sendStoredStateValue(key, value) {
+                    writes.push({ kind: "stored-state", key, value });
+                },
+            },
+            migrations: migrationsModule.buildSynthPresetMigrations(currentContract),
+        }),
+        /No migration is registered/,
     );
-    // The migrated preset keeps every stored legacy value.
-    assert.equal(normalized.parameters.filterCutoff, 2_400);
-    assert.equal(normalized.parameters.filterQ, 4);
-    assert.equal(normalized.parameters.ampRelease, 1.7);
-    assert.equal(normalized.storedState["bounce.v1"], null);
+    assert.deepEqual(writes, []);
 });
 
-test("the derived synth migration adds an oscillator-mode bounce reference to pre-Bounce presets", async () => {
+test("a current Polish preset keeps all three saved values exact", async () => {
     const { contractModule, presetModule, migrationsModule } = await loadModules();
-    const parameters = [
-        ...LEGACY_PARAMETERS,
-        { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
-    ];
-    const legacyContract = contractModule.buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters,
-    });
-    const currentContract = contractModule.buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters: [
-            ...parameters,
-            { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
-            ...AMP_STAGE_PARAMETERS,
-            ...KEY_TRACK_PARAMETERS,
-            ...VOICE_ENHANCER_PARAMETERS,
-        ],
-        storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
-    });
+    const currentContract = buildCurrentContract(contractModule.buildCanonicalPluginStateContract);
     const normalized = presetModule.normalizeEffectPresetV2({
         kind: "cosimo.effectPreset",
         version: 2,
         effectID: "wavetable-synth",
-        presetID: "user.pre-bounce",
-        label: "Pre-Bounce",
-        contract: legacyContract,
+        presetID: "user.current-polish",
+        label: "Current Polish",
+        contract: currentContract,
         parameters: {
-            filterMode: 1,
-            filterCutoff: 2_400,
-            filterQ: 4,
-            ampRelease: 0.83,
-            filterMix: 0.5,
+            filterMode: 2,
+            filterCutoff: 4_800,
+            polishEnhancerAmount: 0.42,
+            polishCompressionClipAmount: 0.73,
+            polishOutputTrimDb: -3.5,
         },
-        storedState: {},
-    }, {
-        currentContract,
-        migrations: migrationsModule.buildSynthPresetMigrations(currentContract),
-    });
-
-    assert.equal(normalized.storedState["bounce.v1"], null);
-    assert.equal(normalized.parameters.filterMix, 0.5);
-    assert.equal(normalized.parameters.globalTune, 0);
-    assert.equal(normalized.parameters.ampRelease, 0.83);
-});
-
-test("the newest synth migration restores pre-Global-Tune presets at neutral zero", async () => {
-    const { contractModule, presetModule, migrationsModule } = await loadModules();
-    const previousParameters = [
-        ...LEGACY_PARAMETERS,
-        { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
-    ];
-    const storedState = [{ key: "bounce.v1", schemaVersion: 1, required: true }];
-    const previousContract = contractModule.buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters: previousParameters,
-        storedState,
-    });
-    const currentContract = contractModule.buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters: [
-            ...previousParameters,
-            { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
-            ...AMP_STAGE_PARAMETERS,
-            ...KEY_TRACK_PARAMETERS,
-            ...VOICE_ENHANCER_PARAMETERS,
-        ],
-        storedState,
-    });
-    const normalized = presetModule.normalizeEffectPresetV2({
-        kind: "cosimo.effectPreset",
-        version: 2,
-        effectID: "wavetable-synth",
-        presetID: "user.pre-global-tune",
-        label: "Pre Global Tune",
-        contract: previousContract,
-        parameters: {
-            filterMode: 1,
-            filterCutoff: 2_400,
-            filterQ: 4,
-            ampRelease: 0.61,
-            filterMix: 0.63,
-        },
-        storedState: { "bounce.v1": null },
-    }, {
-        currentContract,
-        migrations: migrationsModule.buildSynthPresetMigrations(currentContract),
-    });
-
-    assert.equal(normalized.parameters.globalTune, 0);
-    assert.equal(normalized.parameters.filterMix, 0.63);
-    assert.equal(normalized.parameters.ampAttack, 0.01);
-    assert.equal(normalized.parameters.ampDecay, 0.001);
-    assert.equal(normalized.parameters.ampSustain, 1);
-    assert.equal(normalized.parameters.ampRelease, 0.61);
-});
-
-test("the newest synth migration adds the neutral per-voice Enhancer without changing the prior sound", async () => {
-    const { contractModule, presetModule, migrationsModule } = await loadModules();
-    const previousParameters = [
-        ...LEGACY_PARAMETERS,
-        { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
-        { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
-        ...AMP_STAGE_PARAMETERS,
-        ...KEY_TRACK_PARAMETERS,
-    ];
-    const storedState = [{ key: "bounce.v1", schemaVersion: 1, required: true }];
-    const previousContract = contractModule.buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters: previousParameters,
-        storedState,
-    });
-    const currentContract = contractModule.buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters: [...previousParameters, ...VOICE_ENHANCER_PARAMETERS],
-        storedState,
-    });
-    const priorParameters = Object.fromEntries(
-        previousParameters.map((parameter, index) => [
-            parameter.endpointID,
-            Math.min(parameter.max, Math.max(parameter.min, parameter.defaultValue + (index * 0.001))),
-        ]),
-    );
-    const normalized = presetModule.normalizeEffectPresetV2({
-        kind: "cosimo.effectPreset",
-        version: 2,
-        effectID: "wavetable-synth",
-        presetID: "user.pre-voice-enhancer",
-        label: "Pre Voice Enhancer",
-        contract: previousContract,
-        parameters: priorParameters,
-        storedState: { "bounce.v1": null },
+        storedState: { "lane.v1": { version: 2, chain: [] } },
     }, {
         currentContract,
         migrations: migrationsModule.buildSynthPresetMigrations(currentContract),
     });
 
     assert.deepEqual(
-        Object.fromEntries(previousParameters.map(({ endpointID }) => [
-            endpointID,
-            normalized.parameters[endpointID],
-        ])),
-        priorParameters,
-    );
-    assert.deepEqual(
-        Object.fromEntries(VOICE_ENHANCER_PARAMETERS.map(({ endpointID }) => [
-            endpointID,
-            normalized.parameters[endpointID],
-        ])),
+        Object.fromEntries(POLISH_PARAMETERS.map(({ endpointID }) => [endpointID, normalized.parameters[endpointID]])),
         {
-            voiceEnhancerFrequency: 130,
-            voiceEnhancerQ: 0.71,
-            voiceEnhancerAmount: 0,
-            voiceEnhancerKeyTrackEnabled: 0,
-            voiceEnhancerKeyTrackOffsetSemitones: 0,
+            polishEnhancerAmount: 0.42,
+            polishCompressionClipAmount: 0.73,
+            polishOutputTrimDb: -3.5,
         },
     );
 });
 
-test("the migration builder rejects a contract that lacks the filterMix parameter", async () => {
+test("the migration boundary rejects missing, duplicate, or non-neutral Polish contracts", async () => {
     const { contractModule, migrationsModule } = await loadModules();
-    const contractWithoutMix = contractModule.buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters: [
-            ...LEGACY_PARAMETERS,
-            { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
-            ...AMP_STAGE_PARAMETERS,
-            ...KEY_TRACK_PARAMETERS,
-            ...VOICE_ENHANCER_PARAMETERS,
-        ],
-        storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
-    });
+    const cases = [
+        {
+            parameters: POLISH_PARAMETERS.filter(({ endpointID }) => endpointID !== "polishEnhancerAmount"),
+            expected: /neutral polishEnhancerAmount/,
+        },
+        {
+            parameters: [...POLISH_PARAMETERS, POLISH_PARAMETERS[0]],
+            expected: /Duplicate parameter endpointID "polishEnhancerAmount"/,
+        },
+        {
+            parameters: POLISH_PARAMETERS.map((parameter) => (
+                parameter.endpointID === "polishCompressionClipAmount"
+                    ? { ...parameter, defaultValue: 0.25 }
+                    : parameter
+            )),
+            expected: /neutral polishCompressionClipAmount/,
+        },
+        {
+            parameters: POLISH_PARAMETERS.map((parameter) => (
+                parameter.endpointID === "polishOutputTrimDb"
+                    ? { ...parameter, min: -12 }
+                    : parameter
+            )),
+            expected: /neutral polishOutputTrimDb/,
+        },
+    ];
 
-    assert.throws(
-        () => migrationsModule.buildSynthPresetMigrations(contractWithoutMix),
-        /filterMix/,
-    );
-});
-
-test("the migration builder rejects a contract that lacks Global Tune", async () => {
-    const { contractModule, migrationsModule } = await loadModules();
-    const contractWithoutGlobalTune = contractModule.buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters: [
-            ...LEGACY_PARAMETERS,
-            { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
-            ...AMP_STAGE_PARAMETERS,
-            ...KEY_TRACK_PARAMETERS,
-            ...VOICE_ENHANCER_PARAMETERS,
-        ],
-        storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
-    });
-
-    assert.throws(
-        () => migrationsModule.buildSynthPresetMigrations(contractWithoutGlobalTune),
-        /globalTune/,
-    );
-});
-
-test("the migration builder rejects a contract that lacks one appended Amp Envelope stage", async () => {
-    const { contractModule, migrationsModule } = await loadModules();
-    const contractWithoutSustain = contractModule.buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters: [
-            ...LEGACY_PARAMETERS,
-            { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
-            { endpointID: "globalTune", type: "number", min: -24, max: 24, defaultValue: 0 },
-            ...AMP_STAGE_PARAMETERS.filter(({ endpointID }) => endpointID !== "ampSustain"),
-            ...KEY_TRACK_PARAMETERS,
-            ...VOICE_ENHANCER_PARAMETERS,
-        ],
-        storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
-    });
-
-    assert.throws(
-        () => migrationsModule.buildSynthPresetMigrations(contractWithoutSustain),
-        /all three appended Amp Envelope parameters/,
-    );
+    for (const { parameters, expected } of cases) {
+        assert.throws(
+            () => migrationsModule.buildSynthPresetMigrations(buildCurrentContract(
+                contractModule.buildCanonicalPluginStateContract,
+                parameters,
+            )),
+            expected,
+        );
+    }
 });

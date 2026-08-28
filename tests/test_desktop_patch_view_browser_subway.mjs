@@ -936,9 +936,17 @@ test("lane output controls stay inside the composed graph without covering its i
                 const graphRect = rectOf(element);
                 const mix = element.querySelector('[data-role="rack-lane-mix"]');
                 const slider = element.querySelector('[data-role="rack-lane-mix-slider"]');
-                if (!(mix instanceof HTMLElement) || !(slider instanceof HTMLInputElement)) return null;
+                const trunkTail = Array.from(element.querySelectorAll(
+                    '[data-role="rack-ghost-add"][data-lane-path^="trunk:"]',
+                )).at(-1);
+                const polish = element.querySelector('[data-role="rack-polish-boundary"]');
+                if (!(mix instanceof HTMLElement) || !(slider instanceof HTMLInputElement)
+                        || !(trunkTail instanceof HTMLButtonElement)
+                        || !(polish instanceof HTMLElement)) return null;
                 const mixRect = rectOf(mix);
                 const sliderRect = rectOf(slider);
+                const tailRect = rectOf(trunkTail);
+                const polishRect = rectOf(polish);
                 const interactive = Array.from(element.querySelectorAll([
                     "button.subway-station",
                     "button.subway-ghost-button",
@@ -963,6 +971,8 @@ test("lane output controls stay inside the composed graph without covering its i
                     graph: graphRect,
                     mix: mixRect,
                     slider: sliderRect,
+                    tail: tailRect,
+                    polish: polishRect,
                     mixIntersections: interactive.filter((node) => intersects(mixRect, rectOf(node))).length,
                     sliderReachable: slider.contains(sliderHit),
                     sliderHitOwners,
@@ -974,8 +984,12 @@ test("lane output controls stay inside the composed graph without covering its i
             assert.ok(bottomGeometry, fixture.name);
             assert.equal(bottomGeometry.mix.bottom <= bottomGeometry.graph.bottom + 1, true);
             assert.equal(bottomGeometry.mix.top >= bottomGeometry.graph.top - 1, true);
-            assert.equal(Math.abs(bottomGeometry.mix.bottom - bottomGeometry.graph.bottom) <= 2, true,
-                `${fixture.name}: Mix hugs the inside bottom edge`);
+            assert.equal(bottomGeometry.mix.bottom <= bottomGeometry.tail.top + 1, true,
+                `${fixture.name}: Mix stays upstream of the tail add`);
+            assert.equal(bottomGeometry.tail.bottom <= bottomGeometry.polish.top + 1, true,
+                `${fixture.name}: tail add is the final editable row before POLISH`);
+            assert.equal(Math.abs(bottomGeometry.polish.bottom - bottomGeometry.graph.bottom) <= 2, true,
+                `${fixture.name}: POLISH owns the inside bottom edge`);
             assert.equal(bottomGeometry.mix.bottom - bottomGeometry.mix.top >= 43.5, true,
                 `${fixture.name}: Mix keeps a touch-sized row`);
             assert.equal(bottomGeometry.slider.bottom - bottomGeometry.slider.top >= 43.5, true,
@@ -1015,6 +1029,99 @@ test("lane output controls stay inside the composed graph without covering its i
         } finally {
             await page.close();
         }
+    }
+});
+
+test("POLISH is one permanent post-lane node with only the three locked host controls", async () => {
+    const page = await openHarnessPage({
+        laneDoc: populatedThreeBandLaneDocJson(),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        const graph = page.locator('[data-role="rack-module-list"]');
+        await graph.evaluate((element) => {
+            element.scrollTop = element.scrollHeight;
+            element.dispatchEvent(new Event("scroll"));
+        });
+        const polish = page.locator('[data-role="rack-polish-node"]');
+        await polish.waitFor();
+        const structure = await graph.evaluate((element) => {
+            const mix = element.querySelector('[data-role="rack-lane-mix"]');
+            const tail = Array.from(element.querySelectorAll(
+                '[data-role="rack-ghost-add"][data-lane-path^="trunk:"]',
+            )).at(-1);
+            const fixedNode = element.querySelector('[data-role="rack-polish-node"]');
+            if (!(mix instanceof HTMLElement) || !(tail instanceof HTMLButtonElement)
+                    || !(fixedNode instanceof HTMLButtonElement)) return null;
+            const mixRect = mix.getBoundingClientRect();
+            const tailRect = tail.getBoundingClientRect();
+            const polishRect = fixedNode.getBoundingClientRect();
+            return {
+                vertical: {
+                    mixBottom: mixRect.bottom,
+                    tailTop: tailRect.top,
+                    tailBottom: tailRect.bottom,
+                    polishTop: polishRect.top,
+                },
+                draggable: fixedNode.getAttribute("draggable"),
+                modulationTargets: fixedNode.querySelectorAll("[data-modulation-target-kind]").length,
+            };
+        });
+        assert.ok(structure);
+        assert.equal(structure.vertical.mixBottom <= structure.vertical.tailTop + 1, true);
+        assert.equal(structure.vertical.tailBottom <= structure.vertical.polishTop + 1, true);
+        assert.equal(structure.draggable, null);
+        assert.equal(structure.modulationTargets, 0);
+
+        await polish.click({ button: "right" });
+        assert.equal(await page.locator('[data-role="rack-station-menu"]').count(), 0);
+        assert.equal(await page.locator('[data-role="rack-group-menu"]').count(), 0);
+        assert.equal(await page.locator('[data-role="rack-add-sheet"]').count(), 0);
+
+        await polish.click();
+        const editor = page.locator('[data-role="rack-editor-polish"]');
+        await editor.waitFor();
+        assert.equal(await editor.locator('[data-role^="polish-control-"]').count(), 3);
+        assert.equal(await editor.locator('[data-modulation-target-kind]').count(), 0);
+        assert.equal(await editor.locator('.rack-editor-power').count(), 0);
+
+        await page.locator('[data-role="polish-knob-polishEnhancerAmount"]').press("End");
+        await page.locator('[data-role="polish-knob-polishCompressionClipAmount"]').press("End");
+        await page.locator('[data-role="polish-knob-polishOutputTrimDb"]').press("Home");
+        const edited = await waitForHarnessSnapshot(
+            page,
+            "three Polish host controls",
+            (snapshot) => snapshot.parameterValues.polishEnhancerAmount === 1
+                && snapshot.parameterValues.polishCompressionClipAmount === 1
+                && snapshot.parameterValues.polishOutputTrimDb === -24,
+        );
+        assert.deepEqual(
+            Object.fromEntries([
+                "polishEnhancerAmount",
+                "polishCompressionClipAmount",
+                "polishOutputTrimDb",
+            ].map((endpointID) => [endpointID, edited.parameterValues[endpointID]])),
+            {
+                polishEnhancerAmount: 1,
+                polishCompressionClipAmount: 1,
+                polishOutputTrimDb: -24,
+            },
+        );
+
+        await page.locator('[data-role="rack-lane-bypass"]').click();
+        const bypassed = await waitForHarnessSnapshot(
+            page,
+            "lane bypass remains upstream of Polish",
+            (snapshot) => readStoredLaneDoc(snapshot).output.bypassed === true,
+        );
+        assert.equal(bypassed.parameterValues.polishEnhancerAmount, 1);
+        assert.equal(bypassed.parameterValues.polishCompressionClipAmount, 1);
+        assert.equal(bypassed.parameterValues.polishOutputTrimDb, -24);
+        assert.equal(await page.locator('[data-role="rack-polish-node"]').count(), 1);
+    } finally {
+        await page.close();
     }
 });
 
@@ -2074,7 +2181,7 @@ test("a maximum natural-height graph uses one root scroller with truthful cues a
     }
 });
 
-test("empty and short racks extend the final trunk to the inside-bottom Mix rail", async () => {
+test("empty and short racks keep Mix, the tail add, and POLISH together at the graph foot", async () => {
     await fs.mkdir(evidenceDirectory, { recursive: true });
     const cases = [
         { name: "empty", laneDoc: emptyLaneDocJson() },
@@ -2099,19 +2206,30 @@ test("empty and short racks extend the final trunk to the inside-bottom Mix rail
                 const lastAnchorBounds = lastAnchorRow?.getBoundingClientRect();
                 const mixBounds = element.querySelector('[data-role="rack-lane-mix"]')
                     ?.getBoundingClientRect();
+                const fillBounds = element.querySelector('[data-role="rack-trunk-tail-fill"]')
+                    ?.getBoundingClientRect();
+                const polishBounds = element.querySelector('[data-role="rack-polish-boundary"]')
+                    ?.getBoundingClientRect();
                 return {
                     width: bounds.width,
                     height: bounds.height,
-                    mixTop: mixBounds === undefined ? bounds.bottom : mixBounds.top - bounds.top,
-                    unfilledHeight: lastAnchorBounds === undefined || mixBounds === undefined
+                    tailTop: lastAnchorBounds === undefined ? bounds.bottom : lastAnchorBounds.top - bounds.top,
+                    fillHeight: fillBounds === undefined
                         ? bounds.height
-                        : mixBounds.top - lastAnchorBounds.bottom,
+                        : fillBounds.height,
+                    fillSampleY: fillBounds === undefined
+                        ? bounds.height / 2
+                        : ((fillBounds.top + fillBounds.bottom) / 2) - bounds.top,
+                    mixBeforeTail: lastAnchorBounds !== undefined && mixBounds !== undefined
+                        && mixBounds.bottom <= lastAnchorBounds.top + 1,
+                    tailBeforePolish: lastAnchorBounds !== undefined && polishBounds !== undefined
+                        && lastAnchorBounds.bottom <= polishBounds.top + 1,
                 };
             });
             assert.equal(
-                layout.unfilledHeight > 40,
+                layout.fillHeight > 40,
                 true,
-                `${fixture.name}: fixture must leave a meaningful short-rack tail`,
+                `${fixture.name}: fixture must leave meaningful flexible route height above Mix`,
             );
             await page.addStyleTag({
                 content: ".is-tail-proof-bare > .subway-trunk-tail-fill::before { visibility: hidden !important; }",
@@ -2122,9 +2240,11 @@ test("empty and short racks extend the final trunk to the inside-bottom Mix rail
             await graph.evaluate((element) => element.classList.remove("is-tail-proof-bare"));
             assertPaintedAgainstLocalBackground(
                 { painted, bare, size: { width: layout.width, height: layout.height } },
-                { x: layout.width / 2, y: layout.mixTop - 10 },
-                `${fixture.name}: final trunk reaches the Mix rail`,
+                { x: layout.width / 2, y: layout.fillSampleY },
+                `${fixture.name}: final trunk reaches the Mix row`,
             );
+            assert.equal(layout.mixBeforeTail, true, `${fixture.name}: Mix stays directly upstream of the tail add`);
+            assert.equal(layout.tailBeforePolish, true, `${fixture.name}: tail add immediately precedes POLISH`);
             if (fixture.name === "short") {
                 await page.screenshot({
                     path: path.join(evidenceDirectory, "variant-c-short-tail-phone.png"),

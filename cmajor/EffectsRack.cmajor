@@ -37,9 +37,10 @@ namespace wt
     // known bill, and rackModuleSleepsWhileDisabled() below is the single point where a
     // profiling pass changes it.
     //
-    // WHAT THE RACK DOES NOT DO. It does not terminate the signal path. Output limiting
-    // lives in wt::PolishBus, fixed and non-reorderable, between rack.out and
-    // audioOut. Whole-lane Mix/Bypass therefore remains upstream of Polish.
+    // WHAT THE RACK DOES NOT DO. It does not terminate the signal path. Fixed finishing
+    // lives in wt::PolishBus, non-reorderable between rack.out and audioOut; overload
+    // remains observable rather than hidden by a final limiter. Whole-lane Mix/Bypass
+    // therefore remains upstream of Polish.
     //
     // INTEGRATION NOTES for whoever wires this into graph WavetableSynth:
     //   - Hoist with MODULE-PREFIX wildcards only (`input rack.distortion*;` and so on).

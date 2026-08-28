@@ -3,7 +3,7 @@ import { BOUNCE_STATE_KEY } from "../../../bounce/document.mjs";
 import {
     createSoundShareEnvelope,
     parseSoundShareEnvelope,
-    type SoundShareEnvelopeV1,
+    type SoundShareEnvelopeV2,
 } from "../sound-share-envelope";
 import {
     buildPluginStateContract,
@@ -540,7 +540,7 @@ export class StandaloneEffectPresetController {
         });
     }
 
-    captureSharedSound(): StandaloneEffectPresetMutationResult<SoundShareEnvelopeV1<EffectPresetV2>> {
+    captureSharedSound(): StandaloneEffectPresetMutationResult<SoundShareEnvelopeV2<EffectPresetV2>> {
         return this.runMutation(() => {
             if (!this.options.synth) {
                 throw new Error("Sound links are available only for synth controllers.");
@@ -554,7 +554,7 @@ export class StandaloneEffectPresetController {
         }, "Sound link ready.");
     }
 
-    captureCurrentSound(): StandaloneEffectPresetMutationResult<SoundShareEnvelopeV1<EffectPresetV2>> {
+    captureCurrentSound(): StandaloneEffectPresetMutationResult<SoundShareEnvelopeV2<EffectPresetV2>> {
         return this.runMutation(() => {
             if (!this.options.synth) {
                 throw new Error("Current sound capture is available only for synth controllers.");

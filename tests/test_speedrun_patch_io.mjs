@@ -15,13 +15,16 @@ test("speedrun defaults are derived from the current generated synth contract", 
     ]);
     const defaults = patchIO.createDefaultsSnapshot(context.options);
 
-    assert.equal(Object.keys(defaults.parameters).length, 102);
+    assert.equal(Object.keys(defaults.parameters).length, 105);
     assert.equal(defaults.parameters.oscAWavetableSelect, 35);
     assert.ok(Math.abs(defaults.parameters.ampAttack - 0.01) < 1e-6);
     assert.ok(Math.abs(defaults.parameters.ampDecay - 0.001) < 1e-6);
     assert.equal(defaults.parameters.ampSustain, 1);
     assert.ok(Math.abs(defaults.parameters.ampRelease - 0.2) < 1e-6);
     assert.equal(defaults.parameters.sourceMode, 0);
+    assert.equal(defaults.parameters.polishEnhancerAmount, 0);
+    assert.equal(defaults.parameters.polishCompressionClipAmount, 0);
+    assert.equal(defaults.parameters.polishOutputTrimDb, 0);
     assert.equal(defaults.annotations.oscAFineCents.unit, "cents");
     assert.equal(defaults.annotations.oscAOctave.discrete, true);
     assert.deepEqual(Object.keys(defaults.lane.devices), ["distortion#1", "delay#1", "reverb#1"]);
@@ -35,7 +38,7 @@ test("bare and browser-state patches complete, clamp, and snap public parameters
     ]);
     const result = patchIO.intakePatch({
         format: "cosimo.browserPatchState",
-        version: 3,
+        version: 4,
         sound: {
             parameters: {
                 oscAWavetablePosition: 2,
@@ -54,7 +57,7 @@ test("bare and browser-state patches complete, clamp, and snap public parameters
     assert.deepEqual(result.value.document.modulation, context.defaults.modulation);
 });
 
-test("shared-sound envelopes enter through current preset migration and strict document parsing", async () => {
+test("current shared-sound envelopes enter through exact contract and strict document parsing", async () => {
     const [{ patchIO }, context, lane] = await Promise.all([
         loadSpeedrunModules(),
         createCurrentSpeedrunContext(),
@@ -62,7 +65,7 @@ test("shared-sound envelopes enter through current preset migration and strict d
     ]);
     const envelope = {
         format: "cosimo.soundShare",
-        version: 1,
+        version: 2,
         preset: {
             kind: "cosimo.effectPreset",
             version: 2,
@@ -85,6 +88,30 @@ test("shared-sound envelopes enter through current preset migration and strict d
     assert.equal(result.value.document.label, "Shared Split");
     assert.equal(result.value.document.parameters.filterCutoff, 720);
     assert.deepEqual(result.value.document.lane, lane);
+});
+
+test("speedrun rejects pre-Polish browser and shared-sound versions whole", async () => {
+    const [{ patchIO }, context] = await Promise.all([
+        loadSpeedrunModules(),
+        createCurrentSpeedrunContext(),
+    ]);
+    const legacyBrowser = patchIO.intakePatch({
+        format: "cosimo.browserPatchState",
+        version: 3,
+        sound: { parameters: {}, storedState: {} },
+        auxiliary: {},
+    }, context.options);
+    const legacyShare = patchIO.intakePatch({
+        format: "cosimo.soundShare",
+        version: 1,
+        preset: {},
+        supplementalStoredState: {},
+    }, context.options);
+
+    assert.equal(legacyBrowser.ok, false);
+    assert.equal(legacyBrowser.error._tag, "UnknownShape");
+    assert.equal(legacyShare.ok, false);
+    assert.equal(legacyShare.error._tag, "MigrationFailed");
 });
 
 test("intake refuses bounced sounds with the locked studio message", async () => {

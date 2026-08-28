@@ -5620,8 +5620,18 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
         const layout = await host.evaluate((element) => {
             const bounds = element.getBoundingClientRect();
             const panels = document.querySelector('[data-role="mobile-workspace-panels"]');
-            const presetBar = element.querySelector("cosimo-preset-bar")?.shadowRoot?.querySelector(".preset-bar");
-            const presetName = element.querySelector("cosimo-preset-bar")?.shadowRoot?.querySelector('[data-el="preset-name"]');
+            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
+            const presetBar = shadow?.querySelector(".preset-bar");
+            const presetName = shadow?.querySelector('[data-el="preset-name"]');
+            const nameRegion = shadow?.querySelector(".name-region");
+            const leftCluster = shadow?.querySelector(".shell-left-cluster");
+            const meter = shadow?.querySelector('[data-el="polish-meter"]');
+            const more = shadow?.querySelector('[data-el="shell-more"]');
+            const rectOf = (node) => {
+                if (!(node instanceof HTMLElement)) return null;
+                const rect = node.getBoundingClientRect();
+                return { left: rect.left, right: rect.right, width: rect.width, center: (rect.left + rect.right) / 2 };
+            };
             return {
                 display: getComputedStyle(element).display,
                 left: bounds.left,
@@ -5630,6 +5640,11 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
                 panelsTop: panels instanceof HTMLElement ? panels.getBoundingClientRect().top : null,
                 presetBarHeight: presetBar instanceof HTMLElement ? presetBar.getBoundingClientRect().height : null,
                 presetName: presetName?.textContent?.trim() ?? null,
+                bar: rectOf(presetBar),
+                nameRegion: rectOf(nameRegion),
+                leftCluster: rectOf(leftCluster),
+                meter: rectOf(meter),
+                more: rectOf(more),
             };
         });
 
@@ -5642,6 +5657,47 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
         assert.equal(layout.panelsTop >= layout.height, true);
         // T03D: the unnamed working sound is the INIT identity.
         assert.equal(layout.presetName, "INIT");
+        assert.ok(layout.bar && layout.nameRegion && layout.leftCluster && layout.meter && layout.more);
+        assert.equal(Math.abs(layout.meter.width - 92) <= 0.5, true);
+        assert.equal(layout.nameRegion.left >= layout.leftCluster.right - 0.5, true);
+        assert.equal(layout.nameRegion.right <= layout.more.left + 0.5, true);
+        assert.equal(Math.abs(layout.nameRegion.center - layout.bar.center) <= 0.5, true);
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.emitPolishMeter({
+                peakDbfs: 1.2,
+                loudnessDbfs: -12.4,
+            });
+        });
+        await page.waitForFunction(() => {
+            const shadow = document.querySelector("cosimo-preset-bar")?.shadowRoot;
+            return shadow?.querySelector('[data-el="polish-meter-peak"]')?.textContent === "1.2"
+                && shadow?.querySelector('[data-el="polish-meter-loudness"]')?.textContent === "-12"
+                && shadow?.querySelector('[data-el="polish-meter"]')?.getAttribute("data-overload") === "true";
+        });
+        const activeMeter = await host.evaluate((element) => {
+            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
+            const meter = shadow?.querySelector('[data-el="polish-meter"]');
+            const light = shadow?.querySelector('[data-el="polish-meter-light"]');
+            const nameRegion = shadow?.querySelector(".name-region");
+            if (!(meter instanceof HTMLElement) || !(light instanceof HTMLElement)
+                    || !(nameRegion instanceof HTMLElement)) return null;
+            const meterRect = meter.getBoundingClientRect();
+            const nameRect = nameRegion.getBoundingClientRect();
+            return {
+                meterWidth: meterRect.width,
+                nameCenter: (nameRect.left + nameRect.right) / 2,
+                overload: meter.dataset.overload,
+                lightColor: getComputedStyle(light).backgroundColor,
+                lightOpacity: Number(getComputedStyle(light).opacity),
+            };
+        });
+        assert.ok(activeMeter);
+        assert.equal(Math.abs(activeMeter.meterWidth - layout.meter.width) <= 0.5, true);
+        assert.equal(Math.abs(activeMeter.nameCenter - layout.nameRegion.center) <= 0.5, true);
+        assert.equal(activeMeter.overload, "true");
+        assert.equal(activeMeter.lightColor, "rgb(255, 92, 82)");
+        assert.equal(activeMeter.lightOpacity > 0.8, true);
     } finally {
         await page.close();
     }

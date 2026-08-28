@@ -117,7 +117,7 @@ test("synth preset dropdowns own Bounce Audio and current-patch Bounce Video", a
                 currentValues: {}, missingCurrentValueEndpointIDs: [], currentContract: null,
                 lastError: null, supportsInit: true, pendingSoundReplacement: null,
             };
-            const capturedPatch = { kind: "cosimo.soundShare", version: 1, preset: { label: "Current Patch" } };
+            const capturedPatch = { kind: "cosimo.soundShare", version: 2, preset: { label: "Current Patch" } };
             let captureCount = 0;
             const controller = {
                 getState: () => state,

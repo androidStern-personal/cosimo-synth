@@ -10,7 +10,17 @@ import {
     decodeSoundShareFragment,
     stripSoundShareFragment,
 } from "../sound-share-link";
-import type { SoundShareEnvelopeV1 } from "../sound-share-envelope";
+import type { SoundShareEnvelopeV2 } from "../sound-share-envelope";
+import {
+    SILENT_POLISH_METER_FRAME,
+    advancePolishPeakDisplay,
+    createPolishPeakDisplayState,
+    formatPolishLoudnessDbfs,
+    formatPolishPeakDbfs,
+    normalizePolishMeterMessage,
+    type PolishMeterFrame,
+    type PolishPeakDisplayState,
+} from "../polish";
 
 // ── Types ────────────────────────────────────────────────
 
@@ -724,13 +734,12 @@ const PRESET_BAR_CSS = /* css */ `
      Additive mode: without the attribute, nothing below applies and the
      standalone-effects presentation is untouched. */
 
-  .shell-back, .shell-more, .shell-menu { display: none; }
+  .shell-left-cluster, .shell-back, .polish-meter, .shell-more, .shell-menu { display: none; }
 
   :host([compact-synth]) .preset-bar {
-    display: grid;
+    --shell-left-cluster-width: 134px;
+    display: block;
     box-sizing: border-box;
-    grid-template-columns: 40px minmax(0, 1fr) 40px;
-    align-items: center;
     height: var(--compact-shell-row, 40px);
     padding: 0;
   }
@@ -740,8 +749,22 @@ const PRESET_BAR_CSS = /* css */ `
   :host([compact-synth]) .source-tag,
   :host([compact-synth]) .chevron { display: none; }
 
+  :host([compact-synth]) .shell-left-cluster {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    left: 0;
+    display: flex;
+    width: var(--shell-left-cluster-width);
+    height: 100%;
+    align-items: center;
+    gap: 2px;
+  }
+
   :host([compact-synth]) .shell-back {
     display: grid;
+    width: 40px;
+    flex: 0 0 40px;
     place-items: center;
     height: 100%;
     padding: 0;
@@ -760,7 +783,12 @@ const PRESET_BAR_CSS = /* css */ `
   }
 
   :host([compact-synth]) .shell-more {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    right: 0;
     display: grid;
+    width: 40px;
     place-items: center;
     height: 100%;
     padding: 0;
@@ -773,8 +801,71 @@ const PRESET_BAR_CSS = /* css */ `
   }
 
   :host([compact-synth]) .name-region {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: 50%;
+    width: max(0px, calc(100% - (2 * var(--shell-left-cluster-width))));
     justify-content: center;
     min-width: 0;
+    padding-inline: 2px;
+    transform: translateX(-50%);
+  }
+
+  :host([compact-synth]) .polish-meter {
+    display: grid;
+    width: 92px;
+    height: 24px;
+    flex: 0 0 92px;
+    grid-template-columns: 7px 35px 34px;
+    align-items: center;
+    gap: 3px;
+    padding: 0 4px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 999px;
+    background: rgba(0,0,0,0.34);
+    box-shadow: inset 0 1px rgba(255,255,255,0.035);
+    color: rgba(229,236,234,0.78);
+    pointer-events: none;
+  }
+
+  .polish-meter-light {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--polish-meter-light, #77d9a2);
+    box-shadow: 0 0 7px color-mix(in srgb, var(--polish-meter-light, #77d9a2) 72%, transparent);
+    opacity: calc(0.32 + (var(--polish-meter-pulse, 0) * 0.68));
+    transform: scale(calc(0.78 + (var(--polish-meter-pulse, 0) * 0.38)));
+    transform-origin: center;
+  }
+
+  .polish-meter-readout {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 8px minmax(0, 1fr);
+    align-items: center;
+    font-size: 8px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .polish-meter-readout > b {
+    color: rgba(229,236,234,0.42);
+    font-weight: 600;
+  }
+
+  .polish-meter-readout > span {
+    overflow: hidden;
+    color: rgba(239,246,242,0.88);
+    text-align: right;
+  }
+
+  .polish-meter[data-overload="true"] .polish-meter-readout:first-of-type > span {
+    color: #ff6b61;
   }
 
   :host([compact-synth]) .shell-menu.open {
@@ -819,7 +910,14 @@ const PRESET_BAR_CSS = /* css */ `
 
 const PRESET_BAR_HTML = /* html */ `
   <div class="preset-bar">
-    <button class="shell-back" data-action="shell-back" data-el="shell-back" aria-label="Back" disabled>&#8249;</button>
+    <div class="shell-left-cluster">
+      <button class="shell-back" data-action="shell-back" data-el="shell-back" aria-label="Back" disabled>&#8249;</button>
+      <div class="polish-meter" data-el="polish-meter" aria-label="Polish output meter">
+        <span class="polish-meter-light" data-el="polish-meter-light" aria-hidden="true"></span>
+        <output class="polish-meter-readout" aria-label="Peak dBFS"><b>P</b><span data-el="polish-meter-peak">-120</span></output>
+        <output class="polish-meter-readout" aria-label="400 millisecond loudness dBFS"><b>L</b><span data-el="polish-meter-loudness">-120</span></output>
+      </div>
+    </div>
 
     <button class="nav-btn" data-action="prev" title="Previous preset">&#8249;</button>
 
@@ -952,12 +1050,15 @@ class PresetBar extends HTMLElement {
     private _saveDialogPresetKey: string | null = null;
     private _dialogContinuesSoundReplacement = false;
     private _shareFragmentChecked = false;
-    private _pendingSharedEnvelope: SoundShareEnvelopeV1 | null = null;
+    private _pendingSharedEnvelope: SoundShareEnvelopeV2 | null = null;
     private _sharedLoadConfirmationOpen = false;
     private _sharedSoundReplacementPending = false;
     private _currentShareURL: string | null = null;
     private _audioBounceAvailable = false;
     private _videoBounceAvailable = false;
+    private _polishMeterFrame: PolishMeterFrame = SILENT_POLISH_METER_FRAME;
+    private _polishPeakDisplay: PolishPeakDisplayState = createPolishPeakDisplayState();
+    private _polishMeterAnimationFrame: number | null = null;
 
     // Cached DOM refs
     private _els!: Record<string, HTMLElement>;
@@ -1042,6 +1143,10 @@ class PresetBar extends HTMLElement {
         this._closeFlyout();
         this._closeCtxMenu();
         this._closeDialog();
+        if (this._polishMeterAnimationFrame !== null) {
+            window.cancelAnimationFrame(this._polishMeterAnimationFrame);
+            this._polishMeterAnimationFrame = null;
+        }
     }
 
     attributeChangedCallback() {
@@ -1279,6 +1384,64 @@ class PresetBar extends HTMLElement {
     set videoBounceAvailable(available: boolean) {
         this._videoBounceAvailable = available;
         this._syncSynthBounceActions();
+    }
+
+    set polishMeterFrame(value: PolishMeterFrame) {
+        const parsed = normalizePolishMeterMessage(value);
+        if (parsed === null) {
+            return;
+        }
+        this._polishMeterFrame = parsed;
+        this._requestPolishMeterPresentation();
+    }
+
+    private _requestPolishMeterPresentation() {
+        if (this._polishMeterAnimationFrame !== null) {
+            return;
+        }
+
+        const present = (nowMs: number) => {
+            this._polishMeterAnimationFrame = null;
+            this._polishPeakDisplay = advancePolishPeakDisplay(
+                this._polishPeakDisplay,
+                this._polishMeterFrame,
+                nowMs,
+            );
+            this._renderPolishMeter();
+
+            const stillHolding = nowMs < this._polishPeakDisplay.heldUntilMs;
+            const stillDecaying = this._polishPeakDisplay.peakDbfs
+                > this._polishMeterFrame.peakDbfs + 0.01;
+            if (stillHolding || stillDecaying) {
+                this._polishMeterAnimationFrame = window.requestAnimationFrame(present);
+            }
+        };
+
+        this._polishMeterAnimationFrame = window.requestAnimationFrame(present);
+    }
+
+    private _renderPolishMeter() {
+        this._els["polish-meter-peak"].textContent = formatPolishPeakDbfs(
+            this._polishPeakDisplay.peakDbfs,
+        );
+        this._els["polish-meter-loudness"].textContent = formatPolishLoudnessDbfs(
+            this._polishMeterFrame.loudnessDbfs,
+        );
+
+        const pulse = Math.max(0, Math.min(1, (this._polishMeterFrame.loudnessDbfs + 60) / 60));
+        const lightColor = this._polishPeakDisplay.peakDbfs >= 0
+            ? "#ff5c52"
+            : this._polishPeakDisplay.peakDbfs >= -6
+                ? "#f4c86a"
+                : "#77d9a2";
+        const meter = this._els["polish-meter"];
+        meter.style.setProperty("--polish-meter-pulse", String(pulse));
+        meter.style.setProperty("--polish-meter-light", lightColor);
+        meter.dataset.overload = this._polishPeakDisplay.peakDbfs >= 0 ? "true" : "false";
+        meter.setAttribute(
+            "aria-label",
+            `Polish output: peak ${formatPolishPeakDbfs(this._polishPeakDisplay.peakDbfs)} dBFS, loudness ${formatPolishLoudnessDbfs(this._polishMeterFrame.loudnessDbfs)} dBFS`,
+        );
     }
 
     /** Whether universal Back has somewhere to go (compact synth shell only). */
@@ -1519,7 +1682,7 @@ class PresetBar extends HTMLElement {
         this._openSharedLoadDialog(result.value);
     }
 
-    private _openSharedLoadDialog(envelope: SoundShareEnvelopeV1) {
+    private _openSharedLoadDialog(envelope: SoundShareEnvelopeV2) {
         const preset = envelope.preset as Record<string, unknown>;
         const label = typeof preset.label === "string" && preset.label.trim().length > 0
             ? ` “${preset.label.trim()}”`

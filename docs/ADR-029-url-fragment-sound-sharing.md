@@ -20,7 +20,8 @@ too large to embed in a useful URL.
 
 ### Carrier and encoding
 
-Sound links use the URL fragment `#p=1.<payload>`. The versioned
+Sound links use the URL fragment `#p=2.<payload>`. T28 intentionally rejects
+the pre-Polish `#p=1` complete-sound carrier. The versioned
 `cosimo.soundShare` envelope contains:
 
 - one exact preset-v2 document, including its contract identity, public

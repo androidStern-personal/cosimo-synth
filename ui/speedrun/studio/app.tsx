@@ -283,10 +283,10 @@ export function SpeedrunStudioApp({ session }: Props) {
                                 <span>{patchFile?.name ?? "Choose patch JSON"}</span></label>
                         ) : null}
                         <SourceChoice name="patch-source" value="share" active={patchSource === "share"}
-                            label="Share link" detail="Paste a #p=1 Cosimo URL" onChange={() => setPatchSource("share")} />
+                            label="Share link" detail="Paste a #p=2 Cosimo URL" onChange={() => setPatchSource("share")} />
                         {patchSource === "share" ? (
                             <textarea data-testid="share-link-input" value={shareValue} onChange={(event) => setShareValue(event.currentTarget.value)}
-                                placeholder="https://…/#p=1.…" rows={3} />
+                                placeholder="https://…/#p=2.…" rows={3} />
                         ) : null}
                     </fieldset>
                     <fieldset>

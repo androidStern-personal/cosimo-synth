@@ -3,11 +3,11 @@ import {
     parseSoundShareEnvelopeText,
     SoundShareError,
     type SoundShareErrorTag,
-    type SoundShareEnvelopeV1,
+    type SoundShareEnvelopeV2,
     type SoundShareResult,
 } from "./sound-share-envelope";
 
-export const SOUND_SHARE_FRAGMENT_VERSION = 1;
+export const SOUND_SHARE_FRAGMENT_VERSION = 2;
 export const SOUND_SHARE_URL_WARNING_LENGTH = 2_000;
 export const SOUND_SHARE_URL_MAX_LENGTH = 8_000;
 export const SOUND_SHARE_DECOMPRESSED_MAX_BYTES = 1_000_000;
@@ -138,7 +138,7 @@ export function classifySoundShareURLLength(length: number): SoundShareURLLength
 }
 
 export async function encodeSoundShareFragment(
-    envelope: SoundShareEnvelopeV1,
+    envelope: SoundShareEnvelopeV2,
 ): Promise<SoundShareResult<string>> {
     const parsed = parseSoundShareEnvelope(envelope);
     if (!parsed.ok) {
@@ -179,7 +179,7 @@ export async function encodeSoundShareFragment(
 
 export async function decodeSoundShareFragment(
     fragment: string,
-): Promise<SoundShareResult<SoundShareEnvelopeV1 | null>> {
+): Promise<SoundShareResult<SoundShareEnvelopeV2 | null>> {
     try {
         if (!fragment.startsWith("#p=")) {
             return { ok: true, value: null };
@@ -235,7 +235,7 @@ export async function decodeSoundShareFragment(
 }
 
 export async function createSoundShareURL(
-    envelope: SoundShareEnvelopeV1,
+    envelope: SoundShareEnvelopeV2,
     baseURL: string,
 ): Promise<SoundShareResult<CreatedSoundShareURL>> {
     let url: URL;

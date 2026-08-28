@@ -89,6 +89,8 @@ type SubwayMapColumnProps = {
     /** Called once a station drag crosses the reorder threshold. */
     readonly onArmReorder: (deviceId: string, event: ReactPointerEvent<HTMLElement>) => void;
     readonly onKeyboardMove: (deviceId: string, offset: -1 | 1) => void;
+    /** Fixed lane-output controls rendered before the final tail insertion row. */
+    readonly tailPrefix?: ReactNode;
     /** A ghost add-stub was tapped: open the type picker for its path. */
     readonly onRequestAdd: (path: LaneDevicePathV2, clientX: number, clientY: number) => void;
 };
@@ -466,6 +468,7 @@ export function SubwayMapColumn({
     onOpenGroupMenu,
     onArmReorder,
     onKeyboardMove,
+    tailPrefix,
     onRequestAdd,
 }: SubwayMapColumnProps) {
     const layout = buildSubwayLayout(laneState);
@@ -499,6 +502,7 @@ export function SubwayMapColumn({
     // Rows render in order; a group's fork..merge rows nest inside ONE
     // section so bypass dimming and lane alignment stay coherent.
     const rendered: ReactNode[] = [];
+    let trunkTail: ReactNode = null;
     let groupRows: ReactNode[] = [];
     let openGroup: {
         groupId: string;
@@ -616,14 +620,14 @@ export function SubwayMapColumn({
             );
         }
         if (cell !== undefined && cell.kind === "ghost") {
-            rendered.push(
+            trunkTail = (
                 <SubwayGhost
                     key={`trunk-ghost-${rowIndex}`}
                     cell={cell}
                     asCell={false}
                     onRequestAdd={onRequestAdd}
                     onFocusBranch={onFocusBranch}
-                />,
+                />
             );
         }
     }
@@ -637,6 +641,8 @@ export function SubwayMapColumn({
                 data-role="rack-trunk-tail-fill"
                 aria-hidden="true"
             />
+            {tailPrefix}
+            {trunkTail}
         </>
     );
 }

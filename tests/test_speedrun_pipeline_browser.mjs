@@ -223,7 +223,7 @@ test("fixture patch plus uploaded MIDI produces a downloadable verified MP4 and 
     await page.getByRole("status").waitFor();
     const clipboard = await page.evaluate(() => navigator.clipboard.readText());
     assert.equal(clipboard, snapshot.prepared.shareURL);
-    assert.match(clipboard, /\/#p=1\./u);
+    assert.match(clipboard, /\/#p=2\./u);
 
     await page.getByTestId("render-video-button").click();
     await page.waitForFunction(() => window.__COSIMO_SPEEDRUN_STUDIO__.snapshot().activeStage === "video");

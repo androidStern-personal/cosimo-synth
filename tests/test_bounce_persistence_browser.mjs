@@ -140,7 +140,7 @@ async function persistAudibleBounce(page) {
         });
         localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
             format: "cosimo.browserPatchState",
-            version: 3,
+            version: 4,
             sound: {
                 parameters: { ampRelease: 0.2, filterMode: 0, sourceMode: 1 },
                 storedState: {
@@ -229,7 +229,7 @@ test("missing bank reload exposes a visible typed error and preserves durable sa
             });
             localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
                 format: "cosimo.browserPatchState",
-                version: 3,
+                version: 4,
                 sound: {
                     parameters: { filterMode: 0, sourceMode: 1 },
                     storedState: {

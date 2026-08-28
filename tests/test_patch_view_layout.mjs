@@ -374,7 +374,7 @@ test("desktop synth reserves Cmajor host parameter slot 0 away from musical cont
     );
 });
 
-test("Bounce, Global Tune, Amp Envelope, Key Track, and Voice Enhancer preserve the frozen synth host-parameter order", async () => {
+test("Bounce, Global Tune, Amp Envelope, Key Track, Voice Enhancer, and Polish preserve the frozen synth host-parameter order", async () => {
     const synthSource = await fs.readFile(path.join(repoRoot, "cmajor", "WavetableSynth.cmajor"), "utf8");
     const parameterOrder = parseGraphHostParameterIdentifiers(synthSource, "WavetableSynth");
     const inputValues = parseGraphInputValues(synthSource, "WavetableSynth");
@@ -402,13 +402,22 @@ test("Bounce, Global Tune, Amp Envelope, Key Track, and Voice Enhancer preserve 
     const voiceEnhancerKeyTrackOffset = inputValues.find(
         ({ identifier }) => identifier === "voiceEnhancerKeyTrackOffsetSemitones",
     );
+    const polishEnhancerAmount = inputValues.find(
+        ({ identifier }) => identifier === "polishEnhancerAmount",
+    );
+    const polishCompressionClipAmount = inputValues.find(
+        ({ identifier }) => identifier === "polishCompressionClipAmount",
+    );
+    const polishOutputTrimDb = inputValues.find(
+        ({ identifier }) => identifier === "polishOutputTrimDb",
+    );
 
     assert.deepEqual(
-        parameterOrder.slice(0, -14),
+        parameterOrder.slice(0, -17),
         EXISTING_SYNTH_HOST_PARAMETER_ORDER,
         "appending synth controls must not move any existing DAW automation slot",
     );
-    assert.deepEqual(parameterOrder.slice(-14), [
+    assert.deepEqual(parameterOrder.slice(-17), [
         "filterMix",
         "ampRelease",
         "sourceMode",
@@ -423,8 +432,11 @@ test("Bounce, Global Tune, Amp Envelope, Key Track, and Voice Enhancer preserve 
         "voiceEnhancerAmount",
         "voiceEnhancerKeyTrackEnabled",
         "voiceEnhancerKeyTrackOffsetSemitones",
+        "polishEnhancerAmount",
+        "polishCompressionClipAmount",
+        "polishOutputTrimDb",
     ]);
-    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 14);
+    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 17);
     assert.notEqual(filterMix, undefined);
     assert.equal(filterMix.type, "float32");
     assert.match(filterMix.annotation, /name:\s*"Filter Mix"/);
@@ -522,6 +534,21 @@ test("Bounce, Global Tune, Amp Envelope, Key Track, and Voice Enhancer preserve 
     assert.match(voiceEnhancerKeyTrackOffset.annotation, /max:\s*60(?:\.0)?f?/);
     assert.match(voiceEnhancerKeyTrackOffset.annotation, /unit:\s*"st"/);
     assert.match(voiceEnhancerKeyTrackOffset.annotation, /rampFrames:\s*0/);
+    for (const amount of [polishEnhancerAmount, polishCompressionClipAmount]) {
+        assert.notEqual(amount, undefined);
+        assert.equal(amount.type, "float32");
+        assert.match(amount.annotation, /min:\s*0(?:\.0)?f?/);
+        assert.match(amount.annotation, /max:\s*1(?:\.0)?f?/);
+        assert.match(amount.annotation, /init:\s*0(?:\.0)?f?/);
+        assert.match(amount.annotation, /rampFrames:\s*0/);
+    }
+    assert.notEqual(polishOutputTrimDb, undefined);
+    assert.equal(polishOutputTrimDb.type, "float32");
+    assert.match(polishOutputTrimDb.annotation, /min:\s*-24(?:\.0)?f?/);
+    assert.match(polishOutputTrimDb.annotation, /max:\s*12(?:\.0)?f?/);
+    assert.match(polishOutputTrimDb.annotation, /init:\s*0(?:\.0)?f?/);
+    assert.match(polishOutputTrimDb.annotation, /unit:\s*"dB"/);
+    assert.match(polishOutputTrimDb.annotation, /rampFrames:\s*0/);
 });
 
 test("whole Effects Lane Mix and Bypass are struct state, never DAW automation slots", async () => {
