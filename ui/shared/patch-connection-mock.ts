@@ -28,6 +28,14 @@ import {
     GLOBAL_TUNE_MAX_SEMITONES,
     GLOBAL_TUNE_MIN_SEMITONES,
 } from "./global-tune";
+import {
+    VOICE_ENHANCER_AMOUNT_ENDPOINT_ID,
+    VOICE_ENHANCER_FREQUENCY_ENDPOINT_ID,
+    VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID,
+    VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID,
+    VOICE_ENHANCER_PARAMETER_DESCRIPTORS,
+    VOICE_ENHANCER_Q_ENDPOINT_ID,
+} from "./voice-enhancer";
 
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "oscAWavetablePosition";
@@ -360,6 +368,11 @@ function createInitialParameterValues(): Map<string, unknown> {
         [filterCutoffKeyTrackOffsetEndpointID, 0],
         [filterQEndpointID, 0.707107],
         [filterMixEndpointID, 1],
+        [VOICE_ENHANCER_FREQUENCY_ENDPOINT_ID, VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency.initial],
+        [VOICE_ENHANCER_Q_ENDPOINT_ID, VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q.initial],
+        [VOICE_ENHANCER_AMOUNT_ENDPOINT_ID, VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount.initial],
+        [VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID, 0],
+        [VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID, 0],
         [unisonVoicesEndpointID, 1],
         [unisonDetuneEndpointID, 0.1],
         [unisonBlendEndpointID, 0.75],
@@ -546,6 +559,41 @@ function buildHarnessStatus(manifest: unknown) {
                         min: 0.1,
                         max: 20,
                         init: 0.707107,
+                    },
+                },
+                ...Object.values(VOICE_ENHANCER_PARAMETER_DESCRIPTORS).map((descriptor) => ({
+                    endpointID: descriptor.endpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: `Voice Enhancer ${descriptor.label}`,
+                        min: descriptor.min,
+                        max: descriptor.max,
+                        init: descriptor.initial,
+                        step: descriptor.step,
+                        unit: descriptor.unit,
+                    },
+                })),
+                {
+                    endpointID: VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Voice Enhancer Key Track",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                        discrete: true,
+                        step: 1,
+                    },
+                },
+                {
+                    endpointID: VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Voice Enhancer Key Track Offset",
+                        min: -12,
+                        max: 60,
+                        init: 0,
+                        unit: "st",
                     },
                 },
                 {

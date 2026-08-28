@@ -65,6 +65,22 @@ const synthStatus = {
             parameter("oscBMute", { init: 1, min: 0, max: 1, discrete: true }),
             parameter("oscCMute", { init: 1, min: 0, max: 1, discrete: true }),
             parameter("filterMix", { init: 1, min: 0, max: 1 }),
+            parameter("voiceEnhancerFrequency", { init: 130, min: 20, max: 20_000 }),
+            parameter("voiceEnhancerQ", { init: 0.71, min: 0.1, max: 10 }),
+            parameter("voiceEnhancerAmount", { init: 0, min: 0, max: 1 }),
+            parameter("voiceEnhancerKeyTrackEnabled", {
+                init: 0,
+                min: 0,
+                max: 1,
+                discrete: true,
+                step: 1,
+            }),
+            parameter("voiceEnhancerKeyTrackOffsetSemitones", {
+                init: 0,
+                min: -12,
+                max: 60,
+                unit: "st",
+            }),
             parameter("delayMix", { init: 0.5, min: 0, max: 1 }),
             parameter("reverbMix", { init: 0.5, min: 0, max: 1 }),
             parameter("globalTune", { init: 0, min: -24, max: 24 }),
@@ -636,6 +652,11 @@ test("Init writes the default for every current production public parameter, inc
         "oscBWavetableSelect",
         "oscCWavetableSelect",
         "filterMix",
+        "voiceEnhancerFrequency",
+        "voiceEnhancerQ",
+        "voiceEnhancerAmount",
+        "voiceEnhancerKeyTrackEnabled",
+        "voiceEnhancerKeyTrackOffsetSemitones",
         "globalTune",
         "ampAttack",
         "ampDecay",
@@ -663,6 +684,22 @@ test("Init writes the default for every current production public parameter, inc
     const initResult = synthMutations(fixture.controller).initSound();
     assert.equal(initResult.ok, true, initResult.message);
     assert.deepEqual(fixture.patchConnection.parameterValues, fixture.defaults);
+    assert.deepEqual(
+        Object.fromEntries([
+            "voiceEnhancerFrequency",
+            "voiceEnhancerQ",
+            "voiceEnhancerAmount",
+            "voiceEnhancerKeyTrackEnabled",
+            "voiceEnhancerKeyTrackOffsetSemitones",
+        ].map((endpointID) => [endpointID, fixture.patchConnection.parameterValues[endpointID]])),
+        {
+            voiceEnhancerFrequency: 130,
+            voiceEnhancerQ: 0.71,
+            voiceEnhancerAmount: 0,
+            voiceEnhancerKeyTrackEnabled: 0,
+            voiceEnhancerKeyTrackOffsetSemitones: 0,
+        },
+    );
     assert.deepEqual(
         Object.fromEntries([
             "oscAVolumeDb", "oscBVolumeDb", "oscCVolumeDb",
@@ -1117,6 +1154,11 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     const source = await createSynthFixture();
     source.patchConnection.emitParameterValue("oscAFramePosition", 0.37);
     source.patchConnection.emitParameterValue("filterMix", 0.28);
+    source.patchConnection.emitParameterValue("voiceEnhancerFrequency", 2_400);
+    source.patchConnection.emitParameterValue("voiceEnhancerQ", 4.2);
+    source.patchConnection.emitParameterValue("voiceEnhancerAmount", 0.63);
+    source.patchConnection.emitParameterValue("voiceEnhancerKeyTrackEnabled", 1);
+    source.patchConnection.emitParameterValue("voiceEnhancerKeyTrackOffsetSemitones", 19.37);
     source.patchConnection.emitParameterValue("globalTune", 12.37);
     source.patchConnection.emitParameterValue("ampAttack", 0.43);
     source.patchConnection.emitParameterValue("ampDecay", 0.67);
@@ -1161,6 +1203,22 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     assert.deepEqual(captured.value.preset.parameters, source.patchConnection.parameterValues);
     assert.equal(captured.value.preset.parameters.globalTune, 12.37);
     assert.deepEqual(
+        Object.fromEntries([
+            "voiceEnhancerFrequency",
+            "voiceEnhancerQ",
+            "voiceEnhancerAmount",
+            "voiceEnhancerKeyTrackEnabled",
+            "voiceEnhancerKeyTrackOffsetSemitones",
+        ].map((endpointID) => [endpointID, captured.value.preset.parameters[endpointID]])),
+        {
+            voiceEnhancerFrequency: 2_400,
+            voiceEnhancerQ: 4.2,
+            voiceEnhancerAmount: 0.63,
+            voiceEnhancerKeyTrackEnabled: 1,
+            voiceEnhancerKeyTrackOffsetSemitones: 19.37,
+        },
+    );
+    assert.deepEqual(
         Object.fromEntries(["ampAttack", "ampDecay", "ampSustain", "ampRelease"]
             .map((endpointID) => [endpointID, captured.value.preset.parameters[endpointID]])),
         { ampAttack: 0.43, ampDecay: 0.67, ampSustain: 0.38, ampRelease: 2.4 },
@@ -1178,6 +1236,22 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     assert.equal(loaded.ok, true, loaded.message);
     assert.deepEqual(target.patchConnection.parameterValues, source.patchConnection.parameterValues);
     assert.equal(target.patchConnection.parameterValues.globalTune, 12.37);
+    assert.deepEqual(
+        Object.fromEntries([
+            "voiceEnhancerFrequency",
+            "voiceEnhancerQ",
+            "voiceEnhancerAmount",
+            "voiceEnhancerKeyTrackEnabled",
+            "voiceEnhancerKeyTrackOffsetSemitones",
+        ].map((endpointID) => [endpointID, target.patchConnection.parameterValues[endpointID]])),
+        {
+            voiceEnhancerFrequency: 2_400,
+            voiceEnhancerQ: 4.2,
+            voiceEnhancerAmount: 0.63,
+            voiceEnhancerKeyTrackEnabled: 1,
+            voiceEnhancerKeyTrackOffsetSemitones: 19.37,
+        },
+    );
     assert.deepEqual(
         Object.fromEntries(["ampAttack", "ampDecay", "ampSustain", "ampRelease"]
             .map((endpointID) => [endpointID, target.patchConnection.parameterValues[endpointID]])),

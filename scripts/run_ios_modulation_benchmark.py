@@ -34,8 +34,8 @@ PROFILE_BASE_DURATIONS_SECONDS = {
     "voice-rack-100": 45.0,
     "mixed-100": 45.0,
     "combined-200": 45.0,
-    "stored-1330-active-100": 45.0,
-    "active-1330": 20.0,
+    "stored-1372-active-100": 45.0,
+    "active-1372": 20.0,
 }
 PROFILE_NAMES = tuple(PROFILE_BASE_DURATIONS_SECONDS)
 EXECUTABLE_PROFILE_NAMES = PROFILE_NAMES
@@ -563,6 +563,14 @@ def assert_shipping_contract(payload: dict[str, object], *, expected_duration_sc
         raise AssertionError(
             f"Benchmark duration scale {payload_duration_scale!r} differs from requested {expected_duration_scale!r}"
         )
+    enhancer_setting = payload.get("voiceEnhancerAmount")
+    if (
+        not isinstance(enhancer_setting, dict)
+        or enhancer_setting.get("identifier") != "voiceEnhancerAmount"
+        or not math.isclose(float(enhancer_setting.get("requestedValue", math.nan)), 0.75, abs_tol=1.0e-6)
+        or not math.isclose(float(enhancer_setting.get("observedValue", math.nan)), 0.75, abs_tol=1.0e-6)
+    ):
+        raise AssertionError("Benchmark did not prove the per-voice Enhancer was active at Amount 0.75")
     phases = payload.get("phases")
     if not isinstance(phases, list):
         raise AssertionError("Benchmark result omitted phases")

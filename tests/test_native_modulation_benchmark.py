@@ -61,6 +61,7 @@ def test_generated_native_patch_isolates_incremental_modulation_matrix_cost(tmp_
         "env1Sustain": 0.0,
         "filterCutoff": 1200.0,
         "filterMode": 1.0,
+        "voiceEnhancerAmount": 0.75,
         "flangerMix": 0.25,
         "globalFilterCutoff": 1200.0,
         "globalFilterDrive": 1.0,
@@ -84,7 +85,7 @@ def test_generated_native_patch_isolates_incremental_modulation_matrix_cost(tmp_
     profiles = {profile["name"]: profile for profile in result["profiles"]}
     assert set(profiles) == {
         "voice-100", "voice-rack-100", "mixed-100", "combined-200",
-        "stored-1330-active-100", "active-1330",
+        "stored-1372-active-100", "active-1372",
     }
 
     for measured in profiles.values():
@@ -114,10 +115,10 @@ def test_generated_native_patch_isolates_incremental_modulation_matrix_cost(tmp_
         "voiceRack": 100,
         "macroRack": 0,
     }
-    assert profiles["active-1330"]["storedRouteCount"] == 1330
-    assert profiles["active-1330"]["compiledCounts"] == {
-        "voice": 560,
-        "macroVoice": 224,
+    assert profiles["active-1372"]["storedRouteCount"] == 1372
+    assert profiles["active-1372"]["compiledCounts"] == {
+        "voice": 590,
+        "macroVoice": 236,
         "voiceRack": 390,
         "macroRack": 156,
     }
@@ -221,5 +222,5 @@ def test_full_1330_route_profile_is_diagnostic_until_the_merged_product_budget_i
     runner = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(runner)
 
-    assert "active-1330" in runner.EXPECTED_PROFILE_NAMES
-    assert "active-1330" not in runner.MATRIX_LOAD_BUDGETS
+    assert "active-1372" in runner.EXPECTED_PROFILE_NAMES
+    assert "active-1372" not in runner.MATRIX_LOAD_BUDGETS

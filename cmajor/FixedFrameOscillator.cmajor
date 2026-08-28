@@ -62,7 +62,7 @@ namespace wt
     let modulationOscillatorTargetCount = 10;
     let modulationVoiceTargetCount = (oscillatorCount * modulationOscillatorTargetCount) + 29;
     // Keep the established 32-wide SIMD block intact and place appended
-    // destinations in a second padded SIMD block. A single 56-wide
+    // destinations in a second padded SIMD block. A single 59-wide
     // vector scalarises in the pinned browser backend and cannot meet the
     // production AudioWorklet deadline.
     let modulationVoiceCoreLaneCount = 32;

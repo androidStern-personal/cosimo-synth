@@ -7,6 +7,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const keyTrackPromise = loadUIModule(repoRoot, "ui/shared/key-track.ts");
+const voiceEnhancerPromise = loadUIModule(repoRoot, "ui/shared/voice-enhancer.ts");
 
 test("Key Track adds continuous semitone offsets before one frequency conversion", async () => {
     const keyTrack = await keyTrackPromise;
@@ -172,6 +173,24 @@ test("Key Track route presentation converts without changing canonical storage",
     assert.equal(keyTrack.keyTrackRouteAmountFromSemitones(6, "octaves"), 0.5);
     assert.equal(keyTrack.keyTrackRouteAmountToSemitones(6, "semitones"), 6);
     assert.equal(keyTrack.keyTrackRouteAmountFromSemitones(6, "semitones"), 6);
+});
+
+test("Voice Enhancer Ratio is the exact continuous 0.5x to 32x view of semitone storage", async () => {
+    const enhancer = await voiceEnhancerPromise;
+
+    assert.equal(enhancer.voiceEnhancerRatioFromSemitones(-12), 0.5);
+    assert.equal(enhancer.voiceEnhancerRatioFromSemitones(0), 1);
+    assert.equal(enhancer.voiceEnhancerRatioFromSemitones(60), 32);
+    assert.equal(enhancer.formatVoiceEnhancerRatio(-12), "0.5×");
+    assert.equal(enhancer.formatVoiceEnhancerRatio(0), "1×");
+    assert.equal(enhancer.formatVoiceEnhancerRatio(60), "32×");
+
+    for (const semitones of [-12, -7.375, 0, 13.125, 60]) {
+        const normalized = enhancer.normalizeVoiceEnhancerRatio(semitones);
+        assert.ok(Math.abs(
+            enhancer.voiceEnhancerRatioSemitonesFromNormalized(normalized) - semitones,
+        ) < 1e-12);
+    }
 });
 
 test("lane records append Key Track fields without moving deployed parameter indexes", async () => {

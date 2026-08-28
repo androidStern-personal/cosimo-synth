@@ -25,8 +25,8 @@ EXPECTED_PROFILE_NAMES = {
     "voice-rack-100",
     "mixed-100",
     "combined-200",
-    "stored-1330-active-100",
-    "active-1330",
+    "stored-1372-active-100",
+    "active-1372",
 }
 EXECUTABLE_PROFILE_NAMES = set(EXPECTED_PROFILE_NAMES)
 EXPECTED_EFFECT_CONFIGURATION = {
@@ -41,6 +41,7 @@ EXPECTED_EFFECT_CONFIGURATION = {
     "oscCWarpAmount": 0.0,
     "filterMode": 1.0,
     "filterCutoff": 1200.0,
+    "voiceEnhancerAmount": 0.75,
     "env1Sustain": 0.0,
     "globalFilterMode": 1.0,
     "globalFilterCutoff": 1200.0,

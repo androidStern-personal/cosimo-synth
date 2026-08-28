@@ -333,7 +333,11 @@ bool testVoiceEnhancerFrequencyClampsAtPointFourFiveSampleRate()
 {
     return wt::resolveVoiceEnhancerFrequencyHz (
         1.0f, 130.0f, 20000.0f, 60.0f, 6.0f, 48000.0f)
-        == 21600.0f;
+        == 21600.0f
+        && wt::clampVoiceEnhancerFrequencyHz (21600.0f, 48000.0f)
+            == 21600.0f
+        && wt::clampVoiceEnhancerFrequencyHz (22000.0f, 48000.0f)
+            == 21600.0f;
 }
 
 ## testProcessor()

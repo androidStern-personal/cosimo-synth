@@ -140,7 +140,7 @@ test("bridge hydration preserves distinct canonical A/B/C cells from the same so
     adapter.dispose();
 });
 
-test("bridge hydration accepts all 1330 canonical cells without identity collisions", async () => {
+test("bridge hydration accepts all 1372 canonical cells without identity collisions", async () => {
     const [adapterModule, modulation, targets, descriptors] = await Promise.all([
         adapterModulePromise,
         modulationModulePromise,
@@ -162,8 +162,8 @@ test("bridge hydration accepts all 1330 canonical cells without identity collisi
             });
         })
     ));
-    assert.equal(routes.length, 1330);
-    assert.equal(new Set(routes.map((route) => route.id)).size, 1330);
+    assert.equal(routes.length, 1372);
+    assert.equal(new Set(routes.map((route) => route.id)).size, 1372);
     const current = { ...modulation.createDefaultModulationState(), routes };
     const connection = new FakePatchConnection({
         [modulation.MODULATION_STATE_KEY]: modulation.serializeModulationState(current),
@@ -172,9 +172,9 @@ test("bridge hydration accepts all 1330 canonical cells without identity collisi
     const mappings = mappingSummary(adapter.getSnapshot());
 
     assert.equal(adapter.getSnapshot().connection._tag, "ready");
-    assert.equal(mappings.length, 1330);
-    assert.equal(new Set(mappings.map((mapping) => mapping.id)).size, 1330);
-    assert.equal(new Set(mappings.map((mapping) => `${mapping.targetId}->${mapping.sourceId}`)).size, 1330);
+    assert.equal(mappings.length, 1372);
+    assert.equal(new Set(mappings.map((mapping) => mapping.id)).size, 1372);
+    assert.equal(new Set(mappings.map((mapping) => `${mapping.targetId}->${mapping.sourceId}`)).size, 1372);
     assert.deepEqual(connection.storedWrites, []);
     adapter.dispose();
 });

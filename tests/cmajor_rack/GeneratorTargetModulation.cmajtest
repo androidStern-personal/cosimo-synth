@@ -3,7 +3,7 @@
 // then MSEG 1 drives filter Q. The observed Q therefore proves the generator
 // target was consumed by DSP rather than merely accepted by the compiler.
 
-## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/VoiceEnhancer.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor")
 
 ## testProcessor (undefined, { frequency: 600 })
 

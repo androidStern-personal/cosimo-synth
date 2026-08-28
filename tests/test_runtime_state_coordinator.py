@@ -11,6 +11,8 @@ from bench import _collect_cmajor_output_events_via_generated_javascript
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MSEG_SOURCE = REPO_ROOT / "cmajor" / "Mseg.cmajor"
+KEY_TRACK_SOURCE = REPO_ROOT / "cmajor" / "KeyTrack.cmajor"
+VOICE_ENHANCER_SOURCE = REPO_ROOT / "cmajor" / "VoiceEnhancer.cmajor"
 FIXED_FRAME_OSCILLATOR_SOURCE = REPO_ROOT / "cmajor" / "FixedFrameOscillator.cmajor"
 WAVETABLE_SYNTH_SOURCE = REPO_ROOT / "cmajor" / "WavetableSynth.cmajor"
 DEFAULT_SAMPLE_RATE = 44100
@@ -34,7 +36,11 @@ def _build_runtime_state_coordinator_probe_source() -> str:
     )
 
     return (
-        MSEG_SOURCE.read_text(encoding="utf-8")
+        KEY_TRACK_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + MSEG_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + VOICE_ENHANCER_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + FIXED_FRAME_OSCILLATOR_SOURCE.read_text(encoding="utf-8")
         + "\n"

@@ -1060,10 +1060,10 @@ private:
             case BenchmarkParameterKind::resultFieldRequest:        return 0.0f;
             case BenchmarkParameterKind::resultFieldResponse:       return benchmarkResultFieldResponse.load();
             case BenchmarkParameterKind::acceptedModulationProgramSerial: return normaliseBenchmarkValue (benchmarkInstalledProgramSerial.load(), 100000.0);
-            case BenchmarkParameterKind::installedVoiceRouteCount:       return normaliseBenchmarkValue (benchmarkInstalledVoiceRouteCount.load(), 450.0);
-            case BenchmarkParameterKind::installedMacroVoiceRouteCount:  return normaliseBenchmarkValue (benchmarkInstalledMacroVoiceRouteCount.load(), 200.0);
-            case BenchmarkParameterKind::installedVoiceRackRouteCount:   return normaliseBenchmarkValue (benchmarkInstalledVoiceRackRouteCount.load(), 324.0);
-            case BenchmarkParameterKind::installedMacroRackRouteCount:   return normaliseBenchmarkValue (benchmarkInstalledMacroRackRouteCount.load(), 144.0);
+            case BenchmarkParameterKind::installedVoiceRouteCount:       return normaliseBenchmarkValue (benchmarkInstalledVoiceRouteCount.load(), 590.0);
+            case BenchmarkParameterKind::installedMacroVoiceRouteCount:  return normaliseBenchmarkValue (benchmarkInstalledMacroVoiceRouteCount.load(), 236.0);
+            case BenchmarkParameterKind::installedVoiceRackRouteCount:   return normaliseBenchmarkValue (benchmarkInstalledVoiceRackRouteCount.load(), 390.0);
+            case BenchmarkParameterKind::installedMacroRackRouteCount:   return normaliseBenchmarkValue (benchmarkInstalledMacroRackRouteCount.load(), 156.0);
             case BenchmarkParameterKind::renderBlockCount:          return normaliseBenchmarkValue (benchmarkResultRenderBlockCount.load(), 100000.0);
             case BenchmarkParameterKind::capturedRenderSampleCount: return normaliseBenchmarkValue (benchmarkResultSampleCount.load(), 100000.0);
             case BenchmarkParameterKind::dspSampleRate:             return normaliseBenchmarkValue (benchmarkResultDspSampleRate.load(), 192000.0);

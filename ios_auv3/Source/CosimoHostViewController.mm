@@ -475,41 +475,51 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
                 return;
             payload[@"neutralEnvelope"] = neutralEnvelopeResult ?: @{};
 
-            [self.harness openEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable editorResult, NSError * _Nullable editorError)
+            [self.harness setParameterWithIdentifier:@"voiceEnhancerAmount"
+                                               value:0.75f
+                                          completion:^(NSDictionary<NSString *,id> * _Nullable voiceEnhancerResult,
+                                                       NSError * _Nullable voiceEnhancerError)
             {
-                if ([self handleAutomationError:editorError outputName:outputName])
+                if ([self handleAutomationError:voiceEnhancerError outputName:outputName])
                     return;
-                payload[@"editor"] = editorResult;
-                [self presentEditorOverlay:YES];
-                [self.harness installModulationProfileIndex:0 completion:^(NSDictionary<NSString *,id> * _Nullable warmupAck,
-                                                                           NSError * _Nullable warmupInstallError)
+                payload[@"voiceEnhancerAmount"] = voiceEnhancerResult ?: @{};
+
+                [self.harness openEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable editorResult, NSError * _Nullable editorError)
                 {
-                    if ([self handleAutomationError:warmupInstallError outputName:outputName])
+                    if ([self handleAutomationError:editorError outputName:outputName])
                         return;
-                    payload[@"runtimeReady"] = warmupAck ?: @{};
-                    [self completeAutomationWithPayload:payload outputName:outputName];
-                    [self.harness measureModulationPhaseNamed:@"warmup"
-                                              durationSeconds:2.0
-                                                   completion:^(NSDictionary<NSString *,id> * _Nullable warmupMetrics,
-                                                                NSError * _Nullable warmupError)
+                    payload[@"editor"] = editorResult;
+                    [self presentEditorOverlay:YES];
+                    [self.harness installModulationProfileIndex:0 completion:^(NSDictionary<NSString *,id> * _Nullable warmupAck,
+                                                                               NSError * _Nullable warmupInstallError)
                     {
-                        if ([self handleAutomationError:warmupError outputName:outputName])
+                        if ([self handleAutomationError:warmupInstallError outputName:outputName])
                             return;
-                        if ([warmupMetrics[@"rms"] doubleValue] <= 1.0e-5)
+                        payload[@"runtimeReady"] = warmupAck ?: @{};
+                        [self completeAutomationWithPayload:payload outputName:outputName];
+                        [self.harness measureModulationPhaseNamed:@"warmup"
+                                                  durationSeconds:2.0
+                                                       completion:^(NSDictionary<NSString *,id> * _Nullable warmupMetrics,
+                                                                    NSError * _Nullable warmupError)
                         {
-                            [self completeAutomationWithPayload:@{ @"error": @"The physical AUv3 emitted silence during benchmark warmup." }
-                                                      outputName:outputName];
-                            return;
-                        }
-                        payload[@"warmup"] = @{
-                            @"installAck": warmupAck ?: @{},
-                            @"metrics": warmupMetrics ?: @{},
-                        };
-                        [self runModulationBenchmarkProfiles:profiles
-                                                        index:0
-                                                durationScale:durationScale
-                                                      payload:payload
-                                                   outputName:outputName];
+                            if ([self handleAutomationError:warmupError outputName:outputName])
+                                return;
+                            if ([warmupMetrics[@"rms"] doubleValue] <= 1.0e-5)
+                            {
+                                [self completeAutomationWithPayload:@{ @"error": @"The physical AUv3 emitted silence during benchmark warmup." }
+                                                          outputName:outputName];
+                                return;
+                            }
+                            payload[@"warmup"] = @{
+                                @"installAck": warmupAck ?: @{},
+                                @"metrics": warmupMetrics ?: @{},
+                            };
+                            [self runModulationBenchmarkProfiles:profiles
+                                                            index:0
+                                                    durationScale:durationScale
+                                                          payload:payload
+                                                       outputName:outputName];
+                        }];
                     }];
                 }];
             }];
@@ -583,8 +593,8 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
         @"voice-rack-100": @45.0,
         @"mixed-100": @45.0,
         @"combined-200": @45.0,
-        @"stored-1330-active-100": @45.0,
-        @"active-1330": @20.0,
+        @"stored-1372-active-100": @45.0,
+        @"active-1372": @20.0,
     };
     NSNumber *baseDuration = baseDurations[profileName];
     if (profileName.length == 0 || stateJSON.length == 0 || profileIndex == nil || baseDuration == nil

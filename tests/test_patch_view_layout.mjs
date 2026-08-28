@@ -538,6 +538,32 @@ test("whole Effects Lane Mix and Bypass are struct state, never DAW automation s
     assert.doesNotMatch(rackSource, /laneOutputControl[^;]*\[\[[^\]]*purpose:\s*parameter/s);
 });
 
+test("the Voice Enhancer reuses the Filter footprint with explicit stages and the locked three-value graph", async () => {
+    const [viewSource, graphSource, buildSource] = await Promise.all([
+        fs.readFile(path.join(repoRoot, "ui", "desktop", "DesktopPatchView.tsx"), "utf8"),
+        fs.readFile(path.join(repoRoot, "ui", "shared", "voice-enhancer-graph.tsx"), "utf8"),
+        fs.readFile(path.join(repoRoot, "ui", "build.mjs"), "utf8"),
+    ]);
+
+    assert.match(viewSource, /data-role="voice-filter-enhancer-footprint"/);
+    assert.match(viewSource, /data-role="voice-tone-stage-selector"/);
+    assert.match(viewSource, /\(\["filter", "enhancer"\] as const\)/);
+    assert.doesNotMatch(viewSource, /onSwipe.*(?:filter|enhancer)|(?:filter|enhancer).*onSwipe/i);
+    assert.match(viewSource, /data-role="voice-enhancer-knob-row"/);
+    assert.match(viewSource, /VOICE_ENHANCER_FREQUENCY_TARGET_KIND/);
+    assert.match(viewSource, /VOICE_ENHANCER_Q_TARGET_KIND/);
+    assert.match(viewSource, /VOICE_ENHANCER_AMOUNT_TARGET_KIND/);
+    assert.match(viewSource, /data-role="key-track-voiceEnhancerFrequency-graph"/);
+    assert.match(graphSource, /Horizontal travel owns Frequency or/);
+    assert.match(graphSource, /onFrequencyNormalizedChange/);
+    assert.match(graphSource, /onAmountChange/);
+    assert.match(graphSource, /LINKED M\/S/);
+    assert.match(
+        buildSource,
+        /emitGeneratedPatchGuiModule\("ui\/shared\/voice-enhancer\.ts", "patch_gui\/voice-enhancer\.js"\)/,
+    );
+});
+
 test("legacy synth presets resolve an omitted Filter Mix to fully wet through an exact-contract migration", async () => {
     const [{ buildCanonicalPluginStateContract }, { applyEffectPresetV2 }] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts"),

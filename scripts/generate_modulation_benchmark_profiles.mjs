@@ -147,8 +147,8 @@ function buildNeutralRouteGroups() {
         groupsByPath.set(name, targetGroups);
     }
 
-    if (allRoutes.length !== 1330) {
-        throw new Error(`Expected the complete 1330-cell domain, received ${allRoutes.length}`);
+    if (allRoutes.length !== 1372) {
+        throw new Error(`Expected the complete 1372-cell domain, received ${allRoutes.length}`);
     }
     return { allRoutes, groupsByPath };
 }
@@ -269,14 +269,14 @@ export function buildModulationBenchmarkProfiles() {
         createProfile("voice-rack-100", voiceRackHundred),
         createProfile("mixed-100", mixedHundred),
         createProfile("combined-200", [...voiceHundred, ...voiceRackHundred]),
-        createProfile("stored-1330-active-100", allRoutes.map((route) => ({
+        createProfile("stored-1372-active-100", allRoutes.map((route) => ({
             ...route,
             enabled: mixedActiveIDs.has(route.id),
         }))),
-        createProfile("active-1330", allRoutes),
+        createProfile("active-1372", allRoutes),
     ];
     const mixed = profiles.find((profile) => profile.name === "mixed-100");
-    const stored = profiles.find((profile) => profile.name === "stored-1330-active-100");
+    const stored = profiles.find((profile) => profile.name === "stored-1372-active-100");
     if (mixed.executionFingerprint !== stored.executionFingerprint) {
         throw new Error("Disabled stored routes changed the compiled real-time execution program");
     }

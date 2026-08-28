@@ -17,6 +17,7 @@ from bench import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MSEG_SOURCE = REPO_ROOT / "cmajor" / "Mseg.cmajor"
 KEY_TRACK_SOURCE = REPO_ROOT / "cmajor" / "KeyTrack.cmajor"
+VOICE_ENHANCER_SOURCE = REPO_ROOT / "cmajor" / "VoiceEnhancer.cmajor"
 FIXED_FRAME_SOURCE = REPO_ROOT / "cmajor" / "FixedFrameOscillator.cmajor"
 NOOP_RENDERER_SOURCE = REPO_ROOT / "tests" / "cmajor_rack" / "NoopThreeOscillatorRenderer.cmajor"
 VOICE_REDUCER_SOURCE = REPO_ROOT / "cmajor" / "VoiceReducer.cmajor"
@@ -124,6 +125,8 @@ def _build_tracking_pitch_probe_source(
         + "\n"
         + NOOP_RENDERER_SOURCE.read_text(encoding="utf-8")
         + "\n"
+        + VOICE_ENHANCER_SOURCE.read_text(encoding="utf-8")
+        + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + VOICE_REDUCER_SOURCE.read_text(encoding="utf-8")
@@ -213,6 +216,8 @@ def _build_chorus_tracking_probe_source(scheduled_events: list[tuple[int, str]])
         + MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + NOOP_RENDERER_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + VOICE_ENHANCER_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
         + "\n"

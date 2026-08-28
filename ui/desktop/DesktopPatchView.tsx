@@ -136,6 +136,24 @@ import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
 import type { RackParameterDescriptor } from "../shared/rack-parameter-descriptors";
 import { findRackModulationSource } from "../shared/rack-modulation-sources";
 import { VOICE_FILTER_KNOB_DESCRIPTORS } from "../shared/voice-filter-descriptors";
+import { VoiceEnhancerGraph } from "../shared/voice-enhancer-graph";
+import {
+    VOICE_ENHANCER_AMOUNT_TARGET_KIND,
+    VOICE_ENHANCER_FREQUENCY_TARGET_KIND,
+    VOICE_ENHANCER_KEY_TRACK_CONTROL_ID,
+    VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID,
+    VOICE_ENHANCER_PARAMETER_DESCRIPTORS,
+    VOICE_ENHANCER_Q_TARGET_KIND,
+    VOICE_ENHANCER_RATIO_MAX_SEMITONES,
+    VOICE_ENHANCER_RATIO_MIN_SEMITONES,
+    denormalizeVoiceEnhancerValue,
+    formatVoiceEnhancerRatio,
+    normalizeVoiceEnhancerRatio,
+    normalizeVoiceEnhancerValue,
+    voiceEnhancerRatioFromSemitones,
+    voiceEnhancerRatioSemitonesFromNormalized,
+    type VoiceEnhancerParameterDescriptor,
+} from "../shared/voice-enhancer";
 import { presentRouteWithCanonicalAmount, useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import {
     MOBILE_VOICE_OWNER_ACCENT,
@@ -328,6 +346,36 @@ const FILTER_RESONANCE_ENTRY_SPEC = parameterEntrySpecForScalar({
     unit: "Q",
     digits: 2,
 });
+const VOICE_ENHANCER_KEY_TRACK_DEFINITION = getKeyTrackDefinition(
+    VOICE_ENHANCER_KEY_TRACK_CONTROL_ID,
+);
+if (VOICE_ENHANCER_KEY_TRACK_DEFINITION === null) {
+    throw new Error("Voice Enhancer Frequency is missing its Key Track definition.");
+}
+const VOICE_ENHANCER_KEY_TRACK_RANGE = requireKeyTrackRange(
+    VOICE_ENHANCER_KEY_TRACK_DEFINITION.family,
+);
+const VOICE_ENHANCER_RATIO_ENTRY_SPEC = parameterEntrySpecForScalar({
+    min: 0.5,
+    max: 32,
+    step: 0.001,
+    unit: "x",
+    digits: 3,
+});
+const VOICE_ENHANCER_KEY_TRACK_ROUTE_ENTRY_SPEC = parameterEntrySpecForKeyTrackModulationAmount(
+    VOICE_ENHANCER_KEY_TRACK_DEFINITION.family,
+    "octaves",
+);
+const VOICE_ENHANCER_RATIO_KNOB_DESCRIPTOR: ParameterKnobDescriptor = Object.freeze({
+    endpointID: VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID,
+    label: "Ratio",
+    shortLabel: "Ratio",
+    min: VOICE_ENHANCER_RATIO_MIN_SEMITONES,
+    max: VOICE_ENHANCER_RATIO_MAX_SEMITONES,
+    initial: 0,
+    step: VOICE_ENHANCER_KEY_TRACK_RANGE.step,
+    scale: "linear",
+});
 const PAN_ENTRY_SPEC = parameterEntrySpecForMobileVoiceControl("pan");
 const GLOBAL_TUNE_ENTRY_SPEC = parameterEntrySpecForScalar({
     min: GLOBAL_TUNE_MIN_SEMITONES,
@@ -488,6 +536,14 @@ type FilterSectionProps = {
     filterMix?: PatchControlBinding<number>;
     routes?: ModulationRoute[];
     armedSource?: MobileModSource;
+};
+
+type VoiceToneSectionProps = FilterSectionProps & {
+    voiceEnhancerFrequency: PatchControlBinding<number>;
+    voiceEnhancerQ: PatchControlBinding<number>;
+    voiceEnhancerAmount: PatchControlBinding<number>;
+    voiceEnhancerKeyTrackEnabled: PatchControlBinding<number>;
+    voiceEnhancerKeyTrackOffsetSemitones: PatchControlBinding<number>;
 };
 
 type MsegEditorModalProps = {
@@ -2280,6 +2336,344 @@ function GlobalTuneKnob({
                     });
                 }}
             />
+        </div>
+    );
+}
+
+function voiceEnhancerEntrySpec(
+    descriptor: VoiceEnhancerParameterDescriptor,
+): ParameterEntrySpec {
+    if (descriptor.unit === "Hz") {
+        return parameterEntrySpecForFrequency({
+            minHz: descriptor.min,
+            maxHz: descriptor.max,
+            stepHz: descriptor.step,
+            allowLogPercent: true,
+        });
+    }
+    return parameterEntrySpecForScalar({
+        min: descriptor.min,
+        max: descriptor.max,
+        step: descriptor.step,
+        unit: descriptor.unit,
+        canonicalPerDisplayedUnit: descriptor.unit === "%" ? 0.01 : 1,
+        digits: descriptor.unit === "Q" ? 2 : 3,
+    });
+}
+
+function VoiceEnhancerKnob({
+    descriptor,
+    binding,
+    targetKind,
+    routes,
+    armedSource,
+    formatValue,
+    modulationApplication,
+    entrySpec,
+    keyTrackEnabled = false,
+}: {
+    descriptor: ParameterKnobDescriptor;
+    binding: PatchControlBinding<number>;
+    targetKind:
+        | typeof VOICE_ENHANCER_FREQUENCY_TARGET_KIND
+        | typeof VOICE_ENHANCER_Q_TARGET_KIND
+        | typeof VOICE_ENHANCER_AMOUNT_TARGET_KIND;
+    routes: ModulationRoute[];
+    armedSource: MobileModSource;
+    formatValue: (value: number) => string;
+    modulationApplication: "linear" | "octaves";
+    entrySpec: ParameterEntrySpec;
+    keyTrackEnabled?: boolean;
+}) {
+    const armedRoute = routes.find((route) => (
+        route.targetKind === targetKind
+        && route.sourceKind === armedSource.sourceKind
+        && route.sourceSlot === armedSource.sourceSlot
+    )) ?? null;
+    const amountBinding = useModulationRouteAmountBinding(armedRoute);
+    const canonicalPresentedRoute = presentRouteWithCanonicalAmount(armedRoute, amountBinding);
+    const presentedRoute = keyTrackEnabled && canonicalPresentedRoute !== null
+        ? {
+            ...canonicalPresentedRoute,
+            amount: keyTrackRouteAmountToSemitones(canonicalPresentedRoute.amount, "octaves"),
+          }
+        : canonicalPresentedRoute;
+    const sourceDescriptor = findRackModulationSource(armedSource.sourceKind, armedSource.sourceSlot);
+    const targetRouteCount = routes.filter((route) => route.targetKind === targetKind).length;
+    const anyTargetRouteEnabled = routes.some((route) => (
+        route.targetKind === targetKind && route.enabled
+    ));
+    const openParameterMenu = useParameterMenu();
+
+    return (
+        <div
+            className="mobile-filter-knob-cell"
+            data-modulation-target-kind={targetKind}
+        >
+            {targetRouteCount > 0 ? (
+                <span
+                    className={`rack-route-count-badge ${anyTargetRouteEnabled ? "is-solid" : "is-hollow"}`}
+                    data-role={`voice-enhancer-route-count-${targetKind}`}
+                    aria-label={`${targetRouteCount} modulation ${targetRouteCount === 1 ? "route" : "routes"} target ${descriptor.label}`}
+                >
+                    {targetRouteCount}
+                </span>
+            ) : null}
+            <ModulatedParameterKnob
+                descriptor={descriptor}
+                binding={binding}
+                modulationApplication={keyTrackEnabled ? "linear" : modulationApplication}
+                modulationTargetKind={targetKind}
+                formatValue={formatValue}
+                ownerAccent="#a78bfa"
+                modulationDragStyle={targetKind === VOICE_ENHANCER_Q_TARGET_KIND
+                    ? "effective-value"
+                    : "amount-span"}
+                modulationAmountBounds={keyTrackEnabled
+                    ? {
+                        min: VOICE_ENHANCER_KEY_TRACK_RANGE.routeMin,
+                        max: VOICE_ENHANCER_KEY_TRACK_RANGE.routeMax,
+                      }
+                    : undefined}
+                formatModulationAmount={keyTrackEnabled
+                    ? (value) => `${Number(value.toFixed(2))} st`
+                    : undefined}
+                route={presentedRoute}
+                sourceIsSelected
+                sourceAccent={sourceDescriptor.accent}
+                effectiveness="active"
+                dataRole={`voice-enhancer-knob-${descriptor.endpointID}`}
+                trackDataRole={`voice-enhancer-knob-track-${descriptor.endpointID}`}
+                handleDataRole={`voice-enhancer-knob-handle-${descriptor.endpointID}`}
+                onSelect={() => {}}
+                onModulationAmountChange={(value) => amountBinding.setValue(
+                    keyTrackEnabled
+                        ? keyTrackRouteAmountFromSemitones(value, "octaves")
+                        : value,
+                )}
+                onRequestContextMenu={(clientX, clientY) => {
+                    const ratioValue = keyTrackEnabled
+                        ? voiceEnhancerRatioFromSemitones(binding.value)
+                        : binding.value;
+                    openParameterMenu?.({
+                        controlKey: binding.endpointID,
+                        label: descriptor.label,
+                        targetKind,
+                        baseSpec: entrySpec,
+                        amountSpec: keyTrackEnabled
+                            ? VOICE_ENHANCER_KEY_TRACK_ROUTE_ENTRY_SPEC
+                            : parameterEntrySpecForModulationAmount(targetKind, binding.value),
+                        baseFieldLabel: descriptor.label,
+                        routeDestinationLabel: descriptor.label,
+                        baseValue: ratioValue,
+                        defaultValue: keyTrackEnabled ? 1 : descriptor.initial,
+                        commitBase: keyTrackEnabled
+                            ? (ratio) => binding.commitValue(12 * Math.log2(ratio))
+                            : binding.commitValue,
+                        clientX,
+                        clientY,
+                    });
+                }}
+            />
+        </div>
+    );
+}
+
+function VoiceEnhancerSection({
+    frequency,
+    q,
+    amount,
+    keyTrackEnabledBinding,
+    keyTrackOffsetSemitones,
+    routes,
+    armedSource,
+    compact,
+}: {
+    frequency: PatchControlBinding<number>;
+    q: PatchControlBinding<number>;
+    amount: PatchControlBinding<number>;
+    keyTrackEnabledBinding: PatchControlBinding<number>;
+    keyTrackOffsetSemitones: PatchControlBinding<number>;
+    routes: ModulationRoute[];
+    armedSource: MobileModSource;
+    compact: boolean;
+}) {
+    const keyTrackEnabled = keyTrackEnabledBinding.value >= 0.5;
+    const displayedFrequency = keyTrackEnabled ? keyTrackOffsetSemitones : frequency;
+    const displayedFrequencyDescriptor = keyTrackEnabled
+        ? VOICE_ENHANCER_RATIO_KNOB_DESCRIPTOR
+        : VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency;
+    const frequencyNormalized = keyTrackEnabled
+        ? normalizeVoiceEnhancerRatio(keyTrackOffsetSemitones.value)
+        : normalizeVoiceEnhancerValue(
+            VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency,
+            frequency.value,
+        );
+    const ready = displayedFrequency.isReady && q.isReady && amount.isReady;
+    const toggleKeyTrack = useCallback(() => {
+        if (keyTrackEnabled) {
+            keyTrackEnabledBinding.commitValue(0);
+            return;
+        }
+        keyTrackEnabledBinding.beginGesture();
+        try {
+            keyTrackOffsetSemitones.setValue(0);
+            keyTrackEnabledBinding.setValue(1);
+        } finally {
+            keyTrackEnabledBinding.endGesture();
+        }
+    }, [keyTrackEnabled, keyTrackEnabledBinding, keyTrackOffsetSemitones]);
+
+    return (
+        <section
+            data-role="voice-enhancer-card"
+            data-section-accent="violet"
+            className={compact
+                ? "mobile-filter-card h-full"
+                : `${SYNTH_GRID_CARD_SHELL_CLASS} flex h-full w-full min-h-0 flex-col overflow-hidden border`}
+        >
+            {compact ? null : <div className={SYNTH_GRID_CARD_INSET_SHADOW_CLASS} />}
+            <div
+                className="relative min-h-0 flex-1"
+                data-role="voice-enhancer-graph-drop-surface"
+                data-modulation-target-kind={VOICE_ENHANCER_FREQUENCY_TARGET_KIND}
+            >
+                <div
+                    className={`absolute inset-0 p-1.5 ${ready ? "" : "pointer-events-none opacity-45"}`}
+                    data-host-state={ready ? "ready" : "loading"}
+                    aria-busy={!ready}
+                >
+                    <VoiceEnhancerGraph
+                        frequencyNormalized={frequencyNormalized}
+                        q={q.value}
+                        amount={amount.value}
+                        disabled={!ready}
+                        onGestureStart={() => {
+                            displayedFrequency.beginGesture();
+                            amount.beginGesture();
+                        }}
+                        onGestureEnd={() => {
+                            displayedFrequency.endGesture();
+                            amount.endGesture();
+                        }}
+                        onFrequencyNormalizedChange={(value) => displayedFrequency.setValue(
+                            keyTrackEnabled
+                                ? voiceEnhancerRatioSemitonesFromNormalized(value)
+                                : denormalizeVoiceEnhancerValue(
+                                    VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency,
+                                    value,
+                                ),
+                        )}
+                        onAmountChange={(value) => amount.setValue(value)}
+                        className="h-full w-full touch-none"
+                    />
+                </div>
+                <button
+                    type="button"
+                    data-role="key-track-voiceEnhancerFrequency-graph"
+                    aria-pressed={keyTrackEnabled}
+                    className="key-track-button absolute right-2 top-2 z-20"
+                    onClick={toggleKeyTrack}
+                >Key Track</button>
+            </div>
+            <div
+                data-role="voice-enhancer-knob-row"
+                className="mobile-filter-knob-row grid shrink-0 grid-cols-3 gap-1 border-t border-white/[0.07] p-1"
+            >
+                <VoiceEnhancerKnob
+                    descriptor={displayedFrequencyDescriptor}
+                    binding={displayedFrequency}
+                    targetKind={VOICE_ENHANCER_FREQUENCY_TARGET_KIND}
+                    routes={routes}
+                    armedSource={armedSource}
+                    formatValue={keyTrackEnabled ? formatVoiceEnhancerRatio : formatCutoffDisplay}
+                    modulationApplication="octaves"
+                    entrySpec={keyTrackEnabled
+                        ? VOICE_ENHANCER_RATIO_ENTRY_SPEC
+                        : voiceEnhancerEntrySpec(VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency)}
+                />
+                <VoiceEnhancerKnob
+                    descriptor={VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q}
+                    binding={q}
+                    targetKind={VOICE_ENHANCER_Q_TARGET_KIND}
+                    routes={routes}
+                    armedSource={armedSource}
+                    formatValue={formatResonanceDisplay}
+                    modulationApplication="linear"
+                    entrySpec={voiceEnhancerEntrySpec(VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q)}
+                />
+                <VoiceEnhancerKnob
+                    descriptor={VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount}
+                    binding={amount}
+                    targetKind={VOICE_ENHANCER_AMOUNT_TARGET_KIND}
+                    routes={routes}
+                    armedSource={armedSource}
+                    formatValue={(value) => `${Math.round(value * 100)}%`}
+                    modulationApplication="linear"
+                    entrySpec={voiceEnhancerEntrySpec(VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount)}
+                />
+            </div>
+        </section>
+    );
+}
+
+function VoiceToneSection(props: VoiceToneSectionProps) {
+    const [stage, setStage] = useState<"filter" | "enhancer">("filter");
+    const {
+        className,
+        compact = false,
+        voiceEnhancerFrequency,
+        voiceEnhancerQ,
+        voiceEnhancerAmount,
+        voiceEnhancerKeyTrackEnabled,
+        voiceEnhancerKeyTrackOffsetSemitones,
+        ...filterProps
+    } = props;
+    if (!filterProps.routes || !filterProps.armedSource) {
+        throw new Error("VoiceToneSection requires routes and an armed source.");
+    }
+
+    return (
+        <div
+            data-role="voice-filter-enhancer-footprint"
+            data-selected-stage={stage}
+            className={`relative min-h-0 ${className ?? ""}`}
+        >
+            {stage === "filter" ? (
+                <FilterSection
+                    {...filterProps}
+                    compact={compact}
+                    className="h-full"
+                />
+            ) : (
+                <VoiceEnhancerSection
+                    frequency={voiceEnhancerFrequency}
+                    q={voiceEnhancerQ}
+                    amount={voiceEnhancerAmount}
+                    keyTrackEnabledBinding={voiceEnhancerKeyTrackEnabled}
+                    keyTrackOffsetSemitones={voiceEnhancerKeyTrackOffsetSemitones}
+                    routes={filterProps.routes}
+                    armedSource={filterProps.armedSource}
+                    compact={compact}
+                />
+            )}
+            <div
+                data-role="voice-tone-stage-selector"
+                className="absolute left-1/2 top-1.5 z-30 flex -translate-x-1/2 overflow-hidden rounded-full border border-white/[0.09] bg-[#080d10]/90 p-0.5 shadow-lg backdrop-blur"
+            >
+                {(["filter", "enhancer"] as const).map((candidate) => (
+                    <button
+                        key={candidate}
+                        type="button"
+                        data-role={`voice-tone-stage-${candidate}`}
+                        aria-pressed={stage === candidate}
+                        className={`rounded-full px-2 py-0.5 text-[9px] font-semibold tracking-[0.16em] transition ${stage === candidate
+                            ? "bg-violet-400/20 text-violet-100"
+                            : "text-white/45 hover:text-white/75"}`}
+                        onClick={() => setStage(candidate)}
+                    >{candidate.toUpperCase()}</button>
+                ))}
+            </div>
         </div>
     );
 }
@@ -5420,12 +5814,17 @@ function DesktopPatchViewBody({
             />
             )}
 
-            <FilterSection
+            <VoiceToneSection
                 filterMode={synthView.filterMode}
                 filterCutoff={synthView.filterCutoff}
                 filterCutoffKeyTrackEnabled={synthView.filterCutoffKeyTrackEnabled}
                 filterCutoffKeyTrackOffsetSemitones={synthView.filterCutoffKeyTrackOffsetSemitones}
                 filterQ={synthView.filterQ}
+                voiceEnhancerFrequency={synthView.voiceEnhancerFrequency}
+                voiceEnhancerQ={synthView.voiceEnhancerQ}
+                voiceEnhancerAmount={synthView.voiceEnhancerAmount}
+                voiceEnhancerKeyTrackEnabled={synthView.voiceEnhancerKeyTrackEnabled}
+                voiceEnhancerKeyTrackOffsetSemitones={synthView.voiceEnhancerKeyTrackOffsetSemitones}
                 observedFilterState={synthView.observedFilterState}
                 observedFilterSpectrum={synthView.observedFilterSpectrum}
                 resonanceNormalizedFromQ={resonanceNormalizedFromQ}

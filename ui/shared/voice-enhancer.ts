@@ -16,6 +16,8 @@ export const VOICE_ENHANCER_FREQUENCY_TARGET_KIND = "voiceEnhancerFrequencyOctav
 export const VOICE_ENHANCER_Q_TARGET_KIND = "voiceEnhancerQ";
 export const VOICE_ENHANCER_AMOUNT_TARGET_KIND = "voiceEnhancerAmount";
 export const VOICE_ENHANCER_KEY_TRACK_CONTROL_ID = "voice.enhancerFrequency";
+export const VOICE_ENHANCER_RATIO_MIN_SEMITONES = -12;
+export const VOICE_ENHANCER_RATIO_MAX_SEMITONES = 60;
 
 export type VoiceEnhancerParameterKey = "frequency" | "q" | "amount";
 
@@ -87,6 +89,37 @@ Record<VoiceEnhancerParameterKey, VoiceEnhancerParameterDescriptor>
     }),
 });
 
+/** Convert the stored semitone offset to the product's visible Ratio value. */
+export function voiceEnhancerRatioFromSemitones(semitones: number): number {
+    return 2 ** (semitones / 12);
+}
+
+/** Format the continuous 0.5x..32x Key Track value without hiding precision. */
+export function formatVoiceEnhancerRatio(semitones: number): string {
+    const ratio = voiceEnhancerRatioFromSemitones(semitones);
+    const digits = ratio < 10 ? 2 : 1;
+    return `${Number(ratio.toFixed(digits))}×`;
+}
+
+/** Project the locked Ratio span onto the graph's horizontal axis. */
+export function normalizeVoiceEnhancerRatio(semitones: number): number {
+    const clamped = Math.min(
+        VOICE_ENHANCER_RATIO_MAX_SEMITONES,
+        Math.max(VOICE_ENHANCER_RATIO_MIN_SEMITONES, semitones),
+    );
+    return (clamped - VOICE_ENHANCER_RATIO_MIN_SEMITONES)
+        / (VOICE_ENHANCER_RATIO_MAX_SEMITONES - VOICE_ENHANCER_RATIO_MIN_SEMITONES);
+}
+
+/** Invert the graph axis back to the endpoint's continuous semitone storage. */
+export function voiceEnhancerRatioSemitonesFromNormalized(normalized: number): number {
+    const clamped = Math.min(1, Math.max(0, normalized));
+    return VOICE_ENHANCER_RATIO_MIN_SEMITONES
+        + (clamped * (VOICE_ENHANCER_RATIO_MAX_SEMITONES
+            - VOICE_ENHANCER_RATIO_MIN_SEMITONES));
+}
+
+/** Project one parameter's engine value onto its authored display scale. */
 export function normalizeVoiceEnhancerValue(
     descriptor: VoiceEnhancerParameterDescriptor,
     value: number,
@@ -97,6 +130,7 @@ export function normalizeVoiceEnhancerValue(
         : (clamped - descriptor.min) / (descriptor.max - descriptor.min);
 }
 
+/** Invert one parameter's authored display scale to its engine value. */
 export function denormalizeVoiceEnhancerValue(
     descriptor: VoiceEnhancerParameterDescriptor,
     normalizedValue: number,

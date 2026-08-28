@@ -1692,6 +1692,121 @@ test("compact Voice splits its height 50/50 between the wavetable editor and the
     }
 });
 
+test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and Ratio state independent", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const footprint = page.locator('[data-role="voice-filter-enhancer-footprint"]');
+        const filterCard = page.locator('[data-role="filter-card"]');
+        const footprintBefore = await footprint.boundingBox();
+        const filterBefore = await filterCard.boundingBox();
+        assert.ok(footprintBefore);
+        assert.ok(filterBefore);
+        assert.equal(await footprint.getAttribute("data-selected-stage"), "filter");
+        assert.equal(await page.locator('[data-role="voice-tone-stage-filter"]').getAttribute("aria-pressed"), "true");
+        assert.equal(await page.locator('[data-role="voice-tone-stage-enhancer"]').getAttribute("aria-pressed"), "false");
+
+        await page.locator('[data-role="voice-tone-stage-enhancer"]').click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="voice-filter-enhancer-footprint"]')
+                ?.getAttribute("data-selected-stage") === "enhancer"
+        ));
+
+        const enhancerCard = page.locator('[data-role="voice-enhancer-card"]');
+        const footprintAfter = await footprint.boundingBox();
+        const enhancerAfter = await enhancerCard.boundingBox();
+        assert.ok(footprintAfter);
+        assert.ok(enhancerAfter);
+        assert.ok(Math.abs(footprintAfter.width - footprintBefore.width) <= 1);
+        assert.ok(Math.abs(footprintAfter.height - footprintBefore.height) <= 1);
+        assert.ok(Math.abs(enhancerAfter.width - filterBefore.width) <= 1);
+        assert.ok(Math.abs(enhancerAfter.height - filterBefore.height) <= 1);
+        assert.deepEqual(
+            await page.locator('[data-role="voice-enhancer-knob-row"] .mobile-filter-knob-cell')
+                .evaluateAll((cells) => cells.map((cell) => cell.getAttribute("data-modulation-target-kind"))),
+            ["voiceEnhancerFrequencyOctaves", "voiceEnhancerQ", "voiceEnhancerAmount"],
+        );
+        assert.match(await page.locator('[data-role="voice-enhancer-graph"]').textContent(), /LINKED M\/S/);
+
+        const graph = page.locator('[data-role="voice-enhancer-graph"]');
+        const graphBox = await graph.boundingBox();
+        const keyTrackButton = page.locator('[data-role="key-track-voiceEnhancerFrequency-graph"]');
+        const keyTrackBox = await keyTrackButton.boundingBox();
+        assert.ok(graphBox);
+        assert.ok(keyTrackBox);
+        assert.ok(keyTrackBox.x >= graphBox.x && keyTrackBox.y >= graphBox.y);
+        assert.ok(keyTrackBox.x + keyTrackBox.width <= graphBox.x + graphBox.width);
+        assert.ok(keyTrackBox.y + keyTrackBox.height <= graphBox.y + graphBox.height);
+
+        await clearHarnessDebugLog(page);
+        await page.mouse.move(graphBox.x + graphBox.width * 0.58, graphBox.y + graphBox.height * 0.62);
+        await page.mouse.down();
+        await page.mouse.move(graphBox.x + graphBox.width * 0.78, graphBox.y + graphBox.height * 0.28, { steps: 5 });
+        await page.mouse.up();
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "Enhancer graph edits Frequency and Amount",
+            (candidate) => Number(candidate.parameterValues.voiceEnhancerFrequency) > 1_000
+                && Number(candidate.parameterValues.voiceEnhancerAmount) > 0.6,
+        );
+        assert.deepEqual(snapshot.gestureStarts, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+        assert.deepEqual(snapshot.gestureEnds, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+        const retainedFixedFrequency = Number(snapshot.parameterValues.voiceEnhancerFrequency);
+
+        const qKnob = page.locator('[data-role="voice-enhancer-knob-voiceEnhancerQ"]');
+        await qKnob.click({ button: "right" });
+        await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
+        let sheet = page.locator('[data-role="rack-parameter-value-sheet"]');
+        await sheet.locator('[data-role="rack-base-value-input"]').fill("4.2 Q");
+        await sheet.locator('[data-role="rack-value-sheet-apply"]').click();
+        await waitForHarnessSnapshot(
+            page,
+            "Enhancer Q exact entry",
+            (candidate) => Math.abs(Number(candidate.parameterValues.voiceEnhancerQ) - 4.2) < 1e-9,
+        );
+
+        await keyTrackButton.click();
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "Enhancer Key Track enable",
+            (candidate) => Number(candidate.parameterValues.voiceEnhancerKeyTrackEnabled) === 1,
+        );
+        assert.equal(Number(snapshot.parameterValues.voiceEnhancerFrequency), retainedFixedFrequency);
+        assert.equal(Number(snapshot.parameterValues.voiceEnhancerKeyTrackOffsetSemitones), 0);
+        const ratioKnob = page.locator('[data-role="voice-enhancer-knob-voiceEnhancerKeyTrackOffsetSemitones"]');
+        assert.match(await ratioKnob.getAttribute("aria-valuetext"), /1×/);
+
+        await ratioKnob.click({ button: "right" });
+        await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
+        sheet = page.locator('[data-role="rack-parameter-value-sheet"]');
+        assert.equal(
+            (await sheet.locator('[data-role="rack-base-value-input"] + em').textContent()).trim(),
+            "x",
+        );
+        await sheet.locator('[data-role="rack-base-value-input"]').fill("2x");
+        await sheet.locator('[data-role="rack-value-sheet-apply"]').click();
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "Enhancer Ratio exact entry",
+            (candidate) => Math.abs(Number(candidate.parameterValues.voiceEnhancerKeyTrackOffsetSemitones) - 12) < 1e-9,
+        );
+        assert.equal(Number(snapshot.parameterValues.voiceEnhancerFrequency), retainedFixedFrequency);
+
+        await keyTrackButton.click();
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "Enhancer fixed Frequency restore",
+            (candidate) => Number(candidate.parameterValues.voiceEnhancerKeyTrackEnabled) === 0,
+        );
+        assert.equal(Number(snapshot.parameterValues.voiceEnhancerFrequency), retainedFixedFrequency);
+        assert.equal(await page.locator('[data-role="voice-enhancer-knob-voiceEnhancerFrequency"]').count(), 1);
+    } finally {
+        await page.close();
+    }
+});
+
 test("the compact filter knob row exposes Cut/Res/Mix as modulation destinations and Off greys everything but the mode chip", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {

@@ -74,6 +74,14 @@ import {
     GLOBAL_TUNE_INITIAL_SEMITONES,
     clampGlobalTuneSemitones,
 } from "./global-tune";
+import {
+    VOICE_ENHANCER_AMOUNT_ENDPOINT_ID,
+    VOICE_ENHANCER_FREQUENCY_ENDPOINT_ID,
+    VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID,
+    VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID,
+    VOICE_ENHANCER_PARAMETER_DESCRIPTORS,
+    VOICE_ENHANCER_Q_ENDPOINT_ID,
+} from "./voice-enhancer";
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
 import type {
     EffectStoredStateAdapter,
@@ -469,6 +477,11 @@ export type SynthPatchViewModel = {
     filterCutoffKeyTrackOffsetSemitones: PatchControlBinding<number>;
     filterQ: PatchControlBinding<number>;
     filterMix: PatchControlBinding<number>;
+    voiceEnhancerFrequency: PatchControlBinding<number>;
+    voiceEnhancerQ: PatchControlBinding<number>;
+    voiceEnhancerAmount: PatchControlBinding<number>;
+    voiceEnhancerKeyTrackEnabled: PatchControlBinding<number>;
+    voiceEnhancerKeyTrackOffsetSemitones: PatchControlBinding<number>;
     unisonVoices: PatchControlBinding<number>;
     unisonDetune: PatchControlBinding<number>;
     unisonBlend: PatchControlBinding<number>;
@@ -2717,6 +2730,43 @@ export function useSynthPatchViewModel({
             return clamp(Number.isFinite(numeric) ? numeric : 1, 0, 1);
         },
     });
+    const voiceEnhancerFrequency = usePatchParameterBinding<number>({
+        endpointID: VOICE_ENHANCER_FREQUENCY_ENDPOINT_ID,
+        initialValue: VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency.initial,
+        coerce: (value) => clamp(
+            Number(value) || VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency.initial,
+            VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency.min,
+            VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency.max,
+        ),
+    });
+    const voiceEnhancerQ = usePatchParameterBinding<number>({
+        endpointID: VOICE_ENHANCER_Q_ENDPOINT_ID,
+        initialValue: VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q.initial,
+        coerce: (value) => clamp(
+            Number(value) || VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q.initial,
+            VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q.min,
+            VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q.max,
+        ),
+    });
+    const voiceEnhancerAmount = usePatchParameterBinding<number>({
+        endpointID: VOICE_ENHANCER_AMOUNT_ENDPOINT_ID,
+        initialValue: VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount.initial,
+        coerce: (value) => clamp(
+            Number.isFinite(Number(value)) ? Number(value) : VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount.initial,
+            VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount.min,
+            VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount.max,
+        ),
+    });
+    const voiceEnhancerKeyTrackEnabled = usePatchParameterBinding<number>({
+        endpointID: VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => Number(value) >= 0.5 ? 1 : 0,
+    });
+    const voiceEnhancerKeyTrackOffsetSemitones = usePatchParameterBinding<number>({
+        endpointID: VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, -12, 60),
+    });
     const unisonVoices = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("unisonVoices"),
         initialValue: 1,
@@ -4675,6 +4725,11 @@ export function useSynthPatchViewModel({
         filterCutoffKeyTrackOffsetSemitones,
         filterQ,
         filterMix,
+        voiceEnhancerFrequency,
+        voiceEnhancerQ,
+        voiceEnhancerAmount,
+        voiceEnhancerKeyTrackEnabled,
+        voiceEnhancerKeyTrackOffsetSemitones,
         unisonVoices,
         unisonDetune,
         unisonBlend,

@@ -277,20 +277,20 @@ test("a deliberate 101st final-legal sentinel survives in its active prefix", as
     });
 });
 
-test("all 1330 legal mappings publish exact deterministic lane tails without truncation", async () => {
+test("all 1372 legal mappings publish exact deterministic lane tails without truncation", async () => {
     const runtime = await programModulePromise;
     const routes = await createAllLegalRoutes();
     const program = runtime.compileModulationRuntimeProgram(routes);
 
     assert.equal(routes.length, runtime.MODULATION_MAPPING_CELL_COUNT);
-    assert.deepEqual(runtimeLaneCounts(program), [560, 224, 390, 156]);
+    assert.deepEqual(runtimeLaneCounts(program), [590, 236, 390, 156]);
     // Rack-path cell indices run at the BUS width (static + lane pool):
     // source*TOTAL + target. Voice-path indices are untouched by the pool.
     assert.deepEqual(
         runtimeLaneSpecifications.map((specification) => runtimeLaneTail(program, specification)),
         [
-            { cellIndex: 559, sourceIndex: 9, targetIndex: 55, polarity: 0, amount: 0.25, reducer: null },
-            { cellIndex: 223, sourceIndex: 3, targetIndex: 55, polarity: 0, amount: 0.25, reducer: null },
+            { cellIndex: 589, sourceIndex: 9, targetIndex: 58, polarity: 1, amount: 0.25, reducer: null },
+            { cellIndex: 235, sourceIndex: 3, targetIndex: 58, polarity: 1, amount: 0.25, reducer: null },
             { cellIndex: (9 * runtime.MODULATION_RACK_TARGET_TOTAL) + 38, sourceIndex: 9, targetIndex: 38, polarity: 1, amount: 0.25, reducer: 1 },
             { cellIndex: (3 * runtime.MODULATION_RACK_TARGET_TOTAL) + 38, sourceIndex: 3, targetIndex: 38, polarity: 1, amount: 0.25, reducer: null },
         ],
@@ -302,7 +302,7 @@ test("all 1330 legal mappings publish exact deterministic lane tails without tru
     );
 });
 
-test("1330 stored mappings with the same 100 active mappings publish identical execution lanes", async () => {
+test("1372 stored mappings with the same 100 active mappings publish identical execution lanes", async () => {
     const runtime = await programModulePromise;
     const allRoutes = await createAllLegalRoutes();
     const activeRoutes = selectActiveRoutesByLane(
@@ -316,7 +316,7 @@ test("1330 stored mappings with the same 100 active mappings publish identical e
     ));
 
     assert.equal(activeRoutes.length, 100);
-    assert.equal(storedDomain.length, 1330);
+    assert.equal(storedDomain.length, 1372);
     assert.deepEqual(
         projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(storedDomain)),
         projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(activeRoutes)),
@@ -391,14 +391,14 @@ test("filter Mix routes compile from their stable name at the appended Voice tar
     assert.equal(targets.getVoiceModulationTargetIndex("filterMix"), 50);
     assert.deepEqual(mixCell, {
         path: "voice",
-        cellIndex: (6 * 56) + 50,
+        cellIndex: (6 * 59) + 50,
         sourceIndex: 6,
         targetIndex: 50,
-        articulationCellIndex: (6 * 56) + 50,
+        articulationCellIndex: (6 * 59) + 50,
     });
     assert.equal(
         existingCell.cellIndex,
-        (6 * 56) + 31,
+        (6 * 59) + 31,
         "derived route-cell addresses must be rebuilt from the stable filterQ name using the current target stride",
     );
     assert.equal(program.voiceRouteCount, 2);
@@ -424,10 +424,10 @@ test("Global Tune routes compile at the append-only shared pitch target with a 4
     assert.equal(targets.getVoiceModulationTargetIndex("globalTuneSemitones"), 51);
     assert.deepEqual(cell, {
         path: "voice",
-        cellIndex: (6 * 56) + 51,
+        cellIndex: (6 * 59) + 51,
         sourceIndex: 6,
         targetIndex: 51,
-        articulationCellIndex: (6 * 56) + 51,
+        articulationCellIndex: (6 * 59) + 51,
     });
     assert.deepEqual(modulation.getModulationAmountBounds("globalTuneSemitones"), {
         min: -48,
@@ -470,27 +470,41 @@ test("the Cmajor consumer appends Global Tune and resolves shared played pitch b
     );
 });
 
-test("the note signal path applies one Amp Envelope after source combination and Voice Filter, before summing and Effects Lane", async () => {
+test("the note signal path applies the per-voice Enhancer after Filter and before Amp Envelope, summing, and Effects Lane", async () => {
     const [voiceSource, synthSource] = await Promise.all([
         fs.readFile(path.join(repoRoot, "cmajor/FixedFrameOscillator.cmajor"), "utf8"),
         fs.readFile(path.join(repoRoot, "cmajor/WavetableSynth.cmajor"), "utf8"),
     ]);
     const renderStart = voiceSource.indexOf("                int32 rendererSucceeded = 0;");
-    const renderEnd = voiceSource.indexOf("                updateRackModulationOutputs();", renderStart);
+    const renderEnd = voiceSource.indexOf("                trackingPitchHzOut <- trackingPitchHz;", renderStart);
     assert.ok(renderStart >= 0 && renderEnd > renderStart, "Expected the per-note render and sum block.");
     const renderBlock = voiceSource.slice(renderStart, renderEnd);
 
     const combinedSource = renderBlock.indexOf("noteLeft = rendererFloats.at (outputIndex)");
     const bounceSource = renderBlock.indexOf("noteLeft = bounceSample[0]");
     const filter = renderBlock.indexOf("unisonLeftFilters.at (voice).process (noteLeft)");
+    const enhancer = renderBlock.indexOf("voiceEnhancers.at (voice).process");
     const amp = renderBlock.indexOf("let gain = ampEnvelopes[voice].gainOut");
     const sum = renderBlock.indexOf("leftMix += noteLeft * gain");
+    const residueSum = renderBlock.indexOf("enhancerResidueLeftMix += enhancerResidue[0] * gain");
+    const dcBlock = renderBlock.indexOf("voiceEnhancerResidueDcBlocker.process");
+    const finalMix = renderBlock.indexOf("leftMix + blockedEnhancerResidue[0]");
     assert.ok(combinedSource >= 0 && bounceSource >= 0, "Both combined source choices must feed one note path.");
     assert.ok(filter > combinedSource && filter > bounceSource, "Voice Filter must follow either combined source.");
-    assert.ok(amp > filter, "Amp Envelope must follow the per-note Voice Filter.");
+    assert.ok(enhancer > filter, "Each voice's Enhancer must follow that voice's Filter.");
+    assert.ok(amp > enhancer, "Amp Envelope must follow the per-note Enhancer.");
     assert.ok(sum > amp, "Voice summing must follow the one per-note Amp Envelope multiplication.");
+    assert.ok(residueSum > amp, "The same Amp Envelope must scale the Enhancer residue.");
+    assert.ok(dcBlock > residueSum, "Only the summed stereo residue may enter the DC blocker.");
+    assert.ok(finalMix > dcBlock, "The blocked residue must rejoin dry voices after the one post-sum blocker.");
     assert.equal(renderBlock.match(/noteLeft \* gain/g)?.length, 1);
     assert.equal(renderBlock.match(/noteRight \* gain/g)?.length, 1);
+    assert.equal(renderBlock.match(/voiceEnhancerResidueDcBlocker\.process/g)?.length, 1);
+    assert.match(
+        voiceSource,
+        /resolveVoiceEnhancerFrequencyHz\s*\([\s\S]*std::notes::noteToFrequency \(sharedPlayedPitchSemitones\)/,
+        "Enhancer Key Track must consume the same glide, bend, Global Tune, and voice-rule pitch authority as oscillators.",
+    );
 
     assert.match(
         synthSource,

@@ -24,7 +24,7 @@
 // from processor.maxFrequency and the compiler cannot fold that for an
 // uninstantiated processor. See the note on flangerSaturate in Flanger.cmajor.
 
-## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/Flanger.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/VoiceEnhancer.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/Flanger.cmajor")
 
 // ---------------------------------------------------------------------------
 // 1. HARD AUDIBLE BYPASS. At mix 0 the module passes its input BIT-EXACTLY -

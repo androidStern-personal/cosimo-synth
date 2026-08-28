@@ -73,6 +73,7 @@ constexpr std::array effectSettings
     EffectSetting { "oscCWarpAmount", 0.0f },
     EffectSetting { "filterMode", 1.0f },
     EffectSetting { "filterCutoff", 1200.0f },
+    EffectSetting { "voiceEnhancerAmount", 0.75f },
     EffectSetting { "env1Sustain", 0.0f },
 };
 
@@ -431,6 +432,9 @@ void initialiseVoiceFloorPerformer (WavetableSynth& performer)
 {
     performer.initialise (dspSessionID, sampleRate);
     loadSineWavetable (performer);
+    // T62 acceptance measures the retained-voice floor with the nonlinear
+    // per-note processor engaged, not its exact-zero compatibility path.
+    setParameter (performer, "voiceEnhancerAmount", 0.75f);
 
     // The voice floor runs the deployed pre-rack sound: an EMPTY lane, which
     // is the engine's default and its cheapest structure.

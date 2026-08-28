@@ -25,7 +25,7 @@
 // is only defined when a patch manifest supplies it, so depending on it would make this
 // module untestable in isolation.
 
-## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/GlobalFilter.cmajor")
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/VoiceEnhancer.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/GlobalFilter.cmajor")
 
 //==============================================================================
 // Bypass, residue and channel independence.

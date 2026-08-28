@@ -4,8 +4,10 @@
   "version": "1.0.0",
   "name": "Three Oscillator Shared Voice Engine",
   "source": [
+    "../../../cmajor/KeyTrack.cmajor",
     "../../../cmajor/Mseg.cmajor",
     "../../../cmajor/ThreeOscillatorRendererExternal.cmajor",
+    "../../../cmajor/VoiceEnhancer.cmajor",
     "../../../cmajor/FixedFrameOscillator.cmajor",
     "../../../cmajor/VoiceReducer.cmajor",
     "ThreeOscillatorSharedVoiceEngine.cmajor"

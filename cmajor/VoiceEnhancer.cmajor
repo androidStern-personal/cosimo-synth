@@ -21,9 +21,7 @@ namespace wt
         return std::intrinsics::clamp (
             value,
             voiceEnhancerFrequencyMinHz,
-            std::intrinsics::min (
-                voiceEnhancerFrequencyMaxHz,
-                sampleRateHz * 0.45f));
+            sampleRateHz * 0.45f);
     }
 
     float32 clampVoiceEnhancerQ (float32 value)

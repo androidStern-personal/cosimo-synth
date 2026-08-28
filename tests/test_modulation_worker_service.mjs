@@ -18,7 +18,7 @@ const laneTails = [
         targets: "voiceRouteTargets",
         polarities: "voiceRoutePolarities",
         amounts: "voiceRouteAmounts",
-        expected: { count: 560, cellIndex: 559, sourceIndex: 9, targetIndex: 55, polarity: 0 },
+        expected: { count: 590, cellIndex: 589, sourceIndex: 9, targetIndex: 58, polarity: 0 },
     },
     {
         count: "macroVoiceRouteCount",
@@ -27,7 +27,7 @@ const laneTails = [
         targets: "macroVoiceRouteTargets",
         polarities: "macroVoiceRoutePolarities",
         amounts: "macroVoiceRouteAmounts",
-        expected: { count: 224, cellIndex: 223, sourceIndex: 3, targetIndex: 55, polarity: 0 },
+        expected: { count: 236, cellIndex: 235, sourceIndex: 3, targetIndex: 58, polarity: 0 },
     },
     {
         count: "voiceRackRouteCount",
@@ -159,7 +159,7 @@ function readLaneTail(program, specification) {
     };
 }
 
-test("the modulation service publishes serialized all-1330 state through one correlated runtime frontier", async () => {
+test("the modulation service publishes serialized all-1372 state through one correlated runtime frontier", async () => {
     const [modulation, targets, serviceModule] = await Promise.all([
         modulationModulePromise,
         targetsModulePromise,
@@ -193,12 +193,12 @@ test("the modulation service publishes serialized all-1330 state through one cor
             () => installedProgram() !== undefined
                 && connection.acknowledgements.at(-1)?.acceptedModulationSerial
                     === installedProgram()?.value.deliverySerial,
-            "the all-1330 modulation program acknowledgement",
+            "the all-1372 modulation program acknowledgement",
         );
 
         const parsedState = modulation.parseModulationState(serializedState);
         assert.equal(parsedState._tag, "ok");
-        assert.equal(parsedState.value.routes.length, 1330);
+        assert.equal(parsedState.value.routes.length, 1372);
         assert.deepEqual(connection.protocolFailures, []);
 
         const programEvent = installedProgram();

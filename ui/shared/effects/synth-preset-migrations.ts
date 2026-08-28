@@ -8,6 +8,14 @@ import {
     GLOBAL_TUNE_ENDPOINT_ID,
     GLOBAL_TUNE_INITIAL_SEMITONES,
 } from "../global-tune";
+import {
+    VOICE_ENHANCER_AMOUNT_ENDPOINT_ID,
+    VOICE_ENHANCER_FREQUENCY_ENDPOINT_ID,
+    VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID,
+    VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID,
+    VOICE_ENHANCER_PARAMETER_DESCRIPTORS,
+    VOICE_ENHANCER_Q_ENDPOINT_ID,
+} from "../voice-enhancer";
 
 const FILTER_MIX_ENDPOINT_ID = "filterMix";
 const AMP_ATTACK_ENDPOINT_ID = "ampAttack";
@@ -25,17 +33,32 @@ const FILTER_KEY_TRACK_OFFSET_ENDPOINT_ID = "filterCutoffKeyTrackOffsetSemitones
  * historical step fills the neutral value introduced at that step: fully-wet
  * filter Mix, oscillator-mode Bounce, zero-semitone Global Tune, the
  * bit-compatible ADSR representation of the legacy Amp Release contour,
- * then neutral Key Track state.
+ * neutral Filter Key Track state, then the neutral per-voice Enhancer.
  */
 export function buildSynthPresetMigrations(
     currentContract: EffectPluginStateContract,
 ): EffectPresetMigration[] {
-    const preKeyTrackParameters = currentContract.parameters.filter(
+    const enhancerEndpointIDs = new Set([
+        VOICE_ENHANCER_FREQUENCY_ENDPOINT_ID,
+        VOICE_ENHANCER_Q_ENDPOINT_ID,
+        VOICE_ENHANCER_AMOUNT_ENDPOINT_ID,
+        VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID,
+        VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID,
+    ]);
+    const preVoiceEnhancerParameters = currentContract.parameters.filter(
+        (parameter) => !enhancerEndpointIDs.has(parameter.endpointID),
+    );
+
+    if (preVoiceEnhancerParameters.length !== currentContract.parameters.length - 5) {
+        throw new Error("The synth contract must include all five Voice Enhancer parameters.");
+    }
+
+    const preKeyTrackParameters = preVoiceEnhancerParameters.filter(
         (parameter) => parameter.endpointID !== FILTER_KEY_TRACK_ENABLED_ENDPOINT_ID
             && parameter.endpointID !== FILTER_KEY_TRACK_OFFSET_ENDPOINT_ID,
     );
 
-    if (preKeyTrackParameters.length !== currentContract.parameters.length - 2) {
+    if (preKeyTrackParameters.length !== preVoiceEnhancerParameters.length - 2) {
         throw new Error("The synth contract must include both Voice Filter Key Track parameters.");
     }
 
@@ -103,6 +126,11 @@ export function buildSynthPresetMigrations(
         parameters: preKeyTrackParameters,
         storedState: currentContract.storedState,
     });
+    const preVoiceEnhancerContract = buildCanonicalPluginStateContract({
+        effectID: currentContract.effectID,
+        parameters: preVoiceEnhancerParameters,
+        storedState: currentContract.storedState,
+    });
 
     return [
         {
@@ -166,14 +194,34 @@ export function buildSynthPresetMigrations(
         {
             effectID: currentContract.effectID,
             fromHash: preKeyTrackContract.hash,
+            toHash: preVoiceEnhancerContract.hash,
+            migrate: (preset) => ({
+                ...preset,
+                contract: preVoiceEnhancerContract,
+                parameters: {
+                    ...preset.parameters,
+                    [FILTER_KEY_TRACK_ENABLED_ENDPOINT_ID]: 0,
+                    [FILTER_KEY_TRACK_OFFSET_ENDPOINT_ID]: 0,
+                },
+            }),
+        },
+        {
+            effectID: currentContract.effectID,
+            fromHash: preVoiceEnhancerContract.hash,
             toHash: currentContract.hash,
             migrate: (preset) => ({
                 ...preset,
                 contract: currentContract,
                 parameters: {
                     ...preset.parameters,
-                    [FILTER_KEY_TRACK_ENABLED_ENDPOINT_ID]: 0,
-                    [FILTER_KEY_TRACK_OFFSET_ENDPOINT_ID]: 0,
+                    [VOICE_ENHANCER_FREQUENCY_ENDPOINT_ID]:
+                        VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency.initial,
+                    [VOICE_ENHANCER_Q_ENDPOINT_ID]:
+                        VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q.initial,
+                    [VOICE_ENHANCER_AMOUNT_ENDPOINT_ID]:
+                        VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount.initial,
+                    [VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID]: 0,
+                    [VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID]: 0,
                 },
             }),
         },
