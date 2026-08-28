@@ -163,6 +163,7 @@ function emptyLaneDocJson() {
     return JSON.stringify({
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices: {},
         chain: [],
     });
@@ -173,6 +174,7 @@ function populatedThreeBandLaneDocJson() {
     return JSON.stringify({
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices: {
             "distortion#1": { params: { ...params.drive } },
             "chorus#1": { params: { ...params.chorus } },
@@ -211,6 +213,7 @@ function emptySplitLaneDocJson(branchCount) {
     return JSON.stringify({
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices: {},
         chain: [{
             kind: "split",
@@ -228,6 +231,7 @@ function populatedFourWayParallelLaneDocJson() {
     return JSON.stringify({
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices: {
             "distortion#1": { params: { ...params.drive } },
             "chorus#1": { params: { ...params.chorus } },
@@ -275,7 +279,13 @@ function maximumSerialLaneDocJson() {
             chain.push({ kind: "device", deviceId, enabled: true });
         }
     }
-    return JSON.stringify({ format: "cosimo.lane", version: 2, devices, chain });
+    return JSON.stringify({
+        format: "cosimo.lane",
+        version: 2,
+        output: { mix: 1, bypassed: false },
+        devices,
+        chain,
+    });
 }
 
 function boundaryScrollLaneDocJson() {
@@ -283,6 +293,7 @@ function boundaryScrollLaneDocJson() {
     return JSON.stringify({
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices: {
             "globalFilter#1": { params: { ...params.filter } },
             "distortion#1": { params: { ...params.drive } },
@@ -415,6 +426,7 @@ function branchTailLaneDocJson(groupKind) {
     return JSON.stringify({
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices,
         chain: [
             group,
@@ -456,6 +468,7 @@ function populatedConnectorLaneDocJson(groupKind, branchCount) {
     return JSON.stringify({
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices: Object.fromEntries(fixtures.map((fixture) => ([
             fixture.deviceId,
             { params: { ...fixture.params } },
@@ -475,6 +488,7 @@ function emptyConnectorLaneDocJson(groupKind, branchCount) {
     return JSON.stringify({
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices: {},
         chain: [group],
     });
@@ -3380,6 +3394,7 @@ test("remove rides the station menu, heals the selection, and capacity disables 
         }, JSON.stringify({
             format: "cosimo.lane",
             version: 2,
+            output: { mix: 1, bypassed: false },
             devices: Object.fromEntries(
                 [1, 2, 3, 4, 5].map((n) => [`delay#${n}`, { params: { ...v1Params.delay } }])
                     .concat([["reverb#1", { params: { ...v1Params.reverb } }]]),

@@ -7,6 +7,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { OSCILLATOR_DEFAULT_WAVETABLE_INDEX } from "../patch_gui/oscillator-defaults.js";
+
 import {
     normalizeArticulationEditorState,
     normalizeArticulationSnapshot,
@@ -1211,18 +1213,18 @@ test("wavetable picker prewarms the current and adjacent tables without selectin
         assert.deepEqual(
             snapshot.sentMessages.filter(({ endpointID }) => endpointID === "wavetablePrewarmRequest"),
             [
-                { endpointID: "wavetablePrewarmRequest", value: 0 },
-                { endpointID: "wavetablePrewarmRequest", value: 1 },
+                { endpointID: "wavetablePrewarmRequest", value: OSCILLATOR_DEFAULT_WAVETABLE_INDEX },
+                { endpointID: "wavetablePrewarmRequest", value: OSCILLATOR_DEFAULT_WAVETABLE_INDEX - 1 },
             ],
         );
         assert.deepEqual(
             snapshot.endpointMessages.filter(({ endpointID }) => endpointID === "wavetablePrewarmNotification"),
             [
-                { endpointID: "wavetablePrewarmNotification", value: 0 },
-                { endpointID: "wavetablePrewarmNotification", value: 1 },
+                { endpointID: "wavetablePrewarmNotification", value: OSCILLATOR_DEFAULT_WAVETABLE_INDEX },
+                { endpointID: "wavetablePrewarmNotification", value: OSCILLATOR_DEFAULT_WAVETABLE_INDEX - 1 },
             ],
         );
-        assert.equal(Number(snapshot.parameterValues.oscAWavetableSelect), 0);
+        assert.equal(Number(snapshot.parameterValues.oscAWavetableSelect), OSCILLATOR_DEFAULT_WAVETABLE_INDEX);
         assert.deepEqual(snapshot.gestureStarts.filter((value) => value === "oscAWavetableSelect"), []);
     } finally {
         await page.close();
@@ -3471,14 +3473,14 @@ test("wavetable selection commits the desired table and retry uses the runtime r
         await clearHarnessDebugLog(page);
         await page.selectOption('select[aria-label="Select wavetable"]', "1");
 
-        await page.waitForFunction(() => {
+        await page.waitForFunction((defaultTableIndex) => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
             return Number(snapshot.parameterValues.oscAWavetableSelect) === 1 &&
                 snapshot.runtimeState.desiredTableIndex === 1 &&
-                snapshot.runtimeState.activeTableIndex === 0 &&
+                snapshot.runtimeState.activeTableIndex === defaultTableIndex &&
                 snapshot.runtimeState.hasLoading === true &&
                 snapshot.runtimeState.loadingTableIndex === 1;
-        });
+        }, OSCILLATOR_DEFAULT_WAVETABLE_INDEX);
         await page.waitForSelector(`text=Loading ${desiredTableName}…`);
 
         snapshot = await getHarnessSnapshot(page);
@@ -3486,7 +3488,7 @@ test("wavetable selection commits the desired table and retry uses the runtime r
         assert.equal(snapshot.gestureEnds.includes("oscAWavetableSelect"), true);
         assert.equal(snapshot.gestureStarts.includes("oscAWavetablePosition"), false);
         assert.equal(snapshot.gestureEnds.includes("oscAWavetablePosition"), false);
-        assert.equal(snapshot.runtimeState.activeTableIndex, 0);
+        assert.equal(snapshot.runtimeState.activeTableIndex, OSCILLATOR_DEFAULT_WAVETABLE_INDEX);
         assert.equal(snapshot.runtimeState.desiredTableIndex, 1);
         assert.equal(snapshot.runtimeState.hasLoading, true);
         assert.equal(snapshot.runtimeState.loadingTableIndex, 1);
@@ -3500,7 +3502,7 @@ test("wavetable selection commits the desired table and retry uses the runtime r
             desiredTableIndex: 1,
             desiredIntentSerial: 2,
             hasActive: true,
-            activeTableIndex: 0,
+            activeTableIndex: OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
             activeGeneration: 1,
             hasLoading: false,
             hasFailure: true,
@@ -3559,7 +3561,7 @@ test("runtime loading state keeps the audible table visible while naming the des
             desiredTableIndex: 1,
             desiredIntentSerial: 3,
             hasActive: true,
-            activeTableIndex: 0,
+            activeTableIndex: OSCILLATOR_DEFAULT_WAVETABLE_INDEX,
             activeGeneration: 9,
             hasLoading: true,
             loadingTableIndex: 1,
@@ -3703,32 +3705,32 @@ test("wavetable select claims left and right arrows on the real desktop page", a
 
         await clearHarnessDebugLog(page);
         await page.focus('select[aria-label="Select wavetable"]');
-        await page.keyboard.press("ArrowRight");
+        await page.keyboard.press("ArrowLeft");
 
-        await page.waitForFunction(() => {
+        await page.waitForFunction((previousTableIndex) => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Number(snapshot.parameterValues.oscAWavetableSelect) === 1;
-        });
+            return Number(snapshot.parameterValues.oscAWavetableSelect) === previousTableIndex;
+        }, OSCILLATOR_DEFAULT_WAVETABLE_INDEX - 1);
 
         let snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(
             snapshot.sentMessages.filter(({ endpointID }) => endpointID === "oscAWavetableSelect"),
-            [{ endpointID: "oscAWavetableSelect", value: 1 }],
+            [{ endpointID: "oscAWavetableSelect", value: OSCILLATOR_DEFAULT_WAVETABLE_INDEX - 1 }],
         );
         assert.deepEqual(snapshot.midiInputEvents, []);
 
         await clearHarnessDebugLog(page);
-        await page.keyboard.press("ArrowLeft");
+        await page.keyboard.press("ArrowRight");
 
-        await page.waitForFunction(() => {
+        await page.waitForFunction((defaultTableIndex) => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Number(snapshot.parameterValues.oscAWavetableSelect) === 0;
-        });
+            return Number(snapshot.parameterValues.oscAWavetableSelect) === defaultTableIndex;
+        }, OSCILLATOR_DEFAULT_WAVETABLE_INDEX);
 
         snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(
             snapshot.sentMessages.filter(({ endpointID }) => endpointID === "oscAWavetableSelect"),
-            [{ endpointID: "oscAWavetableSelect", value: 0 }],
+            [{ endpointID: "oscAWavetableSelect", value: OSCILLATOR_DEFAULT_WAVETABLE_INDEX }],
         );
         assert.deepEqual(snapshot.midiInputEvents, []);
     } finally {
