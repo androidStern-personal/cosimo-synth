@@ -4827,11 +4827,12 @@ export function EffectsRackWorkspace({
             return;
         }
 
-        // Pick the drop target in BOTH axes: lanes sit side by side, so a
-        // Y-only walk lands in the wrong band. A containing rect wins over
-        // distance, the SMALLEST containing rect wins over an enclosing row
-        // (the ghost cell inside a lane beats the full-width trunk row), and
-        // with no containment the nearest center takes it.
+        // Pick an ACTUAL drop target in both axes: lanes sit side by side, so
+        // a Y-only walk lands in the wrong band. The smallest containing rect
+        // wins over an enclosing row (the ghost cell inside a lane beats the
+        // full-width trunk row). Connector gaps preserve the last preview;
+        // choosing their nearest live rect can move that rect during preview
+        // reflow and make a cross-lane target run away from the pointer.
         const rackUnits = Array.from(
             renderRoot.querySelectorAll<HTMLElement>("[data-lane-path]"),
         );
@@ -4850,11 +4851,10 @@ export function EffectsRackWorkspace({
             }
             const contains = event.clientX >= rect.left && event.clientX <= rect.right
                 && event.clientY >= rect.top && event.clientY <= rect.bottom;
-            const centerX = rect.left + (rect.width / 2);
-            const centerY = rect.top + (rect.height / 2);
-            const score = contains
-                ? rect.width * rect.height
-                : 1e12 + ((event.clientX - centerX) ** 2) + ((event.clientY - centerY) ** 2);
+            if (!contains) {
+                continue;
+            }
+            const score = rect.width * rect.height;
             if (score < targetScore) {
                 targetUnit = unit;
                 targetScore = score;

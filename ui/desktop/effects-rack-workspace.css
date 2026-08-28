@@ -1183,6 +1183,13 @@
 }
 
 .rack-editor-header {
+    --rack-editor-scrim: linear-gradient(
+        90deg,
+        rgb(11 14 16 / 0.6),
+        rgb(11 14 16 / 0.88) 55%,
+        rgb(11 14 16 / 0.95)
+    );
+
     display: grid;
     grid-template-columns: minmax(0, 1fr) 48px;
     min-height: 58px;
@@ -1193,7 +1200,7 @@
     /* The faceplate art relocated from the old rows: a scrim keeps the
        heading legible over the plate. */
     background-image:
-        linear-gradient(90deg, rgb(11 14 16 / 0.6), rgb(11 14 16 / 0.88) 55%, rgb(11 14 16 / 0.95)),
+        var(--rack-editor-scrim),
         url("../assets/rack/rack-faceplates-v2.jpg");
     background-repeat: no-repeat;
     background-size: auto, 100% 800%;
@@ -1273,11 +1280,10 @@
 }
 
 .polish-editor-header {
+    --rack-editor-scrim: linear-gradient(90deg, rgb(17 16 13 / 0.65), rgb(17 16 13 / 0.94));
+    --plate-y: 86%;
+
     grid-template-columns: minmax(0, 1fr);
-    background-image:
-        linear-gradient(90deg, rgb(17 16 13 / 0.65), rgb(17 16 13 / 0.94)),
-        url("../assets/rack/rack-faceplates-v2.jpg");
-    background-position: center, center 86%;
 }
 
 .polish-editor-flow {

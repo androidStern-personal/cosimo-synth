@@ -809,6 +809,28 @@ test("rack wordmark fonts use lossless web compression without changing the appr
     assert.equal((rackStyles.match(/format\(["']woff2["']\)/g) ?? []).length, fontNames.length);
 });
 
+test("the shared rack faceplate asset is declared once while Polish overrides only its scrim and plate position", async () => {
+    const rackStyles = await fs.readFile(
+        path.join(repoRoot, "ui", "desktop", "effects-rack-workspace.css"),
+        "utf8",
+    );
+    const baseHeader = rackStyles.match(/^\.rack-editor-header\s*\{(?<body>[\s\S]*?)\n\}/m)?.groups?.body;
+    const polishHeader = rackStyles.match(/^\.polish-editor-header\s*\{(?<body>[\s\S]*?)\n\}/m)?.groups?.body;
+
+    assert.ok(baseHeader);
+    assert.ok(polishHeader);
+    assert.equal(
+        (rackStyles.match(/url\(["']\.\.\/assets\/rack\/rack-faceplates-v2\.jpg["']\)/g) ?? []).length,
+        1,
+    );
+    assert.match(baseHeader, /--rack-editor-scrim:\s*linear-gradient\(/);
+    assert.match(baseHeader, /background-image:\s*var\(--rack-editor-scrim\),\s*url\(/);
+    assert.match(baseHeader, /background-position:\s*center,\s*center var\(--plate-y,\s*0%\)/);
+    assert.match(polishHeader, /--rack-editor-scrim:\s*linear-gradient\(/);
+    assert.match(polishHeader, /--plate-y:\s*86%/);
+    assert.doesNotMatch(polishHeader, /background(?:-image|-position)?\s*:|url\(/);
+});
+
 test("desktop and shared effect dev entries load React Grab only in Vite dev mode", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     const desktopPatchEntry = await fs.readFile(
