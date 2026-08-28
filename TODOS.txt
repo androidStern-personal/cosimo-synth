@@ -1043,7 +1043,7 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - Real source taps, switching, drag, and drop keep the popout visible and create/edit the canonical Global Tune route. Explicit outside dismissal and deliberate grip collapse still close it. Focused source and compiled-browser checks pass; the complete desktop UI run was 276/279, with the three reds independently classified as the established React Grab webdriver check, an existing master wavetable-prewarm expectation, and the repaired Voice-mode selector collision.
     - Fresh HMR was verified from the T39A worktree and stopped. The final compiled VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`, passes strict deep code-sign verification, and has executable SHA-256 `8cb620126391160d447cc29a34c0cac71b55f875d05be15a626715f1c5a2d4d9`. No Ableton interaction/listening or physical iPhone acceptance is claimed.
 
-[ ] T40 — Make the drag heads-up display match the parameter being changed
+[x] T40 — Make the drag heads-up display match the parameter being changed
     Active owner (2026-08-28):
     - Combined T40/T40A Codex task `T40 T40A Build Parameter-Aware HUD`, active implementation thread `01a04954-1c20-7143-bf4b-84cdff94dd4c`, branch `codex/t40-t40a-parameter-hud`, worktree `/Users/winterfell/.codex/worktrees/e4e5/cosimo-synth`, starting checkpoint `bd4f6ceb`, model SOL, reasoning max. Earlier permission-restricted tasks were superseded; this task preserves and reviews the committed checkpoint before rebasing.
     - This coordinator-managed task owns the one shared HUD, production wavetable/filter/MSEG/Distortion presentations, direct-filter-drag suppression, generic fallback, and composed browser proof. Final review, rebase, merge, push, native/install gates, and deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
@@ -1055,8 +1055,12 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - Suppress the heads-up display only when the person is directly dragging the filter graphic, because the edited graph is already visible beneath the finger. Dragging the cutoff knob still shows the specialized display.
     Done when:
     - Browser tests select each named parameter and prove the correct graphic and current value appear, direct filter-graph dragging produces no duplicate display, MSEG Morph shows its realized curve at 0%, midpoint, and 100% with no generic knob, and an unrelated parameter still gets the generic knob.
+    Completion (2026-08-28):
+    - Integrated implementation commits `65d21696` and `80df7f35`. The one shared precision display now uses the production wavetable, filter-response, MSEG, and Distortion renderers for Index, both Filter Cutoffs, Morph, and Drive; ordinary controls retain the generic knob, and direct filter-graph gestures suppress only their duplicate display.
+    - Focused production-backed browser proof passes 7/7. The complete desktop UI run was 283/286: all T40/T40A cases passed, while the three reds were independently classified as the established React Grab webdriver assertion, the existing wavetable-prewarm expectation, and an older MSEG opacity timing assertion that passed its exact isolated rerun.
+    - Desktop and iPhone generated bundles match the reviewed source and contain no absolute worktree paths. Fresh HMR was verified and stopped. The final compiled VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`, passes strict deep code-sign verification, and has executable SHA-256 `81379fc40fcc8e9b871058f55fc7982306413344d97e734d1053f395f278f07b`. No Ableton interaction/listening or physical iPhone acceptance is claimed.
 
-[ ] T40A — Show the real Distortion Drive graphic instead of a knob in the heads-up display
+[x] T40A — Show the real Distortion Drive graphic instead of a knob in the heads-up display
     Active owner (2026-08-28):
     - Owned by the combined T40/T40A task above: active implementation thread `01a04954-1c20-7143-bf4b-84cdff94dd4c`, branch `codex/t40-t40a-parameter-hud`, worktree `/Users/winterfell/.codex/worktrees/e4e5/cosimo-synth`, starting checkpoint `bd4f6ceb`, model SOL, reasoning max.
     Required result:
@@ -1065,6 +1069,8 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - Add this to the shared heads-up display behavior described in T40; do not create a second floating display.
     Done when:
     - Browser tests adjust Drive with each distortion shape and prove that the correct production curve updates live, the generic knob picture is absent for Drive, and ordinary parameters still show the generic knob.
+    Completion (2026-08-28):
+    - Completed as part of T40 above. Symmetric, Asymmetric, and Wavefold Drive gestures render the live production transfer curve in the shared display; no separate display or sound-processing change was introduced.
 
 [x] T41 — Make every effect Mix or Wet control start at 50%
     Completed (2026-08-26):
