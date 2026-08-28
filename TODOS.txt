@@ -1354,7 +1354,7 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - All eight effect editors, active and bypassed, render only the effect name plus the existing power control at phone, plug-in, and desktop sizes. The focused layout matrix proves a compact header, no blank row or clipping, and a power hit area of at least 44 px; group-editor heading copy remains unchanged.
     - The final desktop UI gate was 258/260: all T57/T58 product checks passed, the established React Grab `navigator.webdriver` assertion remained red, and one unrelated Vite optimize-cache startup failure passed immediately in isolated rerun. The complete layout gate was 27/28 with only the same React Grab assertion. A fresh HMR standalone is live at `http://127.0.0.1:5174`; the compiled VST3 is installed and strict-code-sign valid at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` (executable SHA-256 `4f003882d8fc0fa96d783b222edd1c8f7fee1d36207b2088f0849645d1110a7c`). Physical iPhone and Ableton interaction acceptance were not performed.
 
-[ ] T59 — Make Sine → Square → Triangle → Saw the default oscillator wavetable
+[x] T59 — Make Sine → Square → Triangle → Saw the default oscillator wavetable
     Active owner (2026-08-27):
     - Codex task `T59 Build Four-Frame Default Wavetable`, thread `01a04337-a792-7d21-a860-49d41f801ddc`, branch `codex/t59-four-frame-default-wavetable`, worktree `/Users/winterfell/.codex/worktrees/a8a5/cosimo-synth`, model SOL, reasoning max.
     - This is a coordinator-managed implementation task. Final review, rebase, merge, push, and any deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
@@ -1365,6 +1365,10 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Greenfield decision (2026-08-28, Andrew): old saved sounds, browser state, shared URLs, and host automation impose no backwards-compatibility requirement. Do not add migration, aliases, a dual catalog, or preservation-only code/tests for unpublished pre-T59 state. The accepted current selector contract may include the new table directly.
     Done when:
     - The shipped table contains exactly four frames and each frame is mathematically and visually verified as Sine, Square, Triangle, and Saw in that order. Tests prove Init/new-patch selection uses it for Oscillators A, B, and C, current-format save/Init/recall still works, and no Index-control or interpolation code changed. No old-format compatibility gate is required.
+    Completion evidence (2026-08-28):
+    - Coordinator commit `5108e3ba` semantically rebases the owner implementation onto current master; `2e6f4961` removes obsolete preservation-only assertions, regenerates current composed workers/maps, and repairs the native gain-path fixture to upload the metadata-declared default and apply the real Amp Envelope defaults.
+    - The shipped `core-shapes` table contains exactly four analytic 2,048-sample frames in the required Sine, Square, Triangle, Saw order. Its WAV is byte-reproducible with SHA-256 `ad6dd10ef0ea14631fb60c7103c575888dec75c7ba6ac89aeba1ca4212657993`; A/B/C Init defaults are selector 238 and current-format save/Init/recall is green.
+    - Final focused qualification passes the default table contract 3/3, oscillator/Init contract 27/27, wavetable-bank suite 30/30, current Speedrun default proof, generated source-map provenance, web build, and the production oscillator-to-output native gain path. Index interpolation/control sources remain unchanged. No Ableton, listening, physical iPhone, or other physical-device acceptance is claimed.
 
 [ ] T60 — Make the Mod bar scale adjustable and let it float or park horizontally
     Active owner (2026-08-27):

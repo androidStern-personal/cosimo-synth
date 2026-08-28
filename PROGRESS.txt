@@ -856,9 +856,10 @@ T60 scalable parkable Mod bar — integrated automated checkpoint 2026-08-27
 - Fresh coordinator HMR proved repo root `74e4` and `usesViteClient: true`, then was stopped. The final compiled VST3 is installed and strict-code-sign valid at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`, executable SHA-256 `59555f776e70712c51a0ce8a2a02338a68d0d948ac72629d2b7d48317e28c7a5`.
 - T60 remains product-open for Andrew's real composed visual approval and final default coefficient. No Ableton interaction/listening or physical iPhone/touch acceptance is claimed.
 
-T59 greenfield saved-sound decision — 2026-08-28
-- Andrew explicitly removed backwards compatibility as a constraint for the four-frame default wavetable. Unpublished old saved sounds, browser state, shared URLs, and host automation need no migration or preservation layer.
-- The current product contract may therefore include `core-shapes` directly in the occupied selector range and select it for Init/new patches. Current-format round trips and unchanged Index/interpolation behavior remain required; old-format compatibility does not.
+T59 four-frame Core Shapes default integrated — 2026-08-28
+- Coordinator commit `5108e3ba` semantically rebases the owner implementation onto current master; `2e6f4961` removes obsolete preservation-only assertions, restores current composed generated workers/maps, and makes the native fixture follow the metadata-declared table plus the shipped Amp Envelope defaults.
+- `core-shapes` is one byte-reproducible analytic table containing exactly four 2,048-sample frames in Sine, Square, Triangle, Saw order. A/B/C Init defaults select it at 238; no Index interpolation, modulation, display, drag, or snapping behavior changed. Andrew explicitly waived all unpublished old-state compatibility, while current-format save/Init/recall remains green.
+- Final focused gates pass the default contract 3/3, oscillator/Init 27/27, wavetable-bank 30/30, current Speedrun default, generated-map provenance, web build, and native production oscillator-to-output path. No Ableton/listening, physical iPhone, or other physical-device acceptance is claimed.
 
 T63 real-rack latency decision — 2026-08-28
 - Andrew chose to ship whole-Effects-Lane Mix and Bypass for the current creative rack, whose legal effects add no latency under ADR-008. The integration must remove the misleading synthetic future-latency helper/test/claim rather than redesigning the rack now.
