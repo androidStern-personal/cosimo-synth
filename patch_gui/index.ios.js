@@ -20894,7 +20894,7 @@ function parseJsonDocument$1(input) {
     return { _tag: "err", message: `${LANE_STATE_KEY} is not valid JSON: ${detail}` };
   }
 }
-function isRecord$3(value) {
+function isRecord$4(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function parseEffectId(input) {
@@ -20908,7 +20908,7 @@ function parseLaneState(input) {
   if (document2._tag === "err") {
     return document2;
   }
-  if (!isRecord$3(document2.value)) {
+  if (!isRecord$4(document2.value)) {
     return { _tag: "err", message: `${LANE_STATE_KEY} must be an object` };
   }
   const allowedKeys = /* @__PURE__ */ new Set(["format", "version", "order", "enabled", "params"]);
@@ -20933,7 +20933,7 @@ function parseLaneState(input) {
     seen.add(effectId);
     order.push(effectId);
   }
-  if (!isRecord$3(document2.value.enabled)) {
+  if (!isRecord$4(document2.value.enabled)) {
     return { _tag: "err", message: `${LANE_STATE_KEY}.enabled must be an object` };
   }
   if (Reflect.ownKeys(document2.value.enabled).length !== RACK_EFFECT_ORDER.length) {
@@ -20947,7 +20947,7 @@ function parseLaneState(input) {
     }
     enabled[effectId] = rawEnabled;
   }
-  if (!isRecord$3(document2.value.params)) {
+  if (!isRecord$4(document2.value.params)) {
     return { _tag: "err", message: `${LANE_STATE_KEY}.params must be an object` };
   }
   if (Reflect.ownKeys(document2.value.params).length !== RACK_EFFECT_ORDER.length) {
@@ -20956,7 +20956,7 @@ function parseLaneState(input) {
   const params = {};
   for (const effectId of RACK_EFFECT_ORDER) {
     const rawDeviceParams = document2.value.params[effectId];
-    if (!isRecord$3(rawDeviceParams)) {
+    if (!isRecord$4(rawDeviceParams)) {
       return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId} must be an object` };
     }
     const descriptors = getRackEffectDescriptor(effectId).parameters;
@@ -21195,7 +21195,7 @@ function parseLaneGroupId(value) {
   }
   return { groupKind, unitNumber };
 }
-function isRecord$2(value) {
+function isRecord$3(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function hasExactKeys(value, keys) {
@@ -21210,7 +21210,7 @@ function parseDeviceRecord(deviceId, input) {
   if (parsedId === null) {
     return { failure: err(`device id ${deviceId} is not a pool instance`) };
   }
-  if (!isRecord$2(input) || !hasExactKeys(input, ["params"]) || !isRecord$2(input.params)) {
+  if (!isRecord$3(input) || !hasExactKeys(input, ["params"]) || !isRecord$3(input.params)) {
     return { failure: err(`device ${deviceId} must be { params }`) };
   }
   const endpoints = laneDeviceParamEndpoints(parsedId.deviceType);
@@ -21236,7 +21236,7 @@ function parseDeviceRecord(deviceId, input) {
   return { record: { params: materializeLaneDeviceParams(parsedId.deviceType, inputParams) } };
 }
 function parsePlacement(input, deviceIds) {
-  if (!isRecord$2(input) || input.kind !== "device") {
+  if (!isRecord$3(input) || input.kind !== "device") {
     return { failure: err("branches may hold device placements only") };
   }
   if (!hasExactKeys(input, ["kind", "deviceId", "enabled"])) {
@@ -21257,7 +21257,7 @@ function createDefaultLaneOutputState() {
   return { mix: 1, bypassed: false };
 }
 function parseLaneOutputState(input) {
-  if (!isRecord$2(input) || !hasExactKeys(input, ["mix", "bypassed"])) {
+  if (!isRecord$3(input) || !hasExactKeys(input, ["mix", "bypassed"])) {
     return null;
   }
   if (typeof input.mix !== "number" || !Number.isFinite(input.mix) || input.mix < 0 || input.mix > 1 || typeof input.bypassed !== "boolean") {
@@ -21275,13 +21275,13 @@ function parseLaneStateV2(input) {
       return err(`is not valid JSON: ${detail}`);
     }
   }
-  if (!isRecord$2(document2) || !hasExactKeys(document2, ["format", "version", "output", "devices", "chain"])) {
+  if (!isRecord$3(document2) || !hasExactKeys(document2, ["format", "version", "output", "devices", "chain"])) {
     return err("must be { format, version, output, devices, chain }");
   }
   if (document2.format !== "cosimo.lane" || document2.version !== 2) {
     return err("must be cosimo.lane version 2");
   }
-  if (!isRecord$2(document2.devices)) {
+  if (!isRecord$3(document2.devices)) {
     return err("devices must be an object");
   }
   if (!Array.isArray(document2.chain)) {
@@ -21319,7 +21319,7 @@ function parseLaneStateV2(input) {
     return parsed;
   };
   for (const rawNode of document2.chain) {
-    if (!isRecord$2(rawNode)) {
+    if (!isRecord$3(rawNode)) {
       return err("chain nodes must be objects");
     }
     if (rawNode.kind === "device") {
@@ -27438,7 +27438,7 @@ const BOUNCE_PATCH_DOCUMENT_VERSION = 1;
 function invariant(condition, message) {
   if (!condition) throw new Error(message);
 }
-function isRecord$1(value) {
+function isRecord$2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function cloneJsonValue(value, field = "value") {
@@ -27450,7 +27450,7 @@ function cloneJsonValue(value, field = "value") {
   if (Array.isArray(value)) {
     return value.map((entry, index) => cloneJsonValue(entry, `${field}[${index}]`));
   }
-  invariant(isRecord$1(value), `${field} must be JSON-compatible`);
+  invariant(isRecord$2(value), `${field} must be JSON-compatible`);
   return Object.fromEntries(
     Object.keys(value).sort().map((key) => [key, cloneJsonValue(value[key], `${field}.${key}`)])
   );
@@ -27467,8 +27467,8 @@ function canonicalJsonStringify(value) {
   return JSON.stringify(cloneJsonValue(value));
 }
 function createBouncePatchDocument({ parameters, storedState } = {}) {
-  invariant(isRecord$1(parameters), "Bounce patch parameters must be an object");
-  invariant(isRecord$1(storedState), "Bounce patch storedState must be an object");
+  invariant(isRecord$2(parameters), "Bounce patch parameters must be an object");
+  invariant(isRecord$2(storedState), "Bounce patch storedState must be an object");
   const normalizedParameters = {};
   for (const endpointID of Object.keys(parameters).sort()) {
     const value = parameters[endpointID];
@@ -27492,7 +27492,7 @@ function createBouncePatchDocument({ parameters, storedState } = {}) {
 function parseBouncePatchDocument(value) {
   const parsed = parseJsonDocument(value, "Bounce patch document");
   invariant(
-    isRecord$1(parsed) && parsed.format === BOUNCE_PATCH_DOCUMENT_FORMAT && parsed.version === BOUNCE_PATCH_DOCUMENT_VERSION,
+    isRecord$2(parsed) && parsed.format === BOUNCE_PATCH_DOCUMENT_FORMAT && parsed.version === BOUNCE_PATCH_DOCUMENT_VERSION,
     "Unsupported Bounce patch document"
   );
   invariant(
@@ -27504,7 +27504,7 @@ function parseBouncePatchDocument(value) {
 function parseBounceDocument(value) {
   const parsed = parseJsonDocument(value, BOUNCE_STATE_KEY);
   invariant(
-    isRecord$1(parsed) && parsed.format === BOUNCE_DOCUMENT_FORMAT && parsed.version === BOUNCE_DOCUMENT_VERSION,
+    isRecord$2(parsed) && parsed.format === BOUNCE_DOCUMENT_FORMAT && parsed.version === BOUNCE_DOCUMENT_VERSION,
     "Unsupported bounce.v1 document"
   );
   const exactKeys = [
@@ -27545,16 +27545,16 @@ function parseBounceDocument(value) {
   let expectedOffset = 0;
   parsed.segments.forEach((segment, index) => {
     invariant(
-      isRecord$1(segment) && segment.rootNote === parsed.roots[index] && segment.frameOffset === expectedOffset && Number.isInteger(segment.frameCount) && segment.frameCount > 0 && Number.isInteger(segment.noteOffFrameOffset) && segment.noteOffFrameOffset > 0 && segment.noteOffFrameOffset < segment.frameCount,
+      isRecord$2(segment) && segment.rootNote === parsed.roots[index] && segment.frameOffset === expectedOffset && Number.isInteger(segment.frameCount) && segment.frameCount > 0 && Number.isInteger(segment.noteOffFrameOffset) && segment.noteOffFrameOffset > 0 && segment.noteOffFrameOffset < segment.frameCount,
       `bounce.v1 segment ${index} is invalid`
     );
     expectedOffset += segment.frameCount;
   });
   invariant(
-    isRecord$1(parsed.capture) && Number.isInteger(parsed.capture.sampleRate) && parsed.capture.sampleRate > 0 && typeof parsed.capture.tempoBpm === "number" && parsed.capture.tempoBpm > 0 && parsed.capture.velocity === 100 && Number.isInteger(parsed.capture.holdFrames) && parsed.capture.holdFrames > 0 && Number.isInteger(parsed.capture.tailCapFrames) && parsed.capture.tailCapFrames > 0,
+    isRecord$2(parsed.capture) && Number.isInteger(parsed.capture.sampleRate) && parsed.capture.sampleRate > 0 && typeof parsed.capture.tempoBpm === "number" && parsed.capture.tempoBpm > 0 && parsed.capture.velocity === 100 && Number.isInteger(parsed.capture.holdFrames) && parsed.capture.holdFrames > 0 && Number.isInteger(parsed.capture.tailCapFrames) && parsed.capture.tailCapFrames > 0,
     "bounce.v1 capture metadata is invalid"
   );
-  invariant(isRecord$1(parsed.revertRef), "bounce.v1 revertRef is invalid");
+  invariant(isRecord$2(parsed.revertRef), "bounce.v1 revertRef is invalid");
   const previousBankDigest = parsed.revertRef.bankDigest;
   invariant(
     previousBankDigest === null || typeof previousBankDigest === "string" && /^[0-9a-f]{64}$/.test(previousBankDigest),
@@ -27572,12 +27572,12 @@ function parseBounceDocument(value) {
 function serializeBounceDocument(document2) {
   return canonicalJsonStringify(parseBounceDocument(document2));
 }
-function isRecord(value) {
+function isRecord$1(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function readFullStoredStateValue$1(storedState) {
-  if (!isRecord(storedState)) return void 0;
-  const nestedValues = isRecord(storedState.values) ? storedState.values : null;
+  if (!isRecord$1(storedState)) return void 0;
+  const nestedValues = isRecord$1(storedState.values) ? storedState.values : null;
   if (nestedValues && Object.hasOwn(nestedValues, BOUNCE_STATE_KEY)) {
     return nestedValues[BOUNCE_STATE_KEY];
   }
@@ -27626,8 +27626,8 @@ function createBouncePresetStoredStateAdapter(patchConnection) {
     }
   };
   const handleStoredStateValue = (message) => {
-    const payload = isRecord(message) && isRecord(message.event) ? message.event : message;
-    if (!isRecord(payload) || payload.key !== BOUNCE_STATE_KEY) return;
+    const payload = isRecord$1(message) && isRecord$1(message.event) ? message.event : message;
+    if (!isRecord$1(payload) || payload.key !== BOUNCE_STATE_KEY) return;
     const isHydration = awaitingKeyHydration;
     awaitingKeyHydration = false;
     acceptIncoming(payload.value, isHydration);
@@ -28434,6 +28434,29 @@ function useSynthInputRouter(keyboardRef, {
     bindArrowTarget,
     bindTextEntryTarget
   }), [activateArrowTarget, beginTextEntry, endTextEntry, bindArrowTarget, bindTextEntryTarget]);
+}
+const POLISH_ENHANCER_AMOUNT_ENDPOINT_ID = "polishEnhancerAmount";
+const POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID = "polishCompressionClipAmount";
+const POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID = "polishOutputTrimDb";
+const POLISH_METER_ENDPOINT_ID = "polishMeter";
+const SILENT_POLISH_METER_FRAME = Object.freeze({
+  peakDbfs: -120,
+  loudnessDbfs: -120
+});
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function normalizePolishMeterMessage(value) {
+  const candidate = isRecord(value) && "event" in value ? value.event : value;
+  if (!isRecord(candidate)) {
+    return null;
+  }
+  const peakDbfs = candidate.peakDbfs;
+  const loudnessDbfs = candidate.loudnessDbfs;
+  if (typeof peakDbfs !== "number" || !Number.isFinite(peakDbfs) || typeof loudnessDbfs !== "number" || !Number.isFinite(loudnessDbfs)) {
+    return null;
+  }
+  return { peakDbfs, loudnessDbfs };
 }
 const DEFAULT_SAMPLES_PER_FRAME = 2048;
 const DEFAULT_FACTORY_BANK_CATALOG_PATH = "assets/factory-bank-catalog.json";
@@ -30409,6 +30432,21 @@ function useSynthPatchViewModel({
     initialValue: 0,
     coerce: (value) => clamp$3(Number(value) || 0, -12, 60)
   });
+  const polishEnhancerAmount = usePatchParameterBinding({
+    endpointID: POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$3(Number(value) || 0, 0, 1)
+  });
+  const polishCompressionClipAmount = usePatchParameterBinding({
+    endpointID: POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$3(Number(value) || 0, 0, 1)
+  });
+  const polishOutputTrimDb = usePatchParameterBinding({
+    endpointID: POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID,
+    initialValue: 0,
+    coerce: (value) => clamp$3(Number(value) || 0, -24, 12)
+  });
   const unisonVoices = usePatchParameterBinding({
     endpointID: oscillatorEndpointID("unisonVoices"),
     initialValue: 1,
@@ -30640,6 +30678,14 @@ function useSynthPatchViewModel({
   const observedDistortionHistory = useObservedDistortionHistory(observeDistortionVisuals);
   const observedDistortionScope = useObservedDistortionScope(observeDistortionVisuals);
   const observedMsegState = useObservedMsegState(observeMsegPlayhead);
+  const polishMeterMessage = usePatchVisualEndpoint(
+    POLISH_METER_ENDPOINT_ID,
+    null
+  );
+  const observedPolishMeter = reactExports.useMemo(
+    () => normalizePolishMeterMessage(polishMeterMessage) ?? SILENT_POLISH_METER_FRAME,
+    [polishMeterMessage]
+  );
   const voiceArticulationStartMessage = usePatchEndpoint(
     VOICE_ARTICULATION_START_ENDPOINT_ID,
     null
@@ -32025,6 +32071,9 @@ function useSynthPatchViewModel({
     voiceEnhancerAmount,
     voiceEnhancerKeyTrackEnabled,
     voiceEnhancerKeyTrackOffsetSemitones,
+    polishEnhancerAmount,
+    polishCompressionClipAmount,
+    polishOutputTrimDb,
     unisonVoices,
     unisonDetune,
     unisonBlend,
@@ -32058,6 +32107,7 @@ function useSynthPatchViewModel({
     observedMsegPlayhead,
     observedWarpState,
     observedUnisonState,
+    observedPolishMeter,
     modulationState,
     articulationBank,
     articulationSlots,
