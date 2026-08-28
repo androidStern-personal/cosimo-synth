@@ -1370,7 +1370,7 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - The shipped `core-shapes` table contains exactly four analytic 2,048-sample frames in the required Sine, Square, Triangle, Saw order. Its WAV is byte-reproducible with SHA-256 `ad6dd10ef0ea14631fb60c7103c575888dec75c7ba6ac89aeba1ca4212657993`; A/B/C Init defaults are selector 238 and current-format save/Init/recall is green.
     - Final focused qualification passes the default table contract 3/3, oscillator/Init contract 27/27, wavetable-bank suite 30/30, current Speedrun default proof, generated source-map provenance, web build, and the production oscillator-to-output native gain path. Index interpolation/control sources remain unchanged. No Ableton, listening, physical iPhone, or other physical-device acceptance is claimed.
 
-[ ] T60 — Make the Mod bar scale adjustable and let it float or park horizontally
+[x] T60 — Make the Mod bar scale adjustable and let it float or park horizontally
     Active owner (2026-08-27):
     - Codex task `T60 Build scalable parkable Mod bar`, thread `01a04429-7283-7553-bf22-8c7633b1e892`, branch `codex/t60-scalable-parkable-mod-bar`, worktree `/Users/winterfell/.codex/worktrees/bf11/cosimo-synth`, model SOL, reasoning max.
     - This is a coordinator-managed implementation task. Final review, rebase, merge, push, and any deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
@@ -1399,7 +1399,9 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Moving-master review caught and repaired an already-selected MSEG tap that silently moved the visible source page and prevented T66's MSEG 1 -> MSEG 2 Rate drag from starting. The exact composed T66 route/create/edit case and T60 live-placement drag case both pass after repair.
     - The complete desktop UI run was 272/274 before that focused repair: all seven T60 cases passed, the established React Grab `navigator.webdriver` assertion remained red, and the T66 composed regression was repaired and passed in isolated rerun as required by the integration protocol. Generated Developer Settings/Sites proof passes 1/1; source-map provenance and focused strict TypeScript are clean.
     - Fresh HMR was verified from coordinator worktree `74e4` at `http://127.0.0.1:5174` with `usesViteClient: true`, then stopped. A final compiled-mode build installed and strict-code-sign verified `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`; installed executable SHA-256 is `59555f776e70712c51a0ce8a2a02338a68d0d948ac72629d2b7d48317e28c7a5`.
-    - Andrew's first composed review required one repair: the parked trigger-note button must remain permanently visible immediately before the right paddle. T60 remains open for that repaired composed review and the shipped-default coefficient decision. No Ableton interaction/listening or physical iPhone/touch acceptance is claimed.
+    - Andrew approved the repaired parked contract on 2026-08-28 and directed the coordinator to finish the queue. The trigger-note button is permanent right-side chrome immediately before the right paddle on every source/tools page, and the established 1.10 coefficient remains the shipped default within the adjustable 0.85-1.30 range.
+    - The focused real-browser T60 matrix passes 8/8, including 393x852 phone proof of the permanent trigger-note position on source and tools pages; the composed T66 MSEG 1 -> open MSEG 2 Rate drag remains green. The final composed Cmajor rack gate passes 93/93. Moving-master browser fixtures exposed by the complete desktop/orphan runs were repaired and passed their focused full-file reruns; the only unrepaired desktop diagnostic remains the established unrelated React Grab `navigator.webdriver` assertion.
+    - Fresh coordinator HMR launched the exact `74e4` standalone and the compiled phone render was reviewed. The final self-contained VST3 built in compiled mode, passes strict deep code-sign verification, and has executable SHA-256 `aecc9d516ffcd6e8de58294e692119c5dae4ff798bd2adda42f71b02dff48b59`. This sandbox could not replace the user Library plug-in, so the currently installed VST3 remains the earlier development-server artifact; no Ableton interaction/listening or physical iPhone/touch acceptance is claimed.
 
 [ ] T61 — Package Enhancer Lite as a shippable free VST3 and iOS AUv3 product
     Existing starting point:
@@ -1441,7 +1443,7 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     Done when:
     - The approved three-value Voice interface fits in the existing Filter footprint without shrinking or covering either stage, and tests prove the Enhancer processes each voice after its filter but before voices are combined, fixed linked Mid/Side uses one Amount with no hidden mode state, optional pitch tracking works independently across simultaneous notes, zero Amount is bit-identical, state round trips are complete, retained-voice CPU is acceptable, and the fixed T26/T28 Polish Enhancer is unchanged.
 
-[ ] T63 — Discuss and build whole-Effects-chain Mix and Bypass
+[x] T63 — Discuss and build whole-Effects-chain Mix and Bypass
     Active owner (2026-08-27):
     - Codex task `T63 Build Effects Lane Mix and Bypass`, thread `01a04330-913e-7482-a486-ce792f10ee69`, branch `codex/t63-effects-lane-mix-bypass`, worktree `/Users/winterfell/.codex/worktrees/c0e8/cosimo-synth`, model SOL, reasoning max.
     - This is a coordinator-managed implementation task. Final review, rebase, merge, push, and any deployment belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
@@ -1458,6 +1460,11 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     Done when:
     - The real composed FX page proves the overlaid controls consume no additional graph height and do not cover or block any graph content or interaction at representative sizes.
     - Tests cover empty, serial, split, parallel, feedback/tail, bypass-transition, preset, Init, and URL-share cases with click-free output; inventory tests prove neither control is modulatable or host-automatable. Tests must not manufacture a latency-producing child that the production rack cannot represent or report.
+    Completion evidence (2026-08-28):
+    - The canonical lane document now stores strict top-level `output:{mix,bypassed}` state. Mix retains continuous 0-100% state, Bypass temporarily overrides it, and restore sends output state before topology/device replay. Neither control enters host or modulation inventories.
+    - One retargetable 3 ms outer ramp blends the real current zero-latency rack with aligned dry input after every editable layout and before fixed Polish. The rack keeps advancing while bypassed. The synthetic future-latency helper/test/claim was removed; any future delayed/lookahead effect still requires the separate architecture decision recorded above.
+    - Bypass occupies the unused graph top-left and Mix stays inside the graph's bottom scroller with a real >=44 px touch target and no added graph height. Empty, serial, Parallel, Frequency Split, tail/feedback, zero-Mix, bypass, preset, Init, URL, and inventory cases pass. Final composed qualification includes Cmajor rack 93/93, sound/preset/share 30/30 across non-browser and browser paths, and focused green reruns for every moving-master browser/orphan fixture found by the broad gates; the only unrepaired desktop diagnostic is the established unrelated React Grab `navigator.webdriver` assertion.
+    - Fresh coordinator HMR launched the exact `74e4` standalone. The final self-contained compiled VST3 passes strict deep code-sign verification with executable SHA-256 `aecc9d516ffcd6e8de58294e692119c5dae4ff798bd2adda42f71b02dff48b59`. This sandbox could not replace the user Library plug-in, so final Ableton installation/use, subjective click/listening acceptance, host round-trip inspection, and physical iPhone touch/audio acceptance remain unperformed.
 
 [ ] T64 — Toggle an effect's bypass from its selected graph icon without stealing scroll gestures
     Tap behavior:
