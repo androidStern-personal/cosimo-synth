@@ -2588,6 +2588,7 @@ function VoiceEnhancerSection({
                     armedSource={armedSource}
                     formatValue={keyTrackEnabled ? formatVoiceEnhancerRatio : formatCutoffDisplay}
                     modulationApplication="octaves"
+                    keyTrackEnabled={keyTrackEnabled}
                     entrySpec={keyTrackEnabled
                         ? VOICE_ENHANCER_RATIO_ENTRY_SPEC
                         : voiceEnhancerEntrySpec(VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency)}

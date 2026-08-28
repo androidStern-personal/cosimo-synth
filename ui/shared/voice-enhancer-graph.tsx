@@ -1,5 +1,6 @@
 import {
     useCallback,
+    useEffect,
     useId,
     useMemo,
     useRef,
@@ -46,6 +47,8 @@ export function VoiceEnhancerGraph({
     onAmountChange,
 }: VoiceEnhancerGraphProps) {
     const activePointerRef = useRef<number | null>(null);
+    const onGestureEndRef = useRef(onGestureEnd);
+    onGestureEndRef.current = onGestureEnd;
     const gradientID = useId();
     const normalizedFrequency = clamp01(frequencyNormalized);
     const normalizedAmount = clamp01(amount);
@@ -79,11 +82,26 @@ export function VoiceEnhancerGraph({
         ));
     }, [onAmountChange, onFrequencyNormalizedChange]);
 
-    const finishGesture = useCallback((pointerID: number) => {
-        if (activePointerRef.current !== pointerID) return;
+    const finishGesture = useCallback((pointerID?: number) => {
+        if (activePointerRef.current === null
+            || (pointerID !== undefined && activePointerRef.current !== pointerID)) return;
         activePointerRef.current = null;
-        onGestureEnd();
-    }, [onGestureEnd]);
+        onGestureEndRef.current();
+    }, []);
+
+    useEffect(() => {
+        const handleWindowBlur = () => finishGesture();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") finishGesture();
+        };
+        window.addEventListener("blur", handleWindowBlur);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("blur", handleWindowBlur);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            finishGesture();
+        };
+    }, [finishGesture]);
 
     const handleKeyDown = (event: ReactKeyboardEvent<SVGSVGElement>) => {
         if (disabled) return;
@@ -122,7 +140,7 @@ export function VoiceEnhancerGraph({
             tabIndex={disabled ? -1 : 0}
             onKeyDown={handleKeyDown}
             onPointerDown={(event) => {
-                if (disabled || activePointerRef.current !== null) return;
+                if (disabled || event.button !== 0 || activePointerRef.current !== null) return;
                 event.preventDefault();
                 activePointerRef.current = event.pointerId;
                 event.currentTarget.setPointerCapture(event.pointerId);

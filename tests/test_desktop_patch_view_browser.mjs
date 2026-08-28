@@ -1693,8 +1693,35 @@ test("compact Voice splits its height 50/50 between the wavetable editor and the
 });
 
 test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and Ratio state independent", async () => {
+    const enhancerFrequencyRouteID = "tracked-voice-enhancer-frequency";
+    const routedState = {
+        ...createDefaultModulationState(),
+        routes: [{
+            id: enhancerFrequencyRouteID,
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "bipolar",
+            targetKind: "voiceEnhancerFrequencyOctaves",
+            amount: 0.25,
+            reducer: "max",
+        }],
+    };
+    const readEnhancerFrequencyRoute = (snapshot) => {
+        const rawState = snapshot.storedState[MODULATION_STATE_KEY];
+        if (typeof rawState !== "string") return undefined;
+        return JSON.parse(rawState).routes
+            .find((route) => route.id === enhancerFrequencyRouteID);
+    };
     const page = await openHarnessPage({
-        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(({ stateKey, state }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    storedState: { [stateKey]: JSON.stringify(state) },
+                };
+            }, { stateKey: MODULATION_STATE_KEY, state: routedState });
+        },
     });
 
     try {
@@ -1739,6 +1766,26 @@ test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and
         assert.ok(keyTrackBox.x >= graphBox.x && keyTrackBox.y >= graphBox.y);
         assert.ok(keyTrackBox.x + keyTrackBox.width <= graphBox.x + graphBox.width);
         assert.ok(keyTrackBox.y + keyTrackBox.height <= graphBox.y + graphBox.height);
+
+        const beforeSecondaryClick = await getHarnessSnapshot(page);
+        await clearHarnessDebugLog(page);
+        await page.mouse.click(
+            graphBox.x + graphBox.width * 0.22,
+            graphBox.y + graphBox.height * 0.74,
+            { button: "right" },
+        );
+        await waitForReactFrames(page, 2);
+        const afterSecondaryClick = await getHarnessSnapshot(page);
+        assert.equal(
+            afterSecondaryClick.parameterValues.voiceEnhancerFrequency,
+            beforeSecondaryClick.parameterValues.voiceEnhancerFrequency,
+        );
+        assert.equal(
+            afterSecondaryClick.parameterValues.voiceEnhancerAmount,
+            beforeSecondaryClick.parameterValues.voiceEnhancerAmount,
+        );
+        assert.deepEqual(afterSecondaryClick.gestureStarts, []);
+        assert.deepEqual(afterSecondaryClick.gestureEnds, []);
 
         await clearHarnessDebugLog(page);
         await page.mouse.move(graphBox.x + graphBox.width * 0.58, graphBox.y + graphBox.height * 0.62);
@@ -1794,6 +1841,40 @@ test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and
         );
         assert.equal(Number(snapshot.parameterValues.voiceEnhancerFrequency), retainedFixedFrequency);
 
+        await waitForHarnessSnapshot(
+            page,
+            "Enhancer tracked frequency route seed",
+            (candidate) => readEnhancerFrequencyRoute(candidate) !== undefined,
+        );
+        assert.equal(
+            (await page.locator('[data-role="voice-enhancer-route-count-voiceEnhancerFrequencyOctaves"]').textContent())?.trim(),
+            "1",
+        );
+
+        await ratioKnob.click({ button: "right" });
+        await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
+        sheet = page.locator('[data-role="rack-parameter-value-sheet"]');
+        const labels = await sheet.locator("label > span:first-child").allTextContents();
+        assert.deepEqual(labels, ["Ratio", "MSEG 1 -> Ratio"]);
+        const routeAmountInput = sheet.locator('[data-role="rack-modulation-value-input"]');
+        assert.equal(await routeAmountInput.inputValue(), "3");
+        assert.equal(
+            (await routeAmountInput.locator("xpath=following-sibling::em").textContent())?.trim(),
+            "st",
+        );
+        await routeAmountInput.fill("4.5 st");
+        await sheet.locator('[data-role="rack-value-sheet-apply"]').click();
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "Enhancer tracked route exact entry",
+            (candidate) => {
+                const route = readEnhancerFrequencyRoute(candidate);
+                return Math.abs(Number(route?.amount) - 0.375) < 1e-9;
+            },
+        );
+        assert.equal(Number(snapshot.parameterValues.voiceEnhancerFrequency), retainedFixedFrequency);
+        assert.equal(Number(snapshot.parameterValues.voiceEnhancerKeyTrackOffsetSemitones), 12);
+
         await keyTrackButton.click();
         snapshot = await waitForHarnessSnapshot(
             page,
@@ -1802,6 +1883,173 @@ test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and
         );
         assert.equal(Number(snapshot.parameterValues.voiceEnhancerFrequency), retainedFixedFrequency);
         assert.equal(await page.locator('[data-role="voice-enhancer-knob-voiceEnhancerFrequency"]').count(), 1);
+
+        await clearHarnessDebugLog(page);
+        const teardownGraph = page.locator('[data-role="voice-enhancer-graph"]');
+        const teardownGraphBox = await teardownGraph.boundingBox();
+        assert.ok(teardownGraphBox);
+        await page.mouse.move(
+            teardownGraphBox.x + teardownGraphBox.width * 0.42,
+            teardownGraphBox.y + teardownGraphBox.height * 0.58,
+        );
+        await page.mouse.down();
+        await page.mouse.move(
+            teardownGraphBox.x + teardownGraphBox.width * 0.47,
+            teardownGraphBox.y + teardownGraphBox.height * 0.52,
+            { steps: 2 },
+        );
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "Enhancer teardown gesture active",
+            (candidate) => candidate.gestureStarts.length === 2,
+        );
+        assert.deepEqual(snapshot.gestureStarts, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+        assert.deepEqual(snapshot.gestureEnds, [], "ordinary graph rerenders must not end an active gesture");
+
+        await page.locator('[data-role="voice-tone-stage-filter"]').evaluate((element) => element.click());
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="voice-filter-enhancer-footprint"]')
+                ?.getAttribute("data-selected-stage") === "filter"
+        ));
+        await page.mouse.up();
+        await waitForReactFrames(page, 2);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureStarts, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+        assert.deepEqual(
+            snapshot.gestureEnds,
+            ["voiceEnhancerFrequency", "voiceEnhancerAmount"],
+            "unmount, capture loss, and the later pointer-up must close each gesture once",
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("the per-voice Enhancer graph closes active gestures when focus, visibility, or capture is lost", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.locator('[data-role="voice-tone-stage-enhancer"]').click();
+        const graph = page.locator('[data-role="voice-enhancer-graph"]');
+        const graphBox = await graph.boundingBox();
+        assert.ok(graphBox);
+
+        await clearHarnessDebugLog(page);
+        await page.mouse.move(
+            graphBox.x + graphBox.width * 0.44,
+            graphBox.y + graphBox.height * 0.62,
+        );
+        await page.mouse.down();
+        await page.mouse.move(
+            graphBox.x + graphBox.width * 0.5,
+            graphBox.y + graphBox.height * 0.56,
+            { steps: 2 },
+        );
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "Enhancer window-blur gesture active",
+            (candidate) => candidate.gestureStarts.length === 2,
+        );
+        assert.deepEqual(snapshot.gestureEnds, []);
+
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+        await waitForReactFrames(page, 2);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureEnds, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+
+        await page.mouse.up();
+        await waitForReactFrames(page, 2);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureStarts, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+        assert.deepEqual(snapshot.gestureEnds, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+
+        await clearHarnessDebugLog(page);
+        await page.mouse.move(
+            graphBox.x + graphBox.width * 0.52,
+            graphBox.y + graphBox.height * 0.6,
+        );
+        await page.mouse.down();
+        await page.mouse.move(
+            graphBox.x + graphBox.width * 0.56,
+            graphBox.y + graphBox.height * 0.54,
+            { steps: 2 },
+        );
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "Enhancer visibility-loss gesture active",
+            (candidate) => candidate.gestureStarts.length === 2,
+        );
+        assert.deepEqual(snapshot.gestureEnds, []);
+
+        await page.evaluate(() => {
+            Object.defineProperty(document, "visibilityState", {
+                configurable: true,
+                value: "hidden",
+            });
+            Object.defineProperty(document, "hidden", {
+                configurable: true,
+                value: true,
+            });
+            document.dispatchEvent(new Event("visibilitychange"));
+        });
+        await waitForReactFrames(page, 2);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureEnds, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+
+        await page.evaluate(() => {
+            Object.defineProperty(document, "visibilityState", {
+                configurable: true,
+                value: "visible",
+            });
+            Object.defineProperty(document, "hidden", {
+                configurable: true,
+                value: false,
+            });
+        });
+        await page.mouse.up();
+        await waitForReactFrames(page, 2);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureStarts, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+        assert.deepEqual(snapshot.gestureEnds, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+
+        await clearHarnessDebugLog(page);
+        await page.mouse.move(
+            graphBox.x + graphBox.width * 0.46,
+            graphBox.y + graphBox.height * 0.64,
+        );
+        await page.mouse.down();
+        await page.mouse.move(
+            graphBox.x + graphBox.width * 0.51,
+            graphBox.y + graphBox.height * 0.57,
+            { steps: 2 },
+        );
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "Enhancer capture-loss gesture active",
+            (candidate) => candidate.gestureStarts.length === 2,
+        );
+        assert.deepEqual(snapshot.gestureEnds, []);
+        const capturedPointerID = await graph.evaluate((element) => {
+            for (let pointerID = 1; pointerID <= 16; pointerID += 1) {
+                if (element.hasPointerCapture(pointerID)) return pointerID;
+            }
+            return null;
+        });
+        assert.notEqual(capturedPointerID, null);
+        await graph.evaluate((element, pointerID) => {
+            element.releasePointerCapture(pointerID);
+        }, capturedPointerID);
+        await waitForReactFrames(page, 2);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureEnds, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+
+        await page.mouse.up();
+        await waitForReactFrames(page, 2);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureStarts, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
+        assert.deepEqual(snapshot.gestureEnds, ["voiceEnhancerFrequency", "voiceEnhancerAmount"]);
     } finally {
         await page.close();
     }
