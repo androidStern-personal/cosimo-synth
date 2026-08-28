@@ -140,6 +140,11 @@ test("version skew uses the existing synth preset migrations after link decode",
             { endpointID: "ampSustain", type: "number", min: 0, max: 1, defaultValue: 1 },
             { endpointID: "filterCutoffKeyTrackEnabled", type: "number", min: 0, max: 1, defaultValue: 0 },
             { endpointID: "filterCutoffKeyTrackOffsetSemitones", type: "number", min: -60, max: 60, defaultValue: 0 },
+            { endpointID: "voiceEnhancerFrequency", type: "number", min: 20, max: 20_000, defaultValue: 130 },
+            { endpointID: "voiceEnhancerQ", type: "number", min: 0.1, max: 10, defaultValue: 0.71 },
+            { endpointID: "voiceEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+            { endpointID: "voiceEnhancerKeyTrackEnabled", type: "number", min: 0, max: 1, defaultValue: 0 },
+            { endpointID: "voiceEnhancerKeyTrackOffsetSemitones", type: "number", min: -12, max: 60, defaultValue: 0 },
         ],
         storedState: [
             { key: "modulation.v6", schemaVersion: 6, required: true },
@@ -178,6 +183,11 @@ test("version skew uses the existing synth preset migrations after link decode",
     assert.equal(normalized.parameters.ampRelease, 1.73);
     assert.equal(normalized.parameters.filterCutoffKeyTrackEnabled, 0);
     assert.equal(normalized.parameters.filterCutoffKeyTrackOffsetSemitones, 0);
+    assert.equal(normalized.parameters.voiceEnhancerFrequency, 130);
+    assert.equal(normalized.parameters.voiceEnhancerQ, 0.71);
+    assert.equal(normalized.parameters.voiceEnhancerAmount, 0);
+    assert.equal(normalized.parameters.voiceEnhancerKeyTrackEnabled, 0);
+    assert.equal(normalized.parameters.voiceEnhancerKeyTrackOffsetSemitones, 0);
     assert.equal(normalized.storedState["bounce.v1"], null);
     assert.deepEqual(normalized.storedState["modulation.v6"], legacyPreset.storedState["modulation.v6"]);
 });
