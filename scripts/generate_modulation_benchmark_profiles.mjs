@@ -19,6 +19,60 @@ import { compileModulationRuntimeProgram } from "../patch_gui/modulation-runtime
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..");
 const neutralAmountUnit = 1 / 64;
+const expressionMidiValue = 100;
+const ampEnvelopeSustain = 1;
+const ampEnvelopeRouteValue = 1;
+
+function runtimeVoiceRouteContribution(sourceValue, amount, polarity) {
+    const source = Math.fround(Math.max(0, Math.min(1, sourceValue)));
+    const amount32 = Math.fround(amount);
+    const scale = polarity === "bipolar" ? Math.fround(amount32 * 2) : amount32;
+    const bias = polarity === "bipolar" ? Math.fround(-amount32) : 0;
+    return Math.fround(Math.fround(scale * source) + bias);
+}
+
+function runtimePolarityValue(sourceValue, polarity) {
+    const source = Math.fround(Math.max(0, Math.min(1, sourceValue)));
+    return polarity === "bipolar"
+        ? Math.fround(Math.fround(source * 2) - 1)
+        : source;
+}
+
+function runtimeRackReducedSource(sourceValue, polarity) {
+    const source = Math.fround(Math.max(0, Math.min(1, sourceValue)));
+    if (polarity !== "bipolar") return source;
+
+    let sourceSum = Math.fround(0);
+    for (let voiceIndex = 0; voiceIndex < 16; voiceIndex += 1) {
+        sourceSum = Math.fround(sourceSum + source);
+    }
+    const mean = Math.fround(sourceSum * Math.fround(1 / 16));
+    return runtimePolarityValue(mean, polarity);
+}
+
+function runtimeRackRouteContribution(sourceValue, amount, polarity) {
+    const reducedSource = runtimeRackReducedSource(sourceValue, polarity);
+    const gatedSource = Math.fround(reducedSource * Math.fround(1));
+    return Math.fround(gatedSource * Math.fround(amount));
+}
+
+function exactOpposingFloat32Amount(
+    sourceValue,
+    referenceContribution,
+    polarity,
+    routeContribution,
+) {
+    const unitContribution = routeContribution(sourceValue, Math.fround(1), polarity);
+    const candidate = Math.fround(-referenceContribution / unitContribution);
+    if (!(candidate > 0) || !Number.isFinite(candidate)) {
+        throw new Error(`Cannot calibrate ${polarity} neutral benchmark amount`);
+    }
+    const candidateContribution = routeContribution(sourceValue, candidate, polarity);
+    if (Math.fround(referenceContribution + candidateContribution) !== 0) {
+        throw new Error(`No exact float32 ${polarity} Amp Envelope compensation amount was found`);
+    }
+    return candidate;
+}
 
 function readOutputPath(argv) {
     const outputIndex = argv.indexOf("--output");
@@ -90,24 +144,40 @@ function buildNeutralRouteGroups() {
         throw new Error("Neutral benchmark source groups no longer cover the production source catalog");
     }
 
-    // MSEGs and ordinary envelopes are configured to exact zero. The settled
-    // Amp Envelope is full-scale, so its pair compensates the velocity value
-    // from the shared MIDI byte; pressure and slide receive that same byte.
-    // Macros are all set to the same value. Each group therefore contributes
-    // exactly zero while every compiled instruction still resolves its real
-    // production source, polarity, reducer, and destination.
-    const ampEnvelopeValue = 1;
-    const expressionValue = 100 / 127;
+    // MSEGs and ordinary envelopes are exact zero. The production route path
+    // clamps the legacy full-sustain Amp Envelope source to exactly 1, while
+    // MIDI 100 velocity remains a float32 fraction. Calibrate their amounts
+    // through the same direct-voice and reduced-rack float32 operations as
+    // Cmajor instead of deriving them in JS double. Pressure and slide receive
+    // the same expression byte, and macros share one value.
+    const expressionValue = Math.fround(expressionMidiValue / 127);
+    const ampEnvelopeValue = Math.fround(ampEnvelopeRouteValue);
+    const velocityAmount = Math.fround(-neutralAmountUnit);
+    const buildAmpVelocityAmounts = (routeContribution) => Object.fromEntries(
+        ["unipolar", "bipolar"].map((polarity) => {
+            const velocityContribution = routeContribution(expressionValue, velocityAmount, polarity);
+            return [polarity, [
+                exactOpposingFloat32Amount(
+                    ampEnvelopeValue,
+                    velocityContribution,
+                    polarity,
+                    routeContribution,
+                ),
+                velocityAmount,
+            ]];
+        }),
+    );
+    const ampVelocityAmounts = {
+        voice: buildAmpVelocityAmounts(runtimeVoiceRouteContribution),
+        voiceRack: buildAmpVelocityAmounts(runtimeRackRouteContribution),
+    };
     const voiceGroups = [
         { sources: [voiceSources[0], voiceSources[1]], weights: [1, -1] },
         { sources: [voiceSources[2], voiceSources[3]], weights: [1, -1] },
         { sources: [voiceSources[4], voiceSources[5]], weights: [1, -1] },
         {
             sources: [voiceSources[6], voiceSources[7]],
-            weightsForPolarity: {
-                unipolar: [expressionValue / ampEnvelopeValue, -1],
-                bipolar: [((2 * expressionValue) - 1) / ((2 * ampEnvelopeValue) - 1), -1],
-            },
+            amountsForPathAndPolarity: ampVelocityAmounts,
         },
         { sources: [voiceSources[8], voiceSources[9]], weights: [1, -1] },
     ];
@@ -128,6 +198,9 @@ function buildNeutralRouteGroups() {
         const targetGroups = targets.map((target, targetIndex) => sourceGroups.map((group, groupIndex) => {
             const polarity = targetIndex % 2 === 0 ? "unipolar" : "bipolar";
             const reducer = targetIndex % 2 === 0 ? "max" : "mean";
+            const amounts = group.amountsForPathAndPolarity?.[name]?.[polarity]
+                ?? group.amountsForPolarity?.[polarity]
+                ?? group.amounts;
             const weights = group.weightsForPolarity?.[polarity] ?? group.weights;
             const routes = group.sources.map((source, sourceIndex) => ({
                 id: `benchmark-${name}-${source.value}-${target.value}`,
@@ -136,7 +209,8 @@ function buildNeutralRouteGroups() {
                 sourceSlot: source.sourceSlot,
                 polarity,
                 targetKind: target.value,
-                amount: neutralAmountUnit * weights[sourceIndex],
+                amount: amounts?.[sourceIndex]
+                    ?? Math.fround(neutralAmountUnit * weights[sourceIndex]),
                 reducer,
                 benchmarkPath: name,
                 neutralGroup: `${name}:${targetIndex}:${groupIndex}`,
@@ -291,7 +365,9 @@ export function buildModulationBenchmarkDocument() {
         sourceContract: {
             msegValue: 0,
             envelopeValue: 0,
-            expressionMidiValue: 100,
+            ampEnvelopeSustain,
+            ampEnvelopeRouteValue,
+            expressionMidiValue,
             macroValue: 0.75,
         },
         profiles: buildModulationBenchmarkProfiles(),

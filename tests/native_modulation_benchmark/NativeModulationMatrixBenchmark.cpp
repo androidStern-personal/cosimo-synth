@@ -45,6 +45,8 @@ constexpr std::int32_t wavetableTableIndex = 0;
 constexpr std::uint32_t fullRackEnableMask = 0xff;
 constexpr double audioEquivalenceTolerance = 1.0e-7;
 constexpr double nonSilentRmsThreshold = 1.0e-5;
+constexpr float voiceEnhancerBenchmarkAmount = 0.75f;
+constexpr float ampEnvelopeBenchmarkSustain = benchmark_profiles::ampEnvelopeSustain;
 constexpr std::size_t rackCommitBlocks = 8;
 constexpr std::size_t voiceFloorMeasuredBlocks = 512;
 constexpr std::size_t voiceFloorWarmupBlocks = 128;
@@ -73,8 +75,9 @@ constexpr std::array effectSettings
     EffectSetting { "oscCWarpAmount", 0.0f },
     EffectSetting { "filterMode", 1.0f },
     EffectSetting { "filterCutoff", 1200.0f },
-    EffectSetting { "voiceEnhancerAmount", 0.75f },
+    EffectSetting { "voiceEnhancerAmount", voiceEnhancerBenchmarkAmount },
     EffectSetting { "env1Sustain", 0.0f },
+    EffectSetting { "ampSustain", ampEnvelopeBenchmarkSustain },
 };
 
 // Effect parameters have no host endpoints since the B3 parameter cut: they
@@ -434,7 +437,11 @@ void initialiseVoiceFloorPerformer (WavetableSynth& performer)
     loadSineWavetable (performer);
     // T62 acceptance measures the retained-voice floor with the nonlinear
     // per-note processor engaged, not its exact-zero compatibility path.
-    setParameter (performer, "voiceEnhancerAmount", 0.75f);
+    setParameter (performer, "voiceEnhancerAmount", voiceEnhancerBenchmarkAmount);
+    // Generated host inputs begin at zero. Sustain the independent final Amp
+    // Envelope explicitly so the held-note workload remains sounding after
+    // warmup; env1Sustain above is a separate modulation-source envelope.
+    setParameter (performer, "ampSustain", ampEnvelopeBenchmarkSustain);
 
     // The voice floor runs the deployed pre-rack sound: an EMPTY lane, which
     // is the engine's default and its cheapest structure.
@@ -489,7 +496,16 @@ void compareAudio (const std::array<float, blockSize * 2>& empty,
         }
         const auto delta = std::abs (static_cast<double> (loadedSample) - emptySample);
         if (delta > audioEquivalenceTolerance)
+        {
+            std::cerr << "AUDIO_EQUIVALENCE_VALIDATION"
+                      << "\tsampleIndex=" << sampleIndex
+                      << "\tempty=" << std::setprecision (17) << emptySample
+                      << "\tloaded=" << loadedSample
+                      << "\tdelta=" << delta
+                      << "\ttolerance=" << audioEquivalenceTolerance
+                      << '\n';
             throw std::runtime_error ("Neutral modulation profile changed production audio");
+        }
         if (evidence == nullptr) continue;
         evidence->maximumAbsoluteSampleDelta = std::max (evidence->maximumAbsoluteSampleDelta, delta);
         evidence->emptySumSquares += static_cast<long double> (emptySample) * emptySample;
@@ -772,7 +788,18 @@ void writeVoiceFloorResult (const VoiceFloorResult& result)
         || result.oneRackMask != 0 || result.fullRackMask != 0
         || result.nonFiniteSampleCount != 0
         || oneRms <= nonSilentRmsThreshold || fullRms <= nonSilentRmsThreshold)
+    {
+        std::cerr << "VOICE_FLOOR_VALIDATION"
+                  << "\toneVoiceMask=" << result.oneVoiceMask
+                  << "\tfullVoiceMask=" << result.fullVoiceMask
+                  << "\toneRackMask=" << result.oneRackMask
+                  << "\tfullRackMask=" << result.fullRackMask
+                  << "\tnonFiniteSampleCount=" << result.nonFiniteSampleCount
+                  << "\toneVoiceRms=" << std::setprecision (17) << oneRms
+                  << "\tfullVoiceRms=" << fullRms
+                  << '\n';
         throw std::runtime_error ("Voice-floor workload did not exercise one and sixteen clean sounding voices");
+    }
 
     const auto oneMean = mean (result.oneNanoseconds);
     const auto fullMean = mean (result.fullNanoseconds);

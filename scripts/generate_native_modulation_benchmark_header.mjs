@@ -197,6 +197,7 @@ struct MsegPlayback
 
 inline constexpr const char* profileGenerator = ${cppString(document.generatedFrom)};
 inline constexpr const char* profileDocumentSha256 = ${cppString(sha256(JSON.stringify(document)))};
+inline constexpr float ampEnvelopeSustain = ${cppFloat(document.sourceContract.ampEnvelopeSustain)};
 inline constexpr std::int32_t expressionMidiValue = ${cppInt(document.sourceContract.expressionMidiValue)};
 inline constexpr float macroValue = ${cppFloat(document.sourceContract.macroValue)};
 

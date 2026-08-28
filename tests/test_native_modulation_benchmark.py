@@ -58,6 +58,7 @@ def test_generated_native_patch_isolates_incremental_modulation_matrix_cost(tmp_
         "chorusMix": 0.3,
         "delayMix": 0.25,
         "distortionWet": 0.35,
+        "ampSustain": 1.0,
         "env1Sustain": 0.0,
         "filterCutoff": 1200.0,
         "filterMode": 1.0,

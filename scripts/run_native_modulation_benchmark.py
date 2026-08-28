@@ -43,6 +43,7 @@ EXPECTED_EFFECT_CONFIGURATION = {
     "filterCutoff": 1200.0,
     "voiceEnhancerAmount": 0.75,
     "env1Sustain": 0.0,
+    "ampSustain": 1.0,
     "globalFilterMode": 1.0,
     "globalFilterCutoff": 1200.0,
     "globalFilterResonance": 0.707107,
