@@ -1763,9 +1763,21 @@ test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and
         const keyTrackBox = await keyTrackButton.boundingBox();
         assert.ok(graphBox);
         assert.ok(keyTrackBox);
-        assert.ok(keyTrackBox.x >= graphBox.x && keyTrackBox.y >= graphBox.y);
-        assert.ok(keyTrackBox.x + keyTrackBox.width <= graphBox.x + graphBox.width);
-        assert.ok(keyTrackBox.y + keyTrackBox.height <= graphBox.y + graphBox.height);
+        assert.ok(keyTrackBox.width >= 44 && keyTrackBox.height >= 44);
+        assert.ok(keyTrackBox.x >= footprintAfter.x && keyTrackBox.y >= footprintAfter.y);
+        assert.ok(keyTrackBox.x + keyTrackBox.width <= footprintAfter.x + footprintAfter.width);
+        assert.ok(
+            keyTrackBox.y + keyTrackBox.height <= graphBox.y,
+            "Key Track must remain in the clear tone-card header above the graph",
+        );
+        assert.equal(await keyTrackButton.evaluate((element) => {
+            const bounds = element.getBoundingClientRect();
+            const hit = document.elementFromPoint(
+                bounds.left + (bounds.width / 2),
+                bounds.top + (bounds.height / 2),
+            );
+            return hit === element || (hit instanceof Node && element.contains(hit));
+        }), true, "Key Track must own its reachable center point");
 
         const beforeSecondaryClick = await getHarnessSnapshot(page);
         await clearHarnessDebugLog(page);
