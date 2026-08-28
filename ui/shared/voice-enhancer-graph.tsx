@@ -47,6 +47,8 @@ export function VoiceEnhancerGraph({
 }: VoiceEnhancerGraphProps) {
     const graphRef = useRef<SVGSVGElement | null>(null);
     const activePointerRef = useRef<number | null>(null);
+    const captureWasObservedRef = useRef(false);
+    const captureWatchFrameRef = useRef<number | null>(null);
     const onGestureEndRef = useRef(onGestureEnd);
     const onFrequencyNormalizedChangeRef = useRef(onFrequencyNormalizedChange);
     const onAmountChangeRef = useRef(onAmountChange);
@@ -90,28 +92,63 @@ export function VoiceEnhancerGraph({
     const finishGesture = useCallback((pointerID?: number) => {
         if (activePointerRef.current === null
             || (pointerID !== undefined && activePointerRef.current !== pointerID)) return;
+        if (captureWatchFrameRef.current !== null) {
+            window.cancelAnimationFrame(captureWatchFrameRef.current);
+            captureWatchFrameRef.current = null;
+        }
+        captureWasObservedRef.current = false;
         activePointerRef.current = null;
         onGestureEndRef.current();
     }, []);
 
+    const watchPointerCapture = useCallback((pointerID: number) => {
+        const inspectCapture = () => {
+            captureWatchFrameRef.current = null;
+            if (activePointerRef.current !== pointerID) return;
+
+            let hasCapture = false;
+            try {
+                hasCapture = graphRef.current?.hasPointerCapture(pointerID) ?? false;
+            } catch {
+                // Unsupported capture continues through the window fallbacks.
+            }
+
+            if (hasCapture) {
+                captureWasObservedRef.current = true;
+            } else if (captureWasObservedRef.current) {
+                finishGesture(pointerID);
+                return;
+            }
+
+            captureWatchFrameRef.current = window.requestAnimationFrame(inspectCapture);
+        };
+
+        captureWatchFrameRef.current = window.requestAnimationFrame(inspectCapture);
+    }, [finishGesture]);
+
     useEffect(() => {
+        const graph = graphRef.current;
         const handleFallbackPointerMove = (event: PointerEvent) => {
             if (activePointerRef.current !== event.pointerId) return;
-            const graph = graphRef.current;
             if (event.target instanceof Node && graph?.contains(event.target)) return;
             applyPointer(event);
         };
         const handlePointerEnd = (event: PointerEvent) => finishGesture(event.pointerId);
+        const handleLostPointerCapture = (event: PointerEvent) => finishGesture(event.pointerId);
         const handleWindowBlur = () => finishGesture();
         const handleVisibilityChange = () => {
             if (document.visibilityState !== "visible") finishGesture();
         };
+        // Own capture loss at the native target: programmatic release can miss
+        // React's delegated lost-pointer-capture dispatch in real browsers.
+        graph?.addEventListener("lostpointercapture", handleLostPointerCapture);
         window.addEventListener("pointermove", handleFallbackPointerMove, true);
         window.addEventListener("pointerup", handlePointerEnd, true);
         window.addEventListener("pointercancel", handlePointerEnd, true);
         window.addEventListener("blur", handleWindowBlur);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
+            graph?.removeEventListener("lostpointercapture", handleLostPointerCapture);
             window.removeEventListener("pointermove", handleFallbackPointerMove, true);
             window.removeEventListener("pointerup", handlePointerEnd, true);
             window.removeEventListener("pointercancel", handlePointerEnd, true);
@@ -164,11 +201,13 @@ export function VoiceEnhancerGraph({
                 activePointerRef.current = event.pointerId;
                 try {
                     event.currentTarget.setPointerCapture(event.pointerId);
+                    captureWasObservedRef.current = event.currentTarget.hasPointerCapture(event.pointerId);
                 } catch {
                     // Window fallbacks continue the gesture when capture is unavailable.
                 }
                 onGestureStart();
                 applyPointer(event);
+                watchPointerCapture(event.pointerId);
             }}
             onPointerMove={(event) => {
                 if (activePointerRef.current !== event.pointerId) return;
@@ -176,7 +215,6 @@ export function VoiceEnhancerGraph({
             }}
             onPointerUp={(event) => finishGesture(event.pointerId)}
             onPointerCancel={(event) => finishGesture(event.pointerId)}
-            onLostPointerCapture={(event) => finishGesture(event.pointerId)}
         >
             <defs>
                 <linearGradient id={gradientID} x1="0" y1="0" x2="0" y2="1">
