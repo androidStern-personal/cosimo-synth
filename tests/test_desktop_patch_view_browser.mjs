@@ -3880,7 +3880,12 @@ test("voice mode buttons commit the exact discrete playMode values", async () =>
         await showVoiceControls(page);
         await clearHarnessDebugLog(page);
 
-        await page.click('button:has-text("Mono")');
+        const voiceModeControls = page.locator('[data-role="keyboard-control-row"]');
+        const monoButton = voiceModeControls.getByRole("button", { name: "Mono", exact: true });
+        const legatoButton = voiceModeControls.getByRole("button", { name: "Legato", exact: true });
+        const polyButton = voiceModeControls.getByRole("button", { name: "Poly", exact: true });
+
+        await monoButton.click();
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
             return Number(snapshot.parameterValues.playMode) === 1;
@@ -3891,10 +3896,10 @@ test("voice mode buttons commit the exact discrete playMode values", async () =>
             snapshot.sentMessages.filter(({ endpointID }) => endpointID === "playMode"),
             [{ endpointID: "playMode", value: 1 }],
         );
-        assert.equal(await page.locator('button:has-text("Mono")').getAttribute("aria-pressed"), "true");
+        assert.equal(await monoButton.getAttribute("aria-pressed"), "true");
 
         await clearHarnessDebugLog(page);
-        await page.click('button:has-text("Legato")');
+        await legatoButton.click();
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
             return Number(snapshot.parameterValues.playMode) === 2;
@@ -3905,10 +3910,10 @@ test("voice mode buttons commit the exact discrete playMode values", async () =>
             snapshot.sentMessages.filter(({ endpointID }) => endpointID === "playMode"),
             [{ endpointID: "playMode", value: 2 }],
         );
-        assert.equal(await page.locator('button:has-text("Legato")').getAttribute("aria-pressed"), "true");
+        assert.equal(await legatoButton.getAttribute("aria-pressed"), "true");
 
         await clearHarnessDebugLog(page);
-        await page.click('button:has-text("Poly")');
+        await polyButton.click();
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
             return Number(snapshot.parameterValues.playMode) === 0;
@@ -3919,7 +3924,7 @@ test("voice mode buttons commit the exact discrete playMode values", async () =>
             snapshot.sentMessages.filter(({ endpointID }) => endpointID === "playMode"),
             [{ endpointID: "playMode", value: 0 }],
         );
-        assert.equal(await page.locator('button:has-text("Poly")').getAttribute("aria-pressed"), "true");
+        assert.equal(await polyButton.getAttribute("aria-pressed"), "true");
     } finally {
         await page.close();
     }
