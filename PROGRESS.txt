@@ -855,3 +855,15 @@ T60 scalable parkable Mod bar — integrated automated checkpoint 2026-08-27
 - Final automated evidence: desktop UI 272/274 before focused repair, with the known React Grab webdriver assertion plus the subsequently repaired T66 composition; generated Developer Settings/Sites 1/1; source-map provenance and focused strict TypeScript green. Repo-wide TypeScript remains red only on existing Desktop/iOS and Bounce/share diagnostics outside T60.
 - Fresh coordinator HMR proved repo root `74e4` and `usesViteClient: true`, then was stopped. The final compiled VST3 is installed and strict-code-sign valid at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`, executable SHA-256 `59555f776e70712c51a0ce8a2a02338a68d0d948ac72629d2b7d48317e28c7a5`.
 - T60 remains product-open for Andrew's real composed visual approval and final default coefficient. No Ableton interaction/listening or physical iPhone/touch acceptance is claimed.
+
+T59 greenfield saved-sound decision — 2026-08-28
+- Andrew explicitly removed backwards compatibility as a constraint for the four-frame default wavetable. Unpublished old saved sounds, browser state, shared URLs, and host automation need no migration or preservation layer.
+- The current product contract may therefore include `core-shapes` directly in the occupied selector range and select it for Init/new patches. Current-format round trips and unchanged Index/interpolation behavior remain required; old-format compatibility does not.
+
+T63 real-rack latency decision — 2026-08-28
+- Andrew chose to ship whole-Effects-Lane Mix and Bypass for the current creative rack, whose legal effects add no latency under ADR-008. The integration must remove the misleading synthetic future-latency helper/test/claim rather than redesigning the rack now.
+- A future delayed/lookahead lane effect remains possible only after a separate decision defines host-reported rack latency, serial accumulation, shorter-branch alignment, outer dry timing, and topology-transition behavior. Polish latency remains downstream and outside the whole-lane blend.
+
+T60 parked trigger-note review — 2026-08-28
+- Andrew requires the trigger-note audition button to remain permanently visible at the right end of the visible parked Mod bar, immediately before the right paging paddle. Source/tool page changes must not move or hide it; hiding the complete parked row may hide the button with that row.
+- The current integrated layout therefore needs one focused owner repair and a new composed visual review before T60's product approval can close. The shipped default scale remains unapproved.

@@ -36,7 +36,7 @@ Each kind of schema has one owner:
 | Product parameters and oscillator meaning | One authored build-time product-parameter catalog | Endpoint ID, type, range, default, step/discreteness, declaration order, A/B/C control identity, runtime delivery class, ART identity, and optional reference to a MOD target |
 | Cmajor/TypeScript/native parameter contracts | Generated projections of that catalog | Cmajor input declarations, `OSCILLATOR_BINDING_CONTRACTS`, snapshot/validator metadata, and platform address tables; never separately authored |
 | Host automation slots | The compiled order generated from the catalog | Exact order-sensitive golden ledger, including the hidden slot-0 guard |
-| Factory wavetable slots | Ordered factory catalog `tableId` values | Immutable occupied 0–237 index-to-table-ID/content-digest ledger used by `wavetableSelect` |
+| Factory wavetable slots | Ordered factory catalog `tableId` values | Fully occupied current 0–238 index-to-table-ID/content-digest ledger used by `wavetableSelect`; unpublished older catalogs have no compatibility claim |
 | Modulation document | The current modulation domain parser/catalog | MSEG shapes/discrete playback policy, envelope names, routes, macro names, target identities, exact document shape |
 | Articulation document | The `articulations.v4` domain parser/catalog plus referenced live parameter/MOD contracts | Slots, trigger ranges, sparse override identities/shape; scalar/envelope range and step from the referenced owner; route-amount bounds from the referenced MOD target |
 | Rack structure | The `rack.v1` domain parser | Order and enabled state |
@@ -137,26 +137,26 @@ Putting declaration order into the saved-state hash would incorrectly reject a k
 snapshot merely because two hosts enumerate the same endpoints differently. Omitting
 the separate ledger would fail to protect DAW automation. Both checks are required.
 
-`wavetableSelect` is numeric because it is host-automatable. Its meaning is protected by
-a second test-only compatibility ledger: every existing factory table index must keep
-the same stable `tableId` and canonical source/derived content digests. The hard-cut
-parameter range is exactly the occupied immutable slots 0–237, so host automation/state
-cannot contain an unassigned in-range value. Future factory growth needs a new selector
-endpoint/contract rather than changing this endpoint's range and reinterpreting old
-automation. Reorder, insertion,
-replacement, removal, or byte replacement under an existing ID fails the gate and
-requires a new ID/contract.
+`wavetableSelect` is numeric because it is host-automatable. The accepted current product
+contract keeps a test-only ledger binding every occupied index to its stable `tableId` and
+canonical source/derived content digests. T59 is a greenfield hard cut: it expands the
+fully occupied range to 0–238 and places the four-frame `core-shapes` table at index 238.
+Unpublished older saved sounds, browser state, shared URLs, and host automation impose no
+compatibility requirement, and no migration, alias, or dual catalog is added for them.
+Within this accepted contract, reorder, insertion below an occupied index, replacement,
+removal, or byte replacement under an existing ID fails the ledger gate and requires an
+explicitly reviewed contract change.
 The snapshot does not store a duplicate table ID. Table bytes/cache remain derived
-resources, while the immutable occupied mapping keeps a saved number from silently selecting a
-different sound. Out-of-range 238/255 state rejects at strict preflight; supported host
-automation cannot express it.
+resources, while the occupied mapping keeps a number inside the current contract from
+silently selecting a different sound. Out-of-range 239/255 state rejects at strict
+preflight; supported host automation cannot express it.
 
 ### State authorities
 
 | State | Runtime authority | Durable representation |
 | --- | --- | --- |
 | Ordinary synth/effect controls | Current Cmajor parameter values | Host/AUv3 parameter state; the same keyed parameter snapshot in browser and synth presets |
-| A/B/C wavetable choice | Indexed scheduler's last accepted value/ID; each `osc*WavetableSelect` parameter is its bounded request and durable projection | Numeric 0–237 parameter snapshot; immutable factory slots/content digests preserve its table-ID/sound meaning; table audio/cache contents are not saved |
+| A/B/C wavetable choice | Indexed scheduler's last accepted value/ID; each `osc*WavetableSelect` parameter is its bounded request and durable projection | Numeric 0–238 parameter snapshot; the current factory-slot/content-digest ledger preserves its table-ID/sound meaning; table audio/cache contents are not saved |
 | Modulation structure | Last strictly accepted modulation document | Hard-cut `modulation.v6` |
 | Articulations | Last strictly accepted `articulations.v4` document | `articulations.v4` |
 | Rack structure | Last strictly accepted `rack.v1` document | `rack.v1` |
@@ -542,8 +542,8 @@ Outputs:
 
 The selection parameter is durable state; the loaded table and cache are derived state.
 The snapshot/restore coordinator never republishes table selection as a synchronous
-patch-base endpoint. Its declared parameter range is exactly 0–237, so normal host
-automation cannot express an unassigned selector. A raw snapshot containing 238/255
+patch-base endpoint. Its declared parameter range is exactly 0–238, so normal host
+automation cannot express an unassigned selector. A raw snapshot containing 239/255
 fails strict preflight before mutation. A missing or corrupt resource within the occupied
 ledger retains the last accepted table, keeps readiness closed, and cannot advance the
 accepted durable envelope. There is no asynchronous corrective-write race with a
@@ -841,10 +841,10 @@ Performance acceptance is behavioral, not speculative:
   version 2 to version 3. Version 2 is ignored as a whole; no field-level repair or
   compatibility path is allowed. The existing localStorage slot name remains stable,
   while the payload version is the authoritative saved-sound contract.
-- The wavetable selector contract is deliberately bounded to the fully occupied immutable
-  range 0–237. This gives up silent in-range catalog growth in exchange for making every
-  host-expressible value valid and stable; future growth needs a new reviewed selector
-  endpoint/contract rather than extending this range.
+- T59 hard-cuts the greenfield wavetable selector contract to the fully occupied range
+  0–238. No unpublished pre-T59 saved sound or automation is migrated or treated as a
+  product constraint. Every host-expressible value in the accepted current contract is
+  valid, and later catalog changes still require an explicit reviewed contract change.
 - A selector parameter is an asynchronous request whose reported current/durable value
   changes only when the scheduler activates the table. This gives up an immediate host
   echo during loading in exchange for never saving or reporting a table that failed to

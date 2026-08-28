@@ -1362,9 +1362,9 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Create one license-safe wavetable containing exactly four stored frames in this order: Sine, Square, Triangle, and Saw. Every frame is one complete single-cycle waveform. Do not insert crossfade, transition, duplicate, or intermediate frames.
     - Do not change Index behavior, interpolation, modulation, display, dragging, or any other wavetable-engine behavior. This task constructs the four-frame table and selects it as the default only.
     - Add it to the shipped factory wavetable catalog with a stable identity and make it the selected table for every oscillator in Init and every brand-new patch.
-    - Preserve the wavetable selected by existing saved patches; this changes the default only and must not rewrite recalled sounds.
+    - Greenfield decision (2026-08-28, Andrew): old saved sounds, browser state, shared URLs, and host automation impose no backwards-compatibility requirement. Do not add migration, aliases, a dual catalog, or preservation-only code/tests for unpublished pre-T59 state. The accepted current selector contract may include the new table directly.
     Done when:
-    - The shipped table contains exactly four frames and each frame is mathematically and visually verified as Sine, Square, Triangle, and Saw in that order. Tests prove Init/new-patch selection uses it for Oscillators A, B, and C while existing saved selections still restore unchanged, and prove no Index-control or interpolation code changed.
+    - The shipped table contains exactly four frames and each frame is mathematically and visually verified as Sine, Square, Triangle, and Saw in that order. Tests prove Init/new-patch selection uses it for Oscillators A, B, and C, current-format save/Init/recall still works, and no Index-control or interpolation code changed. No old-format compatibility gate is required.
 
 [ ] T60 — Make the Mod bar scale adjustable and let it float or park horizontally
     Active owner (2026-08-27):
@@ -1382,6 +1382,7 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - In parked mode, keep the row height fixed and let the coefficient scale the contents, widths, gaps, and horizontal density inside that height; every source still owns a full-row touch target. Floating mode may scale the whole shell normally. Do not make the bottom Voice/FX/Mod strip taller merely to follow the Mod-bar coefficient.
     Parked interaction:
     - Use left/right paddles to cycle through source/tool groups. Do not use free horizontal swiping because a horizontal drag beginning on a source icon belongs to the existing drag-to-map gesture.
+    - Product decision (2026-08-28): while the parked row is visible, the trigger-note audition button is permanent right-side chrome immediately before the right paging paddle. It must remain visible and reachable while source/tool pages change; do not place it inside a pageable group or let another control occupy that position. Hiding the complete parked row may still hide it together with that row.
     - The parked bar itself never expands. Tapping a source still opens its existing MSEG/Envelope/Macro quick editor, and the Voice button still opens its Voice settings popout. Those editors float independently and do not enlarge the parked bar.
     Done when:
     - Andrew approves the real composed floating and parked designs and the coefficient feel.
@@ -1394,7 +1395,7 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Moving-master review caught and repaired an already-selected MSEG tap that silently moved the visible source page and prevented T66's MSEG 1 -> MSEG 2 Rate drag from starting. The exact composed T66 route/create/edit case and T60 live-placement drag case both pass after repair.
     - The complete desktop UI run was 272/274 before that focused repair: all seven T60 cases passed, the established React Grab `navigator.webdriver` assertion remained red, and the T66 composed regression was repaired and passed in isolated rerun as required by the integration protocol. Generated Developer Settings/Sites proof passes 1/1; source-map provenance and focused strict TypeScript are clean.
     - Fresh HMR was verified from coordinator worktree `74e4` at `http://127.0.0.1:5174` with `usesViteClient: true`, then stopped. A final compiled-mode build installed and strict-code-sign verified `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`; installed executable SHA-256 is `59555f776e70712c51a0ce8a2a02338a68d0d948ac72629d2b7d48317e28c7a5`.
-    - T60 remains open only for Andrew's real composed floating/parked visual approval and shipped-default coefficient decision. No Ableton interaction/listening or physical iPhone/touch acceptance is claimed.
+    - Andrew's first composed review required one repair: the parked trigger-note button must remain permanently visible immediately before the right paddle. T60 remains open for that repaired composed review and the shipped-default coefficient decision. No Ableton interaction/listening or physical iPhone/touch acceptance is claimed.
 
 [ ] T61 — Package Enhancer Lite as a shippable free VST3 and iOS AUv3 product
     Existing starting point:
@@ -1446,12 +1447,13 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Mix defaults to 100%. Mix and Bypass are saved with the sound and included in URL sharing, but neither is a modulation destination or a host-automatable parameter.
     - Tail spill and CPU saving are not product requirements. Use the simplest behavior supported by the existing rack architecture. Bypass must transition to dry without terrible clicks and releasing it must return to the previously set Mix value. Do not add a separate tail engine, special tail clearing, CPU suspension, or another rack-state mode merely to manufacture a particular tail behavior.
     - Mix at 0% deliberately stores a continuous blend value. Bypass is a temporary override that leaves the stored Mix untouched, allowing one tap to return to the exact previous blend.
+    Product decision (2026-08-28):
+    - Ship the whole-lane Mix and Bypass against the real creative rack, whose legal effects add no processing latency under ADR-008. Do not redesign the rack around a hypothetical delayed/lookahead effect, and do not retain a helper, test fixture, or product claim suggesting that future latency-producing lane effects are already aligned. If such an effect is proposed later, its host-reported latency, serial accumulation, parallel/split alignment, outer dry delay, and topology-transition timing require a separate architecture decision before that effect can enter the rack.
     Required implementation:
-    - Delay-align the outer dry and wet paths for every latency-producing Effects Lane device. The future Polish lookahead is outside this blend and therefore does not belong in this dry/wet alignment. Do not accept comb filtering or a timing jump at intermediate Mix values.
     - Keep bypass transitions click-free with the smallest suitable smoothing ramp. Whether the lane continues processing internally while bypassed is an implementation choice; document the chosen behavior without expanding scope.
     Done when:
     - The real composed FX page proves the overlaid controls consume no additional graph height and do not cover or block any graph content or interaction at representative sizes.
-    - Tests cover empty, serial, split, parallel, latency-producing, feedback/tail, bypass-transition, preset, Init, and URL-share cases with click-free, delay-aligned output; inventory tests prove neither control is modulatable or host-automatable.
+    - Tests cover empty, serial, split, parallel, feedback/tail, bypass-transition, preset, Init, and URL-share cases with click-free output; inventory tests prove neither control is modulatable or host-automatable. Tests must not manufacture a latency-producing child that the production rack cannot represent or report.
 
 [ ] T64 — Toggle an effect's bypass from its selected graph icon without stealing scroll gestures
     Tap behavior:

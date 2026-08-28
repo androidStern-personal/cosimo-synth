@@ -568,6 +568,9 @@ target but does not record a real sampled motion buffer.
   may keep it. `[U18]`
 - Delay and Reverb retain zero-latency dry paths. Any future lookahead/true-peak
   limiter requires a separate decision outside the creative rack.
+- Whole-rack Mix and Bypass therefore ship against the legal zero-latency rack.
+  They do not claim to align a hypothetical delayed child. Adding one later
+  requires an explicit rack/host latency and branch-alignment decision first.
 
 ### 14.7 Disabled modules and strip behavior
 
