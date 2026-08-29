@@ -1,3 +1,7 @@
+Plain CPM correction authorized — 2026-08-29
+- Andrew rejected the custom dependency resolver integrated at `048d9e7f`. Its lock, repair, credential-filtering, read-only, and cache-receipt machinery is superseded and must be replaced with one small direct CPM CMake module.
+- Corrective implementation is isolated in thread `01a04c4d-4b77-7902-83c9-33a7e59cd20e`, worktree `/Users/winterfell/.codex/worktrees/d28f/cosimo-synth`, based on `048d9e7f`. It must also restore the T26 runner through CPM and remove the compiler-warning waiver by fixing the private Cmajor fork. T67 will review and integrate only after a clean committed handoff; no install or deployment is authorized.
+
 Builder Kit one-CPM dependency migration integrated and qualified — 2026-08-29
 - T67 semantically replayed owner commits `ad19d1e0`, `02fd9128`, `41dd2db9`, and `fcfe660d` onto current master as `a7e76286`, `4c2b3fd1`, `9924533a`, and `63b84101`. Unrelated Builder Kit roadmap commits were deliberately excluded. The locked private fork identities remain Cmajor `ee3c0d03` and CHOC `037e34a2`; JUCE remains `501c0767` and CPM runtime 0.43.1.
 - Final qualification passes the complete resolver suite 37/37 in 1425.40 seconds, including real cold/private access, shared-cache concurrency, identity/dirty classification, offline reuse, integrity, symlink/reparse, credential-safety, and narrow repair. A final offline resolution took about 3 seconds with `cpmConfigured=false`; every retained build receipt reports the exact clean/read-only dependency tuple.
