@@ -1393,7 +1393,7 @@ test("mounted iPhone keeps the main-panel MSEG preview horizontal in portrait wh
     }
 });
 
-test("source-composed iPhone emphasized MSEG segments keep A and B identity colors", async () => {
+test("source-composed iPhone preview and editor keep A, B, and realized Morph identity colors", async () => {
     const modulationState = createDefaultModulationState();
     modulationState.msegSlots[0].shapeA = cloneJson(IOS_MSEG_IDENTITY_SHAPES.shapeA);
     modulationState.msegSlots[0].shapeB = cloneJson(IOS_MSEG_IDENTITY_SHAPES.shapeB);
@@ -1407,6 +1407,57 @@ test("source-composed iPhone emphasized MSEG segments keep A and B identity colo
             },
         });
         await waitForIOSSourceHarnessReady(page);
+        const morphValue = "0.370";
+        await page.locator("cosimo-synth-view")
+            .locator(".ios-main-view [data-role='mseg-morph-slider']")
+            .evaluate((element, nextValue) => {
+                if (!(element instanceof HTMLInputElement)) {
+                    throw new Error("Source-composed iPhone MSEG Morph control is missing.");
+                }
+                const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+                if (valueSetter === undefined) {
+                    throw new Error("Source-composed iPhone MSEG Morph value setter is missing.");
+                }
+                valueSetter.call(element, nextValue);
+                element.dispatchEvent(new Event("input", { bubbles: true }));
+                element.dispatchEvent(new Event("change", { bubbles: true }));
+            }, morphValue);
+        await page.waitForFunction((expectedMorphValue) => {
+            const morphControl = document.querySelector("cosimo-synth-view")?.shadowRoot
+                ?.querySelector(".ios-main-view [data-role='mseg-morph-slider']");
+            return morphControl instanceof HTMLInputElement
+                && Math.abs(morphControl.valueAsNumber - expectedMorphValue) < 0.0001;
+        }, Number(morphValue));
+        const readPreviewPresentation = () => page.evaluate(() => {
+            const shadowRoot = document.querySelector("cosimo-synth-view")?.shadowRoot;
+            const preview = shadowRoot?.querySelector("[data-role='mseg-preview-surface']");
+            const readCurve = (role) => {
+                const curve = preview?.querySelector(`[data-role="${role}"]`);
+                if (!(curve instanceof SVGPathElement)) {
+                    throw new Error(`Missing ${role}.`);
+                }
+                return {
+                    path: curve.getAttribute("d"),
+                    stroke: getComputedStyle(curve).stroke,
+                };
+            };
+            return {
+                editShape: preview?.getAttribute("data-edit-shape") ?? null,
+                shapeA: readCurve("mseg-preview-shape-a-curve"),
+                shapeB: readCurve("mseg-preview-shape-b-curve"),
+                realized: readCurve("mseg-preview-effective-curve"),
+            };
+        });
+        const assertPreviewIdentity = async (expectedEditShape) => {
+            const previewPresentation = await readPreviewPresentation();
+            assert.equal(previewPresentation.editShape, expectedEditShape);
+            assert.equal(previewPresentation.shapeA.stroke, "rgb(204, 89, 210)");
+            assert.equal(previewPresentation.shapeB.stroke, "rgba(225, 231, 240, 0.48)");
+            assert.equal(previewPresentation.realized.stroke, "rgb(125, 247, 255)");
+            assert.notEqual(previewPresentation.realized.path, previewPresentation.shapeA.path);
+            assert.notEqual(previewPresentation.realized.path, previewPresentation.shapeB.path);
+        };
+        await assertPreviewIdentity("a");
         await clickShadowButton(page, ".mseg-preview-button");
         await page.waitForFunction(() => {
             const shadowRoot = document.querySelector("cosimo-synth-view")?.shadowRoot;
@@ -1423,6 +1474,7 @@ test("source-composed iPhone emphasized MSEG segments keep A and B identity colo
                     ?.querySelector("[data-role='mseg-modal-viewport']");
                 return surface?.getAttribute("data-edit-shape") === expectedShape;
             }, shape);
+            await assertPreviewIdentity(shape);
             const localPoint = getSurfacePointForMsegPoint(
                 surfaceRect,
                 midpoint.x,
@@ -1440,28 +1492,38 @@ test("source-composed iPhone emphasized MSEG segments keep A and B identity colo
                 const surface = shadowRoot?.querySelector("[data-role='mseg-modal-viewport']");
                 const base = surface?.querySelector("[data-role='mseg-base-curve']");
                 const reference = surface?.querySelector("[data-role='mseg-reference-curve']");
+                const realized = surface?.querySelector("[data-role='mseg-effective-curve']");
                 const highlight = surface?.querySelector("[data-role='mseg-highlight-segment']");
-                const identityStrokes = Object.fromEntries([base, reference]
+                if (!(realized instanceof SVGPathElement)) {
+                    throw new Error("Source-composed iPhone realized MSEG curve is missing.");
+                }
+                const identityCurves = Object.fromEntries([base, reference]
                     .filter((curve) => curve instanceof SVGPathElement)
                     .map((curve) => [
                         curve.getAttribute("data-shape-identity"),
-                        getComputedStyle(curve).stroke,
+                        {
+                            path: curve.getAttribute("d"),
+                            stroke: getComputedStyle(curve).stroke,
+                        },
                     ]));
                 return {
                     editShape: surface?.getAttribute("data-edit-shape") ?? null,
                     highlightStroke: highlight === null || highlight === undefined
                         ? null
                         : getComputedStyle(highlight).stroke,
-                    shapeAStroke: identityStrokes.a ?? null,
-                    shapeBStroke: identityStrokes.b ?? null,
+                    realizedPath: realized.getAttribute("d"),
+                    realizedStroke: getComputedStyle(realized).stroke,
+                    shapeA: identityCurves.a ?? null,
+                    shapeB: identityCurves.b ?? null,
                 };
             });
-            assert.deepEqual(presentation, {
-                editShape: shape,
-                highlightStroke: expectedStroke,
-                shapeAStroke: "rgb(204, 89, 210)",
-                shapeBStroke: "rgba(225, 231, 240, 0.48)",
-            });
+            assert.equal(presentation.editShape, shape);
+            assert.equal(presentation.highlightStroke, expectedStroke);
+            assert.equal(presentation.shapeA?.stroke, "rgb(204, 89, 210)");
+            assert.equal(presentation.shapeB?.stroke, "rgba(225, 231, 240, 0.48)");
+            assert.equal(presentation.realizedStroke, "rgb(125, 247, 255)");
+            assert.notEqual(presentation.realizedPath, presentation.shapeA?.path);
+            assert.notEqual(presentation.realizedPath, presentation.shapeB?.path);
         };
 
         await assertEmphasizedIdentity({

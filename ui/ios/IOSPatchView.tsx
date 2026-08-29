@@ -531,6 +531,9 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
                         {msegState ? (
                             <MsegPreview
                                 points={msegState.shape.points}
+                                morphShapeAPoints={msegState.shapeA?.points ?? null}
+                                morphShapeBPoints={msegState.shapeB?.points ?? null}
+                                morphValue={selectedMsegMorph.value}
                                 editShapeIndex={msegState.editShapeIndex ?? 0}
                                 orientation={previewOrientation}
                                 className="h-full w-full overflow-hidden rounded-[20px] bg-white/[0.03]"
@@ -1255,6 +1258,9 @@ const IOSMsegModal = memo(function IOSMsegModal({
                                 orientation={orientation}
                                 points={msegState.shape.points}
                                 referencePoints={msegState.referenceShape?.points ?? null}
+                                morphShapeAPoints={msegState.shapeA?.points ?? null}
+                                morphShapeBPoints={msegState.shapeB?.points ?? null}
+                                morphValue={selectedMsegMorph.value}
                                 editShapeIndex={msegState.editShapeIndex ?? 0}
                                 selectedPointIndex={selectedPointIndex}
                                 hoveredSegmentIndex={hoveredSegmentIndex}

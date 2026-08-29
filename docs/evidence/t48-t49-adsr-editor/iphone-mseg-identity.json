@@ -4,15 +4,24 @@
     "width": 390,
     "height": 844
   },
+  "morphValue": 0.37,
+  "iphone-390x844-mseg-preview-morph.png": {
+    "editShape": "a",
+    "realized": "rgb(125, 247, 255)",
+    "shapeA": "rgb(204, 89, 210)",
+    "shapeB": "rgba(225, 231, 240, 0.48)"
+  },
   "iphone-390x844-mseg-a-emphasized.png": {
     "editShape": "a",
     "emphasizedSegment": "rgb(204, 89, 210)",
+    "realized": "rgb(125, 247, 255)",
     "shapeA": "rgb(204, 89, 210)",
     "shapeB": "rgba(225, 231, 240, 0.48)"
   },
   "iphone-390x844-mseg-b-emphasized.png": {
     "editShape": "b",
     "emphasizedSegment": "rgba(225, 231, 240, 0.48)",
+    "realized": "rgb(125, 247, 255)",
     "shapeA": "rgb(204, 89, 210)",
     "shapeB": "rgba(225, 231, 240, 0.48)"
   }
