@@ -48,18 +48,22 @@ deliberate.
 
 ```bash
 cmajor_source=$(python3 scripts/resolve_build_dependencies.py --path cmajor)
-cmake -S "$cmajor_source" -B build/cmajor-cli-linux -G Ninja \
+cmajor_source_key="${cmajor_source##*/}"
+cmajor_cli_build_dir="build/cmajor-cli-linux/$cmajor_source_key"
+cmake -S "$cmajor_source" -B "$cmajor_cli_build_dir" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_CMAJ_LIB=OFF \
   -DBUILD_PLUGIN=OFF \
   -DBUILD_EXAMPLES=OFF
-cmake --build build/cmajor-cli-linux --target cmaj -j 1
-build/cmajor-cli-linux/tools/command/cmaj version
+cmake --build "$cmajor_cli_build_dir" --target cmaj -j 1
+"$cmajor_cli_build_dir/tools/command/cmaj" version
 ```
 
 The final command must print `Cmajor Version: 1.0.3066`. This preserves the
-existing pinned CLI build recipe; it does not move CLI acquisition, caching, or
-distribution into the CPM source resolver.
+existing pinned CLI build recipe. Keying the CMake build directory by the
+resolver's locked source directory prevents a persistent Codespace build from
+retaining `CMAKE_HOME_DIRECTORY` for an older dependency source. This does not
+move CLI acquisition, caching, or distribution into the CPM source resolver.
 
 ## External-aware code generator
 

@@ -236,6 +236,37 @@ test("public asset policy rejects resolver manifests and private local dependenc
     );
 });
 
+test("public asset policy rejects serialized platform paths and SSH private fork URLs", async (context) => {
+    const fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cosimo-private-variants-"));
+    context.after(async () => fs.rm(fixtureRoot, { recursive: true, force: true }));
+
+    const fixtures = new Map([
+        ["codespaces.js", "export const source = '/workspaces/cosimo-synth';\n"],
+        ["ssh-choc.js", "export const source = 'git@github.com:androidStern-personal/choc.git';\n"],
+        ["ssh-cmajor.js", "export const source = 'git@github.com:androidStern-personal/cmajor.git';\n"],
+        ["windows-forward.js", "export const source = 'C:/Users/example/cosimo-cache';\n"],
+        [
+            "windows-serialized.json",
+            JSON.stringify({ cacheRoot: String.raw`C:\Users\example\cosimo-cache` }),
+        ],
+        [
+            "web-root-paths.js",
+            "export const assets = ['/assets/factory.wav', '/patch_gui/desktop/app.js'];\n",
+        ],
+    ]);
+    await Promise.all([...fixtures].map(([relativePath, source]) => (
+        fs.writeFile(path.join(fixtureRoot, relativePath), source)
+    )));
+
+    assert.deepEqual(await findPublicAssetPolicyViolations(fixtureRoot), [
+        "codespaces.js: local absolute path",
+        "ssh-choc.js: private dependency repository URL",
+        "ssh-cmajor.js: private dependency repository URL",
+        "windows-forward.js: local absolute path",
+        "windows-serialized.json: local absolute path",
+    ]);
+});
+
 test("audio-worklet instrumentation measures render load without allocating a bound clock per block", () => {
     const source = `class TestProcessor {
                     receive (msg)
