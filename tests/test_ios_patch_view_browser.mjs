@@ -27,13 +27,16 @@ import {
     getIOSHarnessRenderedState,
     getIOSHarnessSnapshot,
     openIOSHarnessPage,
+    openIOSSourceHarnessPage,
     releaseIOSHarnessParameterResponse,
     setIOSHarnessFailingResource,
     setIOSHarnessParameterValue,
     setIOSHarnessRuntimeState,
     setIOSStoredStateValue,
     startIOSHarnessServer,
+    startIOSSourceHarnessServer,
     waitForIOSHarnessReady,
+    waitForIOSSourceHarnessReady,
 } from "./helpers/ios_harness_browser.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -53,6 +56,30 @@ const IOS_MSEG_ORIENTATION_SHAPE = {
         { x: 0.72, y: 0.35, curvePower: 0 },
         { x: 1, y: 1, curvePower: 0 },
     ],
+};
+const IOS_MSEG_IDENTITY_SHAPES = {
+    shapeA: {
+        format: "cosimo.mseg.shape",
+        version: 1,
+        name: "Identity A",
+        globalSmooth: false,
+        points: [
+            { x: 0, y: 0, curvePower: 0 },
+            { x: 0.45, y: 0.8, curvePower: 0 },
+            { x: 1, y: 1, curvePower: 0 },
+        ],
+    },
+    shapeB: {
+        format: "cosimo.mseg.shape",
+        version: 1,
+        name: "Identity B",
+        globalSmooth: false,
+        points: [
+            { x: 0, y: 1, curvePower: 0 },
+            { x: 0.55, y: 0.2, curvePower: 0 },
+            { x: 1, y: 0.65, curvePower: 0 },
+        ],
+    },
 };
 
 function cloneJson(value) {
@@ -1363,6 +1390,95 @@ test("mounted iPhone keeps the main-panel MSEG preview horizontal in portrait wh
         } finally {
             await closeIOSHarnessPage(page);
         }
+    }
+});
+
+test("source-composed iPhone emphasized MSEG segments keep A and B identity colors", async () => {
+    const modulationState = createDefaultModulationState();
+    modulationState.msegSlots[0].shapeA = cloneJson(IOS_MSEG_IDENTITY_SHAPES.shapeA);
+    modulationState.msegSlots[0].shapeB = cloneJson(IOS_MSEG_IDENTITY_SHAPES.shapeB);
+    const sourceServer = await startIOSSourceHarnessServer();
+    let page = null;
+
+    try {
+        page = await openIOSSourceHarnessPage(browser, sourceServer.baseUrl, {
+            storedState: {
+                [MODULATION_STATE_KEY]: serializeModulationState(modulationState),
+            },
+        });
+        await waitForIOSSourceHarnessReady(page);
+        await clickShadowButton(page, ".mseg-preview-button");
+        await page.waitForFunction(() => {
+            const shadowRoot = document.querySelector("cosimo-synth-view")?.shadowRoot;
+            return shadowRoot?.querySelector("[data-role='mseg-modal-layer']")
+                ?.getAttribute("data-open") === "true"
+                && shadowRoot?.querySelectorAll("[data-role='mseg-edit-points'] circle").length === 3;
+        });
+
+        const surfaceRect = await getShadowElementRect(page, "[data-role='mseg-modal-viewport']");
+        const assertEmphasizedIdentity = async ({ shape, midpoint, expectedStroke }) => {
+            await clickShadowButton(page, `[aria-label='Edit MSEG shape ${shape.toUpperCase()}']`);
+            await page.waitForFunction((expectedShape) => {
+                const surface = document.querySelector("cosimo-synth-view")?.shadowRoot
+                    ?.querySelector("[data-role='mseg-modal-viewport']");
+                return surface?.getAttribute("data-edit-shape") === expectedShape;
+            }, shape);
+            const localPoint = getSurfacePointForMsegPoint(
+                surfaceRect,
+                midpoint.x,
+                midpoint.y,
+                "vertical",
+            );
+            await page.mouse.move(1, 1);
+            await page.mouse.move(surfaceRect.left + localPoint.x, surfaceRect.top + localPoint.y);
+            await page.waitForFunction(() => Boolean(
+                document.querySelector("cosimo-synth-view")?.shadowRoot
+                    ?.querySelector("[data-role='mseg-highlight-segment']"),
+            ));
+            const presentation = await page.evaluate(() => {
+                const shadowRoot = document.querySelector("cosimo-synth-view")?.shadowRoot;
+                const surface = shadowRoot?.querySelector("[data-role='mseg-modal-viewport']");
+                const base = surface?.querySelector("[data-role='mseg-base-curve']");
+                const reference = surface?.querySelector("[data-role='mseg-reference-curve']");
+                const highlight = surface?.querySelector("[data-role='mseg-highlight-segment']");
+                const identityStrokes = Object.fromEntries([base, reference]
+                    .filter((curve) => curve instanceof SVGPathElement)
+                    .map((curve) => [
+                        curve.getAttribute("data-shape-identity"),
+                        getComputedStyle(curve).stroke,
+                    ]));
+                return {
+                    editShape: surface?.getAttribute("data-edit-shape") ?? null,
+                    highlightStroke: highlight === null || highlight === undefined
+                        ? null
+                        : getComputedStyle(highlight).stroke,
+                    shapeAStroke: identityStrokes.a ?? null,
+                    shapeBStroke: identityStrokes.b ?? null,
+                };
+            });
+            assert.deepEqual(presentation, {
+                editShape: shape,
+                highlightStroke: expectedStroke,
+                shapeAStroke: "rgb(204, 89, 210)",
+                shapeBStroke: "rgba(225, 231, 240, 0.48)",
+            });
+        };
+
+        await assertEmphasizedIdentity({
+            shape: "a",
+            midpoint: { x: 0.225, y: 0.4 },
+            expectedStroke: "rgb(204, 89, 210)",
+        });
+        await assertEmphasizedIdentity({
+            shape: "b",
+            midpoint: { x: 0.275, y: 0.6 },
+            expectedStroke: "rgba(225, 231, 240, 0.48)",
+        });
+    } finally {
+        if (page) {
+            await closeIOSHarnessPage(page);
+        }
+        await sourceServer.stop();
     }
 });
 

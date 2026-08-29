@@ -1,0 +1,19 @@
+{
+  "source": "ui/ios/patch-view-entry.tsx",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "iphone-390x844-mseg-a-emphasized.png": {
+    "editShape": "a",
+    "emphasizedSegment": "rgb(204, 89, 210)",
+    "shapeA": "rgb(204, 89, 210)",
+    "shapeB": "rgba(225, 231, 240, 0.48)"
+  },
+  "iphone-390x844-mseg-b-emphasized.png": {
+    "editShape": "b",
+    "emphasizedSegment": "rgba(225, 231, 240, 0.48)",
+    "shapeA": "rgb(204, 89, 210)",
+    "shapeB": "rgba(225, 231, 240, 0.48)"
+  }
+}

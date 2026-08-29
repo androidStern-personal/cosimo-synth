@@ -883,6 +883,14 @@ select {
     stroke: var(--cosimo-accent-mint);
 }
 
+.cosimo-curve-line-highlight.cosimo-mseg-shape-a-curve-line {
+    stroke: var(--cosimo-mseg-shape-a);
+}
+
+.cosimo-curve-line-highlight.cosimo-mseg-shape-b-curve-line {
+    stroke: rgb(var(--cosimo-mseg-shape-b-rgb) / 0.48);
+}
+
 .cosimo-mseg-playhead {
     stroke: rgb(244 251 255 / 0.96);
     stroke-width: 2;

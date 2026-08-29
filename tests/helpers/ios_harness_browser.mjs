@@ -2,10 +2,17 @@ import {
     OSCILLATOR_VOLUME_MAX_DB,
     OSCILLATOR_VOLUME_MIN_DB,
 } from "../../patch_gui/oscillator-defaults.js";
-import { startStaticRepoServer } from "./desktop_harness_browser.mjs";
+import {
+    startDesktopHarnessServer,
+    startStaticRepoServer,
+} from "./desktop_harness_browser.mjs";
 
 export async function startIOSHarnessServer() {
     return startStaticRepoServer();
+}
+
+export async function startIOSSourceHarnessServer() {
+    return startDesktopHarnessServer();
 }
 
 export function createIOSHarnessInitScript() {
@@ -1021,6 +1028,64 @@ export async function openIOSHarnessPage(browser, baseUrl, {
     return page;
 }
 
+export async function openIOSSourceHarnessPage(browser, baseUrl, {
+    viewportSize = { width: 390, height: 844 },
+    storedState = {},
+} = {}) {
+    const context = await browser.newContext({
+        viewport: viewportSize,
+        hasTouch: true,
+        isMobile: true,
+        reducedMotion: "reduce",
+    });
+    try {
+        const page = await context.newPage();
+
+        await page.goto(new URL("tests/helpers/module_test_shell.html", baseUrl).toString(), {
+            waitUntil: "load",
+        });
+        await page.evaluate(async (initialStoredState) => {
+            const mountPoint = document.getElementById("mount");
+            if (!(mountPoint instanceof HTMLElement)) {
+                throw new Error("Source-composed iPhone mount point is missing.");
+            }
+
+            document.documentElement.style.width = "100%";
+            document.documentElement.style.height = "100%";
+            document.body.style.width = "100%";
+            document.body.style.height = "100%";
+            mountPoint.style.width = "100%";
+            mountPoint.style.height = "100%";
+            mountPoint.style.padding = "0";
+
+            const [{ MockPatchConnection }, { createIOSPatchView }] = await Promise.all([
+                import("/ui/shared/patch-connection-mock.ts"),
+                import("/ui/ios/patch-view-entry.tsx"),
+            ]);
+            const manifestResponse = await fetch("/WavetableSynth.iOS.cmajorpatch");
+            if (!manifestResponse.ok) {
+                throw new Error(`Could not load source-composed iPhone manifest: ${manifestResponse.status}`);
+            }
+            const patchConnection = new MockPatchConnection(await manifestResponse.json());
+            Object.defineProperty(patchConnection.utilities.PianoKeyboard.prototype, "root", {
+                configurable: true,
+                get() {
+                    return this.shadowRoot;
+                },
+            });
+            for (const [key, value] of Object.entries(initialStoredState)) {
+                patchConnection.setStoredStateValue(key, value);
+            }
+            mountPoint.replaceChildren(createIOSPatchView(patchConnection));
+        }, storedState);
+
+        return page;
+    } catch (cause) {
+        await context.close().catch(() => {});
+        throw cause;
+    }
+}
+
 export async function closeIOSHarnessPage(page) {
     await page.context().close();
 }
@@ -1029,6 +1094,28 @@ export async function waitForIOSHarnessReady(page) {
     await page.waitForFunction(() => Boolean(window.__COSIMO_IOS_HARNESS__));
     await page.waitForFunction(() => Boolean(document.querySelector("cosimo-synth-view")));
     await page.waitForTimeout(250);
+}
+
+export async function waitForIOSSourceHarnessReady(page) {
+    try {
+        await page.waitForFunction(() => Boolean(
+            document.querySelector("cosimo-synth-view")?.shadowRoot
+                ?.querySelector(".mseg-preview-button"),
+        ), undefined, { timeout: 5_000 });
+    } catch (cause) {
+        const rendered = await page.evaluate(() => {
+            const view = document.querySelector("cosimo-synth-view");
+            return {
+                bodyText: document.body.textContent?.trim() ?? "",
+                hasView: view !== null,
+                errorText: view?.shadowRoot?.querySelector("pre")?.textContent?.trim() ?? "",
+                shadowElementNames: Array.from(view?.shadowRoot?.querySelectorAll("*") ?? [])
+                    .slice(-12)
+                    .map((element) => element.tagName),
+            };
+        });
+        throw new Error(`Source-composed iPhone did not render: ${JSON.stringify(rendered)}`, { cause });
+    }
 }
 
 export async function getIOSHarnessSnapshot(page) {

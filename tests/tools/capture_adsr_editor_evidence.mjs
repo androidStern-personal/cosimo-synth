@@ -2,16 +2,54 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
+
+import {
+    MODULATION_STATE_KEY,
+    createDefaultModulationState,
+    serializeModulationState,
+} from "../../patch_gui/modulation.js";
 
 import {
     expandGlobalModRail,
     openHarnessPage,
 } from "../helpers/desktop_patch_view_browser_suite.mjs";
+import {
+    closeIOSHarnessPage,
+    openIOSSourceHarnessPage,
+    startIOSSourceHarnessServer,
+    waitForIOSSourceHarnessReady,
+} from "../helpers/ios_harness_browser.mjs";
 
 const evidenceDirectory = fileURLToPath(new URL(
     "../../docs/evidence/t48-t49-adsr-editor/",
     import.meta.url,
 ));
+
+const IOS_MSEG_IDENTITY_SHAPES = {
+    shapeA: {
+        format: "cosimo.mseg.shape",
+        version: 1,
+        name: "Identity A",
+        globalSmooth: false,
+        points: [
+            { x: 0, y: 0, curvePower: 0 },
+            { x: 0.45, y: 0.8, curvePower: 0 },
+            { x: 1, y: 1, curvePower: 0 },
+        ],
+    },
+    shapeB: {
+        format: "cosimo.mseg.shape",
+        version: 1,
+        name: "Identity B",
+        globalSmooth: false,
+        points: [
+            { x: 0, y: 1, curvePower: 0 },
+            { x: 0.55, y: 0.2, curvePower: 0 },
+            { x: 1, y: 0.65, curvePower: 0 },
+        ],
+    },
+};
 
 async function settleVisuals(page) {
     await page.evaluate(async () => {
@@ -386,6 +424,121 @@ async function captureValueBubble(viewport, fileName, targetRole, field, moves) 
     }
 }
 
+async function captureIOSMsegIdentityEvidence() {
+    const sourceServer = await startIOSSourceHarnessServer();
+    const modulationState = createDefaultModulationState();
+    modulationState.msegSlots[0].shapeA = structuredClone(IOS_MSEG_IDENTITY_SHAPES.shapeA);
+    modulationState.msegSlots[0].shapeB = structuredClone(IOS_MSEG_IDENTITY_SHAPES.shapeB);
+    let sourceBrowser = null;
+    let page = null;
+
+    try {
+        sourceBrowser = await chromium.launch({ headless: true });
+        page = await openIOSSourceHarnessPage(sourceBrowser, sourceServer.baseUrl, {
+            viewportSize: { width: 390, height: 844 },
+            storedState: {
+                [MODULATION_STATE_KEY]: serializeModulationState(modulationState),
+            },
+        });
+        await waitForIOSSourceHarnessReady(page);
+        await page.locator("cosimo-synth-view").locator(".mseg-preview-button").click();
+        await page.waitForFunction(() => (
+            document.querySelector("cosimo-synth-view")?.shadowRoot
+                ?.querySelector("[data-role='mseg-modal-layer']")
+                ?.getAttribute("data-open") === "true"
+        ));
+
+        const captureShape = async (shape, fileName, expectedHighlightStroke) => {
+            await page.locator("cosimo-synth-view")
+                .locator(`[data-role="mseg-modal"] [aria-label="Edit MSEG shape ${shape.toUpperCase()}"]`)
+                .click();
+            await page.waitForFunction((expectedShape) => (
+                document.querySelector("cosimo-synth-view")?.shadowRoot
+                    ?.querySelector("[data-role='mseg-modal-viewport']")
+                    ?.getAttribute("data-edit-shape") === expectedShape
+            ), shape);
+            const segmentPoint = await page.evaluate(() => {
+                const path = document.querySelector("cosimo-synth-view")?.shadowRoot
+                    ?.querySelector("[data-role='mseg-base-curve']");
+                if (!(path instanceof SVGPathElement)) {
+                    throw new Error("Source-composed iPhone MSEG curve is missing.");
+                }
+                const matrix = path.getScreenCTM();
+                if (matrix === null) {
+                    throw new Error("Source-composed iPhone MSEG transform is missing.");
+                }
+                const localPoint = path.getPointAtLength(path.getTotalLength() * 0.25);
+                const screenPoint = new DOMPoint(localPoint.x, localPoint.y).matrixTransform(matrix);
+                return { x: screenPoint.x, y: screenPoint.y };
+            });
+            await page.mouse.move(1, 1);
+            await page.mouse.move(segmentPoint.x, segmentPoint.y);
+            await page.waitForFunction(() => Boolean(
+                document.querySelector("cosimo-synth-view")?.shadowRoot
+                    ?.querySelector("[data-role='mseg-highlight-segment']"),
+            ));
+            await settleVisuals(page);
+            const colors = await page.evaluate(() => {
+                const surface = document.querySelector("cosimo-synth-view")?.shadowRoot
+                    ?.querySelector("[data-role='mseg-modal-viewport']");
+                const readStroke = (role) => {
+                    const curve = surface?.querySelector(`[data-role="${role}"]`);
+                    if (!(curve instanceof SVGPathElement)) {
+                        throw new Error(`Missing ${role}.`);
+                    }
+                    return {
+                        identity: curve.getAttribute("data-shape-identity"),
+                        stroke: getComputedStyle(curve).stroke,
+                    };
+                };
+                const identityStrokes = Object.fromEntries([
+                    readStroke("mseg-base-curve"),
+                    readStroke("mseg-reference-curve"),
+                ].map(({ identity, stroke }) => [identity, stroke]));
+                return {
+                    editShape: surface?.getAttribute("data-edit-shape") ?? null,
+                    emphasizedSegment: readStroke("mseg-highlight-segment").stroke,
+                    shapeA: identityStrokes.a,
+                    shapeB: identityStrokes.b,
+                };
+            });
+            assert.deepEqual(colors, {
+                editShape: shape,
+                emphasizedSegment: expectedHighlightStroke,
+                shapeA: "rgb(204, 89, 210)",
+                shapeB: "rgba(225, 231, 240, 0.48)",
+            });
+            await page.screenshot({
+                path: `${evidenceDirectory}${fileName}`,
+                type: "png",
+                animations: "disabled",
+            });
+            return colors;
+        };
+
+        return {
+            source: "ui/ios/patch-view-entry.tsx",
+            viewport: { width: 390, height: 844 },
+            "iphone-390x844-mseg-a-emphasized.png": await captureShape(
+                "a",
+                "iphone-390x844-mseg-a-emphasized.png",
+                "rgb(204, 89, 210)",
+            ),
+            "iphone-390x844-mseg-b-emphasized.png": await captureShape(
+                "b",
+                "iphone-390x844-mseg-b-emphasized.png",
+                "rgba(225, 231, 240, 0.48)",
+            ),
+        };
+    } finally {
+        if (page) {
+            await closeIOSHarnessPage(page);
+        }
+        await sourceBrowser?.close();
+        await sourceServer.stop();
+    }
+}
+
 test("capture real responsive ADSR editor and local-value-bubble evidence", async () => {
     await mkdir(evidenceDirectory, { recursive: true });
     const captures = {
@@ -457,6 +610,16 @@ test("capture real responsive ADSR editor and local-value-bubble evidence", asyn
 
     await writeFile(
         `${evidenceDirectory}geometry.json`,
+        `${JSON.stringify(captures, null, 2)}\n`,
+        "utf8",
+    );
+});
+
+test("capture source-composed iPhone MSEG identity evidence", async () => {
+    await mkdir(evidenceDirectory, { recursive: true });
+    const captures = await captureIOSMsegIdentityEvidence();
+    await writeFile(
+        `${evidenceDirectory}iphone-mseg-identity.json`,
         `${JSON.stringify(captures, null, 2)}\n`,
         "utf8",
     );

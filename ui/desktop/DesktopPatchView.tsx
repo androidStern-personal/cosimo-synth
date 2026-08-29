@@ -791,6 +791,7 @@ type ActiveEnvelopeDrag = {
     readonly pointerId: number;
     readonly pointerType: RollingAxisPointerType;
     readonly captureElement: SVGElement;
+    readonly removeCaptureLossListener: () => void;
     classifier: RollingAxisState;
     lockedAxis: RollingAxis | null;
     lastValues: Record<EnvelopeEditableField, number>;
@@ -1869,6 +1870,7 @@ function DesktopEnvelopeEditor({
         const activeDrag = activeDragRef.current;
         activeDragRef.current = null;
         if (activeDrag !== null) {
+            activeDrag.removeCaptureLossListener();
             try {
                 if (activeDrag.captureElement.hasPointerCapture(activeDrag.pointerId)) {
                     activeDrag.captureElement.releasePointerCapture(activeDrag.pointerId);
@@ -2026,17 +2028,7 @@ function DesktopEnvelopeEditor({
             window.removeEventListener("resize", clearActiveDrag);
             window.removeEventListener("orientationchange", clearActiveDrag);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
-            const activeDrag = activeDragRef.current;
-            activeDragRef.current = null;
-            if (activeDrag !== null) {
-                try {
-                    if (activeDrag.captureElement.hasPointerCapture(activeDrag.pointerId)) {
-                        activeDrag.captureElement.releasePointerCapture(activeDrag.pointerId);
-                    }
-                } catch {
-                    // Unmount may follow browser-owned pointer teardown.
-                }
-            }
+            clearActiveDrag();
         };
     }, [clearActiveDrag, handlePointerMove]);
 
@@ -2047,7 +2039,7 @@ function DesktopEnvelopeEditor({
         if (activeDragRef.current !== null) {
             return;
         }
-        if (event.pointerType === "mouse" && event.button !== 0) {
+        if (event.button !== 0) {
             return;
         }
         if (!isHandleReady(handleName)) {
@@ -2055,11 +2047,6 @@ function DesktopEnvelopeEditor({
         }
         event.preventDefault();
         event.stopPropagation();
-        try {
-            event.currentTarget.setPointerCapture(event.pointerId);
-        } catch {
-            // Window listeners preserve the gesture when capture is rejected.
-        }
         const envelope = selectedEnvelopeRef.current;
         const initialField = handleName === "attack"
             ? "attackSeconds"
@@ -2068,11 +2055,16 @@ function DesktopEnvelopeEditor({
                 : handleName === "sustain"
                     ? "sustain"
                     : null;
+        const captureElement = event.currentTarget;
+        const handleCaptureLoss = () => clearActiveDrag();
         activeDragRef.current = {
             target: handleName,
             pointerId: event.pointerId,
             pointerType: envelopePointerType(event.pointerType),
-            captureElement: event.currentTarget,
+            captureElement,
+            removeCaptureLossListener: () => {
+                captureElement.removeEventListener("lostpointercapture", handleCaptureLoss);
+            },
             classifier: createRollingAxisState(event.clientX, event.clientY),
             lockedAxis: handleName === "decay-sustain"
                 ? null
@@ -2086,12 +2078,18 @@ function DesktopEnvelopeEditor({
                 releaseSeconds: envelope.releaseSeconds,
             },
         };
+        captureElement.addEventListener("lostpointercapture", handleCaptureLoss, { once: true });
         setActiveHandle(handleName);
         setActiveField(initialField);
         if (initialField !== null) {
             showValueBubble(initialField, envelope[initialField], event.clientX, event.clientY);
         }
-    }, [isHandleReady, showValueBubble]);
+        try {
+            captureElement.setPointerCapture(event.pointerId);
+        } catch {
+            // Window listeners preserve the gesture when capture is rejected.
+        }
+    }, [clearActiveDrag, isHandleReady, showValueBubble]);
 
     const rootNode = svgRef.current?.getRootNode();
     const bubblePortalTarget = typeof document === "undefined"

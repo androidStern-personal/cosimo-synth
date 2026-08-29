@@ -154,19 +154,116 @@ async function dispatchWindowPointer(page, eventType, init) {
     }, { type: eventType, pointerInit: init });
 }
 
-async function beginPointer(target, pointerId, pointerType, point) {
+async function beginPointer(target, pointerId, pointerType, point, { button = 0, buttons = 1 } = {}) {
     await target.dispatchEvent("pointerdown", {
         bubbles: true,
         cancelable: true,
         isPrimary: true,
         pointerId,
         pointerType,
-        button: 0,
-        buttons: 1,
+        button,
+        buttons,
         clientX: point.x,
         clientY: point.y,
     });
 }
+
+test("ADSR native pointer-capture loss closes the active edit before later window movement", async () => {
+    const page = await openHarnessPage();
+    try {
+        await page.getByRole("button", { name: "Select envelope 2" }).click();
+        const attack = page.locator('[data-role="adsr-attack-handle-hit-target"]');
+        const start = await centerOf(attack);
+        await attack.evaluate((element) => {
+            window.__COSIMO_ADSR_CAPTURE_POINTER_ID__ = null;
+            window.__COSIMO_ADSR_NATIVE_CAPTURE_LOSS_OBSERVED__ = false;
+            element.addEventListener("lostpointercapture", (event) => {
+                // Chromium still emits the native target event when the React
+                // root misses its delegated callback. Keep target listeners
+                // observable while stopping the event before React's root.
+                window.__COSIMO_ADSR_NATIVE_CAPTURE_LOSS_OBSERVED__ = true;
+                event.stopPropagation();
+            }, { once: true });
+            element.addEventListener("pointerdown", (event) => {
+                window.__COSIMO_ADSR_CAPTURE_POINTER_ID__ = event.pointerId;
+            }, { capture: true, once: true });
+        });
+
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        await page.locator('[data-role="adsr-value-bubble"]').waitFor();
+        const pointerId = await page.evaluate(() => window.__COSIMO_ADSR_CAPTURE_POINTER_ID__);
+        assert.equal(Number.isInteger(pointerId), true);
+        assert.equal(await attack.evaluate(
+            (element, activePointerId) => element.hasPointerCapture(activePointerId),
+            pointerId,
+        ), true, "The real Chromium pointer must be captured before testing capture loss.");
+
+        await clearHarnessDebugLog(page);
+        await attack.evaluate(
+            (element, activePointerId) => element.releasePointerCapture(activePointerId),
+            pointerId,
+        );
+        await page.locator('[data-role="adsr-value-bubble"]').waitFor({ state: "detached", timeout: 1_000 });
+        assert.equal(await page.evaluate(
+            () => window.__COSIMO_ADSR_NATIVE_CAPTURE_LOSS_OBSERVED__,
+        ), true, "Chromium must emit the native target capture-loss event.");
+        assert.equal(
+            await page.locator('[data-role="adsr-editor-surface"]').getAttribute("data-active-handle"),
+            null,
+        );
+
+        await page.mouse.move(start.x + 90, start.y);
+        await settleLayout(page);
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "env2Attack"), false);
+    } finally {
+        await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
+test("ADSR acquisition ignores secondary mouse and pen buttons", async () => {
+    const page = await openHarnessPage();
+    try {
+        await page.getByRole("button", { name: "Select envelope 2" }).click();
+        const attack = page.locator('[data-role="adsr-attack-handle-hit-target"]');
+        const start = await centerOf(attack);
+
+        for (const [pointerId, pointerType] of [[501, "mouse"], [502, "pen"]]) {
+            await clearHarnessDebugLog(page);
+            const before = await getHarnessSnapshot(page);
+            await beginPointer(attack, pointerId, pointerType, start, { button: 2, buttons: 2 });
+            assert.equal(await page.locator('[data-role="adsr-value-bubble"]').count(), 0);
+            assert.equal(
+                await page.locator('[data-role="adsr-editor-surface"]').getAttribute("data-active-handle"),
+                null,
+            );
+            await dispatchWindowPointer(page, "pointermove", {
+                pointerId,
+                pointerType,
+                button: 2,
+                buttons: 2,
+                clientX: start.x + 72,
+                clientY: start.y,
+            });
+            await dispatchWindowPointer(page, "pointerup", {
+                pointerId,
+                pointerType,
+                button: 2,
+                buttons: 0,
+                clientX: start.x + 72,
+                clientY: start.y,
+            });
+            await settleLayout(page);
+            const after = await getHarnessSnapshot(page);
+            assert.equal(Number(after.parameterValues.env2Attack), Number(before.parameterValues.env2Attack));
+            assert.equal(after.sentMessages.some(({ endpointID }) => endpointID === "env2Attack"), false);
+        }
+    } finally {
+        await page.close();
+    }
+});
 
 async function centerOf(locator) {
     const bounds = await locator.boundingBox();
