@@ -1148,6 +1148,31 @@ def test_cache_validation_fails_offline_and_repairs_only_the_invalid_entry(
     assert repaired_interruption["dependencies"]["juce"]["commit"] == JUCE_COMMIT
 
 
+def test_dirty_cmajor_submodule_content_remains_cache_dirty(
+    concurrent_shared_cache: dict[str, object],
+) -> None:
+    cache_root = concurrent_shared_cache["cacheRoot"]
+    initial = parse_success(run_resolver(cache_root))
+    cmajor_path = Path(initial["dependencies"]["cmajor"]["path"])
+    choc_path = Path(initial["dependencies"]["choc"]["path"])
+    tracked_source = choc_path / "LICENSE.md"
+    original_source = tracked_source.read_bytes()
+
+    make_tree_writable(cmajor_path)
+    try:
+        tracked_source.write_bytes(original_source + b"\nlocal cache mutation\n")
+        offline_dirty = run_resolver(cache_root, "--offline")
+        assert offline_dirty.returncode == 2
+        assert parse_error(offline_dirty)["code"] == "CACHE_DIRTY"
+        assert tracked_source.read_bytes() != original_source
+    finally:
+        tracked_source.write_bytes(original_source)
+
+    restored = parse_success(run_resolver(cache_root))
+    assert restored["repairPerformed"] is False
+    assert restored["dependencies"]["choc"]["commit"] == CHOC_COMMIT
+
+
 def test_missing_private_repository_access_is_typed_and_actionable(
     tmp_path: Path,
 ) -> None:

@@ -1,3 +1,9 @@
+Builder Kit one-CPM final-gate validation-order repair — 2026-08-29
+- Owner: thread `01a04a22-16f6-7c52-86be-55d5da70ac26`, branch `codex/builder-kit-cpm-dependency-migration`; integration coordinator T67 `01a042bf-abd2-7820-9d47-b10405b67c5d`, roadmap coordinator `01a04461-bd5b-71d0-8c75-a3c5287216be`.
+- Cmajor still validates its required files, locked HEAD, and origin before its submodules. Only the aggregate cleanliness query is deferred until the complete submodule graph has passed commit/origin validation, so a wrong CHOC gitlink now reports `CACHE_IDENTITY_MISMATCH` while genuine parent or submodule content changes remain `CACHE_DIRTY`. The aggregate submodule inspection remains three bounded Git calls.
+- Red evidence: the exact retained cache-validation test failed at the CHOC `CHOC_COMMIT^` case with `CACHE_DIRTY` in 1082.92 seconds. Green evidence: that exact test plus a tracked dirty-CHOC-content characterization pass 2/2 in 1336.53 seconds; the bounded aggregate-Git test passes 1/1 in 0.07 seconds.
+- No full resolver suite, build/native/web/runtime/install/deploy gate, rebase, merge, master/private-fork mutation or push, or `TODOS.txt` edit was performed.
+
 Builder Kit one-CPM dependency migration second T67 repair delta — 2026-08-29
 - Owner: thread `01a04a22-16f6-7c52-86be-55d5da70ac26`, branch `codex/builder-kit-cpm-dependency-migration`; roadmap coordinator `01a04461-bd5b-71d0-8c75-a3c5287216be`, integration coordinator T67 `01a042bf-abd2-7820-9d47-b10405b67c5d`.
 - The resolver's bounded default cache-lock wait is now 900 seconds, matching the retained concurrent cold gate's process budget. The unchanged two-caller empty-cache test passes in 445.23 seconds: one process populates the graph while the other waits and reuses it.

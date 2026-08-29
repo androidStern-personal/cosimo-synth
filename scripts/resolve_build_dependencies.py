@@ -568,6 +568,25 @@ def _assert_expected_path(name: str, actual: Path, expected: Path) -> None:
         )
 
 
+def _validate_repository_clean(
+    name: str,
+    path: Path,
+    *,
+    ignore_submodules: bool = False,
+) -> None:
+    status_arguments = ["status", "--porcelain=v1", "--untracked-files=all"]
+    if ignore_submodules:
+        status_arguments.append("--ignore-submodules=all")
+    dirty = _git_dependency(name, path, *status_arguments)
+    if dirty:
+        _raise(
+            "CACHE_DIRTY",
+            f"Cached {name} checkout contains modified or untracked source.",
+            dependency=name,
+            path=path,
+        )
+
+
 def _validate_repository(
     name: str,
     path: Path,
@@ -622,17 +641,11 @@ def _validate_repository(
         )
 
     if verify_clean:
-        status_arguments = ["status", "--porcelain=v1", "--untracked-files=all"]
-        if ignore_submodules:
-            status_arguments.append("--ignore-submodules=all")
-        dirty = _git_dependency(name, path, *status_arguments)
-        if dirty:
-            _raise(
-                "CACHE_DIRTY",
-                f"Cached {name} checkout contains modified or untracked source.",
-                dependency=name,
-                path=path,
-            )
+        _validate_repository_clean(
+            name,
+            path,
+            ignore_submodules=ignore_submodules,
+        )
 
     return {
         "path": str(path.resolve()),
@@ -847,7 +860,7 @@ def _validate_all(
             "include/cmajor/helpers/cmaj_PatchWorker_QuickJS.h",
             ".gitmodules",
         ),
-        verify_clean=verify_clean,
+        verify_clean=False,
     )
 
     submodules = _validate_cmajor_submodules(actual["cmajor"], cache_root)
@@ -864,6 +877,11 @@ def _validate_all(
             dependency="choc",
             path=actual["choc"],
         )
+
+    # The aggregate parent status reports a changed submodule commit as dirt.
+    # Pin and origin mismatches must retain their more precise identity failure.
+    if verify_clean:
+        _validate_repository_clean("cmajor", actual["cmajor"])
 
     llvm_submodule = submodules.get("3rdParty/llvm")
     llvm_path = actual["cmajor"] / "3rdParty/llvm"
