@@ -32,13 +32,34 @@ the pre-Polish `#p=1` complete-sound carrier. The versioned
 The browser adapter strictly parses the four envelope fields, rejects duplicate
 JSON keys and non-JSON/non-finite data, deflates with native
 `CompressionStream`, and base64url-encodes the result. Decode is bounded to
-1 MB before JSON parsing. A native implementation is the primary supported
+3,250,000 bytes before JSON parsing. A native implementation is the primary supported
 path; a small vendored deflate implementation is reserved only for a supported
 browser demonstrated to lack the native streams.
 
-The final URL may be copied normally through 2,000 characters, warns while
-remaining copyable through 8,000, and is refused above 8,000. Incoming payloads
-are subject to equivalent fragment and decompressed-size bounds.
+The final URL may be copied normally through 8,000 characters, warns while
+remaining copyable through 128,000, and is refused above 128,000. Incoming
+payloads are subject to equivalent fragment and decompressed-size bounds.
+
+The threshold is measured against the current contract rather than inherited
+from generic URL folklore. Default and representative sounds are about
+3.0–3.2K characters. The deliberate current maximum fills all 110 public
+parameters, 1,372 legal modulation pairs, 96 MSEG shape points, all 128
+articulation slots with every override and articulable route, and all eight
+Effects Lane devices. With the generated performer's complete endpoint
+contract it is 3,110,089 bytes before compression, 71,656 characters as a
+Chromium link, and 118,164 as a WebKit link. The clean-session UI harness's
+equivalent saved-sound fixture is 2,872,473 bytes because its endpoint metadata
+is minimal; its 68,043-character Chromium and 105,139-character WebKit links
+were copied exactly and reopened in clean desktop and phone sessions. The
+generated maximum therefore remains below both the 3,250,000-byte decode cap
+and the 128,000-character URL cap while retaining strict refusal headroom for
+unbounded names or shapes.
+
+Each `osc*WavetableSelect` remains the ADR-021 durable projection of the
+ordered factory `tableId` ledger. Capture and load both prove that all three
+selected slots exist in the current browser's shipped catalog. A custom slot,
+a factory slot unavailable to that recipient, or a catalog that is not ready
+is refused before any sound mutation.
 
 ### Load transaction
 

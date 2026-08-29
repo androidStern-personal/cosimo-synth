@@ -138,6 +138,7 @@ export type SpeedrunRecipe = {
 };
 
 export type WavetableCatalogEntry = {
+    readonly tableId: string;
     readonly name: string;
 };
 
@@ -562,4 +563,3 @@ export function compileRecipe(
         omitted: analysis.omitted,
     };
 }
-

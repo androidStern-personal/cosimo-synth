@@ -269,7 +269,7 @@ test("the current effects-lane split with delay#2 renders through the same verif
     await context.close();
 });
 
-test("the maximal current patch reaches the ceiling and reports an oversized share link without blocking video analysis", {
+test("the maximal current patch reaches the ceiling and retains a warning-class share link", {
     timeout: 120_000,
 }, async () => {
     const maximal = await buildMaximalCurrentSpeedrunPatch();
@@ -288,10 +288,11 @@ test("the maximal current patch reaches the ceiling and reports an oversized sha
     assert.equal(snapshot.prepared.durationInFrames, 2_700);
     assert.equal(snapshot.prepared.durationSeconds, 90);
     assert.equal(snapshot.prepared.compressionLevel, 3);
-    assert.equal(snapshot.prepared.shareURL, null);
-    assert.equal(snapshot.prepared.shareError.code, "URLTooLong");
+    assert.match(snapshot.prepared.shareURL, /#p=2\.[A-Za-z0-9_-]+$/u);
+    assert.equal(snapshot.prepared.shareLengthClass, "warning");
+    assert.equal(snapshot.prepared.shareError, null);
     assert.match(await page.locator(".compression-note").innerText(), /compression level 3/u);
-    assert.match(await page.getByTestId("share-link-unavailable").innerText(), /video rendering is unaffected/u);
+    assert.match(await page.getByTestId("share-link-warning").innerText(), /complete link/u);
     assert.deepEqual(failures, []);
     console.log(`# ${JSON.stringify({
         speedrunM7MaximalStudio: {

@@ -198,5 +198,8 @@ test("the desktop synth preset-bar wiring opts into canonical Init without chang
     const presetHost = source.slice(presetHostStart, presetHostEnd);
 
     assert.match(source, /import \{ createSynthPresetInitOptions \} from "\.\.\/shared\/effects\/synth-init-state";/);
-    assert.match(presetHost, /synth: createSynthPresetInitOptions\(patchConnection, storedStateAdapters\)/);
+    assert.match(
+        presetHost,
+        /synth: createSynthPresetInitOptions\(patchConnection, storedStateAdapters, \{[\s\S]*getShippedWavetableTables/,
+    );
 });

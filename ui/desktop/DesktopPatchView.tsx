@@ -2023,6 +2023,7 @@ function SynthPresetBarHost({
     isHidden,
     focusedEditorOpen = false,
     storedStateAdapters,
+    wavetableTables,
     polishMeter,
     compactSynth = false,
     backAvailable = false,
@@ -2037,6 +2038,7 @@ function SynthPresetBarHost({
     isHidden: boolean;
     focusedEditorOpen?: boolean;
     storedStateAdapters: EffectStoredStateAdapter[];
+    wavetableTables: SynthPatchViewModel["tableOptions"];
     polishMeter: SynthPatchViewModel["observedPolishMeter"];
     /** ADR-026 compact synth composition: Back slot, centered name, … popover. */
     compactSynth?: boolean;
@@ -2065,12 +2067,16 @@ function SynthPresetBarHost({
     onBounceAudioRef.current = onBounceAudio;
     const onBounceVideoRef = useRef(onBounceVideo);
     onBounceVideoRef.current = onBounceVideo;
+    const wavetableTablesRef = useRef(wavetableTables);
+    wavetableTablesRef.current = wavetableTables;
     const presetController = useMemo(() => createStandaloneEffectPresetController({
         effectID: SYNTH_PRESET_EFFECT_ID,
         patchConnection,
         storedStateAdapters,
         presetMigrations: buildSynthPresetMigrations,
-        synth: createSynthPresetInitOptions(patchConnection, storedStateAdapters),
+        synth: createSynthPresetInitOptions(patchConnection, storedStateAdapters, {
+            getShippedWavetableTables: () => wavetableTablesRef.current,
+        }),
         onSoundReplacementApplied: (replacement) => {
             if (replacement.kind !== "bounce") {
                 clearLaneSoloAudition(patchConnection);
@@ -6085,6 +6091,7 @@ function DesktopPatchViewBody({
                 isHidden={synthView.msegEditor.isOpen && !isCompactViewport}
                 focusedEditorOpen={isCompactViewport && synthView.msegEditor.isOpen}
                 storedStateAdapters={synthView.presetStoredStateAdapters}
+                wavetableTables={synthView.tableOptions}
                 polishMeter={synthView.observedPolishMeter}
                 compactSynth={isCompactViewport}
                 backAvailable={synthView.msegEditor.isOpen || mobileReturnTarget !== null}

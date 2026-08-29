@@ -49,6 +49,8 @@ const wavetablePositionEndpointID = "oscAWavetablePosition";
 const wavetableSelectEndpointID = "oscAWavetableSelect";
 const playModeEndpointID = "playMode";
 const glideTimeEndpointID = "glideTime";
+const macroEndpointIDs = ["macro1", "macro2", "macro3", "macro4"] as const;
+const sourceModeEndpointID = "sourceMode";
 const panEndpointID = "oscAPan";
 const warpModeEndpointID = "oscAWarpMode";
 const warpAmountEndpointID = "oscAWarpAmount";
@@ -366,6 +368,8 @@ function createInitialParameterValues(): Map<string, unknown> {
         [wavetableSelectEndpointID, OSCILLATOR_DEFAULT_WAVETABLE_INDEX],
         [playModeEndpointID, 0],
         [glideTimeEndpointID, 0.15],
+        ...macroEndpointIDs.map((endpointID) => [endpointID, 0] as const),
+        [sourceModeEndpointID, 0],
         [panEndpointID, 0],
         [warpModeEndpointID, 0],
         [warpAmountEndpointID, 0],
@@ -477,6 +481,16 @@ function buildHarnessStatus(manifest: unknown) {
                         init: 0,
                     },
                 },
+                ...macroEndpointIDs.map((endpointID, index) => ({
+                    endpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: `Macro ${index + 1}`,
+                        min: -1,
+                        max: 1,
+                        init: 0,
+                    },
+                })),
                 {
                     endpointID: GLOBAL_TUNE_ENDPOINT_ID,
                     purpose: "parameter",
@@ -741,6 +755,19 @@ function buildHarnessStatus(manifest: unknown) {
                         max: 12,
                         init: 0,
                         unit: "dB",
+                    },
+                },
+                {
+                    endpointID: sourceModeEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Source Mode",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                        discrete: true,
+                        step: 1,
+                        text: "Oscillator|Bounce",
                     },
                 },
                 ...buildModulationGeneratorStatusInputs(),

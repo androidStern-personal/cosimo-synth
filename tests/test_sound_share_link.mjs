@@ -50,6 +50,20 @@ function currentContract(buildCanonicalPluginStateContract) {
     });
 }
 
+function envelopeWithExactByteLength(byteLength) {
+    const envelope = {
+        format: "cosimo.soundShare",
+        version: 2,
+        preset: { padding: "" },
+        supplementalStoredState: {},
+    };
+    const emptyLength = Buffer.byteLength(JSON.stringify(envelope));
+    assert.ok(byteLength >= emptyLength);
+    envelope.preset.padding = "x".repeat(byteLength - emptyLength);
+    assert.equal(Buffer.byteLength(JSON.stringify(envelope)), byteLength);
+    return envelope;
+}
+
 const soundDocumentArbitrary = fc.record({
     wavetable: fc.integer({ min: 0, max: 238 }),
     filterMix: fc.integer({ min: 0, max: 1_000 }).map((value) => value / 1_000),
@@ -215,7 +229,7 @@ test("malformed, corrupt, oversized, and unsupported fragments are rejected as v
         [duplicateKeys, "InvalidEnvelope"],
         ["#p=1.AAAA", "UnsupportedVersion"],
         ["#p=3.AAAA", "UnsupportedVersion"],
-        [`#p=2.${"A".repeat(8_001)}`, "PayloadTooLarge"],
+        [`#p=2.${"A".repeat(128_001)}`, "PayloadTooLarge"],
     ];
 
     for (const [fragment, expectedTag] of cases) {
@@ -226,12 +240,34 @@ test("malformed, corrupt, oversized, and unsupported fragments are rejected as v
     assert.deepEqual(await share.decodeSoundShareFragment("#section=voice"), { ok: true, value: null });
 });
 
-test("URL length policy has exact warning and refusal boundaries", async () => {
+test("measured URL policy has exact warning and refusal boundaries", async () => {
     const { share } = await loadModules();
-    assert.equal(share.classifySoundShareURLLength(2_000), "normal");
-    assert.equal(share.classifySoundShareURLLength(2_001), "warning");
-    assert.equal(share.classifySoundShareURLLength(8_000), "warning");
-    assert.equal(share.classifySoundShareURLLength(8_001), "refused");
+    assert.equal(share.classifySoundShareURLLength(8_000), "normal");
+    assert.equal(share.classifySoundShareURLLength(8_001), "warning");
+    assert.equal(share.classifySoundShareURLLength(128_000), "warning");
+    assert.equal(share.classifySoundShareURLLength(128_001), "refused");
+});
+
+test("the measured generated maximum fits the decompressed cap and one byte over is refused", async () => {
+    const { share } = await loadModules();
+    assert.equal(share.SOUND_SHARE_DECOMPRESSED_MAX_BYTES, 3_250_000);
+
+    const generatedMaximum = envelopeWithExactByteLength(3_110_089);
+    const accepted = await share.encodeSoundShareFragment(generatedMaximum);
+    assert.equal(accepted.ok, true, accepted.ok ? undefined : accepted.error.message);
+    const restored = await share.decodeSoundShareFragment(accepted.value);
+    assert.equal(restored.ok, true, restored.ok ? undefined : restored.error.message);
+    assert.deepEqual(restored.value, generatedMaximum);
+
+    const overCap = envelopeWithExactByteLength(3_250_001);
+    const refusedEncode = await share.encodeSoundShareFragment(overCap);
+    assert.equal(refusedEncode.ok, false);
+    assert.equal(refusedEncode.error._tag, "PayloadTooLarge");
+    const refusedDecode = await share.decodeSoundShareFragment(
+        await deflateFragment(JSON.stringify(overCap)),
+    );
+    assert.equal(refusedDecode.ok, false);
+    assert.equal(refusedDecode.error._tag, "PayloadTooLarge");
 });
 
 test("the envelope boundary rejects extra fields, non-JSON values, and invalid encode callers", async () => {

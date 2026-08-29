@@ -3,6 +3,7 @@ import { ARTICULATIONS_V4_STATE_KEY } from "../../shared/articulation-image";
 import { LANE_STATE_KEY } from "../../shared/lane-state";
 import { MODULATION_STATE_KEY } from "../../shared/modulation";
 import { SYNTH_PRESET_EFFECT_ID } from "../../shared/effects/synth-preset-identity";
+import { getFactoryBankCatalogValue } from "../../shared/wavetable-bank";
 import type { WavetableCatalog } from "../recipe";
 import type { ParameterEndpointMetadata, PatchIntakeOptions } from "../patch-io";
 import { SpeedrunStudioError, studioError } from "./errors";
@@ -49,8 +50,9 @@ async function loadCatalog(webRootURL: URL): Promise<WavetableCatalog> {
     try {
         const response = await fetch(new URL("assets/factory-bank-catalog.json", webRootURL));
         if (!response.ok) throw new Error(`Factory catalog request failed with HTTP ${response.status}.`);
-        const catalog = await response.json() as WavetableCatalog;
-        if (!Array.isArray(catalog.tables) || catalog.tables.length === 0) {
+        const catalogValue: unknown = await response.json();
+        const catalog = getFactoryBankCatalogValue(catalogValue);
+        if (catalog.tables.length === 0) {
             throw new Error("The factory wavetable catalog is empty.");
         }
         return catalog;

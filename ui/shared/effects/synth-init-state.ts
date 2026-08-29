@@ -269,11 +269,13 @@ function createCanonicalStoredState(currentContract: EffectPluginStateContract) 
 export function createSynthPresetInitOptions(
     patchConnection: PatchConnectionLike,
     storedStateAdapters: ReadonlyArray<Pick<EffectStoredStateAdapter, "key">>,
+    options: Partial<Pick<StandaloneEffectPresetSynthOptions, "getShippedWavetableTables">> = {},
 ): StandaloneEffectPresetSynthOptions {
     const rackIsPresetOwned = storedStateAdapters.some((adapter) => adapter.key === LANE_STATE_KEY);
 
     return {
         createCanonicalStoredState,
+        getShippedWavetableTables: options.getShippedWavetableTables ?? (() => []),
         initOnlyStateAdapters: rackIsPresetOwned
             ? []
             : [createSynthRackInitStateAdapter(patchConnection)],

@@ -79,6 +79,19 @@ const REAL_STYLE_VOICE_ENHANCER_ENDPOINTS = [
     },
 ];
 
+const GENERATED_FLOAT32_VOICE_ENHANCER_ENDPOINTS = REAL_STYLE_VOICE_ENHANCER_ENDPOINTS.map(
+    (endpoint) => endpoint.endpointID === "voiceEnhancerQ"
+        ? {
+            ...endpoint,
+            annotation: {
+                ...endpoint.annotation,
+                min: Math.fround(0.1),
+                init: Math.fround(0.71),
+            },
+        }
+        : endpoint,
+);
+
 function buildCurrentContract(buildCanonicalPluginStateContract, {
     voiceEnhancerParameters = VOICE_ENHANCER_PARAMETERS,
     polishParameters = POLISH_PARAMETERS,
@@ -117,6 +130,44 @@ test("the current guard accepts the real-style discrete T62 endpoint contract", 
         text: "Off|On",
     });
     assert.deepEqual(migrationsModule.buildSynthPresetMigrations(currentContract), []);
+});
+
+test("the current guard accepts Cmajor's exact float32 forms of authored numeric annotations", async () => {
+    const { contractModule, migrationsModule } = await loadModules();
+    const currentContract = buildCurrentContract(contractModule.buildCanonicalPluginStateContract, {
+        voiceEnhancerParameters: GENERATED_FLOAT32_VOICE_ENHANCER_ENDPOINTS,
+    });
+    const q = currentContract.parameters.find(({ endpointID }) => endpointID === "voiceEnhancerQ");
+
+    assert.equal(q.min, 0.10000000149011612);
+    assert.equal(q.defaultValue, 0.7099999785423279);
+    assert.deepEqual(migrationsModule.buildSynthPresetMigrations(currentContract), []);
+});
+
+test("the current guard rejects numeric values near but not equal to the authored or float32 forms", async () => {
+    const { contractModule, migrationsModule } = await loadModules();
+    const qIndex = REAL_STYLE_VOICE_ENHANCER_ENDPOINTS.findIndex(
+        ({ endpointID }) => endpointID === "voiceEnhancerQ",
+    );
+    const generatedQ = GENERATED_FLOAT32_VOICE_ENHANCER_ENDPOINTS[qIndex];
+    const wrongAnnotations = [
+        { ...generatedQ.annotation, min: Math.fround(0.1) + 1e-12 },
+        { ...generatedQ.annotation, init: Math.fround(0.71) + 1e-12 },
+    ];
+
+    for (const annotation of wrongAnnotations) {
+        const endpoints = GENERATED_FLOAT32_VOICE_ENHANCER_ENDPOINTS.with(qIndex, {
+            ...generatedQ,
+            annotation,
+        });
+        assert.throws(
+            () => migrationsModule.buildSynthPresetMigrations(buildCurrentContract(
+                contractModule.buildCanonicalPluginStateContract,
+                { voiceEnhancerParameters: endpoints },
+            )),
+            /voiceEnhancerQ/,
+        );
+    }
 });
 
 test("a pre-Polish preset is rejected atomically before parameter or stored-state writes", async () => {

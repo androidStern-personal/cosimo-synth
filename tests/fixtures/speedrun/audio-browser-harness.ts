@@ -6,6 +6,8 @@ import {
     digestSpeedrunPCM,
 } from "../../../ui/speedrun/audio/master-track";
 import { renderSpeedrunCheckpoints } from "../../../ui/speedrun/audio/render-pool";
+import { createSoundShareURL } from "../../../ui/shared/sound-share-link";
+import type { SoundShareEnvelopeV2 } from "../../../ui/shared/sound-share-envelope";
 
 type HarnessRequest = {
     readonly states: ReadonlyArray<CumulativePatchState>;
@@ -111,14 +113,30 @@ async function render(request: HarnessRequest) {
     };
 }
 
+async function measureSoundShareURL(envelope: SoundShareEnvelopeV2) {
+    const result = await createSoundShareURL(envelope, "https://cosimo.test/");
+    return result.ok
+        ? {
+            ok: true as const,
+            length: result.value.length,
+            lengthClass: result.value.lengthClass,
+        }
+        : {
+            ok: false as const,
+            tag: result.error._tag,
+            message: result.error.message,
+        };
+}
+
 declare global {
     interface Window {
         __COSIMO_SPEEDRUN_AUDIO_HARNESS__?: {
             render: typeof render;
+            measureSoundShareURL: typeof measureSoundShareURL;
         };
     }
 }
 
-globalThis.window.__COSIMO_SPEEDRUN_AUDIO_HARNESS__ = { render };
+globalThis.window.__COSIMO_SPEEDRUN_AUDIO_HARNESS__ = { render, measureSoundShareURL };
 const status = document.querySelector("#status");
 if (status) status.textContent = "Speedrun audio harness ready";

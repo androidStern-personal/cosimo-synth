@@ -940,3 +940,10 @@ T67 current integration queue — updated 2026-08-28
 
 Current hosted synth delivery after T28 — deployed 2026-08-28
 - Sites version 60 was built, saved, and publicly deployed from pushed integration commit `fef3aec8` to `https://cosimo-synth.andrew-martin-stern.chatgpt.site`. The live app, web host, Cmajor engine, factory catalog, and compiled desktop interface all return HTTP 200; the published interface and engine contain the new Polish controls.
+
+T46 URL patch sharing — implementation handoff 2026-08-29
+- `#p=2` now restores the complete current 110-parameter sound, modulation/MSEG, all articulations, and Effects Lane through the existing transactional preset path. Capture and load require all A/B/C selectors to identify shipped ADR-021 factory slots; unavailable/custom tables and Bounce-backed sounds are refused before mutation.
+- Measured policy is 8,000-character warning, 128,000-character refusal, and 3,250,000 decompressed bytes. The generated strict maximum is 3,110,089 bytes and encodes to 71,656 characters in Chromium and 118,164 in WebKit; one byte over the decompressed cap is refused.
+- Generated Cmajor float32 endpoint metadata is accepted only when it is exactly the authored numeric value or `Math.fround` of that value. Speedrun rack readiness now derives its frontier from actual positive `laneSlotParams.deliverySerial` values rather than total event count.
+- Exact clean-session desktop/phone copy/open and non-destructive refusal matrices pass in Chromium and WebKit. Generated Speedrun source/restored renders have identical non-silent PCM digests and metrics in both engines. Native/HMR/VST3/pluginval/host/device gates were intentionally not run because URL sharing is browser-only.
+- Unrelated stale Speedrun baselines remain outside T46: an old 105-parameter expectation, legacy lane fixtures, and a missing distortion descriptor in the older maximal helper.

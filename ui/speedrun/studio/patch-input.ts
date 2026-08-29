@@ -12,6 +12,7 @@ import {
 } from "../../shared/sound-share-envelope";
 import { createSoundShareURL, decodeSoundShareFragment } from "../../shared/sound-share-link";
 import type { CreatedSoundShareURL } from "../../shared/sound-share-link";
+import { validateSoundShareWavetables } from "../../shared/sound-share-wavetable";
 import { readBrowserPatchState } from "../../../web/browser-patch-state.mjs";
 import type { PatchDocument } from "../patch-io";
 import type { SpeedrunStudioRuntime } from "./runtime";
@@ -88,6 +89,14 @@ export async function createStudioShareLink(
     runtime: SpeedrunStudioRuntime,
 ): Promise<StudioShareLinkAvailability> {
     try {
+        const wavetableResult = validateSoundShareWavetables(document.parameters, runtime.catalog.tables);
+        if (!wavetableResult.ok) {
+            return {
+                _tag: "unavailable",
+                code: wavetableResult.error._tag,
+                message: wavetableResult.error.message,
+            };
+        }
         const envelope = createStudioShareEnvelope(document, runtime);
         const baseURL = new URL(runtime.webRootURL);
         baseURL.search = "";

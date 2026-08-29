@@ -95,18 +95,36 @@ function assertExactParameterContracts(
     }[],
     description: string,
 ): void {
+    const matchesAuthoredNumber = (
+        actual: number | undefined,
+        expected: number | undefined,
+        allowFloat32: boolean,
+    ) => actual === expected || (
+        allowFloat32
+        && typeof actual === "number"
+        && typeof expected === "number"
+        && Number.isFinite(actual)
+        && Number.isFinite(expected)
+        && actual === Math.fround(expected)
+    );
+
     for (const expected of expectedContracts) {
         const matches = currentContract.parameters.filter(
             (parameter) => parameter.endpointID === expected.endpointID,
         );
         const parameter = matches[0];
+        const allowFloat32 = expected.type === "number";
         if (matches.length !== 1 || parameter === undefined
                 || parameter.type !== expected.type
-                || parameter.min !== expected.min
-                || parameter.max !== expected.max
-                || parameter.defaultValue !== expected.defaultValue
+                || !matchesAuthoredNumber(parameter.min, expected.min, allowFloat32)
+                || !matchesAuthoredNumber(parameter.max, expected.max, allowFloat32)
+                || !matchesAuthoredNumber(
+                    typeof parameter.defaultValue === "number" ? parameter.defaultValue : undefined,
+                    expected.defaultValue,
+                    allowFloat32,
+                )
                 || parameter.discrete !== expected.discrete
-                || parameter.step !== expected.step
+                || !matchesAuthoredNumber(parameter.step, expected.step, allowFloat32)
                 || parameter.text !== expected.text) {
             throw new Error(
                 `The current synth contract must contain exactly one ${description} ${expected.endpointID} parameter.`,

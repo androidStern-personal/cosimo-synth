@@ -13,6 +13,7 @@ export type SoundShareErrorTag =
     | "DecompressionFailed"
     | "PayloadTooLarge"
     | "URLTooLong"
+    | "UnavailableWavetable"
     | "InvalidURL"
     | "HistoryUpdateFailed";
 

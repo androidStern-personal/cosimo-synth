@@ -104,6 +104,11 @@ function RecipeReport({ prepared }: { readonly prepared: SpeedrunPreparedPipelin
                     Share link unavailable; video rendering is unaffected: {prepared.shareLink.message}
                 </div>
             ) : null}
+            {prepared.shareLink?._tag === "available" && prepared.shareLink.link.lengthClass === "warning" ? (
+                <div className="share-unavailable" data-testid="share-link-warning">
+                    Long share link: copy the complete link; some apps may shorten it.
+                </div>
+            ) : null}
             <ol className="recipe-list">
                 {prepared.recipe.sections.map((section, index) => (
                     <li key={section.id} data-section-id={section.id}>

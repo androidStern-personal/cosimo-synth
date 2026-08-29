@@ -5,6 +5,7 @@ import {
     compileLaneTopologyUpload,
     buildLaneRuntimeEventsV2,
 } from "../../shared/lane-state-v2";
+import { LANE_SLOT_PARAMS_ENDPOINT_ID } from "../../shared/lane-state";
 import { buildModulationRuntimeEvents } from "../../shared/modulation";
 import { getModulationArticulationCellIndex } from "../../shared/modulation-runtime-program";
 import { startPatchWorkerServices } from "../../shared/patch-worker-services";
@@ -94,6 +95,31 @@ type InstallExpectations = {
     readonly rackParamSerial: number;
 };
 
+type LaneRuntimeEvent = {
+    readonly endpointID: string;
+    readonly value: unknown;
+};
+
+/** The rack acknowledges only laneSlotParams delivery serials. Output control
+    and topology events deliberately carry no positive parameter frontier. */
+export function getExpectedRackParamSerial(events: ReadonlyArray<LaneRuntimeEvent>) {
+    let frontier = 0;
+    for (const event of events) {
+        if (event.endpointID !== LANE_SLOT_PARAMS_ENDPOINT_ID
+                || typeof event.value !== "object"
+                || event.value === null) {
+            continue;
+        }
+        const deliverySerial = (event.value as { readonly deliverySerial?: unknown }).deliverySerial;
+        if (typeof deliverySerial === "number"
+                && Number.isFinite(deliverySerial)
+                && deliverySerial > 0) {
+            frontier = Math.max(frontier, deliverySerial);
+        }
+    }
+    return frontier;
+}
+
 function installExpectations(state: CumulativePatchState): InstallExpectations {
     const routeCells = Object.fromEntries(state.modulation.routes.flatMap((route) => {
         const cell = getModulationArticulationCellIndex(route);
@@ -110,7 +136,7 @@ function installExpectations(state: CumulativePatchState): InstallExpectations {
             routeCells,
         ).length,
         rackChainLength: compileLaneTopologyUpload(state.lane).chainLength,
-        rackParamSerial: Math.max(0, laneEvents.length - 1),
+        rackParamSerial: getExpectedRackParamSerial(laneEvents),
     };
 }
 

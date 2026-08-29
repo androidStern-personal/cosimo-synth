@@ -80,6 +80,7 @@ export type SpeedrunStudioSnapshot = {
         readonly durationSeconds: number;
         readonly compressionLevel: number;
         readonly shareURL: string | null;
+        readonly shareLengthClass: "normal" | "warning" | null;
         readonly shareError: null | {
             readonly code: string;
             readonly message: string;
@@ -485,6 +486,9 @@ export class SpeedrunStudioSession {
                 compressionLevel: prepared.timeline.compressionLevel,
                 shareURL: prepared.shareLink?._tag === "available"
                     ? prepared.shareLink.link.url
+                    : null,
+                shareLengthClass: prepared.shareLink?._tag === "available"
+                    ? prepared.shareLink.link.lengthClass
                     : null,
                 shareError: prepared.shareLink?._tag === "unavailable"
                     ? { code: prepared.shareLink.code, message: prepared.shareLink.message }

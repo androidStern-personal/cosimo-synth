@@ -35,7 +35,7 @@ async function buildFixture() {
         intake.value.defaults,
         catalog,
     );
-    return { modules, context, maximal, patchInput, share, intake, analysis, recipe };
+    return { modules, context, catalog, maximal, patchInput, share, intake, analysis, recipe };
 }
 
 test("the maximal current patch deterministically compresses to the configured video ceiling", async () => {
@@ -92,10 +92,11 @@ test("the maximal current patch deterministically compresses to the configured v
     })}`);
 });
 
-test("maximal-patch URL compression independently enforces the copy limit", async () => {
-    const { context, patchInput, share, intake } = await maximalFixture();
+test("maximal-patch URL compression remains warning-class and copyable", async () => {
+    const { context, catalog, patchInput, share, intake } = await maximalFixture();
     const runtime = {
         intakeOptions: context.options,
+        catalog,
         webRootURL: new URL("https://cosimo.test/app/"),
     };
     const envelope = patchInput.createStudioShareEnvelope(intake.value.document, runtime);
@@ -107,16 +108,37 @@ test("maximal-patch URL compression independently enforces the copy limit", asyn
     const link = await patchInput.createStudioShareLink(intake.value.document, runtime);
 
     assert.ok(fragment.value.length < rawBytes * 0.2, `${fragment.value.length}/${rawBytes}`);
-    assert.ok(candidateURL.href.length > share.SOUND_SHARE_URL_MAX_LENGTH, candidateURL.href.length);
-    assert.equal(link._tag, "unavailable");
-    assert.equal(link.code, "URLTooLong");
-    assert.match(link.message, /links over 8,000 cannot be copied/u);
+    assert.ok(candidateURL.href.length > share.SOUND_SHARE_URL_WARNING_LENGTH, candidateURL.href.length);
+    assert.ok(candidateURL.href.length <= share.SOUND_SHARE_URL_MAX_LENGTH, candidateURL.href.length);
+    assert.equal(link._tag, "available");
+    assert.equal(link.link.url, candidateURL.href);
+    assert.equal(link.link.lengthClass, "warning");
 
     console.log(`# ${JSON.stringify({
         maximalShareURL: {
             rawBytes,
             compressedURLCharacters: candidateURL.href.length,
-            policy: link.code,
+            policy: link.link.lengthClass,
         },
     })}`);
+});
+
+test("studio share refuses a selector outside its shipped factory catalog", async () => {
+    const { context, catalog, patchInput, intake } = await maximalFixture();
+    const document = {
+        ...intake.value.document,
+        parameters: {
+            ...intake.value.document.parameters,
+            oscCWavetableSelect: catalog.tables.length,
+        },
+    };
+    const link = await patchInput.createStudioShareLink(document, {
+        intakeOptions: context.options,
+        catalog,
+        webRootURL: new URL("https://cosimo.test/app/"),
+    });
+
+    assert.equal(link._tag, "unavailable");
+    assert.equal(link.code, "UnavailableWavetable");
+    assert.match(link.message, /unavailable wavetable for Oscillator C/u);
 });

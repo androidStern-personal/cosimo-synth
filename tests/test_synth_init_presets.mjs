@@ -359,6 +359,7 @@ class FakeSynthPatchConnection {
 async function createSynthFixture({
     includeFactoryPreset = false,
     synthEnabled = true,
+    shippedWavetableCount = 239,
     status = synthStatus,
     onSoundReplacementApplied,
 } = {}) {
@@ -445,6 +446,10 @@ async function createSynthFixture({
                 };
             },
             initOnlyStateAdapters: [rackHarness.adapter],
+            getShippedWavetableTables: () => Array.from(
+                { length: shippedWavetableCount },
+                (_, tableIndex) => ({ tableId: `factory-${tableIndex}` }),
+            ),
         };
     }
     const controller = new presets.StandaloneEffectPresetController(controllerOptions);
@@ -1363,6 +1368,54 @@ test("shared sound supplemental documents are exact and invalid links perform no
         assert.deepEqual(target.articulationHarness.value, baseline.articulations);
         assert.deepEqual(target.rackHarness.value, baseline.lane);
     }
+});
+
+test("capture and load refuse custom or unavailable wavetables without changing the sound", async () => {
+    const source = await createSynthFixture();
+    source.patchConnection.emitParameterValue("oscAWavetableSelect", 35);
+    source.patchConnection.emitParameterValue("oscBWavetableSelect", 34);
+    source.patchConnection.emitParameterValue("oscCWavetableSelect", 12);
+    const captured = synthMutations(source.controller).captureSharedSound();
+    assert.equal(captured.ok, true, captured.message);
+
+    const target = await createSynthFixture({ shippedWavetableCount: 36 });
+    assert.equal(synthMutations(target.controller).initSound().ok, true);
+    const baseline = clone({
+        eventCount: target.patchConnection.events.length,
+        parameters: target.patchConnection.parameterValues,
+        modulation: target.modulationHarness.value,
+        articulations: target.articulationHarness.value,
+        lane: target.rackHarness.value,
+    });
+    const refusedLoad = synthMutations(target.controller).loadSharedSound({
+        ...captured.value,
+        preset: {
+            ...captured.value.preset,
+            parameters: {
+                ...captured.value.preset.parameters,
+                oscBWavetableSelect: 81,
+            },
+        },
+    });
+    assert.equal(refusedLoad.ok, false);
+    assert.match(refusedLoad.message, /unavailable wavetable for Oscillator B/i);
+    assert.equal(target.patchConnection.events.length, baseline.eventCount);
+    assert.deepEqual(target.patchConnection.parameterValues, baseline.parameters);
+    assert.deepEqual(target.modulationHarness.value, baseline.modulation);
+    assert.deepEqual(target.articulationHarness.value, baseline.articulations);
+    assert.deepEqual(target.rackHarness.value, baseline.lane);
+
+    target.patchConnection.emitParameterValue("oscAWavetableSelect", 35);
+    target.patchConnection.emitParameterValue("oscBWavetableSelect", 34);
+    target.patchConnection.emitParameterValue("oscCWavetableSelect", 36);
+    const refusedCapture = synthMutations(target.controller).captureSharedSound();
+    assert.equal(refusedCapture.ok, false);
+    assert.match(refusedCapture.message, /unavailable wavetable for Oscillator C/i);
+
+    const unready = await createSynthFixture({ shippedWavetableCount: 0 });
+    const unavailableCatalog = synthMutations(unready.controller).captureSharedSound();
+    assert.equal(unavailableCatalog.ok, false);
+    assert.match(unavailableCatalog.message, /Wavetable availability is not ready/i);
 });
 
 test("sampled-mode sounds are refused with the locked share-link message", async () => {

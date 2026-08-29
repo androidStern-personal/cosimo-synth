@@ -56,7 +56,7 @@ recipe report. Pacing compression changes presentation timing only; it does
 not remove reconstruction sections.
 
 Sound-share URL compression is independent of video timing and encoding. A
-share URL over 2,000 characters is warned; over 8,000 characters the copy
+share URL over 8,000 characters is warned; over 128,000 characters the copy
 action is unavailable, while sound analysis and video rendering continue.
 
 ## Pipeline behavior

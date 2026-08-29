@@ -6,6 +6,10 @@ import {
     type SoundShareEnvelopeV2,
 } from "../sound-share-envelope";
 import {
+    validateSoundShareWavetables,
+    type ShippedWavetableTable,
+} from "../sound-share-wavetable";
+import {
     buildPluginStateContract,
     canonicalJSONStringify,
     clonePluginStateContract,
@@ -123,6 +127,8 @@ export type StandaloneEffectInitOnlyStateAdapter = {
 export type StandaloneEffectPresetSynthOptions = {
     createCanonicalStoredState: (currentContract: EffectPluginStateContract) => Readonly<Record<string, unknown>>;
     initOnlyStateAdapters?: ReadonlyArray<StandaloneEffectInitOnlyStateAdapter>;
+    /** Current factory-slot ledger used to reject custom or unavailable tables. */
+    getShippedWavetableTables: () => ReadonlyArray<ShippedWavetableTable>;
 };
 
 export type StandaloneEffectPresetControllerOptions = {
@@ -1703,6 +1709,14 @@ export class StandaloneEffectPresetController {
             || (bounceState !== null && bounceState !== undefined)
         ) {
             throw new Error("Bounced sounds can't be shared by link yet");
+        }
+
+        const wavetableResult = validateSoundShareWavetables(
+            preset.parameters,
+            this.options.synth?.getShippedWavetableTables() ?? [],
+        );
+        if (!wavetableResult.ok) {
+            throw wavetableResult.error;
         }
     }
 
