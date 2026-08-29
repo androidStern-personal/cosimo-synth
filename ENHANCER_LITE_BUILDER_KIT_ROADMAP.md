@@ -2,15 +2,15 @@
 
 Status: **execution-grade plan; combined launch HOLD — Gate 0 and Gate 3 unresolved**
 
-Date: 2026-08-28
+Last updated: 2026-08-29
 
 Planning branch: `codex/enhancer-lite-builder-kit-roadmap-cpm`
 
 Roadmap checkpoint reconciled: `d005c4e8f88f153bc1904170d99a0aeee41d4ba0`
 
-Source baseline inspected: `origin/master@6dbc94884b173d66c3885e991faeff541bcf0091`
+Current integration baseline: `origin/master@e3b832ebe8010a40a40e86780bd549467ed744d1`
 
-Dependency-migration authority: `BUILDER_KIT_CPM_DEPENDENCY_MIGRATION.md`. Andrew approved one CPM resolver for the exact patched Cmajor and CHOC private forks plus pinned JUCE, with no post-download patching, alternate source, manual worktree setup, or Cmajor CLI work in this migration.
+Dependency-migration authority: `BUILDER_KIT_CPM_DEPENDENCY_MIGRATION.md`. The plain-CPM correction is implemented and qualified on master: one small CMake module uses ordinary CPM calls and its ordinary shared source cache for the exact private Cmajor/CHOC and official JUCE pins. The rejected custom resolver, locks, repair, credential filtering, receipts, and read-only enforcement are gone. Cmajor CLI delivery remains a separate Builder Kit task.
 
 Historical DSP checkpoint: `codex/t26-spectre-wrapper-prototype@2a652a4035519be1fbe12de9a8c6487ed736e3c5`
 
@@ -80,7 +80,7 @@ If the answer is no or economically unreasonable, Andrew chooses one lawful path
 | Headline | Provisional | “Your first plugin is already built.” | Test against the hero demonstration before GA. |
 | Free product | Locked | Full Enhancer Lite binary; not intentionally crippled. | The paid product sells ownership and workflow, not missing sound features. |
 | Paid product | Locked | Sanitized editable project, setup/update prompts, build system, onboarding, Wavefold example, and lifetime upstream releases. | Never ship the Cosimo monorepo or its full history. |
-| Build dependencies | Locked | Every supported build resolves the same patched Cmajor and CHOC commits plus pinned JUCE through the single CPM system specified in `BUILDER_KIT_CPM_DEPENDENCY_MIGRATION.md`. | Patches live as commits in private GitHub repositories; no build may patch retrieved source, select another source, or require manual worktree dependency setup. The Cmajor CLI is a separate later decision. |
+| Build dependencies | Implemented and qualified | Every supported build uses `cmake/CosimoDependencies.cmake`, ordinary CPM, private Cmajor `f1c9a9a8`, recursive private CHOC `037e34a2`, and official JUCE `501c0767`. | Integrated as `0c38ad96` and qualified at master `e3b832eb`. No custom resolver, cache policy, post-download patch, alternate source, or manual worktree dependency setup is allowed. Cmajor CLI delivery remains separate. |
 | Founding price | Locked for validation | $29, first 50 buyers. | Maximum gross revenue is $1,450; this is a validation cohort, not a profit proof. |
 | Later price | Hypothesis | $49 after evidence. | No automatic increase after customer 50; require the Gate 6 metrics. |
 | Platforms | Locked | Apple Silicon Macs only, M1 or newer, running macOS 15 Sequoia or macOS 26 Tahoe. | Ship arm64 only. No Intel/Rosetta, macOS 14 or older, Windows, or Linux support in v1. |
@@ -240,7 +240,7 @@ Failure behavior:
 3. Polar records the purchase and exposes the finished download, receipt, and purchase-specific setup/update credential for recovery. The credential never activates the plugin.
 4. The copied prompt contains the purchase-specific setup command. The agent authenticates to the private feed, retrieves and verifies the signed Git bundle, clones it locally, and creates the customer customization branch from the immutable release tag. Downloading the source and creating the repository are one invisible user-facing step.
 5. `doctor` inventories the machine without changing it and explains missing requirements in plain language.
-6. With permission, `setup` installs only the documented build tools and pinned dependencies.
+6. With permission, `setup` installs or guides only the documented external build tools. Cmajor, CHOC, and JUCE are fetched lazily by ordinary CPM during the first configure/build and then reused from CPM's normal user cache.
 7. `test`, `build`, and `install` produce and install the baseline local-mode plugin.
 8. The agent confirms the installed path and asks the user to perform the supported-host smoke.
 9. Onboarding HTML opens and explains modification, recovery, updates, publishing limits, and support.
@@ -307,6 +307,9 @@ enhancer-lite-builder-kit/
   THIRD_PARTY_NOTICES.md
   product.json
   toolchain.lock.json
+  cmake/
+    CPM.cmake
+    CosimoDependencies.cmake
   package.json
   package-lock.json
   dsp/
@@ -346,25 +349,28 @@ enhancer-lite-builder-kit/
 
 ### 6.3 Toolchain contract
 
-`toolchain.lock.json` pins versions, commits, download URLs, and checksums for every build dependency. At minimum:
+Source dependencies and external tools have separate, non-overlapping authorities:
+
+- `cmake/CosimoDependencies.cmake` alone pins the Cmajor repository/commit, recursive CHOC commit, and JUCE repository/commit and retrieves them through ordinary CPM.
+- `toolchain.lock.json` records only prerequisites outside CPM. It must not repeat or override the Cmajor, CHOC, or JUCE URLs or commits.
+
+The external-tool file covers at minimum:
 
 - Stable Xcode and Command Line Tools range.
 - macOS 15.0 deployment target plus explicit macOS 15 Sequoia and macOS 26 Tahoe qualification targets.
 - Node and npm.
 - CMake.
-- Cmajor CLI and source/runtime commit.
-- Patched CHOC commit, if still required.
-- JUCE major/minor and exact commit.
-- VST3 SDK and other transitive wrapper dependencies.
+- Cmajor CLI version and acquisition path, which remains unresolved.
+- Any non-CPM SDK or wrapper prerequisite discovered from the final customer build.
 
-The current repository pins Cmajor and CHOC but takes `cmaj` from `PATH` and shallow-clones moving JUCE. That is development behavior and fails the customer reproducibility gate.
+T69 completed the repository source-dependency portion on master `e3b832eb`: production callers use private Cmajor `f1c9a9a8`, recursive private CHOC `037e34a2`, and official JUCE `501c0767` through plain CPM. The remaining customer reproducibility gap is the `cmaj` command-line program and the exact external Xcode/Node/CMake range—not Cmajor/CHOC/JUCE source retrieval.
 
 ### 6.4 Command contract
 
 | Command | Required behavior |
 |---|---|
 | `doctor` | Read-only inventory; requires Apple Silicon M1 or newer and macOS 15 or 26; identifies disk, Xcode agreement, Node/npm, CMake, Cmajor, JUCE, agent, DAW paths, signing mode, and unsupported conditions. Emits a redacted support report and rejects Intel/Rosetta or other macOS releases before mutation. |
-| `setup` | Installs/fetches only pinned dependencies after consent; verifies checksums and licenses; is safe to rerun. |
+| `setup` | Installs or guides missing external tools after consent and is safe to rerun. It does not create another dependency downloader; ordinary configure/build lets CPM lazily fetch and cache Cmajor, CHOC, and JUCE. |
 | `test` | Runs customer-contained DSP, finite-output, dry, state, UI, audio, and build-contract tests. No proprietary corpus or network required after setup. |
 | `build` | Produces deterministic arm64 local-mode VST3/AU artifacts from a clean tree. |
 | `install` | Backs up/replaces only the exact target plugin bundles, signs locally, verifies, and prints rescan/restart instructions. |
@@ -388,16 +394,16 @@ The current shelf-corpus test points at the ignored `build/t26-spectre-shelves` 
 
 Evidence status: **completed read-only proposed-boundary audit at exact roadmap checkpoint `d005c4e8f88f153bc1904170d99a0aeee41d4ba0`; not an actual-build SBOM and not release approval.** Audit task `01a047d0-d360-7481-9cf1-a9f987066c17` used a clean worktree, created no build directory or artifact, and made no build, install, package, account, publication, merge, push, or deployment changes.
 
-Audit verdict: **HOLD.** BK-03 now has an evidence-backed proposed customer boundary, but it remains open until the exact Cmajor reply is preserved, the no-JIT boundary is proven, and the Cosimo source license, JUCE delivery terms, Spectre-derived DSP provenance, replacement-brand ownership, exact approved dependency pins, and notices are resolved. BK-32 must still regenerate the final inventory from the exact checksummed build that would ship.
+Audit verdict: **HOLD.** BK-03 now has an evidence-backed proposed customer boundary, but it remains open until the exact Cmajor reply is preserved, the no-JIT boundary is proven, and the Cosimo source license, JUCE delivery terms, Spectre-derived DSP provenance, replacement-brand ownership, and notices are resolved. T69 closed the repository's Cmajor/CHOC/JUCE source-pin and moving-download gap; BK-20 remains open for the customer-facing `cmaj` and external-toolchain contract. BK-32 must still regenerate the final inventory from the exact build that would ship.
 
 Observed workstation versions are macOS 26.5.1 on arm64, Xcode 26.5, Node 22.16.0, npm 11.4.1, CMake 4.2.3, and `cmaj` 1.0.3066. They describe the inspected machine, not the eventual supported range or locked customer toolchain.
 
 | Component | Observed evidence | Release disposition / open proof |
 |---|---|---|
 | Cosimo Enhancer Lite source | Relevant source first appears in Andrew-authored Git commits, including `71f106b9`, `887757f3`, and `47dadd75`; the repository has no root customer license. | Git authorship is provenance evidence, not a customer rights grant. Gate 0 must supply the Cosimo license/EULA and commercial promise. |
-| Cmajor | Runtime provisioner pins Cmajor 1.0.3066 at `172db53232337154d5a1c0f9a448318129dfacd9`. Andrew reports written Cmajor clearance unless the JIT engine is embedded. | Use a no-JIT customer build, preserve the exact reply, and prove which generated/runtime components enter the final customer project and binaries. Any embedded JIT engine requires separate licensing. |
-| CHOC | Provisioner pins Andrew's patched fork at `e50b21a272a1729bc1dd1fd368c112095cb18d5a`. | Verify upstream ISC notice, patch provenance, and the minimal patch subset actually required by Lite. Do not export the full shared runtime patch stack by assumption. |
-| JUCE | `fx/prod-effect.mjs` shallow-clones the moving head of the JUCE repository. | Critical reproducibility and SBOM gap. Pin an exact approved version/commit, enumerate the VST3/AU wrapper contents, and resolve Gate 0 before customer packaging. |
+| Cmajor | Plain CPM pins private `androidStern-personal/cmajor` at `f1c9a9a8e85dcc82141326a2fc1c5160241f346c`. Andrew reports written Cmajor clearance unless the JIT engine is embedded. | Preserve the exact reply and prove the final customer project and binaries use the no-JIT path. Any embedded JIT engine requires separate licensing. |
+| CHOC | Cmajor recursively pins private `androidStern-personal/choc` at `037e34a2b382175c8bee4be5a0707724130f10e8`. The committed fixes are baseline correctness for every production build. | Preserve upstream ISC notices and patch provenance, and define lawful customer access to the exact private source. Do not create a second or reduced dependency stack for Lite. |
+| JUCE | Plain CPM pins official JUCE at `501c07674e1ad693085a7e7c398f205c2677f5da`. | The moving-download defect is closed. Written Builder Kit delivery/derivative terms, the exact VST3/AU wrapper inventory, notices, and final-binary inclusion remain Gate 0/BK-32 work. |
 | VST3 SDK and wrapper dependencies | Enter transitively through the generated JUCE project; no exact release inventory is locked in the current Lite path. | Record exact versions, licenses, notices, and binary inclusion from the final pinned build. |
 | Apple SDK, WebKit, and Audio Unit APIs | Supplied by Xcode/macOS rather than copied from this repository. | Lock the supported Xcode/deployment range and document customer prerequisites; actual distribution still needs signing/notarization proof. |
 | JavaScript build/test tooling | The root lock contains 316 dependency entries plus the root project and includes unrelated product/media dependencies. Lite UI is vanilla TypeScript, while the shared build script also loads React tooling. | Create a dedicated minimal package and lock after authorization. Vite/esbuild and Playwright are build/test-only candidates; recompute licenses from the exact customer closure. |
@@ -414,7 +420,7 @@ The proposed export is an **allowlist design, not a shippable archive**:
 | Candidate customer tests | `tests/cmajor_enhancer_lite/*.cmajor` | Repath into the product repository and verify every fixture is redistributable. |
 | Rewrite/split | `tests/test_enhancer_lite_state.mjs`; `tests/test_enhancer_lite_view_browser.mjs` | Remove WavetableSynth, EffectsRack, monorepo helper, and shared-build assumptions; retain only standalone Lite behavior. |
 | Author product-only | Manifest/identity, independent Lite state, production loader, build/setup/update/recovery tooling, documentation, minimal `package.json` and lock, customer-contained tests, and SBOM/notices | These customer files do not exist as an isolated product today. Rewrite them against the clean boundary; do not copy monorepo-wide helpers or dependency manifests. |
-| Fetch only after approval | Exact Cmajor, CHOC, JUCE, VST3 SDK, generated wrapper, and other transitive framework components | Do not bundle the current framework trees as-is. Use only a proven no-JIT Cmajor path; after the remaining written terms permit the model, fetch exact approved pins after customer consent, verify checksums, and generate notices and the actual-build SBOM. |
+| Fetch only after approval | Exact Cmajor, CHOC, JUCE, VST3 SDK, generated wrapper, and other transitive framework components | Do not bundle framework trees as-is. After the remaining written terms permit the model, use the same plain-CPM pins after customer consent, prove the no-JIT Cmajor path, and generate notices and the actual-build SBOM. |
 | Internal only | `fx/enhancer_lite/EnhancerLiteShelvesAudition.cmajorpatch`; `scripts/measure_enhancer_lite*.mjs`; Spectre fixtures/corpora/audio and measurement scripts; full T26 state/DSP; T28/T61/T62 sources; WavetableSynth/EffectsRack; TODO/PROGRESS/roadmap/ADR files; unrelated fonts/icons/images/audio; caches; installed/generated artifacts; secrets; private paths; monorepo helpers and history | Forbidden by the customer export and negative leak tests. Summarized redistributable tolerances and newly authored fixtures may be created later. |
 
 This boundary preserves six distinct authorities: standalone Enhancer Lite, its Builder Kit launch, T26, T61, T62, and T28. The Builder Kit is a distinct launch workstream and does not revise any of the other product contracts.
@@ -423,11 +429,11 @@ This boundary preserves six distinct authorities: standalone Enhancer Lite, its 
 
 Verdict: **source-level AU feasibility is plausible; a releasable Lite AU is unproven.** The Lite patch is a stereo, non-instrument effect without MIDI, and Cmajor's JUCE generator is documented as supporting AU as well as VST. [Cmajor patch format](https://cmajor.dev/docs/PatchFormat) · [Cmajor getting started](https://cmajor.dev/docs/GettingStarted)
 
-The current production script nevertheless builds only `${cmakeTarget}_VST3`, installs only a `.vst3`, explicitly avoids AU installation, takes `cmaj` from `PATH`, obtains JUCE from a moving shallow clone, applies the full monorepo Cmajor/CHOC patch stack, and provides only ad-hoc signing. No Enhancer Lite `.component`, arm64-architecture inspection, `auval` result, Logic load/state/WebView/latency test, Developer ID signing record, notarization ticket, macOS 15 clean-install result, or cross-format saved-state evidence was found.
+The current production script nevertheless builds only `${cmakeTarget}_VST3`, installs only a `.vst3`, explicitly avoids AU installation, takes `cmaj` from `PATH`, and provides only ad-hoc signing. Cmajor, CHOC, and JUCE source retrieval is now pinned through plain CPM, but no Enhancer Lite `.component`, arm64-architecture inspection, `auval` result, Logic load/state/WebView/latency test, Developer ID signing record, notarization ticket, macOS 15 clean-install result, or cross-format saved-state evidence has been produced.
 
 The audit also confirmed that all eight current sound endpoints—Frequency, Q, Routing, Amount/Mid, Side, Character, Intensity, and Shape—are explicitly non-automatable, and no begin/end host-gesture bracketing was found in the UI. This is verified current behavior, not an open v1 product choice: Andrew already locked DAW automation for every sound control. Future BK-12 work must therefore use a versioned, stable parameter/state migration and add host gesture handling before VST3/AU parity can pass. No implementation of that migration is currently authorized.
 
-Gate 3 therefore remains failed. After Gate 0 and explicit implementation authorization, the order is: build the clean allowlist and negative leak tests; isolate state/tests and pin the minimal approved toolchain; run a private disposable real-AU spike; then, only after the product and rights are frozen, complete Developer ID signing/notarization and clean Logic/Ableton qualification on macOS 15 and 26. Existing Cosimo Synth AU/iOS AUv3 work is not Enhancer Lite AU proof.
+Gate 3 therefore remains failed. After Gate 0 and explicit implementation authorization, the order is: build the clean allowlist and negative leak tests; isolate state/tests and finish the external `cmaj`/toolchain contract on top of the completed plain-CPM source pins; run a private disposable real-AU spike; then, only after the product and rights are frozen, complete Developer ID signing/notarization and clean Logic/Ableton qualification on macOS 15 and 26. Existing Cosimo Synth AU/iOS AUv3 work is not Enhancer Lite AU proof.
 
 ## 7. Commerce and entitlement
 
@@ -605,7 +611,7 @@ Owner codes:
 | BK-13 | Create product identity system | A | BK-11 | `product.json` drives manifest, bundle IDs, codes, names, files, branding, version, and support URLs; collision tests pass. | 3–4 d |
 | BK-14 | Build Wavefold reference | A/H | BK-12–13 | Separate example branch/tag adds Wavefold plus solid-color visual treatment, focused safety/state/UI/audio tests, and Andrew's audible/visual approval. | 2–4 d |
 | BK-15 | Customer repo history/package | A | BK-11–14 | Clean release history and immutable version tag exported as reproducible Git bundle with checksum. | 1–2 d |
-| BK-20 | Pin toolchain | A | BK-03, BK-11 | Exact stable Xcode range, macOS 15.0 deployment target, macOS 15/26 qualification environments, arm64 architecture, Node/npm, CMake, cmaj, Cmajor/CHOC, JUCE, SDK versions and hashes locked; moving clones removed. | 2–4 d |
+| BK-20 | Finish the customer toolchain contract | A | BK-03, BK-11 | **Source-dependency portion complete at T69:** plain CPM pins Cmajor/CHOC/JUCE and all moving source clones are removed. Complete when the supported Xcode range, macOS 15.0 target, macOS 15/26 environments, arm64 architecture, Node/npm, CMake, `cmaj`, and non-CPM SDK prerequisites are locked and reproducible for customers without creating another dependency resolver. | 2–4 d total |
 | BK-21 | Implement doctor/setup | A | BK-20 | Clean-account read-only diagnosis and idempotent setup; explicit consent/licensing stops; redacted support report. | 3–5 d |
 | BK-22 | Implement test/build/install | A | BK-12, BK-20–21 | One-command customer gate and arm64 local VST3/AU build/install for M1-or-newer Macs on macOS 15/26, with checkpoint, exact targets, dry-run, safe failure, and host-automation contract checks. If Gate 0 permits customer distribution, the customer-specific package path is also proven with replaceable identity and customer-owned signing credentials. | 4–7 d |
 | BK-23 | Implement update/recover | A | BK-15, BK-22 | Bundle import, checkpoint, rebase, conflict stop, green-only install, and recovery proven against clean, changed, dirty, and conflicting fixtures. | 4–6 d |
@@ -817,7 +823,7 @@ Given the final rehearsal or live launch finds a stop condition, when rollback i
 | Security | No production secret is stored in source, prompts, logs, bundles, or CI artifacts. | Secret scanning and manual release review. |
 | Privacy | No hidden plugin telemetry; checkout/survey data follows the published policy and consent. | Source audit and commerce-event review. |
 | Accessibility | Existing keyboard, focus, ARIA, and readable-value behavior survives export and Wavefold example. | Browser and host editor checks. |
-| Maintainability | One product manifest and one toolchain lock own generated identity/dependency values. | Contract tests reject duplicated authority. |
+| Maintainability | `product.json` owns product identity, `cmake/CosimoDependencies.cmake` owns source dependencies, and `toolchain.lock.json` owns only external prerequisites. | Contract tests reject overlapping or duplicated authority. |
 | Supportability | Diagnostics identify known setup failures without requiring raw personal files. | Beta support-log review. |
 | Compatibility | Declared macOS, architecture, format, and host matrix matches tested artifacts exactly. | Release evidence table. |
 
@@ -828,7 +834,7 @@ Given the final rehearsal or live launch finds a stop condition, when rollback i
 | Cmajor/JUCE terms invalidate proprietary $29 kit | High | Critical | Gate 0 before packaging; choose explicit fallback. |
 | Customer publishing requires licenses/signing they did not expect | High | High | State costs before purchase; separate local and distribution modes. |
 | Monorepo export leaks private/unrelated IP | High without controls | Critical | Allowlist export, forbidden-file tests, clean history, manual review. |
-| Moving JUCE head or oversized shared patch stack makes builds irreproducible or rights ambiguous | High | Critical | Pin the approved JUCE version and exact transitive SDKs; reduce the customer runtime patch set; generate an actual-build SBOM. |
+| Private Cmajor/CHOC access or JUCE delivery terms do not work for customers | High | Critical | Keep the qualified plain-CPM pins, secure written delivery terms, prove customer access without a second source path, and generate an actual-build SBOM. |
 | Wordmark or black-box-derived material lacks adequate release provenance | Medium | High | Obtain Andrew's asset declaration/source or replace the mark; keep Spectre material internal and obtain counsel's provenance position. |
 | Current AU is not real/releasable | High | High | Dedicated AU task and Gate 3; no Logic claim beforehand. |
 | Automatable host-parameter migration breaks saved state or parameter identity | Medium | High | Freeze an append-only parameter map; test legacy-state migration plus Ableton/Logic discovery, write/read/playback, gestures, and restart recall. |
@@ -863,7 +869,7 @@ Given the final rehearsal or live launch finds a stop condition, when rollback i
 13. **Founder-led proof with presentation deferred.** Andrew will appear in or narrate the real modification demo. Production may decide the precise mix of face, voice, screen, and performance later, while retaining an honest workflow.
 14. **Bounded launch support.** Initial support is self-service documentation plus email assistance for purchase, download, and genuine setup failures. The $29 offer does not include custom plugin development, unlimited personal help, or bespoke update/merge repair.
 15. **Paid kit retained; lawful route is critical.** The Builder Kit remains part of the launch plan. A missed Gate 0 date holds or moves the combined launch, or forces Andrew to approve another lawful framework/license model; it does not silently turn the plan into a free-only launch or create unsupported derivative rights.
-16. **The completed read-only boundary audit is not release qualification.** Task `01a047d0-d360-7481-9cf1-a9f987066c17` at exact checkpoint `d005c4e8f88f153bc1904170d99a0aeee41d4ba0` confirmed a plausible standalone source nucleus and AU-capable graph, but also a full-T26 state import, multi-product build scripts, moving JUCE dependency, oversized shared runtime patch surface, unresolved Spectre provenance, an unproven working-name wordmark that is now excluded, and no real Lite AU/Logic evidence. These findings define BK-03/BK-11/BK-12/BK-20/BK-30 work; they do not authorize it.
+16. **The completed read-only boundary audit is not release qualification.** Task `01a047d0-d360-7481-9cf1-a9f987066c17` at exact checkpoint `d005c4e8f88f153bc1904170d99a0aeee41d4ba0` confirmed a plausible standalone source nucleus and AU-capable graph, but also a full-T26 state import, multi-product build scripts, unresolved Spectre provenance, an unproven working-name wordmark that is now excluded, and no real Lite AU/Logic evidence. Its then-current moving-JUCE and patch-at-setup findings were later closed by T69; the remaining findings still define BK-03/BK-11/BK-12/BK-20/BK-30 work and do not authorize release.
 17. **Polar supersedes Lemon Squeezy because internal agent operation is an operational requirement.** Andrew selected Polar for v1 on August 28, 2026. The original checkpoint selected Lemon Squeezy for its merchant-of-record, download, and license stack; the later commerce review made Andrew's ability to delegate routine account work to his authorized agent decisive. Polar retains the required commerce primitives while adding first-party production/sandbox MCP and scoped API access. This changes BK-50/BK-51 and every entitlement/recovery reference. Marketing campaigns use separately selected Resend, and selecting Polar does not itself authorize account creation or credential access.
 18. **DAW automation is required in v1.** Andrew rejected the current saved-but-non-automatable limitation. The audit confirmed all eight endpoints are currently non-automatable and the UI lacks host gesture brackets, so the resolved product choice requires a versioned automation/state migration. Every user-editable Lite sound control must have stable VST3/AU host identity and pass real Ableton/Logic automation recording and playback; this expands BK-10/BK-12/BK-22/BK-30/BK-33 rather than creating a separate product or changing T26/T61/T62/T28.
 19. **Day 2 compatibility scope is complete.** V1 supports Apple Silicon Macs only, M1 or newer, running macOS 15 Sequoia or macOS 26 Tahoe. Intel/Rosetta and every other macOS release are unsupported. This removes universal-binary work but requires explicit build, installer, DAW, Gatekeeper, and clean-machine qualification on both supported OS generations.
@@ -873,6 +879,7 @@ Given the final rehearsal or live launch finds a stop condition, when rollback i
 23. **The controlled beta stays separate from creator outreach.** The twenty-day fast-track sends the frozen tester package only to the booked ten-person cohort before launch. Outreach to the separate 20–30 creator list begins on launch day only after the beta and launch rehearsal pass, avoiding an unmeasured advance-access cohort and preserving one clear support and evidence boundary.
 24. **The audit HOLD has two independent causes.** Written rights and provenance are required for the paid customer promise, while a clean export, pinned toolchain, versioned automation/state migration, and real AU/Logic proof are required for technical release. Clearing either side alone does not clear the combined launch.
 25. **“Enhancer” is no longer the public name; the replacement structure is locked.** Andrew rejected it on August 28, 2026. The free plugin will be **[Base Name]** and the paid product **[Base Name] Builder Kit**. The base name remains open and must be selected before name-conflict research, replacement branding, commerce products, demo titles, or public copy are finalized. Existing code and roadmap filenames may keep the old wording temporarily as internal working labels so naming does not silently trigger an implementation-wide rename.
+26. **Plain CPM replaces the rejected custom resolver.** Andrew required one simple dependency path and explicitly rejected custom locking, corruption repair, credential filtering, cache receipts, read-only enforcement, and similar policy code. T69 therefore uses one small `cmake/CosimoDependencies.cmake` with ordinary CPM calls and the ordinary user cache. Production Cmajor, recursive CHOC, and JUCE pins are fixed in that module; worktrees share only CPM source downloads and keep separate build folders. This is integrated as `0c38ad96` and qualified on master `e3b832eb`. The Cmajor CLI, customer repository, and release rights remain separate work.
 
 ## 17. Immediate next actions
 
@@ -883,7 +890,7 @@ The roadmap begins with these actions, in order:
 3. Obtain written Cmajor/JUCE clearance or approve another lawful rights/framework path. Do not advertise commercial derivative rights before BK-06.
 4. Resolve the Cosimo customer source license and Spectre-derived DSP provenance position. The current wordmark is excluded; document ownership of whatever replaces it.
 5. Keep all implementation, accounts, further vendor contact, publishing, merging, pushing, installation, signing/notarization, and deployment paused until Andrew explicitly authorizes the relevant action.
-6. After Gate 0 and explicit implementation authorization, implement the allowlist plus negative leak tests; isolate state/tests and pin the minimal approved toolchain; then run the private real-AU spike. Signing/notarization and clean Logic/Ableton qualification wait for the product and rights freeze.
+6. After Gate 0 and explicit implementation authorization, implement the allowlist plus negative leak tests; isolate state/tests and finish the remaining external toolchain contract on top of T69's plain-CPM source pins; then run the private real-AU spike. Signing/notarization and clean Logic/Ableton qualification wait for the product and rights freeze.
 7. Regenerate and compare the final actual-build inventory under BK-32; never treat the checkpoint audit as the shipped-build SBOM.
 
 ## 18. Completeness audit
@@ -937,13 +944,14 @@ This schedule does not authorize implementation, account creation, vendor contac
 
 ### 19.3 Daily schedule
 
-Day 1 status recorded on August 28, 2026:
+Status through August 29, 2026:
 
-- Andrew reports that the Cmajor inquiry was sent to Jules through Discord; the reply is pending and Gate 0 remains unresolved.
+- Andrew reports that the Cmajor team replied in writing that this model needs no Cmajor license unless the JIT engine is embedded. Preserve that exact reply and prove the final customer build contains no JIT engine.
 - The JUCE inquiry was sent to `sales@juce.com`; the reply is pending.
 - Andrew has no lawyer budget. Legal review is therefore unavailable unless a free or separately funded route appears; this is an explicit funding gap, not legal approval.
 - Apple Developer membership, signing identities, and notarization access were verified.
 - The read-only customer-file/license and AU/build audit is complete and incorporated as planning authority. Its verdict is HOLD; it is neither legal approval nor an actual-build release inventory.
+- T69 replaced the rejected custom dependency resolver with the approved plain-CPM architecture and pushed it to master `e3b832eb`. All representative no-install builds passed; nothing was installed or deployed.
 
 | Day | Date | What Andrew does | What agents hand back | Finished only when |
 |---:|---|---|---|---|
