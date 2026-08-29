@@ -9,6 +9,7 @@ import {
     instrumentCosimoAudioWorkletSource,
 } from "./audio-worklet-instrumentation.mjs";
 import { copyWebHostAssets } from "./web-host-assets.mjs";
+import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
 
 const webDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webDirectory, "..");
@@ -37,20 +38,6 @@ function run(command, args) {
     if (result.status !== 0) {
         throw new Error(`${command} ${args.join(" ")} exited with status ${result.status ?? "unknown"}.`);
     }
-}
-
-function runAndRead(command, args) {
-    const result = spawnSync(command, args, {
-        cwd: repoRoot,
-        env: process.env,
-        encoding: "utf8",
-    });
-
-    if (result.error) throw result.error;
-    if (result.status !== 0) {
-        throw new Error(`${command} ${args.join(" ")} exited with status ${result.status ?? "unknown"}.\n${result.stderr}`);
-    }
-    return result.stdout.trim();
 }
 
 async function buildRendererAwarePatchModule() {
@@ -93,13 +80,10 @@ async function buildRendererAwarePatchModule() {
 }
 
 async function copyCmajorWebRuntime() {
-    const runtimeRoot = process.env.CMAJOR_SOURCE_PATH
-        || runAndRead("python3", ["scripts/ensure_cmajor_runtime.py", "--path"]);
-    await fs.cp(
-        path.join(runtimeRoot, "javascript", "cmaj_api"),
-        path.join(outputDirectory, "cmaj_api"),
-        { recursive: true },
-    );
+    stageCmajorWebRuntime(repoRoot, {
+        buildDirectory: path.join(repoRoot, "build", "cmajor_web_runtime-web"),
+        outputDirectory: path.join(outputDirectory, "cmaj_api"),
+    });
 }
 
 async function instrumentAudioWorklet() {

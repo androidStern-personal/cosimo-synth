@@ -1,10 +1,95 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PRODUCTION_CMAKE_CALLERS = (
+    "ios_auv3/CMakeLists.txt",
+    "tests/native/CMakeLists.txt",
+    "tools/cmajor_external_codegen/CMakeLists.txt",
+    "tools/cmajor_runtime_build/CMakeLists.txt",
+    "tools/cmajor_web_runtime/CMakeLists.txt",
+    "tools/cmajplugin_build/CMakeLists.txt",
+    "tools/desktop_native/CMakeLists.txt",
+    "tools/effect_plugin_build/CMakeLists.txt",
+)
+DEPENDENCY_ENTRYPOINTS = (
+    "fx/prod-effect.mjs",
+    "scripts/build_cmajplugin_vst3.sh",
+    "scripts/build_desktop_native.sh",
+    "scripts/generate_cmajor_cpp_with_externals.sh",
+    "scripts/generate_ios_auv3_xcode_project.sh",
+    "scripts/test_quickjs_modulation_restore.sh",
+    "tests/helpers/desktop_harness_browser.mjs",
+    "tests/helpers/live_review_server.mjs",
+    "tests/native/run_bounce_quickjs_driver_probe.sh",
+    "tests/native/run_three_oscillator_jit_provider.sh",
+    "tests/test_desktop_native_keyboard_probe.mjs",
+    "tests/test_spectral_chord_resonator_probe.py",
+    "tests/test_web_renderer_audio_worklet.mjs",
+    "ui/vite.shared.mjs",
+    "web/build.mjs",
+)
+
+
+def test_production_cmake_builds_use_the_shared_dependency_module() -> None:
+    for relative_path in PRODUCTION_CMAKE_CALLERS:
+        source = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+
+        assert "cmake/CosimoDependencies.cmake" in source, relative_path
+        assert "cosimo_add_production_dependencies()" in source, relative_path
+
+
+def test_dependency_entrypoints_have_no_second_source_resolver() -> None:
+    forbidden_files = (
+        "scripts/ensure_cmajor_runtime.py",
+        "scripts/resolve_build_dependencies.py",
+        "tests/test_ensure_cmajor_runtime.py",
+        "tests/test_cpm_dependency_resolver.py",
+    )
+
+    for relative_path in forbidden_files:
+        assert not (REPO_ROOT / relative_path).exists(), relative_path
+
+    for relative_path in DEPENDENCY_ENTRYPOINTS:
+        source = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+
+        assert "ensure_cmajor_runtime" not in source, relative_path
+        assert "resolve_build_dependencies" not in source, relative_path
+        assert "git clone" not in source, relative_path
+        assert "cmajor-lang/cmajor/releases/download" not in source, relative_path
+
+
+def test_t26_runner_builds_against_research_juce_7_through_cpm() -> None:
+    module = (REPO_ROOT / "cmake/CosimoDependencies.cmake").read_text(encoding="utf-8")
+    prototype_cmake = (
+        REPO_ROOT / "tools/enhancer_wrapper_prototype/CMakeLists.txt"
+    ).read_text(encoding="utf-8")
+    runner = (REPO_ROOT / "tools/enhancer_wrapper_prototype/run.py").read_text(
+        encoding="utf-8"
+    )
+    package = json.loads((REPO_ROOT / "package.json").read_text(encoding="utf-8"))
+
+    assert "cosimo_add_t26_research_juce" in module
+    assert "b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0" in module
+    assert "cmake/CosimoDependencies.cmake" in prototype_cmake
+    assert "cosimo_add_t26_research_juce()" in prototype_cmake
+    assert '"cmake"' in runner
+    assert '"--build"' in runner
+    assert "git clone" not in runner
+    assert package["scripts"]["prototype:enhancer-wrapper"].endswith(
+        "tools/enhancer_wrapper_prototype/run.py"
+    )
+    assert package["scripts"]["prototype:enhancer-deemphasis"].endswith(
+        "tools/enhancer_wrapper_prototype/de_emphasis.py"
+    )
+
+
+PRODUCTION_CMAJOR_COMMIT = "f1c9a9a8e85dcc82141326a2fc1c5160241f346c"
+PRODUCTION_CHOC_COMMIT = "037e34a2b382175c8bee4be5a0707724130f10e8"
 PRODUCTION_JUCE_COMMIT = "501c07674e1ad693085a7e7c398f205c2677f5da"
 
 
@@ -62,8 +147,6 @@ file(WRITE \"${{CMAKE_BINARY_DIR}}/resolved.txt\"
         line.split("=", 1)
         for line in (build_dir / "resolved.txt").read_text(encoding="utf-8").splitlines()
     )
-    assert resolved["cmajor"] == resolved["cmajor"].lower()
-    assert len(resolved["cmajor"]) == 40
-    assert resolved["choc"] == resolved["choc"].lower()
-    assert len(resolved["choc"]) == 40
+    assert resolved["cmajor"] == PRODUCTION_CMAJOR_COMMIT
+    assert resolved["choc"] == PRODUCTION_CHOC_COMMIT
     assert resolved["juce"] == PRODUCTION_JUCE_COMMIT

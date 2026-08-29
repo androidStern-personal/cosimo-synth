@@ -85,9 +85,9 @@ the iPhone AUv3 here. What you CAN do on Linux:
 
 Toolchain bring-up is Milestone 0 and has real friction:
 
-- `python3 scripts/ensure_cmajor_runtime.py --path` clones the pinned Cmajor
-  (tag 1.0.3066, commit `172db532…`) + patched CHOC and applies the repo's
-  patches. You must then **build the `cmaj` tool and the repo's
+- `cmake/CosimoDependencies.cmake` resolves the exact private Cmajor commit and
+  its checked-in private CHOC gitlink through plain CPM. You must then **build
+  the `cmaj` tool and the repo's
   `tools/cmajor_external_codegen` on Linux** (cmake; upstream Cmajor supports
   Linux). This is on the critical path: the stock `cmaj` CLI cannot resolve
   the synth's external renderer function; only the repo's codegen tool can.

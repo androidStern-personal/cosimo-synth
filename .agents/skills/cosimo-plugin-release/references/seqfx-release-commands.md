@@ -49,14 +49,8 @@ PYTHONPATH=. uv run pytest -q tests/test_seqfx_probe.py
 npm run fx:build -- seqfx
 cmaj play --dry-run --stop-on-error build/fx/seqfx_runtime/SeqFx.cmajorpatch
 npm run fx:prod:build -- seqfx --clean
-codesign --verify --deep --strict --verbose=4 build/seqfx_juce/_build/CosimoSeqFX_artefacts/Release/VST3/CosimoSeqFX.vst3
-lipo -archs build/seqfx_juce/_build/CosimoSeqFX_artefacts/Release/VST3/CosimoSeqFX.vst3/Contents/MacOS/CosimoSeqFX
-```
-
-If Cmajor runtime setup races in a fresh worktree, run this once before browser-heavy tests:
-
-```bash
-python3 scripts/ensure_cmajor_runtime.py --path
+codesign --verify --deep --strict --verbose=4 build/seqfx_juce/_build/plugin/CosimoSeqFX_artefacts/Release/VST3/CosimoSeqFX.vst3
+lipo -archs build/seqfx_juce/_build/plugin/CosimoSeqFX_artefacts/Release/VST3/CosimoSeqFX.vst3/Contents/MacOS/CosimoSeqFX
 ```
 
 ## Clean Release Build

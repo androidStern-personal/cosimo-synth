@@ -6,6 +6,8 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
+import { stageCmajorWebRuntime } from "../../ui/vite.shared.mjs";
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DESKTOP_HARNESS_READINESS_TIMEOUT_MS = 90_000;
 const SERVER_READINESS_POLL_INTERVAL_MS = 250;
@@ -31,29 +33,10 @@ export function pathStaysWithinRepoRoot(rootPath, candidatePath) {
 
 async function resolveCmajorApiRoot(rootPath) {
     if (!cmajorApiRootPromise) {
-        cmajorApiRootPromise = (async () => {
-            const depsRoot = path.join(rootPath, "build", "deps");
-            const entries = await fs.readdir(depsRoot, { withFileTypes: true });
-
-            for (const entry of entries) {
-                if (!entry.name.startsWith("cmajor-")) {
-                    continue;
-                }
-
-                const candidate = path.join(depsRoot, entry.name, "javascript", "cmaj_api");
-
-                try {
-                    const stat = await fs.stat(candidate);
-                    if (stat.isDirectory()) {
-                        return candidate;
-                    }
-                } catch {
-                    // Ignore missing runtime folders and keep searching.
-                }
-            }
-
-            throw new Error(`Could not find a Cmajor browser API directory under ${depsRoot}`);
-        })();
+        cmajorApiRootPromise = Promise.resolve(stageCmajorWebRuntime(rootPath, {
+            buildDirectory: path.join(rootPath, "build", "cmajor_web_runtime-desktop-tests"),
+            outputDirectory: path.join(rootPath, "build", "cmajor_web_runtime-desktop-tests", "cmaj_api"),
+        }));
     }
 
     return cmajorApiRootPromise;

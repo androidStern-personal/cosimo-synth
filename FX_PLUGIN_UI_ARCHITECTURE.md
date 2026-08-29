@@ -216,8 +216,9 @@ It should:
 
 ```text
 1. Run the runtime build above.
-2. Use scripts/ensure_cmajor_runtime.py as the default patched Cmajor source.
-3. Run cmaj generate --target=juce against the generated runtime patch.
+2. Configure `tools/effect_plugin_build`, which includes the shared plain-CPM
+   module for the exact private Cmajor/CHOC graph and production JUCE.
+3. Run cmaj generate --target=juce inside that configure against the generated runtime patch.
 4. Configure and build the generated JUCE project with CMake.
 5. Verify the built binary contains the patched CHOC keyboard bridge.
 6. Leave the dedicated plugin artifacts under build/.

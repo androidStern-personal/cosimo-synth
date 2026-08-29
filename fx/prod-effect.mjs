@@ -12,9 +12,6 @@ import {
     repoRoot,
 } from "./build-effect.mjs";
 
-const cacheRoot = process.env.COSIMO_DEV_CACHE
-    ? path.resolve(process.env.COSIMO_DEV_CACHE)
-    : path.join(process.env.HOME, "Library/Caches/cosimo-synth-dev");
 const scriptPath = fileURLToPath(import.meta.url);
 const patchedWebViewRequiredStrings = [
     "chocHostKeyboard",
@@ -28,7 +25,6 @@ const keyboardBridgeForbiddenStrings = [
     "cosimo-keyboard-probe-panel",
     "forwarded-buffered-flags-changed",
 ];
-const sidechainBusRequiredString = "COSIMO_CMAJOR_JUCE_PLUGIN_SPLIT_INPUT_BUSES";
 
 function availablePluginNames() {
     return ["all", ...effectPluginTargetNames()].join(", ");
@@ -107,68 +103,6 @@ async function pathExists(nextPath) {
     }
 }
 
-async function ensureJucePath() {
-    const jucePath = process.env.JUCE_PATH
-        ? path.resolve(process.env.JUCE_PATH)
-        : path.join(cacheRoot, "JUCE");
-
-    if (!await pathExists(path.join(jucePath, ".git")))
-        run("git", ["clone", "--depth", "1", "https://github.com/juce-framework/JUCE.git", jucePath]);
-
-    return jucePath;
-}
-
-async function verifyPatchedCmajorRuntime(cmajorSourcePath) {
-    const webViewHeaderPath = path.join(cmajorSourcePath, "include/choc/choc/gui/choc_WebView.h");
-    const jucePluginHeaderPath = path.join(cmajorSourcePath, "include/cmajor/helpers/cmaj_JUCEPlugin.h");
-    let webViewHeader = "";
-    let jucePluginHeader = "";
-
-    try {
-        webViewHeader = await readFile(webViewHeaderPath, "utf8");
-    } catch {
-        throw new Error(`Cmajor runtime is missing CHOC WebView header: ${webViewHeaderPath}`);
-    }
-
-    try {
-        jucePluginHeader = await readFile(jucePluginHeaderPath, "utf8");
-    } catch {
-        throw new Error(`Cmajor runtime is missing JUCE plugin helper: ${jucePluginHeaderPath}`);
-    }
-
-    const missingMarkers = patchedWebViewRequiredStrings.filter((marker) => !webViewHeader.includes(marker));
-
-    if (missingMarkers.length > 0) {
-        throw new Error(
-            [
-                `Cmajor runtime does not include the required patched CHOC WebView features: ${cmajorSourcePath}`,
-                `Missing marker(s): ${missingMarkers.join(", ")}`,
-                "Use scripts/ensure_cmajor_runtime.py --path or set CMAJOR_SOURCE_PATH to a patched Cmajor checkout.",
-            ].join("\n"),
-        );
-    }
-
-    if (!jucePluginHeader.includes(sidechainBusRequiredString)) {
-        throw new Error(
-            [
-                `Cmajor runtime does not include the required split-input sidechain bus patch: ${cmajorSourcePath}`,
-                `Missing marker: ${sidechainBusRequiredString}`,
-                "Use scripts/ensure_cmajor_runtime.py --path or set CMAJOR_SOURCE_PATH to the repo-patched Cmajor checkout.",
-            ].join("\n"),
-        );
-    }
-}
-
-async function ensureCmajorSourcePath() {
-    const cmajorSourcePath = process.env.CMAJOR_SOURCE_PATH
-        ? path.resolve(process.env.CMAJOR_SOURCE_PATH)
-        : run("python3", [path.join(repoRoot, "scripts/ensure_cmajor_runtime.py"), "--path"], { capture: true });
-
-    await verifyPatchedCmajorRuntime(cmajorSourcePath);
-
-    return cmajorSourcePath;
-}
-
 export function replaceGeneratedPluginLatency(source, latencySamples) {
     if (!Number.isInteger(latencySamples) || latencySamples < 0)
         throw new Error("generatedHostLatencySamples must be a non-negative integer.");
@@ -241,20 +175,18 @@ export async function prepareJuceProjectOutput(juceOut, { clean = false } = {}) 
 }
 
 async function generateJuceProject(pluginName, plugin, options = {}) {
-    const jucePath = await ensureJucePath();
-    const cmajorSourcePath = await ensureCmajorSourcePath();
     const runtimePatchPath = path.join(repoRoot, plugin.runtimeOut, path.basename(plugin.patch));
     const juceOut = path.join(repoRoot, plugin.juceOut);
+    const cmakeBuildDir = path.join(juceOut, "_build");
 
     await prepareJuceProjectOutput(juceOut, { clean: options.clean });
 
-    run("cmaj", [
-        "generate",
-        "--target=juce",
-        runtimePatchPath,
-        `--output=${juceOut}`,
-        `--jucePath=${jucePath}`,
-        `--cmajorIncludePath=${path.join(cmajorSourcePath, "include")}`,
+    run("cmake", [
+        "-S", path.join(repoRoot, "tools", "effect_plugin_build"),
+        "-B", cmakeBuildDir,
+        "-DCMAKE_BUILD_TYPE=Release",
+        `-DCOSIMO_EFFECT_PATCH_PATH=${runtimePatchPath}`,
+        `-DCOSIMO_EFFECT_OUTPUT_DIR=${juceOut}`,
     ]);
     await applyGeneratedHostLatency(pluginName, plugin, juceOut);
 
@@ -285,14 +217,6 @@ async function buildJuceProject(pluginName, plugin, options = {}) {
 
     if (!await pathExists(cmakeListsPath))
         throw new Error(`Generated CMake project not found: ${cmakeListsPath}`);
-
-    run("cmake", [
-        "-S",
-        juceOut,
-        "-B",
-        cmakeBuildDir,
-        "-DCMAKE_BUILD_TYPE=Release",
-    ]);
 
     run("cmake", createCmakeBuildArgs(cmakeBuildDir, `${plugin.cmakeTarget}_VST3`, options.cmakeJobs));
 
@@ -403,17 +327,12 @@ async function prodBuildAll(pluginNames, options) {
         return;
     }
 
-    const jucePath = await ensureJucePath();
-    const cmajorSourcePath = await ensureCmajorSourcePath();
-
     console.log(`Building ${pluginNames.join(", ")} with ${pluginJobs} plugin job(s), ${cmakeJobs} CMake job(s) per plugin.`);
 
     await runLimited(pluginNames, pluginJobs, (pluginName) => runChildProcess(
         createProdBuildChildArgs(pluginName, options),
         {
             ...process.env,
-            JUCE_PATH: jucePath,
-            CMAJOR_SOURCE_PATH: cmajorSourcePath,
             COSIMO_CMAKE_JOBS: String(cmakeJobs),
         },
     ));
@@ -424,6 +343,7 @@ function getBuiltVST3Path(plugin) {
         repoRoot,
         plugin.juceOut,
         "_build",
+        "plugin",
         `${plugin.cmakeTarget}_artefacts`,
         "Release",
         "VST3",

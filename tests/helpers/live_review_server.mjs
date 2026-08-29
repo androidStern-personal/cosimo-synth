@@ -3,6 +3,8 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { stageCmajorWebRuntime } from "../../ui/vite.shared.mjs";
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const CONTENT_TYPES = new Map([
@@ -20,17 +22,10 @@ const CONTENT_TYPES = new Map([
 ]);
 
 async function findCmajorApiRoot() {
-    const depsRoot = path.join(repoRoot, "build", "deps");
-    for (const entry of await fs.readdir(depsRoot)) {
-        if (!entry.startsWith("cmajor-")) continue;
-        const candidate = path.join(depsRoot, entry, "javascript", "cmaj_api");
-        try {
-            if ((await fs.stat(candidate)).isDirectory()) return candidate;
-        } catch {
-            // keep looking
-        }
-    }
-    throw new Error("No Cmajor browser API directory under build/deps.");
+    return stageCmajorWebRuntime(repoRoot, {
+        buildDirectory: path.join(repoRoot, "build", "cmajor_web_runtime-live-review"),
+        outputDirectory: path.join(repoRoot, "build", "cmajor_web_runtime-live-review", "cmaj_api"),
+    });
 }
 
 /**

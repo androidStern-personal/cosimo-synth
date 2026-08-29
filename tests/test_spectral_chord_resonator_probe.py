@@ -15,7 +15,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 PATCH_PATH = ROOT / "fx" / "spectral_chord_resonator" / "SpectralChordResonator.cmajorpatch"
 SPECTRAL_SOURCE_PATH = ROOT / "fx" / "spectral_chord_resonator" / "SpectralChordResonator.cmajor"
-ENSURE_CMAJOR_RUNTIME = ROOT / "scripts" / "ensure_cmajor_runtime.py"
 SAMPLE_RATE = 48_000
 FFT_SIZE = 2048
 
@@ -819,9 +818,35 @@ def test_many_partial_shape_is_not_a_linear_gain_multiplier(
     assert float(np.max(np.abs(flat_32_partials[tail]))) < wet_limit * 0.98
 
 
-def test_pinned_cmajor_runtime_splits_audio_inputs_into_host_buses() -> None:
+def test_pinned_cmajor_runtime_splits_audio_inputs_into_host_buses(tmp_path: Path) -> None:
+    source_dir = tmp_path / "source"
+    build_dir = tmp_path / "build"
+    source_dir.mkdir()
+    (source_dir / "CMakeLists.txt").write_text(
+        f"""cmake_minimum_required(VERSION 3.16)
+project(CosimoSplitInputProbe LANGUAGES NONE)
+include(\"{ROOT / 'cmake' / 'CosimoDependencies.cmake'}\")
+cosimo_add_production_dependencies()
+file(READ \"${{COSIMO_CMAJOR_SOURCE_DIR}}/include/cmajor/helpers/cmaj_JUCEPlugin.h\" header)
+foreach(marker
+    \"COSIMO_CMAJOR_JUCE_PLUGIN_SPLIT_INPUT_BUSES\"
+    \"addInputEndpointBuses\"
+    \"audioBusIndex == 0 ? \\\"Input\\\" : \\\"Sidechain\\\"\"
+    \"countAudioChannels (layout.inputBuses)\")
+    string(FIND \"${{header}}\" \"${{marker}}\" marker_index)
+    if(marker_index EQUAL -1)
+        message(FATAL_ERROR \"Missing split-input marker: ${{marker}}\")
+    endif()
+endforeach()
+string(FIND \"${{header}}\" \"layout.getMainInputChannels()\" obsolete_index)
+if(NOT obsolete_index EQUAL -1)
+    message(FATAL_ERROR \"Obsolete main-input-only path remains\")
+endif()
+""",
+        encoding="utf-8",
+    )
     result = subprocess.run(
-        ["python3", str(ENSURE_CMAJOR_RUNTIME), "--path"],
+        ["cmake", "-S", str(source_dir), "-B", str(build_dir)],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -829,17 +854,7 @@ def test_pinned_cmajor_runtime_splits_audio_inputs_into_host_buses() -> None:
     )
     if result.returncode != 0:
         details = "\n".join(part for part in (result.stdout.strip(), result.stderr.strip()) if part)
-        raise AssertionError(f"Could not prepare pinned Cmajor runtime:\n{details}")
-
-    runtime_root = Path(result.stdout.strip())
-    header = runtime_root / "include" / "cmajor" / "helpers" / "cmaj_JUCEPlugin.h"
-    header_text = header.read_text(encoding="utf-8")
-
-    assert "COSIMO_CMAJOR_JUCE_PLUGIN_SPLIT_INPUT_BUSES" in header_text
-    assert "addInputEndpointBuses" in header_text
-    assert 'audioBusIndex == 0 ? "Input" : "Sidechain"' in header_text
-    assert "countAudioChannels (layout.inputBuses)" in header_text
-    assert "layout.getMainInputChannels()" not in header_text
+        raise AssertionError(f"Could not verify pinned Cmajor split-input patch:\n{details}")
 
 
 def test_spectral_reserves_host_parameter_slot_zero_away_from_magnitude_feedback() -> None:

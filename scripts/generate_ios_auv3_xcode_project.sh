@@ -2,11 +2,9 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cache_root="${COSIMO_DEV_CACHE:-$HOME/Library/Caches/cosimo-synth-dev}"
 build_dir="${1:-$repo_root/build/ios_device_run}"
 ios_sysroot="${COSIMO_IOS_SYSROOT:-iphoneos}"
 cmajor_version="$(cmaj version | awk '/Cmajor Version:/ { print $3; exit }')"
-juce_path="${JUCE_PATH:-$cache_root/JUCE}"
 
 enable_app_groups_capability() {
   local project_file="$1"
@@ -43,11 +41,6 @@ enable_app_groups_capability() {
   done
 }
 
-if [[ ! -d "$juce_path/.git" ]]; then
-  mkdir -p "$cache_root"
-  git clone --depth 1 https://github.com/juce-framework/JUCE.git "$juce_path"
-fi
-
 cmake -S "$repo_root/ios_auv3" \
       -B "$build_dir" \
       -G Xcode \
@@ -64,8 +57,7 @@ cmake -S "$repo_root/ios_auv3" \
       -DCOSIMO_ENABLE_APP_GROUP="${COSIMO_ENABLE_APP_GROUP:-ON}" \
       -DCOSIMO_USE_BUNDLED_WAVETABLE_LIBRARY="${COSIMO_USE_BUNDLED_WAVETABLE_LIBRARY:-OFF}" \
       -DCOSIMO_ENABLE_MODULATION_BENCHMARK_METRICS="${COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS:-OFF}" \
-      -DCOSIMO_MODULATION_BENCHMARK_PROFILES_PATH="${COSIMO_MODULATION_BENCHMARK_PROFILES_PATH:-}" \
-      -DJUCE_PATH="$juce_path"
+      -DCOSIMO_MODULATION_BENCHMARK_PROFILES_PATH="${COSIMO_MODULATION_BENCHMARK_PROFILES_PATH:-}"
 
 if [[ "${COSIMO_ENABLE_APP_GROUP:-ON}" == "ON" ]]; then
   enable_app_groups_capability "$build_dir/CosimoSynthAUv3.xcodeproj/project.pbxproj"

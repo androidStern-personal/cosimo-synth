@@ -10,10 +10,9 @@ import { fileURLToPath } from "node:url";
 import { chromium, webkit } from "playwright";
 
 import { adaptCosimoAudioWorkletModuleLoading } from "../web/audio-worklet-instrumentation.mjs";
+import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const runtimeRoot = process.env.CMAJOR_SOURCE_PATH
-    ?? path.join(repoRoot, "build/deps/cmajor-1.0.3066-choc-e50b21a2");
 const browserName = process.env.COSIMO_WEB_RENDERER_BROWSER ?? "chromium";
 
 let server;
@@ -69,8 +68,9 @@ export async function createConnection(audioContext) {
     return connection;
 }
 `);
-    await fs.cp(path.join(runtimeRoot, "javascript/cmaj_api"), path.join(root, "cmaj_api"), {
-        recursive: true,
+    stageCmajorWebRuntime(repoRoot, {
+        buildDirectory: path.join(root, "cmajor-runtime-build"),
+        outputDirectory: path.join(root, "cmaj_api"),
     });
     const helperPath = path.join(root, "cmaj_api/cmaj-audio-worklet-helper.js");
     await fs.writeFile(

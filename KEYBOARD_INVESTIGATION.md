@@ -60,15 +60,16 @@ Generated VST3 workflow:
 The shared production build follows the same dependency pattern:
 
 ```text
-scripts/ensure_cmajor_runtime.py
-  -> build/deps/cmajor-1.0.3066-choc-1e79d904
-  -> include/choc at 1e79d904209abd842d688433358f9e0df7d55454
-  -> cmaj generate ... --cmajorIncludePath=<patched runtime>/include
+tools/effect_plugin_build/CMakeLists.txt
+  -> cmake/CosimoDependencies.cmake
+  -> private Cmajor at its exact production commit
+  -> include/choc at Cmajor's checked-in private gitlink
+  -> cmaj generate with those CPM source paths
 ```
 
-That means the generated plugin builds pick up the patched CHOC checkout by
-default. If `CMAJOR_SOURCE_PATH` is set manually, the scripts still validate
-that its CHOC WebView header contains the bridge markers:
+That means generated plugin builds pick up the patched CHOC checkout directly
+from Cmajor's recursive submodule graph. The built binary check still requires
+the bridge markers:
 
 ```text
 chocHostKeyboard
@@ -138,14 +139,14 @@ npm run cmajplugin:build
 npm run cmajplugin:install
 ```
 
-`npm run cmajplugin:build` uses `scripts/ensure_cmajor_runtime.py` by default,
-configures Cmajor's `CmajPlugin_VST3` target with CMake, builds it, and verifies
-that the built binary contains the bridge strings.
+`npm run cmajplugin:build` configures the repo's CMake wrapper, which includes
+the shared plain-CPM dependency module, builds Cmajor's `CmajPlugin_VST3`
+target, and verifies that the built binary contains the bridge strings.
 
 The built VST3 is expected under:
 
 ```text
-build/cmajplugin_vst3/tools/CmajPlugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3
+build/cmajplugin_vst3/cmajplugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3
 ```
 
 `npm run cmajplugin:install` copies that already-built VST3 into:
@@ -213,42 +214,12 @@ test issue. A hosted CHOC fork does not need that override.
 
 ## New Plugin Repo Quickstart
 
-For a new Cmajor plugin repo, vendor a Cmajor checkout and replace its CHOC
-submodule with the patched CHOC fork.
-
-```bash
-git clone https://github.com/cmajor-lang/cmajor.git vendor/cmajor
-cd vendor/cmajor
-git checkout 172db53232337154d5a1c0f9a448318129dfacd9
-
-git submodule deinit -f include/choc
-rm -rf include/choc .git/modules/include/choc
-
-git submodule add https://github.com/androidStern/choc.git include/choc
-cd include/choc
-git checkout 1e79d904209abd842d688433358f9e0df7d55454
-cd ../..
-```
-
-Then generate with the vendored Cmajor include directory:
-
-```bash
-cmaj generate \
-  --target=juce \
-  /path/to/MyPlugin.cmajorpatch \
-  --output=/path/to/build/MyPlugin_juce \
-  --jucePath=/path/to/JUCE \
-  --cmajorIncludePath=/absolute/path/to/vendor/cmajor/include
-```
-
-Build the generated plugin:
-
-```bash
-cmake -S /path/to/build/MyPlugin_juce -B /path/to/build/MyPlugin_juce/build
-cmake --build /path/to/build/MyPlugin_juce/build --target MyPlugin_VST3 -j 8
-```
-
-Replace `MyPlugin_VST3` with the actual generated target name.
+Use the same small CMake dependency module and exact private Cmajor commit.
+Do not independently replace or select CHOC: the Cmajor repository's checked-in
+private CHOC gitlink remains authoritative. Generate with the Cmajor include
+directory returned inside that CMake configure. Model the build after
+`tools/effect_plugin_build`: run `cmaj generate` from the CMake project with
+the resolved Cmajor/JUCE paths, then add and build the generated subdirectory.
 
 ## Patched Behavior
 

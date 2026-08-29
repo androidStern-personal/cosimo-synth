@@ -715,7 +715,8 @@ test("desktop and iPhone React UI tooling are wired for Vite dev and build loops
     assert.equal(packageJson.scripts["ios:project"], "./scripts/generate_ios_auv3_xcode_project.sh build/ios_device_run");
     assert.equal(packageJson.scripts["ui:worker:build"], "vite build --config ui/vite.worker.config.mjs");
     assert.equal(packageJson.scripts["ui:build"], "node ui/build.mjs");
-    assert.match(sharedViteHelpers, /ensure_cmajor_runtime\.py/);
+    assert.match(sharedViteHelpers, /stageCmajorWebRuntime/);
+    assert.match(sharedViteHelpers, /tools", "cmajor_web_runtime/);
     assert.match(sharedViteHelpers, /export function createViteRepoContext/);
     assert.match(sharedViteHelpers, /export function serveStaticDirectory/);
     assert.match(sharedViteHelpers, /export function serveStaticFile/);
@@ -1023,7 +1024,6 @@ test("desktop dev plug-in build enables the webview dev server and regenerates t
         path.join(repoRoot, "tools", "desktop_native", "Source", "cmaj_PatchLoaderPlugin.cpp"),
         "utf8",
     );
-    const ensureRuntimeScript = await fs.readFile(path.join(repoRoot, "scripts", "ensure_cmajor_runtime.py"), "utf8");
     const buildAssets = await fs.readFile(path.join(repoRoot, "build_assets.py"), "utf8");
 
     assert.match(cmakeSource, /CMAJ_ENABLE_WEBVIEW_DEV_TOOLS=1/);
@@ -1047,7 +1047,11 @@ test("desktop dev plug-in build enables the webview dev server and regenerates t
     assert.match(buildScript, /CosimoDesktopNative_artefacts\/Release\/VST3\/CosimoDesktopNative\.vst3/);
     assert.match(buildScript, /CosimoDesktopNative_artefacts\/Release\/Standalone\/CosimoDesktopNative\.app/);
     assert.match(buildScript, /rm -rf "\$vst3_bundle"\s+cp -R "\$vst3_built" "\$vst3_bundle"/s);
+    assert.match(buildScript, /tools\/cmajor_runtime_build/);
+    assert.match(buildScript, /--target CmajPerformer/);
     assert.match(buildScript, /cp "\$runtime_dylib" "\$vst3_bundle\/Contents\/Resources\/libCmajPerformer\.dylib"/);
+    assert.doesNotMatch(buildScript, /cmajor\.dmg/);
+    assert.doesNotMatch(buildScript, /cmajor-lang\/cmajor\/releases\/download/);
     assert.match(buildScript, /codesign --force --deep --sign - "\$vst3_bundle"/);
     assert.match(cmakeSource, /FORMATS AU VST3 Standalone/);
     assert.match(buildScript, /uv run python "\$repo_root\/build_assets\.py"/);
@@ -1062,9 +1066,6 @@ test("desktop dev plug-in build enables the webview dev server and regenerates t
     assert.match(patchLoaderPluginSource, /JUCEApplicationBase::isStandaloneApp/);
     assert.match(patchLoaderPluginSource, /currentExecutableFile/);
     assert.match(patchLoaderPluginSource, /ProjectInfo::projectName/);
-    assert.match(ensureRuntimeScript, /COSIMO_HOST_KEYBOARD_RELAY_PROCESS_NAME/);
-    assert.match(ensureRuntimeScript, /cosimo-standalone-keyboard/);
-    assert.match(ensureRuntimeScript, /hostKeyboardShouldRelayToPlugin/);
     assert.match(patchLoaderPluginSource, /rule\.selectorText !== "\*"/);
     assert.match(patchLoaderPluginSource, /rule\.style\.removeProperty\("padding"\)/);
     assert.match(patchLoaderPluginSource, /rule\.style\.removeProperty\("margin"\)/);

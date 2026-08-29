@@ -2,26 +2,14 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cache_root="${COSIMO_DEV_CACHE:-$HOME/Library/Caches/cosimo-synth-dev}"
 build_dir="$repo_root/build/desktop_native"
+runtime_build_dir="$repo_root/build/cmajor_runtime"
+runtime_dylib="$runtime_build_dir/lib/libCmajPerformer.dylib"
 patch_path="$repo_root/WavetableSynth.cmajorpatch"
 desktop_ui_source_mode="${COSIMO_DESKTOP_UI_SOURCE_MODE:-compiled}"
 desktop_dev_server_origin="${COSIMO_DESKTOP_DEV_SERVER_ORIGIN:-http://127.0.0.1:5174}"
 desktop_dev_server_module_url="${desktop_dev_server_origin%/}/patch_gui/desktop/index.js"
 desktop_dev_server_status_url="${desktop_dev_server_origin%/}/__cosimo-dev-status"
-
-cmajor_version="$(cmaj version | awk '/Cmajor Version:/ { print $3; exit }')"
-
-if [[ -n "${CMAJOR_SOURCE_PATH:-}" ]]; then
-  cmajor_source_path="$CMAJOR_SOURCE_PATH"
-else
-  cmajor_source_path="$(python3 "$repo_root/scripts/ensure_cmajor_runtime.py" --path)"
-fi
-
-juce_path="${JUCE_PATH:-$cache_root/JUCE}"
-dmg_path="$cache_root/cmajor-$cmajor_version.dmg"
-runtime_dylib="$cache_root/libCmajPerformer-$cmajor_version.dylib"
-mount_point="$cache_root/cmajor-dmg-$cmajor_version"
 
 au_install_dir="$HOME/Library/Audio/Plug-Ins/Components"
 vst3_install_dir="$HOME/Library/Audio/Plug-Ins/VST3"
@@ -29,28 +17,10 @@ vst3_install_dir="$HOME/Library/Audio/Plug-Ins/VST3"
 au_bundle="$au_install_dir/CosimoDesktopNative.component"
 vst3_bundle="$vst3_install_dir/CosimoDesktopNative.vst3"
 
-validate_patched_cmajor_runtime() {
-  local webview_header="$cmajor_source_path/include/choc/choc/gui/choc_WebView.h"
-
-  if [[ ! -f "$webview_header" ]]; then
-    printf 'Cmajor runtime is missing CHOC WebView header: %s\n' "$webview_header" >&2
-    exit 1
-  fi
-
-  if ! grep -Fq 'chocHostKeyboard' "$webview_header" \
-      || ! grep -Fq '__chocHostKeyboardBridgeInstalled' "$webview_header"; then
-    printf 'Cmajor runtime does not include the patched CHOC keyboard bridge: %s\n' "$cmajor_source_path" >&2
-    printf 'Use scripts/ensure_cmajor_runtime.py --path or set CMAJOR_SOURCE_PATH to a patched Cmajor checkout.\n' >&2
-    exit 1
-  fi
-}
-
 if [[ ! -e "$patch_path" ]]; then
   printf 'Patch file not found: %s\n' "$patch_path" >&2
   exit 1
 fi
-
-validate_patched_cmajor_runtime
 
 if [[ "$desktop_ui_source_mode" == "compiled" ]]; then
   npm run ui:build
@@ -76,30 +46,17 @@ if [[ "$desktop_ui_source_mode" == "dev-server" ]]; then
   fi
 fi
 
-mkdir -p "$cache_root"
-
-if [[ -f "$build_dir/CMakeCache.txt" ]]; then
-  cached_source_dir="$(awk -F= '/^CMAKE_HOME_DIRECTORY:INTERNAL=/{print $2; exit}' "$build_dir/CMakeCache.txt")"
-
-  if [[ -n "$cached_source_dir" && "$cached_source_dir" != "$repo_root/tools/desktop_native" ]]; then
-    rm -rf "$build_dir"
-  fi
-fi
-
-if [[ ! -d "$juce_path/.git" ]]; then
-  git clone --depth 1 https://github.com/juce-framework/JUCE.git "$juce_path"
-fi
+cmake -S "$repo_root/tools/cmajor_runtime_build" \
+      -B "$runtime_build_dir" \
+      -DCMAKE_BUILD_TYPE=Release
+cmake --build "$runtime_build_dir" \
+      --config Release \
+      --target CmajPerformer \
+      --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-8}"
 
 if [[ ! -f "$runtime_dylib" ]]; then
-  if [[ ! -f "$dmg_path" ]]; then
-    curl -L "https://github.com/cmajor-lang/cmajor/releases/download/$cmajor_version/cmajor.dmg" -o "$dmg_path"
-  fi
-
-  mkdir -p "$mount_point"
-  hdiutil attach "$dmg_path" -mountpoint "$mount_point" -nobrowse >/dev/null
-  cp "$mount_point/libCmajPerformer.dylib" "$runtime_dylib"
-  hdiutil detach "$mount_point" >/dev/null
-  rmdir "$mount_point" 2>/dev/null || true
+  printf 'Built Cmajor runtime not found: %s\n' "$runtime_dylib" >&2
+  exit 1
 fi
 
 mkdir -p "$build_dir" "$au_install_dir" "$vst3_install_dir"
@@ -109,9 +66,7 @@ cmake -S "$repo_root/tools/desktop_native" \
       -DCMAKE_BUILD_TYPE=Release \
       -DCOSIMO_PATCH_PATH="$patch_path" \
       -DCOSIMO_DESKTOP_UI_SOURCE_MODE="$desktop_ui_source_mode" \
-      -DCOSIMO_DESKTOP_DEV_SERVER_ORIGIN="$desktop_dev_server_origin" \
-      -DCMAJOR_SOURCE_PATH="$cmajor_source_path" \
-      -DJUCE_PATH="$juce_path"
+      -DCOSIMO_DESKTOP_DEV_SERVER_ORIGIN="$desktop_dev_server_origin"
 
 cmake --build "$build_dir" --config Release
 

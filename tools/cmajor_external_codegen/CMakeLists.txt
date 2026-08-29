@@ -2,14 +2,14 @@ cmake_minimum_required(VERSION 3.22)
 
 project(CosimoCmajorExternalCodegen LANGUAGES C CXX)
 
-if (NOT DEFINED CMAJOR_SOURCE_PATH OR CMAJOR_SOURCE_PATH STREQUAL "")
-    message(FATAL_ERROR "CMAJOR_SOURCE_PATH must point to the pinned Cmajor checkout")
-endif()
+get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+include("${COSIMO_REPO_ROOT}/cmake/CosimoDependencies.cmake")
+cosimo_add_production_dependencies()
 
 set(CMAJ_VERSION "1.0.3066")
 set(CMAJ_TARGET_COMPILER cxx_std_17)
 
-add_subdirectory("${CMAJOR_SOURCE_PATH}/modules" cmajor_modules)
+add_subdirectory("${COSIMO_CMAJOR_SOURCE_DIR}/modules" cmajor_modules)
 
 MAKE_CMAJ_LIBRARY(
     LIBRARY_NAME cosimo_cmaj_codegen_lib

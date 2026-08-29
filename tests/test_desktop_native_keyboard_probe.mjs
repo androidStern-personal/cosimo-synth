@@ -35,11 +35,6 @@ async function run(command, args, {
     });
 }
 
-async function readTrimmed(command, args, options) {
-    const { stdout } = await run(command, args, options);
-    return stdout.trim();
-}
-
 async function buildKeyboardProbeApp(devServerOrigin) {
     if (process.env.COSIMO_NATIVE_KEYBOARD_PROBE_APP) {
         return process.env.COSIMO_NATIVE_KEYBOARD_PROBE_APP;
@@ -53,15 +48,6 @@ async function buildKeyboardProbeApp(devServerOrigin) {
         "Standalone",
         "CosimoDesktopNative.app",
     );
-    const cmajorSourcePath = await readTrimmed("python3", ["scripts/ensure_cmajor_runtime.py", "--path"]);
-    const jucePath = process.env.JUCE_PATH ?? path.join(
-        process.env.HOME ?? "",
-        "Library",
-        "Caches",
-        "cosimo-synth-dev",
-        "JUCE",
-    );
-
     await run("cmake", [
         "-S", path.join(repoRoot, "tools", "desktop_native"),
         "-B", probeBuildDir,
@@ -70,8 +56,6 @@ async function buildKeyboardProbeApp(devServerOrigin) {
         `-DCOSIMO_PATCH_PATH=${path.join(repoRoot, "WavetableSynth.cmajorpatch")}`,
         "-DCOSIMO_DESKTOP_UI_SOURCE_MODE=dev-server",
         `-DCOSIMO_DESKTOP_DEV_SERVER_ORIGIN=${devServerOrigin.replace(/\/$/, "")}`,
-        `-DCMAJOR_SOURCE_PATH=${cmajorSourcePath}`,
-        `-DJUCE_PATH=${jucePath}`,
     ]);
     await run("cmake", [
         "--build", probeBuildDir,
@@ -80,23 +64,20 @@ async function buildKeyboardProbeApp(devServerOrigin) {
         "-j", "8",
     ]);
 
-    const cmajorVersionOutput = await readTrimmed("cmaj", ["version"]);
-    const cmajorVersion = cmajorVersionOutput
-        .split(/\r?\n/)
-        .map((line) => line.match(/Cmajor Version:\s+(\S+)/)?.[1])
-        .find(Boolean);
+    const runtimeBuildDir = path.join(repoRoot, "build", "desktop_native_keyboard_probe_runtime");
+    await run("cmake", [
+        "-S", path.join(repoRoot, "tools", "cmajor_runtime_build"),
+        "-B", runtimeBuildDir,
+        "-DCMAKE_BUILD_TYPE=Release",
+    ]);
+    await run("cmake", [
+        "--build", runtimeBuildDir,
+        "--config", "Release",
+        "--target", "CmajPerformer",
+        "-j", "8",
+    ]);
 
-    if (!cmajorVersion) {
-        throw new Error(`Could not read Cmajor version from:\n${cmajorVersionOutput}`);
-    }
-
-    const cacheRoot = process.env.COSIMO_DEV_CACHE ?? path.join(
-        process.env.HOME ?? "",
-        "Library",
-        "Caches",
-        "cosimo-synth-dev",
-    );
-    const runtimeDylib = path.join(cacheRoot, `libCmajPerformer-${cmajorVersion}.dylib`);
+    const runtimeDylib = path.join(runtimeBuildDir, "lib", "libCmajPerformer.dylib");
     const resourcesDir = path.join(appPath, "Contents", "Resources");
     await fs.mkdir(resourcesDir, { recursive: true });
     await fs.copyFile(runtimeDylib, path.join(resourcesDir, "libCmajPerformer.dylib"));

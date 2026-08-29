@@ -17,7 +17,7 @@ function(cosimo_add_production_dependencies)
     CPMAddPackage(
         NAME cosimo_cmajor
         GIT_REPOSITORY "https://github.com/androidStern-personal/cmajor.git"
-        GIT_TAG "ee3c0d03944ccf281bc3b7d065d3daeb027aec6a"
+        GIT_TAG "f1c9a9a8e85dcc82141326a2fc1c5160241f346c"
         GIT_SHALLOW FALSE
         GIT_SUBMODULES_RECURSE TRUE
         DOWNLOAD_ONLY YES
@@ -34,4 +34,16 @@ function(cosimo_add_production_dependencies)
     set(COSIMO_CMAJOR_SOURCE_DIR "${cosimo_cmajor_SOURCE_DIR}" PARENT_SCOPE)
     set(COSIMO_CHOC_SOURCE_DIR "${cosimo_cmajor_SOURCE_DIR}/include/choc" PARENT_SCOPE)
     set(COSIMO_JUCE_SOURCE_DIR "${cosimo_juce_SOURCE_DIR}" PARENT_SCOPE)
+endfunction()
+
+function(cosimo_add_t26_research_juce)
+    CPMAddPackage(
+        NAME cosimo_t26_juce
+        GIT_REPOSITORY "https://github.com/juce-framework/JUCE.git"
+        GIT_TAG "b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0"
+        GIT_SHALLOW FALSE
+        DOWNLOAD_ONLY YES
+    )
+
+    set(COSIMO_T26_JUCE_SOURCE_DIR "${cosimo_t26_juce_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()

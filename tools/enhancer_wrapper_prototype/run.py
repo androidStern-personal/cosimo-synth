@@ -12,10 +12,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import shutil
 import subprocess
 import sys
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -31,7 +29,7 @@ import measure_spectre_reference as reference  # noqa: E402
 
 SAMPLE_RATE = 48_000
 BUILD_ROOT = REPO_ROOT / "build" / "t26-wrapper-prototype"
-JUCE_ROOT = BUILD_ROOT / "JUCE"
+CMAKE_BUILD_ROOT = BUILD_ROOT / "cmake"
 DIRECT_ROOT = BUILD_ROOT / "direct"
 RAW_ROOT = BUILD_ROOT / "raw"
 RESULT_ROOT = BUILD_ROOT / "results"
@@ -86,123 +84,30 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def ensure_juce() -> str:
-    if not (JUCE_ROOT / ".git").is_dir():
-        if JUCE_ROOT.exists():
-            raise RuntimeError(f"refusing to replace non-git path: {JUCE_ROOT}")
-        JUCE_ROOT.parent.mkdir(parents=True, exist_ok=True)
-        print("fetching pinned JUCE 7.0.1", flush=True)
-        run_command(
-            [
-                "git",
-                "clone",
-                "--filter=blob:none",
-                "--branch",
-                JUCE_TAG,
-                "--depth",
-                "1",
-                JUCE_REPOSITORY,
-                str(JUCE_ROOT),
-            ]
-        )
-
-    commit = run_command(
-        ["git", "-C", str(JUCE_ROOT), "rev-parse", "HEAD"], capture=True
-    ).stdout.strip()
-    if commit != JUCE_COMMIT:
-        raise RuntimeError(
-            f"JUCE checkout is {commit}; expected pinned 7.0.1 commit {JUCE_COMMIT}"
-        )
-    return commit
-
-
-def needs_rebuild(output: Path, inputs: list[Path]) -> bool:
-    return not output.exists() or any(
-        source.stat().st_mtime_ns > output.stat().st_mtime_ns for source in inputs
-    )
-
-
 def compile_probe() -> None:
-    compiler = shutil.which("clang++")
-    if compiler is None:
-        raise RuntimeError("clang++ is required")
-    DIRECT_ROOT.mkdir(parents=True, exist_ok=True)
-    source_root = JUCE_ROOT / "modules"
-    common = [
-        compiler,
-        "-std=c++17",
-        "-O2",
-        "-DNDEBUG",
-        "-DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1",
-        "-DJUCE_USE_CURL=0",
-        "-DJUCE_WEB_BROWSER=0",
-        "-I",
-        str(source_root),
-    ]
-    source_and_objects = (
-        (
-            source_root / "juce_core" / "juce_core.mm",
-            DIRECT_ROOT / "juce_core.o",
-            True,
-        ),
-        (
-            source_root / "juce_audio_basics" / "juce_audio_basics.mm",
-            DIRECT_ROOT / "juce_audio_basics.o",
-            True,
-        ),
-        (
-            source_root / "juce_dsp" / "juce_dsp.mm",
-            DIRECT_ROOT / "juce_dsp.o",
-            True,
-        ),
-        (
-            Path(__file__).with_name("enhancer_wrapper_probe.cpp"),
-            DIRECT_ROOT / "enhancer_wrapper_probe.o",
-            False,
-        ),
+    print("building pinned JUCE DSP probe through CPM", flush=True)
+    run_command(
+        [
+            "cmake",
+            "-S",
+            str(Path(__file__).resolve().parent),
+            "-B",
+            str(CMAKE_BUILD_ROOT),
+            "-DCMAKE_BUILD_TYPE=Release",
+            f"-DCOSIMO_T26_PROBE_OUTPUT_DIR={DIRECT_ROOT}",
+        ]
     )
-
-    def compile_one(row: tuple[Path, Path, bool]) -> Path:
-        source, output, objective_c = row
-        if not needs_rebuild(output, [source]):
-            return output
-        command = [*common]
-        if objective_c:
-            command.extend(("-x", "objective-c++"))
-        command.extend(("-c", str(source), "-o", str(output)))
-        result = subprocess.run(
-            command,
-            cwd=REPO_ROOT,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"failed compiling {source}\n{result.stdout}\n{result.stderr}"
-            )
-        return output
-
-    print("building pinned JUCE DSP probe", flush=True)
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        objects = list(executor.map(compile_one, source_and_objects))
-    sources = [row[0] for row in source_and_objects]
-    if needs_rebuild(PROBE, [*sources, *objects]):
-        run_command(
-            [
-                compiler,
-                *(str(path) for path in objects),
-                "-framework",
-                "Accelerate",
-                "-framework",
-                "Foundation",
-                "-framework",
-                "Cocoa",
-                "-Wl,-dead_strip",
-                "-o",
-                str(PROBE),
-            ]
-        )
+    run_command(
+        [
+            "cmake",
+            "--build",
+            str(CMAKE_BUILD_ROOT),
+            "--target",
+            "enhancer_wrapper_probe",
+            "--parallel",
+            "4",
+        ]
+    )
 
 
 def safe_id(value: str) -> str:
@@ -940,7 +845,6 @@ def main() -> int:
         if not required.exists():
             raise FileNotFoundError(required)
 
-    juce_commit = ensure_juce()
     compile_probe()
     RESULT_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -977,7 +881,7 @@ def main() -> int:
             "git_head_before_prototype_commit": uncertainty.git_head(),
             "juce_repository": JUCE_REPOSITORY,
             "juce_tag": JUCE_TAG,
-            "juce_commit": juce_commit,
+            "juce_commit": JUCE_COMMIT,
             "probe_sha256": sha256_file(PROBE),
             "spectre": reference.plugin_metadata(),
             "spectre_target_mode": "Medium",

@@ -49,7 +49,6 @@ IOS_HOST_SOURCE_RUNTIME = REPO_ROOT / "ui" / "ios" / "runtime-host.js"
 IOS_PATCH_HOST_HTML = REPO_ROOT / "patch_gui" / "index.ios.html"
 IOS_PATCH_HOST_RUNTIME = REPO_ROOT / "patch_gui" / "index.ios-host.js"
 PACKAGE_JSON = REPO_ROOT / "package.json"
-CMAJOR_RUNTIME_HELPER = REPO_ROOT / "scripts" / "ensure_cmajor_runtime.py"
 
 CONTAINER_BUNDLE_ID = "dev.cosimo.wavetable-synth"
 HOST_BUNDLE_ID = "dev.cosimo.wavetable-synth-host"
@@ -92,20 +91,27 @@ endfunction()
 
 
 @functools.lru_cache(maxsize=1)
-def _cmajor_runtime_root() -> Path:
-    result = subprocess.run(
-        ["python3", str(CMAJOR_RUNTIME_HELPER), "--path"],
+def _cmajor_web_api_root() -> Path:
+    build_dir = REPO_ROOT / "build" / "test-cmajor-web-runtime"
+    output_dir = build_dir / "cmaj_api"
+    subprocess.run(
+        [
+            "cmake",
+            "-S",
+            str(REPO_ROOT / "tools" / "cmajor_web_runtime"),
+            "-B",
+            str(build_dir),
+            f"-DCOSIMO_CMAJOR_WEB_RUNTIME_DIR={output_dir}",
+        ],
         cwd=REPO_ROOT,
         check=True,
-        capture_output=True,
-        text=True,
     )
-
-    return Path(result.stdout.strip())
-
-
-def _cmajor_web_api_root() -> Path:
-    return _cmajor_runtime_root() / "javascript" / "cmaj_api"
+    subprocess.run(
+        ["cmake", "--build", str(build_dir), "--target", "cosimo_cmajor_web_runtime"],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    return output_dir
 
 
 def _stage_bundle_root(destination: Path) -> None:
@@ -774,14 +780,19 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert "LANGUAGES CXX C OBJC OBJCXX" in cmake
     assert "FORMATS Standalone AUv3" in cmake
     assert "generate_ios_auv3_plugin.sh" in cmake_text
-    assert "ensure_cmajor_runtime.py" in cmake_text
+    assert "cmake/CosimoDependencies.cmake" in cmake_text
+    assert "cosimo_add_production_dependencies()" in cmake_text
     assert "CosimoPluginMain.cpp" in cmake_text
     assert "CosimoSharedWavetableLibrary.mm" in cmake_text
     assert "BounceNativeDriver.cpp" in cmake_text
     assert "BounceNativePlatform.cpp" in cmake_text
     assert "BounceNativeBankStore.cpp" in cmake_text
     assert "CmajorBounceOfflinePerformer.cpp" in cmake_text
-    assert "COSIMO_CMAJOR_RUNTIME_DIR" in cmake_text
+    assert "COSIMO_CMAJOR_SOURCE_DIR" in cmake_text
+    assert '"${COSIMO_CMAJOR_SOURCE_DIR}/include"' in cmake_text
+    assert '"${COSIMO_CHOC_SOURCE_DIR}"' in cmake_text
+    assert '"${COSIMO_CMAJOR_SOURCE_DIR}/javascript/cmaj_api"' in cmake_text
+    assert "COSIMO_CMAJOR_RUNTIME_DIR" not in cmake_text
     assert "COSIMO_REACT_UI_FILES" in cmake_text
     assert "COSIMO_WORKER_UI_FILES" in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/ios/*' in cmake_text
@@ -1737,7 +1748,8 @@ def test_ios_ui_dev_server_configuration_exists() -> None:
     assert "ui:ios:dev" not in package_json["scripts"]
     assert "ui:ios:build" not in package_json["scripts"]
     assert "vite" in package_json["devDependencies"]
-    assert "ensure_cmajor_runtime.py" in shared_vite_helpers
+    assert "stageCmajorWebRuntime" in shared_vite_helpers
+    assert "tools\", \"cmajor_web_runtime" in shared_vite_helpers
     assert "export function createViteRepoContext" in shared_vite_helpers
     assert "export function serveStaticDirectory" in shared_vite_helpers
     assert "export function serveStaticFile" in shared_vite_helpers
@@ -1781,7 +1793,7 @@ def test_ios_auv3_xcode_project_script_generates_an_xcode_project(tmp_path: Path
     fake_juce = _write_fake_juce_checkout(tmp_path / "fake-juce")
     build_dir = tmp_path / "xcode-build"
     env = os.environ.copy()
-    env["JUCE_PATH"] = str(fake_juce)
+    env["CPM_cosimo_juce_SOURCE"] = str(fake_juce)
     env["COSIMO_IOS_SYSROOT"] = "iphonesimulator"
 
     result = subprocess.run(

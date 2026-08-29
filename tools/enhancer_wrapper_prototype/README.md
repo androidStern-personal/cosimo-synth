@@ -19,10 +19,12 @@ Run it with:
 npm run prototype:enhancer-wrapper
 ```
 
-The command verifies the exact JUCE 7.0.1 source revision, builds the probe, ranks
-all eight FIR/IIR quality and latency variants on training material, and only then
-reveals the held-out tone and music results. The pinned JUCE checkout, executable,
-report, and A/B audio stay under ignored `build/t26-wrapper-prototype/`.
+The command uses the repository's vendored CPM module to fetch the exact
+research-only JUCE 7.0.1 commit, builds the probe, ranks all eight FIR/IIR quality
+and latency variants on training material, and only then reveals the held-out tone
+and music results. CPM's source cache is shared with other worktrees; the
+executable, report, and A/B audio stay under ignored
+`build/t26-wrapper-prototype/`.
 
 The measured result and production decision boundary are recorded in
 `ENHANCER_WRAPPER_PROTOTYPE_FINDINGS.md` at the repository root.

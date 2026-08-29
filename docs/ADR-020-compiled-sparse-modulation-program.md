@@ -248,8 +248,8 @@ This began as a rack-only pre-RT-01 proof; current voice-target behavior is cove
 SharedVoiceEngine and complete 50-target execution gates.
 Focused native regressions also exercise
 Promise jobs at every QuickJS execution boundary and stored-string change detection. The pinned runtime
-fixes are reproduced by `scripts/ensure_cmajor_runtime.py`; every source anchor must occur exactly once
-or dependency preparation fails. Worker JavaScript errors report status without unloading an otherwise
+fixes are ordinary commits in the private Cmajor repository and its private CHOC submodule; the shared
+plain-CPM module fetches those exact commits recursively. Worker JavaScript errors report status without unloading an otherwise
 playable patch, while compile/source-transformer failures remain fatal. A native constant-signal proof
 requires audio to continue after that worker error. These fixes run on worker/control-message paths and
 do not add work to the audio-rate DSP loop.

@@ -3,31 +3,39 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-export function resolveCmajorRuntimeRoot(workspaceRoot) {
-    if (process.env.COSIMO_CMAJOR_RUNTIME_DIR) {
-        return path.resolve(process.env.COSIMO_CMAJOR_RUNTIME_DIR);
-    }
+export function stageCmajorWebRuntime(workspaceRoot, {
+    buildDirectory = path.join(workspaceRoot, "build", "cmajor_web_runtime"),
+    outputDirectory = path.join(buildDirectory, "cmaj_api"),
+} = {}) {
+    const sourceDirectory = path.join(workspaceRoot, "tools", "cmajor_web_runtime");
 
-    const runtimeScript = path.join(workspaceRoot, "scripts", "ensure_cmajor_runtime.py");
-
-    return execFileSync("python3", [runtimeScript, "--path"], {
+    execFileSync("cmake", [
+        "-S", sourceDirectory,
+        "-B", buildDirectory,
+        `-DCOSIMO_CMAJOR_WEB_RUNTIME_DIR=${outputDirectory}`,
+    ], {
         cwd: workspaceRoot,
-        encoding: "utf8",
-    }).trim();
+        stdio: "inherit",
+    });
+    execFileSync("cmake", [
+        "--build", buildDirectory,
+        "--target", "cosimo_cmajor_web_runtime",
+    ], {
+        cwd: workspaceRoot,
+        stdio: "inherit",
+    });
+
+    return outputDirectory;
 }
 
 export function createViteRepoContext(importMetaUrl) {
     const configDirectory = path.dirname(fileURLToPath(importMetaUrl));
     const repoRoot = path.resolve(configDirectory, "..");
-    const cmajorRuntimeRoot = resolveCmajorRuntimeRoot(repoRoot);
-    const cmajorWebRoot = path.join(cmajorRuntimeRoot, "javascript");
-    const cmajorApiRoot = path.join(cmajorWebRoot, "cmaj_api");
+    const cmajorApiRoot = stageCmajorWebRuntime(repoRoot);
 
     return {
         configDirectory,
         repoRoot,
-        cmajorRuntimeRoot,
-        cmajorWebRoot,
         cmajorApiRoot,
     };
 }
