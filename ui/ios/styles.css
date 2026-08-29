@@ -848,11 +848,35 @@ select {
 
 .cosimo-mseg-effective-curve-line {
     fill: none;
-    stroke: var(--cosimo-accent-amber);
+    stroke: var(--cosimo-mseg-realized);
     stroke-width: 3.25;
     stroke-linecap: round;
     stroke-linejoin: round;
-    filter: drop-shadow(0 0 8px rgb(var(--cosimo-accent-amber-rgb) / 0.32));
+    filter: drop-shadow(0 0 8px rgb(var(--cosimo-mseg-realized-rgb) / 0.32));
+}
+
+.cosimo-mseg-shape-a-fill {
+    fill: rgb(var(--cosimo-mseg-shape-a-rgb) / 0.09);
+}
+
+.cosimo-mseg-shape-a-curve-line {
+    stroke: var(--cosimo-mseg-shape-a);
+}
+
+.cosimo-mseg-shape-b-fill {
+    fill: rgb(var(--cosimo-mseg-shape-b-rgb) / 0.04);
+}
+
+.cosimo-mseg-shape-b-curve-line {
+    stroke: rgb(var(--cosimo-mseg-shape-b-rgb) / 0.48);
+}
+
+.cosimo-mseg-realized-fill {
+    fill: rgb(var(--cosimo-mseg-realized-rgb) / 0.12);
+}
+
+.cosimo-mseg-realized-curve-line {
+    stroke: var(--cosimo-mseg-realized);
 }
 
 .cosimo-curve-line-highlight {
@@ -888,6 +912,14 @@ select {
     stroke: var(--cosimo-ground);
     stroke-width: 2px;
     opacity: 0.62;
+}
+
+[data-role="mseg-edit-points"][data-shape-identity="a"] :is(.cosimo-mseg-point-default, .cosimo-mseg-point-highlight, .cosimo-mseg-point-selected) {
+    fill: var(--cosimo-mseg-shape-a);
+}
+
+[data-role="mseg-edit-points"][data-shape-identity="b"] :is(.cosimo-mseg-point-default, .cosimo-mseg-point-highlight, .cosimo-mseg-point-selected) {
+    fill: rgb(var(--cosimo-mseg-shape-b-rgb) / 0.82);
 }
 
 .ios-section-panel select,

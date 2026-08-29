@@ -93,6 +93,8 @@
     --cosimo-accent-ion-rgb: 111 168 255;
     --cosimo-accent-violet: #a98cff;
     --cosimo-accent-violet-rgb: 169 140 255;
+    --cosimo-accent-purple: #cc59d2;
+    --cosimo-accent-purple-rgb: 204 89 210;
     --cosimo-accent-pink: #ff79d8;
     --cosimo-accent-pink-rgb: 255 121 216;
     --cosimo-accent-coral: #ff7a6c;
@@ -105,6 +107,19 @@
     --cosimo-accent-mint-rgb: 104 255 194;
     --cosimo-accent-teal: #69d5c5;
     --cosimo-accent-teal-rgb: 105 213 197;
+
+    /* -- Editor identities: semantic drawing roles ---------------------
+       Source badges keep their own family identities. These tokens lock
+       the actual ADSR/MSEG drawings so selection or gesture state cannot
+       silently recolor the musical shape. */
+    --cosimo-adsr-curve: var(--cosimo-accent-cyan);
+    --cosimo-adsr-curve-rgb: var(--cosimo-accent-cyan-rgb);
+    --cosimo-mseg-shape-a: var(--cosimo-accent-purple);
+    --cosimo-mseg-shape-a-rgb: var(--cosimo-accent-purple-rgb);
+    --cosimo-mseg-shape-b: #e1e7f0;
+    --cosimo-mseg-shape-b-rgb: 225 231 240;
+    --cosimo-mseg-realized: var(--cosimo-accent-cyan);
+    --cosimo-mseg-realized-rgb: var(--cosimo-accent-cyan-rgb);
 
     --section-accent: var(--cosimo-accent-cyan);
     --section-accent-rgb: var(--cosimo-accent-cyan-rgb);

@@ -529,6 +529,7 @@ export function MsegPreview({
     morphShapeBPoints = null,
     morphValue = null,
     showMorphCurve = false,
+    editShapeIndex = 0,
     orientation = "horizontal",
     className,
     progressFillEnd = null,
@@ -539,6 +540,8 @@ export function MsegPreview({
     morphShapeBPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphValue?: number | null;
     showMorphCurve?: boolean;
+    /** Shape identity controls color only; selection never swaps A/B colors. */
+    editShapeIndex?: 0 | 1;
     orientation?: MsegSurfaceOrientation;
     className?: string;
     progressFillEnd?: number | null;
@@ -635,11 +638,24 @@ export function MsegPreview({
             height: metrics.plotHeight,
         };
     }, [clampedProgressFillEnd, metrics.plotHeight, metrics.plotLeft, metrics.plotTop, metrics.plotWidth, orientation]);
+    const editedShapeFillClass = editShapeIndex === 0
+        ? "cosimo-mseg-shape-a-fill"
+        : "cosimo-mseg-shape-b-fill";
+    const editedShapeCurveClass = editShapeIndex === 0
+        ? "cosimo-mseg-shape-a-curve-line"
+        : "cosimo-mseg-shape-b-curve-line";
+    const referenceShapeFillClass = editShapeIndex === 0
+        ? "cosimo-mseg-shape-b-fill"
+        : "cosimo-mseg-shape-a-fill";
+    const referenceShapeCurveClass = editShapeIndex === 0
+        ? "cosimo-mseg-shape-b-curve-line"
+        : "cosimo-mseg-shape-a-curve-line";
 
     return (
         <svg
             ref={viewportRef}
             data-role="mseg-preview-surface"
+            data-edit-shape={editShapeIndex === 0 ? "a" : "b"}
             className={className ?? "h-32 w-full overflow-hidden rounded-[20px] bg-white/[0.03]"}
             viewBox={`0 0 ${size.width} ${size.height}`}
         >
@@ -679,50 +695,67 @@ export function MsegPreview({
                 ))}
             </g>
             {referenceFillPath ? (
-                <path className="cosimo-reference-curve-fill" d={referenceFillPath} />
+                <path
+                    className={`cosimo-reference-curve-fill ${referenceShapeFillClass}`}
+                    d={referenceFillPath}
+                />
             ) : null}
             {referenceCurvePath ? (
-                <path className="cosimo-reference-curve-line" d={referenceCurvePath} />
+                <path
+                    className={`cosimo-reference-curve-line ${referenceShapeCurveClass}`}
+                    d={referenceCurvePath}
+                />
             ) : null}
             {morphShapeAFillPath ? (
                 <path
                     data-role="mseg-preview-shape-a-fill"
-                    className="cosimo-reference-curve-fill"
+                    className="cosimo-reference-curve-fill cosimo-mseg-shape-a-fill"
                     d={morphShapeAFillPath}
                 />
             ) : null}
             {morphShapeBFillPath ? (
                 <path
                     data-role="mseg-preview-shape-b-fill"
-                    className="cosimo-reference-curve-fill"
+                    className="cosimo-reference-curve-fill cosimo-mseg-shape-b-fill"
                     d={morphShapeBFillPath}
                 />
             ) : null}
             {morphShapeACurvePath ? (
                 <path
                     data-role="mseg-preview-shape-a-curve"
-                    className="cosimo-reference-curve-line"
+                    className="cosimo-reference-curve-line cosimo-mseg-shape-a-curve-line"
                     d={morphShapeACurvePath}
                 />
             ) : null}
             {morphShapeBCurvePath ? (
                 <path
                     data-role="mseg-preview-shape-b-curve"
-                    className="cosimo-reference-curve-line"
+                    className="cosimo-reference-curve-line cosimo-mseg-shape-b-curve-line"
                     d={morphShapeBCurvePath}
                 />
             ) : null}
-            <path className="cosimo-curve-fill" d={fillPath} />
+            <path
+                className={morphShapeAFillPath
+                    ? "cosimo-curve-fill cosimo-mseg-realized-fill"
+                    : `cosimo-curve-fill ${editedShapeFillClass}`}
+                d={fillPath}
+            />
             {progressClipRect ? (
                 <g clipPath={`url(#${clipPathId})`}>
                     <path
-                        className="cosimo-curve-fill cosimo-curve-fill-progress"
+                        className="cosimo-curve-fill cosimo-curve-fill-progress cosimo-mseg-realized-fill"
                         d={fillPath}
                         data-role="mseg-preview-progress-fill"
                     />
                 </g>
             ) : null}
-            <path data-role="mseg-preview-effective-curve" className="cosimo-curve-line" d={curvePath} />
+            <path
+                data-role="mseg-preview-effective-curve"
+                className={morphShapeACurvePath
+                    ? "cosimo-curve-line cosimo-mseg-realized-curve-line"
+                    : `cosimo-curve-line ${editedShapeCurveClass}`}
+                d={curvePath}
+            />
         </svg>
     );
 }
@@ -850,6 +883,7 @@ export function EditableMsegSurface({
     morphShapeBPoints = null,
     morphValue = null,
     realizedMorphEmphasis = "resting",
+    editShapeIndex = 0,
     selectedPointIndex,
     hoveredSegmentIndex = -1,
     activeSegmentIndex = -1,
@@ -871,6 +905,8 @@ export function EditableMsegSurface({
     morphValue?: number | null;
     /** The realized A/B result is always present; active only changes its visual prominence. */
     realizedMorphEmphasis?: "resting" | "active";
+    /** Shape identity controls color only; selection never swaps A/B colors. */
+    editShapeIndex?: 0 | 1;
     selectedPointIndex: number;
     hoveredSegmentIndex?: number;
     activeSegmentIndex?: number;
@@ -938,6 +974,7 @@ export function EditableMsegSurface({
             data-role={dataRole}
             data-time-axis={orientation}
             data-morph-presentation={realizedMorphEmphasis === "active" ? "morph-active" : "edit-shape"}
+            data-edit-shape={editShapeIndex === 0 ? "a" : "b"}
             className={joinClasses(
                 "h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]",
                 className,
@@ -975,25 +1012,41 @@ export function EditableMsegSurface({
             {referenceFillPath ? (
                 <path
                     data-role="mseg-reference-fill"
-                    className="cosimo-reference-curve-fill"
+                    data-shape-identity={editShapeIndex === 0 ? "b" : "a"}
+                    className={editShapeIndex === 0
+                        ? "cosimo-reference-curve-fill cosimo-mseg-shape-b-fill"
+                        : "cosimo-reference-curve-fill cosimo-mseg-shape-a-fill"}
                     d={referenceFillPath}
                 />
             ) : null}
             {referenceCurvePath ? (
                 <path
                     data-role="mseg-reference-curve"
-                    className="cosimo-reference-curve-line"
+                    data-shape-identity={editShapeIndex === 0 ? "b" : "a"}
+                    className={editShapeIndex === 0
+                        ? "cosimo-reference-curve-line cosimo-mseg-shape-b-curve-line"
+                        : "cosimo-reference-curve-line cosimo-mseg-shape-a-curve-line"}
                     d={referenceCurvePath}
                 />
             ) : null}
             <path
                 data-role="mseg-base-fill"
-                className={joinClasses("cosimo-curve-fill", hasEmphasizedSegment && "cosimo-curve-fill-muted")}
+                data-shape-identity={editShapeIndex === 0 ? "a" : "b"}
+                className={joinClasses(
+                    "cosimo-curve-fill",
+                    editShapeIndex === 0 ? "cosimo-mseg-shape-a-fill" : "cosimo-mseg-shape-b-fill",
+                    hasEmphasizedSegment && "cosimo-curve-fill-muted",
+                )}
                 d={fillPath}
             />
             <path
                 data-role="mseg-base-curve"
-                className={joinClasses("cosimo-curve-line", hasEmphasizedSegment && "cosimo-curve-line-muted")}
+                data-shape-identity={editShapeIndex === 0 ? "a" : "b"}
+                className={joinClasses(
+                    "cosimo-curve-line",
+                    editShapeIndex === 0 ? "cosimo-mseg-shape-a-curve-line" : "cosimo-mseg-shape-b-curve-line",
+                    hasEmphasizedSegment && "cosimo-curve-line-muted",
+                )}
                 d={curvePath}
             />
             {morphCurvePath ? (
@@ -1010,11 +1063,17 @@ export function EditableMsegSurface({
                 <path
                     data-role="mseg-highlight-segment"
                     data-segment-index={String(emphasizedSegmentIndex)}
-                    className="cosimo-curve-line cosimo-curve-line-highlight"
+                    className={joinClasses(
+                        "cosimo-curve-line cosimo-curve-line-highlight",
+                        editShapeIndex === 0 ? "cosimo-mseg-shape-a-curve-line" : "cosimo-mseg-shape-b-curve-line",
+                    )}
                     d={highlightedSegmentPath}
                 />
             ) : null}
-            <g>
+            <g
+                data-role="mseg-edit-points"
+                data-shape-identity={editShapeIndex === 0 ? "a" : "b"}
+            >
                 {points.map((point, pointIndex) => {
                     const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height, {
                         orientation,

@@ -1915,23 +1915,19 @@ test("desktop envelope editor drags handles and commits compact rail values for 
 
         const parametersAfterAttack = snapshot.parameterValues;
 
-        await dragEnvelopeHandleBy(page, "adsr-decay-sustain-handle-hit-target", 160, 70);
+        await dragEnvelopeHandleBy(page, "adsr-decay-sustain-handle-hit-target", 160, 8);
 
         snapshot = await waitForHarnessSnapshot(
             page,
-            "decay-sustain handle drag updates decay horizontally and sustain vertically for slot 2",
+            "decay-sustain handle locks a horizontal drag to decay for slot 2",
             (nextSnapshot) => {
                 return Math.abs(Number(nextSnapshot.parameterValues.env2Decay) - Number(parametersAfterAttack.env2Decay ?? initialParameters.env2Decay ?? 0.25)) > 0.02
-                    && Math.abs(Number(nextSnapshot.parameterValues.env2Sustain) - Number(parametersAfterAttack.env2Sustain ?? initialParameters.env2Sustain ?? 0.5)) > 0.05
+                    && Math.abs(Number(nextSnapshot.parameterValues.env2Sustain) - Number(parametersAfterAttack.env2Sustain ?? initialParameters.env2Sustain ?? 0.5)) <= 1e-9
                     && Math.abs(Number(nextSnapshot.parameterValues.env1Decay) - 0.25) <= 1e-9
                     && Math.abs(Number(nextSnapshot.parameterValues.env1Sustain) - 0.5) <= 1e-9
                     && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
                         endpointID === "env2Decay"
                         && Math.abs(Number(value) - Number(parametersAfterAttack.env2Decay ?? initialParameters.env2Decay ?? 0.25)) > 0.02
-                    ))
-                    && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                        endpointID === "env2Sustain"
-                        && Math.abs(Number(value) - Number(parametersAfterAttack.env2Sustain ?? initialParameters.env2Sustain ?? 0.5)) > 0.05
                     ));
             },
         );
@@ -1941,11 +1937,26 @@ test("desktop envelope editor drags handles and commits compact rail values for 
             true,
         );
         assert.equal(
-            Math.abs(Number(snapshot.parameterValues.env2Sustain) - Number(parametersAfterAttack.env2Sustain ?? initialParameters.env2Sustain ?? 0.5)) > 0.05,
+            Math.abs(Number(snapshot.parameterValues.env2Sustain) - Number(parametersAfterAttack.env2Sustain ?? initialParameters.env2Sustain ?? 0.5)) <= 1e-9,
             true,
         );
         assert.equal(Math.abs(Number(snapshot.parameterValues.env1Decay) - 0.25) <= 1e-9, true);
         assert.equal(Math.abs(Number(snapshot.parameterValues.env1Sustain) - 0.5) <= 1e-9, true);
+
+        const parametersAfterHorizontalDecay = snapshot.parameterValues;
+        await dragEnvelopeHandleBy(page, "adsr-decay-sustain-handle-hit-target", 8, 70);
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "decay-sustain handle locks a vertical drag to sustain for slot 2",
+            (nextSnapshot) => (
+                Math.abs(Number(nextSnapshot.parameterValues.env2Sustain) - Number(parametersAfterHorizontalDecay.env2Sustain)) > 0.05
+                && Math.abs(Number(nextSnapshot.parameterValues.env2Decay) - Number(parametersAfterHorizontalDecay.env2Decay)) <= 1e-9
+            ),
+        );
+        assert.equal(
+            Math.abs(Number(snapshot.parameterValues.env2Decay) - Number(parametersAfterHorizontalDecay.env2Decay)) <= 1e-9,
+            true,
+        );
 
         const releaseInput = page.locator('input[aria-label="Envelope release value"]');
         await releaseInput.focus();

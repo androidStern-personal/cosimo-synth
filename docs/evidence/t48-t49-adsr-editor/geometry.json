@@ -1,0 +1,415 @@
+{
+  "phone-393x852-compact.png": {
+    "viewport": {
+      "width": 393,
+      "height": 852
+    },
+    "root": {
+      "x": 0,
+      "y": 596,
+      "width": 393,
+      "height": 256
+    },
+    "surface": {
+      "x": 8,
+      "y": 675,
+      "width": 377,
+      "height": 171
+    },
+    "viewBox": {
+      "width": 377,
+      "height": 171
+    },
+    "handles": [
+      {
+        "role": "adsr-attack-handle",
+        "x": 36.67,
+        "y": 689.5,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      },
+      {
+        "role": "adsr-decay-sustain-handle",
+        "x": 166.2,
+        "y": 751,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      },
+      {
+        "role": "adsr-release-handle",
+        "x": 308.95,
+        "y": 812.5,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      }
+    ],
+    "hitTargets": [
+      {
+        "role": "adsr-attack-handle-hit-target",
+        "radius": 22
+      },
+      {
+        "role": "adsr-decay-sustain-handle-hit-target",
+        "radius": 22
+      },
+      {
+        "role": "adsr-release-handle-hit-target",
+        "radius": 22
+      }
+    ],
+    "curve": {
+      "x": 24,
+      "y": 24,
+      "width": 329,
+      "height": 123,
+      "stroke": "rgb(125, 247, 255)"
+    }
+  },
+  "phone-393x852-live-resize.png": {
+    "viewport": {
+      "width": 393,
+      "height": 852
+    },
+    "root": {
+      "x": 0,
+      "y": 504,
+      "width": 393,
+      "height": 348
+    },
+    "surface": {
+      "x": 8,
+      "y": 583,
+      "width": 377,
+      "height": 263
+    },
+    "viewBox": {
+      "width": 377,
+      "height": 263
+    },
+    "handles": [
+      {
+        "role": "adsr-attack-handle",
+        "x": 36.67,
+        "y": 603.01,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      },
+      {
+        "role": "adsr-decay-sustain-handle",
+        "x": 166.2,
+        "y": 705,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      },
+      {
+        "role": "adsr-release-handle",
+        "x": 308.95,
+        "y": 806.99,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      }
+    ],
+    "hitTargets": [
+      {
+        "role": "adsr-attack-handle-hit-target",
+        "radius": 22
+      },
+      {
+        "role": "adsr-decay-sustain-handle-hit-target",
+        "radius": 22
+      },
+      {
+        "role": "adsr-release-handle-hit-target",
+        "radius": 22
+      }
+    ],
+    "curve": {
+      "x": 24,
+      "y": 29.51,
+      "width": 329,
+      "height": 203.98,
+      "stroke": "rgb(125, 247, 255)"
+    }
+  },
+  "phone-393x852-expanded.png": {
+    "viewport": {
+      "width": 393,
+      "height": 852
+    },
+    "root": {
+      "x": 0,
+      "y": 426,
+      "width": 393,
+      "height": 426
+    },
+    "surface": {
+      "x": 8,
+      "y": 505,
+      "width": 377,
+      "height": 341
+    },
+    "viewBox": {
+      "width": 377,
+      "height": 341
+    },
+    "handles": [
+      {
+        "role": "adsr-attack-handle",
+        "x": 36.67,
+        "y": 564.01,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      },
+      {
+        "role": "adsr-decay-sustain-handle",
+        "x": 166.2,
+        "y": 666,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      },
+      {
+        "role": "adsr-release-handle",
+        "x": 308.95,
+        "y": 767.99,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      }
+    ],
+    "hitTargets": [
+      {
+        "role": "adsr-attack-handle-hit-target",
+        "radius": 22
+      },
+      {
+        "role": "adsr-decay-sustain-handle-hit-target",
+        "radius": 22
+      },
+      {
+        "role": "adsr-release-handle-hit-target",
+        "radius": 22
+      }
+    ],
+    "curve": {
+      "x": 24,
+      "y": 68.51,
+      "width": 329,
+      "height": 203.98,
+      "stroke": "rgb(125, 247, 255)"
+    }
+  },
+  "phone-393x852-full.png": {
+    "viewport": {
+      "width": 393,
+      "height": 852
+    },
+    "root": {
+      "x": 1,
+      "y": 45,
+      "width": 391,
+      "height": 670
+    },
+    "surface": {
+      "x": 15,
+      "y": 129,
+      "width": 363,
+      "height": 513
+    },
+    "viewBox": {
+      "width": 363,
+      "height": 513
+    },
+    "handles": [
+      {
+        "role": "adsr-attack-handle",
+        "x": 43.07,
+        "y": 278.35,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      },
+      {
+        "role": "adsr-decay-sustain-handle",
+        "x": 167.09,
+        "y": 376,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      },
+      {
+        "role": "adsr-release-handle",
+        "x": 303.76,
+        "y": 473.65,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      }
+    ],
+    "hitTargets": [
+      {
+        "role": "adsr-attack-handle-hit-target",
+        "radius": 22
+      },
+      {
+        "role": "adsr-decay-sustain-handle-hit-target",
+        "radius": 22
+      },
+      {
+        "role": "adsr-release-handle-hit-target",
+        "radius": 22
+      }
+    ],
+    "curve": {
+      "x": 24,
+      "y": 158.85,
+      "width": 315,
+      "height": 195.3,
+      "stroke": "rgb(125, 247, 255)"
+    }
+  },
+  "desktop-1280x900.png": {
+    "viewport": {
+      "width": 1280,
+      "height": 900
+    },
+    "root": {
+      "x": 17,
+      "y": 376,
+      "width": 613,
+      "height": 331.02
+    },
+    "surface": {
+      "x": 17,
+      "y": 454,
+      "width": 613,
+      "height": 253.02
+    },
+    "viewBox": {
+      "width": 613,
+      "height": 253.02
+    },
+    "handles": [
+      {
+        "role": "adsr-attack-handle",
+        "x": 55.84,
+        "y": 468.5,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      },
+      {
+        "role": "adsr-decay-sustain-handle",
+        "x": 278.29,
+        "y": 571.01,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      },
+      {
+        "role": "adsr-release-handle",
+        "x": 523.43,
+        "y": 673.52,
+        "width": 19,
+        "height": 19,
+        "radius": 9.5,
+        "stroke": "rgb(125, 247, 255)",
+        "strokeWidth": 2.5
+      }
+    ],
+    "hitTargets": [
+      {
+        "role": "adsr-attack-handle-hit-target",
+        "radius": 22
+      },
+      {
+        "role": "adsr-decay-sustain-handle-hit-target",
+        "radius": 22
+      },
+      {
+        "role": "adsr-release-handle-hit-target",
+        "radius": 22
+      }
+    ],
+    "curve": {
+      "x": 24,
+      "y": 24,
+      "width": 565,
+      "height": 205.02,
+      "stroke": "rgb(125, 247, 255)"
+    }
+  },
+  "desktop-1280x900-mseg-colors.png": {
+    "editShape": "b",
+    "presentation": "edit-shape",
+    "shapeA": "rgb(204, 89, 210)",
+    "shapeB": "rgba(225, 231, 240, 0.48)",
+    "realized": "rgb(125, 247, 255)",
+    "editPoints": "rgba(225, 231, 240, 0.82)"
+  },
+  "phone-393x852-decay-bubble.png": {
+    "field": "decaySeconds",
+    "text": "10 s",
+    "style": {
+      "backgroundColor": "rgb(16, 16, 16)",
+      "borderColor": "rgb(125, 247, 255)",
+      "color": "rgb(125, 247, 255)"
+    },
+    "bubble": {
+      "x": 210.7,
+      "y": 723.31,
+      "width": 54,
+      "height": 25.19
+    }
+  },
+  "phone-393x852-sustain-bubble.png": {
+    "field": "sustain",
+    "text": "84.1%",
+    "style": {
+      "backgroundColor": "rgb(16, 16, 16)",
+      "borderColor": "rgb(125, 247, 255)",
+      "color": "rgb(125, 247, 255)"
+    },
+    "bubble": {
+      "x": 234.94,
+      "y": 679.31,
+      "width": 54,
+      "height": 25.19
+    }
+  }
+}

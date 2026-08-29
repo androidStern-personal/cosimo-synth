@@ -531,6 +531,7 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
                         {msegState ? (
                             <MsegPreview
                                 points={msegState.shape.points}
+                                editShapeIndex={msegState.editShapeIndex ?? 0}
                                 orientation={previewOrientation}
                                 className="h-full w-full overflow-hidden rounded-[20px] bg-white/[0.03]"
                                 progressFillEnd={observedMsegPlayhead.progressFillEnd}
@@ -1254,6 +1255,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
                                 orientation={orientation}
                                 points={msegState.shape.points}
                                 referencePoints={msegState.referenceShape?.points ?? null}
+                                editShapeIndex={msegState.editShapeIndex ?? 0}
                                 selectedPointIndex={selectedPointIndex}
                                 hoveredSegmentIndex={hoveredSegmentIndex}
                                 activeSegmentIndex={activeSegmentIndex}

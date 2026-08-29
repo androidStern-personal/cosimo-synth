@@ -585,14 +585,47 @@
     stroke-linejoin: round;
 }
 
+.cosimo-mseg-shape-a-fill {
+    fill: rgb(var(--cosimo-mseg-shape-a-rgb) / 0.09);
+}
+
+.cosimo-mseg-shape-a-curve-line {
+    fill: none;
+    stroke: var(--cosimo-mseg-shape-a);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.cosimo-mseg-shape-b-fill {
+    fill: rgb(var(--cosimo-mseg-shape-b-rgb) / 0.04);
+}
+
+.cosimo-mseg-shape-b-curve-line {
+    fill: none;
+    stroke: rgb(var(--cosimo-mseg-shape-b-rgb) / 0.48);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.cosimo-mseg-realized-fill {
+    fill: rgb(var(--cosimo-mseg-realized-rgb) / 0.12);
+}
+
+.cosimo-mseg-realized-curve-line {
+    fill: none;
+    stroke: var(--cosimo-mseg-realized);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
 .cosimo-mseg-effective-curve-line {
     fill: none;
-    stroke: var(--cosimo-accent-cyan);
+    stroke: var(--cosimo-mseg-realized);
     stroke-width: 2.25;
     stroke-linecap: round;
     stroke-linejoin: round;
     opacity: 0.64;
-    filter: drop-shadow(0 0 4px rgb(var(--cosimo-accent-cyan-rgb) / 0.30));
+    filter: drop-shadow(0 0 4px rgb(var(--cosimo-mseg-realized-rgb) / 0.30));
     transition: opacity 120ms ease, stroke-width 120ms ease, filter 120ms ease;
     vector-effect: non-scaling-stroke;
 }
@@ -600,7 +633,7 @@
 .cosimo-mseg-effective-curve-line.is-active {
     stroke-width: 3.75;
     opacity: 1;
-    filter: drop-shadow(0 0 8px rgb(var(--cosimo-accent-cyan-rgb) / 0.72));
+    filter: drop-shadow(0 0 8px rgb(var(--cosimo-mseg-realized-rgb) / 0.72));
 }
 
 .cosimo-curve-line-highlight {
@@ -633,21 +666,75 @@
     opacity: 0.62;
 }
 
-.mseg-editor-shell .cosimo-curve-fill:not(.cosimo-curve-fill-muted) {
-    fill: color-mix(in srgb, var(--quick-sheet-accent) 10%, transparent);
-}
-
-.mseg-editor-shell .cosimo-curve-line:not(.cosimo-curve-line-muted) {
-    stroke: var(--quick-sheet-accent);
-    stroke-width: 2.5;
-}
-
 .mseg-editor-shell .cosimo-mseg-effective-curve-line {
-    stroke: var(--cosimo-accent-cyan);
+    stroke: var(--cosimo-mseg-realized);
 }
 
-.mseg-editor-shell :is(.cosimo-mseg-point-default, .cosimo-mseg-point-highlight, .cosimo-mseg-point-selected) {
-    fill: var(--quick-sheet-accent);
+.mseg-editor-shell .cosimo-mseg-shape-a-fill {
+    fill: rgb(var(--cosimo-mseg-shape-a-rgb) / 0.10);
+}
+
+.mseg-editor-shell .cosimo-mseg-shape-a-curve-line {
+    stroke: var(--cosimo-mseg-shape-a);
+}
+
+.mseg-editor-shell .cosimo-mseg-shape-b-fill {
+    fill: rgb(var(--cosimo-mseg-shape-b-rgb) / 0.04);
+}
+
+.mseg-editor-shell .cosimo-mseg-shape-b-curve-line {
+    stroke: rgb(var(--cosimo-mseg-shape-b-rgb) / 0.48);
+}
+
+.mseg-editor-shell .cosimo-mseg-realized-fill {
+    fill: rgb(var(--cosimo-mseg-realized-rgb) / 0.12);
+}
+
+.mseg-editor-shell .cosimo-mseg-realized-curve-line {
+    stroke: var(--cosimo-mseg-realized);
+}
+
+.mseg-editor-shell [data-role="mseg-edit-points"][data-shape-identity="a"] :is(.cosimo-mseg-point-default, .cosimo-mseg-point-highlight, .cosimo-mseg-point-selected) {
+    fill: var(--cosimo-mseg-shape-a);
+}
+
+.mseg-editor-shell [data-role="mseg-edit-points"][data-shape-identity="b"] :is(.cosimo-mseg-point-default, .cosimo-mseg-point-highlight, .cosimo-mseg-point-selected) {
+    fill: rgb(var(--cosimo-mseg-shape-b-rgb) / 0.82);
+}
+
+.adsr-value-bubble {
+    position: fixed;
+    z-index: 95;
+    min-width: 54px;
+    max-width: 104px;
+    padding: 5px 8px;
+    transform: translate(-50%, -100%);
+    border: 1px solid var(--cosimo-adsr-curve, #7df7ff);
+    border-radius: 6px;
+    background: var(--cosimo-ground, #101010);
+    box-shadow: 0 5px 16px rgb(0 0 0 / 0.72), 0 0 10px rgb(var(--cosimo-adsr-curve-rgb, 125 247 255) / 0.24);
+    color: var(--cosimo-adsr-curve, #7df7ff);
+    font-family: "Departure Mono", "SFMono-Regular", ui-monospace, monospace;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.adsr-value-bubble::after {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    width: 7px;
+    height: 7px;
+    transform: translate(-50%, -4px) rotate(45deg);
+    border-right: 1px solid var(--cosimo-adsr-curve, #7df7ff);
+    border-bottom: 1px solid var(--cosimo-adsr-curve, #7df7ff);
+    background: var(--cosimo-ground, #101010);
+    content: "";
 }
 
 .cosimo-mseg-time-axis {

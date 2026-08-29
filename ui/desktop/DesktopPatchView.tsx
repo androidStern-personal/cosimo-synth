@@ -14,6 +14,7 @@ import {
     type PointerEvent as ReactPointerEvent,
     type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 import {
     WORKSPACE_SHELL_STORAGE_KEY,
     activateTab,
@@ -131,6 +132,18 @@ import {
     useParameterMenu,
     type ParameterMenuRequest,
 } from "../shared/parameter-context-menu";
+import {
+    EDITOR_HIT_RADIUS_PX,
+    EDITOR_VALUE_HANDLE_RADIUS_PX,
+    useEditorSurfaceSize,
+} from "../shared/editor-tokens";
+import {
+    applyRollingAxisSample,
+    createRollingAxisState,
+    type RollingAxis,
+    type RollingAxisPointerType,
+    type RollingAxisState,
+} from "../shared/rolling-axis-classifier";
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
 import type { RackParameterDescriptor } from "../shared/rack-parameter-descriptors";
@@ -267,14 +280,14 @@ const AMP_ENVELOPE_EDITOR_SLOT_INDEX = MODULATION_ENV_SLOT_COUNT;
 const ENVELOPE_EDITOR_SLOT_COUNT = MODULATION_ENV_SLOT_COUNT + 1;
 const ENVELOPE_TIME_RESPONSE = 1.4;
 const ENVELOPE_NOTE_OFF_RATIO = 0.76;
-const ENVELOPE_VIEWBOX = {
-    width: 920,
-    height: 520,
-    left: 44,
-    right: 44,
-    top: 42,
-    bottom: 118,
-} as const;
+const ENVELOPE_ATTACK_REGION_RATIO = 0.30;
+const ENVELOPE_DECAY_REGION_RATIO = 0.28;
+const ENVELOPE_PLOT_PADDING_PX = EDITOR_HIT_RADIUS_PX + 2;
+const ENVELOPE_MAX_PLOT_HEIGHT_TO_WIDTH_RATIO = 0.62;
+const ENVELOPE_HANDLE_INNER_RADIUS_PX = 3.5;
+const ENVELOPE_HANDLE_STROKE_WIDTH_PX = 2.5;
+const ENVELOPE_VALUE_BUBBLE_EDGE_INSET_PX = 56;
+const ENVELOPE_VALUE_BUBBLE_FINGER_GAP_PX = 14;
 const DESKTOP_GRID_CARD_CLASS = `w-full ${SYNTH_GRID_CARD_SIZE_CLASS}`;
 const DESKTOP_VOICE_VISUALIZATION_CARD_CLASS = `w-full ${SYNTH_GRID_CARD_SIZE_CLASS} md:aspect-[3/1]`;
 const WARP_MODE_OPTIONS = [
@@ -717,29 +730,33 @@ function envelopeReleaseMinimumSeconds(slotIndex: number): number {
     return descriptor.format.minSeconds;
 }
 
-function envelopeSustainToY(sustain: number) {
-    const plotHeight = ENVELOPE_VIEWBOX.height - ENVELOPE_VIEWBOX.top - ENVELOPE_VIEWBOX.bottom;
-    return ENVELOPE_VIEWBOX.top + ((1 - clamp(sustain, 0, 1)) * plotHeight);
-}
-
-function envelopeYToSustain(y: number) {
-    const plotHeight = ENVELOPE_VIEWBOX.height - ENVELOPE_VIEWBOX.top - ENVELOPE_VIEWBOX.bottom;
-    return clamp(1 - ((y - ENVELOPE_VIEWBOX.top) / plotHeight), 0, 1);
-}
-
 function computeEnvelopeGeometry(
     envelope: NonNullable<ModulationMatrixSectionProps["selectedEnvelope"]>,
     releaseMinimumSeconds: number,
+    surfaceSize: { readonly width: number; readonly height: number },
 ) {
-    const plotWidth = ENVELOPE_VIEWBOX.width - ENVELOPE_VIEWBOX.left - ENVELOPE_VIEWBOX.right;
-    const attackRegionWidth = plotWidth * 0.30;
-    const decayRegionWidth = plotWidth * 0.28;
-    const noteOffX = ENVELOPE_VIEWBOX.left + (plotWidth * ENVELOPE_NOTE_OFF_RATIO);
-    const releaseRegionWidth = ENVELOPE_VIEWBOX.width - ENVELOPE_VIEWBOX.right - noteOffX;
-    const attackX = ENVELOPE_VIEWBOX.left + (secondsToEnvelopeNormalized(envelope.attackSeconds) * attackRegionWidth);
-    const decayRegionStart = ENVELOPE_VIEWBOX.left + attackRegionWidth;
+    const surfaceWidth = Math.max(1, surfaceSize.width);
+    const surfaceHeight = Math.max(1, surfaceSize.height);
+    const horizontalPadding = Math.min(ENVELOPE_PLOT_PADDING_PX, surfaceWidth * 0.25);
+    const verticalPadding = Math.min(ENVELOPE_PLOT_PADDING_PX, surfaceHeight * 0.25);
+    const plotLeft = horizontalPadding;
+    const plotRight = Math.max(plotLeft + 0.5, surfaceWidth - horizontalPadding);
+    const plotWidth = Math.max(0.5, plotRight - plotLeft);
+    const availablePlotHeight = Math.max(0.5, surfaceHeight - (verticalPadding * 2));
+    const plotHeight = Math.min(
+        availablePlotHeight,
+        Math.max(0.5, plotWidth * ENVELOPE_MAX_PLOT_HEIGHT_TO_WIDTH_RATIO),
+    );
+    const plotTop = (surfaceHeight - plotHeight) * 0.5;
+    const plotBottom = plotTop + plotHeight;
+    const attackRegionWidth = plotWidth * ENVELOPE_ATTACK_REGION_RATIO;
+    const decayRegionWidth = plotWidth * ENVELOPE_DECAY_REGION_RATIO;
+    const noteOffX = plotLeft + (plotWidth * ENVELOPE_NOTE_OFF_RATIO);
+    const releaseRegionWidth = plotRight - noteOffX;
+    const attackX = plotLeft + (secondsToEnvelopeNormalized(envelope.attackSeconds) * attackRegionWidth);
+    const decayRegionStart = plotLeft + attackRegionWidth;
     const decayX = decayRegionStart + (secondsToEnvelopeNormalized(envelope.decaySeconds) * decayRegionWidth);
-    const sustainY = envelopeSustainToY(envelope.sustain);
+    const sustainY = plotTop + ((1 - clamp(envelope.sustain, 0, 1)) * plotHeight);
     const releaseX = noteOffX + (
         secondsToEnvelopeNormalized(envelope.releaseSeconds, releaseMinimumSeconds) * releaseRegionWidth
     );
@@ -755,12 +772,59 @@ function computeEnvelopeGeometry(
         sustainY,
         releaseX,
         plotWidth,
-        plotHeight: ENVELOPE_VIEWBOX.height - ENVELOPE_VIEWBOX.top - ENVELOPE_VIEWBOX.bottom,
-        plotBottom: ENVELOPE_VIEWBOX.height - ENVELOPE_VIEWBOX.bottom,
-        plotTop: ENVELOPE_VIEWBOX.top,
-        plotLeft: ENVELOPE_VIEWBOX.left,
-        plotRight: ENVELOPE_VIEWBOX.width - ENVELOPE_VIEWBOX.right,
+        plotHeight,
+        plotBottom,
+        plotTop,
+        plotLeft,
+        plotRight,
+        surfaceWidth,
+        surfaceHeight,
     };
+}
+
+type EnvelopeDragTarget = "attack" | "decay-sustain" | "sustain" | "release";
+
+type EnvelopeEditableField = "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds";
+
+type ActiveEnvelopeDrag = {
+    readonly target: EnvelopeDragTarget;
+    readonly pointerId: number;
+    readonly pointerType: RollingAxisPointerType;
+    readonly captureElement: SVGElement;
+    classifier: RollingAxisState;
+    lockedAxis: RollingAxis | null;
+    lastValues: Record<EnvelopeEditableField, number>;
+};
+
+type EnvelopeValueBubble = {
+    readonly field: EnvelopeEditableField;
+    readonly text: string;
+    readonly left: number;
+    readonly top: number;
+};
+
+function envelopePointerType(pointerType: string): RollingAxisPointerType {
+    if (pointerType === "touch") {
+        return "touch";
+    }
+    if (pointerType === "pen") {
+        return "pen";
+    }
+    return "mouse";
+}
+
+function formatEnvelopeBubbleValue(
+    field: EnvelopeEditableField,
+    value: number,
+    releaseMinimumSeconds: number,
+): string {
+    if (field === "sustain") {
+        return formatParameterEntry(ENVELOPE_SUSTAIN_ENTRY_SPEC, value).display;
+    }
+    const minimumSeconds = field === "releaseSeconds"
+        ? releaseMinimumSeconds
+        : ENVELOPE_TIME_MIN_SECONDS;
+    return formatParameterEntry(envelopeTimeEntrySpec(value, minimumSeconds), value).display;
 }
 
 function formatSignedOctaves(value: number) {
@@ -1686,7 +1750,6 @@ function DesktopEnvelopeEditor({
     onEnvelopeChange,
     readiness,
     releaseMinimumSeconds,
-    compact = false,
 }: {
     selectedEnvelope: NonNullable<ModulationMatrixSectionProps["selectedEnvelope"]>;
     onEnvelopeChange: ModulationMatrixSectionProps["onEnvelopeChange"];
@@ -1695,18 +1758,36 @@ function DesktopEnvelopeEditor({
     compact?: boolean;
 }) {
     const svgRef = useRef<SVGSVGElement | null>(null);
-    const [activeHandle, setActiveHandle] = useState<null | "attack" | "decay-sustain" | "release">(null);
-    const [activePointerId, setActivePointerId] = useState<number | null>(null);
+    const surfaceSize = useEditorSurfaceSize(svgRef);
+    const activeDragRef = useRef<ActiveEnvelopeDrag | null>(null);
+    const [activeHandle, setActiveHandle] = useState<EnvelopeDragTarget | null>(null);
+    const [activeField, setActiveField] = useState<EnvelopeEditableField | null>(null);
+    const [valueBubble, setValueBubble] = useState<EnvelopeValueBubble | null>(null);
 
     const geometry = useMemo(
-        () => computeEnvelopeGeometry(selectedEnvelope, releaseMinimumSeconds),
-        [releaseMinimumSeconds, selectedEnvelope],
+        () => computeEnvelopeGeometry(selectedEnvelope, releaseMinimumSeconds, surfaceSize),
+        [releaseMinimumSeconds, selectedEnvelope, surfaceSize],
     );
-    const isHandleReady = useCallback((handleName: "attack" | "decay-sustain" | "release") => {
-        if (handleName === "attack") return readiness.attackSeconds;
-        if (handleName === "decay-sustain") return readiness.decaySeconds && readiness.sustain;
-        return readiness.releaseSeconds;
-    }, [readiness]);
+    const geometryRef = useRef(geometry);
+    const readinessRef = useRef(readiness);
+    const selectedEnvelopeRef = useRef(selectedEnvelope);
+    const onEnvelopeChangeRef = useRef(onEnvelopeChange);
+    const releaseMinimumSecondsRef = useRef(releaseMinimumSeconds);
+    geometryRef.current = geometry;
+    readinessRef.current = readiness;
+    selectedEnvelopeRef.current = selectedEnvelope;
+    onEnvelopeChangeRef.current = onEnvelopeChange;
+    releaseMinimumSecondsRef.current = releaseMinimumSeconds;
+
+    const isHandleReady = useCallback((handleName: EnvelopeDragTarget) => {
+        const currentReadiness = readinessRef.current;
+        if (handleName === "attack") return currentReadiness.attackSeconds;
+        if (handleName === "decay-sustain") {
+            return currentReadiness.decaySeconds && currentReadiness.sustain;
+        }
+        if (handleName === "sustain") return currentReadiness.sustain;
+        return currentReadiness.releaseSeconds;
+    }, []);
     const allFieldsReady = readiness.attackSeconds
         && readiness.decaySeconds
         && readiness.sustain
@@ -1747,73 +1828,180 @@ function DesktopEnvelopeEditor({
 
         const normalizedX = (clientX - rect.left) / rect.width;
         const normalizedY = (clientY - rect.top) / rect.height;
+        const currentGeometry = geometryRef.current;
 
         return {
-            x: normalizedX * ENVELOPE_VIEWBOX.width,
-            y: normalizedY * ENVELOPE_VIEWBOX.height,
+            x: normalizedX * currentGeometry.surfaceWidth,
+            y: normalizedY * currentGeometry.surfaceHeight,
         };
     }, []);
 
-    useEffect(() => {
-        if (!activeHandle || activePointerId === null) {
+    const showValueBubble = useCallback((
+        field: EnvelopeEditableField,
+        value: number,
+        clientX: number,
+        clientY: number,
+    ) => {
+        if (typeof window === "undefined") {
+            return;
+        }
+        const viewportWidth = Math.max(1, window.innerWidth);
+        const viewportHeight = Math.max(1, window.innerHeight);
+        const left = clamp(
+            clientX,
+            ENVELOPE_VALUE_BUBBLE_EDGE_INSET_PX,
+            Math.max(ENVELOPE_VALUE_BUBBLE_EDGE_INSET_PX, viewportWidth - ENVELOPE_VALUE_BUBBLE_EDGE_INSET_PX),
+        );
+        const top = clamp(
+            clientY - ENVELOPE_VALUE_BUBBLE_FINGER_GAP_PX,
+            40,
+            Math.max(40, viewportHeight - 8),
+        );
+        setValueBubble({
+            field,
+            text: formatEnvelopeBubbleValue(field, value, releaseMinimumSecondsRef.current),
+            left,
+            top,
+        });
+    }, []);
+
+    const clearActiveDrag = useCallback(() => {
+        const activeDrag = activeDragRef.current;
+        activeDragRef.current = null;
+        if (activeDrag !== null) {
+            try {
+                if (activeDrag.captureElement.hasPointerCapture(activeDrag.pointerId)) {
+                    activeDrag.captureElement.releasePointerCapture(activeDrag.pointerId);
+                }
+            } catch {
+                // Pointer capture may already be gone after cancellation.
+            }
+        }
+        setActiveHandle(null);
+        setActiveField(null);
+        setValueBubble(null);
+    }, []);
+
+    const writeEnvelopeValue = useCallback((
+        drag: ActiveEnvelopeDrag,
+        field: EnvelopeEditableField,
+        nextValue: number,
+        clientX: number,
+        clientY: number,
+    ) => {
+        const previousValue = drag.lastValues[field];
+        if (Math.abs(nextValue - previousValue) > 1e-9) {
+            drag.lastValues[field] = nextValue;
+            onEnvelopeChangeRef.current(field, nextValue);
+        }
+        showValueBubble(field, nextValue, clientX, clientY);
+    }, [showValueBubble]);
+
+    const handlePointerMove = useCallback((event: PointerEvent) => {
+        const drag = activeDragRef.current;
+        if (drag === null || event.pointerId !== drag.pointerId) {
+            return;
+        }
+        if (!isHandleReady(drag.target)) {
+            clearActiveDrag();
             return;
         }
 
-        const clearActiveDrag = () => {
-            setActiveHandle(null);
-            setActivePointerId(null);
-        };
+        if (event.pointerType === "mouse" && event.buttons === 0) {
+            clearActiveDrag();
+            return;
+        }
+        event.preventDefault();
 
-        const handlePointerMove = (event: PointerEvent) => {
-            if (event.pointerId !== activePointerId) {
+        if (drag.target === "decay-sustain" && drag.lockedAxis === null) {
+            const classified = applyRollingAxisSample(drag.classifier, {
+                x: event.clientX,
+                y: event.clientY,
+                time: Number(event.timeStamp) || performance.now(),
+                pointerType: drag.pointerType,
+            });
+            drag.classifier = classified.state;
+            if (classified.transition !== "activate" || classified.state.mode === "pending") {
                 return;
             }
-            if (!isHandleReady(activeHandle)) {
-                clearActiveDrag();
-                return;
-            }
+            drag.lockedAxis = classified.state.mode;
+            const field = classified.state.mode === "horizontal" ? "decaySeconds" : "sustain";
+            setActiveField(field);
+            showValueBubble(field, drag.lastValues[field], event.clientX, event.clientY);
+        }
 
-            if (event.pointerType === "mouse" && event.buttons === 0) {
-                clearActiveDrag();
-                return;
-            }
+        const point = readStagePoint(event.clientX, event.clientY);
+        if (point === null) {
+            return;
+        }
+        const currentGeometry = geometryRef.current;
 
-            const point = readStagePoint(event.clientX, event.clientY);
-
-            if (!point) {
-                return;
-            }
-
-            if (activeHandle === "attack") {
-                const normalized = clamp(
-                    (point.x - geometry.plotLeft) / Math.max(1, geometry.attackRegionWidth),
-                    0,
-                    1,
-                );
-                onEnvelopeChange("attackSeconds", normalizedToEnvelopeSeconds(normalized));
-                return;
-            }
-
-            if (activeHandle === "decay-sustain") {
-                const normalizedDecay = clamp(
-                    (point.x - geometry.decayRegionStart) / Math.max(1, geometry.decayRegionWidth),
-                    0,
-                    1,
-                );
-                onEnvelopeChange("decaySeconds", normalizedToEnvelopeSeconds(normalizedDecay));
-                onEnvelopeChange("sustain", envelopeYToSustain(point.y));
-                return;
-            }
-
-            const normalizedRelease = clamp(
-                (point.x - geometry.noteOffX) / Math.max(1, geometry.releaseRegionWidth),
+        if (drag.target === "attack") {
+            const normalized = clamp(
+                (point.x - currentGeometry.plotLeft) / Math.max(0.5, currentGeometry.attackRegionWidth),
                 0,
                 1,
             );
-            onEnvelopeChange(
-                "releaseSeconds",
-                normalizedToEnvelopeSeconds(normalizedRelease, releaseMinimumSeconds),
+            writeEnvelopeValue(
+                drag,
+                "attackSeconds",
+                normalizedToEnvelopeSeconds(normalized),
+                event.clientX,
+                event.clientY,
             );
+            return;
+        }
+
+        if (drag.target === "release") {
+            const normalizedRelease = clamp(
+                (point.x - currentGeometry.noteOffX) / Math.max(0.5, currentGeometry.releaseRegionWidth),
+                0,
+                1,
+            );
+            writeEnvelopeValue(
+                drag,
+                "releaseSeconds",
+                normalizedToEnvelopeSeconds(normalizedRelease, releaseMinimumSecondsRef.current),
+                event.clientX,
+                event.clientY,
+            );
+            return;
+        }
+
+        if (drag.target === "sustain" || drag.lockedAxis === "vertical") {
+            const sustain = clamp(
+                1 - ((point.y - currentGeometry.plotTop) / Math.max(0.5, currentGeometry.plotHeight)),
+                0,
+                1,
+            );
+            writeEnvelopeValue(drag, "sustain", sustain, event.clientX, event.clientY);
+            return;
+        }
+
+        const normalizedDecay = clamp(
+            (point.x - currentGeometry.decayRegionStart) / Math.max(0.5, currentGeometry.decayRegionWidth),
+            0,
+            1,
+        );
+        writeEnvelopeValue(
+            drag,
+            "decaySeconds",
+            normalizedToEnvelopeSeconds(normalizedDecay),
+            event.clientX,
+            event.clientY,
+        );
+    }, [clearActiveDrag, isHandleReady, readStagePoint, showValueBubble, writeEnvelopeValue]);
+
+    useEffect(() => {
+        const handlePointerUp = (event: PointerEvent) => {
+            if (activeDragRef.current?.pointerId === event.pointerId) {
+                clearActiveDrag();
+            }
+        };
+        const handlePointerCancel = (event: PointerEvent) => {
+            if (activeDragRef.current?.pointerId === event.pointerId) {
+                clearActiveDrag();
+            }
         };
 
         const handleVisibilityChange = () => {
@@ -1822,53 +2010,108 @@ function DesktopEnvelopeEditor({
             }
         };
 
-        window.addEventListener("pointermove", handlePointerMove);
-        window.addEventListener("pointerup", clearActiveDrag);
-        window.addEventListener("pointercancel", clearActiveDrag);
+        window.addEventListener("pointermove", handlePointerMove, { passive: false });
+        window.addEventListener("pointerup", handlePointerUp, true);
+        window.addEventListener("pointercancel", handlePointerCancel, true);
         window.addEventListener("blur", clearActiveDrag);
+        window.addEventListener("resize", clearActiveDrag);
+        window.addEventListener("orientationchange", clearActiveDrag);
         document.addEventListener("visibilitychange", handleVisibilityChange);
 
         return () => {
             window.removeEventListener("pointermove", handlePointerMove);
-            window.removeEventListener("pointerup", clearActiveDrag);
-            window.removeEventListener("pointercancel", clearActiveDrag);
+            window.removeEventListener("pointerup", handlePointerUp, true);
+            window.removeEventListener("pointercancel", handlePointerCancel, true);
             window.removeEventListener("blur", clearActiveDrag);
+            window.removeEventListener("resize", clearActiveDrag);
+            window.removeEventListener("orientationchange", clearActiveDrag);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
+            const activeDrag = activeDragRef.current;
+            activeDragRef.current = null;
+            if (activeDrag !== null) {
+                try {
+                    if (activeDrag.captureElement.hasPointerCapture(activeDrag.pointerId)) {
+                        activeDrag.captureElement.releasePointerCapture(activeDrag.pointerId);
+                    }
+                } catch {
+                    // Unmount may follow browser-owned pointer teardown.
+                }
+            }
         };
-    }, [
-        activeHandle,
-        activePointerId,
-        geometry,
-        isHandleReady,
-        onEnvelopeChange,
-        readStagePoint,
-        releaseMinimumSeconds,
-    ]);
+    }, [clearActiveDrag, handlePointerMove]);
 
     const beginHandleDrag = useCallback((
-        handleName: "attack" | "decay-sustain" | "release",
-        event: ReactPointerEvent<SVGCircleElement>,
+        handleName: EnvelopeDragTarget,
+        event: ReactPointerEvent<SVGElement>,
     ) => {
+        if (activeDragRef.current !== null) {
+            return;
+        }
+        if (event.pointerType === "mouse" && event.button !== 0) {
+            return;
+        }
         if (!isHandleReady(handleName)) {
             return;
         }
         event.preventDefault();
         event.stopPropagation();
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+            // Window listeners preserve the gesture when capture is rejected.
+        }
+        const envelope = selectedEnvelopeRef.current;
+        const initialField = handleName === "attack"
+            ? "attackSeconds"
+            : handleName === "release"
+                ? "releaseSeconds"
+                : handleName === "sustain"
+                    ? "sustain"
+                    : null;
+        activeDragRef.current = {
+            target: handleName,
+            pointerId: event.pointerId,
+            pointerType: envelopePointerType(event.pointerType),
+            captureElement: event.currentTarget,
+            classifier: createRollingAxisState(event.clientX, event.clientY),
+            lockedAxis: handleName === "decay-sustain"
+                ? null
+                : handleName === "sustain"
+                    ? "vertical"
+                    : "horizontal",
+            lastValues: {
+                attackSeconds: envelope.attackSeconds,
+                decaySeconds: envelope.decaySeconds,
+                sustain: envelope.sustain,
+                releaseSeconds: envelope.releaseSeconds,
+            },
+        };
         setActiveHandle(handleName);
-        setActivePointerId(event.pointerId);
-    }, [isHandleReady]);
+        setActiveField(initialField);
+        if (initialField !== null) {
+            showValueBubble(initialField, envelope[initialField], event.clientX, event.clientY);
+        }
+    }, [isHandleReady, showValueBubble]);
+
+    const rootNode = svgRef.current?.getRootNode();
+    const bubblePortalTarget = typeof document === "undefined"
+        ? null
+        : typeof ShadowRoot !== "undefined" && rootNode instanceof ShadowRoot
+            ? rootNode
+            : document.body;
 
     return (
         <div className="relative h-full overflow-hidden bg-[rgb(var(--cosimo-ground-rgb)/0.92)]">
                 <svg
                     ref={svgRef}
-                    viewBox={`0 0 ${ENVELOPE_VIEWBOX.width} ${ENVELOPE_VIEWBOX.height}`}
-                    preserveAspectRatio={compact ? "none" : undefined}
+                    viewBox={`0 0 ${geometry.surfaceWidth} ${geometry.surfaceHeight}`}
+                    preserveAspectRatio="none"
                     className="relative z-10 block h-full w-full touch-none"
                     data-role="adsr-editor-surface"
                     data-host-state={allFieldsReady ? "ready" : "loading"}
                     aria-busy={!allFieldsReady}
                     data-active-handle={activeHandle ?? undefined}
+                    data-active-field={activeField ?? undefined}
                     aria-label="Envelope editor"
                 >
                     {Array.from({ length: 9 }, (_, step) => {
@@ -1881,6 +2124,7 @@ function DesktopEnvelopeEditor({
                                 x2={x}
                                 y2={geometry.plotBottom}
                                 stroke="rgba(145,163,199,0.12)"
+                                vectorEffect="non-scaling-stroke"
                             />
                         );
                     })}
@@ -1894,6 +2138,7 @@ function DesktopEnvelopeEditor({
                                 x2={geometry.plotRight}
                                 y2={y}
                                 stroke="rgba(145,163,199,0.12)"
+                                vectorEffect="non-scaling-stroke"
                             />
                         );
                     })}
@@ -1904,7 +2149,7 @@ function DesktopEnvelopeEditor({
                         width={geometry.attackRegionWidth}
                         height={geometry.plotHeight}
                         rx={16}
-                        fill="rgb(var(--section-accent-rgb) / 0.03)"
+                        fill="rgb(var(--cosimo-adsr-curve-rgb) / 0.03)"
                     />
                     <rect
                         x={geometry.decayRegionStart}
@@ -1912,7 +2157,7 @@ function DesktopEnvelopeEditor({
                         width={geometry.decayRegionWidth}
                         height={geometry.plotHeight}
                         rx={16}
-                        fill="rgb(var(--section-accent-rgb) / 0.045)"
+                        fill="rgb(var(--cosimo-adsr-curve-rgb) / 0.045)"
                     />
                     <rect
                         x={geometry.noteOffX}
@@ -1920,7 +2165,7 @@ function DesktopEnvelopeEditor({
                         width={geometry.releaseRegionWidth}
                         height={geometry.plotHeight}
                         rx={16}
-                        fill="rgb(var(--section-accent-rgb) / 0.04)"
+                        fill="rgb(var(--cosimo-adsr-curve-rgb) / 0.04)"
                     />
 
                     <line
@@ -1928,84 +2173,140 @@ function DesktopEnvelopeEditor({
                         y1={geometry.plotTop}
                         x2={geometry.noteOffX}
                         y2={geometry.plotBottom}
-                        stroke="rgb(var(--section-accent-rgb) / 0.84)"
+                        stroke="rgb(var(--cosimo-adsr-curve-rgb) / 0.72)"
                         strokeWidth={2}
                         strokeDasharray="7 7"
+                        vectorEffect="non-scaling-stroke"
                     />
 
-                    <path d={envelopeFillPath} fill="rgb(var(--section-accent-rgb) / 0.10)" />
+                    <path d={envelopeFillPath} fill="rgb(var(--cosimo-adsr-curve-rgb) / 0.10)" />
                     <path
+                        data-role="adsr-curve"
                         d={envelopePath}
                         fill="none"
-                        stroke="var(--section-accent)"
-                        strokeWidth={4}
+                        stroke="var(--cosimo-adsr-curve)"
+                        strokeWidth={3}
                         strokeLinecap="round"
                         strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
+                    />
+
+                    <line
+                        data-role="adsr-sustain-segment-hit-target"
+                        x1={geometry.decayX}
+                        y1={geometry.sustainY}
+                        x2={geometry.noteOffX}
+                        y2={geometry.sustainY}
+                        stroke="transparent"
+                        strokeWidth={EDITOR_HIT_RADIUS_PX * 2}
+                        vectorEffect="non-scaling-stroke"
+                        className={readiness.sustain ? "cursor-ns-resize" : "cursor-wait"}
+                        aria-disabled={!readiness.sustain}
+                        style={{ pointerEvents: readiness.sustain ? "stroke" : "none" }}
+                        onPointerDown={(event) => beginHandleDrag("sustain", event)}
+                        onLostPointerCapture={clearActiveDrag}
                     />
 
                     <circle
+                        data-role="adsr-attack-handle"
                         cx={geometry.attackX}
                         cy={geometry.plotTop}
-                        r={13}
+                        r={EDITOR_VALUE_HANDLE_RADIUS_PX}
                         fill="rgb(var(--cosimo-ground-rgb) / 0.94)"
-                        stroke="var(--section-accent)"
-                        strokeWidth={3}
+                        stroke="var(--cosimo-adsr-curve)"
+                        strokeWidth={ENVELOPE_HANDLE_STROKE_WIDTH_PX}
+                        vectorEffect="non-scaling-stroke"
                     />
-                    <circle cx={geometry.attackX} cy={geometry.plotTop} r={4} fill="var(--section-accent)" />
+                    <circle
+                        cx={geometry.attackX}
+                        cy={geometry.plotTop}
+                        r={ENVELOPE_HANDLE_INNER_RADIUS_PX}
+                        fill="var(--cosimo-adsr-curve)"
+                    />
                     <circle
                         data-role="adsr-attack-handle-hit-target"
                         cx={geometry.attackX}
                         cy={geometry.plotTop}
-                        r={34}
+                        r={EDITOR_HIT_RADIUS_PX}
                         fill="transparent"
                         className={readiness.attackSeconds ? "cursor-ew-resize" : "cursor-wait"}
                         aria-disabled={!readiness.attackSeconds}
                         style={{ pointerEvents: readiness.attackSeconds ? undefined : "none" }}
                         onPointerDown={(event) => beginHandleDrag("attack", event)}
+                        onLostPointerCapture={clearActiveDrag}
                     />
 
                     <circle
+                        data-role="adsr-decay-sustain-handle"
                         cx={geometry.decayX}
                         cy={geometry.sustainY}
-                        r={13}
+                        r={EDITOR_VALUE_HANDLE_RADIUS_PX}
                         fill="rgb(var(--cosimo-ground-rgb) / 0.94)"
-                        stroke="var(--section-accent)"
-                        strokeWidth={3}
+                        stroke="var(--cosimo-adsr-curve)"
+                        strokeWidth={ENVELOPE_HANDLE_STROKE_WIDTH_PX}
+                        vectorEffect="non-scaling-stroke"
                     />
-                    <circle cx={geometry.decayX} cy={geometry.sustainY} r={4} fill="var(--section-accent)" />
+                    <circle
+                        cx={geometry.decayX}
+                        cy={geometry.sustainY}
+                        r={ENVELOPE_HANDLE_INNER_RADIUS_PX}
+                        fill="var(--cosimo-adsr-curve)"
+                    />
                     <circle
                         data-role="adsr-decay-sustain-handle-hit-target"
                         cx={geometry.decayX}
                         cy={geometry.sustainY}
-                        r={34}
+                        r={EDITOR_HIT_RADIUS_PX}
                         fill="transparent"
                         className={readiness.decaySeconds && readiness.sustain ? "cursor-move" : "cursor-wait"}
                         aria-disabled={!readiness.decaySeconds || !readiness.sustain}
                         style={{ pointerEvents: readiness.decaySeconds && readiness.sustain ? undefined : "none" }}
                         onPointerDown={(event) => beginHandleDrag("decay-sustain", event)}
+                        onLostPointerCapture={clearActiveDrag}
                     />
 
                     <circle
+                        data-role="adsr-release-handle"
                         cx={geometry.releaseX}
                         cy={geometry.plotBottom}
-                        r={13}
+                        r={EDITOR_VALUE_HANDLE_RADIUS_PX}
                         fill="rgb(var(--cosimo-ground-rgb) / 0.94)"
-                        stroke="var(--section-accent)"
-                        strokeWidth={3}
+                        stroke="var(--cosimo-adsr-curve)"
+                        strokeWidth={ENVELOPE_HANDLE_STROKE_WIDTH_PX}
+                        vectorEffect="non-scaling-stroke"
                     />
-                    <circle cx={geometry.releaseX} cy={geometry.plotBottom} r={4} fill="var(--section-accent)" />
+                    <circle
+                        cx={geometry.releaseX}
+                        cy={geometry.plotBottom}
+                        r={ENVELOPE_HANDLE_INNER_RADIUS_PX}
+                        fill="var(--cosimo-adsr-curve)"
+                    />
                     <circle
                         data-role="adsr-release-handle-hit-target"
                         cx={geometry.releaseX}
                         cy={geometry.plotBottom}
-                        r={34}
+                        r={EDITOR_HIT_RADIUS_PX}
                         fill="transparent"
                         className={readiness.releaseSeconds ? "cursor-ew-resize" : "cursor-wait"}
                         aria-disabled={!readiness.releaseSeconds}
                         style={{ pointerEvents: readiness.releaseSeconds ? undefined : "none" }}
                         onPointerDown={(event) => beginHandleDrag("release", event)}
+                        onLostPointerCapture={clearActiveDrag}
                     />
                 </svg>
+                {valueBubble !== null && bubblePortalTarget !== null ? createPortal(
+                    <div
+                        data-role="adsr-value-bubble"
+                        data-field={valueBubble.field}
+                        className="adsr-value-bubble"
+                        style={{ left: valueBubble.left, top: valueBubble.top }}
+                        role="status"
+                        aria-live="off"
+                    >
+                        {valueBubble.text}
+                    </div>,
+                    bubblePortalTarget,
+                ) : null}
         </div>
     );
 }
@@ -3717,6 +4018,7 @@ function MsegEditorModal({
                         morphShapeBPoints={msegState.shapeB?.points ?? null}
                         morphValue={morphBinding.value}
                         realizedMorphEmphasis={isMorphAdjusting ? "active" : "resting"}
+                        editShapeIndex={msegState.editShapeIndex ?? 0}
                         selectedPointIndex={selectedPointIndex}
                         hoveredSegmentIndex={hoveredSegmentIndex}
                         activeSegmentIndex={activeSegmentIndex}
@@ -3843,6 +4145,7 @@ function EditableMsegSurfaceHost({
             morphShapeBPoints={msegState.shapeB?.points ?? null}
             morphValue={morphValue}
             realizedMorphEmphasis={showMorphCurve ? "active" : "resting"}
+            editShapeIndex={msegState.editShapeIndex ?? 0}
             selectedPointIndex={editing.selectedPointIndex}
             hoveredSegmentIndex={editing.hoveredSegmentIndex}
             activeSegmentIndex={editing.activeSegmentIndex}
@@ -4807,6 +5110,7 @@ function ModulationMatrixSection({
                                     morphShapeBPoints={msegState.shapeB?.points ?? null}
                                     morphValue={selectedMsegMorph.value}
                                     showMorphCurve={isMsegMorphAdjusting}
+                                    editShapeIndex={msegState.editShapeIndex ?? 0}
                                     className="h-full w-full"
                                     progressFillEnd={observedMsegPlayhead.progressFillEnd}
                                 />
@@ -6249,6 +6553,7 @@ function DesktopPatchViewBody({
                             morphShapeBPoints={synthView.msegState.shapeB?.points ?? null}
                             morphValue={synthView.selectedMsegMorph.value}
                             realizedMorphEmphasis={isQuickMsegMorphAdjusting ? "active" : "resting"}
+                            editShapeIndex={synthView.msegState.editShapeIndex ?? 0}
                             selectedPointIndex={synthView.msegEditor.selectedPointIndex}
                             hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
                             activeSegmentIndex={synthView.msegEditor.activeSegmentIndex}
