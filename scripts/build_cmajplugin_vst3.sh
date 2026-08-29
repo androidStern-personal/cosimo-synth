@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 build_dir="${1:-$repo_root/build/cmajplugin_vst3}"
+source "$repo_root/scripts/cmajplugin_paths.sh"
 
 validate_patched_binary() {
   local binary_path="$1"
@@ -43,7 +44,7 @@ cmake --build "$build_dir" \
       --target CmajPlugin_VST3 \
       --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-8}"
 
-built_vst3="$build_dir/cmajplugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3"
+built_vst3="$(cmajplugin_vst3_bundle_path "$build_dir")"
 built_binary="$built_vst3/Contents/MacOS/CmajPlugin"
 
 if [[ ! -d "$built_vst3" ]]; then

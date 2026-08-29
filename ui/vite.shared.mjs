@@ -5,33 +5,41 @@ import { fileURLToPath } from "node:url";
 
 export function stageCmajorWebRuntime(workspaceRoot, {
     buildDirectory = path.join(workspaceRoot, "build", "cmajor_web_runtime"),
-    outputDirectory = path.join(buildDirectory, "cmaj_api"),
+    outputDirectory = null,
+    instanceId = null,
 } = {}) {
     const sourceDirectory = path.join(workspaceRoot, "tools", "cmajor_web_runtime");
+    const instanceBuildDirectory = instanceId
+        ? path.join(buildDirectory, instanceId)
+        : buildDirectory;
+    const instanceOutputDirectory = outputDirectory
+        ?? path.join(instanceBuildDirectory, "cmaj_api");
 
     execFileSync("cmake", [
         "-S", sourceDirectory,
-        "-B", buildDirectory,
-        `-DCOSIMO_CMAJOR_WEB_RUNTIME_DIR=${outputDirectory}`,
+        "-B", instanceBuildDirectory,
+        `-DCOSIMO_CMAJOR_WEB_RUNTIME_DIR=${instanceOutputDirectory}`,
     ], {
         cwd: workspaceRoot,
         stdio: "inherit",
     });
     execFileSync("cmake", [
-        "--build", buildDirectory,
+        "--build", instanceBuildDirectory,
         "--target", "cosimo_cmajor_web_runtime",
     ], {
         cwd: workspaceRoot,
         stdio: "inherit",
     });
 
-    return outputDirectory;
+    return instanceOutputDirectory;
 }
 
 export function createViteRepoContext(importMetaUrl) {
     const configDirectory = path.dirname(fileURLToPath(importMetaUrl));
     const repoRoot = path.resolve(configDirectory, "..");
-    const cmajorApiRoot = stageCmajorWebRuntime(repoRoot);
+    const cmajorApiRoot = stageCmajorWebRuntime(repoRoot, {
+        instanceId: process.env.COSIMO_CMAJOR_WEB_RUNTIME_INSTANCE || null,
+    });
 
     return {
         configDirectory,

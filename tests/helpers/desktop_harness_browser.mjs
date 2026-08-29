@@ -35,7 +35,7 @@ async function resolveCmajorApiRoot(rootPath) {
     if (!cmajorApiRootPromise) {
         cmajorApiRootPromise = Promise.resolve(stageCmajorWebRuntime(rootPath, {
             buildDirectory: path.join(rootPath, "build", "cmajor_web_runtime-desktop-tests"),
-            outputDirectory: path.join(rootPath, "build", "cmajor_web_runtime-desktop-tests", "cmaj_api"),
+            instanceId: `static-${process.pid}`,
         }));
     }
 
@@ -172,6 +172,7 @@ export async function startDesktopHarnessServer() {
                 // leave core-burning orphans behind (T17B).
                 COSIMO_TEST_HARNESS: "1",
                 COSIMO_HARNESS_SPAWNER_PID: String(process.pid),
+                COSIMO_CMAJOR_WEB_RUNTIME_INSTANCE: `harness-${process.pid}-${port}`,
             },
         },
     );

@@ -267,6 +267,59 @@ test("fx_prod_prepare_preserves_cmake_build_tree_but_removes_stale_generated_fil
     }
 });
 
+test("fx_prod_prepare_discards_a_cmake_tree_owned_by_the_legacy_generated_project", async () => {
+    const { prodModule } = await loadBuildModules();
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-prod-owner-migration-"));
+    const juceOut = path.join(tempRoot, "seqfx_juce");
+    const wrapperSource = path.join(tempRoot, "tools", "effect_plugin_build");
+
+    try {
+        await mkdir(path.join(juceOut, "_build", "objects"), { recursive: true });
+        await mkdir(wrapperSource, { recursive: true });
+        await writeFile(
+            path.join(juceOut, "_build", "CMakeCache.txt"),
+            `CMAKE_HOME_DIRECTORY:INTERNAL=${juceOut}\n`,
+        );
+        await writeFile(path.join(juceOut, "_build", "objects", "legacy.o"), "legacy object");
+
+        await prodModule.prepareJuceProjectOutput(juceOut, {
+            cmakeSourceDirectory: wrapperSource,
+        });
+
+        await assert.rejects(readFile(path.join(juceOut, "_build", "CMakeCache.txt"), "utf8"), { code: "ENOENT" });
+        await assert.rejects(readFile(path.join(juceOut, "_build", "objects", "legacy.o"), "utf8"), { code: "ENOENT" });
+    } finally {
+        await rm(tempRoot, { recursive: true, force: true });
+    }
+});
+
+test("fx_prod_prepare_preserves_a_cmake_tree_owned_by_the_wrapper_project", async () => {
+    const { prodModule } = await loadBuildModules();
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-prod-owner-match-"));
+    const juceOut = path.join(tempRoot, "seqfx_juce");
+    const wrapperSource = path.join(tempRoot, "tools", "effect_plugin_build");
+    const cachePath = path.join(juceOut, "_build", "CMakeCache.txt");
+    const objectPath = path.join(juceOut, "_build", "objects", "current.o");
+
+    try {
+        await mkdir(path.dirname(objectPath), { recursive: true });
+        await mkdir(wrapperSource, { recursive: true });
+        await writeFile(cachePath, `CMAKE_HOME_DIRECTORY:INTERNAL=${wrapperSource}\n`);
+        await writeFile(objectPath, "current object");
+        await writeFile(path.join(juceOut, "cmajor_plugin.cpp"), "stale generated source");
+
+        await prodModule.prepareJuceProjectOutput(juceOut, {
+            cmakeSourceDirectory: wrapperSource,
+        });
+
+        assert.equal(await readFile(cachePath, "utf8"), `CMAKE_HOME_DIRECTORY:INTERNAL=${wrapperSource}\n`);
+        assert.equal(await readFile(objectPath, "utf8"), "current object");
+        await assert.rejects(readFile(path.join(juceOut, "cmajor_plugin.cpp"), "utf8"), { code: "ENOENT" });
+    } finally {
+        await rm(tempRoot, { recursive: true, force: true });
+    }
+});
+
 test("fx_prod_prepare_clean_removes_the_cmake_build_tree", async () => {
     const { prodModule } = await loadBuildModules();
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-prod-clean-"));

@@ -157,7 +157,10 @@ async function applyGeneratedHostLatency(pluginName, plugin, juceOut) {
     );
 }
 
-export async function prepareJuceProjectOutput(juceOut, { clean = false } = {}) {
+export async function prepareJuceProjectOutput(juceOut, {
+    clean = false,
+    cmakeSourceDirectory = null,
+} = {}) {
     if (clean) {
         await rm(juceOut, { recursive: true, force: true });
         await mkdir(juceOut, { recursive: true });
@@ -165,6 +168,23 @@ export async function prepareJuceProjectOutput(juceOut, { clean = false } = {}) 
     }
 
     await mkdir(juceOut, { recursive: true });
+
+    if (cmakeSourceDirectory) {
+        const cmakeBuildDir = path.join(juceOut, "_build");
+        const cmakeCachePath = path.join(cmakeBuildDir, "CMakeCache.txt");
+
+        try {
+            const cmakeCache = await readFile(cmakeCachePath, "utf8");
+            const cachedHome = cmakeCache.match(/^CMAKE_HOME_DIRECTORY:INTERNAL=(.*)$/mu)?.[1];
+
+            if (cachedHome && path.resolve(cachedHome) !== path.resolve(cmakeSourceDirectory)) {
+                await rm(cmakeBuildDir, { recursive: true, force: true });
+            }
+        } catch (error) {
+            if (!error || typeof error !== "object" || error.code !== "ENOENT")
+                throw error;
+        }
+    }
 
     for (const entry of await readdir(juceOut, { withFileTypes: true })) {
         if (entry.name === "_build")
@@ -178,11 +198,15 @@ async function generateJuceProject(pluginName, plugin, options = {}) {
     const runtimePatchPath = path.join(repoRoot, plugin.runtimeOut, path.basename(plugin.patch));
     const juceOut = path.join(repoRoot, plugin.juceOut);
     const cmakeBuildDir = path.join(juceOut, "_build");
+    const cmakeSourceDirectory = path.join(repoRoot, "tools", "effect_plugin_build");
 
-    await prepareJuceProjectOutput(juceOut, { clean: options.clean });
+    await prepareJuceProjectOutput(juceOut, {
+        clean: options.clean,
+        cmakeSourceDirectory,
+    });
 
     run("cmake", [
-        "-S", path.join(repoRoot, "tools", "effect_plugin_build"),
+        "-S", cmakeSourceDirectory,
         "-B", cmakeBuildDir,
         "-DCMAKE_BUILD_TYPE=Release",
         `-DCOSIMO_EFFECT_PATCH_PATH=${runtimePatchPath}`,

@@ -81,6 +81,12 @@ add_executable(WorkerErrorSurvivalProbe
 )
 cosimo_configure_cmajor_probe(WorkerErrorSurvivalProbe)
 
+add_executable(PatchWorkerLifetimeProbe
+    "${COSIMO_REPO_ROOT}/tests/native_quickjs/PatchWorkerLifetimeProbe.cpp"
+)
+cosimo_configure_cmajor_probe(PatchWorkerLifetimeProbe)
+target_compile_options(PatchWorkerLifetimeProbe PRIVATE -O1 -g0)
+
 add_executable(ModulationRestoreProbe
     "${COSIMO_REPO_ROOT}/tests/native_quickjs/ModulationRestoreProbe.cpp"
     ${COSIMO_RENDERER_SOURCES}
