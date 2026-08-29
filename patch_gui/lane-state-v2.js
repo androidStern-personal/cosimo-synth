@@ -1012,6 +1012,20 @@ export function removeLaneDevice(state, deviceId) {
     delete devices[deviceId];
     return { ...state, devices, chain };
 }
+/** Replace one placed device at its exact path. The old device record leaves
+    before the replacement is allocated, so choosing the same type resets it
+    to normal defaults instead of retaining hidden parameter state. */
+export function replaceLaneDevice(state, deviceId, replacementType) {
+    const source = findLaneDevicePath(state, deviceId);
+    if (source === null) {
+        return null;
+    }
+    const withoutDevice = removeLaneDevice(state, deviceId);
+    if (withoutDevice === null) {
+        return null;
+    }
+    return addLaneDevice(withoutDevice, replacementType, source);
+}
 /** Device ids in DISPATCH order — the flattened chain walk host surfaces
     (the seqfx bridge's ordered effect list) present. */
 export function listLaneChainDeviceIds(state) {
