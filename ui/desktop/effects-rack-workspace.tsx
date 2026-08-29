@@ -14,8 +14,12 @@ import {
     type ReactNode,
     type Ref,
 } from "react";
-import { parseLaneModulationTargetKind } from "../shared/lane-modulation-targets";
 import { createPortal } from "react-dom";
+
+import {
+    parseLaneModulationTargetKind,
+    type LaneDeviceType,
+} from "../shared/lane-modulation-targets";
 
 import {
     ParameterHudLayerContext,
@@ -60,6 +64,7 @@ import {
     listLaneDeviceInstancesV2,
     moveLaneDevice,
     parseLaneDevicePath,
+    replaceLaneDevice,
     serializeLaneStateV2,
     setLaneDeviceEnabled,
     setLaneGroupBranchCount,
@@ -177,7 +182,14 @@ import {
     RackParameterKnob,
     type ParameterKnobDescriptor,
 } from "./rack-parameter-knob";
-import { SubwayMapColumn, formatCrossoverHz, type SubwayGroupMenuRequest, type SubwayStationMenuRequest } from "./subway-map-column";
+import {
+    SubwayMapColumn,
+    formatCrossoverHz,
+    type SubwayGroupMenuRequest,
+    type SubwayReorderLiftOrigin,
+    type SubwayReorderPresentation,
+    type SubwayStationMenuRequest,
+} from "./subway-map-column";
 import {
     POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
     POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,
@@ -402,9 +414,50 @@ type ReorderGesture = {
     readonly deviceId: string;
     readonly originalDoc: LaneStateV2;
     readonly captureElement: HTMLDivElement;
+    readonly pointerOffsetX: number;
+    readonly pointerOffsetY: number;
+    readonly sourceWidth: number;
+    readonly sourceHeight: number;
+    readonly visualMode: SubwayReorderPresentation["visualMode"];
 };
 
 const REORDER_BRANCH_FOCUS_DWELL_MS = 400;
+const REORDER_LAYOUT_ANIMATION_MS = 180;
+const REORDER_SETTLE_MS = 140;
+
+type ReorderLayoutRect = {
+    readonly left: number;
+    readonly top: number;
+};
+
+type RackEffectPickerState =
+    | {
+        readonly _tag: "add";
+        readonly path: LaneDevicePathV2;
+        readonly clientX: number;
+        readonly clientY: number;
+      }
+    | {
+        readonly _tag: "swap";
+        readonly deviceId: string;
+        readonly clientX: number;
+        readonly clientY: number;
+      };
+
+function renderedStationVisualMode(
+    pill: HTMLElement,
+): SubwayReorderPresentation["visualMode"] {
+    const ownerWindow = pill.ownerDocument.defaultView;
+    const summary = pill.querySelector<HTMLElement>(".subway-station-summary");
+    if (summary !== null && ownerWindow?.getComputedStyle(summary).display !== "none") {
+        return "summary";
+    }
+    const compact = pill.querySelector<HTMLElement>(".subway-station-compact");
+    if (compact !== null && ownerWindow?.getComputedStyle(compact).display !== "none") {
+        return "compact";
+    }
+    return "detail";
+}
 
 const EFFECT_ACCENTS: Readonly<Record<EffectModuleId, string>> = {
     filter: "#c6db3f",
@@ -2360,6 +2413,29 @@ function triggerLightHaptic() {
     }
 }
 
+/** One reorder-lift request. Native wrappers own the tactile style; ordinary
+    browsers get one very short vibration only when that capability exists. */
+function triggerReorderLiftHaptic() {
+    const nativeTrigger = (globalThis as {
+        cmaj_triggerHaptic?: (style?: string) => unknown;
+    }).cmaj_triggerHaptic;
+    if (typeof nativeTrigger === "function") {
+        try {
+            nativeTrigger("light");
+        } catch {
+            // A wrapper haptic is progressive enhancement, never a gesture dependency.
+        }
+        return;
+    }
+    try {
+        if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+            navigator.vibrate(8);
+        }
+    } catch {
+        // Unsupported or rejected browser vibration is intentionally silent.
+    }
+}
+
 function MobileGlobalModRail({
     selectedSource,
     routeCount,
@@ -4247,7 +4323,9 @@ export function EffectsRackWorkspace({
     }, []);
     const reorderRef = useRef<ReorderGesture | null>(null);
     const reorderBranchDwellRef = useRef<{ key: string; timer: number } | null>(null);
-    const [reorderingDeviceId, setReorderingDeviceId] = useState<string | null>(null);
+    const reorderSettleTimerRef = useRef<number | null>(null);
+    const reorderLayoutSnapshotRef = useRef<ReadonlyMap<string, ReorderLayoutRect> | null>(null);
+    const [reorderPresentation, setReorderPresentation] = useState<SubwayReorderPresentation | null>(null);
     const [focusedBranchIndices, setFocusedBranchIndices] = useState<Readonly<Record<string, number>>>({});
     const focusRackBranch = useCallback((groupId: string, branchIndex: number) => {
         setFocusedBranchIndices((current) => (
@@ -4288,6 +4366,41 @@ export function EffectsRackWorkspace({
             clearUiTimeout(dwell.timer);
             reorderBranchDwellRef.current = null;
         }
+    }, []);
+    const clearReorderSettle = useCallback(() => {
+        if (reorderSettleTimerRef.current !== null) {
+            clearUiTimeout(reorderSettleTimerRef.current);
+            reorderSettleTimerRef.current = null;
+        }
+    }, []);
+    const captureReorderLayout = useCallback(() => {
+        const list = rackListRef.current;
+        if (list === null) {
+            reorderLayoutSnapshotRef.current = null;
+            return;
+        }
+        const snapshot = new Map<string, ReorderLayoutRect>();
+        for (const element of list.querySelectorAll<HTMLElement>(
+            '[data-reorder-layout-key]:not([data-reorder-dragged="true"])',
+        )) {
+            const key = element.dataset.reorderLayoutKey;
+            if (key === undefined) {
+                continue;
+            }
+            const rect = element.getBoundingClientRect();
+            snapshot.set(key, { left: rect.left, top: rect.top });
+            for (const animation of element.getAnimations()) {
+                animation.cancel();
+            }
+            for (const connectorPath of element.querySelectorAll<SVGPathElement>(
+                ".subway-connector-svg path",
+            )) {
+                for (const animation of connectorPath.getAnimations()) {
+                    animation.cancel();
+                }
+            }
+        }
+        reorderLayoutSnapshotRef.current = snapshot;
     }, []);
     const updateReorderBranchDwell = useCallback((
         referenceElement: Element,
@@ -4459,18 +4572,14 @@ export function EffectsRackWorkspace({
     const [railCollapseSignal, setRailCollapseSignal] = useState(0);
     const [parameterMenu, setParameterMenu] = useState<RackParameterMenuState | null>(null);
     const [stationMenu, setStationMenu] = useState<SubwayStationMenuRequest | null>(null);
-    const [addSheet, setAddSheet] = useState<{
-        path: LaneDevicePathV2;
-        clientX: number;
-        clientY: number;
-    } | null>(null);
+    const [effectPicker, setEffectPicker] = useState<RackEffectPickerState | null>(null);
     const [parameterValueSheetEndpointID, setParameterValueSheetEndpointID] = useState<string | null>(null);
     const [removeTargetRoutesEndpointID, setRemoveTargetRoutesEndpointID] = useState<string | null>(null);
     const pendingRouteRef = useRef<{ key: string } | null>(null);
     const [pendingRouteKey, setPendingRouteKey] = useState<string | null>(null);
 
     useEffect(() => {
-        if (parameterMenu === null && stationMenu === null && groupMenu === null && addSheet === null) {
+        if (parameterMenu === null && stationMenu === null && groupMenu === null && effectPicker === null) {
             return;
         }
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -4478,12 +4587,12 @@ export function EffectsRackWorkspace({
                 setParameterMenu(null);
                 setStationMenu(null);
                 setGroupMenu(null);
-                setAddSheet(null);
+                setEffectPicker(null);
             }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [parameterMenu, stationMenu, groupMenu, addSheet]);
+    }, [parameterMenu, stationMenu, groupMenu, effectPicker]);
 
     useEffect(() => {
         if (reorderRef.current !== null) {
@@ -4551,6 +4660,58 @@ export function EffectsRackWorkspace({
     }, [previewDoc, rackState]);
 
     useLayoutEffect(() => {
+        const previous = reorderLayoutSnapshotRef.current;
+        const list = rackListRef.current;
+        if (previous === null || list === null) {
+            return;
+        }
+        reorderLayoutSnapshotRef.current = null;
+        const reducedMotion = typeof window.matchMedia === "function"
+            && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const duration = reducedMotion ? 1 : REORDER_LAYOUT_ANIMATION_MS;
+        for (const element of list.querySelectorAll<HTMLElement>(
+            '[data-reorder-layout-key]:not([data-reorder-dragged="true"])',
+        )) {
+            const key = element.dataset.reorderLayoutKey;
+            const before = key === undefined ? undefined : previous.get(key);
+            if (before === undefined) {
+                continue;
+            }
+            const after = element.getBoundingClientRect();
+            const deltaX = before.left - after.left;
+            const deltaY = before.top - after.top;
+            if (Math.abs(deltaX) >= 0.5 || Math.abs(deltaY) >= 0.5) {
+                element.animate([
+                    { transform: `translate3d(${deltaX}px, ${deltaY}px, 0)` },
+                    { transform: "translate3d(0, 0, 0)" },
+                ], {
+                    duration,
+                    easing: "cubic-bezier(0.22, 0.7, 0.24, 1)",
+                });
+            }
+            // A cross-trunk or cross-branch move can change an empty dashed
+            // route into the live route without moving its fork/merge box.
+            // Give the paths their own short reveal so topology changes never
+            // snap even when FLIP has zero positional delta.
+            for (const connectorPath of element.querySelectorAll<SVGPathElement>(
+                ".subway-connector-svg path",
+            )) {
+                const rawOpacity = connectorPath.ownerDocument.defaultView
+                    ?.getComputedStyle(connectorPath).opacity ?? "1";
+                const parsedOpacity = Number.parseFloat(rawOpacity);
+                const opacity = Number.isFinite(parsedOpacity) ? parsedOpacity : 1;
+                connectorPath.animate([
+                    { opacity: Math.max(0.18, opacity * 0.45) },
+                    { opacity },
+                ], {
+                    duration,
+                    easing: "ease-out",
+                });
+            }
+        }
+    }, [mapDoc]);
+
+    useLayoutEffect(() => {
         const list = rackListRef.current;
         if (list === null) {
             return;
@@ -4571,7 +4732,7 @@ export function EffectsRackWorkspace({
 
     useLayoutEffect(() => {
         const list = rackListRef.current;
-        if (list === null) {
+        if (list === null || reorderPresentation !== null) {
             return;
         }
         const animationFrame = window.requestAnimationFrame(() => {
@@ -4591,7 +4752,7 @@ export function EffectsRackWorkspace({
             updateRackScrollPresentation();
         });
         return () => window.cancelAnimationFrame(animationFrame);
-    }, [mapDoc, selectedDeviceId, updateRackScrollPresentation]);
+    }, [mapDoc, reorderPresentation, selectedDeviceId, updateRackScrollPresentation]);
     const selectedGroup = selectedGroupId === null
         ? null
         : rackState.chain.find((node) => node.kind !== "device" && node.groupId === selectedGroupId) ?? null;
@@ -4734,29 +4895,67 @@ export function EffectsRackWorkspace({
         }
     }, [commit, rackStateRef]);
 
-    // A station drag that crosses the lift threshold hands the pointer to the
-    // list-level reorder machinery — the same physics the grip handle drove.
-    const armStationReorder = useCallback((deviceId: string, event: ReactPointerEvent<HTMLElement>) => {
+    const removeModulationRoutesForDevice = useCallback((deviceId: string) => {
+        const routeIndices = routes.flatMap((route, routeIndex) => (
+            parseLaneModulationTargetKind(route.targetKind)?.instanceId === deviceId
+                ? [routeIndex]
+                : []
+        ));
+        routeIndices.sort((left, right) => right - left);
+        for (const routeIndex of routeIndices) {
+            onRemoveRoute(routeIndex);
+        }
+    }, [onRemoveRoute, routes]);
+
+    // Movement after the short stationary hold hands the pointer to this one
+    // list-level owner. The station hook has already ruled out scrolling and
+    // the longer context-menu hold before this can run.
+    const armStationReorder = useCallback((
+        deviceId: string,
+        event: ReactPointerEvent<HTMLElement>,
+        liftOrigin: SubwayReorderLiftOrigin,
+    ): boolean => {
         const captureElement = rackListRef.current;
         if (!captureElement || reorderRef.current !== null) {
-            return;
+            return false;
         }
+        const pill = event.currentTarget.querySelector<HTMLElement>(".subway-station-pill");
+        if (pill === null) {
+            return false;
+        }
+        clearReorderSettle();
         event.preventDefault();
-        event.stopPropagation();
         try {
             captureElement.setPointerCapture(event.pointerId);
         } catch {
             // The list and window handlers remain authoritative when capture
             // is unavailable or the platform has already lost it.
         }
+        const pillRect = pill.getBoundingClientRect();
+        const visualMode = renderedStationVisualMode(pill);
         reorderRef.current = {
             pointerId: event.pointerId,
             deviceId,
             originalDoc: previewDocRef.current,
             captureElement,
+            pointerOffsetX: liftOrigin.clientX - pillRect.left,
+            pointerOffsetY: liftOrigin.clientY - pillRect.top,
+            sourceWidth: pillRect.width,
+            sourceHeight: pillRect.height,
+            visualMode,
         };
-        setReorderingDeviceId(deviceId);
-    }, []);
+        setReorderPresentation({
+            deviceId,
+            phase: "dragging",
+            left: pillRect.left,
+            top: pillRect.top,
+            width: pillRect.width,
+            height: pillRect.height,
+            visualMode,
+        });
+        triggerReorderLiftHaptic();
+        return true;
+    }, [clearReorderSettle]);
 
     const moveDeviceByOffset = useCallback((deviceId: string, offset: -1 | 1) => {
         const doc = rackStateRef.current;
@@ -4783,7 +4982,6 @@ export function EffectsRackWorkspace({
 
         reorderRef.current = null;
         clearReorderBranchDwell();
-        setReorderingDeviceId(null);
         try {
             if (gesture.captureElement.hasPointerCapture(pointerId)) {
                 gesture.captureElement.releasePointerCapture(pointerId);
@@ -4792,15 +4990,63 @@ export function EffectsRackWorkspace({
             // Capture may already be gone after a platform cancellation.
         }
 
-        if (shouldCommit
-                && serializeLaneStateV2(gesture.originalDoc) !== serializeLaneStateV2(previewDocRef.current)) {
-            commit(previewDocRef.current);
-        } else {
+        if (!shouldCommit) {
+            captureReorderLayout();
+            setReorderPresentation(null);
             const currentDoc = rackStateRef.current;
             previewDocRef.current = currentDoc;
             setPreviewDoc(currentDoc);
+            return;
         }
-    }, [clearReorderBranchDwell, commit, rackStateRef]);
+
+        const changed = serializeLaneStateV2(gesture.originalDoc)
+            !== serializeLaneStateV2(previewDocRef.current);
+        const ghost = gesture.captureElement.querySelector<HTMLElement>(
+            `[data-role="rack-reorder-ghost"][data-device-id="${CSS.escape(gesture.deviceId)}"] .subway-station-pill`,
+        );
+        if (ghost !== null) {
+            const ghostRect = ghost.getBoundingClientRect();
+            const destinationVisualMode = renderedStationVisualMode(ghost);
+            setReorderPresentation((current) => (
+                current?.deviceId === gesture.deviceId
+                    ? {
+                        ...current,
+                        phase: "settling",
+                        left: ghostRect.left,
+                        top: ghostRect.top,
+                        width: ghostRect.width,
+                        height: ghostRect.height,
+                        visualMode: destinationVisualMode,
+                      }
+                    : current
+            ));
+            const reducedMotion = typeof window.matchMedia === "function"
+                && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            clearReorderSettle();
+            reorderSettleTimerRef.current = uiTimeout(() => {
+                reorderSettleTimerRef.current = null;
+                setReorderPresentation((current) => (
+                    current?.deviceId === gesture.deviceId ? null : current
+                ));
+            }, reducedMotion ? 32 : REORDER_SETTLE_MS);
+        } else {
+            setReorderPresentation(null);
+        }
+
+        if (changed) {
+            commit(previewDocRef.current);
+            return;
+        }
+        const currentDoc = rackStateRef.current;
+        previewDocRef.current = currentDoc;
+        setPreviewDoc(currentDoc);
+    }, [
+        captureReorderLayout,
+        clearReorderBranchDwell,
+        clearReorderSettle,
+        commit,
+        rackStateRef,
+    ]);
 
     const updateReorderPreview = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         const gesture = reorderRef.current;
@@ -4814,6 +5060,20 @@ export function EffectsRackWorkspace({
             finishReorder(event.pointerId, false);
             return;
         }
+
+        setReorderPresentation((current) => (
+            current?.deviceId === gesture.deviceId
+                ? {
+                    ...current,
+                    phase: "dragging",
+                    left: event.clientX - gesture.pointerOffsetX,
+                    top: event.clientY - gesture.pointerOffsetY,
+                    width: gesture.sourceWidth,
+                    height: gesture.sourceHeight,
+                    visualMode: gesture.visualMode,
+                  }
+                : current
+        ));
 
         const renderRoot = event.currentTarget.getRootNode();
         if (!(renderRoot instanceof Document) && !(renderRoot instanceof ShadowRoot)) {
@@ -4868,10 +5128,11 @@ export function EffectsRackWorkspace({
         const nextDoc = moveLaneDevice(previewDocRef.current, gesture.deviceId, targetPath);
         if (nextDoc !== null
                 && serializeLaneStateV2(nextDoc) !== serializeLaneStateV2(previewDocRef.current)) {
+            captureReorderLayout();
             previewDocRef.current = nextDoc;
             setPreviewDoc(nextDoc);
         }
-    }, [finishReorder, updateReorderBranchDwell]);
+    }, [captureReorderLayout, finishReorder, updateReorderBranchDwell]);
 
     useEffect(() => {
         const handlePointerUp = (event: PointerEvent) => finishReorder(event.pointerId, true);
@@ -4898,8 +5159,9 @@ export function EffectsRackWorkspace({
             window.removeEventListener("blur", cancelActiveReorder);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             cancelActiveReorder();
+            clearReorderSettle();
         };
-    }, [finishReorder]);
+    }, [clearReorderSettle, finishReorder]);
 
     const getPairCreation = useCallback((
         source: SelectedSource,
@@ -4984,6 +5246,43 @@ export function EffectsRackWorkspace({
     const selectEffect = useCallback((effectId: EffectModuleId) => {
         selectDevice(deviceIdForEffectSelection(effectId));
     }, [deviceIdForEffectSelection, selectDevice]);
+
+    const removePlacedDevice = useCallback((deviceId: string): boolean => {
+        const next = removeLaneDevice(rackStateRef.current, deviceId);
+        if (next === null) {
+            return false;
+        }
+        removeModulationRoutesForDevice(deviceId);
+        commit(next);
+        if (selectedDeviceId === deviceId) {
+            const fallback = firstLaneDeviceId(next);
+            if (fallback !== null) {
+                selectDevice(fallback);
+            }
+        }
+        return true;
+    }, [commit, rackStateRef, removeModulationRoutesForDevice, selectDevice, selectedDeviceId]);
+
+    const swapPlacedDevice = useCallback((
+        deviceId: string,
+        replacementType: LaneDeviceType,
+    ): boolean => {
+        const current = rackStateRef.current;
+        const next = replaceLaneDevice(current, deviceId, replacementType);
+        if (next === null) {
+            return false;
+        }
+        const replacementDeviceId = Object.keys(next.devices)
+            .find((candidate) => current.devices[candidate] === undefined)
+            ?? (next.devices[deviceId] === undefined ? null : deviceId);
+        if (replacementDeviceId === null) {
+            return false;
+        }
+        removeModulationRoutesForDevice(deviceId);
+        commit(next);
+        selectDevice(replacementDeviceId);
+        return true;
+    }, [commit, rackStateRef, removeModulationRoutesForDevice, selectDevice]);
 
     const selectTarget = useCallback((endpointID: string) => {
         const parameter = getRackParameterDescriptor(endpointID);
@@ -5335,6 +5634,28 @@ export function EffectsRackWorkspace({
                         <button
                             type="button"
                             role="menuitem"
+                            data-role={`rack-station-swap-${stationMenuEffectId}`}
+                            onClick={() => {
+                                const path = findLaneDevicePath(
+                                    rackStateRef.current,
+                                    stationMenu.deviceId,
+                                );
+                                if (path !== null) {
+                                    setEffectPicker({
+                                        _tag: "swap",
+                                        deviceId: stationMenu.deviceId,
+                                        clientX: stationMenu.clientX,
+                                        clientY: stationMenu.clientY,
+                                    });
+                                }
+                                setStationMenu(null);
+                            }}
+                        >
+                            Swap
+                        </button>
+                        <button
+                            type="button"
+                            role="menuitem"
                             data-role={`rack-station-exact-${stationMenuEffectId}`}
                             onClick={() => {
                                 const effect = getRackEffectDescriptor(stationMenuEffectId);
@@ -5352,16 +5673,7 @@ export function EffectsRackWorkspace({
                             role="menuitem"
                             data-role={`rack-station-remove-${stationMenuEffectId}`}
                             onClick={() => {
-                                const next = removeLaneDevice(rackStateRef.current, stationMenu.deviceId);
-                                if (next !== null) {
-                                    commit(next);
-                                    if (selectedDeviceId === stationMenu.deviceId) {
-                                        const fallback = firstLaneDeviceId(next);
-                                        if (fallback !== null) {
-                                            selectDevice(fallback);
-                                        }
-                                    }
-                                }
+                                removePlacedDevice(stationMenu.deviceId);
                                 setStationMenu(null);
                             }}
                         >
@@ -5448,28 +5760,37 @@ export function EffectsRackWorkspace({
                     </div>
                 </div>
             ) : null}
-            {addSheet !== null ? (
-                // The ghost's type picker: all eight devices, with the ones
-                // the document cannot take (pool or wire capacity) disabled.
+            {effectPicker !== null ? (
+                // Add and Swap deliberately share this one type picker. The
+                // tagged request owns whether selection inserts at a ghost or
+                // replaces the exact station path.
                 <div
                     className="rack-parameter-menu-layer"
                     data-role="rack-add-sheet-layer"
-                    onPointerDown={() => setAddSheet(null)}
+                    data-picker-mode={effectPicker._tag}
+                    onPointerDown={() => setEffectPicker(null)}
                 >
                     <div
                         role="menu"
-                        aria-label="Add a device"
+                        aria-label={effectPicker._tag === "add" ? "Add a device" : "Swap effect"}
                         data-role="rack-add-sheet"
+                        data-picker-mode={effectPicker._tag}
                         className="rack-parameter-menu"
                         style={{
-                            "--rack-menu-x": `${addSheet.clientX}px`,
-                            "--rack-menu-y": `${addSheet.clientY}px`,
+                            "--rack-menu-x": `${effectPicker.clientX}px`,
+                            "--rack-menu-y": `${effectPicker.clientY}px`,
                         } as CSSProperties}
                         onPointerDown={(event) => event.stopPropagation()}
                     >
                         {RACK_EFFECT_DESCRIPTORS.map((effect) => {
                             const deviceType = EFFECT_ID_TO_LANE_TYPE[effect.id];
-                            const creatable = addLaneDevice(rackState, deviceType, addSheet.path) !== null;
+                            const creatable = effectPicker._tag === "add"
+                                ? addLaneDevice(rackState, deviceType, effectPicker.path) !== null
+                                : replaceLaneDevice(
+                                    rackState,
+                                    effectPicker.deviceId,
+                                    deviceType,
+                                ) !== null;
                             return (
                                 <button
                                     key={effect.id}
@@ -5478,17 +5799,27 @@ export function EffectsRackWorkspace({
                                     data-role={`rack-add-${effect.id}`}
                                     disabled={!creatable}
                                     onClick={() => {
-                                        const current = rackStateRef.current;
-                                        const next = addLaneDevice(current, deviceType, addSheet.path);
-                                        if (next !== null) {
-                                            const newDeviceId = Object.keys(next.devices)
-                                                .find((deviceId) => current.devices[deviceId] === undefined);
-                                            commit(next);
-                                            if (newDeviceId !== undefined) {
-                                                selectDevice(newDeviceId);
+                                        if (effectPicker._tag === "swap") {
+                                            if (!swapPlacedDevice(effectPicker.deviceId, deviceType)) {
+                                                showFeedbackToast("NO ROOM TO SWAP");
+                                            }
+                                        } else {
+                                            const current = rackStateRef.current;
+                                            const next = addLaneDevice(
+                                                current,
+                                                deviceType,
+                                                effectPicker.path,
+                                            );
+                                            if (next !== null) {
+                                                const newDeviceId = Object.keys(next.devices)
+                                                    .find((deviceId) => current.devices[deviceId] === undefined);
+                                                commit(next);
+                                                if (newDeviceId !== undefined) {
+                                                    selectDevice(newDeviceId);
+                                                }
                                             }
                                         }
-                                        setAddSheet(null);
+                                        setEffectPicker(null);
                                     }}
                                 >
                                     {effect.label}
@@ -5604,7 +5935,7 @@ export function EffectsRackWorkspace({
                             graphWidth={rackGraphWidth}
                             selectedDeviceId={selectedDeviceId}
                             selectedGroupId={selectedGroupId}
-                            reorderingDeviceId={reorderingDeviceId}
+                            reorderPresentation={reorderPresentation}
                             focusedBranchIndices={focusedBranchIndices}
                             accents={EFFECT_ACCENTS}
                             onSelect={selectDevice}
@@ -5615,10 +5946,15 @@ export function EffectsRackWorkspace({
                             onFocusBranch={focusRackBranch}
                             onOpenStationMenu={setStationMenu}
                             onOpenGroupMenu={setGroupMenu}
+                            onToggleBypass={toggleDeviceEnabled}
                             onArmReorder={armStationReorder}
                             onKeyboardMove={moveDeviceByOffset}
                             tailPrefix={(
-                                <label className="rack-lane-mix" data-role="rack-lane-mix">
+                                <label
+                                    className="rack-lane-mix"
+                                    data-role="rack-lane-mix"
+                                    data-reorder-layout-key="lane:mix"
+                                >
                                     <span className="rack-lane-mix-label">MIX</span>
                                     <input
                                         type="range"
@@ -5643,7 +5979,12 @@ export function EffectsRackWorkspace({
                                     </output>
                                 </label>
                             )}
-                            onRequestAdd={(path, clientX, clientY) => setAddSheet({ path, clientX, clientY })}
+                            onRequestAdd={(path, clientX, clientY) => setEffectPicker({
+                                _tag: "add",
+                                path,
+                                clientX,
+                                clientY,
+                            })}
                         />
                         <button
                             type="button"
@@ -5659,7 +6000,11 @@ export function EffectsRackWorkspace({
                             <span className="rack-lane-bypass-label">BYPASS</span>
                             <span className="rack-lane-bypass-label-compact" aria-hidden="true">BYP</span>
                         </button>
-                        <div className="rack-polish-boundary" data-role="rack-polish-boundary">
+                        <div
+                            className="rack-polish-boundary"
+                            data-role="rack-polish-boundary"
+                            data-reorder-layout-key="lane:polish"
+                        >
                             <button
                                 type="button"
                                 className={`rack-polish-node${polishSelected ? " is-selected" : ""}`}

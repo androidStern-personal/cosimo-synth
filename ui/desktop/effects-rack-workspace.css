@@ -522,11 +522,71 @@
     box-shadow: 0 0 10px color-mix(in srgb, var(--station-accent, #69d5c5) 35%, transparent);
 }
 
-.subway-station-row.is-reordering .subway-station-pill,
-.subway-station-cell.is-reordering .subway-station-pill {
-    z-index: 4;
-    transform: translateX(var(--subway-chip-offset-x, 0)) scale(1.06);
-    filter: drop-shadow(0 7px 14px rgb(0 0 0 / 0.72));
+.subway-reorder-destination-ghost {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    min-width: var(--cosimo-hit-min);
+    min-height: var(--cosimo-hit-min);
+    place-items: center;
+    pointer-events: none;
+}
+
+/* The preview owns the real chip geometry. Its in-graph counterpart is an
+   equally sized translucent destination marker, so release cannot jump to a
+   different path or insertion size than the pointer preview showed. */
+.subway-reorder-destination-ghost .subway-station-pill {
+    opacity: 0.38;
+    filter: saturate(0.45) drop-shadow(0 0 5px color-mix(in srgb, var(--station-accent, #69d5c5) 34%, transparent));
+}
+
+.subway-reorder-destination-ghost .subway-station-detail,
+.subway-reorder-destination-ghost .subway-station-compact-well,
+.subway-reorder-destination-ghost .subway-station-summary-well {
+    outline: 1px dashed color-mix(in srgb, var(--station-accent, #69d5c5) 74%, transparent);
+    outline-offset: 2px;
+}
+
+.subway-reorder-lifted-pill {
+    position: fixed;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    transform: scale(1.06);
+    transform-origin: center;
+    will-change: left, top, width, height;
+}
+
+.subway-reorder-lifted-pill .subway-station-pill {
+    filter: drop-shadow(0 8px 15px rgb(0 0 0 / 0.76));
+}
+
+.subway-reorder-lifted-pill[data-enabled="false"] .subway-station-pill {
+    opacity: 0.48;
+    filter: saturate(0.25) drop-shadow(0 8px 15px rgb(0 0 0 / 0.76));
+}
+
+.subway-reorder-lifted-pill.is-settling {
+    transition:
+        left 140ms cubic-bezier(0.22, 0.7, 0.24, 1),
+        top 140ms cubic-bezier(0.22, 0.7, 0.24, 1),
+        width 140ms cubic-bezier(0.22, 0.7, 0.24, 1),
+        height 140ms cubic-bezier(0.22, 0.7, 0.24, 1),
+        transform 140ms cubic-bezier(0.22, 0.7, 0.24, 1);
+    transform: scale(1);
+}
+
+.subway-reorder-lifted-pill[data-presentation="compact"] .subway-station-detail,
+.subway-reorder-lifted-pill[data-presentation="compact"] .subway-station-summary,
+.subway-reorder-lifted-pill[data-presentation="summary"] .subway-station-detail,
+.subway-reorder-lifted-pill[data-presentation="summary"] .subway-station-compact {
+    display: none;
+}
+
+.subway-reorder-lifted-pill[data-presentation="compact"] .subway-station-compact,
+.subway-reorder-lifted-pill[data-presentation="summary"] .subway-station-summary {
+    display: grid;
 }
 
 .subway-station:focus-visible .subway-station-detail,
@@ -749,7 +809,8 @@
     opacity: 0.5;
 }
 
-.subway-station-cell > .subway-station {
+.subway-station-cell > .subway-station,
+.subway-station-cell > .subway-reorder-destination-ghost {
     position: absolute;
     z-index: 2;
     /* The 44px touch target intentionally exceeds a narrow lane column.
@@ -2083,6 +2144,7 @@
 @media (prefers-reduced-motion: reduce) {
     .rack-mod-track,
     .subway-station-pill,
+    .subway-reorder-lifted-pill,
     .subway-scroll-cue {
         transition-duration: 1ms !important;
     }

@@ -1,11 +1,14 @@
 import {
     useCallback,
+    useEffect,
     useRef,
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
+    type MouseEvent as ReactMouseEvent,
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { LANE_TYPE_TO_EFFECT_ID } from "../shared/lane-state";
 import { encodeLaneDevicePath, type LaneDevicePathV2, type LaneStateV2 } from "../shared/lane-state-v2";
@@ -57,8 +60,26 @@ import {
  * on the cell.
  */
 
-const STATION_DRAG_THRESHOLD_PX = 7;
+const STATION_SCROLL_THRESHOLD_PX = 5;
+const STATION_REORDER_HOLD_MS = 180;
+const STATION_REORDER_MOVE_PX = 3;
+const STATION_MENU_MOVEMENT_TOLERANCE_PX = 8;
 const STATION_LONG_PRESS_MS = 550;
+
+export type SubwayReorderPresentation = {
+    readonly deviceId: string;
+    readonly phase: "dragging" | "settling";
+    readonly left: number;
+    readonly top: number;
+    readonly width: number;
+    readonly height: number;
+    readonly visualMode: "detail" | "compact" | "summary";
+};
+
+export type SubwayReorderLiftOrigin = {
+    readonly clientX: number;
+    readonly clientY: number;
+};
 
 export type SubwayStationMenuRequest = {
     readonly deviceId: string;
@@ -78,7 +99,7 @@ type SubwayMapColumnProps = {
     readonly graphWidth: number;
     readonly selectedDeviceId: string;
     readonly selectedGroupId: string | null;
-    readonly reorderingDeviceId: string | null;
+    readonly reorderPresentation: SubwayReorderPresentation | null;
     readonly focusedBranchIndices: Readonly<Record<string, number>>;
     readonly accents: Readonly<Record<EffectModuleId, string>>;
     readonly onSelect: (deviceId: string) => void;
@@ -86,8 +107,13 @@ type SubwayMapColumnProps = {
     readonly onFocusBranch: (groupId: string, branchIndex: number) => void;
     readonly onOpenStationMenu: (request: SubwayStationMenuRequest) => void;
     readonly onOpenGroupMenu: (request: SubwayGroupMenuRequest) => void;
-    /** Called once a station drag crosses the reorder threshold. */
-    readonly onArmReorder: (deviceId: string, event: ReactPointerEvent<HTMLElement>) => void;
+    readonly onToggleBypass: (deviceId: string) => void;
+    /** Called once movement after the deliberate short hold lifts a station. */
+    readonly onArmReorder: (
+        deviceId: string,
+        event: ReactPointerEvent<HTMLElement>,
+        liftOrigin: SubwayReorderLiftOrigin,
+    ) => boolean;
     readonly onKeyboardMove: (deviceId: string, offset: -1 | 1) => void;
     /** Fixed lane-output controls rendered before the final tail insertion row. */
     readonly tailPrefix?: ReactNode;
@@ -110,12 +136,76 @@ function requiredLaneCenter(laneCenters: ReadonlyArray<number>, laneIndex: numbe
     return center;
 }
 
-type StationPointerState = {
-    pointerId: number;
-    startX: number;
-    startY: number;
-    longPressTimer: number;
+type PressingPointerState = {
+    readonly _tag: "pressing";
+    readonly pointerId: number;
+    readonly captureElement: HTMLElement;
+    readonly startX: number;
+    readonly startY: number;
+    readonly lastX: number;
+    readonly lastY: number;
+    readonly reorderTimer: number | null;
+    readonly menuTimer: number;
 };
+
+type ReorderReadyPointerState = {
+    readonly _tag: "reorder-ready";
+    readonly pointerId: number;
+    readonly captureElement: HTMLElement;
+    readonly startX: number;
+    readonly startY: number;
+    readonly lastX: number;
+    readonly lastY: number;
+    readonly readyX: number;
+    readonly readyY: number;
+    readonly menuTimer: number;
+};
+
+type ScrollingPointerState = {
+    readonly _tag: "scrolling";
+    readonly pointerId: number;
+    readonly captureElement: HTMLElement;
+    readonly lastX: number;
+    readonly lastY: number;
+};
+
+type WonPointerState = {
+    readonly _tag: "reordering" | "menu-open";
+    readonly pointerId: number;
+    readonly captureElement: HTMLElement;
+};
+
+type StationPointerState =
+    | PressingPointerState
+    | ReorderReadyPointerState
+    | ScrollingPointerState
+    | WonPointerState;
+
+function pointerDistance(fromX: number, fromY: number, toX: number, toY: number): number {
+    return Math.hypot(toX - fromX, toY - fromY);
+}
+
+/** Scroll the first owning surface, then offer any unconsumed delta to its
+    scrollable ancestors. This preserves the graph's real top/bottom boundary
+    instead of letting a station drag become a reorder there. */
+function scrollScrollableAncestors(start: HTMLElement, deltaY: number): void {
+    let remaining = deltaY;
+    let candidate = start.parentElement;
+    while (candidate !== null && Math.abs(remaining) > 0.01) {
+        const overflowY = candidate.ownerDocument.defaultView
+            ?.getComputedStyle(candidate).overflowY ?? "visible";
+        const scrollable = (overflowY === "auto" || overflowY === "scroll")
+            && candidate.scrollHeight > candidate.clientHeight + 0.5;
+        if (scrollable) {
+            const before = candidate.scrollTop;
+            const maximum = Math.max(0, candidate.scrollHeight - candidate.clientHeight);
+            const after = Math.min(Math.max(before + remaining, 0), maximum);
+            candidate.scrollTop = after;
+            remaining -= after - before;
+        }
+        candidate = candidate.parentElement;
+    }
+}
 
 /**
  * Tap / drag-arm / long-press disambiguation shared by stations and forks.
@@ -127,21 +217,51 @@ function usePressableGestures({
     onTap,
     onLongPress,
     onDragArm = null,
+    manualScroll = false,
 }: {
-    onTap: () => void;
+    onTap: (event: ReactMouseEvent<HTMLElement>) => void;
     onLongPress: (clientX: number, clientY: number) => void;
-    onDragArm?: ((event: ReactPointerEvent<HTMLElement>) => void) | null;
+    onDragArm?: ((
+        event: ReactPointerEvent<HTMLElement>,
+        liftOrigin: SubwayReorderLiftOrigin,
+    ) => boolean) | null;
+    manualScroll?: boolean;
 }) {
     const pointerStateRef = useRef<StationPointerState | null>(null);
     const suppressClickRef = useRef(false);
 
+    const clearPointerTimers = useCallback((pointerState: StationPointerState) => {
+        if (pointerState._tag === "pressing") {
+            if (pointerState.reorderTimer !== null) {
+                clearUiTimeout(pointerState.reorderTimer);
+            }
+            clearUiTimeout(pointerState.menuTimer);
+        } else if (pointerState._tag === "reorder-ready") {
+            clearUiTimeout(pointerState.menuTimer);
+        }
+    }, []);
+
     const clearPointerState = useCallback(() => {
         const pointerState = pointerStateRef.current;
         if (pointerState !== null) {
-            clearUiTimeout(pointerState.longPressTimer);
+            clearPointerTimers(pointerState);
             pointerStateRef.current = null;
         }
-    }, []);
+    }, [clearPointerTimers]);
+
+    useEffect(() => clearPointerState, [clearPointerState]);
+
+    const applyScrollMove = useCallback((
+        event: ReactPointerEvent<HTMLElement>,
+        deltaY: number,
+    ) => {
+        if (!manualScroll) {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        scrollScrollableAncestors(event.currentTarget, deltaY);
+    }, [manualScroll]);
 
     const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
         if (event.pointerType === "mouse" && event.button !== 0) {
@@ -156,56 +276,189 @@ function usePressableGestures({
             // just has to land on the element itself.
         }
         const { clientX, clientY, pointerId } = event;
+        const captureElement = event.currentTarget;
+        const reorderTimer = onDragArm === null
+            ? null
+            : uiTimeout(() => {
+                const current = pointerStateRef.current;
+                if (current?._tag !== "pressing" || current.pointerId !== pointerId) {
+                    return;
+                }
+                pointerStateRef.current = {
+                    _tag: "reorder-ready",
+                    pointerId,
+                    captureElement: current.captureElement,
+                    startX: current.startX,
+                    startY: current.startY,
+                    lastX: current.lastX,
+                    lastY: current.lastY,
+                    readyX: current.lastX,
+                    readyY: current.lastY,
+                    menuTimer: current.menuTimer,
+                };
+            }, STATION_REORDER_HOLD_MS);
+        const menuTimer = uiTimeout(() => {
+            const current = pointerStateRef.current;
+            if ((current?._tag !== "pressing" && current?._tag !== "reorder-ready")
+                    || current.pointerId !== pointerId
+                    || pointerDistance(
+                        current.startX,
+                        current.startY,
+                        current.lastX,
+                        current.lastY,
+                    ) > STATION_MENU_MOVEMENT_TOLERANCE_PX) {
+                return;
+            }
+            clearPointerTimers(current);
+            pointerStateRef.current = {
+                _tag: "menu-open",
+                pointerId,
+                captureElement: current.captureElement,
+            };
+            suppressClickRef.current = true;
+            onLongPress(clientX, clientY);
+        }, STATION_LONG_PRESS_MS);
         pointerStateRef.current = {
+            _tag: "pressing",
             pointerId,
+            captureElement,
             startX: clientX,
             startY: clientY,
-            longPressTimer: uiTimeout(() => {
-                if (pointerStateRef.current?.pointerId === pointerId) {
-                    clearPointerState();
-                    suppressClickRef.current = true;
-                    onLongPress(clientX, clientY);
-                }
-            }, STATION_LONG_PRESS_MS),
+            lastX: clientX,
+            lastY: clientY,
+            reorderTimer,
+            menuTimer,
         };
-    }, [clearPointerState, onLongPress]);
+    }, [clearPointerState, clearPointerTimers, onDragArm, onLongPress]);
 
     const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
         const pointerState = pointerStateRef.current;
-        if (pointerState === null || pointerState.pointerId !== event.pointerId || onDragArm === null) {
+        if (pointerState === null || pointerState.pointerId !== event.pointerId) {
             return;
         }
-        const distance = Math.hypot(
-            event.clientX - pointerState.startX,
-            event.clientY - pointerState.startY,
-        );
-        if (distance < STATION_DRAG_THRESHOLD_PX) {
+        if (pointerState._tag === "pressing") {
+            if (pointerDistance(
+                pointerState.startX,
+                pointerState.startY,
+                event.clientX,
+                event.clientY,
+            ) < STATION_SCROLL_THRESHOLD_PX) {
+                pointerStateRef.current = {
+                    ...pointerState,
+                    lastX: event.clientX,
+                    lastY: event.clientY,
+                };
+                return;
+            }
+            clearPointerTimers(pointerState);
+            suppressClickRef.current = true;
+            pointerStateRef.current = {
+                _tag: "scrolling",
+                pointerId: pointerState.pointerId,
+                captureElement: pointerState.captureElement,
+                lastX: event.clientX,
+                lastY: event.clientY,
+            };
+            applyScrollMove(event, pointerState.startY - event.clientY);
             return;
         }
-        clearPointerState();
-        suppressClickRef.current = true;
-        onDragArm(event);
-    }, [clearPointerState, onDragArm]);
+        if (pointerState._tag === "reorder-ready") {
+            if (pointerDistance(
+                pointerState.readyX,
+                pointerState.readyY,
+                event.clientX,
+                event.clientY,
+            ) < STATION_REORDER_MOVE_PX) {
+                pointerStateRef.current = {
+                    ...pointerState,
+                    lastX: event.clientX,
+                    lastY: event.clientY,
+                };
+                return;
+            }
+            clearPointerTimers(pointerState);
+            suppressClickRef.current = true;
+            event.preventDefault();
+            const armed = onDragArm?.(event, {
+                clientX: pointerState.readyX,
+                clientY: pointerState.readyY,
+            }) ?? false;
+            pointerStateRef.current = armed
+                ? {
+                    _tag: "reordering",
+                    pointerId: pointerState.pointerId,
+                    captureElement: pointerState.captureElement,
+                }
+                : {
+                    _tag: "scrolling",
+                    pointerId: pointerState.pointerId,
+                    captureElement: pointerState.captureElement,
+                    lastX: event.clientX,
+                    lastY: event.clientY,
+                };
+            if (!armed) {
+                applyScrollMove(event, pointerState.readyY - event.clientY);
+            }
+            return;
+        }
+        if (pointerState._tag === "scrolling") {
+            const deltaY = pointerState.lastY - event.clientY;
+            pointerStateRef.current = {
+                ...pointerState,
+                lastX: event.clientX,
+                lastY: event.clientY,
+            };
+            applyScrollMove(event, deltaY);
+        }
+    }, [applyScrollMove, clearPointerTimers, onDragArm]);
 
-    const handlePointerEnd = useCallback(() => {
+    const handlePointerUp = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+        if (pointerStateRef.current?.pointerId !== event.pointerId) {
+            return;
+        }
         clearPointerState();
     }, [clearPointerState]);
 
-    const handleClick = useCallback(() => {
-        if (suppressClickRef.current) {
-            suppressClickRef.current = false;
+    const handlePointerCancel = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+        if (pointerStateRef.current?.pointerId !== event.pointerId) {
             return;
         }
-        onTap();
+        suppressClickRef.current = true;
+        clearPointerState();
+    }, [clearPointerState]);
+
+    const handleLostPointerCapture = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+        if (pointerStateRef.current?.pointerId === event.pointerId) {
+            clearPointerState();
+        }
+    }, [clearPointerState]);
+
+    const handleClick = useCallback((event: ReactMouseEvent<HTMLElement>) => {
+        if (suppressClickRef.current) {
+            suppressClickRef.current = false;
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+        onTap(event);
     }, [onTap]);
 
-    const handleContextMenu = useCallback((event: { preventDefault: () => void; clientX: number; clientY: number }) => {
+    const handleContextMenu = useCallback((event: ReactMouseEvent<HTMLElement>) => {
         event.preventDefault();
+        clearPointerState();
         suppressClickRef.current = true;
         onLongPress(event.clientX, event.clientY);
-    }, [onLongPress]);
+    }, [clearPointerState, onLongPress]);
 
-    return { handlePointerDown, handlePointerMove, handlePointerEnd, handleClick, handleContextMenu };
+    return {
+        handlePointerDown,
+        handlePointerMove,
+        handlePointerUp,
+        handlePointerCancel,
+        handleLostPointerCapture,
+        handleClick,
+        handleContextMenu,
+    };
 }
 
 function StationIcon({ effectId, className }: {
@@ -222,29 +475,100 @@ function StationIcon({ effectId, className }: {
     );
 }
 
-function StationBody({ station, effectId }: {
+function StationBody({ station, effectId, interactive = false }: {
     readonly station: SubwayStationCell;
     readonly effectId: EffectModuleId;
+    readonly interactive?: boolean;
 }) {
     return (
         <span className="subway-station-pill" aria-hidden="true">
             <span className="subway-station-detail">
-                <span className="subway-station-icon-well">
+                <span
+                    className="subway-station-icon-well"
+                    data-station-icon-target={interactive ? "true" : undefined}
+                >
                     <StationIcon effectId={effectId} className="subway-station-icon subway-station-icon-detail" />
                 </span>
                 <span className="subway-station-label">{station.code} {station.instanceNumber}</span>
             </span>
             <span className="subway-station-compact" aria-hidden="true">
-                <span className="subway-station-compact-well">
+                <span
+                    className="subway-station-compact-well"
+                    data-station-icon-target={interactive ? "true" : undefined}
+                >
                     <StationIcon effectId={effectId} className="subway-station-icon subway-station-icon-compact" />
                 </span>
             </span>
             <span className="subway-station-summary" aria-hidden="true">
-                <span className="subway-station-summary-well">
+                <span
+                    className="subway-station-summary-well"
+                    data-station-icon-target={interactive ? "true" : undefined}
+                >
                     <StationIcon effectId={effectId} className="subway-station-icon subway-station-icon-summary" />
                 </span>
             </span>
         </span>
+    );
+}
+
+function stationTapHitsVisibleIcon(event: ReactMouseEvent<HTMLElement>): boolean {
+    if (event.target instanceof Element
+            && event.target.closest('[data-station-icon-target="true"]') !== null) {
+        return true;
+    }
+    // Some WebViews retarget clicks from aria-hidden station decoration to
+    // the owning button. Use the rendered icon well as the product contract;
+    // keyboard activation has detail 0 and remains a normal select/open action.
+    if (event.detail === 0) {
+        return false;
+    }
+    const { clientX, clientY } = event;
+    return Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+        '[data-station-icon-target="true"]',
+    )).some((iconTarget) => {
+        const rect = iconTarget.getBoundingClientRect();
+        return rect.width > 0
+            && rect.height > 0
+            && clientX >= rect.left
+            && clientX <= rect.right
+            && clientY >= rect.top
+            && clientY <= rect.bottom;
+    });
+}
+
+function LiftedStation({
+    station,
+    effectId,
+    accent,
+    presentation,
+}: {
+    readonly station: SubwayStationCell;
+    readonly effectId: EffectModuleId;
+    readonly accent: string;
+    readonly presentation: SubwayReorderPresentation;
+}) {
+    if (typeof document === "undefined") {
+        return null;
+    }
+    return createPortal(
+        <div
+            className={`subway-reorder-lifted-pill is-${presentation.phase}`}
+            data-role="rack-reorder-lifted-pill"
+            data-device-id={station.deviceId}
+            data-enabled={station.enabled ? "true" : "false"}
+            data-presentation={presentation.visualMode}
+            aria-hidden="true"
+            style={{
+                "--station-accent": accent,
+                left: presentation.left,
+                top: presentation.top,
+                width: presentation.width,
+                height: presentation.height,
+            } as CSSProperties}
+        >
+            <StationBody station={station} effectId={effectId} />
+        </div>,
+        document.body,
     );
 }
 
@@ -254,9 +578,10 @@ function SubwayStation({
     asCell,
     accents,
     selectedDeviceId,
-    reorderingDeviceId,
+    reorderPresentation,
     onSelect,
     onOpenStationMenu,
+    onToggleBypass,
     onArmReorder,
     onKeyboardMove,
     onFocusBranch,
@@ -268,8 +593,9 @@ function SubwayStation({
     readonly asCell: boolean;
     readonly branchContext?: SubwayBranchContext | null;
 } & Pick<SubwayMapColumnProps,
-    "accents" | "selectedDeviceId" | "reorderingDeviceId"
-    | "onSelect" | "onOpenStationMenu" | "onArmReorder" | "onKeyboardMove" | "onFocusBranch">) {
+    "accents" | "selectedDeviceId" | "reorderPresentation"
+    | "onSelect" | "onOpenStationMenu" | "onToggleBypass"
+    | "onArmReorder" | "onKeyboardMove" | "onFocusBranch">) {
     const effectId = LANE_TYPE_TO_EFFECT_ID.get(station.deviceType);
     if (effectId === undefined) {
         throw new Error(`Unknown lane device type on the map: ${station.deviceType}`);
@@ -279,16 +605,24 @@ function SubwayStation({
         ? `${effect.label} ${station.instanceNumber}`
         : effect.label;
     const selected = selectedDeviceId === station.deviceId;
-    const reordering = reorderingDeviceId === station.deviceId;
+    const stationReorderPresentation = reorderPresentation?.deviceId === station.deviceId
+        ? reorderPresentation
+        : null;
+    const reordering = stationReorderPresentation !== null;
     const gestures = usePressableGestures({
-        onTap: () => {
+        onTap: (event) => {
+            if (selected && stationTapHitsVisibleIcon(event)) {
+                onToggleBypass(station.deviceId);
+                return;
+            }
             if (branchContext !== null) {
                 onFocusBranch(branchContext.groupId, branchContext.branchIndex);
             }
             onSelect(station.deviceId);
         },
         onLongPress: (clientX, clientY) => onOpenStationMenu({ deviceId: station.deviceId, clientX, clientY }),
-        onDragArm: (event) => onArmReorder(station.deviceId, event),
+        onDragArm: (event, liftOrigin) => onArmReorder(station.deviceId, event, liftOrigin),
+        manualScroll: true,
     });
 
     return (
@@ -305,32 +639,54 @@ function SubwayStation({
             data-branch-index={branchContext?.branchIndex}
             data-branch-lane-count={branchContext?.laneCount}
             data-focused-branch={branchContext === null ? undefined : branchContext.focused ? "true" : "false"}
+            data-reorder-layout-key={`device:${station.deviceId}`}
+            data-reorder-dragged={reordering ? "true" : undefined}
             className={`${asCell ? "subway-station-cell" : "subway-station-row"}${branchContext === null ? "" : branchContext.focused ? " is-focused-branch" : " is-context-branch"}${selected ? " is-selected" : ""}${station.enabled ? "" : " is-disabled"}${reordering ? " is-reordering" : ""}`}
             style={{ "--station-accent": accents[effectId] } as CSSProperties}
         >
-            <button
-                type="button"
-                data-role={`rack-station-${effectId}`}
-                aria-label={`${label}${station.enabled ? "" : " (bypassed)"}${selected ? ", selected" : ""}`}
-                className="subway-station"
-                onPointerDown={gestures.handlePointerDown}
-                onPointerMove={gestures.handlePointerMove}
-                onPointerUp={gestures.handlePointerEnd}
-                onPointerCancel={gestures.handlePointerEnd}
-                onClick={gestures.handleClick}
-                onContextMenu={gestures.handleContextMenu}
-                onKeyDown={(event: ReactKeyboardEvent<HTMLButtonElement>) => {
-                    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-                        event.preventDefault();
-                        onKeyboardMove(station.deviceId, -1);
-                    } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-                        event.preventDefault();
-                        onKeyboardMove(station.deviceId, 1);
-                    }
-                }}
-            >
-                <StationBody station={station} effectId={effectId} />
-            </button>
+            {stationReorderPresentation === null ? (
+                <button
+                    type="button"
+                    data-role={`rack-station-${effectId}`}
+                    aria-label={`${label}${station.enabled ? "" : " (bypassed)"}${selected ? ", selected" : ""}`}
+                    className="subway-station"
+                    onPointerDown={gestures.handlePointerDown}
+                    onPointerMove={gestures.handlePointerMove}
+                    onPointerUp={gestures.handlePointerUp}
+                    onPointerCancel={gestures.handlePointerCancel}
+                    onLostPointerCapture={gestures.handleLostPointerCapture}
+                    onClick={gestures.handleClick}
+                    onContextMenu={gestures.handleContextMenu}
+                    onKeyDown={(event: ReactKeyboardEvent<HTMLButtonElement>) => {
+                        if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+                            event.preventDefault();
+                            onKeyboardMove(station.deviceId, -1);
+                        } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+                            event.preventDefault();
+                            onKeyboardMove(station.deviceId, 1);
+                        }
+                    }}
+                >
+                    <StationBody station={station} effectId={effectId} interactive />
+                </button>
+            ) : (
+                <>
+                    <span
+                        className="subway-reorder-destination-ghost"
+                        data-role="rack-reorder-ghost"
+                        data-device-id={station.deviceId}
+                        aria-hidden="true"
+                    >
+                        <StationBody station={station} effectId={effectId} />
+                    </span>
+                    <LiftedStation
+                        station={station}
+                        effectId={effectId}
+                        accent={accents[effectId]}
+                        presentation={stationReorderPresentation}
+                    />
+                </>
+            )}
         </div>
     );
 }
@@ -363,6 +719,7 @@ function SubwayGhost({
                 data-branch-index={branchContext?.branchIndex}
                 data-branch-lane-count={branchContext?.laneCount}
                 data-focused-branch={branchContext?.focused ? "true" : "false"}
+                data-reorder-layout-key={`path:${encodeLaneDevicePath(cell.path)}`}
             >
                 <button
                     type="button"
@@ -388,6 +745,7 @@ function SubwayGhost({
             className="subway-ghost-row"
             data-lane-path={encodeLaneDevicePath(cell.path)}
             data-lane-tint={cell.tint}
+            data-reorder-layout-key={`path:${encodeLaneDevicePath(cell.path)}`}
             onClick={(event) => requestAdd(event.clientX, event.clientY)}
         >
             <span className="subway-ghost-pill" aria-hidden="true">+</span>
@@ -401,8 +759,9 @@ function laneCells(
     focusedBranchIndex: number,
     positionOf: (cell: SubwayStationCell) => number,
     stationProps: Pick<SubwayMapColumnProps,
-        "accents" | "selectedDeviceId" | "reorderingDeviceId"
-        | "onSelect" | "onOpenStationMenu" | "onArmReorder" | "onKeyboardMove" | "onFocusBranch">,
+        "accents" | "selectedDeviceId" | "reorderPresentation"
+        | "onSelect" | "onOpenStationMenu" | "onToggleBypass"
+        | "onArmReorder" | "onKeyboardMove" | "onFocusBranch">,
     onRequestAdd: SubwayMapColumnProps["onRequestAdd"],
 ): ReactNode[] {
     return cells.map((cell, laneIndex) => {
@@ -458,7 +817,7 @@ export function SubwayMapColumn({
     graphWidth,
     selectedDeviceId,
     selectedGroupId,
-    reorderingDeviceId,
+    reorderPresentation,
     focusedBranchIndices,
     accents,
     onSelect,
@@ -466,6 +825,7 @@ export function SubwayMapColumn({
     onFocusBranch,
     onOpenStationMenu,
     onOpenGroupMenu,
+    onToggleBypass,
     onArmReorder,
     onKeyboardMove,
     tailPrefix,
@@ -490,9 +850,10 @@ export function SubwayMapColumn({
     const stationProps = {
         accents,
         selectedDeviceId,
-        reorderingDeviceId,
+        reorderPresentation,
         onSelect,
         onOpenStationMenu,
+        onToggleBypass,
         onArmReorder,
         onKeyboardMove,
         onFocusBranch,
@@ -639,6 +1000,7 @@ export function SubwayMapColumn({
             <span
                 className="subway-trunk-tail-fill"
                 data-role="rack-trunk-tail-fill"
+                data-reorder-layout-key="trunk:tail-fill"
                 aria-hidden="true"
             />
             {tailPrefix}
@@ -673,7 +1035,11 @@ function SubwayFork({
             : `${formatCrossoverHz(row.crossovers.lowHz)} · ${formatCrossoverHz(row.crossovers.highHz)}`;
 
     return (
-        <div className="subway-fork" data-fork-kind={row.groupKind}>
+        <div
+            className="subway-fork"
+            data-fork-kind={row.groupKind}
+            data-reorder-layout-key={`group:${row.groupId}:fork`}
+        >
             <SubwayForkConnections
                 row={row}
                 focusedBranchIndex={focusedBranchIndex}
@@ -704,8 +1070,9 @@ function SubwayFork({
                 aria-label={`${row.groupKind === "split" ? "Frequency split" : "Parallel"} group${row.bypassed ? " (bypassed)" : ""}`}
                 onPointerDown={gestures.handlePointerDown}
                 onPointerMove={gestures.handlePointerMove}
-                onPointerUp={gestures.handlePointerEnd}
-                onPointerCancel={gestures.handlePointerEnd}
+                onPointerUp={gestures.handlePointerUp}
+                onPointerCancel={gestures.handlePointerCancel}
+                onLostPointerCapture={gestures.handleLostPointerCapture}
                 onClick={gestures.handleClick}
                 onContextMenu={gestures.handleContextMenu}
             >
@@ -763,7 +1130,11 @@ function SubwayMerge({
 }) {
     const laneCount = row.lanes.length;
     return (
-        <div className="subway-merge" aria-hidden="true">
+        <div
+            className="subway-merge"
+            data-reorder-layout-key={`group:${groupId}:merge`}
+            aria-hidden="true"
+        >
             <svg
                 className="subway-connector-svg subway-merge-connectors"
                 data-role={`rack-merge-connections-${groupId}`}

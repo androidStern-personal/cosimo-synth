@@ -17,6 +17,7 @@ async function makeSerialDoc() {
     const parsed = laneV2.parseLaneStateV2({
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices: {
             "delay#1": { params: { ...params.delay } },
             "reverb#1": { params: { ...params.reverb } },
@@ -298,6 +299,41 @@ test("removeLaneDevice drops the placement and the record, wherever it sits", as
     assert.equal(laneV2.compileLaneTopologyUpload(empty).chainLength, 0);
 
     assert.equal(laneV2.removeLaneDevice(doc, "ott#1"), null);
+});
+
+test("replaceLaneDevice preserves the exact trunk or branch path and resets defaults", async () => {
+    const laneV2 = await laneV2Promise;
+    const doc = await makeSerialDoc();
+
+    const edited = laneV2.setLaneDeviceParam(doc, "delay#1", "delayTime", 987);
+    const sameType = laneV2.replaceLaneDevice(edited, "delay#1", "delay");
+    assert.deepEqual(laneV2.findLaneDevicePath(sameType, "delay#1"), { kind: "trunk", index: 0 });
+    assert.equal(sameType.devices["delay#1"].params.delayTime, 375);
+    assert.deepEqual(sameType.devices["delay#1"].params, laneV2.laneDefaultParamsForType("delay"));
+
+    const trunkSwap = laneV2.replaceLaneDevice(doc, "reverb#1", "flanger");
+    assert.deepEqual(laneV2.findLaneDevicePath(trunkSwap, "flanger#1"), { kind: "trunk", index: 1 });
+    assert.equal(trunkSwap.chain[1].enabled, true);
+    assert.equal(trunkSwap.devices["reverb#1"], undefined);
+    assert.deepEqual(trunkSwap.devices["flanger#1"].params, laneV2.laneDefaultParamsForType("flanger"));
+
+    const parallel = laneV2.wrapLaneDeviceInGroup(doc, "reverb#1", "parallel");
+    const populatedParallel = laneV2.moveLaneDevice(parallel, "chorus#1", {
+        kind: "branch", groupId: "parallel#1", branchIndex: 1, index: 0,
+    });
+    const parallelSwap = laneV2.replaceLaneDevice(populatedParallel, "chorus#1", "ott");
+    assert.deepEqual(laneV2.findLaneDevicePath(parallelSwap, "ott#1"), {
+        kind: "branch", groupId: "parallel#1", branchIndex: 1, index: 0,
+    });
+    assert.equal(parallelSwap.devices["chorus#1"], undefined);
+
+    const split = laneV2.wrapLaneDeviceInGroup(doc, "reverb#1", "split");
+    const splitSwap = laneV2.replaceLaneDevice(split, "reverb#1", "phaser");
+    assert.deepEqual(laneV2.findLaneDevicePath(splitSwap, "phaser#1"), {
+        kind: "branch", groupId: "split#1", branchIndex: 0, index: 0,
+    });
+    assert.equal(splitSwap.devices["reverb#1"], undefined);
+    assert.equal(laneV2.replaceLaneDevice(doc, "ott#1", "delay"), null);
 });
 
 test("the chain walk lists device ids in dispatch order for host surfaces", async () => {
