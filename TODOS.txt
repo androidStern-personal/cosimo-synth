@@ -1165,10 +1165,13 @@ BROWSER SHARING AND ENVELOPE FOLLOW-UP
     Done when:
     - An approved design settles the open service rules, then a sender with a custom wavetable can create a link and a clean recipient session restores a byte-verified table and the exact patch; unavailable assets produce a clear non-destructive error.
 
-[ ] T48 — Redraw ADSR envelopes responsively without stretching their handles, and settle the envelope color
-    Active owner (2026-08-29):
+[x] T48 — Redraw ADSR envelopes responsively without stretching their handles, and settle the envelope color
+    Completed (2026-08-29):
     - Combined T48/T49 implementation task `T48 T49 Complete ADSR Editor`, thread `01a04c8c-c9dc-77d2-afd0-788fb44b9834`, branch `codex/t48-t49-adsr-editor`, worktree `/Users/winterfell/.codex/worktrees/9e82/cosimo-synth`, base `d10c166fbb8d4f25aedb326f7661576aedbf61f7`, model SOL, reasoning max.
     - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push master or deploy.
+    - The coordinator rebased the review-clean implementation onto current master and integrated final tip `85991314`. Responsive CSS-pixel geometry keeps visible handles circular and hit targets at least 44 px across compact, resized, expanded, full-screen, desktop, and iPhone compositions. ADSR and realized MSEG identity is cyan, MSEG A remains purple, and MSEG B remains gray on every reviewed surface.
+    - The decision-objection audit exposed one HIGH cross-surface omission: iPhone MSEG surfaces initially lacked the cyan realized Morph curve. That failed review and was repaired through the existing shared preview/editor seams before integration. Remaining geometry, gesture-threshold, bubble-placement, fixed-color, and local-lifecycle decisions were LOW or MEDIUM physical-feel risks rather than source defects.
+    - Focused ADSR 5/5 and iPhone A/B/realized-Morph checks pass. The complete desktop UI suite is 293/296: the two established React Grab and wavetable-prewarm reds remain, and the one reorder timeout reproduces identically on pre-integration master. Fresh HMR reported the exact task checkout and `usesViteClient: true`, then was stopped; the compiled strict-signed VST3 is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` with executable SHA-256 `7945ce0fd558d95c148301cbdfbed940d232d8715618f053664a5721a3fa2c14`.
     Confirmed drawing bug:
     - The compact ADSR editor sets the SVG to stretch freely to its container. That non-uniform transform stretches the entire diagram, including circular breakpoints, into long ovals.
     Required result:
@@ -1179,10 +1182,11 @@ BROWSER SHARING AND ENVELOPE FOLLOW-UP
     - Geometry tests prove every visible handle's rendered width equals its height across representative aspect ratios and no path or hit target escapes the graph.
     - In-context screenshots cover the compact drawer, expanded drawer, and full editor, and Andrew accepts both the responsive shape and the shared color.
 
-[ ] T49 — Make ADSR graph editing precise without covering the graph
-    Active owner (2026-08-29):
+[x] T49 — Make ADSR graph editing precise without covering the graph
+    Completed (2026-08-29):
     - Combined T48/T49 implementation task `T48 T49 Complete ADSR Editor`, thread `01a04c8c-c9dc-77d2-afd0-788fb44b9834`, branch `codex/t48-t49-adsr-editor`, worktree `/Users/winterfell/.codex/worktrees/9e82/cosimo-synth`, base `d10c166fbb8d4f25aedb326f7661576aedbf61f7`, model SOL, reasoning max.
     - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push master or deploy.
+    - The integrated editor locks the first dominant Decay/Sustain axis for the complete gesture, makes the whole sustain segment a Sustain-only target, and shows only the edited value in a compact pointer-following bubble. Native capture loss, rejected capture, cancellation, blur, resize/orientation, visibility, unmount, mouse, pen, and secondary-button behavior converge on an exactly-once lifecycle; final focused and delivery evidence is recorded with T48 above.
     Current gap:
     - Dragging the decay/sustain breakpoint changes both decay time and sustain level on every move. There is no dominant-axis lock, no value next to the finger, and the sustain segment itself cannot be dragged.
     Required interaction:
@@ -1578,12 +1582,12 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     Enhancer integration boundary:
     - Keep Cosimo Enhancer, Cosimo Enhancer Lite, and the per-voice Enhancer separate exactly as specified by T26, T61, T62, and `ENHANCER_DESIGN.md`. Per-voice simplifications never authorize deleting approved behavior from either standalone processor.
     - `codex/t26-spectre-wrapper-prototype` is the shared historical base. The readout and shelf branches are independent Lite descendants and must both survive composition. T61 packaging and MIDI tracking remain open after that composition; T62 remains separate and depends on T50.
-    Current integration queue (updated 2026-08-29):
+    Current integration queue (updated 2026-08-30):
     - Recently completed — `T28 Build Fixed Polish Section`; coordinator-managed implementation thread `01a04954-1c32-7771-9e22-c16c02d93503`; branch `codex/t28-fixed-polish-section`; worktree `/Users/winterfell/.codex/worktrees/1c70/cosimo-synth`; rebased base `35f5cb33cb7f8568323661d9713a28cb1f7fa3c3`; final commit `40eea1ebb085cc7781d5409a1bb57872cdf7f3b8`; scope is the fixed end-of-chain Polish DSP/UI/state/meter/host delivery. T62 dependency is landed; source review, focused repairs, complete automated gates, HMR, compiled build, install, code signing, fast-forward merge, master push at `fef3aec8`, and Sites version 60 deployment are complete. No merge, push, install, or deployment work remains for T28.
     - Recently completed — `T69 Implement plain CPM correction`; final handoff owner thread `01a04c57-fedd-7c23-b84a-7cc076a6ab4c`; branch `codex/t69-plain-cpm-correction`; worktree `/Users/winterfell/.codex/worktrees/2c89/cosimo-synth`; rebased integration commit `0c38ad96`. The rejected custom resolver is gone. Every active caller now uses one small ordinary CPM module for the private Cmajor/CHOC forks and pinned JUCE; the T26 runner is restored through the same seam and the private Cmajor compiler fix removes the warning waiver. Source review, focused repairs, rebasing, tests, and representative no-install builds are complete; no integration, installation, or deployment work remains for T69.
     - Recently completed — `T46 Finish URL Patch Sharing`; thread `01a04c8b-6924-76c0-b653-c395741312b7`; branch `codex/t46-url-patch-sharing`; worktree `/Users/winterfell/.codex/worktrees/46e1/cosimo-synth`; rebased integration commit `f63f70a4`. Complete current sounds now copy/open through URL on Chromium and WebKit at desktop and phone sizes, unsupported sounds refuse before mutation, and source/restored maximal sounds render identical audio. No native install or host gate applies to this browser-only feature.
     - Review queued — `T31 + T51 + T64 FX Graph Interactions`; thread `01a04c8c-a573-7ef0-b92b-177417df587f`; branch `codex/t31-t51-t64-fx-graph-interactions`; worktree `/Users/winterfell/.codex/worktrees/6e16/cosimo-synth`; base `d10c166f`; clean handoff `9f112c04`. Scope is exclusive scroll/reorder/menu gesture ownership, real lift/ghost/animated preview, Swap with cleanup, and selected-icon-only bypass.
-    - Review queued — `T48 + T49 Complete ADSR Editor`; thread `01a04c8c-c9dc-77d2-afd0-788fb44b9834`; branch `codex/t48-t49-adsr-editor`; worktree `/Users/winterfell/.codex/worktrees/9e82/cosimo-synth`; base `d10c166f`; clean handoff `e065b53b`. Scope is responsive ADSR geometry, cyan curve/handles, dominant-axis Decay/Sustain editing, sustain-segment dragging, and the compact finger value bubble.
+    - Recently completed — `T48 + T49 Complete ADSR Editor`; thread `01a04c8c-c9dc-77d2-afd0-788fb44b9834`; branch `codex/t48-t49-adsr-editor`; worktree `/Users/winterfell/.codex/worktrees/9e82/cosimo-synth`; integrated final tip `85991314`. Responsive ADSR geometry, dominant-axis Decay/Sustain editing, sustain-segment dragging, the local value bubble, cross-surface semantic colors, generated desktop/iPhone bundles, complete UI qualification, fresh HMR, compiled install, and strict code-sign verification are complete. Physical iPhone feel/visual acceptance and Ableton interaction remain explicitly unperformed rather than implementation blockers.
     Initial handoff sources to audit:
     - T57/T58 effect-editor cleanup: thread `01a0426b-19ee-7db0-ba88-e21192770e6a`.
     - T27 Sausage Fattener lab: thread `01a03b9b-5ad4-7f11-aafb-53bc9db9ca6f`.
