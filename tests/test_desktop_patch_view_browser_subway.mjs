@@ -506,6 +506,79 @@ async function centerOf(locator) {
     return { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
 }
 
+async function moveHarnessIntoProductionShadowRoot(page) {
+    await page.evaluate(async () => {
+        const host = document.querySelector("cosimo-desktop-react-view");
+        const mountPoint = host?.firstElementChild;
+        if (!(host instanceof HTMLElement) || !(mountPoint instanceof HTMLElement)) {
+            throw new Error("Expected the source-composed desktop view mount point.");
+        }
+        if (host.shadowRoot !== null) {
+            throw new Error("Expected the source harness to begin in light DOM.");
+        }
+        const cssModule = await import("/ui/desktop/styles.css?inline");
+        if (typeof cssModule.default !== "string") {
+            throw new Error("Expected the production desktop stylesheet text.");
+        }
+        const shadowRoot = host.attachShadow({ mode: "open" });
+        const style = document.createElement("style");
+        style.textContent = cssModule.default;
+        shadowRoot.replaceChildren(style, mountPoint);
+        document.getElementById("cosimo-desktop-react-view-styles")?.remove();
+    });
+    await page.waitForFunction(() => (
+        document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+            ?.querySelector('[data-role="rack-module-list"]') !== null
+    ));
+}
+
+async function openAllCaptureRejectedRackPage() {
+    return openHarnessPage({
+        laneDoc: "fresh",
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 1024, height: 768 });
+            await nextPage.addInitScript(() => {
+                window.__FX_CAPTURE_REJECTIONS__ = [];
+                window.__FX_LAST_POINTER_ID__ = null;
+                window.addEventListener("pointerdown", (event) => {
+                    window.__FX_LAST_POINTER_ID__ = event.pointerId;
+                }, true);
+                Element.prototype.setPointerCapture = function rejectPointerCapture() {
+                    window.__FX_CAPTURE_REJECTIONS__.push(
+                        this.matches?.(".subway-station")
+                            ? "station"
+                            : this.matches?.('[data-role="rack-module-list"]')
+                                ? "list"
+                                : "other",
+                    );
+                    throw new DOMException("Pointer capture is unavailable", "NotSupportedError");
+                };
+            });
+        },
+    });
+}
+
+async function pointOutsideOf(locator) {
+    return locator.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const candidates = [
+            { x: rect.right + 32, y: rect.top + (rect.height / 2) },
+            { x: rect.left - 32, y: rect.top + (rect.height / 2) },
+            { x: rect.left + (rect.width / 2), y: rect.bottom + 32 },
+            { x: rect.left + (rect.width / 2), y: rect.top - 32 },
+        ];
+        const point = candidates.find(({ x, y }) => (
+            x >= 2 && x <= window.innerWidth - 2
+                && y >= 2 && y <= window.innerHeight - 2
+                && !(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)
+        ));
+        if (point === undefined) {
+            throw new Error("Expected an in-viewport point outside the rack list.");
+        }
+        return point;
+    });
+}
+
 async function createTouchDriver(page) {
     const cdp = await page.context().newCDPSession(page);
     const point = ({ x, y }) => ({
@@ -3313,6 +3386,90 @@ test("dragging a station into the empty band crosses lanes and commits once", as
     }
 });
 
+test("the source-composed production ShadowRoot owns and styles the lifted real pill", async () => {
+    const page = await openHarnessPage({
+        laneDoc: "fresh",
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 1024, height: 768 }),
+    });
+
+    try {
+        await moveHarnessIntoProductionShadowRoot(page);
+        const source = page.locator(
+            '[data-device-id="reverb#1"] [data-role="rack-station-reverb"]',
+        );
+        const target = page.locator(
+            '[data-device-id="distortion#1"] [data-role="rack-station-drive"]',
+        );
+        await source.scrollIntoViewIfNeeded();
+        const sourcePoint = await centerOf(source);
+        const targetPoint = await centerOf(target);
+
+        await page.mouse.move(sourcePoint.x, sourcePoint.y);
+        await page.mouse.down();
+        await page.waitForTimeout(210);
+        await page.mouse.move(targetPoint.x, targetPoint.y);
+        const lifted = page.locator(
+            '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]',
+        );
+        await lifted.waitFor();
+        const beforeMove = await lifted.evaluate((element) => ({
+            left: Number.parseFloat(element.style.left),
+            top: Number.parseFloat(element.style.top),
+        }));
+        const followDelta = { x: 12, y: 6 };
+        await page.mouse.move(
+            targetPoint.x + followDelta.x,
+            targetPoint.y + followDelta.y,
+        );
+        await page.waitForFunction(({ beforeLeft, beforeTop }) => {
+            const host = document.querySelector("cosimo-desktop-react-view");
+            const element = host?.shadowRoot?.querySelector('[data-role="rack-reorder-lifted-pill"]')
+                ?? document.body.querySelector('[data-role="rack-reorder-lifted-pill"]');
+            return element instanceof HTMLElement
+                && Math.abs(Number.parseFloat(element.style.left) - beforeLeft) > 8
+                && Math.abs(Number.parseFloat(element.style.top) - beforeTop) > 3;
+        }, { beforeLeft: beforeMove.left, beforeTop: beforeMove.top });
+
+        const evidence = await lifted.evaluate((element) => {
+            const host = document.querySelector("cosimo-desktop-react-view");
+            const shadowRoot = host?.shadowRoot ?? null;
+            const style = getComputedStyle(element);
+            const pill = element.querySelector(".subway-station-pill");
+            const pillStyle = pill instanceof HTMLElement ? getComputedStyle(pill) : null;
+            return {
+                rootIsOwningShadow: shadowRoot !== null && element.getRootNode() === shadowRoot,
+                documentBodyOwnsLift: document.body.querySelector(
+                    '[data-role="rack-reorder-lifted-pill"]',
+                ) !== null,
+                position: style.position,
+                display: style.display,
+                zIndex: style.zIndex,
+                pointerEvents: style.pointerEvents,
+                transform: style.transform,
+                pillDisplay: pillStyle?.display ?? "",
+                pillFilter: pillStyle?.filter ?? "",
+                left: Number.parseFloat(element.style.left),
+                top: Number.parseFloat(element.style.top),
+            };
+        });
+        assert.equal(evidence.rootIsOwningShadow, true);
+        assert.equal(evidence.documentBodyOwnsLift, false);
+        assert.equal(evidence.position, "fixed");
+        assert.equal(evidence.display, "grid");
+        assert.equal(evidence.zIndex, "100");
+        assert.equal(evidence.pointerEvents, "none");
+        assert.notEqual(evidence.transform, "none");
+        assert.equal(evidence.pillDisplay, "grid");
+        assert.notEqual(evidence.pillFilter, "none");
+        assert.equal(Math.abs((evidence.left - beforeMove.left) - followDelta.x) < 1, true);
+        assert.equal(Math.abs((evidence.top - beforeMove.top) - followDelta.y) < 1, true);
+        await page.mouse.up();
+    } finally {
+        await page.mouse.up().catch(() => undefined);
+        await page.close();
+    }
+});
+
 test("same-branch reorder commits the exact held preview once", async () => {
     const page = await openHarnessPage({ laneDoc: branchTailLaneDocJson("split") });
 
@@ -3624,6 +3781,176 @@ test("station capture rejection still lifts and reorders outside the source stat
     } finally {
         await page.mouse.up().catch(() => undefined);
         await page.close();
+    }
+});
+
+test("post-lift capture rejection follows outside-list movement and commits the exact preview once", async () => {
+    const page = await openAllCaptureRejectedRackPage();
+
+    try {
+        const list = page.locator('[data-role="rack-module-list"]');
+        const source = page.locator(
+            '[data-device-id="reverb#1"] [data-role="rack-station-reverb"]',
+        );
+        const target = page.locator(
+            '[data-device-id="distortion#1"] [data-role="rack-station-drive"]',
+        );
+        await source.scrollIntoViewIfNeeded();
+        const sourcePoint = await centerOf(source);
+        const targetPoint = await centerOf(target);
+        const outsidePoint = await pointOutsideOf(list);
+        await clearHarnessDebugLog(page);
+
+        await page.mouse.move(sourcePoint.x, sourcePoint.y);
+        await page.mouse.down();
+        await page.waitForTimeout(210);
+        await page.mouse.move(targetPoint.x, targetPoint.y);
+        const lifted = page.locator(
+            '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]',
+        );
+        await lifted.waitFor();
+        await page.mouse.move(targetPoint.x + 1, targetPoint.y);
+        await page.waitForSelector(
+            '[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]',
+        );
+        const beforeOutsideMove = await lifted.boundingBox();
+        assert.ok(beforeOutsideMove);
+
+        await page.mouse.move(outsidePoint.x, outsidePoint.y);
+        await page.waitForFunction(({ beforeLeft, beforeTop }) => {
+            const element = document.querySelector('[data-role="rack-reorder-lifted-pill"]');
+            if (!(element instanceof HTMLElement)) {
+                return false;
+            }
+            const rect = element.getBoundingClientRect();
+            return Math.abs(rect.left - beforeLeft) > 8 || Math.abs(rect.top - beforeTop) > 8;
+        }, {
+            beforeLeft: beforeOutsideMove.x,
+            beforeTop: beforeOutsideMove.y,
+        }, { timeout: 2000 });
+        const outsideEvidence = await page.evaluate(({ x, y }) => {
+            const listElement = document.querySelector('[data-role="rack-module-list"]');
+            const hit = document.elementFromPoint(x, y);
+            return {
+                outsideList: listElement instanceof HTMLElement
+                    && hit !== null
+                    && !listElement.contains(hit),
+                rejections: window.__FX_CAPTURE_REJECTIONS__.slice(),
+                previewPath: document.querySelector(
+                    '[data-device-id="reverb#1"][data-lane-path]',
+                )?.getAttribute("data-lane-path") ?? null,
+            };
+        }, outsidePoint);
+        assert.equal(outsideEvidence.outsideList, true);
+        assert.deepEqual(outsideEvidence.rejections, ["station", "list"]);
+        assert.equal(outsideEvidence.previewPath, "trunk:0");
+
+        await page.mouse.up();
+        const committed = await waitForHarnessSnapshot(
+            page,
+            "all-capture-rejected reorder commit",
+            (snapshot) => {
+                const rawLane = snapshot.storedState["lane.v1"];
+                return rawLane !== undefined
+                    && JSON.parse(String(rawLane)).chain[0]?.deviceId === "reverb#1";
+            },
+        );
+        assert.equal(
+            committed.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").length,
+            1,
+        );
+    } finally {
+        await page.mouse.up().catch(() => undefined);
+        await page.close();
+    }
+});
+
+test("post-lift window fallback cancel, blur, and hidden state never publish", async () => {
+    for (const lifecycleLoss of ["pointercancel", "blur", "hidden"]) {
+        const page = await openAllCaptureRejectedRackPage();
+        try {
+            const list = page.locator('[data-role="rack-module-list"]');
+            const source = page.locator(
+                '[data-device-id="reverb#1"] [data-role="rack-station-reverb"]',
+            );
+            const target = page.locator(
+                '[data-device-id="distortion#1"] [data-role="rack-station-drive"]',
+            );
+            await source.scrollIntoViewIfNeeded();
+            const sourcePoint = await centerOf(source);
+            const targetPoint = await centerOf(target);
+            const outsidePoint = await pointOutsideOf(list);
+            const storedBefore = String((await getHarnessSnapshot(page)).storedState["lane.v1"]);
+            await clearHarnessDebugLog(page);
+
+            await page.mouse.move(sourcePoint.x, sourcePoint.y);
+            await page.mouse.down();
+            await page.waitForTimeout(210);
+            await page.mouse.move(targetPoint.x, targetPoint.y);
+            await page.waitForSelector(
+                '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]',
+            );
+            await page.mouse.move(targetPoint.x + 1, targetPoint.y);
+            await page.waitForSelector(
+                '[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]',
+            );
+            await page.mouse.move(outsidePoint.x, outsidePoint.y);
+
+            if (lifecycleLoss === "pointercancel") {
+                await page.evaluate(() => {
+                    window.dispatchEvent(new PointerEvent("pointercancel", {
+                        bubbles: true,
+                        cancelable: true,
+                        pointerId: window.__FX_LAST_POINTER_ID__,
+                        pointerType: "mouse",
+                        isPrimary: true,
+                        button: 0,
+                        buttons: 0,
+                    }));
+                });
+            } else if (lifecycleLoss === "blur") {
+                await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+            } else {
+                await page.evaluate(() => {
+                    Object.defineProperty(document, "visibilityState", {
+                        configurable: true,
+                        get: () => "hidden",
+                    });
+                    document.dispatchEvent(new Event("visibilitychange"));
+                    Object.defineProperty(document, "visibilityState", {
+                        configurable: true,
+                        get: () => "visible",
+                    });
+                });
+            }
+
+            await page.waitForSelector('[data-role="rack-reorder-lifted-pill"]', {
+                state: "detached",
+            });
+            await page.mouse.move(sourcePoint.x, sourcePoint.y);
+            await page.mouse.up();
+            await page.waitForTimeout(80);
+
+            const snapshot = await getHarnessSnapshot(page);
+            assert.equal(
+                String(snapshot.storedState["lane.v1"]),
+                storedBefore,
+                `${lifecycleLoss} must restore the authoritative document`,
+            );
+            assert.equal(
+                snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"),
+                false,
+                `${lifecycleLoss} must not publish reorder topology`,
+            );
+            assert.deepEqual(
+                await page.evaluate(() => window.__FX_CAPTURE_REJECTIONS__),
+                ["station", "list"],
+            );
+            assert.equal(await page.locator('[data-role="rack-station-menu"]').count(), 0);
+        } finally {
+            await page.mouse.up().catch(() => undefined);
+            await page.close();
+        }
     }
 });
 

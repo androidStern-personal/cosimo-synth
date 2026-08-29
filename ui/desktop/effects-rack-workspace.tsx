@@ -416,6 +416,7 @@ type ReorderGesture = {
     readonly authoritativeTopologyKey: string;
     readonly previewPath: LaneDevicePathV2;
     readonly captureElement: HTMLDivElement;
+    readonly pointerOwnership: "element-capture" | "window-fallback";
     readonly pointerOffsetX: number;
     readonly pointerOffsetY: number;
     readonly sourceWidth: number;
@@ -475,6 +476,13 @@ function renderedStationVisualMode(
     return "detail";
 }
 
+function reorderOverlayRoot(stationElement: HTMLElement): HTMLElement | ShadowRoot {
+    const renderRoot = stationElement.getRootNode();
+    return renderRoot instanceof ShadowRoot
+        ? renderRoot
+        : stationElement.ownerDocument.body;
+}
+
 const EFFECT_ACCENTS: Readonly<Record<EffectModuleId, string>> = {
     filter: "#c6db3f",
     drive: "#ff6a27",
@@ -527,7 +535,17 @@ function resolveModSourceDragPoint(
     });
 }
 
-function hasReleasedMouseButton(event: ReactPointerEvent<HTMLElement>) {
+type ReorderPointerInput = {
+    readonly pointerId: number;
+    readonly pointerType: string;
+    readonly buttons: number;
+    readonly clientX: number;
+    readonly clientY: number;
+    preventDefault: () => void;
+    stopPropagation: () => void;
+};
+
+function hasReleasedMouseButton(event: Pick<ReorderPointerInput, "pointerType" | "buttons">) {
     return event.pointerType === "mouse" && event.buttons === 0;
 }
 
@@ -4940,8 +4958,16 @@ export function EffectsRackWorkspace({
         try {
             captureElement.setPointerCapture(request.pointerId);
         } catch {
-            // The list and window handlers remain authoritative when capture
-            // is unavailable or the platform has already lost it.
+            // hasPointerCapture below distinguishes an existing capture from
+            // a platform that needs stable post-lift window ownership.
+        }
+        let pointerOwnership: ReorderGesture["pointerOwnership"] = "window-fallback";
+        try {
+            if (captureElement.hasPointerCapture(request.pointerId)) {
+                pointerOwnership = "element-capture";
+            }
+        } catch {
+            // Unsupported capture keeps the window fallback authoritative.
         }
         const pillRect = pill.getBoundingClientRect();
         const visualMode = renderedStationVisualMode(pill);
@@ -4951,6 +4977,7 @@ export function EffectsRackWorkspace({
             authoritativeTopologyKey: laneTopologyKey(rackStateRef.current),
             previewPath,
             captureElement,
+            pointerOwnership,
             pointerOffsetX: liftOrigin.clientX - pillRect.left,
             pointerOffsetY: liftOrigin.clientY - pillRect.top,
             sourceWidth: pillRect.width,
@@ -4960,6 +4987,7 @@ export function EffectsRackWorkspace({
         setReorderPresentation({
             deviceId,
             phase: "dragging",
+            overlayRoot: reorderOverlayRoot(request.stationElement),
             left: pillRect.left,
             top: pillRect.top,
             width: pillRect.width,
@@ -5083,7 +5111,10 @@ export function EffectsRackWorkspace({
         }
     }, [finishReorder, rackState]);
 
-    const updateReorderPreview = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const processReorderPointerMove = useCallback((
+        event: ReorderPointerInput,
+        captureElement: HTMLDivElement,
+    ) => {
         const gesture = reorderRef.current;
         if (!gesture || gesture.pointerId !== event.pointerId) {
             return;
@@ -5110,7 +5141,7 @@ export function EffectsRackWorkspace({
                 : current
         ));
 
-        const renderRoot = event.currentTarget.getRootNode();
+        const renderRoot = captureElement.getRootNode();
         if (!(renderRoot instanceof Document) && !(renderRoot instanceof ShadowRoot)) {
             return;
         }
@@ -5118,7 +5149,7 @@ export function EffectsRackWorkspace({
         // A folded four-lane branch deliberately has no direct body target.
         // Deliberately dwelling its full-size badge opens that branch without
         // moving the device to a nearby visible rail while the badge is held.
-        if (updateReorderBranchDwell(event.currentTarget, event.clientX, event.clientY)) {
+        if (updateReorderBranchDwell(captureElement, event.clientX, event.clientY)) {
             return;
         }
 
@@ -5173,8 +5204,23 @@ export function EffectsRackWorkspace({
             setPreviewDoc(nextDoc);
         }
     }, [captureReorderLayout, finishReorder, updateReorderBranchDwell]);
+    const processReorderPointerMoveRef = useRef(processReorderPointerMove);
+    processReorderPointerMoveRef.current = processReorderPointerMove;
+
+    const updateReorderPreview = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        if (reorderRef.current?.pointerOwnership !== "element-capture") {
+            return;
+        }
+        processReorderPointerMove(event, event.currentTarget);
+    }, [processReorderPointerMove]);
 
     useEffect(() => {
+        const handlePointerMove = (event: PointerEvent) => {
+            const gesture = reorderRef.current;
+            if (gesture?.pointerOwnership === "window-fallback") {
+                processReorderPointerMoveRef.current(event, gesture.captureElement);
+            }
+        };
         const handlePointerUp = (event: PointerEvent) => finishReorder(event.pointerId, true);
         const handlePointerCancel = (event: PointerEvent) => finishReorder(event.pointerId, false);
         const cancelActiveReorder = () => {
@@ -5189,11 +5235,13 @@ export function EffectsRackWorkspace({
             }
         };
 
+        window.addEventListener("pointermove", handlePointerMove, { capture: true, passive: false });
         window.addEventListener("pointerup", handlePointerUp, true);
         window.addEventListener("pointercancel", handlePointerCancel, true);
         window.addEventListener("blur", cancelActiveReorder);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
+            window.removeEventListener("pointermove", handlePointerMove, true);
             window.removeEventListener("pointerup", handlePointerUp, true);
             window.removeEventListener("pointercancel", handlePointerCancel, true);
             window.removeEventListener("blur", cancelActiveReorder);

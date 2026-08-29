@@ -69,6 +69,7 @@ const STATION_LONG_PRESS_MS = 550;
 export type SubwayReorderPresentation = {
     readonly deviceId: string;
     readonly phase: "dragging" | "settling";
+    readonly overlayRoot: HTMLElement | ShadowRoot;
     readonly left: number;
     readonly top: number;
     readonly width: number;
@@ -711,7 +712,7 @@ function LiftedStation({
         >
             <StationBody station={station} effectId={effectId} />
         </div>,
-        document.body,
+        presentation.overlayRoot,
     );
 }
 
