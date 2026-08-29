@@ -868,6 +868,9 @@ EFFECTS LANE FOLLOW-UP
     - Screenshots with populated LO, MID, and HI bands show which effect belongs to which band without relying on clipping, horizontal scrolling, or shrinking the effect labels until they are unreadable.
 
 [ ] T31 — Show the proposed result while an effect is dragged and animate every move
+    Active owner (2026-08-29):
+    - Combined T31/T51/T64 implementation task `T31 T51 T64 FX Graph Interactions`, thread `01a04c8c-a573-7ef0-b92b-177417df587f`, branch `codex/t31-t51-t64-fx-graph-interactions`, worktree `/Users/winterfell/.codex/worktrees/6e16/cosimo-synth`, base `d10c166fbb8d4f25aedb326f7661576aedbf61f7`, model SOL, reasoning max.
+    - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push master or deploy.
     Current gap:
     - The code already builds a proposed rack order as the pointer crosses drop targets, but it redraws that order instantly. The dragged effect stays in the grid, other effects jump, and the destination is not shown as an opening in the chain.
     Required drag behavior:
@@ -1131,6 +1134,9 @@ BROWSER SHARING AND ENVELOPE FOLLOW-UP
     - A physical Safari pass switches apps/windows, returns, follows the browser's permitted gesture path, and confirms a subsequent note sounds. A test that only changes `document.hidden` in place is not sufficient evidence.
 
 [ ] T46 — Requalify and finish the existing first version of patch sharing by URL
+    Active owner (2026-08-29):
+    - Codex task `T46 Finish URL Patch Sharing`, thread `01a04c8b-6924-76c0-b653-c395741312b7`, branch `codex/t46-url-patch-sharing`, worktree `/Users/winterfell/.codex/worktrees/46e1/cosimo-synth`, base `d10c166fbb8d4f25aedb326f7661576aedbf61f7`, model SOL, reasoning max.
+    - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push master or deploy.
     Existing implementation:
     - Master already captures the current sound into a versioned `#p=1.<compressed-data>` URL fragment, exposes Share in the preset menu, asks before replacing the current sound, removes the fragment after loading, warns above 2,000 characters, and refuses above 8,000. Do not rebuild this machinery from scratch.
     Current audit (2026-08-27):
@@ -1159,6 +1165,9 @@ BROWSER SHARING AND ENVELOPE FOLLOW-UP
     - An approved design settles the open service rules, then a sender with a custom wavetable can create a link and a clean recipient session restores a byte-verified table and the exact patch; unavailable assets produce a clear non-destructive error.
 
 [ ] T48 — Redraw ADSR envelopes responsively without stretching their handles, and settle the envelope color
+    Active owner (2026-08-29):
+    - Combined T48/T49 implementation task `T48 T49 Complete ADSR Editor`, thread `01a04c8c-c9dc-77d2-afd0-788fb44b9834`, branch `codex/t48-t49-adsr-editor`, worktree `/Users/winterfell/.codex/worktrees/9e82/cosimo-synth`, base `d10c166fbb8d4f25aedb326f7661576aedbf61f7`, model SOL, reasoning max.
+    - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push master or deploy.
     Confirmed drawing bug:
     - The compact ADSR editor sets the SVG to stretch freely to its container. That non-uniform transform stretches the entire diagram, including circular breakpoints, into long ovals.
     Required result:
@@ -1170,6 +1179,9 @@ BROWSER SHARING AND ENVELOPE FOLLOW-UP
     - In-context screenshots cover the compact drawer, expanded drawer, and full editor, and Andrew accepts both the responsive shape and the shared color.
 
 [ ] T49 — Make ADSR graph editing precise without covering the graph
+    Active owner (2026-08-29):
+    - Combined T48/T49 implementation task `T48 T49 Complete ADSR Editor`, thread `01a04c8c-c9dc-77d2-afd0-788fb44b9834`, branch `codex/t48-t49-adsr-editor`, worktree `/Users/winterfell/.codex/worktrees/9e82/cosimo-synth`, base `d10c166fbb8d4f25aedb326f7661576aedbf61f7`, model SOL, reasoning max.
+    - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push master or deploy.
     Current gap:
     - Dragging the decay/sustain breakpoint changes both decay time and sustain level on every move. There is no dominant-axis lock, no value next to the finger, and the sustain segment itself cannot be dragged.
     Required interaction:
@@ -1226,6 +1238,9 @@ BROWSER SHARING AND ENVELOPE FOLLOW-UP
 RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
 
 [ ] T51 — Let an effect be replaced from its graph-node menu
+    Active owner (2026-08-29):
+    - Combined T31/T51/T64 implementation task `T31 T51 T64 FX Graph Interactions`, thread `01a04c8c-a573-7ef0-b92b-177417df587f`, branch `codex/t31-t51-t64-fx-graph-interactions`, worktree `/Users/winterfell/.codex/worktrees/6e16/cosimo-synth`, base `d10c166fbb8d4f25aedb326f7661576aedbf61f7`, model SOL, reasoning max.
+    - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push master or deploy.
     Current gap:
     - Long-pressing an effect node opens its context menu, but that menu cannot replace the effect.
     Required behavior:
@@ -1494,6 +1509,9 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Fresh coordinator HMR launched the exact `74e4` standalone. The final self-contained compiled VST3 includes the pinned Cmajor runtime and is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`; strict deep code-sign verification passes and its executable SHA-256 is `8a6754146b8c1a2b588798a2807d4c93a5f0edaf4996791783bd7cd2fdc198cd`. Sites version 57 deploys the composed lane controls from `c4f6de33`. Ableton remained open and was not disturbed, so final host use, subjective click/listening acceptance, host round-trip inspection, and physical iPhone touch/audio acceptance remain unperformed.
 
 [ ] T64 — Toggle an effect's bypass from its selected graph icon without stealing scroll gestures
+    Active owner (2026-08-29):
+    - Combined T31/T51/T64 implementation task `T31 T51 T64 FX Graph Interactions`, thread `01a04c8c-a573-7ef0-b92b-177417df587f`, branch `codex/t31-t51-t64-fx-graph-interactions`, worktree `/Users/winterfell/.codex/worktrees/6e16/cosimo-synth`, base `d10c166fbb8d4f25aedb326f7661576aedbf61f7`, model SOL, reasoning max.
+    - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push master or deploy.
     Tap behavior:
     - Keep the current first tap: tapping an effect node selects it and expands its editor.
     - When that same effect is already selected, tapping specifically its effect icon toggles that effect between active and bypassed while leaving it selected and its editor open. The first icon tap on an unselected node only selects it; it must not also bypass it.
