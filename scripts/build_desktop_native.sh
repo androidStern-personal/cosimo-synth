@@ -11,6 +11,14 @@ desktop_dev_server_module_url="${desktop_dev_server_origin%/}/patch_gui/desktop/
 desktop_dev_server_status_url="${desktop_dev_server_origin%/}/__cosimo-dev-status"
 
 cmajor_version="$(cmaj version | awk '/Cmajor Version:/ { print $3; exit }')"
+
+if [[ -n "${CMAJOR_SOURCE_PATH:-}" ]]; then
+  cmajor_source_path="$CMAJOR_SOURCE_PATH"
+else
+  cmajor_source_path="$(python3 "$repo_root/scripts/ensure_cmajor_runtime.py" --path)"
+fi
+
+juce_path="${JUCE_PATH:-$cache_root/JUCE}"
 dmg_path="$cache_root/cmajor-$cmajor_version.dmg"
 runtime_dylib="$cache_root/libCmajPerformer-$cmajor_version.dylib"
 mount_point="$cache_root/cmajor-dmg-$cmajor_version"
@@ -21,10 +29,28 @@ vst3_install_dir="$HOME/Library/Audio/Plug-Ins/VST3"
 au_bundle="$au_install_dir/CosimoDesktopNative.component"
 vst3_bundle="$vst3_install_dir/CosimoDesktopNative.vst3"
 
+validate_patched_cmajor_runtime() {
+  local webview_header="$cmajor_source_path/include/choc/choc/gui/choc_WebView.h"
+
+  if [[ ! -f "$webview_header" ]]; then
+    printf 'Cmajor runtime is missing CHOC WebView header: %s\n' "$webview_header" >&2
+    exit 1
+  fi
+
+  if ! grep -Fq 'chocHostKeyboard' "$webview_header" \
+      || ! grep -Fq '__chocHostKeyboardBridgeInstalled' "$webview_header"; then
+    printf 'Cmajor runtime does not include the patched CHOC keyboard bridge: %s\n' "$cmajor_source_path" >&2
+    printf 'Use scripts/ensure_cmajor_runtime.py --path or set CMAJOR_SOURCE_PATH to a patched Cmajor checkout.\n' >&2
+    exit 1
+  fi
+}
+
 if [[ ! -e "$patch_path" ]]; then
   printf 'Patch file not found: %s\n' "$patch_path" >&2
   exit 1
 fi
+
+validate_patched_cmajor_runtime
 
 if [[ "$desktop_ui_source_mode" == "compiled" ]]; then
   npm run ui:build
@@ -60,6 +86,10 @@ if [[ -f "$build_dir/CMakeCache.txt" ]]; then
   fi
 fi
 
+if [[ ! -d "$juce_path/.git" ]]; then
+  git clone --depth 1 https://github.com/juce-framework/JUCE.git "$juce_path"
+fi
+
 if [[ ! -f "$runtime_dylib" ]]; then
   if [[ ! -f "$dmg_path" ]]; then
     curl -L "https://github.com/cmajor-lang/cmajor/releases/download/$cmajor_version/cmajor.dmg" -o "$dmg_path"
@@ -79,7 +109,9 @@ cmake -S "$repo_root/tools/desktop_native" \
       -DCMAKE_BUILD_TYPE=Release \
       -DCOSIMO_PATCH_PATH="$patch_path" \
       -DCOSIMO_DESKTOP_UI_SOURCE_MODE="$desktop_ui_source_mode" \
-      -DCOSIMO_DESKTOP_DEV_SERVER_ORIGIN="$desktop_dev_server_origin"
+      -DCOSIMO_DESKTOP_DEV_SERVER_ORIGIN="$desktop_dev_server_origin" \
+      -DCMAJOR_SOURCE_PATH="$cmajor_source_path" \
+      -DJUCE_PATH="$juce_path"
 
 cmake --build "$build_dir" --config Release
 
@@ -126,4 +158,3 @@ printf 'Installed %s\n' "$vst3_bundle"
 printf 'Bundled standalone runtime into %s\n' "$standalone_built"
 printf 'Bundled %s\n' "$runtime_dylib"
 printf 'Using patch %s\n' "$patch_path"
-printf 'Dependency evidence: %s\n' "$build_dir/cosimo-dependency-resolution.json"

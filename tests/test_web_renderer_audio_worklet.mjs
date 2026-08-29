@@ -12,13 +12,8 @@ import { chromium, webkit } from "playwright";
 import { adaptCosimoAudioWorkletModuleLoading } from "../web/audio-worklet-instrumentation.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const dependencyResult = spawnSync("python3", ["scripts/resolve_build_dependencies.py"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-});
-if (dependencyResult.status !== 0)
-    throw new Error(dependencyResult.stderr || "CPM dependency resolution failed");
-const runtimeRoot = JSON.parse(dependencyResult.stdout).dependencies.cmajor.path;
+const runtimeRoot = process.env.CMAJOR_SOURCE_PATH
+    ?? path.join(repoRoot, "build/deps/cmajor-1.0.3066-choc-e50b21a2");
 const browserName = process.env.COSIMO_WEB_RENDERER_BROWSER ?? "chromium";
 
 let server;
@@ -77,7 +72,6 @@ export async function createConnection(audioContext) {
     await fs.cp(path.join(runtimeRoot, "javascript/cmaj_api"), path.join(root, "cmaj_api"), {
         recursive: true,
     });
-    run("chmod", ["-R", "u+w", path.join(root, "cmaj_api")]);
     const helperPath = path.join(root, "cmaj_api/cmaj-audio-worklet-helper.js");
     await fs.writeFile(
         helperPath,

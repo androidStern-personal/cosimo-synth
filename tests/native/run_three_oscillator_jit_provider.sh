@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-runtime_root="$(python3 "$repo_root/scripts/resolve_build_dependencies.py" --path cmajor)"
+runtime_root="${CMAJOR_SOURCE_PATH:-$(python3 "$repo_root/scripts/ensure_cmajor_runtime.py" --path)}"
 runtime_dylib="${COSIMO_CMAJOR_RUNTIME_LIBRARY:-}"
 
 if [[ -z "$runtime_dylib" ]]; then

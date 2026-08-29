@@ -216,7 +216,7 @@ It should:
 
 ```text
 1. Run the runtime build above.
-2. Resolve the locked Cmajor, CHOC, and JUCE sources through the repository's one CPM resolver.
+2. Use scripts/ensure_cmajor_runtime.py as the default patched Cmajor source.
 3. Run cmaj generate --target=juce against the generated runtime patch.
 4. Configure and build the generated JUCE project with CMake.
 5. Verify the built binary contains the patched CHOC keyboard bridge.

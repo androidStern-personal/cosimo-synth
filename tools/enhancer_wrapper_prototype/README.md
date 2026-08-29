@@ -9,9 +9,20 @@ This directory is throwaway measurement code. It is not production DSP and is no
 wired into the synth, the installed Enhancer, or the Polish chain. It compiles only
 the JUCE DSP modules, avoiding JUCE's obsolete GUI build helper on current macOS.
 
-The original JUCE runner was retired when Cosimo adopted its single CPM source
-resolver. Its measured results remain recorded below; this directory no longer
-contains an independently runnable dependency downloader.
+The runner builds a tiny JUCE probe, renders all JUCE FIR/IIR quality and latency
+variants, selects on linear and nonlinear training probes, and evaluates only the
+winner on held-out tones and musical material.
+
+Run it with:
+
+```sh
+npm run prototype:enhancer-wrapper
+```
+
+The command verifies the exact JUCE 7.0.1 source revision, builds the probe, ranks
+all eight FIR/IIR quality and latency variants on training material, and only then
+reveals the held-out tone and music results. The pinned JUCE checkout, executable,
+report, and A/B audio stay under ignored `build/t26-wrapper-prototype/`.
 
 The measured result and production decision boundary are recorded in
 `ENHANCER_WRAPPER_PROTOTYPE_FINDINGS.md` at the repository root.
@@ -28,8 +39,13 @@ those two measured endpoints as ground truth. Cosimo's continuous 25%, 50%, and 
 targets are exact sample-wise interpolation between them; they are not presented as
 Spectre settings and use no dynamic gain measurement.
 
-The follow-up fit the shaped path and the `Spectre off - Spectre on` subtraction
-path separately on training-only tones, locked both static filter choices, then
-evaluated Subtle/Medium, Tube/Solid, control variants, and four musical fixtures.
-Its independently downloading JUCE runner and package command are retired; the
-result remains recorded in `ENHANCER_DEEMPHASIS_FINDINGS.md`.
+Run the isolated follow-up with:
+
+```sh
+npm run prototype:enhancer-deemphasis
+```
+
+It fits the shaped path and the `Spectre off - Spectre on` subtraction path
+separately on training-only tones, locks both static filter choices, then evaluates
+Subtle/Medium, Tube/Solid, control variants, and four musical fixtures. The ignored
+report and A/B audio are written below `build/t26-deemphasis-prototype/`.

@@ -42,6 +42,11 @@ while (( $# > 0 )); do
   esac
 done
 build_dir="${COSIMO_CMAJOR_EXTERNAL_CODEGEN_BUILD_DIR:-$repo_root/build/cmajor_external_codegen-host}"
+cmajor_source_path="${CMAJOR_SOURCE_PATH:-}"
+
+if [[ -z "$cmajor_source_path" ]]; then
+  cmajor_source_path="$(python3 "$repo_root/scripts/ensure_cmajor_runtime.py" --path)"
+fi
 
 host_cmake() {
   env \
@@ -61,7 +66,8 @@ host_cmake() {
 
 host_cmake -S "$repo_root/tools/cmajor_external_codegen" -B "$build_dir" \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_OSX_SYSROOT=macosx
+  -DCMAKE_OSX_SYSROOT=macosx \
+  -DCMAJOR_SOURCE_PATH="$cmajor_source_path"
 host_cmake --build "$build_dir" --config Release --target cosimo_cmajor_external_codegen -j "$build_jobs"
 
 mkdir -p "$(dirname "$output_path")"

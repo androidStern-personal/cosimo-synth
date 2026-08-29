@@ -33,9 +33,13 @@ generated plugin build
   cmaj generate receives --cmajorIncludePath /absolute/path/to/cmajor/include
 ```
 
-The current private Cmajor and CHOC repository identities and full commits are
-defined only in `cmake/dependencies.lock.cmake`. Cmajor's `include/choc`
-submodule pins that same private CHOC commit.
+The current pushed CHOC fork is:
+
+```text
+https://github.com/androidStern/choc
+branch: cosimo-keyboard-bridge
+commit: 1e79d904209abd842d688433358f9e0df7d55454
+```
 
 The official prebuilt generic `CmajPlugin.vst3` and `CmajPlugin.component` do not
 contain this fix. They were already compiled against stock CHOC. To use this
@@ -53,20 +57,18 @@ Generated VST3 workflow:
 - `OTT Lab` uses `npm run fx:prod:build -- ott`.
 - `SeqFX` uses `npm run fx:prod:build -- seqfx`.
 
-The shared production build follows one dependency pattern:
+The shared production build follows the same dependency pattern:
 
 ```text
-scripts/resolve_build_dependencies.py
-  -> shared CPM source cache
-  -> locked private Cmajor commit
-  -> include/choc at the locked private CHOC commit
-  -> locked JUCE commit
+scripts/ensure_cmajor_runtime.py
+  -> build/deps/cmajor-1.0.3066-choc-1e79d904
+  -> include/choc at 1e79d904209abd842d688433358f9e0df7d55454
   -> cmaj generate ... --cmajorIncludePath=<patched runtime>/include
 ```
 
-That means generated plugin builds pick up the patched CHOC checkout by default.
-The resolver rejects a dirty, incomplete, wrong-origin, or wrong-commit tree and
-the plugin build still verifies that its output binary contains the bridge markers:
+That means the generated plugin builds pick up the patched CHOC checkout by
+default. If `CMAJOR_SOURCE_PATH` is set manually, the scripts still validate
+that its CHOC WebView header contains the bridge markers:
 
 ```text
 chocHostKeyboard
@@ -136,14 +138,14 @@ npm run cmajplugin:build
 npm run cmajplugin:install
 ```
 
-`npm run cmajplugin:build` resolves the locked source graph through CPM,
+`npm run cmajplugin:build` uses `scripts/ensure_cmajor_runtime.py` by default,
 configures Cmajor's `CmajPlugin_VST3` target with CMake, builds it, and verifies
 that the built binary contains the bridge strings.
 
 The built VST3 is expected under:
 
 ```text
-build/cmajplugin_vst3/cmajplugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3
+build/cmajplugin_vst3/tools/CmajPlugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3
 ```
 
 `npm run cmajplugin:install` copies that already-built VST3 into:
@@ -176,12 +178,77 @@ Do not use the official generic AU loader for Ableton development. The official
 generic VST3 did not reproduce the Ableton WebView knob crash; the official
 generic AU did.
 
-## Dependency Ownership
+## Setup
 
-Cosimo callers must use the repository resolver and must not construct or patch
-their own Cmajor/CHOC/JUCE tree. Customer-repository dependency delivery is a
-separate Builder Kit decision and is intentionally not specified by this
-investigation.
+1. Fork CHOC from the exact CHOC commit used by the target Cmajor release.
+2. Patch `choc/gui/choc_WebView.h` in that CHOC fork.
+3. In the Cmajor checkout or fork, point `include/choc` at the patched CHOC fork.
+4. Generate plugins with an absolute `--cmajorIncludePath`.
+
+Example:
+
+```bash
+cmaj generate \
+  --target=juce \
+  /path/to/MyPlugin.cmajorpatch \
+  --output=/path/to/build/MyPlugin_juce \
+  --jucePath=/path/to/JUCE \
+  --cmajorIncludePath=/path/to/patched-cmajor/include
+```
+
+Then build the generated JUCE project normally:
+
+```bash
+cmake -S /path/to/build/MyPlugin_juce -B /path/to/build/MyPlugin_juce/build
+cmake --build /path/to/build/MyPlugin_juce/build --target MyPlugin_VST3 -j 8
+```
+
+`--cmajorIncludePath` should be absolute. A relative path is emitted literally
+into generated CMake and can resolve relative to the generated plugin folder
+instead of the source repo.
+
+If `include/choc` is a Git submodule and you test with a local file-path remote,
+Git may reject it with `fatal: transport 'file' not allowed`. That is a local
+test issue. A hosted CHOC fork does not need that override.
+
+## New Plugin Repo Quickstart
+
+For a new Cmajor plugin repo, vendor a Cmajor checkout and replace its CHOC
+submodule with the patched CHOC fork.
+
+```bash
+git clone https://github.com/cmajor-lang/cmajor.git vendor/cmajor
+cd vendor/cmajor
+git checkout 172db53232337154d5a1c0f9a448318129dfacd9
+
+git submodule deinit -f include/choc
+rm -rf include/choc .git/modules/include/choc
+
+git submodule add https://github.com/androidStern/choc.git include/choc
+cd include/choc
+git checkout 1e79d904209abd842d688433358f9e0df7d55454
+cd ../..
+```
+
+Then generate with the vendored Cmajor include directory:
+
+```bash
+cmaj generate \
+  --target=juce \
+  /path/to/MyPlugin.cmajorpatch \
+  --output=/path/to/build/MyPlugin_juce \
+  --jucePath=/path/to/JUCE \
+  --cmajorIncludePath=/absolute/path/to/vendor/cmajor/include
+```
+
+Build the generated plugin:
+
+```bash
+cmake -S /path/to/build/MyPlugin_juce -B /path/to/build/MyPlugin_juce/build
+cmake --build /path/to/build/MyPlugin_juce/build --target MyPlugin_VST3 -j 8
+```
+
+Replace `MyPlugin_VST3` with the actual generated target name.
 
 ## Patched Behavior
 

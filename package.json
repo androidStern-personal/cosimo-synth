@@ -7,6 +7,8 @@
     "assets:mod-sources": "node scripts/generate_modulation_source_icons.mjs",
     "prototype:parameter-colors": "vite --config ui/desktop/parameter-color-prototype/vite.config.mjs",
     "prototype:mobile-voice": "vite --config ui/desktop/voice-mobile-prototype/vite.config.mjs",
+    "prototype:enhancer-wrapper": "uv run --with pedalboard --with numpy --with scipy python tools/enhancer_wrapper_prototype/run.py",
+    "prototype:enhancer-deemphasis": "uv run --with pedalboard --with numpy --with scipy python tools/enhancer_wrapper_prototype/de_emphasis.py",
     "ui:desktop:dev": "vite --config ui/vite.desktop.config.mjs",
     "ui:desktop:build": "node ui/build.mjs --desktop",
     "web:build": "node web/build.mjs",

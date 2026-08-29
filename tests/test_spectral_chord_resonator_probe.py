@@ -15,7 +15,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 PATCH_PATH = ROOT / "fx" / "spectral_chord_resonator" / "SpectralChordResonator.cmajorpatch"
 SPECTRAL_SOURCE_PATH = ROOT / "fx" / "spectral_chord_resonator" / "SpectralChordResonator.cmajor"
-DEPENDENCY_RESOLVER = ROOT / "scripts" / "resolve_build_dependencies.py"
+ENSURE_CMAJOR_RUNTIME = ROOT / "scripts" / "ensure_cmajor_runtime.py"
 SAMPLE_RATE = 48_000
 FFT_SIZE = 2048
 
@@ -821,7 +821,7 @@ def test_many_partial_shape_is_not_a_linear_gain_multiplier(
 
 def test_pinned_cmajor_runtime_splits_audio_inputs_into_host_buses() -> None:
     result = subprocess.run(
-        ["python3", str(DEPENDENCY_RESOLVER), "--path", "cmajor"],
+        ["python3", str(ENSURE_CMAJOR_RUNTIME), "--path"],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -829,7 +829,7 @@ def test_pinned_cmajor_runtime_splits_audio_inputs_into_host_buses() -> None:
     )
     if result.returncode != 0:
         details = "\n".join(part for part in (result.stdout.strip(), result.stderr.strip()) if part)
-        raise AssertionError(f"Could not resolve pinned Cmajor source:\n{details}")
+        raise AssertionError(f"Could not prepare pinned Cmajor runtime:\n{details}")
 
     runtime_root = Path(result.stdout.strip())
     header = runtime_root / "include" / "cmajor" / "helpers" / "cmaj_JUCEPlugin.h"

@@ -92,11 +92,14 @@ fi
     patch = tmp_path / "fixture.cmajorpatch"
     patch.write_text("{}\n", encoding="utf-8")
     output = tmp_path / "Generated.cpp"
+    cmajor_source = tmp_path / "cmajor"
+    cmajor_source.mkdir()
 
     environment = os.environ.copy()
     environment.update(
         {
             "PATH": f"{fake_bin}:{environment['PATH']}",
+            "CMAJOR_SOURCE_PATH": str(cmajor_source),
             "COSIMO_CMAJOR_EXTERNAL_CODEGEN_BUILD_DIR": str(tmp_path / "host-build"),
             "COSIMO_HOST_CMAKE_LOG": str(cmake_log),
             "SDKROOT": "/fake/iPhoneSimulator.sdk",

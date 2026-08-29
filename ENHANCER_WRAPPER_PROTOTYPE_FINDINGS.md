@@ -126,18 +126,18 @@ remainder still matters; this is not an honest final-null claim.
    low-frequency common phase/de-emphasis response, implement the wrapper behind a
    production latency seam, and rerun the full T26/Ableton contract.
 
-## Archived reproduction
+## Reproduction
 
-The historical runner used JUCE tag 7.0.1 at commit
-`b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0`, built only its DSP modules, rendered
-the activated Spectre and installed Cosimo Enhancer, and wrote the ignored report
+```sh
+npm run prototype:enhancer-wrapper
+```
+
+The command verifies JUCE tag 7.0.1 at commit
+`b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0`, builds only its DSP modules, renders
+the activated Spectre and installed Cosimo Enhancer, and writes the ignored report
 and A/B audio to `build/t26-wrapper-prototype/results/`.
 
-That independently downloading runner and its package command were retired when
-Cosimo adopted the single CPM dependency resolver. The measurement remains a
-historical finding; there is no active reproduction command in this repository.
-
-The retired runner and probe contained no Spectre code or audio. The final local
+The retained runner and probe contain no Spectre code or audio. The final local
 report SHA-256 was
 `9338e709c80f2c72a376db7e35d0ee60142d2bbce93c387c33cda6f5d0707e9a`;
-do not treat that ignored report hash as a source artifact.
+regenerate rather than treating an ignored report hash as a source artifact.

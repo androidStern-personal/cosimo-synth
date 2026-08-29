@@ -53,6 +53,15 @@ async function buildKeyboardProbeApp(devServerOrigin) {
         "Standalone",
         "CosimoDesktopNative.app",
     );
+    const cmajorSourcePath = await readTrimmed("python3", ["scripts/ensure_cmajor_runtime.py", "--path"]);
+    const jucePath = process.env.JUCE_PATH ?? path.join(
+        process.env.HOME ?? "",
+        "Library",
+        "Caches",
+        "cosimo-synth-dev",
+        "JUCE",
+    );
+
     await run("cmake", [
         "-S", path.join(repoRoot, "tools", "desktop_native"),
         "-B", probeBuildDir,
@@ -61,6 +70,8 @@ async function buildKeyboardProbeApp(devServerOrigin) {
         `-DCOSIMO_PATCH_PATH=${path.join(repoRoot, "WavetableSynth.cmajorpatch")}`,
         "-DCOSIMO_DESKTOP_UI_SOURCE_MODE=dev-server",
         `-DCOSIMO_DESKTOP_DEV_SERVER_ORIGIN=${devServerOrigin.replace(/\/$/, "")}`,
+        `-DCMAJOR_SOURCE_PATH=${cmajorSourcePath}`,
+        `-DJUCE_PATH=${jucePath}`,
     ]);
     await run("cmake", [
         "--build", probeBuildDir,

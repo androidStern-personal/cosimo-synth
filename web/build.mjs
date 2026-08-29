@@ -53,26 +53,6 @@ function runAndRead(command, args) {
     return result.stdout.trim();
 }
 
-async function makeBuildTreeWritable(root) {
-    let stats;
-    try {
-        stats = await fs.lstat(root);
-    } catch (error) {
-        if (error?.code === "ENOENT") return;
-        throw error;
-    }
-
-    if (stats.isSymbolicLink()) return;
-    if (!stats.isDirectory()) {
-        await fs.chmod(root, stats.mode | 0o600);
-        return;
-    }
-
-    await fs.chmod(root, stats.mode | 0o700);
-    const children = await fs.readdir(root);
-    await Promise.all(children.map((child) => makeBuildTreeWritable(path.join(root, child))));
-}
-
 async function buildRendererAwarePatchModule() {
     const generatedClassPath = path.join(outputDirectory, "cmaj_WavetableSynth.class.js");
     const offlineClassPath = path.join(outputDirectory, "cmaj_Cosimo_Synth.offline.js");
@@ -113,23 +93,13 @@ async function buildRendererAwarePatchModule() {
 }
 
 async function copyCmajorWebRuntime() {
-    const resolution = JSON.parse(runAndRead("python3", ["scripts/resolve_build_dependencies.py"]));
-    const { cmajor, choc, juce } = resolution.dependencies;
-    const runtimeRoot = cmajor.path;
-    const runtimeOutputRoot = path.join(outputDirectory, "cmaj_api");
-    await fs.writeFile(
-        path.join(outputDirectory, "cosimo-dependency-resolution.json"),
-        `${JSON.stringify(resolution, null, 2)}\n`,
-    );
-    console.log(
-        `Cosimo CPM dependencies: Cmajor@${cmajor.commit}, CHOC@${choc.commit}, JUCE@${juce.commit} (${resolution.cacheRoot})`,
-    );
+    const runtimeRoot = process.env.CMAJOR_SOURCE_PATH
+        || runAndRead("python3", ["scripts/ensure_cmajor_runtime.py", "--path"]);
     await fs.cp(
         path.join(runtimeRoot, "javascript", "cmaj_api"),
-        runtimeOutputRoot,
+        path.join(outputDirectory, "cmaj_api"),
         { recursive: true },
     );
-    await makeBuildTreeWritable(runtimeOutputRoot);
 }
 
 async function instrumentAudioWorklet() {
@@ -153,7 +123,6 @@ async function copyBounceBrowserRuntime() {
 }
 
 async function buildWebProof() {
-    await makeBuildTreeWritable(outputDirectory);
     await fs.rm(outputDirectory, { recursive: true, force: true });
 
     run("npm", ["run", "ui:desktop:build"]);

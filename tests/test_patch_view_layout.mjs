@@ -715,7 +715,7 @@ test("desktop and iPhone React UI tooling are wired for Vite dev and build loops
     assert.equal(packageJson.scripts["ios:project"], "./scripts/generate_ios_auv3_xcode_project.sh build/ios_device_run");
     assert.equal(packageJson.scripts["ui:worker:build"], "vite build --config ui/vite.worker.config.mjs");
     assert.equal(packageJson.scripts["ui:build"], "node ui/build.mjs");
-    assert.match(sharedViteHelpers, /resolve_build_dependencies\.py/);
+    assert.match(sharedViteHelpers, /ensure_cmajor_runtime\.py/);
     assert.match(sharedViteHelpers, /export function createViteRepoContext/);
     assert.match(sharedViteHelpers, /export function serveStaticDirectory/);
     assert.match(sharedViteHelpers, /export function serveStaticFile/);
@@ -1023,10 +1023,7 @@ test("desktop dev plug-in build enables the webview dev server and regenerates t
         path.join(repoRoot, "tools", "desktop_native", "Source", "cmaj_PatchLoaderPlugin.cpp"),
         "utf8",
     );
-    const dependencyResolverScript = await fs.readFile(
-        path.join(repoRoot, "scripts", "resolve_build_dependencies.py"),
-        "utf8",
-    );
+    const ensureRuntimeScript = await fs.readFile(path.join(repoRoot, "scripts", "ensure_cmajor_runtime.py"), "utf8");
     const buildAssets = await fs.readFile(path.join(repoRoot, "build_assets.py"), "utf8");
 
     assert.match(cmakeSource, /CMAJ_ENABLE_WEBVIEW_DEV_TOOLS=1/);
@@ -1065,9 +1062,9 @@ test("desktop dev plug-in build enables the webview dev server and regenerates t
     assert.match(patchLoaderPluginSource, /JUCEApplicationBase::isStandaloneApp/);
     assert.match(patchLoaderPluginSource, /currentExecutableFile/);
     assert.match(patchLoaderPluginSource, /ProjectInfo::projectName/);
-    assert.match(dependencyResolverScript, /COSIMO_CMAJOR_COMMIT/);
-    assert.match(dependencyResolverScript, /submodule.*status/s);
-    assert.match(dependencyResolverScript, /readOnly/);
+    assert.match(ensureRuntimeScript, /COSIMO_HOST_KEYBOARD_RELAY_PROCESS_NAME/);
+    assert.match(ensureRuntimeScript, /cosimo-standalone-keyboard/);
+    assert.match(ensureRuntimeScript, /hostKeyboardShouldRelayToPlugin/);
     assert.match(patchLoaderPluginSource, /rule\.selectorText !== "\*"/);
     assert.match(patchLoaderPluginSource, /rule\.style\.removeProperty\("padding"\)/);
     assert.match(patchLoaderPluginSource, /rule\.style\.removeProperty\("margin"\)/);
