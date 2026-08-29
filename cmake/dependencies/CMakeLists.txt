@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.22)
 
 project(CosimoBuildDependencies LANGUAGES NONE)
 
@@ -36,6 +36,10 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/../CPM.cmake")
 
+if(NOT CPM_VERSION STREQUAL COSIMO_CPM_VERSION)
+    message(FATAL_ERROR "Vendored CPM runtime version does not match the dependency lock")
+endif()
+
 CPMAddPackage(
     NAME cosimo_cmajor
     GIT_REPOSITORY "${COSIMO_CMAJOR_REPOSITORY}"
@@ -61,6 +65,7 @@ CPMAddPackage(
 file(WRITE "${COSIMO_DEPENDENCY_RESULT_FILE}"
     "schema_version=1\n"
     "cpm_version=${COSIMO_CPM_VERSION}\n"
+    "cpm_runtime_version=${CPM_VERSION}\n"
     "cpm_commit=${COSIMO_CPM_COMMIT}\n"
     "cpm_sha256=${COSIMO_CPM_SHA256}\n"
     "cmajor_repository=${COSIMO_CMAJOR_REPOSITORY}\n"

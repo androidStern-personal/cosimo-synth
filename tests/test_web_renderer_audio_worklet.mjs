@@ -45,6 +45,18 @@ function contentType(filePath) {
     return "application/octet-stream";
 }
 
+async function makeTreeWritable(filePath) {
+    const metadata = await fs.lstat(filePath);
+    if (metadata.isSymbolicLink()) return;
+    await fs.chmod(
+        filePath,
+        metadata.mode | (metadata.isDirectory() ? 0o700 : 0o600),
+    );
+    if (!metadata.isDirectory()) return;
+    const children = await fs.readdir(filePath);
+    await Promise.all(children.map((child) => makeTreeWritable(path.join(filePath, child))));
+}
+
 before(async () => {
     root = await fs.mkdtemp(path.join(os.tmpdir(), "cosimo-renderer-worklet-"));
     const generatedClass = path.join(root, "generated-class.js");
@@ -77,7 +89,7 @@ export async function createConnection(audioContext) {
     await fs.cp(path.join(runtimeRoot, "javascript/cmaj_api"), path.join(root, "cmaj_api"), {
         recursive: true,
     });
-    run("chmod", ["-R", "u+w", path.join(root, "cmaj_api")]);
+    await makeTreeWritable(path.join(root, "cmaj_api"));
     const helperPath = path.join(root, "cmaj_api/cmaj-audio-worklet-helper.js");
     await fs.writeFile(
         helperPath,

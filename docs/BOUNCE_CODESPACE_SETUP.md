@@ -41,9 +41,25 @@ copied headers are needed.
 ## Pinned Cmajor CLI
 
 Cmajor CLI acquisition and distribution are outside the repository's CPM source
-resolver. Provision the existing pinned CLI workflow separately and confirm that
-`cmaj version` prints `Cmajor Version: 1.0.3066`. Do not derive a second Cmajor
-source checkout from these Codespace notes.
+resolver. The existing source-build workflow remains reproducible from the same
+locked Cmajor tree without creating a second checkout. Build serially: the M0
+Codespace had 7.8 GiB RAM and killed a four-way C++ build, so `-j 1` is
+deliberate.
+
+```bash
+cmajor_source=$(python3 scripts/resolve_build_dependencies.py --path cmajor)
+cmake -S "$cmajor_source" -B build/cmajor-cli-linux -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_CMAJ_LIB=OFF \
+  -DBUILD_PLUGIN=OFF \
+  -DBUILD_EXAMPLES=OFF
+cmake --build build/cmajor-cli-linux --target cmaj -j 1
+build/cmajor-cli-linux/tools/command/cmaj version
+```
+
+The final command must print `Cmajor Version: 1.0.3066`. This preserves the
+existing pinned CLI build recipe; it does not move CLI acquisition, caching, or
+distribution into the CPM source resolver.
 
 ## External-aware code generator
 

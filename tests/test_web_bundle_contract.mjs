@@ -164,6 +164,7 @@ test("public asset policy removes build-only artifacts without touching runtime 
 
     const files = [
         "README.md",
+        "cosimo-dependency-resolution.json",
         "assets/factory-bank-catalog.json",
         "assets/factory-table-catalog.json",
         "assets/factory_sources/default.wav",
@@ -182,6 +183,7 @@ test("public asset policy removes build-only artifacts without touching runtime 
         "README.md",
         "assets/factory-table-catalog.json",
         "assets/incoming",
+        "cosimo-dependency-resolution.json",
         "patch_gui/desktop/app.js.map",
         "patch_gui/wavetable-test-worker.js",
     ]);
@@ -198,6 +200,40 @@ test("public asset policy removes build-only artifacts without touching runtime 
         fs.access(path.join(fixtureRoot, "assets", "factory_sources", "default.wav")),
         fs.access(path.join(fixtureRoot, "patch_gui", "desktop", "app.js")),
     ]);
+});
+
+test("public asset policy rejects resolver manifests and private local dependency evidence", async (context) => {
+    const fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cosimo-private-evidence-"));
+    context.after(async () => fs.rm(fixtureRoot, { recursive: true, force: true }));
+
+    await fs.writeFile(
+        path.join(fixtureRoot, "cosimo-dependency-resolution.json"),
+        JSON.stringify({ cacheRoot: "/Users/example/Library/Caches/cosimo" }),
+    );
+    await fs.writeFile(
+        path.join(fixtureRoot, "runtime.js"),
+        "export const source = '/Users/example/worktree';\n"
+            + `export const repository = '${[
+                "https://github.com",
+                "androidStern-personal",
+                "cmajor.git",
+            ].join("/")}';\n`,
+    );
+
+    assert.deepEqual(await findPublicAssetPolicyViolations(fixtureRoot), [
+        "cosimo-dependency-resolution.json",
+        "cosimo-dependency-resolution.json: local absolute path",
+        "runtime.js: local absolute path",
+        "runtime.js: private dependency repository URL",
+    ]);
+    await assert.rejects(
+        enforcePublicAssetPolicy(fixtureRoot),
+        /runtime\.js: local absolute path.*runtime\.js: private dependency repository URL/,
+    );
+    await assert.rejects(
+        fs.access(path.join(fixtureRoot, "cosimo-dependency-resolution.json")),
+        { code: "ENOENT" },
+    );
 });
 
 test("audio-worklet instrumentation measures render load without allocating a bound clock per block", () => {

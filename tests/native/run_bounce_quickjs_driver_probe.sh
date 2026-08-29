@@ -4,7 +4,9 @@ set -euo pipefail
 test_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_dir="$(cd "$test_dir/../.." && pwd -P)"
 cmajor_source_path="$(python3 "$repo_dir/scripts/resolve_build_dependencies.py" --path cmajor)"
-runtime_build_dir="${COSIMO_CMAJOR_RUNTIME_BUILD_DIR:-$repo_dir/build/cmajor-runtime-linux}"
+runtime_build_root="${COSIMO_CMAJOR_RUNTIME_BUILD_DIR:-$repo_dir/build/cmajor-runtime-linux}"
+runtime_source_key="${cmajor_source_path##*/}"
+runtime_build_dir="$runtime_build_root/$runtime_source_key"
 probe_build_dir="$repo_dir/build/native_bounce_quickjs"
 runtime_library="${COSIMO_CMAJOR_RUNTIME_LIBRARY:-}"
 host_os="$(uname -s)"
@@ -37,6 +39,14 @@ if [[ "$host_os" == "Darwin" ]]; then
     )
 else
     if [[ -z "$runtime_library" || ! -f "$runtime_library" ]]; then
+        runtime_cache="$runtime_build_dir/CMakeCache.txt"
+        if [[ -f "$runtime_cache" ]]; then
+            cached_source_path="$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$runtime_cache" | head -n 1)"
+            if [[ "$cached_source_path" != "$cmajor_source_path" ]]; then
+                source_path_key="$(printf '%s' "$cmajor_source_path" | cksum | awk '{ print $1 }')"
+                runtime_build_dir="$runtime_build_root/$runtime_source_key-$source_path_key"
+            fi
+        fi
         cmake -S "$cmajor_source_path" -B "$runtime_build_dir" -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_CMAJ=OFF \

@@ -13,6 +13,7 @@ import { copyWebHostAssets } from "./web-host-assets.mjs";
 const webDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webDirectory, "..");
 const outputDirectory = path.join(repoRoot, "build", "web");
+const dependencyEvidenceDirectory = path.join(repoRoot, "build", "dependency-evidence", "web");
 const bounceBrowserRuntimeFiles = Object.freeze([
     "bank-format.mjs",
     "bank-install.mjs",
@@ -117,12 +118,13 @@ async function copyCmajorWebRuntime() {
     const { cmajor, choc, juce } = resolution.dependencies;
     const runtimeRoot = cmajor.path;
     const runtimeOutputRoot = path.join(outputDirectory, "cmaj_api");
+    await fs.mkdir(dependencyEvidenceDirectory, { recursive: true });
     await fs.writeFile(
-        path.join(outputDirectory, "cosimo-dependency-resolution.json"),
+        path.join(dependencyEvidenceDirectory, "cosimo-dependency-resolution.json"),
         `${JSON.stringify(resolution, null, 2)}\n`,
     );
     console.log(
-        `Cosimo CPM dependencies: Cmajor@${cmajor.commit}, CHOC@${choc.commit}, JUCE@${juce.commit} (${resolution.cacheRoot})`,
+        `Cosimo CPM dependencies: Cmajor@${cmajor.commit}, CHOC@${choc.commit}, JUCE@${juce.commit}`,
     );
     await fs.cp(
         path.join(runtimeRoot, "javascript", "cmaj_api"),

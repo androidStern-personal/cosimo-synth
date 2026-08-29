@@ -8,6 +8,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -32,7 +33,11 @@ JUCE_REPOSITORY = LOCK_VALUES["COSIMO_JUCE_REPOSITORY"]
 JUCE_COMMIT = LOCK_VALUES["COSIMO_JUCE_COMMIT"]
 
 
-def run_resolver(cache_root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+def run_resolver(
+    cache_root: Path,
+    *arguments: str,
+    environment: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
             sys.executable,
@@ -42,6 +47,7 @@ def run_resolver(cache_root: Path, *arguments: str) -> subprocess.CompletedProce
             *arguments,
         ],
         cwd=REPO_ROOT,
+        env=environment,
         text=True,
         capture_output=True,
         check=False,
@@ -59,6 +65,117 @@ def parse_success(result: subprocess.CompletedProcess[str]) -> dict[str, object]
     return json.loads(result.stdout)
 
 
+def write_executable(path: Path, source: str) -> None:
+    path.write_text(source, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def create_synthetic_dependency_tools(
+    tmp_path: Path,
+) -> tuple[dict[str, str], Path]:
+    fake_bin = tmp_path / "synthetic-tools"
+    fake_bin.mkdir()
+    cmake_log = tmp_path / "cmake-invocations.log"
+    llvm_commit = "1234567890abcdef1234567890abcdef12345678"
+    llvm_repository = "https://github.com/llvm/llvm-project.git"
+    write_executable(
+        fake_bin / "cmake",
+        f"""#!{sys.executable}
+import os
+import sys
+from pathlib import Path
+
+arguments = {{argument.partition('=')[0]: argument.partition('=')[2] for argument in sys.argv[1:] if argument.startswith('-D')}}
+cache_root = Path(arguments['-DCPM_SOURCE_CACHE'])
+result_file = Path(arguments['-DCOSIMO_DEPENDENCY_RESULT_FILE'])
+cmajor = cache_root / 'cosimo_cmajor' / 'cmajor-{CMAJOR_COMMIT}'
+choc = cmajor / 'include' / 'choc'
+juce = cache_root / 'cosimo_juce' / 'juce-{JUCE_COMMIT}'
+
+def ensure(root, relative_path):
+    target = root / relative_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.exists():
+        target.write_text('synthetic dependency fixture\\n', encoding='utf-8')
+
+for relative_path in (
+    'LICENSE.md',
+    'CMakeLists.txt',
+    'include/cmajor/helpers/cmaj_Patch.h',
+    'include/cmajor/helpers/cmaj_JUCEPlugin.h',
+    'include/cmajor/helpers/cmaj_PatchWorker_QuickJS.h',
+    '.gitmodules',
+    '3rdParty/llvm/README.md',
+):
+    ensure(cmajor, relative_path)
+for relative_path in (
+    'LICENSE.md',
+    'choc/gui/choc_WebView.h',
+    'choc/javascript/choc_javascript_QuickJS.h',
+    'choc/javascript/choc_javascript_Timer.h',
+):
+    ensure(choc, relative_path)
+for relative_path in (
+    'LICENSE.md',
+    'CMakeLists.txt',
+    'modules/juce_audio_processors/juce_audio_processors.h',
+):
+    ensure(juce, relative_path)
+
+result_file.parent.mkdir(parents=True, exist_ok=True)
+result_file.write_text(
+    f'cpm_runtime_version={CPM_VERSION}\\ncmajor_source={{cmajor}}\\nchoc_source={{choc}}\\njuce_source={{juce}}\\n',
+    encoding='utf-8',
+)
+with Path(os.environ['COSIMO_FAKE_CMAKE_LOG']).open('a', encoding='utf-8') as log:
+    log.write('configured\\n')
+""",
+    )
+    write_executable(
+        fake_bin / "git",
+        f"""#!{sys.executable}
+import sys
+from pathlib import Path
+
+arguments = sys.argv[1:]
+if len(arguments) < 3 or arguments[0] != '-C':
+    raise SystemExit(2)
+repository_path = Path(arguments[1])
+command = arguments[2:]
+
+if command[:2] == ['rev-parse', 'HEAD']:
+    if repository_path.name == 'choc': print('{CHOC_COMMIT}')
+    elif repository_path.name == 'llvm': print('{llvm_commit}')
+    elif repository_path.name.startswith('juce-'): print('{JUCE_COMMIT}')
+    else: print('{CMAJOR_COMMIT}')
+elif command[:3] == ['remote', 'get-url', 'origin']:
+    if repository_path.name == 'choc': print('{CHOC_REPOSITORY}')
+    elif repository_path.name == 'llvm': print('{llvm_repository}')
+    elif repository_path.name.startswith('juce-'): print('{JUCE_REPOSITORY}')
+    else: print('{CMAJOR_REPOSITORY}')
+elif command and command[0] == 'status':
+    pass
+elif command[:2] == ['config', '--file']:
+    print('submodule.3rdParty/choc.path include/choc')
+    print('submodule.3rdParty/choc.url {CHOC_REPOSITORY}')
+    print('submodule.3rdParty/llvm.path 3rdParty/llvm')
+    print('submodule.3rdParty/llvm.url {llvm_repository}')
+elif command[:3] == ['submodule', 'status', '--recursive']:
+    print(' {CHOC_COMMIT} include/choc (heads/main)')
+    print(' {llvm_commit} 3rdParty/llvm (heads/main)')
+elif command[:2] == ['submodule', 'foreach']:
+    print('COSIMO_SUBMODULE\\tinclude/choc\\t{CHOC_COMMIT}\\t{CHOC_REPOSITORY}')
+    print('COSIMO_SUBMODULE\\t3rdParty/llvm\\t{llvm_commit}\\t{llvm_repository}')
+else:
+    raise SystemExit(3)
+""",
+    )
+    environment = os.environ.copy()
+    environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
+    environment["COSIMO_FAKE_CMAKE_LOG"] = str(cmake_log)
+    return environment, cmake_log
+
+
 def make_tree_writable(path: Path) -> None:
     if not path.exists():
         return
@@ -73,6 +190,23 @@ def make_tree_writable(path: Path) -> None:
     for entry in [path, *path.rglob("*")]:
         if not entry.is_symlink():
             entry.chmod(entry.stat().st_mode | stat.S_IWUSR)
+
+
+@pytest.fixture
+def synthetic_cpm_cache(tmp_path: Path):
+    environment, cmake_log = create_synthetic_dependency_tools(tmp_path)
+    cache_root = tmp_path / "synthetic-cache"
+    cold_result = run_resolver(cache_root, environment=environment)
+    assert cold_result.returncode == 0, cold_result.stderr
+    cmake_log.write_text("", encoding="utf-8")
+    try:
+        yield {
+            "cacheRoot": cache_root,
+            "environment": environment,
+            "cmakeLog": cmake_log,
+        }
+    finally:
+        make_tree_writable(cache_root)
 
 
 @pytest.fixture(scope="module")
@@ -126,6 +260,40 @@ def test_dependency_lock_pins_cpm_and_all_source_identities() -> None:
     assert hashlib.sha256(CPM_FILE.read_bytes()).hexdigest() == CPM_SHA256
 
 
+def test_vendored_cpm_runtime_version_matches_the_locked_release() -> None:
+    assert dependency_resolver.vendored_cpm_runtime_version() == CPM_VERSION
+
+
+@pytest.mark.parametrize(
+    "runtime_version",
+    ("1.0.0-development-version", "0.43.2"),
+)
+def test_development_or_mismatched_cpm_runtime_cannot_pass_integrity_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    runtime_version: str,
+) -> None:
+    cpm_file = tmp_path / "CPM.cmake"
+    cpm_file.write_text(
+        f"set(CURRENT_CPM_VERSION {runtime_version})\n",
+        encoding="utf-8",
+    )
+    cpm_digest = hashlib.sha256(cpm_file.read_bytes()).hexdigest()
+    lock_file = tmp_path / "dependencies.lock.cmake"
+    lock_file.write_text(
+        LOCK_FILE.read_text(encoding="utf-8").replace(CPM_SHA256, cpm_digest),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(dependency_resolver, "CPM_FILE", cpm_file)
+    monkeypatch.setattr(dependency_resolver, "LOCK_FILE", lock_file)
+
+    with pytest.raises(dependency_resolver.ResolverError) as failure:
+        dependency_resolver.load_lock()
+
+    assert failure.value.code == "CPM_INTEGRITY_FAILURE"
+    assert failure.value.operation == "verify-cpm-integrity"
+
+
 @pytest.mark.parametrize(
     "mutate_lock",
     (
@@ -166,6 +334,170 @@ def test_lock_rejects_non_strict_identity_or_unexpected_content(
     assert failure.value.code == "LOCK_FILE_INVALID"
 
 
+def test_cpm_failure_never_exposes_subprocess_credentials_or_git_trace(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    sentinels = (
+        "USERNAME_ONLY_TOKEN_SENTINEL",
+        "PASSWORD_SENTINEL",
+        "BASIC_CREDENTIAL_SENTINEL",
+        "STANDALONE_TOKEN_SENTINEL",
+        "TRACE_ENV_SENTINEL",
+    )
+    write_executable(
+        fake_bin / "cmake",
+        """#!/bin/sh
+printf '%s\n' 'fatal: could not resolve https://USERNAME_ONLY_TOKEN_SENTINEL@github.com/private/repo.git' >&2
+printf '%s\n' 'https://user:PASSWORD_SENTINEL@github.com/private/repo.git' >&2
+printf '%s\n' 'Authorization: Basic BASIC_CREDENTIAL_SENTINEL' >&2
+printf '%s\n' 'STANDALONE_TOKEN_SENTINEL' >&2
+printf '%s\n' "${GIT_TRACE:-TRACE_VARIABLE_REMOVED}" >&2
+exit 1
+""",
+    )
+    environment = os.environ.copy()
+    environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
+    environment["GIT_TRACE"] = "TRACE_ENV_SENTINEL"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RESOLVER),
+            "--cache-root",
+            str(tmp_path / "cache"),
+        ],
+        cwd=REPO_ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    combined_output = result.stdout + result.stderr
+    for sentinel in sentinels:
+        assert sentinel not in combined_output
+    assert parse_error(result) == {
+        "code": "CPM_CONFIGURE_FAILED",
+        "dependency": "dependency-graph",
+        "message": "CPM could not resolve the locked dependency graph.",
+        "operation": "resolve-with-cpm",
+        "repairAttempted": False,
+    }
+
+
+def test_git_failure_never_exposes_subprocess_credentials_or_git_trace(
+    tmp_path: Path,
+) -> None:
+    cache_root = tmp_path / "cache"
+    expected = dependency_resolver.expected_source_paths(LOCK_VALUES, cache_root)
+    required_files = {
+        "cmajor": (
+            "LICENSE.md",
+            "CMakeLists.txt",
+            "include/cmajor/helpers/cmaj_Patch.h",
+            "include/cmajor/helpers/cmaj_JUCEPlugin.h",
+            "include/cmajor/helpers/cmaj_PatchWorker_QuickJS.h",
+            ".gitmodules",
+        ),
+        "choc": (
+            "LICENSE.md",
+            "choc/gui/choc_WebView.h",
+            "choc/javascript/choc_javascript_QuickJS.h",
+            "choc/javascript/choc_javascript_Timer.h",
+        ),
+        "juce": (
+            "LICENSE.md",
+            "CMakeLists.txt",
+            "modules/juce_audio_processors/juce_audio_processors.h",
+        ),
+    }
+    for dependency, relative_paths in required_files.items():
+        for relative_path in relative_paths:
+            file_path = expected[dependency] / relative_path
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text("fixture\n", encoding="utf-8")
+
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    write_executable(
+        fake_bin / "cmake",
+        """#!/bin/sh
+for argument in "$@"; do
+    case "$argument" in
+        -DCPM_SOURCE_CACHE=*) cache_root=${argument#*=} ;;
+        -DCOSIMO_DEPENDENCY_RESULT_FILE=*) result_file=${argument#*=} ;;
+    esac
+done
+mkdir -p "$(dirname "$result_file")"
+cat >"$result_file" <<EOF
+cpm_runtime_version="""
+        + CPM_VERSION
+        + """
+cmajor_source=$cache_root/cosimo_cmajor/cmajor-"""
+        + CMAJOR_COMMIT
+        + """
+choc_source=$cache_root/cosimo_cmajor/cmajor-"""
+        + CMAJOR_COMMIT
+        + """/include/choc
+juce_source=$cache_root/cosimo_juce/juce-"""
+        + JUCE_COMMIT
+        + """
+EOF
+""",
+    )
+    write_executable(
+        fake_bin / "git",
+        """#!/bin/sh
+printf '%s\n' 'https://USERNAME_ONLY_TOKEN_SENTINEL@github.com/private/repo.git' >&2
+printf '%s\n' 'https://user:PASSWORD_SENTINEL@github.com/private/repo.git' >&2
+printf '%s\n' 'Authorization: Basic BASIC_CREDENTIAL_SENTINEL' >&2
+printf '%s\n' 'STANDALONE_TOKEN_SENTINEL' >&2
+printf '%s\n' "${GIT_TRACE:-TRACE_VARIABLE_REMOVED}" >&2
+exit 1
+""",
+    )
+    environment = os.environ.copy()
+    environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
+    environment["GIT_TRACE"] = "TRACE_ENV_SENTINEL"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RESOLVER),
+            "--cache-root",
+            str(cache_root),
+            "--offline",
+        ],
+        cwd=REPO_ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    combined_output = result.stdout + result.stderr
+    for sentinel in (
+        "USERNAME_ONLY_TOKEN_SENTINEL",
+        "PASSWORD_SENTINEL",
+        "BASIC_CREDENTIAL_SENTINEL",
+        "STANDALONE_TOKEN_SENTINEL",
+        "TRACE_ENV_SENTINEL",
+    ):
+        assert sentinel not in combined_output
+    assert parse_error(result) == {
+        "code": "CACHE_INCOMPLETE",
+        "dependency": "cmajor",
+        "message": "Cached dependency validation found incomplete source.",
+        "operation": "validate-cache",
+        "repairAttempted": False,
+    }
+
+
 def test_cached_source_root_symlink_is_rejected_even_when_target_is_valid(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -201,7 +533,103 @@ def test_cached_source_root_symlink_is_rejected_even_when_target_is_valid(
 
     assert failure.value.code == "CACHE_INCOMPLETE"
     assert failure.value.dependency == "juce"
-    assert "symbolic link" in failure.value.message
+    assert failure.value.operation == "validate-cache"
+
+
+def test_parent_cache_container_symlink_is_rejected_before_cpm_or_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    external_root = tmp_path / "external-juce-container"
+    external_root.mkdir()
+    marker = external_root / "must-remain-untouched.txt"
+    marker.write_text("external sentinel\n", encoding="utf-8")
+    marker.chmod(0o444)
+    external_root.chmod(0o555)
+    container = cache_root / "cosimo_juce"
+    try:
+        container.symlink_to(external_root, target_is_directory=True)
+    except OSError as error:
+        pytest.skip(f"directory symlinks unavailable: {error}")
+
+    def fail_if_cpm_runs(*_arguments, **_keywords):
+        raise AssertionError("CPM ran before cache-component validation")
+
+    monkeypatch.setattr(dependency_resolver, "_run_cpm", fail_if_cpm_runs)
+    before_root_mode = stat.S_IMODE(external_root.stat().st_mode)
+    before_marker_mode = stat.S_IMODE(marker.stat().st_mode)
+
+    with pytest.raises(dependency_resolver.ResolverError) as failure:
+        dependency_resolver.resolve_dependencies(cache_root)
+
+    assert failure.value.payload() == {
+        "code": "UNSAFE_CACHE_PATH",
+        "dependency": "juce",
+        "message": "Dependency cache path validation rejected a link or reparse-point escape.",
+        "operation": "validate-cache-path",
+        "repairAttempted": False,
+    }
+    assert marker.read_text(encoding="utf-8") == "external sentinel\n"
+    assert stat.S_IMODE(external_root.stat().st_mode) == before_root_mode
+    assert stat.S_IMODE(marker.stat().st_mode) == before_marker_mode
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="fcntl probe is POSIX-only")
+def test_cache_lock_timeout_is_bounded_and_typed(tmp_path: Path) -> None:
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    lock_path = cache_root / ".cosimo-resolver.lock"
+    ready_path = tmp_path / "lock-ready"
+    holder = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            """import fcntl
+import pathlib
+import sys
+import time
+
+lock_path = pathlib.Path(sys.argv[1])
+ready_path = pathlib.Path(sys.argv[2])
+with lock_path.open("a+b") as lock_file:
+    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+    ready_path.write_text("ready", encoding="utf-8")
+    time.sleep(10)
+""",
+            str(lock_path),
+            str(ready_path),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        deadline = time.monotonic() + 5
+        while not ready_path.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert ready_path.is_file()
+
+        result = run_resolver(
+            cache_root,
+            "--offline",
+            "--lock-timeout-seconds",
+            "0.1",
+        )
+
+        assert result.returncode == 2
+        assert parse_error(result) == {
+            "code": "CACHE_LOCK_TIMEOUT",
+            "dependency": "dependency-graph",
+            "message": "Timed out waiting for exclusive access to the dependency cache.",
+            "operation": "acquire-cache-lock",
+            "repairAttempted": False,
+        }
+    finally:
+        holder.terminate()
+        holder.communicate(timeout=5)
 
 
 @pytest.mark.parametrize("entry_kind", ("file", "broken-symlink"))
@@ -233,9 +661,182 @@ def test_empty_offline_cache_fails_without_attempting_retrieval(tmp_path: Path) 
     assert result.returncode == 2
     error = parse_error(result)
     assert error["code"] == "OFFLINE_CACHE_MISS"
-    assert str(cache_root) in str(error["message"])
+    assert error["operation"] == "resolve-offline"
+    assert error["dependency"] == "dependency-graph"
     assert not (cache_root / "cosimo_cmajor").exists()
     assert not (cache_root / "cosimo_juce").exists()
+
+
+def test_valid_warm_cache_skips_the_cpm_configure_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache_root = tmp_path / "warm-cache"
+    expected = dependency_resolver.expected_source_paths(LOCK_VALUES, cache_root)
+    expected["cmajor"].mkdir(parents=True)
+    expected["choc"].mkdir(parents=True)
+    expected["juce"].mkdir(parents=True)
+    validated = {
+        name: {
+            "path": str(path),
+            "repository": LOCK_VALUES[f"COSIMO_{name.upper()}_REPOSITORY"],
+            "commit": LOCK_VALUES[f"COSIMO_{name.upper()}_COMMIT"],
+            "clean": True,
+        }
+        for name, path in expected.items()
+    }
+
+    monkeypatch.setattr(dependency_resolver, "load_lock", lambda: LOCK_VALUES)
+    monkeypatch.setattr(
+        dependency_resolver,
+        "_validate_all",
+        lambda _lock, _cache_root, _result, **_keywords: validated,
+    )
+    monkeypatch.setattr(
+        dependency_resolver,
+        "_validation_receipt_matches",
+        lambda *_arguments: True,
+    )
+    monkeypatch.setattr(
+        dependency_resolver,
+        "_mark_tree_read_only",
+        lambda *_arguments: None,
+    )
+
+    def fail_if_cpm_runs(*_arguments, **_keywords):
+        raise AssertionError("warm resolution launched CPM")
+
+    monkeypatch.setattr(dependency_resolver, "_run_cpm", fail_if_cpm_runs)
+
+    result = dependency_resolver.resolve_dependencies(cache_root, offline=True)
+
+    assert result["resolutionMode"] == "warm-cache"
+    assert result["cpmConfigured"] is False
+    assert result["dependencies"]["cmajor"]["commit"] == CMAJOR_COMMIT
+
+
+def test_warm_offline_resolution_uses_immutable_receipt_without_cpm(
+    synthetic_cpm_cache: dict[str, object],
+) -> None:
+    cache_root = synthetic_cpm_cache["cacheRoot"]
+    environment = synthetic_cpm_cache["environment"]
+    cmake_log = synthetic_cpm_cache["cmakeLog"]
+
+    started = time.monotonic()
+    result = run_resolver(
+        cache_root,
+        "--offline",
+        environment=environment,
+    )
+    elapsed = time.monotonic() - started
+
+    payload = parse_success(result)
+    assert payload["resolutionMode"] == "warm-cache"
+    assert payload["cpmConfigured"] is False
+    assert payload["immutableValidation"] == {
+        "receiptVersion": 1,
+        "verified": True,
+    }
+    assert payload["cpm"]["runtimeVersion"] == CPM_VERSION
+    assert cmake_log.read_text(encoding="utf-8") == ""
+    assert elapsed < 5.0, f"warm synthetic resolution took {elapsed:.2f}s"
+
+
+def test_complete_submodule_graph_is_checked_with_bounded_aggregate_git_calls(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache_root = tmp_path / "cache"
+    cmajor_path = cache_root / "cosimo_cmajor" / f"cmajor-{CMAJOR_COMMIT}"
+    (cmajor_path / "include/choc").mkdir(parents=True)
+    (cmajor_path / "3rdParty/llvm").mkdir(parents=True)
+    llvm_commit = "1234567890abcdef1234567890abcdef12345678"
+    llvm_repository = "https://github.com/llvm/llvm-project.git"
+    calls: list[tuple[Path, tuple[str, ...]]] = []
+
+    def fake_git(_dependency: str, path: Path, *arguments: str) -> str:
+        calls.append((path, arguments))
+        if arguments[:3] == ("config", "--file", ".gitmodules"):
+            return "\n".join(
+                (
+                    "submodule.3rdParty/choc.path include/choc",
+                    f"submodule.3rdParty/choc.url {CHOC_REPOSITORY}",
+                    "submodule.3rdParty/llvm.path 3rdParty/llvm",
+                    f"submodule.3rdParty/llvm.url {llvm_repository}",
+                )
+            )
+        if arguments == ("submodule", "status", "--recursive"):
+            return (
+                f" {CHOC_COMMIT} include/choc (heads/main)\n"
+                f" {llvm_commit} 3rdParty/llvm (heads/main)"
+            )
+        if arguments[:4] == ("submodule", "foreach", "--recursive", "--quiet"):
+            return (
+                f"COSIMO_SUBMODULE\tinclude/choc\t{CHOC_COMMIT}\t{CHOC_REPOSITORY}\n"
+                f"COSIMO_SUBMODULE\t3rdParty/llvm\t{llvm_commit}\t{llvm_repository}"
+            )
+        raise AssertionError(arguments)
+
+    monkeypatch.setattr(dependency_resolver, "_git_dependency", fake_git)
+    validated = dependency_resolver._validate_cmajor_submodules(
+        cmajor_path,
+        cache_root,
+    )
+
+    assert set(validated) == {"include/choc", "3rdParty/llvm"}
+    assert len(calls) == 3
+    assert {path for path, _arguments in calls} == {cmajor_path}
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    ("missing-cmajor-file", "interrupted-juce-entry"),
+)
+def test_concurrent_warm_cache_repair_is_serialized_and_runs_cpm_once(
+    synthetic_cpm_cache: dict[str, object],
+    corruption: str,
+) -> None:
+    cache_root = synthetic_cpm_cache["cacheRoot"]
+    environment = synthetic_cpm_cache["environment"]
+    cmake_log = synthetic_cpm_cache["cmakeLog"]
+    expected = dependency_resolver.expected_source_paths(LOCK_VALUES, cache_root)
+
+    if corruption == "missing-cmajor-file":
+        required_file = expected["cmajor"] / "include/cmajor/helpers/cmaj_Patch.h"
+        required_file.parent.chmod(required_file.parent.stat().st_mode | stat.S_IWUSR)
+        required_file.unlink()
+    else:
+        make_tree_writable(expected["juce"])
+        shutil.rmtree(expected["juce"])
+        expected["juce"].write_text("interrupted checkout\n", encoding="utf-8")
+
+    command = [
+        sys.executable,
+        str(RESOLVER),
+        "--cache-root",
+        str(cache_root),
+    ]
+    processes = [
+        subprocess.Popen(
+            command,
+            cwd=REPO_ROOT,
+            env=environment,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        for _ in range(2)
+    ]
+    completed = [process.communicate(timeout=30) for process in processes]
+
+    assert all(process.returncode == 0 for process in processes), completed
+    payloads = [json.loads(stdout) for stdout, _stderr in completed]
+    assert sorted(payload["resolutionMode"] for payload in payloads) == [
+        "cpm",
+        "warm-cache",
+    ]
+    assert sum(payload["repairPerformed"] for payload in payloads) == 1
+    assert cmake_log.read_text(encoding="utf-8").splitlines() == ["configured"]
 
 
 def test_cold_then_warm_offline_resolution_returns_locked_read_only_sources(
@@ -249,6 +850,7 @@ def test_cold_then_warm_offline_resolution_returns_locked_read_only_sources(
     assert cold["repairPerformed"] is False
     assert cold["cpm"] == {
         "commit": CPM_COMMIT,
+        "runtimeVersion": CPM_VERSION,
         "sha256": CPM_SHA256,
         "source": str(CPM_FILE),
         "version": CPM_VERSION,
@@ -448,7 +1050,7 @@ def test_cache_validation_fails_offline_and_repairs_only_the_invalid_entry(
     juce_path.symlink_to(symlink_target, target_is_directory=True)
     offline_symlink = run_resolver(cache_root, "--offline")
     assert offline_symlink.returncode == 2
-    assert parse_error(offline_symlink)["code"] == "CACHE_INCOMPLETE"
+    assert parse_error(offline_symlink)["code"] == "UNSAFE_CACHE_PATH"
     repaired_symlink = parse_success(run_resolver(cache_root))
     assert repaired_symlink["repairPerformed"] is True
     assert not juce_path.is_symlink()
@@ -502,7 +1104,9 @@ def test_missing_private_repository_access_is_typed_and_actionable(
         assert result.returncode == 2
         error = parse_error(result)
         assert error["code"] == "PRIVATE_REPOSITORY_ACCESS_DENIED"
-        assert "Authenticate GitHub" in str(error["message"])
+        assert error["dependency"] == "cmajor"
+        assert error["operation"] == "retrieve-locked-source"
+        assert error["message"] == "GitHub access to the locked private dependency failed."
         assert not re.search(r"https?://[^/\s]+@", result.stderr)
     finally:
         make_tree_writable(cache_root)
@@ -519,6 +1123,7 @@ def test_every_active_build_entrypoint_delegates_to_the_canonical_resolver() -> 
         "ios_auv3/CMakeLists.txt": "ResolveBuildDependencies.cmake",
         "scripts/test_quickjs_modulation_restore.sh": "resolve_build_dependencies.py",
         "tests/native/run_bounce_quickjs_driver_probe.sh": "resolve_build_dependencies.py",
+        "tests/native/run_patch_worker_lifetime_probe.sh": "resolve_build_dependencies.py",
         "tests/native/run_three_oscillator_jit_provider.sh": "resolve_build_dependencies.py",
         "tests/helpers/desktop_harness_browser.mjs": "resolve_build_dependencies.py",
         "tests/helpers/live_review_server.mjs": "resolve_build_dependencies.py",
@@ -563,6 +1168,9 @@ def test_every_active_build_entrypoint_delegates_to_the_canonical_resolver() -> 
         assert "JUCE@${juce.commit}" in source, relative_path
 
     web_build = (REPO_ROOT / "web/build.mjs").read_text(encoding="utf-8")
+    assert 'path.join(repoRoot, "build", "dependency-evidence", "web")' in web_build
+    assert 'path.join(outputDirectory, "cosimo-dependency-resolution.json")' not in web_build
+    assert "(${resolution.cacheRoot})" not in web_build
     assert "async function makeBuildTreeWritable" in web_build
     assert web_build.index("await makeBuildTreeWritable(outputDirectory);") < (
         web_build.index("await fs.rm(outputDirectory")
@@ -607,6 +1215,19 @@ def test_repository_has_no_retired_dependency_provider_or_active_alternate_path(
         "TODOS.txt",
         "tests/test_cpm_dependency_resolver.py",
     }
+    dependency_declaration_exemptions = {
+        "cmake/CPM.cmake",
+        "cmake/dependencies/CMakeLists.txt",
+    }
+    source_override_exemptions = {
+        "cmake/dependencies/CMakeLists.txt",
+        "scripts/resolve_build_dependencies.py",
+    }
+    locked_authorities = tuple(
+        value
+        for key, value in LOCK_VALUES.items()
+        if key.endswith(("_COMMIT", "_REPOSITORY"))
+    )
     forbidden_literals = (
         "ensure_cmajor_runtime.py",
         "CMAJOR_SOURCE_PATH",
@@ -635,6 +1256,9 @@ def test_repository_has_no_retired_dependency_provider_or_active_alternate_path(
         for literal in forbidden_literals:
             if literal in source:
                 violations.append(f"{relative_path}: {literal}")
+        for authority in locked_authorities:
+            if authority in source and relative_path != "cmake/dependencies.lock.cmake":
+                violations.append(f"{relative_path}: duplicate locked identity")
         if re.search(r'["\x27]build["\x27]\s*,\s*["\x27]deps["\x27]', source):
             violations.append(f"{relative_path}: constructed build/deps")
         if re.search(
@@ -642,6 +1266,27 @@ def test_repository_has_no_retired_dependency_provider_or_active_alternate_path(
             source,
         ):
             violations.append(f"{relative_path}: direct dependency clone")
+        if re.search(
+            r'["\x27]git["\x27]\s*,\s*(?:\[\s*)?["\x27]clone["\x27]',
+            source,
+        ):
+            violations.append(f"{relative_path}: tokenized dependency clone")
+        if (
+            relative_path not in dependency_declaration_exemptions
+            and re.search(
+                r"\b(?:CPMAddPackage|FetchContent_(?:Declare|MakeAvailable|Populate))\s*\(",
+                source,
+            )
+        ):
+            violations.append(f"{relative_path}: alternate dependency declaration")
+        if (
+            relative_path not in source_override_exemptions
+            and re.search(
+                r"\b(?:FETCHCONTENT_SOURCE_DIR_[A-Z0-9_]+|CPM_[A-Za-z0-9_]+_SOURCE)\b",
+                source,
+            )
+        ):
+            violations.append(f"{relative_path}: dependency source substitution")
 
     assert not (REPO_ROOT / "scripts/ensure_cmajor_runtime.py").exists()
     assert not (REPO_ROOT / "tests/test_ensure_cmajor_runtime.py").exists()
@@ -657,3 +1302,41 @@ def test_repository_has_no_retired_dependency_provider_or_active_alternate_path(
     assert "import run as wrapper" not in de_emphasis
     assert "wrapper.ensure_juce" not in de_emphasis
     assert not violations, "\n".join(violations)
+
+
+def test_dependency_cmake_minimum_is_consistent_across_all_callers() -> None:
+    cmake_projects = (
+        "cmake/dependencies/CMakeLists.txt",
+        "ios_auv3/CMakeLists.txt",
+        "tools/cmajor_external_codegen/CMakeLists.txt",
+        "tools/cmajplugin_build/CMakeLists.txt",
+        "tools/desktop_native/CMakeLists.txt",
+    )
+    for relative_path in cmake_projects:
+        first_line = (REPO_ROOT / relative_path).read_text(encoding="utf-8").splitlines()[0]
+        assert first_line == "cmake_minimum_required(VERSION 3.22)", relative_path
+
+
+def test_quickjs_linux_runtime_build_is_keyed_by_locked_source_identity() -> None:
+    source = (
+        REPO_ROOT / "tests/native/run_bounce_quickjs_driver_probe.sh"
+    ).read_text(encoding="utf-8")
+    assert 'runtime_source_key="${cmajor_source_path##*/}"' in source
+    assert 'runtime_build_dir="$runtime_build_root/$runtime_source_key"' in source
+    assert "CMAKE_HOME_DIRECTORY:INTERNAL=" in source
+
+
+def test_codespace_keeps_the_pinned_cmajor_cli_source_build_recipe() -> None:
+    source = (REPO_ROOT / "docs/BOUNCE_CODESPACE_SETUP.md").read_text(encoding="utf-8")
+    assert "scripts/resolve_build_dependencies.py --path cmajor" in source
+    assert 'cmake -S "$cmajor_source" -B build/cmajor-cli-linux' in source
+    assert "--target cmaj -j 1" in source
+    assert "Cmajor Version: 1.0.3066" in source
+
+
+def test_audio_worklet_fixture_uses_portable_node_mode_changes() -> None:
+    source = (
+        REPO_ROOT / "tests/test_web_renderer_audio_worklet.mjs"
+    ).read_text(encoding="utf-8")
+    assert "await fs.chmod(" in source
+    assert 'run("chmod"' not in source
