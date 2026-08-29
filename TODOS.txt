@@ -867,10 +867,14 @@ EFFECTS LANE FOLLOW-UP
     - Browser geometry checks prove that every rendered part stays within the graph at representative phone, desktop, and plugin widths and that no pair of effect pills intersects.
     - Screenshots with populated LO, MID, and HI bands show which effect belongs to which band without relying on clipping, horizontal scrolling, or shrinking the effect labels until they are unreadable.
 
-[ ] T31 — Show the proposed result while an effect is dragged and animate every move
+[x] T31 — Show the proposed result while an effect is dragged and animate every move
     Active owner (2026-08-29):
     - Combined T31/T51/T64 implementation task `T31 T51 T64 FX Graph Interactions`, thread `01a04c8c-a573-7ef0-b92b-177417df587f`, branch `codex/t31-t51-t64-fx-graph-interactions`, worktree `/Users/winterfell/.codex/worktrees/6e16/cosimo-synth`, base `d10c166fbb8d4f25aedb326f7661576aedbf61f7`, model SOL, reasoning max.
     - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push master or deploy.
+    Integrated (2026-08-30):
+    - A deliberate short hold lifts the real pill into the graph's own styled overlay, the exact destination opens with a ghost, displaced effects and paths animate, and release commits exactly the pictured move once. Cancellation, capture loss, blur, hidden state, and concurrent topology replacement publish nothing.
+    - Source review rejected the first handoff's body-level portal and missing outside-list movement after capture rejection. The repaired production ShadowRoot ownership and single window fallback pass real composed browser coverage, including rejected station and list capture.
+    - Focused reorder/lifecycle coverage passes 12/12 and the complete desktop UI suite passes 307/310; the three reds are the established unrelated React Grab, wavetable-prewarm, and MSEG-opacity baselines. Fresh HMR ran from the exact implementation worktree and was stopped; the final compiled VST3 is installed and strict-signed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` (executable SHA-256 `c3af65f515566efbc661a11cc3a59a09a6e1ba9292b54055992a3a496dc7abdd`).
     Current gap:
     - The code already builds a proposed rack order as the pointer crosses drop targets, but it redraws that order instantly. The dragged effect stays in the grid, other effects jump, and the destination is not shown as an opening in the chain.
     Required drag behavior:
@@ -1242,10 +1246,13 @@ BROWSER SHARING AND ENVELOPE FOLLOW-UP
 
 RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
 
-[ ] T51 — Let an effect be replaced from its graph-node menu
+[x] T51 — Let an effect be replaced from its graph-node menu
     Active owner (2026-08-29):
     - Combined T31/T51/T64 implementation task `T31 T51 T64 FX Graph Interactions`, thread `01a04c8c-a573-7ef0-b92b-177417df587f`, branch `codex/t31-t51-t64-fx-graph-interactions`, worktree `/Users/winterfell/.codex/worktrees/6e16/cosimo-synth`, base `d10c166fbb8d4f25aedb326f7661576aedbf61f7`, model SOL, reasoning max.
     - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push master or deploy.
+    Integrated (2026-08-30):
+    - `Swap` reuses the existing picker and replaces the exact trunk, Parallel, or Frequency Split path with the chosen effect's normal defaults. Cancelling changes nothing; successful replacement removes the old effect's state and modulation routes through the existing cleanup seam.
+    - The final lane-operation suite passes 11/11 and the real composed trunk/Parallel/Split Swap proof passes with the complete rack interaction suite above.
     Current gap:
     - Long-pressing an effect node opens its context menu, but that menu cannot replace the effect.
     Required behavior:
@@ -1513,10 +1520,13 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Bypass occupies the unused graph top-left and Mix stays inside the graph's bottom scroller with a real >=44 px touch target and no added graph height. Empty, serial, Parallel, Frequency Split, tail/feedback, zero-Mix, bypass, preset, Init, URL, and inventory cases pass. Final composed qualification includes Cmajor rack 93/93, sound/preset/share 30/30 across non-browser and browser paths, and focused green reruns for every moving-master browser/orphan fixture found by the broad gates; the only unrepaired desktop diagnostic is the established unrelated React Grab `navigator.webdriver` assertion.
     - Fresh coordinator HMR launched the exact `74e4` standalone. The final self-contained compiled VST3 includes the pinned Cmajor runtime and is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`; strict deep code-sign verification passes and its executable SHA-256 is `8a6754146b8c1a2b588798a2807d4c93a5f0edaf4996791783bd7cd2fdc198cd`. Sites version 57 deploys the composed lane controls from `c4f6de33`. Ableton remained open and was not disturbed, so final host use, subjective click/listening acceptance, host round-trip inspection, and physical iPhone touch/audio acceptance remain unperformed.
 
-[ ] T64 — Toggle an effect's bypass from its selected graph icon without stealing scroll gestures
+[x] T64 — Toggle an effect's bypass from its selected graph icon without stealing scroll gestures
     Active owner (2026-08-29):
     - Combined T31/T51/T64 implementation task `T31 T51 T64 FX Graph Interactions`, thread `01a04c8c-a573-7ef0-b92b-177417df587f`, branch `codex/t31-t51-t64-fx-graph-interactions`, worktree `/Users/winterfell/.codex/worktrees/6e16/cosimo-synth`, base `d10c166fbb8d4f25aedb326f7661576aedbf61f7`, model SOL, reasoning max.
     - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push master or deploy.
+    Integrated (2026-08-30):
+    - First tap still selects and opens. Only the visible icon of the already selected effect toggles bypass while the editor stays open; labels and the surrounding pill never toggle it.
+    - Immediate movement remains scrolling, a stationary 550 ms hold opens the menu, and a 180 ms hold followed by 3 px movement lifts into reorder with one light haptic. Automated phone coverage proves exclusive ownership and cancellation; Andrew's physical-phone feel judgment for the chosen 180/5/3 timing remains product acceptance, not unfinished implementation.
     Tap behavior:
     - Keep the current first tap: tapping an effect node selects it and expands its editor.
     - When that same effect is already selected, tapping specifically its effect icon toggles that effect between active and bypassed while leaving it selected and its editor open. The first icon tap on an unselected node only selects it; it must not also bypass it.
@@ -1586,7 +1596,7 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Recently completed — `T28 Build Fixed Polish Section`; coordinator-managed implementation thread `01a04954-1c32-7771-9e22-c16c02d93503`; branch `codex/t28-fixed-polish-section`; worktree `/Users/winterfell/.codex/worktrees/1c70/cosimo-synth`; rebased base `35f5cb33cb7f8568323661d9713a28cb1f7fa3c3`; final commit `40eea1ebb085cc7781d5409a1bb57872cdf7f3b8`; scope is the fixed end-of-chain Polish DSP/UI/state/meter/host delivery. T62 dependency is landed; source review, focused repairs, complete automated gates, HMR, compiled build, install, code signing, fast-forward merge, master push at `fef3aec8`, and Sites version 60 deployment are complete. No merge, push, install, or deployment work remains for T28.
     - Recently completed — `T69 Implement plain CPM correction`; final handoff owner thread `01a04c57-fedd-7c23-b84a-7cc076a6ab4c`; branch `codex/t69-plain-cpm-correction`; worktree `/Users/winterfell/.codex/worktrees/2c89/cosimo-synth`; rebased integration commit `0c38ad96`. The rejected custom resolver is gone. Every active caller now uses one small ordinary CPM module for the private Cmajor/CHOC forks and pinned JUCE; the T26 runner is restored through the same seam and the private Cmajor compiler fix removes the warning waiver. Source review, focused repairs, rebasing, tests, and representative no-install builds are complete; no integration, installation, or deployment work remains for T69.
     - Recently completed — `T46 Finish URL Patch Sharing`; thread `01a04c8b-6924-76c0-b653-c395741312b7`; branch `codex/t46-url-patch-sharing`; worktree `/Users/winterfell/.codex/worktrees/46e1/cosimo-synth`; rebased integration commit `f63f70a4`. Complete current sounds now copy/open through URL on Chromium and WebKit at desktop and phone sizes, unsupported sounds refuse before mutation, and source/restored maximal sounds render identical audio. No native install or host gate applies to this browser-only feature.
-    - Review queued — `T31 + T51 + T64 FX Graph Interactions`; thread `01a04c8c-a573-7ef0-b92b-177417df587f`; branch `codex/t31-t51-t64-fx-graph-interactions`; worktree `/Users/winterfell/.codex/worktrees/6e16/cosimo-synth`; base `d10c166f`; clean handoff `9f112c04`. Scope is exclusive scroll/reorder/menu gesture ownership, real lift/ghost/animated preview, Swap with cleanup, and selected-icon-only bypass.
+    - Recently completed — `T31 + T51 + T64 FX Graph Interactions`; thread `01a04c8c-a573-7ef0-b92b-177417df587f`; branch `codex/t31-t51-t64-fx-graph-interactions`; worktree `/Users/winterfell/.codex/worktrees/6e16/cosimo-synth`; rebased final tip `b0b99de4`. Exclusive scroll/reorder/menu ownership, real lift/ghost/animated preview, Swap cleanup, selected-icon-only bypass, source review, focused repairs, complete UI qualification, generated bundles, HMR, compiled install, and strict signing are complete. The only MEDIUM objection-audit item is Andrew's still-unperformed physical-phone feel judgment for the 180 ms reorder hold; the remaining decisions were assessed LOW and match current product authority.
     - Recently completed — `T48 + T49 Complete ADSR Editor`; thread `01a04c8c-c9dc-77d2-afd0-788fb44b9834`; branch `codex/t48-t49-adsr-editor`; worktree `/Users/winterfell/.codex/worktrees/9e82/cosimo-synth`; integrated final tip `85991314`. Responsive ADSR geometry, dominant-axis Decay/Sustain editing, sustain-segment dragging, the local value bubble, cross-surface semantic colors, generated desktop/iPhone bundles, complete UI qualification, fresh HMR, compiled install, and strict code-sign verification are complete. Physical iPhone feel/visual acceptance and Ableton interaction remain explicitly unperformed rather than implementation blockers.
     Initial handoff sources to audit:
     - T57/T58 effect-editor cleanup: thread `01a0426b-19ee-7db0-ba88-e21192770e6a`.
