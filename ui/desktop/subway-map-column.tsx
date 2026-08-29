@@ -81,6 +81,12 @@ export type SubwayReorderLiftOrigin = {
     readonly clientY: number;
 };
 
+export type SubwayReorderArmRequest = {
+    readonly pointerId: number;
+    readonly stationElement: HTMLElement;
+    readonly preventDefault: () => void;
+};
+
 export type SubwayStationMenuRequest = {
     readonly deviceId: string;
     readonly clientX: number;
@@ -111,7 +117,7 @@ type SubwayMapColumnProps = {
     /** Called once movement after the deliberate short hold lifts a station. */
     readonly onArmReorder: (
         deviceId: string,
-        event: ReactPointerEvent<HTMLElement>,
+        request: SubwayReorderArmRequest,
         liftOrigin: SubwayReorderLiftOrigin,
     ) => boolean;
     readonly onKeyboardMove: (deviceId: string, offset: -1 | 1) => void;
@@ -136,10 +142,14 @@ function requiredLaneCenter(laneCenters: ReadonlyArray<number>, laneIndex: numbe
     return center;
 }
 
-type PressingPointerState = {
-    readonly _tag: "pressing";
+type StationPointerOwner = {
     readonly pointerId: number;
     readonly captureElement: HTMLElement;
+    readonly ownership: "element-capture" | "window-fallback";
+};
+
+type PressingPointerState = StationPointerOwner & {
+    readonly _tag: "pressing";
     readonly startX: number;
     readonly startY: number;
     readonly lastX: number;
@@ -148,10 +158,8 @@ type PressingPointerState = {
     readonly menuTimer: number;
 };
 
-type ReorderReadyPointerState = {
+type ReorderReadyPointerState = StationPointerOwner & {
     readonly _tag: "reorder-ready";
-    readonly pointerId: number;
-    readonly captureElement: HTMLElement;
     readonly startX: number;
     readonly startY: number;
     readonly lastX: number;
@@ -161,18 +169,14 @@ type ReorderReadyPointerState = {
     readonly menuTimer: number;
 };
 
-type ScrollingPointerState = {
+type ScrollingPointerState = StationPointerOwner & {
     readonly _tag: "scrolling";
-    readonly pointerId: number;
-    readonly captureElement: HTMLElement;
     readonly lastX: number;
     readonly lastY: number;
 };
 
-type WonPointerState = {
-    readonly _tag: "reordering" | "menu-open";
-    readonly pointerId: number;
-    readonly captureElement: HTMLElement;
+type WonPointerState = StationPointerOwner & {
+    readonly _tag: "menu-open";
 };
 
 type StationPointerState =
@@ -180,6 +184,14 @@ type StationPointerState =
     | ReorderReadyPointerState
     | ScrollingPointerState
     | WonPointerState;
+
+type StationGesturePointerInput = {
+    readonly pointerId: number;
+    readonly clientX: number;
+    readonly clientY: number;
+    preventDefault: () => void;
+    stopPropagation: () => void;
+};
 
 function pointerDistance(fromX: number, fromY: number, toX: number, toY: number): number {
     return Math.hypot(toX - fromX, toY - fromY);
@@ -209,9 +221,10 @@ function scrollScrollableAncestors(start: HTMLElement, deltaY: number): void {
 
 /**
  * Tap / drag-arm / long-press disambiguation shared by stations and forks.
- * The pointer is captured at pointerdown (mouse has no implicit capture),
- * so the threshold-crossing move always reaches this element; the workspace
- * steals the capture when a reorder arms.
+ * One primary pointer owns this state machine until release/cancellation.
+ * Element capture is preferred; a stable window listener is the equivalent
+ * owner when the platform rejects capture. The workspace takes over only
+ * after the reorder winner has armed.
  */
 function usePressableGestures({
     onTap,
@@ -222,12 +235,13 @@ function usePressableGestures({
     onTap: (event: ReactMouseEvent<HTMLElement>) => void;
     onLongPress: (clientX: number, clientY: number) => void;
     onDragArm?: ((
-        event: ReactPointerEvent<HTMLElement>,
+        request: SubwayReorderArmRequest,
         liftOrigin: SubwayReorderLiftOrigin,
     ) => boolean) | null;
     manualScroll?: boolean;
 }) {
     const pointerStateRef = useRef<StationPointerState | null>(null);
+    const ownershipCleanupRef = useRef<(() => void) | null>(null);
     const suppressClickRef = useRef(false);
 
     const clearPointerTimers = useCallback((pointerState: StationPointerState) => {
@@ -243,16 +257,26 @@ function usePressableGestures({
 
     const clearPointerState = useCallback(() => {
         const pointerState = pointerStateRef.current;
+        pointerStateRef.current = null;
         if (pointerState !== null) {
             clearPointerTimers(pointerState);
-            pointerStateRef.current = null;
         }
+        const cleanup = ownershipCleanupRef.current;
+        ownershipCleanupRef.current = null;
+        cleanup?.();
     }, [clearPointerTimers]);
 
-    useEffect(() => clearPointerState, [clearPointerState]);
+    const cancelPointerState = useCallback(() => {
+        if (pointerStateRef.current === null) {
+            return;
+        }
+        suppressClickRef.current = true;
+        clearPointerState();
+    }, [clearPointerState]);
 
     const applyScrollMove = useCallback((
-        event: ReactPointerEvent<HTMLElement>,
+        event: StationGesturePointerInput,
+        captureElement: HTMLElement,
         deltaY: number,
     ) => {
         if (!manualScroll) {
@@ -260,23 +284,213 @@ function usePressableGestures({
         }
         event.preventDefault();
         event.stopPropagation();
-        scrollScrollableAncestors(event.currentTarget, deltaY);
+        scrollScrollableAncestors(captureElement, deltaY);
     }, [manualScroll]);
 
-    const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-        if (event.pointerType === "mouse" && event.button !== 0) {
+    const processPointerMove = useCallback((event: StationGesturePointerInput) => {
+        const pointerState = pointerStateRef.current;
+        if (pointerState === null || pointerState.pointerId !== event.pointerId) {
             return;
         }
-        clearPointerState();
-        suppressClickRef.current = false;
-        try {
-            event.currentTarget.setPointerCapture(event.pointerId);
-        } catch {
-            // Without capture the fast paths still work: the threshold move
-            // just has to land on the element itself.
+        if (pointerState._tag === "pressing") {
+            if (pointerDistance(
+                pointerState.startX,
+                pointerState.startY,
+                event.clientX,
+                event.clientY,
+            ) < STATION_SCROLL_THRESHOLD_PX) {
+                pointerStateRef.current = {
+                    ...pointerState,
+                    lastX: event.clientX,
+                    lastY: event.clientY,
+                };
+                return;
+            }
+            clearPointerTimers(pointerState);
+            suppressClickRef.current = true;
+            pointerStateRef.current = {
+                _tag: "scrolling",
+                pointerId: pointerState.pointerId,
+                captureElement: pointerState.captureElement,
+                ownership: pointerState.ownership,
+                lastX: event.clientX,
+                lastY: event.clientY,
+            };
+            applyScrollMove(
+                event,
+                pointerState.captureElement,
+                pointerState.startY - event.clientY,
+            );
+            return;
         }
+        if (pointerState._tag === "reorder-ready") {
+            if (pointerDistance(
+                pointerState.readyX,
+                pointerState.readyY,
+                event.clientX,
+                event.clientY,
+            ) < STATION_REORDER_MOVE_PX) {
+                pointerStateRef.current = {
+                    ...pointerState,
+                    lastX: event.clientX,
+                    lastY: event.clientY,
+                };
+                return;
+            }
+            clearPointerTimers(pointerState);
+            suppressClickRef.current = true;
+            event.preventDefault();
+            const armed = onDragArm?.({
+                pointerId: event.pointerId,
+                stationElement: pointerState.captureElement,
+                preventDefault: () => event.preventDefault(),
+            }, {
+                clientX: pointerState.readyX,
+                clientY: pointerState.readyY,
+            }) ?? false;
+            if (armed) {
+                // The workspace has captured the pointer and is now the one
+                // reorder owner. End the station phase without reviving it
+                // after the capture-transfer lostpointercapture event.
+                clearPointerState();
+                return;
+            }
+            pointerStateRef.current = {
+                _tag: "scrolling",
+                pointerId: pointerState.pointerId,
+                captureElement: pointerState.captureElement,
+                ownership: pointerState.ownership,
+                lastX: event.clientX,
+                lastY: event.clientY,
+            };
+            applyScrollMove(
+                event,
+                pointerState.captureElement,
+                pointerState.readyY - event.clientY,
+            );
+            return;
+        }
+        if (pointerState._tag === "scrolling") {
+            const deltaY = pointerState.lastY - event.clientY;
+            pointerStateRef.current = {
+                ...pointerState,
+                lastX: event.clientX,
+                lastY: event.clientY,
+            };
+            applyScrollMove(event, pointerState.captureElement, deltaY);
+        }
+    }, [applyScrollMove, clearPointerState, clearPointerTimers, onDragArm]);
+
+    const processPointerUp = useCallback((pointerId: number) => {
+        if (pointerStateRef.current?.pointerId === pointerId) {
+            clearPointerState();
+        }
+    }, [clearPointerState]);
+
+    const processPointerCancel = useCallback((pointerId: number) => {
+        if (pointerStateRef.current?.pointerId === pointerId) {
+            cancelPointerState();
+        }
+    }, [cancelPointerState]);
+
+    const installPointerOwnership = useCallback((
+        captureElement: HTMLElement,
+        ownership: StationPointerOwner["ownership"],
+    ) => {
+        const ownerDocument = captureElement.ownerDocument;
+        const ownerWindow = ownerDocument.defaultView;
+        if (ownerWindow === null) {
+            cancelPointerState();
+            return;
+        }
+
+        const handleWindowPointerMove = (event: PointerEvent) => {
+            if (pointerStateRef.current?.ownership === "window-fallback") {
+                processPointerMove(event);
+            }
+        };
+        const handleWindowPointerUp = (event: PointerEvent) => {
+            if (pointerStateRef.current?.ownership === "window-fallback") {
+                processPointerUp(event.pointerId);
+            }
+        };
+        const handleWindowPointerCancel = (event: PointerEvent) => {
+            if (pointerStateRef.current?.ownership === "window-fallback") {
+                processPointerCancel(event.pointerId);
+            }
+        };
+        const handleTargetLostPointerCapture = (event: PointerEvent) => {
+            const pointerState = pointerStateRef.current;
+            if (pointerState?.ownership === "element-capture"
+                    && pointerState.pointerId === event.pointerId) {
+                cancelPointerState();
+            }
+        };
+        const handleVisibilityChange = () => {
+            if (ownerDocument.visibilityState !== "visible") {
+                cancelPointerState();
+            }
+        };
+
+        if (ownership === "window-fallback") {
+            ownerWindow.addEventListener("pointermove", handleWindowPointerMove, true);
+            ownerWindow.addEventListener("pointerup", handleWindowPointerUp, true);
+            ownerWindow.addEventListener("pointercancel", handleWindowPointerCancel, true);
+        } else {
+            // Capture loss is owned at the actual target. React's delegated
+            // root event is only a redundant guard: it may never receive the
+            // native event in a host or shadow-root integration.
+            captureElement.addEventListener(
+                "lostpointercapture",
+                handleTargetLostPointerCapture,
+                true,
+            );
+        }
+        ownerWindow.addEventListener("blur", cancelPointerState);
+        ownerDocument.addEventListener("visibilitychange", handleVisibilityChange);
+        ownershipCleanupRef.current = () => {
+            if (ownership === "window-fallback") {
+                ownerWindow.removeEventListener("pointermove", handleWindowPointerMove, true);
+                ownerWindow.removeEventListener("pointerup", handleWindowPointerUp, true);
+                ownerWindow.removeEventListener("pointercancel", handleWindowPointerCancel, true);
+            } else {
+                captureElement.removeEventListener(
+                    "lostpointercapture",
+                    handleTargetLostPointerCapture,
+                    true,
+                );
+            }
+            ownerWindow.removeEventListener("blur", cancelPointerState);
+            ownerDocument.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
+    }, [cancelPointerState, processPointerCancel, processPointerMove, processPointerUp]);
+
+    useEffect(() => () => {
+        suppressClickRef.current = true;
+        clearPointerState();
+    }, [clearPointerState]);
+
+    const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+        if (!event.isPrimary || event.button !== 0 || pointerStateRef.current !== null) {
+            return;
+        }
+        suppressClickRef.current = false;
         const { clientX, clientY, pointerId } = event;
         const captureElement = event.currentTarget;
+        try {
+            captureElement.setPointerCapture(pointerId);
+        } catch {
+            // hasPointerCapture below distinguishes implicit capture from a
+            // platform that truly needs the stable window fallback.
+        }
+        let ownership: StationPointerOwner["ownership"] = "window-fallback";
+        try {
+            if (captureElement.hasPointerCapture(pointerId)) {
+                ownership = "element-capture";
+            }
+        } catch {
+            // Unsupported capture uses the window fallback.
+        }
         const reorderTimer = onDragArm === null
             ? null
             : uiTimeout(() => {
@@ -288,6 +502,7 @@ function usePressableGestures({
                     _tag: "reorder-ready",
                     pointerId,
                     captureElement: current.captureElement,
+                    ownership: current.ownership,
                     startX: current.startX,
                     startY: current.startY,
                     lastX: current.lastX,
@@ -314,6 +529,7 @@ function usePressableGestures({
                 _tag: "menu-open",
                 pointerId,
                 captureElement: current.captureElement,
+                ownership: current.ownership,
             };
             suppressClickRef.current = true;
             onLongPress(clientX, clientY);
@@ -322,6 +538,7 @@ function usePressableGestures({
             _tag: "pressing",
             pointerId,
             captureElement,
+            ownership,
             startX: clientX,
             startY: clientY,
             lastX: clientX,
@@ -329,109 +546,35 @@ function usePressableGestures({
             reorderTimer,
             menuTimer,
         };
-    }, [clearPointerState, clearPointerTimers, onDragArm, onLongPress]);
+        installPointerOwnership(captureElement, ownership);
+    }, [clearPointerTimers, installPointerOwnership, onDragArm, onLongPress]);
 
     const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
         const pointerState = pointerStateRef.current;
-        if (pointerState === null || pointerState.pointerId !== event.pointerId) {
-            return;
+        if (pointerState?.ownership === "element-capture") {
+            processPointerMove(event);
         }
-        if (pointerState._tag === "pressing") {
-            if (pointerDistance(
-                pointerState.startX,
-                pointerState.startY,
-                event.clientX,
-                event.clientY,
-            ) < STATION_SCROLL_THRESHOLD_PX) {
-                pointerStateRef.current = {
-                    ...pointerState,
-                    lastX: event.clientX,
-                    lastY: event.clientY,
-                };
-                return;
-            }
-            clearPointerTimers(pointerState);
-            suppressClickRef.current = true;
-            pointerStateRef.current = {
-                _tag: "scrolling",
-                pointerId: pointerState.pointerId,
-                captureElement: pointerState.captureElement,
-                lastX: event.clientX,
-                lastY: event.clientY,
-            };
-            applyScrollMove(event, pointerState.startY - event.clientY);
-            return;
-        }
-        if (pointerState._tag === "reorder-ready") {
-            if (pointerDistance(
-                pointerState.readyX,
-                pointerState.readyY,
-                event.clientX,
-                event.clientY,
-            ) < STATION_REORDER_MOVE_PX) {
-                pointerStateRef.current = {
-                    ...pointerState,
-                    lastX: event.clientX,
-                    lastY: event.clientY,
-                };
-                return;
-            }
-            clearPointerTimers(pointerState);
-            suppressClickRef.current = true;
-            event.preventDefault();
-            const armed = onDragArm?.(event, {
-                clientX: pointerState.readyX,
-                clientY: pointerState.readyY,
-            }) ?? false;
-            pointerStateRef.current = armed
-                ? {
-                    _tag: "reordering",
-                    pointerId: pointerState.pointerId,
-                    captureElement: pointerState.captureElement,
-                }
-                : {
-                    _tag: "scrolling",
-                    pointerId: pointerState.pointerId,
-                    captureElement: pointerState.captureElement,
-                    lastX: event.clientX,
-                    lastY: event.clientY,
-                };
-            if (!armed) {
-                applyScrollMove(event, pointerState.readyY - event.clientY);
-            }
-            return;
-        }
-        if (pointerState._tag === "scrolling") {
-            const deltaY = pointerState.lastY - event.clientY;
-            pointerStateRef.current = {
-                ...pointerState,
-                lastX: event.clientX,
-                lastY: event.clientY,
-            };
-            applyScrollMove(event, deltaY);
-        }
-    }, [applyScrollMove, clearPointerTimers, onDragArm]);
+    }, [processPointerMove]);
 
     const handlePointerUp = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-        if (pointerStateRef.current?.pointerId !== event.pointerId) {
-            return;
+        if (pointerStateRef.current?.ownership === "element-capture") {
+            processPointerUp(event.pointerId);
         }
-        clearPointerState();
-    }, [clearPointerState]);
+    }, [processPointerUp]);
 
     const handlePointerCancel = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-        if (pointerStateRef.current?.pointerId !== event.pointerId) {
-            return;
+        if (pointerStateRef.current?.ownership === "element-capture") {
+            processPointerCancel(event.pointerId);
         }
-        suppressClickRef.current = true;
-        clearPointerState();
-    }, [clearPointerState]);
+    }, [processPointerCancel]);
 
     const handleLostPointerCapture = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-        if (pointerStateRef.current?.pointerId === event.pointerId) {
-            clearPointerState();
+        const pointerState = pointerStateRef.current;
+        if (pointerState?.ownership === "element-capture"
+                && pointerState.pointerId === event.pointerId) {
+            cancelPointerState();
         }
-    }, [clearPointerState]);
+    }, [cancelPointerState]);
 
     const handleClick = useCallback((event: ReactMouseEvent<HTMLElement>) => {
         if (suppressClickRef.current) {

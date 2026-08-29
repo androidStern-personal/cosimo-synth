@@ -7,6 +7,7 @@ import {
     createDefaultLaneState,
     serializeLaneState,
 } from "../patch_gui/lane-state.js";
+import { createDefaultLaneStateV2 } from "../patch_gui/lane-state-v2.js";
 import { normalizeModulationState } from "../patch_gui/modulation.js";
 import {
     clickPresetBarAction,
@@ -26,6 +27,7 @@ import {
 import { decodePng, pngPixelAt, rgbDistance } from "./helpers/png_pixels.mjs";
 
 const readStoredLaneDoc = (snapshot) => JSON.parse(String(snapshot.storedState["lane.v1"]));
+const starterTrioLaneDocJson = () => JSON.stringify(createDefaultLaneStateV2());
 const evidenceDirectory = path.resolve(import.meta.dirname, "..", "build", "fx-graph-foundation");
 const laneOutputEvidenceDirectory = path.resolve(import.meta.dirname, "..", "build", "t63-lane-output");
 
@@ -3349,6 +3351,447 @@ test("same-branch reorder commits the exact held preview once", async () => {
             committed.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").length,
             1,
         );
+    } finally {
+        await page.close();
+    }
+});
+
+test("reorder release composes its move onto concurrent device state", async () => {
+    const page = await openHarnessPage({ laneDoc: starterTrioLaneDocJson() });
+
+    try {
+        const source = page.locator(
+            '[data-device-id="reverb#1"] [data-role="rack-station-reverb"]',
+        );
+        const target = page.locator(
+            '[data-device-id="distortion#1"] [data-role="rack-station-drive"]',
+        );
+        await source.scrollIntoViewIfNeeded();
+        const sourcePoint = await centerOf(source);
+        const targetPoint = await centerOf(target);
+        await clearHarnessDebugLog(page);
+
+        await page.mouse.move(sourcePoint.x, sourcePoint.y);
+        await page.mouse.down();
+        await page.waitForTimeout(210);
+        await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 6 });
+        await page.waitForSelector('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]', {
+            timeout: 2000,
+        });
+        await page.waitForSelector('[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]', {
+            timeout: 2000,
+        });
+
+        await page.evaluate(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            const doc = JSON.parse(String(snapshot.storedState["lane.v1"]));
+            const visitPlacements = (nodes) => {
+                for (const node of nodes) {
+                    if (node.kind === "device") {
+                        if (node.deviceId === "delay#1") {
+                            node.enabled = false;
+                        }
+                    } else {
+                        node.branches.forEach(visitPlacements);
+                    }
+                }
+            };
+            visitPlacements(doc.chain);
+            doc.devices["delay#1"].params.delayFeedback = 0.71;
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(
+                "lane.v1",
+                JSON.stringify(doc),
+            );
+        });
+        await page.waitForSelector('[data-device-id="delay#1"][data-enabled="false"]');
+        const publicationsBeforeRelease = (await getHarnessSnapshot(page)).sentMessages
+            .filter(({ endpointID }) => endpointID === "laneTopology").length;
+
+        await page.mouse.up();
+        const committed = await waitForHarnessSnapshot(
+            page,
+            "reorder composed onto concurrent device state",
+            (snapshot) => {
+                const rawLane = snapshot.storedState["lane.v1"];
+                if (rawLane === undefined) {
+                    return false;
+                }
+                const doc = JSON.parse(String(rawLane));
+                return doc.chain[0]?.deviceId === "reverb#1"
+                    && doc.chain.find((node) => node.deviceId === "delay#1")?.enabled === false
+                    && doc.devices["delay#1"]?.params?.delayFeedback === 0.71;
+            },
+        );
+        const stored = readStoredLaneDoc(committed);
+        assert.equal(stored.chain[0].deviceId, "reverb#1");
+        assert.equal(stored.chain.find((node) => node.deviceId === "delay#1").enabled, false);
+        assert.equal(stored.devices["delay#1"].params.delayFeedback, 0.71);
+        assert.equal(
+            committed.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").length,
+            publicationsBeforeRelease + 1,
+        );
+    } finally {
+        await page.mouse.up().catch(() => undefined);
+        await page.close();
+    }
+});
+
+test("a concurrent topology replacement cancels reorder without restoring its stale preview", async () => {
+    const page = await openHarnessPage({ laneDoc: starterTrioLaneDocJson() });
+
+    try {
+        const source = page.locator(
+            '[data-device-id="reverb#1"] [data-role="rack-station-reverb"]',
+        );
+        const target = page.locator(
+            '[data-device-id="distortion#1"] [data-role="rack-station-drive"]',
+        );
+        await source.scrollIntoViewIfNeeded();
+        const sourcePoint = await centerOf(source);
+        const targetPoint = await centerOf(target);
+        await page.mouse.move(sourcePoint.x, sourcePoint.y);
+        await page.mouse.down();
+        await page.waitForTimeout(210);
+        await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 6 });
+        await page.waitForSelector('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]', {
+            timeout: 2000,
+        });
+        await page.waitForSelector('[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]', {
+            timeout: 2000,
+        });
+
+        const replacement = await page.evaluate(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            const doc = JSON.parse(String(snapshot.storedState["lane.v1"]));
+            const byDeviceId = Object.fromEntries(doc.chain.map((node) => [node.deviceId, node]));
+            doc.chain = [
+                byDeviceId["delay#1"],
+                byDeviceId["distortion#1"],
+                byDeviceId["reverb#1"],
+            ];
+            const serialized = JSON.stringify(doc);
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("lane.v1", serialized);
+            return serialized;
+        });
+
+        await page.waitForSelector('[data-role="rack-reorder-lifted-pill"]', {
+            state: "detached",
+            timeout: 2000,
+        });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-module-list"]')?.firstElementChild
+                ?.getAttribute("data-device-id") === "delay#1"
+        ));
+        await clearHarnessDebugLog(page);
+        await page.mouse.up();
+        await page.waitForTimeout(80);
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(String(snapshot.storedState["lane.v1"]), replacement);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"),
+            false,
+        );
+        assert.equal(await page.locator('[data-role="rack-reorder-lifted-pill"]').count(), 0);
+    } finally {
+        await page.mouse.up().catch(() => undefined);
+        await page.close();
+    }
+});
+
+test("station capture rejection keeps outside movement in the scrolling gesture", async () => {
+    const page = await openHarnessPage({
+        laneDoc: boundaryScrollLaneDocJson(),
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                window.__FX_CAPTURE_REJECTIONS__ = 0;
+                const setPointerCapture = Element.prototype.setPointerCapture;
+                Element.prototype.setPointerCapture = function rejectStationCapture(pointerId) {
+                    if (this.matches?.(".subway-station")) {
+                        window.__FX_CAPTURE_REJECTIONS__ += 1;
+                        try {
+                            if (this.hasPointerCapture(pointerId)) {
+                                this.releasePointerCapture(pointerId);
+                            }
+                        } catch {
+                            // The test seam represents a platform with no capture support.
+                        }
+                        throw new DOMException("Station pointer capture rejected", "NotSupportedError");
+                    }
+                    return setPointerCapture.call(this, pointerId);
+                };
+            });
+        },
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        const graph = page.locator('[data-role="rack-module-list"]');
+        await graph.waitFor();
+        await graph.evaluate((element) => { element.scrollTop = 0; });
+        const source = await centerOf(page.locator(
+            '[data-device-id="globalFilter#1"] [data-role="rack-station-filter"]',
+        ));
+        await clearHarnessDebugLog(page);
+
+        await page.mouse.move(source.x, source.y);
+        await page.mouse.down();
+        await page.mouse.move(388, source.y - 44);
+        await page.waitForFunction(() => {
+            const element = document.querySelector('[data-role="rack-module-list"]');
+            return element instanceof HTMLElement && element.scrollTop > 20;
+        }, undefined, { timeout: 2000 });
+        await page.waitForTimeout(600);
+
+        assert.equal(await page.evaluate(() => window.__FX_CAPTURE_REJECTIONS__), 1);
+        assert.equal(await page.locator('[data-role="rack-station-menu"]').count(), 0);
+        assert.equal(await page.locator('[data-role="rack-reorder-lifted-pill"]').count(), 0);
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
+        await page.mouse.up();
+    } finally {
+        await page.mouse.up().catch(() => undefined);
+        await page.close();
+    }
+});
+
+test("station capture rejection still lifts and reorders outside the source station", async () => {
+    const page = await openHarnessPage({
+        laneDoc: "fresh",
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                window.__FX_REORDER_HAPTICS__ = [];
+                window.cmaj_triggerHaptic = (style = "light") => {
+                    window.__FX_REORDER_HAPTICS__.push(style);
+                };
+                const setPointerCapture = Element.prototype.setPointerCapture;
+                Element.prototype.setPointerCapture = function rejectStationCapture(pointerId) {
+                    if (this.matches?.(".subway-station")) {
+                        try {
+                            if (this.hasPointerCapture(pointerId)) {
+                                this.releasePointerCapture(pointerId);
+                            }
+                        } catch {
+                            // The test seam represents a platform with no capture support.
+                        }
+                        throw new DOMException("Station pointer capture rejected", "NotSupportedError");
+                    }
+                    return setPointerCapture.call(this, pointerId);
+                };
+            });
+        },
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        const source = await centerOf(page.locator(
+            '[data-device-id="reverb#1"] [data-role="rack-station-reverb"]',
+        ));
+        const target = await centerOf(page.locator(
+            '[data-device-id="distortion#1"] [data-role="rack-station-drive"]',
+        ));
+        await clearHarnessDebugLog(page);
+
+        await page.mouse.move(source.x, source.y);
+        await page.mouse.down();
+        await page.waitForTimeout(210);
+        await page.mouse.move(target.x, target.y);
+        await page.waitForSelector(
+            '[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]',
+        );
+        await page.mouse.up();
+
+        const committed = await waitForHarnessSnapshot(
+            page,
+            "capture fallback reorder committed",
+            (snapshot) => {
+                const rawLane = snapshot.storedState["lane.v1"];
+                return rawLane !== undefined
+                    && JSON.parse(String(rawLane)).chain[0]?.deviceId === "reverb#1";
+            },
+        );
+        assert.deepEqual(await page.evaluate(() => window.__FX_REORDER_HAPTICS__), ["light"]);
+        assert.equal(
+            committed.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").length,
+            1,
+        );
+    } finally {
+        await page.mouse.up().catch(() => undefined);
+        await page.close();
+    }
+});
+
+test("native station capture loss cancels a hold even when React delegation is blocked", async () => {
+    const page = await openHarnessPage({
+        laneDoc: starterTrioLaneDocJson(),
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+        },
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        const station = page.locator(
+            '[data-device-id="reverb#1"] [data-role="rack-station-reverb"]',
+        );
+        const source = await centerOf(station);
+        const before = await getHarnessSnapshot(page);
+        const selectedBefore = await page.locator(
+            '.subway-station-row.is-selected, .subway-station-cell.is-selected',
+        ).first().getAttribute("data-device-id");
+        await station.evaluate((element) => {
+            window.__FX_CAPTURE_LOSS_POINTER_ID__ = null;
+            window.__FX_CAPTURE_LOSS_BLOCKED__ = 0;
+            element.addEventListener("pointerdown", (event) => {
+                window.__FX_CAPTURE_LOSS_POINTER_ID__ = event.pointerId;
+            }, { once: true });
+        });
+        await clearHarnessDebugLog(page);
+
+        await page.mouse.move(source.x, source.y);
+        await page.mouse.down();
+        await page.waitForFunction(() => Number.isInteger(window.__FX_CAPTURE_LOSS_POINTER_ID__));
+        await page.mouse.move(source.x + 1, source.y);
+        await page.waitForFunction(() => {
+            const element = document.querySelector(
+                '[data-device-id="reverb#1"] [data-role="rack-station-reverb"]',
+            );
+            return element?.hasPointerCapture(window.__FX_CAPTURE_LOSS_POINTER_ID__) === true;
+        });
+        await station.evaluate((element) => {
+            element.addEventListener("lostpointercapture", (event) => {
+                window.__FX_CAPTURE_LOSS_BLOCKED__ += 1;
+                event.stopPropagation();
+            }, { once: true });
+            element.releasePointerCapture(window.__FX_CAPTURE_LOSS_POINTER_ID__);
+        });
+        await page.mouse.move(388, source.y - 44);
+        await page.waitForFunction(
+            () => window.__FX_CAPTURE_LOSS_BLOCKED__ === 1,
+            undefined,
+            { timeout: 2000 },
+        );
+        await page.waitForTimeout(600);
+        await page.mouse.up();
+
+        assert.equal(await page.locator('[data-role="rack-station-menu"]').count(), 0);
+        assert.equal(await page.locator('[data-role="rack-reorder-lifted-pill"]').count(), 0);
+        assert.equal(
+            await page.locator(
+                '.subway-station-row.is-selected, .subway-station-cell.is-selected',
+            ).first().getAttribute("data-device-id"),
+            selectedBefore,
+        );
+        const after = await getHarnessSnapshot(page);
+        assert.equal(String(after.storedState["lane.v1"]), String(before.storedState["lane.v1"]));
+        assert.equal(after.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
+    } finally {
+        await page.mouse.up().catch(() => undefined);
+        await page.close();
+    }
+});
+
+test("blur and hidden visibility cancel pre-lift station holds without a late winner", async () => {
+    const page = await openHarnessPage({
+        laneDoc: "fresh",
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                window.__FX_REORDER_HAPTICS__ = [];
+                window.cmaj_triggerHaptic = (style = "light") => {
+                    window.__FX_REORDER_HAPTICS__.push(style);
+                };
+            });
+        },
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        const sourceLocator = page.locator(
+            '[data-device-id="reverb#1"] [data-role="rack-station-reverb"]',
+        );
+        const targetLocator = page.locator(
+            '[data-device-id="distortion#1"] [data-role="rack-station-drive"]',
+        );
+        const selectedBefore = await page.locator(
+            '.subway-station-row.is-selected, .subway-station-cell.is-selected',
+        ).first().getAttribute("data-device-id");
+        const storedBefore = String((await getHarnessSnapshot(page)).storedState["lane.v1"]);
+
+        for (const lifecycleLoss of ["blur", "hidden"]) {
+            await clearHarnessDebugLog(page);
+            const source = await centerOf(sourceLocator);
+            const target = await centerOf(targetLocator);
+            await page.mouse.move(source.x, source.y);
+            await page.mouse.down();
+            await page.waitForTimeout(lifecycleLoss === "blur" ? 80 : 230);
+            if (lifecycleLoss === "blur") {
+                await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+            } else {
+                await page.evaluate(() => {
+                    Object.defineProperty(document, "visibilityState", {
+                        configurable: true,
+                        get: () => "hidden",
+                    });
+                    document.dispatchEvent(new Event("visibilitychange"));
+                    Object.defineProperty(document, "visibilityState", {
+                        configurable: true,
+                        get: () => "visible",
+                    });
+                });
+            }
+            await page.waitForTimeout(600);
+            await page.mouse.move(target.x, target.y);
+            await page.mouse.up();
+
+            assert.equal(await page.locator('[data-role="rack-station-menu"]').count(), 0);
+            assert.equal(await page.locator('[data-role="rack-reorder-lifted-pill"]').count(), 0);
+            assert.equal(
+                await page.locator(
+                    '.subway-station-row.is-selected, .subway-station-cell.is-selected',
+                ).first().getAttribute("data-device-id"),
+                selectedBefore,
+            );
+            const snapshot = await getHarnessSnapshot(page);
+            assert.equal(String(snapshot.storedState["lane.v1"]), storedBefore);
+            assert.equal(
+                snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"),
+                false,
+            );
+        }
+        assert.deepEqual(await page.evaluate(() => window.__FX_REORDER_HAPTICS__), []);
+    } finally {
+        await page.mouse.up().catch(() => undefined);
+        await page.close();
+    }
+});
+
+test("secondary mouse and pen pointerdowns never enter the station hold state", async () => {
+    const page = await openHarnessPage({ laneDoc: "fresh" });
+
+    try {
+        const station = page.locator(
+            '[data-device-id="delay#1"] [data-role="rack-station-delay"]',
+        );
+        const point = await centerOf(station);
+        for (const input of [
+            { pointerId: 81, pointerType: "mouse", isPrimary: true, button: 2 },
+            { pointerId: 82, pointerType: "pen", isPrimary: true, button: 2 },
+            { pointerId: 83, pointerType: "pen", isPrimary: false, button: 0 },
+        ]) {
+            await station.dispatchEvent("pointerdown", {
+                ...input,
+                clientX: point.x,
+                clientY: point.y,
+                bubbles: true,
+            });
+        }
+        await page.waitForTimeout(600);
+
+        assert.equal(await page.locator('[data-role="rack-station-menu"]').count(), 0);
+        assert.equal(await page.locator('[data-role="rack-reorder-lifted-pill"]').count(), 0);
     } finally {
         await page.close();
     }

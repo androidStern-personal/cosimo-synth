@@ -186,6 +186,7 @@ import {
     SubwayMapColumn,
     formatCrossoverHz,
     type SubwayGroupMenuRequest,
+    type SubwayReorderArmRequest,
     type SubwayReorderLiftOrigin,
     type SubwayReorderPresentation,
     type SubwayStationMenuRequest,
@@ -412,7 +413,8 @@ type SourceDragPresentation = {
 type ReorderGesture = {
     readonly pointerId: number;
     readonly deviceId: string;
-    readonly originalDoc: LaneStateV2;
+    readonly authoritativeTopologyKey: string;
+    readonly previewPath: LaneDevicePathV2;
     readonly captureElement: HTMLDivElement;
     readonly pointerOffsetX: number;
     readonly pointerOffsetY: number;
@@ -420,6 +422,20 @@ type ReorderGesture = {
     readonly sourceHeight: number;
     readonly visualMode: SubwayReorderPresentation["visualMode"];
 };
+
+/** Structural identity only. Enables, parameters, crossovers, and output
+    controls remain live state that a held reorder must preserve. */
+function laneTopologyKey(state: LaneStateV2): string {
+    return JSON.stringify(state.chain.map((node) => (
+        node.kind === "device"
+            ? ["device", node.deviceId]
+            : [
+                node.kind,
+                node.groupId,
+                node.branches.map((branch) => branch.map(({ deviceId }) => deviceId)),
+              ]
+    )));
+}
 
 const REORDER_BRANCH_FOCUS_DWELL_MS = 400;
 const REORDER_LAYOUT_ANIMATION_MS = 180;
@@ -4594,14 +4610,6 @@ export function EffectsRackWorkspace({
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [parameterMenu, stationMenu, groupMenu, effectPicker]);
 
-    useEffect(() => {
-        if (reorderRef.current !== null) {
-            return;
-        }
-        previewDocRef.current = rackState;
-        setPreviewDoc(rackState);
-    }, [rackState]);
-
     // A document swap (preset restore, storage hydrate) can strand the
     // selection on a device that no longer exists; heal it to the first
     // placed device. Only a truly empty document keeps the stale id — the
@@ -4912,21 +4920,25 @@ export function EffectsRackWorkspace({
     // the longer context-menu hold before this can run.
     const armStationReorder = useCallback((
         deviceId: string,
-        event: ReactPointerEvent<HTMLElement>,
+        request: SubwayReorderArmRequest,
         liftOrigin: SubwayReorderLiftOrigin,
     ): boolean => {
         const captureElement = rackListRef.current;
         if (!captureElement || reorderRef.current !== null) {
             return false;
         }
-        const pill = event.currentTarget.querySelector<HTMLElement>(".subway-station-pill");
+        const previewPath = findLaneDevicePath(previewDocRef.current, deviceId);
+        if (previewPath === null) {
+            return false;
+        }
+        const pill = request.stationElement.querySelector<HTMLElement>(".subway-station-pill");
         if (pill === null) {
             return false;
         }
         clearReorderSettle();
-        event.preventDefault();
+        request.preventDefault();
         try {
-            captureElement.setPointerCapture(event.pointerId);
+            captureElement.setPointerCapture(request.pointerId);
         } catch {
             // The list and window handlers remain authoritative when capture
             // is unavailable or the platform has already lost it.
@@ -4934,9 +4946,10 @@ export function EffectsRackWorkspace({
         const pillRect = pill.getBoundingClientRect();
         const visualMode = renderedStationVisualMode(pill);
         reorderRef.current = {
-            pointerId: event.pointerId,
+            pointerId: request.pointerId,
             deviceId,
-            originalDoc: previewDocRef.current,
+            authoritativeTopologyKey: laneTopologyKey(rackStateRef.current),
+            previewPath,
             captureElement,
             pointerOffsetX: liftOrigin.clientX - pillRect.left,
             pointerOffsetY: liftOrigin.clientY - pillRect.top,
@@ -4955,7 +4968,7 @@ export function EffectsRackWorkspace({
         });
         triggerReorderLiftHaptic();
         return true;
-    }, [clearReorderSettle]);
+    }, [clearReorderSettle, rackStateRef]);
 
     const moveDeviceByOffset = useCallback((deviceId: string, offset: -1 | 1) => {
         const doc = rackStateRef.current;
@@ -4990,17 +5003,26 @@ export function EffectsRackWorkspace({
             // Capture may already be gone after a platform cancellation.
         }
 
-        if (!shouldCommit) {
+        const currentDoc = rackStateRef.current;
+        const topologyIsStillExact = laneTopologyKey(currentDoc)
+            === gesture.authoritativeTopologyKey;
+        if (!shouldCommit || !topologyIsStillExact) {
             captureReorderLayout();
             setReorderPresentation(null);
-            const currentDoc = rackStateRef.current;
             previewDocRef.current = currentDoc;
             setPreviewDoc(currentDoc);
             return;
         }
 
-        const changed = serializeLaneStateV2(gesture.originalDoc)
-            !== serializeLaneStateV2(previewDocRef.current);
+        const composedDoc = moveLaneDevice(currentDoc, gesture.deviceId, gesture.previewPath);
+        if (composedDoc === null) {
+            captureReorderLayout();
+            setReorderPresentation(null);
+            previewDocRef.current = currentDoc;
+            setPreviewDoc(currentDoc);
+            return;
+        }
+        const changed = serializeLaneStateV2(currentDoc) !== serializeLaneStateV2(composedDoc);
         const ghost = gesture.captureElement.querySelector<HTMLElement>(
             `[data-role="rack-reorder-ghost"][data-device-id="${CSS.escape(gesture.deviceId)}"] .subway-station-pill`,
         );
@@ -5034,10 +5056,11 @@ export function EffectsRackWorkspace({
         }
 
         if (changed) {
-            commit(previewDocRef.current);
+            previewDocRef.current = composedDoc;
+            setPreviewDoc(composedDoc);
+            commit(composedDoc);
             return;
         }
-        const currentDoc = rackStateRef.current;
         previewDocRef.current = currentDoc;
         setPreviewDoc(currentDoc);
     }, [
@@ -5047,6 +5070,18 @@ export function EffectsRackWorkspace({
         commit,
         rackStateRef,
     ]);
+
+    useEffect(() => {
+        const gesture = reorderRef.current;
+        if (gesture === null) {
+            previewDocRef.current = rackState;
+            setPreviewDoc(rackState);
+            return;
+        }
+        if (laneTopologyKey(rackState) !== gesture.authoritativeTopologyKey) {
+            finishReorder(gesture.pointerId, false);
+        }
+    }, [finishReorder, rackState]);
 
     const updateReorderPreview = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         const gesture = reorderRef.current;
@@ -5128,7 +5163,12 @@ export function EffectsRackWorkspace({
         const nextDoc = moveLaneDevice(previewDocRef.current, gesture.deviceId, targetPath);
         if (nextDoc !== null
                 && serializeLaneStateV2(nextDoc) !== serializeLaneStateV2(previewDocRef.current)) {
+            const previewPath = findLaneDevicePath(nextDoc, gesture.deviceId);
+            if (previewPath === null) {
+                return;
+            }
             captureReorderLayout();
+            reorderRef.current = { ...gesture, previewPath };
             previewDocRef.current = nextDoc;
             setPreviewDoc(nextDoc);
         }
