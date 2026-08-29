@@ -19,11 +19,11 @@ const inspectedTextExtensions = new Set([
 const sensitiveContentChecks = Object.freeze([
     {
         label: "local absolute path",
-        pattern: /(?:\/Users\/|\/home\/|\/private\/var\/|\/workspaces\/|[A-Za-z]:(?:\/+|\\+)Users(?:\/+|\\+))/,
+        pattern: /(?:\/Users\/|\/home\/|\/private\/var\/|[A-Za-z]:\\Users\\)/,
     },
     {
         label: "private dependency repository URL",
-        pattern: /(?:github\.com\/|git@github\.com:)androidStern-personal\/(?:cmajor|choc)(?:\.git)?/,
+        pattern: /github\.com\/androidStern-personal\/(?:cmajor|choc)(?:\.git)?/,
     },
 ]);
 

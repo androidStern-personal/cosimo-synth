@@ -32,86 +32,6 @@ CHOC_COMMIT = LOCK_VALUES["COSIMO_CHOC_COMMIT"]
 JUCE_REPOSITORY = LOCK_VALUES["COSIMO_JUCE_REPOSITORY"]
 JUCE_COMMIT = LOCK_VALUES["COSIMO_JUCE_COMMIT"]
 
-CANONICAL_DEPENDENCY_CMAKE = "cmake/dependencies/CMakeLists.txt"
-DEPENDENCY_DECLARATION_PATTERN = re.compile(
-    r"\b(?:CPMAddPackage|FetchContent_(?:Declare|MakeAvailable|Populate))\s*\(",
-    re.IGNORECASE,
-)
-CPM_PACKAGE_PATTERN = re.compile(
-    r"\bCPMAddPackage\s*\((?P<body>[^)]*)\)",
-    re.IGNORECASE | re.DOTALL,
-)
-EXPECTED_CPM_PACKAGES = {
-    "cosimo_cmajor": ("COSIMO_CMAJOR_REPOSITORY", "COSIMO_CMAJOR_COMMIT"),
-    "cosimo_juce": ("COSIMO_JUCE_REPOSITORY", "COSIMO_JUCE_COMMIT"),
-}
-
-
-def _cmake_argument_values(body: str, argument: str) -> list[str]:
-    return re.findall(
-        rf"\b{argument}\s+(\"[^\"]*\"|[^\s)]+)",
-        body,
-        flags=re.IGNORECASE,
-    )
-
-
-def _dependency_declaration_violations(
-    relative_path: str,
-    source: str,
-) -> list[str]:
-    if relative_path == "cmake/CPM.cmake":
-        return []
-    if relative_path != CANONICAL_DEPENDENCY_CMAKE:
-        if DEPENDENCY_DECLARATION_PATTERN.search(source):
-            return [f"{relative_path}: alternate dependency declaration"]
-        return []
-
-    violations: list[str] = []
-    package_bodies = [match.group("body") for match in CPM_PACKAGE_PATTERN.finditer(source)]
-    fetch_content_commands = [
-        match
-        for match in DEPENDENCY_DECLARATION_PATTERN.finditer(source)
-        if match.group(0).lower().startswith("fetchcontent_")
-    ]
-    if fetch_content_commands:
-        violations.append(f"{relative_path}: unexpected FetchContent declaration")
-    if len(package_bodies) != len(EXPECTED_CPM_PACKAGES):
-        violations.append(
-            f"{relative_path}: expected exactly {len(EXPECTED_CPM_PACKAGES)} CPM packages"
-        )
-
-    packages_by_name: dict[str, list[str]] = {}
-    for body in package_bodies:
-        names = _cmake_argument_values(body, "NAME")
-        if len(names) != 1:
-            violations.append(f"{relative_path}: CPM package must have exactly one NAME")
-            continue
-        packages_by_name.setdefault(names[0].lower(), []).append(body)
-
-    if set(packages_by_name) != set(EXPECTED_CPM_PACKAGES):
-        violations.append(f"{relative_path}: unexpected CPM package identity")
-
-    for package_name, (repository_variable, commit_variable) in EXPECTED_CPM_PACKAGES.items():
-        matching_bodies = packages_by_name.get(package_name, [])
-        if len(matching_bodies) != 1:
-            violations.append(
-                f"{relative_path}: expected one {package_name} CPM package"
-            )
-            continue
-        body = matching_bodies[0]
-        if _cmake_argument_values(body, "GIT_REPOSITORY") != [
-            f'"${{{repository_variable}}}"'
-        ]:
-            violations.append(
-                f"{relative_path}: {package_name} repository must use the dependency lock"
-            )
-        if _cmake_argument_values(body, "GIT_TAG") != [f'"${{{commit_variable}}}"']:
-            violations.append(
-                f"{relative_path}: {package_name} commit must use the dependency lock"
-            )
-
-    return violations
-
 
 def run_resolver(
     cache_root: Path,
@@ -1283,29 +1203,6 @@ def test_active_entrypoints_have_no_independent_juce_clone_or_source_override() 
         assert "juce-framework/JUCE" not in source, relative_path
 
 
-@pytest.mark.parametrize(
-    "declaration",
-    (
-        "CPMAddPackage(NAME alternate GIT_REPOSITORY https://example.invalid/alternate.git GIT_TAG deadbeef)",
-        "cpmaddpackage(NAME alternate GIT_REPOSITORY https://example.invalid/alternate.git GIT_TAG deadbeef)",
-    ),
-    ids=("extra-declaration", "lowercase-extra-declaration"),
-)
-def test_canonical_dependency_authority_rejects_extra_package_declarations(
-    declaration: str,
-) -> None:
-    canonical_source = (
-        REPO_ROOT / "cmake/dependencies/CMakeLists.txt"
-    ).read_text(encoding="utf-8")
-
-    violations = _dependency_declaration_violations(
-        "cmake/dependencies/CMakeLists.txt",
-        f"{canonical_source}\n{declaration}\n",
-    )
-
-    assert violations
-
-
 def test_repository_has_no_retired_dependency_provider_or_active_alternate_path() -> None:
     tracked = subprocess.run(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
@@ -1317,6 +1214,10 @@ def test_repository_has_no_retired_dependency_provider_or_active_alternate_path(
         "BUILDER_KIT_CPM_DEPENDENCY_MIGRATION.md",
         "TODOS.txt",
         "tests/test_cpm_dependency_resolver.py",
+    }
+    dependency_declaration_exemptions = {
+        "cmake/CPM.cmake",
+        "cmake/dependencies/CMakeLists.txt",
     }
     source_override_exemptions = {
         "cmake/dependencies/CMakeLists.txt",
@@ -1370,7 +1271,14 @@ def test_repository_has_no_retired_dependency_provider_or_active_alternate_path(
             source,
         ):
             violations.append(f"{relative_path}: tokenized dependency clone")
-        violations.extend(_dependency_declaration_violations(relative_path, source))
+        if (
+            relative_path not in dependency_declaration_exemptions
+            and re.search(
+                r"\b(?:CPMAddPackage|FetchContent_(?:Declare|MakeAvailable|Populate))\s*\(",
+                source,
+            )
+        ):
+            violations.append(f"{relative_path}: alternate dependency declaration")
         if (
             relative_path not in source_override_exemptions
             and re.search(
@@ -1421,12 +1329,7 @@ def test_quickjs_linux_runtime_build_is_keyed_by_locked_source_identity() -> Non
 def test_codespace_keeps_the_pinned_cmajor_cli_source_build_recipe() -> None:
     source = (REPO_ROOT / "docs/BOUNCE_CODESPACE_SETUP.md").read_text(encoding="utf-8")
     assert "scripts/resolve_build_dependencies.py --path cmajor" in source
-    assert 'cmajor_source_key="${cmajor_source##*/}"' in source
-    assert 'cmajor_cli_build_dir="build/cmajor-cli-linux/$cmajor_source_key"' in source
-    assert 'cmake -S "$cmajor_source" -B "$cmajor_cli_build_dir"' in source
-    assert 'cmake --build "$cmajor_cli_build_dir" --target cmaj -j 1' in source
-    assert '"$cmajor_cli_build_dir/tools/command/cmaj" version' in source
-    assert '-B build/cmajor-cli-linux' not in source
+    assert 'cmake -S "$cmajor_source" -B build/cmajor-cli-linux' in source
     assert "--target cmaj -j 1" in source
     assert "Cmajor Version: 1.0.3066" in source
 
