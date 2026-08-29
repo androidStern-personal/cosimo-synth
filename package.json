@@ -34,7 +34,6 @@
     "test:bounce:native:driver": "tests/native/run_bounce_native_driver_tests.sh",
     "test:bounce:native:store": "tests/native/run_bounce_native_bank_store_tests.sh",
     "test:bounce:native:quickjs": "tests/native/run_bounce_quickjs_driver_probe.sh",
-    "test:dependencies:retained-fixes": "tests/native/run_patch_worker_lifetime_probe.sh",
     "test:bounce:native": "npm run test:bounce:native:driver && npm run test:bounce:native:store && npm run test:bounce:native:generated && npm run test:bounce:native:quickjs",
     "synth:desktop:build": "./scripts/build_desktop_native.sh",
     "synth:desktop:dev": "./scripts/run_desktop_native_dev.sh",

@@ -44,10 +44,12 @@ function(cosimo_resolve_build_dependencies out_cmajor out_choc out_juce)
     string(JSON choc_commit GET "${resolver_output}" dependencies choc commit)
     string(JSON juce_source GET "${resolver_output}" dependencies juce path)
     string(JSON juce_commit GET "${resolver_output}" dependencies juce commit)
+    string(JSON cache_root GET "${resolver_output}" cacheRoot)
+
     file(WRITE "${CMAKE_BINARY_DIR}/cosimo-dependency-resolution.json" "${resolver_output}\n")
     message(STATUS
         "Cosimo CPM dependencies: Cmajor@${cmajor_commit}, CHOC@${choc_commit}, "
-        "JUCE@${juce_commit}"
+        "JUCE@${juce_commit} (${cache_root})"
     )
 
     set(${out_cmajor} "${cmajor_source}" PARENT_SCOPE)
