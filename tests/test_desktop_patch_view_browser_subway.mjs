@@ -1714,7 +1714,11 @@ test("every visible fork-symbol pixel owns the exact group tap and long-press co
 
             for (const pointName of ["top", "center", "bottom"]) {
                 const resetToFirstBranch = async () => {
-                    await page.click('[data-device-id="distortion#1"] > .subway-station');
+                    const firstBranchStation = page.locator(
+                        '[data-device-id="distortion#1"] > .subway-station',
+                    );
+                    await firstBranchStation.focus();
+                    await page.keyboard.press("Enter");
                     await page.waitForFunction((role) => {
                         const element = document.querySelector(`[data-role="${role}"]`);
                         return element instanceof HTMLElement

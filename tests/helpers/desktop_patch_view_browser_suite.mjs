@@ -1354,17 +1354,11 @@ export async function beginRackReorderWithoutPointerCapture(page, {
     pointerId,
     targetEffectID = null,
 }) {
-    await page.evaluate(({ pointerId: browserPointerId, targetEffectID: browserTargetEffectID }) => {
+    await page.evaluate(({ pointerId: browserPointerId }) => {
         const list = document.querySelector('[data-role="rack-module-list"]');
         const station = document.querySelector('[data-role="rack-station-reverb"]');
-        const target = browserTargetEffectID === null
-            ? null
-            : document.querySelector(`[data-role="rack-module-${browserTargetEffectID}"]`);
         if (!(list instanceof HTMLElement) || !(station instanceof HTMLElement)) {
             throw new Error("Expected rack reorder elements.");
-        }
-        if (browserTargetEffectID !== null && !(target instanceof HTMLElement)) {
-            throw new Error(`Expected ${browserTargetEffectID} rack target.`);
         }
 
         Object.defineProperty(list, "setPointerCapture", {
@@ -1382,15 +1376,40 @@ export async function beginRackReorderWithoutPointerCapture(page, {
             bubbles: true,
             pointerId: browserPointerId,
             pointerType: "mouse",
+            isPrimary: true,
             button: 0,
             buttons: 1,
             clientX: stationCenterX,
             clientY: stationCenterY,
         }));
+    }, { pointerId });
+
+    // Reorder is deliberately distinct from scrolling: the hold must win
+    // before movement crosses the lift threshold, including on the fallback
+    // path used when pointer capture is unavailable.
+    await page.waitForTimeout(210);
+
+    await page.evaluate(({ pointerId: browserPointerId, targetEffectID: browserTargetEffectID }) => {
+        const list = document.querySelector('[data-role="rack-module-list"]');
+        const station = document.querySelector('[data-role="rack-station-reverb"]');
+        const target = browserTargetEffectID === null
+            ? null
+            : document.querySelector(`[data-role="rack-module-${browserTargetEffectID}"]`);
+        if (!(list instanceof HTMLElement) || !(station instanceof HTMLElement)) {
+            throw new Error("Expected rack reorder elements.");
+        }
+        if (browserTargetEffectID !== null && !(target instanceof HTMLElement)) {
+            throw new Error(`Expected ${browserTargetEffectID} rack target.`);
+        }
+
+        const stationBounds = station.getBoundingClientRect();
+        const stationCenterX = stationBounds.left + (stationBounds.width / 2);
+        const stationCenterY = stationBounds.top + (stationBounds.height / 2);
         station.dispatchEvent(new PointerEvent("pointermove", {
             bubbles: true,
             pointerId: browserPointerId,
             pointerType: "mouse",
+            isPrimary: true,
             button: 0,
             buttons: 1,
             clientX: stationCenterX,
@@ -1402,6 +1421,7 @@ export async function beginRackReorderWithoutPointerCapture(page, {
                 bubbles: true,
                 pointerId: browserPointerId,
                 pointerType: "mouse",
+                isPrimary: true,
                 button: 0,
                 buttons: 1,
                 clientX: targetBounds.left + (targetBounds.width / 2),
@@ -1421,6 +1441,7 @@ export async function endRackReorderWithoutPointerCapture(page, pointerId) {
             bubbles: true,
             pointerId: browserPointerId,
             pointerType: "mouse",
+            isPrimary: true,
             button: 0,
             buttons: 0,
         }));

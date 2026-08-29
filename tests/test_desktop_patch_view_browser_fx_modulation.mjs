@@ -3173,11 +3173,14 @@ test("phone touch drags are captured by rack grips and modulation chips without 
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
     });
     const cdp = await page.context().newCDPSession(page);
-    const touchDrag = async (from, to) => {
+    const touchDrag = async (from, to, { holdBeforeMoveMs = 0 } = {}) => {
         await cdp.send("Input.dispatchTouchEvent", {
             type: "touchStart",
             touchPoints: [{ x: from.x, y: from.y, radiusX: 6, radiusY: 6, force: 1 }],
         });
+        if (holdBeforeMoveMs > 0) {
+            await page.waitForTimeout(holdBeforeMoveMs);
+        }
         for (let step = 1; step <= 8; step += 1) {
             const progress = step / 8;
             await cdp.send("Input.dispatchTouchEvent", {
@@ -3208,6 +3211,7 @@ test("phone touch drags are captured by rack grips and modulation chips without 
         await touchDrag(
             { x: gripBox.x + gripBox.width / 2, y: gripBox.y + gripBox.height / 2 },
             { x: filterBox.x + filterBox.width / 2, y: filterBox.y + filterBox.height / 2 },
+            { holdBeforeMoveMs: 210 },
         );
         let snapshot = await waitForHarnessSnapshot(
             page,
@@ -3362,18 +3366,14 @@ test("rack no-op release adopts authoritative stored order received during the g
         });
         await page.waitForFunction(() => (
             document.querySelector('[data-role="rack-module-chorus"]')?.getAttribute("data-enabled") === "true"
-            && document.querySelector(".subway-station-row.is-reordering") !== null
-        ));
-        assert.equal(
-            await page.locator('[data-role="rack-module-list"] > :first-child').getAttribute("data-role"),
-            "rack-module-filter",
-            "authoritative order must not replace the preview while the gesture is active",
-        );
-        await endRackReorderWithoutPointerCapture(page, 94);
-        await page.waitForFunction(() => (
-            document.querySelector('[data-role="rack-module-list"]')?.firstElementChild
+            && document.querySelector('[data-role="rack-module-list"]')?.firstElementChild
                 ?.getAttribute("data-role") === "rack-module-reverb"
-        ), null, { timeout: 1_000 });
+            && document.querySelector(".subway-station-row.is-reordering") === null
+        ));
+        // A structurally different authoritative document makes the held
+        // preview inexact, so it cancels immediately and adopts that document.
+        // The eventual release must remain inert.
+        await endRackReorderWithoutPointerCapture(page, 94);
 
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
