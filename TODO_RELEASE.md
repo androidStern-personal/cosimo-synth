@@ -35,6 +35,23 @@ The current native build path is:
 The older path without `_build/plugin/` is stale and must not be used in release
 automation or evidence.
 
+The native dependency contract is also fail-closed:
+
+- Cmajor: `androidStern-personal/cmajor` at
+  `f1c9a9a8e85dcc82141326a2fc1c5160241f346c`
+- CHOC: the Cmajor `include/choc` gitlink at
+  `037e34a2b382175c8bee4be5a0707724130f10e8`
+- JUCE: `juce-framework/JUCE` at
+  `501c07674e1ad693085a7e7c398f205c2677f5da`
+
+Plan mode parses `cmake/CosimoDependencies.cmake` and refuses Cmajor or JUCE
+repository/revision drift before any native build. After the fresh build, the
+builder resolves the actual Cmajor and JUCE source directories from that
+build's `CMakeCache.txt`, verifies exact Cmajor/CHOC/JUCE revisions and clean
+checkouts plus their declared repository origins, and records the attestation
+in the release manifest. Absolute machine-local checkout paths are deliberately
+not recorded.
+
 ## Product decisions required before public beta
 
 - [ ] Andrew explicitly approves the current public name, bundle ID, plugin
@@ -138,6 +155,8 @@ download without creating a checksum cycle inside the ZIP.
 - [ ] Branch is committed and `git status --short --untracked-files=all` is clean.
 - [ ] Release config, patch manifest, and `fx/build-effect.mjs` identity/path
   contract passes.
+- [ ] Plan mode records the exact CMake-declared Cmajor and JUCE repositories
+  and revisions plus the expected Cmajor-pinned CHOC gitlink.
 - [ ] Complete focused SeqFX state/runtime/preset/browser suites pass.
 - [ ] Production packaged-view suite passes.
 - [ ] Complete SeqFX DSP/buffer/interpolation suites pass at the supported sample
@@ -153,6 +172,9 @@ download without creating a checksum cycle inside the ZIP.
 - [ ] Confirm strict code-sign verification passes on the local build signature.
 - [ ] Confirm required patched CHOC WebView marker strings exist and retired
   keyboard-probe strings do not.
+- [ ] Confirm the release manifest records matching declared and actual
+  Cmajor/CHOC/JUCE revisions, the Cmajor CHOC gitlink, and `clean: true` for all
+  three selected checkouts, with every declared repository origin verified.
 - [ ] Inspect `Info.plist` and `moduleinfo.json` for identity, versions, category,
   architecture, and any inappropriate generated permissions/usage text.
 - [ ] Record VST3 bundle and executable sizes and SHA-256 values.

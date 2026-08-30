@@ -182,6 +182,291 @@ async function pathExists(targetPath) {
     }
 }
 
+function requireUniqueCmakeField(block, field, label) {
+    const values = [];
+
+    for (const rawLine of block.split(/\r?\n/u)) {
+        const line = rawLine.replace(/\s+#.*$/u, "").trim();
+        const match = line.match(new RegExp(`^${field}\\s+(?:\"([^\"]+)\"|(\\S+))$`, "u"));
+
+        if (match)
+            values.push(match[1] ?? match[2]);
+    }
+
+    if (values.length !== 1)
+        throw new Error(`${label} must declare exactly one ${field}; found ${values.length}.`);
+
+    return values[0];
+}
+
+function cpmPackageBlocks(cmakeSource) {
+    return [...cmakeSource.matchAll(/\bCPMAddPackage\s*\(([\s\S]*?)^\s*\)/gmu)]
+        .map((match) => match[1]);
+}
+
+function declaredCpmPackage(cmakeSource, expected, label) {
+    const matches = cpmPackageBlocks(cmakeSource).filter((block) => {
+        try {
+            return requireUniqueCmakeField(block, "NAME", label) === expected.cpmName;
+        } catch {
+            return false;
+        }
+    });
+
+    if (matches.length !== 1) {
+        throw new Error(
+            `${label} must have exactly one CPMAddPackage declaration named ${expected.cpmName}; found ${matches.length}.`,
+        );
+    }
+
+    const repository = requireUniqueCmakeField(matches[0], "GIT_REPOSITORY", label);
+    const revision = requireUniqueCmakeField(matches[0], "GIT_TAG", label);
+
+    if (repository !== expected.repository) {
+        throw new Error(
+            `${label} repository drift: expected ${expected.repository}, found ${repository}.`,
+        );
+    }
+
+    if (revision !== expected.revision) {
+        throw new Error(
+            `${label} revision drift: expected ${expected.revision}, found ${revision}.`,
+        );
+    }
+
+    return {
+        cpmName: expected.cpmName,
+        repository,
+        revision,
+    };
+}
+
+/** Read and fail closed over the production dependency declarations used by CMake. */
+export async function readDeclaredNativeDependencyProvenance(
+    config = seqFxReleaseConfig,
+    { repositoryRoot = repoRoot } = {},
+) {
+    const declarationPath = config.nativeDependencies.declarationPath;
+    const cmakeSource = await readFile(path.join(repositoryRoot, declarationPath), "utf8");
+
+    return {
+        schemaVersion: 1,
+        declarationPath,
+        cmajor: declaredCpmPackage(
+            cmakeSource,
+            config.nativeDependencies.cmajor,
+            "Cmajor production dependency",
+        ),
+        choc: {
+            repository: config.nativeDependencies.choc.repository,
+            revision: config.nativeDependencies.choc.revision,
+            submodulePath: config.nativeDependencies.choc.submodulePath,
+            source: "Cmajor gitlink pinned by the declared Cmajor revision",
+        },
+        juce: declaredCpmPackage(
+            cmakeSource,
+            config.nativeDependencies.juce,
+            "JUCE production dependency",
+        ),
+    };
+}
+
+function requireUniqueCmakeCacheValue(cacheSource, key) {
+    const prefix = `${key}:`;
+    const matches = cacheSource.split(/\r?\n/u)
+        .filter((line) => line.startsWith(prefix))
+        .map((line) => {
+            const separatorIndex = line.indexOf("=");
+            return separatorIndex >= 0 ? line.slice(separatorIndex + 1) : "";
+        });
+
+    if (matches.length !== 1 || !matches[0])
+        throw new Error(`Native CMake cache must contain exactly one non-empty ${key}; found ${matches.length}.`);
+
+    return matches[0];
+}
+
+function assertAbsoluteCheckoutPath(checkoutPath, label) {
+    if (!path.isAbsolute(checkoutPath))
+        throw new Error(`${label} checkout path from CMake cache must be absolute.`);
+}
+
+function readCleanGitCheckout(checkoutPath, expectedRepository, expectedRevision, label) {
+    const repository = gitOutput(["remote", "get-url", "origin"], checkoutPath);
+    const revision = gitOutput(["rev-parse", "HEAD"], checkoutPath);
+    const status = gitOutput([
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        "--ignore-submodules=none",
+    ], checkoutPath);
+
+    if (repository !== expectedRepository) {
+        throw new Error(
+            `${label} checkout origin drift: expected ${expectedRepository}, found ${repository}.`,
+        );
+    }
+
+    if (revision !== expectedRevision)
+        throw new Error(`${label} checkout revision drift: expected ${expectedRevision}, found ${revision}.`);
+
+    if (status) {
+        throw new Error([
+            `${label} checkout is dirty after the native build:`,
+            status,
+        ].join("\n"));
+    }
+
+    return {
+        actualRevision: revision,
+        clean: true,
+        originVerified: true,
+    };
+}
+
+function parseGitmodulesEntry(source, submodulePath) {
+    const entries = [];
+    let current = null;
+
+    for (const rawLine of source.split(/\r?\n/u)) {
+        const section = rawLine.match(/^\s*\[submodule\s+"([^"]+)"\]\s*$/u);
+
+        if (section) {
+            current = { name: section[1] };
+            entries.push(current);
+            continue;
+        }
+
+        const property = rawLine.match(/^\s*(path|url)\s*=\s*(\S.*?)\s*$/u);
+
+        if (current && property)
+            current[property[1]] = property[2];
+    }
+
+    const matches = entries.filter((entry) => entry.path === submodulePath);
+
+    if (matches.length !== 1 || !matches[0].url) {
+        throw new Error(
+            `Cmajor must declare exactly one ${submodulePath} submodule with a URL; found ${matches.length}.`,
+        );
+    }
+
+    return matches[0];
+}
+
+/** Verify the exact clean CPM checkouts selected by the completed native configure/build. */
+export async function captureActualNativeDependencyProvenance(
+    config = seqFxReleaseConfig,
+    { repositoryRoot = repoRoot } = {},
+) {
+    const cachePath = path.join(repositoryRoot, config.paths.nativeBuildCmakeCache);
+    const cacheSource = await readFile(cachePath, "utf8");
+    const expectedCmakeHome = path.join(repositoryRoot, "tools", "effect_plugin_build");
+    const actualCmakeHome = requireUniqueCmakeCacheValue(cacheSource, "CMAKE_HOME_DIRECTORY");
+
+    if (path.resolve(actualCmakeHome) !== path.resolve(expectedCmakeHome)) {
+        throw new Error(
+            `Native CMake cache belongs to ${actualCmakeHome}, expected ${expectedCmakeHome}.`,
+        );
+    }
+
+    const cmajorPath = requireUniqueCmakeCacheValue(
+        cacheSource,
+        config.nativeDependencies.cmajor.sourceDirectoryCacheKey,
+    );
+    const jucePath = requireUniqueCmakeCacheValue(
+        cacheSource,
+        config.nativeDependencies.juce.sourceDirectoryCacheKey,
+    );
+    assertAbsoluteCheckoutPath(cmajorPath, "Cmajor");
+    assertAbsoluteCheckoutPath(jucePath, "JUCE");
+
+    const cmajor = readCleanGitCheckout(
+        cmajorPath,
+        config.nativeDependencies.cmajor.repository,
+        config.nativeDependencies.cmajor.revision,
+        "Cmajor",
+    );
+    const juce = readCleanGitCheckout(
+        jucePath,
+        config.nativeDependencies.juce.repository,
+        config.nativeDependencies.juce.revision,
+        "JUCE",
+    );
+    const chocPath = path.resolve(cmajorPath, config.nativeDependencies.choc.submodulePath);
+    const relativeChocPath = path.relative(cmajorPath, chocPath);
+
+    if (relativeChocPath.startsWith(`..${path.sep}`) || path.isAbsolute(relativeChocPath))
+        throw new Error("CHOC submodule path escapes the Cmajor checkout.");
+
+    const gitlink = gitOutput([
+        "ls-tree",
+        config.nativeDependencies.cmajor.revision,
+        "--",
+        config.nativeDependencies.choc.submodulePath,
+    ], cmajorPath);
+    const gitlinkMatch = gitlink.match(/^160000 commit ([0-9a-f]{40})\t(.+)$/u);
+
+    if (!gitlinkMatch || gitlinkMatch[2] !== config.nativeDependencies.choc.submodulePath) {
+        throw new Error(
+            `Cmajor revision does not contain the expected ${config.nativeDependencies.choc.submodulePath} gitlink.`,
+        );
+    }
+
+    if (gitlinkMatch[1] !== config.nativeDependencies.choc.revision) {
+        throw new Error(
+            `Cmajor CHOC gitlink drift: expected ${config.nativeDependencies.choc.revision}, found ${gitlinkMatch[1]}.`,
+        );
+    }
+
+    const gitmodulesSource = gitOutput([
+        "show",
+        `${config.nativeDependencies.cmajor.revision}:.gitmodules`,
+    ], cmajorPath);
+    const chocDeclaration = parseGitmodulesEntry(
+        gitmodulesSource,
+        config.nativeDependencies.choc.submodulePath,
+    );
+
+    if (chocDeclaration.url !== config.nativeDependencies.choc.repository) {
+        throw new Error(
+            `Cmajor CHOC repository drift: expected ${config.nativeDependencies.choc.repository}, found ${chocDeclaration.url}.`,
+        );
+    }
+
+    const choc = readCleanGitCheckout(
+        chocPath,
+        config.nativeDependencies.choc.repository,
+        config.nativeDependencies.choc.revision,
+        "CHOC",
+    );
+
+    return {
+        schemaVersion: 1,
+        cmakeCachePath: config.paths.nativeBuildCmakeCache,
+        declarationPath: config.nativeDependencies.declarationPath,
+        cmajor: {
+            repository: config.nativeDependencies.cmajor.repository,
+            declaredRevision: config.nativeDependencies.cmajor.revision,
+            ...cmajor,
+            sourceDirectoryCacheKey: config.nativeDependencies.cmajor.sourceDirectoryCacheKey,
+        },
+        choc: {
+            repository: chocDeclaration.url,
+            declaredRevision: config.nativeDependencies.choc.revision,
+            ...choc,
+            gitlinkRevision: gitlinkMatch[1],
+            submodulePath: config.nativeDependencies.choc.submodulePath,
+        },
+        juce: {
+            repository: config.nativeDependencies.juce.repository,
+            declaredRevision: config.nativeDependencies.juce.revision,
+            ...juce,
+            sourceDirectoryCacheKey: config.nativeDependencies.juce.sourceDirectoryCacheKey,
+        },
+    };
+}
+
 function expectedBuiltVst3Path(plugin) {
     return path.join(
         plugin.juceOut,
@@ -214,7 +499,16 @@ export function releaseContractErrors(
         ["paths.patchManifest", config.paths.patchManifest],
         ["paths.thirdPartyNotices", config.paths.thirdPartyNotices],
         ["paths.builtVst3", config.paths.builtVst3],
+        ["paths.nativeBuildCmakeCache", config.paths.nativeBuildCmakeCache],
         ["paths.installedVst3", config.paths.installedVst3],
+        ["nativeDependencies.declarationPath", config.nativeDependencies.declarationPath],
+        ["nativeDependencies.cmajor.repository", config.nativeDependencies.cmajor.repository],
+        ["nativeDependencies.cmajor.revision", config.nativeDependencies.cmajor.revision],
+        ["nativeDependencies.choc.repository", config.nativeDependencies.choc.repository],
+        ["nativeDependencies.choc.revision", config.nativeDependencies.choc.revision],
+        ["nativeDependencies.choc.submodulePath", config.nativeDependencies.choc.submodulePath],
+        ["nativeDependencies.juce.repository", config.nativeDependencies.juce.repository],
+        ["nativeDependencies.juce.revision", config.nativeDependencies.juce.revision],
     ];
 
     for (const [label, value] of requiredStrings) {
@@ -271,17 +565,94 @@ export function assertReleaseContract(config, patchManifest, plugin) {
         throw new Error(["SeqFX release contract drifted:", ...errors.map((error) => `- ${error}`)].join("\n"));
 }
 
+function assertDeclaredNativeDependencyProvenance(config, provenance) {
+    const checks = [
+        ["schema version", provenance?.schemaVersion, 1],
+        ["declaration path", provenance?.declarationPath, config.nativeDependencies.declarationPath],
+        ["Cmajor CPM name", provenance?.cmajor?.cpmName, config.nativeDependencies.cmajor.cpmName],
+        ["Cmajor repository", provenance?.cmajor?.repository, config.nativeDependencies.cmajor.repository],
+        ["Cmajor revision", provenance?.cmajor?.revision, config.nativeDependencies.cmajor.revision],
+        ["CHOC repository", provenance?.choc?.repository, config.nativeDependencies.choc.repository],
+        ["CHOC revision", provenance?.choc?.revision, config.nativeDependencies.choc.revision],
+        ["CHOC submodule path", provenance?.choc?.submodulePath, config.nativeDependencies.choc.submodulePath],
+        ["JUCE repository", provenance?.juce?.repository, config.nativeDependencies.juce.repository],
+        ["JUCE CPM name", provenance?.juce?.cpmName, config.nativeDependencies.juce.cpmName],
+        ["JUCE revision", provenance?.juce?.revision, config.nativeDependencies.juce.revision],
+    ];
+    const errors = checks
+        .filter(([, observed, expected]) => observed !== expected)
+        .map(([label, observed, expected]) => (
+            `${label}: expected ${JSON.stringify(expected)}, found ${JSON.stringify(observed)}`
+        ));
+
+    if (errors.length > 0) {
+        throw new Error([
+            "SeqFX declared native dependency provenance is incomplete or drifted:",
+            ...errors.map((error) => `- ${error}`),
+        ].join("\n"));
+    }
+}
+
+function assertActualNativeDependencyProvenance(config, provenance) {
+    const checks = [
+        ["schema version", provenance?.schemaVersion, 1],
+        ["CMake cache path", provenance?.cmakeCachePath, config.paths.nativeBuildCmakeCache],
+        ["declaration path", provenance?.declarationPath, config.nativeDependencies.declarationPath],
+        ["Cmajor repository", provenance?.cmajor?.repository, config.nativeDependencies.cmajor.repository],
+        ["Cmajor declared revision", provenance?.cmajor?.declaredRevision, config.nativeDependencies.cmajor.revision],
+        ["Cmajor actual revision", provenance?.cmajor?.actualRevision, config.nativeDependencies.cmajor.revision],
+        ["Cmajor cleanliness", provenance?.cmajor?.clean, true],
+        ["Cmajor origin verification", provenance?.cmajor?.originVerified, true],
+        [
+            "Cmajor source-directory cache key",
+            provenance?.cmajor?.sourceDirectoryCacheKey,
+            config.nativeDependencies.cmajor.sourceDirectoryCacheKey,
+        ],
+        ["CHOC repository", provenance?.choc?.repository, config.nativeDependencies.choc.repository],
+        ["CHOC declared revision", provenance?.choc?.declaredRevision, config.nativeDependencies.choc.revision],
+        ["CHOC gitlink revision", provenance?.choc?.gitlinkRevision, config.nativeDependencies.choc.revision],
+        ["CHOC actual revision", provenance?.choc?.actualRevision, config.nativeDependencies.choc.revision],
+        ["CHOC cleanliness", provenance?.choc?.clean, true],
+        ["CHOC origin verification", provenance?.choc?.originVerified, true],
+        ["CHOC submodule path", provenance?.choc?.submodulePath, config.nativeDependencies.choc.submodulePath],
+        ["JUCE repository", provenance?.juce?.repository, config.nativeDependencies.juce.repository],
+        ["JUCE declared revision", provenance?.juce?.declaredRevision, config.nativeDependencies.juce.revision],
+        ["JUCE actual revision", provenance?.juce?.actualRevision, config.nativeDependencies.juce.revision],
+        ["JUCE cleanliness", provenance?.juce?.clean, true],
+        ["JUCE origin verification", provenance?.juce?.originVerified, true],
+        [
+            "JUCE source-directory cache key",
+            provenance?.juce?.sourceDirectoryCacheKey,
+            config.nativeDependencies.juce.sourceDirectoryCacheKey,
+        ],
+    ];
+    const errors = checks
+        .filter(([, observed, expected]) => observed !== expected)
+        .map(([label, observed, expected]) => (
+            `${label}: expected ${JSON.stringify(expected)}, found ${JSON.stringify(observed)}`
+        ));
+
+    if (errors.length > 0) {
+        throw new Error([
+            "SeqFX actual native dependency provenance is incomplete or drifted:",
+            ...errors.map((error) => `- ${error}`),
+        ].join("\n"));
+    }
+}
+
 export function createReleasePlan({
     config = seqFxReleaseConfig,
+    declaredNativeDependencies,
     gitState,
     mode = "plan",
     sourceDateEpoch,
 } = {}) {
     const artifactBaseName = seqFxArtifactBaseName(config);
     const decisionGates = unresolvedSeqFxPublicReleaseDecisions(config);
+    assertDeclaredNativeDependencyProvenance(config, declaredNativeDependencies);
 
     return {
-        schemaVersion: 1,
+        schemaVersion: 2,
         mode,
         product: config.identity.publicName,
         releaseVersion: config.release.channelVersion,
@@ -293,6 +664,15 @@ export function createReleasePlan({
         },
         scope: config.scope,
         identity: config.identity,
+        nativeDependencyProvenance: {
+            declared: declaredNativeDependencies,
+            postBuildVerification: {
+                actualCheckoutsRecordedInReleaseManifest: true,
+                cmakeCachePath: config.paths.nativeBuildCmakeCache,
+                cleanlinessRequired: true,
+                requiredBeforePackaging: true,
+            },
+        },
         paths: {
             builtVst3: config.paths.builtVst3,
             outputDirectory: config.release.outputDirectory,
@@ -336,6 +716,10 @@ function printPlan(plan, { json = false } = {}) {
     console.log(`Built VST3: ${plan.paths.builtVst3}`);
     console.log(`Unsigned output: ${plan.paths.zip}`);
     console.log(`Worktree: ${plan.source.worktreeDirty ? "dirty" : "clean"}`);
+    console.log(`Cmajor: ${plan.nativeDependencyProvenance.declared.cmajor.revision}`);
+    console.log(`CHOC: ${plan.nativeDependencyProvenance.declared.choc.revision}`);
+    console.log(`JUCE: ${plan.nativeDependencyProvenance.declared.juce.revision}`);
+    console.log("Native packaging requires the post-build CMake-selected checkouts to match these revisions and remain clean.");
     console.log("Repeatability: two unsigned packaging assemblies of one fresh native build; independent native-build reproducibility is not claimed.");
 
     if (plan.publicReleaseDecisionGates.length > 0) {
@@ -943,6 +1327,7 @@ export function createReleaseManifest({
     architectures,
     config,
     gitState,
+    nativeDependencyProvenance,
     notarization,
     options,
     packagePayloadFileCount,
@@ -952,9 +1337,10 @@ export function createReleaseManifest({
     sourceDateEpoch,
 }) {
     const artifactBaseName = seqFxArtifactBaseName(config);
+    assertActualNativeDependencyProvenance(config, nativeDependencyProvenance);
 
     return {
-        schemaVersion: 3,
+        schemaVersion: 4,
         artifactClass: options.mode === "release" ? "signed-notarized-release-candidate" : "local-unsigned-validation",
         packagingReady: options.mode === "release",
         distributionReady: false,
@@ -979,6 +1365,7 @@ export function createReleaseManifest({
             pluginCode: patchManifest.plugin?.pluginCode,
             manufacturerCode: patchManifest.plugin?.manufacturerCode,
         },
+        nativeDependencyProvenance,
         build: {
             builtVst3: config.paths.builtVst3,
             binaryArchitectures: architectures,
@@ -1097,6 +1484,7 @@ async function assembleArtifactSet({
     builtArtifact,
     config,
     gitState,
+    nativeDependencyProvenance,
     options,
     outputRoot,
     patchManifest,
@@ -1192,6 +1580,7 @@ async function assembleArtifactSet({
         architectures: builtArtifact.architectures,
         config,
         gitState,
+        nativeDependencyProvenance,
         notarization,
         options,
         packagePayloadFileCount: payloadFiles.length,
@@ -1276,7 +1665,13 @@ async function compareArtifactSets(left, right) {
     return results;
 }
 
-async function buildReleaseArtifacts({ config, gitState, options, patchManifest, sourceDateEpoch }) {
+async function buildReleaseArtifacts({
+    config,
+    gitState,
+    options,
+    patchManifest,
+    sourceDateEpoch,
+}) {
     if (process.platform !== "darwin")
         throw new Error("SeqFX beta packaging targets macOS and must run on macOS.");
 
@@ -1288,12 +1683,14 @@ async function buildReleaseArtifacts({ config, gitState, options, patchManifest,
     run(process.execPath, ["fx/prod-effect.mjs", "build", config.productKey, "--clean"]);
     assertSourceStateUnchanged(gitState, getReleaseGitState());
 
+    const nativeDependencyProvenance = await captureActualNativeDependencyProvenance(config);
     const builtArtifact = await verifyBuiltVst3(config);
     const outputRoot = path.join(repoRoot, config.release.outputDirectory);
     const primaryArtifacts = await assembleArtifactSet({
         builtArtifact,
         config,
         gitState,
+        nativeDependencyProvenance,
         options,
         outputRoot,
         patchManifest,
@@ -1309,6 +1706,7 @@ async function buildReleaseArtifacts({ config, gitState, options, patchManifest,
             builtArtifact,
             config,
             gitState,
+            nativeDependencyProvenance,
             options,
             outputRoot: repeatRoot,
             patchManifest,
@@ -1351,11 +1749,18 @@ export async function main(argv = process.argv) {
     const plugin = effectPlugins[config.productKey];
 
     assertReleaseContract(config, patchManifest, plugin);
+    const declaredNativeDependencies = await readDeclaredNativeDependencyProvenance(config);
     const gitState = getReleaseGitState();
     const sourceDateEpoch = resolveSourceDateEpoch({
         gitTimestamp: sourceCommitTimestamp(),
     });
-    const plan = createReleasePlan({ config, gitState, mode: options.mode, sourceDateEpoch });
+    const plan = createReleasePlan({
+        config,
+        declaredNativeDependencies,
+        gitState,
+        mode: options.mode,
+        sourceDateEpoch,
+    });
 
     if (options.mode === "plan") {
         printPlan(plan, options);

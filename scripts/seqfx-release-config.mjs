@@ -7,7 +7,7 @@
  * product identity.
  */
 export const seqFxReleaseConfig = Object.freeze({
-    schemaVersion: 1,
+    schemaVersion: 2,
     productKey: "seqfx",
     identity: Object.freeze({
         publicName: "Cosimo SeqFX",
@@ -50,8 +50,29 @@ export const seqFxReleaseConfig = Object.freeze({
         patchManifest: "fx/seqfx/SeqFx.cmajorpatch",
         thirdPartyNotices: "legal/seqfx/THIRD_PARTY_NOTICES.txt",
         builtVst3: "build/seqfx_juce/_build/plugin/CosimoSeqFX_artefacts/Release/VST3/CosimoSeqFX.vst3",
+        nativeBuildCmakeCache: "build/seqfx_juce/_build/CMakeCache.txt",
         installedVst3: "/Library/Audio/Plug-Ins/VST3/CosimoSeqFX.vst3",
         userInstalledVst3: "~/Library/Audio/Plug-Ins/VST3/CosimoSeqFX.vst3",
+    }),
+    nativeDependencies: Object.freeze({
+        declarationPath: "cmake/CosimoDependencies.cmake",
+        cmajor: Object.freeze({
+            cpmName: "cosimo_cmajor",
+            sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",
+            repository: "https://github.com/androidStern-personal/cmajor.git",
+            revision: "f1c9a9a8e85dcc82141326a2fc1c5160241f346c",
+        }),
+        choc: Object.freeze({
+            repository: "https://github.com/androidStern-personal/choc.git",
+            revision: "037e34a2b382175c8bee4be5a0707724130f10e8",
+            submodulePath: "include/choc",
+        }),
+        juce: Object.freeze({
+            cpmName: "cosimo_juce",
+            sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_juce_SOURCE_DIR",
+            repository: "https://github.com/juce-framework/JUCE.git",
+            revision: "501c07674e1ad693085a7e7c398f205c2677f5da",
+        }),
     }),
     webViewMarkers: Object.freeze({
         required: Object.freeze([

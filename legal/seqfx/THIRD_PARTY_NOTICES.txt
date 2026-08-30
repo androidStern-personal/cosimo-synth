@@ -119,7 +119,9 @@ presentation may be recolored and scaled. No Fontaudio font file is bundled.
 CHOC
 ----
 
-Pinned through the Cmajor source above.
+Source: https://github.com/androidStern-personal/choc
+Pinned commit: 037e34a2b382175c8bee4be5a0707724130f10e8
+Pinned as the `include/choc` gitlink in the Cmajor revision above.
 License identifier: ISC
 
 CHOC is Copyright (C) 2022 Tracktion Corporation.

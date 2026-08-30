@@ -11,12 +11,14 @@ import {
     assertArchiveTreeContainsOnlyFilesAndDirectories,
     assertSafeOutputRoot,
     canonicalPayloadFingerprint,
+    captureActualNativeDependencyProvenance,
     createReleaseManifest,
     createReleasePlan,
     deterministicCpioPayload,
     getReleaseGitState,
     parseReleaseArgs,
     payloadInventoryErrors,
+    readDeclaredNativeDependencyProvenance,
     releaseContractErrors,
     renderPackageInfo,
     renderReleaseReadme,
@@ -36,7 +38,135 @@ function currentManifest() {
         .then((source) => JSON.parse(source));
 }
 
+function declaredNativeDependencyFixture(config = seqFxReleaseConfig) {
+    return {
+        schemaVersion: 1,
+        declarationPath: config.nativeDependencies.declarationPath,
+        cmajor: {
+            cpmName: config.nativeDependencies.cmajor.cpmName,
+            repository: config.nativeDependencies.cmajor.repository,
+            revision: config.nativeDependencies.cmajor.revision,
+        },
+        choc: {
+            repository: config.nativeDependencies.choc.repository,
+            revision: config.nativeDependencies.choc.revision,
+            submodulePath: config.nativeDependencies.choc.submodulePath,
+            source: "Cmajor gitlink pinned by the declared Cmajor revision",
+        },
+        juce: {
+            cpmName: config.nativeDependencies.juce.cpmName,
+            repository: config.nativeDependencies.juce.repository,
+            revision: config.nativeDependencies.juce.revision,
+        },
+    };
+}
+
+function actualNativeDependencyFixture(config = seqFxReleaseConfig) {
+    return {
+        schemaVersion: 1,
+        cmakeCachePath: config.paths.nativeBuildCmakeCache,
+        declarationPath: config.nativeDependencies.declarationPath,
+        cmajor: {
+            repository: config.nativeDependencies.cmajor.repository,
+            declaredRevision: config.nativeDependencies.cmajor.revision,
+            actualRevision: config.nativeDependencies.cmajor.revision,
+            clean: true,
+            originVerified: true,
+            sourceDirectoryCacheKey: config.nativeDependencies.cmajor.sourceDirectoryCacheKey,
+        },
+        choc: {
+            repository: config.nativeDependencies.choc.repository,
+            declaredRevision: config.nativeDependencies.choc.revision,
+            actualRevision: config.nativeDependencies.choc.revision,
+            clean: true,
+            originVerified: true,
+            gitlinkRevision: config.nativeDependencies.choc.revision,
+            submodulePath: config.nativeDependencies.choc.submodulePath,
+        },
+        juce: {
+            repository: config.nativeDependencies.juce.repository,
+            declaredRevision: config.nativeDependencies.juce.revision,
+            actualRevision: config.nativeDependencies.juce.revision,
+            clean: true,
+            originVerified: true,
+            sourceDirectoryCacheKey: config.nativeDependencies.juce.sourceDirectoryCacheKey,
+        },
+    };
+}
+
+function git(repoPath, args) {
+    return execFileSync("git", args, {
+        cwd: repoPath,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+}
+
+function commitFixture(repoPath, message) {
+    git(repoPath, ["add", "."]);
+    git(repoPath, [
+        "-c", "user.name=SeqFX Release Test",
+        "-c", "user.email=seqfx-release-test@example.invalid",
+        "commit", "-m", message,
+    ]);
+    return git(repoPath, ["rev-parse", "HEAD"]);
+}
+
+async function createNativeDependencyCheckoutFixture(context) {
+    const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-native-provenance-"));
+    context.after(() => rm(repositoryRoot, { recursive: true, force: true }));
+    const cmajorPath = path.join(repositoryRoot, "checkouts", "cmajor");
+    const chocSourcePath = path.join(repositoryRoot, "sources", "choc");
+    const jucePath = path.join(repositoryRoot, "checkouts", "juce");
+    const cmakeHome = path.join(repositoryRoot, "tools", "effect_plugin_build");
+    const cmakeCachePath = path.join(repositoryRoot, "build", "seqfx", "CMakeCache.txt");
+
+    for (const checkoutPath of [cmajorPath, chocSourcePath, jucePath]) {
+        await mkdir(checkoutPath, { recursive: true });
+        git(checkoutPath, ["init", "--initial-branch=fixture"]);
+    }
+
+    await writeFile(path.join(chocSourcePath, "choc.h"), "// fixture CHOC\n", "utf8");
+    const chocRevision = commitFixture(chocSourcePath, "fixture CHOC");
+    await writeFile(path.join(cmajorPath, "cmajor.txt"), "fixture Cmajor\n", "utf8");
+    git(cmajorPath, [
+        "-c", "protocol.file.allow=always",
+        "submodule", "add", chocSourcePath, "include/choc",
+    ]);
+    const cmajorRevision = commitFixture(cmajorPath, "fixture Cmajor");
+    git(cmajorPath, ["remote", "add", "origin", cmajorPath]);
+    await writeFile(path.join(jucePath, "juce.txt"), "fixture JUCE\n", "utf8");
+    const juceRevision = commitFixture(jucePath, "fixture JUCE");
+    git(jucePath, ["remote", "add", "origin", jucePath]);
+    await mkdir(cmakeHome, { recursive: true });
+    await mkdir(path.dirname(cmakeCachePath), { recursive: true });
+    await writeFile(cmakeCachePath, [
+        `CMAKE_HOME_DIRECTORY:INTERNAL=${cmakeHome}`,
+        `CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR:INTERNAL=${cmajorPath}`,
+        `CPM_PACKAGE_cosimo_juce_SOURCE_DIR:INTERNAL=${jucePath}`,
+        "",
+    ].join("\n"), "utf8");
+
+    const config = structuredClone(seqFxReleaseConfig);
+    config.paths.nativeBuildCmakeCache = path.relative(repositoryRoot, cmakeCachePath);
+    config.nativeDependencies.cmajor.repository = cmajorPath;
+    config.nativeDependencies.cmajor.revision = cmajorRevision;
+    config.nativeDependencies.choc.repository = chocSourcePath;
+    config.nativeDependencies.choc.revision = chocRevision;
+    config.nativeDependencies.juce.repository = jucePath;
+    config.nativeDependencies.juce.revision = juceRevision;
+
+    return {
+        cmajorPath,
+        chocPath: path.join(cmajorPath, "include", "choc"),
+        config,
+        jucePath,
+        repositoryRoot,
+    };
+}
+
 test("release config freezes the existing beta identity and current native output path", () => {
+    assert.equal(seqFxReleaseConfig.schemaVersion, 2);
     assert.deepEqual(seqFxReleaseConfig.identity, {
         publicName: "Cosimo SeqFX",
         bundleName: "CosimoSeqFX",
@@ -52,6 +182,26 @@ test("release config freezes the existing beta identity and current native outpu
         seqFxReleaseConfig.paths.builtVst3,
         "build/seqfx_juce/_build/plugin/CosimoSeqFX_artefacts/Release/VST3/CosimoSeqFX.vst3",
     );
+    assert.deepEqual(seqFxReleaseConfig.nativeDependencies, {
+        declarationPath: "cmake/CosimoDependencies.cmake",
+        cmajor: {
+            cpmName: "cosimo_cmajor",
+            sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",
+            repository: "https://github.com/androidStern-personal/cmajor.git",
+            revision: "f1c9a9a8e85dcc82141326a2fc1c5160241f346c",
+        },
+        choc: {
+            repository: "https://github.com/androidStern-personal/choc.git",
+            revision: "037e34a2b382175c8bee4be5a0707724130f10e8",
+            submodulePath: "include/choc",
+        },
+        juce: {
+            cpmName: "cosimo_juce",
+            sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_juce_SOURCE_DIR",
+            repository: "https://github.com/juce-framework/JUCE.git",
+            revision: "501c07674e1ad693085a7e7c398f205c2677f5da",
+        },
+    });
     assert.equal(seqFxArtifactBaseName(), "CosimoSeqFX-0.1.0-beta.1-macOS");
 });
 
@@ -125,6 +275,79 @@ test("release config matches the current patch manifest and effect build registr
     assert.deepEqual(releaseContractErrors(seqFxReleaseConfig, await currentManifest()), []);
 });
 
+test("release planning fails closed over the exact production CMake dependency declarations", async (context) => {
+    assert.deepEqual(
+        await readDeclaredNativeDependencyProvenance(),
+        declaredNativeDependencyFixture(),
+    );
+
+    const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-declaration-drift-"));
+    context.after(() => rm(repositoryRoot, { recursive: true, force: true }));
+    const declarationPath = path.join(
+        repositoryRoot,
+        seqFxReleaseConfig.nativeDependencies.declarationPath,
+    );
+    const currentDeclaration = await readFile(
+        path.join(repoRoot, seqFxReleaseConfig.nativeDependencies.declarationPath),
+        "utf8",
+    );
+    await mkdir(path.dirname(declarationPath), { recursive: true });
+    await writeFile(
+        declarationPath,
+        currentDeclaration.replace(
+            seqFxReleaseConfig.nativeDependencies.cmajor.revision,
+            "0".repeat(40),
+        ),
+        "utf8",
+    );
+
+    await assert.rejects(
+        readDeclaredNativeDependencyProvenance(seqFxReleaseConfig, { repositoryRoot }),
+        /Cmajor production dependency revision drift/u,
+    );
+});
+
+test("post-build provenance resolves CMake-selected clean Cmajor, CHOC, and JUCE checkouts", async (context) => {
+    const fixture = await createNativeDependencyCheckoutFixture(context);
+    const provenance = await captureActualNativeDependencyProvenance(fixture.config, {
+        repositoryRoot: fixture.repositoryRoot,
+    });
+
+    assert.deepEqual(provenance, actualNativeDependencyFixture(fixture.config));
+    assert.equal("checkoutPath" in provenance.cmajor, false);
+    assert.equal("checkoutPath" in provenance.choc, false);
+    assert.equal("checkoutPath" in provenance.juce, false);
+
+    git(fixture.jucePath, ["remote", "set-url", "origin", `${fixture.jucePath}-other`]);
+    await assert.rejects(
+        captureActualNativeDependencyProvenance(fixture.config, {
+            repositoryRoot: fixture.repositoryRoot,
+        }),
+        /JUCE checkout origin drift/u,
+    );
+    git(fixture.jucePath, ["remote", "set-url", "origin", fixture.jucePath]);
+    await writeFile(path.join(fixture.jucePath, "dirty.txt"), "dirty\n", "utf8");
+    await assert.rejects(
+        captureActualNativeDependencyProvenance(fixture.config, {
+            repositoryRoot: fixture.repositoryRoot,
+        }),
+        /JUCE checkout is dirty after the native build/u,
+    );
+});
+
+test("post-build provenance rejects a CHOC checkout that differs from Cmajor's gitlink", async (context) => {
+    const fixture = await createNativeDependencyCheckoutFixture(context);
+    await writeFile(path.join(fixture.chocPath, "new.txt"), "different revision\n", "utf8");
+    const differentRevision = commitFixture(fixture.chocPath, "different CHOC");
+
+    await assert.rejects(
+        captureActualNativeDependencyProvenance(fixture.config, {
+            repositoryRoot: fixture.repositoryRoot,
+        }),
+        new RegExp(`Cmajor checkout is dirty|CHOC checkout revision drift:.*${differentRevision}`, "u"),
+    );
+});
+
 test("tracked third-party notices cover the embedded runtime and artwork", async () => {
     const notices = await readFile(path.join(repoRoot, seqFxReleaseConfig.paths.thirdPartyNotices), "utf8");
     const requiredComponents = [
@@ -149,6 +372,9 @@ test("tracked third-party notices cover the embedded runtime and artwork", async
         assert.match(notices, new RegExp(`^${component.replaceAll("+", "\\+")}$`, "mu"));
 
     assert.match(notices, /does not grant distribution\s+rights/u);
+    assert.match(notices, /f1c9a9a8e85dcc82141326a2fc1c5160241f346c/u);
+    assert.match(notices, /037e34a2b382175c8bee4be5a0707724130f10e8/u);
+    assert.match(notices, /501c07674e1ad693085a7e7c398f205c2677f5da/u);
     assert.match(notices, /320ea19819bf66429fa772d6c04614ae75815895/u);
     assert.match(notices, /Creative Commons Attribution 4\.0 International/u);
     assert.match(notices, /This software is based in part on the work of the Independent JPEG Group\./u);
@@ -168,6 +394,7 @@ test("release contract reports identity and path drift before packaging", async 
 test("read-only plan names exact side effects, current paths, and release blockers", () => {
     const plan = createReleasePlan({
         config: seqFxReleaseConfig,
+        declaredNativeDependencies: declaredNativeDependencyFixture(),
         gitState: {
             branch: "codex/test",
             commit: "a".repeat(40),
@@ -184,6 +411,11 @@ test("read-only plan names exact side effects, current paths, and release blocke
     assert.match(plan.repeatability.deterministicBoundary, /one freshly built unsigned VST3/u);
     assert.equal(plan.repeatability.independentNativeBuildsCompared, false);
     assert.equal(plan.repeatability.signedArtifactBytesReproducible, false);
+    assert.equal(
+        plan.nativeDependencyProvenance.declared.choc.revision,
+        seqFxReleaseConfig.nativeDependencies.choc.revision,
+    );
+    assert.equal(plan.nativeDependencyProvenance.postBuildVerification.requiredBeforePackaging, true);
     assert.ok(plan.explicitlyNeverPerformed.includes("Patreon upload"));
 });
 
@@ -372,6 +604,7 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
             dirty: false,
             worktreeStatus: "",
         },
+        nativeDependencyProvenance: actualNativeDependencyFixture(),
         notarization: {
             gatekeeperAccepted: false,
             notarized: false,
@@ -404,6 +637,12 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
     assert.equal("createdAt" in first, false);
     assert.equal("branch" in first.source, false);
     assert.equal(first.repeatability.independentNativeBuildsCompared, false);
+    assert.equal(
+        first.nativeDependencyProvenance.cmajor.actualRevision,
+        seqFxReleaseConfig.nativeDependencies.cmajor.revision,
+    );
+    assert.equal(first.nativeDependencyProvenance.choc.clean, true);
+    assert.equal(first.nativeDependencyProvenance.juce.clean, true);
     assert.equal(first.artifacts.thirdPartyNotices, "THIRD_PARTY_NOTICES.txt");
     assert.ok(first.operationsNotPerformed.includes("DAW smoke or listening acceptance"));
     assert.ok(first.operationsNotPerformed.includes("Patreon upload"));
@@ -418,4 +657,18 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
     assert.equal(signedCandidate.packagingReady, true);
     assert.equal(signedCandidate.distributionReady, false);
     assert.match(signedCandidate.distributionReadinessReason, /Ableton\/listening acceptance/u);
+
+    assert.throws(
+        () => createReleaseManifest({
+            ...inputs,
+            nativeDependencyProvenance: {
+                ...inputs.nativeDependencyProvenance,
+                choc: {
+                    ...inputs.nativeDependencyProvenance.choc,
+                    clean: false,
+                },
+            },
+        }),
+        /CHOC cleanliness/u,
+    );
 });
