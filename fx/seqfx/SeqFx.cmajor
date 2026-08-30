@@ -35,6 +35,7 @@ namespace seqfx
     let tapeTimingSync = 0;
     let tapeTimingFree = 1;
     let transitionCrossfadeFrames = 96.0f;
+    let dirtyOversampleFactor = 4;
     let lifecycleIdle = 0;
     let lifecycleEntering = 1;
     let lifecycleActive = 2;
@@ -429,6 +430,155 @@ namespace seqfx
 
         return std::filters::simper::Mode::lowPass;
     }
+
+    processor DirtyCore
+    {
+        input stream float32<2> in;
+        input value float32 driveDbIn;
+        input value float32 biasIn;
+        input value float32 characterIn;
+        output stream float32<2> out;
+        output stream float32<2> thru;
+
+        int32 selectedCharacter;
+        int32 transitionFramesRemaining;
+        float32 softWeight = 1.0f;
+        float32 hardWeight;
+        float32 foldWeight;
+        float32 biasWeight;
+        float32 softStep;
+        float32 hardStep;
+        float32 foldStep;
+        float32 biasStep;
+
+        float32 softShape (float32 sample)
+        {
+            let magnitude = std::intrinsics::abs (sample);
+            return sample / std::intrinsics::sqrt (1.0f + (magnitude * magnitude));
+        }
+
+        float32 foldShape (float32 sample)
+        {
+            let wrapped = sample - (4.0f * std::intrinsics::floor ((sample + 2.0f) / 4.0f));
+            if (wrapped > 1.0f) return 2.0f - wrapped;
+            if (wrapped < -1.0f) return -2.0f - wrapped;
+            return wrapped;
+        }
+
+        float32 shapeForCharacter (float32 sample, int32 character)
+        {
+            if (character == 1)
+                return clampFloat (sample, -1.0f, 1.0f);
+
+            if (character == 2)
+                return foldShape (sample);
+
+            if (character == 3)
+                return softShape (sample + 0.22f) - softShape (0.22f);
+
+            return softShape (sample);
+        }
+
+        float32 biasedShapeForCharacter (float32 sample, float32 bias, int32 character)
+        {
+            let offset = clampFloat (bias, -1.0f, 1.0f) * 0.5f;
+            let zero = shapeForCharacter (offset, character);
+            return clampFloat (shapeForCharacter (sample + offset, character) - zero, -2.0f, 2.0f);
+        }
+
+        void beginCharacterTransition (int32 nextCharacter)
+        {
+            selectedCharacter = nextCharacter;
+            transitionFramesRemaining = int32 (std::intrinsics::max (
+                1.0f,
+                float32 (processor.frequency) * 0.002f
+            ));
+            let inverseFrames = 1.0f / float32 (transitionFramesRemaining);
+            softStep = (((nextCharacter == 0) ? 1.0f : 0.0f) - softWeight) * inverseFrames;
+            hardStep = (((nextCharacter == 1) ? 1.0f : 0.0f) - hardWeight) * inverseFrames;
+            foldStep = (((nextCharacter == 2) ? 1.0f : 0.0f) - foldWeight) * inverseFrames;
+            biasStep = (((nextCharacter == 3) ? 1.0f : 0.0f) - biasWeight) * inverseFrames;
+        }
+
+        float32<2> shapeStereo (float32<2> samples, float32 bias, int32 character)
+        {
+            if (character != selectedCharacter)
+                beginCharacterTransition (character);
+
+            if (transitionFramesRemaining <= 0)
+                return float32<2> (
+                    biasedShapeForCharacter (samples[0], bias, selectedCharacter),
+                    biasedShapeForCharacter (samples[1], bias, selectedCharacter)
+                );
+
+            let result = float32<2> (
+                softWeight * biasedShapeForCharacter (samples[0], bias, 0)
+                    + hardWeight * biasedShapeForCharacter (samples[0], bias, 1)
+                    + foldWeight * biasedShapeForCharacter (samples[0], bias, 2)
+                    + biasWeight * biasedShapeForCharacter (samples[0], bias, 3),
+                softWeight * biasedShapeForCharacter (samples[1], bias, 0)
+                    + hardWeight * biasedShapeForCharacter (samples[1], bias, 1)
+                    + foldWeight * biasedShapeForCharacter (samples[1], bias, 2)
+                    + biasWeight * biasedShapeForCharacter (samples[1], bias, 3)
+            );
+
+            softWeight += softStep;
+            hardWeight += hardStep;
+            foldWeight += foldStep;
+            biasWeight += biasStep;
+            transitionFramesRemaining -= 1;
+
+            if (transitionFramesRemaining == 0)
+            {
+                softWeight = selectedCharacter == 0 ? 1.0f : 0.0f;
+                hardWeight = selectedCharacter == 1 ? 1.0f : 0.0f;
+                foldWeight = selectedCharacter == 2 ? 1.0f : 0.0f;
+                biasWeight = selectedCharacter == 3 ? 1.0f : 0.0f;
+            }
+
+            return result;
+        }
+
+        void main()
+        {
+            loop
+            {
+                let samples = in;
+                let driven = samples * dbToGain (clampFloat (driveDbIn, 0.0f, 36.0f));
+                let character = clampInt (int32 (characterIn + 0.5f), 0, 3);
+                thru <- samples;
+                out <- shapeStereo (driven, biasIn, character);
+                advance();
+            }
+        }
+    }
+
+    processor DirtyBus
+    {
+        input stream float32<2> in;
+        input value float32 driveDbIn;
+        input value float32 biasIn;
+        input value float32 characterIn;
+        output stream float32<2> out;
+        output stream float32<2> thru;
+
+        node core = DirtyCore * dirtyOversampleFactor;
+
+        void main()
+        {
+            loop
+            {
+                core.in <- in;
+                core.driveDbIn <- driveDbIn;
+                core.biasIn <- biasIn;
+                core.characterIn <- characterIn;
+                core.advance();
+                out <- core.out;
+                thru <- core.thru;
+                advance();
+            }
+        }
+    }
 }
 
 processor SeqFx [[ main ]]
@@ -596,6 +746,22 @@ processor SeqFx [[ main ]]
     float32<2>[seqfx::laneCount] talkBoxLowState;
     float32<2>[seqfx::laneCount] talkBoxHighLowState;
 
+    node dirtyCores = seqfx::DirtyBus[seqfx::laneCount];
+    bool[seqfx::laneCount] dirtyActive;
+    float32[seqfx::laneCount] dirtyDriveDb;
+    int32[seqfx::laneCount] dirtyCharacter;
+    float32[seqfx::laneCount] dirtyBias;
+    float32[seqfx::laneCount] dirtyDynamics;
+    float32[seqfx::laneCount] dirtyToneHz;
+    float32[seqfx::laneCount] dirtyTrimDb;
+    float32[seqfx::laneCount] dirtyMixCurrent;
+    float32[seqfx::laneCount] dirtyMixTarget;
+    float32<2>[seqfx::laneCount] dirtyDcPreviousInput;
+    float32<2>[seqfx::laneCount] dirtyDcPreviousOutput;
+    float32<2>[seqfx::laneCount] dirtyToneState;
+    float32[seqfx::laneCount] dirtyInputPower;
+    float32[seqfx::laneCount] dirtyOutputPower;
+
     bool[seqfx::laneCount] tapeLaneActive;
     float32[seqfx::laneCount] tapeMixCurrent;
     float32[seqfx::laneCount] tapeMixTarget;
@@ -656,6 +822,11 @@ processor SeqFx [[ main ]]
             talkBoxResonance[lane] = 6.0f;
             talkBoxLows[lane] = 0.3f;
             talkBoxHighs[lane] = 0.15f;
+
+            dirtyDriveDb[lane] = 12.0f;
+            dirtyDynamics[lane] = 0.65f;
+            dirtyToneHz[lane] = 12000.0f;
+            dirtyTrimDb[lane] = -6.0f;
 
             for (wrap<seqfx::tapeVoiceCount> voice)
                 tapeVoiceRestartAge[lane, voice] = seqfx::transitionCrossfadeFrames;
@@ -1167,11 +1338,17 @@ processor SeqFx [[ main ]]
                     talkBoxFormantStates[lane, formant, channel].reset();
             talkBoxLowState[lane] = float32<2> (0.0f);
             talkBoxHighLowState[lane] = float32<2> (0.0f);
+            dirtyDcPreviousInput[lane] = float32<2> (0.0f);
+            dirtyDcPreviousOutput[lane] = float32<2> (0.0f);
+            dirtyToneState[lane] = float32<2> (0.0f);
+            dirtyInputPower[lane] = 0.0f;
+            dirtyOutputPower[lane] = 0.0f;
 
             filterActive[lane] = false;
             crusherActive[lane] = false;
             ringActive[lane] = false;
             talkBoxActive[lane] = false;
+            dirtyActive[lane] = false;
             tapeLaneActive[lane] = false;
             stutterLaneActive[lane] = false;
             chainPreviousEffectType[lane] = chainEffectType[lane];
@@ -1179,6 +1356,8 @@ processor SeqFx [[ main ]]
             chainLifecycleState[lane] = seqfx::lifecycleResetting;
             chainLifecycleAge[lane] = 0.0f;
         }
+
+        dirtyCores.reset();
 
         needsStepLatch = true;
         processingResetRequested = false;
@@ -1455,6 +1634,7 @@ processor SeqFx [[ main ]]
         let wasCrusherActive = crusherActive[lane];
         let wasRingActive = ringActive[lane];
         let wasTalkBoxActive = talkBoxActive[lane];
+        let wasDirtyActive = dirtyActive[lane];
         let wasTapeActive = tapeLaneActive[lane];
         let wasStutterActive = stutterLaneActive[lane];
 
@@ -1464,6 +1644,7 @@ processor SeqFx [[ main ]]
         crusherActive[lane] = effectType == seqfx::effectCrusher;
         ringActive[lane] = effectType == seqfx::effectRing;
         talkBoxActive[lane] = effectType == seqfx::effectTalkBox;
+        dirtyActive[lane] = effectType == seqfx::effectDirty;
         tapeLaneActive[lane] = effectType == seqfx::effectTapeStop;
         stutterLaneActive[lane] = effectType == seqfx::effectStutter;
 
@@ -1471,6 +1652,7 @@ processor SeqFx [[ main ]]
         crusherMixTarget[lane] = crusherActive[lane] ? targetMix : 0.0f;
         ringMixTarget[lane] = ringActive[lane] ? targetMix : 0.0f;
         talkBoxMixTarget[lane] = talkBoxActive[lane] ? targetMix : 0.0f;
+        dirtyMixTarget[lane] = dirtyActive[lane] ? targetMix : 0.0f;
         tapeMixTarget[lane] = tapeLaneActive[lane] ? targetMix : 0.0f;
         stutterMixTarget[lane] = stutterLaneActive[lane] ? targetMix : 0.0f;
 
@@ -1499,6 +1681,9 @@ processor SeqFx [[ main ]]
 
         if (talkBoxActive[lane])
             latchTalkBoxStep (lane, wasTalkBoxActive);
+
+        if (dirtyActive[lane])
+            latchDirtyStep (lane, wasDirtyActive);
 
         if (tapeLaneActive[lane])
             latchTapeStep (lane, wasTapeActive);
@@ -1619,6 +1804,23 @@ processor SeqFx [[ main ]]
         talkBoxLows[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 1.0f);
         talkBoxHighs[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 5], 0.0f, 1.0f);
         talkBoxDriveDb[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 6], 0.0f, 12.0f);
+    }
+
+    void latchDirtyStep (wrap<seqfx::laneCount> lane, bool wasActive)
+    {
+        let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
+
+        if (wasActive && ! triggerSteps[lane, currentStepIndex] && ! relatchingFromPatternUpload)
+            return;
+
+        let blockStart = blockStartStep (lane, currentStep);
+        let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        dirtyDriveDb[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 0], 0.0f, 36.0f);
+        dirtyCharacter[lane] = snapValue (stepParams[lane, blockStartIndex, 1], 0, 3);
+        dirtyBias[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], -1.0f, 1.0f);
+        dirtyDynamics[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.0f, 1.0f);
+        dirtyToneHz[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 500.0f, 20000.0f);
+        dirtyTrimDb[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 5], -18.0f, 6.0f);
     }
 
     void latchStutterStep (wrap<seqfx::laneCount> lane, bool wasActive)
@@ -2326,6 +2528,67 @@ processor SeqFx [[ main ]]
         return stage + ((voiced - stage) * talkBoxMixCurrent[lane]);
     }
 
+    float32<2> processDirty (wrap<seqfx::laneCount> lane, float32<2> stage)
+    {
+        dirtyMixCurrent[lane] = seqfx::moveTowards (
+            dirtyMixCurrent[lane],
+            dirtyMixTarget[lane],
+            1.0f / seqfx::transitionCrossfadeFrames
+        );
+
+        let currentDriveDb = seqfx::clampFloat (auxParamValue (lane, 0, dirtyDriveDb[lane]), 0.0f, 36.0f);
+        let currentBias = seqfx::clampFloat (auxParamValue (lane, 2, dirtyBias[lane]), -1.0f, 1.0f);
+        let currentDynamics = seqfx::clampFloat (auxParamValue (lane, 3, dirtyDynamics[lane]), 0.0f, 1.0f);
+        let currentToneHz = auxLogParamValue (lane, 4, dirtyToneHz[lane], 500.0f, 20000.0f);
+        let currentTrimDb = seqfx::clampFloat (auxParamValue (lane, 5, dirtyTrimDb[lane]), -18.0f, 6.0f);
+
+        dirtyCores[lane].in <- stage;
+        dirtyCores[lane].driveDbIn <- currentDriveDb;
+        dirtyCores[lane].biasIn <- currentBias;
+        dirtyCores[lane].characterIn <- float32 (dirtyCharacter[lane]);
+        dirtyCores[lane].advance();
+
+        let rawResidue = dirtyCores[lane].out - dirtyCores[lane].thru;
+        let dcCoefficient = std::intrinsics::exp (
+            (-2.0f * seqfx::pi * 10.0f) / float32 (processor.frequency)
+        );
+        let dcBlocked = rawResidue
+            - dirtyDcPreviousInput[lane]
+            + (dirtyDcPreviousOutput[lane] * dcCoefficient);
+        dirtyDcPreviousInput[lane] = rawResidue;
+        dirtyDcPreviousOutput[lane] = dcBlocked;
+
+        let toneCoefficient = 1.0f - std::intrinsics::exp (
+            (-2.0f * seqfx::pi * currentToneHz) / float32 (processor.frequency)
+        );
+        dirtyToneState[lane] += (dcBlocked - dirtyToneState[lane]) * toneCoefficient;
+        let rawDirty = stage + dirtyToneState[lane];
+        let detectorCoefficient = 1.0f - std::intrinsics::exp (
+            -1.0f / (0.01f * float32 (processor.frequency))
+        );
+        let inputPower = 0.5f * ((stage[0] * stage[0]) + (stage[1] * stage[1]));
+        let outputPower = 0.5f * ((rawDirty[0] * rawDirty[0]) + (rawDirty[1] * rawDirty[1]));
+        dirtyInputPower[lane] += (inputPower - dirtyInputPower[lane]) * detectorCoefficient;
+        dirtyOutputPower[lane] += (outputPower - dirtyOutputPower[lane]) * detectorCoefficient;
+        let compensation = seqfx::clampFloat (
+            float32 (std::intrinsics::sqrt (
+                std::intrinsics::max (dirtyInputPower[lane], 1.0e-12f)
+                    / std::intrinsics::max (dirtyOutputPower[lane], 1.0e-12f)
+            )),
+            0.015848932f,
+            4.0f
+        );
+        let dynamicsGain = std::intrinsics::pow (compensation, currentDynamics);
+        let trimGain = seqfx::dbToGain (currentTrimDb);
+        let rawWet = rawDirty * dynamicsGain * trimGain;
+        let clippedWet = float32<2> (
+            seqfx::clampFloat (rawWet[0], -4.0f, 4.0f),
+            seqfx::clampFloat (rawWet[1], -4.0f, 4.0f)
+        );
+
+        return stage + ((clippedWet - stage) * dirtyMixCurrent[lane]);
+    }
+
     float32<2> processTapeCharacter (
         wrap<seqfx::laneCount> lane,
         wrap<seqfx::tapeVoiceCount> voice,
@@ -2545,6 +2808,7 @@ processor SeqFx [[ main ]]
         stage = processCrusher (lane, stage);
         stage = processRing (lane, stage);
         stage = processTalkBox (lane, stage);
+        stage = processDirty (lane, stage);
 
         writeTapeHistory (lane, stage);
         stage = processTapeStop (lane, stage);

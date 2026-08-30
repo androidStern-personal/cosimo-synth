@@ -24,6 +24,7 @@ const SEQFX_EFFECT_TYPES = {
     stutter: 4,
     ring: 7,
     talkBox: 9,
+    dirty: 12,
 };
 const FILTER_PARAM_MODE = 0;
 const FILTER_PARAM_CUTOFF = 1;
@@ -977,6 +978,7 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
             { effectType: "4", patternCount: 1 },
             { effectType: "7", patternCount: 1 },
             { effectType: "9", patternCount: 1 },
+            { effectType: "12", patternCount: 1 },
         ],
         "every effect tab icon should carry the same internal halftone texture technique as the cells",
     );
@@ -1014,6 +1016,7 @@ test("seqfx_effect_tab_icons_use_their_cell_palette_when_selected", async () => 
         4: "rgb(181, 217, 156)",
         7: "rgb(199, 166, 216)",
         9: "rgb(229, 164, 181)",
+        12: "rgb(121, 185, 166)",
     };
 
     for (const [effectType, expectedColor] of Object.entries(expectedSelectedColors)) {
@@ -3161,8 +3164,8 @@ test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_
     const effectPicker = page.locator('[data-role="seqfx-effect-type"]');
     assert.equal(await effectPicker.evaluate((element) => element.tagName), "DIV");
     assert.equal(await effectPicker.locator("select").count(), 0);
-    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"]').count(), 6);
-    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"] > svg').count(), 6);
+    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"]').count(), 7);
+    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"] > svg').count(), 7);
     assert.equal(await effectPicker.getByRole("button", { name: "Crush", exact: true }).getAttribute("aria-pressed"), "true");
 
     const tapeStopButton = effectPicker.getByRole("button", { name: "Tape Stop", exact: true });
@@ -3299,6 +3302,58 @@ test("seqfx_talk_box_sequences_documented_vowels_and_exposes_only_continuous_con
     const glyph = page.locator('[data-role="seqfx-block"][data-lane="0"][data-start="0"] [data-role="seqfx-block-glyph"]');
     assert.equal(await glyph.getAttribute("data-effect"), "talk-box");
     assert.ok(await glyph.locator('[data-role="seqfx-block-glyph-ink"]').getAttribute("d"));
+
+    await page.close();
+});
+
+test("seqfx_dirty_sequences_oversampled_distortion_controls_and_excludes_character_from_modulation", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Dirty", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 Dirty block 1", exact: true }).waitFor();
+
+    const param = (index) => page.locator(`[data-role="seqfx-param"][data-param="${index}"]`);
+    assert.deepEqual(
+        await param(1).locator("option").evaluateAll((options) => options.map((option) => option.textContent)),
+        ["Soft", "Hard", "Fold", "Bias"],
+    );
+
+    await param(0).fill("24");
+    await param(1).selectOption("2");
+    await param(2).fill("0.35");
+    await param(3).fill("0.8");
+    await param(4).fill("5000");
+    await param(5).fill("-3");
+
+    let snapshot = await getHarnessSnapshot(page);
+    let upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.effectTypes[0][0], SEQFX_EFFECT_TYPES.dirty);
+    assert.deepEqual(upload.params[0][0], [24, 2, 0.35, 0.8, 5000, -3, 0, 0]);
+
+    await openSeqFxModView(page);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 5);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="1"]').count(), 0);
+    await toggleSeqFxModTarget(page, 0);
+    await setSeqFxModTargetAmount(page, 0, 6);
+
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.auxEnabled[0][0][0], true);
+    assertClose(upload.auxEnd[0][0][0], 30, 0.01, "Dirty Drive +6 dB should persist as 30 dB");
+    const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    const storedDirty = storedState.patterns[0].lanes[0].steps[0];
+    assert.equal(storedDirty.effectType, SEQFX_EFFECT_TYPES.dirty);
+    assert.deepEqual(storedDirty.params, [24, 2, 0.35, 0.8, 5000, -3, 0, 0]);
+    assert.equal(storedDirty.aux.targets[0].enabled, true);
+    assertClose(storedDirty.aux.targets[0].end, 30, 0.01, "Dirty aux target should survive sparse v7 persistence");
+
+    const glyph = page.locator('[data-role="seqfx-block"][data-lane="0"][data-start="0"] [data-role="seqfx-block-glyph"]');
+    assert.equal(await glyph.getAttribute("data-effect"), "dirty");
+    assert.ok(await glyph.locator('[data-role="seqfx-block-glyph-line"]').getAttribute("d"));
 
     await page.close();
 });

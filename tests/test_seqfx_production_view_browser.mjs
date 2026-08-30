@@ -673,7 +673,7 @@ test("SeqFX production shadow-root host exposes the shared editor token palette"
     }
 });
 
-test("SeqFX packaged shadow-root flow renders the selected crusher stutter ring and talk box inspectors", async () => {
+test("SeqFX packaged shadow-root flow renders the selected crusher stutter ring talk box and dirty inspectors", async () => {
     const page = await browser.newPage();
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error));
@@ -865,6 +865,24 @@ test("SeqFX packaged shadow-root flow renders the selected crusher stutter ring 
             scrollWidth: node.scrollWidth,
         }));
         assert.ok(talkBoxInspectorBounds.scrollWidth <= talkBoxInspectorBounds.clientWidth + 1);
+
+        await page.getByRole("button", { name: "Dirty", exact: true }).click();
+        await page.getByRole("button", { name: "Chain 4 Dirty block 1", exact: true }).waitFor();
+        assert.equal(await page.locator('[data-role="seqfx-param"]').count(), 6);
+        assert.deepEqual(
+            await page.locator('[data-role="seqfx-param"][data-param="1"] option').evaluateAll((options) => options.map((option) => option.textContent)),
+            ["Soft", "Hard", "Fold", "Bias"],
+        );
+        await page.locator('[data-role="seqfx-param"][data-param="0"]').fill("24");
+        assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="dirty"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
+        await page.locator('[data-role="seqfx-mod-toggle"]').click();
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 5);
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="1"]').count(), 0);
+        const dirtyInspectorBounds = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => ({
+            clientWidth: node.clientWidth,
+            scrollWidth: node.scrollWidth,
+        }));
+        assert.ok(dirtyInspectorBounds.scrollWidth <= dirtyInspectorBounds.clientWidth + 1);
 
         assert.deepEqual(pageErrors.map((error) => error.message), []);
     } finally {

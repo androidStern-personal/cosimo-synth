@@ -207,6 +207,13 @@ claims about Koala's private implementation.
 - Dynamics: 0–100% input-envelope preservation.
 - Tone: 500 Hz–20 kHz.
 - Trim: -18–6 dB.
+- Production decision: fixed 4x nonlinear core, 2 ms Character crossfade,
+  10 Hz post-residue DC blocker, 10 ms bounded dynamics compensation, and
+  residue-only Tone filtering. See `dirty-decision.md` for documented facts,
+  engineering choices, and measured alias evidence.
+- Implementation status: complete through DSP, sequenced UI/state, source
+  browser proof, and packaged-bundle proof; subjective/release gates remain in
+  the shared roadmap.
 
 ## Copy, adapt, omit
 

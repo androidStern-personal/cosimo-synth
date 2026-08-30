@@ -121,3 +121,24 @@ test("Cmajor accepts every append-only effect ID without aliasing future effects
         /clampInt \(upload\.effectTypes\[[^\n]+effectEmpty, seqfx::effectStutter\)/,
     );
 });
+
+test("Dirty keeps one sequenced identity while its nonlinear core runs at fixed 4x quality", async () => {
+    const dirty = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.dirty);
+    assert.equal(dirty.lifecycle, "gated");
+    assert.deepEqual(
+        dirty.parameters.map(({ id, defaultValue, latch, auxEligible }) => ({ id, defaultValue, latch, auxEligible })),
+        [
+            { id: "driveDb", defaultValue: 12, latch: "continuous", auxEligible: true },
+            { id: "character", defaultValue: 0, latch: "trigger", auxEligible: false },
+            { id: "bias", defaultValue: 0, latch: "continuous", auxEligible: true },
+            { id: "dynamics", defaultValue: 0.65, latch: "continuous", auxEligible: true },
+            { id: "toneHz", defaultValue: 12_000, latch: "continuous", auxEligible: true },
+            { id: "trimDb", defaultValue: -6, latch: "continuous", auxEligible: true },
+        ],
+    );
+
+    const source = await readFile(path.join(repoRoot, "fx/seqfx/SeqFx.cmajor"), "utf8");
+    assert.match(source, /let dirtyOversampleFactor = 4;/);
+    assert.match(source, /node core = DirtyCore \* dirtyOversampleFactor;/);
+    assert.match(source, /node dirtyCores = seqfx::DirtyBus\[seqfx::laneCount\];/);
+});

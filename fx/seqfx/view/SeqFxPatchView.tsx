@@ -227,6 +227,7 @@ const EFFECT_OPTIONS = [
     SEQFX_EFFECT_TYPES.stutter,
     SEQFX_EFFECT_TYPES.ring,
     SEQFX_EFFECT_TYPES.talkBox,
+    SEQFX_EFFECT_TYPES.dirty,
 ] as const;
 
 function defaultEffectTypeForChain(chain: number) {
@@ -357,6 +358,7 @@ const TAPE_STOP_ICON_PATH =
     "M3 5h18a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5h-3.5l-.55-2.45A1.4 1.4 0 0 0 15.59 15.5H8.41a1.4 1.4 0 0 0-1.36 1.05L6.5 19H3a1.5 1.5 0 0 1-1.5-1.5v-11A1.5 1.5 0 0 1 3 5Zm5 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z";
 const TALK_BOX_ICON_PATH =
     "M55.618 178.111l75.645-94.377s.03-15.79 12.989-26.864c15.797-13.498 40.626-11.241 53.643 3.201 13.016 14.443 16.545 38.02-1.25 54.93-11.078 10.526-23.552 10.425-23.552 10.425l-94.71 75.646-9.344-9.14-17.266 16.088s-1.429 1.188-2.844-.578c-1.415-1.765-.71-3.282-.71-3.282l17.039-16.203-9.64-9.846zm17.729-1.144l5.687 5.484 75.162-59.15s-8.01-4.416-12.813-9.469c-4.804-5.053-7.58-11.981-7.58-11.981l-60.456 75.116zm75.827-105.668s-13.299 18.34 2.398 33.329c15.698 14.99 33.564 2.4 33.564 2.4s-16.071-3.727-24.79-12.39c-8.72-8.662-11.172-23.34-11.172-23.34zm5.393-4.513s3.702 14.109 12.601 23.073c8.899 8.965 22.874 12.662 22.874 12.662s12.885-19.52-3.271-34.318c-16.157-14.798-32.204-1.417-32.204-1.417z";
+const DIRTY_ICON_PATH = "M232 64.5h-54l-111.5 112H26V193h50L187.5 81H232z";
 
 // Effect picker SVGs are local silhouettes matched to the riso cell palette.
 function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
@@ -451,6 +453,19 @@ function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
                         fillRule="evenodd"
                     />
                     <path d={TALK_BOX_ICON_PATH} fill={textureFill} fillRule="evenodd" />
+                </svg>
+            );
+        case SEQFX_EFFECT_TYPES.dirty:
+            return (
+                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
+                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
+                    <path
+                        d={DIRTY_ICON_PATH}
+                        data-role="seqfx-effect-icon-fill"
+                        fill="currentColor"
+                        fillRule="evenodd"
+                    />
+                    <path d={DIRTY_ICON_PATH} fill={textureFill} fillRule="evenodd" />
                 </svg>
             );
         default:
@@ -919,6 +934,14 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 5, label: "Highs", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Restores source brightness above the formants." },
         { index: 6, label: "Drive", min: 0, max: 12, step: 0.1, amountKind: "db", hint: "Adds bounded excitation before the formant filters." },
     ],
+    [SEQFX_EFFECT_TYPES.dirty]: [
+        { index: 0, label: "Drive", min: 0, max: 36, step: 0.1, amountKind: "db", hint: "Level into the oversampled nonlinear stage." },
+        { index: 1, label: "Character", min: 0, max: 3, step: 1, kind: "select", options: ["Soft", "Hard", "Fold", "Bias"], hint: "Latched transfer shape; changes crossfade over 2 ms." },
+        { index: 2, label: "Bias", min: -1, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Offsets the transfer curve for even-harmonic asymmetry." },
+        { index: 3, label: "Dynamics", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Restores the source signal's level contrast after saturation." },
+        { index: 4, label: "Tone", min: 500, max: 20000, step: 1, amountKind: "cutoffOctaves", hint: "Low-passes only the nonlinear residue, preserving the dry fundamental." },
+        { index: 5, label: "Trim", min: -18, max: 6, step: 0.1, amountKind: "db", hint: "Output gain after dynamics compensation." },
+    ],
 };
 
 const FILTER_PARAM_MODE = 0;
@@ -957,6 +980,9 @@ const RING_PARAM_WAVEFORM = 1;
 const TALK_BOX_PARAM_FROM_VOWEL = 0;
 const TALK_BOX_PARAM_TO_VOWEL = 1;
 const TALK_BOX_PARAM_MORPH = 2;
+const DIRTY_PARAM_DRIVE_DB = 0;
+const DIRTY_PARAM_CHARACTER = 1;
+const DIRTY_PARAM_BIAS = 2;
 
 type SeqFxBlockVisualSize = "single" | "medium" | "wide";
 
@@ -1438,6 +1464,81 @@ function SeqFxTalkBoxBlockGlyph({
     );
 }
 
+function dirtyTransferSample(input: number, character: number, bias: number, driveDb: number) {
+    const soft = (value: number) => value / Math.sqrt(1 + (value * value));
+    const fold = (value: number) => {
+        const wrapped = value - (4 * Math.floor((value + 2) / 4));
+        if (wrapped > 1) return 2 - wrapped;
+        if (wrapped < -1) return -2 - wrapped;
+        return wrapped;
+    };
+    const shape = (value: number) => {
+        if (character === 1) return clampNumber(value, -1, 1);
+        if (character === 2) return fold(value);
+        if (character === 3) return soft(value + 0.22) - soft(0.22);
+        return soft(value);
+    };
+    const offset = clampNumber(bias, -1, 1) * 0.5;
+    const driven = input * (10 ** (clampNumber(driveDb, 0, 36) / 20));
+    return clampNumber(shape(driven + offset) - shape(offset), -1.25, 1.25);
+}
+
+function dirtyRisoPath(character: number, bias: number, driveDb: number, width: number) {
+    return Array.from({ length: 65 }, (_unused, index) => {
+        const input = ((index / 64) * 2) - 1;
+        const output = dirtyTransferSample(input, character, bias, driveDb);
+        const x = (index / 64) * width;
+        const y = 14 - ((output / 1.25) * 11);
+        return `${index === 0 ? "M" : "L"}${roundedPathValue(x)} ${roundedPathValue(y)}`;
+    }).join(" ");
+}
+
+function SeqFxDirtyBlockGlyph({
+    params,
+    size,
+    width,
+}: {
+    params: number[];
+    size: SeqFxBlockVisualSize;
+    width: number;
+}) {
+    const driveDb = Number(params[DIRTY_PARAM_DRIVE_DB] ?? 12);
+    const character = Math.round(Number(params[DIRTY_PARAM_CHARACTER] ?? 0));
+    const bias = Number(params[DIRTY_PARAM_BIAS] ?? 0);
+    const characterLabel = ["SOFT", "HARD", "FOLD", "BIAS"][character] ?? "SOFT";
+
+    return (
+        <>
+            <svg
+                aria-hidden="true"
+                className="seqfx-block-glyph"
+                data-effect="dirty"
+                data-role="seqfx-block-glyph"
+                data-size={size}
+                focusable="false"
+                preserveAspectRatio="none"
+                viewBox={`0 0 ${width} 28`}
+            >
+                <path
+                    className="seqfx-block-glyph__line"
+                    d={dirtyRisoPath(character, bias, driveDb, width)}
+                    data-role="seqfx-block-glyph-line"
+                />
+            </svg>
+            {size !== "single" ? (
+                <span className="seqfx-block-glyph-label" data-role="seqfx-block-glyph-label">
+                    {characterLabel}
+                </span>
+            ) : null}
+            {size === "wide" ? (
+                <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
+                    {formatSignedFixed(driveDb, 0)} dB
+                </span>
+            ) : null}
+        </>
+    );
+}
+
 export function SeqFxBlockGlyph({
     effectType,
     params,
@@ -1463,6 +1564,8 @@ export function SeqFxBlockGlyph({
             return <SeqFxRingBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.talkBox:
             return <SeqFxTalkBoxBlockGlyph params={params} size={size} width={width} />;
+        case SEQFX_EFFECT_TYPES.dirty:
+            return <SeqFxDirtyBlockGlyph params={params} size={size} width={width} />;
         default:
             return null;
     }

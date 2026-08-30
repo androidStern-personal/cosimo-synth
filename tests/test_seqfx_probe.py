@@ -25,6 +25,7 @@ EFFECT_TAPE = 3
 EFFECT_STUTTER = 4
 EFFECT_RING = 7
 EFFECT_TALK_BOX = 9
+EFFECT_DIRTY = 12
 LIFECYCLE_IDLE = 0
 LIFECYCLE_ENTERING = 1
 LIFECYCLE_ACTIVE = 2
@@ -2818,3 +2819,186 @@ def test_talk_box_extreme_resonance_and_drive_stay_finite_and_bounded(
     assert np.all(np.isfinite(output))
     assert float(np.max(np.abs(output))) <= 4.001
     assert float(np.max(np.abs(output - baseline))) < 1.0e-6
+
+
+def _render_dirty(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    input_audio: np.ndarray,
+    *,
+    drive_db: float = 24.0,
+    character: float = 0.0,
+    bias: float = 0.0,
+    dynamics: float = 0.0,
+    tone_hz: float = 20_000.0,
+    trim_db: float = 0.0,
+) -> np.ndarray:
+    upload = _empty_upload()
+    for step in range(4):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_DIRTY,
+            params=[drive_db, character, bias, dynamics, tone_hz, trim_db],
+        )
+    return _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+
+def test_dirty_soft_character_adds_odd_harmonics_without_becoming_crush(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    input_audio = _sine(STEP_FRAMES * 4, 997.0, amplitude=0.08)
+    output = _render_dirty(generated_runtime, tmp_path, input_audio)
+    analysis = output[2_048:, 0]
+
+    assert _tone_amplitude(analysis, 2_991.0) > 0.015
+    assert _tone_amplitude(analysis, 1_994.0) < _tone_amplitude(analysis, 2_991.0) * 0.2
+
+
+def test_dirty_character_modes_have_distinct_transfer_signatures(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    input_audio = _sine(STEP_FRAMES * 4, 997.0, amplitude=0.16)
+    outputs = [
+        _render_dirty(generated_runtime, tmp_path, input_audio, character=float(character))[2_048:, 0]
+        for character in range(4)
+    ]
+
+    for left_index in range(len(outputs)):
+        for right_index in range(left_index + 1, len(outputs)):
+            assert _rms(outputs[left_index] - outputs[right_index]) > 0.01
+    assert _tone_amplitude(outputs[3], 1_994.0) > 0.01
+
+
+def test_dirty_dynamics_restores_input_level_contrast(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    def ratio(dynamics: float) -> float:
+        quiet = _sine(STEP_FRAMES * 4, 997.0, amplitude=0.025)
+        loud = _sine(STEP_FRAMES * 4, 997.0, amplitude=0.25)
+        quiet_out = _render_dirty(
+            generated_runtime,
+            tmp_path,
+            quiet,
+            drive_db=30.0,
+            character=1.0,
+            dynamics=dynamics,
+        )[3_000:, 0]
+        loud_out = _render_dirty(
+            generated_runtime,
+            tmp_path,
+            loud,
+            drive_db=30.0,
+            character=1.0,
+            dynamics=dynamics,
+        )[3_000:, 0]
+        return _rms(loud_out) / _rms(quiet_out)
+
+    flattened_ratio = ratio(0.0)
+    preserved_ratio = ratio(1.0)
+    assert preserved_ratio > flattened_ratio * 3.0
+    assert preserved_ratio > 7.0
+
+
+def test_dirty_bias_character_is_dc_blocked_but_keeps_even_harmonics(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    input_audio = _sine(STEP_FRAMES * 4, 997.0, amplitude=0.12)
+    output = _render_dirty(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        character=3.0,
+        bias=0.75,
+    )[4_000:, 0]
+
+    assert abs(float(np.mean(output))) < 0.003
+    assert _tone_amplitude(output, 1_994.0) > 0.01
+
+
+def test_dirty_tone_filters_the_nonlinear_residue_not_the_dry_fundamental(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    input_audio = _sine(STEP_FRAMES * 4, 997.0, amplitude=0.13)
+    dark = _render_dirty(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        character=2.0,
+        tone_hz=1_200.0,
+    )[3_000:, 0]
+    bright = _render_dirty(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        character=2.0,
+        tone_hz=20_000.0,
+    )[3_000:, 0]
+
+    assert _tone_amplitude(dark, 997.0) > _tone_amplitude(bright, 997.0) * 0.7
+    assert _tone_amplitude(bright, 4_985.0) > _tone_amplitude(dark, 4_985.0) * 2.0
+
+
+def test_dirty_four_times_core_suppresses_the_naive_hard_clip_fifth_harmonic_alias(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    input_audio = _sine(STEP_FRAMES * 4, 7_000.0, amplitude=0.18)
+    output = _render_dirty(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        drive_db=24.0,
+        character=1.0,
+    )[4_000:, 0]
+    naive = np.clip(input_audio[4_000:, 0] * (10.0 ** (24.0 / 20.0)), -1.0, 1.0)
+
+    # A 35 kHz fifth harmonic folds to 13 kHz at the 48 kHz host rate.
+    assert _tone_amplitude(output, 13_000.0) < _tone_amplitude(naive, 13_000.0) * 0.4
+
+
+def test_dirty_trim_is_a_post_character_decibel_control(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    input_audio = _complex_signal(STEP_FRAMES * 4) * 0.25
+    unity = _render_dirty(generated_runtime, tmp_path, input_audio, dynamics=0.65)[4_000:, 0]
+    minus_six = _render_dirty(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        dynamics=0.65,
+        trim_db=-6.0,
+    )[4_000:, 0]
+
+    assert _rms(minus_six) / _rms(unity) == pytest.approx(10.0 ** (-6.0 / 20.0), abs=0.015)
+
+
+@pytest.mark.parametrize("character", [0.0, 1.0, 2.0, 3.0])
+def test_dirty_extreme_settings_remain_finite_and_bounded(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    character: float,
+) -> None:
+    input_audio = _complex_signal(STEP_FRAMES * 4) * 2.0
+    output = _render_dirty(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        drive_db=36.0,
+        character=character,
+        bias=1.0,
+        dynamics=1.0,
+        tone_hz=20_000.0,
+        trim_db=6.0,
+    )
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
