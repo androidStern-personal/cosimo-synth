@@ -138,10 +138,27 @@ namespace wt
             return x / denominator;
         }
 
+        // The asymmetric DC-restore term is a function of the knee alone, so
+        // it is derived once per knee value instead of twice per shaped
+        // sample - at 4x oversampled stereo that was 16 pow() calls per
+        // output sample recomputing one constant. Exact-input memo: any knee
+        // change recomputes with the identical expression, an unchanged knee
+        // reuses the identical stored bits. Knee is clamped to [0, 1], so -1
+        // marks "never derived".
+        float32 asymmetricBiasKnee = -1.0f;
+        float32 asymmetricBiasShape;
+
         float32 asymmetricShape (float32 x, float32 knee)
         {
             let bias = 0.08f;
-            return symmetricShape (x + bias, knee) - symmetricShape (bias, knee);
+
+            if (knee != asymmetricBiasKnee)
+            {
+                asymmetricBiasKnee = knee;
+                asymmetricBiasShape = symmetricShape (bias, knee);
+            }
+
+            return symmetricShape (x + bias, knee) - asymmetricBiasShape;
         }
 
         float32 wavefoldShape (float32 x, float32 knee)

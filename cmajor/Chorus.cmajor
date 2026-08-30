@@ -169,6 +169,27 @@ namespace wt
         float32[chorusGroupCount, chorusInnerPairCount] driftTarget;
         int32[chorusGroupCount, chorusInnerPairCount] driftCounter;
 
+        // Exact-input memos for per-sample derivations whose inputs only
+        // move on parameter edits: the equal-power mix gains (keyed on the
+        // active mix, [0,1] so -1 marks empty), the tone loop-filter
+        // coefficients (keyed on tone, same domain), and the ring-frequency
+        // ratio pow (KeyTrack.cmajor's memo family). Same values, derived
+        // once per change instead of once per sample.
+        float32 mixGainMemoMix = -1.0f;
+        float32 mixGainMemoDry;
+        float32 mixGainMemoWet;
+        float32 toneCoefficientMemoTone = -1.0f;
+        float32 toneCoefficientMemoLow;
+        float32 toneCoefficientMemoHigh;
+        ExactPow2Memo ringRatioMemo;
+
+        // The ring glide one-pole is a pure function of the sample rate; the
+        // per-sample recompute was one exp() per sample deriving a constant.
+        // Identical expression composition to the deployed inline pair.
+        let ringGlideSamples = std::intrinsics::max (
+            1.0f, chorusRingGlideMs * float32 (processor.frequency) * 0.001f);
+        let ringGlideCoefficient = 1.0f - std::intrinsics::exp (-1.0f / ringGlideSamples);
+
         float32 lfoPhase;
         float32[chorusGroupCount] shimmerPhase;
         float32 ringPhase;
@@ -480,12 +501,19 @@ namespace wt
                 let delayB = std::intrinsics::clamp (chorusDelayBMs * sampleRate * 0.001f, 3.0f, float32 (chorusBufferSize - 8));
                 let modDepthSamples = std::intrinsics::clamp (chorusMotionDepthMs (motionMode) * sampleRate * 0.001f, 0.0f, sampleRate * 0.030f);
                 let driftDepthSamples = std::intrinsics::clamp (chorusDriftMs * sampleRate * 0.001f, 0.0f, sampleRate * 0.008f);
-                let hpCutoff = chorusLerp (140.0f, 45.0f, tone01);
-                let lpCutoff = chorusLerp (2600.0f, 14000.0f, tone01);
-                let lowCoeff = chorusCoefficientForCutoff (sampleRate, lpCutoff);
-                let highCoeff = chorusCoefficientForCutoff (sampleRate, hpCutoff);
+                if (tone01 != toneCoefficientMemoTone)
+                {
+                    toneCoefficientMemoTone = tone01;
+                    let hpCutoff = chorusLerp (140.0f, 45.0f, tone01);
+                    let lpCutoff = chorusLerp (2600.0f, 14000.0f, tone01);
+                    toneCoefficientMemoLow = chorusCoefficientForCutoff (sampleRate, lpCutoff);
+                    toneCoefficientMemoHigh = chorusCoefficientForCutoff (sampleRate, hpCutoff);
+                }
+                let lowCoeff = toneCoefficientMemoLow;
+                let highCoeff = toneCoefficientMemoHigh;
 
-                let targetRingHz = resolveChorusRingFrequencyHz (
+                let targetRingHz = resolveChorusRingFrequencyHzMemoized (
+                    ringRatioMemo,
                     ringKeyTrackEnabledIn,
                     ringLegacyClampEnabledIn,
                     ringFrequencyHzIn,
@@ -499,9 +527,7 @@ namespace wt
                 if (trackedRingHz <= 0.0f)
                     trackedRingHz = targetRingHz;
 
-                let ringGlideSamples = std::intrinsics::max (1.0f, chorusRingGlideMs * sampleRate * 0.001f);
-                let ringGlideCoeff = 1.0f - std::intrinsics::exp (-1.0f / ringGlideSamples);
-                trackedRingHz += (targetRingHz - trackedRingHz) * ringGlideCoeff;
+                trackedRingHz += (targetRingHz - trackedRingHz) * ringGlideCoefficient;
 
                 let ringCarrier = std::intrinsics::sin (2.0f * chorusPi * ringPhase);
 
@@ -511,8 +537,14 @@ namespace wt
                 let shimmerTone01 = std::intrinsics::clamp (0.35f + (tone01 * 0.55f), 0.0f, 1.0f);
                 let shimmerGrainSamples = std::intrinsics::clamp (42.0f * sampleRate * 0.001f, sampleRate * 0.018f, float32 (shimmerBufferSize - 256));
 
-                let dryGain = std::intrinsics::cos (0.5f * chorusPi * activeMix01);
-                let wetGain = std::intrinsics::sin (0.5f * chorusPi * activeMix01);
+                if (activeMix01 != mixGainMemoMix)
+                {
+                    mixGainMemoMix = activeMix01;
+                    mixGainMemoDry = std::intrinsics::cos (0.5f * chorusPi * activeMix01);
+                    mixGainMemoWet = std::intrinsics::sin (0.5f * chorusPi * activeMix01);
+                }
+                let dryGain = mixGainMemoDry;
+                let wetGain = mixGainMemoWet;
 
                 var chorusWetLeft = 0.0f;
                 var chorusWetRight = 0.0f;
