@@ -1534,7 +1534,7 @@ function parseStoredStep(
     const aux = hasOwnValue(raw, "aux")
         ? parseStoredAux(effectType, params, raw.aux, `${path}.aux`)
         : baseStep
-            ? cloneAuxState(baseStep.aux)
+            ? normalizeAuxState(effectType, params, baseStep.aux)
             : defaultAuxForParams(params, effectType);
     const memories = hasOwnValue(raw, "memories")
         ? parseStoredMemories(raw.memories, `${path}.memories`)

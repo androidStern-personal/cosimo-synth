@@ -11,6 +11,7 @@ import {
     SEQFX_SELECTABLE_EFFECT_IDS,
     getSeqFxDefaultParams,
     getSeqFxParamLimits,
+    isSeqFxAuxEligibleDefinition,
     isSeqFxIntegerParam,
     type SeqFxEffectType,
 } from "./seqfx-effect-definitions";
@@ -179,8 +180,12 @@ export function seqFxStoredAuxArbitrary(
         ...(source.includeSliceCount ? { sliceCount: source.sliceCount } : {}),
     }));
 
+    const eligibleTargetIndices = Array.from(
+        { length: SEQFX_PARAM_COUNT },
+        (_unused, paramIndex) => paramIndex,
+    ).filter((paramIndex) => isSeqFxAuxEligibleDefinition(effectType, paramIndex));
     const targetsArbitrary = fc
-        .uniqueArray(fc.integer({ min: 0, max: SEQFX_PARAM_COUNT - 1 }), { maxLength: SEQFX_PARAM_COUNT })
+        .subarray(eligibleTargetIndices)
         .chain((indices): Arbitrary<SeqFxStoredAuxTarget[]> => {
             const sortedIndices = [...indices].sort((left, right) => left - right);
             if (sortedIndices.length === 0) {

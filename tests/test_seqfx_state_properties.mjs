@@ -222,6 +222,30 @@ test("SeqFX normalization is structurally idempotent for arbitrary candidates", 
     );
 });
 
+test("SeqFX strict v7 canonicalizes inherited ineligible Aux endpoints after a step parameter override", async () => {
+    const stateModule = await stateModulePromise;
+    const storedState = stateModule.projectSeqFxStoredStateV7(stateModule.createDefaultSeqFxState());
+    const filterType = stateModule.SEQFX_EFFECT_TYPES.filter;
+    const overrideParams = [0, 20, 20, 0.1, 0.25, 0, 0, 0];
+    storedState.patterns[0].chains[3].blocks = [{
+        startStep: 0,
+        length: 2,
+        effectType: filterType,
+        stepOverrides: [{ offset: 1, params: overrideParams }],
+    }];
+
+    const accepted = stateModule.parseStrictSeqFxStateV7(storedState);
+    const overrideStep = accepted.patterns[0].lanes[3].steps[1];
+    assert.deepEqual(overrideStep.params, overrideParams);
+    assert.deepEqual(overrideStep.aux.targets[2], { enabled: false, end: overrideParams[2] });
+    assert.deepEqual(overrideStep.aux.targets[4], { enabled: false, end: overrideParams[4] });
+
+    const serialized = stateModule.serializeSeqFxState(accepted);
+    const canonical = stateModule.parseStrictSeqFxStateV7(serialized);
+    assert.deepEqual(canonical, accepted);
+    assert.equal(stateModule.serializeSeqFxState(canonical), serialized);
+});
+
 test("SeqFX accepted v7 states preserve semantics and reach an exact canonical fixed point", async () => {
     const [stateModule, arbitraryModule] = await Promise.all([stateModulePromise, arbitraryModulePromise]);
 
