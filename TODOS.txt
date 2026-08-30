@@ -1655,6 +1655,9 @@ INFRASTRUCTURE AND TOOLING
     - One iOS benchmark-profile assertion remains a pre-existing float32-versus-Python-double cancellation mismatch and reproduces unchanged on the integration base; no T69 product repair was folded in. Nothing was installed or deployed, and no Ableton or physical-device acceptance was required.
 
 [ ] T72 — Make Cmajor's JUCE generator honor the latency declared by the DSP
+    Active owner (2026-08-30):
+    - Codex task `Fix Cmajor JUCE latency generation`, thread `01a05218-ccb7-7203-b9e4-5c37e65419b6`, Cosimo branch `codex/t72-cmajor-latency-generator`, worktree `/Users/winterfell/.codex/worktrees/3488/cosimo-synth`, starting checkpoint `8960b206`, model SOL, reasoning max.
+    - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push Cosimo master, merge the Cmajor fork default branch, install shared plugins, or deploy.
     Confirmed toolchain debt (2026-08-30):
     - With Cmajor 1.0.3066, `cmaj generate --target=juce` ignores a patch's declared latency and writes zero into the generated C++ wrapper. That is a Cmajor code-generator defect, not a Cosimo product requirement.
     - Cosimo currently compensates in `fx/prod-effect.mjs` with `replaceGeneratedPluginLatency`/`applyGeneratedHostLatency`: a 53-line regex splice that rewrites the generated latency constant and plugin factory after generation.
