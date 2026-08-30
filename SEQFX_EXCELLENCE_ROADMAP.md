@@ -17,6 +17,7 @@ Execution evidence:
   `research/seqfx/comb-lab-decision.md`
 - Sparse state/domain checkpoint: `research/seqfx/state-v7-evidence.md`
 - Shared-buffer decision: `research/seqfx/buffer-architecture.md`
+- Lifecycle/reset contract: `research/seqfx/lifecycle-contract.md`
 
 ## 1. Outcome
 

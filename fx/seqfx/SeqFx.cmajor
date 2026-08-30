@@ -29,6 +29,12 @@ namespace seqfx
     let tapeModeStop = 0;
     let tapeModeSpinUp = 1;
     let tapeRestartCrossfadeFrames = 32.0f;
+    let transitionCrossfadeFrames = 96.0f;
+    let lifecycleIdle = 0;
+    let lifecycleEntering = 1;
+    let lifecycleActive = 2;
+    let lifecycleReleased = 3;
+    let lifecycleResetting = 4;
     let pi = 3.14159265358979323846f;
 
     struct SeqPatternUpload
@@ -60,6 +66,8 @@ namespace seqfx
         bool transportRunning;
         float32 stepProgress;
         float32 stepDurationMs;
+        int32[laneCount] effectType;
+        int32[laneCount] lifecycleState;
         float32[laneCount] auxCyclePhase;
         float32[laneCount] auxAmount;
         float32[laneCount] auxDurationMs;
@@ -413,9 +421,32 @@ processor SeqFx [[ main ]]
     float32 hostBpm = 120.0f;
     float64 hostQuarterNote;
     bool resetRequested;
+    bool processingResetRequested;
     bool hostPositionPending;
+    bool hasHostPositionAnchor;
+    int64 renderedFrameCounter;
+    int64 renderedFrameAtLastHostPosition;
+    int64 lastHostFrameIndex;
+    float64 lastHostQuarterNote;
     bool needsStepLatch = true;
     bool relatchingFromPatternUpload;
+    bool controlStateReady;
+    int32 cachedClockMode;
+    int32 cachedRate;
+    int32 cachedLoopStart;
+    int32 cachedLoopLength;
+    bool previousEnabled = true;
+    float32 bypassMixCurrent = 1.0f;
+    float32 bypassMixTarget = 1.0f;
+    bool bypassFlushPending;
+    bool hasProcessedStage;
+    float32<2> lastProcessedStage;
+    float32<2> resetCrossfadeFrom;
+    float32 resetCrossfadeAge = seqfx::transitionCrossfadeFrames;
+    int32[seqfx::laneCount] chainEffectType;
+    int32[seqfx::laneCount] chainPreviousEffectType;
+    int32[seqfx::laneCount] chainLifecycleState;
+    float32[seqfx::laneCount] chainLifecycleAge;
     int32 monitorCountdown;
     int32[seqfx::laneCount] auxBlockStartStep;
     float32[seqfx::laneCount] auxAgeFrames;
@@ -662,6 +693,9 @@ processor SeqFx [[ main ]]
 
         if (currentCellChanged)
         {
+            if (upload.authoritative)
+                processingResetRequested = true;
+
             relatchingFromPatternUpload = true;
             needsStepLatch = true;
         }
@@ -684,20 +718,42 @@ processor SeqFx [[ main ]]
     event tempoIn (std::timeline::Tempo tempo)
     {
         hostBpm = seqfx::clampFloat (tempo.bpm, 20.0f, 300.0f);
+        hasHostPositionAnchor = false;
     }
 
     event transportStateIn (std::timeline::TransportState state)
     {
+        let wasHostRunning = hostRunning;
         hostRunning = state.isPlaying();
-        if (! hostRunning)
+        if (wasHostRunning && ! hostRunning)
         {
-            releaseTimeEffects();
+            processingResetRequested = true;
             relatchingFromPatternUpload = false;
         }
     }
 
     event positionIn (std::timeline::Position position)
     {
+        if (hasHostPositionAnchor)
+        {
+            let elapsedFrames = renderedFrameCounter - renderedFrameAtLastHostPosition;
+            let expectedFrameIndex = lastHostFrameIndex + elapsedFrames;
+            let frameDelta = position.frameIndex - expectedFrameIndex;
+            let expectedQuarterNote = lastHostQuarterNote
+                + (float64 (elapsedFrames) / (processor.frequency * (60.0 / float64 (hostBpm))));
+            let quarterNoteDelta = position.quarterNote - expectedQuarterNote;
+
+            if (frameDelta < -8 || frameDelta > 8
+                || quarterNoteDelta < -0.02 || quarterNoteDelta > 0.02)
+            {
+                processingResetRequested = true;
+            }
+        }
+
+        hasHostPositionAnchor = true;
+        renderedFrameAtLastHostPosition = renderedFrameCounter;
+        lastHostFrameIndex = position.frameIndex;
+        lastHostQuarterNote = position.quarterNote;
         hostQuarterNote = position.quarterNote;
         hostPositionPending = true;
     }
@@ -806,6 +862,59 @@ processor SeqFx [[ main ]]
         currentStepFrames = stepDurationFramesForStep (currentStep);
     }
 
+    void refreshControlTransitions()
+    {
+        let nextClockMode = resolveClockMode();
+        let nextRate = resolveRate();
+        let nextLoopStart = resolveLoopStart();
+        let nextLoopLength = resolveLoopLength();
+        let nextEnabled = enabled >= 0.5f;
+
+        if (! controlStateReady)
+        {
+            cachedClockMode = nextClockMode;
+            cachedRate = nextRate;
+            cachedLoopStart = nextLoopStart;
+            cachedLoopLength = nextLoopLength;
+            previousEnabled = nextEnabled;
+            bypassMixCurrent = nextEnabled ? 1.0f : 0.0f;
+            bypassMixTarget = bypassMixCurrent;
+            controlStateReady = true;
+            return;
+        }
+
+        if (nextClockMode != cachedClockMode
+            || nextRate != cachedRate
+            || nextLoopStart != cachedLoopStart
+            || nextLoopLength != cachedLoopLength)
+        {
+            cachedClockMode = nextClockMode;
+            cachedRate = nextRate;
+            cachedLoopStart = nextLoopStart;
+            cachedLoopLength = nextLoopLength;
+            resetClockToLoopStart();
+            processingResetRequested = true;
+            relatchingFromPatternUpload = false;
+            needsStepLatch = true;
+            hasHostPositionAnchor = false;
+        }
+
+        if (nextEnabled != previousEnabled)
+        {
+            bypassMixTarget = nextEnabled ? 1.0f : 0.0f;
+
+            if (! nextEnabled)
+                bypassFlushPending = true;
+            else if (bypassFlushPending)
+            {
+                processingResetRequested = true;
+                bypassFlushPending = false;
+            }
+
+            previousEnabled = nextEnabled;
+        }
+    }
+
     void syncHostStepFromQuarterNote()
     {
         let start = resolveLoopStart();
@@ -837,7 +946,7 @@ processor SeqFx [[ main ]]
             return;
 
         selectedPatternIndex = nextPattern;
-        releaseTimeEffects();
+        processingResetRequested = true;
         relatchingFromPatternUpload = false;
         needsStepLatch = true;
     }
@@ -852,6 +961,56 @@ processor SeqFx [[ main ]]
             tapeMixTarget[lane] = 0.0f;
             stutterMixTarget[lane] = 0.0f;
         }
+    }
+
+    void resetProcessingState()
+    {
+        if (hasProcessedStage)
+        {
+            resetCrossfadeFrom = lastProcessedStage;
+            resetCrossfadeAge = 0.0f;
+        }
+        else
+        {
+            resetCrossfadeAge = seqfx::transitionCrossfadeFrames;
+        }
+
+        releaseTimeEffects();
+
+        for (wrap<seqfx::laneCount> lane)
+        {
+            validTapeFrames[lane] = 0;
+            tapePlaying[lane] = false;
+            tapeElapsedFrames[lane] = 0.0f;
+            tapeCatchupJumped[lane] = false;
+            tapeJumpBlendAge[lane] = 0.0f;
+            tapeRestartBlendAge[lane] = 0.0f;
+            tapeLastSample[lane] = float32<2> (0.0f);
+
+            stutterCapturing[lane] = false;
+            stutterPlaying[lane] = false;
+            stutterCaptureFrames[lane] = 0.0f;
+            stutterPhaseFrames[lane] = 0.0f;
+
+            filterStates[lane, 0].reset();
+            filterStates[lane, 1].reset();
+            filterModeFade[lane] = 0.0f;
+            crusherHeld[lane] = float32<2> (0.0f);
+            crusherHoldCounter[lane] = 0;
+            crusherNeedsRecapture[lane] = true;
+
+            filterActive[lane] = false;
+            crusherActive[lane] = false;
+            tapeLaneActive[lane] = false;
+            stutterLaneActive[lane] = false;
+            chainPreviousEffectType[lane] = chainEffectType[lane];
+            chainEffectType[lane] = seqfx::effectEmpty;
+            chainLifecycleState[lane] = seqfx::lifecycleResetting;
+            chainLifecycleAge[lane] = 0.0f;
+        }
+
+        needsStepLatch = true;
+        processingResetRequested = false;
     }
 
     int32 selectedEffectForStep (wrap<seqfx::laneCount> lane, int32 step)
@@ -1038,6 +1197,58 @@ processor SeqFx [[ main ]]
         emitMonitor();
     }
 
+    void latchChainLifecycle (wrap<seqfx::laneCount> lane, int32 effectType)
+    {
+        let previousEffect = chainEffectType[lane];
+        let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
+
+        if (effectType == seqfx::effectEmpty)
+        {
+            if (previousEffect != seqfx::effectEmpty)
+            {
+                chainPreviousEffectType[lane] = previousEffect;
+                chainEffectType[lane] = seqfx::effectEmpty;
+                chainLifecycleState[lane] = seqfx::lifecycleReleased;
+                chainLifecycleAge[lane] = 0.0f;
+            }
+            else if (chainLifecycleState[lane] == seqfx::lifecycleResetting)
+            {
+                chainLifecycleState[lane] = seqfx::lifecycleIdle;
+            }
+
+            return;
+        }
+
+        let retriggered = triggerSteps[lane, currentStepIndex] && ! relatchingFromPatternUpload;
+        if (effectType != previousEffect || retriggered)
+        {
+            chainPreviousEffectType[lane] = previousEffect;
+            chainEffectType[lane] = effectType;
+            chainLifecycleState[lane] = seqfx::lifecycleEntering;
+            chainLifecycleAge[lane] = 0.0f;
+            return;
+        }
+
+        chainLifecycleState[lane] = seqfx::lifecycleActive;
+    }
+
+    void advanceChainLifecycle (wrap<seqfx::laneCount> lane)
+    {
+        let state = chainLifecycleState[lane];
+
+        if (state != seqfx::lifecycleEntering && state != seqfx::lifecycleReleased)
+            return;
+
+        chainLifecycleAge[lane] += 1.0f;
+        if (chainLifecycleAge[lane] < seqfx::transitionCrossfadeFrames)
+            return;
+
+        if (state == seqfx::lifecycleEntering)
+            chainLifecycleState[lane] = seqfx::lifecycleActive;
+        else
+            chainLifecycleState[lane] = seqfx::lifecycleIdle;
+    }
+
     void latchChainStep (wrap<seqfx::laneCount> lane)
     {
         let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
@@ -1047,6 +1258,8 @@ processor SeqFx [[ main ]]
         let wasCrusherActive = crusherActive[lane];
         let wasTapeActive = tapeLaneActive[lane];
         let wasStutterActive = stutterLaneActive[lane];
+
+        latchChainLifecycle (lane, effectType);
 
         filterActive[lane] = effectType == seqfx::effectFilter;
         crusherActive[lane] = effectType == seqfx::effectCrusher;
@@ -1551,6 +1764,7 @@ processor SeqFx [[ main ]]
 
         stage = processStutter (lane, stage);
         advanceAuxBlock (lane);
+        advanceChainLifecycle (lane);
         return stage;
     }
 
@@ -1581,6 +1795,8 @@ processor SeqFx [[ main ]]
         for (wrap<seqfx::laneCount> lane)
         {
             let activeEffect = selectedEffectForStep (lane, currentStep) != seqfx::effectEmpty;
+            monitor.effectType[lane] = chainEffectType[lane];
+            monitor.lifecycleState[lane] = chainLifecycleState[lane];
             monitor.auxCyclePhase[lane] = activeEffect ? auxCyclePhaseForLane (lane) : 0.0f;
             monitor.auxAmount[lane] = activeEffect ? auxAmountForLane (lane) : 0.0f;
             monitor.auxDurationMs[lane] = activeEffect
@@ -1605,14 +1821,20 @@ processor SeqFx [[ main ]]
     {
         loop
         {
+            refreshControlTransitions();
+            refreshSelectedPattern();
+
             if (resetRequested)
             {
                 resetClockToLoopStart();
-                releaseTimeEffects();
+                processingResetRequested = true;
                 relatchingFromPatternUpload = false;
                 needsStepLatch = true;
                 resetRequested = false;
             }
+
+            if (processingResetRequested)
+                resetProcessingState();
 
             if (hostPositionPending)
             {
@@ -1621,8 +1843,6 @@ processor SeqFx [[ main ]]
 
                 hostPositionPending = false;
             }
-
-            refreshSelectedPattern();
 
             if (needsStepLatch)
             {
@@ -1646,11 +1866,35 @@ processor SeqFx [[ main ]]
                     writeTapeHistory (lane, stage);
             }
 
-            let effectiveMix = enabled >= 0.5f ? seqfx::clampFloat (globalMix, 0.0f, 1.0f) : 0.0f;
+            if (resetCrossfadeAge < seqfx::transitionCrossfadeFrames)
+            {
+                let resetFade = seqfx::smoothStep01 (
+                    resetCrossfadeAge / seqfx::transitionCrossfadeFrames
+                );
+                stage = resetCrossfadeFrom + ((stage - resetCrossfadeFrom) * resetFade);
+                resetCrossfadeAge += 1.0f;
+            }
+
+            lastProcessedStage = stage;
+            hasProcessedStage = true;
+
+            bypassMixCurrent = seqfx::moveTowards (
+                bypassMixCurrent,
+                bypassMixTarget,
+                1.0f / seqfx::transitionCrossfadeFrames
+            );
+            let effectiveMix = seqfx::clampFloat (globalMix, 0.0f, 1.0f) * bypassMixCurrent;
             audioOut <- dry + ((stage - dry) * effectiveMix);
+
+            if (bypassFlushPending && bypassMixCurrent <= 0.00001f)
+            {
+                processingResetRequested = true;
+                bypassFlushPending = false;
+            }
 
             advanceSequencer();
             maybeEmitMonitor();
+            renderedFrameCounter += 1;
             advance();
         }
     }

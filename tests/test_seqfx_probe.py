@@ -23,6 +23,10 @@ EFFECT_FILTER = 1
 EFFECT_CRUSHER = 2
 EFFECT_TAPE = 3
 EFFECT_STUTTER = 4
+LIFECYCLE_IDLE = 0
+LIFECYCLE_ENTERING = 1
+LIFECYCLE_ACTIVE = 2
+LIFECYCLE_RELEASED = 3
 STEP_COUNT = 32
 LANE_COUNT = 4
 PARAM_COUNT = 8
@@ -497,6 +501,45 @@ def test_swing_changes_reported_step_durations_without_changing_rate_label(
     first_step_two_frame = _first_monitor_frame_for_step(monitors, 2)
     assert 2_250 <= first_step_one_frame <= 4_050
     assert 6_000 <= first_step_two_frame <= 7_800
+
+
+def test_chain_lifecycle_reports_enter_active_release_and_idle(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_FILTER,
+        step=0,
+        trigger=True,
+        params=[0.0, 800.0, 800.0, 0.707, 1.0],
+    )
+    input_audio = np.zeros((STEP_FRAMES * 2, 2), dtype=np.float32)
+    _output, monitors = _render_with_monitor_events(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(upload),
+    )
+
+    states_by_step: dict[int, list[int]] = {}
+    effect_types_by_step: dict[int, list[int]] = {}
+    for monitor in monitors:
+        value = monitor["value"]
+        assert isinstance(value, dict)
+        event = value["event"]
+        assert isinstance(event, dict)
+        step = int(event["stepIndex"])
+        states_by_step.setdefault(step, []).append(int(event["lifecycleState"][LANE_FILTER]))
+        effect_types_by_step.setdefault(step, []).append(int(event["effectType"][LANE_FILTER]))
+
+    assert LIFECYCLE_ENTERING in states_by_step[0]
+    assert LIFECYCLE_ACTIVE in states_by_step[0]
+    assert EFFECT_FILTER in effect_types_by_step[0]
+    assert LIFECYCLE_RELEASED in states_by_step[1]
+    assert LIFECYCLE_IDLE in states_by_step[1]
+    assert EFFECT_EMPTY in effect_types_by_step[1]
 
 
 def test_empty_seqfx_pattern_passes_audio_unchanged(
@@ -1405,6 +1448,105 @@ def test_tape_stop_step_boundaries_do_not_click_on_exit_or_retrigger(
     assert largest_boundary_jump(adjacent_retrigger, 3) <= allowed_jump
 
 
+def test_internal_reset_invalidates_tape_history_before_relatching_current_block(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_TAPE,
+        step=0,
+        trigger=True,
+        params=[0.05, 4.0, 1.0, 0.0, 0.0],
+    )
+
+    frames = 4_000
+    input_audio = np.zeros((frames, 2), dtype=np.float32)
+    input_audio[:1_000] = 0.4
+    schedule = _base_schedule(upload)
+    schedule[1_000] = [["event", "internalReset", 1]]
+    output = _render(generated_runtime, tmp_path, input_audio, schedule)
+
+    assert _rms(output[1_300:3_800, 0]) < 1.0e-5
+
+
+def test_discontinuous_host_seek_invalidates_captured_history(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(upload, lane=LANE_STUTTER, step=1, trigger=True, params=[8.0, 1.0, 0.0, 1.0])
+
+    frames = 10_000
+    input_audio = np.zeros((frames, 2), dtype=np.float32)
+    input_audio[6_000:6_750] = _complex_signal(750)
+    schedule = _base_schedule(upload, clock_mode=0.0, rate=1.0)
+    schedule[0].extend(
+        [
+            ["event", "transportStateIn", {"flags": 1}],
+            ["event", "positionIn", {"frameIndex": 0, "quarterNote": 0.0, "barStartQuarterNote": 0.0}],
+        ]
+    )
+    schedule[6_000] = [
+        ["event", "positionIn", {"frameIndex": 6_000, "quarterNote": 0.25, "barStartQuarterNote": 0.0}]
+    ]
+    schedule[7_000] = [
+        [
+            "event",
+            "positionIn",
+            {"frameIndex": 96_000, "quarterNote": 8.25, "barStartQuarterNote": 8.0},
+        ]
+    ]
+    output = _render(generated_runtime, tmp_path, input_audio, schedule)
+
+    assert _rms(output[7_300:9_800, 0]) < 1.0e-5
+
+
+def test_authoritative_pattern_replacement_invalidates_captured_history(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(upload, lane=LANE_STUTTER, step=0, trigger=True, params=[8.0, 1.0, 0.0, 1.0])
+    replacement = json.loads(json.dumps(upload))
+    replacement["revision"] = 2
+    replacement["authoritative"] = True
+
+    frames = 4_000
+    input_audio = np.zeros((frames, 2), dtype=np.float32)
+    input_audio[:375] = _complex_signal(375)
+    schedule = _base_schedule(upload)
+    schedule[1_000] = [["event", "patternUpload", replacement]]
+    output = _render(generated_runtime, tmp_path, input_audio, schedule)
+
+    assert _rms(output[1_300:3_800, 0]) < 1.0e-5
+
+
+def test_global_bypass_crossfades_instead_of_switching_at_one_sample(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=step == 0,
+            params=[1.0, 1_000.0, 1_000.0, 0.707, 1.0],
+        )
+
+    input_audio = np.full((4_000, 2), 0.8, dtype=np.float32)
+    schedule = _base_schedule(upload)
+    schedule[1_003] = [["value", "enabled", 0.0, 0]]
+    output = _render(generated_runtime, tmp_path, input_audio, schedule)
+
+    boundary = output[995:1_115, 0]
+    assert float(np.max(np.abs(np.diff(boundary)))) < 0.08
+    assert _rms(output[1_250:1_900, 0] - input_audio[1_250:1_900, 0]) < 1.0e-5
+
+
 def test_adjacent_different_effects_in_one_chain_do_not_create_a_step_boundary_click(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -1745,8 +1887,15 @@ def test_stutter_live_upload_keeps_repeating_and_updates_envelope(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
-    def upload_with_envelope(*, revision: int, shape: float, gate: float) -> dict[str, object]:
+    def upload_with_envelope(
+        *,
+        revision: int,
+        shape: float,
+        gate: float,
+        authoritative: bool = True,
+    ) -> dict[str, object]:
         upload = _empty_upload(revision=revision)
+        upload["authoritative"] = authoritative
         for step in (0, 1):
             _activate_step(
                 upload,
@@ -1770,7 +1919,11 @@ def test_stutter_live_upload_keeps_repeating_and_updates_envelope(
 
     schedule = _base_schedule(upload_with_envelope(revision=1, shape=0.0, gate=1.0))
     schedule[STEP_FRAMES + 300] = [
-        ["event", "patternUpload", upload_with_envelope(revision=2, shape=0.25, gate=0.45)]
+        [
+            "event",
+            "patternUpload",
+            upload_with_envelope(revision=2, shape=0.25, gate=0.45, authoritative=False),
+        ]
     ]
 
     output = _render(generated_runtime, tmp_path, input_audio, schedule)
