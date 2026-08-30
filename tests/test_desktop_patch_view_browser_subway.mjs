@@ -2993,13 +2993,17 @@ test("a populated three-band split stays inside the graph without intersecting e
                 await page.click('[data-role="mobile-workspace-tab-fx"]');
             }
             await page.waitForSelector('[data-role="rack-group-split#1"]');
+            await page.locator(".rack-stack").scrollIntoViewIfNeeded();
             const geometry = await page.locator('[data-role="rack-group-split#1"]').evaluate((group) => {
                 const list = group.closest('[data-role="rack-module-list"]');
-                if (!(list instanceof HTMLElement)) {
+                const graphBoundary = group.closest('[data-role="rack-graph-boundary"]');
+                if (!(list instanceof HTMLElement) || !(graphBoundary instanceof HTMLElement)) {
                     return null;
                 }
                 const bounds = list.getBoundingClientRect();
-                const parts = Array.from(group.querySelectorAll([
+                const listStyle = getComputedStyle(list);
+                const graphBoundaryStyle = getComputedStyle(graphBoundary);
+                const partElements = Array.from(group.querySelectorAll([
                     ".subway-glyph-diamond",
                     ".subway-fork-lane",
                     ".subway-fork-readout",
@@ -3011,8 +3015,15 @@ test("a populated three-band split stays inside the graph without intersecting e
                     const rect = element.getBoundingClientRect();
                     return style.display !== "none" && style.visibility !== "hidden"
                         && rect.width > 0 && rect.height > 0;
-                }).map((element) => {
+                });
+                const parts = partElements.map((element) => {
                     const rect = element.getBoundingClientRect();
+                    const visible = {
+                        left: Math.max(rect.left, bounds.left),
+                        right: Math.min(rect.right, bounds.right),
+                        top: Math.max(rect.top, bounds.top),
+                        bottom: Math.min(rect.bottom, bounds.bottom),
+                    };
                     return {
                         className: element.className,
                         text: element.textContent?.trim() ?? "",
@@ -3020,9 +3031,25 @@ test("a populated three-band split stays inside the graph without intersecting e
                         right: rect.right,
                         top: rect.top,
                         bottom: rect.bottom,
+                        visible,
+                        intersectsGraph: visible.left < visible.right && visible.top < visible.bottom,
                     };
                 });
                 const pills = parts.filter((part) => part.className === "subway-station-pill");
+                const outsideGraphHitOwnedBySplit = partElements.some((element) => {
+                    const rect = element.getBoundingClientRect();
+                    const x = Math.max(bounds.left + 1, Math.min(bounds.right - 1, rect.left + (rect.width / 2)));
+                    const y = Math.max(bounds.top + 1, Math.min(bounds.bottom - 1, rect.top + (rect.height / 2)));
+                    return [
+                        { x, y: bounds.top - 1 },
+                        { x, y: bounds.bottom + 1 },
+                        { x: bounds.left - 1, y },
+                        { x: bounds.right + 1, y },
+                    ].some((point) => {
+                        const hit = document.elementFromPoint(point.x, point.y);
+                        return hit !== null && group.contains(hit);
+                    });
+                });
                 return {
                     bounds: {
                         left: bounds.left,
@@ -3032,6 +3059,11 @@ test("a populated three-band split stays inside the graph without intersecting e
                     },
                     parts,
                     pills,
+                    graphClipsPaint: listStyle.overflowX === "hidden"
+                        && listStyle.overflowY === "auto"
+                        && graphBoundaryStyle.overflowX === "hidden"
+                        && graphBoundaryStyle.overflowY === "hidden",
+                    outsideGraphHitOwnedBySplit,
                     labels: Array.from(group.querySelectorAll(".subway-fork-lane"), (label) => (
                         label.textContent?.trim() ?? ""
                     )),
@@ -3045,17 +3077,23 @@ test("a populated three-band split stays inside the graph without intersecting e
                 true,
                 `${surface.name}: the graph must not widen the document`,
             );
-            for (const part of geometry.parts) {
+            assert.equal(geometry.graphClipsPaint, true,
+                `${surface.name}: split paint must be clipped by the scroll graph and its boundary`);
+            const visibleParts = geometry.parts.filter((part) => part.intersectsGraph);
+            assert.equal(visibleParts.length > 0, true, `${surface.name}: split parts must paint in the graph`);
+            for (const part of visibleParts) {
                 assert.equal(
-                    part.left >= geometry.bounds.left - 0.5
-                        && part.right <= geometry.bounds.right + 0.5
-                        && part.top >= geometry.bounds.top - 0.5
-                        && part.bottom <= geometry.bounds.bottom + 0.5,
+                    part.visible.left >= geometry.bounds.left - 0.5
+                        && part.visible.right <= geometry.bounds.right + 0.5
+                        && part.visible.top >= geometry.bounds.top - 0.5
+                        && part.visible.bottom <= geometry.bounds.bottom + 0.5,
                     true,
-                    `${surface.name}: ${part.className} ${part.text} must stay inside the graph: `
+                    `${surface.name}: visible ${part.className} ${part.text} paint must stay inside the graph: `
                         + `${JSON.stringify(part)} vs ${JSON.stringify(geometry.bounds)}`,
                 );
             }
+            assert.equal(geometry.outsideGraphHitOwnedBySplit, false,
+                `${surface.name}: clipped split parts must not own hits outside the graph`);
             for (let leftIndex = 0; leftIndex < geometry.pills.length; leftIndex += 1) {
                 for (let rightIndex = leftIndex + 1; rightIndex < geometry.pills.length; rightIndex += 1) {
                     assert.equal(
@@ -3066,10 +3104,118 @@ test("a populated three-band split stays inside the graph without intersecting e
                     );
                 }
             }
+
+            const footerBeforeScroll = await page.locator('[data-role="rack-fixed-footer"]').boundingBox();
+            assert.ok(footerBeforeScroll);
+            const graph = page.locator('[data-role="rack-module-list"]');
+            await graph.evaluate((element) => {
+                element.scrollTop = element.scrollHeight;
+                element.dispatchEvent(new Event("scroll"));
+            });
+            await page.waitForFunction(() => {
+                const element = document.querySelector('[data-role="rack-module-list"]');
+                return element instanceof HTMLElement
+                    && element.scrollTop + element.clientHeight >= element.scrollHeight - 1;
+            });
+            const tailGeometry = await page.locator(".rack-stack").evaluate((stack) => {
+                const graph = stack.querySelector('[data-role="rack-module-list"]');
+                const footer = stack.querySelector('[data-role="rack-fixed-footer"]');
+                const mix = stack.querySelector('[data-role="rack-lane-mix"]');
+                const polish = stack.querySelector('[data-role="rack-polish-boundary"]');
+                const split = stack.querySelector('[data-role="rack-group-split#1"]');
+                const finalTrunkAdd = Array.from(stack.querySelectorAll(
+                    '[data-role="rack-ghost-add"][data-lane-path^="trunk:"]',
+                )).at(-1);
+                const branchAdds = split === null ? [] : Array.from(split.querySelectorAll(
+                    '[data-role="rack-ghost-add"][data-insertion-anchor="path-tail"]',
+                ));
+                const targets = [...branchAdds, finalTrunkAdd].filter((target) => target !== undefined);
+                if (!(graph instanceof HTMLElement) || !(footer instanceof HTMLElement)
+                        || !(mix instanceof HTMLElement) || !(polish instanceof HTMLElement)
+                        || targets.some((target) => !(target instanceof HTMLButtonElement))) return null;
+                const rectOf = (element) => {
+                    const rect = element.getBoundingClientRect();
+                    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+                };
+                const graphRect = rectOf(graph);
+                const footerRect = footer.getBoundingClientRect();
+                return {
+                    graph: graphRect,
+                    mix: rectOf(mix),
+                    polish: rectOf(polish),
+                    footer: {
+                        x: footerRect.x,
+                        y: footerRect.y,
+                        width: footerRect.width,
+                        height: footerRect.height,
+                    },
+                    scrollAtBottom: graph.scrollTop + graph.clientHeight >= graph.scrollHeight - 1,
+                    targets: targets.map((target) => {
+                        const rect = target.getBoundingClientRect();
+                        const hit = document.elementFromPoint(
+                            rect.left + (rect.width / 2),
+                            rect.top + (rect.height / 2),
+                        );
+                        return {
+                            path: target.getAttribute("data-lane-path"),
+                            rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
+                            insideGraph: graph.contains(target)
+                                && rect.left >= graphRect.left - 0.5
+                                && rect.right <= graphRect.right + 0.5
+                                && rect.top >= graphRect.top - 0.5
+                                && rect.bottom <= graphRect.bottom + 0.5,
+                            reachable: hit !== null && target.contains(hit),
+                            outsideFooter: !footer.contains(target),
+                        };
+                    }),
+                };
+            });
+            assert.ok(tailGeometry, `${surface.name}: split tail geometry must render`);
+            assert.equal(tailGeometry.scrollAtBottom, true, `${surface.name}: graph must reach its true tail`);
+            assert.deepEqual(tailGeometry.targets.map(({ path: lanePath }) => lanePath).sort(), [
+                "branch:split#1:0:2",
+                "branch:split#1:1:3",
+                "branch:split#1:2:2",
+                "trunk:1",
+            ]);
+            assert.equal(tailGeometry.targets.every(({ insideGraph }) => insideGraph), true,
+                `${surface.name}: every split and trunk tail add must be inside the scrolled graph`);
+            assert.equal(tailGeometry.targets.every(({ reachable }) => reachable), true,
+                `${surface.name}: every split and trunk tail add must own its visible center hit: `
+                    + JSON.stringify(tailGeometry.targets));
+            assert.equal(tailGeometry.targets.every(({ outsideFooter }) => outsideFooter), true,
+                `${surface.name}: no split add target may enter the fixed footer`);
+            assert.equal(Math.abs(tailGeometry.graph.bottom - tailGeometry.mix.top) <= 1, true,
+                `${surface.name}: split add targets end before fixed Mix`);
+            assert.equal(Math.abs(tailGeometry.mix.bottom - tailGeometry.polish.top) <= 1, true,
+                `${surface.name}: fixed Mix remains immediately before POLISH`);
+            assert.equal(Math.abs(tailGeometry.footer.x - footerBeforeScroll.x) <= 0.5
+                && Math.abs(tailGeometry.footer.y - footerBeforeScroll.y) <= 0.5
+                && Math.abs(tailGeometry.footer.width - footerBeforeScroll.width) <= 0.5
+                && Math.abs(tailGeometry.footer.height - footerBeforeScroll.height) <= 0.5, true,
+            `${surface.name}: scrolling to the split tail must not move the fixed footer`);
             await page.locator('[data-role="effects-rack-card"]').screenshot({
                 path: path.join(evidenceDirectory, `frequency-split-${surface.name}-${surface.width}px.png`),
                 animations: "disabled",
             });
+
+            await clearHarnessDebugLog(page);
+            await page.click('[data-role="rack-ghost-add"][data-lane-path="branch:split#1:0:2"]');
+            await page.waitForSelector('[data-role="rack-add-sheet"]');
+            await page.click('[data-role="rack-add-filter"]');
+            const snapshot = await waitForHarnessSnapshot(
+                page,
+                `${surface.name} split-tail filter insertion`,
+                (nextSnapshot) => readStoredLaneDoc(nextSnapshot).devices?.["globalFilter#1"] !== undefined,
+            );
+            const split = readStoredLaneDoc(snapshot).chain.find((node) => node.kind === "split");
+            assert.deepEqual(split?.branches[0].map((node) => node.deviceId), [
+                "distortion#1",
+                "chorus#1",
+                "globalFilter#1",
+            ]);
+            assert.equal(snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").length, 1,
+                `${surface.name}: the reachable split add executes one topology write`);
         } finally {
             await page.close();
         }

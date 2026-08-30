@@ -3205,12 +3205,41 @@ test("phone touch drags are captured by rack grips and modulation chips without 
             documentY: document.documentElement.scrollTop,
         }));
 
+        const graph = page.locator('[data-role="rack-module-list"]');
+        await graph.evaluate((element) => {
+            element.scrollTop = element.scrollHeight;
+            element.dispatchEvent(new Event("scroll"));
+        });
+        await page.waitForFunction(() => {
+            const element = document.querySelector('[data-role="rack-module-list"]');
+            return element instanceof HTMLElement
+                && element.scrollTop + element.clientHeight >= element.scrollHeight - 1;
+        });
         const gripBox = await page.locator('[data-role="rack-station-reverb"]').boundingBox();
-        const filterBox = await page.locator('[data-role="rack-module-filter"]').boundingBox();
-        assert.ok(gripBox && filterBox);
+        const delayBox = await page.locator('[data-role="rack-module-delay"]').boundingBox();
+        assert.ok(gripBox && delayBox);
+        const reorderTargetsAreReachable = await page.evaluate(() => {
+            const graph = document.querySelector('[data-role="rack-module-list"]');
+            const reverb = document.querySelector('[data-role="rack-station-reverb"]');
+            const delay = document.querySelector('[data-role="rack-module-delay"]');
+            if (!(graph instanceof HTMLElement) || !(reverb instanceof HTMLElement)
+                    || !(delay instanceof HTMLElement)) return false;
+            const graphRect = graph.getBoundingClientRect();
+            return [reverb, delay].every((target) => {
+                const rect = target.getBoundingClientRect();
+                const hit = document.elementFromPoint(
+                    rect.left + (rect.width / 2),
+                    rect.top + (rect.height / 2),
+                );
+                return rect.top >= graphRect.top && rect.bottom <= graphRect.bottom
+                    && hit !== null && target.contains(hit);
+            });
+        });
+        assert.equal(reorderTargetsAreReachable, true,
+            "the touch reorder endpoints must both be visible and own their hit points");
         await touchDrag(
             { x: gripBox.x + gripBox.width / 2, y: gripBox.y + gripBox.height / 2 },
-            { x: filterBox.x + filterBox.width / 2, y: filterBox.y + filterBox.height / 2 },
+            { x: delayBox.x + delayBox.width / 2, y: delayBox.y + delayBox.height / 2 },
             { holdBeforeMoveMs: 210 },
         );
         let snapshot = await waitForHarnessSnapshot(
@@ -3219,7 +3248,8 @@ test("phone touch drags are captured by rack grips and modulation chips without 
             (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
                 endpointID === "laneTopology"
                 && Array.isArray(value?.slotIds)
-                && Number(value.slotIds[0]) === 7
+                && Number(value.slotIds[6]) === 7
+                && Number(value.slotIds[7]) === 6
             )),
         );
         assert.equal(snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").length, 1);
@@ -3414,40 +3444,24 @@ test("mobile FX subpage keeps eight readable stations on the line and confines m
                 const list = document.querySelector(".rack-list");
                 const editor = document.querySelector(".rack-effect-editor");
                 const amount = document.querySelector(".rack-mod-amount, [data-role=\"rack-unmapped-pair\"]");
-                const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
                 const stations = Array.from(document.querySelectorAll(".subway-station"));
-                const pills = Array.from(document.querySelectorAll(".subway-station-pill"));
                 const perEffectRanges = Array.from(document.querySelectorAll(
                     '[data-role="effects-rack-card"] input[type="range"]',
                 )).filter((range) => range.getAttribute("data-role") !== "rack-lane-mix-slider");
 
                 if (!(list instanceof HTMLElement)
-                    || !(editor instanceof HTMLElement)
-                    || !(keyboard instanceof HTMLElement)) {
+                    || !(editor instanceof HTMLElement)) {
                     return null;
                 }
 
                 return {
                     viewportWidth: window.innerWidth,
                     documentScrollWidth: document.documentElement.scrollWidth,
-                    units: units.map(rectOf),
+                    unitCount: units.length,
                     list: rectOf(list),
                     editor: rectOf(editor),
                     amount: amount instanceof HTMLElement ? rectOf(amount) : null,
-                    keyboard: rectOf(keyboard),
-                    stations: stations.map(rectOf),
-                    pillsHaveReadableAnatomy: pills.every((pill) => {
-                        const detail = pill.querySelector(".subway-station-detail");
-                        const label = pill.querySelector(".subway-station-label");
-                        if (!(detail instanceof HTMLElement) || !(label instanceof HTMLElement)) {
-                            return false;
-                        }
-                        const detailRect = detail.getBoundingClientRect();
-                        return getComputedStyle(detail).whiteSpace === "nowrap"
-                            && detailRect.width === 76
-                            && detailRect.height === 32
-                            && Number.parseFloat(getComputedStyle(label).fontSize) >= 13;
-                    }),
+                    stationCount: stations.length,
                     perEffectRangesAreVisuallyHidden: perEffectRanges.every((range) => {
                         const style = getComputedStyle(range);
                         return style.position === "absolute"
@@ -3459,37 +3473,83 @@ test("mobile FX subpage keeps eight readable stations on the line and confines m
             });
 
             assert.ok(layout, `Expected subway-map rack layout at ${width}px.`);
-            assert.equal(layout.units.length, 8, `Expected eight stations at ${width}px.`);
+            assert.equal(layout.unitCount, 8, `Expected eight station rows at ${width}px.`);
+            assert.equal(layout.stationCount, 8, `Expected eight station controls at ${width}px.`);
             assert.equal(layout.documentScrollWidth <= layout.viewportWidth, true, `Horizontal overflow at ${width}px.`);
-            // The WHOLE line stays in view: last station above the keyboard
-            // and inside the viewport, list tall enough to hold it.
-            assert.equal(layout.units[7].bottom <= layout.keyboard.top + 0.5, true, `Last station clips keyboard at ${width}px.`);
-            assert.equal(layout.units[7].bottom <= 667, true, `All stations must remain in the viewport at ${width}px.`);
-            assert.equal(layout.list.bottom >= layout.units[7].bottom - 0.5, true);
             if (layout.amount) {
                 assert.equal(layout.amount.left >= layout.editor.left - 0.5, true, `Amount control escapes editor at ${width}px.`);
                 assert.equal(layout.amount.right <= layout.editor.right + 0.5, true, `Amount control escapes editor at ${width}px.`);
                 assert.equal(layout.amount.left >= layout.list.right - 0.5, true, `Amount control steals rack width at ${width}px.`);
             }
-            // Station rows keep the 44px touch floor while every serial chip
-            // keeps the accepted readable Variant C anatomy.
-            assert.equal(
-                layout.units.every((unit) => unit.height >= 43.5),
-                true,
-                `Station rows lost the touch floor at ${width}px: ${JSON.stringify(layout.units)}`,
-            );
-            assert.equal(
-                layout.stations.every((station) => station.width >= 44 && station.height >= 43.5),
-                true,
-                `Station hit areas are not touchable at ${width}px.`,
-            );
-            assert.equal(
-                layout.pillsHaveReadableAnatomy,
-                true,
-                `Station chips lost fixed readable anatomy at ${width}px.`,
-            );
             assert.equal(layout.perEffectRangesAreVisuallyHidden, true,
                 `Native per-effect ranges leaked visually at ${width}px.`);
+
+            const footerBeforeScroll = await page.locator('[data-role="rack-fixed-footer"]').boundingBox();
+            assert.ok(footerBeforeScroll);
+            const stations = page.locator(".subway-station");
+            const stationCount = await stations.count();
+            for (let index = 0; index < stationCount; index += 1) {
+                const station = stations.nth(index);
+                await station.scrollIntoViewIfNeeded();
+                const reachable = await station.evaluate((element) => {
+                    const list = element.closest('[data-role="rack-module-list"]');
+                    const footer = document.querySelector('[data-role="rack-fixed-footer"]');
+                    const detail = element.querySelector(".subway-station-detail");
+                    const label = element.querySelector(".subway-station-label");
+                    if (!(list instanceof HTMLElement) || !(footer instanceof HTMLElement)
+                            || !(detail instanceof HTMLElement) || !(label instanceof HTMLElement)) return null;
+                    const stationRect = element.getBoundingClientRect();
+                    const listRect = list.getBoundingClientRect();
+                    const detailRect = detail.getBoundingClientRect();
+                    const footerRect = footer.getBoundingClientRect();
+                    const hit = document.elementFromPoint(
+                        stationRect.left + (stationRect.width / 2),
+                        stationRect.top + (stationRect.height / 2),
+                    );
+                    return {
+                        role: element.getAttribute("data-role"),
+                        insideGraph: stationRect.left >= listRect.left - 0.5
+                            && stationRect.right <= listRect.right + 0.5
+                            && stationRect.top >= listRect.top - 0.5
+                            && stationRect.bottom <= listRect.bottom + 0.5,
+                        touchSized: stationRect.width >= 44 && stationRect.height >= 43.5,
+                        ownsCenterHit: hit !== null && element.contains(hit),
+                        readable: getComputedStyle(detail).whiteSpace === "nowrap"
+                            && detailRect.width === 76
+                            && detailRect.height === 32
+                            && Number.parseFloat(getComputedStyle(label).fontSize) >= 13,
+                        footer: {
+                            x: footerRect.x,
+                            y: footerRect.y,
+                            width: footerRect.width,
+                            height: footerRect.height,
+                        },
+                        windowY: window.scrollY,
+                    };
+                });
+                assert.ok(reachable, `Station ${index + 1} must render at ${width}px.`);
+                assert.equal(reachable.insideGraph, true,
+                    `${reachable.role} must be reachable inside the scrolled graph at ${width}px.`);
+                assert.equal(reachable.touchSized, true,
+                    `${reachable.role} lost its touch floor at ${width}px.`);
+                assert.equal(reachable.ownsCenterHit, true,
+                    `${reachable.role} does not own its visible center hit at ${width}px.`);
+                assert.equal(reachable.readable, true,
+                    `${reachable.role} lost readable Variant C anatomy at ${width}px.`);
+                assert.equal(Math.abs(reachable.footer.x - footerBeforeScroll.x) <= 0.5
+                    && Math.abs(reachable.footer.y - footerBeforeScroll.y) <= 0.5
+                    && Math.abs(reachable.footer.width - footerBeforeScroll.width) <= 0.5
+                    && Math.abs(reachable.footer.height - footerBeforeScroll.height) <= 0.5, true,
+                `The fixed footer moved while revealing ${reachable.role} at ${width}px.`);
+                assert.equal(reachable.windowY, 0,
+                    `Revealing ${reachable.role} must scroll the graph, not the phone page at ${width}px.`);
+            }
+            const graphScroll = await page.locator('[data-role="rack-module-list"]').evaluate((element) => ({
+                top: element.scrollTop,
+                maximum: element.scrollHeight - element.clientHeight,
+            }));
+            assert.equal(graphScroll.maximum > 0 && graphScroll.top > 0, true,
+                `The eight stations must use the T73 graph scroller at ${width}px.`);
         } finally {
             await page.close();
         }
