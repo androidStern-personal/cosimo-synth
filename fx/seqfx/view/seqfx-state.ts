@@ -1,19 +1,33 @@
 import {
-    STUTTER_DEFAULT_GATE,
-    STUTTER_DEFAULT_SHAPE,
-    STUTTER_DEFAULT_SLICES,
-    STUTTER_DEFAULT_SPEED,
-    STUTTER_SLICES_MAX,
-    STUTTER_SLICES_MIN,
-    STUTTER_SPEED_MAX,
-    STUTTER_SPEED_MIN,
-} from "./stutter-envelope";
+    SEQFX_EFFECT_IDS,
+    SEQFX_EFFECT_TYPES,
+    SEQFX_EFFECT_TYPE_NAMES,
+    SEQFX_EFFECT_TYPE_SHORT_NAMES,
+    SEQFX_PARAM_COUNT,
+    getSeqFxDefaultParams,
+    getSeqFxParamLimits,
+    isSeqFxEffectType,
+    isSeqFxIntegerParam,
+    isSeqFxTriggerLatchedDefinition,
+    type SeqFxEffectType,
+} from "./seqfx-effect-definitions";
+
+export {
+    SEQFX_EFFECT_DEFINITIONS,
+    SEQFX_EFFECT_IDS,
+    SEQFX_EFFECT_TYPES,
+    SEQFX_EFFECT_TYPE_NAMES,
+    SEQFX_EFFECT_TYPE_SHORT_NAMES,
+    SEQFX_PARAM_COUNT,
+    SEQFX_SELECTABLE_EFFECT_IDS,
+    getSeqFxEffectDefinition,
+} from "./seqfx-effect-definitions";
+export type { SeqFxEffectDefinition, SeqFxEffectLifecycle, SeqFxEffectType, SeqFxParameterDefinition } from "./seqfx-effect-definitions";
 
 export const SEQFX_STATE_KEY = "seqfx.v6";
 export const SEQFX_STEP_COUNT = 32;
 export const SEQFX_LANE_COUNT = 4;
 export const SEQFX_PATTERN_COUNT = 12;
-export const SEQFX_PARAM_COUNT = 8;
 
 export const SEQFX_AUX_RATE_MODES = {
     tempo: "tempo",
@@ -43,14 +57,6 @@ export const SEQFX_AUX_TEMPO_MULTIPLIER_MAX = 64;
 export const SEQFX_AUX_SLICE_COUNT_MIN = 1;
 export const SEQFX_AUX_SLICE_COUNT_MAX = 32;
 
-export const SEQFX_EFFECT_TYPES = {
-    empty: 0,
-    filter: 1,
-    crusher: 2,
-    tapeStop: 3,
-    stutter: 4,
-} as const;
-
 export const SEQFX_LANES = {
     filter: 0,
     crusher: 1,
@@ -65,24 +71,7 @@ export const SEQFX_LANE_NAMES = [
     "Chain 4",
 ] as const;
 
-export const SEQFX_EFFECT_TYPE_NAMES = {
-    [SEQFX_EFFECT_TYPES.empty]: "Empty",
-    [SEQFX_EFFECT_TYPES.filter]: "Filter",
-    [SEQFX_EFFECT_TYPES.crusher]: "Crusher",
-    [SEQFX_EFFECT_TYPES.tapeStop]: "Tape Stop",
-    [SEQFX_EFFECT_TYPES.stutter]: "Stutter",
-} as const;
-
-export const SEQFX_EFFECT_TYPE_SHORT_NAMES = {
-    [SEQFX_EFFECT_TYPES.empty]: "",
-    [SEQFX_EFFECT_TYPES.filter]: "FLT",
-    [SEQFX_EFFECT_TYPES.crusher]: "CRSH",
-    [SEQFX_EFFECT_TYPES.tapeStop]: "TAPE",
-    [SEQFX_EFFECT_TYPES.stutter]: "STUT",
-} as const;
-
 export type SeqFxLaneIndex = typeof SEQFX_LANES[keyof typeof SEQFX_LANES];
-export type SeqFxEffectType = typeof SEQFX_EFFECT_TYPES[keyof typeof SEQFX_EFFECT_TYPES];
 export type SeqFxAuxRateMode = typeof SEQFX_AUX_RATE_MODES[keyof typeof SEQFX_AUX_RATE_MODES];
 
 export type SeqFxAuxSource = {
@@ -312,83 +301,8 @@ export type SeqFxStepValuePasteEdit = SeqFxEditTarget & {
     values: SeqFxStepValueSnapshot;
 };
 
-const DEFAULT_EFFECT_PARAMS: number[][] = [
-    [0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 2_000, 500, 0.707, 1, 0, 0, 0],
-    [8, 1, 0, 0, 0, 0, 0, 0],
-    [1, 1, 1, 25, 0, 0, 0, 0],
-    [STUTTER_DEFAULT_SLICES, STUTTER_DEFAULT_SPEED, STUTTER_DEFAULT_SHAPE, STUTTER_DEFAULT_GATE, 0, 0, 0, 0],
-];
-
 const FILTER_PARAM_CUTOFF = 1;
 const FILTER_PARAM_LEGACY_END_CUTOFF = 2;
-
-const PARAM_LIMITS: Array<Array<[number, number]>> = [
-    [
-        [0, 0],
-        [0, 0],
-        [0, 0],
-        [0, 0],
-        [0, 0],
-        [0, 0],
-        [0, 0],
-        [0, 0],
-    ],
-    [
-        [0, 2],
-        [20, 20_000],
-        [20, 20_000],
-        [0.1, 20],
-        [0.25, 4],
-        [0, 0],
-        [0, 0],
-        [0, 0],
-    ],
-    [
-        [4, 16],
-        [1, 64],
-        [0, 36],
-        [0, 0],
-        [0, 0],
-        [0, 0],
-        [0, 0],
-        [0, 0],
-    ],
-    [
-        [0.05, 4],
-        [0.25, 4],
-        [0.25, 4],
-        [0, 100],
-        [0, 1],
-        [0, 0],
-        [0, 0],
-        [0, 0],
-    ],
-    [
-        [STUTTER_SLICES_MIN, STUTTER_SLICES_MAX],
-        [STUTTER_SPEED_MIN, STUTTER_SPEED_MAX],
-        [0, 1],
-        [0, 1],
-        [0, 0],
-        [0, 0],
-        [0, 0],
-        [0, 0],
-    ],
-];
-
-const INTEGER_PARAMS = new Set([
-    `${SEQFX_EFFECT_TYPES.filter}:0`,
-    `${SEQFX_EFFECT_TYPES.crusher}:0`,
-    `${SEQFX_EFFECT_TYPES.crusher}:1`,
-    `${SEQFX_EFFECT_TYPES.tapeStop}:4`,
-    `${SEQFX_EFFECT_TYPES.stutter}:0`,
-]);
-
-const TRIGGER_LATCHED_PARAMS = new Set([
-    `${SEQFX_EFFECT_TYPES.tapeStop}:0`,
-    `${SEQFX_EFFECT_TYPES.tapeStop}:4`,
-    `${SEQFX_EFFECT_TYPES.stutter}:0`,
-]);
 
 function clamp(value: number, min: number, max: number): number {
     if (!Number.isFinite(value)) {
@@ -424,8 +338,8 @@ function defaultEffectTypeForLane(lane: number): SeqFxEffectType {
 
 function normalizeEffectType(value: number, fallback: SeqFxEffectType = SEQFX_EFFECT_TYPES.filter): SeqFxEffectType {
     const rounded = Math.round(Number(value));
-    if (rounded >= SEQFX_EFFECT_TYPES.empty && rounded <= SEQFX_EFFECT_TYPES.stutter) {
-        return rounded as SeqFxEffectType;
+    if (isSeqFxEffectType(rounded)) {
+        return rounded;
     }
 
     return fallback;
@@ -433,7 +347,7 @@ function normalizeEffectType(value: number, fallback: SeqFxEffectType = SEQFX_EF
 
 function defaultParamsForEffect(effectType: number): number[] {
     const resolved = normalizeEffectType(effectType, SEQFX_EFFECT_TYPES.empty);
-    return [...(DEFAULT_EFFECT_PARAMS[resolved] ?? DEFAULT_EFFECT_PARAMS[SEQFX_EFFECT_TYPES.empty])];
+    return getSeqFxDefaultParams(resolved);
 }
 
 function normalizeParamVector(effectType: number, params: unknown): number[] {
@@ -452,12 +366,10 @@ function normalizeEffectParamMemory(value: unknown): Partial<Record<SeqFxEffectT
     const rawMemory = value as Record<string, unknown>;
     const memory: Partial<Record<SeqFxEffectType, number[]>> = {};
 
-    for (const effectType of [
-        SEQFX_EFFECT_TYPES.filter,
-        SEQFX_EFFECT_TYPES.crusher,
-        SEQFX_EFFECT_TYPES.tapeStop,
-        SEQFX_EFFECT_TYPES.stutter,
-    ] as const) {
+    for (const effectType of SEQFX_EFFECT_IDS) {
+        if (effectType === SEQFX_EFFECT_TYPES.empty) {
+            continue;
+        }
         const rawParams = rawMemory[String(effectType)];
         if (Array.isArray(rawParams)) {
             memory[effectType] = normalizeParamVector(effectType, rawParams);
@@ -568,12 +480,10 @@ function normalizeEffectAuxMemory(
     const rawMemory = value as Record<string, unknown>;
     const memory: Partial<Record<SeqFxEffectType, SeqFxAuxState>> = {};
 
-    for (const effectType of [
-        SEQFX_EFFECT_TYPES.filter,
-        SEQFX_EFFECT_TYPES.crusher,
-        SEQFX_EFFECT_TYPES.tapeStop,
-        SEQFX_EFFECT_TYPES.stutter,
-    ] as const) {
+    for (const effectType of SEQFX_EFFECT_IDS) {
+        if (effectType === SEQFX_EFFECT_TYPES.empty) {
+            continue;
+        }
         const params = effectParamMemory?.[effectType] ?? defaultParamsForEffect(effectType);
         const rawAux = rawMemory[String(effectType)];
         if (rawAux && typeof rawAux === "object" && !Array.isArray(rawAux)) {
@@ -709,10 +619,10 @@ function writeStepAuxTargetEnd(
 }
 
 function normalizeParam(effectType: number, paramIndex: number, value: number): number {
-    const limits = PARAM_LIMITS[effectType]?.[paramIndex] ?? [0, 0];
+    const limits = getSeqFxParamLimits(effectType, paramIndex);
     const clamped = clamp(Number(value), limits[0], limits[1]);
 
-    if (INTEGER_PARAMS.has(`${effectType}:${paramIndex}`)) {
+    if (isSeqFxIntegerParam(effectType, paramIndex)) {
         return Math.round(clamped);
     }
 
@@ -776,11 +686,11 @@ function assertAuxStateValuesInRange(effectType: number, aux: SeqFxAuxState | un
             throw new Error(`${label} aux target ${paramIndex} enabled must be boolean.`);
         }
 
-        const [min, max] = PARAM_LIMITS[effectType]?.[paramIndex] ?? [0, 0];
+        const [min, max] = getSeqFxParamLimits(effectType, paramIndex);
         const targetLabel = `${label} aux target ${paramIndex} end`;
         assertInRange(Number(target.end), min, max, targetLabel);
 
-        if (INTEGER_PARAMS.has(`${effectType}:${paramIndex}`) && !Number.isInteger(target.end)) {
+        if (isSeqFxIntegerParam(effectType, paramIndex) && !Number.isInteger(target.end)) {
             throw new Error(`${targetLabel} must be an integer.`);
         }
     });
@@ -816,12 +726,12 @@ export function assertSeqFxStateValuesInRange(state: SeqFxState) {
                         return;
                     }
 
-                    const [min, max] = PARAM_LIMITS[activeEffectType]?.[paramIndex] ?? [0, 0];
+                    const [min, max] = getSeqFxParamLimits(activeEffectType, paramIndex);
                     const label = `SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} param ${paramIndex}`;
 
                     assertInRange(param, min, max, label);
 
-                    if (INTEGER_PARAMS.has(`${activeEffectType}:${paramIndex}`) && !Number.isInteger(param)) {
+                    if (isSeqFxIntegerParam(activeEffectType, paramIndex) && !Number.isInteger(param)) {
                         throw new Error(`${label} must be an integer.`);
                     }
                 });
@@ -851,7 +761,7 @@ export function isSeqFxTriggerLatchedParam(lane: number, paramIndex: number): bo
 }
 
 export function isSeqFxTriggerLatchedParamForEffect(effectType: number, paramIndex: number): boolean {
-    return TRIGGER_LATCHED_PARAMS.has(`${effectType}:${paramIndex}`);
+    return isSeqFxTriggerLatchedDefinition(effectType, paramIndex);
 }
 
 function createDefaultStep(lane: number): SeqFxStep {

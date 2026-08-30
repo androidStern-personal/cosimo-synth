@@ -334,8 +334,8 @@ namespace seqfx
 
 processor SeqFx [[ main ]]
 {
-    input stream float32<2> audioIn;
-    output stream float32<2> audioOut;
+    input stream float32<2> audioIn [[ name: "Input" ]];
+    output stream float32<2> audioOut [[ name: "Output" ]];
 
     input event std::timeline::Position positionIn;
     input event std::timeline::Tempo tempoIn;
