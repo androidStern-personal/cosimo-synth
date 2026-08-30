@@ -1448,10 +1448,13 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - The focused real-browser T60 matrix passes 8/8, including 393x852 phone proof of the permanent trigger-note position on source and tools pages; the composed T66 MSEG 1 -> open MSEG 2 Rate drag remains green. The final composed Cmajor rack gate passes 93/93. Moving-master browser fixtures exposed by the complete desktop/orphan runs were repaired and passed their focused full-file reruns; the only unrepaired desktop diagnostic remains the established unrelated React Grab `navigator.webdriver` assertion.
     - Fresh coordinator HMR launched the exact `74e4` standalone and the compiled phone render was reviewed. The final self-contained VST3 includes the pinned Cmajor runtime and is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`; strict deep code-sign verification passes and its executable SHA-256 is `8a6754146b8c1a2b588798a2807d4c93a5f0edaf4996791783bd7cd2fdc198cd`. The replaced development-server bundle is recoverable from `/Users/winterfell/Desktop/CosimoDesktopNative-before-d1a9e51b.vst3`. Ableton remained open and was not disturbed, so no fresh host interaction/listening or physical iPhone/touch acceptance is claimed.
 
-[ ] T70 — Move the parked Mod bar to the top lip of an open MSEG drawer
-    Active combined owner (2026-08-30):
+[x] T70 — Move the parked Mod bar to the top lip of an open MSEG drawer
+    Implemented and integrated with T71 (2026-08-30):
     - Codex task `Fix parked Mod bar MSEG layouts`, thread `01a0521d-8859-72e0-bc16-f7dab267f2a3`, branch `codex/t70-t71-mseg-parked-layout-implementation`, worktree `/Users/winterfell/.codex/worktrees/5d2b/cosimo-synth`, starting commit `209b4a0b44645e6675289e50059cde6fc4160e30`, model SOL, reasoning max, Full Access with approvals disabled. This is the sole implementation owner for T70 and T71; permission-failed shells `01a051f2-0a3f-7f21-a8c8-af367ffe9a90` and `01a0521b-500f-7032-b401-5e44cf48b58d` made no product changes and are not implementation inputs.
     - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b`; the implementation task must not merge or push master, run serialized native/HMR/install gates, or deploy.
+    - Final rebased source is `c742bbc0`; coordinator-generated desktop/iPhone bundles are `0201c65c`. The parked row follows the drawer lip throughout live motion and detents without remounting either surface, and the approved trigger note remains permanently visible immediately before the right paddle.
+    - Focused composed proof passes T70/T71 7/7, MSEG interaction/session behavior 9/9, adjacent T60/T43/T13 behavior 5/5, and the T66 open-MSEG Rate drop 1/1. The complete desktop interface run is 314/317: all T70/T71 cases pass, while the three reds reproduce on current master or are the established React Grab/wavetable-prewarm/MSEG visual-timing baselines.
+    - Fresh HMR reported this exact worktree and `usesViteClient: true`; its processes were stopped and port 5174 cleared. A final compiled build installed and strict-code-sign verified `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`, executable SHA-256 `1aa0f2a9b9b720d39e45b7ecb03d2799ae07823bf2447bf4b8b3596cb398de00`. Ableton/listening and physical iPhone/touch acceptance were not performed. The hosted update is intentionally batched with the remaining accepted interface queue.
     Confirmed failure (2026-08-30):
     - The failure reproduces on current master and the deployed Sites build at 393x852. The MSEG drawer occupies y=596-852 while the parked Mod bar stays at y=681-721, so the bar sits inside the drawer and covers its editable graph.
     Required result:
@@ -1461,9 +1464,10 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Real-browser geometry proves the parked row's bottom meets the MSEG drawer's top edge throughout opening, every supported detent, live dragging, and closing at representative portrait and landscape phone sizes.
     - Every visible MSEG graph point and drawer control retains its own hit point, and opening or moving the drawer does not cancel a pending source drag, change the selected MSEG, or alter the envelope.
 
-[ ] T71 — Keep the parked Mod bar from covering full-screen MSEG controls
-    Active combined owner (2026-08-30):
+[x] T71 — Keep the parked Mod bar from covering full-screen MSEG controls
+    Implemented and integrated with T70 (2026-08-30):
     - The sole T70+T71 owner is Codex task `Fix parked Mod bar MSEG layouts`, thread `01a0521d-8859-72e0-bc16-f7dab267f2a3`, branch `codex/t70-t71-mseg-parked-layout-implementation`, worktree `/Users/winterfell/.codex/worktrees/5d2b/cosimo-synth`, starting commit `209b4a0b44645e6675289e50059cde6fc4160e30`, model SOL, reasoning max, Full Access with approvals disabled. Final review, repair direction, rebase, merge, master push, and any generated/native/install/deployment gates belong to coordinator thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b`.
+    - The full-screen editor now reserves exactly the visible parked row while hidden and floating modes preserve their established behavior. A new/reopened/switched MSEG begins a clean Undo session; only expanding that same live drawer resumes its existing Undo checkpoint. Final qualification and delivery evidence is recorded under T70 above.
     Confirmed failure (2026-08-30):
     - In the 393x852 full-screen MSEG editor, the A/B, Rate, Morph, and Loop control row and the parked Mod bar occupy the exact same y=812-852 rectangle. The Mod bar therefore hides the controls and takes their touches.
     Required result:
