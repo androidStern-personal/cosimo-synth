@@ -140,6 +140,39 @@ namespace wt
             maximumHz);
     }
 
+    /** resolveChorusRingFrequencyHz through one ExactPow2Memo: identical
+        branch structure and expressions, with the ratio pow paid only when
+        the tracked offset actually moves. Sample-exact against the direct
+        resolver — the memo family's contract. */
+    float32 resolveChorusRingFrequencyHzMemoized (ExactPow2Memo& ratioMemo,
+                                                  float32 keyTrackEnabled,
+                                                  float32 legacyClampEnabled,
+                                                  float32 ordinaryHz,
+                                                  float32 playedPitchHz,
+                                                  float32 migratedBaseOffsetSemitones,
+                                                  float32 legacyFineSemitones,
+                                                  float32 retainedRouteSemitones,
+                                                  float32 minimumHz,
+                                                  float32 maximumHz)
+    {
+        if (keyTrackEnabled >= 0.5f)
+            return std::intrinsics::clamp (
+                keyTrackFinitePitchHz (playedPitchHz)
+                    * exactKeyTrackRatio (ratioMemo,
+                                          chorusRingTrackedOffsetSemitones (
+                                              legacyClampEnabled,
+                                              migratedBaseOffsetSemitones,
+                                              legacyFineSemitones,
+                                              retainedRouteSemitones)),
+                minimumHz,
+                maximumHz);
+
+        return std::intrinsics::clamp (
+            ordinaryHz * exactKeyTrackRatio (ratioMemo, retainedRouteSemitones),
+            minimumHz,
+            maximumHz);
+    }
+
     /**
      * Ordinary delay modulation retains its deployed sign while off.
      * Tracked delay/comb periods use pitch's reciprocal sign while enabled.
