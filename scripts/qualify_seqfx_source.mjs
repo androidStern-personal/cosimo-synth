@@ -54,7 +54,9 @@ const testGroups = Object.freeze({
         "tests/test_seqfx_probe.py",
     ]),
     releaseBuilder: Object.freeze([
+        "tests/test_fx_build_args.mjs",
         "tests/test_seqfx_release_builder.mjs",
+        "tests/test_seqfx_release_toolchain.mjs",
     ]),
     visualProofContracts: Object.freeze([
         "tests/test_seqfx_proof_provenance.mjs",
