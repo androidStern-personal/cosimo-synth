@@ -167,8 +167,8 @@
     flex: 0 0 auto;
 }
 
-/* T28: unused height sits before the tail insertion row. That keeps the final
-   editable + immediately against the fixed POLISH boundary at every height. */
+/* Unused height sits before the tail insertion row. That keeps the final
+   editable + immediately against the fixed Mix/Polish footer at every height. */
 .rack-list.subway-map > .subway-trunk-tail-fill {
     position: relative;
     flex: 1 0 13px;
