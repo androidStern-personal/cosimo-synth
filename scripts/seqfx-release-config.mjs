@@ -7,7 +7,7 @@
  * product identity.
  */
 export const seqFxReleaseConfig = Object.freeze({
-    schemaVersion: 2,
+    schemaVersion: 3,
     productKey: "seqfx",
     identity: Object.freeze({
         publicName: "Cosimo SeqFX",
@@ -72,6 +72,18 @@ export const seqFxReleaseConfig = Object.freeze({
             sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_juce_SOURCE_DIR",
             repository: "https://github.com/juce-framework/JUCE.git",
             revision: "501c07674e1ad693085a7e7c398f205c2677f5da",
+        }),
+    }),
+    nativeMetadata: Object.freeze({
+        bundlePackageType: "BNDL",
+        vst3Category: "Fx",
+        audioClass: Object.freeze({
+            category: "Audio Module Class",
+            cid: "ABCDEF019182FAEB436F736943734678",
+        }),
+        controllerClass: Object.freeze({
+            category: "Component Controller Class",
+            cid: "ABCDEF011234ABCD436F736943734678",
         }),
     }),
     webViewMarkers: Object.freeze({

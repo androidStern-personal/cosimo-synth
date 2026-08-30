@@ -10,6 +10,9 @@ set(COSIMO_EFFECT_PATCH_PATH "" CACHE FILEPATH "Cmajor patch to generate")
 set(COSIMO_EFFECT_OUTPUT_DIR "" CACHE PATH "Generated JUCE project directory")
 set(COSIMO_EFFECT_PLUGIN_TARGET "" CACHE STRING "Generated JUCE shared-code target")
 set(COSIMO_CMAJ_EXECUTABLE "" CACHE FILEPATH "Pinned Cmajor command executable")
+option(COSIMO_DISABLE_MICROPHONE_PERMISSION
+    "Disable microphone permission metadata in the generated plugin project"
+    OFF)
 
 if(NOT EXISTS "${COSIMO_EFFECT_PATCH_PATH}")
     message(FATAL_ERROR "COSIMO_EFFECT_PATCH_PATH must name an existing Cmajor patch")
@@ -43,6 +46,12 @@ execute_process(
 
 if(NOT generate_result EQUAL 0)
     message(FATAL_ERROR "cmaj generate failed:\n${generate_output}${generate_error}")
+endif()
+
+if(COSIMO_DISABLE_MICROPHONE_PERMISSION)
+    include("${COSIMO_REPO_ROOT}/cmake/SeqFxGeneratedPluginMetadata.cmake")
+    cosimo_disable_generated_microphone_permission(
+        "${COSIMO_EFFECT_OUTPUT_DIR}/CMakeLists.txt")
 endif()
 
 message(STATUS "${generate_output}${generate_error}")

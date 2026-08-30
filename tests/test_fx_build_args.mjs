@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -45,6 +45,75 @@ test("fx_build_single_plugin_still_resolves_to_only_that_plugin", async () => {
     assert.deepEqual(
         prodModule.resolveProdPluginNames("enhancer-lite-shelves-audition"),
         ["enhancer-lite-shelves-audition"],
+    );
+});
+
+test("the SeqFX production configure explicitly disables microphone permission metadata", async () => {
+    const { buildModule, prodModule } = await loadBuildModules();
+    const plugin = buildModule.effectPlugins.seqfx;
+
+    assert.equal(plugin.disableMicrophonePermission, true);
+    assert.deepEqual(prodModule.createCmakeConfigureArgs({
+        cmakeBuildDir: "/tmp/seqfx-build",
+        cmakeSourceDirectory: "/repo/tools/effect_plugin_build",
+        disableMicrophonePermission: plugin.disableMicrophonePermission,
+        juceOut: "/repo/build/seqfx_juce",
+        runtimePatchPath: "/repo/build/fx/seqfx_runtime/SeqFx.cmajorpatch",
+    }), [
+        "-S", "/repo/tools/effect_plugin_build",
+        "-B", "/tmp/seqfx-build",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCOSIMO_EFFECT_PATCH_PATH=/repo/build/fx/seqfx_runtime/SeqFx.cmajorpatch",
+        "-DCOSIMO_EFFECT_OUTPUT_DIR=/repo/build/seqfx_juce",
+        "-DCOSIMO_DISABLE_MICROPHONE_PERMISSION=ON",
+    ]);
+    const wrapperCmake = await readFile(
+        path.join(repoRoot, "tools", "effect_plugin_build", "CMakeLists.txt"),
+        "utf8",
+    );
+    assert.match(wrapperCmake, /option\(COSIMO_DISABLE_MICROPHONE_PERMISSION/u);
+    assert.match(wrapperCmake, /cosimo_disable_generated_microphone_permission/u);
+});
+
+test("the production metadata hardener disables Cmajor's generated microphone permission before JUCE configures", async (context) => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-generated-metadata-"));
+    context.after(() => rm(fixtureRoot, { recursive: true, force: true }));
+    const generatedCmake = path.join(fixtureRoot, "CMakeLists.txt");
+    const driver = path.join(fixtureRoot, "harden.cmake");
+    await writeFile(generatedCmake, `juce_add_plugin(CosimoSeqFX
+    PRODUCT_NAME "CosimoSeqFX"
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    IS_SYNTH FALSE
+)
+`, "utf8");
+    await writeFile(driver, `include("${path.join(repoRoot, "cmake", "SeqFxGeneratedPluginMetadata.cmake")}")
+cosimo_disable_generated_microphone_permission("\${GENERATED_PLUGIN_CMAKE}")
+`, "utf8");
+
+    execFileSync("cmake", [`-DGENERATED_PLUGIN_CMAKE=${generatedCmake}`, "-P", driver], {
+        encoding: "utf8",
+    });
+    assert.match(await readFile(generatedCmake, "utf8"), /MICROPHONE_PERMISSION_ENABLED FALSE\s+MICROPHONE_PERMISSION_TEXT ""/u);
+    assert.doesNotMatch(await readFile(generatedCmake, "utf8"), /MICROPHONE_PERMISSION_ENABLED TRUE/u);
+});
+
+test("the production metadata hardener fails closed when Cmajor's generated permission shape drifts", async (context) => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-generated-metadata-drift-"));
+    context.after(() => rm(fixtureRoot, { recursive: true, force: true }));
+    const generatedCmake = path.join(fixtureRoot, "CMakeLists.txt");
+    const driver = path.join(fixtureRoot, "harden.cmake");
+    await writeFile(generatedCmake, "juce_add_plugin(CosimoSeqFX IS_SYNTH FALSE)\n", "utf8");
+    await writeFile(driver, `include("${path.join(repoRoot, "cmake", "SeqFxGeneratedPluginMetadata.cmake")}")
+cosimo_disable_generated_microphone_permission("\${GENERATED_PLUGIN_CMAKE}")
+`, "utf8");
+
+    assert.throws(
+        () => execFileSync("cmake", [
+            `-DGENERATED_PLUGIN_CMAKE=${generatedCmake}`,
+            "-P",
+            driver,
+        ], { encoding: "utf8" }),
+        /Expected exactly one generated MICROPHONE_PERMISSION_ENABLED TRUE entry,\s+found 0/u,
     );
 });
 

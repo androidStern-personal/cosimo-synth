@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 import {
+    attestMatchingVst3Metadata,
     assertArchiveTreeContainsOnlyFilesAndDirectories,
     assertSafeOutputRoot,
     canonicalPayloadFingerprint,
@@ -23,6 +24,7 @@ import {
     renderPackageInfo,
     renderReleaseReadme,
     resolveSourceDateEpoch,
+    verifyVst3Metadata,
 } from "../scripts/build_seqfx_beta_release.mjs";
 import {
     seqFxArtifactBaseName,
@@ -91,6 +93,21 @@ function actualNativeDependencyFixture(config = seqFxReleaseConfig) {
             originVerified: true,
             sourceDirectoryCacheKey: config.nativeDependencies.juce.sourceDirectoryCacheKey,
         },
+    };
+}
+
+function vst3MetadataSummaryFixture() {
+    return {
+        audioClassId: "ABCDEF019182FAEB436F736943734678",
+        binary: "Contents/MacOS/CosimoSeqFX",
+        bundleIdentifier: "dev.cosimo.seqfx",
+        bundlePackageType: "BNDL",
+        category: "Fx",
+        controllerClassId: "ABCDEF011234ABCD436F736943734678",
+        microphonePermissionAbsent: true,
+        name: "CosimoSeqFX",
+        vendor: "Cosimo",
+        version: "0.1.0",
     };
 }
 
@@ -165,8 +182,66 @@ async function createNativeDependencyCheckoutFixture(context) {
     };
 }
 
+async function createVst3MetadataFixture(context) {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-vst3-metadata-"));
+    context.after(() => rm(fixtureRoot, { recursive: true, force: true }));
+    const vst3Path = path.join(fixtureRoot, "CosimoSeqFX.vst3");
+    const contentsPath = path.join(vst3Path, "Contents");
+    const resourcesPath = path.join(contentsPath, "Resources");
+    const binaryPath = path.join(contentsPath, "MacOS", "CosimoSeqFX");
+
+    await mkdir(resourcesPath, { recursive: true });
+    await mkdir(path.dirname(binaryPath), { recursive: true });
+    await writeFile(binaryPath, "fixture binary\n", "utf8");
+    await writeFile(path.join(contentsPath, "Info.plist"), `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key><string>CosimoSeqFX</string>
+    <key>CFBundleExecutable</key><string>CosimoSeqFX</string>
+    <key>CFBundleIdentifier</key><string>dev.cosimo.seqfx</string>
+    <key>CFBundleName</key><string>CosimoSeqFX</string>
+    <key>CFBundlePackageType</key><string>BNDL</string>
+    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>CFBundleVersion</key><string>0.1.0</string>
+</dict>
+</plist>
+`, "utf8");
+    await writeFile(path.join(resourcesPath, "moduleinfo.json"), `{
+  "Name": "CosimoSeqFX",
+  "Version": "0.1.0",
+  "Factory Info": {
+    "Vendor": "Cosimo",
+    "URL": "",
+    "E-Mail": "",
+    "Flags": { "Unicode": true, },
+  },
+  "Classes": [
+    {
+      "CID": "ABCDEF019182FAEB436F736943734678",
+      "Category": "Audio Module Class",
+      "Name": "CosimoSeqFX",
+      "Vendor": "Cosimo",
+      "Version": "0.1.0",
+      "Sub Categories": [ "Fx", ],
+    },
+    {
+      "CID": "ABCDEF011234ABCD436F736943734678",
+      "Category": "Component Controller Class",
+      "Name": "CosimoSeqFX",
+      "Vendor": "Cosimo",
+      "Version": "0.1.0",
+      "Sub Categories": [ "Fx", ],
+    },
+  ],
+}
+`, "utf8");
+
+    return vst3Path;
+}
+
 test("release config freezes the existing beta identity and current native output path", () => {
-    assert.equal(seqFxReleaseConfig.schemaVersion, 2);
+    assert.equal(seqFxReleaseConfig.schemaVersion, 3);
     assert.deepEqual(seqFxReleaseConfig.identity, {
         publicName: "Cosimo SeqFX",
         bundleName: "CosimoSeqFX",
@@ -200,6 +275,18 @@ test("release config freezes the existing beta identity and current native outpu
             sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_juce_SOURCE_DIR",
             repository: "https://github.com/juce-framework/JUCE.git",
             revision: "501c07674e1ad693085a7e7c398f205c2677f5da",
+        },
+    });
+    assert.deepEqual(seqFxReleaseConfig.nativeMetadata, {
+        bundlePackageType: "BNDL",
+        vst3Category: "Fx",
+        audioClass: {
+            category: "Audio Module Class",
+            cid: "ABCDEF019182FAEB436F736943734678",
+        },
+        controllerClass: {
+            category: "Component Controller Class",
+            cid: "ABCDEF011234ABCD436F736943734678",
         },
     });
     assert.equal(seqFxArtifactBaseName(), "CosimoSeqFX-0.1.0-beta.1-macOS");
@@ -273,6 +360,84 @@ test("release git state treats untracked source as dirty", async () => {
 
 test("release config matches the current patch manifest and effect build registry", async () => {
     assert.deepEqual(releaseContractErrors(seqFxReleaseConfig, await currentManifest()), []);
+});
+
+test("native metadata validation accepts the exact approved VST3 identity and no microphone permission", async (context) => {
+    const vst3Path = await createVst3MetadataFixture(context);
+    const metadata = await verifyVst3Metadata(seqFxReleaseConfig, vst3Path);
+
+    assert.deepEqual(metadata, vst3MetadataSummaryFixture());
+});
+
+test("native metadata validation rejects identity, category, and binary drift together", async (context) => {
+    const vst3Path = await createVst3MetadataFixture(context);
+    const infoPlistPath = path.join(vst3Path, "Contents", "Info.plist");
+    const moduleInfoPath = path.join(vst3Path, "Contents", "Resources", "moduleinfo.json");
+    const binaryPath = path.join(vst3Path, "Contents", "MacOS", "CosimoSeqFX");
+    execFileSync("plutil", [
+        "-replace", "CFBundleIdentifier", "-string", "com.example.wrong", infoPlistPath,
+    ]);
+    await writeFile(
+        moduleInfoPath,
+        (await readFile(moduleInfoPath, "utf8")).replaceAll('"Fx"', '"Instrument"'),
+        "utf8",
+    );
+    await rm(binaryPath);
+
+    await assert.rejects(
+        verifyVst3Metadata(seqFxReleaseConfig, vst3Path),
+        (error) => {
+            assert.match(error.message, /CFBundleIdentifier/u);
+            assert.match(error.message, /sub-categories/u);
+            assert.match(error.message, /VST3 binary is missing/u);
+            return true;
+        },
+    );
+});
+
+test("native metadata validation rejects microphone permission keys and usage text", async (context) => {
+    const vst3Path = await createVst3MetadataFixture(context);
+    const infoPlistPath = path.join(vst3Path, "Contents", "Info.plist");
+    execFileSync("plutil", [
+        "-insert",
+        "NSMicrophoneUsageDescription",
+        "-string",
+        "This app requires the built-in microphone.",
+        infoPlistPath,
+    ]);
+
+    await assert.rejects(
+        verifyVst3Metadata(seqFxReleaseConfig, vst3Path),
+        /microphone permission or usage text is forbidden.*NSMicrophoneUsageDescription/isu,
+    );
+});
+
+test("release metadata attestation independently validates matching built and staged bundles", async (context) => {
+    const builtVst3 = await createVst3MetadataFixture(context);
+    const stagedVst3 = await createVst3MetadataFixture(context);
+
+    assert.deepEqual(
+        await attestMatchingVst3Metadata(seqFxReleaseConfig, builtVst3, stagedVst3),
+        {
+            built: vst3MetadataSummaryFixture(),
+            staged: vst3MetadataSummaryFixture(),
+            stagedMatchesBuilt: true,
+        },
+    );
+});
+
+test("release metadata attestation rejects staged metadata drift", async (context) => {
+    const builtVst3 = await createVst3MetadataFixture(context);
+    const stagedVst3 = await createVst3MetadataFixture(context);
+    const stagedInfoPlist = path.join(stagedVst3, "Contents", "Info.plist");
+    execFileSync("plutil", [
+        "-replace", "CFBundleExecutable", "-string", "WrongBinary", stagedInfoPlist,
+    ]);
+
+    await assert.rejects(
+        attestMatchingVst3Metadata(seqFxReleaseConfig, builtVst3, stagedVst3),
+        /CFBundleExecutable/u,
+    );
 });
 
 test("release planning fails closed over the exact production CMake dependency declarations", async (context) => {
@@ -627,11 +792,17 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
             vst3: { signedWithDeveloperId: false },
         },
         sourceDateEpoch: 1_700_000_000,
+        vst3Metadata: {
+            built: vst3MetadataSummaryFixture(),
+            staged: vst3MetadataSummaryFixture(),
+            stagedMatchesBuilt: true,
+        },
     };
     const first = createReleaseManifest(inputs);
     const second = createReleaseManifest(inputs);
 
     assert.deepEqual(second, first);
+    assert.equal(first.schemaVersion, 5);
     assert.equal(first.distributionReady, false);
     assert.equal(first.packagingReady, false);
     assert.equal("createdAt" in first, false);
@@ -643,6 +814,7 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
     );
     assert.equal(first.nativeDependencyProvenance.choc.clean, true);
     assert.equal(first.nativeDependencyProvenance.juce.clean, true);
+    assert.deepEqual(first.build.vst3Metadata, inputs.vst3Metadata);
     assert.equal(first.artifacts.thirdPartyNotices, "THIRD_PARTY_NOTICES.txt");
     assert.ok(first.operationsNotPerformed.includes("DAW smoke or listening acceptance"));
     assert.ok(first.operationsNotPerformed.includes("Patreon upload"));
@@ -670,5 +842,15 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
             },
         }),
         /CHOC cleanliness/u,
+    );
+    assert.throws(
+        () => createReleaseManifest({
+            ...inputs,
+            vst3Metadata: {
+                ...inputs.vst3Metadata,
+                stagedMatchesBuilt: false,
+            },
+        }),
+        /staged metadata was not proven identical/u,
     );
 });

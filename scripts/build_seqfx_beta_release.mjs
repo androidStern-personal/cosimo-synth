@@ -509,6 +509,12 @@ export function releaseContractErrors(
         ["nativeDependencies.choc.submodulePath", config.nativeDependencies.choc.submodulePath],
         ["nativeDependencies.juce.repository", config.nativeDependencies.juce.repository],
         ["nativeDependencies.juce.revision", config.nativeDependencies.juce.revision],
+        ["nativeMetadata.bundlePackageType", config.nativeMetadata.bundlePackageType],
+        ["nativeMetadata.vst3Category", config.nativeMetadata.vst3Category],
+        ["nativeMetadata.audioClass.category", config.nativeMetadata.audioClass.category],
+        ["nativeMetadata.audioClass.cid", config.nativeMetadata.audioClass.cid],
+        ["nativeMetadata.controllerClass.category", config.nativeMetadata.controllerClass.category],
+        ["nativeMetadata.controllerClass.cid", config.nativeMetadata.controllerClass.cid],
     ];
 
     for (const [label, value] of requiredStrings) {
@@ -530,6 +536,7 @@ export function releaseContractErrors(
         ["manufacturer code", patchManifest.plugin?.manufacturerCode, config.identity.manufacturerCode],
         ["registry patch path", plugin.patch, config.paths.patchManifest],
         ["registry product name", plugin.productName, config.identity.bundleName],
+        ["registry microphone permission", plugin.disableMicrophonePermission, true],
         ["native build path", expectedBuiltVst3Path(plugin), config.paths.builtVst3],
     ];
 
@@ -852,6 +859,251 @@ function binaryArchitectures(config, binaryPath) {
     return observed;
 }
 
+function parseJsonWithTrailingCommas(source, label) {
+    let normalized = "";
+    let escaped = false;
+    let inString = false;
+
+    for (let index = 0; index < source.length; index += 1) {
+        const character = source[index];
+
+        if (inString) {
+            normalized += character;
+
+            if (escaped) {
+                escaped = false;
+            } else if (character === "\\") {
+                escaped = true;
+            } else if (character === '"') {
+                inString = false;
+            }
+
+            continue;
+        }
+
+        if (character === '"') {
+            inString = true;
+            normalized += character;
+            continue;
+        }
+
+        if (character === ",") {
+            let nextIndex = index + 1;
+
+            while (/\s/u.test(source[nextIndex] ?? ""))
+                nextIndex += 1;
+
+            if (source[nextIndex] === "}" || source[nextIndex] === "]")
+                continue;
+        }
+
+        normalized += character;
+    }
+
+    try {
+        return JSON.parse(normalized);
+    } catch (error) {
+        throw new Error(`${label} is not parseable JSON metadata: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
+function microphoneMetadataPaths(value, currentPath = "metadata") {
+    if (typeof value === "string")
+        return /microphone/iu.test(value) ? [currentPath] : [];
+
+    if (!value || typeof value !== "object")
+        return [];
+
+    const paths = [];
+
+    for (const [key, nestedValue] of Object.entries(value)) {
+        const nestedPath = `${currentPath}.${key}`;
+
+        if (/microphone/iu.test(key))
+            paths.push(nestedPath);
+
+        paths.push(...microphoneMetadataPaths(nestedValue, nestedPath));
+    }
+
+    return paths;
+}
+
+function exactMetadataValue(errors, label, observed, expected) {
+    if (observed !== expected)
+        errors.push(`${label}: expected ${JSON.stringify(expected)}, found ${JSON.stringify(observed)}`);
+}
+
+function expectedVst3MetadataSummary(config) {
+    return {
+        audioClassId: config.nativeMetadata.audioClass.cid,
+        binary: path.posix.join("Contents", "MacOS", config.identity.bundleName),
+        bundleIdentifier: config.identity.patchId,
+        bundlePackageType: config.nativeMetadata.bundlePackageType,
+        category: config.nativeMetadata.vst3Category,
+        controllerClassId: config.nativeMetadata.controllerClass.cid,
+        microphonePermissionAbsent: true,
+        name: config.identity.bundleName,
+        vendor: config.identity.manufacturer,
+        version: config.identity.pluginVersion,
+    };
+}
+
+function exactRecordMatches(observed, expected) {
+    if (!observed || typeof observed !== "object" || Array.isArray(observed))
+        return false;
+
+    const observedKeys = Object.keys(observed).sort();
+    const expectedKeys = Object.keys(expected).sort();
+
+    return JSON.stringify(observedKeys) === JSON.stringify(expectedKeys)
+        && expectedKeys.every((key) => observed[key] === expected[key]);
+}
+
+function assertVst3MetadataAttestation(config, attestation) {
+    const expected = expectedVst3MetadataSummary(config);
+    const errors = [];
+
+    if (!exactRecordMatches(attestation?.built, expected))
+        errors.push(`built metadata does not match the release contract: ${JSON.stringify(attestation?.built)}`);
+
+    if (!exactRecordMatches(attestation?.staged, expected))
+        errors.push(`staged metadata does not match the release contract: ${JSON.stringify(attestation?.staged)}`);
+
+    if (attestation?.stagedMatchesBuilt !== true)
+        errors.push("staged metadata was not proven identical to built metadata");
+
+    if (errors.length > 0)
+        throw new Error(["SeqFX VST3 metadata attestation rejected:", ...errors.map((error) => `- ${error}`)].join("\n"));
+}
+
+function validateModuleClass(errors, moduleClass, expected, config, label) {
+    if (!moduleClass || typeof moduleClass !== "object" || Array.isArray(moduleClass)) {
+        errors.push(`${label} must be an object.`);
+        return;
+    }
+
+    exactMetadataValue(errors, `${label} CID`, moduleClass.CID, expected.cid);
+    exactMetadataValue(errors, `${label} category`, moduleClass.Category, expected.category);
+    exactMetadataValue(errors, `${label} name`, moduleClass.Name, config.identity.bundleName);
+    exactMetadataValue(errors, `${label} vendor`, moduleClass.Vendor, config.identity.manufacturer);
+    exactMetadataValue(errors, `${label} version`, moduleClass.Version, config.identity.pluginVersion);
+
+    if (!Array.isArray(moduleClass["Sub Categories"])
+        || moduleClass["Sub Categories"].length !== 1
+        || moduleClass["Sub Categories"][0] !== config.nativeMetadata.vst3Category) {
+        errors.push(
+            `${label} sub-categories: expected [${JSON.stringify(config.nativeMetadata.vst3Category)}], `
+            + `found ${JSON.stringify(moduleClass["Sub Categories"])}`,
+        );
+    }
+}
+
+/** Parse and fail closed over one built or staged SeqFX VST3 metadata boundary. */
+export async function verifyVst3Metadata(config, vst3Path) {
+    const contentsPath = path.join(vst3Path, "Contents");
+    const infoPlistPath = path.join(contentsPath, "Info.plist");
+    const moduleInfoPath = path.join(contentsPath, "Resources", "moduleinfo.json");
+    const binaryRelativePath = path.posix.join("Contents", "MacOS", config.identity.bundleName);
+    const binaryPath = path.join(vst3Path, ...binaryRelativePath.split("/"));
+    const plistResult = run("plutil", ["-convert", "json", "-o", "-", infoPlistPath], {
+        capture: true,
+    });
+    const infoPlist = JSON.parse(plistResult.stdout);
+    const moduleInfo = parseJsonWithTrailingCommas(
+        await readFile(moduleInfoPath, "utf8"),
+        path.basename(moduleInfoPath),
+    );
+    const errors = [];
+
+    exactMetadataValue(errors, "CFBundleDisplayName", infoPlist.CFBundleDisplayName, config.identity.bundleName);
+    exactMetadataValue(errors, "CFBundleExecutable", infoPlist.CFBundleExecutable, config.identity.bundleName);
+    exactMetadataValue(errors, "CFBundleIdentifier", infoPlist.CFBundleIdentifier, config.identity.patchId);
+    exactMetadataValue(errors, "CFBundleName", infoPlist.CFBundleName, config.identity.bundleName);
+    exactMetadataValue(errors, "CFBundlePackageType", infoPlist.CFBundlePackageType, config.nativeMetadata.bundlePackageType);
+    exactMetadataValue(
+        errors,
+        "CFBundleShortVersionString",
+        infoPlist.CFBundleShortVersionString,
+        config.identity.pluginVersion,
+    );
+    exactMetadataValue(errors, "CFBundleVersion", infoPlist.CFBundleVersion, config.identity.pluginVersion);
+    exactMetadataValue(errors, "module name", moduleInfo?.Name, config.identity.bundleName);
+    exactMetadataValue(errors, "module version", moduleInfo?.Version, config.identity.pluginVersion);
+    exactMetadataValue(
+        errors,
+        "module vendor",
+        moduleInfo?.["Factory Info"]?.Vendor,
+        config.identity.manufacturer,
+    );
+
+    const moduleClasses = moduleInfo?.Classes;
+
+    if (!Array.isArray(moduleClasses) || moduleClasses.length !== 2) {
+        errors.push(`module classes: expected exactly 2, found ${Array.isArray(moduleClasses) ? moduleClasses.length : "non-array"}`);
+    } else {
+        const audioClasses = moduleClasses.filter(
+            (moduleClass) => moduleClass?.Category === config.nativeMetadata.audioClass.category,
+        );
+        const controllerClasses = moduleClasses.filter(
+            (moduleClass) => moduleClass?.Category === config.nativeMetadata.controllerClass.category,
+        );
+
+        if (audioClasses.length !== 1)
+            errors.push(`audio module classes: expected exactly 1, found ${audioClasses.length}`);
+        else
+            validateModuleClass(errors, audioClasses[0], config.nativeMetadata.audioClass, config, "audio module class");
+
+        if (controllerClasses.length !== 1)
+            errors.push(`controller module classes: expected exactly 1, found ${controllerClasses.length}`);
+        else
+            validateModuleClass(errors, controllerClasses[0], config.nativeMetadata.controllerClass, config, "controller module class");
+    }
+
+    const microphonePaths = [
+        ...microphoneMetadataPaths(infoPlist, "Info.plist"),
+        ...microphoneMetadataPaths(moduleInfo, "moduleinfo.json"),
+    ];
+
+    if (microphonePaths.length > 0)
+        errors.push(`microphone permission or usage text is forbidden: ${microphonePaths.join(", ")}`);
+
+    try {
+        const binaryStat = await lstat(binaryPath);
+
+        if (!binaryStat.isFile())
+            errors.push(`VST3 binary is not a regular file: ${binaryRelativePath}`);
+    } catch (error) {
+        if (error && typeof error === "object" && "code" in error && error.code === "ENOENT")
+            errors.push(`VST3 binary is missing: ${binaryRelativePath}`);
+        else
+            throw error;
+    }
+
+    if (errors.length > 0) {
+        throw new Error([
+            `SeqFX VST3 metadata rejected at ${vst3Path}:`,
+            ...errors.map((error) => `- ${error}`),
+        ].join("\n"));
+    }
+
+    return expectedVst3MetadataSummary(config);
+}
+
+export async function attestMatchingVst3Metadata(config, builtVst3Path, stagedVst3Path) {
+    const built = await verifyVst3Metadata(config, builtVst3Path);
+    const staged = await verifyVst3Metadata(config, stagedVst3Path);
+    const stagedMatchesBuilt = JSON.stringify(staged) === JSON.stringify(built);
+
+    if (!stagedMatchesBuilt)
+        throw new Error("Staged SeqFX VST3 metadata differs from the source-built bundle.");
+
+    return {
+        built,
+        staged,
+        stagedMatchesBuilt,
+    };
+}
+
 async function verifyBuiltVst3(config) {
     const vst3Path = path.join(repoRoot, config.paths.builtVst3);
     const binaryPath = path.join(vst3Path, "Contents", "MacOS", config.identity.bundleName);
@@ -864,6 +1116,7 @@ async function verifyBuiltVst3(config) {
 
     verifyCodesign(vst3Path);
     verifyPatchedWebView(config, binaryPath);
+    await verifyVst3Metadata(config, vst3Path);
 
     return {
         architectures: binaryArchitectures(config, binaryPath),
@@ -1335,12 +1588,14 @@ export function createReleaseManifest({
     payloadFingerprint,
     signing,
     sourceDateEpoch,
+    vst3Metadata,
 }) {
     const artifactBaseName = seqFxArtifactBaseName(config);
     assertActualNativeDependencyProvenance(config, nativeDependencyProvenance);
+    assertVst3MetadataAttestation(config, vst3Metadata);
 
     return {
-        schemaVersion: 4,
+        schemaVersion: 5,
         artifactClass: options.mode === "release" ? "signed-notarized-release-candidate" : "local-unsigned-validation",
         packagingReady: options.mode === "release",
         distributionReady: false,
@@ -1369,6 +1624,7 @@ export function createReleaseManifest({
         build: {
             builtVst3: config.paths.builtVst3,
             binaryArchitectures: architectures,
+            vst3Metadata,
             webViewRequiredMarkers: config.webViewMarkers.required,
             webViewForbiddenMarkersAbsent: config.webViewMarkers.forbidden,
         },
@@ -1522,6 +1778,11 @@ async function assembleArtifactSet({
     const stagedThirdPartyNoticesPath = path.join(stagedVst3, "Contents", "Resources", "THIRD_PARTY_NOTICES.txt");
     await mkdir(path.dirname(stagedThirdPartyNoticesPath), { recursive: true });
     copyPathWithoutMetadata(thirdPartyNoticesSourcePath, stagedThirdPartyNoticesPath);
+    const vst3Metadata = await attestMatchingVst3Metadata(
+        config,
+        builtArtifact.vst3Path,
+        stagedVst3,
+    );
     await assertArchiveTreeContainsOnlyFilesAndDirectories(stagingRoot);
     await normalizeTreeTimestamps(stagedVst3, sourceDateEpoch);
 
@@ -1591,6 +1852,7 @@ async function assembleArtifactSet({
             vst3: vst3Signing,
         },
         sourceDateEpoch,
+        vst3Metadata,
     });
 
     await writeFile(readmePath, readme, "utf8");
