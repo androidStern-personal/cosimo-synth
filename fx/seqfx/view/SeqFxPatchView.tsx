@@ -855,7 +855,6 @@ const TAPE_STOP_PARAM_CHARACTER = 4;
 const TAPE_STOP_PARAM_TIMING = 5;
 const TAPE_STOP_PARAM_FREE_STOP_MS = 6;
 const TAPE_STOP_PARAM_FREE_START_MS = 7;
-const TAPE_STOP_RETURN_CATCH_UP = TAPE_STOP_RETURN_CROSSFADE_TO_LIVE;
 const TAPE_STOP_TIMING_SYNC = 0;
 const TAPE_STOP_TIMING_FREE = 1;
 const STUTTER_PARAM_SLICES = 0;
@@ -1133,7 +1132,7 @@ function SeqFxTapeStopBlockGlyph({
     size: SeqFxBlockVisualSize;
     width: number;
 }) {
-    const returnMode = params[TAPE_STOP_PARAM_RETURN] ?? TAPE_STOP_RETURN_CATCH_UP;
+    const returnMode = params[TAPE_STOP_PARAM_RETURN] ?? TAPE_STOP_RETURN_CROSSFADE_TO_LIVE;
     const curve = params[TAPE_STOP_PARAM_CURVE] ?? 0;
     const label = tapeStopRisoLabel(returnMode);
 
@@ -2469,7 +2468,7 @@ function TapeStopV2Editor({
 }) {
     const stopDivision = Math.round(step.params[TAPE_STOP_PARAM_STOP_DIVISION] ?? 8);
     const curve = clampNumber(step.params[TAPE_STOP_PARAM_CURVE] ?? 0, -1, 1);
-    const returnMode = Math.round(step.params[TAPE_STOP_PARAM_RETURN] ?? TAPE_STOP_RETURN_CATCH_UP);
+    const returnMode = Math.round(step.params[TAPE_STOP_PARAM_RETURN] ?? TAPE_STOP_RETURN_CROSSFADE_TO_LIVE);
     const startDivision = Math.round(step.params[TAPE_STOP_PARAM_START_DIVISION] ?? 1);
     const character = clampNumber(step.params[TAPE_STOP_PARAM_CHARACTER] ?? 0, 0, 1);
     const timing = Math.round(step.params[TAPE_STOP_PARAM_TIMING] ?? TAPE_STOP_TIMING_SYNC);
@@ -2607,7 +2606,7 @@ function TapeStopV2Editor({
                         onChange={(event) => onParamChange(TAPE_STOP_PARAM_RETURN, Number(event.currentTarget.value))}
                         value={returnMode}
                     >
-                        <option value={TAPE_STOP_RETURN_CATCH_UP}>Crossfade to Live</option>
+                        <option value={TAPE_STOP_RETURN_CROSSFADE_TO_LIVE}>Crossfade to Live</option>
                         <option value={TAPE_STOP_RETURN_SPIN_UP}>Spin Up</option>
                     </select>
                     <small>{spinUp ? "Restarts the captured motor from 0x to 1x, then hands off to live; it does not catch up in time." : "Returns directly to current live input with a short click-safe crossfade."}</small>
