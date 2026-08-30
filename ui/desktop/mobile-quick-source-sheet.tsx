@@ -16,6 +16,7 @@
 import {
     useCallback,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -189,6 +190,9 @@ export type MobileQuickSourceSheetProps = {
     readonly macroBinding: PatchControlBinding<number> | null;
     /** ADR-017 long-press menu, owned by the shell (one menu everywhere). */
     readonly onRequestParameterMenu?: (request: ParameterMenuRequest) => void;
+    /** Reports the drawer's authoritative live height so adjacent compact
+        shell chrome can follow its lip without replacing either surface. */
+    readonly onLayoutHeightChange?: (height: number | null) => void;
     readonly onClose: () => void;
     readonly onOpenFullEditor: () => void;
 };
@@ -216,6 +220,7 @@ export function MobileQuickSourceSheet({
     onEnvelopeChange,
     macroBinding,
     onRequestParameterMenu,
+    onLayoutHeightChange,
     onClose,
     onOpenFullEditor,
 }: MobileQuickSourceSheetProps) {
@@ -236,6 +241,14 @@ export function MobileQuickSourceSheet({
     ), [usableHeight]);
 
     const sheetHeight = dragHeight ?? detentHeight(detent);
+
+    useLayoutEffect(() => {
+        onLayoutHeightChange?.(sheetHeight);
+    }, [onLayoutHeightChange, sheetHeight]);
+
+    useEffect(() => () => {
+        onLayoutHeightChange?.(null);
+    }, [onLayoutHeightChange]);
 
     const gripPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
         if (event.pointerType === "mouse" && event.button !== 0) {

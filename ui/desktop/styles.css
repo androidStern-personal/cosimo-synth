@@ -226,6 +226,15 @@
         bottom: var(--cosimo-shell-pad);
         left: var(--cosimo-shell-pad);
     }
+
+    /* T71: a visible parked row remains global shell chrome during focused
+       MSEG editing. Reserve its exact row plus the shell border so the full
+       editor's controls end where the parked row begins. */
+    .is-mobile-shell
+    > .mobile-bottom-dock[data-mod-bar-placement="parked"][data-parked-visibility="visible"]
+    ~ .mseg-editor-backdrop {
+        bottom: calc(var(--cosimo-shell-pad) + var(--cosimo-module) + var(--cosimo-line-width));
+    }
 }
 
 .mseg-editor-frame {

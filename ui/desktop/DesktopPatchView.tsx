@@ -5294,6 +5294,7 @@ function DesktopPatchViewBody({
     const mobileReturnTarget = universalBackTarget(workspaceShell);
     const workspacePanelsRef = useRef(new Map<WorkspaceTabId, HTMLElement>());
     const workspacePanelScrollsRef = useRef(new Map<WorkspaceTabId, number>());
+    const mobileBottomDockRef = useRef<HTMLDivElement | null>(null);
     const [mobileModRailPortalTarget, setMobileModRailPortalTarget] = useState<HTMLElement | null>(null);
     const [mobileVoiceHudLayer, setMobileVoiceHudLayer] = useState<HTMLDivElement | null>(null);
     const [globalModRailState, setGlobalModRailState] = useState<GlobalModRailState>({
@@ -5899,6 +5900,20 @@ function DesktopPatchViewBody({
     // can never observe different source snapshots.
     const [quickEditorSource, setQuickEditorSource] = useState<MobileModSource | null>(null);
     const [isQuickMsegMorphAdjusting, setIsQuickMsegMorphAdjusting] = useState(false);
+    const handleQuickMsegDrawerHeightChange = useCallback((height: number | null) => {
+        const dock = mobileBottomDockRef.current;
+        if (dock === null) {
+            return;
+        }
+        if (height === null) {
+            dock.style.removeProperty("--mobile-mseg-drawer-height");
+            return;
+        }
+        // The drawer reports during layout. Keep this one adjacent-layout
+        // value synchronous so the parked portal follows CSS detent animation
+        // before paint without rerendering the complete synth every frame.
+        dock.style.setProperty("--mobile-mseg-drawer-height", `${height}px`);
+    }, []);
 
     useEffect(() => {
         if (quickEditorSource?.sourceKind !== "mseg") {
@@ -5927,23 +5942,26 @@ function DesktopPatchViewBody({
             ));
             return;
         }
+        const closesCurrentQuickEditor = quickEditorSource?.sourceKind === source.sourceKind
+            && quickEditorSource.sourceSlot === source.sourceSlot;
         // Keep the selected editor binding in the same React batch as the
         // sheet source. Env 2 must never render one frame of Env 1 values,
         // and an MSEG switch must immediately use that slot's rate/shape.
         if (source.sourceKind === "mseg") {
+            if (!closesCurrentQuickEditor) {
+                synthView.msegEditor.beginEditorSession();
+            }
             synthView.handleSelectMsegSlot(source.sourceSlot - 1);
         } else if (source.sourceKind === "env") {
             synthView.handleSelectEnvelopeSlot(source.sourceSlot - 1);
         }
-        setQuickEditorSource((current) => (
-            current?.sourceKind === source.sourceKind && current.sourceSlot === source.sourceSlot
-                ? null
-                : source
-        ));
+        setQuickEditorSource(closesCurrentQuickEditor ? null : source);
     }, [
         mobileWorkspaceSection,
+        quickEditorSource,
         synthView.handleSelectEnvelopeSlot,
         synthView.handleSelectMsegSlot,
+        synthView.msegEditor.beginEditorSession,
     ]);
     const handleGlobalModSourceDrop = useCallback((source: GlobalModRailState["selectedSource"]) => {
         if (mobileWorkspaceSection === "mod" && synthView.msegEditor.isOpen) {
@@ -5972,7 +5990,7 @@ function DesktopPatchViewBody({
         }
         setQuickEditorSource(null);
         if (source.sourceKind === "mseg") {
-            synthView.msegEditor.openEditor();
+            synthView.msegEditor.resumeEditorSession();
             return;
         }
         openMobileModSourceDetail(source);
@@ -6478,9 +6496,11 @@ function DesktopPatchViewBody({
 
             {isCompactViewport ? (
                 <div
+                    ref={mobileBottomDockRef}
                     data-role="mobile-bottom-dock"
                     data-mod-bar-placement={modBarPreferences.placement}
                     data-parked-visibility={modBarPreferences.parkedVisibility}
+                    data-mseg-drawer-open={quickEditorSource?.sourceKind === "mseg"}
                     className="mobile-bottom-dock"
                 >
                     <div
@@ -6594,6 +6614,9 @@ function DesktopPatchViewBody({
                         ? quickMacroBindings[quickEditorSource.sourceSlot - 1] ?? null
                         : null}
                     onRequestParameterMenu={openShellParameterMenu}
+                    onLayoutHeightChange={quickEditorSource.sourceKind === "mseg"
+                        ? handleQuickMsegDrawerHeightChange
+                        : undefined}
                     onClose={closeQuickEditor}
                     onOpenFullEditor={openQuickEditorFullEditor}
                 />

@@ -738,6 +738,30 @@
             flex-basis 180ms cubic-bezier(0.22, 0.72, 0.22, 1);
     }
 
+    /* T70: the drawer owns its live height; the existing dock keeps owning
+       the stable portal and places it against that height. The Mod bar thus
+       follows every drag frame without remounting or entering the editor. */
+    .mobile-bottom-dock[data-mod-bar-placement="parked"][data-mseg-drawer-open="true"]
+    .mobile-global-mod-rail-portal {
+        position: fixed;
+        right: 0;
+        bottom: var(--mobile-mseg-drawer-height);
+        left: 0;
+        width: auto;
+        transition:
+            bottom 200ms ease,
+            height 180ms cubic-bezier(0.22, 0.72, 0.22, 1),
+            flex-basis 180ms cubic-bezier(0.22, 0.72, 0.22, 1);
+    }
+
+    .cosimo-surface.is-mobile-shell:has(
+        > .quick-source-sheet[data-source-kind="mseg"].is-resizing
+    )
+    > .mobile-bottom-dock[data-mod-bar-placement="parked"][data-mseg-drawer-open="true"]
+    .mobile-global-mod-rail-portal {
+        transition: none;
+    }
+
     .mobile-bottom-dock[data-mod-bar-placement="parked"][data-parked-visibility="hidden"]
     .mobile-global-mod-rail-portal {
         height: 0;

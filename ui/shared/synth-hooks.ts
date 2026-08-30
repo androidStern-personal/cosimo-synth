@@ -2172,9 +2172,20 @@ export function useMsegEditorInteractions({
         };
     }, [cancelActivePointer, isOpen]);
 
-    const openEditor = useCallback(() => {
+    const beginEditorSession = useCallback(() => {
         setUndoShape(null);
         activeGestureUndoCapturedRef.current = false;
+        cancelActivePointer();
+    }, [cancelActivePointer]);
+
+    const openEditor = useCallback(() => {
+        beginEditorSession();
+        setIsOpen(true);
+    }, [beginEditorSession]);
+
+    // Expanding the compact drawer changes presentation without starting a
+    // new edit session, so its one-level undo checkpoint must remain intact.
+    const resumeEditorSession = useCallback(() => {
         setIsOpen(true);
     }, []);
 
@@ -2507,7 +2518,9 @@ export function useMsegEditorInteractions({
         hoveredSegmentIndex,
         activeSegmentIndex,
         canUndo: undoShape !== null,
+        beginEditorSession,
         openEditor,
+        resumeEditorSession,
         closeEditor,
         undoLastEdit,
         handlePointerDown,

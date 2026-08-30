@@ -2192,17 +2192,31 @@ test("T60 hide and restore keep quick and full MSEG editors mounted without dead
         };
     }, surfaceSelector);
 
-    const assertRestoreOwnership = (ownership, label) => {
+    const assertRestoreOwnership = (ownership, label, { maySitAboveSurface = false } = {}) => {
         assert.ok(ownership);
         assert.equal(ownership.visibleCenterOwned, true, `${label}: visible restore center must remain usable.`);
         assert.equal(Math.abs(ownership.visibleWidth - 33) <= 0.5, true);
         assert.equal(Math.abs(ownership.visibleHeight - 15.4) <= 0.5, true);
-        for (const point of ownership.transparentSurfaceOwnership) {
+        if (maySitAboveSurface) {
             assert.equal(
-                point.surfaceIsUnder,
+                ownership.restoreBounds.bottom <= ownership.surfaceBounds.top + 0.5,
                 true,
-                `${label}: expected editor surface beneath restore bounds: ${JSON.stringify(ownership)}`,
+                `${label}: the hidden restore tab must stay above the moved drawer surface.`,
             );
+            assert.equal(
+                Math.abs(ownership.restoreBounds.bottom - ownership.surfaceBounds.top) <= 1.5,
+                true,
+                `${label}: the hidden restore tab must remain attached to the drawer lip.`,
+            );
+        }
+        for (const point of ownership.transparentSurfaceOwnership) {
+            if (!maySitAboveSurface) {
+                assert.equal(
+                    point.surfaceIsUnder,
+                    true,
+                    `${label}: expected editor surface beneath restore bounds: ${JSON.stringify(ownership)}`,
+                );
+            }
             assert.equal(
                 point.restoreMasksSurface,
                 false,
@@ -2244,6 +2258,7 @@ test("T60 hide and restore keep quick and full MSEG editors mounted without dead
         assertRestoreOwnership(
             await readRestoreOwnership('[data-role="quick-source-sheet-grip"]'),
             "quick editor",
+            { maySitAboveSurface: true },
         );
 
         await clickVisibleRestore();
@@ -2289,6 +2304,965 @@ test("T60 hide and restore keep quick and full MSEG editors mounted without dead
             delete globalThis.__cosimoT60FullEditor;
         }).catch(() => {});
         await page.close();
+    }
+});
+
+test("T70 parked Mod bar follows the open MSEG drawer lip without stealing editor hits", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem("cosimo.mod-bar.preferences.v1", JSON.stringify({
+                    version: 1,
+                    scale: 1.1,
+                    placement: "parked",
+                    parkedVisibility: "visible",
+                }));
+            });
+        },
+    });
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"][data-placement="parked"]');
+        await rail.waitFor();
+        await rail.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+
+        const drawer = page.locator('[data-role="quick-source-sheet"][data-source-kind="mseg"]');
+        await drawer.waitFor();
+        const geometry = await page.evaluate(() => {
+            const rectOf = (element) => {
+                if (!(element instanceof Element)) {
+                    return null;
+                }
+                const bounds = element.getBoundingClientRect();
+                return {
+                    left: bounds.left,
+                    right: bounds.right,
+                    top: bounds.top,
+                    bottom: bounds.bottom,
+                    width: bounds.width,
+                    height: bounds.height,
+                };
+            };
+            const drawerElement = document.querySelector(
+                '[data-role="quick-source-sheet"][data-source-kind="mseg"]',
+            );
+            const railElement = document.querySelector(
+                '[data-role="mobile-global-mod-rail"][data-placement="parked"]',
+            );
+            const editorTargets = [...(drawerElement?.querySelectorAll([
+                '[data-role="mseg-point"]',
+                '[data-role="quick-source-sheet-cell-rate"]',
+                '[data-role="quick-source-sheet-cell-morph"]',
+                '[data-role="mseg-shape-a"]',
+                '[data-role="mseg-shape-b"]',
+                '[data-role="mseg-loop-toggle"]',
+            ].join(", ")) ?? [])].filter((element) => {
+                const bounds = element.getBoundingClientRect();
+                return bounds.width > 0 && bounds.height > 0;
+            });
+            return {
+                drawer: rectOf(drawerElement),
+                rail: rectOf(railElement),
+                targetHits: editorTargets.map((element) => {
+                    const bounds = element.getBoundingClientRect();
+                    const center = {
+                        x: bounds.left + (bounds.width / 2),
+                        y: bounds.top + (bounds.height / 2),
+                    };
+                    const hit = document.elementFromPoint(center.x, center.y);
+                    return {
+                        role: element.getAttribute("data-role"),
+                        owned: hit !== null && element.contains(hit),
+                        hitRole: hit?.closest("[data-role]")?.getAttribute("data-role") ?? hit?.tagName ?? null,
+                    };
+                }),
+            };
+        });
+
+        assert.ok(geometry.drawer && geometry.rail);
+        assert.equal(
+            Math.abs(geometry.rail.bottom - geometry.drawer.top) <= 0.5,
+            true,
+            `Parked row must meet the compact drawer lip: ${JSON.stringify(geometry)}`,
+        );
+        assert.equal(geometry.rail.bottom <= geometry.drawer.top + 0.5, true);
+        assert.equal(geometry.targetHits.length >= 7, true);
+        assert.deepEqual(
+            geometry.targetHits.filter((target) => !target.owned),
+            [],
+            `The parked row stole MSEG editor hit points: ${JSON.stringify(geometry)}`,
+        );
+    } finally {
+        await page.evaluate(() => {
+            localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+        }).catch(() => {});
+        await page.close();
+    }
+});
+
+test("T70 parked row tracks live MSEG drawer movement and detents across compact phones", async () => {
+    for (const viewport of [
+        { name: "portrait phone", width: 393, height: 852 },
+        { name: "landscape phone", width: 568, height: 320 },
+    ]) {
+        const page = await openHarnessPage({
+            beforeGoto: async (nextPage) => {
+                await nextPage.setViewportSize({ width: viewport.width, height: viewport.height });
+                await nextPage.addInitScript(() => {
+                    localStorage.setItem("cosimo.mod-bar.preferences.v1", JSON.stringify({
+                        version: 1,
+                        scale: 1.1,
+                        placement: "parked",
+                        parkedVisibility: "visible",
+                    }));
+                });
+            },
+        });
+
+        const readAttachment = async () => page.evaluate(() => {
+            const drawer = document.querySelector('[data-role="quick-source-sheet"][data-source-kind="mseg"]');
+            const rail = document.querySelector(
+                '[data-role="mobile-global-mod-rail"][data-placement="parked"]',
+            );
+            if (!(drawer instanceof HTMLElement) || !(rail instanceof HTMLElement)) {
+                return null;
+            }
+            const drawerBounds = drawer.getBoundingClientRect();
+            const railBounds = rail.getBoundingClientRect();
+            return {
+                drawerTop: drawerBounds.top,
+                railBottom: railBounds.bottom,
+                gap: drawerBounds.top - railBounds.bottom,
+                detent: drawer.getAttribute("data-detent"),
+                sourceSlot: drawer.getAttribute("data-source-slot"),
+                pageIndex: rail.getAttribute("data-page-index"),
+                selectedLabel: rail.querySelector(
+                    '[data-role="mobile-global-mod-rail-selected"]',
+                )?.getAttribute("aria-label") ?? null,
+            };
+        });
+        const assertAttached = async (label) => {
+            const attachment = await readAttachment();
+            assert.ok(attachment, `${viewport.name} ${label}: drawer and parked row must exist.`);
+            assert.equal(
+                Math.abs(attachment.gap) <= 0.75,
+                true,
+                `${viewport.name} ${label}: parked row left the live drawer lip: ${JSON.stringify(attachment)}`,
+            );
+            assert.equal(attachment.sourceSlot, "1");
+            assert.equal(attachment.selectedLabel, "MSEG 1 selected");
+            return attachment;
+        };
+        const startTransitionGapMonitor = async () => {
+            await page.evaluate(() => {
+                const monitor = { gaps: [], active: true };
+                globalThis.__cosimoT70GapMonitor = monitor;
+                const sample = () => {
+                    if (!monitor.active) {
+                        return;
+                    }
+                    const drawer = document.querySelector(
+                        '[data-role="quick-source-sheet"][data-source-kind="mseg"]',
+                    );
+                    const rail = document.querySelector(
+                        '[data-role="mobile-global-mod-rail"][data-placement="parked"]',
+                    );
+                    if (drawer instanceof HTMLElement && rail instanceof HTMLElement) {
+                        monitor.gaps.push(
+                            drawer.getBoundingClientRect().top - rail.getBoundingClientRect().bottom,
+                        );
+                    }
+                    requestAnimationFrame(sample);
+                };
+                requestAnimationFrame(sample);
+            });
+        };
+        const stopTransitionGapMonitor = async (label) => {
+            await page.waitForTimeout(240);
+            const gaps = await page.evaluate(() => {
+                const monitor = globalThis.__cosimoT70GapMonitor;
+                if (!monitor) {
+                    return [];
+                }
+                monitor.active = false;
+                return monitor.gaps;
+            });
+            assert.equal(gaps.length > 2, true, `${viewport.name} ${label}: expected transition samples.`);
+            assert.equal(
+                Math.max(...gaps.map((gap) => Math.abs(gap))) <= 0.75,
+                true,
+                `${viewport.name} ${label}: parked row jumped during detent settling: ${JSON.stringify(gaps)}`,
+            );
+        };
+        const beginGripDrag = async () => {
+            const grip = page.locator('[data-role="quick-source-sheet-grip"]');
+            const bounds = await grip.boundingBox();
+            assert.ok(bounds);
+            const start = {
+                x: bounds.x + (bounds.width / 2),
+                y: bounds.y + (bounds.height / 2),
+            };
+            await page.mouse.move(start.x, start.y);
+            await page.mouse.down();
+            return start;
+        };
+
+        try {
+            const rail = page.locator('[data-role="mobile-global-mod-rail"][data-placement="parked"]');
+            await rail.waitFor();
+            const shapeBefore = readStoredMsegShape(await getHarnessSnapshot(page));
+            await rail.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+            await page.locator('[data-role="quick-source-sheet"][data-source-kind="mseg"]').waitFor();
+            await assertAttached("compact detent");
+
+            await rail.getByRole("button", { name: "Next Mod bar group" }).click();
+            await rail.locator('xpath=self::*[@data-page-index="1"]').waitFor();
+            const permanentChrome = await rail.evaluate((element) => {
+                const note = element.querySelector('[data-role="mobile-global-mod-rail-note"]');
+                const next = element.querySelector('[data-role="mobile-global-mod-rail-parked-next"]');
+                if (!(note instanceof HTMLButtonElement) || !(next instanceof HTMLButtonElement)) {
+                    return null;
+                }
+                const noteBounds = note.getBoundingClientRect();
+                const noteCenter = {
+                    x: noteBounds.left + (noteBounds.width / 2),
+                    y: noteBounds.top + (noteBounds.height / 2),
+                };
+                return {
+                    noteImmediatelyBeforeNext: note.nextElementSibling === next,
+                    noteTouchesNext: Math.abs(noteBounds.right - next.getBoundingClientRect().left) <= 0.5,
+                    noteOwnsHit: document.elementFromPoint(noteCenter.x, noteCenter.y)?.closest("button") === note,
+                };
+            });
+            assert.deepEqual(permanentChrome, {
+                noteImmediatelyBeforeNext: true,
+                noteTouchesNext: true,
+                noteOwnsHit: true,
+            });
+
+            let dragStart = await beginGripDrag();
+            for (const fraction of [0.05, 0.1, 0.16]) {
+                await page.mouse.move(
+                    dragStart.x,
+                    dragStart.y - (viewport.height * fraction),
+                    { steps: 2 },
+                );
+                await waitForReactFrames(page, 1);
+                const attachment = await assertAttached(`live upward drag ${fraction}`);
+                assert.equal(attachment.detent, "dragging");
+                assert.equal(attachment.pageIndex, "1");
+            }
+            await startTransitionGapMonitor();
+            await page.mouse.up();
+            await stopTransitionGapMonitor("compact-to-half transition");
+            const halfAttachment = await assertAttached("half detent");
+            assert.equal(halfAttachment.detent, "half");
+            assert.equal(halfAttachment.pageIndex, "1");
+
+            dragStart = await beginGripDrag();
+            await page.mouse.move(
+                dragStart.x,
+                dragStart.y + (viewport.height * 0.19),
+                { steps: 6 },
+            );
+            await assertAttached("live downward drag");
+            await startTransitionGapMonitor();
+            await page.mouse.up();
+            await stopTransitionGapMonitor("half-to-compact transition");
+            const compactAttachment = await assertAttached("returned compact detent");
+            assert.equal(compactAttachment.detent, "compact");
+            assert.equal(compactAttachment.pageIndex, "1");
+
+            dragStart = await beginGripDrag();
+            await page.mouse.move(
+                dragStart.x,
+                dragStart.y + (viewport.height * 0.12),
+                { steps: 6 },
+            );
+            await assertAttached("live dismiss drag");
+            await page.mouse.up();
+            await page.locator('[data-role="quick-source-sheet"]').waitFor({ state: "detached" });
+
+            const closedLayout = await page.evaluate(() => {
+                const rail = document.querySelector(
+                    '[data-role="mobile-global-mod-rail"][data-placement="parked"]',
+                );
+                const tabs = document.querySelector('[data-role="mobile-workspace-tabs"]');
+                if (!(rail instanceof HTMLElement) || !(tabs instanceof HTMLElement)) {
+                    return null;
+                }
+                return {
+                    gap: tabs.getBoundingClientRect().top - rail.getBoundingClientRect().bottom,
+                    pageIndex: rail.getAttribute("data-page-index"),
+                };
+            });
+            assert.ok(closedLayout);
+            assert.equal(Math.abs(closedLayout.gap) <= 0.75, true);
+            assert.equal(closedLayout.pageIndex, "1");
+            assert.deepEqual(readStoredMsegShape(await getHarnessSnapshot(page)), shapeBefore);
+        } finally {
+            await page.evaluate(() => {
+                localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+                delete globalThis.__cosimoT70GapMonitor;
+            }).catch(() => {});
+            await page.mouse.up().catch(() => {});
+            await page.close();
+        }
+    }
+});
+
+test("T70 moving the MSEG drawer preserves a pending parked source drag through its drop", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem("cosimo.mod-bar.preferences.v1", JSON.stringify({
+                    version: 1,
+                    scale: 1.1,
+                    placement: "parked",
+                    parkedVisibility: "visible",
+                }));
+            });
+        },
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        const sourceNumber = page.locator('[data-role="mobile-mod-source-number"]');
+        await sourceNumber.waitFor();
+        await sourceNumber.selectOption("2");
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-global-mod-rail-selected"]')
+                ?.getAttribute("aria-label") === "MSEG 2 selected"
+        ));
+        const shapeBefore = readStoredMsegShape(await getHarnessSnapshot(page), 1);
+
+        await page.click('[data-role="mobile-workspace-tab-voice"]');
+        const rail = page.locator('[data-role="mobile-global-mod-rail"][data-placement="parked"]');
+        await rail.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+        const drawer = page.locator('[data-role="quick-source-sheet"][data-source-slot="2"]');
+        const grip = drawer.locator('[data-role="quick-source-sheet-grip"]');
+        const rate = drawer.locator('[data-role="quick-source-sheet-cell-rate"]');
+        await rate.waitFor();
+        if (await rail.getAttribute("data-page-index") !== "0") {
+            await rail.getByRole("button", { name: "Previous Mod bar group" }).click();
+            await rail.locator('xpath=self::*[@data-page-index="0"]').waitFor();
+        }
+
+        const source = rail.locator('[data-role="rack-mod-source-mseg-1"]');
+        const sourceBounds = await source.boundingBox();
+        const initialRateBounds = await rate.boundingBox();
+        assert.ok(sourceBounds && initialRateBounds);
+        const sourceCenter = {
+            x: sourceBounds.x + (sourceBounds.width / 2),
+            y: sourceBounds.y + (sourceBounds.height / 2),
+        };
+        const initialRateCenter = {
+            x: initialRateBounds.x + (initialRateBounds.width / 2),
+            y: initialRateBounds.y + (initialRateBounds.height / 2),
+        };
+        await page.mouse.move(sourceCenter.x, sourceCenter.y);
+        await page.mouse.down();
+        await page.mouse.move(
+            sourceCenter.x + ((initialRateCenter.x - sourceCenter.x) * 0.25),
+            sourceCenter.y + ((initialRateCenter.y - sourceCenter.y) * 0.25),
+            { steps: 4 },
+        );
+        await rail.locator('xpath=self::*[@data-mapping-active="true"]').waitFor();
+        const selectedDuringDrag = await rail.locator(
+            '[data-role="mobile-global-mod-rail-selected"]',
+        ).getAttribute("aria-label");
+
+        await grip.evaluate((element) => {
+            const bounds = element.getBoundingClientRect();
+            const pointerId = 707;
+            const startX = bounds.left + (bounds.width / 2);
+            const startY = bounds.top + (bounds.height / 2);
+            element.dispatchEvent(new PointerEvent("pointerdown", {
+                bubbles: true,
+                pointerId,
+                pointerType: "touch",
+                isPrimary: false,
+                button: 0,
+                buttons: 1,
+                clientX: startX,
+                clientY: startY,
+            }));
+            window.dispatchEvent(new PointerEvent("pointermove", {
+                bubbles: true,
+                pointerId,
+                pointerType: "touch",
+                isPrimary: false,
+                button: 0,
+                buttons: 1,
+                clientX: startX,
+                clientY: startY - 150,
+            }));
+        });
+        await drawer.locator('xpath=self::*[@data-detent="dragging"]').waitFor();
+        assert.equal(await rail.getAttribute("data-mapping-active"), "true");
+        const liveGap = await page.evaluate(() => {
+            const drawerElement = document.querySelector('[data-role="quick-source-sheet"]');
+            const railElement = document.querySelector(
+                '[data-role="mobile-global-mod-rail"][data-placement="parked"]',
+            );
+            if (!(drawerElement instanceof HTMLElement) || !(railElement instanceof HTMLElement)) {
+                return null;
+            }
+            return drawerElement.getBoundingClientRect().top - railElement.getBoundingClientRect().bottom;
+        });
+        assert.ok(liveGap !== null && Math.abs(liveGap) <= 0.75);
+
+        await page.evaluate(() => {
+            const gripElement = document.querySelector('[data-role="quick-source-sheet-grip"]');
+            if (!(gripElement instanceof HTMLElement)) {
+                throw new Error("MSEG drawer grip missing during the second-pointer release.");
+            }
+            const gripBounds = gripElement.getBoundingClientRect();
+            window.dispatchEvent(new PointerEvent("pointerup", {
+                bubbles: true,
+                pointerId: 707,
+                pointerType: "touch",
+                isPrimary: false,
+                button: 0,
+                buttons: 0,
+                clientX: gripBounds.left + (gripBounds.width / 2),
+                clientY: gripBounds.top + (gripBounds.height / 2),
+            }));
+        });
+        await drawer.locator('xpath=self::*[@data-detent="half"]').waitFor();
+        await page.waitForTimeout(220);
+        assert.equal(
+            await rail.getAttribute("data-mapping-active"),
+            "true",
+            "Settling the drawer must not cancel the original source pointer.",
+        );
+        assert.equal(
+            await rail.locator('[data-role="mobile-global-mod-rail-selected"]').getAttribute("aria-label"),
+            selectedDuringDrag,
+            "Moving the drawer must not replace the selected MSEG before the drop commits.",
+        );
+
+        const movedRateBounds = await rate.boundingBox();
+        assert.ok(movedRateBounds);
+        await page.mouse.move(
+            movedRateBounds.x + (movedRateBounds.width / 2),
+            movedRateBounds.y + (movedRateBounds.height / 2),
+            { steps: 8 },
+        );
+        await page.mouse.up();
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "pending source drag completes after drawer movement",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
+                route.sourceKind === "mseg"
+                && route.sourceSlot === 1
+                && route.targetKind === "mseg2Rate"
+            )),
+        );
+        assert.equal(await drawer.getAttribute("data-source-slot"), "2");
+        assert.equal(
+            await rail.locator('[data-role="mobile-global-mod-rail-selected"]').getAttribute("aria-label"),
+            "MSEG 1 selected",
+            "The successful drop may commit the dragged source after drawer movement.",
+        );
+        assert.deepEqual(readStoredMsegShape(snapshot, 1), shapeBefore);
+    } finally {
+        await page.evaluate(() => {
+            localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+        }).catch(() => {});
+        await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
+test("T71 drawer-to-full-screen MSEG gives its controls a row above the parked Mod bar", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem("cosimo.mod-bar.preferences.v1", JSON.stringify({
+                    version: 1,
+                    scale: 1.1,
+                    placement: "parked",
+                    parkedVisibility: "visible",
+                }));
+            });
+        },
+    });
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"][data-placement="parked"]');
+        await rail.waitFor();
+        await rail.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+
+        const drawer = page.locator('[data-role="quick-source-sheet"][data-source-kind="mseg"]');
+        const grip = drawer.locator('[data-role="quick-source-sheet-grip"]');
+        const gripBounds = await grip.boundingBox();
+        assert.ok(gripBounds);
+        const gripCenter = {
+            x: gripBounds.x + (gripBounds.width / 2),
+            y: gripBounds.y + (gripBounds.height / 2),
+        };
+        await page.mouse.move(gripCenter.x, gripCenter.y);
+        await page.mouse.down();
+        await page.mouse.move(gripCenter.x, gripCenter.y - 370, { steps: 8 });
+        await page.mouse.up();
+
+        const editor = page.locator('[data-role="mseg-editor-dialog"]');
+        await editor.waitFor();
+        const geometry = await page.evaluate(() => {
+            const rectOf = (element) => {
+                if (!(element instanceof Element)) {
+                    return null;
+                }
+                const bounds = element.getBoundingClientRect();
+                return {
+                    left: bounds.left,
+                    right: bounds.right,
+                    top: bounds.top,
+                    bottom: bounds.bottom,
+                    width: bounds.width,
+                    height: bounds.height,
+                };
+            };
+            const controls = document.querySelector('[data-role="mseg-editor-controls"]');
+            const railElement = document.querySelector(
+                '[data-role="mobile-global-mod-rail"][data-placement="parked"]',
+            );
+            const hitOwnership = (elements) => elements.map((element) => {
+                const bounds = element.getBoundingClientRect();
+                const center = {
+                    x: bounds.left + (bounds.width / 2),
+                    y: bounds.top + (bounds.height / 2),
+                };
+                const hit = document.elementFromPoint(center.x, center.y);
+                return {
+                    role: element.getAttribute("data-role") ?? element.getAttribute("aria-label"),
+                    owned: hit !== null && element.contains(hit),
+                    hitRole: hit?.closest("[data-role]")?.getAttribute("data-role") ?? hit?.tagName ?? null,
+                };
+            });
+            const editorTargets = [...document.querySelectorAll([
+                '[data-role="mseg-editor-controls"] [data-role="mseg-shape-a"]',
+                '[data-role="mseg-editor-controls"] [data-role="mseg-shape-b"]',
+                '[data-role="mseg-editor-cell-rate"]',
+                '[data-role="mseg-editor-cell-morph"]',
+                '[data-role="mseg-editor-controls"] [data-role="mseg-loop-toggle"]',
+                '[data-role="mseg-editor-surface"] [data-role="mseg-point"]',
+            ].join(", "))].filter((element) => {
+                const bounds = element.getBoundingClientRect();
+                return bounds.width > 0 && bounds.height > 0;
+            });
+            const railTargets = [...(railElement?.querySelectorAll("button") ?? [])].filter((element) => {
+                const bounds = element.getBoundingClientRect();
+                return bounds.width > 0 && bounds.height > 0;
+            });
+            return {
+                controls: rectOf(controls),
+                rail: rectOf(railElement),
+                editorHits: hitOwnership(editorTargets),
+                railHits: hitOwnership(railTargets),
+            };
+        });
+
+        assert.ok(geometry.controls && geometry.rail);
+        assert.equal(
+            geometry.controls.bottom <= geometry.rail.top + 0.5,
+            true,
+            `Full-screen MSEG controls must not overlap the parked row: ${JSON.stringify(geometry)}`,
+        );
+        assert.equal(
+            Math.abs(geometry.controls.bottom - geometry.rail.top) <= 0.5,
+            true,
+            `Full-screen controls must sit directly above the parked row: ${JSON.stringify(geometry)}`,
+        );
+        assert.equal(geometry.editorHits.length >= 7, true);
+        assert.deepEqual(geometry.editorHits.filter((target) => !target.owned), []);
+        assert.equal(geometry.railHits.length >= 8, true);
+        assert.deepEqual(geometry.railHits.filter((target) => !target.owned), []);
+    } finally {
+        await page.evaluate(() => {
+            localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+        }).catch(() => {});
+        await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
+test("T71 full-screen MSEG and parked Mod bar stay operable across compact phones", async () => {
+    for (const viewport of [
+        { name: "portrait phone", width: 393, height: 852 },
+        { name: "landscape phone", width: 568, height: 320 },
+    ]) {
+        const page = await openHarnessPage({
+            beforeGoto: async (nextPage) => {
+                await nextPage.setViewportSize({ width: viewport.width, height: viewport.height });
+                await nextPage.addInitScript(() => {
+                    localStorage.setItem("cosimo.mod-bar.preferences.v1", JSON.stringify({
+                        version: 1,
+                        scale: 1.1,
+                        placement: "parked",
+                        parkedVisibility: "visible",
+                    }));
+                });
+            },
+        });
+
+        try {
+            const rail = page.locator('[data-role="mobile-global-mod-rail"][data-placement="parked"]');
+            await rail.waitFor();
+            const readShapeB = (snapshot) => readStoredModulationState(snapshot).msegSlots[0].shapeB;
+            const shapeBefore = readShapeB(await getHarnessSnapshot(page));
+            await rail.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+
+            const drawer = page.locator('[data-role="quick-source-sheet"][data-source-kind="mseg"]');
+            const drawerSurface = drawer.locator('[data-role="quick-sheet-mseg-surface"]');
+            await drawerSurface.waitFor();
+            const grip = drawer.locator('[data-role="quick-source-sheet-grip"]');
+            const halfGripBounds = await grip.boundingBox();
+            assert.ok(halfGripBounds);
+            const halfGripCenter = {
+                x: halfGripBounds.x + (halfGripBounds.width / 2),
+                y: halfGripBounds.y + (halfGripBounds.height / 2),
+            };
+            await page.mouse.move(halfGripCenter.x, halfGripCenter.y);
+            await page.mouse.down();
+            await page.mouse.move(
+                halfGripCenter.x,
+                halfGripCenter.y - (viewport.height * 0.16),
+                { steps: 6 },
+            );
+            await page.mouse.up();
+            await drawer.locator('xpath=self::*[@data-detent="half"]').waitFor();
+            await page.waitForTimeout(220);
+
+            await drawer.locator('[data-role="mseg-shape-b"]').click();
+            assert.equal(await drawerSurface.getAttribute("data-edit-shape"), "b");
+
+            const surfaceBounds = await drawerSurface.boundingBox();
+            assert.ok(surfaceBounds);
+            await page.mouse.click(
+                surfaceBounds.x + (surfaceBounds.width * 0.56),
+                surfaceBounds.y + (surfaceBounds.height * 0.85),
+            );
+            const changedSnapshot = await waitForHarnessSnapshot(
+                page,
+                `${viewport.name} drawer point edit`,
+                (snapshot) => readShapeB(snapshot).points.length === shapeBefore.points.length + 1,
+            );
+            const shapeAfterDrawerEdit = readShapeB(changedSnapshot);
+
+            await rail.getByRole("button", { name: "Next Mod bar group" }).click();
+            await rail.locator('xpath=self::*[@data-page-index="1"]').waitFor();
+            const gripBounds = await grip.boundingBox();
+            assert.ok(gripBounds);
+            const gripCenter = {
+                x: gripBounds.x + (gripBounds.width / 2),
+                y: gripBounds.y + (gripBounds.height / 2),
+            };
+            await page.mouse.move(gripCenter.x, gripCenter.y);
+            await page.mouse.down();
+            await page.mouse.move(
+                gripCenter.x,
+                gripCenter.y - (viewport.height * 0.25),
+                { steps: 8 },
+            );
+            await page.mouse.up();
+
+            const editor = page.locator('[data-role="mseg-editor-dialog"]');
+            await editor.waitFor();
+            const editorSurface = editor.locator('[data-role="mseg-editor-surface"]');
+            const controls = editor.locator('[data-role="mseg-editor-controls"]');
+            const fullGeometry = await page.evaluate(() => {
+                const controls = document.querySelector('[data-role="mseg-editor-controls"]');
+                const rail = document.querySelector(
+                    '[data-role="mobile-global-mod-rail"][data-placement="parked"]',
+                );
+                if (!(controls instanceof HTMLElement) || !(rail instanceof HTMLElement)) {
+                    return null;
+                }
+                const controlsBounds = controls.getBoundingClientRect();
+                const railBounds = rail.getBoundingClientRect();
+                return {
+                    gap: railBounds.top - controlsBounds.bottom,
+                    controlsHeight: controlsBounds.height,
+                    railHeight: railBounds.height,
+                    pageIndex: rail.getAttribute("data-page-index"),
+                    selectedLabel: rail.querySelector(
+                        '[data-role="mobile-global-mod-rail-selected"]',
+                    )?.getAttribute("aria-label") ?? null,
+                };
+            });
+            assert.ok(fullGeometry);
+            assert.equal(Math.abs(fullGeometry.gap) <= 0.75, true, JSON.stringify(fullGeometry));
+            assert.equal(Math.abs(fullGeometry.controlsHeight - 40) <= 0.5, true);
+            assert.equal(Math.abs(fullGeometry.railHeight - 40) <= 0.5, true);
+            assert.equal(fullGeometry.pageIndex, "1");
+            assert.equal(fullGeometry.selectedLabel, "MSEG 1 selected");
+            assert.equal(await editorSurface.getAttribute("data-edit-shape"), "b");
+            assert.equal(await editor.locator('[data-role="mseg-editor-undo"]').isDisabled(), false);
+            assert.deepEqual(readShapeB(await getHarnessSnapshot(page)), shapeAfterDrawerEdit);
+
+            const rate = controls.locator('[data-role="mseg-editor-cell-rate"]');
+            await rate.focus();
+            await page.keyboard.press("End");
+            await waitForHarnessSnapshot(
+                page,
+                `${viewport.name} full-screen Rate remains operable`,
+                (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg1Rate) - 2) <= 0.001,
+            );
+
+            const morph = controls.locator('[data-role="mseg-editor-cell-morph"]');
+            await morph.focus();
+            await page.keyboard.press("End");
+            await waitForHarnessSnapshot(
+                page,
+                `${viewport.name} full-screen Morph remains operable`,
+                (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg1Morph) - 1) <= 0.001,
+            );
+
+            await controls.locator('[data-role="mseg-shape-a"]').click();
+            assert.equal(await editorSurface.getAttribute("data-edit-shape"), "a");
+            await controls.locator('[data-role="mseg-shape-b"]').click();
+            assert.equal(await editorSurface.getAttribute("data-edit-shape"), "b");
+
+            const loop = controls.locator('[data-role="mseg-loop-toggle"]');
+            const loopBefore = await loop.getAttribute("aria-pressed");
+            await loop.click();
+            await page.waitForFunction((previous) => (
+                document.querySelector('[data-role="mseg-editor-controls"] [data-role="mseg-loop-toggle"]')
+                    ?.getAttribute("aria-pressed") !== previous
+            ), loopBefore);
+            const loopAfter = await loop.getAttribute("aria-pressed");
+            assert.notEqual(loopAfter, loopBefore);
+
+            await rail.getByRole("button", { name: "Next Mod bar group" }).click();
+            await rail.locator('xpath=self::*[@data-page-index="2"]').waitFor();
+            const parkedChrome = await rail.evaluate((element) => {
+                const note = element.querySelector('[data-role="mobile-global-mod-rail-note"]');
+                const next = element.querySelector('[data-role="mobile-global-mod-rail-parked-next"]');
+                if (!(note instanceof HTMLButtonElement) || !(next instanceof HTMLButtonElement)) {
+                    return null;
+                }
+                const noteBounds = note.getBoundingClientRect();
+                const center = {
+                    x: noteBounds.left + (noteBounds.width / 2),
+                    y: noteBounds.top + (noteBounds.height / 2),
+                };
+                return {
+                    immediatelyBeforeNext: note.nextElementSibling === next,
+                    ownsHit: document.elementFromPoint(center.x, center.y)?.closest("button") === note,
+                };
+            });
+            assert.deepEqual(parkedChrome, { immediatelyBeforeNext: true, ownsHit: true });
+
+            await editor.locator('[data-role="mseg-editor-undo"]').click();
+            await waitForHarnessSnapshot(
+                page,
+                `${viewport.name} drawer undo survives full-screen transition`,
+                (snapshot) => JSON.stringify(readShapeB(snapshot)) === JSON.stringify(shapeBefore),
+            );
+            await page.locator('[data-action="shell-back"]').click();
+            await editor.waitFor({ state: "detached" });
+
+            await rail.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+            await drawer.waitFor();
+            const returnedState = await drawer.evaluate((element) => {
+                const rate = element.querySelector('[data-role="quick-source-sheet-cell-rate"]');
+                const morph = element.querySelector('[data-role="quick-source-sheet-cell-morph"]');
+                const loop = element.querySelector('[data-role="mseg-loop-toggle"]');
+                const surface = element.querySelector('[data-role="quick-sheet-mseg-surface"]');
+                const rail = document.querySelector(
+                    '[data-role="mobile-global-mod-rail"][data-placement="parked"]',
+                );
+                const drawerBounds = element.getBoundingClientRect();
+                const railBounds = rail?.getBoundingClientRect();
+                return {
+                    sourceSlot: element.getAttribute("data-source-slot"),
+                    editShape: surface?.getAttribute("data-edit-shape") ?? null,
+                    rate: Number(rate?.getAttribute("aria-valuenow")),
+                    morph: Number(morph?.getAttribute("aria-valuenow")),
+                    loop: loop?.getAttribute("aria-pressed") ?? null,
+                    pageIndex: rail?.getAttribute("data-page-index") ?? null,
+                    gap: railBounds === undefined ? null : drawerBounds.top - railBounds.bottom,
+                };
+            });
+            assert.equal(returnedState.sourceSlot, "1");
+            assert.equal(returnedState.editShape, "b");
+            assert.equal(Math.abs(returnedState.rate - 2) <= 0.001, true);
+            assert.equal(Math.abs(returnedState.morph - 1) <= 0.001, true);
+            assert.equal(returnedState.loop, loopAfter);
+            assert.equal(returnedState.pageIndex, "2");
+            assert.ok(returnedState.gap !== null && Math.abs(returnedState.gap) <= 0.75);
+            assert.deepEqual(readShapeB(await getHarnessSnapshot(page)), shapeBefore);
+        } finally {
+            await page.evaluate(() => {
+                localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+            }).catch(() => {});
+            await page.mouse.up().catch(() => {});
+            await page.close();
+        }
+    }
+});
+
+test("T71 switching MSEG drawers starts a clean Undo session before full-screen expansion", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem("cosimo.mod-bar.preferences.v1", JSON.stringify({
+                    version: 1,
+                    scale: 1.1,
+                    placement: "parked",
+                    parkedVisibility: "visible",
+                }));
+            });
+        },
+    });
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"][data-placement="parked"]');
+        await rail.waitFor();
+        const initialSnapshot = await getHarnessSnapshot(page);
+        const mseg1Before = readStoredMsegShape(initialSnapshot, 0);
+        const mseg2Before = readStoredMsegShape(initialSnapshot, 1);
+
+        await rail.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+        const drawer = page.locator('[data-role="quick-source-sheet"][data-source-kind="mseg"]');
+        const grip = drawer.locator('[data-role="quick-source-sheet-grip"]');
+        await drawer.waitFor();
+        const gripBounds = await grip.boundingBox();
+        assert.ok(gripBounds);
+        const gripCenter = {
+            x: gripBounds.x + (gripBounds.width / 2),
+            y: gripBounds.y + (gripBounds.height / 2),
+        };
+        await page.mouse.move(gripCenter.x, gripCenter.y);
+        await page.mouse.down();
+        await page.mouse.move(gripCenter.x, gripCenter.y - 140, { steps: 6 });
+        await page.mouse.up();
+        await drawer.locator('xpath=self::*[@data-detent="half"]').waitFor();
+        await page.waitForTimeout(220);
+
+        const mseg1Surface = drawer.locator('[data-role="quick-sheet-mseg-surface"]');
+        const surfaceBounds = await mseg1Surface.boundingBox();
+        assert.ok(surfaceBounds);
+        await page.mouse.click(
+            surfaceBounds.x + (surfaceBounds.width * 0.56),
+            surfaceBounds.y + (surfaceBounds.height * 0.85),
+        );
+        const editedSnapshot = await waitForHarnessSnapshot(
+            page,
+            "MSEG 1 drawer creates an Undo checkpoint",
+            (snapshot) => readStoredMsegShape(snapshot, 0).points.length === mseg1Before.points.length + 1,
+        );
+        const mseg1AfterEdit = readStoredMsegShape(editedSnapshot, 0);
+
+        await rail.getByRole("button", { name: "Next Mod bar group" }).click();
+        await rail.locator('xpath=self::*[@data-page-index="1"]').waitFor();
+        await rail.locator('[data-role="rack-mod-source-mseg-2"]').click();
+        await drawer.locator('xpath=self::*[@data-source-slot="2"]').waitFor();
+        assert.deepEqual(readStoredMsegShape(await getHarnessSnapshot(page), 1), mseg2Before);
+
+        await drawer.locator('[data-role="quick-source-sheet-full-editor"]').click();
+        const editor = page.locator('[data-role="mseg-editor-dialog"]');
+        await editor.waitFor();
+        assert.equal(await editor.getAttribute("aria-label"), "MSEG 2 editor");
+        assert.equal(
+            await editor.locator('[data-role="mseg-editor-undo"]').isDisabled(),
+            true,
+            "MSEG 2 must not inherit the prior MSEG 1 drawer's Undo checkpoint.",
+        );
+        const finalSnapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(readStoredMsegShape(finalSnapshot, 0), mseg1AfterEdit);
+        assert.deepEqual(readStoredMsegShape(finalSnapshot, 1), mseg2Before);
+    } finally {
+        await page.evaluate(() => {
+            localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+        }).catch(() => {});
+        await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
+test("T71 floating Mod-bar placements retain their full-editor overlay behavior", async () => {
+    for (const placement of ["floating-left", "floating-right"]) {
+        const page = await openHarnessPage({
+            beforeGoto: async (nextPage) => {
+                await nextPage.setViewportSize({ width: 393, height: 852 });
+                await nextPage.addInitScript(({ placement: initialPlacement }) => {
+                    localStorage.setItem("cosimo.mod-bar.preferences.v1", JSON.stringify({
+                        version: 1,
+                        scale: 1.1,
+                        placement: initialPlacement,
+                        parkedVisibility: "visible",
+                    }));
+                }, { placement });
+            },
+        });
+
+        try {
+            const expectedEdge = placement === "floating-left" ? "left" : "right";
+            const rail = page.locator(
+                `[data-role="mobile-global-mod-rail"][data-edge="${expectedEdge}"]`,
+            );
+            await rail.waitFor();
+            await rail.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+            await page.locator('[data-role="quick-source-sheet-full-editor"]').click();
+            await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
+
+            const geometry = await page.evaluate(() => {
+                const backdrop = document.querySelector(".mseg-editor-backdrop");
+                const controls = document.querySelector('[data-role="mseg-editor-controls"]');
+                const railElement = document.querySelector('[data-role="mobile-global-mod-rail"]');
+                const railLayer = railElement?.closest('[data-role="mobile-global-mod-rail-layer"]');
+                if (!(backdrop instanceof HTMLElement)
+                    || !(controls instanceof HTMLElement)
+                    || !(railElement instanceof HTMLElement)
+                    || !(railLayer instanceof HTMLElement)) {
+                    return null;
+                }
+                const backdropBounds = backdrop.getBoundingClientRect();
+                const controlBounds = controls.getBoundingClientRect();
+                const railBounds = railElement.getBoundingClientRect();
+                const railCenter = {
+                    x: railBounds.left + (railBounds.width / 2),
+                    y: railBounds.top + (railBounds.height / 2),
+                };
+                const stack = document.elementsFromPoint(railCenter.x, railCenter.y);
+                const railIndex = stack.findIndex((element) => railElement.contains(element));
+                const backdropIndex = stack.findIndex((element) => backdrop.contains(element));
+                return {
+                    edge: railElement.getAttribute("data-edge"),
+                    layerPosition: getComputedStyle(railLayer).position,
+                    controlsToBackdropBottom: backdropBounds.bottom - controlBounds.bottom,
+                    railAboveEditor: railIndex >= 0
+                        && backdropIndex >= 0
+                        && railIndex < backdropIndex,
+                };
+            });
+
+            assert.ok(geometry);
+            assert.equal(geometry.edge, expectedEdge);
+            assert.equal(geometry.layerPosition, "fixed");
+            assert.equal(
+                Math.abs(geometry.controlsToBackdropBottom) <= 0.75,
+                true,
+                `${placement} must keep the established unreserved full-editor edge: ${JSON.stringify(geometry)}`,
+            );
+            assert.equal(
+                geometry.railAboveEditor,
+                true,
+                `${placement} must remain global overlay chrome above the full editor.`,
+            );
+        } finally {
+            await page.evaluate(() => {
+                localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+            }).catch(() => {});
+            await page.close();
+        }
     }
 });
 
