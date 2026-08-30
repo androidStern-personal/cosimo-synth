@@ -977,6 +977,19 @@ namespace wt
         return std::intrinsics::pow (10.0f, gainDb / 20.0f);
     }
 
+    /** dbToGain through a wt::GainDbMemo (KeyTrack.cmajor's exact-input memo
+        family): recomputes on any dB change, returns identical bits otherwise. */
+    float32 exactDbToGain (GainDbMemo& memo, float32 gainDb)
+    {
+        if (gainDb != memo.gainDb || memo.gain <= 0.0f)
+        {
+            memo.gainDb = gainDb;
+            memo.gain = dbToGain (gainDb);
+        }
+
+        return memo.gain;
+    }
+
     float32 panLeftGain (float32 pan)
     {
         let normalizedPan = (clampPan (pan) + 1.0f) * 0.25f * float32 (pi);
@@ -1646,6 +1659,19 @@ namespace wt
 
         std::filters::simper::Implementation[voiceCount] unisonLeftFilters;
         std::filters::simper::Implementation[voiceCount] unisonRightFilters;
+        // Exact-input memos (KeyTrack.cmajor) for the per-sample transcendental
+        // work in the sounding-voice path, plus the last SVF coefficient
+        // inputs (a zero Q marks "never derived" — the parameter's floor is
+        // 0.1). Each recomputes on any input change and returns identical
+        // stored bits otherwise, so every path stays sample-exact.
+        NoteFrequencyMemo[voiceCount] voicePlayedPitchMemos;
+        ExactPow2Memo[voiceCount] voiceFilterCutoffRatioMemos;
+        ExactPow2Memo[voiceCount] voiceEnhancerRatioMemos;
+        NoteFrequencyMemo[voiceCount * oscillatorCount] oscillatorPitchMemos;
+        GainDbMemo[voiceCount * oscillatorCount] oscillatorGainMemos;
+        int32[voiceCount] voiceFilterCoefficientMode;
+        float32[voiceCount] voiceFilterCoefficientCutoffHz;
+        float32[voiceCount] voiceFilterCoefficientQ;
         VoiceEnhancerVoice[voiceCount] voiceEnhancers;
         VoiceEnhancerResidueDcBlocker voiceEnhancerResidueDcBlocker;
         int32[voiceCount * oscillatorCount] voiceOscillatorGeneration;
@@ -2850,7 +2876,8 @@ namespace wt
             let canRender = oscillatorGain > 0.0f
                 && activeSlot >= 0
                 && oscillatorFrameCount.at (oscillator) > 0;
-            let baseFrequencyHz = std::notes::noteToFrequency (effectivePitchSemitones);
+            let baseFrequencyHz = exactNoteToFrequency (
+                oscillatorPitchMemos.at (voiceOscillator), effectivePitchSemitones);
 
             rendererFloats.at (rendererBasePhaseIncrementOffset + voiceOscillator)
                 = baseFrequencyHz / float32 (processor.frequency);
@@ -5903,11 +5930,13 @@ namespace wt
                     accumulateVoiceRackSources (voiceIndex);
 
                     let sharedPlayedPitchSemitones = resolveSharedPlayedPitchSemitones (voiceIndex);
+                    let sharedPlayedPitchHz = exactNoteToFrequency (
+                        voicePlayedPitchMemos.at (voice), sharedPlayedPitchSemitones);
                     let voiceSerial = voiceTrackingSerial.at (voice);
                     if (voiceActive.at (voice) != 0 && voiceSerial > trackingSerial)
                     {
                         trackingSerial = voiceSerial;
-                        trackingPitchHz = std::notes::noteToFrequency (sharedPlayedPitchSemitones);
+                        trackingPitchHz = sharedPlayedPitchHz;
                     }
 
                     let processorFrequency = float32 (processor.frequency);
@@ -5931,14 +5960,27 @@ namespace wt
                         ? voiceArticulationFilterQ.at (voice)
                         : filterQIn;
                     let filterKeyTrackEnabled = filterCutoffKeyTrackEnabledIn >= 0.5f;
-                    let targetFilterCutoffHz = resolveVoiceFilterKeyTrackedFrequencyHz (
-                        filterKeyTrackEnabled ? 1.0f : 0.0f,
-                        baseFilterCutoffHz,
-                        std::notes::noteToFrequency (sharedPlayedPitchSemitones),
-                        baseFilterKeyTrackOffsetSemitones,
-                        routeFilterCutoffOctaves,
-                        filterCutoffMinHz,
-                        std::intrinsics::min (filterCutoffMaxHz, processorFrequency * 0.48f));
+                    // resolveVoiceFilterKeyTrackedFrequencyHz's two branches,
+                    // expression for expression, through the voice's exact
+                    // pow memo (its pow argument differs per branch, so a
+                    // key-track toggle simply misses once and recomputes).
+                    let maximumFilterCutoffHz = std::intrinsics::min (
+                        filterCutoffMaxHz, processorFrequency * 0.48f);
+                    let targetFilterCutoffHz = filterKeyTrackEnabled
+                        ? std::intrinsics::clamp (
+                            keyTrackFinitePitchHz (sharedPlayedPitchHz)
+                                * exactKeyTrackRatio (
+                                    voiceFilterCutoffRatioMemos.at (voice),
+                                    baseFilterKeyTrackOffsetSemitones
+                                        + (routeFilterCutoffOctaves * 12.0f)),
+                            filterCutoffMinHz,
+                            maximumFilterCutoffHz)
+                        : std::intrinsics::clamp (
+                            baseFilterCutoffHz * exactPow2 (
+                                voiceFilterCutoffRatioMemos.at (voice),
+                                routeFilterCutoffOctaves),
+                            filterCutoffMinHz,
+                            maximumFilterCutoffHz);
                     let effectiveFilterCutoffHz = filterKeyTrackEnabled
                         ? advanceKeyTrackSmoothedValue (
                             voiceFilterKeyTrackSmoothedHz.at (voice),
@@ -5958,10 +6000,11 @@ namespace wt
                         voiceIndex,
                         modulationTargetVoiceEnhancerFrequencyOctaves);
                     voiceEffectiveEnhancerFrequencyHz.at (voice)
-                        = resolveVoiceEnhancerFrequencyHz (
+                        = resolveVoiceEnhancerFrequencyHzMemoized (
+                            voiceEnhancerRatioMemos.at (voice),
                             voiceEnhancerKeyTrackEnabledIn,
                             voiceEnhancerFrequencyIn,
-                            std::notes::noteToFrequency (sharedPlayedPitchSemitones),
+                            sharedPlayedPitchHz,
                             voiceEnhancerKeyTrackOffsetSemitonesIn,
                             routeVoiceEnhancerFrequencyOctaves,
                             processorFrequency);
@@ -5994,10 +6037,13 @@ namespace wt
                                 voiceIndex, oscillator, modulationTargetPitchSemitones);
                         let effectiveGain = voiceOscillatorIsAudible (
                             voiceIndex, oscillator, hasSoloedOscillator)
-                            ? dbToGain (clampAmpGainDb (
-                                voiceOscillatorVolumeDb (voiceIndex, oscillator)
-                                    + voiceOscillatorModulationOffset (
-                                        voiceIndex, oscillator, modulationTargetAmpGainDb)))
+                            ? exactDbToGain (
+                                oscillatorGainMemos.at (
+                                    oscillatorVoiceIndex (voiceIndex, oscillator)),
+                                clampAmpGainDb (
+                                    voiceOscillatorVolumeDb (voiceIndex, oscillator)
+                                        + voiceOscillatorModulationOffset (
+                                            voiceIndex, oscillator, modulationTargetAmpGainDb)))
                             : 0.0f;
                         let effectivePan = clampPan (
                             voiceOscillatorPan (voiceIndex, oscillator)
@@ -6115,22 +6161,42 @@ namespace wt
                     {
                         let dryLeft = noteLeft;
                         let dryRight = noteRight;
-                        unisonLeftFilters.at (voice).setMode (
-                            resolveSimperFilterMode (effectiveFilterMode));
-                        unisonLeftFilters.at (voice).setFrequency (
-                            processor.frequency,
-                            voiceEffectiveFilterCutoffHz.at (voice),
-                            voiceEffectiveFilterQ.at (voice),
-                            0.0f
-                        );
-                        unisonRightFilters.at (voice).setMode (
-                            resolveSimperFilterMode (effectiveFilterMode));
-                        unisonRightFilters.at (voice).setFrequency (
-                            processor.frequency,
-                            voiceEffectiveFilterCutoffHz.at (voice),
-                            voiceEffectiveFilterQ.at (voice),
-                            0.0f
-                        );
+
+                        // Both channels run identical settings, so derive the
+                        // SVF coefficients (one tan) only when mode, cutoff
+                        // or Q actually moved, and mirror them to the right
+                        // channel instead of deriving them twice. Filter
+                        // STATE (ic1eq/ic2eq) is never copied. A zero
+                        // memoized Q marks "never derived" — the parameter
+                        // floor is 0.1 — and reset() does not touch
+                        // coefficients, so the memo survives note lifecycle.
+                        let simperFilterMode = resolveSimperFilterMode (effectiveFilterMode);
+                        let filterCutoffToSet = voiceEffectiveFilterCutoffHz.at (voice);
+                        let filterQToSet = voiceEffectiveFilterQ.at (voice);
+
+                        if (simperFilterMode != voiceFilterCoefficientMode.at (voice)
+                            || filterCutoffToSet != voiceFilterCoefficientCutoffHz.at (voice)
+                            || filterQToSet != voiceFilterCoefficientQ.at (voice))
+                        {
+                            voiceFilterCoefficientMode.at (voice) = simperFilterMode;
+                            voiceFilterCoefficientCutoffHz.at (voice) = filterCutoffToSet;
+                            voiceFilterCoefficientQ.at (voice) = filterQToSet;
+                            unisonLeftFilters.at (voice).setMode (simperFilterMode);
+                            unisonLeftFilters.at (voice).setFrequency (
+                                processor.frequency,
+                                filterCutoffToSet,
+                                filterQToSet,
+                                0.0f
+                            );
+                            unisonRightFilters.at (voice).mode = unisonLeftFilters.at (voice).mode;
+                            unisonRightFilters.at (voice).a1 = unisonLeftFilters.at (voice).a1;
+                            unisonRightFilters.at (voice).a2 = unisonLeftFilters.at (voice).a2;
+                            unisonRightFilters.at (voice).a3 = unisonLeftFilters.at (voice).a3;
+                            unisonRightFilters.at (voice).f0 = unisonLeftFilters.at (voice).f0;
+                            unisonRightFilters.at (voice).f1 = unisonLeftFilters.at (voice).f1;
+                            unisonRightFilters.at (voice).f2 = unisonLeftFilters.at (voice).f2;
+                        }
+
                         let filteredLeft = unisonLeftFilters.at (voice).process (noteLeft);
                         let filteredRight = unisonRightFilters.at (voice).process (noteRight);
                         let effectiveFilterMix = voiceEffectiveFilterMix.at (voice);

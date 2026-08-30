@@ -60,6 +60,34 @@ namespace wt
             std::intrinsics::min (voiceEnhancerFrequencyMaxHz, maximumHz));
     }
 
+    /** resolveVoiceEnhancerFrequencyHz through one wt::ExactPow2Memo: the same
+        branch structure and expressions, with the per-sample pow paid only
+        when the tracked offset (or route octave) actually moves. Sample-exact
+        against the direct resolver — the memo family's contract. */
+    float32 resolveVoiceEnhancerFrequencyHzMemoized (ExactPow2Memo& ratioMemo,
+                                                     float32 enabled,
+                                                     float32 ordinaryHz,
+                                                     float32 playedPitchHz,
+                                                     float32 baseOffsetSemitones,
+                                                     float32 routeOffsetOctaves,
+                                                     float32 sampleRateHz)
+    {
+        let maximumHz = sampleRateHz * 0.45f;
+        if (enabled >= 0.5f)
+            return std::intrinsics::clamp (
+                keyTrackFinitePitchHz (playedPitchHz)
+                    * exactKeyTrackRatio (ratioMemo,
+                                          std::intrinsics::clamp (baseOffsetSemitones, -12.0f, 60.0f)
+                                              + routeOffsetOctaves * 12.0f),
+                voiceEnhancerFrequencyMinHz,
+                maximumHz);
+
+        return std::intrinsics::clamp (
+            ordinaryHz * exactPow2 (ratioMemo, routeOffsetOctaves),
+            voiceEnhancerFrequencyMinHz,
+            std::intrinsics::min (voiceEnhancerFrequencyMaxHz, maximumHz));
+    }
+
     float32 voiceEnhancerAmountDrive (float32 amount)
     {
         return std::levels::dBtoGain (
