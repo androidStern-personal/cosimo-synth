@@ -1840,6 +1840,21 @@ namespace wt
         float32[modulationVoiceRackRouteCellCount] voiceRackCellGates;
         float32[rackModTargetCount] rackModAccumulator;
         float32[rackModTargetCount] rackModSmoothed;
+        // Active-set delivery for the rack modulation bus. The compiled
+        // program is sparse everywhere upstream; these carry that sparseness
+        // through the final smooth-and-publish stage, so the per-sample cost
+        // scales with installed rack routes rather than the full
+        // rackModTargetCount lane domain. A target is ROUTED while the
+        // installed program references it, and LIVE from the install until
+        // its smoothed value has decayed back to exactly zero — the
+        // rackModSmoothTowards snap guarantees that happens in finite time,
+        // and a lane's final write before leaving the live list is that
+        // exact zero, so unpublished lanes always stand at 0.
+        bool[rackModTargetCount] rackModTargetRouted;
+        bool[rackModTargetCount] rackModTargetLive;
+        int32[rackModTargetCount] rackModLiveTargets;
+        int32 rackModLiveTargetCount;
+        bool rackModHasMacroRackRoutes;
         float32 rackModGateReleaseStepState;
         float32 rackModSmoothingCoefficientState;
         float32 keyTrackSmoothingCoefficientState;
@@ -4045,13 +4060,47 @@ namespace wt
             return sourceModeFadeGain;
         }
 
+        // Called from every accepted program install, at event rate. Routed
+        // membership only changes here; amount edits keep their route and so
+        // keep its target's lane. Accumulators for every currently live lane
+        // are re-zeroed because the audio loop now zeroes only the lanes the
+        // installed route prefix is about to write: a lane whose route was
+        // just removed must decay from its smoothed value toward zero, not
+        // toward a stale accumulated offset.
+        void rebuildRackModulationLiveSet()
+        {
+            for (int32 liveIndex = 0; liveIndex < rackModLiveTargetCount; ++liveIndex)
+                rackModAccumulator.at (rackModLiveTargets.at (liveIndex)) = 0.0f;
+
+            for (wrap<rackModTargetCount> target)
+                rackModTargetRouted[target] = false;
+
+            for (int32 routeIndex = 0; routeIndex < voiceRackRouteCount; ++routeIndex)
+                rackModTargetRouted.at (voiceRackRouteTargets.at (routeIndex)) = true;
+
+            for (int32 routeIndex = 0; routeIndex < macroRackRouteCount; ++routeIndex)
+                rackModTargetRouted.at (macroRackRouteTargets.at (routeIndex)) = true;
+
+            rackModHasMacroRackRoutes = macroRackRouteCount > 0;
+
+            for (wrap<rackModTargetCount> target)
+            {
+                if (rackModTargetRouted[target] && ! rackModTargetLive[target])
+                {
+                    rackModTargetLive[target] = true;
+                    rackModLiveTargets.at (rackModLiveTargetCount) = int32 (target);
+                    rackModLiveTargetCount += 1;
+                }
+            }
+        }
+
         void updateRackModulationOutputs()
         {
-            for (wrap<rackModTargetCount> target)
-                rackModAccumulator[target] = 0.0f;
-
             if (voiceRackParticipantCount > 0)
                 voiceRackParticipantReciprocal = 1.0f / float32 (voiceRackParticipantCount);
+
+            for (int32 routeIndex = 0; routeIndex < voiceRackRouteCount; ++routeIndex)
+                rackModAccumulator.at (voiceRackRouteTargets.at (routeIndex)) = 0.0f;
 
             for (wrap<modulationVoiceRackRouteCapacity> routeIndex)
             {
@@ -4084,29 +4133,52 @@ namespace wt
                     * voiceRackRouteAmounts[cellIndex];
             }
 
-            for (wrap<rackModBlockCount> block)
-                macroRackBaseTargetOffsets[block] = float32<rackModStaticTargetCount> (0.0f);
-
-            for (wrap<modulationMacroSourceCount> sourceIndex)
+            if (rackModHasMacroRackRoutes)
             {
-                if (macroRackRouteSourceUsed[sourceIndex])
+                for (wrap<rackModBlockCount> block)
+                    macroRackBaseTargetOffsets[block] = float32<rackModStaticTargetCount> (0.0f);
+
+                for (wrap<modulationMacroSourceCount> sourceIndex)
                 {
-                    for (wrap<rackModBlockCount> block)
-                        macroRackBaseTargetOffsets[block] += (
-                            macroRackRouteScaleVectors[sourceIndex, block] * macroSourceValues[sourceIndex]
-                        ) + macroRackRouteBiasVectors[sourceIndex, block];
+                    if (macroRackRouteSourceUsed[sourceIndex])
+                    {
+                        for (wrap<rackModBlockCount> block)
+                            macroRackBaseTargetOffsets[block] += (
+                                macroRackRouteScaleVectors[sourceIndex, block] * macroSourceValues[sourceIndex]
+                            ) + macroRackRouteBiasVectors[sourceIndex, block];
+                    }
                 }
             }
 
-            for (wrap<rackModTargetCount> target)
+            // Only live lanes smooth and publish. A lane leaves the list
+            // when it is unrouted and its one-pole has snapped to exactly
+            // zero; that zero is written before removal, so a dormant lane's
+            // last published value is always 0 and skipping it is
+            // bit-identical to the dense loop this replaces.
+            for (int32 liveIndex = 0; liveIndex < rackModLiveTargetCount;)
             {
+                let target = wrap<rackModTargetCount> (rackModLiveTargets.at (liveIndex));
                 let block = wrap<rackModBlockCount> (int32 (target) / rackModStaticTargetCount);
                 let lane = wrap<rackModStaticTargetCount> (int32 (target) % rackModStaticTargetCount);
-                rackModSmoothed[target] = rackModSmoothTowards (rackModSmoothed[target],
-                                                                rackModAccumulator[target]
-                                                                    + macroRackBaseTargetOffsets[block][lane],
-                                                                rackModSmoothingCoefficientState);
-                rackModOut[target] <- rackModSmoothed[target];
+                let macroOffset = rackModHasMacroRackRoutes
+                    ? macroRackBaseTargetOffsets[block][lane]
+                    : 0.0f;
+                let smoothed = rackModSmoothTowards (rackModSmoothed[target],
+                                                     rackModAccumulator[target] + macroOffset,
+                                                     rackModSmoothingCoefficientState);
+                rackModSmoothed[target] = smoothed;
+                rackModOut[target] <- smoothed;
+
+                if (smoothed == 0.0f && ! rackModTargetRouted[target])
+                {
+                    rackModTargetLive[target] = false;
+                    rackModLiveTargetCount -= 1;
+                    rackModLiveTargets.at (liveIndex) = rackModLiveTargets.at (rackModLiveTargetCount);
+                }
+                else
+                {
+                    ++liveIndex;
+                }
             }
         }
 
@@ -4966,6 +5038,7 @@ namespace wt
             macroVoiceRouteCount = upload.macroVoiceRouteCount;
             voiceRackRouteCount = upload.voiceRackRouteCount;
             macroRackRouteCount = upload.macroRackRouteCount;
+            rebuildRackModulationLiveSet();
             acceptedModulationProgramSerial = upload.deliverySerial;
             completeModulationRuntimeInstall (upload.deliverySerial);
         }
