@@ -1,6 +1,6 @@
 # SeqFX Excellence Roadmap
 
-Status: implementation in progress; Phases 0–3 complete, Tape Stop v2 and Crush v2 complete; Phase 4 continues with Ring
+Status: implementation in progress; Phases 0–3 complete; Tape Stop v2, Crush v2, and Ring complete; Phase 4 continues with Talk Box
 Owner thread: `01a05051-d7c7-7e13-bb60-58968b6392cf`
 Branch: `codex/seqfx-excellence-01a05051`
 Worktree: `/Users/winterfell/.codex/worktrees/seqfx-excellence-01a05051/cosimo-synth`
@@ -20,6 +20,7 @@ Execution evidence:
 - Lifecycle/reset contract: `research/seqfx/lifecycle-contract.md`
 - Tape Stop v2 implementation proof: `research/seqfx/tape-stop-v2-evidence.md`
 - Crush v2 decision and implementation proof: `research/seqfx/crush-v2-decision.md`
+- Ring decision and implementation proof: `research/seqfx/ring-decision.md`
 
 ## 1. Outcome
 
@@ -863,6 +864,7 @@ The implementation task must not infer these from a build succeeding.
 | Sparse v7 block state | Committed engineering direction | Removes hundreds of kilobytes of empty repeated state and creates one coherent version boundary | Extend dense version 5 again | Requires migration, but lowers host-state risk and effect-expansion cost |
 | Tape is a trigger-latched motor gesture with explicit Stop Time, Curve, Catch Up/Spin Up, optional Start Time, and Sync/Free timing | Committed and implemented | Official mature-product vocabulary plus the frozen benchmark; block end does not define motor lifetime | Invent Tail/Throw controls or keep the old block-bound ramp | Two gesture voices, tiered history, explicit v5 migration, and a dedicated v2 inspector |
 | Crush uses Original/Classic/Smooth/Progressive characters plus ADC Q, DAC Q, and deterministic Dither | Committed and implemented | Kilohearts, Effectrix2, and Redux establish the converter vocabulary; measured fixtures preserve the old sound and distinguish the new modes | Keep opaque Hold Frames or add an overlapping Tone control | ID 2 persists; legacy Hold maps at canonical 48 kHz; Rate is stable across host sample rates |
+| Ring uses a phase-continuous carrier with additive Bias, bipolar Rectify, and opposite frequency Spread | Committed and implemented | Kilohearts establishes the core semantics; Effectrix2 and Looperator establish waveform and LFO vocabulary; analytic sidebands provide an exact oracle | Reset phase per block, use a guessed phase-offset Spread, or add a sidechain/Drive that overlaps other products | ID 7 is block-sequenced; Wave latches, other controls can use Aux, max Spread is a documented 25 cents per channel, and internal Motion stays free-running while shared Aux owns tempo sync |
 | Comb uses the selected vector-dispersive feedback topology | Committed by lab evidence | The lab retained recognizable tuning while dispersion, stereo vector coupling, damping, motion, drive, and width created a distinct stable instrument | Ship a conventional one-delay comb or the less controllable modal candidates | Production Comb implements the selected candidate and preserves the rejected-candidate scorecard |
 | macOS VST3 release candidate only | Inherited | Existing release scope and toolchain | Expand AU/Windows now | Keeps the slice finishable; other formats need their own roadmap |
 | No merge/push/deploy/publish by this task | Inherited | Coordinator and user authorization boundary | Treat “end to end” as permission to release | Final result is a clean handoff and artifact, not an external launch |

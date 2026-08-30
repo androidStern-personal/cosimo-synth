@@ -22,6 +22,7 @@ const SEQFX_EFFECT_TYPES = {
     crusher: 2,
     tapeStop: 3,
     stutter: 4,
+    ring: 7,
 };
 const FILTER_PARAM_MODE = 0;
 const FILTER_PARAM_CUTOFF = 1;
@@ -973,6 +974,7 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
             { effectType: "2", patternCount: 1 },
             { effectType: "3", patternCount: 1 },
             { effectType: "4", patternCount: 1 },
+            { effectType: "7", patternCount: 1 },
         ],
         "every effect tab icon should carry the same internal halftone texture technique as the cells",
     );
@@ -1008,6 +1010,7 @@ test("seqfx_effect_tab_icons_use_their_cell_palette_when_selected", async () => 
         2: "rgb(238, 108, 77)",
         3: "rgb(152, 193, 217)",
         4: "rgb(181, 217, 156)",
+        7: "rgb(199, 166, 216)",
     };
 
     for (const [effectType, expectedColor] of Object.entries(expectedSelectedColors)) {
@@ -2096,7 +2099,7 @@ test("seqfx_filter_mod_panel_edits_signed_amounts_without_hiding_inline_ranges",
     const cutoffAmount = page.locator('[data-role="seqfx-mod-target-amount"][data-param="1"]');
     await cutoffAmount.waitFor();
     assert.equal(await page.locator('[data-role="seqfx-mod-target-amount"][data-param="0"]').count(), 0);
-    assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="0"]').count(), 1);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="0"]').count(), 0);
     assert.equal(await page.locator('[data-role="seqfx-mod-target-amount-value"][data-param="1"]').textContent(), "-2.00 oct");
     assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="1"]').textContent(), "500");
 
@@ -3155,8 +3158,8 @@ test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_
     const effectPicker = page.locator('[data-role="seqfx-effect-type"]');
     assert.equal(await effectPicker.evaluate((element) => element.tagName), "DIV");
     assert.equal(await effectPicker.locator("select").count(), 0);
-    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"]').count(), 4);
-    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"] > svg').count(), 4);
+    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"]').count(), 5);
+    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"] > svg').count(), 5);
     assert.equal(await effectPicker.getByRole("button", { name: "Crush", exact: true }).getAttribute("aria-pressed"), "true");
 
     const tapeStopButton = effectPicker.getByRole("button", { name: "Tape Stop", exact: true });
@@ -3184,6 +3187,60 @@ test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_
     assert.equal(storedStep.active, true);
     assert.equal(storedStep.effectType, SEQFX_EFFECT_TYPES.tapeStop);
     assert.deepEqual(storedStep.params, [8, 0, 0, 1, 0, 0, 500, 125]);
+
+    await page.close();
+});
+
+test("seqfx_ring_inspector_sequences_every_public_control_and_hides_waveform_from_live_modulation", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    const ringButton = page.getByRole("button", { name: "Ring", exact: true });
+    await ringButton.click();
+    await page.getByRole("button", { name: "Chain 1 Ring block 1", exact: true }).waitFor();
+
+    const param = (index) => page.locator(`[data-role="seqfx-param"][data-param="${index}"]`);
+    assert.equal(await param(0).inputValue(), "180");
+    assert.equal(await param(1).locator("option").count(), 4);
+    assert.equal(await param(1).inputValue(), "0");
+    assert.equal(await param(6).inputValue(), "0");
+
+    await param(0).fill("440");
+    await param(1).selectOption("2");
+    await param(2).fill("0.4");
+    await param(3).fill("3");
+    await param(4).fill("1");
+    await param(5).fill("0.25");
+    await param(6).fill("-0.3");
+
+    let snapshot = await getHarnessSnapshot(page);
+    let upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.effectTypes[0][0], SEQFX_EFFECT_TYPES.ring);
+    assert.deepEqual(upload.params[0][0], [440, 2, 0.4, 3, 1, 0.25, -0.3, 0]);
+
+    await openSeqFxModView(page);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 6);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="1"]').count(), 0);
+    await toggleSeqFxModTarget(page, 0);
+    await setSeqFxModTargetAmount(page, 0, 1);
+
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.auxEnabled[0][0][0], true);
+    assertClose(upload.auxEnd[0][0][0], 880, 0.01, "Ring frequency +1 octave should persist as 880 Hz");
+    const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    const storedRing = storedState.patterns[0].lanes[0].steps[0];
+    assert.equal(storedRing.effectType, SEQFX_EFFECT_TYPES.ring);
+    assert.deepEqual(storedRing.params, [440, 2, 0.4, 3, 1, 0.25, -0.3, 0]);
+    assert.equal(storedRing.aux.targets[0].enabled, true);
+    assertClose(storedRing.aux.targets[0].end, 880, 0.01, "Ring aux target should survive sparse v7 persistence");
+
+    const glyph = page.locator('[data-role="seqfx-block"][data-lane="0"][data-start="0"] [data-role="seqfx-block-glyph"]');
+    assert.equal(await glyph.getAttribute("data-effect"), "ring");
+    assert.ok(await glyph.locator('[data-role="seqfx-block-glyph-line"]').getAttribute("d"));
 
     await page.close();
 });
@@ -3882,11 +3939,10 @@ test("seqfx_cmd_c_and_cmd_v_copy_cell_values_to_single_or_group_selection", asyn
     await pressMetaShortcut(page, "KeyC");
 
     await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
-    await openSeqFxModView(page);
-    await page.locator('[data-role="seqfx-mod-target-destination"][data-param="0"]').waitFor();
-    await toggleSeqFxModTarget(page, 0);
+    await page.getByRole("button", { name: "Ring", exact: true }).click();
+    await page.locator('[data-role="seqfx-param"][data-param="1"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
-    await page.locator('[data-role="seqfx-mod-target-destination"][data-param="0"]').focus();
+    await page.locator('[data-role="seqfx-param"][data-param="1"]').focus();
     await pressMetaShortcut(page, "KeyV");
     let snapshot = await getHarnessSnapshot(page);
     assert.equal(patternUploads(snapshot).length, 0);
@@ -3946,13 +4002,12 @@ test("seqfx_clipboard_events_copy_and_paste_cell_values_when_keydown_is_missing"
     assert.deepEqual(copyResult, { defaultPrevented: true, dispatchResult: false });
 
     await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
-    await openSeqFxModView(page);
-    await page.locator('[data-role="seqfx-mod-target-destination"][data-param="0"]').waitFor();
-    await toggleSeqFxModTarget(page, 0);
+    await page.getByRole("button", { name: "Ring", exact: true }).click();
+    await page.locator('[data-role="seqfx-param"][data-param="1"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
     const ignoredPasteResult = await dispatchClipboardEvent(
         page,
-        '[data-role="seqfx-mod-target-destination"][data-param="0"]',
+        '[data-role="seqfx-param"][data-param="1"]',
         "paste",
     );
     assert.deepEqual(ignoredPasteResult, { defaultPrevented: false, dispatchResult: true });

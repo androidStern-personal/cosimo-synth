@@ -23,6 +23,7 @@ EFFECT_FILTER = 1
 EFFECT_CRUSHER = 2
 EFFECT_TAPE = 3
 EFFECT_STUTTER = 4
+EFFECT_RING = 7
 LIFECYCLE_IDLE = 0
 LIFECYCLE_ENTERING = 1
 LIFECYCLE_ACTIVE = 2
@@ -437,6 +438,13 @@ def _tape_v2_params(
 
 def _rms(samples: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.asarray(samples, dtype=np.float64) ** 2)))
+
+
+def _tone_amplitude(samples: np.ndarray, frequency: float, sample_rate: int = SAMPLE_RATE) -> float:
+    signal = np.asarray(samples, dtype=np.float64)
+    phase = np.arange(signal.size, dtype=np.float64) * (2.0 * np.pi * frequency / sample_rate)
+    projection = np.sum(signal * np.exp(-1j * phase))
+    return float(2.0 * np.abs(projection) / max(1, signal.size))
 
 
 def _largest_boundary_jump(samples: np.ndarray, boundary_step: int) -> float:
@@ -2526,3 +2534,135 @@ def test_stutter_captures_first_slice_even_when_block_start_mix_is_zero(
     assert original_rms > 0.2
     assert float(np.sqrt(np.mean(audible_repeat**2))) > original_rms * 0.8
     assert float(np.sqrt(np.mean((audible_repeat - original_window) ** 2))) < original_rms * 0.18
+
+
+def test_ring_sine_carrier_creates_expected_sum_and_difference_sidebands(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in range(3):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_RING,
+            params=[180.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0],
+        )
+
+    frames = STEP_FRAMES * 3
+    input_audio = _sine(frames, 1_000.0, amplitude=0.6)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+    analysis = output[2_000:6_800, 0]
+
+    lower_sideband = _tone_amplitude(analysis, 820.0)
+    upper_sideband = _tone_amplitude(analysis, 1_180.0)
+    dry_carrier = _tone_amplitude(analysis, 1_000.0)
+
+    assert lower_sideband > 0.24
+    assert upper_sideband > 0.24
+    assert abs(lower_sideband - upper_sideband) < 0.02
+    assert dry_carrier < 0.02
+
+
+def test_ring_retrigger_keeps_carrier_phase_continuous(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=True,
+            effect_type=EFFECT_RING,
+            params=[180.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0],
+        )
+
+    input_audio = np.full((STEP_FRAMES * 2, 2), 0.5, dtype=np.float32)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    boundary_window = output[STEP_FRAMES - 8 : STEP_FRAMES + 8, 0]
+    assert float(np.max(np.abs(np.diff(boundary_window)))) < 0.025
+
+
+@pytest.mark.parametrize("waveform", [0.0, 1.0, 2.0, 3.0])
+def test_ring_waveforms_are_finite_bounded_and_audible(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    waveform: float,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_RING,
+            params=[3_500.0, waveform, 0.65, 7.0, 1.0, 0.2, 0.45],
+        )
+
+    input_audio = np.full((STEP_FRAMES * 2, 2), 0.5, dtype=np.float32)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+    settled = output[500:, :]
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 0.61
+    assert _rms(settled[:, 0]) > 0.04
+    assert _rms(np.mean(settled, axis=1)) > 0.025
+
+
+def test_ring_positive_bias_restores_the_input_frequency_without_removing_sidebands(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_RING,
+            params=[180.0, 0.0, 0.0, 0.5, 0.0, 1.0, 0.0],
+        )
+
+    input_audio = _sine(STEP_FRAMES * 2, 1_000.0, amplitude=0.6)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+    analysis = output[1_000:5_800, 0]
+
+    assert _tone_amplitude(analysis, 1_000.0) > 0.58
+    assert _tone_amplitude(analysis, 820.0) > 0.24
+    assert _tone_amplitude(analysis, 1_180.0) > 0.24
+
+
+def test_ring_spread_uses_opposite_small_carrier_detunes(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in range(16):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_RING,
+            params=[180.0, 0.0, 0.0, 0.5, 1.0, 0.0, 0.0],
+        )
+
+    frames = STEP_FRAMES * 16
+    input_audio = _sine(frames, 1_000.0, amplitude=0.6)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+    analysis = output[4_800:, :]
+    spread_ratio = 2.0 ** (0.25 / 12.0)
+    left_lower = 1_000.0 - (180.0 / spread_ratio)
+    right_lower = 1_000.0 - (180.0 * spread_ratio)
+
+    assert _tone_amplitude(analysis[:, 0], left_lower) > 0.27
+    assert _tone_amplitude(analysis[:, 1], right_lower) > 0.27
+    assert _tone_amplitude(analysis[:, 0], left_lower) > _tone_amplitude(analysis[:, 0], right_lower) * 4
+    assert _tone_amplitude(analysis[:, 1], right_lower) > _tone_amplitude(analysis[:, 1], left_lower) * 4

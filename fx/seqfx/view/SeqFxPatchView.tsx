@@ -220,6 +220,7 @@ const EFFECT_OPTIONS = [
     SEQFX_EFFECT_TYPES.crusher,
     SEQFX_EFFECT_TYPES.tapeStop,
     SEQFX_EFFECT_TYPES.stutter,
+    SEQFX_EFFECT_TYPES.ring,
 ] as const;
 
 function defaultEffectTypeForChain(chain: number) {
@@ -412,6 +413,23 @@ function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
                         <path d="M109.533 197.602a1.887 1.887 0 0 1-.034 2.76l-7.583 7.066a4.095 4.095 0 0 1-5.714-.152l-32.918-34.095c-1.537-1.592-1.54-4.162-.002-5.746l33.1-34.092c1.536-1.581 4.11-1.658 5.74-.18l7.655 6.94c.82.743.833 1.952.02 2.708l-21.11 19.659s53.036.129 71.708.064c18.672-.064 33.437-16.973 33.437-34.7c0-7.214-5.578-17.64-5.578-17.64c-.498-.99-.273-2.444.483-3.229l8.61-8.94c.764-.794 1.772-.632 2.242.364c0 0 9.212 18.651 9.212 28.562c0 28.035-21.765 50.882-48.533 50.882s-70.921.201-70.921.201z" />
                         <path d="M144.398 58.435a1.887 1.887 0 0 1 .034-2.76l7.583-7.066a4.095 4.095 0 0 1 5.714.152l32.918 34.095c1.537 1.592 1.54 4.162.002 5.746l-33.1 34.092c-1.536 1.581-4.11 1.658-5.74.18l-7.656-6.94c-.819-.743-.832-1.952-.02-2.708l21.111-19.659s-53.036-.129-71.708-.064c-18.672.064-33.437 16.973-33.437 34.7c0 7.214 5.578 17.64 5.578 17.64c.498.99.273 2.444-.483 3.229l-8.61 8.94c-.764.794-1.772.632-2.242-.364c0 0-9.212-18.65-9.212-28.562c0-28.035 21.765-50.882 48.533-50.882s70.921-.201 70.921-.201z" />
                     </g>
+                </svg>
+            );
+        case SEQFX_EFFECT_TYPES.ring:
+            return (
+                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
+                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
+                    <path
+                        d="M48 128c-1.955-29.248 19.364-64 37.364-64 18 0 36.136 13.843 36.136 64.5s19.136 80.5 49.136 80.5c30 0 53.364-40.125 53.364-80.5-8.182 0-7.273-.752-16 0 0 32.35-20.455 64.45-37.364 64.45s-33.909-13.542-33.909-64.45S120.273 48 85.364 48C50.454 48 32 88.626 32 127.748c6 0 8.364.252 16 .252z"
+                        data-role="seqfx-effect-icon-fill"
+                        fill="currentColor"
+                        fillRule="evenodd"
+                    />
+                    <path
+                        d="M48 128c-1.955-29.248 19.364-64 37.364-64 18 0 36.136 13.843 36.136 64.5s19.136 80.5 49.136 80.5c30 0 53.364-40.125 53.364-80.5-8.182 0-7.273-.752-16 0 0 32.35-20.455 64.45-37.364 64.45s-33.909-13.542-33.909-64.45S120.273 48 85.364 48C50.454 48 32 88.626 32 127.748c6 0 8.364.252 16 .252z"
+                        fill={textureFill}
+                        fillRule="evenodd"
+                    />
                 </svg>
             );
         default:
@@ -862,6 +880,15 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 2, label: "Shape", min: 0, max: 1, step: 0.01, amountKind: "stutterShape", hint: "Morphs the per-cut envelope." },
         { index: 3, label: "Gate", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Audible portion of each cut." },
     ],
+    [SEQFX_EFFECT_TYPES.ring]: [
+        { index: 0, label: "Frequency", min: 0.1, max: 12000, step: 0.01, amountKind: "cutoffOctaves", hint: "Carrier frequency; sine creates exact sum and difference sidebands." },
+        { index: 1, label: "Wave", min: 0, max: 3, step: 1, kind: "select", options: ["Sine", "Triangle", "Square", "Noise"], hint: "Latched when the block triggers." },
+        { index: 2, label: "Motion", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Adds a phase-continuous one-octave carrier sweep." },
+        { index: 3, label: "Rate", min: 0.02, max: 20, step: 0.01, amountKind: "cutoffOctaves", hint: "Free-running motion rate in Hz." },
+        { index: 4, label: "Spread", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Small opposite left/right carrier detunes, up to 25 cents per channel." },
+        { index: 5, label: "Bias", min: -1, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Moves ring modulation toward positive or inverted dry signal." },
+        { index: 6, label: "Rectify", min: -1, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Morphs the carrier toward positive or negative full-wave rectification." },
+    ],
 };
 
 const FILTER_PARAM_MODE = 0;
@@ -895,6 +922,8 @@ const STUTTER_PARAM_SLICES = 0;
 const STUTTER_PARAM_SPEED = 1;
 const STUTTER_PARAM_SHAPE = 2;
 const STUTTER_PARAM_GATE = 3;
+const RING_PARAM_FREQUENCY = 0;
+const RING_PARAM_WAVEFORM = 1;
 
 type SeqFxBlockVisualSize = "single" | "medium" | "wide";
 
@@ -1254,6 +1283,66 @@ function SeqFxStutterBlockGlyph({
     );
 }
 
+function ringRisoPath(waveform: number, frequencyHz: number, width: number) {
+    const safeFrequency = clampNumber(Number(frequencyHz), 0.1, 12_000);
+    const cycles = Math.max(1, Math.min(8, Math.round(1 + (Math.log10(safeFrequency / 0.1) / Math.log10(120_000)) * 7)));
+    const points = Array.from({ length: 65 }, (_unused, index) => {
+        const phase = (index / 64) * cycles;
+        const wrapped = phase - Math.floor(phase);
+        let carrier = Math.sin(phase * Math.PI * 2);
+        if (waveform === 1) carrier = 1 - (4 * Math.abs(wrapped - 0.5));
+        if (waveform === 2) carrier = wrapped < 0.5 ? 1 : -1;
+        if (waveform === 3) carrier = Math.sin((index * 12.9898) + 78.233) * 0.82;
+        return `${index === 0 ? "M" : "L"}${roundedPathValue((index / 64) * width)} ${roundedPathValue(14 - (carrier * 10))}`;
+    });
+    return points.join(" ");
+}
+
+function SeqFxRingBlockGlyph({
+    params,
+    size,
+    width,
+}: {
+    params: number[];
+    size: SeqFxBlockVisualSize;
+    width: number;
+}) {
+    const frequencyHz = Number(params[RING_PARAM_FREQUENCY] ?? 180);
+    const waveform = Math.round(Number(params[RING_PARAM_WAVEFORM] ?? 0));
+    const waveformLabel = ["SIN", "TRI", "SQR", "NOISE"][waveform] ?? "SIN";
+
+    return (
+        <>
+            <svg
+                aria-hidden="true"
+                className="seqfx-block-glyph"
+                data-effect="ring"
+                data-role="seqfx-block-glyph"
+                data-size={size}
+                focusable="false"
+                preserveAspectRatio="none"
+                viewBox={`0 0 ${width} 28`}
+            >
+                <path
+                    className="seqfx-block-glyph__line"
+                    d={ringRisoPath(waveform, frequencyHz, width)}
+                    data-role="seqfx-block-glyph-line"
+                />
+            </svg>
+            {size !== "single" ? (
+                <span className="seqfx-block-glyph-label" data-role="seqfx-block-glyph-label">
+                    {waveformLabel}
+                </span>
+            ) : null}
+            {size === "wide" ? (
+                <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
+                    {frequencyHz >= 1_000 ? `${(frequencyHz / 1_000).toFixed(1)}k` : Number(frequencyHz.toFixed(1))} Hz
+                </span>
+            ) : null}
+        </>
+    );
+}
+
 export function SeqFxBlockGlyph({
     effectType,
     params,
@@ -1275,6 +1364,8 @@ export function SeqFxBlockGlyph({
             return <SeqFxTapeStopBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.stutter:
             return <SeqFxStutterBlockGlyph params={params} size={size} width={width} />;
+        case SEQFX_EFFECT_TYPES.ring:
+            return <SeqFxRingBlockGlyph params={params} size={size} width={width} />;
         default:
             return null;
     }
@@ -3839,6 +3930,9 @@ export function SeqFxPatchView({
         ? inspectedCell.effectType
         : drawEffectType ?? defaultEffectTypeForChain(inspectedLane ?? 0);
     const inspectedParamDefinitions = PARAM_DEFINITIONS[inspectedEffectType] ?? [];
+    const inspectedAuxParamDefinitions = inspectedParamDefinitions.filter((definition) => (
+        getSeqFxEffectDefinition(inspectedEffectType).parameters[definition.index]?.auxEligible === true
+    ));
     const inspectedBlock = inspectedLane !== null && inspectedStep !== null
         ? getSeqFxBlockAtStep(renderedPatternState, inspectedLane, inspectedStep)
         : null;
@@ -4672,7 +4766,7 @@ export function SeqFxPatchView({
                                     cyclePhase={inspectedAuxCyclePhase}
                                     amount={inspectedAuxAmount}
                                     params={inspectedCell.params}
-                                    definitions={inspectedParamDefinitions}
+                                    definitions={inspectedAuxParamDefinitions}
                                     onSourceChange={setAuxSource}
                                     onTargetToggle={toggleAuxTarget}
                                     onTargetEndChange={setAuxTargetEnd}

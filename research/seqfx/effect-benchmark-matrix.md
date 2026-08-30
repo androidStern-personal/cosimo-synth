@@ -27,7 +27,7 @@ live-touch workflow are not being cloned.
 | Stutter | Capture a short slice and repeat it rhythmically | Slice/window, speed, gate/envelope, crossfade | Captured | Retain current block-relative slice count, speed, shape, and gate; capture at block start | First-repeat ambiguity, wrap clicks, stale audio, destructive retrigger |
 | Pitch | Shift harmonic pitch without changing authored block rate | Semitones, grain size, jitter, spread, mix | Captured/streaming | Dual complementary grains reading warm history; semitone snap with smooth aux path | Latency, transient smear, grain beating, phase resets |
 | Comb | Repeated peaks/notches plus resonant material color | Tune/cutoff, polarity, mix; advanced feedback/decay/damping | Modulated delay/tail | Conventional neutral core plus an evidence-selected dispersive/vector extension | Feedback runaway, tuning error, mono cancellation, generic metallic sound |
-| Ring | Multiply audio by an internal carrier | Frequency, waveform, bias/rectify, spread, mix | Gated | Phase-continuous carrier with optional synced LFO motion | Aliasing from carrier shapes, DC from bias, abrupt phase reset |
+| Ring | Multiply audio by an internal carrier | Frequency, waveform, bias/rectify, spread, mix | Gated | Phase-continuous carrier, documented stereo detune, and free LFO motion; tempo motion remains available through block Aux | Aliasing from carrier shapes, DC from bias, abrupt phase reset |
 | Reverse | Play a finite buffered region backward | Window, sync/free, crossfade, mix | Captured | Reverse already recorded lookback audio at trigger, so host latency remains zero | Unavailable history, wrong-region surprise, boundary pops, old audio after seek |
 | Talk Box | Vowel-like formant coloration | Vowel selection/morph, Q, lows, highs | Gated | Two vowel endpoints plus morph; formant filter, not sidechain vocoder | Unstable high-Q filters, coefficient zippering, literal vowel mapping |
 | Vibro | Periodic pitch wobble without dry-path combing | Rate, depth, waveform, spread | Modulated delay | Wet variable-delay modulation; no feedback; separate ID 10 | Interpolation noise, mono loss, accidental chorus/flange identity |
@@ -149,11 +149,18 @@ an overlapping Tone control; the full source/inference split is recorded in
 
 - Frequency: 0.1 Hz–12 kHz, logarithmic; optional musical snaps.
 - Wave: Sine / Triangle / Square / Noise, trigger-latched.
-- Motion: 0–100% LFO amount.
-- Rate: sync divisions or 0.02–20 Hz.
-- Spread: 0–100% small opposite carrier detune.
+- Motion: 0–100% LFO amount, reaching a one-octave exponential sweep.
+- Rate: 0.02–20 Hz free-running. Tempo-synced modulation uses the shared Aux
+  source rather than a second hidden Rate mode.
+- Spread: 0–100% opposite carrier detune, reaching 25 cents per channel.
 - Bias: -100–100%.
 - Rectify: -100–100%.
+
+Kilohearts directly establishes Frequency-as-noise-cutoff, additive Bias,
+bipolar Rectify, and stereo Spread through small opposite frequency shifts.
+Effectrix2 establishes internal Ring LFO Speed/Amount and a quality concern.
+SeqFX's precise Spread and Motion depths are engineering inferences frozen in
+`ring-decision.md`; they are not presented as competitor measurements.
 
 ### Reverse (ID 8)
 

@@ -18,6 +18,7 @@
     --seqfx-effect-crusher: #ee6c4d;
     --seqfx-effect-tape-stop: #98c1d9;
     --seqfx-effect-stutter: #b5d99c;
+    --seqfx-effect-ring: #c7a6d8;
 }
 
 * {
@@ -517,6 +518,10 @@ select {
     background: var(--seqfx-effect-stutter);
 }
 
+.seqfx-block[data-effect="7"] .seqfx-block-fill {
+    background: var(--seqfx-effect-ring);
+}
+
 .seqfx-block:hover .seqfx-block-fill {
     filter: brightness(1.05);
 }
@@ -539,6 +544,15 @@ select {
 
 .seqfx-block-glyph__ink {
     fill: currentColor;
+}
+
+.seqfx-block-glyph__line {
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.25;
+    vector-effect: non-scaling-stroke;
 }
 
 .seqfx-block-glyph__marker {
@@ -1140,6 +1154,10 @@ select {
 
 .seqfx-effect-picker__options button[data-effect-type="4"] {
     --seqfx-effect-icon-active: var(--seqfx-effect-stutter);
+}
+
+.seqfx-effect-picker__options button[data-effect-type="7"] {
+    --seqfx-effect-icon-active: var(--seqfx-effect-ring);
 }
 
 .seqfx-effect-picker__options button:hover,

@@ -673,7 +673,7 @@ test("SeqFX production shadow-root host exposes the shared editor token palette"
     }
 });
 
-test("SeqFX packaged shadow-root flow renders the selected crusher and stutter inspectors", async () => {
+test("SeqFX packaged shadow-root flow renders the selected crusher stutter and ring inspectors", async () => {
     const page = await browser.newPage();
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error));
@@ -825,6 +825,27 @@ test("SeqFX packaged shadow-root flow renders the selected crusher and stutter i
         });
         assert.equal(stutterEditorStyle.backgroundColor, "rgba(222, 216, 204, 0.58)");
         assert.equal(stutterEditorStyle.color, "rgb(28, 28, 28)");
+
+        await page.getByRole("button", { name: "Ring", exact: true }).click();
+        await page.getByRole("button", { name: "Chain 4 Ring block 1", exact: true }).waitFor();
+        const ringFrequency = page.locator('[data-role="seqfx-param"][data-param="0"]');
+        await ringFrequency.waitFor();
+        await ringFrequency.fill("440");
+        assert.equal(await ringFrequency.inputValue(), "440");
+        assert.equal(await page.locator('[data-role="seqfx-param"]').count(), 7);
+        assert.equal(await page.locator('[data-role="seqfx-param"][data-param="1"] option').count(), 4);
+        assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="ring"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
+
+        await page.locator('[data-role="seqfx-mod-toggle"]').click();
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 6);
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="1"]').count(), 0);
+        const ringInspectorBounds = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => ({
+            clientHeight: node.clientHeight,
+            clientWidth: node.clientWidth,
+            scrollHeight: node.scrollHeight,
+            scrollWidth: node.scrollWidth,
+        }));
+        assert.ok(ringInspectorBounds.scrollWidth <= ringInspectorBounds.clientWidth + 1);
 
         assert.deepEqual(pageErrors.map((error) => error.message), []);
     } finally {
