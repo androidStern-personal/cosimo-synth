@@ -5639,3 +5639,219 @@ def test_reverse_four_chain_maximum_windows_remain_within_the_generated_js_budge
     assert np.all(np.isfinite(output))
     assert float(np.max(np.abs(output))) <= 4.001
     assert elapsed < 2.0, f"four-chain generated-JS render took {elapsed:.3f}s for {source.shape[0] / SAMPLE_RATE:.3f}s audio"
+
+
+_LIFECYCLE_EFFECT_CASES = (
+    pytest.param(EFFECT_FILTER, [0.0, 1_200.0, 1_200.0, 4.0, 1.0], id="filter"),
+    pytest.param(EFFECT_CRUSHER, [6.0, 3_200.0, 12.0, 1.0, 0.2, 0.2, 0.0], id="crush"),
+    pytest.param(EFFECT_TAPE, _tape_v2_params(curve=0.35), id="tape-stop"),
+    pytest.param(EFFECT_STUTTER, [8.0, 1.0, 0.55, 0.82], id="stutter"),
+    pytest.param(EFFECT_PITCH, [7.0, 12.0, 48.0, 0.18, 0.4], id="pitch"),
+    pytest.param(EFFECT_COMB, [220.0, 2.0, 0.0, 0.55, 8_000.0, 0.12, 0.2, 0.65], id="comb"),
+    pytest.param(EFFECT_RING, [220.0, 3.0, 0.2, 2.0, 0.15, 0.0, 0.0], id="ring"),
+    pytest.param(EFFECT_REVERSE, [4.0, 0.08, 0.0, 250.0, 1.0], id="reverse"),
+    pytest.param(EFFECT_TALK_BOX, [0.0, 3.0, 0.5, 10.0, 0.2, 0.2, 3.0], id="talk-box"),
+    pytest.param(EFFECT_VIBRO, [3.0, 60.0, 0.0, 90.0, 1.0, 3.0], id="vibro"),
+    pytest.param(EFFECT_FLANGE, [2.0, 3.0, 2.0, 0.7, 90.0, 0.0, 1.0, 3.0], id="flange"),
+    pytest.param(EFFECT_DIRTY, [24.0, 2.0, 0.3, 0.5, 4_000.0, -3.0], id="dirty"),
+)
+
+@pytest.mark.parametrize(("effect_type", "params"), _LIFECYCLE_EFFECT_CASES)
+def test_one_cell_loop_wrap_retriggers_every_effect_without_a_click_or_runaway(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    effect_type: int,
+    params: list[float],
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_FILTER,
+        step=0,
+        trigger=True,
+        effect_type=effect_type,
+        params=params,
+    )
+    source = _sine(STEP_FRAMES * 4, 660.0, amplitude=0.35)
+    output, monitors = _render_with_monitor_events(
+        generated_runtime,
+        tmp_path,
+        source,
+        _base_schedule(upload, loop_length=1.0),
+    )
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
+    differences = np.abs(np.diff(output[:, 0]))
+    reference_mask = np.ones(differences.shape, dtype=bool)
+    for boundary_step in (1, 2, 3):
+        boundary = STEP_FRAMES * boundary_step
+        reference_mask[boundary - 32 : boundary + 32] = False
+    reference_jump = float(np.quantile(differences[reference_mask], 0.999))
+    allowed_jump = max(0.08, reference_jump * 1.5)
+    for boundary_step in (1, 2, 3):
+        boundary_jump = _largest_boundary_jump(output[:, 0], boundary_step)
+        local_differences = differences[(STEP_FRAMES * boundary_step) - 16 : (STEP_FRAMES * boundary_step) + 16]
+        local_jump_frame = (STEP_FRAMES * boundary_step) - 16 + int(np.argmax(local_differences))
+        assert boundary_jump <= allowed_jump, (
+            f"step {boundary_step} jump {boundary_jump:.6f} exceeds "
+            f"non-boundary reference {reference_jump:.6f} at frame {local_jump_frame}: "
+            f"{output[local_jump_frame, 0]:.6f} to {output[local_jump_frame + 1, 0]:.6f}"
+        )
+
+    lane_events = []
+    for monitor in monitors:
+        value = monitor["value"]
+        assert isinstance(value, dict)
+        event = value["event"]
+        assert isinstance(event, dict)
+        if int(event["effectType"][LANE_FILTER]) == effect_type:
+            lane_events.append(int(event["lifecycleState"][LANE_FILTER]))
+
+    assert lane_events.count(LIFECYCLE_ENTERING) >= 3
+    assert LIFECYCLE_ACTIVE in lane_events
+
+
+@pytest.mark.parametrize(("effect_type", "params"), _LIFECYCLE_EFFECT_CASES)
+def test_explicit_reset_erases_preboundary_state_for_every_effect(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    effect_type: int,
+    params: list[float],
+) -> None:
+    """Different project audio must become indistinguishable after a reset."""
+    upload = _empty_upload()
+    for step in range(8):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=effect_type,
+            params=params,
+        )
+
+    reset_frame = STEP_FRAMES + 500
+    frames = reset_frame + (STEP_FRAMES * 3)
+    source_a = _complex_signal(frames) * 0.4
+    source_b = source_a.copy()
+    source_b[:reset_frame] *= -0.73
+    common_suffix = _sine(frames - reset_frame, 733.0, amplitude=0.28)
+    source_a[reset_frame:] = common_suffix
+    source_b[reset_frame:] = common_suffix
+    schedule = _base_schedule(upload)
+    schedule[reset_frame] = [["event", "internalReset", 1]]
+
+    (tmp_path / "history-a").mkdir()
+    (tmp_path / "history-b").mkdir()
+    output_a = _render(generated_runtime, tmp_path / "history-a", source_a, schedule)
+    output_b = _render(generated_runtime, tmp_path / "history-b", source_b, schedule)
+
+    comparison = slice(reset_frame + 160, frames)
+    np.testing.assert_allclose(output_a[comparison], output_b[comparison], atol=2.0e-6, rtol=0.0)
+
+
+def _comb_reset_canary() -> tuple[dict[str, object], np.ndarray, np.ndarray, int]:
+    upload = _empty_upload()
+    params = [220.0, 2.4, 0.0, 0.55, 8_000.0, 0.12, 0.2, 0.65]
+    for step in range(12):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_COMB,
+            params=params,
+        )
+
+    boundary = STEP_FRAMES + 500
+    frames = boundary + (STEP_FRAMES * 3)
+    source_a = np.zeros((frames, 2), dtype=np.float32)
+    source_b = np.zeros((frames, 2), dtype=np.float32)
+    source_a[600] = 0.9
+    source_b[900] = -0.65
+    return upload, source_a, source_b, boundary
+
+
+def test_comb_prehistory_canary_remains_sensitive_without_a_reset_boundary(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload, source_a, source_b, boundary = _comb_reset_canary()
+    (tmp_path / "history-a").mkdir()
+    (tmp_path / "history-b").mkdir()
+    output_a = _render(generated_runtime, tmp_path / "history-a", source_a, _base_schedule(upload))
+    output_b = _render(generated_runtime, tmp_path / "history-b", source_b, _base_schedule(upload))
+
+    assert _rms(output_a[boundary + 160 :] - output_b[boundary + 160 :]) > 1.0e-3
+
+
+@pytest.mark.parametrize(
+    "reset_authority",
+    (
+        "transport-stop-start",
+        "discontinuous-seek",
+        "clock-source",
+        "rate",
+        "loop-range",
+        "pattern-select",
+        "authoritative-pattern",
+        "bypass-flush",
+    ),
+)
+def test_every_reset_authority_erases_live_comb_prehistory(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    reset_authority: str,
+) -> None:
+    upload, source_a, source_b, boundary = _comb_reset_canary()
+    host_authority = reset_authority in ("transport-stop-start", "discontinuous-seek")
+    schedule = _base_schedule(upload, clock_mode=0.0 if host_authority else 1.0)
+    comparison_start = boundary + 160
+
+    if host_authority:
+        schedule[0].extend([
+            ["event", "tempoIn", {"bpm": 120.0}],
+            ["event", "transportStateIn", {"flags": 1}],
+            ["event", "positionIn", {"frameIndex": 0, "quarterNote": 0.0, "barStartQuarterNote": 0.0}],
+        ])
+
+    if reset_authority == "transport-stop-start":
+        schedule[boundary] = [["event", "transportStateIn", {"flags": 0}]]
+        schedule[boundary + 320] = [["event", "transportStateIn", {"flags": 1}]]
+        comparison_start = boundary + 480
+    elif reset_authority == "discontinuous-seek":
+        schedule[boundary] = [[
+            "event",
+            "positionIn",
+            {"frameIndex": boundary + 5_000, "quarterNote": 4.0, "barStartQuarterNote": 4.0},
+        ]]
+    elif reset_authority == "clock-source":
+        schedule[boundary] = [["value", "clockMode", 2.0, 0]]
+    elif reset_authority == "rate":
+        schedule[boundary] = [["value", "rate", 1.0, 0]]
+    elif reset_authority == "loop-range":
+        schedule[boundary] = [
+            ["value", "loopStart", 2.0, 0],
+            ["value", "loopLength", 4.0, 0],
+        ]
+    elif reset_authority == "pattern-select":
+        schedule[boundary] = [["value", "patternSelect", 1.0, 0]]
+    elif reset_authority == "authoritative-pattern":
+        replacement = json.loads(json.dumps(upload))
+        replacement["revision"] = 2
+        schedule[boundary] = [["event", "patternUpload", replacement]]
+    elif reset_authority == "bypass-flush":
+        schedule[boundary] = [["value", "enabled", 0.0, 0]]
+        schedule[boundary + 320] = [["value", "enabled", 1.0, 0]]
+        comparison_start = boundary + 480
+    else:
+        raise AssertionError(f"Unhandled reset authority {reset_authority}")
+
+    (tmp_path / "history-a").mkdir()
+    (tmp_path / "history-b").mkdir()
+    output_a = _render(generated_runtime, tmp_path / "history-a", source_a, schedule)
+    output_b = _render(generated_runtime, tmp_path / "history-b", source_b, schedule)
+
+    np.testing.assert_array_equal(output_a[comparison_start:], output_b[comparison_start:])
+    np.testing.assert_allclose(output_a[comparison_start:], 0.0, atol=1.0e-7, rtol=0.0)

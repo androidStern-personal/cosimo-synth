@@ -915,6 +915,7 @@ processor SeqFx [[ main ]]
     float32<2>[seqfx::laneCount] dirtyToneState;
     float32[seqfx::laneCount] dirtyInputPower;
     float32[seqfx::laneCount] dirtyOutputPower;
+    int32[seqfx::laneCount] dirtyResetWarmupFramesRemaining;
 
     bool[seqfx::laneCount] combActive;
     bool[seqfx::laneCount] combTailActive;
@@ -1852,6 +1853,10 @@ processor SeqFx [[ main ]]
             dirtyToneState[lane] = float32<2> (0.0f);
             dirtyInputPower[lane] = 0.0f;
             dirtyOutputPower[lane] = 0.0f;
+            dirtyMixCurrent[lane] = 0.0f;
+            dirtyResetWarmupFramesRemaining[lane] = hasProcessedStage
+                ? int32 (seqfx::transitionCrossfadeFrames)
+                : 0;
             resetCombNetwork (lane);
             combTailAgeFrames[lane] = 0.0f;
             combTailEnergy[lane] = 0.0f;
@@ -2809,6 +2814,11 @@ processor SeqFx [[ main ]]
             return false;
         }
 
+        var hadActiveVoice = false;
+        for (wrap<seqfx::reverseVoiceCount> voice)
+            if (reverseVoiceActive[lane, voice])
+                hadActiveVoice = true;
+
         let selectedVoiceIndex = allocateReverseVoice (lane);
         let selectedVoice = wrap<seqfx::reverseVoiceCount> (selectedVoiceIndex);
         let wasActive = reverseVoiceActive[lane, selectedVoice];
@@ -2850,7 +2860,9 @@ processor SeqFx [[ main ]]
             : crossfadeFrames;
         reverseCurrentVoice[lane] = selectedVoiceIndex;
 
-        if (explicitTrigger && ! wasActive)
+        // An idle alternate slot is still a retrigger when the other voice is
+        // live; only a genuinely cold start should restart the outer wet mix.
+        if (explicitTrigger && ! hadActiveVoice)
             reverseMixCurrent[lane] = 0.0f;
 
         return true;
@@ -5247,12 +5259,6 @@ processor SeqFx [[ main ]]
 
     float32<2> processDirty (wrap<seqfx::laneCount> lane, float32<2> stage)
     {
-        dirtyMixCurrent[lane] = seqfx::moveTowards (
-            dirtyMixCurrent[lane],
-            dirtyMixTarget[lane],
-            1.0f / seqfx::transitionCrossfadeFrames
-        );
-
         let currentDriveDb = seqfx::clampFloat (auxParamValue (lane, 0, dirtyDriveDb[lane]), 0.0f, 36.0f);
         let currentBias = seqfx::clampFloat (auxParamValue (lane, 2, dirtyBias[lane]), -1.0f, 1.0f);
         let currentDynamics = seqfx::clampFloat (auxParamValue (lane, 3, dirtyDynamics[lane]), 0.0f, 1.0f);
@@ -5266,6 +5272,26 @@ processor SeqFx [[ main ]]
         dirtyCores[lane].advance();
 
         let rawResidue = dirtyCores[lane].out - dirtyCores[lane].thru;
+        if (dirtyResetWarmupFramesRemaining[lane] > 0)
+        {
+            // The 4x node owns rate-converter memory outside these explicit
+            // states. Flush it behind dry output, then begin the normal entry.
+            dirtyResetWarmupFramesRemaining[lane] -= 1;
+            dirtyMixCurrent[lane] = 0.0f;
+            dirtyDcPreviousInput[lane] = float32<2> (0.0f);
+            dirtyDcPreviousOutput[lane] = float32<2> (0.0f);
+            dirtyToneState[lane] = float32<2> (0.0f);
+            dirtyInputPower[lane] = 0.0f;
+            dirtyOutputPower[lane] = 0.0f;
+            return stage;
+        }
+
+        dirtyMixCurrent[lane] = seqfx::moveTowards (
+            dirtyMixCurrent[lane],
+            dirtyMixTarget[lane],
+            1.0f / seqfx::transitionCrossfadeFrames
+        );
+
         let dcCoefficient = std::intrinsics::exp (
             (-2.0f * seqfx::pi * 10.0f) / float32 (processor.frequency)
         );
@@ -5807,7 +5833,8 @@ processor SeqFx [[ main ]]
             || mixTransitionIsAudible (talkBoxMixCurrent[lane], talkBoxMixTarget[lane]))
             stage = processTalkBox (lane, stage);
         if (dirtyActive[lane]
-            || mixTransitionIsAudible (dirtyMixCurrent[lane], dirtyMixTarget[lane]))
+            || mixTransitionIsAudible (dirtyMixCurrent[lane], dirtyMixTarget[lane])
+            || dirtyResetWarmupFramesRemaining[lane] > 0)
             stage = processDirty (lane, stage);
         if (combNeedsProcessing (lane))
             stage = processComb (lane, stage);
