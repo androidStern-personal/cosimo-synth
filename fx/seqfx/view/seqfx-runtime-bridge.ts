@@ -123,6 +123,7 @@ type SeqFxGlobalEndpoint =
     | typeof SEQFX_ENDPOINTS.swing
     | typeof SEQFX_ENDPOINTS.loopStart
     | typeof SEQFX_ENDPOINTS.loopLength;
+type SeqFxAutomatableEndpoint = SeqFxGlobalEndpoint | typeof SEQFX_ENDPOINTS.patternSelect;
 
 const DEFAULT_GLOBAL_CONTROLS: SeqFxGlobalControls = {
     enabled: true,
@@ -507,7 +508,12 @@ export class SeqFxRuntimeBridge {
     selectPattern(patternIndex: number) {
         const nextPatternIndex = resolvePatternIndex(patternIndex);
         this.selectedPatternIndex = nextPatternIndex;
-        this.patchConnection.sendEventOrValue?.(SEQFX_ENDPOINTS.patternSelect, nextPatternIndex);
+        this.beginGlobalGesture(SEQFX_ENDPOINTS.patternSelect);
+        try {
+            this.patchConnection.sendEventOrValue?.(SEQFX_ENDPOINTS.patternSelect, nextPatternIndex);
+        } finally {
+            this.endGlobalGesture(SEQFX_ENDPOINTS.patternSelect);
+        }
         this.notifyStateListeners();
     }
 
@@ -517,6 +523,15 @@ export class SeqFxRuntimeBridge {
         this.patchConnection.sendEventOrValue?.(endpointID, normalizedValue);
     }
 
+    commitGlobalControl(endpointID: SeqFxGlobalEndpoint, value: unknown) {
+        this.beginGlobalGesture(endpointID);
+        try {
+            this.setGlobalControl(endpointID, value);
+        } finally {
+            this.endGlobalGesture(endpointID);
+        }
+    }
+
     setLoopRange(startStep: number, endStepExclusive: number) {
         const loopStart = resolveInteger(startStep, this.globalControls.loopStart, 0, 31);
         const loopEndExclusive = resolveInteger(endStepExclusive, loopStart + 1, loopStart + 1, 32);
@@ -524,11 +539,22 @@ export class SeqFxRuntimeBridge {
         this.setGlobalControl(SEQFX_ENDPOINTS.loopLength, loopEndExclusive - loopStart);
     }
 
-    beginGlobalGesture(endpointID: SeqFxGlobalEndpoint) {
+    commitLoopRange(startStep: number, endStepExclusive: number) {
+        this.beginGlobalGesture(SEQFX_ENDPOINTS.loopStart);
+        this.beginGlobalGesture(SEQFX_ENDPOINTS.loopLength);
+        try {
+            this.setLoopRange(startStep, endStepExclusive);
+        } finally {
+            this.endGlobalGesture(SEQFX_ENDPOINTS.loopStart);
+            this.endGlobalGesture(SEQFX_ENDPOINTS.loopLength);
+        }
+    }
+
+    beginGlobalGesture(endpointID: SeqFxAutomatableEndpoint) {
         this.patchConnection.sendParameterGestureStart?.(endpointID);
     }
 
-    endGlobalGesture(endpointID: SeqFxGlobalEndpoint) {
+    endGlobalGesture(endpointID: SeqFxAutomatableEndpoint) {
         this.patchConnection.sendParameterGestureEnd?.(endpointID);
     }
 

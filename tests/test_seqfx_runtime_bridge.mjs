@@ -936,13 +936,26 @@ test("global_parameter_gestures_and_internal_transport_keep_host authority expli
 
     bridge.beginGlobalGesture(SEQFX_ENDPOINTS.globalMix);
     bridge.endGlobalGesture(SEQFX_ENDPOINTS.globalMix);
+    bridge.commitGlobalControl(SEQFX_ENDPOINTS.enabled, 0);
+    bridge.commitLoopRange(8, 16);
+    bridge.selectPattern(4);
     bridge.playInternal();
     bridge.stopInternal();
     bridge.resetInternal();
 
-    assert.deepEqual(connection.gestureStarts, [SEQFX_ENDPOINTS.globalMix]);
-    assert.deepEqual(connection.gestureEnds, [SEQFX_ENDPOINTS.globalMix]);
+    assert.deepEqual(connection.gestureStarts, [
+        SEQFX_ENDPOINTS.globalMix,
+        SEQFX_ENDPOINTS.enabled,
+        SEQFX_ENDPOINTS.loopStart,
+        SEQFX_ENDPOINTS.loopLength,
+        SEQFX_ENDPOINTS.patternSelect,
+    ]);
+    assert.deepEqual(connection.gestureEnds, connection.gestureStarts);
     assert.deepEqual(connection.events, [
+        { endpointID: SEQFX_ENDPOINTS.enabled, value: 0 },
+        { endpointID: SEQFX_ENDPOINTS.loopStart, value: 8 },
+        { endpointID: SEQFX_ENDPOINTS.loopLength, value: 8 },
+        { endpointID: SEQFX_ENDPOINTS.patternSelect, value: 4 },
         { endpointID: SEQFX_ENDPOINTS.internalPlay, value: 1 },
         { endpointID: SEQFX_ENDPOINTS.internalPlay, value: 0 },
         { endpointID: SEQFX_ENDPOINTS.internalReset, value: 1 },

@@ -6,6 +6,8 @@ type Listener = (value: unknown) => void;
 class SeqFxHarnessPatchConnection {
     storedState: Record<string, unknown> = {};
     events: Array<{ endpointID: string; value: unknown }> = [];
+    gestureStarts: string[] = [];
+    gestureEnds: string[] = [];
     parameters: Record<string, unknown> = {
         enabled: 1,
         globalMix: 1,
@@ -91,6 +93,14 @@ class SeqFxHarnessPatchConnection {
         this.emitParameter(endpointID, value);
     }
 
+    sendParameterGestureStart(endpointID: string) {
+        this.gestureStarts.push(endpointID);
+    }
+
+    sendParameterGestureEnd(endpointID: string) {
+        this.gestureEnds.push(endpointID);
+    }
+
     emitParameter(endpointID: string, value: unknown) {
         this.parameters[endpointID] = value;
         for (const listener of this.parameterListeners.get(endpointID) ?? []) {
@@ -117,6 +127,8 @@ class SeqFxHarnessPatchConnection {
     getSnapshot() {
         return {
             events: [...this.events],
+            gestureStarts: [...this.gestureStarts],
+            gestureEnds: [...this.gestureEnds],
             storedState: { ...this.storedState },
             parameters: { ...this.parameters },
         };
@@ -152,6 +164,8 @@ window.__SEQFX_HARNESS__ = {
     getSnapshot: () => patchConnection.getSnapshot(),
     clearEvents: () => {
         patchConnection.events = [];
+        patchConnection.gestureStarts = [];
+        patchConnection.gestureEnds = [];
     },
     emitParameter: (endpointID: string, value: unknown) => {
         patchConnection.emitParameter(endpointID, value);

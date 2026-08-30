@@ -12,7 +12,9 @@ type GlobalControlEndpoint =
     | typeof SEQFX_ENDPOINTS.clockMode
     | typeof SEQFX_ENDPOINTS.manualBpm
     | typeof SEQFX_ENDPOINTS.rate
-    | typeof SEQFX_ENDPOINTS.swing;
+    | typeof SEQFX_ENDPOINTS.swing
+    | typeof SEQFX_ENDPOINTS.loopStart
+    | typeof SEQFX_ENDPOINTS.loopLength;
 
 type LoopDragEdge = "start" | "end";
 
@@ -35,6 +37,7 @@ export function SeqFxGlobalControlSurface({
     canRedo,
     hasLoopClipboard,
     onGlobalControl,
+    onGlobalControlCommit,
     onGlobalGestureStart,
     onGlobalGestureEnd,
     onLoopRangeChange,
@@ -56,6 +59,7 @@ export function SeqFxGlobalControlSurface({
     canRedo: boolean;
     hasLoopClipboard: boolean;
     onGlobalControl: (endpointID: GlobalControlEndpoint, value: number) => void;
+    onGlobalControlCommit: (endpointID: GlobalControlEndpoint, value: number) => void;
     onGlobalGestureStart: (endpointID: GlobalControlEndpoint) => void;
     onGlobalGestureEnd: (endpointID: GlobalControlEndpoint) => void;
     onLoopRangeChange: (startStep: number, endStepExclusive: number) => void;
@@ -73,16 +77,60 @@ export function SeqFxGlobalControlSurface({
     const loopEndExclusive = Math.min(32, controls.loopStart + controls.loopLength);
     const loopRulerRef = useRef<HTMLDivElement | null>(null);
     const dragEdgeRef = useRef<LoopDragEdge | null>(null);
+    const loopGestureActiveRef = useRef(false);
+    const activeGestureEndpointsRef = useRef(new Set<GlobalControlEndpoint>());
+    const pointerGestureEndpointsRef = useRef(new Set<GlobalControlEndpoint>());
+    const globalGestureStartRef = useRef(onGlobalGestureStart);
+    const globalGestureEndRef = useRef(onGlobalGestureEnd);
+    globalGestureStartRef.current = onGlobalGestureStart;
+    globalGestureEndRef.current = onGlobalGestureEnd;
+
+    function beginLoopGesture() {
+        if (loopGestureActiveRef.current) {
+            return;
+        }
+
+        loopGestureActiveRef.current = true;
+        beginGesture(SEQFX_ENDPOINTS.loopStart);
+        beginGesture(SEQFX_ENDPOINTS.loopLength);
+    }
+
+    function endLoopGesture() {
+        if (!loopGestureActiveRef.current) {
+            return;
+        }
+
+        loopGestureActiveRef.current = false;
+        endGesture(SEQFX_ENDPOINTS.loopStart);
+        endGesture(SEQFX_ENDPOINTS.loopLength);
+    }
 
     useEffect(() => {
-        const endDrag = () => {
-            dragEdgeRef.current = null;
+        const endPointerInteraction = () => {
+            if (dragEdgeRef.current !== null) {
+                dragEdgeRef.current = null;
+                endLoopGesture();
+            }
+            for (const endpointID of [...pointerGestureEndpointsRef.current]) {
+                endPointerGesture(endpointID);
+            }
         };
-        window.addEventListener("pointerup", endDrag);
-        window.addEventListener("pointercancel", endDrag);
+        const endAllInteractions = () => {
+            dragEdgeRef.current = null;
+            endLoopGesture();
+            for (const endpointID of [...activeGestureEndpointsRef.current]) {
+                endGesture(endpointID);
+            }
+            pointerGestureEndpointsRef.current.clear();
+        };
+        window.addEventListener("pointerup", endPointerInteraction);
+        window.addEventListener("pointercancel", endPointerInteraction);
+        window.addEventListener("blur", endAllInteractions);
         return () => {
-            window.removeEventListener("pointerup", endDrag);
-            window.removeEventListener("pointercancel", endDrag);
+            window.removeEventListener("pointerup", endPointerInteraction);
+            window.removeEventListener("pointercancel", endPointerInteraction);
+            window.removeEventListener("blur", endAllInteractions);
+            endAllInteractions();
         };
     }, []);
 
@@ -104,6 +152,7 @@ export function SeqFxGlobalControlSurface({
 
         const edge = nearestLoopEdge(step, controls.loopStart, loopEndExclusive);
         dragEdgeRef.current = edge;
+        beginLoopGesture();
         event.currentTarget.setPointerCapture(event.pointerId);
         changeLoopEdge(edge, step);
     }
@@ -121,11 +170,28 @@ export function SeqFxGlobalControlSurface({
     }
 
     function beginGesture(endpointID: GlobalControlEndpoint) {
-        onGlobalGestureStart(endpointID);
+        if (activeGestureEndpointsRef.current.has(endpointID)) {
+            return;
+        }
+        activeGestureEndpointsRef.current.add(endpointID);
+        globalGestureStartRef.current(endpointID);
     }
 
     function endGesture(endpointID: GlobalControlEndpoint) {
-        onGlobalGestureEnd(endpointID);
+        if (!activeGestureEndpointsRef.current.delete(endpointID)) {
+            return;
+        }
+        globalGestureEndRef.current(endpointID);
+    }
+
+    function beginPointerGesture(endpointID: GlobalControlEndpoint) {
+        pointerGestureEndpointsRef.current.add(endpointID);
+        beginGesture(endpointID);
+    }
+
+    function endPointerGesture(endpointID: GlobalControlEndpoint) {
+        pointerGestureEndpointsRef.current.delete(endpointID);
+        endGesture(endpointID);
     }
 
     const clockOwnsTransport = controls.clockMode === 1;
@@ -138,7 +204,7 @@ export function SeqFxGlobalControlSurface({
                     aria-checked={controls.enabled}
                     className={controls.enabled ? "seqfx-global__on is-on" : "seqfx-global__on"}
                     data-role="seqfx-enabled"
-                    onClick={() => onGlobalControl(SEQFX_ENDPOINTS.enabled, controls.enabled ? 0 : 1)}
+                    onClick={() => onGlobalControlCommit(SEQFX_ENDPOINTS.enabled, controls.enabled ? 0 : 1)}
                     role="switch"
                     type="button"
                 >
@@ -155,8 +221,8 @@ export function SeqFxGlobalControlSurface({
                         min="0"
                         onBlur={() => endGesture(SEQFX_ENDPOINTS.globalMix)}
                         onChange={(event) => onGlobalControl(SEQFX_ENDPOINTS.globalMix, Number(event.currentTarget.value))}
-                        onPointerDown={() => beginGesture(SEQFX_ENDPOINTS.globalMix)}
-                        onPointerUp={() => endGesture(SEQFX_ENDPOINTS.globalMix)}
+                        onPointerDown={() => beginPointerGesture(SEQFX_ENDPOINTS.globalMix)}
+                        onPointerUp={() => endPointerGesture(SEQFX_ENDPOINTS.globalMix)}
                         step="0.01"
                         type="range"
                         value={controls.globalMix}
@@ -169,7 +235,7 @@ export function SeqFxGlobalControlSurface({
                     <select
                         aria-label="Clock source"
                         data-role="seqfx-clock-mode"
-                        onChange={(event) => onGlobalControl(SEQFX_ENDPOINTS.clockMode, Number(event.currentTarget.value))}
+                        onChange={(event) => onGlobalControlCommit(SEQFX_ENDPOINTS.clockMode, Number(event.currentTarget.value))}
                         value={controls.clockMode}
                     >
                         {CLOCK_OPTIONS.map((option, index) => <option key={option} value={index}>{option}</option>)}
@@ -198,7 +264,7 @@ export function SeqFxGlobalControlSurface({
                     <select
                         aria-label="Sequence rate"
                         data-role="seqfx-rate"
-                        onChange={(event) => onGlobalControl(SEQFX_ENDPOINTS.rate, Number(event.currentTarget.value))}
+                        onChange={(event) => onGlobalControlCommit(SEQFX_ENDPOINTS.rate, Number(event.currentTarget.value))}
                         value={controls.rateIndex}
                     >
                         {RATE_OPTIONS.map((option, index) => <option key={option} value={index}>{option}</option>)}
@@ -214,8 +280,8 @@ export function SeqFxGlobalControlSurface({
                         min="0"
                         onBlur={() => endGesture(SEQFX_ENDPOINTS.swing)}
                         onChange={(event) => onGlobalControl(SEQFX_ENDPOINTS.swing, Number(event.currentTarget.value))}
-                        onPointerDown={() => beginGesture(SEQFX_ENDPOINTS.swing)}
-                        onPointerUp={() => endGesture(SEQFX_ENDPOINTS.swing)}
+                        onPointerDown={() => beginPointerGesture(SEQFX_ENDPOINTS.swing)}
+                        onPointerUp={() => endPointerGesture(SEQFX_ENDPOINTS.swing)}
                         step="0.01"
                         type="range"
                         value={controls.swing}
@@ -251,7 +317,9 @@ export function SeqFxGlobalControlSurface({
                             data-role="seqfx-loop-start"
                             max={loopEndExclusive}
                             min="1"
+                            onBlur={endLoopGesture}
                             onChange={(event) => onLoopRangeChange(Number(event.currentTarget.value) - 1, loopEndExclusive)}
+                            onFocus={beginLoopGesture}
                             type="number"
                             value={controls.loopStart + 1}
                         />
@@ -263,7 +331,9 @@ export function SeqFxGlobalControlSurface({
                             data-role="seqfx-loop-end"
                             max="32"
                             min={controls.loopStart + 1}
+                            onBlur={endLoopGesture}
                             onChange={(event) => onLoopRangeChange(controls.loopStart, Number(event.currentTarget.value))}
+                            onFocus={beginLoopGesture}
                             type="number"
                             value={loopEndExclusive}
                         />
@@ -313,6 +383,7 @@ export function SeqFxGlobalControlSurface({
                         onPointerMove={handleLoopPointerMove}
                         onPointerUp={() => {
                             dragEdgeRef.current = null;
+                            endLoopGesture();
                         }}
                         ref={loopRulerRef}
                         role="group"
@@ -333,7 +404,14 @@ export function SeqFxGlobalControlSurface({
                                     data-loop-step={step}
                                     data-role="seqfx-loop-step"
                                     key={step}
-                                    onClick={() => changeLoopEdge(nearestLoopEdge(step, controls.loopStart, loopEndExclusive), step)}
+                                    onClick={(event) => {
+                                        if (event.detail !== 0) {
+                                            return;
+                                        }
+                                        beginLoopGesture();
+                                        changeLoopEdge(nearestLoopEdge(step, controls.loopStart, loopEndExclusive), step);
+                                        endLoopGesture();
+                                    }}
                                     type="button"
                                 >
                                     {step + 1}

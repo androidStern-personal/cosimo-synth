@@ -1078,11 +1078,59 @@ test("seqfx_global_surface_wires_host_controls_loop_transport_and_edit_history",
         { endpointID: "internalPlay", value: 1 },
         { endpointID: "internalReset", value: 1 },
     ]);
+    assert.deepEqual(snapshot.gestureStarts, [
+        "enabled",
+        "clockMode",
+        "manualBpm",
+        "rate",
+        "loopStart",
+        "loopLength",
+        "loopStart",
+        "loopLength",
+    ]);
+    assert.deepEqual(
+        [...snapshot.gestureEnds].sort(),
+        [...snapshot.gestureStarts].sort(),
+        "each combined global edit should close exactly one matching host gesture",
+    );
+
+    for (const [endpointID, slider] of [["globalMix", mix], ["swing", swing]]) {
+        await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+        const box = await slider.boundingBox();
+        assert.ok(box);
+        await page.mouse.move(box.x + (box.width * 0.3), box.y + (box.height / 2));
+        await page.mouse.down();
+        await page.mouse.move(box.x + (box.width * 0.7), box.y + (box.height / 2), { steps: 3 });
+        await page.mouse.up();
+        await slider.evaluate((node) => node.blur());
+        const gestureSnapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(gestureSnapshot.gestureStarts, [endpointID]);
+        assert.deepEqual(gestureSnapshot.gestureEnds, [endpointID]);
+    }
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await clock.selectOption("0");
+    assert.equal(await transport.isDisabled(), true);
+    assert.equal(await transport.getAttribute("aria-label"), "Play internal clock");
+    await clock.selectOption("1");
+    assert.equal(await transport.isEnabled(), true);
+    assert.equal(await transport.getAttribute("aria-label"), "Play internal clock");
+    assert.deepEqual((await getHarnessSnapshot(page)).events, [
+        { endpointID: "internalPlay", value: 0 },
+        { endpointID: "clockMode", value: 0 },
+        { endpointID: "clockMode", value: 1 },
+    ], "leaving Internal must stop DSP transport instead of hiding a latched run state");
 
     await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
     assert.equal(await undo.isEnabled(), true);
     await undo.click();
     assert.equal(await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).getAttribute("aria-pressed"), "false");
+    await page.locator('[data-role="seqfx-empty"]').waitFor();
+    assert.equal(
+        await page.locator('[data-role="seqfx-mix-row"]').count(),
+        0,
+        "undoing the selected block must not leave controls for an inactive cell",
+    );
     assert.equal(await redo.isEnabled(), true);
     await redo.click();
     assert.equal(await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).getAttribute("aria-pressed"), "true");

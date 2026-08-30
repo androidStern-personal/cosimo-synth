@@ -3665,6 +3665,7 @@ export function SeqFxPatchView({
     const [runtimeRateIndex, setRateIndex] = useState(() => bridge.getRateIndex());
     const [runtimeGlobalControls, setGlobalControls] = useState(() => bridge.getGlobalControls());
     const [runtimeInternalRunning, setInternalRunning] = useState(false);
+    const internalRunningRef = useRef(runtimeInternalRunning);
     const [runtimeHasLoopClipboard, setHasLoopClipboard] = useState(() => bridge.canPasteLoop());
     const [runtimeSelectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
     const [runtimeSelection, setSelection] = useState<Selection | null>(null);
@@ -3714,6 +3715,7 @@ export function SeqFxPatchView({
     const selectedPatternRef = useRef(selectedPattern);
     const selectedCellRef = useRef<SelectedCell | null>(selectedCell);
     const activeSelectionRef = useRef<Selection | null>(null);
+    const selectionPatternRef = useRef(selectedPattern);
     const cellClipboardRef = useRef<SeqFxStepValueSnapshot | null>(null);
     const liveEditPointerIdRef = useRef<number | null>(null);
 
@@ -3721,6 +3723,7 @@ export function SeqFxPatchView({
     stateRef.current = state;
     selectedPatternRef.current = selectedPattern;
     selectedCellRef.current = selectedCell;
+    internalRunningRef.current = runtimeInternalRunning;
 
     useEffect(() => {
         if (isPromoControlled) {
@@ -3735,6 +3738,10 @@ export function SeqFxPatchView({
         const unsubscribeGlobalControls = bridge.subscribeGlobalControls((nextControls) => {
             setGlobalControls(nextControls);
             if (nextControls.clockMode !== 1) {
+                if (internalRunningRef.current) {
+                    internalRunningRef.current = false;
+                    bridge.stopInternal();
+                }
                 setInternalRunning(false);
             }
         });
@@ -3790,6 +3797,34 @@ export function SeqFxPatchView({
             bridge.detach();
         };
     }, [bridge, isPromoControlled]);
+
+    useEffect(() => {
+        if (isPromoControlled) {
+            return;
+        }
+
+        const patternChanged = selectionPatternRef.current !== runtimeSelectedPattern;
+        selectionPatternRef.current = runtimeSelectedPattern;
+        if (!runtimeSelectedCell) {
+            return;
+        }
+
+        const pattern = runtimeState.patterns[runtimeSelectedPattern];
+        const selectedStep = pattern?.lanes[runtimeSelectedCell.lane]?.steps[runtimeSelectedCell.step];
+        const selectedBlockStarts = runtimeSelection?.blockStartSteps ?? [];
+        const blockSelectionStillExists = selectedBlockStarts.every((startStep) => {
+            const block = pattern ? getSeqFxBlockAtStep(pattern, runtimeSelection?.lane ?? runtimeSelectedCell.lane, startStep) : null;
+            return block?.startStep === startStep;
+        });
+
+        if (!patternChanged && selectedStep?.active && blockSelectionStillExists) {
+            return;
+        }
+
+        setSelectedCell(null);
+        setSelection(null);
+        setInspectorMode("effect");
+    }, [isPromoControlled, runtimeSelectedCell, runtimeSelectedPattern, runtimeSelection, runtimeState]);
 
     useEffect(() => {
         if (isPromoControlled) {
@@ -4682,7 +4717,7 @@ export function SeqFxPatchView({
     const inspectedAuxCyclePhase = inspectedLane !== null ? auxMonitor.cyclePhase[inspectedLane] ?? 0 : 0;
     const inspectedAuxAmount = inspectedLane !== null ? auxMonitor.amount[inspectedLane] ?? 0 : 0;
     const showModEditor = inspectorMode === "mod" && Boolean(inspectedAux);
-    const matchingFactoryPreset = inspectedCell
+    const matchingFactoryPreset = inspectedCell?.active
         ? inspectedEffectDefinition.factoryPresets.find((preset) => (
             Math.abs(inspectedCell.mix - preset.mix) < 0.000001
             && preset.params.every((value, paramIndex) => Math.abs(inspectedCell.params[paramIndex] - value) < 0.000001)
@@ -5287,6 +5322,11 @@ export function SeqFxPatchView({
                         bridge.setGlobalControl(endpointID, value);
                     }
                 }}
+                onGlobalControlCommit={(endpointID, value) => {
+                    if (!isPromoControlled) {
+                        bridge.commitGlobalControl(endpointID, value);
+                    }
+                }}
                 onGlobalGestureStart={(endpointID) => {
                     if (!isPromoControlled) {
                         bridge.beginGlobalGesture(endpointID);
@@ -5306,6 +5346,7 @@ export function SeqFxPatchView({
                     if (isPromoControlled) {
                         return;
                     }
+                    internalRunningRef.current = running;
                     setInternalRunning(running);
                     if (running) {
                         bridge.playInternal();
@@ -5577,10 +5618,10 @@ export function SeqFxPatchView({
                 >
                     <div className="seqfx-inspector-heading">
                         <span aria-hidden="true" className="seqfx-inspector-heading__bullet" data-role="seqfx-inspector-bullet" />
-                        <strong>{getSelectionLabel(activeSelection, inspectedCell ? inspectedEffectType : null)}</strong>
+                        <strong>{getSelectionLabel(activeSelection, inspectedCell?.active ? inspectedEffectType : null)}</strong>
                         <span aria-hidden="true" className="seqfx-inspector-heading__rule" data-role="seqfx-inspector-rule" />
                     </div>
-                    {!inspectedCell || inspectedLane === null ? (
+                    {!inspectedCell?.active || inspectedLane === null ? (
                         <p className="seqfx-empty" data-role="seqfx-empty">
                             <SeqFxEmptyStateIcon />
                             <span>Choose a lane cell to edit its mix and effect settings.</span>
