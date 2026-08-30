@@ -145,6 +145,14 @@ an overlapping Tone control; the full source/inference split is recorded in
 - Width: 0–100% with documented mono projection.
 - Drive: 0–100% saturating feedback character.
 
+Production status: implemented as the lab-selected vector-dispersive network
+with a bit-exact conventional neutral at `Dispersion = 0`. Four normalized
+cross-feedback paths, per-path allpass dispersion, deterministic motion,
+frequency-dependent damping, mono-safe width, loop saturation, measured tuning
+compensation, bounded tail lifecycle, and authoritative reset behavior are
+covered by DSP and browser fixtures. Human listening and native-host CPU remain
+release-phase gates; see `comb-lab-decision.md`.
+
 ### Ring (ID 7)
 
 - Frequency: 0.1 Hz–12 kHz, logarithmic; optional musical snaps.

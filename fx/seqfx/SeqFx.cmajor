@@ -36,6 +36,9 @@ namespace seqfx
     let tapeTimingFree = 1;
     let transitionCrossfadeFrames = 96.0f;
     let dirtyOversampleFactor = 4;
+    let combModeCount = 4;
+    let combAllpassStageCount = 4;
+    let combMaxDelaySeconds = 0.25f;
     let lifecycleIdle = 0;
     let lifecycleEntering = 1;
     let lifecycleActive = 2;
@@ -108,6 +111,19 @@ namespace seqfx
         float32<2> current,
         float32<2> following,
         float32<2> nextFollowing,
+        float32 fraction)
+    {
+        let a = (previous * -0.5f) + (current * 1.5f) - (following * 1.5f) + (nextFollowing * 0.5f);
+        let b = previous - (current * 2.5f) + (following * 2.0f) - (nextFollowing * 0.5f);
+        let c = (previous * -0.5f) + (following * 0.5f);
+        return (((a * fraction) + b) * fraction + c) * fraction + current;
+    }
+
+    float32 cubicHermite4Scalar (
+        float32 previous,
+        float32 current,
+        float32 following,
+        float32 nextFollowing,
         float32 fraction)
     {
         let a = (previous * -0.5f) + (current * 1.5f) - (following * 1.5f) + (nextFollowing * 0.5f);
@@ -607,6 +623,7 @@ processor SeqFx [[ main ]]
     output event seqfx::SeqMonitor monitorOut;
 
     let stutterBufferSize = int (processor.maxFrequency * seqfx::maxStutterSeconds) + 8;
+    let combBufferSize = int (processor.maxFrequency * seqfx::combMaxDelaySeconds) + 8;
 
     bool[seqfx::laneCount, seqfx::stepCount] activeSteps;
     bool[seqfx::laneCount, seqfx::stepCount] triggerSteps;
@@ -634,6 +651,8 @@ processor SeqFx [[ main ]]
     int32[seqfx::tapeCoarseBufferSize] tapeCoarseHistory2;
     int32[seqfx::tapeCoarseBufferSize] tapeCoarseHistory3;
     float32<2>[seqfx::laneCount, stutterBufferSize] stutterHistory;
+    float32<2>[seqfx::laneCount, combBufferSize] combReferenceHistory;
+    float32[seqfx::laneCount, seqfx::combModeCount, combBufferSize] combVectorHistory;
     wrap<seqfx::tapePrimaryBufferSize>[seqfx::laneCount] tapePrimaryWriteIndex;
     wrap<seqfx::tapeCoarseBufferSize>[seqfx::laneCount] tapeCoarseWriteIndex;
     int32[seqfx::laneCount] tapePrimaryValidSamples;
@@ -762,6 +781,41 @@ processor SeqFx [[ main ]]
     float32[seqfx::laneCount] dirtyInputPower;
     float32[seqfx::laneCount] dirtyOutputPower;
 
+    bool[seqfx::laneCount] combActive;
+    bool[seqfx::laneCount] combTailActive;
+    float32[seqfx::laneCount] combTuneHz;
+    float32[seqfx::laneCount] combDecaySeconds;
+    int32[seqfx::laneCount] combPolarity;
+    float32[seqfx::laneCount] combDispersion;
+    float32[seqfx::laneCount] combDampingHz;
+    float32[seqfx::laneCount] combMotion;
+    float32[seqfx::laneCount] combDrive;
+    float32[seqfx::laneCount] combWidth;
+    float32[seqfx::laneCount] combTuneCurrent;
+    float32[seqfx::laneCount] combDecayCurrent;
+    float32[seqfx::laneCount] combDispersionCurrent;
+    float32[seqfx::laneCount] combDampingCurrent;
+    float32[seqfx::laneCount] combMotionCurrent;
+    float32[seqfx::laneCount] combDriveCurrent;
+    float32[seqfx::laneCount] combWidthCurrent;
+    float32[seqfx::laneCount] combMixCurrent;
+    float32[seqfx::laneCount] combMixTarget;
+    float32[seqfx::laneCount] combGateCurrent;
+    float32[seqfx::laneCount] combGateTarget;
+    float32[seqfx::laneCount] combTailAgeFrames;
+    float32[seqfx::laneCount] combTailEnergy;
+    float32[seqfx::laneCount] combMotionPhase;
+    wrap<combBufferSize>[seqfx::laneCount] combWriteIndex;
+    int32[seqfx::laneCount] combValidSamples;
+    float32<2>[seqfx::laneCount] combReferenceDamped;
+    float32<2>[seqfx::laneCount] combReferenceDcInput;
+    float32<2>[seqfx::laneCount] combReferenceDcOutput;
+    float32[seqfx::laneCount, seqfx::combModeCount] combVectorDamped;
+    float32[seqfx::laneCount, seqfx::combModeCount] combVectorDcInput;
+    float32[seqfx::laneCount, seqfx::combModeCount] combVectorDcOutput;
+    float32[seqfx::laneCount, seqfx::combModeCount, seqfx::combAllpassStageCount] combAllpassInput;
+    float32[seqfx::laneCount, seqfx::combModeCount, seqfx::combAllpassStageCount] combAllpassOutput;
+
     bool[seqfx::laneCount] tapeLaneActive;
     float32[seqfx::laneCount] tapeMixCurrent;
     float32[seqfx::laneCount] tapeMixTarget;
@@ -827,6 +881,21 @@ processor SeqFx [[ main ]]
             dirtyDynamics[lane] = 0.65f;
             dirtyToneHz[lane] = 12000.0f;
             dirtyTrimDb[lane] = -6.0f;
+
+            combTuneHz[lane] = 220.0f;
+            combDecaySeconds[lane] = 1.4f;
+            combDispersion[lane] = 0.55f;
+            combDampingHz[lane] = 7500.0f;
+            combMotion[lane] = 0.12f;
+            combDrive[lane] = 0.18f;
+            combWidth[lane] = 0.65f;
+            combTuneCurrent[lane] = combTuneHz[lane];
+            combDecayCurrent[lane] = combDecaySeconds[lane];
+            combDispersionCurrent[lane] = combDispersion[lane];
+            combDampingCurrent[lane] = combDampingHz[lane];
+            combMotionCurrent[lane] = combMotion[lane];
+            combDriveCurrent[lane] = combDrive[lane];
+            combWidthCurrent[lane] = combWidth[lane];
 
             for (wrap<seqfx::tapeVoiceCount> voice)
                 tapeVoiceRestartAge[lane, voice] = seqfx::transitionCrossfadeFrames;
@@ -1343,12 +1412,21 @@ processor SeqFx [[ main ]]
             dirtyToneState[lane] = float32<2> (0.0f);
             dirtyInputPower[lane] = 0.0f;
             dirtyOutputPower[lane] = 0.0f;
-
+            resetCombNetwork (lane);
+            combTailAgeFrames[lane] = 0.0f;
+            combTailEnergy[lane] = 0.0f;
+            combMotionPhase[lane] = 0.0f;
+            combMixCurrent[lane] = 0.0f;
+            combMixTarget[lane] = 0.0f;
+            combGateCurrent[lane] = 0.0f;
+            combGateTarget[lane] = 0.0f;
+            combTailActive[lane] = false;
             filterActive[lane] = false;
             crusherActive[lane] = false;
             ringActive[lane] = false;
             talkBoxActive[lane] = false;
             dirtyActive[lane] = false;
+            combActive[lane] = false;
             tapeLaneActive[lane] = false;
             stutterLaneActive[lane] = false;
             chainPreviousEffectType[lane] = chainEffectType[lane];
@@ -1635,6 +1713,7 @@ processor SeqFx [[ main ]]
         let wasRingActive = ringActive[lane];
         let wasTalkBoxActive = talkBoxActive[lane];
         let wasDirtyActive = dirtyActive[lane];
+        let wasCombActive = combActive[lane];
         let wasTapeActive = tapeLaneActive[lane];
         let wasStutterActive = stutterLaneActive[lane];
 
@@ -1645,6 +1724,7 @@ processor SeqFx [[ main ]]
         ringActive[lane] = effectType == seqfx::effectRing;
         talkBoxActive[lane] = effectType == seqfx::effectTalkBox;
         dirtyActive[lane] = effectType == seqfx::effectDirty;
+        combActive[lane] = effectType == seqfx::effectComb;
         tapeLaneActive[lane] = effectType == seqfx::effectTapeStop;
         stutterLaneActive[lane] = effectType == seqfx::effectStutter;
 
@@ -1653,6 +1733,9 @@ processor SeqFx [[ main ]]
         ringMixTarget[lane] = ringActive[lane] ? targetMix : 0.0f;
         talkBoxMixTarget[lane] = talkBoxActive[lane] ? targetMix : 0.0f;
         dirtyMixTarget[lane] = dirtyActive[lane] ? targetMix : 0.0f;
+        combGateTarget[lane] = combActive[lane] ? 1.0f : 0.0f;
+        if (combActive[lane])
+            combMixTarget[lane] = targetMix;
         tapeMixTarget[lane] = tapeLaneActive[lane] ? targetMix : 0.0f;
         stutterMixTarget[lane] = stutterLaneActive[lane] ? targetMix : 0.0f;
 
@@ -1684,6 +1767,9 @@ processor SeqFx [[ main ]]
 
         if (dirtyActive[lane])
             latchDirtyStep (lane, wasDirtyActive);
+
+        if (combActive[lane])
+            latchCombStep (lane, wasCombActive);
 
         if (tapeLaneActive[lane])
             latchTapeStep (lane, wasTapeActive);
@@ -1821,6 +1907,65 @@ processor SeqFx [[ main ]]
         dirtyDynamics[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.0f, 1.0f);
         dirtyToneHz[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 500.0f, 20000.0f);
         dirtyTrimDb[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 5], -18.0f, 6.0f);
+    }
+
+    void resetCombNetwork (wrap<seqfx::laneCount> lane)
+    {
+        combWriteIndex[lane] = 0;
+        combValidSamples[lane] = 0;
+        combReferenceDamped[lane] = float32<2> (0.0f);
+        combReferenceDcInput[lane] = float32<2> (0.0f);
+        combReferenceDcOutput[lane] = float32<2> (0.0f);
+        for (wrap<seqfx::combModeCount> mode)
+        {
+            combVectorDamped[lane, mode] = 0.0f;
+            combVectorDcInput[lane, mode] = 0.0f;
+            combVectorDcOutput[lane, mode] = 0.0f;
+            for (wrap<seqfx::combAllpassStageCount> stage)
+            {
+                combAllpassInput[lane, mode, stage] = 0.0f;
+                combAllpassOutput[lane, mode, stage] = 0.0f;
+            }
+        }
+    }
+
+    void latchCombStep (wrap<seqfx::laneCount> lane, bool wasActive)
+    {
+        let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
+
+        if (wasActive && ! triggerSteps[lane, currentStepIndex] && ! relatchingFromPatternUpload)
+            return;
+
+        let blockStart = blockStartStep (lane, currentStep);
+        let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        let freshNetwork = ! combTailActive[lane];
+        if (freshNetwork)
+            resetCombNetwork (lane);
+
+        combTuneHz[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 0], 30.0f, 8000.0f);
+        combDecaySeconds[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 1], 0.02f, 8.0f);
+        combPolarity[lane] = snapValue (stepParams[lane, blockStartIndex, 2], 0, 1);
+        combDispersion[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.0f, 1.0f);
+        combDampingHz[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 500.0f, 20000.0f);
+        combMotion[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 5], 0.0f, 1.0f);
+        combDrive[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 6], 0.0f, 1.0f);
+        combWidth[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 7], 0.0f, 1.0f);
+
+        if (freshNetwork)
+        {
+            combTuneCurrent[lane] = combTuneHz[lane];
+            combDecayCurrent[lane] = combDecaySeconds[lane];
+            combDispersionCurrent[lane] = combDispersion[lane];
+            combDampingCurrent[lane] = combDampingHz[lane];
+            combMotionCurrent[lane] = combMotion[lane];
+            combDriveCurrent[lane] = combDrive[lane];
+            combWidthCurrent[lane] = combWidth[lane];
+            combMixCurrent[lane] = 0.0f;
+            combGateCurrent[lane] = 1.0f;
+        }
+
+        combTailActive[lane] = true;
+        combTailAgeFrames[lane] = 0.0f;
     }
 
     void latchStutterStep (wrap<seqfx::laneCount> lane, bool wasActive)
@@ -2528,6 +2673,357 @@ processor SeqFx [[ main ]]
         return stage + ((voiced - stage) * talkBoxMixCurrent[lane]);
     }
 
+    float32 combModeRatio (wrap<seqfx::combModeCount> mode, float32 dispersion)
+    {
+        if (mode == 1) return 1.0f + (0.011f * dispersion);
+        if (mode == 2) return 1.0f - (0.013f * dispersion);
+        if (mode == 3) return 1.0f + (0.027f * dispersion);
+        return 1.0f;
+    }
+
+    float32 combAllpassCoefficient (wrap<seqfx::combModeCount> mode, float32 dispersion)
+    {
+        let amount = seqfx::clampFloat (dispersion, 0.0f, 1.0f);
+        if (mode == 1) return -0.5644f * amount;
+        if (mode == 2) return 0.51f * amount;
+        if (mode == 3) return -0.42f * amount;
+        return 0.68f * amount;
+    }
+
+    float32 combAllpassGroupDelay (float32 coefficient, float32 tuneHz)
+    {
+        let radians = 2.0f * seqfx::pi * tuneHz / float32 (processor.frequency);
+        let numerator = 1.0f - (coefficient * coefficient);
+        let denominator = 1.0f + (coefficient * coefficient)
+            + (2.0f * coefficient * std::intrinsics::cos (radians));
+        return float32 (seqfx::combAllpassStageCount)
+            * numerator
+            / std::intrinsics::max (0.000001f, denominator);
+    }
+
+    float32 combModeDelaySamples (
+        wrap<seqfx::combModeCount> mode,
+        float32 targetPeriod,
+        float32 tuneHz,
+        float32 dispersion,
+        float32 motion,
+        float32 phase)
+    {
+        let coefficient = combAllpassCoefficient (mode, dispersion);
+        let baseDelay = (targetPeriod * combModeRatio (mode, dispersion))
+            - combAllpassGroupDelay (coefficient, tuneHz);
+        let excursion = std::intrinsics::min (3.0f, targetPeriod * 0.018f)
+            * seqfx::clampFloat (motion, 0.0f, 1.0f)
+            * seqfx::clampFloat (dispersion, 0.0f, 1.0f);
+        let modePhase = seqfx::unitWrap (phase + (float32 (mode) * 0.25f));
+        return seqfx::clampFloat (
+            baseDelay + (excursion * std::intrinsics::sin (modePhase * 2.0f * seqfx::pi)),
+            4.0f,
+            float32 (combBufferSize - 4)
+        );
+    }
+
+    float32 combFeedbackGain (float32 delaySamples, float32 decaySeconds, int32 polarity)
+    {
+        let safeDecay = seqfx::clampFloat (decaySeconds, 0.02f, 8.0f);
+        let delaySeconds = delaySamples / float32 (processor.frequency);
+        let magnitude = std::intrinsics::min (
+            0.9985f,
+            std::intrinsics::pow (10.0f, -3.0f * delaySeconds / safeDecay)
+        );
+        return polarity == 0 ? magnitude : -magnitude;
+    }
+
+    float32 combMeasuredPeriodCompensation (float32 tuneHz)
+    {
+        let octavesFromA3 = std::intrinsics::log (
+            seqfx::clampFloat (tuneHz, 30.0f, 8000.0f) / 220.0f
+        ) / std::intrinsics::log (2.0f);
+        return seqfx::clampFloat (1.0046f - (0.00675f * octavesFromA3), 0.97f, 1.025f);
+    }
+
+    float32 combVectorPeriodCompensation (float32 tuneHz, float32 dispersion)
+    {
+        // The four dispersed paths do not share the reference comb's measured
+        // loop phase. This small octave-dependent correction keeps their
+        // aggregate resonance centred on Tune while preserving a bit-exact
+        // conventional comb at Dispersion = 0.
+        let octavesFromA3 = std::intrinsics::log (
+            seqfx::clampFloat (tuneHz, 30.0f, 8000.0f) / 220.0f
+        ) / std::intrinsics::log (2.0f);
+        let amount = seqfx::clampFloat (dispersion, 0.0f, 1.0f);
+        return seqfx::clampFloat (1.0f - (0.0115f * octavesFromA3 * amount), 0.96f, 1.04f);
+    }
+
+    float32 combSoftLimit (float32 sample, float32 drive)
+    {
+        let amount = seqfx::clampFloat (drive, 0.0f, 1.0f);
+        if (amount <= 0.000001f)
+            return sample;
+
+        let gain = 1.0f + (amount * 5.0f);
+        let shaped = std::intrinsics::tanh (sample * gain) / gain;
+        return (sample * (1.0f - amount)) + (shaped * amount);
+    }
+
+    float32<2> combSoftLimitStereo (float32<2> sample, float32 drive)
+    {
+        return float32<2> (
+            combSoftLimit (sample[0], drive),
+            combSoftLimit (sample[1], drive)
+        );
+    }
+
+    float32<2> readCombReferenceAt (wrap<seqfx::laneCount> lane, int32 index)
+    {
+        return combReferenceHistory[lane, wrap<combBufferSize> (index)];
+    }
+
+    float32 readCombVectorAt (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::combModeCount> mode,
+        int32 index)
+    {
+        return combVectorHistory[lane, mode, wrap<combBufferSize> (index)];
+    }
+
+    float32<2> readCombReference (wrap<seqfx::laneCount> lane, float32 delaySamples)
+    {
+        if (combValidSamples[lane] < int32 (std::intrinsics::ceil (delaySamples)) + 3)
+            return float32<2> (0.0f);
+
+        let readPosition = float32 (int32 (combWriteIndex[lane])) - delaySamples;
+        let currentIndex = int32 (std::intrinsics::floor (readPosition));
+        let fraction = readPosition - float32 (currentIndex);
+        return seqfx::cubicHermite4 (
+            readCombReferenceAt (lane, currentIndex - 1),
+            readCombReferenceAt (lane, currentIndex),
+            readCombReferenceAt (lane, currentIndex + 1),
+            readCombReferenceAt (lane, currentIndex + 2),
+            fraction
+        );
+    }
+
+    float32 readCombVector (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::combModeCount> mode,
+        float32 delaySamples)
+    {
+        if (combValidSamples[lane] < int32 (std::intrinsics::ceil (delaySamples)) + 3)
+            return 0.0f;
+
+        let readPosition = float32 (int32 (combWriteIndex[lane])) - delaySamples;
+        let currentIndex = int32 (std::intrinsics::floor (readPosition));
+        let fraction = readPosition - float32 (currentIndex);
+        return seqfx::cubicHermite4Scalar (
+            readCombVectorAt (lane, mode, currentIndex - 1),
+            readCombVectorAt (lane, mode, currentIndex),
+            readCombVectorAt (lane, mode, currentIndex + 1),
+            readCombVectorAt (lane, mode, currentIndex + 2),
+            fraction
+        );
+    }
+
+    float32 processCombAllpass (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::combModeCount> mode,
+        float32 sample,
+        float32 coefficient)
+    {
+        var current = sample;
+        for (wrap<seqfx::combAllpassStageCount> stage)
+        {
+            let nextSample = (coefficient * current)
+                + combAllpassInput[lane, mode, stage]
+                - (coefficient * combAllpassOutput[lane, mode, stage]);
+            combAllpassInput[lane, mode, stage] = current;
+            combAllpassOutput[lane, mode, stage] = nextSample;
+            current = nextSample;
+        }
+        return current;
+    }
+
+    float32<2> processComb (wrap<seqfx::laneCount> lane, float32<2> stage)
+    {
+        if (! combActive[lane] && ! combTailActive[lane])
+            return stage;
+
+        let parameterSmoothing = 1.0f - std::intrinsics::exp (
+            -1.0f / (0.01f * float32 (processor.frequency))
+        );
+        if (combActive[lane])
+        {
+            let targetTune = auxLogParamValue (lane, 0, combTuneHz[lane], 30.0f, 8000.0f);
+            let targetDecay = auxLogParamValue (lane, 1, combDecaySeconds[lane], 0.02f, 8.0f);
+            let targetDispersion = seqfx::clampFloat (auxParamValue (lane, 3, combDispersion[lane]), 0.0f, 1.0f);
+            let targetDamping = auxLogParamValue (lane, 4, combDampingHz[lane], 500.0f, 20000.0f);
+            let targetMotion = seqfx::clampFloat (auxParamValue (lane, 5, combMotion[lane]), 0.0f, 1.0f);
+            let targetDrive = seqfx::clampFloat (auxParamValue (lane, 6, combDrive[lane]), 0.0f, 1.0f);
+            let targetWidth = seqfx::clampFloat (auxParamValue (lane, 7, combWidth[lane]), 0.0f, 1.0f);
+            combTuneCurrent[lane] += (targetTune - combTuneCurrent[lane]) * parameterSmoothing;
+            combDecayCurrent[lane] += (targetDecay - combDecayCurrent[lane]) * parameterSmoothing;
+            combDispersionCurrent[lane] += (targetDispersion - combDispersionCurrent[lane]) * parameterSmoothing;
+            combDampingCurrent[lane] += (targetDamping - combDampingCurrent[lane]) * parameterSmoothing;
+            combMotionCurrent[lane] += (targetMotion - combMotionCurrent[lane]) * parameterSmoothing;
+            combDriveCurrent[lane] += (targetDrive - combDriveCurrent[lane]) * parameterSmoothing;
+            combWidthCurrent[lane] += (targetWidth - combWidthCurrent[lane]) * parameterSmoothing;
+        }
+
+        combMixCurrent[lane] = seqfx::moveTowards (
+            combMixCurrent[lane],
+            combMixTarget[lane],
+            1.0f / seqfx::transitionCrossfadeFrames
+        );
+        combGateCurrent[lane] = seqfx::moveTowards (
+            combGateCurrent[lane],
+            combGateTarget[lane],
+            1.0f / seqfx::transitionCrossfadeFrames
+        );
+
+        let tuneHz = seqfx::clampFloat (combTuneCurrent[lane], 30.0f, 8000.0f);
+        let decaySeconds = seqfx::clampFloat (combDecayCurrent[lane], 0.02f, 8.0f);
+        let dispersion = seqfx::clampFloat (combDispersionCurrent[lane], 0.0f, 1.0f);
+        let dampingHz = seqfx::clampFloat (
+            combDampingCurrent[lane],
+            500.0f,
+            std::intrinsics::min (20000.0f, float32 (processor.frequency) * 0.45f)
+        );
+        let motion = seqfx::clampFloat (combMotionCurrent[lane], 0.0f, 1.0f);
+        let drive = seqfx::clampFloat (combDriveCurrent[lane], 0.0f, 1.0f);
+        let width = seqfx::clampFloat (combWidthCurrent[lane], 0.0f, 1.0f);
+        let referencePeriod = (float32 (processor.frequency) / tuneHz)
+            * combMeasuredPeriodCompensation (tuneHz);
+        let vectorPeriod = referencePeriod * combVectorPeriodCompensation (tuneHz, dispersion);
+        let inputSample = combActive[lane] ? stage : float32<2> (0.0f);
+        let referenceDelay = seqfx::clampFloat (referencePeriod, 4.0f, float32 (combBufferSize - 4));
+        let referenceRead = readCombReference (lane, referenceDelay);
+        let dampingCoefficient = std::intrinsics::exp (
+            -2.0f * seqfx::pi * dampingHz / float32 (processor.frequency)
+        );
+        combReferenceDamped[lane] = (referenceRead * (1.0f - dampingCoefficient))
+            + (combReferenceDamped[lane] * dampingCoefficient);
+        let referenceLimited = combSoftLimitStereo (combReferenceDamped[lane], drive);
+        let dcCoefficient = std::intrinsics::exp (
+            -2.0f * seqfx::pi * 10.0f / float32 (processor.frequency)
+        );
+        let referenceReturned = referenceLimited
+            - combReferenceDcInput[lane]
+            + (combReferenceDcOutput[lane] * dcCoefficient);
+        combReferenceDcInput[lane] = referenceLimited;
+        combReferenceDcOutput[lane] = referenceReturned;
+        let referenceFeedback = combFeedbackGain (referenceDelay, decaySeconds, combPolarity[lane]);
+
+        let modeDelay0 = combModeDelaySamples (0, vectorPeriod, tuneHz, dispersion, motion, combMotionPhase[lane]);
+        let modeDelay1 = combModeDelaySamples (1, vectorPeriod, tuneHz, dispersion, motion, combMotionPhase[lane]);
+        let modeDelay2 = combModeDelaySamples (2, vectorPeriod, tuneHz, dispersion, motion, combMotionPhase[lane]);
+        let modeDelay3 = combModeDelaySamples (3, vectorPeriod, tuneHz, dispersion, motion, combMotionPhase[lane]);
+        let prior0 = combVectorDamped[lane, 0] * combFeedbackGain (modeDelay0, decaySeconds, combPolarity[lane]);
+        let prior1 = combVectorDamped[lane, 1] * combFeedbackGain (modeDelay1, decaySeconds, combPolarity[lane]);
+        let prior2 = combVectorDamped[lane, 2] * combFeedbackGain (modeDelay2, decaySeconds, combPolarity[lane]);
+        let prior3 = combVectorDamped[lane, 3] * combFeedbackGain (modeDelay3, decaySeconds, combPolarity[lane]);
+        let rotated0 = 0.5f * (prior0 + prior1 + prior2 + prior3);
+        let rotated1 = 0.5f * (prior0 - prior1 + prior2 - prior3);
+        let rotated2 = 0.5f * (prior0 + prior1 - prior2 - prior3);
+        let rotated3 = 0.5f * (prior0 - prior1 - prior2 + prior3);
+        let inputMid = 0.25f * (inputSample[0] + inputSample[1]);
+        let writeIndex = combWriteIndex[lane];
+        combReferenceHistory[lane, writeIndex] = float32<2> (
+            seqfx::clampFloat (inputSample[0] + (referenceFeedback * referenceReturned[0]), -4.0f, 4.0f),
+            seqfx::clampFloat (inputSample[1] + (referenceFeedback * referenceReturned[1]), -4.0f, 4.0f)
+        );
+        combVectorHistory[lane, 0, writeIndex] = seqfx::clampFloat (
+            (0.5f * inputSample[0]) + combSoftLimit (rotated0, drive), -4.0f, 4.0f
+        );
+        combVectorHistory[lane, 1, writeIndex] = seqfx::clampFloat (
+            (0.5f * inputSample[1]) + combSoftLimit (rotated1, drive), -4.0f, 4.0f
+        );
+        combVectorHistory[lane, 2, writeIndex] = seqfx::clampFloat (
+            inputMid + combSoftLimit (rotated2, drive), -4.0f, 4.0f
+        );
+        combVectorHistory[lane, 3, writeIndex] = seqfx::clampFloat (
+            inputMid + combSoftLimit (rotated3, drive), -4.0f, 4.0f
+        );
+
+        let modeDelays = float32<4> (modeDelay0, modeDelay1, modeDelay2, modeDelay3);
+        float32<4> vectorReads;
+        for (wrap<seqfx::combModeCount> mode)
+        {
+            let rawRead = readCombVector (lane, mode, modeDelays[mode]);
+            let dispersed = processCombAllpass (
+                lane,
+                mode,
+                rawRead,
+                combAllpassCoefficient (mode, dispersion)
+            );
+            let damped = (dispersed * (1.0f - dampingCoefficient))
+                + (combVectorDamped[lane, mode] * dampingCoefficient);
+            combVectorDamped[lane, mode] = damped;
+            let returned = damped
+                - combVectorDcInput[lane, mode]
+                + (combVectorDcOutput[lane, mode] * dcCoefficient);
+            combVectorDcInput[lane, mode] = damped;
+            combVectorDcOutput[lane, mode] = returned;
+            combVectorDamped[lane, mode] = returned;
+            vectorReads[mode] = rawRead;
+        }
+
+        combWriteIndex[lane] = wrap<combBufferSize> (int32 (writeIndex) + 1);
+        if (combValidSamples[lane] < combBufferSize - 4)
+            combValidSamples[lane] += 1;
+
+        let referenceMid = 0.5f * (referenceRead[0] + referenceRead[1]);
+        let referenceSide = 0.5f * (referenceRead[0] - referenceRead[1]);
+        let referenceWet = float32<2> (
+            referenceMid + (referenceSide * width),
+            referenceMid - (referenceSide * width)
+        );
+        let projectedLeft = 0.5f * (vectorReads[0] + vectorReads[1] - vectorReads[2] + vectorReads[3]);
+        let projectedRight = 0.5f * (vectorReads[0] - vectorReads[1] + vectorReads[2] + vectorReads[3]);
+        let vectorMid = 0.5f * (projectedLeft + projectedRight);
+        let vectorWet = float32<2> (
+            vectorMid + ((projectedLeft - vectorMid) * width),
+            vectorMid + ((projectedRight - vectorMid) * width)
+        );
+        let advancedMix = seqfx::smoothStep01 (dispersion);
+        let wet = referenceWet + ((vectorWet - referenceWet) * advancedMix);
+
+        let energy = 0.5f * ((wet[0] * wet[0]) + (wet[1] * wet[1]));
+        let energyCoefficient = 1.0f - std::intrinsics::exp (
+            -1.0f / (0.02f * float32 (processor.frequency))
+        );
+        combTailEnergy[lane] += (energy - combTailEnergy[lane]) * energyCoefficient;
+        if (! combActive[lane])
+        {
+            combTailAgeFrames[lane] += 1.0f;
+            let quietEnough = combTailAgeFrames[lane] > float32 (processor.frequency) * 0.1f
+                && combTailEnergy[lane] < 1.0e-10f;
+            let expired = combTailAgeFrames[lane]
+                > (decaySeconds * 1.5f + 0.25f) * float32 (processor.frequency);
+            if (quietEnough || expired)
+            {
+                combTailActive[lane] = false;
+                combMixTarget[lane] = 0.0f;
+                resetCombNetwork (lane);
+                return stage;
+            }
+        }
+        else
+        {
+            combTailAgeFrames[lane] = 0.0f;
+        }
+
+        let motionRateHz = 0.11f + (0.31f * motion);
+        combMotionPhase[lane] = seqfx::unitWrap (
+            combMotionPhase[lane] + (motionRateHz / float32 (processor.frequency))
+        );
+        let combined = stage + (wet * combMixCurrent[lane])
+            - (stage * combMixCurrent[lane] * combGateCurrent[lane]);
+        return float32<2> (
+            seqfx::clampFloat (combined[0], -4.0f, 4.0f),
+            seqfx::clampFloat (combined[1], -4.0f, 4.0f)
+        );
+    }
+
     float32<2> processDirty (wrap<seqfx::laneCount> lane, float32<2> stage)
     {
         dirtyMixCurrent[lane] = seqfx::moveTowards (
@@ -2809,6 +3305,7 @@ processor SeqFx [[ main ]]
         stage = processRing (lane, stage);
         stage = processTalkBox (lane, stage);
         stage = processDirty (lane, stage);
+        stage = processComb (lane, stage);
 
         writeTapeHistory (lane, stage);
         stage = processTapeStop (lane, stage);

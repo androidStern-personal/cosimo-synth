@@ -142,3 +142,28 @@ test("Dirty keeps one sequenced identity while its nonlinear core runs at fixed 
     assert.match(source, /node core = DirtyCore \* dirtyOversampleFactor;/);
     assert.match(source, /node dirtyCores = seqfx::DirtyBus\[seqfx::laneCount\];/);
 });
+
+test("Comb keeps the selected reference-neutral vector-dispersive production contract", async () => {
+    const comb = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.comb);
+    assert.equal(comb.lifecycle, "tail");
+    assert.deepEqual(
+        comb.parameters.map(({ id, defaultValue, latch, auxEligible }) => ({ id, defaultValue, latch, auxEligible })),
+        [
+            { id: "tuneHz", defaultValue: 220, latch: "continuous", auxEligible: true },
+            { id: "decaySeconds", defaultValue: 1.4, latch: "continuous", auxEligible: true },
+            { id: "polarity", defaultValue: 0, latch: "trigger", auxEligible: false },
+            { id: "dispersion", defaultValue: 0.55, latch: "continuous", auxEligible: true },
+            { id: "dampingHz", defaultValue: 7_500, latch: "continuous", auxEligible: true },
+            { id: "motion", defaultValue: 0.12, latch: "continuous", auxEligible: true },
+            { id: "drive", defaultValue: 0.18, latch: "continuous", auxEligible: true },
+            { id: "width", defaultValue: 0.65, latch: "continuous", auxEligible: true },
+        ],
+    );
+
+    const source = await readFile(path.join(repoRoot, "fx/seqfx/SeqFx.cmajor"), "utf8");
+    assert.match(source, /let combModeCount = 4;/);
+    assert.match(source, /let combAllpassStageCount = 4;/);
+    assert.match(source, /combVectorHistory/);
+    assert.match(source, /combMeasuredPeriodCompensation/);
+    assert.match(source, /combTailActive/);
+});

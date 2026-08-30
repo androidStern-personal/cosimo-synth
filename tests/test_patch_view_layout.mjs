@@ -986,7 +986,7 @@ test("the shared rack faceplate asset is declared once while Polish overrides on
     assert.doesNotMatch(polishHeader, /background(?:-image|-position)?\s*:|url\(/);
 });
 
-test("desktop and shared effect dev entries load React Grab only in Vite dev mode", async () => {
+test("desktop and shared effect dev entries load React Grab only in interactive Vite dev mode", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     const desktopPatchEntry = await fs.readFile(
         path.join(repoRoot, "ui", "desktop", "patch-view-entry.tsx"),
@@ -1006,7 +1006,7 @@ test("desktop and shared effect dev entries load React Grab only in Vite dev mod
     assert.match(desktopPatchEntry, /if \(import\.meta\.env\.DEV\) \{/);
     assert.match(desktopPatchEntry, /void import\("react-grab"\);/);
     assert.match(desktopPatchEntry, /void import\("@react-grab\/mcp\/client"\);/);
-    assert.match(effectDevTools, /if \(import\.meta\.env\.DEV\) \{/);
+    assert.match(effectDevTools, /if \(import\.meta\.env\.DEV && navigator\.webdriver !== true\) \{/);
     assert.match(effectDevTools, /await import\("react-grab"\);/);
     assert.match(effectDevTools, /await import\("@react-grab\/mcp\/client"\);/);
     assert.match(effectViewLoader, /EFFECT_DEV_TOOLS_MODULE_PATH = "\/ui\/shared\/effects\/effect-dev-tools\.js"/);

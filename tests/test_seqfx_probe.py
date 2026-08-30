@@ -6,6 +6,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 
 import numpy as np
 import pytest
@@ -23,6 +24,7 @@ EFFECT_FILTER = 1
 EFFECT_CRUSHER = 2
 EFFECT_TAPE = 3
 EFFECT_STUTTER = 4
+EFFECT_COMB = 6
 EFFECT_RING = 7
 EFFECT_TALK_BOX = 9
 EFFECT_DIRTY = 12
@@ -3002,3 +3004,231 @@ def test_dirty_extreme_settings_remain_finite_and_bounded(
 
     assert np.all(np.isfinite(output))
     assert float(np.max(np.abs(output))) <= 4.001
+
+
+def _render_comb(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    input_audio: np.ndarray,
+    *,
+    tune_hz: float = 220.0,
+    decay_seconds: float = 1.4,
+    polarity: float = 0.0,
+    dispersion: float = 0.55,
+    damping_hz: float = 7_500.0,
+    motion: float = 0.12,
+    drive: float = 0.18,
+    width: float = 0.65,
+    active_steps: int = 1,
+) -> np.ndarray:
+    upload = _empty_upload()
+    params = [tune_hz, decay_seconds, polarity, dispersion, damping_hz, motion, drive, width]
+    for step in range(active_steps):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_COMB,
+            params=params,
+        )
+    return _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+
+def _comb_impulse(frames: int, frame: int = 256) -> np.ndarray:
+    audio = np.zeros((frames, 2), dtype=np.float32)
+    audio[frame] = 0.6
+    return audio
+
+
+def _dominant_frequency_near(samples: np.ndarray, target_hz: float) -> float:
+    signal = np.asarray(samples, dtype=np.float64)
+    transform_size = 262_144
+    spectrum = np.abs(np.fft.rfft(signal * np.hanning(signal.size), n=transform_size))
+    frequencies = np.fft.rfftfreq(transform_size, 1.0 / SAMPLE_RATE)
+    candidates = np.flatnonzero((frequencies >= target_hz * 0.75) & (frequencies <= target_hz * 1.25))
+    peak = int(candidates[np.argmax(spectrum[candidates])])
+    return float(frequencies[peak])
+
+
+def test_comb_impulse_tail_outlives_its_trigger_block_and_decays(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    output = _render_comb(
+        generated_runtime,
+        tmp_path,
+        _comb_impulse(STEP_FRAMES * 6),
+        decay_seconds=0.35,
+        dispersion=0.7,
+        motion=0.0,
+    )
+    early_tail = output[STEP_FRAMES + 128 : STEP_FRAMES * 2, 0]
+    late_tail = output[STEP_FRAMES * 5 : STEP_FRAMES * 6, 0]
+
+    assert _rms(early_tail) > 1.0e-4
+    assert _rms(late_tail) < _rms(early_tail) * 0.55
+
+
+@pytest.mark.parametrize("tune_hz", [110.0, 220.0, 880.0])
+def test_comb_vector_dispersive_mode_tracks_tune_within_twenty_cents(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    tune_hz: float,
+) -> None:
+    output = _render_comb(
+        generated_runtime,
+        tmp_path,
+        _comb_impulse(SAMPLE_RATE),
+        tune_hz=tune_hz,
+        decay_seconds=1.4,
+        dispersion=0.7,
+        motion=0.0,
+    )
+    measured_hz = _dominant_frequency_near(np.mean(output[320:], axis=1), tune_hz)
+    cents = 1_200.0 * np.log2(measured_hz / tune_hz)
+
+    assert abs(float(cents)) < 20.0, f"{tune_hz=}, {measured_hz=}, {cents=}"
+
+
+def test_comb_dispersion_zero_is_an_exact_motion_independent_reference_neutral(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _comb_impulse(STEP_FRAMES * 4)
+    stationary = _render_comb(generated_runtime, tmp_path, source, dispersion=0.0, motion=0.0)
+    motion_ignored = _render_comb(generated_runtime, tmp_path, source, dispersion=0.0, motion=1.0)
+    advanced = _render_comb(generated_runtime, tmp_path, source, dispersion=0.75, motion=0.0)
+
+    np.testing.assert_array_equal(stationary, motion_ignored)
+    assert _rms(advanced[512:] - stationary[512:]) > 1.0e-3
+
+
+def test_comb_width_has_a_mono_safe_center_and_a_distinct_stereo_projection(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _comb_impulse(STEP_FRAMES * 4)
+    centered = _render_comb(generated_runtime, tmp_path, source, dispersion=0.8, motion=0.2, width=0.0)
+    wide = _render_comb(generated_runtime, tmp_path, source, dispersion=0.8, motion=0.2, width=1.0)
+
+    np.testing.assert_allclose(centered[512:, 0], centered[512:, 1], atol=1.0e-6, rtol=0.0)
+    assert _rms(wide[512:, 0] - wide[512:, 1]) > 1.0e-3
+    assert _rms(np.mean(wide[512:], axis=1)) > _rms(np.mean(centered[512:], axis=1)) * 0.2
+
+
+def test_comb_extreme_feedback_controls_are_deterministic_finite_and_bounded(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = np.zeros((STEP_FRAMES * 6, 2), dtype=np.float32)
+    source[: STEP_FRAMES * 2] = _complex_signal(STEP_FRAMES * 2) * 1.4
+    first = _render_comb(
+        generated_runtime,
+        tmp_path,
+        source,
+        tune_hz=30.0,
+        decay_seconds=8.0,
+        polarity=1.0,
+        dispersion=1.0,
+        damping_hz=20_000.0,
+        motion=1.0,
+        drive=1.0,
+        width=1.0,
+        active_steps=2,
+    )
+    second = _render_comb(
+        generated_runtime,
+        tmp_path,
+        source,
+        tune_hz=30.0,
+        decay_seconds=8.0,
+        polarity=1.0,
+        dispersion=1.0,
+        damping_hz=20_000.0,
+        motion=1.0,
+        drive=1.0,
+        width=1.0,
+        active_steps=2,
+    )
+
+    np.testing.assert_array_equal(first, second)
+    assert np.all(np.isfinite(first))
+    assert float(np.max(np.abs(first))) <= 4.001
+
+
+def test_comb_aux_sweeps_all_continuous_feedback_controls_without_runaway(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = [220.0, 0.4, 0.0, 0.0, 1_500.0, 0.0, 0.0, 0.0]
+    for step in range(4):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_COMB,
+            params=params,
+        )
+    for param, end in ((0, 55.0), (1, 8.0), (3, 1.0), (4, 20_000.0), (5, 1.0), (6, 1.0), (7, 1.0)):
+        _set_aux(upload, lane=LANE_FILTER, step=0, param=param, end=end, shape=0.0)
+
+    source = np.zeros((STEP_FRAMES * 6, 2), dtype=np.float32)
+    source[: STEP_FRAMES * 2] = _complex_signal(STEP_FRAMES * 2)
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
+
+
+def test_comb_authoritative_reset_invalidates_the_live_feedback_tail(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_FILTER,
+        step=0,
+        trigger=True,
+        effect_type=EFFECT_COMB,
+        params=[220.0, 1.4, 0.0, 0.7, 7_500.0, 0.0, 0.18, 0.65],
+    )
+    source = _comb_impulse(STEP_FRAMES * 4)
+    baseline = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+    reset_schedule = _base_schedule(upload)
+    reset_schedule[4_500] = [["event", "internalReset", 1]]
+    reset = _render(generated_runtime, tmp_path, source, reset_schedule)
+
+    baseline_tail = _rms(baseline[5_000:7_000])
+    reset_tail = _rms(reset[5_000:7_000])
+    assert baseline_tail > 1.0e-4
+    assert reset_tail < baseline_tail * 0.05
+
+
+def test_comb_four_chain_worst_case_remains_faster_than_the_generous_js_budget(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = [55.0, 8.0, 1.0, 1.0, 20_000.0, 1.0, 1.0, 1.0]
+    for lane in range(LANE_COUNT):
+        for step in range(4):
+            _activate_step(
+                upload,
+                lane=lane,
+                step=step,
+                trigger=(step == 0),
+                effect_type=EFFECT_COMB,
+                params=params,
+            )
+    source = _complex_signal(STEP_FRAMES * 4) * 0.3
+    started = perf_counter()
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+    elapsed = perf_counter() - started
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
+    assert elapsed < 2.0, f"four-chain generated-JS render took {elapsed:.3f}s for {source.shape[0] / SAMPLE_RATE:.3f}s audio"

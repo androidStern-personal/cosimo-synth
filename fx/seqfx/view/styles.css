@@ -18,6 +18,7 @@
     --seqfx-effect-crusher: #ee6c4d;
     --seqfx-effect-tape-stop: #98c1d9;
     --seqfx-effect-stutter: #b5d99c;
+    --seqfx-effect-comb: #7fa8d8;
     --seqfx-effect-ring: #c7a6d8;
     --seqfx-effect-talk-box: #e5a4b5;
     --seqfx-effect-dirty: #79b9a6;
@@ -518,6 +519,10 @@ select {
 
 .seqfx-block[data-effect="4"] .seqfx-block-fill {
     background: var(--seqfx-effect-stutter);
+}
+
+.seqfx-block[data-effect="6"] .seqfx-block-fill {
+    background: var(--seqfx-effect-comb);
 }
 
 .seqfx-block[data-effect="7"] .seqfx-block-fill {
@@ -1164,6 +1169,10 @@ select {
 
 .seqfx-effect-picker__options button[data-effect-type="4"] {
     --seqfx-effect-icon-active: var(--seqfx-effect-stutter);
+}
+
+.seqfx-effect-picker__options button[data-effect-type="6"] {
+    --seqfx-effect-icon-active: var(--seqfx-effect-comb);
 }
 
 .seqfx-effect-picker__options button[data-effect-type="7"] {

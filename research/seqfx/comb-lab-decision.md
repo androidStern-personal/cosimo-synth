@@ -101,3 +101,67 @@ If the four-line production CPU gate fails, reduce allpass stage count or use
 two coupled lines before changing the user-facing contract. Falling back to a
 reference-only comb requires an explicit product decision; it is not an
 automatic optimization.
+
+## Production implementation
+
+The selected topology is implemented in `fx/seqfx/SeqFx.cmajor` as effect ID
+6. It keeps two deliberately separate signal paths:
+
+- `Dispersion = 0` is a true stereo one-delay feedback comb. `Motion` is
+  ignored there, so the neutral reference is exact and deterministic rather
+  than an approximation made by collapsing the advanced network.
+- Raising `Dispersion` morphs through the complete four-delay vector network.
+  Its normalized Hadamard feedback rotation, four compensated allpass stages
+  per path, deterministic quarter-cycle motion offsets, complementary stereo
+  projection, damping, and unity-small-signal loop limiter remain active at
+  the advanced end.
+
+Tune is continuous and Aux-eligible, with a 10 ms smoothing path. The displayed
+frequency is converted to a fractional delay and receives two measured phase
+corrections: a small host-rate-independent reference correction, then an
+octave- and Dispersion-dependent vector correction. The latter compensates
+aggregate phase introduced by the four different dispersed loops; it becomes
+exactly 1 at `Dispersion = 0` and is bounded to 0.96–1.04. These are measured
+implementation corrections, not new user controls.
+
+The loop also contains frequency-dependent damping and a 10 Hz DC blocker.
+Continuous controls move over 10 ms; entering and leaving a block uses the
+shared 96-frame routing crossfade. On release the comb stops accepting new
+audio but its bounded tail continues additively until its measured energy is
+quiet or the Decay-derived maximum age expires. An authoritative transport or
+state reset clears every delay, allpass, damping, DC, modulation, and tail
+state.
+
+## Production evidence
+
+Automated production probes establish:
+
+- an impulse tail survives its trigger block and decays;
+- the vector-dispersive mode measures within 20 cents at 110, 220, and 880 Hz;
+- `Dispersion = 0` is bit-exact with Motion at either extreme while the
+  advanced setting is materially different;
+- Width has a mono-safe center, a distinct stereo extreme, and a nonzero mono
+  fold;
+- extreme Decay, Drive, Motion, Dispersion, and polarity states are
+  deterministic, finite, bounded, and resettable;
+- every continuous feedback control survives the shared Aux sweep;
+- four worst-case generated-JavaScript chains remain inside the deliberately
+  generous two-second fixture budget.
+
+The UI exposes all eight effect-specific controls, uses the vendored Fontaudio
+notch-filter glyph, persists sparse v7 state, and keeps stepped Polarity out of
+Aux mapping. Source and packaged-browser tests cover selection, layout, state,
+modulation rows, octave Tune mapping, and the live comb response glyph.
+
+Checkpoint qualification passed 123 combined DSP/buffer/interpolation/lab
+tests, 109 non-browser state and contract tests, all 59 source-browser tests,
+all 7 explicitly packaged-browser tests, and Cmajor dry-run loading at 32,
+44.1, 48, 88.2, and 96 kHz. The packaged harness now forces the packaged
+branch so a live effects Vite server cannot silently substitute source UI;
+automated source browsers remain hermetic while static contracts prove the
+interactive React Grab imports.
+
+Still intentionally unperformed at this checkpoint: matched-level listening
+on the five musical fixtures, native-wrapper inspection, Ableton host
+acceptance, and release CPU measurement. Those are final qualification gates;
+the automated JavaScript budget is not represented as native realtime proof.

@@ -327,6 +327,7 @@ async function mountProductionView(page, {
     disableAbortController = false,
     hangDevStatusFetch = false,
     breakPackagedModuleUrlConstructor = false,
+    forceProductionModule = true,
     timeoutMs = 2_000,
 } = {}) {
     await page.goto(staticServerOrigin);
@@ -358,6 +359,7 @@ async function mountProductionView(page, {
         disableAbortController: shouldDisableAbortController,
         hangDevStatusFetch: shouldHangDevStatusFetch,
         breakPackagedModuleUrlConstructor: shouldBreakPackagedModuleUrlConstructor,
+        forceProductionModule: shouldForceProductionModule,
         timeoutMs: hostTimeoutMs,
     }) => {
         // eslint-disable-next-line no-new-func
@@ -365,6 +367,10 @@ async function mountProductionView(page, {
         const PatchConnection = definePatchConnection();
         const patchConnection = new PatchConnection();
         const root = document.getElementById("root");
+
+        if (shouldForceProductionModule) {
+            patchConnection.manifest.view.devModule = "";
+        }
 
         if (shouldDisableAbortController) {
             window.AbortController = undefined;
@@ -474,6 +480,7 @@ async function mountProductionView(page, {
         disableAbortController,
         hangDevStatusFetch,
         breakPackagedModuleUrlConstructor,
+        forceProductionModule,
         timeoutMs,
     });
 }
@@ -673,7 +680,7 @@ test("SeqFX production shadow-root host exposes the shared editor token palette"
     }
 });
 
-test("SeqFX packaged shadow-root flow renders the selected crusher stutter ring talk box and dirty inspectors", async () => {
+test("SeqFX packaged shadow-root flow renders crusher stutter ring talk box dirty and comb inspectors", async () => {
     const page = await browser.newPage();
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error));
@@ -884,6 +891,25 @@ test("SeqFX packaged shadow-root flow renders the selected crusher stutter ring 
         }));
         assert.ok(dirtyInspectorBounds.scrollWidth <= dirtyInspectorBounds.clientWidth + 1);
 
+        await page.locator('[data-role="seqfx-mod-toggle"]').click();
+        await page.getByRole("button", { name: "Comb", exact: true }).click();
+        await page.getByRole("button", { name: "Chain 4 Comb block 1", exact: true }).waitFor();
+        assert.equal(await page.locator('[data-role="seqfx-param"]').count(), 8);
+        assert.deepEqual(
+            await page.locator('[data-role="seqfx-param"][data-param="2"] option').evaluateAll((options) => options.map((option) => option.textContent)),
+            ["Positive", "Negative"],
+        );
+        await page.locator('[data-role="seqfx-param"][data-param="0"]').fill("440");
+        assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="comb"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
+        await page.locator('[data-role="seqfx-mod-toggle"]').click();
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 7);
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="2"]').count(), 0);
+        const combInspectorBounds = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => ({
+            clientWidth: node.clientWidth,
+            scrollWidth: node.scrollWidth,
+        }));
+        assert.ok(combInspectorBounds.scrollWidth <= combInspectorBounds.clientWidth + 1);
+
         assert.deepEqual(pageErrors.map((error) => error.message), []);
     } finally {
         await page.close();
@@ -897,6 +923,7 @@ test("SeqFX Cmajor host-flow falls back to packaged UI when dev probe fetch cann
         const result = await mountProductionView(page, {
             disableAbortController: true,
             hangDevStatusFetch: true,
+            forceProductionModule: false,
             timeoutMs: 1_500,
         });
 

@@ -225,6 +225,7 @@ const EFFECT_OPTIONS = [
     SEQFX_EFFECT_TYPES.crusher,
     SEQFX_EFFECT_TYPES.tapeStop,
     SEQFX_EFFECT_TYPES.stutter,
+    SEQFX_EFFECT_TYPES.comb,
     SEQFX_EFFECT_TYPES.ring,
     SEQFX_EFFECT_TYPES.talkBox,
     SEQFX_EFFECT_TYPES.dirty,
@@ -359,6 +360,8 @@ const TAPE_STOP_ICON_PATH =
 const TALK_BOX_ICON_PATH =
     "M55.618 178.111l75.645-94.377s.03-15.79 12.989-26.864c15.797-13.498 40.626-11.241 53.643 3.201 13.016 14.443 16.545 38.02-1.25 54.93-11.078 10.526-23.552 10.425-23.552 10.425l-94.71 75.646-9.344-9.14-17.266 16.088s-1.429 1.188-2.844-.578c-1.415-1.765-.71-3.282-.71-3.282l17.039-16.203-9.64-9.846zm17.729-1.144l5.687 5.484 75.162-59.15s-8.01-4.416-12.813-9.469c-4.804-5.053-7.58-11.981-7.58-11.981l-60.456 75.116zm75.827-105.668s-13.299 18.34 2.398 33.329c15.698 14.99 33.564 2.4 33.564 2.4s-16.071-3.727-24.79-12.39c-8.72-8.662-11.172-23.34-11.172-23.34zm5.393-4.513s3.702 14.109 12.601 23.073c8.899 8.965 22.874 12.662 22.874 12.662s12.885-19.52-3.271-34.318c-16.157-14.798-32.204-1.417-32.204-1.417z";
 const DIRTY_ICON_PATH = "M232 64.5h-54l-111.5 112H26V193h50L187.5 81H232z";
+const COMB_ICON_PATH =
+    "M25.101 77.628a4.008 4.008 0 0 0 3.997 4.01h16.996c6.632 0 13.927 5.01 16.3 11.202l52.724 85.231c7.115 18.564 18.693 18.571 25.857.025L193.91 92.84c2.39-6.187 9.693-11.202 16.336-11.202h16.49a4.01 4.01 0 0 0 4-4.01V68.82a4 4 0 0 0-3.994-4.009h-23.508c-8.835 0-18.547 6.702-21.69 14.962l-47.147 73.852c-3.533 9.287-9.217 9.262-12.694-.051L75.2 79.805C72.108 71.524 62.44 64.81 53.6 64.81H29.11a4.012 4.012 0 0 0-4.008 4.01v8.808z";
 
 // Effect picker SVGs are local silhouettes matched to the riso cell palette.
 function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
@@ -423,6 +426,19 @@ function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
                         <path d="M109.533 197.602a1.887 1.887 0 0 1-.034 2.76l-7.583 7.066a4.095 4.095 0 0 1-5.714-.152l-32.918-34.095c-1.537-1.592-1.54-4.162-.002-5.746l33.1-34.092c1.536-1.581 4.11-1.658 5.74-.18l7.655 6.94c.82.743.833 1.952.02 2.708l-21.11 19.659s53.036.129 71.708.064c18.672-.064 33.437-16.973 33.437-34.7c0-7.214-5.578-17.64-5.578-17.64c-.498-.99-.273-2.444.483-3.229l8.61-8.94c.764-.794 1.772-.632 2.242.364c0 0 9.212 18.651 9.212 28.562c0 28.035-21.765 50.882-48.533 50.882s-70.921.201-70.921.201z" />
                         <path d="M144.398 58.435a1.887 1.887 0 0 1 .034-2.76l7.583-7.066a4.095 4.095 0 0 1 5.714.152l32.918 34.095c1.537 1.592 1.54 4.162.002 5.746l-33.1 34.092c-1.536 1.581-4.11 1.658-5.74.18l-7.656-6.94c-.819-.743-.832-1.952-.02-2.708l21.111-19.659s-53.036-.129-71.708-.064c-18.672.064-33.437 16.973-33.437 34.7c0 7.214 5.578 17.64 5.578 17.64c.498.99.273 2.444-.483 3.229l-8.61 8.94c-.764.794-1.772.632-2.242-.364c0 0-9.212-18.65-9.212-28.562c0-28.035 21.765-50.882 48.533-50.882s70.921-.201 70.921-.201z" />
                     </g>
+                </svg>
+            );
+        case SEQFX_EFFECT_TYPES.comb:
+            return (
+                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="18 18 220 220">
+                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={220} />
+                    <path
+                        d={COMB_ICON_PATH}
+                        data-role="seqfx-effect-icon-fill"
+                        fill="currentColor"
+                        fillRule="evenodd"
+                    />
+                    <path d={COMB_ICON_PATH} fill={textureFill} fillRule="evenodd" />
                 </svg>
             );
         case SEQFX_EFFECT_TYPES.ring:
@@ -916,6 +932,16 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 2, label: "Shape", min: 0, max: 1, step: 0.01, amountKind: "stutterShape", hint: "Morphs the per-cut envelope." },
         { index: 3, label: "Gate", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Audible portion of each cut." },
     ],
+    [SEQFX_EFFECT_TYPES.comb]: [
+        { index: 0, label: "Tune", min: 30, max: 8000, step: 0.01, amountKind: "cutoffOctaves", hint: "Center frequency of the conventional and dispersed resonances." },
+        { index: 1, label: "Decay", min: 0.02, max: 8, step: 0.01, amountKind: "linear", hint: "Time for the feedback loop to fall by 60 dB." },
+        { index: 2, label: "Polarity", min: 0, max: 1, step: 1, kind: "select", options: ["Positive", "Negative"], hint: "Latched feedback polarity." },
+        { index: 3, label: "Dispersion", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Morphs from the reference comb into compensated coupled modes." },
+        { index: 4, label: "Damping", min: 500, max: 20000, step: 1, amountKind: "cutoffOctaves", hint: "Shortens high-frequency feedback decay." },
+        { index: 5, label: "Motion", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Adds deterministic phase-offset motion to the dispersed modes." },
+        { index: 6, label: "Drive", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Adds unity-small-signal saturation inside the feedback network." },
+        { index: 7, label: "Width", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Moves from a mono-safe center to complementary stereo projection." },
+    ],
     [SEQFX_EFFECT_TYPES.ring]: [
         { index: 0, label: "Frequency", min: 0.1, max: 12000, step: 0.01, amountKind: "cutoffOctaves", hint: "Carrier frequency; sine creates exact sum and difference sidebands." },
         { index: 1, label: "Wave", min: 0, max: 3, step: 1, kind: "select", options: ["Sine", "Triangle", "Square", "Noise"], hint: "Latched when the block triggers." },
@@ -975,6 +1001,10 @@ const STUTTER_PARAM_SLICES = 0;
 const STUTTER_PARAM_SPEED = 1;
 const STUTTER_PARAM_SHAPE = 2;
 const STUTTER_PARAM_GATE = 3;
+const COMB_PARAM_TUNE_HZ = 0;
+const COMB_PARAM_DECAY_SECONDS = 1;
+const COMB_PARAM_DISPERSION = 3;
+const COMB_PARAM_DAMPING_HZ = 4;
 const RING_PARAM_FREQUENCY = 0;
 const RING_PARAM_WAVEFORM = 1;
 const TALK_BOX_PARAM_FROM_VOWEL = 0;
@@ -1342,6 +1372,78 @@ function SeqFxStutterBlockGlyph({
     );
 }
 
+function combRisoPath(tuneHz: number, dispersion: number, dampingHz: number, width: number) {
+    const safeTune = clampNumber(Number(tuneHz), 30, 8_000);
+    const safeDispersion = clampUnit(Number(dispersion));
+    const safeDamping = clampNumber(Number(dampingHz), 500, 20_000);
+    const tunePosition = Math.log(safeTune / 30) / Math.log(8_000 / 30);
+    const toothCount = Math.max(3, Math.min(12, Math.round(3 + (tunePosition * 9))));
+    const commands = [`M0 8`];
+    for (let tooth = 0; tooth < toothCount; tooth += 1) {
+        const center = ((tooth + 0.5) / toothCount) * width;
+        const spacing = width / toothCount;
+        const bend = Math.sin((tooth + 1) * 2.17) * spacing * 0.16 * safeDispersion;
+        const x = clampNumber(center + bend, 0, width);
+        const highLoss = tooth / Math.max(1, toothCount - 1);
+        const dampingAmount = 1 - (Math.log(safeDamping / 500) / Math.log(20_000 / 500));
+        const depth = Math.max(5, 19 - (highLoss * dampingAmount * 10));
+        const halfWidth = Math.max(0.8, spacing * (0.1 + (safeDispersion * 0.08)));
+        commands.push(
+            `L${roundedPathValue(Math.max(0, x - halfWidth))} 8`,
+            `L${roundedPathValue(x)} ${roundedPathValue(8 + depth)}`,
+            `L${roundedPathValue(Math.min(width, x + halfWidth))} 8`,
+        );
+    }
+    commands.push(`L${roundedPathValue(width)} 8`);
+    return commands.join(" ");
+}
+
+function SeqFxCombBlockGlyph({
+    params,
+    size,
+    width,
+}: {
+    params: number[];
+    size: SeqFxBlockVisualSize;
+    width: number;
+}) {
+    const tuneHz = Number(params[COMB_PARAM_TUNE_HZ] ?? 220);
+    const decaySeconds = Number(params[COMB_PARAM_DECAY_SECONDS] ?? 1.4);
+    const dispersion = Number(params[COMB_PARAM_DISPERSION] ?? 0.55);
+    const dampingHz = Number(params[COMB_PARAM_DAMPING_HZ] ?? 7_500);
+
+    return (
+        <>
+            <svg
+                aria-hidden="true"
+                className="seqfx-block-glyph"
+                data-effect="comb"
+                data-role="seqfx-block-glyph"
+                data-size={size}
+                focusable="false"
+                preserveAspectRatio="none"
+                viewBox={`0 0 ${width} 28`}
+            >
+                <path
+                    className="seqfx-block-glyph__line"
+                    d={combRisoPath(tuneHz, dispersion, dampingHz, width)}
+                    data-role="seqfx-block-glyph-line"
+                />
+            </svg>
+            {size !== "single" ? (
+                <span className="seqfx-block-glyph-label" data-role="seqfx-block-glyph-label">
+                    {formatRisoCutoff(tuneHz)} HZ
+                </span>
+            ) : null}
+            {size === "wide" ? (
+                <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
+                    {Number(decaySeconds.toFixed(2))} s · {Math.round(clampUnit(dispersion) * 100)}%
+                </span>
+            ) : null}
+        </>
+    );
+}
+
 function ringRisoPath(waveform: number, frequencyHz: number, width: number) {
     const safeFrequency = clampNumber(Number(frequencyHz), 0.1, 12_000);
     const cycles = Math.max(1, Math.min(8, Math.round(1 + (Math.log10(safeFrequency / 0.1) / Math.log10(120_000)) * 7)));
@@ -1560,6 +1662,8 @@ export function SeqFxBlockGlyph({
             return <SeqFxTapeStopBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.stutter:
             return <SeqFxStutterBlockGlyph params={params} size={size} width={width} />;
+        case SEQFX_EFFECT_TYPES.comb:
+            return <SeqFxCombBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.ring:
             return <SeqFxRingBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.talkBox:
