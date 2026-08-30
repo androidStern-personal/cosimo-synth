@@ -410,17 +410,22 @@ select {
 
 .seqfx-loop__scroll {
     min-width: 0;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
+    overflow: visible;
 }
 
 .seqfx-loop__ruler {
     display: grid;
-    grid-template-columns: repeat(32, minmax(24px, 1fr));
+    grid-template-columns: repeat(16, minmax(24px, 1fr));
     gap: 1px;
-    min-width: 768px;
+    min-width: 0;
     touch-action: none;
+}
+
+@media (min-width: 1360px) {
+    .seqfx-loop__ruler {
+        grid-template-columns: repeat(32, minmax(24px, 1fr));
+        min-width: 768px;
+    }
 }
 
 .seqfx-loop__ruler button {

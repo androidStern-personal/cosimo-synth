@@ -1244,6 +1244,109 @@ test("seqfx_global_surface_wires_host_controls_loop_transport_and_edit_history",
     await page.close();
 });
 
+test("seqfx_loop_ruler_keeps_first_and_last_steps_visible_and_keyboard_reachable_at_supported_sizes", async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 800 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    const supportedSizes = [
+        { id: "minimum", width: 720, height: 520, expectedRows: 2 },
+        { id: "compact", width: 900, height: 600, expectedRows: 2 },
+        { id: "default", width: 1120, height: 680, expectedRows: 2 },
+        { id: "wide", width: 1440, height: 800, expectedRows: 1 },
+    ];
+    const scroll = page.locator(".seqfx-loop__scroll");
+    const firstStep = page.locator('[data-role="seqfx-loop-step"][data-loop-step="0"]');
+    const lastStep = page.locator('[data-role="seqfx-loop-step"][data-loop-step="31"]');
+    const factoryPattern = page.locator('[data-role="seqfx-factory-pattern"]');
+
+    for (const size of supportedSizes) {
+        await page.setViewportSize({ width: size.width, height: size.height });
+        await scroll.evaluate((node) => {
+            node.scrollLeft = 0;
+        });
+
+        const geometry = await scroll.evaluate((node) => {
+            const buttons = [...node.querySelectorAll('[data-role="seqfx-loop-step"]')];
+            const scrollRect = node.getBoundingClientRect();
+            const buttonRects = buttons.map((button) => button.getBoundingClientRect());
+            const rowCounts = new Map();
+            for (const rect of buttonRects) {
+                const rowTop = Math.round(rect.top * 10) / 10;
+                rowCounts.set(rowTop, (rowCounts.get(rowTop) ?? 0) + 1);
+            }
+
+            return {
+                buttonCount: buttons.length,
+                clientWidth: node.clientWidth,
+                first: buttonRects[0],
+                last: buttonRects.at(-1),
+                rowCounts: [...rowCounts.values()],
+                scroll: scrollRect,
+                scrollWidth: node.scrollWidth,
+            };
+        });
+
+        assert.equal(geometry.buttonCount, 32, `${size.id} loop ruler should expose all 32 step buttons`);
+        assert.deepEqual(
+            geometry.rowCounts,
+            size.expectedRows === 1 ? [32] : [16, 16],
+            `${size.id} loop ruler should use the supported ${size.expectedRows}-row geometry`,
+        );
+        assert.ok(
+            geometry.scrollWidth <= geometry.clientWidth + 1,
+            `${size.id} loop ruler should not require horizontal scrolling (${geometry.scrollWidth}px > ${geometry.clientWidth}px)`,
+        );
+        assert.ok(
+            geometry.first.left >= geometry.scroll.left - 1 && geometry.first.right <= geometry.scroll.right + 1,
+            `${size.id} first loop step should be directly visible`,
+        );
+        assert.ok(
+            geometry.last.left >= geometry.scroll.left - 1 && geometry.last.right <= geometry.scroll.right + 1,
+            `${size.id} last loop step should be directly visible`,
+        );
+        assert.equal(await firstStep.getAttribute("aria-label"), "Loop step 1, inside range");
+        assert.equal(await lastStep.getAttribute("aria-label"), "Loop step 32, inside range");
+
+        await factoryPattern.focus();
+        await page.keyboard.press("Tab");
+        assert.equal(await firstStep.evaluate((node) => document.activeElement === node), true, `${size.id} first loop step should follow the preceding control in keyboard order`);
+        for (let step = 1; step < 32; step += 1) {
+            await page.keyboard.press("Tab");
+        }
+        assert.equal(await lastStep.evaluate((node) => document.activeElement === node), true, `${size.id} last loop step should remain keyboard reachable`);
+    }
+
+    await page.close();
+});
+
+test("seqfx_loop_ruler_pointer_drag_follows_the_second_visual_row", async () => {
+    const page = await browser.newPage({ viewport: { width: 900, height: 600 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    const firstStep = page.locator('[data-role="seqfx-loop-step"][data-loop-step="0"]');
+    const step17 = page.locator('[data-role="seqfx-loop-step"][data-loop-step="16"]');
+    const firstBox = await firstStep.boundingBox();
+    const step17Box = await step17.boundingBox();
+    assert.ok(firstBox);
+    assert.ok(step17Box);
+
+    await page.mouse.move(firstBox.x + (firstBox.width / 2), firstBox.y + (firstBox.height / 2));
+    await page.mouse.down();
+    await page.mouse.move(step17Box.x + (step17Box.width / 2), step17Box.y + (step17Box.height / 2), { steps: 8 });
+    await page.mouse.up();
+
+    await page.waitForTimeout(100);
+    const snapshot = await getHarnessSnapshot(page);
+    const loopEvents = snapshot.events.filter(({ endpointID }) => endpointID === "loopStart" || endpointID === "loopLength");
+    assert.equal(snapshot.parameters.loopStart, 16, `second-row drag should set loop start to step 17; events: ${JSON.stringify(loopEvents)}`);
+    assert.equal(await page.locator('[data-role="seqfx-loop-start"]').inputValue(), "17");
+    assert.equal(await page.locator('[data-role="seqfx-loop-end"]').inputValue(), "32");
+
+    await page.close();
+});
+
 test("seqfx_internal_transport_parses_explicit_monitor_booleans_and_rejects_malformed_values", async () => {
     const page = await browser.newPage({ viewport: { width: 1120, height: 680 } });
     await loadSeqFxHarness(page);

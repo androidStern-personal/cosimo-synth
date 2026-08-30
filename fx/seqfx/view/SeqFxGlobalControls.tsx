@@ -29,6 +29,32 @@ function nearestLoopEdge(step: number, loopStart: number, loopEndExclusive: numb
     return Math.abs(step - loopStart) <= Math.abs(step - (loopEndExclusive - 1)) ? "start" : "end";
 }
 
+function nearestLoopStepFromPointer(ruler: HTMLDivElement, clientX: number, clientY: number) {
+    const exactTarget = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-loop-step]");
+    const exactStep = Number(exactTarget?.dataset.loopStep);
+    if (exactTarget && ruler.contains(exactTarget) && Number.isInteger(exactStep)) {
+        return exactStep;
+    }
+
+    let nearestStep = 0;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const button of ruler.querySelectorAll<HTMLElement>("[data-loop-step]")) {
+        const step = Number(button.dataset.loopStep);
+        if (!Number.isInteger(step)) {
+            continue;
+        }
+        const rect = button.getBoundingClientRect();
+        const distanceX = Math.max(rect.left - clientX, 0, clientX - rect.right);
+        const distanceY = Math.max(rect.top - clientY, 0, clientY - rect.bottom);
+        const distance = (distanceX * distanceX) + (distanceY * distanceY);
+        if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestStep = step;
+        }
+    }
+    return nearestStep;
+}
+
 export function SeqFxGlobalControlSurface({
     controls,
     internalRunning,
@@ -168,8 +194,7 @@ export function SeqFxGlobalControlSurface({
             return;
         }
 
-        const rect = ruler.getBoundingClientRect();
-        const step = clampStep(((event.clientX - rect.left) / rect.width) * 32, 0, 31);
+        const step = nearestLoopStepFromPointer(ruler, event.clientX, event.clientY);
         changeLoopEdge(edge, step);
     }
 
