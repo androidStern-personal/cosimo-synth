@@ -1571,6 +1571,9 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Real touch tests starting on trunk and branch nodes prove immediate vertical drags scroll without selecting, bypassing, reordering, or requesting haptics; hold-and-drag still reorders and requests exactly one bump when it lifts; stationary long-press still opens the menu without the reorder bump; and releasing any cancelled scroll/reorder gesture produces no stray tap.
 
 [ ] T73 — Put the FX tail add, whole-lane Mix, and Polish in their real signal order without overlap
+    Active owner (2026-08-30):
+    - Codex task `Fix FX footer signal-order layout`, thread `01a0524e-3449-7ba3-b869-27b9522031db`, branch `codex/t73-fx-footer-layout`, worktree `/Users/winterfell/.codex/worktrees/d238/cosimo-synth`, base `2a33f81225be7e90d879d01c8a27541e0082f473`, with Full Access and approval prompts disabled.
+    - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`. The implementation task owns the approved footer layout only; it must not implement the separate Polish-control redesign, merge or push master, install shared plugins, or deploy.
     Confirmed production problem (2026-08-30):
     - At 393x852 the bottom bands are currently laid out as Mix, then the final trunk `+`, then POLISH. Their boxes are adjacent, but the graph rail and graph-owned background continue through the control stack, so the three controls visually collide and expose graph line/gap space behind what should be a compact bottom boundary.
     - This is encoded rather than accidental: `EffectsRackWorkspace` passes Mix as `tailPrefix`, `SubwayMapColumn` renders that prefix before the trunk-tail add row, and the composed browser tests explicitly assert `mixBeforeTail`. Those assertions preserve the wrong signal order.
