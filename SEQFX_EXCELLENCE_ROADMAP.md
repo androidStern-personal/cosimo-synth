@@ -838,8 +838,9 @@ Tasks:
 - `P8.11` Open by design — no Developer ID signing, Apple submission, notarization,
   or stapling was authorized or performed.
 - `P8.12` Open — no separate Gatekeeper-enabled clean account/machine was available.
-- `P8.13` Active — produce the exact clean coordinator handoff; do not merge, push,
-  deploy, publish, or upload.
+- `P8.13` Complete — the exact clean coordinator handoff records source, artifacts,
+  install/backup paths, qualification, and every open gate. No merge, push, deploy,
+  publish, or upload was performed.
 
 Exit: a committed clean release-candidate branch and repeatably packaged artifact with checksum and provenance exist, with binary reproducibility and every external/user gate stated only to the level actually proved.
 
