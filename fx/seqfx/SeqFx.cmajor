@@ -38,6 +38,9 @@ namespace seqfx
     let tapeCoarseRate = 8000.0f;
     let tapePrimaryBufferSize = 768008;
     let tapeCoarseBufferSize = 768008;
+    let pitchHalfRateBufferSize = 16392;
+    let pitchQuarterRateBufferSize = 8200;
+    let speedupLowpassDelay = 15;
     let tapeSpeedFloor = 0.005f;
     let tapeVoiceCount = 2;
     let tapeReturnCatchUp = 0;
@@ -165,6 +168,31 @@ namespace seqfx
     {
         let x = clampFloat (value, 0.0f, 1.0f);
         return x * x * (3.0f - (2.0f * x));
+    }
+
+    // Normalised 31-tap equiripple low-pass used by both Pitch mip levels and
+    // Stutter speed-up reads. The passband ends at 0.20 cycles/sample and the
+    // weighted stopband begins at 0.30, so ordinary source bandwidth remains
+    // flat while content that would fold at 2x is rejected by about 60 dB.
+    float32 speedupLowpassCoefficient (int32 absoluteOffset)
+    {
+        let offset = clampInt (absoluteOffset, 0, speedupLowpassDelay);
+        if (offset == 0)  return 0.484055769194f;
+        if (offset == 1)  return 0.313502224029f;
+        if (offset == 2)  return 0.012690073291f;
+        if (offset == 3)  return -0.096803822304f;
+        if (offset == 4)  return -0.011574096330f;
+        if (offset == 5)  return 0.049644199935f;
+        if (offset == 6)  return 0.009888999117f;
+        if (offset == 7)  return -0.027712558024f;
+        if (offset == 8)  return -0.007859102447f;
+        if (offset == 9)  return 0.015141873695f;
+        if (offset == 10) return 0.005735322834f;
+        if (offset == 11) return -0.007589563206f;
+        if (offset == 12) return -0.003743404185f;
+        if (offset == 13) return 0.003465620001f;
+        if (offset == 14) return 0.002977340355f;
+        return 0.000209008642f;
     }
 
     float32 unitWrap (float32 value)
@@ -659,11 +687,14 @@ processor SeqFx [[ main ]]
     int32[seqfx::patternCount] acceptedRevisions;
 
     std::filters::simper::Implementation[seqfx::laneCount, 2] filterStates;
+    std::filters::simper::Implementation[seqfx::laneCount, 2, 4] tapePrimaryAntialiasStates;
 
     float32<2>[seqfx::tapePrimaryBufferSize] tapePrimaryHistory0;
     float32<2>[seqfx::tapePrimaryBufferSize] tapePrimaryHistory1;
     float32<2>[seqfx::tapePrimaryBufferSize] tapePrimaryHistory2;
     float32<2>[seqfx::tapePrimaryBufferSize] tapePrimaryHistory3;
+    float32<2>[seqfx::laneCount, seqfx::pitchHalfRateBufferSize] pitchHalfRateHistory;
+    float32<2>[seqfx::laneCount, seqfx::pitchQuarterRateBufferSize] pitchQuarterRateHistory;
     int32[seqfx::tapeCoarseBufferSize] tapeCoarseHistory0;
     int32[seqfx::tapeCoarseBufferSize] tapeCoarseHistory1;
     int32[seqfx::tapeCoarseBufferSize] tapeCoarseHistory2;
@@ -683,6 +714,10 @@ processor SeqFx [[ main ]]
     int32[seqfx::laneCount] tapeCoarseValidSamples;
     int64[seqfx::laneCount] tapePrimarySamplesWritten;
     int64[seqfx::laneCount] tapeCoarseSamplesWritten;
+    int64[seqfx::laneCount] pitchHalfRateSamplesWritten;
+    int64[seqfx::laneCount] pitchQuarterRateSamplesWritten;
+    int32[seqfx::laneCount] pitchHalfRateValidSamples;
+    int32[seqfx::laneCount] pitchQuarterRateValidSamples;
     float32[seqfx::laneCount] tapePrimaryWritePhase;
     float32[seqfx::laneCount] tapeCoarseWritePhase;
     float32<2>[seqfx::laneCount] tapePreviousHostSample;
@@ -981,9 +1016,58 @@ processor SeqFx [[ main ]]
     float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceShape;
     float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceGate;
 
+    float32 tapePrimaryAntialiasQ (wrap<4> stage)
+    {
+        if (stage == 0) return 0.509795579f;
+        if (stage == 1) return 0.601344887f;
+        if (stage == 2) return 0.899976223f;
+        return 2.56291545f;
+    }
+
+    void configureTapePrimaryAntialias()
+    {
+        for (wrap<seqfx::laneCount> lane)
+        {
+            for (wrap<2> channel)
+            {
+                for (wrap<4> stage)
+                {
+                    tapePrimaryAntialiasStates[lane, channel, stage].setMode (
+                        std::filters::simper::Mode::lowPass
+                    );
+                    tapePrimaryAntialiasStates[lane, channel, stage].setFrequency (
+                        processor.frequency,
+                        18000.0f,
+                        tapePrimaryAntialiasQ (stage),
+                        0.0f
+                    );
+                }
+            }
+        }
+    }
+
+    float32<2> antialiasTapePrimaryInput (
+        wrap<seqfx::laneCount> lane,
+        float32<2> sample)
+    {
+        if (processor.frequency <= seqfx::tapePrimaryRate)
+            return sample;
+
+        var filtered = sample;
+        for (wrap<2> channel)
+        {
+            for (wrap<4> stage)
+                filtered[channel] = tapePrimaryAntialiasStates[lane, channel, stage].process (
+                    filtered[channel]
+                );
+        }
+        return filtered;
+    }
+
     void init()
     {
         initialiseDefaultPattern();
+        configureTapePrimaryAntialias();
         for (wrap<seqfx::laneCount> lane)
         {
             filterStartHz[lane] = 2000.0f;
@@ -1572,12 +1656,19 @@ processor SeqFx [[ main ]]
             tapeCoarseValidSamples[lane] = 0;
             tapePrimarySamplesWritten[lane] = 0;
             tapeCoarseSamplesWritten[lane] = 0;
+            pitchHalfRateSamplesWritten[lane] = 0;
+            pitchQuarterRateSamplesWritten[lane] = 0;
+            pitchHalfRateValidSamples[lane] = 0;
+            pitchQuarterRateValidSamples[lane] = 0;
             tapePrimaryWriteIndex[lane] = 0;
             tapeCoarseWriteIndex[lane] = 0;
             tapePrimaryWritePhase[lane] = 0.0f;
             tapeCoarseWritePhase[lane] = 0.0f;
             tapePreviousHostSample[lane] = float32<2> (0.0f);
             tapeCoarseLowpassState[lane] = float32<2> (0.0f);
+            for (wrap<2> channel)
+                for (wrap<4> stage)
+                    tapePrimaryAntialiasStates[lane, channel, stage].reset();
             tapeTriggerPending[lane] = false;
             for (wrap<seqfx::tapeVoiceCount> voice)
             {
@@ -2814,6 +2905,133 @@ processor SeqFx [[ main ]]
         stutterCurrentVoice[lane] = selectedVoiceIndex;
     }
 
+    float32<2> readTapePrimaryForMip (
+        wrap<seqfx::laneCount> lane,
+        int64 absoluteIndex)
+    {
+        let earliest = tapePrimarySamplesWritten[lane] - int64 (tapePrimaryValidSamples[lane]);
+        if (absoluteIndex < earliest || absoluteIndex >= tapePrimarySamplesWritten[lane])
+            return float32<2> (0.0f);
+        return readTapePrimaryAt (lane, absoluteIndex);
+    }
+
+    float32<2> readPitchHalfRateAt (
+        wrap<seqfx::laneCount> lane,
+        int64 absoluteIndex)
+    {
+        return pitchHalfRateHistory[
+            lane,
+            wrap<seqfx::pitchHalfRateBufferSize> (
+                int32 (absoluteIndex % int64 (seqfx::pitchHalfRateBufferSize))
+            )
+        ];
+    }
+
+    float32<2> readPitchHalfRateForMip (
+        wrap<seqfx::laneCount> lane,
+        int64 absoluteIndex)
+    {
+        let earliest = pitchHalfRateSamplesWritten[lane] - int64 (pitchHalfRateValidSamples[lane]);
+        if (absoluteIndex < earliest || absoluteIndex >= pitchHalfRateSamplesWritten[lane])
+            return float32<2> (0.0f);
+        return readPitchHalfRateAt (lane, absoluteIndex);
+    }
+
+    float32<2> speedupLowpassFromPrimary (
+        wrap<seqfx::laneCount> lane,
+        int64 centreIndex)
+    {
+        var filtered = readTapePrimaryForMip (lane, centreIndex)
+            * seqfx::speedupLowpassCoefficient (0);
+        for (wrap<15> pair)
+        {
+            let offset = int32 (pair) + 1;
+            filtered += (
+                readTapePrimaryForMip (lane, centreIndex - int64 (offset))
+                + readTapePrimaryForMip (lane, centreIndex + int64 (offset))
+            ) * seqfx::speedupLowpassCoefficient (offset);
+        }
+        return filtered;
+    }
+
+    float32<2> speedupLowpassFromHalfRate (
+        wrap<seqfx::laneCount> lane,
+        int64 centreIndex)
+    {
+        var filtered = readPitchHalfRateForMip (lane, centreIndex)
+            * seqfx::speedupLowpassCoefficient (0);
+        for (wrap<15> pair)
+        {
+            let offset = int32 (pair) + 1;
+            filtered += (
+                readPitchHalfRateForMip (lane, centreIndex - int64 (offset))
+                + readPitchHalfRateForMip (lane, centreIndex + int64 (offset))
+            ) * seqfx::speedupLowpassCoefficient (offset);
+        }
+        return filtered;
+    }
+
+    void writePitchHalfRateSample (
+        wrap<seqfx::laneCount> lane,
+        int64 absoluteIndex,
+        float32<2> sample)
+    {
+        pitchHalfRateHistory[
+            lane,
+            wrap<seqfx::pitchHalfRateBufferSize> (
+                int32 (absoluteIndex % int64 (seqfx::pitchHalfRateBufferSize))
+            )
+        ] = sample;
+        pitchHalfRateSamplesWritten[lane] = absoluteIndex + 1;
+        if (pitchHalfRateValidSamples[lane] < seqfx::pitchHalfRateBufferSize - 4)
+            pitchHalfRateValidSamples[lane] += 1;
+    }
+
+    void writePitchQuarterRateSample (
+        wrap<seqfx::laneCount> lane,
+        int64 absoluteIndex,
+        float32<2> sample)
+    {
+        pitchQuarterRateHistory[
+            lane,
+            wrap<seqfx::pitchQuarterRateBufferSize> (
+                int32 (absoluteIndex % int64 (seqfx::pitchQuarterRateBufferSize))
+            )
+        ] = sample;
+        pitchQuarterRateSamplesWritten[lane] = absoluteIndex + 1;
+        if (pitchQuarterRateValidSamples[lane] < seqfx::pitchQuarterRateBufferSize - 4)
+            pitchQuarterRateValidSamples[lane] += 1;
+    }
+
+    void updatePitchMipHistory (wrap<seqfx::laneCount> lane)
+    {
+        let primaryIndex = tapePrimarySamplesWritten[lane] - 1;
+        if (primaryIndex < 0 || primaryIndex % 2L != 0L)
+            return;
+
+        let halfIndex = primaryIndex / 2L;
+        writePitchHalfRateSample (
+            lane,
+            halfIndex,
+            speedupLowpassFromPrimary (
+                lane,
+                primaryIndex - int64 (seqfx::speedupLowpassDelay)
+            )
+        );
+
+        if (halfIndex % 2L == 0L)
+        {
+            writePitchQuarterRateSample (
+                lane,
+                halfIndex / 2L,
+                speedupLowpassFromHalfRate (
+                    lane,
+                    halfIndex - int64 (seqfx::speedupLowpassDelay)
+                )
+            );
+        }
+    }
+
     void writeTapePrimarySample (wrap<seqfx::laneCount> lane, float32<2> sample)
     {
         let index = tapePrimaryWriteIndex[lane];
@@ -2830,6 +3048,7 @@ processor SeqFx [[ main ]]
         tapePrimarySamplesWritten[lane] += 1;
         if (tapePrimaryValidSamples[lane] < seqfx::tapePrimaryBufferSize - 4)
             tapePrimaryValidSamples[lane] += 1;
+        updatePitchMipHistory (lane);
     }
 
     int32 packTapeStereo16 (float32<2> sample)
@@ -2867,6 +3086,7 @@ processor SeqFx [[ main ]]
 
     void writeTapeHistory (wrap<seqfx::laneCount> lane, float32<2> sample)
     {
+        let primaryInput = antialiasTapePrimaryInput (lane, sample);
         let primaryRatio = seqfx::tapePrimaryRate / float32 (processor.frequency);
         tapePrimaryWritePhase[lane] += primaryRatio;
         while (tapePrimaryWritePhase[lane] >= 1.0f)
@@ -2874,7 +3094,7 @@ processor SeqFx [[ main ]]
             let overshoot = tapePrimaryWritePhase[lane] - 1.0f;
             let fraction = seqfx::clampFloat (1.0f - (overshoot / primaryRatio), 0.0f, 1.0f);
             let resampled = tapePreviousHostSample[lane]
-                + ((sample - tapePreviousHostSample[lane]) * fraction);
+                + ((primaryInput - tapePreviousHostSample[lane]) * fraction);
             writeTapePrimarySample (lane, resampled);
             tapePrimaryWritePhase[lane] -= 1.0f;
         }
@@ -2893,7 +3113,7 @@ processor SeqFx [[ main ]]
             tapeCoarseWritePhase[lane] -= 1.0f;
         }
 
-        tapePreviousHostSample[lane] = sample;
+        tapePreviousHostSample[lane] = primaryInput;
     }
 
     void writeStutterCapture (
@@ -3009,6 +3229,113 @@ processor SeqFx [[ main ]]
         );
     }
 
+    float32<2> readPitchQuarterRateAt (
+        wrap<seqfx::laneCount> lane,
+        int64 absoluteIndex)
+    {
+        return pitchQuarterRateHistory[
+            lane,
+            wrap<seqfx::pitchQuarterRateBufferSize> (
+                int32 (absoluteIndex % int64 (seqfx::pitchQuarterRateBufferSize))
+            )
+        ];
+    }
+
+    bool pitchHalfRatePositionIsValid (wrap<seqfx::laneCount> lane, float64 position)
+    {
+        let currentIndex = int64 (std::intrinsics::floor (position));
+        let earliest = pitchHalfRateSamplesWritten[lane] - int64 (pitchHalfRateValidSamples[lane]);
+        return currentIndex - 1 >= earliest && currentIndex + 2 < pitchHalfRateSamplesWritten[lane];
+    }
+
+    bool pitchQuarterRatePositionIsValid (wrap<seqfx::laneCount> lane, float64 position)
+    {
+        let currentIndex = int64 (std::intrinsics::floor (position));
+        let earliest = pitchQuarterRateSamplesWritten[lane] - int64 (pitchQuarterRateValidSamples[lane]);
+        return currentIndex - 1 >= earliest && currentIndex + 2 < pitchQuarterRateSamplesWritten[lane];
+    }
+
+    float32<2> readPitchHalfRate (wrap<seqfx::laneCount> lane, float64 position)
+    {
+        let currentIndex = int64 (std::intrinsics::floor (position));
+        let fraction = float32 (position - float64 (currentIndex));
+        return seqfx::cubicHermite4 (
+            readPitchHalfRateAt (lane, currentIndex - 1),
+            readPitchHalfRateAt (lane, currentIndex),
+            readPitchHalfRateAt (lane, currentIndex + 1),
+            readPitchHalfRateAt (lane, currentIndex + 2),
+            fraction
+        );
+    }
+
+    float32<2> readPitchQuarterRate (wrap<seqfx::laneCount> lane, float64 position)
+    {
+        let currentIndex = int64 (std::intrinsics::floor (position));
+        let fraction = float32 (position - float64 (currentIndex));
+        return seqfx::cubicHermite4 (
+            readPitchQuarterRateAt (lane, currentIndex - 1),
+            readPitchQuarterRateAt (lane, currentIndex),
+            readPitchQuarterRateAt (lane, currentIndex + 1),
+            readPitchQuarterRateAt (lane, currentIndex + 2),
+            fraction
+        );
+    }
+
+    float32 pitchMipLevel (float32 effectiveReadRatio)
+    {
+        if (effectiveReadRatio <= 1.0f)
+            return 0.0f;
+        return seqfx::clampFloat (
+            std::intrinsics::log (effectiveReadRatio) / std::intrinsics::log (2.0f),
+            0.0f,
+            2.0f
+        );
+    }
+
+    bool pitchSourcePositionIsValid (
+        wrap<seqfx::laneCount> lane,
+        float64 primaryPosition,
+        float32 effectiveReadRatio)
+    {
+        if (! tapePrimaryPositionIsValid (lane, primaryPosition))
+            return false;
+
+        let level = pitchMipLevel (effectiveReadRatio);
+        if (level <= 0.000001f)
+            return true;
+
+        let halfPosition = (primaryPosition + float64 (seqfx::speedupLowpassDelay)) * 0.5;
+        if (! pitchHalfRatePositionIsValid (lane, halfPosition))
+            return false;
+        if (level <= 1.000001f)
+            return true;
+
+        let quarterDelay = seqfx::speedupLowpassDelay * 3;
+        let quarterPosition = (primaryPosition + float64 (quarterDelay)) * 0.25;
+        return pitchQuarterRatePositionIsValid (lane, quarterPosition);
+    }
+
+    float32<2> readPitchSource (
+        wrap<seqfx::laneCount> lane,
+        float64 primaryPosition,
+        float32 effectiveReadRatio)
+    {
+        let level = pitchMipLevel (effectiveReadRatio);
+        let primary = readTapePrimary (lane, primaryPosition);
+        if (level <= 0.000001f)
+            return primary;
+
+        let halfPosition = (primaryPosition + float64 (seqfx::speedupLowpassDelay)) * 0.5;
+        let halfRate = readPitchHalfRate (lane, halfPosition);
+        if (level <= 1.0f)
+            return primary + ((halfRate - primary) * seqfx::smoothStep01 (level));
+
+        let quarterDelay = seqfx::speedupLowpassDelay * 3;
+        let quarterPosition = (primaryPosition + float64 (quarterDelay)) * 0.25;
+        let quarterRate = readPitchQuarterRate (lane, quarterPosition);
+        return halfRate + ((quarterRate - halfRate) * seqfx::smoothStep01 (level - 1.0f));
+    }
+
     float32<2> readTapeCoarse (wrap<seqfx::laneCount> lane, float64 position)
     {
         let currentIndex = int64 (std::intrinsics::floor (position));
@@ -3116,21 +3443,38 @@ processor SeqFx [[ main ]]
     bool pitchGrainPositionIsValid (
         wrap<seqfx::laneCount> lane,
         wrap<seqfx::pitchGrainVoiceCount> voice,
-        float32 spreadOffset)
+        float32 spreadOffset,
+        float32 effectiveReadRatio)
     {
         let position = pitchGrainSourcePosition[lane, voice];
-        return tapePrimaryPositionIsValid (lane, position - float64 (spreadOffset))
-            && tapePrimaryPositionIsValid (lane, position + float64 (spreadOffset));
+        return pitchSourcePositionIsValid (
+            lane,
+            position - float64 (spreadOffset),
+            effectiveReadRatio
+        ) && pitchSourcePositionIsValid (
+            lane,
+            position + float64 (spreadOffset),
+            effectiveReadRatio
+        );
     }
 
     float32<2> readPitchGrain (
         wrap<seqfx::laneCount> lane,
         wrap<seqfx::pitchGrainVoiceCount> voice,
-        float32 spreadOffset)
+        float32 spreadOffset,
+        float32 effectiveReadRatio)
     {
         let position = pitchGrainSourcePosition[lane, voice];
-        let left = readTapePrimary (lane, position - float64 (spreadOffset));
-        let right = readTapePrimary (lane, position + float64 (spreadOffset));
+        let left = readPitchSource (
+            lane,
+            position - float64 (spreadOffset),
+            effectiveReadRatio
+        );
+        let right = readPitchSource (
+            lane,
+            position + float64 (spreadOffset),
+            effectiveReadRatio
+        );
         return float32<2> (left[0], right[1]);
     }
 
@@ -3290,14 +3634,26 @@ processor SeqFx [[ main ]]
         {
             let phase = pitchGrainPhase[lane, voice];
             let window = pitchWindowAt (phase);
-            let positionValid = pitchGrainPositionIsValid (lane, voice, spreadOffset);
+            let grainRatio = pitchRatioForGrain (lane, voice);
+            let effectiveReadRatio = grainRatio * primaryPerHostFrame;
+            let positionValid = pitchGrainPositionIsValid (
+                lane,
+                voice,
+                spreadOffset,
+                effectiveReadRatio
+            );
             if (positionValid)
-                grains += readPitchGrain (lane, voice, spreadOffset) * window;
+                grains += readPitchGrain (
+                    lane,
+                    voice,
+                    spreadOffset,
+                    effectiveReadRatio
+                ) * window;
             else
                 allHistoryValid = false;
 
             pitchGrainSourcePosition[lane, voice] += float64 (
-                pitchRatioForGrain (lane, voice) * primaryPerHostFrame
+                grainRatio * primaryPerHostFrame
             );
             let nextPhase = phase + phaseIncrement;
             if (nextPhase >= 1.0f)
@@ -3347,6 +3703,47 @@ processor SeqFx [[ main ]]
         return stutterHistory1[lane, index];
     }
 
+    int32 wrapStutterReadIndex (int32 index, int32 readFrameLimit)
+    {
+        while (index < 0)
+            index += readFrameLimit;
+        while (index >= readFrameLimit)
+            index -= readFrameLimit;
+        return index;
+    }
+
+    float32<2> readStutterCaptureLowpassAt (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::stutterVoiceCount> voice,
+        int32 centreIndex,
+        int32 readFrameLimit)
+    {
+        var filtered = readStutterCaptureAt (
+            lane,
+            voice,
+            wrap<stutterBufferSize> (wrapStutterReadIndex (centreIndex, readFrameLimit))
+        ) * seqfx::speedupLowpassCoefficient (0);
+
+        for (wrap<15> pair)
+        {
+            let offset = int32 (pair) + 1;
+            let previousIndex = wrapStutterReadIndex (centreIndex - offset, readFrameLimit);
+            let followingIndex = wrapStutterReadIndex (centreIndex + offset, readFrameLimit);
+            filtered += (
+                readStutterCaptureAt (
+                    lane,
+                    voice,
+                    wrap<stutterBufferSize> (previousIndex)
+                ) + readStutterCaptureAt (
+                    lane,
+                    voice,
+                    wrap<stutterBufferSize> (followingIndex)
+                )
+            ) * seqfx::speedupLowpassCoefficient (offset);
+        }
+        return filtered;
+    }
+
     float32<2> readStutterCapture (
         wrap<seqfx::laneCount> lane,
         wrap<seqfx::stutterVoiceCount> voice,
@@ -3372,13 +3769,35 @@ processor SeqFx [[ main ]]
         while (nextFollowingIndex >= readFrameLimit)
             nextFollowingIndex -= readFrameLimit;
 
-        return seqfx::cubicHermite4 (
+        let primary = seqfx::cubicHermite4 (
             readStutterCaptureAt (lane, voice, wrap<stutterBufferSize> (previousIndex)),
             readStutterCaptureAt (lane, voice, wrap<stutterBufferSize> (currentIndex)),
             readStutterCaptureAt (lane, voice, wrap<stutterBufferSize> (followingIndex)),
             readStutterCaptureAt (lane, voice, wrap<stutterBufferSize> (nextFollowingIndex)),
             fraction
         );
+
+        let speed = seqfx::clampFloat (stutterVoicePlaybackSpeed[lane, voice], 0.5f, 2.0f);
+        if (speed <= 1.0f)
+            return primary;
+
+        let filteredCurrent = readStutterCaptureLowpassAt (
+            lane,
+            voice,
+            currentIndex,
+            readFrameLimit
+        );
+        let filteredFollowing = readStutterCaptureLowpassAt (
+            lane,
+            voice,
+            followingIndex,
+            readFrameLimit
+        );
+        let filtered = filteredCurrent + ((filteredFollowing - filteredCurrent) * fraction);
+        let filterAmount = seqfx::smoothStep01 (
+            std::intrinsics::log (speed) / std::intrinsics::log (2.0f)
+        );
+        return primary + ((filtered - primary) * filterAmount);
     }
 
     float32<2> processFilter (wrap<seqfx::laneCount> lane, float32<2> stage)

@@ -404,6 +404,14 @@ def _sine_at_rate(frames: int, frequency: float, sample_rate: int, amplitude: fl
     return np.column_stack([mono, mono]).astype(np.float32)
 
 
+def _step_frames_at_rate(sample_rate: int) -> int:
+    return int(round(STEP_FRAMES * sample_rate / SAMPLE_RATE))
+
+
+def _fold_frequency(frequency: float, sample_rate: int) -> float:
+    return abs(((frequency + (sample_rate * 0.5)) % sample_rate) - (sample_rate * 0.5))
+
+
 def _ramp(frames: int) -> np.ndarray:
     mono = np.linspace(-0.95, 0.95, frames, dtype=np.float32)
     return np.column_stack([mono, mono]).astype(np.float32)
@@ -4133,6 +4141,7 @@ def _render_pitch(
     first_step: int = 3,
     active_steps: int = 12,
     mix: float = 1.0,
+    sample_rate: int = SAMPLE_RATE,
 ) -> np.ndarray:
     upload = _empty_upload()
     params = [semitones, fine_cents, grain_ms, jitter, spread]
@@ -4146,7 +4155,154 @@ def _render_pitch(
             effect_type=EFFECT_PITCH,
             params=params,
         )
-    return _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+    return _render(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(upload),
+        sample_rate=sample_rate,
+    )
+
+
+@pytest.mark.parametrize(
+    ("sample_rate", "rejected_input_hz", "pass_input_hz", "output_hz"),
+    [
+        (96_000, 30_000.0, 18_000.0, 9_000.0),
+        (192_000, 60_000.0, 12_000.0, 6_000.0),
+    ],
+)
+def test_pitch_primary_history_rejects_high_rate_foldover_before_fixed_48k_ingest(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    sample_rate: int,
+    rejected_input_hz: float,
+    pass_input_hz: float,
+    output_hz: float,
+) -> None:
+    step_frames = _step_frames_at_rate(sample_rate)
+    frames = step_frames * 28
+    alias_path = tmp_path / "alias"
+    pass_path = tmp_path / "pass"
+    alias_path.mkdir()
+    pass_path.mkdir()
+    alias_output = _render_pitch(
+        generated_runtime,
+        alias_path,
+        _sine_at_rate(frames, rejected_input_hz, sample_rate, amplitude=0.35),
+        semitones=-12.0,
+        grain_ms=72.0,
+        first_step=3,
+        active_steps=22,
+        sample_rate=sample_rate,
+    )
+    pass_output = _render_pitch(
+        generated_runtime,
+        pass_path,
+        _sine_at_rate(frames, pass_input_hz, sample_rate, amplitude=0.35),
+        semitones=-12.0,
+        grain_ms=72.0,
+        first_step=3,
+        active_steps=22,
+        sample_rate=sample_rate,
+    )
+    analysis = slice(step_frames * 8, step_frames * 20)
+    rejected = _tone_amplitude(alias_output[analysis, 0], output_hz, sample_rate)
+    passed = _tone_amplitude(pass_output[analysis, 0], output_hz, sample_rate)
+
+    assert passed > 0.08
+    assert rejected < passed * 0.08
+
+
+@pytest.mark.parametrize("sample_rate", [44_100, 48_000, 96_000, 192_000])
+def test_pitch_octave_speedup_mip_filter_rejects_only_frequencies_that_would_fold(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    sample_rate: int,
+) -> None:
+    step_frames = _step_frames_at_rate(sample_rate)
+    frames = step_frames * 28
+    low_path = tmp_path / "low"
+    high_path = tmp_path / "high"
+    low_path.mkdir()
+    high_path.mkdir()
+    low_output = _render_pitch(
+        generated_runtime,
+        low_path,
+        _sine_at_rate(frames, 1_000.0, sample_rate, amplitude=0.35),
+        semitones=24.0,
+        grain_ms=72.0,
+        first_step=3,
+        active_steps=22,
+        sample_rate=sample_rate,
+    )
+    high_output = _render_pitch(
+        generated_runtime,
+        high_path,
+        _sine_at_rate(frames, 8_000.0, sample_rate, amplitude=0.35),
+        semitones=24.0,
+        grain_ms=72.0,
+        first_step=3,
+        active_steps=22,
+        sample_rate=sample_rate,
+    )
+    analysis = slice(step_frames * 8, step_frames * 20)
+    low = _tone_amplitude(low_output[analysis, 0], 4_000.0, sample_rate)
+    high_frequency = _fold_frequency(32_000.0, sample_rate)
+    high = _tone_amplitude(high_output[analysis, 0], high_frequency, sample_rate)
+
+    assert low > 0.025
+    if 32_000.0 > sample_rate * 0.5:
+        assert high < low * 0.12
+    else:
+        assert high > 0.025
+
+
+@pytest.mark.parametrize("sample_rate", [44_100, 48_000, 96_000, 192_000])
+def test_stutter_double_speed_rejects_foldover_without_muting_passband(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    sample_rate: int,
+) -> None:
+    step_frames = _step_frames_at_rate(sample_rate)
+    frames = step_frames * 10
+    upload = _empty_upload()
+    for step in range(8):
+        _activate_step(
+            upload,
+            lane=LANE_STUTTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_STUTTER,
+            params=[8.0, 2.0, 0.0, 1.0],
+        )
+
+    low_input_hz = 4_000.0
+    rejected_input_hz = sample_rate * 0.288
+    low_path = tmp_path / "low"
+    high_path = tmp_path / "high"
+    low_path.mkdir()
+    high_path.mkdir()
+    low = _render(
+        generated_runtime,
+        low_path,
+        _sine_at_rate(frames, low_input_hz, sample_rate, amplitude=0.35),
+        _base_schedule(upload),
+        sample_rate=sample_rate,
+    )
+    high = _render(
+        generated_runtime,
+        high_path,
+        _sine_at_rate(frames, rejected_input_hz, sample_rate, amplitude=0.35),
+        _base_schedule(upload),
+        sample_rate=sample_rate,
+    )
+    analysis = slice(step_frames * 2, step_frames * 7)
+    low_amplitude = _tone_amplitude(low[analysis, 0], low_input_hz * 2.0, sample_rate)
+    alias_hz = _fold_frequency(rejected_input_hz * 2.0, sample_rate)
+    alias_amplitude = _tone_amplitude(high[analysis, 0], alias_hz, sample_rate)
+
+    assert low_amplitude > 0.08
+    assert alias_amplitude < low_amplitude * 0.12
 
 
 @pytest.mark.parametrize(
