@@ -3,7 +3,18 @@ namespace wt
     processor FilterSpectrumAnalyzer
     {
         input stream float32 in;
+        // Demand gate: nonzero while any spectrum view is open (see
+        // ui/shared/analyzer-activity.ts). A plain int32 event, so every
+        // fixture that compiles this file alone stays self-contained.
+        input event int32 analyzerActivityIn;
         output event FilterSpectrumFrame filterSpectrum;
+
+        bool analyzerActive = false;
+
+        event analyzerActivityIn (int32 activity)
+        {
+            analyzerActive = activity != 0;
+        }
 
         let hopSize = int32 (float32 (processor.frequency) / filterSpectrumFramesPerSecond);
         let overlapSize = filterSpectrumWindowSize - hopSize;
@@ -75,26 +86,36 @@ namespace wt
 
         void main()
         {
-            primeAnalysisWindow();
-
             loop
             {
-                copyAnalysisWindowToFFTBuffer();
-                float32[filterSpectrumFFTSize] fft;
-                std::frequency::realOnlyForwardFFT (fftBuffer, fft);
+                // Sleep frame by frame until a view opens, then window from
+                // fresh input. The wait costs one branch per sample; the FFT,
+                // windowing and 2048-float frame emission cost nothing while
+                // no view is listening.
+                while (! analyzerActive)
+                    advance();
 
-                FilterSpectrumFrame result;
-                result.sampleRateHz = float32 (processor.frequency);
+                primeAnalysisWindow();
 
-                for (wrap<filterSpectrumBinCount> index)
+                while (analyzerActive)
                 {
-                    let real = fft[index];
-                    let imag = fft.at (filterSpectrumBinCount + index);
-                    result.magnitudes[index] = std::intrinsics::sqrt ((real * real) + (imag * imag)) * normalizationFactor;
-                }
+                    copyAnalysisWindowToFFTBuffer();
+                    float32[filterSpectrumFFTSize] fft;
+                    std::frequency::realOnlyForwardFFT (fftBuffer, fft);
 
-                filterSpectrum <- result;
-                advanceToNextWindow();
+                    FilterSpectrumFrame result;
+                    result.sampleRateHz = float32 (processor.frequency);
+
+                    for (wrap<filterSpectrumBinCount> index)
+                    {
+                        let real = fft[index];
+                        let imag = fft.at (filterSpectrumBinCount + index);
+                        result.magnitudes[index] = std::intrinsics::sqrt ((real * real) + (imag * imag)) * normalizationFactor;
+                    }
+
+                    filterSpectrum <- result;
+                    advanceToNextWindow();
+                }
             }
         }
     }

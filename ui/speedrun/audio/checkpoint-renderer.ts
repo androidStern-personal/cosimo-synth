@@ -347,7 +347,14 @@ export async function renderSpeedrunCheckpoint(
     let renderedFrames = 0;
     let noteOnIndex = 0;
     // Recording is opt-in so audio-only renders keep the pre-telemetry
-    // advance pattern (and output) byte for byte.
+    // advance pattern (and output) byte for byte. The engine's diagnostic
+    // analyzers are demand-driven, so a telemetry render — which is a view
+    // of them — must wake all three; audio-only renders leave them asleep.
+    if (recordTelemetry) {
+        host.sendEventOrValue("filterSpectrumActivity", 1);
+        host.sendEventOrValue("distortionScopeActivity", 1);
+        host.sendEventOrValue("distortionHistoryActivity", 1);
+    }
     const telemetryListeners = recordTelemetry
         ? SPEEDRUN_TELEMETRY_ENDPOINT_IDS.map((endpointID) => {
             const listener = (value: unknown) => {
