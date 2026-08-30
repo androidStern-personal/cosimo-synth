@@ -891,6 +891,32 @@ test("seqfx_effect_graphs_render_through_shared_editor_curve_primitives", async 
     await page.close();
 });
 
+test("seqfx_bespoke_editors_disclose_trigger_latching_and_crush_shows_a_host_rate_Full_ceiling", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    const expectTriggerContract = async (parameterId, parameterLabel) => {
+        const contract = page.locator(`[data-role="seqfx-bespoke-trigger"][data-param="${parameterId}"]`);
+        await contract.waitFor();
+        assert.equal(await contract.isVisible(), true);
+        assert.equal((await contract.textContent())?.replace(/\s+/g, " ").trim(), `${parameterLabel} Trigger`);
+    };
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await expectTriggerContract("mode", "Mode");
+
+    await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
+    await expectTriggerContract("character", "Character");
+    assert.equal(await page.locator('[data-role="seqfx-crusher-rate-value"]').textContent(), "Full");
+    assert.equal(await page.locator('[data-role="seqfx-crusher-editor"]').getByText("48 kHz", { exact: true }).count(), 0);
+
+    await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
+    await expectTriggerContract("slices", "Slices");
+
+    await page.close();
+});
+
 test("seqfx_vite_dev_server_serves_a_stable_browser_harness_page", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     const response = await page.goto(`${DEV_SERVER_ORIGIN}/fx/seqfx/view/harness.html`);

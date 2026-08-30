@@ -48,6 +48,7 @@ export type SeqFxParameterDefinition = {
     integer: boolean;
     section: SeqFxParameterSection;
     hint?: string;
+    maxLabel?: string;
     options?: readonly string[];
 };
 
@@ -113,6 +114,9 @@ export function formatSeqFxParameterValue(definition: SeqFxParameterDefinition, 
     const option = definition.options?.[Math.round(safeValue)];
     if (option !== undefined) {
         return option;
+    }
+    if (definition.maxLabel !== undefined && safeValue >= definition.max) {
+        return definition.maxLabel;
     }
 
     const decimals = definition.integer ? 0 : decimalPlacesForStep(definition.step);
@@ -197,7 +201,12 @@ const definitions = [
         lifecycle: "gated",
         parameters: [
             parameter("bits", "Bits", 2, 16, 8, 1, { unit: "bits", integer: true }),
-            parameter("rateHz", "Rate", 200, 48_000, 48_000, 1, { unit: "Hz", scale: "log", hint: "Converter sample rate; lower values produce wider steps and more aliasing." }),
+            parameter("rateHz", "Rate", 200, 48_000, 48_000, 1, {
+                unit: "Hz",
+                scale: "log",
+                maxLabel: "Full",
+                hint: "Full uses the host sample rate up to the converter's 48 kHz ceiling; lower values produce wider steps and more aliasing.",
+            }),
             parameter("drive", "Drive", 0, 36, 0, 0.1, { unit: "dB" }),
             parameter("character", "Character", 0, 3, 1, 1, {
                 latch: "trigger",

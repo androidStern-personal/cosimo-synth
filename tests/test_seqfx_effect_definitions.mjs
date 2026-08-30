@@ -31,7 +31,7 @@ test("the canonical registry owns honest units and primary versus advanced hiera
 
     assert.deepEqual(defaultReadouts, {
         filter: ["Low Pass", "2 kHz", "500 Hz", "Q 0.707", "1\u00d7"],
-        crush: ["8 bits", "48 kHz", "0 dB", "Classic", "0%", "0%", "0%"],
+        crush: ["8 bits", "Full", "0 dB", "Classic", "0%", "0%", "0%"],
         tapeStop: ["1 Cell", "0", "Crossfade to Live", "1/16", "0%", "Sync", "500 ms", "125 ms"],
         stutter: ["8", "1\u00d7", "0.44", "68%"],
         pitch: ["0 semitones", "0 cents", "48 ms", "0%", "35%"],
@@ -86,6 +86,19 @@ test("the canonical registry owns honest units and primary versus advanced hiera
     assert.match(patchViewSource, /data-role="seqfx-effect-icon"/);
     assert.doesNotMatch(patchViewSource, /SeqFxEffectIconTexture/);
     assert.doesNotMatch(patchViewSource, /_ICON_PATH\b/);
+});
+
+test("Crush keeps its 48 kHz state ceiling while presenting the host-rate top as Full", () => {
+    const crushRate = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.crusher).parameters[1];
+
+    assert.equal(crushRate.id, "rateHz");
+    assert.equal(crushRate.max, 48_000);
+    assert.equal(crushRate.defaultValue, 48_000);
+    assert.equal(crushRate.maxLabel, "Full");
+    assert.match(crushRate.hint, /host sample rate up to the converter's 48 kHz ceiling/);
+    assert.equal(formatSeqFxParameterValue(crushRate, 48_000), "Full");
+    assert.equal(formatSeqFxParameterValue(crushRate, 44_100), "44.1 kHz");
+    assert.equal(formatSeqFxParameterRange(crushRate), "200 Hz to Full");
 });
 
 test("seqfx effect IDs are append-only and cover the requested sequenced effects", () => {

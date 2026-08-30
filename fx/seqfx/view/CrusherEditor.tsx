@@ -41,6 +41,11 @@ import {
     sampleCrusherPreview,
     type CrusherPreviewSample,
 } from "./crusher-preview";
+import {
+    formatSeqFxParameterValue,
+    getSeqFxEffectDefinition,
+    SEQFX_EFFECT_TYPES,
+} from "./seqfx-effect-definitions";
 
 export type CrusherEditorValue = {
     bits: number;
@@ -90,6 +95,7 @@ export type CrusherEditorProps = {
 const CRUSHER_POINT_COUNT = 240;
 const CRUSHER_TOP_RESERVE_PX = 14;
 const CRUSHER_CHARACTER_NAMES = ["Original", "Classic", "Smooth", "Progressive"] as const;
+const CRUSHER_RATE_DEFINITION = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.crusher).parameters[1];
 
 function clamp(value: number, min: number, max: number) {
     if (!Number.isFinite(value)) {
@@ -149,8 +155,7 @@ function formatDriveDb(value: number) {
 }
 
 function formatRateHz(value: number) {
-    const rateHz = clampCrusherRateHz(value);
-    return rateHz >= 1_000 ? `${(rateHz / 1_000).toFixed(rateHz >= 10_000 ? 0 : 1)} kHz` : `${Math.round(rateHz)} Hz`;
+    return formatSeqFxParameterValue(CRUSHER_RATE_DEFINITION, clampCrusherRateHz(value));
 }
 
 function formatPercent(value: number) {

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import { createEffectHeader } from "../../../ui/shared/effects/effect-header";
@@ -834,6 +834,32 @@ function SeqFxParameterField({
                     : definition.hint ?? formatSeqFxParameterRange(definition)}
             </small>
         </label>
+    );
+}
+
+function SeqFxBespokeEditor({
+    children,
+    parameterId,
+    parameterLabel,
+}: {
+    children: ReactNode;
+    parameterId: string;
+    parameterLabel: string;
+}) {
+    return (
+        <div className="seqfx-bespoke-editor" data-role="seqfx-bespoke-editor">
+            <div
+                aria-label={`${parameterLabel}: captured when the block triggers`}
+                className="seqfx-bespoke-editor__trigger"
+                data-param={parameterId}
+                data-role="seqfx-bespoke-trigger"
+                title={`${parameterLabel} is captured when the block triggers`}
+            >
+                <span>{parameterLabel}</span>
+                <em>Trigger</em>
+            </div>
+            {children}
+        </div>
     );
 }
 
@@ -4913,29 +4939,33 @@ export function SeqFxPatchView({
                             ) : (
                                 <>
                                     {inspectedEffectType === SEQFX_EFFECT_TYPES.filter ? (
-                                        <FilterRangeEditor
-                                            ariaLabel="SeqFX filter range editor"
-                                            modeOptions={SEQFX_FILTER_MODE_OPTIONS}
-                                            range={filterRangeEndpointsFromSeqFxStep(inspectedCell)}
-                                            rangePolarity="bipolar"
-                                            showHandleChips
-                                            showModeControls
-                                            value={filterRangeValueFromSeqFxStep(inspectedCell)}
-                                            onRangeChange={setFilterRange}
-                                            onValueChange={setFilterValue}
-                                        />
+                                        <SeqFxBespokeEditor parameterId="mode" parameterLabel="Mode">
+                                            <FilterRangeEditor
+                                                ariaLabel="SeqFX filter range editor"
+                                                modeOptions={SEQFX_FILTER_MODE_OPTIONS}
+                                                range={filterRangeEndpointsFromSeqFxStep(inspectedCell)}
+                                                rangePolarity="bipolar"
+                                                showHandleChips
+                                                showModeControls
+                                                value={filterRangeValueFromSeqFxStep(inspectedCell)}
+                                                onRangeChange={setFilterRange}
+                                                onValueChange={setFilterValue}
+                                            />
+                                        </SeqFxBespokeEditor>
                                     ) : inspectedEffectType === SEQFX_EFFECT_TYPES.crusher ? (
-                                        <CrusherEditor
-                                            value={crusherValueFromSeqFxStep(inspectedCell)}
-                                            onBitsChange={(value) => setParam(CRUSHER_PARAM_BITS, value)}
-                                            onRateHzChange={(value) => setParam(CRUSHER_PARAM_RATE_HZ, value)}
-                                            onDriveDbChange={(value) => setParam(CRUSHER_PARAM_DRIVE_DB, value)}
-                                            onCharacterChange={(value) => setParam(CRUSHER_PARAM_CHARACTER, value)}
-                                            onAdcQualityChange={(value) => setParam(CRUSHER_PARAM_ADC_QUALITY, value)}
-                                            onDacQualityChange={(value) => setParam(CRUSHER_PARAM_DAC_QUALITY, value)}
-                                            onDitherChange={(value) => setParam(CRUSHER_PARAM_DITHER, value)}
-                                            modulation={modulationForCrusher()}
-                                        />
+                                        <SeqFxBespokeEditor parameterId="character" parameterLabel="Character">
+                                            <CrusherEditor
+                                                value={crusherValueFromSeqFxStep(inspectedCell)}
+                                                onBitsChange={(value) => setParam(CRUSHER_PARAM_BITS, value)}
+                                                onRateHzChange={(value) => setParam(CRUSHER_PARAM_RATE_HZ, value)}
+                                                onDriveDbChange={(value) => setParam(CRUSHER_PARAM_DRIVE_DB, value)}
+                                                onCharacterChange={(value) => setParam(CRUSHER_PARAM_CHARACTER, value)}
+                                                onAdcQualityChange={(value) => setParam(CRUSHER_PARAM_ADC_QUALITY, value)}
+                                                onDacQualityChange={(value) => setParam(CRUSHER_PARAM_DAC_QUALITY, value)}
+                                                onDitherChange={(value) => setParam(CRUSHER_PARAM_DITHER, value)}
+                                                modulation={modulationForCrusher()}
+                                            />
+                                        </SeqFxBespokeEditor>
                                     ) : inspectedEffectType === SEQFX_EFFECT_TYPES.tapeStop ? (
                                         <TapeStopV2Editor
                                             cellDurationMs={observedStepDurationMs ?? estimatedStepDurationMsForRateIndex(rateIndex)}
@@ -4945,14 +4975,16 @@ export function SeqFxPatchView({
                                             onParamChange={setParam}
                                         />
                                     ) : inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? (
-                                        <StutterEnvelopeEditor
-                                            value={stutterValueFromSeqFxStep(inspectedCell)}
-                                            onGateChange={(value) => setStutterParam(STUTTER_PARAM_GATE, value)}
-                                            onShapeChange={(value) => setStutterParam(STUTTER_PARAM_SHAPE, value)}
-                                            onSlicesChange={(value) => setStutterParam(STUTTER_PARAM_SLICES, value)}
-                                            onSpeedChange={(value) => setStutterParam(STUTTER_PARAM_SPEED, value)}
-                                            modulation={modulationForStutter()}
-                                        />
+                                        <SeqFxBespokeEditor parameterId="slices" parameterLabel="Slices">
+                                            <StutterEnvelopeEditor
+                                                value={stutterValueFromSeqFxStep(inspectedCell)}
+                                                onGateChange={(value) => setStutterParam(STUTTER_PARAM_GATE, value)}
+                                                onShapeChange={(value) => setStutterParam(STUTTER_PARAM_SHAPE, value)}
+                                                onSlicesChange={(value) => setStutterParam(STUTTER_PARAM_SLICES, value)}
+                                                onSpeedChange={(value) => setStutterParam(STUTTER_PARAM_SPEED, value)}
+                                                modulation={modulationForStutter()}
+                                            />
+                                        </SeqFxBespokeEditor>
                                     ) : (
                                         <>
                                             {inspectedEffectType === SEQFX_EFFECT_TYPES.reverse ? (
