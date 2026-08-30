@@ -163,6 +163,69 @@ namespace wt
         return std::intrinsics::clamp (converted, minimumMs, maximumMs);
     }
 
+    //==============================================================================
+    // Exact-input transcendental memos for per-sample audio paths.
+    //
+    // The audio-rate contract stands: these change WHEN a value is derived,
+    // never what is derived. Each memo recomputes on ANY input change (exact
+    // float compare, unlike wt::RackOctaveScaler's epsilon, which is a rack
+    // forwarding tolerance) and returns the identical stored bits otherwise,
+    // so a memoized path is sample-for-sample identical to the direct call.
+    // A zero-initialised memo is self-invalidating: every derived value here
+    // is strictly positive, so `<= 0` marks "never computed", and a NaN key
+    // never false-hits because NaN != NaN.
+
+    struct ExactPow2Memo
+    {
+        float32 exponent;
+        float32 scale;
+    }
+
+    float32 exactPow2 (ExactPow2Memo& memo, float32 exponent)
+    {
+        if (exponent != memo.exponent || memo.scale <= 0.0f)
+        {
+            memo.exponent = exponent;
+            memo.scale = std::intrinsics::pow (2.0f, exponent);
+        }
+
+        return memo.scale;
+    }
+
+    /** keyTrackRatio through an ExactPow2Memo: identical finite-input mapping,
+        identical expression, one pow only when the offset actually moves. */
+    float32 exactKeyTrackRatio (ExactPow2Memo& memo, float32 offsetSemitones)
+    {
+        let finiteOffset = ! std::intrinsics::isnan (offsetSemitones)
+            && ! std::intrinsics::isinf (offsetSemitones)
+            ? offsetSemitones
+            : 0.0f;
+        return exactPow2 (memo, finiteOffset / 12.0f);
+    }
+
+    struct NoteFrequencyMemo
+    {
+        float32 pitchSemitones;
+        float32 frequencyHz;
+    }
+
+    float32 exactNoteToFrequency (NoteFrequencyMemo& memo, float32 pitchSemitones)
+    {
+        if (pitchSemitones != memo.pitchSemitones || memo.frequencyHz <= 0.0f)
+        {
+            memo.pitchSemitones = pitchSemitones;
+            memo.frequencyHz = std::notes::noteToFrequency (pitchSemitones);
+        }
+
+        return memo.frequencyHz;
+    }
+
+    struct GainDbMemo
+    {
+        float32 gainDb;
+        float32 gain;
+    }
+
     float32 keyTrackOnePoleCoefficient (float32 sampleRate)
     {
         let frames = std::intrinsics::max (
