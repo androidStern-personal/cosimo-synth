@@ -18,7 +18,7 @@ When working in `cosimo-synth`, read these before changing or releasing anything
 1. `AGENTS.md` for repo-specific rules and known local-machine facts.
 2. `PROGRESS.txt` for the latest release state and completed checks.
 3. `TODO_RELEASE.md` if the user asks for audit, plan, release readiness, or remaining work.
-4. `package.json` and `scripts/build_seqfx_beta_release.mjs` for the actual release command.
+4. `scripts/seqfx-release-config.mjs`, `package.json`, and `scripts/build_seqfx_beta_release.mjs` for the release identity, paths, and actual commands.
 
 For exact command patterns, read `references/seqfx-release-commands.md` before running release builds or verification.
 
@@ -48,16 +48,18 @@ Commit code/script/doc changes that are part of release automation or durable re
 
 ## Required Release Flow
 
-1. Confirm scope and artifact name.
-2. Install dependencies with the repo lockfile.
-3. Run the relevant SeqFX tests and production build checks.
-4. Confirm Apple Developer ID signing identities and notarization profile.
-5. Build with `npm run seqfx:release:build -- --release`.
-6. Verify the copied `.pkg` and `.zip`.
-7. Check for old installed plugin copies before DAW testing.
-8. Install the `.pkg` and run DAW smoke tests.
-9. Upload the `.zip` to a Patreon members-only post or product.
-10. Record results in `PROGRESS.txt` and state remaining gaps plainly.
+1. Run the read-only `npm run seqfx:release:plan` and resolve its public product decisions.
+2. Confirm scope and artifact name from `scripts/seqfx-release-config.mjs`.
+3. Install dependencies with the repo lockfile.
+4. Run the relevant SeqFX tests and production build checks.
+5. Prove the clean unsigned payload/package with `--unsigned --verify-reproducible`.
+6. Confirm Apple Developer ID signing identities and notarization profile.
+7. Build with `npm run seqfx:release:build -- --release`.
+8. Verify the copied `.pkg` and `.zip`.
+9. Check for old installed plugin copies before DAW testing.
+10. Install the `.pkg` and run DAW smoke tests.
+11. Upload the `.zip` to the separately approved Patreon surface.
+12. Record results in `PROGRESS.txt` and state remaining gaps plainly.
 
 ## Apple Credential Boundary
 
@@ -85,6 +87,8 @@ npm run seqfx:release:build -- --release
 ```
 
 Never call an ad-hoc-signed or non-notarized artifact Patreon-ready. A Patreon-ready macOS beta must be Developer ID signed, notarized, stapled, Gatekeeper accepted, and DAW smoke tested.
+
+Do not call signed/notarized bytes reproducible. The builder's repeatable byte claim ends at the normalized unsigned payload/package/ZIP. Developer ID timestamps and Apple notarization are time-varying authenticity attestations and need their own recorded evidence.
 
 Verify at minimum:
 

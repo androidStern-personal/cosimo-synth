@@ -1,6 +1,6 @@
 # SeqFX Release Commands
 
-Use these commands from the `cosimo-synth` repo root. Adjust versioned paths if `scripts/build_seqfx_beta_release.mjs` changes `releaseVersion`.
+Use these commands from the `cosimo-synth` repo root. `scripts/seqfx-release-config.mjs` is the release-facing identity, version, scope, and path authority; the builder rejects drift against the Cmajor manifest and effect registry.
 
 ## Preflight
 
@@ -9,7 +9,11 @@ git status --short --untracked-files=no
 npm ci
 npm audit
 node --check scripts/build_seqfx_beta_release.mjs
+npm run test:seqfx:release-builder
+npm run seqfx:release:plan
 ```
+
+The plan command is read-only. It reports unresolved identity/support/channel decisions and never builds, packages, signs, installs, uploads, or deploys.
 
 Check signing identities and notarization profile:
 
@@ -37,10 +41,11 @@ Use an Apple app-specific password at the secure prompt. Do not pass that passwo
 
 ## Regression Checks
 
-Use the current test set from `TODO_RELEASE.md` or `PROGRESS.txt`. The 2026-04-30 SeqFX beta pass used:
+Use the current test set and pass counts from `TODO_RELEASE.md` and the active release handoff. Do not reuse the 2026-04-30 pass counts as current evidence. At minimum, include:
 
 ```bash
 node --test tests/test_seqfx_runtime_bridge.mjs tests/test_seqfx_patch_view_browser.mjs
+node --test tests/test_seqfx_release_builder.mjs
 node --test tests/test_seqfx_production_view_browser.mjs
 node --test tests/test_seqfx_state.mjs tests/test_seqfx_runtime_bridge.mjs tests/test_seqfx_worker_service.mjs tests/test_seqfx_preset_adapter.mjs tests/test_seqfx_crusher_preview.mjs tests/test_seqfx_stutter_envelope.mjs tests/test_seqfx_tape_stop_envelope.mjs tests/test_seqfx_aux_source.mjs
 node --test tests/test_seqfx_patch_view_browser.mjs
@@ -64,7 +69,15 @@ cd "$tmp/worktree"
 npm ci
 ```
 
-Run the release build:
+First verify the unsigned deterministic boundary from the clean commit:
+
+```bash
+npm run seqfx:release:build -- --unsigned --verify-reproducible
+```
+
+The repeat check applies to the normalized unsigned payload, unsigned package, generated text, and ZIP. Developer ID secure timestamps and Apple notarization tickets make signed release bytes intentionally non-reproducible; signed mode is proved through identities, notarization, stapling, Gatekeeper, and checksums instead.
+
+Run the signed release build only after the current public identity, minimum macOS version, support contact, and Patreon delivery surface are explicitly approved in the release config:
 
 ```bash
 COSIMO_DEVELOPER_ID_APPLICATION="Developer ID Application: Andrew Stern (JUFVT28775)" \
@@ -96,7 +109,9 @@ release/seqfx/0.1.0-beta.1/CosimoSeqFX-0.1.0-beta.1-macOS.zip
 release/seqfx/0.1.0-beta.1/CosimoSeqFX-0.1.0-beta.1-macOS.pkg
 release/seqfx/0.1.0-beta.1/CosimoSeqFX-0.1.0-beta.1-macOS-release-manifest.json
 release/seqfx/0.1.0-beta.1/CosimoSeqFX-0.1.0-beta.1-macOS-checksums.txt
+release/seqfx/0.1.0-beta.1/CosimoSeqFX-0.1.0-beta.1-macOS.zip.sha256
 release/seqfx/0.1.0-beta.1/README.txt
+release/seqfx/0.1.0-beta.1/CosimoSeqFX-0.1.0-beta.1-macOS-reproducibility.json  # unsigned repeat check only
 ```
 
 ## Package And Zip Verification
@@ -107,8 +122,10 @@ pkg="$release_dir/CosimoSeqFX-0.1.0-beta.1-macOS.pkg"
 zip="$release_dir/CosimoSeqFX-0.1.0-beta.1-macOS.zip"
 manifest="$release_dir/CosimoSeqFX-0.1.0-beta.1-macOS-release-manifest.json"
 checksums="$release_dir/CosimoSeqFX-0.1.0-beta.1-macOS-checksums.txt"
+zip_checksum="$release_dir/CosimoSeqFX-0.1.0-beta.1-macOS.zip.sha256"
 
 cd "$release_dir" && shasum -a 256 -c "$(basename "$checksums")"
+cd "$release_dir" && shasum -a 256 -c "$(basename "$zip_checksum")"
 cd -
 pkgutil --check-signature "$pkg"
 xcrun stapler validate "$pkg"
@@ -187,7 +204,7 @@ codesign --verify --deep --strict --verbose=4 /Library/Audio/Plug-Ins/VST3/Cosim
 
 ## Patreon Upload
 
-Upload this file to a members-only Patreon post or product:
+After the user chooses members-only post versus digital product and separately authorizes upload, upload this file to that approved Patreon surface:
 
 ```text
 release/seqfx/0.1.0-beta.1/CosimoSeqFX-0.1.0-beta.1-macOS.zip
