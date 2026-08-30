@@ -1276,10 +1276,20 @@ namespace wt
     // Per-note loudness ADSR. Its attack and release equations deliberately
     // match RetriggerableASR: at A=10 ms, D=1 ms, S=1 the gain stream is
     // sample-identical to every pre-T38 sound, including velocity response.
+    //
+    // The attack starts from zero. That is click-free because the engine
+    // never retriggers this envelope while it is audible: a hard retrigger
+    // of a sounding voice runs the steal fade first (see SharedVoiceEngine),
+    // and the deferred note-on lands right after hardResetIn with the voice
+    // output at exactly zero.
     processor RetriggerableAmpAdsr
     {
         input event (std::notes::NoteOn,
                      std::notes::NoteOff) eventIn;
+        // Steal-fade support: the engine fades a stolen voice's output to
+        // exactly zero, then hard-resets this envelope before the deferred
+        // note-on so the handoff is explicit about starting from silence.
+        input event int32 hardResetIn;
         input value float32 attackSecondsIn;
         input value float32 decaySecondsIn;
         input value float32 sustainIn;
@@ -1305,6 +1315,12 @@ namespace wt
         event eventIn (std::notes::NoteOff noteOff)
         {
             keyDownVelocity = 0.0f;
+        }
+
+        event hardResetIn (int32 unused)
+        {
+            keyDownVelocity = 0.0f;
+            currentLevel = 0.0f;
         }
 
         void emitCurrentLevel()
@@ -1448,6 +1464,9 @@ namespace wt
     {
         input event (std::notes::NoteOn,
                      std::notes::NoteOff) eventIn;
+        // See RetriggerableAmpAdsr.hardResetIn: clears state after the
+        // engine's steal fade so the deferred note starts from silence.
+        input event int32 hardResetIn;
         input value float32 attackSecondsIn;
         input value float32 decaySecondsIn;
         input value float32 sustainIn;
@@ -1483,6 +1502,15 @@ namespace wt
         {
             releaseStartLevel = currentLevel;
             startStage (4);
+        }
+
+        event hardResetIn (int32 unused)
+        {
+            currentLevel = 0.0f;
+            attackStartLevel = 0.0f;
+            releaseStartLevel = 0.0f;
+            stageProgress = 0.0f;
+            stage = 0;
         }
 
         void main()
@@ -1684,6 +1712,31 @@ namespace wt
         float32[voiceCount] voiceSlide;
         float32[voiceCount] voiceVelocity;
         float32[voiceCount] voiceAmpEnvelopeInverseVelocity;
+        // ── Steal-fade declick. A hard (re)trigger of a voice that is still
+        // audibly sounding would truncate the old signal in one sample — a
+        // click — because a note restart is always discontinuous here (the
+        // renderer's note history clears unconditionally, phases per their
+        // flags). Instead the old content fades to exactly zero over
+        // stealFadeFrames (~1.5ms) while the incoming note waits in the
+        // pending payload, then starts from cleared state. Notes from
+        // silence start immediately, exactly as before.
+        let stealFadeFrames = int32 (std::intrinsics::max (1.0f, 0.0015f * float32 (processor.frequency)));
+        let inverseStealFadeFrames = 1.0f / float32 (stealFadeFrames);
+        int32[voiceCount] voiceStealFadeRemaining;
+        bool[voiceCount] voicePendingStart;
+        int32[voiceCount] voicePendingChannel;
+        float32[voiceCount] voicePendingPitch;
+        float32[voiceCount] voicePendingVelocity;
+        float32[voiceCount] voicePendingBendSemitones;
+        float32[voiceCount] voicePendingPressure;
+        float32[voiceCount] voicePendingSlide;
+        bool[voiceCount] voicePendingHasArticulation;
+        int32[voiceCount] voicePendingSelectorA;
+        int32[voiceCount] voicePendingSelectorB;
+        int32[voiceCount] voicePendingDurationSamples;
+        int32[voiceCount] voicePendingAgeSamples;
+        bool[voiceCount] voicePendingNoteOff;
+        float32[voiceCount] voicePendingNoteOffVelocity;
         float64[voiceCount] voiceBouncePosition;
         int32[voiceCount] voiceBounceRootIndex;
         int32[voiceCount] voiceBounceBankSlot;
@@ -4650,13 +4703,16 @@ namespace wt
             }
         }
 
-        void startVoiceFromNote (int32 index,
-                                 std::notes::NoteOn note,
-                                 bool hasArticulation,
-                                 int32 selectorA,
-                                 int32 selectorB,
-                                 int32 durationSamples,
-                                 int32 ageSamples)
+        void startVoiceFromNoteNow (int32 index,
+                                    std::notes::NoteOn note,
+                                    bool hasArticulation,
+                                    int32 selectorA,
+                                    int32 selectorB,
+                                    int32 durationSamples,
+                                    int32 ageSamples,
+                                    float32 bendSemitones,
+                                    float32 pressure,
+                                    float32 slide)
         {
             let voice = wrap<voiceCount> (index);
             voiceChannel.at (voice) = note.channel;
@@ -4664,9 +4720,9 @@ namespace wt
             voiceAmpEnvelopeInverseVelocity.at (voice) = note.velocity > 0.0f
                 ? 1.0f / note.velocity
                 : 0.0f;
-            voiceBendSemitones.at (voice) = 0.0f;
-            voicePressure.at (voice) = 0.0f;
-            voiceSlide.at (voice) = 0.0f;
+            voiceBendSemitones.at (voice) = bendSemitones;
+            voicePressure.at (voice) = pressure;
+            voiceSlide.at (voice) = slide;
             latchVoiceArticulation (index, hasArticulation, selectorA, selectorB, durationSamples, ageSamples);
             setVoicePitchImmediate (index, note.pitch);
             voiceActive.at (voice) = 1;
@@ -4676,11 +4732,120 @@ namespace wt
             nextVoiceTrackingSerial += 1;
             resetVoiceOscillatorLifecycle (index);
             startBounceSampleForVoice (index, note.pitch);
+
+            // Only reached with the voice at silence (fresh, or right after
+            // its steal fade), so resetting filter state cuts nothing.
             resetFilterState (index);
             resetVoiceGeneratorModulationTargets (index);
 
             ampEnvelopes[voice].eventIn <- note;
             triggerVoiceModulators (index);
+        }
+
+        void stashPendingVoiceStart (int32 index,
+                                     std::notes::NoteOn note,
+                                     bool hasArticulation,
+                                     int32 selectorA,
+                                     int32 selectorB,
+                                     int32 durationSamples,
+                                     int32 ageSamples,
+                                     float32 bendSemitones,
+                                     float32 pressure,
+                                     float32 slide)
+        {
+            let voice = wrap<voiceCount> (index);
+            let alreadyFading = voicePendingStart[voice];
+            voicePendingStart[voice] = true;
+            voicePendingChannel.at (voice) = note.channel;
+            voicePendingPitch.at (voice) = note.pitch;
+            voicePendingVelocity.at (voice) = note.velocity;
+            voicePendingBendSemitones.at (voice) = bendSemitones;
+            voicePendingPressure.at (voice) = pressure;
+            voicePendingSlide.at (voice) = slide;
+            voicePendingHasArticulation[voice] = hasArticulation;
+            voicePendingSelectorA.at (voice) = selectorA;
+            voicePendingSelectorB.at (voice) = selectorB;
+            voicePendingDurationSamples.at (voice) = durationSamples;
+            voicePendingAgeSamples.at (voice) = ageSamples;
+            voicePendingNoteOff[voice] = false;
+
+            // A steal landing on a voice that is already fading keeps the
+            // running countdown (re-arming would jump the fade gain back
+            // up); only the payload is replaced.
+            if (! alreadyFading)
+                voiceStealFadeRemaining.at (voice) = stealFadeFrames;
+        }
+
+        void applyPendingVoiceStart (int32 index)
+        {
+            let voice = wrap<voiceCount> (index);
+            voicePendingStart[voice] = false;
+            voiceStealFadeRemaining.at (voice) = 0;
+
+            // The fade took the audible output to exactly zero, so the
+            // deferred note starts like any note from silence: cleared
+            // envelopes, cleared filter, fresh modulators.
+            voiceWasSounding[voice] = false;
+            ampEnvelopes[voice].hardResetIn <- 1;
+            modEnv1[voice].hardResetIn <- 1;
+            modEnv2[voice].hardResetIn <- 1;
+            modEnv3[voice].hardResetIn <- 1;
+
+            std::notes::NoteOn note;
+            note.channel = voicePendingChannel.at (voice);
+            note.pitch = voicePendingPitch.at (voice);
+            note.velocity = voicePendingVelocity.at (voice);
+
+            startVoiceFromNoteNow (index,
+                                   note,
+                                   voicePendingHasArticulation[voice],
+                                   voicePendingSelectorA.at (voice),
+                                   voicePendingSelectorB.at (voice),
+                                   voicePendingDurationSamples.at (voice),
+                                   voicePendingAgeSamples.at (voice),
+                                   voicePendingBendSemitones.at (voice),
+                                   voicePendingPressure.at (voice),
+                                   voicePendingSlide.at (voice));
+
+            // A note released faster than the fade still gets its start and
+            // immediate release, so nothing hangs and nothing is lost.
+            if (voicePendingNoteOff[voice])
+            {
+                voicePendingNoteOff[voice] = false;
+                voiceActive.at (voice) = 0;
+                std::notes::NoteOff off;
+                off.channel = note.channel;
+                off.pitch = note.pitch;
+                off.velocity = voicePendingNoteOffVelocity.at (voice);
+                ampEnvelopes[voice].eventIn <- off;
+                noteOffVoiceModulators (index, off);
+            }
+        }
+
+        void startVoiceFromNote (int32 index,
+                                 std::notes::NoteOn note,
+                                 bool hasArticulation,
+                                 int32 selectorA,
+                                 int32 selectorB,
+                                 int32 durationSamples,
+                                 int32 ageSamples)
+        {
+            let voice = wrap<voiceCount> (index);
+
+            // Steal of an audibly sounding voice: fade the old content out
+            // first (see the state block). Every note restart is
+            // discontinuous here regardless of the phase-retrigger flags —
+            // resetVoiceOscillatorLifecycle clears the renderer's note
+            // history unconditionally — so every sounding steal fades.
+            if (voiceWasSounding[voice])
+            {
+                stashPendingVoiceStart (index, note, hasArticulation, selectorA, selectorB,
+                                        durationSamples, ageSamples, 0.0f, 0.0f, 0.0f);
+                return;
+            }
+
+            startVoiceFromNoteNow (index, note, hasArticulation, selectorA, selectorB,
+                                   durationSamples, ageSamples, 0.0f, 0.0f, 0.0f);
         }
 
         event voiceEventIn (int index, std::notes::NoteOn note)
@@ -4706,6 +4871,17 @@ namespace wt
         event voiceEventIn (int index, std::notes::NoteOff note)
         {
             let voice = wrap<voiceCount> (index);
+
+            // The release of a note that is still waiting out a steal fade
+            // is applied right after its deferred start, not to the old
+            // fading tail (which already had its own note-off).
+            if (voicePendingStart[voice])
+            {
+                voicePendingNoteOff[voice] = true;
+                voicePendingNoteOffVelocity.at (voice) = note.velocity;
+                return;
+            }
+
             voiceActive.at (voice) = 0;
             ampEnvelopes[voice].eventIn <- note;
             noteOffVoiceModulators (index, note);
@@ -4714,18 +4890,39 @@ namespace wt
         event voiceEventIn (int index, std::notes::PitchBend bend)
         {
             let voice = wrap<voiceCount> (index);
+
+            if (voicePendingStart[voice])
+            {
+                voicePendingBendSemitones.at (voice) = bend.bendSemitones;
+                return;
+            }
+
             voiceBendSemitones.at (voice) = bend.bendSemitones;
         }
 
         event voiceEventIn (int index, std::notes::Slide slide)
         {
             let voice = wrap<voiceCount> (index);
+
+            if (voicePendingStart[voice])
+            {
+                voicePendingSlide.at (voice) = slide.slide;
+                return;
+            }
+
             voiceSlide.at (voice) = slide.slide;
         }
 
         event voiceEventIn (int index, std::notes::Pressure pressure)
         {
             let voice = wrap<voiceCount> (index);
+
+            if (voicePendingStart[voice])
+            {
+                voicePendingPressure.at (voice) = pressure.pressure;
+                return;
+            }
+
             voicePressure.at (voice) = pressure.pressure;
         }
 
@@ -4736,6 +4933,47 @@ namespace wt
             let voice = wrap<voiceCount> (index);
             let shouldRetrigger = change.retrigger || voiceActive.at (voice) == 0;
             let shouldGlide = change.glide && voiceActive.at (voice) != 0;
+
+            // A hard mono retrigger of a sounding voice is a self-steal:
+            // fade out first, then start the deferred note from silence.
+            // Nothing (pitch included) may mutate the old tail while it
+            // fades.
+            if (shouldRetrigger && voiceWasSounding[voice])
+            {
+                std::notes::NoteOn note;
+                note.channel = change.channel;
+                note.pitch = change.pitch;
+                note.velocity = change.velocity;
+                stashPendingVoiceStart (int32 (index), note,
+                                        change.hasArticulation,
+                                        change.selectorA,
+                                        change.selectorB,
+                                        change.durationSamples,
+                                        change.ageSamples,
+                                        change.bendSemitones,
+                                        change.pressure,
+                                        change.slide);
+                return;
+            }
+
+            if (voicePendingStart[voice])
+            {
+                // A legato retune aimed at a voice still fading amends the
+                // deferred note instead of mutating the fading tail.
+                voicePendingChannel.at (voice) = change.channel;
+                voicePendingPitch.at (voice) = change.pitch;
+                voicePendingVelocity.at (voice) = change.velocity;
+                voicePendingBendSemitones.at (voice) = change.bendSemitones;
+                voicePendingPressure.at (voice) = change.pressure;
+                voicePendingSlide.at (voice) = change.slide;
+                voicePendingHasArticulation[voice] = change.hasArticulation;
+                voicePendingSelectorA.at (voice) = change.selectorA;
+                voicePendingSelectorB.at (voice) = change.selectorB;
+                voicePendingDurationSamples.at (voice) = change.durationSamples;
+                voicePendingAgeSamples.at (voice) = change.ageSamples;
+                voicePendingNoteOff[voice] = false;
+                return;
+            }
 
             voiceChannel.at (voice) = change.channel;
             voiceVelocity.at (voice) = change.velocity;
@@ -4771,20 +5009,25 @@ namespace wt
                 nextVoiceGeneration += 1;
                 resetVoiceOscillatorLifecycle (index);
                 startBounceSampleForVoice (index, change.pitch);
-                resetFilterState (index);
 
-                // A quiescent voice's effective envelope/MSEG values are
-                // frozen along with the rest of it, so a retune out of
-                // quiescence must refresh them from the current bases — the
-                // per-frame reset used to do this implicitly. A retrigger of
-                // a still-sounding voice keeps its live effectives, exactly
-                // as before (startVoiceFromNote's poly path resets
-                // unconditionally because a stolen voice starts over).
-                if (! voiceWasSounding[voice])
-                    resetVoiceGeneratorModulationTargets (index);
+                // Only reached with the voice at silence (a sounding hard
+                // retrigger took the steal-fade path above), so these
+                // resets cut nothing — and a retune out of quiescence must
+                // refresh the frozen effectives from the current bases.
+                resetFilterState (index);
+                resetVoiceGeneratorModulationTargets (index);
 
                 ampEnvelopes[voice].eventIn <- note;
                 triggerVoiceModulators (index);
+            }
+            else
+            {
+                // Legato pitch change: envelopes continue; each MSEG restarts
+                // only if its uploaded playback config asks to
+                // (legatoRestarts — the patch-model field this honors).
+                mseg1[voice].legatoTriggerIn <- 1;
+                mseg2[voice].legatoTriggerIn <- 1;
+                mseg3[voice].legatoTriggerIn <- 1;
             }
         }
 
@@ -5847,6 +6090,18 @@ namespace wt
                 {
                     let voiceIndex = int32 (voice);
 
+                    // A completed steal fade hands its deferred note over
+                    // before anything else looks at the voice this sample.
+                    // A pending voice that already reached true silence
+                    // (its release beat the fade to zero) starts at once —
+                    // the mix loop skips silent voices, so its countdown
+                    // would otherwise stall.
+                    if (voicePendingStart[voice]
+                        && (voiceStealFadeRemaining.at (voice) <= 0
+                            || (voiceActive.at (voice) == 0
+                                && ampEnvelopes[voice].gainOut <= 0.0f)))
+                        applyPendingVoiceStart (voiceIndex);
+
                     // A voice that was not sounding after its previous frame
                     // is frozen whole: no pitch glide, no modulator input
                     // writes, no node advances. Every frozen node re-emits
@@ -5855,8 +6110,12 @@ namespace wt
                     // so the skip is bit-identical to advancing. The
                     // pre-advance view of the amp gain equals the
                     // post-advance view here because an idle amp envelope is
-                    // stationary at exactly zero.
-                    if (voiceActive.at (voice) == 0 && ampEnvelopes[voice].gainOut <= 0.0f)
+                    // stationary at exactly zero. A voice mid steal-fade is
+                    // sounding by definition; the pending guard only covers
+                    // the corner where its envelope idles at exactly zero.
+                    if (voiceActive.at (voice) == 0
+                        && ampEnvelopes[voice].gainOut <= 0.0f
+                        && ! voicePendingStart[voice])
                     {
                         if (voiceWasSounding[voice])
                         {
@@ -6219,7 +6478,17 @@ namespace wt
                         voiceEffectiveEnhancerFrequencyHz.at (voice),
                         voiceEffectiveEnhancerQ.at (voice),
                         voiceEffectiveEnhancerAmount.at (voice));
-                    let gain = ampEnvelopes[voice].gainOut;
+                    var gain = ampEnvelopes[voice].gainOut;
+
+                    // Steal fade: ramp the dying content linearly to exactly
+                    // zero; the final faded sample multiplies by 0, so the
+                    // deferred note that follows starts from true silence.
+                    if (voiceStealFadeRemaining.at (voice) > 0)
+                    {
+                        voiceStealFadeRemaining.at (voice) -= 1;
+                        gain *= float32 (voiceStealFadeRemaining.at (voice)) * inverseStealFadeFrames;
+                    }
+
                     leftMix += noteLeft * gain;
                     rightMix += noteRight * gain;
                     enhancerResidueLeftMix += enhancerResidue[0] * gain;
