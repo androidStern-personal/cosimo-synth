@@ -45,7 +45,7 @@ namespace seqfx
     let adaptiveLowpassTapCount = 24;
     let tapeSpeedFloor = 0.005f;
     let tapeVoiceCount = 2;
-    let tapeReturnCatchUp = 0;
+    let tapeReturnCrossfadeLive = 0;
     let tapeReturnSpinUp = 1;
     let tapeTimingSync = 0;
     let tapeTimingFree = 1;
@@ -2913,7 +2913,7 @@ processor SeqFx [[ main ]]
         tapeVoiceActive[lane, selectedVoice] = true;
         tapeVoiceReturnMode[lane, selectedVoice] = snapValue (
             tapePendingParams[lane, 2],
-            seqfx::tapeReturnCatchUp,
+            seqfx::tapeReturnCrossfadeLive,
             seqfx::tapeReturnSpinUp
         );
         tapeVoiceAgeFrames[lane, selectedVoice] = 0.0f;
