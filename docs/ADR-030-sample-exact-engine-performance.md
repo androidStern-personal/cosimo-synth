@@ -57,11 +57,36 @@ What changes is only *when* a value is derived, never *what*:
   distortion's asymmetric bias term (a function of the knee alone that was
   recomputed 16 times per output sample), and the chorus mix/tone/ring
   constants.
-- **Observation is demand-driven.** The spectrum FFT and distortion scopes
-  sleep unless their int32 activity event input is nonzero. The UI half is
-  one seam: `usePatchVisualEndpoint` reference-counts analyzer endpoint
-  listeners (`ui/shared/analyzer-activity.ts`), so a view wakes its analyzer
-  for exactly as long as it observes. Audio is untouched either way.
+- **Observation is demand-driven.** The spectrum capture and distortion
+  scopes sleep unless their int32 activity event input is nonzero. The UI
+  half is one seam: `usePatchVisualEndpoint` reference-counts analyzer
+  endpoint listeners (`ui/shared/analyzer-activity.ts`), so a view wakes its
+  analyzer for exactly as long as it observes. Audio is untouched either
+  way.
+- **Observation math runs on the observer's thread.** The 4096-point
+  spectrum FFT used to execute inside ONE sample's advance, twenty times a
+  second — several render quanta of work in a 2.7ms budget, the single
+  biggest peak-load spike on a phone with the filter view open. The engine
+  now emits the raw 1024-sample analysis window
+  (`FilterSpectrumCapture`) on the unchanged `filterSpectrum` endpoint and
+  the UI computes the identical Hann window, zero-padded FFT and normalized
+  magnitudes at 20fps (`computeFilterSpectrumMagnitudes` in
+  `ui/shared/filter-spectrum.ts`, which also still accepts recorded and
+  synthetic magnitude frames). Frame-by-frame parity against the in-engine
+  FFT was measured at a maximum absolute error of 2.4e-9 with identical
+  emission samples — float32 rounding, invisible on a dB display.
+- **The render thread allocates nothing for unobserved events.** The
+  generated worklet helper unpacked EVERY queued output event into fresh JS
+  objects each block — the monitor streams at 30–60Hz, the spectrum's
+  2048-entry array literal — listeners or not, then posted one port message
+  per event per listener. JSC garbage-collection pauses from that churn are
+  multi-ms audio-thread stalls: late callbacks and missed deadlines on the
+  phone HUD. `poolCosimoAudioWorkletEventDelivery`
+  (`web/audio-worklet-instrumentation.mjs`) now drops unlistened events in
+  wasm memory unread, and coalesces the events one block does deliver into
+  a single port message (the `cosimo-event-batch` envelope, unwrapped
+  before `deliverMessageFromServer`; a lone message keeps the original wire
+  shape).
 
 ## The acceptance gate
 
