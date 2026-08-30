@@ -28831,6 +28831,7 @@ const AUTO_PREVIEW_SCHEDULER_CONFIG = {
   releaseNoteCapMs: 600
 };
 const AUTO_PREVIEW_MIN_NOTE_MS = 250;
+const AUTO_PREVIEW_STRIKE_LEAD_MS = 8;
 const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
 const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
 const GLIDE_TIME_MIN_SECONDS = 0;
@@ -31858,6 +31859,7 @@ function useSynthPatchViewModel({
     const heldCountBefore = heldMidiNotesRef.current.size;
     if (isNoteOn) {
       lastNoteOnAtRef.current = performance.now();
+      autoPreviewAnchorFrameRef.current = null;
       if (intentional) {
         lastPlayedNoteRef.current = safeNote;
         setLastPlayedNote(safeNote);
@@ -31935,6 +31937,9 @@ function useSynthPatchViewModel({
   const browserAudioAwayRef = reactExports.useRef(false);
   const msegRatesRef = reactExports.useRef([1, 1, 1]);
   msegRatesRef.current = [mseg1Rate.value, mseg2Rate.value, mseg3Rate.value];
+  const autoPreviewFrameClockRef = reactExports.useRef(null);
+  const autoPreviewAnchorFrameRef = reactExports.useRef(null);
+  const autoPreviewInFlightStrikeRef = reactExports.useRef(null);
   reactExports.useSyncExternalStore(
     subscribePerfTuning,
     () => getPerfTuningState().algorithm
@@ -31944,6 +31949,9 @@ function useSynthPatchViewModel({
     const sendRawMidi = (status, note, velocity) => {
       patchConnection.sendMIDIInputEvent?.(MIDI_INPUT_ENDPOINT_ID$1, buildShortMidi(status, note, velocity));
     };
+    const scheduleConnection = patchConnection;
+    const canScheduleFrames = typeof scheduleConnection.cosimoScheduleEvents === "function";
+    const scheduleSampleRate = scheduleConnection.audioContext?.sampleRate ?? null;
     const clearOwnedOffTimer = () => {
       if (autoPreviewOffTimerRef.current !== null) {
         window.clearTimeout(autoPreviewOffTimerRef.current);
@@ -31973,6 +31981,14 @@ function useSynthPatchViewModel({
       if (pending) {
         autoPreviewPendingStrikeRef.current = null;
         window.clearTimeout(pending.timer);
+      }
+      const inFlight = autoPreviewInFlightStrikeRef.current;
+      if (inFlight) {
+        autoPreviewInFlightStrikeRef.current = null;
+        scheduleConnection.cosimoCancelScheduledEvents?.("auto-preview");
+        for (const pitch of inFlight.previousPitches) {
+          sendRawMidi(128, pitch, 0);
+        }
       }
     };
     autoPreviewClearPendingRef.current = clearPendingStrike;
@@ -32005,14 +32021,45 @@ function useSynthPatchViewModel({
       }
       return slowestPeriodMs > 0 ? { periodMs: slowestPeriodMs, anchorMs } : null;
     };
-    const strikePreviewNow = (strikeCapMs) => {
+    const strikePreviewNow = (strikeCapMs, targetFrame = null) => {
       const strikeAtMs = performance.now();
       const pitches = previewNoteMemory.rememberedGroup();
-      releaseOwnedGroup();
-      autoPreviewOwnedGroupRef.current = { pitches, startedAt: strikeAtMs };
-      for (const pitch of pitches) {
-        sendRawMidi(144, pitch, 100);
+      if (!canScheduleFrames) {
+        releaseOwnedGroup();
+        autoPreviewOwnedGroupRef.current = { pitches, startedAt: strikeAtMs };
+        for (const pitch of pitches) {
+          sendRawMidi(144, pitch, 100);
+        }
+        lastNoteOnAtRef.current = strikeAtMs;
+        if (strikeCapMs !== null) {
+          scheduleOwnedRelease(strikeCapMs);
+        }
+        return;
       }
+      clearOwnedOffTimer();
+      const previousPitches = autoPreviewOwnedGroupRef.current?.pitches ?? [];
+      autoPreviewOwnedGroupRef.current = { pitches, startedAt: strikeAtMs };
+      const atFrame = targetFrame ?? 0;
+      const events = [];
+      for (const pitch of previousPitches) {
+        events.push({
+          atFrame,
+          endpointID: MIDI_INPUT_ENDPOINT_ID$1,
+          value: { message: buildShortMidi(128, pitch, 0) },
+          tag: "auto-preview"
+        });
+      }
+      for (const pitch of pitches) {
+        events.push({
+          atFrame,
+          endpointID: MIDI_INPUT_ENDPOINT_ID$1,
+          value: { message: buildShortMidi(144, pitch, 100) },
+          tag: "auto-preview"
+        });
+      }
+      autoPreviewInFlightStrikeRef.current = { previousPitches: [...previousPitches] };
+      autoPreviewAnchorFrameRef.current = null;
+      scheduleConnection.cosimoScheduleEvents?.(events);
       lastNoteOnAtRef.current = strikeAtMs;
       if (strikeCapMs !== null) {
         scheduleOwnedRelease(strikeCapMs);
@@ -32042,14 +32089,25 @@ function useSynthPatchViewModel({
           strikePreviewNow(capMs);
           return;
         }
+        let targetFrame = null;
+        if (canScheduleFrames && scheduleSampleRate) {
+          const anchor = autoPreviewAnchorFrameRef.current;
+          const clock = autoPreviewFrameClockRef.current;
+          if (anchor) {
+            targetFrame = Math.round(anchor.frame + (strikeAt - anchor.ms) / 1e3 * scheduleSampleRate);
+          } else if (clock) {
+            targetFrame = Math.round(clock.frame + (strikeAt - clock.atMs) / 1e3 * scheduleSampleRate);
+          }
+        }
+        const leadMs = targetFrame !== null ? AUTO_PREVIEW_STRIKE_LEAD_MS : 0;
         const pending = { timer: 0, capMs };
         pending.timer = window.setTimeout(() => {
           if (autoPreviewPendingStrikeRef.current !== pending) {
             return;
           }
           autoPreviewPendingStrikeRef.current = null;
-          strikePreviewNow(pending.capMs);
-        }, Math.max(0, strikeAt - now));
+          strikePreviewNow(pending.capMs, targetFrame);
+        }, Math.max(0, strikeAt - now - leadMs));
         autoPreviewPendingStrikeRef.current = pending;
       },
       endPreview: () => {
@@ -32069,6 +32127,40 @@ function useSynthPatchViewModel({
         releaseOwnedGroup();
       }
     });
+    const audioPort = canScheduleFrames ? scheduleConnection.audioNode?.port : void 0;
+    const handleSchedulerPortMessage = (event) => {
+      const data = event.data;
+      if (!data || !Number.isFinite(data.currentFrame)) {
+        return;
+      }
+      if (data.type === "cosimo-schedule-ack") {
+        autoPreviewFrameClockRef.current = { frame: data.currentFrame, atMs: performance.now() };
+        return;
+      }
+      if (data.type !== "cosimo-scheduled-applied") {
+        return;
+      }
+      const receivedAt = performance.now();
+      autoPreviewFrameClockRef.current = { frame: data.currentFrame, atMs: receivedAt };
+      let newestOnFrame = null;
+      for (const applied of data.events ?? []) {
+        if (applied?.tag !== "auto-preview" || !Number.isFinite(applied.appliedFrame)) {
+          continue;
+        }
+        const message = applied.value?.message;
+        const isNoteOnMessage = typeof message === "number" && (message & 15728640) === 9437184 && (message & 255) > 0;
+        if (isNoteOnMessage) {
+          newestOnFrame = applied.appliedFrame;
+        }
+      }
+      if (newestOnFrame !== null && scheduleSampleRate) {
+        const anchorMs = receivedAt - (data.currentFrame - newestOnFrame) / scheduleSampleRate * 1e3;
+        autoPreviewAnchorFrameRef.current = { frame: newestOnFrame, ms: anchorMs };
+        lastNoteOnAtRef.current = anchorMs;
+        autoPreviewInFlightStrikeRef.current = null;
+      }
+    };
+    audioPort?.addEventListener("message", handleSchedulerPortMessage);
     const engine = createShippedEngine();
     autoPreviewEngineRef.current = engine;
     if (heldMidiNotesRef.current.size > 0) {
@@ -32103,6 +32195,7 @@ function useSynthPatchViewModel({
       window.removeEventListener("focus", handleResume);
       window.removeEventListener(BROWSER_AUDIO_RETURN_EVENT, handleBrowserAudioReturn);
       document.removeEventListener("visibilitychange", handleVisibility);
+      audioPort?.removeEventListener("message", handleSchedulerPortMessage);
       unsubscribe();
       engine.dispose();
       clearPendingStrike();
