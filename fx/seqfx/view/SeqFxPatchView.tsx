@@ -856,6 +856,7 @@ function SeqFxBespokeEditor({
                 title={`${parameterLabel} is captured when the block triggers`}
             >
                 <span>{parameterLabel}</span>
+                {" "}
                 <em>Trigger</em>
             </div>
             {children}
