@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { createLegacyV5StateWithBlock } from "./helpers/seqfx_legacy_v5_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
@@ -361,16 +362,13 @@ test("seqfx worker reuploads the selected pattern when seqfx.v7 changes", () => 
 });
 
 test("seqfx worker reads a valid version-5 seqfx.v6 fallback without writing stored state", () => {
-    const legacyState = createStateWithBlock({
+    const legacyState = createLegacyV5StateWithBlock({
         patternIndex: 6,
         lane: SEQFX_LANES.tapeStop,
         startStep: 12,
         length: 3,
+        params: [1, 1, 1, 25, 0, 0, 0, 0],
     });
-    for (const step of legacyState.patterns[6].lanes[SEQFX_LANES.tapeStop].steps.slice(12, 15)) {
-        step.params = [1, 1, 1, 25, 0, 0, 0, 0];
-    }
-    legacyState.version = 5;
     const connection = new FakePatchConnection({
         values: {
             [SEQFX_LEGACY_STATE_KEY]: JSON.stringify(legacyState),

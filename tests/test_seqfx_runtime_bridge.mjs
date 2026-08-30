@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { createLegacyV5StateWithBlock } from "./helpers/seqfx_legacy_v5_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
@@ -1144,17 +1145,13 @@ test("same-position move and same-length resize do not write state or create und
 });
 
 test("boot migrates a valid seqfx.v6 version-5 document once and gives v7 precedence thereafter", () => {
-    let legacyState = createDefaultSeqFxState();
-    legacyState = applySeqFxBlockCreate(legacyState, {
+    const legacyState = createLegacyV5StateWithBlock({
         patternIndex: 3,
         lane: SEQFX_LANES.tapeStop,
         startStep: 7,
         length: 3,
+        params: [1, 1, 1, 25, 0, 0, 0, 0],
     });
-    for (const step of legacyState.patterns[3].lanes[SEQFX_LANES.tapeStop].steps.slice(7, 10)) {
-        step.params = [1, 1, 1, 25, 0, 0, 0, 0];
-    }
-    legacyState.version = 5;
     const legacyText = JSON.stringify(legacyState);
     const connection = new FakePatchConnection({
         [SEQFX_LEGACY_STATE_KEY]: legacyText,

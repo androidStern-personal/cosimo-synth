@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { createLegacyV5StateWithBlock } from "./helpers/seqfx_legacy_v5_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
@@ -285,17 +286,13 @@ test("seqfx_adapter_rejects_legacy_v1_state_instead_of_migrating", () => {
 });
 
 test("seqfx_adapter_migrates_supported_version-5 preset state to sparse v7", () => {
-    let state = createDefaultSeqFxState();
-    state = applySeqFxCellToggle(state, {
+    const state = createLegacyV5StateWithBlock({
         patternIndex: 9,
         lane: SEQFX_LANES.crusher,
-        step: 13,
-        active: true,
+        startStep: 13,
+        length: 1,
+        params: [8, 1, 0, 0, 0, 0, 0, 0],
     });
-    const legacyCrushStep = state.patterns[9].lanes[SEQFX_LANES.crusher].steps[13];
-    legacyCrushStep.params = [8, 1, 0, 0, 0, 0, 0, 0];
-    legacyCrushStep.aux.targets = legacyCrushStep.params.map((end) => ({ enabled: false, end }));
-    state.version = 5;
     const connection = new FakePatchConnection({}, { patternSelect: 9 });
     const bridge = new SeqFxRuntimeBridge(connection);
     const adapter = createSeqFxPresetStateAdapter({ bridge, patchConnection: connection });

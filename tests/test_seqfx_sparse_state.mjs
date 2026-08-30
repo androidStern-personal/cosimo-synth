@@ -4,6 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import {
+    createLegacyV5StateWithBlock,
+    projectCompatibleDenseStateToLegacyV5Fixture,
+} from "./helpers/seqfx_legacy_v5_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
@@ -32,58 +36,6 @@ const {
     serializeSeqFxState,
 } = stateModule;
 
-function legacyV5(state) {
-    const legacy = {
-        ...structuredClone(state),
-        version: 5,
-    };
-
-    const laneDefaults = [
-        [0, 2_000, 500, 0.707, 1, 0, 0, 0],
-        [8, 1, 0, 0, 0, 0, 0, 0],
-        [1, 1, 1, 25, 0, 0, 0, 0],
-        [8, 1, 0.4375, 0.68, 0, 0, 0, 0],
-    ];
-
-    legacy.patterns.forEach((pattern) => {
-        pattern.lanes.forEach((lane, laneIndex) => {
-            lane.steps.forEach((step) => {
-                if (!step.active) {
-                    const params = [...laneDefaults[laneIndex]];
-                    step.params = params;
-                    step.aux = {
-                        source: {
-                            shape: laneIndex === SEQFX_LANES.filter ? 1 : 0,
-                            sourceCurve: 0,
-                            rateMode: "slice",
-                            tempoMultiplier: 4,
-                            tempoTriplet: false,
-                            sliceCount: 1,
-                        },
-                        targets: params.map((end, paramIndex) => ({
-                            enabled: laneIndex === SEQFX_LANES.filter && paramIndex === 1,
-                            end: laneIndex === SEQFX_LANES.filter && paramIndex === 1 ? params[2] : end,
-                        })),
-                    };
-                }
-
-                for (const memories of [step.effectParams, step.effectAux]) {
-                    if (!memories) {
-                        continue;
-                    }
-                    for (const effectId of Object.keys(memories)) {
-                        if (Number(effectId) > SEQFX_EFFECT_TYPES.stutter) {
-                            delete memories[effectId];
-                        }
-                    }
-                }
-            });
-        });
-    });
-
-    return legacy;
-}
-
 function assertActiveUploadEqual(actual, expected) {
     assert.deepEqual(actual.activeSteps, expected.activeSteps);
     assert.deepEqual(actual.triggerSteps, expected.triggerSteps);
@@ -107,6 +59,28 @@ function assertActiveUploadEqual(actual, expected) {
         });
     });
 }
+
+test("legacy fixture builder keeps Crush holdFrames in predecessor range", () => {
+    assert.throws(() => createLegacyV5StateWithBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        startStep: 0,
+        length: 1,
+        params: [8, 48_000, 0, 0, 0, 0, 0, 0],
+    }), /holdFrames from 1 to 64/);
+
+    const legacy = createLegacyV5StateWithBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        startStep: 0,
+        length: 1,
+        params: [8, 1, 0, 0, 0, 0, 0, 0],
+    });
+    assert.deepEqual(
+        legacy.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].params.slice(0, 2),
+        [8, 1],
+    );
+});
 
 test("sparse v7 Init is compact and names its key and version consistently", () => {
     const serialized = serializeSeqFxState(createDefaultSeqFxState());
@@ -238,7 +212,7 @@ test("legacy v5 migration is idempotent and keeps the dense runtime upload audib
         paramIndex: 1,
         value: 1.25,
     });
-    const legacy = legacyV5(current);
+    const legacy = projectCompatibleDenseStateToLegacyV5Fixture(current);
     const migrated = parseSeqFxStoredState(JSON.stringify(legacy));
     const v7 = serializeSeqFxState(migrated.state);
     const reparsed = parseSeqFxStoredState(v7);
@@ -268,7 +242,9 @@ test("legacy Tape Stop blocks migrate through the documented canonical free-time
         step.aux.targets = step.params.map((end, index) => ({ enabled: index === 0, end }));
     }
 
-    const migrated = parseSeqFxStoredState(JSON.stringify(legacyV5(state))).state;
+    const migrated = parseSeqFxStoredState(JSON.stringify(
+        projectCompatibleDenseStateToLegacyV5Fixture(state),
+    )).state;
     for (const step of migrated.patterns[0].lanes[2].steps.slice(4, 7)) {
         assert.deepEqual(step.params, [8, 1, 1, 1, 0, 1, 750, 187.5]);
         assert.ok(step.aux.targets.every((target) => target.enabled === false));
@@ -300,7 +276,9 @@ test("legacy non-Tape blocks discard obsolete remembered Tape aux during migrati
         };
     }
 
-    let migrated = parseSeqFxStoredState(JSON.stringify(legacyV5(state))).state;
+    let migrated = parseSeqFxStoredState(JSON.stringify(
+        projectCompatibleDenseStateToLegacyV5Fixture(state),
+    )).state;
     for (const step of migrated.patterns[0].lanes[1].steps.slice(3, 5)) {
         const rememberedParams = step.effectParams?.[SEQFX_EFFECT_TYPES.tapeStop];
         const rememberedAux = step.effectAux?.[SEQFX_EFFECT_TYPES.tapeStop];
@@ -383,14 +361,16 @@ test("legacy Crush blocks preserve 48 kHz hold behavior and aux endpoints in Ori
         }));
     }
 
-    const migrated = parseSeqFxStoredState(JSON.stringify(legacyV5(state))).state;
+    const migrated = parseSeqFxStoredState(JSON.stringify(
+        projectCompatibleDenseStateToLegacyV5Fixture(state),
+    )).state;
     for (const step of migrated.patterns[0].lanes[1].steps.slice(6, 8)) {
         assert.deepEqual(step.params, [6, 12_000, 12, 0, 0, 0, 0, 0]);
         assert.deepEqual(step.aux.targets.map((target) => target.enabled), [true, true, true, false, false, false, false, false]);
         assert.deepEqual(step.aux.targets.map((target) => target.end), [8, 3_000, 24, 0, 0, 0, 0, 0]);
     }
 
-    const malformed = legacyV5(state);
+    const malformed = projectCompatibleDenseStateToLegacyV5Fixture(state);
     malformed.patterns[0].lanes[1].steps[6].aux.targets[1].end = 0;
     assert.throws(() => parseSeqFxStoredState(JSON.stringify(malformed)), (error) => {
         assert.ok(error instanceof SeqFxStateParseError);
@@ -410,7 +390,7 @@ test("strict v5 parsing rejects out-of-range legacy parameters instead of clampi
         length: 1,
         effectType: SEQFX_EFFECT_TYPES.filter,
     });
-    const malformed = legacyV5(state);
+    const malformed = projectCompatibleDenseStateToLegacyV5Fixture(state);
     malformed.patterns[0].lanes[0].steps[0].params[1] = 999_999;
 
     assert.throws(() => parseSeqFxStoredState(malformed), (error) => {
@@ -512,7 +492,7 @@ test("strict v7 parsing rejects overlap, bounds, unknown fields, and malformed a
 });
 
 test("malformed legacy state never produces or rewrites a v7 document", () => {
-    const malformed = legacyV5(createDefaultSeqFxState());
+    const malformed = projectCompatibleDenseStateToLegacyV5Fixture(createDefaultSeqFxState());
     malformed.patterns[0].lanes[0].steps.pop();
 
     assert.throws(() => parseSeqFxStoredState(malformed), (error) => {
