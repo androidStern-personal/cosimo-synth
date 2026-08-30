@@ -1,11 +1,12 @@
 # Polish Chain Design
 
-Status: **current T74 implementation contract, rebased onto master authority for
-qualification, 2026-08-30**. Companion to `ENHANCER_DESIGN.md`,
+Status: **current T74 implementation contract for qualification against master,
+2026-08-30**. Companion to `ENHANCER_DESIGN.md`,
 `DISTORTION_QUALITY_DESIGN.md`, and `SAUSAGE_FATTENER_ANALYSIS.md`. The exact
-contract below is intentionally conservative and evidence-backed. Automated
-qualification does not replace Andrew's later level-matched listening, which
-remains a separate, unperformed product-acceptance gate.
+contract below supersedes the earlier T28 candidate framing and remains
+intentionally conservative and evidence-backed. Automated qualification does not
+replace Andrew's later level-matched listening, which remains a separate,
+unperformed product-acceptance gate.
 
 ## 1. Properties
 

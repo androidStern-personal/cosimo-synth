@@ -17,6 +17,7 @@ import {
     expandGlobalModRail,
     getHarnessSnapshot,
     laneParamWireLocation,
+    openBuiltDesktopBundlePage,
     openHarnessPage,
     readStoredModulationState,
     readRuntimeProgramRoute,
@@ -1577,6 +1578,50 @@ test("POLISH composes four compact modules, independent bypasses, and the T75 ex
         assert.equal(bypassed.parameterValues.polishSafeBassAmount, 1);
         assert.equal(bypassed.parameterValues.polishSafeBassBypass, 1);
         assert.equal(await page.locator('[data-role="rack-polish-node"]').count(), 1);
+    } finally {
+        await page.close();
+    }
+});
+
+test("the built desktop bundle exposes T74 controls without moving the T73 footer", async () => {
+    const page = await openBuiltDesktopBundlePage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
+        await page.locator('[data-role="rack-polish-node"]').click();
+        const editor = page.locator('[data-role="rack-editor-polish"]');
+        await editor.waitFor();
+        assert.equal(await editor.locator('[data-role^="polish-module-"]').count(), 4);
+        assert.equal(await editor.locator('[data-role^="polish-control-"]').count(), 4);
+        assert.equal(await editor.locator('[data-role^="polish-bypass-"]').count(), 4);
+
+        const footerBefore = await page.locator('[data-role="rack-fixed-footer"]').boundingBox();
+        assert.ok(footerBefore);
+        const expand = page.locator('[data-role="polish-expand"]');
+        await expand.click();
+        await page.waitForFunction(() => (
+            document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="polish-expand"]')?.getAttribute("aria-expanded") === "true"
+        ));
+        assert.equal(await editor.getAttribute("data-expanded"), "true");
+        const footerAfter = await page.locator('[data-role="rack-fixed-footer"]').boundingBox();
+        assert.ok(footerAfter);
+        assert.equal(
+            Math.abs(footerAfter.x - footerBefore.x) <= 0.5
+                && Math.abs(footerAfter.y - footerBefore.y) <= 0.5
+                && Math.abs(footerAfter.width - footerBefore.width) <= 0.5
+                && Math.abs(footerAfter.height - footerBefore.height) <= 0.5,
+            true,
+        );
+
+        await expand.click();
+        await page.waitForFunction(() => (
+            document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="polish-expand"]')?.getAttribute("aria-expanded") === "false"
+        ));
+        assert.equal(await editor.getAttribute("data-expanded"), "false");
     } finally {
         await page.close();
     }

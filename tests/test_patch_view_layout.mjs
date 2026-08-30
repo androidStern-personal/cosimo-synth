@@ -195,6 +195,73 @@ test("checked-in UI source maps keep dependency provenance inside the checkout",
     }
 });
 
+test("generated desktop and iPhone UI artifacts carry the exact T74 source contracts", async () => {
+    const sharedEndpointTokens = [
+        "polishSafeBassAmount",
+        "polishSafeBassBypass",
+        "polishEnhancerBypass",
+        "polishCompressionClipBypass",
+        "polishOutputTrimBypass",
+    ];
+    const artifactContracts = [
+        {
+            label: "desktop",
+            bundlePath: "patch_gui/desktop/app.js",
+            mapPath: "patch_gui/desktop/app.js.map",
+            requiredTokens: [
+                ...sharedEndpointTokens,
+                "polish-module-",
+                "polish-bypass-",
+                "polish-expand",
+                "SAFE BASS",
+                "ENHANCE",
+                "OUTPUT TRIM",
+                "rack-fixed-footer",
+            ],
+            sourcePaths: [
+                "ui/desktop/effects-rack-workspace.tsx",
+                "ui/desktop/DesktopPatchView.tsx",
+                "ui/shared/synth-hooks.ts",
+                "ui/shared/polish.ts",
+            ],
+        },
+        {
+            label: "iPhone",
+            bundlePath: "patch_gui/index.ios.js",
+            mapPath: "patch_gui/index.ios.js.map",
+            requiredTokens: sharedEndpointTokens,
+            sourcePaths: [
+                "ui/shared/synth-hooks.ts",
+                "ui/shared/polish.ts",
+                "ui/ios/patch-view-entry.tsx",
+            ],
+        },
+    ];
+
+    for (const contract of artifactContracts) {
+        const [bundle, sourceMap] = await Promise.all([
+            fs.readFile(path.join(repoRoot, contract.bundlePath), "utf8"),
+            fs.readFile(path.join(repoRoot, contract.mapPath), "utf8").then(JSON.parse),
+        ]);
+        for (const token of contract.requiredTokens) {
+            assert.equal(
+                bundle.includes(token),
+                true,
+                `${contract.label} bundle is missing ${token}`,
+            );
+        }
+        for (const sourcePath of contract.sourcePaths) {
+            const sourceIndex = sourceMap.sources.findIndex((source) => source.endsWith(sourcePath));
+            assert.notEqual(sourceIndex, -1, `${contract.label} map is missing ${sourcePath}`);
+            assert.equal(
+                sourceMap.sourcesContent[sourceIndex],
+                await fs.readFile(path.join(repoRoot, sourcePath), "utf8"),
+                `${contract.label} sourcesContent drifted from ${sourcePath}`,
+            );
+        }
+    }
+});
+
 async function pickUnusedLocalPort() {
     return await new Promise((resolve, reject) => {
         const server = createServer();
