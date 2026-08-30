@@ -42,6 +42,11 @@ import { CrusherEditor, type CrusherModulation } from "./CrusherEditor";
 import { SeqFxGlobalControlSurface } from "./SeqFxGlobalControls";
 import { StutterEnvelopeEditor, type StutterModulation } from "./StutterEnvelopeEditor";
 import {
+    formatSeqFxParameterRange,
+    formatSeqFxParameterValue,
+    type SeqFxParameterDefinition,
+} from "./seqfx-effect-definitions";
+import {
     SEQFX_EFFECT_TYPES,
     SEQFX_EFFECT_TYPE_NAMES,
     SEQFX_EFFECT_TYPE_SHORT_NAMES,
@@ -62,11 +67,7 @@ import {
     type SeqFxState,
 } from "./seqfx-state";
 import { formatStutterShapeLabel } from "./stutter-envelope";
-import {
-    TALK_BOX_VOWELS,
-    formatTalkBoxVowelPair,
-    resolveTalkBoxFormants,
-} from "./talk-box-contract";
+import { formatTalkBoxVowelPair, resolveTalkBoxFormants } from "./talk-box-contract";
 import {
     TAPE_STOP_MAX_CATCHUP_PERCENT,
     TAPE_STOP_MAX_CURVE,
@@ -202,16 +203,10 @@ type InvalidDropTarget = {
     }>;
 };
 
-type ParamDefinition = {
+type ParamDefinition = SeqFxParameterDefinition & {
     index: number;
-    label: string;
-    min: number;
-    max: number;
-    step: number;
     kind?: "select";
-    amountKind?: ParamAmountKind;
-    options?: string[];
-    hint?: string;
+    amountKind: ParamAmountKind;
 };
 
 type ParamAmountKind =
@@ -221,8 +216,6 @@ type ParamAmountKind =
     | "db"
     | "speed"
     | "percentPoints"
-    | "percentValue"
-    | "tapeStopPointPercent"
     | "stutterShape";
 
 const EFFECT_OPTIONS = [
@@ -582,7 +575,7 @@ function SeqFxMixRow({
                 type="range"
                 value={value}
             />
-            <output>{formatValue(value)}</output>
+            <output data-role="seqfx-mix-value">{Math.round(clampNumber(value, 0, 1) * 100)}%</output>
         </label>
     );
 }
@@ -635,10 +628,6 @@ function quantizeToStep(value: number, min: number, step: number) {
 }
 
 function modDisplayValue(definition: ParamDefinition, rawValue: number) {
-    if (definition.amountKind === "tapeStopPointPercent") {
-        return multiplierToStopPointPercent(rawValue);
-    }
-
     if (definition.amountKind === "percentPoints") {
         return rawValue * 100;
     }
@@ -647,10 +636,6 @@ function modDisplayValue(definition: ParamDefinition, rawValue: number) {
 }
 
 function rawValueFromModDisplay(definition: ParamDefinition, displayValue: number) {
-    if (definition.amountKind === "tapeStopPointPercent") {
-        return stopPointPercentToMultiplier(displayValue);
-    }
-
     if (definition.amountKind === "percentPoints") {
         return displayValue / 100;
     }
@@ -659,13 +644,6 @@ function rawValueFromModDisplay(definition: ParamDefinition, displayValue: numbe
 }
 
 function modDisplayBounds(definition: ParamDefinition) {
-    if (definition.amountKind === "tapeStopPointPercent") {
-        return {
-            min: TAPE_STOP_MIN_STOP_POINT_PERCENT,
-            max: TAPE_STOP_MAX_STOP_POINT_PERCENT,
-        };
-    }
-
     if (definition.amountKind === "percentPoints") {
         return {
             min: definition.min * 100,
@@ -720,9 +698,7 @@ function targetFromModAmount(definition: ParamDefinition, baseValue: number, amo
     const displayBounds = modDisplayBounds(definition);
     const displayStep = definition.amountKind === "percentPoints"
         ? definition.step * 100
-        : definition.amountKind === "tapeStopPointPercent"
-            ? 1
-            : definition.step;
+        : definition.step;
     const nextDisplayValue = quantizeToStep(
         clampNumber(baseDisplayValue + amount, displayBounds.min, displayBounds.max),
         displayBounds.min,
@@ -753,48 +729,43 @@ function physicalAmountFromNormalized(normalized: number, minAmount: number, max
 }
 
 function formatModAmountValue(definition: ParamDefinition, amount: number) {
+    const signed = (decimals: number) => formatSignedFixed(amount, decimals);
     switch (definition.amountKind) {
         case "cutoffOctaves":
             return `${formatSignedFixed(amount, 2)} oct`;
-        case "integer":
-            return formatSignedFixed(Math.round(amount), 0);
+        case "integer": {
+            const unit = definition.unit === "" ? "" : ` ${definition.unit}`;
+            return `${formatSignedFixed(Math.round(amount), 0)}${unit}`;
+        }
         case "db":
             return `${formatSignedFixed(amount, 1)} dB`;
         case "speed":
-            return `${formatSignedFixed(amount, 2)}x`;
+            return `${formatSignedFixed(amount, 2)}\u00d7`;
         case "percentPoints":
-        case "percentValue":
-        case "tapeStopPointPercent":
             return `${formatSignedFixed(Math.round(amount), 0)}%`;
         case "stutterShape":
+            return formatSignedFixed(amount, 2);
         case "linear":
         default:
-            return formatSignedFixed(amount, 2);
+            switch (definition.unit) {
+                case "cents": return `${signed(1)} cents`;
+                case "degrees": return `${signed(0)}\u00b0`;
+                case "Hz": return `${signed(2)} Hz`;
+                case "ms": return `${signed(2)} ms`;
+                case "Q": return `Q ${signed(2)}`;
+                case "s": return `${signed(2)} s`;
+                case "semitones": return `${signed(0)} semitones`;
+                default: return signed(2);
+            }
     }
 }
 
 function formatModDestinationValue(definition: ParamDefinition, value: number) {
-    switch (definition.amountKind) {
-        case "cutoffOctaves":
-            return formatFilterHzChip(value);
-        case "integer":
-            return String(Math.round(value));
-        case "db":
-            return `${value.toFixed(1)} dB`;
-        case "speed":
-            return `${value.toFixed(2)}x`;
-        case "percentPoints":
-            return `${Math.round(value * 100)}%`;
-        case "percentValue":
-            return `${Math.round(value)}%`;
-        case "tapeStopPointPercent":
-            return `${Math.round(multiplierToStopPointPercent(value))}%`;
-        case "stutterShape":
-            return formatStutterShapeLabel(value);
-        case "linear":
-        default:
-            return formatValue(value);
+    if (definition.amountKind === "stutterShape") {
+        return formatStutterShapeLabel(value);
     }
+
+    return formatSeqFxParameterValue(definition, value);
 }
 
 function SeqFxModToggleButton({
@@ -974,105 +945,105 @@ function SeqFxModEditor({
     );
 }
 
-const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
-    [SEQFX_EFFECT_TYPES.filter]: [
-        { index: 0, label: "Mode", min: 0, max: 2, step: 1, kind: "select", options: ["Lowpass", "Highpass", "Bandpass"] },
-        { index: 1, label: "Cutoff", min: 20, max: 20000, step: 1, amountKind: "cutoffOctaves" },
-        { index: 3, label: "Resonance", min: 0.1, max: 20, step: 0.01, amountKind: "linear" },
-    ],
-    [SEQFX_EFFECT_TYPES.crusher]: [
-        { index: 0, label: "Bits", min: 2, max: 16, step: 1, amountKind: "integer" },
-        { index: 1, label: "Rate", min: 200, max: 48000, step: 1, amountKind: "cutoffOctaves", hint: "Converter sample rate; lower values produce wider steps and more aliasing." },
-        { index: 2, label: "Drive", min: 0, max: 36, step: 0.1, amountKind: "db" },
-        { index: 4, label: "ADC Q", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Pre-converter anti-alias filtering." },
-        { index: 5, label: "DAC Q", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Post-converter reconstruction filtering." },
-        { index: 6, label: "Dither", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Deterministic TPDF dither at the quantizer." },
-    ],
-    [SEQFX_EFFECT_TYPES.tapeStop]: [
-        { index: 0, label: "Stop Time", min: 0, max: 8, step: 1, kind: "select", options: ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars", "1 Cell"], hint: "How long the motor takes to stop; it may outlive the block." },
-        { index: 1, label: "Curve", min: -1, max: 1, step: 0.01, amountKind: "linear", hint: "Center is linear speed; left and right move the braking weight." },
-        { index: 2, label: "Return", min: 0, max: 1, step: 1, kind: "select", options: ["Catch Up", "Spin Up"], hint: "Catch Up returns quickly; Spin Up uses Start Time." },
-        { index: 3, label: "Start Time", min: 0, max: 8, step: 1, kind: "select", options: ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars", "1 Cell"] },
-        { index: 4, label: "Character", min: 0, max: 1, step: 0.01, amountKind: "percentValue", hint: "Adds bounded high-frequency loss and saturation as the tape slows." },
-        { index: 5, label: "Timing", min: 0, max: 1, step: 1, kind: "select", options: ["Sync", "Free"] },
-        { index: 6, label: "Free Stop", min: 20, max: 8000, step: 1, amountKind: "linear", hint: "Milliseconds used when Timing is Free." },
-        { index: 7, label: "Free Start", min: 20, max: 8000, step: 1, amountKind: "linear", hint: "Milliseconds used for a free-time Spin Up return." },
-    ],
-    [SEQFX_EFFECT_TYPES.stutter]: [
-        { index: 0, label: "Slices", min: 2, max: 32, step: 1, amountKind: "integer", hint: "Divide the block, capture its first slice up to one second, then repeat it." },
-        { index: 1, label: "Speed", min: 0.5, max: 2, step: 0.01, amountKind: "speed", hint: "1.00 keeps the captured pitch." },
-        { index: 2, label: "Shape", min: 0, max: 1, step: 0.01, amountKind: "stutterShape", hint: "Morphs the per-cut envelope." },
-        { index: 3, label: "Gate", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Audible portion of each cut." },
-    ],
-    [SEQFX_EFFECT_TYPES.pitch]: [
-        { index: 0, label: "Pitch", min: -24, max: 24, step: 1, amountKind: "integer", hint: "Semitone shift; direct edits snap while modulation follows a smoothed continuous path." },
-        { index: 1, label: "Fine", min: -100, max: 100, step: 1, amountKind: "integer", hint: "Fine pitch offset in cents." },
-        { index: 2, label: "Grain", min: 10, max: 120, step: 0.1, amountKind: "linear", hint: "Trigger-latched grain window in milliseconds; longer values trade transient detail for smoother sustained sound." },
-        { index: 3, label: "Jitter", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Seeded grain-birth pitch and position variation." },
-        { index: 4, label: "Spread", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Symmetric left/right source-position offset; zero remains dual mono." },
-    ],
-    [SEQFX_EFFECT_TYPES.comb]: [
-        { index: 0, label: "Tune", min: 30, max: 8000, step: 0.01, amountKind: "cutoffOctaves", hint: "Center frequency of the conventional and dispersed resonances." },
-        { index: 1, label: "Decay", min: 0.02, max: 8, step: 0.01, amountKind: "linear", hint: "Time for the feedback loop to fall by 60 dB." },
-        { index: 2, label: "Polarity", min: 0, max: 1, step: 1, kind: "select", options: ["Positive", "Negative"], hint: "Latched feedback polarity." },
-        { index: 3, label: "Dispersion", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Morphs from the reference comb into compensated coupled modes." },
-        { index: 4, label: "Damping", min: 500, max: 20000, step: 1, amountKind: "cutoffOctaves", hint: "Shortens high-frequency feedback decay." },
-        { index: 5, label: "Motion", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Adds deterministic phase-offset motion to the dispersed modes." },
-        { index: 6, label: "Drive", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Adds unity-small-signal saturation inside the feedback network." },
-        { index: 7, label: "Width", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Moves from a mono-safe center to complementary stereo projection." },
-    ],
-    [SEQFX_EFFECT_TYPES.ring]: [
-        { index: 0, label: "Frequency", min: 0.1, max: 12000, step: 0.01, amountKind: "cutoffOctaves", hint: "Carrier frequency; sine creates exact sum and difference sidebands." },
-        { index: 1, label: "Wave", min: 0, max: 3, step: 1, kind: "select", options: ["Sine", "Triangle", "Square", "Noise"], hint: "Latched when the block triggers." },
-        { index: 2, label: "Motion", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Adds a phase-continuous one-octave carrier sweep." },
-        { index: 3, label: "Rate", min: 0.02, max: 20, step: 0.01, amountKind: "cutoffOctaves", hint: "Free-running motion rate in Hz." },
-        { index: 4, label: "Spread", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Small opposite left/right carrier detunes, up to 25 cents per channel." },
-        { index: 5, label: "Bias", min: -1, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Moves ring modulation toward positive or inverted dry signal." },
-        { index: 6, label: "Rectify", min: -1, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Morphs the carrier toward positive or negative full-wave rectification." },
-    ],
-    [SEQFX_EFFECT_TYPES.reverse]: [
-        { index: 0, label: "Length", min: 0, max: 4, step: 1, kind: "select", options: ["1/32", "1/16", "1/8", "1/4", "1 Cell"], hint: "Trigger-latched lookback length; the high-quality source window is bounded to four seconds." },
-        { index: 1, label: "Crossfade", min: 0, max: 0.25, step: 0.001, amountKind: "percentPoints", hint: "Proportion of each window used to blend into the next captured lookback." },
-        { index: 2, label: "Timing", min: 0, max: 1, step: 1, kind: "select", options: ["Sync", "Free"], hint: "Sync follows host tempo; Free uses the millisecond length." },
-        { index: 3, label: "Free Length", min: 20, max: 4000, step: 1, amountKind: "linear", hint: "Milliseconds used when Timing is Free." },
-        { index: 4, label: "Decay", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Choose where the reversed loop fades back to dry within the authored block; 100% keeps the complete block." },
-    ],
-    [SEQFX_EFFECT_TYPES.talkBox]: [
-        { index: 0, label: "From", min: 0, max: 4, step: 1, kind: "select", options: [...TALK_BOX_VOWELS], hint: "Starting vowel; latched when the block triggers." },
-        { index: 1, label: "To", min: 0, max: 4, step: 1, kind: "select", options: [...TALK_BOX_VOWELS], hint: "Destination vowel; latched when the block triggers." },
-        { index: 2, label: "Morph", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Moves both formants between the selected vowels on a perceptual frequency scale." },
-        { index: 3, label: "Resonance", min: 1, max: 20, step: 0.01, amountKind: "linear", hint: "Controls the strength and width of both vocal resonances." },
-        { index: 4, label: "Lows", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Restores source signal below the formants." },
-        { index: 5, label: "Highs", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Restores source brightness above the formants." },
-        { index: 6, label: "Drive", min: 0, max: 12, step: 0.1, amountKind: "db", hint: "Adds bounded excitation before the formant filters." },
-    ],
-    [SEQFX_EFFECT_TYPES.vibro]: [
-        { index: 0, label: "Rate", min: 0.05, max: 12, step: 0.01, amountKind: "cutoffOctaves", hint: "Free-mode cycle rate; Sync derives the rate from Division and host tempo." },
-        { index: 1, label: "Depth", min: 0, max: 100, step: 0.1, amountKind: "linear", hint: "Exact half peak-to-peak Doppler pitch span in cents." },
-        { index: 2, label: "Wave", min: 0, max: 1, step: 1, kind: "select", options: ["Sine", "Triangle"], hint: "Latched pitch-motion shape; changes crossfade without resetting phase." },
-        { index: 3, label: "Spread", min: 0, max: 180, step: 1, amountKind: "linear", hint: "Right-channel phase offset; 0° is mono-safe and 180° is opposite motion." },
-        { index: 4, label: "Timing", min: 0, max: 1, step: 1, kind: "select", options: ["Sync", "Free"], hint: "Sync follows host tempo; Free uses Rate." },
-        { index: 5, label: "Division", min: 0, max: 5, step: 1, kind: "select", options: ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar"], hint: "One modulation cycle when Timing is Sync." },
-    ],
-    [SEQFX_EFFECT_TYPES.flange]: [
-        { index: 0, label: "Delay", min: 0.2, max: 10, step: 0.01, amountKind: "linear", hint: "Minimum delay before modulation is added, in milliseconds." },
-        { index: 1, label: "Depth", min: 0, max: 10, step: 0.01, amountKind: "linear", hint: "Delay excursion added above the minimum, in milliseconds." },
-        { index: 2, label: "Rate", min: 0.02, max: 10, step: 0.01, amountKind: "cutoffOctaves", hint: "Free-mode sweep rate; Sync derives the rate from Division and host tempo." },
-        { index: 3, label: "Feedback", min: 0, max: 0.95, step: 0.01, amountKind: "percentPoints", hint: "Wet signal returned to the short delay; Polarity chooses normal or inverted return." },
-        { index: 4, label: "Spread", min: 0, max: 180, step: 1, amountKind: "linear", hint: "Right-channel modulation phase offset; 0° stays dual mono." },
-        { index: 5, label: "Polarity", min: 0, max: 1, step: 1, kind: "select", options: ["Normal", "Inverse"], hint: "Trigger-latched feedback polarity." },
-        { index: 6, label: "Timing", min: 0, max: 1, step: 1, kind: "select", options: ["Sync", "Free"], hint: "Sync follows host tempo; Free uses Rate." },
-        { index: 7, label: "Division", min: 0, max: 6, step: 1, kind: "select", options: ["1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars"], hint: "One complete sweep when Timing is Sync." },
-    ],
-    [SEQFX_EFFECT_TYPES.dirty]: [
-        { index: 0, label: "Drive", min: 0, max: 36, step: 0.1, amountKind: "db", hint: "Level into the oversampled nonlinear stage." },
-        { index: 1, label: "Character", min: 0, max: 3, step: 1, kind: "select", options: ["Soft", "Hard", "Fold", "Bias"], hint: "Latched transfer shape; changes crossfade over 2 ms." },
-        { index: 2, label: "Bias", min: -1, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Offsets the transfer curve for even-harmonic asymmetry." },
-        { index: 3, label: "Dynamics", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Restores the source signal's level contrast after saturation." },
-        { index: 4, label: "Tone", min: 500, max: 20000, step: 1, amountKind: "cutoffOctaves", hint: "Low-passes only the nonlinear residue, preserving the dry fundamental." },
-        { index: 5, label: "Trim", min: -18, max: 6, step: 0.1, amountKind: "db", hint: "Output gain after dynamics compensation." },
-    ],
-};
+function paramAmountKind(effectType: SeqFxEffectType, definition: SeqFxParameterDefinition): ParamAmountKind {
+    if (effectType === SEQFX_EFFECT_TYPES.stutter && definition.id === "shape") {
+        return "stutterShape";
+    }
+
+    if (definition.unit === "Hz" && definition.scale === "log") {
+        return "cutoffOctaves";
+    }
+
+    if (definition.unit === "dB") {
+        return "db";
+    }
+
+    if (definition.unit === "%") {
+        return "percentPoints";
+    }
+
+    if (definition.unit === "x") {
+        return "speed";
+    }
+
+    if (definition.integer) {
+        return "integer";
+    }
+
+    return "linear";
+}
+
+function paramDefinitionsForEffect(effectType: SeqFxEffectType): ParamDefinition[] {
+    return getSeqFxEffectDefinition(effectType).parameters.map((definition, index) => ({
+        ...definition,
+        index,
+        kind: definition.options ? "select" : undefined,
+        amountKind: paramAmountKind(effectType, definition),
+    }));
+}
+
+function SeqFxParameterField({
+    definition,
+    disabled,
+    triggerLatched,
+    value,
+    onChange,
+}: {
+    definition: ParamDefinition;
+    disabled: boolean;
+    triggerLatched: boolean;
+    value: number;
+    onChange: (value: number) => void;
+}) {
+    const formattedValue = formatSeqFxParameterValue(definition, value);
+
+    return (
+        <label className="seqfx-field" data-section={definition.section}>
+            <span className="seqfx-field__heading">
+                {definition.label}
+                {triggerLatched ? <em>Trigger</em> : null}
+            </span>
+            {definition.kind === "select" ? (
+                <select
+                    aria-label={definition.label}
+                    data-role="seqfx-param"
+                    data-param={definition.index}
+                    disabled={disabled}
+                    onChange={(event) => onChange(Number(event.currentTarget.value))}
+                    value={Math.round(value)}
+                >
+                    {definition.options!.map((option, index) => (
+                        <option key={option} value={index}>{option}</option>
+                    ))}
+                </select>
+            ) : (
+                <span className="seqfx-field__number">
+                    <input
+                        aria-label={definition.label}
+                        aria-valuetext={formattedValue}
+                        data-role="seqfx-param"
+                        data-param={definition.index}
+                        disabled={disabled}
+                        max={definition.max}
+                        min={definition.min}
+                        onChange={(event) => onChange(Number(event.currentTarget.value))}
+                        step={definition.step}
+                        type="number"
+                        value={formatValue(value)}
+                    />
+                    <output data-param={definition.index} data-role="seqfx-param-value">
+                        {formattedValue}
+                    </output>
+                </span>
+            )}
+            <small>
+                {disabled
+                    ? "Select one cell to edit this trigger."
+                    : definition.hint ?? formatSeqFxParameterRange(definition)}
+            </small>
+        </label>
+    );
+}
 
 const FILTER_PARAM_MODE = 0;
 const FILTER_PARAM_CUTOFF = 1;
@@ -4686,7 +4657,9 @@ export function SeqFxPatchView({
         ? inspectedCell.effectType
         : drawEffectType ?? defaultEffectTypeForChain(inspectedLane ?? 0);
     const inspectedEffectDefinition = getSeqFxEffectDefinition(inspectedEffectType);
-    const inspectedParamDefinitions = PARAM_DEFINITIONS[inspectedEffectType] ?? [];
+    const inspectedParamDefinitions = paramDefinitionsForEffect(inspectedEffectType);
+    const inspectedPrimaryParamDefinitions = inspectedParamDefinitions.filter((definition) => definition.section === "primary");
+    const inspectedAdvancedParamDefinitions = inspectedParamDefinitions.filter((definition) => definition.section === "advanced");
     const inspectedAuxParamDefinitions = inspectedParamDefinitions.filter((definition) => (
         inspectedEffectDefinition.parameters[definition.index]?.auxEligible === true
     ));
@@ -5124,6 +5097,23 @@ export function SeqFxPatchView({
         }
     }
 
+    function renderInspectedParam(definition: ParamDefinition) {
+        const triggerLatched = isSeqFxTriggerLatchedParamForEffect(inspectedEffectType, definition.index);
+        const disabled = triggerLatched && !selectedBlockGroup && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1;
+        const value = inspectedCell?.params[definition.index] ?? definition.defaultValue;
+
+        return (
+            <SeqFxParameterField
+                definition={definition}
+                disabled={disabled}
+                key={definition.index}
+                onChange={(nextValue) => setParam(definition.index, nextValue)}
+                triggerLatched={triggerLatched}
+                value={value}
+            />
+        );
+    }
+
     function setEffectType(value: number) {
         const nextEffectType = EFFECT_OPTIONS.includes(value as typeof EFFECT_OPTIONS[number])
             ? value as SeqFxEffectType
@@ -5405,7 +5395,7 @@ export function SeqFxPatchView({
             {showFirstUseHint ? (
                 <aside className="seqfx-first-use" data-role="seqfx-first-use" role="status">
                     <strong>First pattern?</strong>
-                    <span>Click a cell, drag a block edge to resize, choose a named effect, then open Mod.</span>
+                    <span>Click a cell, drag a block edge to resize, choose a named effect, then open Mod. Dismissal lasts while this editor stays open.</span>
                     <button
                         aria-label="Dismiss first-use hint"
                         data-role="seqfx-first-use-dismiss"
@@ -5755,50 +5745,24 @@ export function SeqFxPatchView({
                                                     Reverses audio already heard before the block, so it adds no lookahead latency. On a cold start, dry audio continues until one complete source window exists.
                                                 </p>
                                             ) : null}
-                                            {inspectedParamDefinitions.map((definition) => {
-                                                const triggerLatched = isSeqFxTriggerLatchedParamForEffect(inspectedEffectType, definition.index);
-                                                const disabled = triggerLatched && !selectedBlockGroup && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1;
-                                                const value = inspectedCell.params[definition.index];
-
-                                                return (
-                                                    <label className="seqfx-field" key={definition.index}>
-                                                        <span>
-                                                            {definition.label}
-                                                            {triggerLatched ? <em>Trigger</em> : null}
-                                                        </span>
-                                                        {definition.kind === "select" ? (
-                                                            <select
-                                                                data-role="seqfx-param"
-                                                                data-param={definition.index}
-                                                                disabled={disabled}
-                                                                onChange={(event) => setParam(definition.index, Number(event.currentTarget.value))}
-                                                                value={Math.round(value)}
-                                                            >
-                                                                {definition.options!.map((option, index) => (
-                                                                    <option key={option} value={index}>{option}</option>
-                                                                ))}
-                                                            </select>
-                                                        ) : (
-                                                            <input
-                                                                data-role="seqfx-param"
-                                                                data-param={definition.index}
-                                                                disabled={disabled}
-                                                                max={definition.max}
-                                                                min={definition.min}
-                                                                onChange={(event) => setParam(definition.index, Number(event.currentTarget.value))}
-                                                                step={definition.step}
-                                                                type="number"
-                                                                value={formatValue(value)}
-                                                            />
-                                                        )}
-                                                        <small>
-                                                            {disabled
-                                                                ? "Select one cell to edit this trigger."
-                                                                : definition.hint ?? `${definition.min} to ${definition.max}`}
-                                                        </small>
-                                                    </label>
-                                                );
-                                            })}
+                                            <div className="seqfx-parameter-section" data-role="seqfx-primary-parameters">
+                                                {inspectedPrimaryParamDefinitions.map(renderInspectedParam)}
+                                            </div>
+                                            {inspectedAdvancedParamDefinitions.length > 0 ? (
+                                                <details
+                                                    className="seqfx-advanced-parameters"
+                                                    data-role="seqfx-advanced-parameters"
+                                                    key={inspectedEffectType}
+                                                >
+                                                    <summary>
+                                                        Advanced
+                                                        <span>{inspectedAdvancedParamDefinitions.length}</span>
+                                                    </summary>
+                                                    <div className="seqfx-parameter-section">
+                                                        {inspectedAdvancedParamDefinitions.map(renderInspectedParam)}
+                                                    </div>
+                                                </details>
+                                            ) : null}
                                         </>
                                     )}
                                 </>

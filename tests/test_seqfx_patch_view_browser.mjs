@@ -394,6 +394,16 @@ async function openSeqFxModView(page) {
     return modToggle;
 }
 
+async function openSeqFxAdvancedParameters(page) {
+    const disclosure = page.locator('[data-role="seqfx-advanced-parameters"]');
+    await disclosure.waitFor();
+    if ((await disclosure.getAttribute("open")) === null) {
+        await disclosure.locator("summary").click();
+    }
+    assert.notEqual(await disclosure.getAttribute("open"), null, "Advanced controls should disclose on request");
+    return disclosure;
+}
+
 async function toggleSeqFxModTarget(page, paramIndex) {
     await page.locator(`[data-role="seqfx-mod-target-toggle"][data-param="${paramIndex}"]`).click();
 }
@@ -1160,7 +1170,7 @@ test("seqfx_factory_content_and_first_use_hint_are_discoverable_atomic_and_undoa
     await page.locator('[data-role="seqfx-first-use-dismiss"]').click();
     await page.locator('[data-role="seqfx-pattern"][data-pattern="1"]').click();
     await page.locator('[data-role="seqfx-pattern"][data-pattern="0"]').click();
-    assert.equal(await hint.count(), 0, "dismissal should survive state and pattern rerenders for this plugin instance");
+    assert.equal(await hint.count(), 0, "dismissal should survive state and pattern rerenders while this editor stays open");
 
     const factoryPattern = page.locator('[data-role="seqfx-factory-pattern"]');
     assert.equal(await factoryPattern.locator("option").count(), 13);
@@ -2365,7 +2375,7 @@ test("seqfx_filter_mod_panel_edits_signed_amounts_without_hiding_inline_ranges",
     assert.equal(await page.locator('[data-role="seqfx-mod-target-amount"][data-param="0"]').count(), 0);
     assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="0"]').count(), 0);
     assert.equal(await page.locator('[data-role="seqfx-mod-target-amount-value"][data-param="1"]').textContent(), "-2.00 oct");
-    assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="1"]').textContent(), "500");
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="1"]').textContent(), "500 Hz");
 
     await setSeqFxModTargetAmount(page, 1, -1);
     let snapshot = await getHarnessSnapshot(page);
@@ -2373,7 +2383,7 @@ test("seqfx_filter_mod_panel_edits_signed_amounts_without_hiding_inline_ranges",
     assertClose(upload.params[0][0][1], 2000, 0.001, "cutoff Mod amount edit should not rewrite the filter start cutoff");
     assertClose(upload.auxEnd[0][0][1], 1000, 0.001, "cutoff -1 oct amount should write a physical 1 kHz range end");
     assert.equal(await page.locator('[data-role="seqfx-mod-target-amount-value"][data-param="1"]').textContent(), "-1.00 oct");
-    assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="1"]').textContent(), "1.00k");
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="1"]').textContent(), "1 kHz");
     const cutoffFill = await cutoffAmount.evaluate((node) => {
         const style = getComputedStyle(node);
         return {
@@ -2396,15 +2406,15 @@ test("seqfx_filter_mod_panel_edits_signed_amounts_without_hiding_inline_ranges",
     upload = patternUploads(snapshot).at(-1).value;
     assertClose(upload.params[0][0][3], 0.707, 0.000001, "resonance Mod amount edit should not rewrite base Q");
     assertClose(upload.auxEnd[0][0][3], 3.71, 0.000001, "resonance +3 amount should write base Q plus amount rounded to the public Q step");
-    assert.equal(await page.locator('[data-role="seqfx-mod-target-amount-value"][data-param="3"]').textContent(), "+3.00");
-    assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="3"]').textContent(), "3.71");
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-amount-value"][data-param="3"]').textContent(), "Q +3.00");
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="3"]').textContent(), "Q 3.707");
 
     await page.locator('[data-role="seqfx-mod-target-amount"][data-param="3"]').dblclick();
     snapshot = await getHarnessSnapshot(page);
     upload = patternUploads(snapshot).at(-1).value;
     assert.equal(upload.auxEnabled[0][0][3], true);
     assertClose(upload.auxEnd[0][0][3], 0.707, 0.000001, "double-click should reset bipolar resonance amount to zero");
-    assert.equal(await page.locator('[data-role="seqfx-mod-target-amount-value"][data-param="3"]').textContent(), "0.00");
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-amount-value"][data-param="3"]').textContent(), "Q 0.00");
     const resonanceFill = await page.locator('[data-role="seqfx-mod-target-amount"][data-param="3"]').evaluate((node) => {
         const style = getComputedStyle(node);
         return {
@@ -3483,7 +3493,14 @@ test("seqfx_ring_inspector_sequences_every_public_control_and_hides_waveform_fro
     assert.equal(await param(0).inputValue(), "180");
     assert.equal(await param(1).locator("option").count(), 4);
     assert.equal(await param(1).inputValue(), "0");
+    assert.equal(await page.locator('[data-role="seqfx-param-value"][data-param="0"]').textContent(), "180 Hz");
+    assert.equal(await page.locator('[data-role="seqfx-mix-value"]').textContent(), "100%");
+    const advanced = page.locator('[data-role="seqfx-advanced-parameters"]');
+    assert.equal(await advanced.getAttribute("open"), null, "secondary Ring controls should start disclosed only by their summary");
+    assert.equal(await param(6).isVisible(), false);
+    await openSeqFxAdvancedParameters(page);
     assert.equal(await param(6).inputValue(), "0");
+    assert.equal(await page.locator('[data-role="seqfx-param-value"][data-param="4"]').textContent(), "8%");
 
     await param(0).fill("440");
     await param(1).selectOption("2");
@@ -3542,6 +3559,7 @@ test("seqfx_reverse_sequences_a_zero_latency_lookback_with_only_boundary_and_dec
         ["Sync", "Free"],
     );
     assert.match(await page.locator('[data-role="seqfx-reverse-source-note"]').textContent(), /already heard before the block/);
+    await openSeqFxAdvancedParameters(page);
 
     await param(0).selectOption("3");
     await param(1).fill("0.12");
@@ -3598,6 +3616,7 @@ test("seqfx_comb_sequences_the_selected_vector_dispersive_contract_and_latches_p
         await param(2).locator("option").evaluateAll((options) => options.map((option) => option.textContent)),
         ["Positive", "Negative"],
     );
+    await openSeqFxAdvancedParameters(page);
 
     await param(0).fill("440");
     await param(1).fill("2.5");
@@ -3660,6 +3679,7 @@ test("seqfx_vibro_sequences_wet_only_doppler_controls with explicit sync and fre
         await param(5).locator("option").evaluateAll((options) => options.map((option) => option.textContent)),
         ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar"],
     );
+    await openSeqFxAdvancedParameters(page);
 
     await param(0).fill("6");
     await param(1).fill("60");
@@ -3723,6 +3743,7 @@ test("seqfx_flange_sequences_the_short_delay_feedback_contract and latches timin
         await param(7).locator("option").evaluateAll((options) => options.map((option) => option.textContent)),
         ["1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars"],
     );
+    await openSeqFxAdvancedParameters(page);
 
     await param(0).fill("2");
     await param(1).fill("6");
@@ -3776,6 +3797,7 @@ test("seqfx_pitch_sequences_the_complementary_grain_contract_and_sparse_modulati
     await page.getByRole("button", { name: "Chain 1 Pitch block 1", exact: true }).waitFor();
 
     const param = (index) => page.locator(`[data-role="seqfx-param"][data-param="${index}"]`);
+    await openSeqFxAdvancedParameters(page);
     await param(0).fill("12");
     await param(1).fill("25");
     await param(2).fill("64");
@@ -3828,6 +3850,7 @@ test("seqfx_talk_box_sequences_documented_vowels_and_exposes_only_continuous_con
         ["A", "E", "I", "O", "U"],
     );
     assert.equal(await param(1).inputValue(), "3");
+    await openSeqFxAdvancedParameters(page);
 
     await param(0).selectOption("1");
     await param(1).selectOption("4");
@@ -3882,6 +3905,7 @@ test("seqfx_dirty_sequences_oversampled_distortion_controls_and_excludes_charact
         await param(1).locator("option").evaluateAll((options) => options.map((option) => option.textContent)),
         ["Soft", "Hard", "Fold", "Bias"],
     );
+    await openSeqFxAdvancedParameters(page);
 
     await param(0).fill("24");
     await param(1).selectOption("2");

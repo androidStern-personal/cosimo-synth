@@ -14,10 +14,68 @@ const {
     SEQFX_EFFECT_TYPES,
     SEQFX_PARAM_COUNT,
     SEQFX_SELECTABLE_EFFECT_IDS,
+    formatSeqFxParameterRange,
+    formatSeqFxParameterValue,
     getSeqFxDefaultParams,
     getSeqFxEffectDefinition,
     getSeqFxParamLimits,
 } = definitionsModule;
+
+test("the canonical registry owns honest units and primary versus advanced hierarchy", async () => {
+    const defaultReadouts = Object.fromEntries(SEQFX_SELECTABLE_EFFECT_IDS.map((effectType) => {
+        const definition = getSeqFxEffectDefinition(effectType);
+        return [definition.key, definition.parameters.map((parameter) => (
+            formatSeqFxParameterValue(parameter, parameter.defaultValue)
+        ))];
+    }));
+
+    assert.deepEqual(defaultReadouts, {
+        filter: ["Low Pass", "2 kHz", "500 Hz", "Q 0.707", "1\u00d7"],
+        crush: ["8 bits", "48 kHz", "0 dB", "Classic", "0%", "0%", "0%"],
+        tapeStop: ["1 Cell", "0", "Catch Up", "1/16", "0%", "Sync", "500 ms", "125 ms"],
+        stutter: ["8", "1\u00d7", "0.44", "68%"],
+        pitch: ["0 semitones", "0 cents", "48 ms", "0%", "35%"],
+        comb: ["220 Hz", "1.4 s", "Positive", "55%", "7.5 kHz", "12%", "18%", "65%"],
+        ring: ["180 Hz", "Sine", "0%", "0.5 Hz", "8%", "0%", "0%"],
+        reverse: ["1 Cell", "8%", "Sync", "250 ms", "100%"],
+        talkBox: ["A", "O", "0%", "Q 6", "30%", "15%", "0 dB"],
+        vibro: ["4.5 Hz", "28 cents", "Sine", "90\u00b0", "Sync", "1/8"],
+        flange: ["1.2 ms", "3.5 ms", "0.28 Hz", "55%", "120\u00b0", "Normal", "Free", "2 Bars"],
+        dirty: ["12 dB", "Soft", "0%", "65%", "12 kHz", "-6 dB"],
+    });
+
+    for (const effectType of SEQFX_SELECTABLE_EFFECT_IDS) {
+        const definition = getSeqFxEffectDefinition(effectType);
+        assert.ok(definition.parameters.every((parameter) => ["primary", "advanced"].includes(parameter.section)));
+        assert.ok(definition.parameters.some((parameter) => parameter.section === "primary"));
+    }
+
+    for (const effectType of [
+        SEQFX_EFFECT_TYPES.pitch,
+        SEQFX_EFFECT_TYPES.comb,
+        SEQFX_EFFECT_TYPES.ring,
+        SEQFX_EFFECT_TYPES.reverse,
+        SEQFX_EFFECT_TYPES.talkBox,
+        SEQFX_EFFECT_TYPES.vibro,
+        SEQFX_EFFECT_TYPES.flange,
+        SEQFX_EFFECT_TYPES.dirty,
+    ]) {
+        assert.ok(
+            getSeqFxEffectDefinition(effectType).parameters.some((parameter) => parameter.section === "advanced"),
+            `${getSeqFxEffectDefinition(effectType).name} should keep secondary controls behind Advanced`,
+        );
+    }
+
+    const freeStop = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.tapeStop).parameters[6];
+    assert.equal(formatSeqFxParameterValue(freeStop, 8_000), "8 s");
+    assert.equal(formatSeqFxParameterRange(freeStop), "20 ms to 8 s");
+
+    const patchViewSource = await readFile(path.join(repoRoot, "fx/seqfx/view/SeqFxPatchView.tsx"), "utf8");
+    assert.doesNotMatch(patchViewSource, /const PARAM_DEFINITIONS/);
+    assert.match(patchViewSource, /paramDefinitionsForEffect\(inspectedEffectType\)/);
+    assert.match(patchViewSource, /data-role="seqfx-advanced-parameters"/);
+    assert.match(patchViewSource, /formatSeqFxParameterValue\(definition, value\)/);
+});
 
 test("seqfx effect IDs are append-only and cover the requested sequenced effects", () => {
     assert.deepEqual(SEQFX_EFFECT_TYPES, {

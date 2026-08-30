@@ -1209,13 +1209,30 @@ select {
     gap: 7px;
 }
 
-.seqfx-field span {
+.seqfx-field__heading {
     display: flex;
     align-items: center;
     justify-content: space-between;
     color: var(--seqfx-shell-ink);
     font-size: 12px;
     font-weight: 700;
+}
+
+.seqfx-field__number {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+}
+
+.seqfx-field__number input {
+    min-width: 0;
+}
+
+.seqfx-field__number output {
+    min-width: 58px;
+    text-align: right;
+    white-space: nowrap;
 }
 
 .seqfx-field em {
@@ -1254,6 +1271,76 @@ select {
     color: var(--seqfx-shell-ink);
     font-family: Menlo, Monaco, monospace;
     font-size: 12px;
+}
+
+.seqfx-parameter-section {
+    display: grid;
+    gap: 10px;
+}
+
+.seqfx-advanced-parameters {
+    border-top: 1px solid var(--seqfx-shell-border);
+    padding-top: 4px;
+}
+
+.seqfx-advanced-parameters summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 34px;
+    border-radius: 6px;
+    padding: 5px 8px;
+    color: var(--seqfx-shell-ink);
+    background: rgba(222, 216, 204, 0.38);
+    font-size: 12px;
+    font-weight: 750;
+    cursor: pointer;
+    list-style: none;
+}
+
+.seqfx-advanced-parameters summary::-webkit-details-marker {
+    display: none;
+}
+
+.seqfx-advanced-parameters summary::before {
+    width: 0;
+    height: 0;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-left: 6px solid currentColor;
+    content: "";
+    transform-origin: 2px 50%;
+    transition: transform 120ms ease;
+}
+
+.seqfx-advanced-parameters[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.seqfx-advanced-parameters summary > span {
+    min-width: 22px;
+    border-radius: 999px;
+    padding: 2px 6px;
+    color: var(--seqfx-shell-ink-muted);
+    background: rgba(255, 248, 232, 0.56);
+    font-family: Menlo, Monaco, monospace;
+    font-size: 10px;
+    text-align: center;
+}
+
+.seqfx-advanced-parameters[open] summary {
+    margin-bottom: 10px;
+}
+
+.seqfx-advanced-parameters summary:focus-visible {
+    outline: 2px solid var(--seqfx-focus-ring-dark);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .seqfx-advanced-parameters summary::before {
+        transition: none;
+    }
 }
 
 .aux-curve {
