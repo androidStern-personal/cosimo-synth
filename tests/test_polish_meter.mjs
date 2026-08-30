@@ -24,6 +24,58 @@ test("Polish meter messages accept only finite direct or Cmajor event frames", a
     }
 });
 
+test("Polish meter telemetry preserves finite live compressor gain reduction", async () => {
+    const meter = await loadUIModule(repoRoot, "ui/shared/polish.ts");
+    const frame = {
+        peakDbfs: -2.4,
+        loudnessDbfs: -13.2,
+        compressorGainReductionDb: -3.75,
+    };
+
+    assert.deepEqual(meter.normalizePolishMeterMessage(frame), frame);
+    assert.deepEqual(meter.normalizePolishMeterMessage({ event: frame }), frame);
+    assert.equal(meter.normalizePolishMeterMessage({
+        ...frame,
+        compressorGainReductionDb: Number.NaN,
+    }), null);
+});
+
+test("alternating Polish meter and spectrum events retain both telemetry views", async () => {
+    const telemetry = await loadUIModule(repoRoot, "ui/shared/polish-telemetry.ts");
+    let state = telemetry.createPolishTelemetryDisplay();
+    const meterFrame = {
+        peakDbfs: -2.4,
+        loudnessDbfs: -13.2,
+        compressorGainReductionDb: -3.75,
+    };
+    state = telemetry.advancePolishTelemetryDisplay(state, meterFrame, 10);
+    assert.deepEqual(state.meter, meterFrame);
+    assert.equal(state.spectrum, null);
+
+    const magnitudes = new Array(2_048).fill(0);
+    magnitudes[200] = 1;
+    state = telemetry.advancePolishTelemetryDisplay(
+        state,
+        { sampleRateHz: 4_096, magnitudes },
+        20,
+    );
+    assert.deepEqual(state.meter, meterFrame);
+    assert.ok(state.spectrum);
+    const retainedSpectrum = state.spectrum;
+
+    state = telemetry.advancePolishTelemetryDisplay(state, {
+        ...meterFrame,
+        peakDbfs: -1.1,
+    }, 30);
+    assert.equal(state.meter.peakDbfs, -1.1);
+    assert.equal(state.spectrum, retainedSpectrum);
+
+    assert.deepEqual(
+        telemetry.advancePolishTelemetryDisplay(state, null, 40),
+        telemetry.createPolishTelemetryDisplay(),
+    );
+});
+
 test("the compact peak display writes higher peaks immediately, holds one second, then falls at 24 dB per second", async () => {
     const meter = await loadUIModule(repoRoot, "ui/shared/polish.ts");
     let state = meter.createPolishPeakDisplayState({ peakDbfs: -20, loudnessDbfs: -30 }, 0);

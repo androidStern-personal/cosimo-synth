@@ -141,8 +141,11 @@ test("the isolated Lite DSP keeps the accepted laws while removing de-emphasis",
     assert.doesNotMatch(source, /selectedDownsampler|unprocessed/i);
     assert.doesNotMatch(graph, /deEmphasis/i);
     assert.match(graph, /input event int32 analyzerEnabledIn \[\[ name: "Analyzer Enable", hidden: true \]\];/);
-    assert.match(graph, /output event wt::EnhancerLiteSpectrumFrame inputSpectrum/);
-    assert.match(graph, /output event wt::EnhancerLiteSpectrumFrame outputSpectrum/);
+    assert.match(graph, /output event wt::EnhancerSpectrumFrame inputSpectrum/);
+    assert.match(graph, /output event wt::EnhancerSpectrumFrame outputSpectrum/);
+    assert.match(graph, /node inputAnalyzer = wt::EnhancerSpectrumAnalyzer \(0\);/);
+    assert.match(graph, /node outputAnalyzer = wt::EnhancerSpectrumAnalyzer \(0\);/);
+    assert.match(analyzer, /processor EnhancerSpectrumAnalyzer \(int32 initiallyEnabled\)/);
     assert.match(analyzer, /let stereoPower = 0\.5f/);
     assert.doesNotMatch(analyzer, /StereoToMonoAverage/);
 

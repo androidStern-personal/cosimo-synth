@@ -15,7 +15,75 @@ function requirePolishLatency (relativePath)
     return undefined;
 }
 
-## global ("../../cmajor/Enhancer.cmajor", "../../cmajor/Polish.cmajor", "PolishRateProbes.cmajor")
+## global ("../../cmajor/Enhancer.cmajor", "../../cmajor/EnhancerLiteSpectrumAnalyzer.cmajor", "../../cmajor/Polish.cmajor", "PolishRateProbes.cmajor")
+
+//==============================================================================
+// Compile the production analyzer from Polish's internal post-Safe-Bass tap.
+// The source-level production test separately pins the exact top-level wire;
+// this fixture proves the endpoint types compose without a host endpoint.
+
+## testProcessor (undefined, { frequency: 48000 })
+
+graph PolishEnhancerInputAnalyzerComposition [[ main ]]
+{
+    output event int32 out;
+
+    node source = PolishEnhancerInputAnalyzerSource;
+    node polish = wt::PolishBus;
+    node analyzer = wt::EnhancerSpectrumAnalyzer (1);
+    node witness = PolishEnhancerInputAnalyzerWitness;
+
+    connection
+    {
+        source.audioOut -> polish.in;
+        source.enhancerAmountOut -> polish.enhancerAmountIn;
+        source.compAmountOut -> polish.compressionClipAmountIn;
+        source.trimOut -> polish.outputTrimDbIn;
+        polish.enhancerInputMonitor -> analyzer.in;
+        analyzer.spectrum -> witness.spectrumIn;
+        witness.out -> out;
+    }
+}
+
+processor PolishEnhancerInputAnalyzerSource
+{
+    output stream float32<2> audioOut;
+    output value float32 enhancerAmountOut;
+    output value float32 compAmountOut;
+    output value float32 trimOut;
+
+    void main()
+    {
+        enhancerAmountOut <- 1.0f;
+        compAmountOut <- 0.0f;
+        trimOut <- 0.0f;
+        loop
+        {
+            audioOut <- float32<2> (0.25f, -0.25f);
+            advance();
+        }
+    }
+}
+
+processor PolishEnhancerInputAnalyzerWitness
+{
+    input event wt::EnhancerSpectrumFrame spectrumIn;
+    output event int32 out;
+
+    event spectrumIn (wt::EnhancerSpectrumFrame frame)
+    {
+    }
+
+    void main()
+    {
+        for (int32 frame = 0; frame < 10; ++frame)
+            advance();
+        out <- 1;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
 
 //==============================================================================
 // The all-zero sound is neutral but never changes timing: the production bus

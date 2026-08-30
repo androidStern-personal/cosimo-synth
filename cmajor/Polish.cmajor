@@ -28,6 +28,7 @@ namespace wt
     {
         float32 peakDbfs;
         float32 loudnessDbfs;
+        float32 compressorGainReductionDb;
     }
 
     float32 clampPolishAmount (float32 value)
@@ -202,6 +203,9 @@ namespace wt
         input value float32 compressionClipBypassIn [[ name: "Compression / Clip Bypass", group: "Polish", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
         input value float32 outputTrimBypassIn [[ name: "Output Trim Bypass", group: "Polish", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
         output stream float32<2> out;
+        // Internal read-only tap: the parent graph analyses the exact signal
+        // after Safe Bass and before Enhancer without exposing a host endpoint.
+        output stream float32<2> enhancerInputMonitor;
         output event PolishMeterFrame meterOut [[ name: "Polish Meter" ]];
 
         // Cmajor 1.0.3066 does not propagate a child's declaration through a
@@ -357,7 +361,9 @@ namespace wt
             loop
             {
                 updateControls();
-                driveEnhancer (applySafeBass (in));
+                let enhancerInput = applySafeBass (in);
+                enhancerInputMonitor <- enhancerInput;
+                driveEnhancer (enhancerInput);
                 let finished = applyCompressionAndClip (enhancer.out);
                 let rendered = finished * outputTrimGain;
                 out <- rendered;
@@ -366,6 +372,7 @@ namespace wt
                     PolishMeterFrame frame;
                     frame.peakDbfs = meter.peakDbfs;
                     frame.loudnessDbfs = meter.loudnessDbfs;
+                    frame.compressorGainReductionDb = compressorReductionDb;
                     meterOut <- frame;
                 }
                 advance();

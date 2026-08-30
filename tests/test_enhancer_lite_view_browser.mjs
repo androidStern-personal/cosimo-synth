@@ -241,7 +241,7 @@ test("the Frequency readout drags one octave per 80 horizontal pixels", async ()
     }
 });
 
-test("Frequency uses the same fixed logarithmic law at every value and editor width", async () => {
+test("the Frequency readout keeps its fixed logarithmic law at every value and editor width", async () => {
     const expectedRatio = Math.sqrt(2);
 
     for (const { viewportWidth, editorWidth } of [
@@ -255,14 +255,11 @@ test("Frequency uses the same fixed logarithmic law at every value and editor wi
                 host.style.width = `${width}px`;
             }, editorWidth);
             const frequencyReadout = shadow(page, "[data-readout-control='frequency']");
-            const primaryHandle = shadow(page, "[data-response-role='primary-handle']");
             const lowRatio = await frequencyRatioAfterDrag(page, frequencyReadout, 100, 40);
             const highRatio = await frequencyRatioAfterDrag(page, frequencyReadout, 8000, 40);
-            const bellRatio = await frequencyRatioAfterDrag(page, primaryHandle, 1000, 40);
 
             assert.ok(Math.abs(lowRatio - expectedRatio) < 1e-6, String(lowRatio));
             assert.ok(Math.abs(highRatio - expectedRatio) < 1e-6, String(highRatio));
-            assert.ok(Math.abs(bellRatio - expectedRatio) < 1e-6, String(bellRatio));
         } finally {
             await page.close();
         }
@@ -852,6 +849,84 @@ test("input and output spectra share the bell's frequency grid and aligned dB ro
                 path: process.env.ENHANCER_LITE_SCREENSHOT_PATH,
                 fullPage: true,
             });
+        }
+    } finally {
+        await page.close();
+    }
+});
+
+test("a plotted frequency handle writes the exact shared-axis tick under the pointer", async () => {
+    for (const editorWidth of [393, 620, 820]) {
+        const page = await openEnhancerLite();
+        try {
+            await page.setViewportSize({ width: Math.max(500, editorWidth + 40), height: 620 });
+            await page.locator("cosimo-enhancer-lite-view").evaluate((host, width) => {
+                host.style.width = `${width}px`;
+            }, editorWidth);
+            await page.evaluate(() => {
+                window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1_000);
+                window.__ENHANCER_LITE_TEST__.clearSent();
+            });
+
+            const plot = shadow(page, ".response-plot");
+            const handle = shadow(page, "[data-response-role='primary-handle']");
+            const targetTick = shadow(page, "[data-frequency-hz='2000']");
+            const [plotBounds, handleBounds, targetTickX] = await Promise.all([
+                plot.boundingBox(),
+                handle.boundingBox(),
+                targetTick.getAttribute("x").then(Number),
+            ]);
+            assert.ok(plotBounds && handleBounds);
+            const targetClientX = plotBounds.x + targetTickX / 760 * plotBounds.width;
+            const handleClientY = handleBounds.y + handleBounds.height / 2;
+            await page.mouse.move(
+                handleBounds.x + handleBounds.width / 2,
+                handleClientY,
+            );
+            await page.mouse.down();
+            await page.mouse.move(targetClientX, handleClientY, { steps: 5 });
+            await page.mouse.up();
+
+            const frequencyEvents = (await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent))
+                .filter(({ endpointID }) => endpointID === "freqHzIn");
+            assert.ok(frequencyEvents.length > 0, `${editorWidth}px emitted no frequency write`);
+            assert.ok(
+                Math.abs(frequencyEvents.at(-1).value - 2_000) < 0.25,
+                `${editorWidth}px wrote ${frequencyEvents.at(-1).value} Hz at the 2 kHz tick`,
+            );
+            assert.equal(await handle.getAttribute("cx"), await targetTick.getAttribute("x"));
+        } finally {
+            await page.close();
+        }
+    }
+});
+
+test("the shared axis reduces label density responsively without moving retained ticks", async () => {
+    const page = await openEnhancerLite();
+    try {
+        let oneKhzX;
+        for (const { editorWidth, expectedLabels } of [
+            { editorWidth: 393, expectedLabels: 5 },
+            { editorWidth: 620, expectedLabels: 7 },
+            { editorWidth: 820, expectedLabels: 10 },
+        ]) {
+            await page.setViewportSize({ width: Math.max(500, editorWidth + 40), height: 620 });
+            await page.locator("cosimo-enhancer-lite-view").evaluate((host, width) => {
+                host.style.width = `${width}px`;
+            }, editorWidth);
+            await page.waitForFunction((count) => {
+                const root = document.querySelector("cosimo-enhancer-lite-view")?.shadowRoot;
+                return root?.querySelectorAll("[data-frequency-hz]:not([hidden])").length === count;
+            }, expectedLabels);
+
+            const visibleTicks = shadow(page, "[data-frequency-hz]:not([hidden])");
+            assert.equal(await visibleTicks.count(), expectedLabels);
+            const labels = await visibleTicks.allTextContents();
+            assert.equal(labels.some((label) => label.endsWith(" Hz")), true);
+            assert.equal(labels.some((label) => label.endsWith(" kHz")), true);
+            const nextOneKhzX = Number(await shadow(page, "[data-frequency-hz='1000']").getAttribute("x"));
+            oneKhzX ??= nextOneKhzX;
+            assert.equal(nextOneKhzX, oneKhzX);
         }
     } finally {
         await page.close();

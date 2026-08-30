@@ -48,9 +48,10 @@ test("the production graph exposes the compact Polish controls and ends rack to 
         assert.match(source, new RegExp(`input value float32 ${endpointID} \\[\\[`));
         assert.match(source, new RegExp(`${endpointID} -> polish\\.`));
     }
-    assert.match(source, /output event wt::PolishMeterFrame polishMeter;/);
+    assert.match(source, /output event \(wt::PolishMeterFrame, wt::EnhancerSpectrumFrame\) polishMeter;/);
     assert.match(source, /node polish = wt::PolishBus;/);
     assert.match(source, /rack\.out -> polish\.in;/);
+    assert.match(source, /polish\.enhancerInputMonitor -> polishInputSpectrum\.in;/);
     assert.match(source, /polish\.out -> audioOut;/);
     assert.match(source, /polish\.meterOut -> polishMeter;/);
     assert.match(source, /static_assert \(processor\.latency == wt::polishLatencyFrames/);
@@ -59,6 +60,40 @@ test("the production graph exposes the compact Polish controls and ends rack to 
     const polishEndpointMentions = [...source.matchAll(/input value float32 (polish\w+)/g)]
         .map((match) => match[1]);
     assert.deepEqual(polishEndpointMentions, publicControls);
+});
+
+test("Polish reuses the Enhancer analyzer and multiplexes spectrum through its existing telemetry endpoint", async () => {
+    const [source, analyzer, polish, ...manifests] = await Promise.all([
+        read("cmajor/WavetableSynth.cmajor"),
+        read("cmajor/EnhancerLiteSpectrumAnalyzer.cmajor"),
+        read("cmajor/Polish.cmajor"),
+        read("WavetableSynth.cmajorpatch").then(JSON.parse),
+        read("WavetableSynth.iOS.cmajorpatch").then(JSON.parse),
+    ]);
+
+    for (const manifest of manifests) {
+        assert.ok(manifest.source.includes("cmajor/EnhancerLiteSpectrumAnalyzer.cmajor"));
+    }
+    assert.match(analyzer, /processor EnhancerSpectrumAnalyzer \(int32 initiallyEnabled\)/);
+    assert.match(source, /output event \(wt::PolishMeterFrame, wt::EnhancerSpectrumFrame\) polishMeter;/);
+    assert.match(source, /node polishInputSpectrum = wt::EnhancerSpectrumAnalyzer \(1\);/);
+    assert.match(polish, /output stream float32<2> enhancerInputMonitor;/);
+    assert.match(polish, /let enhancerInput = applySafeBass \(in\);/);
+    assert.match(polish, /enhancerInputMonitor <- enhancerInput;/);
+    assert.match(polish, /driveEnhancer \(enhancerInput\);/);
+    assert.match(source, /rack\.out -> polish\.in;/);
+    assert.match(source, /polish\.enhancerInputMonitor -> polishInputSpectrum\.in;/);
+    assert.match(source, /polishInputSpectrum\.spectrum -> polishMeter;/);
+    assert.match(polish, /float32 compressorGainReductionDb;/);
+    assert.match(polish, /frame\.compressorGainReductionDb = compressorReductionDb;/);
+
+    const publicPolishInputs = [...source.matchAll(/input value float32 (polish\w+)/g)]
+        .map((match) => match[1]);
+    assert.deepEqual(publicPolishInputs, [
+        "polishEnhancerAmount",
+        "polishCompressionClipAmount",
+        "polishOutputTrimDb",
+    ]);
 });
 
 test("native plugin seams forward the compiled graph latency to their hosts", async () => {

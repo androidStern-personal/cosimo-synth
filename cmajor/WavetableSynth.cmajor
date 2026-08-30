@@ -1422,8 +1422,10 @@ graph WavetableSynth [[ main ]]
     output event wt::BounceBankRuntimeState bounceBankRuntimeState;
     // Append-only engine metadata used by Bounce capture.
     output event wt::EngineStatus engineStatus;
-    // Append-only, post-trim Polish telemetry. The observer never changes audio.
-    output event wt::PolishMeterFrame polishMeter;
+    // Existing Polish telemetry identity carries both the post-trim meter and
+    // read-only post-Safe-Bass/pre-Enhancer spectrum; no new host endpoint or
+    // sound control is added.
+    output event (wt::PolishMeterFrame, wt::EnhancerSpectrumFrame) polishMeter;
 
     let voiceCount = 16;
 
@@ -1441,6 +1443,7 @@ graph WavetableSynth [[ main ]]
     node engineStatusMonitor = wt::EngineStatusMonitor;
     node analyzerDownmix = wt::StereoToMonoAverage;
     node filterSpectrumAnalyzer = wt::FilterSpectrumAnalyzer;
+    node polishInputSpectrum = wt::EnhancerSpectrumAnalyzer (1);
     node distortionScopeAnalyzer = wt::DistortionScopeAnalyzer;
     node distortionHistoryAnalyzer = wt::DistortionHistoryAnalyzer;
     node desiredTableMonitorA = wt::DesiredTableMonitor (wt::oscillatorA);
@@ -1627,8 +1630,10 @@ graph WavetableSynth [[ main ]]
         rack.previewOutputLeft -> distortionHistoryAnalyzer.previewOutputLeft;
         rack.previewOutputRight -> distortionHistoryAnalyzer.previewOutputRight;
         rack.out -> polish.in;
+        polish.enhancerInputMonitor -> polishInputSpectrum.in;
         polish.out -> audioOut;
         polish.meterOut -> polishMeter;
+        polishInputSpectrum.spectrum -> polishMeter;
         rack.laneCommittedChainLength -> rackStateMonitor.laneCommittedChainLengthIn;
         rack.laneCommittedChainCode -> rackStateMonitor.laneCommittedChainCodeIn;
         rack.laneCommittedPositionMask -> rackStateMonitor.laneCommittedPositionMaskIn;

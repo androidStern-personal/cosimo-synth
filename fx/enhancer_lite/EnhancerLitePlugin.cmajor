@@ -3,8 +3,8 @@ graph CosimoEnhancerLite [[ main ]]
     input stream float32<2> audioIn [[ name: "Input" ]];
     output stream float32<2> audioOut [[ name: "Output" ]];
     input event int32 analyzerEnabledIn [[ name: "Analyzer Enable", hidden: true ]];
-    output event wt::EnhancerLiteSpectrumFrame inputSpectrum [[ name: "Input Spectrum", hidden: true ]];
-    output event wt::EnhancerLiteSpectrumFrame outputSpectrum [[ name: "Output Spectrum", hidden: true ]];
+    output event wt::EnhancerSpectrumFrame inputSpectrum [[ name: "Input Spectrum", hidden: true ]];
+    output event wt::EnhancerSpectrumFrame outputSpectrum [[ name: "Output Spectrum", hidden: true ]];
 
     input value float32 freqHzIn [[ name: "Frequency", group: "Band", min: wt::enhancerLiteFrequencyMinHz, max: wt::enhancerLiteFrequencyMaxHz, init: wt::enhancerLiteFrequencyDefaultHz, unit: "Hz", automatable: false, rampFrames: 0 ]];
     input value float32 qIn [[ name: "Q", group: "Band", min: wt::enhancerLiteQMin, max: wt::enhancerLiteQMax, init: wt::enhancerLiteQDefault, automatable: false, rampFrames: 0 ]];
@@ -16,8 +16,8 @@ graph CosimoEnhancerLite [[ main ]]
     input value float32 shapeIn [[ name: "Shape", group: "Band", min: 0.0f, max: 2.0f, init: float32 (wt::enhancerLiteShapeDefault), discrete: true, step: 1.0f, text: "Low|Bell|High", automatable: false, rampFrames: 0 ]];
 
     node enhancer = wt::EnhancerLiteBus;
-    node inputAnalyzer = wt::EnhancerLiteSpectrumAnalyzer;
-    node outputAnalyzer = wt::EnhancerLiteSpectrumAnalyzer;
+    node inputAnalyzer = wt::EnhancerSpectrumAnalyzer (0);
+    node outputAnalyzer = wt::EnhancerSpectrumAnalyzer (0);
 
     connection
     {

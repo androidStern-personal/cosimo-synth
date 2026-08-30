@@ -4,15 +4,22 @@ import {
     type EnhancerLiteSettingDescriptor,
 } from "../../../ui/shared/enhancer-lite-state";
 import {
+    ENHANCER_FREQUENCY_TICKS as ENHANCER_LITE_FREQUENCY_TICKS,
+    ENHANCER_SPECTRUM_PLOT as ENHANCER_LITE_PLOT,
+    advanceEnhancerSpectrum as advanceEnhancerLiteSpectrum,
+    createEnhancerFrequencyPath,
+    enhancerBellResponseDb,
+    enhancerFrequencyAfterClientDrag,
+    enhancerFrequencyTicksForWidth,
+    enhancerFrequencyX as enhancerLiteFrequencyX,
+    enhancerGainY as enhancerLiteGainY,
+    formatEnhancerFrequencyTick,
+    type EnhancerSpectrumDisplay as EnhancerLiteSpectrumDisplay,
+} from "../../../ui/shared/enhancer-spectrum";
+import {
     ENHANCER_LITE_ANALYZER_ENDPOINTS,
     ENHANCER_LITE_DB_ROWS,
-    ENHANCER_LITE_FREQUENCY_TICKS,
-    ENHANCER_LITE_PLOT,
-    advanceEnhancerLiteSpectrum,
-    enhancerLiteFrequencyX,
-    enhancerLiteGainY,
     enhancerLiteShelfGainY,
-    type EnhancerLiteSpectrumDisplay,
 } from "./spectrum";
 import {
     ENHANCER_LITE_GESTURE_POLICY,
@@ -129,39 +136,6 @@ function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
 }
 
-function peakingResponseDb(
-    frequencyHz: number,
-    centreHz: number,
-    q: number,
-    amount: number,
-): number {
-    const gainDb = 12 * clamp(amount, 0, 1);
-    const amplitude = Math.pow(10, gainDb / 40);
-    const centreOmega = 2 * Math.PI * clamp(centreHz, 20, 20_000)
-        / responseModelSampleRate;
-    const alpha = Math.sin(centreOmega) / (2 * clamp(q, 0.1, 10));
-    const centreCosine = Math.cos(centreOmega);
-    const omega = 2 * Math.PI * clamp(frequencyHz, 20, 20_000)
-        / responseModelSampleRate;
-    const z1Real = Math.cos(omega);
-    const z1Imaginary = -Math.sin(omega);
-    const z2Real = Math.cos(2 * omega);
-    const z2Imaginary = -Math.sin(2 * omega);
-    const numeratorReal = 1 + alpha * amplitude
-        - 2 * centreCosine * z1Real
-        + (1 - alpha * amplitude) * z2Real;
-    const numeratorImaginary = -2 * centreCosine * z1Imaginary
-        + (1 - alpha * amplitude) * z2Imaginary;
-    const denominatorReal = 1 + alpha / amplitude
-        - 2 * centreCosine * z1Real
-        + (1 - alpha / amplitude) * z2Real;
-    const denominatorImaginary = -2 * centreCosine * z1Imaginary
-        + (1 - alpha / amplitude) * z2Imaginary;
-    const numeratorPower = numeratorReal * numeratorReal + numeratorImaginary * numeratorImaginary;
-    const denominatorPower = denominatorReal * denominatorReal + denominatorImaginary * denominatorImaginary;
-    return clamp(10 * Math.log10(Math.max(numeratorPower / denominatorPower, 1e-30)), 0, 12);
-}
-
 function shelfResponseDb(
     shape: Exclude<EnhancerLiteShape, "bell">,
     frequencyHz: number,
@@ -222,7 +196,7 @@ function responseDb(
     amount: number,
 ): number {
     return shape === "bell"
-        ? peakingResponseDb(frequencyHz, centreHz, q, amount)
+        ? enhancerBellResponseDb(frequencyHz, centreHz, q, amount)
         : shelfResponseDb(shape, frequencyHz, centreHz, q, amount);
 }
 
@@ -233,29 +207,19 @@ function responsePath(
     amount: number,
     closeArea = false,
 ): string {
-    const pointCount = 241;
-    const points: Array<string> = [];
-    for (let index = 0; index < pointCount; index += 1) {
-        const normalized = index / (pointCount - 1);
-        const frequencyHz = ENHANCER_LITE_PLOT.minimumHz
-            * Math.pow(
-                ENHANCER_LITE_PLOT.maximumHz / ENHANCER_LITE_PLOT.minimumHz,
-                normalized,
-            );
+    const path = createEnhancerFrequencyPath((frequencyHz) => {
         const gainDb = responseDb(shape, frequencyHz, centreHz, q, amount);
-        points.push(
-            `${index === 0 ? "M" : "L"} ${enhancerLiteFrequencyX(frequencyHz).toFixed(2)} `
-            + (shape === "bell"
-                ? enhancerLiteGainY(gainDb)
-                : enhancerLiteShelfGainY(gainDb)).toFixed(2),
-        );
-    }
+        return shape === "bell"
+            ? enhancerLiteGainY(gainDb)
+            : enhancerLiteShelfGainY(gainDb);
+    });
     if (closeArea) {
         const baseline = enhancerLiteGainY(0).toFixed(2);
-        points.push(`L ${(ENHANCER_LITE_PLOT.width - ENHANCER_LITE_PLOT.right).toFixed(2)} ${baseline}`);
-        points.push(`L ${ENHANCER_LITE_PLOT.left.toFixed(2)} ${baseline} Z`);
+        return `${path} L ${(
+            ENHANCER_LITE_PLOT.width - ENHANCER_LITE_PLOT.right
+        ).toFixed(2)} ${baseline} L ${ENHANCER_LITE_PLOT.left.toFixed(2)} ${baseline} Z`;
     }
-    return points.join(" ");
+    return path;
 }
 
 class EnhancerLiteView extends HTMLElement {
@@ -268,6 +232,7 @@ class EnhancerLiteView extends HTMLElement {
     hasAttached = false;
     drag: ResponseDrag | undefined;
     readoutDrag: ReadoutDrag | undefined;
+    frequencyTickResizeObserver: ResizeObserver | undefined;
 
     constructor(patchConnection: EnhancerLitePatchConnection) {
         super();
@@ -308,6 +273,12 @@ class EnhancerLiteView extends HTMLElement {
             1,
             0,
         );
+        const responsePlot = this.requireElement<SVGSVGElement>(".response-plot");
+        this.frequencyTickResizeObserver = new ResizeObserver(() => {
+            this.renderFrequencyTickDensity();
+        });
+        this.frequencyTickResizeObserver.observe(responsePlot);
+        this.renderFrequencyTickDensity();
     }
 
     disconnectedCallback(): void {
@@ -326,6 +297,8 @@ class EnhancerLiteView extends HTMLElement {
         this.parameterListeners.length = 0;
         this.endpointListeners.length = 0;
         this.spectrumDisplays.clear();
+        this.frequencyTickResizeObserver?.disconnect();
+        this.frequencyTickResizeObserver = undefined;
         this.hasAttached = false;
         this.drag = undefined;
     }
@@ -596,9 +569,16 @@ class EnhancerLiteView extends HTMLElement {
             return;
         }
 
-        const frequencyHz = enhancerLiteFrequencyFromHorizontalPixels(
+        const plotBounds = this.requireElement<SVGSVGElement>(".response-plot")
+            .getBoundingClientRect();
+        const frequencyHz = enhancerFrequencyAfterClientDrag(
             drag.originFrequencyHz,
-            event.clientX - drag.originClientX,
+            drag.originClientX,
+            event.clientX,
+            {
+                left: plotBounds.left,
+                width: plotBounds.width,
+            },
         );
         const amount = enhancerLiteAmountFromUpwardPixels(
             drag.originAmount,
@@ -839,11 +819,27 @@ class EnhancerLiteView extends HTMLElement {
         sideAmountReadout.setAttribute("aria-valuetext", formatBoost(sideAmount));
     }
 
+    renderFrequencyTickDensity(): void {
+        const plot = this.requireElement<SVGSVGElement>(".response-plot");
+        const visibleFrequencies = new Set(
+            enhancerFrequencyTicksForWidth(plot.getBoundingClientRect().width)
+                .map((tick) => tick.frequencyHz),
+        );
+        for (const tick of this.root.querySelectorAll<SVGElement>(
+            "[data-frequency-hz], [data-frequency-grid-hz]",
+        )) {
+            const rawFrequency = tick.getAttribute("data-frequency-hz")
+                ?? tick.getAttribute("data-frequency-grid-hz");
+            const frequencyHz = Number(rawFrequency);
+            tick.toggleAttribute("hidden", !visibleFrequencies.has(frequencyHz));
+        }
+    }
+
     responsePlotMarkup(): string {
         const verticalGrid = ENHANCER_LITE_FREQUENCY_TICKS.map((frequencyHz) => {
             const x = enhancerLiteFrequencyX(frequencyHz).toFixed(2);
-            const label = frequencyHz >= 1000 ? `${frequencyHz / 1000}k` : String(frequencyHz);
-            return `<path class="grid-line" d="M ${x} ${ENHANCER_LITE_PLOT.top} V ${enhancerLiteGainY(0).toFixed(2)}"></path>
+            const label = formatEnhancerFrequencyTick(frequencyHz);
+            return `<path class="grid-line" data-frequency-grid-hz="${frequencyHz}" d="M ${x} ${ENHANCER_LITE_PLOT.top} V ${enhancerLiteGainY(0).toFixed(2)}"></path>
                     <text class="axis-label frequency" data-frequency-hz="${frequencyHz}" x="${x}" y="${ENHANCER_LITE_PLOT.height - 7}" text-anchor="middle">${label}</text>`;
         }).join("");
         const horizontalGrid = ENHANCER_LITE_DB_ROWS.map(({ gainDb, levelDbfs }, index) => {
@@ -862,7 +858,7 @@ class EnhancerLiteView extends HTMLElement {
                     </span>
                     <span class="gesture-hint">DRAG FREQ + AMOUNT&nbsp;&nbsp;·&nbsp;&nbsp;SHIFT DRAG Q</span>
                 </div>
-                <svg class="response-plot" viewBox="0 0 ${ENHANCER_LITE_PLOT.width} ${ENHANCER_LITE_PLOT.height}" role="application" aria-label="Draggable frequency and amount plot with input and output spectra">
+                <svg class="response-plot" viewBox="0 0 ${ENHANCER_LITE_PLOT.width} ${ENHANCER_LITE_PLOT.height}" preserveAspectRatio="none" role="application" aria-label="Draggable frequency and amount plot with input and output spectra">
                     ${verticalGrid}
                     ${horizontalGrid}
                     <text class="axis-label shelf-overflow" data-shelf-overflow="high" x="${ENHANCER_LITE_PLOT.left - 8}" y="9" text-anchor="end" hidden>+30</text>

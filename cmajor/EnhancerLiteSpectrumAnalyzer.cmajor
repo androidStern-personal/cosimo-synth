@@ -1,64 +1,64 @@
 namespace wt
 {
-    let enhancerLiteSpectrumFFTSize = 4096;
-    let enhancerLiteSpectrumBinCount = enhancerLiteSpectrumFFTSize / 2;
-    let enhancerLiteSpectrumWindowSize = 1024;
-    let enhancerLiteSpectrumFramesPerSecond = 20.0f;
+    let enhancerSpectrumFFTSize = 4096;
+    let enhancerSpectrumBinCount = enhancerSpectrumFFTSize / 2;
+    let enhancerSpectrumWindowSize = 1024;
+    let enhancerSpectrumFramesPerSecond = 20.0f;
 
-    struct EnhancerLiteSpectrumFrame
+    struct EnhancerSpectrumFrame
     {
         float32 sampleRateHz;
-        float32[enhancerLiteSpectrumBinCount] magnitudes;
+        float32[enhancerSpectrumBinCount] magnitudes;
     }
 
     // Stereo power is measured before magnitude conversion so pure Side input
     // remains visible instead of cancelling in a mono-average analyser.
-    processor EnhancerLiteSpectrumAnalyzer
+    processor EnhancerSpectrumAnalyzer (int32 initiallyEnabled)
     {
         input stream float32<2> in;
         input event int32 enabledIn;
-        output event EnhancerLiteSpectrumFrame spectrum;
+        output event EnhancerSpectrumFrame spectrum;
 
         let hopSize = int32 (
-            float32 (processor.frequency) / enhancerLiteSpectrumFramesPerSecond
+            float32 (processor.frequency) / enhancerSpectrumFramesPerSecond
         );
 
-        float32[enhancerLiteSpectrumWindowSize] leftRing;
-        float32[enhancerLiteSpectrumWindowSize] rightRing;
-        float32[enhancerLiteSpectrumFFTSize] fftBuffer;
-        wrap<enhancerLiteSpectrumWindowSize> writePosition;
+        float32[enhancerSpectrumWindowSize] leftRing;
+        float32[enhancerSpectrumWindowSize] rightRing;
+        float32[enhancerSpectrumFFTSize] fftBuffer;
+        wrap<enhancerSpectrumWindowSize> writePosition;
         int32 collectedFrames;
         int32 framesUntilAnalysis;
         bool enabled;
 
-        float32[enhancerLiteSpectrumWindowSize] hann()
+        float32[enhancerSpectrumWindowSize] hann()
         {
-            float32[enhancerLiteSpectrumWindowSize] window;
+            float32[enhancerSpectrumWindowSize] window;
 
-            for (wrap<enhancerLiteSpectrumWindowSize> index)
+            for (wrap<enhancerSpectrumWindowSize> index)
                 window[index] = 0.5f * (1.0f - std::intrinsics::cos (
                     float32 (twoPi) * float32 (index)
-                        / float32 (enhancerLiteSpectrumWindowSize - 1)
+                        / float32 (enhancerSpectrumWindowSize - 1)
                 ));
 
             return window;
         }
 
-        float32[enhancerLiteSpectrumWindowSize] window = hann();
+        float32[enhancerSpectrumWindowSize] window = hann();
 
         event enabledIn (int32 value)
         {
             enabled = value != 0;
             writePosition = 0;
             collectedFrames = 0;
-            framesUntilAnalysis = enhancerLiteSpectrumWindowSize;
+            framesUntilAnalysis = enhancerSpectrumWindowSize;
         }
 
         void copyChannelToFFTBuffer (bool useRightChannel)
         {
-            for (wrap<enhancerLiteSpectrumWindowSize> index)
+            for (wrap<enhancerSpectrumWindowSize> index)
             {
-                let sourceIndex = wrap<enhancerLiteSpectrumWindowSize> (
+                let sourceIndex = wrap<enhancerSpectrumWindowSize> (
                     int32 (writePosition) + int32 (index)
                 );
                 let sample = useRightChannel
@@ -67,35 +67,35 @@ namespace wt
                 fftBuffer[index] = sample * window[index];
             }
 
-            for (int32 index = enhancerLiteSpectrumWindowSize;
-                 index < enhancerLiteSpectrumFFTSize;
+            for (int32 index = enhancerSpectrumWindowSize;
+                 index < enhancerSpectrumFFTSize;
                  ++index)
                 fftBuffer.at (index) = 0.0f;
         }
 
         void emitSpectrum()
         {
-            EnhancerLiteSpectrumFrame result;
+            EnhancerSpectrumFrame result;
             result.sampleRateHz = float32 (processor.frequency);
-            float32[enhancerLiteSpectrumFFTSize] fft;
+            float32[enhancerSpectrumFFTSize] fft;
 
             copyChannelToFFTBuffer (false);
             std::frequency::realOnlyForwardFFT (fftBuffer, fft);
-            for (wrap<enhancerLiteSpectrumBinCount> index)
+            for (wrap<enhancerSpectrumBinCount> index)
             {
                 let real = fft[index];
-                let imag = fft.at (enhancerLiteSpectrumBinCount + index);
+                let imag = fft.at (enhancerSpectrumBinCount + index);
                 result.magnitudes[index] = (real * real) + (imag * imag);
             }
 
             copyChannelToFFTBuffer (true);
             std::frequency::realOnlyForwardFFT (fftBuffer, fft);
             let amplitudeCalibration = 4.0f
-                / float32 (enhancerLiteSpectrumWindowSize);
-            for (wrap<enhancerLiteSpectrumBinCount> index)
+                / float32 (enhancerSpectrumWindowSize);
+            for (wrap<enhancerSpectrumBinCount> index)
             {
                 let real = fft[index];
-                let imag = fft.at (enhancerLiteSpectrumBinCount + index);
+                let imag = fft.at (enhancerSpectrumBinCount + index);
                 let rightPower = (real * real) + (imag * imag);
                 let stereoPower = 0.5f
                     * (result.magnitudes[index] + rightPower);
@@ -108,7 +108,8 @@ namespace wt
 
         void main()
         {
-            framesUntilAnalysis = enhancerLiteSpectrumWindowSize;
+            enabled = initiallyEnabled != 0;
+            framesUntilAnalysis = enhancerSpectrumWindowSize;
 
             loop
             {
@@ -116,15 +117,15 @@ namespace wt
                 {
                     leftRing[writePosition] = in[0];
                     rightRing[writePosition] = in[1];
-                    writePosition = wrap<enhancerLiteSpectrumWindowSize> (
+                    writePosition = wrap<enhancerSpectrumWindowSize> (
                         int32 (writePosition) + 1
                     );
 
-                    if (collectedFrames < enhancerLiteSpectrumWindowSize)
+                    if (collectedFrames < enhancerSpectrumWindowSize)
                         ++collectedFrames;
 
                     --framesUntilAnalysis;
-                    if (collectedFrames >= enhancerLiteSpectrumWindowSize
+                    if (collectedFrames >= enhancerSpectrumWindowSize
                         && framesUntilAnalysis <= 0)
                     {
                         emitSpectrum();

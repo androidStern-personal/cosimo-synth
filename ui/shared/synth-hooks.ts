@@ -188,10 +188,13 @@ import {
     POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID,
     POLISH_SAFE_BASS_AMOUNT_ENDPOINT_ID,
     POLISH_SAFE_BASS_BYPASS_ENDPOINT_ID,
-    SILENT_POLISH_METER_FRAME,
-    normalizePolishMeterMessage,
     type PolishMeterFrame,
 } from "./polish";
+import type { EnhancerSpectrumDisplay } from "./enhancer-spectrum";
+import {
+    advancePolishTelemetryDisplay,
+    createPolishTelemetryDisplay,
+} from "./polish-telemetry";
 import {
     DEFAULT_FACTORY_TABLE_INDEX,
     loadFactoryBankCatalog,
@@ -538,6 +541,7 @@ export type SynthPatchViewModel = {
     observedWarpState: EffectiveWarpState;
     observedUnisonState: EffectiveUnisonState;
     observedPolishMeter: PolishMeterFrame;
+    observedPolishSpectrum: EnhancerSpectrumDisplay | null;
     modulationState: ModulationState | null;
     articulationBank: ArticulationEditorState;
     articulationSlots: ArticulationSlot[];
@@ -3084,10 +3088,18 @@ export function useSynthPatchViewModel({
         POLISH_METER_ENDPOINT_ID,
         null,
     );
-    const observedPolishMeter = useMemo(
-        () => normalizePolishMeterMessage(polishMeterMessage) ?? SILENT_POLISH_METER_FRAME,
-        [polishMeterMessage],
+    const [observedPolishTelemetry, setObservedPolishTelemetry] = useState(
+        createPolishTelemetryDisplay,
     );
+    useEffect(() => {
+        setObservedPolishTelemetry((current) => advancePolishTelemetryDisplay(
+            current,
+            polishMeterMessage,
+            globalThis.performance?.now() ?? 0,
+        ));
+    }, [polishMeterMessage]);
+    const observedPolishMeter = observedPolishTelemetry.meter;
+    const observedPolishSpectrum = observedPolishTelemetry.spectrum;
     const voiceArticulationStartMessage = usePatchEndpoint<VoiceArticulationStartMessage | null>(
         VOICE_ARTICULATION_START_ENDPOINT_ID,
         null,
@@ -4856,6 +4868,7 @@ export function useSynthPatchViewModel({
         observedWarpState,
         observedUnisonState,
         observedPolishMeter,
+        observedPolishSpectrum,
         modulationState,
         articulationBank,
         articulationSlots,

@@ -28,6 +28,7 @@
     "cmajor/EffectsRack.cmajor",
     "cmajor/Enhancer.cmajor",
     "cmajor/Polish.cmajor",
+    "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
     "cmajor/FilterSpectrumCommon.cmajor",
     "cmajor/FilterSpectrumAnalyzer.cmajor",
     "cmajor/Mseg.cmajor",
