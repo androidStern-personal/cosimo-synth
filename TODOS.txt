@@ -1448,6 +1448,31 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - The focused real-browser T60 matrix passes 8/8, including 393x852 phone proof of the permanent trigger-note position on source and tools pages; the composed T66 MSEG 1 -> open MSEG 2 Rate drag remains green. The final composed Cmajor rack gate passes 93/93. Moving-master browser fixtures exposed by the complete desktop/orphan runs were repaired and passed their focused full-file reruns; the only unrepaired desktop diagnostic remains the established unrelated React Grab `navigator.webdriver` assertion.
     - Fresh coordinator HMR launched the exact `74e4` standalone and the compiled phone render was reviewed. The final self-contained VST3 includes the pinned Cmajor runtime and is installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`; strict deep code-sign verification passes and its executable SHA-256 is `8a6754146b8c1a2b588798a2807d4c93a5f0edaf4996791783bd7cd2fdc198cd`. The replaced development-server bundle is recoverable from `/Users/winterfell/Desktop/CosimoDesktopNative-before-d1a9e51b.vst3`. Ableton remained open and was not disturbed, so no fresh host interaction/listening or physical iPhone/touch acceptance is claimed.
 
+[ ] T70 — Move the parked Mod bar to the top lip of an open MSEG drawer
+    Confirmed failure (2026-08-30):
+    - The failure reproduces on current master and the deployed Sites build at 393x852. The MSEG drawer occupies y=596-852 while the parked Mod bar stays at y=681-721, so the bar sits inside the drawer and covers its editable graph.
+    Required result:
+    - While the MSEG drawer is open, keep the parked Mod bar visible but move it immediately above the drawer's live top edge. It must follow the drawer continuously through its supported detents and while the drawer is dragged or resized; do not leave a gap, cover the drawer, or jump only after release.
+    - This is layout behavior, not a request to hide the Mod bar, raise another z-index, shrink its fixed row, or change floating-left/floating-right placement. Preserve the parked row's scale, paddles, audition button, selected source, source page, hide/restore state, mapping gestures, and open-editor continuity.
+    Done when:
+    - Real-browser geometry proves the parked row's bottom meets the MSEG drawer's top edge throughout opening, every supported detent, live dragging, and closing at representative portrait and landscape phone sizes.
+    - Every visible MSEG graph point and drawer control retains its own hit point, and opening or moving the drawer does not cancel a pending source drag, change the selected MSEG, or alter the envelope.
+
+[ ] T71 — Keep the parked Mod bar from covering full-screen MSEG controls
+    Confirmed failure (2026-08-30):
+    - In the 393x852 full-screen MSEG editor, the A/B, Rate, Morph, and Loop control row and the parked Mod bar occupy the exact same y=812-852 rectangle. The Mod bar therefore hides the controls and takes their touches.
+    Required result:
+    - Keep both surfaces visible and give each its own row. The full-screen MSEG editor must use the space above the parked Mod bar, with its complete bottom control row directly above the bar and fully tappable. Reduce or reflow the graph as needed; do not overlay the bar on the controls and do not hide the bar as a workaround.
+    - Dragging the drawer into full-screen and returning to the drawer must preserve the current MSEG, Shape A/B selection, Rate, Morph, Loop, undo state, selected Mod source, source page, and parked-bar state. If the parked row is hidden, the editor may reclaim that row while the tiny restore tab remains an overlay and does not block an editor control.
+    Done when:
+    - Real-browser geometry proves the full-screen MSEG control row and visible parked row have disjoint rectangles and owned hit points at representative portrait and landscape phone sizes, including the drawer-to-full-screen transition and return.
+    - Focused regression coverage proves Rate, Morph, A/B, and Loop remain operable with the parked row visible; the Mod bar remains operable; and floating placements retain their existing global-overlay behavior.
+
+    Coordinator assignment for T70 and T71 (2026-08-30):
+    - Send both items as one combined implementation task to `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`. They share the same `mobile-bottom-dock`, MSEG drawer, and full-editor layout boundary and must not be implemented by competing branches.
+    - The implementation task must start from current `origin/master`, use its own Codex worktree with SOL at max reasoning, reproduce both geometry failures before editing, report its committed clean handoff to that coordinator, and must not merge or push master or deploy.
+    - Review source and the scoped layout diff before broad tests. Repair failures with focused drawer/full-editor geometry and hit-testing tests; run the complete relevant UI/build/native/install/deployment gates only once after review is clean.
+
 [ ] T61 — Package Enhancer Lite as a shippable free VST3 and iOS AUv3 product
     Existing starting point:
     - Cosimo Enhancer Lite is the one-band standalone spin-off, not the two-band Polish processor and not the eventual per-voice processor. Its DSP, direct-manipulation editor, analyzer, wordmark, state tests, signed universal macOS VST3, and pluginval proof start on `codex/t26-spectre-wrapper-prototype`. Treat that as source material, not as a finished public release.
