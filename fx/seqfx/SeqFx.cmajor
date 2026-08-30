@@ -41,6 +41,8 @@ namespace seqfx
     let pitchHalfRateBufferSize = 16392;
     let pitchQuarterRateBufferSize = 8200;
     let speedupLowpassDelay = 15;
+    let adaptiveLowpassDelay = 23;
+    let adaptiveLowpassTapCount = 24;
     let tapeSpeedFloor = 0.005f;
     let tapeVoiceCount = 2;
     let tapeReturnCatchUp = 0;
@@ -193,6 +195,18 @@ namespace seqfx
         if (offset == 13) return 0.003465620001f;
         if (offset == 14) return 0.002977340355f;
         return 0.000209008642f;
+    }
+
+    // Symmetric 47-tap Blackman window. The ratio-dependent sinc coefficients
+    // are cached per voice, so the trigonometry is paid only when a playback-
+    // rate control actually moves rather than on every history read.
+    float32 adaptiveLowpassWindow (int32 absoluteOffset)
+    {
+        let x = float32 (clampInt (absoluteOffset, 0, adaptiveLowpassDelay));
+        let angle = seqfx::pi * x / float32 (adaptiveLowpassDelay);
+        return 0.42f
+            + (0.5f * std::intrinsics::cos (angle))
+            + (0.08f * std::intrinsics::cos (angle * 2.0f));
     }
 
     float32 unitWrap (float32 value)
@@ -687,7 +701,8 @@ processor SeqFx [[ main ]]
     int32[seqfx::patternCount] acceptedRevisions;
 
     std::filters::simper::Implementation[seqfx::laneCount, 2] filterStates;
-    std::filters::simper::Implementation[seqfx::laneCount, 2, 4] tapePrimaryAntialiasStates;
+    std::filters::simper::Implementation[seqfx::laneCount, 2, 8] tapePrimaryAntialiasStates;
+    std::filters::simper::Implementation[seqfx::laneCount, 2, 4] tapeCoarseAntialiasStates;
 
     float32<2>[seqfx::tapePrimaryBufferSize] tapePrimaryHistory0;
     float32<2>[seqfx::tapePrimaryBufferSize] tapePrimaryHistory1;
@@ -718,10 +733,10 @@ processor SeqFx [[ main ]]
     int64[seqfx::laneCount] pitchQuarterRateSamplesWritten;
     int32[seqfx::laneCount] pitchHalfRateValidSamples;
     int32[seqfx::laneCount] pitchQuarterRateValidSamples;
-    float32[seqfx::laneCount] tapePrimaryWritePhase;
-    float32[seqfx::laneCount] tapeCoarseWritePhase;
+    float64[seqfx::laneCount] tapePrimaryWritePhase;
+    float64[seqfx::laneCount] tapeCoarseWritePhase;
     float32<2>[seqfx::laneCount] tapePreviousHostSample;
-    float32<2>[seqfx::laneCount] tapeCoarseLowpassState;
+    float32<2>[seqfx::laneCount] tapePreviousCoarseSample;
 
     int32 selectedPatternIndex;
     int32 currentStep;
@@ -829,6 +844,8 @@ processor SeqFx [[ main ]]
     float64[seqfx::laneCount, seqfx::pitchGrainVoiceCount] pitchGrainSourcePosition;
     float32[seqfx::laneCount, seqfx::pitchGrainVoiceCount] pitchGrainJitterCents;
     float32[seqfx::laneCount, seqfx::pitchGrainVoiceCount] pitchGrainPositionJitter;
+    float32[seqfx::laneCount, seqfx::pitchGrainVoiceCount, seqfx::adaptiveLowpassTapCount] pitchAntialiasCoefficients;
+    float32[seqfx::laneCount, seqfx::pitchGrainVoiceCount] pitchAntialiasResidualRatio;
     std::random::RNG[seqfx::laneCount, seqfx::pitchGrainVoiceCount] pitchGrainRng;
 
     bool[seqfx::laneCount] reverseActive;
@@ -1015,8 +1032,22 @@ processor SeqFx [[ main ]]
     float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoicePlaybackSpeed;
     float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceShape;
     float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceGate;
+    float32[seqfx::laneCount, seqfx::stutterVoiceCount, seqfx::adaptiveLowpassTapCount] stutterAntialiasCoefficients;
+    float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterAntialiasResidualRatio;
 
-    float32 tapePrimaryAntialiasQ (wrap<4> stage)
+    float32 tapePrimaryAntialiasQ (wrap<8> stage)
+    {
+        if (stage == 0) return 0.502419286f;
+        if (stage == 1) return 0.522498615f;
+        if (stage == 2) return 0.566944035f;
+        if (stage == 3) return 0.646821783f;
+        if (stage == 4) return 0.788154623f;
+        if (stage == 5) return 1.060677686f;
+        if (stage == 6) return 1.722447098f;
+        return 5.101148619f;
+    }
+
+    float32 tapeCoarseAntialiasQ (wrap<4> stage)
     {
         if (stage == 0) return 0.509795579f;
         if (stage == 1) return 0.601344887f;
@@ -1030,15 +1061,28 @@ processor SeqFx [[ main ]]
         {
             for (wrap<2> channel)
             {
-                for (wrap<4> stage)
+                for (wrap<8> stage)
                 {
                     tapePrimaryAntialiasStates[lane, channel, stage].setMode (
                         std::filters::simper::Mode::lowPass
                     );
                     tapePrimaryAntialiasStates[lane, channel, stage].setFrequency (
                         processor.frequency,
-                        18000.0f,
+                        21500.0f,
                         tapePrimaryAntialiasQ (stage),
+                        0.0f
+                    );
+                }
+
+                for (wrap<4> stage)
+                {
+                    tapeCoarseAntialiasStates[lane, channel, stage].setMode (
+                        std::filters::simper::Mode::lowPass
+                    );
+                    tapeCoarseAntialiasStates[lane, channel, stage].setFrequency (
+                        processor.frequency,
+                        3200.0f,
+                        tapeCoarseAntialiasQ (stage),
                         0.0f
                     );
                 }
@@ -1056,8 +1100,23 @@ processor SeqFx [[ main ]]
         var filtered = sample;
         for (wrap<2> channel)
         {
-            for (wrap<4> stage)
+            for (wrap<8> stage)
                 filtered[channel] = tapePrimaryAntialiasStates[lane, channel, stage].process (
+                    filtered[channel]
+                );
+        }
+        return filtered;
+    }
+
+    float32<2> antialiasTapeCoarseInput (
+        wrap<seqfx::laneCount> lane,
+        float32<2> sample)
+    {
+        var filtered = sample;
+        for (wrap<2> channel)
+        {
+            for (wrap<4> stage)
+                filtered[channel] = tapeCoarseAntialiasStates[lane, channel, stage].process (
                     filtered[channel]
                 );
         }
@@ -1662,13 +1721,17 @@ processor SeqFx [[ main ]]
             pitchQuarterRateValidSamples[lane] = 0;
             tapePrimaryWriteIndex[lane] = 0;
             tapeCoarseWriteIndex[lane] = 0;
-            tapePrimaryWritePhase[lane] = 0.0f;
-            tapeCoarseWritePhase[lane] = 0.0f;
+            tapePrimaryWritePhase[lane] = 0.0;
+            tapeCoarseWritePhase[lane] = 0.0;
             tapePreviousHostSample[lane] = float32<2> (0.0f);
-            tapeCoarseLowpassState[lane] = float32<2> (0.0f);
+            tapePreviousCoarseSample[lane] = float32<2> (0.0f);
             for (wrap<2> channel)
-                for (wrap<4> stage)
+            {
+                for (wrap<8> stage)
                     tapePrimaryAntialiasStates[lane, channel, stage].reset();
+                for (wrap<4> stage)
+                    tapeCoarseAntialiasStates[lane, channel, stage].reset();
+            }
             tapeTriggerPending[lane] = false;
             for (wrap<seqfx::tapeVoiceCount> voice)
             {
@@ -2937,6 +3000,80 @@ processor SeqFx [[ main ]]
         return readPitchHalfRateAt (lane, absoluteIndex);
     }
 
+    float32<2> readPitchQuarterRateForMip (
+        wrap<seqfx::laneCount> lane,
+        int64 absoluteIndex)
+    {
+        let earliest = pitchQuarterRateSamplesWritten[lane] - int64 (pitchQuarterRateValidSamples[lane]);
+        if (absoluteIndex < earliest || absoluteIndex >= pitchQuarterRateSamplesWritten[lane])
+            return float32<2> (0.0f);
+        return readPitchQuarterRateAt (lane, absoluteIndex);
+    }
+
+    float32 adaptiveLowpassCoefficientForRatio (
+        int32 absoluteOffset,
+        float32 residualRatio)
+    {
+        let offset = seqfx::clampInt (absoluteOffset, 0, seqfx::adaptiveLowpassDelay);
+        let cutoff = seqfx::clampFloat (0.44f / std::intrinsics::max (1.0f, residualRatio), 0.05f, 0.475f);
+        if (offset == 0)
+            return 2.0f * cutoff;
+
+        let offsetFloat = float32 (offset);
+        return (
+            std::intrinsics::sin (2.0f * seqfx::pi * cutoff * offsetFloat)
+                / (seqfx::pi * offsetFloat)
+        ) * seqfx::adaptiveLowpassWindow (offset);
+    }
+
+    void configurePitchAntialias (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::pitchGrainVoiceCount> voice,
+        float32 residualRatio)
+    {
+        let ratio = std::intrinsics::max (1.0f, residualRatio);
+        if (std::intrinsics::abs (pitchAntialiasResidualRatio[lane, voice] - ratio) < 0.001f)
+            return;
+
+        var normalisation = 0.0f;
+        for (wrap<seqfx::adaptiveLowpassTapCount> tap)
+        {
+            let offset = int32 (tap);
+            let coefficient = adaptiveLowpassCoefficientForRatio (offset, ratio);
+            pitchAntialiasCoefficients[lane, voice, tap] = coefficient;
+            normalisation += coefficient * (offset == 0 ? 1.0f : 2.0f);
+        }
+
+        let inverseNormalisation = 1.0f / std::intrinsics::max (0.000001f, normalisation);
+        for (wrap<seqfx::adaptiveLowpassTapCount> tap)
+            pitchAntialiasCoefficients[lane, voice, tap] *= inverseNormalisation;
+        pitchAntialiasResidualRatio[lane, voice] = ratio;
+    }
+
+    void configureStutterAntialias (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::stutterVoiceCount> voice,
+        float32 residualRatio)
+    {
+        let ratio = std::intrinsics::max (1.0f, residualRatio);
+        if (std::intrinsics::abs (stutterAntialiasResidualRatio[lane, voice] - ratio) < 0.001f)
+            return;
+
+        var normalisation = 0.0f;
+        for (wrap<seqfx::adaptiveLowpassTapCount> tap)
+        {
+            let offset = int32 (tap);
+            let coefficient = adaptiveLowpassCoefficientForRatio (offset, ratio);
+            stutterAntialiasCoefficients[lane, voice, tap] = coefficient;
+            normalisation += coefficient * (offset == 0 ? 1.0f : 2.0f);
+        }
+
+        let inverseNormalisation = 1.0f / std::intrinsics::max (0.000001f, normalisation);
+        for (wrap<seqfx::adaptiveLowpassTapCount> tap)
+            stutterAntialiasCoefficients[lane, voice, tap] *= inverseNormalisation;
+        stutterAntialiasResidualRatio[lane, voice] = ratio;
+    }
+
     float32<2> speedupLowpassFromPrimary (
         wrap<seqfx::laneCount> lane,
         int64 centreIndex)
@@ -3087,33 +3224,41 @@ processor SeqFx [[ main ]]
     void writeTapeHistory (wrap<seqfx::laneCount> lane, float32<2> sample)
     {
         let primaryInput = antialiasTapePrimaryInput (lane, sample);
-        let primaryRatio = seqfx::tapePrimaryRate / float32 (processor.frequency);
+        let primaryRatio = float64 (seqfx::tapePrimaryRate) / processor.frequency;
         tapePrimaryWritePhase[lane] += primaryRatio;
-        while (tapePrimaryWritePhase[lane] >= 1.0f)
+        while (tapePrimaryWritePhase[lane] >= 1.0)
         {
-            let overshoot = tapePrimaryWritePhase[lane] - 1.0f;
-            let fraction = seqfx::clampFloat (1.0f - (overshoot / primaryRatio), 0.0f, 1.0f);
+            let overshoot = tapePrimaryWritePhase[lane] - 1.0;
+            let fraction = float32 (std::intrinsics::clamp (
+                1.0 - (overshoot / primaryRatio),
+                0.0,
+                1.0
+            ));
             let resampled = tapePreviousHostSample[lane]
                 + ((primaryInput - tapePreviousHostSample[lane]) * fraction);
             writeTapePrimarySample (lane, resampled);
-            tapePrimaryWritePhase[lane] -= 1.0f;
+            tapePrimaryWritePhase[lane] -= 1.0;
         }
 
-        let coarseCutoff = std::intrinsics::min (3200.0f, float32 (processor.frequency) * 0.2f);
-        let coarseCoefficient = 1.0f - std::intrinsics::exp (
-            (-2.0f * seqfx::pi * coarseCutoff) / float32 (processor.frequency)
-        );
-        tapeCoarseLowpassState[lane] += (sample - tapeCoarseLowpassState[lane]) * coarseCoefficient;
-
-        let coarseRatio = seqfx::tapeCoarseRate / float32 (processor.frequency);
+        let coarseInput = antialiasTapeCoarseInput (lane, sample);
+        let coarseRatio = float64 (seqfx::tapeCoarseRate) / processor.frequency;
         tapeCoarseWritePhase[lane] += coarseRatio;
-        while (tapeCoarseWritePhase[lane] >= 1.0f)
+        while (tapeCoarseWritePhase[lane] >= 1.0)
         {
-            writeTapeCoarseSample (lane, tapeCoarseLowpassState[lane]);
-            tapeCoarseWritePhase[lane] -= 1.0f;
+            let overshoot = tapeCoarseWritePhase[lane] - 1.0;
+            let fraction = float32 (std::intrinsics::clamp (
+                1.0 - (overshoot / coarseRatio),
+                0.0,
+                1.0
+            ));
+            let resampled = tapePreviousCoarseSample[lane]
+                + ((coarseInput - tapePreviousCoarseSample[lane]) * fraction);
+            writeTapeCoarseSample (lane, resampled);
+            tapeCoarseWritePhase[lane] -= 1.0;
         }
 
         tapePreviousHostSample[lane] = primaryInput;
+        tapePreviousCoarseSample[lane] = coarseInput;
     }
 
     void writeStutterCapture (
@@ -3281,15 +3426,81 @@ processor SeqFx [[ main ]]
         );
     }
 
-    float32 pitchMipLevel (float32 effectiveReadRatio)
+    int32 pitchSourceTier (float32 effectiveReadRatio)
     {
-        if (effectiveReadRatio <= 1.0f)
-            return 0.0f;
-        return seqfx::clampFloat (
-            std::intrinsics::log (effectiveReadRatio) / std::intrinsics::log (2.0f),
-            0.0f,
-            2.0f
-        );
+        if (effectiveReadRatio <= 2.0f)
+            return 0;
+        if (effectiveReadRatio <= 4.0f)
+            return 1;
+        return 2;
+    }
+
+    float32 pitchResidualRatio (float32 effectiveReadRatio, int32 tier)
+    {
+        if (tier == 1)
+            return effectiveReadRatio * 0.5f;
+        if (tier == 2)
+            return effectiveReadRatio * 0.25f;
+        return effectiveReadRatio;
+    }
+
+    float64 pitchTierPosition (float64 primaryPosition, int32 tier)
+    {
+        if (tier == 1)
+            return (primaryPosition + float64 (seqfx::speedupLowpassDelay)) * 0.5;
+        if (tier == 2)
+        {
+            let quarterDelay = seqfx::speedupLowpassDelay * 3;
+            return (primaryPosition + float64 (quarterDelay)) * 0.25;
+        }
+        return primaryPosition;
+    }
+
+    bool pitchTierPositionIsValid (
+        wrap<seqfx::laneCount> lane,
+        int32 tier,
+        float64 position,
+        float64 margin)
+    {
+        if (tier == 1)
+            return pitchHalfRatePositionIsValid (lane, position - margin)
+                && pitchHalfRatePositionIsValid (lane, position + margin);
+        if (tier == 2)
+            return pitchQuarterRatePositionIsValid (lane, position - margin)
+                && pitchQuarterRatePositionIsValid (lane, position + margin);
+        return tapePrimaryPositionIsValid (lane, position - margin)
+            && tapePrimaryPositionIsValid (lane, position + margin);
+    }
+
+    float32<2> readPitchTierAt (
+        wrap<seqfx::laneCount> lane,
+        int32 tier,
+        int64 absoluteIndex)
+    {
+        if (tier == 1)
+            return readPitchHalfRateForMip (lane, absoluteIndex);
+        if (tier == 2)
+            return readPitchQuarterRateForMip (lane, absoluteIndex);
+        return readTapePrimaryForMip (lane, absoluteIndex);
+    }
+
+    float32<2> readPitchTierFilteredAt (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::pitchGrainVoiceCount> voice,
+        int32 tier,
+        int64 centreIndex)
+    {
+        var filtered = readPitchTierAt (lane, tier, centreIndex)
+            * pitchAntialiasCoefficients[lane, voice, 0];
+        for (wrap<seqfx::adaptiveLowpassDelay> pair)
+        {
+            let offset = int32 (pair) + 1;
+            filtered += (
+                readPitchTierAt (lane, tier, centreIndex - int64 (offset))
+                + readPitchTierAt (lane, tier, centreIndex + int64 (offset))
+            ) * pitchAntialiasCoefficients[lane, voice, offset];
+        }
+        return filtered;
     }
 
     bool pitchSourcePositionIsValid (
@@ -3297,43 +3508,43 @@ processor SeqFx [[ main ]]
         float64 primaryPosition,
         float32 effectiveReadRatio)
     {
-        if (! tapePrimaryPositionIsValid (lane, primaryPosition))
-            return false;
-
-        let level = pitchMipLevel (effectiveReadRatio);
-        if (level <= 0.000001f)
-            return true;
-
-        let halfPosition = (primaryPosition + float64 (seqfx::speedupLowpassDelay)) * 0.5;
-        if (! pitchHalfRatePositionIsValid (lane, halfPosition))
-            return false;
-        if (level <= 1.000001f)
-            return true;
-
-        let quarterDelay = seqfx::speedupLowpassDelay * 3;
-        let quarterPosition = (primaryPosition + float64 (quarterDelay)) * 0.25;
-        return pitchQuarterRatePositionIsValid (lane, quarterPosition);
+        let tier = pitchSourceTier (effectiveReadRatio);
+        let residualRatio = pitchResidualRatio (effectiveReadRatio, tier);
+        let margin = residualRatio > 1.000001f
+            ? float64 (seqfx::adaptiveLowpassDelay + 2)
+            : 0.0;
+        return pitchTierPositionIsValid (
+            lane,
+            tier,
+            pitchTierPosition (primaryPosition, tier),
+            margin
+        );
     }
 
     float32<2> readPitchSource (
         wrap<seqfx::laneCount> lane,
+        wrap<seqfx::pitchGrainVoiceCount> voice,
         float64 primaryPosition,
         float32 effectiveReadRatio)
     {
-        let level = pitchMipLevel (effectiveReadRatio);
-        let primary = readTapePrimary (lane, primaryPosition);
-        if (level <= 0.000001f)
-            return primary;
+        let tier = pitchSourceTier (effectiveReadRatio);
+        let residualRatio = pitchResidualRatio (effectiveReadRatio, tier);
+        let position = pitchTierPosition (primaryPosition, tier);
 
-        let halfPosition = (primaryPosition + float64 (seqfx::speedupLowpassDelay)) * 0.5;
-        let halfRate = readPitchHalfRate (lane, halfPosition);
-        if (level <= 1.0f)
-            return primary + ((halfRate - primary) * seqfx::smoothStep01 (level));
+        if (residualRatio <= 1.000001f)
+        {
+            if (tier == 1)
+                return readPitchHalfRate (lane, position);
+            if (tier == 2)
+                return readPitchQuarterRate (lane, position);
+            return readTapePrimary (lane, position);
+        }
 
-        let quarterDelay = seqfx::speedupLowpassDelay * 3;
-        let quarterPosition = (primaryPosition + float64 (quarterDelay)) * 0.25;
-        let quarterRate = readPitchQuarterRate (lane, quarterPosition);
-        return halfRate + ((quarterRate - halfRate) * seqfx::smoothStep01 (level - 1.0f));
+        let currentIndex = int64 (std::intrinsics::floor (position));
+        let fraction = float32 (position - float64 (currentIndex));
+        let current = readPitchTierFilteredAt (lane, voice, tier, currentIndex);
+        let following = readPitchTierFilteredAt (lane, voice, tier, currentIndex + 1);
+        return current + ((following - current) * fraction);
     }
 
     float32<2> readTapeCoarse (wrap<seqfx::laneCount> lane, float64 position)
@@ -3467,11 +3678,13 @@ processor SeqFx [[ main ]]
         let position = pitchGrainSourcePosition[lane, voice];
         let left = readPitchSource (
             lane,
+            voice,
             position - float64 (spreadOffset),
             effectiveReadRatio
         );
         let right = readPitchSource (
             lane,
+            voice,
             position + float64 (spreadOffset),
             effectiveReadRatio
         );
@@ -3636,6 +3849,12 @@ processor SeqFx [[ main ]]
             let window = pitchWindowAt (phase);
             let grainRatio = pitchRatioForGrain (lane, voice);
             let effectiveReadRatio = grainRatio * primaryPerHostFrame;
+            let sourceTier = pitchSourceTier (effectiveReadRatio);
+            configurePitchAntialias (
+                lane,
+                voice,
+                pitchResidualRatio (effectiveReadRatio, sourceTier)
+            );
             let positionValid = pitchGrainPositionIsValid (
                 lane,
                 voice,
@@ -3722,9 +3941,9 @@ processor SeqFx [[ main ]]
             lane,
             voice,
             wrap<stutterBufferSize> (wrapStutterReadIndex (centreIndex, readFrameLimit))
-        ) * seqfx::speedupLowpassCoefficient (0);
+        ) * stutterAntialiasCoefficients[lane, voice, 0];
 
-        for (wrap<15> pair)
+        for (wrap<seqfx::adaptiveLowpassDelay> pair)
         {
             let offset = int32 (pair) + 1;
             let previousIndex = wrapStutterReadIndex (centreIndex - offset, readFrameLimit);
@@ -3739,7 +3958,7 @@ processor SeqFx [[ main ]]
                     voice,
                     wrap<stutterBufferSize> (followingIndex)
                 )
-            ) * seqfx::speedupLowpassCoefficient (offset);
+            ) * stutterAntialiasCoefficients[lane, voice, offset];
         }
         return filtered;
     }
@@ -3781,6 +4000,8 @@ processor SeqFx [[ main ]]
         if (speed <= 1.0f)
             return primary;
 
+        configureStutterAntialias (lane, voice, speed);
+
         let filteredCurrent = readStutterCaptureLowpassAt (
             lane,
             voice,
@@ -3794,10 +4015,7 @@ processor SeqFx [[ main ]]
             readFrameLimit
         );
         let filtered = filteredCurrent + ((filteredFollowing - filteredCurrent) * fraction);
-        let filterAmount = seqfx::smoothStep01 (
-            std::intrinsics::log (speed) / std::intrinsics::log (2.0f)
-        );
-        return primary + ((filtered - primary) * filterAmount);
+        return filtered;
     }
 
     float32<2> processFilter (wrap<seqfx::laneCount> lane, float32<2> stage)
@@ -3992,6 +4210,17 @@ processor SeqFx [[ main ]]
         let rightFrequency = seqfx::clampFloat (modulatedFrequency * spreadRatio, 0.1f, float32 (processor.frequency) * 0.45f);
         let leftPhaseStep = leftFrequency / float32 (processor.frequency);
         let rightPhaseStep = rightFrequency / float32 (processor.frequency);
+
+        if (ringMixCurrent[lane] <= 0.00001f)
+        {
+            ringCarrierPhase[lane][0] = seqfx::unitWrap (ringCarrierPhase[lane][0] + leftPhaseStep);
+            ringCarrierPhase[lane][1] = seqfx::unitWrap (ringCarrierPhase[lane][1] + rightPhaseStep);
+            ringMotionPhase[lane] = seqfx::unitWrap (
+                ringMotionPhase[lane] + (currentRate / float32 (processor.frequency))
+            );
+            return stage;
+        }
+
         let commonNoise = ringNoiseRng[lane].getBipolar();
         let leftNoiseCoefficient = 1.0f - std::intrinsics::exp (
             (-2.0f * seqfx::pi * leftFrequency) / float32 (processor.frequency)
@@ -4027,9 +4256,6 @@ processor SeqFx [[ main ]]
         ringMotionPhase[lane] = seqfx::unitWrap (
             ringMotionPhase[lane] + (currentRate / float32 (processor.frequency))
         );
-
-        if (ringMixCurrent[lane] <= 0.00001f)
-            return stage;
 
         let ringed = float32<2> (stage[0] * leftCarrier, stage[1] * rightCarrier);
         return stage + ((ringed - stage) * ringMixCurrent[lane]);
@@ -4772,6 +4998,18 @@ processor SeqFx [[ main ]]
         flangePhase[lane] = seqfx::unitWrap (
             phase + (rateHz / float32 (processor.frequency))
         );
+
+        // Keep the pre-effect lookback warm and the free-running phase exact,
+        // but do not pay for two interpolated delay reads once both the output
+        // and the feedback handoff have reached silence.
+        if (! flangeActive[lane]
+            && flangeMixCurrent[lane] <= 0.000001f
+            && flangeFeedbackCurrent[lane] <= 0.000001f)
+        {
+            writeFlangeHistory (lane, stage);
+            return stage;
+        }
+
         let spreadPhase = seqfx::clampFloat (flangeSpreadCurrent[lane], 0.0f, 180.0f) / 360.0f;
         let leftDelay = flangeDelaySamples (
             phase, flangeDelayCurrent[lane], flangeDepthCurrent[lane]
@@ -5297,6 +5535,43 @@ processor SeqFx [[ main ]]
         return stage + ((wet - stage) * stutterMixCurrent[lane] * handoffGain);
     }
 
+    bool mixTransitionIsAudible (float32 current, float32 target)
+    {
+        return current > 0.000001f || target > 0.000001f;
+    }
+
+    bool reverseNeedsProcessing (wrap<seqfx::laneCount> lane)
+    {
+        if (reverseActive[lane]
+            || mixTransitionIsAudible (reverseMixCurrent[lane], reverseMixTarget[lane]))
+            return true;
+        for (wrap<seqfx::reverseVoiceCount> voice)
+            if (reverseVoiceActive[lane, voice])
+                return true;
+        return false;
+    }
+
+    bool tapeNeedsProcessing (wrap<seqfx::laneCount> lane)
+    {
+        if (tapeTriggerPending[lane])
+            return true;
+        for (wrap<seqfx::tapeVoiceCount> voice)
+            if (tapeVoiceActive[lane, voice])
+                return true;
+        return false;
+    }
+
+    bool stutterNeedsProcessing (wrap<seqfx::laneCount> lane)
+    {
+        if (stutterLaneActive[lane]
+            || mixTransitionIsAudible (stutterMixCurrent[lane], stutterMixTarget[lane]))
+            return true;
+        for (wrap<seqfx::stutterVoiceCount> voice)
+            if (stutterVoiceCapturing[lane, voice] || stutterVoicePlaying[lane, voice])
+                return true;
+        return false;
+    }
+
     float32<2> processChain (wrap<seqfx::laneCount> lane, float32<2> stage)
     {
         // The fixed-rate gesture history is the raw input to this serial lane.
@@ -5304,22 +5579,37 @@ processor SeqFx [[ main ]]
         // own time-remapped output back into future grains/gestures.
         writeTapeHistory (lane, stage);
         startPendingTapeStop (lane);
-        stage = processFilter (lane, stage);
-        stage = processCrusher (lane, stage);
-        stage = processPitch (lane, stage);
-        stage = processReverse (lane, stage);
+        if (filterActive[lane]
+            || mixTransitionIsAudible (filterMixCurrent[lane], filterMixTarget[lane]))
+            stage = processFilter (lane, stage);
+        if (crusherActive[lane]
+            || mixTransitionIsAudible (crusherMixCurrent[lane], crusherMixTarget[lane]))
+            stage = processCrusher (lane, stage);
+        if (pitchActive[lane]
+            || mixTransitionIsAudible (pitchMixCurrent[lane], pitchMixTarget[lane]))
+            stage = processPitch (lane, stage);
+        if (reverseNeedsProcessing (lane))
+            stage = processReverse (lane, stage);
         stage = processRing (lane, stage);
-        stage = processTalkBox (lane, stage);
-        stage = processDirty (lane, stage);
-        stage = processComb (lane, stage);
+        if (talkBoxActive[lane]
+            || mixTransitionIsAudible (talkBoxMixCurrent[lane], talkBoxMixTarget[lane]))
+            stage = processTalkBox (lane, stage);
+        if (dirtyActive[lane]
+            || mixTransitionIsAudible (dirtyMixCurrent[lane], dirtyMixTarget[lane]))
+            stage = processDirty (lane, stage);
+        if (combActive[lane] || combTailActive[lane]
+            || mixTransitionIsAudible (combMixCurrent[lane], combMixTarget[lane]))
+            stage = processComb (lane, stage);
         let vibroInput = stage;
         stage = processVibro (lane, stage);
         writeVibroHistory (lane, vibroInput);
         stage = processFlange (lane, stage);
 
-        stage = processTapeStop (lane, stage);
+        if (tapeNeedsProcessing (lane))
+            stage = processTapeStop (lane, stage);
 
-        stage = processStutter (lane, stage);
+        if (stutterNeedsProcessing (lane))
+            stage = processStutter (lane, stage);
         advanceAuxBlock (lane);
         advanceChainLifecycle (lane);
         return stage;

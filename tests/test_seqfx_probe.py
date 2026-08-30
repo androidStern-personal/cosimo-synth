@@ -463,6 +463,25 @@ def _tone_amplitude(samples: np.ndarray, frequency: float, sample_rate: int = SA
     return float(2.0 * np.abs(projection) / max(1, signal.size))
 
 
+def _hann_band_amplitude(
+    samples: np.ndarray,
+    frequency: float,
+    sample_rate: int = SAMPLE_RATE,
+    *,
+    half_width_hz: float = 300.0,
+) -> float:
+    signal = np.asarray(samples, dtype=np.float64)
+    if signal.size < 2:
+        return 0.0
+    window = np.hanning(signal.size)
+    spectrum = np.fft.rfft(signal * window)
+    frequencies = np.fft.rfftfreq(signal.size, 1.0 / sample_rate)
+    band = np.abs(frequencies - frequency) <= half_width_hz
+    if not np.any(band):
+        return 0.0
+    return float(2.0 * np.linalg.norm(spectrum[band]) / max(1.0, np.sum(window)))
+
+
 def _largest_boundary_jump(samples: np.ndarray, boundary_step: int) -> float:
     boundary = STEP_FRAMES * boundary_step
     window = samples[boundary - 16 : boundary + 16]
@@ -485,6 +504,31 @@ def _first_monitor_frame_for_step(monitors: list[dict[str, object]], step_index:
 
     raise AssertionError(f"No monitor event reported step {step_index}; saw {monitors[:8]}")
 
+
+def test_empty_pattern_keeps_histories_warm_without_running_expensive_effect_cores(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _complex_signal(STEP_FRAMES * 16) * 0.35
+    started = perf_counter()
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(_empty_upload()))
+    elapsed = perf_counter() - started
+
+    np.testing.assert_array_equal(output, source)
+    assert elapsed < 1.0, f"empty generated-JS render took {elapsed:.3f}s for {source.shape[0] / SAMPLE_RATE:.3f}s audio"
+
+    dsp_source = (ROOT / "fx" / "seqfx" / "SeqFx.cmajor").read_text()
+    process_chain = dsp_source[dsp_source.index("float32<2> processChain") : dsp_source.index("void advanceSequencer")]
+    for expensive_call in (
+        "processPitch (lane, stage)",
+        "processTalkBox (lane, stage)",
+        "processDirty (lane, stage)",
+        "processComb (lane, stage)",
+        "processTapeStop (lane, stage)",
+        "processStutter (lane, stage)",
+    ):
+        call_offset = process_chain.index(expensive_call)
+        assert "if (" in process_chain[max(0, call_offset - 220) : call_offset]
 
 def _first_monitor_event_for_step(monitors: list[dict[str, object]], step_index: int) -> dict[str, object]:
     for monitor in monitors:
@@ -4213,7 +4257,46 @@ def test_pitch_primary_history_rejects_high_rate_foldover_before_fixed_48k_inges
     assert rejected < passed * 0.08
 
 
-@pytest.mark.parametrize("sample_rate", [44_100, 48_000, 96_000, 192_000])
+def test_pitch_primary_history_rejects_near_transition_foldover_at_192k(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    sample_rate = 192_000
+    step_frames = _step_frames_at_rate(sample_rate)
+    frames = step_frames * 28
+    alias_path = tmp_path / "alias"
+    pass_path = tmp_path / "pass"
+    alias_path.mkdir()
+    pass_path.mkdir()
+    alias_output = _render_pitch(
+        generated_runtime,
+        alias_path,
+        _sine_at_rate(frames, 26_000.0, sample_rate, amplitude=0.35),
+        semitones=-12.0,
+        grain_ms=72.0,
+        first_step=3,
+        active_steps=22,
+        sample_rate=sample_rate,
+    )
+    pass_output = _render_pitch(
+        generated_runtime,
+        pass_path,
+        _sine_at_rate(frames, 22_000.0, sample_rate, amplitude=0.35),
+        semitones=-12.0,
+        grain_ms=72.0,
+        first_step=3,
+        active_steps=22,
+        sample_rate=sample_rate,
+    )
+    analysis = slice(step_frames * 8, step_frames * 20)
+    rejected = _hann_band_amplitude(alias_output[analysis, 0], 11_000.0, sample_rate)
+    passed = _hann_band_amplitude(pass_output[analysis, 0], 11_000.0, sample_rate)
+
+    assert passed > 0.015
+    assert rejected < passed * 0.15
+
+
+@pytest.mark.parametrize("sample_rate", [44_100, 48_000, 88_200, 96_000, 192_000])
 def test_pitch_octave_speedup_mip_filter_rejects_only_frequencies_that_would_fold(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -4246,9 +4329,9 @@ def test_pitch_octave_speedup_mip_filter_rejects_only_frequencies_that_would_fol
         sample_rate=sample_rate,
     )
     analysis = slice(step_frames * 8, step_frames * 20)
-    low = _tone_amplitude(low_output[analysis, 0], 4_000.0, sample_rate)
+    low = _hann_band_amplitude(low_output[analysis, 0], 4_000.0, sample_rate)
     high_frequency = _fold_frequency(32_000.0, sample_rate)
-    high = _tone_amplitude(high_output[analysis, 0], high_frequency, sample_rate)
+    high = _hann_band_amplitude(high_output[analysis, 0], high_frequency, sample_rate)
 
     assert low > 0.025
     if 32_000.0 > sample_rate * 0.5:
@@ -4257,7 +4340,58 @@ def test_pitch_octave_speedup_mip_filter_rejects_only_frequencies_that_would_fol
         assert high > 0.025
 
 
-@pytest.mark.parametrize("sample_rate", [44_100, 48_000, 96_000, 192_000])
+@pytest.mark.parametrize(
+    ("sample_rate", "semitones", "pass_input_hz", "rejected_input_hz", "output_hz"),
+    [
+        (48_000, 12.0 * np.log2(1.5), 12_000.0, 20_000.0, 18_000.0),
+        (44_100, 24.0, 5_025.0, 6_000.0, 20_100.0),
+        (88_200, 24.0, 10_050.0, 12_000.0, 40_200.0),
+    ],
+)
+def test_pitch_residual_rate_filter_rejects_intermediate_ratio_foldover(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    sample_rate: int,
+    semitones: float,
+    pass_input_hz: float,
+    rejected_input_hz: float,
+    output_hz: float,
+) -> None:
+    step_frames = _step_frames_at_rate(sample_rate)
+    frames = step_frames * 28
+    alias_path = tmp_path / "alias"
+    pass_path = tmp_path / "pass"
+    alias_path.mkdir()
+    pass_path.mkdir()
+    alias_output = _render_pitch(
+        generated_runtime,
+        alias_path,
+        _sine_at_rate(frames, rejected_input_hz, sample_rate, amplitude=0.35),
+        semitones=semitones,
+        grain_ms=72.0,
+        first_step=3,
+        active_steps=22,
+        sample_rate=sample_rate,
+    )
+    pass_output = _render_pitch(
+        generated_runtime,
+        pass_path,
+        _sine_at_rate(frames, pass_input_hz, sample_rate, amplitude=0.35),
+        semitones=semitones,
+        grain_ms=72.0,
+        first_step=3,
+        active_steps=22,
+        sample_rate=sample_rate,
+    )
+    analysis = slice(step_frames * 8, step_frames * 20)
+    rejected = _hann_band_amplitude(alias_output[analysis, 0], output_hz, sample_rate)
+    passed = _hann_band_amplitude(pass_output[analysis, 0], output_hz, sample_rate)
+
+    assert passed > 0.012
+    assert rejected < passed * 0.10
+
+
+@pytest.mark.parametrize("sample_rate", [44_100, 48_000, 88_200, 96_000, 192_000])
 def test_stutter_double_speed_rejects_foldover_without_muting_passband(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -4303,6 +4437,47 @@ def test_stutter_double_speed_rejects_foldover_without_muting_passband(
 
     assert low_amplitude > 0.08
     assert alias_amplitude < low_amplitude * 0.12
+
+
+def test_stutter_intermediate_speed_rejects_nearby_foldover_band(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    speed = 1.6
+    frames = STEP_FRAMES * 10
+    upload = _empty_upload()
+    for step in range(8):
+        _activate_step(
+            upload,
+            lane=LANE_STUTTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_STUTTER,
+            params=[8.0, speed, 0.0, 1.0],
+        )
+
+    pass_path = tmp_path / "pass"
+    alias_path = tmp_path / "alias"
+    pass_path.mkdir()
+    alias_path.mkdir()
+    passed_output = _render(
+        generated_runtime,
+        pass_path,
+        _sine(frames, 8_000.0, amplitude=0.35),
+        _base_schedule(upload),
+    )
+    alias_output = _render(
+        generated_runtime,
+        alias_path,
+        _sine(frames, 22_000.0, amplitude=0.35),
+        _base_schedule(upload),
+    )
+    analysis = slice(STEP_FRAMES * 2, STEP_FRAMES * 7)
+    passed = _hann_band_amplitude(passed_output[analysis, 0], 12_800.0)
+    rejected = _hann_band_amplitude(alias_output[analysis, 0], 12_800.0)
+
+    assert passed > 0.08
+    assert rejected < passed * 0.10
 
 
 @pytest.mark.parametrize(
