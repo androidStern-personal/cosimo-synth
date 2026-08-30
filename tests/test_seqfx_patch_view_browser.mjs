@@ -25,6 +25,7 @@ const SEQFX_EFFECT_TYPES = {
     comb: 6,
     ring: 7,
     talkBox: 9,
+    vibro: 10,
     dirty: 12,
 };
 const FILTER_PARAM_MODE = 0;
@@ -979,6 +980,7 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
             { effectType: "6", patternCount: 1 },
             { effectType: "7", patternCount: 1 },
             { effectType: "9", patternCount: 1 },
+            { effectType: "10", patternCount: 1 },
             { effectType: "12", patternCount: 1 },
         ],
         "every effect tab icon should carry the same internal halftone texture technique as the cells",
@@ -3166,8 +3168,8 @@ test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_
     const effectPicker = page.locator('[data-role="seqfx-effect-type"]');
     assert.equal(await effectPicker.evaluate((element) => element.tagName), "DIV");
     assert.equal(await effectPicker.locator("select").count(), 0);
-    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"]').count(), 8);
-    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"] > svg').count(), 8);
+    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"]').count(), 9);
+    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"] > svg').count(), 9);
     assert.equal(await effectPicker.getByRole("button", { name: "Crush", exact: true }).getAttribute("aria-pressed"), "true");
 
     const tapeStopButton = effectPicker.getByRole("button", { name: "Tape Stop", exact: true });
@@ -3303,6 +3305,69 @@ test("seqfx_comb_sequences_the_selected_vector_dispersive_contract_and_latches_p
     const glyph = page.locator('[data-role="seqfx-block"][data-lane="0"][data-start="0"] [data-role="seqfx-block-glyph"]');
     assert.equal(await glyph.getAttribute("data-effect"), "comb");
     assert.ok(await glyph.locator('[data-role="seqfx-block-glyph-line"]').getAttribute("d"));
+
+    await page.close();
+});
+
+test("seqfx_vibro_sequences_wet_only_doppler controls with explicit sync and free timing", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Vibro", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 Vibro block 1", exact: true }).waitFor();
+
+    const param = (index) => page.locator(`[data-role="seqfx-param"][data-param="${index}"]`);
+    assert.deepEqual(
+        await param(2).locator("option").evaluateAll((options) => options.map((option) => option.textContent)),
+        ["Sine", "Triangle"],
+    );
+    assert.deepEqual(
+        await param(4).locator("option").evaluateAll((options) => options.map((option) => option.textContent)),
+        ["Sync", "Free"],
+    );
+    assert.deepEqual(
+        await param(5).locator("option").evaluateAll((options) => options.map((option) => option.textContent)),
+        ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar"],
+    );
+
+    await param(0).fill("6");
+    await param(1).fill("60");
+    await param(2).selectOption("1");
+    await param(3).fill("150");
+    await param(4).selectOption("1");
+    await param(5).selectOption("4");
+
+    let snapshot = await getHarnessSnapshot(page);
+    let upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.effectTypes[0][0], SEQFX_EFFECT_TYPES.vibro);
+    assert.deepEqual(upload.params[0][0], [6, 60, 1, 150, 1, 4, 0, 0]);
+
+    await openSeqFxModView(page);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 3);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="2"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="4"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="5"]').count(), 0);
+    await toggleSeqFxModTarget(page, 1);
+    await setSeqFxModTargetAmount(page, 1, 20);
+
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.auxEnabled[0][0][1], true);
+    assertClose(upload.auxEnd[0][0][1], 80, 0.01, "Vibro Depth +20 cents should persist as 80 cents");
+    const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    const storedVibro = storedState.patterns[0].lanes[0].steps[0];
+    assert.equal(storedVibro.effectType, SEQFX_EFFECT_TYPES.vibro);
+    assert.deepEqual(storedVibro.params, [6, 60, 1, 150, 1, 4, 0, 0]);
+    assert.equal(storedVibro.aux.targets[1].enabled, true);
+    assertClose(storedVibro.aux.targets[1].end, 80, 0.01, "Vibro aux target should survive sparse v7 persistence");
+
+    const glyph = page.locator('[data-role="seqfx-block"][data-lane="0"][data-start="0"] [data-role="seqfx-block-glyph"]');
+    assert.equal(await glyph.getAttribute("data-effect"), "vibro");
+    assert.ok(await glyph.locator('[data-role="seqfx-block-glyph-line"]').getAttribute("d"));
+    assert.ok(await glyph.locator('[data-role="seqfx-block-glyph-secondary-line"]').getAttribute("d"));
 
     await page.close();
 });

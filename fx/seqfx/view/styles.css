@@ -21,6 +21,7 @@
     --seqfx-effect-comb: #7fa8d8;
     --seqfx-effect-ring: #c7a6d8;
     --seqfx-effect-talk-box: #e5a4b5;
+    --seqfx-effect-vibro: #d7a36b;
     --seqfx-effect-dirty: #79b9a6;
 }
 
@@ -533,6 +534,10 @@ select {
     background: var(--seqfx-effect-talk-box);
 }
 
+.seqfx-block[data-effect="10"] .seqfx-block-fill {
+    background: var(--seqfx-effect-vibro);
+}
+
 .seqfx-block[data-effect="12"] .seqfx-block-fill {
     background: var(--seqfx-effect-dirty);
 }
@@ -568,6 +573,11 @@ select {
     stroke-linejoin: round;
     stroke-width: 1.25;
     vector-effect: non-scaling-stroke;
+}
+
+.seqfx-block-glyph__line--secondary {
+    opacity: 0.48;
+    stroke-dasharray: 2 1.4;
 }
 
 .seqfx-block-glyph__marker {
@@ -1181,6 +1191,10 @@ select {
 
 .seqfx-effect-picker__options button[data-effect-type="9"] {
     --seqfx-effect-icon-active: var(--seqfx-effect-talk-box);
+}
+
+.seqfx-effect-picker__options button[data-effect-type="10"] {
+    --seqfx-effect-icon-active: var(--seqfx-effect-vibro);
 }
 
 .seqfx-effect-picker__options button[data-effect-type="12"] {

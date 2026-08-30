@@ -30,7 +30,7 @@ live-touch workflow are not being cloned.
 | Ring | Multiply audio by an internal carrier | Frequency, waveform, bias/rectify, spread, mix | Gated | Phase-continuous carrier, documented stereo detune, and free LFO motion; tempo motion remains available through block Aux | Aliasing from carrier shapes, DC from bias, abrupt phase reset |
 | Reverse | Play a finite buffered region backward | Window, sync/free, crossfade, mix | Captured | Reverse already recorded lookback audio at trigger, so host latency remains zero | Unavailable history, wrong-region surprise, boundary pops, old audio after seek |
 | Talk Box | Vowel-like formant coloration | Vowel selection/morph, Q, lows, highs | Gated | Two vowel endpoints plus morph; formant filter, not sidechain vocoder | Unstable high-Q filters, coefficient zippering, literal vowel mapping |
-| Vibro | Periodic pitch wobble without dry-path combing | Rate, depth, waveform, spread | Modulated delay | Wet variable-delay modulation; no feedback; separate ID 10 | Interpolation noise, mono loss, accidental chorus/flange identity |
+| Vibro | Periodic pitch wobble without dry-path combing | Sync/free rate, depth, waveform, spread | Modulated delay | Wet variable-delay modulation; no feedback; separate ID 10 | Interpolation noise, insufficient slow-rate history, mono loss, accidental chorus/flange identity |
 | Flange | Short modulated delay mixed with dry for moving notches | Delay, depth, rate, feedback, spread, polarity, mix | Modulated delay | Separate ID 11; classic and subtle ranges; optional scroll remains deferred | Feedback instability, comb cancellation, parameter zippering |
 | Dirty | Character distortion distinct from digital Crush | Drive, type/character, bias, dynamics, tone, mix/trim | Gated | Soft, hard, fold, and asymmetric families behind one Character control; level-conscious output | Aliasing, DC, loudness bias, loss of dynamics |
 
@@ -192,11 +192,21 @@ claims about Koala's private implementation.
 
 ### Vibro (ID 10)
 
-- Rate: synced divisions or 0.05–12 Hz.
-- Depth: 0–100 cents target range.
+- Rate: 0.05–12 Hz in Free mode.
+- Depth: 0–100 cents, exact half peak-to-peak pitch span.
 - Wave: Sine / Triangle.
 - Spread: 0–180 degrees stereo phase.
-- Drift: 0–20% only if deterministic seeded modulation wins listening.
+- Timing: Sync / Free, trigger-latched.
+- Division: 1/32 / 1/16 / 1/8 / 1/4 / 1/2 / 1 Bar,
+  trigger-latched and used only in Sync mode.
+- Production decision: 400 ms raw pre-effect history, analytic integrated
+  Sine/Triangle Doppler trajectories, 25 ms continuous smoothing, 96-frame
+  entry/exit/history/waveform crossfades, phase-continuous block triggers, and
+  exact zero-Depth neutral. Drift was omitted because its conditional listening
+  gate had no evidence. See `vibro-decision.md`.
+- Implementation status: complete through DSP, sequenced UI/state, source
+  browser proof, and packaged-bundle proof; subjective/release gates remain in
+  the shared roadmap.
 
 ### Flange (ID 11)
 

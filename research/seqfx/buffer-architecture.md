@@ -16,8 +16,9 @@ Kilohearts, Koala, or another product allocates memory.
 - Stutter: two bounded one-second capture voices per chain. The one-second cap
   preserves the existing product limit and must be stated when a very slow,
   large block would otherwise imply a longer slice.
-- Comb/Vibro/Flange: a separate 250 ms host-rate modulation-delay bank covers
-  the 30 Hz Comb floor plus Vibro's slow/deep delay excursion with margin.
+- Comb and Flange need compact host-rate delay banks. Vibro needs 400 ms: its
+  documented 0.05 Hz, 100-cent extreme requires about 367 ms of periodic delay
+  range, so the original 250 ms estimate did not cover the public contract.
 
 ## Probe
 
@@ -59,13 +60,16 @@ array:
    or Reverse.
 3. **Capture voices:** two one-second stereo float32 buffers per chain for
    frozen Stutter captures and bounded retrigger overlap.
-4. **Modulation delay:** 250 ms per chain at host-rate stereo float32 for Comb,
-   Vibro, and Flange. Feedback is never routed through the rate-converted
-   gesture history.
+4. **Modulation delays:** effect-owned host-rate stereo float32 banks, kept
+   separate from the rate-converted gesture history. Production Vibro uses
+   400 ms of raw pre-effect history per chain. Comb owns its shorter feedback
+   histories; Flange will receive a compact short-delay bank after its range is
+   frozen. Keeping Vibro raw and feedback-free prevents an accidental loop.
 
-Total buffer storage at the 192 kHz build maximum is 39.552 MiB. Small scalar,
-filter, voice, and sequencer state is additional and will be measured again in
-the production C++ state after integration.
+The original probe's tiered candidate measured 39.552 MiB at its 192 kHz build
+maximum. The production Vibro correction adds 150 ms per chain relative to
+that modeled 250 ms bank; final generated C++ state and multi-instance memory
+remain release measurements rather than silently reusing the earlier total.
 
 ## Why the quality split is acceptable
 

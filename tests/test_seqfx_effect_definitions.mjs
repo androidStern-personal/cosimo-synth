@@ -167,3 +167,32 @@ test("Comb keeps the selected reference-neutral vector-dispersive production con
     assert.match(source, /combMeasuredPeriodCompensation/);
     assert.match(source, /combTailActive/);
 });
+
+test("Vibro is a wet-only Doppler modulation with explicit free and sync timing", async () => {
+    const vibro = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.vibro);
+    assert.equal(vibro.lifecycle, "modulatedDelay");
+    assert.equal(vibro.fontaudioIcon, "fad-modtri");
+    assert.deepEqual(
+        vibro.parameters.map(({ id, defaultValue, latch, auxEligible, options }) => ({
+            id,
+            defaultValue,
+            latch,
+            auxEligible,
+            options,
+        })),
+        [
+            { id: "rateHz", defaultValue: 4.5, latch: "continuous", auxEligible: true, options: undefined },
+            { id: "depthCents", defaultValue: 28, latch: "continuous", auxEligible: true, options: undefined },
+            { id: "waveform", defaultValue: 0, latch: "trigger", auxEligible: false, options: ["Sine", "Triangle"] },
+            { id: "spreadDegrees", defaultValue: 90, latch: "continuous", auxEligible: true, options: undefined },
+            { id: "timingMode", defaultValue: 0, latch: "trigger", auxEligible: false, options: ["Sync", "Free"] },
+            { id: "division", defaultValue: 2, latch: "trigger", auxEligible: false, options: ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar"] },
+        ],
+    );
+
+    const source = await readFile(path.join(repoRoot, "fx/seqfx/SeqFx.cmajor"), "utf8");
+    assert.match(source, /vibroMaxDelaySeconds/);
+    assert.match(source, /vibroTriangleIntegral/);
+    assert.match(source, /processVibro/);
+    assert.doesNotMatch(source, /vibroFeedback/);
+});

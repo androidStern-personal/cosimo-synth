@@ -39,6 +39,9 @@ namespace seqfx
     let combModeCount = 4;
     let combAllpassStageCount = 4;
     let combMaxDelaySeconds = 0.25f;
+    let vibroMaxDelaySeconds = 0.4f;
+    let vibroTimingSync = 0;
+    let vibroTimingFree = 1;
     let lifecycleIdle = 0;
     let lifecycleEntering = 1;
     let lifecycleActive = 2;
@@ -624,6 +627,7 @@ processor SeqFx [[ main ]]
 
     let stutterBufferSize = int (processor.maxFrequency * seqfx::maxStutterSeconds) + 8;
     let combBufferSize = int (processor.maxFrequency * seqfx::combMaxDelaySeconds) + 8;
+    let vibroBufferSize = int (processor.maxFrequency * seqfx::vibroMaxDelaySeconds) + 8;
 
     bool[seqfx::laneCount, seqfx::stepCount] activeSteps;
     bool[seqfx::laneCount, seqfx::stepCount] triggerSteps;
@@ -653,6 +657,7 @@ processor SeqFx [[ main ]]
     float32<2>[seqfx::laneCount, stutterBufferSize] stutterHistory;
     float32<2>[seqfx::laneCount, combBufferSize] combReferenceHistory;
     float32[seqfx::laneCount, seqfx::combModeCount, combBufferSize] combVectorHistory;
+    float32<2>[seqfx::laneCount, vibroBufferSize] vibroHistory;
     wrap<seqfx::tapePrimaryBufferSize>[seqfx::laneCount] tapePrimaryWriteIndex;
     wrap<seqfx::tapeCoarseBufferSize>[seqfx::laneCount] tapeCoarseWriteIndex;
     int32[seqfx::laneCount] tapePrimaryValidSamples;
@@ -816,6 +821,25 @@ processor SeqFx [[ main ]]
     float32[seqfx::laneCount, seqfx::combModeCount, seqfx::combAllpassStageCount] combAllpassInput;
     float32[seqfx::laneCount, seqfx::combModeCount, seqfx::combAllpassStageCount] combAllpassOutput;
 
+    bool[seqfx::laneCount] vibroActive;
+    float32[seqfx::laneCount] vibroRateHz;
+    float32[seqfx::laneCount] vibroDepthCents;
+    int32[seqfx::laneCount] vibroWaveform;
+    int32[seqfx::laneCount] vibroPreviousWaveform;
+    float32[seqfx::laneCount] vibroWaveformFade;
+    float32[seqfx::laneCount] vibroSpreadDegrees;
+    int32[seqfx::laneCount] vibroTimingMode;
+    int32[seqfx::laneCount] vibroDivision;
+    float32[seqfx::laneCount] vibroRateCurrent;
+    float32[seqfx::laneCount] vibroDepthCurrent;
+    float32[seqfx::laneCount] vibroSpreadCurrent;
+    float32[seqfx::laneCount] vibroMixCurrent;
+    float32[seqfx::laneCount] vibroMixTarget;
+    float32[seqfx::laneCount] vibroHistoryFade;
+    float32[seqfx::laneCount] vibroPhase;
+    wrap<vibroBufferSize>[seqfx::laneCount] vibroWriteIndex;
+    int32[seqfx::laneCount] vibroValidSamples;
+
     bool[seqfx::laneCount] tapeLaneActive;
     float32[seqfx::laneCount] tapeMixCurrent;
     float32[seqfx::laneCount] tapeMixTarget;
@@ -896,6 +920,19 @@ processor SeqFx [[ main ]]
             combMotionCurrent[lane] = combMotion[lane];
             combDriveCurrent[lane] = combDrive[lane];
             combWidthCurrent[lane] = combWidth[lane];
+
+            vibroRateHz[lane] = 4.5f;
+            vibroDepthCents[lane] = 28.0f;
+            vibroWaveform[lane] = 0;
+            vibroPreviousWaveform[lane] = 0;
+            vibroWaveformFade[lane] = 1.0f;
+            vibroSpreadDegrees[lane] = 90.0f;
+            vibroTimingMode[lane] = seqfx::vibroTimingSync;
+            vibroDivision[lane] = 2;
+            vibroRateCurrent[lane] = vibroRateHz[lane];
+            vibroDepthCurrent[lane] = vibroDepthCents[lane];
+            vibroSpreadCurrent[lane] = vibroSpreadDegrees[lane];
+            vibroHistoryFade[lane] = 0.0f;
 
             for (wrap<seqfx::tapeVoiceCount> voice)
                 tapeVoiceRestartAge[lane, voice] = seqfx::transitionCrossfadeFrames;
@@ -1421,12 +1458,21 @@ processor SeqFx [[ main ]]
             combGateCurrent[lane] = 0.0f;
             combGateTarget[lane] = 0.0f;
             combTailActive[lane] = false;
+            vibroWriteIndex[lane] = 0;
+            vibroValidSamples[lane] = 0;
+            vibroMixCurrent[lane] = 0.0f;
+            vibroMixTarget[lane] = 0.0f;
+            vibroHistoryFade[lane] = 0.0f;
+            vibroPhase[lane] = 0.0f;
+            vibroPreviousWaveform[lane] = vibroWaveform[lane];
+            vibroWaveformFade[lane] = 1.0f;
             filterActive[lane] = false;
             crusherActive[lane] = false;
             ringActive[lane] = false;
             talkBoxActive[lane] = false;
             dirtyActive[lane] = false;
             combActive[lane] = false;
+            vibroActive[lane] = false;
             tapeLaneActive[lane] = false;
             stutterLaneActive[lane] = false;
             chainPreviousEffectType[lane] = chainEffectType[lane];
@@ -1714,6 +1760,7 @@ processor SeqFx [[ main ]]
         let wasTalkBoxActive = talkBoxActive[lane];
         let wasDirtyActive = dirtyActive[lane];
         let wasCombActive = combActive[lane];
+        let wasVibroActive = vibroActive[lane];
         let wasTapeActive = tapeLaneActive[lane];
         let wasStutterActive = stutterLaneActive[lane];
 
@@ -1725,6 +1772,7 @@ processor SeqFx [[ main ]]
         talkBoxActive[lane] = effectType == seqfx::effectTalkBox;
         dirtyActive[lane] = effectType == seqfx::effectDirty;
         combActive[lane] = effectType == seqfx::effectComb;
+        vibroActive[lane] = effectType == seqfx::effectVibro;
         tapeLaneActive[lane] = effectType == seqfx::effectTapeStop;
         stutterLaneActive[lane] = effectType == seqfx::effectStutter;
 
@@ -1736,6 +1784,7 @@ processor SeqFx [[ main ]]
         combGateTarget[lane] = combActive[lane] ? 1.0f : 0.0f;
         if (combActive[lane])
             combMixTarget[lane] = targetMix;
+        vibroMixTarget[lane] = vibroActive[lane] ? targetMix : 0.0f;
         tapeMixTarget[lane] = tapeLaneActive[lane] ? targetMix : 0.0f;
         stutterMixTarget[lane] = stutterLaneActive[lane] ? targetMix : 0.0f;
 
@@ -1770,6 +1819,9 @@ processor SeqFx [[ main ]]
 
         if (combActive[lane])
             latchCombStep (lane, wasCombActive);
+
+        if (vibroActive[lane])
+            latchVibroStep (lane, wasVibroActive);
 
         if (tapeLaneActive[lane])
             latchTapeStep (lane, wasTapeActive);
@@ -1966,6 +2018,39 @@ processor SeqFx [[ main ]]
 
         combTailActive[lane] = true;
         combTailAgeFrames[lane] = 0.0f;
+    }
+
+    void latchVibroStep (wrap<seqfx::laneCount> lane, bool wasActive)
+    {
+        let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
+
+        if (wasActive && ! triggerSteps[lane, currentStepIndex] && ! relatchingFromPatternUpload)
+            return;
+
+        let blockStart = blockStartStep (lane, currentStep);
+        let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        vibroRateHz[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 0], 0.05f, 12.0f);
+        vibroDepthCents[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 1], 0.0f, 100.0f);
+        let nextWaveform = snapValue (stepParams[lane, blockStartIndex, 2], 0, 1);
+        if (nextWaveform != vibroWaveform[lane])
+        {
+            vibroPreviousWaveform[lane] = vibroWaveform[lane];
+            vibroWaveform[lane] = nextWaveform;
+            vibroWaveformFade[lane] = 0.0f;
+        }
+        vibroSpreadDegrees[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.0f, 180.0f);
+        vibroTimingMode[lane] = snapValue (stepParams[lane, blockStartIndex, 4], 0, 1);
+        vibroDivision[lane] = snapValue (stepParams[lane, blockStartIndex, 5], 0, 5);
+
+        if (! wasActive)
+        {
+            vibroRateCurrent[lane] = resolveVibroRateHz (lane);
+            vibroDepthCurrent[lane] = vibroDepthCents[lane];
+            vibroSpreadCurrent[lane] = vibroSpreadDegrees[lane];
+            vibroMixCurrent[lane] = 0.0f;
+            vibroPreviousWaveform[lane] = vibroWaveform[lane];
+            vibroWaveformFade[lane] = 1.0f;
+        }
     }
 
     void latchStutterStep (wrap<seqfx::laneCount> lane, bool wasActive)
@@ -3024,6 +3109,196 @@ processor SeqFx [[ main ]]
         );
     }
 
+    float64 vibroDivisionQuarterNotes (int32 division)
+    {
+        if (division == 0) return 0.125;
+        if (division == 1) return 0.25;
+        if (division == 2) return 0.5;
+        if (division == 3) return 1.0;
+        if (division == 4) return 2.0;
+        return 4.0;
+    }
+
+    float32 resolveVibroRateHz (wrap<seqfx::laneCount> lane)
+    {
+        if (vibroTimingMode[lane] == seqfx::vibroTimingFree)
+            return seqfx::clampFloat (vibroRateHz[lane], 0.05f, 12.0f);
+
+        let cycleFrames = framesPerQuarter() * vibroDivisionQuarterNotes (vibroDivision[lane]);
+        return seqfx::clampFloat (
+            float32 (processor.frequency / std::intrinsics::max (1.0, cycleFrames)),
+            0.02f,
+            24.0f
+        );
+    }
+
+    float32 vibroTriangleIntegral (float32 phase)
+    {
+        let p = seqfx::unitWrap (phase);
+        if (p < 0.5f)
+            return p - (2.0f * p * p);
+
+        return (2.0f * p * p) - (3.0f * p) + 1.0f;
+    }
+
+    float32 vibroDelaySamples (
+        int32 waveform,
+        float32 phase,
+        float32 rateHz,
+        float32 depthCents)
+    {
+        if (depthCents <= 0.000001f)
+            return 0.0f;
+
+        // Depth is the exact half peak-to-peak pitch span. A periodic delay
+        // must average one-sample-per-sample playback, so the small residual
+        // centre offset is preferable to an ever-drifting read head.
+        let depthRatio = std::intrinsics::tanh (
+            seqfx::clampFloat (depthCents, 0.0f, 100.0f)
+                * std::intrinsics::log (2.0f)
+                / 1200.0f
+        );
+        let safeRate = seqfx::clampFloat (rateHz, 0.02f, 24.0f);
+        if (waveform == 1)
+        {
+            let scale = depthRatio * float32 (processor.frequency) / safeRate;
+            let halfRange = scale * 0.125f;
+            return seqfx::clampFloat (
+                4.0f + halfRange - (scale * vibroTriangleIntegral (phase)),
+                4.0f,
+                float32 (vibroBufferSize - 4)
+            );
+        }
+
+        let amplitude = depthRatio * float32 (processor.frequency)
+            / (2.0f * seqfx::pi * safeRate);
+        return seqfx::clampFloat (
+            4.0f + amplitude + (amplitude * std::intrinsics::cos (phase * 2.0f * seqfx::pi)),
+            4.0f,
+            float32 (vibroBufferSize - 4)
+        );
+    }
+
+    float32<2> readVibroAt (wrap<seqfx::laneCount> lane, int32 index)
+    {
+        return vibroHistory[lane, wrap<vibroBufferSize> (index)];
+    }
+
+    float32<2> readVibroHistory (wrap<seqfx::laneCount> lane, float32 delaySamples)
+    {
+        if (vibroValidSamples[lane] < int32 (std::intrinsics::ceil (delaySamples)) + 3)
+            return float32<2> (0.0f);
+
+        let readPosition = float32 (int32 (vibroWriteIndex[lane])) - delaySamples;
+        let currentIndex = int32 (std::intrinsics::floor (readPosition));
+        let fraction = readPosition - float32 (currentIndex);
+        return seqfx::cubicHermite4 (
+            readVibroAt (lane, currentIndex - 1),
+            readVibroAt (lane, currentIndex),
+            readVibroAt (lane, currentIndex + 1),
+            readVibroAt (lane, currentIndex + 2),
+            fraction
+        );
+    }
+
+    void writeVibroHistory (wrap<seqfx::laneCount> lane, float32<2> sample)
+    {
+        let writeIndex = vibroWriteIndex[lane];
+        vibroHistory[lane, writeIndex] = sample;
+        vibroWriteIndex[lane] = wrap<vibroBufferSize> (int32 (writeIndex) + 1);
+        if (vibroValidSamples[lane] < vibroBufferSize - 4)
+            vibroValidSamples[lane] += 1;
+    }
+
+    float32<2> processVibro (wrap<seqfx::laneCount> lane, float32<2> stage)
+    {
+        let parameterSmoothing = 1.0f - std::intrinsics::exp (
+            -1.0f / (0.025f * float32 (processor.frequency))
+        );
+        var targetRate = resolveVibroRateHz (lane);
+        if (vibroActive[lane])
+        {
+            if (vibroTimingMode[lane] == seqfx::vibroTimingFree)
+                targetRate = auxLogParamValue (lane, 0, vibroRateHz[lane], 0.05f, 12.0f);
+
+            let targetDepth = seqfx::clampFloat (auxParamValue (lane, 1, vibroDepthCents[lane]), 0.0f, 100.0f);
+            let targetSpread = seqfx::clampFloat (auxParamValue (lane, 3, vibroSpreadDegrees[lane]), 0.0f, 180.0f);
+            vibroDepthCurrent[lane] += (targetDepth - vibroDepthCurrent[lane]) * parameterSmoothing;
+            vibroSpreadCurrent[lane] += (targetSpread - vibroSpreadCurrent[lane]) * parameterSmoothing;
+        }
+        vibroRateCurrent[lane] += (targetRate - vibroRateCurrent[lane]) * parameterSmoothing;
+        vibroMixCurrent[lane] = seqfx::moveTowards (
+            vibroMixCurrent[lane],
+            vibroMixTarget[lane],
+            1.0f / seqfx::transitionCrossfadeFrames
+        );
+        vibroWaveformFade[lane] = seqfx::moveTowards (
+            vibroWaveformFade[lane],
+            1.0f,
+            1.0f / seqfx::transitionCrossfadeFrames
+        );
+
+        let rateHz = seqfx::clampFloat (vibroRateCurrent[lane], 0.02f, 24.0f);
+        let depthCents = seqfx::clampFloat (vibroDepthCurrent[lane], 0.0f, 100.0f);
+        let phase = vibroPhase[lane];
+        vibroPhase[lane] = seqfx::unitWrap (
+            phase + (rateHz / float32 (processor.frequency))
+        );
+
+        if (! vibroActive[lane] || vibroMixCurrent[lane] <= 0.000001f || depthCents <= 0.000001f)
+            return stage;
+
+        let spreadPhase = seqfx::clampFloat (vibroSpreadCurrent[lane], 0.0f, 180.0f) / 360.0f;
+        let leftDelay = vibroDelaySamples (vibroWaveform[lane], phase, rateHz, depthCents);
+        let rightDelay = vibroDelaySamples (
+            vibroWaveform[lane],
+            seqfx::unitWrap (phase + spreadPhase),
+            rateHz,
+            depthCents
+        );
+        let requiredDelay = std::intrinsics::max (leftDelay, rightDelay);
+        if (vibroValidSamples[lane] < int32 (std::intrinsics::ceil (requiredDelay)) + 3)
+        {
+            vibroHistoryFade[lane] = 0.0f;
+            return stage;
+        }
+
+        vibroHistoryFade[lane] = seqfx::moveTowards (
+            vibroHistoryFade[lane],
+            1.0f,
+            1.0f / seqfx::transitionCrossfadeFrames
+        );
+        let leftRead = readVibroHistory (lane, leftDelay);
+        let rightRead = readVibroHistory (lane, rightDelay);
+        var wet = float32<2> (leftRead[0], rightRead[1]);
+        if (vibroWaveformFade[lane] < 0.999999f)
+        {
+            let previousLeftDelay = vibroDelaySamples (
+                vibroPreviousWaveform[lane], phase, rateHz, depthCents
+            );
+            let previousRightDelay = vibroDelaySamples (
+                vibroPreviousWaveform[lane],
+                seqfx::unitWrap (phase + spreadPhase),
+                rateHz,
+                depthCents
+            );
+            let previousRequired = std::intrinsics::max (previousLeftDelay, previousRightDelay);
+            if (vibroValidSamples[lane] >= int32 (std::intrinsics::ceil (previousRequired)) + 3)
+            {
+                let previousLeftRead = readVibroHistory (lane, previousLeftDelay);
+                let previousRightRead = readVibroHistory (lane, previousRightDelay);
+                let previousWet = float32<2> (previousLeftRead[0], previousRightRead[1]);
+                wet = previousWet + ((wet - previousWet) * vibroWaveformFade[lane]);
+            }
+        }
+
+        let combined = stage + ((wet - stage) * vibroMixCurrent[lane] * vibroHistoryFade[lane]);
+        return float32<2> (
+            seqfx::clampFloat (combined[0], -4.0f, 4.0f),
+            seqfx::clampFloat (combined[1], -4.0f, 4.0f)
+        );
+    }
+
     float32<2> processDirty (wrap<seqfx::laneCount> lane, float32<2> stage)
     {
         dirtyMixCurrent[lane] = seqfx::moveTowards (
@@ -3306,6 +3581,9 @@ processor SeqFx [[ main ]]
         stage = processTalkBox (lane, stage);
         stage = processDirty (lane, stage);
         stage = processComb (lane, stage);
+        let vibroInput = stage;
+        stage = processVibro (lane, stage);
+        writeVibroHistory (lane, vibroInput);
 
         writeTapeHistory (lane, stage);
         stage = processTapeStop (lane, stage);
@@ -3411,7 +3689,10 @@ processor SeqFx [[ main ]]
             else
             {
                 for (wrap<seqfx::laneCount> lane)
+                {
+                    writeVibroHistory (lane, stage);
                     writeTapeHistory (lane, stage);
+                }
             }
 
             if (resetCrossfadeAge < seqfx::transitionCrossfadeFrames)

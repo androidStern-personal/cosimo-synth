@@ -228,6 +228,7 @@ const EFFECT_OPTIONS = [
     SEQFX_EFFECT_TYPES.comb,
     SEQFX_EFFECT_TYPES.ring,
     SEQFX_EFFECT_TYPES.talkBox,
+    SEQFX_EFFECT_TYPES.vibro,
     SEQFX_EFFECT_TYPES.dirty,
 ] as const;
 
@@ -362,6 +363,8 @@ const TALK_BOX_ICON_PATH =
 const DIRTY_ICON_PATH = "M232 64.5h-54l-111.5 112H26V193h50L187.5 81H232z";
 const COMB_ICON_PATH =
     "M25.101 77.628a4.008 4.008 0 0 0 3.997 4.01h16.996c6.632 0 13.927 5.01 16.3 11.202l52.724 85.231c7.115 18.564 18.693 18.571 25.857.025L193.91 92.84c2.39-6.187 9.693-11.202 16.336-11.202h16.49a4.01 4.01 0 0 0 4-4.01V68.82a4 4 0 0 0-3.994-4.009h-23.508c-8.835 0-18.547 6.702-21.69 14.962l-47.147 73.852c-3.533 9.287-9.217 9.262-12.694-.051L75.2 79.805C72.108 71.524 62.44 64.81 53.6 64.81H29.11a4.012 4.012 0 0 0-4.008 4.01v8.808z";
+const VIBRO_ICON_PATH =
+    "M35.996 208c-2.207 0-3.077-1.532-1.935-3.434l91.878-153.132c1.138-1.896 2.98-1.902 4.122 0l91.878 153.132c1.138 1.896.272 3.434-1.935 3.434h-8.008c-2.207 0-4.922-1.54-6.054-3.421L130.058 78.42c-1.137-1.89-2.984-1.881-4.116 0L50.058 204.58c-1.138 1.889-3.848 3.42-6.054 3.42h-8.008z";
 
 // Effect picker SVGs are local silhouettes matched to the riso cell palette.
 function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
@@ -469,6 +472,19 @@ function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
                         fillRule="evenodd"
                     />
                     <path d={TALK_BOX_ICON_PATH} fill={textureFill} fillRule="evenodd" />
+                </svg>
+            );
+        case SEQFX_EFFECT_TYPES.vibro:
+            return (
+                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
+                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
+                    <path
+                        d={VIBRO_ICON_PATH}
+                        data-role="seqfx-effect-icon-fill"
+                        fill="currentColor"
+                        fillRule="evenodd"
+                    />
+                    <path d={VIBRO_ICON_PATH} fill={textureFill} fillRule="evenodd" />
                 </svg>
             );
         case SEQFX_EFFECT_TYPES.dirty:
@@ -960,6 +976,14 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 5, label: "Highs", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Restores source brightness above the formants." },
         { index: 6, label: "Drive", min: 0, max: 12, step: 0.1, amountKind: "db", hint: "Adds bounded excitation before the formant filters." },
     ],
+    [SEQFX_EFFECT_TYPES.vibro]: [
+        { index: 0, label: "Rate", min: 0.05, max: 12, step: 0.01, amountKind: "cutoffOctaves", hint: "Free-mode cycle rate; Sync derives the rate from Division and host tempo." },
+        { index: 1, label: "Depth", min: 0, max: 100, step: 0.1, amountKind: "linear", hint: "Exact half peak-to-peak Doppler pitch span in cents." },
+        { index: 2, label: "Wave", min: 0, max: 1, step: 1, kind: "select", options: ["Sine", "Triangle"], hint: "Latched pitch-motion shape; changes crossfade without resetting phase." },
+        { index: 3, label: "Spread", min: 0, max: 180, step: 1, amountKind: "linear", hint: "Right-channel phase offset; 0° is mono-safe and 180° is opposite motion." },
+        { index: 4, label: "Timing", min: 0, max: 1, step: 1, kind: "select", options: ["Sync", "Free"], hint: "Sync follows host tempo; Free uses Rate." },
+        { index: 5, label: "Division", min: 0, max: 5, step: 1, kind: "select", options: ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar"], hint: "One modulation cycle when Timing is Sync." },
+    ],
     [SEQFX_EFFECT_TYPES.dirty]: [
         { index: 0, label: "Drive", min: 0, max: 36, step: 0.1, amountKind: "db", hint: "Level into the oversampled nonlinear stage." },
         { index: 1, label: "Character", min: 0, max: 3, step: 1, kind: "select", options: ["Soft", "Hard", "Fold", "Bias"], hint: "Latched transfer shape; changes crossfade over 2 ms." },
@@ -1010,6 +1034,12 @@ const RING_PARAM_WAVEFORM = 1;
 const TALK_BOX_PARAM_FROM_VOWEL = 0;
 const TALK_BOX_PARAM_TO_VOWEL = 1;
 const TALK_BOX_PARAM_MORPH = 2;
+const VIBRO_PARAM_RATE_HZ = 0;
+const VIBRO_PARAM_DEPTH_CENTS = 1;
+const VIBRO_PARAM_WAVEFORM = 2;
+const VIBRO_PARAM_SPREAD_DEGREES = 3;
+const VIBRO_PARAM_TIMING_MODE = 4;
+const VIBRO_PARAM_DIVISION = 5;
 const DIRTY_PARAM_DRIVE_DB = 0;
 const DIRTY_PARAM_CHARACTER = 1;
 const DIRTY_PARAM_BIAS = 2;
@@ -1566,6 +1596,72 @@ function SeqFxTalkBoxBlockGlyph({
     );
 }
 
+function vibroRisoPath(waveform: number, phaseOffset: number, width: number) {
+    const cycles = width <= 28 ? 1.5 : Math.min(5, Math.max(2, width / 42));
+    return Array.from({ length: 65 }, (_unused, index) => {
+        const phase = ((index / 64) * cycles) + phaseOffset;
+        const wrapped = phase - Math.floor(phase);
+        const wave = waveform === 1
+            ? 1 - (4 * Math.abs(wrapped - 0.5))
+            : Math.sin(phase * Math.PI * 2);
+        return `${index === 0 ? "M" : "L"}${roundedPathValue((index / 64) * width)} ${roundedPathValue(14 - (wave * 8))}`;
+    }).join(" ");
+}
+
+function SeqFxVibroBlockGlyph({
+    params,
+    size,
+    width,
+}: {
+    params: number[];
+    size: SeqFxBlockVisualSize;
+    width: number;
+}) {
+    const rateHz = Number(params[VIBRO_PARAM_RATE_HZ] ?? 4.5);
+    const depthCents = Number(params[VIBRO_PARAM_DEPTH_CENTS] ?? 28);
+    const waveform = Math.round(Number(params[VIBRO_PARAM_WAVEFORM] ?? 0));
+    const spreadDegrees = Number(params[VIBRO_PARAM_SPREAD_DEGREES] ?? 90);
+    const timingMode = Math.round(Number(params[VIBRO_PARAM_TIMING_MODE] ?? 0));
+    const division = Math.round(Number(params[VIBRO_PARAM_DIVISION] ?? 2));
+    const divisionLabel = ["1/32", "1/16", "1/8", "1/4", "1/2", "1 BAR"][division] ?? "1/8";
+
+    return (
+        <>
+            <svg
+                aria-hidden="true"
+                className="seqfx-block-glyph"
+                data-effect="vibro"
+                data-role="seqfx-block-glyph"
+                data-size={size}
+                focusable="false"
+                preserveAspectRatio="none"
+                viewBox={`0 0 ${width} 28`}
+            >
+                <path
+                    className="seqfx-block-glyph__line"
+                    d={vibroRisoPath(waveform, 0, width)}
+                    data-role="seqfx-block-glyph-line"
+                />
+                <path
+                    className="seqfx-block-glyph__line seqfx-block-glyph__line--secondary"
+                    d={vibroRisoPath(waveform, clampNumber(spreadDegrees, 0, 180) / 360, width)}
+                    data-role="seqfx-block-glyph-secondary-line"
+                />
+            </svg>
+            {size !== "single" ? (
+                <span className="seqfx-block-glyph-label" data-role="seqfx-block-glyph-label">
+                    {Number(depthCents.toFixed(1))}¢
+                </span>
+            ) : null}
+            {size === "wide" ? (
+                <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
+                    {timingMode === 0 ? `${divisionLabel} SYNC` : `${Number(rateHz.toFixed(2))} Hz`}
+                </span>
+            ) : null}
+        </>
+    );
+}
+
 function dirtyTransferSample(input: number, character: number, bias: number, driveDb: number) {
     const soft = (value: number) => value / Math.sqrt(1 + (value * value));
     const fold = (value: number) => {
@@ -1668,6 +1764,8 @@ export function SeqFxBlockGlyph({
             return <SeqFxRingBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.talkBox:
             return <SeqFxTalkBoxBlockGlyph params={params} size={size} width={width} />;
+        case SEQFX_EFFECT_TYPES.vibro:
+            return <SeqFxVibroBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.dirty:
             return <SeqFxDirtyBlockGlyph params={params} size={size} width={width} />;
         default:

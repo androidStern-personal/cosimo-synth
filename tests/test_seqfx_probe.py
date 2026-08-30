@@ -27,6 +27,7 @@ EFFECT_STUTTER = 4
 EFFECT_COMB = 6
 EFFECT_RING = 7
 EFFECT_TALK_BOX = 9
+EFFECT_VIBRO = 10
 EFFECT_DIRTY = 12
 LIFECYCLE_IDLE = 0
 LIFECYCLE_ENTERING = 1
@@ -3232,3 +3233,229 @@ def test_comb_four_chain_worst_case_remains_faster_than_the_generous_js_budget(
     assert np.all(np.isfinite(output))
     assert float(np.max(np.abs(output))) <= 4.001
     assert elapsed < 2.0, f"four-chain generated-JS render took {elapsed:.3f}s for {source.shape[0] / SAMPLE_RATE:.3f}s audio"
+
+
+def _render_vibro(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    input_audio: np.ndarray,
+    *,
+    rate_hz: float = 4.5,
+    depth_cents: float = 28.0,
+    waveform: float = 0.0,
+    spread_degrees: float = 90.0,
+    timing_mode: float = 1.0,
+    division: float = 2.0,
+    first_step: int = 1,
+    active_steps: int = 16,
+    mix: float = 1.0,
+    bpm: float = 120.0,
+) -> np.ndarray:
+    upload = _empty_upload()
+    params = [rate_hz, depth_cents, waveform, spread_degrees, timing_mode, division]
+    for step in range(first_step, min(STEP_COUNT, first_step + active_steps)):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == first_step),
+            mix=mix,
+            effect_type=EFFECT_VIBRO,
+            params=params,
+        )
+    return _render(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(upload, manual_bpm=bpm),
+    )
+
+
+def _vibro_ramp(frames: int, slope: float = 8.0e-6) -> tuple[np.ndarray, float]:
+    mono = (np.arange(frames, dtype=np.float64) * slope).astype(np.float32)
+    return np.column_stack([mono, mono]).astype(np.float32), slope
+
+
+def _vibro_read_ratio(output: np.ndarray, slope: float, start: int, end: int, channel: int = 0) -> np.ndarray:
+    wet = np.asarray(output[start:end, channel], dtype=np.float64)
+    return np.gradient(wet) / slope
+
+
+def test_vibro_free_rate_and_depth_match_the_displayed_doppler_contract(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    frames = STEP_FRAMES * 20
+    source, slope = _vibro_ramp(frames)
+    output = _render_vibro(
+        generated_runtime,
+        tmp_path,
+        source,
+        rate_hz=4.0,
+        depth_cents=60.0,
+        waveform=0.0,
+        spread_degrees=0.0,
+        active_steps=18,
+    )
+    ratio = _vibro_read_ratio(output, slope, STEP_FRAMES * 2, STEP_FRAMES * 18)
+    modulation = ratio - np.mean(ratio)
+    measured_rate = _dominant_frequency_near(modulation, 4.0)
+    phase = np.arange(ratio.size, dtype=np.float64) * (2.0 * np.pi * measured_rate / SAMPLE_RATE)
+    basis = np.column_stack([np.sin(phase), np.cos(phase), np.ones(ratio.size)])
+    sine_weight, cosine_weight, _center = np.linalg.lstsq(basis, ratio, rcond=None)[0]
+    rate_deviation = float(np.hypot(sine_weight, cosine_weight))
+    measured_depth = 600.0 * np.log2((1.0 + rate_deviation) / (1.0 - rate_deviation))
+
+    assert measured_rate == pytest.approx(4.0, abs=0.12)
+    assert measured_depth == pytest.approx(60.0, abs=3.0)
+
+
+def test_vibro_sync_rate_follows_host_tempo_and_selected_division(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    frames = STEP_FRAMES * 32
+    source, slope = _vibro_ramp(frames, slope=4.0e-6)
+    output = _render_vibro(
+        generated_runtime,
+        tmp_path,
+        source,
+        rate_hz=9.0,
+        depth_cents=45.0,
+        waveform=0.0,
+        spread_degrees=0.0,
+        timing_mode=0.0,
+        division=3.0,
+        active_steps=31,
+        bpm=90.0,
+    )
+    ratio = _vibro_read_ratio(output, slope, 8_000, frames - 2_000)
+    measured_rate = _dominant_frequency_near(ratio - np.mean(ratio), 1.5)
+
+    assert measured_rate == pytest.approx(1.5, abs=0.12)
+
+
+def test_vibro_zero_depth_is_exact_pass_through_under_full_mix(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _complex_signal(STEP_FRAMES * 6) * 0.35
+    output = _render_vibro(
+        generated_runtime,
+        tmp_path,
+        source,
+        depth_cents=0.0,
+        first_step=1,
+        active_steps=4,
+        mix=1.0,
+    )
+
+    np.testing.assert_array_equal(output, source)
+
+
+def test_vibro_spread_has_a_mono_safe_center_and_a_useful_stereo_extreme(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _sine(STEP_FRAMES * 12, 440.0, amplitude=0.4)
+    centered = _render_vibro(
+        generated_runtime,
+        tmp_path,
+        source,
+        rate_hz=3.0,
+        depth_cents=55.0,
+        spread_degrees=0.0,
+        active_steps=10,
+    )
+    wide = _render_vibro(
+        generated_runtime,
+        tmp_path,
+        source,
+        rate_hz=3.0,
+        depth_cents=55.0,
+        spread_degrees=180.0,
+        active_steps=10,
+    )
+    window = slice(STEP_FRAMES * 2, STEP_FRAMES * 10)
+
+    np.testing.assert_allclose(centered[window, 0], centered[window, 1], atol=1.0e-7, rtol=0.0)
+    assert _rms(wide[window, 0] - wide[window, 1]) > 0.08
+    assert _rms(np.mean(wide[window], axis=1)) > 0.08
+
+
+def test_vibro_triangle_is_distinct_but_matches_sine_depth_and_stays_bounded(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    frames = STEP_FRAMES * 16
+    source, slope = _vibro_ramp(frames)
+    sine = _render_vibro(
+        generated_runtime,
+        tmp_path,
+        source,
+        rate_hz=5.0,
+        depth_cents=70.0,
+        waveform=0.0,
+        spread_degrees=0.0,
+        active_steps=14,
+    )
+    triangle = _render_vibro(
+        generated_runtime,
+        tmp_path,
+        source,
+        rate_hz=5.0,
+        depth_cents=70.0,
+        waveform=1.0,
+        spread_degrees=0.0,
+        active_steps=14,
+    )
+    window = slice(STEP_FRAMES * 2, STEP_FRAMES * 14)
+    sine_ratio = _vibro_read_ratio(sine, slope, window.start, window.stop)
+    triangle_ratio = _vibro_read_ratio(triangle, slope, window.start, window.stop)
+
+    for ratio in (sine_ratio, triangle_ratio):
+        low, high = np.quantile(ratio, [0.005, 0.995])
+        assert 600.0 * np.log2(high / low) == pytest.approx(70.0, abs=4.0)
+    assert _rms(sine[window, 0] - triangle[window, 0]) > 1.0e-4
+    assert np.all(np.isfinite(triangle))
+    assert float(np.max(np.abs(triangle))) <= 4.001
+
+
+def test_vibro_exit_crossfades_back_to_dry_and_has_no_tail(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _sine(STEP_FRAMES * 7, 997.0, amplitude=0.35)
+    output = _render_vibro(
+        generated_runtime,
+        tmp_path,
+        source,
+        rate_hz=5.5,
+        depth_cents=80.0,
+        first_step=1,
+        active_steps=3,
+    )
+    release = STEP_FRAMES * 4
+
+    assert _largest_boundary_jump(output[:, 0], 4) < 0.15
+    np.testing.assert_allclose(output[release + 160 :], source[release + 160 :], atol=1.0e-7, rtol=0.0)
+
+
+def test_vibro_cold_history_becomes_available_without_a_delayed_edge(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _sine(STEP_FRAMES * 32, 997.0, amplitude=0.35)
+    output = _render_vibro(
+        generated_runtime,
+        tmp_path,
+        source,
+        rate_hz=0.05,
+        depth_cents=100.0,
+        spread_degrees=0.0,
+        first_step=0,
+        active_steps=32,
+    )
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(np.diff(output[:, 0])))) < 0.06

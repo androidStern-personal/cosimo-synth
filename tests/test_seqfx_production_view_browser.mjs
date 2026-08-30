@@ -680,7 +680,7 @@ test("SeqFX production shadow-root host exposes the shared editor token palette"
     }
 });
 
-test("SeqFX packaged shadow-root flow renders crusher stutter ring talk box dirty and comb inspectors", async () => {
+test("SeqFX packaged shadow-root flow renders implemented effect inspectors including Vibro", async () => {
     const page = await browser.newPage();
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error));
@@ -872,6 +872,33 @@ test("SeqFX packaged shadow-root flow renders crusher stutter ring talk box dirt
             scrollWidth: node.scrollWidth,
         }));
         assert.ok(talkBoxInspectorBounds.scrollWidth <= talkBoxInspectorBounds.clientWidth + 1);
+
+        await page.getByRole("button", { name: "Vibro", exact: true }).click();
+        await page.getByRole("button", { name: "Chain 4 Vibro block 1", exact: true }).waitFor();
+        assert.equal(await page.locator('[data-role="seqfx-param"]').count(), 6);
+        assert.deepEqual(
+            await page.locator('[data-role="seqfx-param"][data-param="2"] option').evaluateAll((options) => options.map((option) => option.textContent)),
+            ["Sine", "Triangle"],
+        );
+        assert.deepEqual(
+            await page.locator('[data-role="seqfx-param"][data-param="4"] option').evaluateAll((options) => options.map((option) => option.textContent)),
+            ["Sync", "Free"],
+        );
+        await page.locator('[data-role="seqfx-param"][data-param="0"]').fill("6");
+        await page.locator('[data-role="seqfx-param"][data-param="4"]').selectOption("1");
+        assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="vibro"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
+        assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="vibro"] [data-role="seqfx-block-glyph-secondary-line"]').getAttribute("d"));
+        await page.locator('[data-role="seqfx-mod-toggle"]').click();
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 3);
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="2"]').count(), 0);
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="4"]').count(), 0);
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="5"]').count(), 0);
+        const vibroInspectorBounds = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => ({
+            clientWidth: node.clientWidth,
+            scrollWidth: node.scrollWidth,
+        }));
+        assert.ok(vibroInspectorBounds.scrollWidth <= vibroInspectorBounds.clientWidth + 1);
+        await page.locator('[data-role="seqfx-mod-toggle"]').click();
 
         await page.getByRole("button", { name: "Dirty", exact: true }).click();
         await page.getByRole("button", { name: "Chain 4 Dirty block 1", exact: true }).waitFor();

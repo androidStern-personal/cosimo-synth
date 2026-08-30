@@ -1,6 +1,6 @@
 # SeqFX Excellence Roadmap
 
-Status: implementation in progress; Phases 0–4 complete; Tape Stop v2, Crush v2, Ring, Talk Box, Dirty, and production Comb complete; Phase 5 continues with Vibro
+Status: implementation in progress; Phases 0–4 complete; Tape Stop v2, Crush v2, Ring, Talk Box, Dirty, production Comb, and Vibro complete; Phase 5 continues with Flange
 Owner thread: `01a05051-d7c7-7e13-bb60-58968b6392cf`
 Branch: `codex/seqfx-excellence-01a05051`
 Worktree: `/Users/winterfell/.codex/worktrees/seqfx-excellence-01a05051/cosimo-synth`
@@ -25,6 +25,7 @@ Execution evidence:
 - Dirty decision and implementation proof: `research/seqfx/dirty-decision.md`
 - Production Comb decision and implementation proof:
   `research/seqfx/comb-lab-decision.md`
+- Vibro decision and implementation proof: `research/seqfx/vibro-decision.md`
 
 ## 1. Outcome
 
@@ -872,6 +873,7 @@ The implementation task must not infer these from a build succeeding.
 | Talk Box is a two-formant vowel filter, not a vocoder | Committed and implemented | Koala names a formant filter, Kilohearts establishes two resonances/Q/passthrough, and Peterson-Barney supplies measured vowel targets | Guess Koala internals, require a sidechain, or expose anonymous F1/F2 knobs | ID 9 sequences literal From/To vowels; Morph is logarithmic; selection latches while Morph/Q/Lows/Highs/Drive remain Aux eligible; crossover and gain choices are recorded as inference |
 | Dirty is a fixed-4x character distortion with residue-only Tone and bounded dynamics restoration | Committed and implemented | Koala establishes the requested identity; Kilohearts and Ableton establish character, bias, dynamics, DC, and quality vocabulary; a measured alias fixture justifies 4x | Treat Dirty as a second Crush, copy undocumented curves, or darken/delay the entire signal for Tone | ID 12 sequences six controls; Character latches and crossfades; continuous controls use Aux; dry Mix remains exact while the nonlinear residue owns DC and Tone processing |
 | Comb uses the selected vector-dispersive feedback topology | Committed and implemented | The lab retained recognizable tuning while dispersion, stereo vector coupling, damping, motion, drive, and width created a distinct stable instrument | Ship a conventional one-delay comb or the less controllable modal candidates | ID 6 keeps an exact reference neutral, morphs through the full four-path advanced network, and records measured tuning, tail, stability, mono, reset, browser, and generated-runtime evidence |
+| Vibro is a wet-only, phase-continuous Doppler delay with literal Sync/Free timing | Committed and implemented | Academic delay-line theory establishes pure variable delay as vibrato; Kilohearts and Effectrix2 separate the dry-mixed/feedback vocabulary of chorus and flanging; measured depth/rate fixtures provide the oracle | Add feedback/dry combing, guess Koala's private behavior, or ship optional Drift without a listening win | ID 10 sequences Rate, Depth, Wave, Spread, Timing, and Division; its corrected 400 ms history covers the stated slow/deep extreme; Flange remains separately identifiable |
 | macOS VST3 release candidate only | Inherited | Existing release scope and toolchain | Expand AU/Windows now | Keeps the slice finishable; other formats need their own roadmap |
 | No merge/push/deploy/publish by this task | Inherited | Coordinator and user authorization boundary | Treat “end to end” as permission to release | Final result is a clean handoff and artifact, not an external launch |
 

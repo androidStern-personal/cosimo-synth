@@ -275,14 +275,20 @@ const definitions = [
         key: "vibro",
         name: "Vibro",
         shortName: "VIB",
-        fontaudioIcon: "fad-modsine",
+        fontaudioIcon: "fad-modtri",
         lifecycle: "modulatedDelay",
         parameters: [
             parameter("rateHz", "Rate", 0.05, 12, 4.5, 0.01, { unit: "Hz", scale: "log" }),
             parameter("depthCents", "Depth", 0, 100, 28, 0.1, { unit: "cents" }),
             parameter("waveform", "Wave", 0, 1, 0, 1, { latch: "trigger", auxEligible: false, integer: true, options: ["Sine", "Triangle"] }),
             parameter("spreadDegrees", "Spread", 0, 180, 90, 1, { unit: "degrees" }),
-            parameter("drift", "Drift", 0, 0.2, 0, 0.001, { unit: "%" }),
+            parameter("timingMode", "Timing", 0, 1, 0, 1, { latch: "trigger", auxEligible: false, integer: true, options: ["Sync", "Free"] }),
+            parameter("division", "Division", 0, 5, 2, 1, {
+                latch: "trigger",
+                auxEligible: false,
+                integer: true,
+                options: ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar"],
+            }),
         ],
     },
     {
