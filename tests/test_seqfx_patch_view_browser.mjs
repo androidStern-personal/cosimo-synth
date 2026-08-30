@@ -1139,6 +1139,13 @@ test("seqfx_global_surface_wires_host_controls_loop_transport_and_edit_history",
     assert.equal(await undo.isDisabled(), true);
     assert.equal(await redo.isDisabled(), true);
 
+    const rateBounds = await rate.boundingBox();
+    assert.ok(rateBounds, "sequence rate should have measurable browser geometry");
+    assert.ok(
+        rateBounds.width >= 54,
+        `sequence rate should leave room for 1/16 plus the native select arrow, got ${rateBounds.width}px`,
+    );
+
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
     await enabled.click();
     await mix.fill("0.37");

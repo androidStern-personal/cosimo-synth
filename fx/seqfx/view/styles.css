@@ -172,7 +172,7 @@ select {
 
 .seqfx-global__controls {
     display: grid;
-    grid-template-columns: auto minmax(120px, 1.3fr) 88px 76px 72px minmax(108px, 1fr) auto;
+    grid-template-columns: auto minmax(120px, 1.3fr) 88px 76px 88px minmax(108px, 1fr) auto;
     align-items: end;
     gap: 7px;
     min-width: 0;
