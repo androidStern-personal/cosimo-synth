@@ -145,6 +145,26 @@ and audibly testable; it is not attributed to a benchmark product.
 - Entry, terminal fade, return, and retrigger use complementary short windows.
 - Every output sample must remain finite at 44.1–192 kHz.
 
+### Legacy v5 migration
+
+The old document stored Tape timing as a multiplier of the active block, but it
+did not store the host tempo or SeqFX rate needed to recover milliseconds.
+Migration therefore uses the old default clock as an explicit canonical
+reference: 120 BPM with 1/16 cells, or 125 ms per cell.
+
+- `freeStopMs = clamp(oldDurationScale * blockLength * 125, 20, 8000)`;
+- old curve power `0.25..4` maps logarithmically to the new centered `-1..1`
+  Curve control;
+- old Stop mode maps to `Catch Up`; old Spin-up mode maps to `Spin Up` return;
+- old Catch-up percent maps to free Start Time against the same canonical block
+  duration;
+- migrated timing is explicitly `Free`, Character is neutral, and old aux
+  targets are disabled because the v2 motor gesture is trigger-latched.
+
+This is deterministic and honest about missing context. It is not claimed to
+be sample-identical when an old project used a non-default tempo/rate. The old
+`seqfx.v6` payload is preserved, and the mapping has a frozen migration test.
+
 ## Executable acceptance fixtures
 
 Production Tape Stop v2 is not accepted until automated renders prove:

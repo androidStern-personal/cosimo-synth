@@ -396,6 +396,29 @@ def _complex_signal(frames: int) -> np.ndarray:
     return np.column_stack([mono, mono]).astype(np.float32)
 
 
+def _tape_v2_params(
+    *,
+    stop_division: int = 8,
+    curve: float = 0.0,
+    return_mode: int = 0,
+    start_division: int = 1,
+    character: float = 0.0,
+    timing_mode: int = 0,
+    free_stop_ms: float = 500.0,
+    free_start_ms: float = 125.0,
+) -> list[float]:
+    return [
+        float(stop_division),
+        curve,
+        float(return_mode),
+        float(start_division),
+        character,
+        float(timing_mode),
+        free_stop_ms,
+        free_start_ms,
+    ]
+
+
 def _rms(samples: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.asarray(samples, dtype=np.float64) ** 2)))
 
@@ -1270,7 +1293,11 @@ def test_serial_chain_order_is_chain_order_not_legacy_effect_order(
     ("effect_type", "params_a", "params_b"),
     [
         (EFFECT_FILTER, [0.0, 360.0, 360.0, 0.707, 1.0], [1.0, 4_500.0, 4_500.0, 0.707, 1.0]),
-        (EFFECT_TAPE, [0.7, 1.0, 1.0, 35.0, 0.0], [0.2, 1.8, 1.0, 50.0, 1.0]),
+        (
+            EFFECT_TAPE,
+            _tape_v2_params(timing_mode=1, free_stop_ms=500.0),
+            _tape_v2_params(timing_mode=1, free_stop_ms=20.0),
+        ),
         (EFFECT_STUTTER, [6.0, 1.0, 0.0], [3.0, 1.0, 0.0]),
     ],
 )
@@ -1355,13 +1382,41 @@ def test_filter_envelope_uses_the_full_stretched_block_duration(
     assert fourth_rms > first_rms * 6.0
 
 
+def test_one_cell_tape_stop_can_finish_a_one_beat_gesture_after_its_block(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_TAPE,
+        step=1,
+        trigger=True,
+        params=_tape_v2_params(stop_division=3),
+    )
+
+    frames = 18_000
+    input_audio = np.zeros((frames, 2), dtype=np.float32)
+    input_audio[: STEP_FRAMES * 2] = _sine(STEP_FRAMES * 2, 660.0)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    assert _rms(input_audio[6_000:6_300, 0]) < 1.0e-6
+    assert _rms(output[6_000:6_300, 0]) > 0.08
+
+
 def test_tape_stop_lowers_zero_crossing_rate_during_active_block(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
     upload = _empty_upload()
     for step in (1, 2, 3):
-        _activate_step(upload, lane=LANE_TAPE, step=step, trigger=(step == 1), params=[1.0, 1.4, 1.0, 30.0])
+        _activate_step(
+            upload,
+            lane=LANE_TAPE,
+            step=step,
+            trigger=(step == 1),
+            params=_tape_v2_params(stop_division=2, curve=0.35),
+        )
 
     input_audio = _sine(STEP_FRAMES * 4, 660.0)
     output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
@@ -1371,7 +1426,7 @@ def test_tape_stop_lowers_zero_crossing_rate_during_active_block(
     assert _zero_crossing_rate(late) < _zero_crossing_rate(early) * 0.72
 
 
-def test_aux_envelope_modulates_tape_stop_start_length(
+def test_tape_stop_time_is_trigger_latched_and_ignores_mid_gesture_aux_motion(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
@@ -1383,25 +1438,23 @@ def test_aux_envelope_modulates_tape_stop_start_length(
             lane=LANE_TAPE,
             step=step,
             trigger=(step == 1),
-            params=[1.0, 1.0, 1.0, 0.0, 0.0],
+            params=_tape_v2_params(stop_division=2),
         )
         _activate_step(
             aux_upload,
             lane=LANE_TAPE,
             step=step,
             trigger=(step == 1),
-            params=[1.0, 1.0, 1.0, 0.0, 0.0],
+            params=_tape_v2_params(stop_division=2),
         )
-        _set_aux(aux_upload, lane=LANE_TAPE, step=step, param=0, end=0.2)
+        _set_aux(aux_upload, lane=LANE_TAPE, step=step, param=0, end=7.0)
 
     input_audio = _sine(STEP_FRAMES * 4, 660.0)
     baseline = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
     modulated = _render(generated_runtime, tmp_path, input_audio, _base_schedule(aux_upload))
     comparison_window = slice(STEP_FRAMES + 1_000, (STEP_FRAMES * 2) - 200)
-    delta = float(np.sqrt(np.mean((modulated[comparison_window] - baseline[comparison_window]) ** 2)))
-
     assert np.all(np.isfinite(modulated))
-    assert delta > 0.04
+    np.testing.assert_allclose(modulated[comparison_window], baseline[comparison_window], atol=1.0e-6, rtol=0.0)
 
 
 def test_tape_stop_step_boundaries_do_not_click_on_exit_or_retrigger(
@@ -1432,8 +1485,8 @@ def test_tape_stop_step_boundaries_do_not_click_on_exit_or_retrigger(
 
     dry = _sine(STEP_FRAMES * 5, 660.0)[:, 0]
     allowed_jump = float(np.max(np.abs(np.diff(dry)))) * 1.5
-    stop_params = [1.0, 1.0, 1.0, 25.0, 0.0]
-    spin_up_params = [1.0, 1.0, 1.0, 25.0, 1.0]
+    stop_params = _tape_v2_params(stop_division=8, return_mode=0)
+    spin_up_params = _tape_v2_params(stop_division=8, return_mode=1, start_division=8)
 
     stop_exit = render_tape_steps([(1, True, stop_params)], "stop_exit")
     spin_up_exit = render_tape_steps([(1, True, spin_up_params)], "spin_up_exit")
@@ -1448,6 +1501,50 @@ def test_tape_stop_step_boundaries_do_not_click_on_exit_or_retrigger(
     assert largest_boundary_jump(adjacent_retrigger, 3) <= allowed_jump
 
 
+def test_third_tape_retrigger_steals_a_bounded_voice_without_gain_runaway(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = _tape_v2_params(stop_division=2, curve=0.25, return_mode=1, start_division=2)
+    for step in (1, 2, 3):
+        _activate_step(upload, lane=LANE_TAPE, step=step, trigger=True, params=params)
+
+    input_audio = _sine(STEP_FRAMES * 6, 550.0, amplitude=0.45)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+    dry_jump = float(np.max(np.abs(np.diff(input_audio[:, 0]))))
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) < 0.8
+    for boundary_step in (2, 3, 4):
+        assert _largest_boundary_jump(output[:, 0], boundary_step) <= dry_jump * 1.8
+
+
+def test_tempo_change_does_not_retime_an_active_synced_tape_gesture(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_TAPE,
+        step=1,
+        trigger=True,
+        params=_tape_v2_params(stop_division=2, curve=0.2, return_mode=1, start_division=1),
+    )
+    input_audio = _complex_signal(STEP_FRAMES * 6)
+    baseline_path = tmp_path / "baseline"
+    changed_path = tmp_path / "changed"
+    baseline_path.mkdir()
+    changed_path.mkdir()
+    baseline = _render(generated_runtime, baseline_path, input_audio, _base_schedule(upload))
+    changed_schedule = _base_schedule(upload)
+    changed_schedule[5_000] = [["value", "manualBpm", 60.0, 0]]
+    changed = _render(generated_runtime, changed_path, input_audio, changed_schedule)
+
+    np.testing.assert_allclose(changed[5_000:14_500], baseline[5_000:14_500], atol=1.0e-6, rtol=0.0)
+
+
 def test_internal_reset_invalidates_tape_history_before_relatching_current_block(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -1458,7 +1555,7 @@ def test_internal_reset_invalidates_tape_history_before_relatching_current_block
         lane=LANE_TAPE,
         step=0,
         trigger=True,
-        params=[0.05, 4.0, 1.0, 0.0, 0.0],
+        params=_tape_v2_params(timing_mode=1, free_stop_ms=20.0),
     )
 
     frames = 4_000
@@ -1566,7 +1663,7 @@ def test_adjacent_different_effects_in_one_chain_do_not_create_a_step_boundary_c
         step=1,
         trigger=False,
         effect_type=EFFECT_TAPE,
-        params=[0.8, 1.0, 1.0, 25.0, 0.0],
+        params=_tape_v2_params(stop_division=8),
     )
 
     input_audio = _sine(STEP_FRAMES * 3, 660.0)
@@ -1589,7 +1686,7 @@ def test_tape_stop_catchup_does_not_play_faster_than_dry_timeline(
             lane=LANE_TAPE,
             step=step,
             trigger=(step == 1),
-            params=[0.25, 1.0, 1.0, 50.0, 0.0],
+            params=_tape_v2_params(stop_division=2, return_mode=0),
         )
 
     input_audio = _sine(STEP_FRAMES * 6, 660.0)
@@ -1602,12 +1699,110 @@ def test_tape_stop_catchup_does_not_play_faster_than_dry_timeline(
     assert output_zcr <= dry_zcr * 1.15
 
     stop_window = slice((STEP_FRAMES * 2) + 300, (STEP_FRAMES * 2) + 1_200)
-    end_window = slice((STEP_FRAMES * 5) - 600, (STEP_FRAMES * 5) - 120)
+    end_window = slice((STEP_FRAMES * 5) + 700, (STEP_FRAMES * 5) + 1_200)
     stop_error = float(np.sqrt(np.mean((output[stop_window] - input_audio[stop_window]) ** 2)))
     end_error = float(np.sqrt(np.mean((output[end_window] - input_audio[end_window]) ** 2)))
 
     assert stop_error > 0.15
     assert end_error < stop_error * 0.25
+
+
+def test_tape_stop_free_time_bounds_produce_distinct_short_and_long_gestures(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    short_upload = _empty_upload()
+    long_upload = _empty_upload()
+    for upload, stop_ms in ((short_upload, 20.0), (long_upload, 8_000.0)):
+        _activate_step(
+            upload,
+            lane=LANE_TAPE,
+            step=1,
+            trigger=True,
+            params=_tape_v2_params(timing_mode=1, free_stop_ms=stop_ms),
+        )
+
+    input_audio = _complex_signal(24_000)
+    short_path = tmp_path / "short"
+    long_path = tmp_path / "long"
+    short_path.mkdir()
+    long_path.mkdir()
+    short = _render(generated_runtime, short_path, input_audio, _base_schedule(short_upload))
+    long = _render(generated_runtime, long_path, input_audio, _base_schedule(long_upload))
+    settled_window = slice(8_000, 22_000)
+    short_error = _rms(short[settled_window] - input_audio[settled_window])
+    long_error = _rms(long[settled_window] - input_audio[settled_window])
+
+    assert short_error < 0.02
+    assert long_error > short_error + 0.08
+
+
+def test_tape_stop_character_is_bounded_and_changes_the_slow_tape_timbre(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    clean_upload = _empty_upload()
+    character_upload = _empty_upload()
+    for upload, character in ((clean_upload, 0.0), (character_upload, 1.0)):
+        _activate_step(
+            upload,
+            lane=LANE_TAPE,
+            step=1,
+            trigger=True,
+            params=_tape_v2_params(
+                curve=0.5,
+                character=character,
+                timing_mode=1,
+                free_stop_ms=500.0,
+            ),
+        )
+
+    input_audio = _complex_signal(36_000)
+    clean_path = tmp_path / "clean"
+    character_path = tmp_path / "character"
+    clean_path.mkdir()
+    character_path.mkdir()
+    clean = _render(generated_runtime, clean_path, input_audio, _base_schedule(clean_upload))
+    colored = _render(generated_runtime, character_path, input_audio, _base_schedule(character_upload))
+    slow_window = slice(9_000, 22_000)
+
+    assert np.all(np.isfinite(colored))
+    assert float(np.max(np.abs(colored))) < 1.0
+    assert _rms(colored[slow_window] - clean[slow_window]) > 0.025
+
+
+@pytest.mark.reference
+def test_tape_stop_long_synced_gesture_crosses_to_packed_history_without_dropping_out(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    empty = _empty_upload()
+    gesture = _empty_upload(revision=2)
+    gesture["authoritative"] = False
+    for step in range(STEP_COUNT):
+        _activate_step(
+            gesture,
+            lane=LANE_TAPE,
+            step=step,
+            trigger=False,
+            params=_tape_v2_params(stop_division=7, curve=1.0),
+        )
+
+    pre_roll_frames = SAMPLE_RATE * 20
+    post_trigger_frames = SAMPLE_RATE * 26
+    input_audio = _sine(pre_roll_frames + post_trigger_frames, 730.0, amplitude=0.35)
+    schedule = _base_schedule(empty, manual_bpm=20.0)
+    schedule[pre_roll_frames] = [["event", "patternUpload", gesture]]
+    output = _render(generated_runtime, tmp_path, input_audio, schedule)
+    crossover = output[
+        pre_roll_frames + (SAMPLE_RATE * 23) :
+        pre_roll_frames + (SAMPLE_RATE * 25),
+        0,
+    ]
+
+    assert np.all(np.isfinite(crossover))
+    assert _rms(crossover) > 0.04
+    assert float(np.max(np.abs(np.diff(crossover)))) < 0.12
 
 
 def test_stutter_repeats_the_captured_slice(

@@ -163,6 +163,28 @@ test("legacy v5 migration is idempotent and keeps the dense runtime upload audib
     );
 });
 
+test("legacy Tape Stop blocks migrate through the documented canonical free-time mapping", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: 2,
+        startStep: 4,
+        length: 3,
+        effectType: SEQFX_EFFECT_TYPES.tapeStop,
+    });
+    for (const step of state.patterns[0].lanes[2].steps.slice(4, 7)) {
+        step.params = [2, 4, 0.5, 50, 1, 0, 0, 0];
+        step.aux.targets = step.params.map((end, index) => ({ enabled: index === 0, end }));
+    }
+
+    const migrated = parseSeqFxStoredState(JSON.stringify(legacyV5(state))).state;
+    for (const step of migrated.patterns[0].lanes[2].steps.slice(4, 7)) {
+        assert.deepEqual(step.params, [8, 1, 1, 1, 0, 1, 750, 187.5]);
+        assert.ok(step.aux.targets.every((target) => target.enabled === false));
+        assert.deepEqual(step.aux.targets.map((target) => target.end), step.params);
+    }
+});
+
 test("a deliberately dense twelve-pattern v7 document stays below the host-state budget", () => {
     const state = createDefaultSeqFxState();
     const effectTypes = [

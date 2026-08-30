@@ -29,8 +29,8 @@ const FILTER_PARAM_RESONANCE = 3;
 const CRUSHER_PARAM_BITS = 0;
 const CRUSHER_PARAM_HOLD_FRAMES = 1;
 const CRUSHER_PARAM_DRIVE_DB = 2;
-const TAPE_STOP_PARAM_START_CURVE = 1;
-const TAPE_STOP_PARAM_MODE = 4;
+const TAPE_STOP_PARAM_CURVE = 1;
+const TAPE_STOP_PARAM_RETURN = 2;
 const STUTTER_PARAM_SLICES = 0;
 const STUTTER_PARAM_SHAPE = 2;
 const SEQFX_LANE_NAMES = ["Chain 1", "Chain 2", "Chain 3", "Chain 4"];
@@ -197,10 +197,6 @@ async function editorCurvePlotPoint(page, graphRole, graphBox, normalizedX, norm
         x: graphBox.x + ((svgX / plot.viewBoxWidth) * graphBox.width),
         y: graphBox.y + ((svgY / plot.viewBoxHeight) * graphBox.height),
     };
-}
-
-async function tapeGraphPoint(page, graphBox, normalizedTime, normalizedSpeed) {
-    return editorCurvePlotPoint(page, "seqfx-tape-graph", graphBox, normalizedTime, 1 - normalizedSpeed);
 }
 
 async function stutterGraphPoint(page, graphBox, normalizedGate) {
@@ -775,12 +771,8 @@ test("seqfx_effect_graphs_render_through_shared_editor_curve_primitives", async 
     });
 
     await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
-    await assertSharedCurveContract(page, {
-        graphRole: "seqfx-tape-graph",
-        handleRole: "seqfx-tape-start-length-handle",
-        pathRole: "seqfx-tape-graph-line",
-        fillRole: "seqfx-tape-graph-fill",
-    });
+    await page.locator('[data-role="seqfx-tape-v2-editor"]').waitFor();
+    await page.locator('[data-role="seqfx-tape-v2-curve"]').waitFor();
 
     await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
     await assertSharedCurveContract(page, {
@@ -839,7 +831,7 @@ test("seqfx_vite_dev_server_serves_a_stable_browser_harness_page", async () => {
     assertClose(measuredText.find((entry) => entry.label === "inspectorTitle").width, 102.9063, 0.2, "Avenir Next inspector title width");
     assertClose(measuredText.find((entry) => entry.label === "filterReadout").width, 80.5781, 0.2, "Avenir Next filter readout width");
     await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
-    await page.locator('[data-role="seqfx-tape-graph"]').waitFor();
+    await page.locator('[data-role="seqfx-tape-v2-editor"]').waitFor();
 
     await page.close();
 });
@@ -2433,50 +2425,25 @@ test("seqfx_stutter_aux_controls_edit_gate_slices_shape_and_speed_targets", asyn
     await page.close();
 });
 
-test("seqfx_tape_stop_aux_controls_edit_all_tape_targets_including_mode", async () => {
+test("seqfx_tape_stop_trigger_latched_controls_do_not_offer_live_aux_targets", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
-    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
     await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
     await page.getByRole("button", { name: "Chain 3 Tape Stop block 1", exact: true }).waitFor();
-    await page.locator('[data-role="seqfx-tape-graph"]').waitFor();
+    await page.locator('[data-role="seqfx-tape-v2-editor"]').waitFor();
     assert.equal(await page.locator('[data-role="seqfx-aux-source"]').count(), 0);
-    await openSeqFxModView(page);
-
-    for (const paramIndex of [0, 1, 2, 3, 4]) {
-        await toggleSeqFxModTarget(page, paramIndex);
-    }
-
-    await setSeqFxModTargetAmount(page, 0, 25);
-    await setSeqFxModTargetAmount(page, 1, 1.5);
-    await setSeqFxModTargetAmount(page, 2, 2);
-    await setSeqFxModTargetAmount(page, 3, 50);
-    await page.locator('[data-role="seqfx-mod-target-destination"][data-param="4"]').selectOption("1");
+    assert.equal(await page.locator('[data-role="seqfx-mod-toggle"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-mod-editor"]').count(), 0);
 
     const snapshot = await getHarnessSnapshot(page);
     const upload = patternUploads(snapshot).at(-1).value;
-    assert.deepEqual(upload.auxEnabled[2][0].slice(0, 5), [true, true, true, true, true]);
-    assertClose(upload.auxEnd[2][0][0], 1.25, 0.000001, "tape start length aux end");
-    assert.equal(upload.auxEnd[2][0][1], 2.5);
-    assert.equal(upload.auxEnd[2][0][2], 3);
-    assert.equal(upload.auxEnd[2][0][3], 75);
-    assert.equal(upload.auxEnd[2][0][4], 1);
+    assert.deepEqual(upload.auxEnabled[2][0], [false, false, false, false, false, false, false, false]);
 
     const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
     const step = storedState.patterns[0].lanes[2].steps[0];
-    assert.deepEqual(step.aux.source, {
-        shape: 0,
-        sourceCurve: 0,
-        rateMode: "slice",
-        tempoMultiplier: 4,
-        tempoTriplet: false,
-        sliceCount: 1,
-    });
-    assert.deepEqual(step.aux.targets.slice(0, 5).map((target) => target.enabled), [true, true, true, true, true]);
-    assertClose(step.aux.targets[0].end, 1.25, 0.000001, "persisted tape start length aux end");
-    assert.deepEqual(step.aux.targets.slice(1, 5).map((target) => target.end), [2.5, 3, 75, 1]);
+    assert.deepEqual(step.aux.targets.map((target) => target.enabled), [false, false, false, false, false, false, false, false]);
 
     await page.close();
 });
@@ -3007,8 +2974,8 @@ test("seqfx_right_edge_drag_resizes_a_block_without_retriggering_continuation_st
     const lastUpload = patternUploads(snapshot).at(-1).value;
     assert.deepEqual(lastUpload.activeSteps[2].slice(0, 5), [true, true, true, true, true]);
     assert.deepEqual(lastUpload.triggerSteps[2].slice(0, 5), [true, false, false, false, false]);
-    await page.locator('[data-role="seqfx-tape-graph"]').waitFor();
-    assert.equal(await page.locator('[data-role="seqfx-tape-stop-point"]').isDisabled(), false);
+    await page.locator('[data-role="seqfx-tape-v2-editor"]').waitFor();
+    assert.equal(await page.locator('[data-control="seqfx-tape-stop-time"]').isDisabled(), false);
 
     const resizedBlockBox = await page.getByRole("button", { name: "Chain 3 Tape Stop block 1-5", exact: true }).boundingBox();
     const firstCellBox = await first.boundingBox();
@@ -3066,62 +3033,52 @@ test("seqfx_cross_row_blocks_render_as_one_logical_block_split_across_bar_rows",
     await page.close();
 });
 
-test("seqfx_tape_stop_inspector_renders_graph_handles_and_writes_curve_parameters", async () => {
+test("seqfx_tape_stop_v2_inspector_exposes_established_motor_controls_and_persists_them", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
 
     await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
-    await page.locator('[data-role="seqfx-tape-graph"]').waitFor();
+    await page.locator('[data-role="seqfx-tape-v2-editor"]').waitFor();
 
     const inspector = page.locator('[data-role="seqfx-inspector"]');
-    await inspector.getByText("Mode").waitFor();
-    assert.equal(await inspector.locator(".seqfx-tape-control").filter({ hasText: /^Start Length/ }).count(), 1);
-    assert.equal(await inspector.locator(".seqfx-tape-control").filter({ hasText: /^Start Curve/ }).count(), 1);
-    assert.equal(await inspector.locator(".seqfx-tape-control").filter({ hasText: /^Catchup Length/ }).count(), 1);
-    assert.equal(await inspector.locator(".seqfx-tape-control").filter({ hasText: /^Catchup Curve/ }).count(), 1);
-    await page.locator('[data-role="seqfx-tape-start-length-handle"]').waitFor();
-    await page.locator('[data-role="seqfx-tape-start-curve-handle"]').waitFor();
-    await page.locator('[data-role="seqfx-tape-catchup-length-handle"]').waitFor();
-    assert.equal(await inspector.getByText("Stop Point").count(), 0);
-    assert.equal(await inspector.getByText("Catch-up").count(), 0);
-    assert.equal(await inspector.getByText("Duration", { exact: true }).count(), 0);
-    assert.equal(await inspector.getByText("End", { exact: true }).count(), 0);
+    await page.locator('[data-control="seqfx-tape-stop-time"]').waitFor();
+    const controlLabels = await inspector.locator(".seqfx-tape-v2-control > span").allTextContents();
+    for (const label of ["Stop Time", "Curve", "Return", "Character", "Timing"]) {
+        assert.equal(controlLabels.some((entry) => entry.startsWith(label)), true, `missing ${label} control`);
+    }
+    assert.equal(await page.locator('[data-control="seqfx-tape-start-time"]').count(), 0);
+    assert.equal(await page.locator('[data-control="seqfx-tape-stop-time"]').inputValue(), "8");
+    assert.equal(await page.locator('[data-control="seqfx-tape-return"]').inputValue(), "0");
+    const initialPath = await page.locator('[data-role="seqfx-tape-v2-curve"]').getAttribute("d");
 
-    const initialGraphBox = await page.locator('[data-role="seqfx-tape-graph"]').boundingBox();
-    assert.ok(initialGraphBox);
-    await dragLocatorTo(
-        page,
-        page.locator('[data-role="seqfx-tape-start-length-handle"]'),
-        await tapeGraphPoint(page, initialGraphBox, 0.5, 0.02),
-    );
-    await page.locator('[data-role="seqfx-tape-catchup-curve-handle"]').waitFor();
+    await page.locator('[data-control="seqfx-tape-return"]').selectOption("1");
+    await page.locator('[data-control="seqfx-tape-start-time"]').waitFor();
+    await page.locator('[data-control="seqfx-tape-timing"]').selectOption("1");
+    assert.equal(await page.locator('[data-control="seqfx-tape-stop-time"]').getAttribute("type"), "number");
+    assert.equal(await page.locator('[data-control="seqfx-tape-start-time"]').getAttribute("type"), "number");
+    await page.locator('[data-control="seqfx-tape-stop-time"]').fill("1200");
+    await page.locator('[data-control="seqfx-tape-start-time"]').fill("800");
+    await setRangeInputValue(page.locator('[data-control="seqfx-tape-curve"]'), -0.5);
+    await setRangeInputValue(page.locator('[data-control="seqfx-tape-character"]'), 0.72);
 
-    await dragLocatorTo(
-        page,
-        page.locator('[data-role="seqfx-tape-catchup-length-handle"]'),
-        await tapeGraphPoint(page, initialGraphBox, 0.65, 0.02),
-    );
-    await dragLocatorTo(
-        page,
-        page.locator('[data-role="seqfx-tape-start-curve-handle"]'),
-        await tapeGraphPoint(page, initialGraphBox, 0.25, 0.25),
-    );
-    await dragLocatorTo(
-        page,
-        page.locator('[data-role="seqfx-tape-catchup-curve-handle"]'),
-        await tapeGraphPoint(page, initialGraphBox, 0.825, 0.25),
-    );
-    await page.locator('[data-role="seqfx-tape-mode"]').selectOption("1");
+    const finalPath = await page.locator('[data-role="seqfx-tape-v2-curve"]').getAttribute("d");
+    assert.notEqual(finalPath, initialPath);
+    const layout = await page.locator('[data-role="seqfx-tape-v2-editor"]').evaluate((node) => ({
+        clientWidth: node.clientWidth,
+        scrollWidth: node.scrollWidth,
+        trajectoryLabel: node.querySelector('[data-role="seqfx-tape-v2-trajectory"]')?.getAttribute("aria-label"),
+    }));
+    assert.ok(layout.scrollWidth <= layout.clientWidth + 1, `Tape Stop editor overflowed by ${layout.scrollWidth - layout.clientWidth}px`);
+    assert.equal(layout.trajectoryLabel, "Tape slows over 1200 ms, then spins up over 800 ms");
 
     const snapshot = await getHarnessSnapshot(page);
     const lastUpload = patternUploads(snapshot).at(-1).value;
-    assertClose(lastUpload.params[2][0][0], 0.5, 0.03, "start length handle should write a 50% first segment");
-    assertClose(lastUpload.params[2][0][1], 2, 0.25, "start curve handle should bend the first segment");
-    assertClose(lastUpload.params[2][0][2], 2, 0.25, "catchup curve handle should bend the return segment");
-    assertClose(lastUpload.params[2][0][3], 35, 2, "catchup length handle should write the reserved end percentage");
-    assert.equal(lastUpload.params[2][0][4], 1);
+    assert.deepEqual(lastUpload.params[2][0], [8, -0.5, 1, 1, 0.72, 1, 1200, 800]);
+
+    const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    assert.deepEqual(storedState.patterns[0].lanes[2].steps[0].params, [8, -0.5, 1, 1, 0.72, 1, 1200, 800]);
 
     await page.close();
 });
@@ -3182,13 +3139,13 @@ test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_
     assert.equal(uploads.length, 1);
     const upload = uploads.at(-1).value;
     assert.equal(upload.effectTypes[1][0], SEQFX_EFFECT_TYPES.tapeStop);
-    assert.deepEqual(upload.params[1][0].slice(0, 5), [1, 1, 1, 25, 0]);
+    assert.deepEqual(upload.params[1][0], [8, 0, 0, 1, 0, 0, 500, 125]);
 
     const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
     const storedStep = storedState.patterns[0].lanes[1].steps[0];
     assert.equal(storedStep.active, true);
     assert.equal(storedStep.effectType, SEQFX_EFFECT_TYPES.tapeStop);
-    assert.deepEqual(storedStep.params.slice(0, 5), [1, 1, 1, 25, 0]);
+    assert.deepEqual(storedStep.params, [8, 0, 0, 1, 0, 0, 500, 125]);
 
     await page.close();
 });
@@ -3297,8 +3254,8 @@ test("seqfx_blocks_render_risograph_glyphs_from_effect_parameters", async () => 
         setParam(1, 0, params.crusherDriveDb, 9);
 
         createBlock(2, 0, 4, module.SEQFX_EFFECT_TYPES.tapeStop);
-        setParam(2, 0, params.tapeStartCurve, 3.2);
-        setParam(2, 0, params.tapeMode, 1);
+        setParam(2, 0, params.tapeCurve, 0.65);
+        setParam(2, 0, params.tapeReturn, 1);
 
         createBlock(3, 0, 5, module.SEQFX_EFFECT_TYPES.stutter);
         setParam(3, 0, params.stutterSlices, 16);
@@ -3314,8 +3271,8 @@ test("seqfx_blocks_render_risograph_glyphs_from_effect_parameters", async () => 
             crusherBits: CRUSHER_PARAM_BITS,
             crusherHoldFrames: CRUSHER_PARAM_HOLD_FRAMES,
             crusherDriveDb: CRUSHER_PARAM_DRIVE_DB,
-            tapeStartCurve: TAPE_STOP_PARAM_START_CURVE,
-            tapeMode: TAPE_STOP_PARAM_MODE,
+            tapeCurve: TAPE_STOP_PARAM_CURVE,
+            tapeReturn: TAPE_STOP_PARAM_RETURN,
             stutterSlices: STUTTER_PARAM_SLICES,
             stutterShape: STUTTER_PARAM_SHAPE,
         },
@@ -3374,7 +3331,7 @@ test("seqfx_blocks_render_risograph_glyphs_from_effect_parameters", async () => 
 
     assert.equal(glyphs.tape.effect, "tape");
     assert.equal(glyphs.tape.size, "wide");
-    assert.deepEqual(glyphs.tape.labels, ["UP"]);
+    assert.deepEqual(glyphs.tape.labels, ["SPIN"]);
     assert.match(glyphs.tape.inkPath, /Q/, "curved tape modes should draw a curved filled envelope");
     assert.match(glyphs.tape.blockBackground, /^rgb\(152, 193, 217\)$/);
 

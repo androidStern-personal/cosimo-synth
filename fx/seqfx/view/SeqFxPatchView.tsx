@@ -47,6 +47,7 @@ import {
     SEQFX_LANE_NAMES,
     SEQFX_PATTERN_COUNT,
     SEQFX_STEP_COUNT,
+    getSeqFxEffectDefinition,
     getSeqFxBlockAtStep,
     getSeqFxLaneBlocks,
     isSeqFxTriggerLatchedParamForEffect,
@@ -843,11 +844,14 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 2, label: "Drive", min: 0, max: 36, step: 0.1, amountKind: "db" },
     ],
     [SEQFX_EFFECT_TYPES.tapeStop]: [
-        { index: 0, label: "Start Length", min: 0.05, max: 4, step: 0.01, amountKind: "tapeStopPointPercent" },
-        { index: 1, label: "Start Curve", min: 0.25, max: 4, step: 0.01, amountKind: "linear" },
-        { index: 2, label: "Catchup Curve", min: 0.25, max: 4, step: 0.01, amountKind: "linear" },
-        { index: 3, label: "Catchup Length", min: 0, max: 100, step: 1, amountKind: "percentValue" },
-        { index: 4, label: "Mode", min: 0, max: 1, step: 1, kind: "select", options: ["Stop", "Spin-up"] },
+        { index: 0, label: "Stop Time", min: 0, max: 8, step: 1, kind: "select", options: ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars", "1 Cell"], hint: "How long the motor takes to stop; it may outlive the block." },
+        { index: 1, label: "Curve", min: -1, max: 1, step: 0.01, amountKind: "linear", hint: "Center is linear speed; left and right move the braking weight." },
+        { index: 2, label: "Return", min: 0, max: 1, step: 1, kind: "select", options: ["Catch Up", "Spin Up"], hint: "Catch Up returns quickly; Spin Up uses Start Time." },
+        { index: 3, label: "Start Time", min: 0, max: 8, step: 1, kind: "select", options: ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars", "1 Cell"] },
+        { index: 4, label: "Character", min: 0, max: 1, step: 0.01, amountKind: "percentValue", hint: "Adds bounded high-frequency loss and saturation as the tape slows." },
+        { index: 5, label: "Timing", min: 0, max: 1, step: 1, kind: "select", options: ["Sync", "Free"] },
+        { index: 6, label: "Free Stop", min: 20, max: 8000, step: 1, amountKind: "linear", hint: "Milliseconds used when Timing is Free." },
+        { index: 7, label: "Free Start", min: 20, max: 8000, step: 1, amountKind: "linear", hint: "Milliseconds used for a free-time Spin Up return." },
     ],
     [SEQFX_EFFECT_TYPES.stutter]: [
         { index: 0, label: "Slices", min: 2, max: 32, step: 1, amountKind: "integer", hint: "Record slice 1; repeat the rest." },
@@ -868,6 +872,18 @@ const TAPE_STOP_PARAM_START_CURVE = 1;
 const TAPE_STOP_PARAM_CATCHUP_CURVE = 2;
 const TAPE_STOP_PARAM_CATCHUP_LENGTH = 3;
 const TAPE_STOP_PARAM_MODE = 4;
+const TAPE_STOP_PARAM_STOP_DIVISION = 0;
+const TAPE_STOP_PARAM_CURVE = 1;
+const TAPE_STOP_PARAM_RETURN = 2;
+const TAPE_STOP_PARAM_START_DIVISION = 3;
+const TAPE_STOP_PARAM_CHARACTER = 4;
+const TAPE_STOP_PARAM_TIMING = 5;
+const TAPE_STOP_PARAM_FREE_STOP_MS = 6;
+const TAPE_STOP_PARAM_FREE_START_MS = 7;
+const TAPE_STOP_RETURN_CATCH_UP = 0;
+const TAPE_STOP_RETURN_SPIN_UP = 1;
+const TAPE_STOP_TIMING_SYNC = 0;
+const TAPE_STOP_TIMING_FREE = 1;
 const STUTTER_PARAM_SLICES = 0;
 const STUTTER_PARAM_SPEED = 1;
 const STUTTER_PARAM_SHAPE = 2;
@@ -1084,21 +1100,18 @@ function SeqFxCrusherBlockGlyph({
     );
 }
 
-function tapeStopRisoPath(mode: number, curve: number, width: number) {
-    const curved = Number(curve) > 1.25;
-    if (Math.round(Number(mode)) === TAPE_STOP_MODE_SPIN_UP) {
-        return curved
-            ? `M0 28 L0 24 Q${roundedPathValue(width * 0.68)} 24 ${roundedPathValue(width)} 4 L${roundedPathValue(width)} 28 Z`
-            : `M0 28 L0 24 L${roundedPathValue(width)} 4 L${roundedPathValue(width)} 28 Z`;
+function tapeStopRisoPath(returnMode: number, curve: number, width: number) {
+    const curveControl = clampNumber(Number(curve), -1, 1);
+    const controlX = roundedPathValue(width * (0.5 + (curveControl * 0.24)));
+    if (Math.round(Number(returnMode)) === TAPE_STOP_RETURN_SPIN_UP) {
+        return `M0 4 Q${controlX} 4 ${roundedPathValue(width * 0.62)} 24 Q${roundedPathValue(width * 0.84)} 24 ${roundedPathValue(width)} 4 L${roundedPathValue(width)} 28 L0 28 Z`;
     }
 
-    return curved
-        ? `M0 5 Q${roundedPathValue(width * 0.72)} 5 ${roundedPathValue(width)} 28 L0 28 Z`
-        : `M0 4 L${roundedPathValue(width)} 28 L0 28 Z`;
+    return `M0 4 Q${controlX} 4 ${roundedPathValue(width)} 27 L${roundedPathValue(width)} 28 L0 28 Z`;
 }
 
-function tapeStopRisoLabel(mode: number) {
-    return Math.round(Number(mode)) === TAPE_STOP_MODE_SPIN_UP ? "UP" : "STOP";
+function tapeStopRisoLabel(returnMode: number) {
+    return Math.round(Number(returnMode)) === TAPE_STOP_RETURN_SPIN_UP ? "SPIN" : "STOP";
 }
 
 function SeqFxTapeStopBlockGlyph({
@@ -1110,9 +1123,9 @@ function SeqFxTapeStopBlockGlyph({
     size: SeqFxBlockVisualSize;
     width: number;
 }) {
-    const mode = params[TAPE_STOP_PARAM_MODE] ?? TAPE_STOP_MODE_STOP;
-    const curve = params[TAPE_STOP_PARAM_START_CURVE] ?? 1;
-    const label = tapeStopRisoLabel(mode);
+    const returnMode = params[TAPE_STOP_PARAM_RETURN] ?? TAPE_STOP_RETURN_CATCH_UP;
+    const curve = params[TAPE_STOP_PARAM_CURVE] ?? 0;
+    const label = tapeStopRisoLabel(returnMode);
 
     return (
         <>
@@ -1128,7 +1141,7 @@ function SeqFxTapeStopBlockGlyph({
             >
                 <path
                     className="seqfx-block-glyph__ink"
-                    d={tapeStopRisoPath(mode, curve, width)}
+                    d={tapeStopRisoPath(returnMode, curve, width)}
                     data-role="seqfx-block-glyph-ink"
                 />
             </svg>
@@ -2413,6 +2426,231 @@ function TapeStopEnvelopeEditor({
     );
 }
 
+const TAPE_STOP_SYNC_LABELS = ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars", "1 Cell"] as const;
+
+function tapeStopCurveLabel(value: number) {
+    if (value < -0.08) {
+        return `Early brake ${Math.round(Math.abs(value) * 100)}%`;
+    }
+    if (value > 0.08) {
+        return `Late brake ${Math.round(value * 100)}%`;
+    }
+    return "Linear";
+}
+
+function tapeStopTrajectoryPath(curve: number, returnMode: number) {
+    const power = Math.pow(4, clampNumber(curve, -1, 1));
+    const points: string[] = [];
+    const stopEnd = returnMode === TAPE_STOP_RETURN_SPIN_UP ? 0.62 : 0.9;
+
+    for (let index = 0; index <= 24; index += 1) {
+        const phase = index / 24;
+        let speed = 0;
+        if (phase <= stopEnd) {
+            speed = Math.pow(Math.max(0, 1 - (phase / stopEnd)), power);
+        } else if (returnMode === TAPE_STOP_RETURN_SPIN_UP) {
+            speed = Math.pow((phase - stopEnd) / (1 - stopEnd), 1 / power);
+        } else {
+            speed = Math.pow((phase - stopEnd) / (1 - stopEnd), 3);
+        }
+        const x = 12 + (phase * 336);
+        const y = 78 - (clampNumber(speed, 0, 1) * 62);
+        points.push(`${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`);
+    }
+
+    return points.join(" ");
+}
+
+function TapeStopV2Editor({
+    step,
+    disabled,
+    onParamChange,
+}: {
+    step: SeqFxStep;
+    disabled: boolean;
+    onParamChange: (paramIndex: number, value: number) => void;
+}) {
+    const stopDivision = Math.round(step.params[TAPE_STOP_PARAM_STOP_DIVISION] ?? 8);
+    const curve = clampNumber(step.params[TAPE_STOP_PARAM_CURVE] ?? 0, -1, 1);
+    const returnMode = Math.round(step.params[TAPE_STOP_PARAM_RETURN] ?? TAPE_STOP_RETURN_CATCH_UP);
+    const startDivision = Math.round(step.params[TAPE_STOP_PARAM_START_DIVISION] ?? 1);
+    const character = clampNumber(step.params[TAPE_STOP_PARAM_CHARACTER] ?? 0, 0, 1);
+    const timing = Math.round(step.params[TAPE_STOP_PARAM_TIMING] ?? TAPE_STOP_TIMING_SYNC);
+    const freeStopMs = clampNumber(step.params[TAPE_STOP_PARAM_FREE_STOP_MS] ?? 500, 20, 8_000);
+    const freeStartMs = clampNumber(step.params[TAPE_STOP_PARAM_FREE_START_MS] ?? 125, 20, 8_000);
+    const spinUp = returnMode === TAPE_STOP_RETURN_SPIN_UP;
+    const freeTiming = timing === TAPE_STOP_TIMING_FREE;
+    const stopLabel = freeTiming ? `${Math.round(freeStopMs)} ms` : TAPE_STOP_SYNC_LABELS[stopDivision] ?? "1 Cell";
+    const startLabel = freeTiming ? `${Math.round(freeStartMs)} ms` : TAPE_STOP_SYNC_LABELS[startDivision] ?? "1/16";
+
+    return (
+        <section className="seqfx-tape-v2" data-role="seqfx-tape-v2-editor" aria-label="Tape Stop controls">
+            <div className="seqfx-tape-v2__trajectory">
+                <div className="seqfx-tape-v2__trajectory-head">
+                    <span>Motor speed</span>
+                    <strong>{stopLabel} · {spinUp ? `Spin Up ${startLabel}` : "Catch Up"}</strong>
+                </div>
+                <svg
+                    aria-label={`Tape slows over ${stopLabel}, then ${spinUp ? `spins up over ${startLabel}` : "catches up"}`}
+                    data-role="seqfx-tape-v2-trajectory"
+                    role="img"
+                    viewBox="0 0 360 92"
+                >
+                    <line className="seqfx-tape-v2__axis" x1="12" x2="348" y1="78" y2="78" />
+                    <line className="seqfx-tape-v2__guide" x1="12" x2="348" y1="16" y2="16" />
+                    <path
+                        className="seqfx-tape-v2__curve"
+                        data-role="seqfx-tape-v2-curve"
+                        d={tapeStopTrajectoryPath(curve, returnMode)}
+                    />
+                    <text className="seqfx-tape-v2__axis-label" x="12" y="12">1x</text>
+                    <text className="seqfx-tape-v2__axis-label" x="12" y="90">0x</text>
+                </svg>
+                <p>The block triggers the motor. The captured gesture keeps running until its return completes.</p>
+            </div>
+
+            <div className="seqfx-tape-v2__controls">
+                <label className="seqfx-tape-v2-control">
+                    <span>Timing <em>Trigger</em></span>
+                    <select
+                        aria-label="Tape Stop timing"
+                        data-control="seqfx-tape-timing"
+                        data-param={TAPE_STOP_PARAM_TIMING}
+                        data-role="seqfx-param"
+                        disabled={disabled}
+                        onChange={(event) => onParamChange(TAPE_STOP_PARAM_TIMING, Number(event.currentTarget.value))}
+                        value={timing}
+                    >
+                        <option value={TAPE_STOP_TIMING_SYNC}>Sync</option>
+                        <option value={TAPE_STOP_TIMING_FREE}>Free</option>
+                    </select>
+                    <small>{freeTiming ? "Milliseconds stay fixed when tempo changes." : "The duration is latched from tempo at the trigger."}</small>
+                </label>
+
+                <label className="seqfx-tape-v2-control">
+                    <span>Stop Time <em>Trigger</em></span>
+                    {freeTiming ? (
+                        <input
+                            aria-label="Tape Stop free stop time in milliseconds"
+                            data-control="seqfx-tape-stop-time"
+                            data-param={TAPE_STOP_PARAM_FREE_STOP_MS}
+                            data-role="seqfx-param"
+                            disabled={disabled}
+                            max={8_000}
+                            min={20}
+                            onChange={(event) => onParamChange(TAPE_STOP_PARAM_FREE_STOP_MS, Number(event.currentTarget.value))}
+                            step={1}
+                            type="number"
+                            value={Math.round(freeStopMs)}
+                        />
+                    ) : (
+                        <select
+                            aria-label="Tape Stop synced stop time"
+                            data-control="seqfx-tape-stop-time"
+                            data-param={TAPE_STOP_PARAM_STOP_DIVISION}
+                            data-role="seqfx-param"
+                            disabled={disabled}
+                            onChange={(event) => onParamChange(TAPE_STOP_PARAM_STOP_DIVISION, Number(event.currentTarget.value))}
+                            value={stopDivision}
+                        >
+                            {TAPE_STOP_SYNC_LABELS.map((label, index) => <option key={label} value={index}>{label}</option>)}
+                        </select>
+                    )}
+                    <small>How long the captured audio takes to reach a stop.</small>
+                </label>
+
+                <label className="seqfx-tape-v2-control seqfx-tape-v2-control--wide">
+                    <span>Curve <em>Trigger</em><output>{tapeStopCurveLabel(curve)}</output></span>
+                    <input
+                        aria-label="Tape Stop brake curve"
+                        data-control="seqfx-tape-curve"
+                        data-param={TAPE_STOP_PARAM_CURVE}
+                        data-role="seqfx-param"
+                        disabled={disabled}
+                        max={1}
+                        min={-1}
+                        onChange={(event) => onParamChange(TAPE_STOP_PARAM_CURVE, Number(event.currentTarget.value))}
+                        step={0.01}
+                        type="range"
+                        value={curve}
+                    />
+                    <small>Move the braking weight earlier or later without changing Stop Time.</small>
+                </label>
+
+                <label className="seqfx-tape-v2-control">
+                    <span>Return <em>Trigger</em></span>
+                    <select
+                        aria-label="Tape Stop return behavior"
+                        data-control="seqfx-tape-return"
+                        data-param={TAPE_STOP_PARAM_RETURN}
+                        data-role="seqfx-param"
+                        disabled={disabled}
+                        onChange={(event) => onParamChange(TAPE_STOP_PARAM_RETURN, Number(event.currentTarget.value))}
+                        value={returnMode}
+                    >
+                        <option value={TAPE_STOP_RETURN_CATCH_UP}>Catch Up</option>
+                        <option value={TAPE_STOP_RETURN_SPIN_UP}>Spin Up</option>
+                    </select>
+                    <small>{spinUp ? "Accelerates the captured audio, then crossfades to live input." : "Returns to live input with a short click-safe crossfade."}</small>
+                </label>
+
+                {spinUp ? (
+                    <label className="seqfx-tape-v2-control">
+                        <span>Start Time <em>Trigger</em></span>
+                        {freeTiming ? (
+                            <input
+                                aria-label="Tape Stop free start time in milliseconds"
+                                data-control="seqfx-tape-start-time"
+                                data-param={TAPE_STOP_PARAM_FREE_START_MS}
+                                data-role="seqfx-param"
+                                disabled={disabled}
+                                max={8_000}
+                                min={20}
+                                onChange={(event) => onParamChange(TAPE_STOP_PARAM_FREE_START_MS, Number(event.currentTarget.value))}
+                                step={1}
+                                type="number"
+                                value={Math.round(freeStartMs)}
+                            />
+                        ) : (
+                            <select
+                                aria-label="Tape Stop synced start time"
+                                data-control="seqfx-tape-start-time"
+                                data-param={TAPE_STOP_PARAM_START_DIVISION}
+                                data-role="seqfx-param"
+                                disabled={disabled}
+                                onChange={(event) => onParamChange(TAPE_STOP_PARAM_START_DIVISION, Number(event.currentTarget.value))}
+                                value={startDivision}
+                            >
+                                {TAPE_STOP_SYNC_LABELS.map((label, index) => <option key={label} value={index}>{label}</option>)}
+                            </select>
+                        )}
+                        <small>How long the motor takes to return to normal speed.</small>
+                    </label>
+                ) : null}
+
+                <label className="seqfx-tape-v2-control seqfx-tape-v2-control--wide">
+                    <span>Character <em>Trigger</em><output>{Math.round(character * 100)}%</output></span>
+                    <input
+                        aria-label="Tape Stop character"
+                        data-control="seqfx-tape-character"
+                        data-param={TAPE_STOP_PARAM_CHARACTER}
+                        data-role="seqfx-param"
+                        disabled={disabled}
+                        max={1}
+                        min={0}
+                        onChange={(event) => onParamChange(TAPE_STOP_PARAM_CHARACTER, Number(event.currentTarget.value))}
+                        step={0.01}
+                        type="range"
+                        value={character}
+                    />
+                    <small>Adds speed-linked high-frequency loss and bounded saturation.</small>
+                </label>
+            </div>
+            {disabled ? <p className="seqfx-tape-v2__disabled">Select one trigger or a complete block to edit this gesture.</p> : null}
+        </section>
+    );
+}
+
 function selectionFromCell(cell: SelectedCell | null): Selection | null {
     return cell ? { lane: cell.lane, steps: [cell.step] } : null;
 }
@@ -3609,6 +3847,7 @@ export function SeqFxPatchView({
         inspectedBlock
         && inspectedCell?.active
         && inspectedEffectType !== SEQFX_EFFECT_TYPES.empty
+        && getSeqFxEffectDefinition(inspectedEffectType).parameters.some((parameter) => parameter.auxEligible)
         && selectedBlockStartSteps.length <= 1,
     );
     const inspectedAux = auxEditable ? inspectedCell?.aux ?? null : null;
@@ -4422,15 +4661,7 @@ export function SeqFxPatchView({
                                 />
                             ) : (
                                 <>
-                                    {inspectedEffectType === SEQFX_EFFECT_TYPES.tapeStop ? (
-                                        <TapeStopEnvelopeEditor
-                                            step={inspectedCell}
-                                            blockLength={inspectedBlockLength}
-                                            blockDurationMs={tapeGraphBlockDurationMs}
-                                            onParamChange={setParam}
-                                            modulation={modulationForTapeStop()}
-                                        />
-                                    ) : inspectedEffectType === SEQFX_EFFECT_TYPES.filter ? (
+                                    {inspectedEffectType === SEQFX_EFFECT_TYPES.filter ? (
                                         <FilterRangeEditor
                                             ariaLabel="SeqFX filter range editor"
                                             modeOptions={SEQFX_FILTER_MODE_OPTIONS}
@@ -4449,6 +4680,12 @@ export function SeqFxPatchView({
                                             onHoldFramesChange={(value) => setParam(CRUSHER_PARAM_HOLD_FRAMES, value)}
                                             onDriveDbChange={(value) => setParam(CRUSHER_PARAM_DRIVE_DB, value)}
                                             modulation={modulationForCrusher()}
+                                        />
+                                    ) : inspectedEffectType === SEQFX_EFFECT_TYPES.tapeStop ? (
+                                        <TapeStopV2Editor
+                                            step={inspectedCell}
+                                            disabled={!selectedBlockGroup && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1}
+                                            onParamChange={setParam}
                                         />
                                     ) : inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? (
                                         <StutterEnvelopeEditor

@@ -1536,12 +1536,129 @@ function assertStrictSeqFxLegacyStateShape(value: unknown): asserts value is Seq
     });
 }
 
+function migrateLegacyTapeParamVector(rawParams: unknown, blockLength: number): number[] {
+    const params = Array.isArray(rawParams) ? rawParams.map(Number) : [];
+    const durationScale = Number(params[0] ?? 1);
+    const curvePower = Number(params[1] ?? 1);
+    const releaseCurvePower = Number(params[2] ?? 1);
+    const catchupPercent = Number(params[3] ?? 25);
+    const legacyMode = Number(params[4] ?? 0);
+
+    const legacyValues: Array<[number, number, number, string]> = [
+        [durationScale, 0.05, 4, "duration scale"],
+        [curvePower, 0.25, 4, "curve"],
+        [releaseCurvePower, 0.25, 4, "release curve"],
+        [catchupPercent, 0, 100, "catch-up percent"],
+        [legacyMode, 0, 1, "mode"],
+    ];
+    for (const [value, min, max, label] of legacyValues) {
+        if (!Number.isFinite(value) || value < min || value > max) {
+            throw new Error(`Legacy Tape Stop ${label} must be between ${min} and ${max}.`);
+        }
+    }
+    if (!Number.isInteger(legacyMode)) {
+        throw new Error("Legacy Tape Stop mode must be an integer.");
+    }
+
+    // Legacy timing was a multiple of the authored block. The state document
+    // never stored host tempo/rate, so migration uses the old default clock
+    // (120 BPM, 1/16 cells = 125 ms) and records an honest free-time gesture.
+    const canonicalBlockMs = Math.max(1, Math.trunc(blockLength)) * 125;
+    const freeStopMs = clamp(durationScale * canonicalBlockMs, 20, 8_000);
+    const freeStartMs = clamp((catchupPercent / 100) * canonicalBlockMs, 20, 8_000);
+    const curve = clamp(Math.log(curvePower) / Math.log(4), -1, 1);
+
+    return [
+        8, // One Cell remains the direct-edit default when switching back to Sync.
+        curve,
+        legacyMode === 1 ? 1 : 0,
+        1,
+        0,
+        1, // Free timing preserves the deterministic millisecond mapping above.
+        freeStopMs,
+        freeStartMs,
+    ];
+}
+
+function resetMigratedTapeAux(step: SeqFxStep, params: number[]): void {
+    step.params = params;
+    step.aux = defaultAuxForParams(params, SEQFX_EFFECT_TYPES.tapeStop);
+
+    if (step.effectParams?.[SEQFX_EFFECT_TYPES.tapeStop]) {
+        step.effectParams[SEQFX_EFFECT_TYPES.tapeStop] = migrateLegacyTapeParamVector(
+            step.effectParams[SEQFX_EFFECT_TYPES.tapeStop],
+            1,
+        );
+    }
+    if (step.effectAux?.[SEQFX_EFFECT_TYPES.tapeStop]) {
+        const memoryParams = step.effectParams?.[SEQFX_EFFECT_TYPES.tapeStop]
+            ?? getSeqFxDefaultParams(SEQFX_EFFECT_TYPES.tapeStop);
+        step.effectAux[SEQFX_EFFECT_TYPES.tapeStop] = defaultAuxForParams(
+            memoryParams,
+            SEQFX_EFFECT_TYPES.tapeStop,
+        );
+    }
+}
+
+function migrateLegacyTapeState(value: SeqFxLegacyStateV5): SeqFxLegacyStateV5 {
+    const migrated = JSON.parse(JSON.stringify(value)) as SeqFxLegacyStateV5;
+
+    migrated.patterns.forEach((pattern) => {
+        pattern.lanes.forEach((lane, laneIndex) => {
+            let stepIndex = 0;
+            while (stepIndex < lane.steps.length) {
+                const step = lane.steps[stepIndex];
+                const fallbackEffectType = defaultEffectTypeForLane(laneIndex);
+                const effectType = step.active
+                    ? normalizeEffectType(Number(step.effectType ?? fallbackEffectType), fallbackEffectType)
+                    : SEQFX_EFFECT_TYPES.empty;
+
+                if (effectType !== SEQFX_EFFECT_TYPES.tapeStop) {
+                    if (step.effectParams?.[SEQFX_EFFECT_TYPES.tapeStop]) {
+                        step.effectParams[SEQFX_EFFECT_TYPES.tapeStop] = migrateLegacyTapeParamVector(
+                            step.effectParams[SEQFX_EFFECT_TYPES.tapeStop],
+                            1,
+                        );
+                    }
+                    stepIndex += 1;
+                    continue;
+                }
+
+                let blockEnd = stepIndex + 1;
+                while (blockEnd < lane.steps.length) {
+                    const candidate = lane.steps[blockEnd];
+                    const candidateType = candidate.active
+                        ? normalizeEffectType(Number(candidate.effectType ?? fallbackEffectType), fallbackEffectType)
+                        : SEQFX_EFFECT_TYPES.empty;
+                    if (candidateType !== SEQFX_EFFECT_TYPES.tapeStop || candidate.trigger === true) {
+                        break;
+                    }
+                    blockEnd += 1;
+                }
+
+                const blockLength = blockEnd - stepIndex;
+                for (let memberIndex = stepIndex; memberIndex < blockEnd; memberIndex += 1) {
+                    const member = lane.steps[memberIndex];
+                    resetMigratedTapeAux(
+                        member,
+                        migrateLegacyTapeParamVector(member.params, blockLength),
+                    );
+                }
+                stepIndex = blockEnd;
+            }
+        });
+    });
+
+    return migrated;
+}
+
 export function parseStrictSeqFxStateV5(value: unknown): SeqFxState {
     try {
         const parsed = parseStateCandidate(value);
         assertStrictSeqFxLegacyStateShape(parsed);
-        assertSeqFxStateValuesInRange(parsed as unknown as SeqFxState);
-        return normalizeDenseSeqFxState(parsed);
+        const normalized = normalizeDenseSeqFxState(migrateLegacyTapeState(parsed));
+        assertSeqFxStateValuesInRange(normalized);
+        return normalized;
     } catch (error) {
         if (error instanceof SeqFxStateParseError) {
             throw error;

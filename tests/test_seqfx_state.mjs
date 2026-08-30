@@ -324,7 +324,7 @@ test("chain_steps_clamp_parameters_by_selected_effect_type_not_chain_index", () 
     ]);
     assert.deepEqual(
         upload.params[1].slice(4, 6).map((params) => params[0]),
-        [0.05, 0.05],
+        [0, 0],
     );
     assert.equal(upload.effectTypes[2][8], SEQFX_EFFECT_TYPES.filter);
     assert.equal(upload.params[2][8][1], 20);
@@ -688,7 +688,7 @@ test("editing_trigger_latched_tape_and_stutter_parameters_marks_only_that_cell_a
     assert.equal(state.patterns[0].lanes[SEQFX_LANES.stutter].steps[20].trigger, true);
 });
 
-test("tape_stop_catchup_percent_and_mode_parameters_are_uploaded_to_the_whole_block", () => {
+test("tape_stop_return_start_time_and_character_are_uploaded_to_the_whole_block", () => {
     let state = createDefaultSeqFxState();
     state = applySeqFxBlockCreate(state, {
         patternIndex: 0,
@@ -701,21 +701,21 @@ test("tape_stop_catchup_percent_and_mode_parameters_are_uploaded_to_the_whole_bl
         lane: SEQFX_LANES.tapeStop,
         startStep: 1,
         paramIndex: 2,
-        value: 2.5,
+        value: 1,
     });
     state = applySeqFxBlockParamEdit(state, {
         patternIndex: 0,
         lane: SEQFX_LANES.tapeStop,
         startStep: 1,
         paramIndex: 3,
-        value: 75,
+        value: 7,
     });
     state = applySeqFxBlockParamEdit(state, {
         patternIndex: 0,
         lane: SEQFX_LANES.tapeStop,
         startStep: 1,
         paramIndex: 4,
-        value: 1,
+        value: 0.8,
     });
 
     const upload = buildSeqPatternUpload(state, {
@@ -725,15 +725,15 @@ test("tape_stop_catchup_percent_and_mode_parameters_are_uploaded_to_the_whole_bl
 
     assert.deepEqual(
         upload.params[SEQFX_LANES.tapeStop].slice(1, 3).map((params) => params[2]),
-        [2.5, 2.5],
+        [1, 1],
     );
     assert.deepEqual(
         upload.params[SEQFX_LANES.tapeStop].slice(1, 3).map((params) => params[3]),
-        [75, 75],
+        [7, 7],
     );
     assert.deepEqual(
         upload.params[SEQFX_LANES.tapeStop].slice(1, 3).map((params) => params[4]),
-        [1, 1],
+        [0.8, 0.8],
     );
 });
 
@@ -875,7 +875,7 @@ test("block_parameter_edits_copy_settings_across_the_block_without_retriggering_
         lane: SEQFX_LANES.tapeStop,
         startStep: 10,
         paramIndex: 0,
-        value: 2.5,
+        value: 3,
     });
 
     const upload = buildSeqPatternUpload(state, {
@@ -886,7 +886,7 @@ test("block_parameter_edits_copy_settings_across_the_block_without_retriggering_
     assert.deepEqual(upload.triggerSteps[SEQFX_LANES.tapeStop].slice(10, 13), [true, false, false]);
     assert.deepEqual(
         upload.params[SEQFX_LANES.tapeStop].slice(10, 13).map((params) => params[0]),
-        [2.5, 2.5, 2.5],
+        [3, 3, 3],
     );
 });
 
@@ -998,14 +998,14 @@ test("copying_a_seqfx_block_preserves_source_and_rejects_overlaps", () => {
         lane: SEQFX_LANES.tapeStop,
         startStep: 1,
         paramIndex: 0,
-        value: 2.25,
+        value: 2,
     });
-    state = applySeqFxParamEdit(state, {
+    state = applySeqFxBlockParamEdit(state, {
         patternIndex: 0,
         lane: SEQFX_LANES.tapeStop,
-        steps: [2],
+        startStep: 1,
         paramIndex: 1,
-        value: 1.75,
+        value: 0.75,
     });
 
     assert.throws(
@@ -1036,11 +1036,11 @@ test("copying_a_seqfx_block_preserves_source_and_rejects_overlaps", () => {
     assert.deepEqual(upload.triggerSteps[SEQFX_LANES.tapeStop].slice(6, 8), [true, false]);
     assert.deepEqual(
         upload.params[SEQFX_LANES.tapeStop].slice(6, 8).map((params) => params[0]),
-        [2.25, 2.25],
+        [2, 2],
     );
     assert.deepEqual(
         upload.params[SEQFX_LANES.tapeStop].slice(6, 8).map((params) => params[1]),
-        [1, 1.75],
+        [0.75, 0.75],
     );
 });
 

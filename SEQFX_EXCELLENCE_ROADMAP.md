@@ -1,6 +1,6 @@
 # SeqFX Excellence Roadmap
 
-Status: implementation in progress; Phases 0–2 complete, Phase 3 next
+Status: implementation in progress; Phases 0–3 complete, Tape Stop v2 complete; Phase 4 continues with Crush v2
 Owner thread: `01a05051-d7c7-7e13-bb60-58968b6392cf`
 Branch: `codex/seqfx-excellence-01a05051`
 Worktree: `/Users/winterfell/.codex/worktrees/seqfx-excellence-01a05051/cosimo-synth`
@@ -18,6 +18,7 @@ Execution evidence:
 - Sparse state/domain checkpoint: `research/seqfx/state-v7-evidence.md`
 - Shared-buffer decision: `research/seqfx/buffer-architecture.md`
 - Lifecycle/reset contract: `research/seqfx/lifecycle-contract.md`
+- Tape Stop v2 implementation proof: `research/seqfx/tape-stop-v2-evidence.md`
 
 ## 1. Outcome
 
@@ -859,8 +860,8 @@ The implementation task must not infer these from a build succeeding.
 | Rename Crusher display to Crush, preserve ID 2 | Committed | Matches requested vocabulary without breaking recall | Add a second Crush ID or renumber | Migration is simple and old projects remain addressable |
 | Vibro and Flange are separate IDs | Committed from wording | The user listed both, while Koala combines them | One bipolar Vibro/Flange block | Clearer authored intent and independent focused controls |
 | Sparse v7 block state | Committed engineering direction | Removes hundreds of kilobytes of empty repeated state and creates one coherent version boundary | Extend dense version 5 again | Requires migration, but lowers host-state risk and effect-expansion cost |
-| Tape core behavior follows benchmark | Committed process, behavior pending | Direct “do not guess” requirement | Implement the earlier Stop/Shape/Tail/Return proposal as fact | Production DSP waits for measured/documented contract |
-| Advanced Comb selected by three-candidate lab | Committed process, topology pending | A conventional comb would fail the originality requirement | Pick one fashionable technique from prose | More lab work, but decision will have audible/stability/CPU evidence |
+| Tape is a trigger-latched motor gesture with explicit Stop Time, Curve, Catch Up/Spin Up, optional Start Time, and Sync/Free timing | Committed and implemented | Official mature-product vocabulary plus the frozen benchmark; block end does not define motor lifetime | Invent Tail/Throw controls or keep the old block-bound ramp | Two gesture voices, tiered history, explicit v5 migration, and a dedicated v2 inspector |
+| Comb uses the selected vector-dispersive feedback topology | Committed by lab evidence | The lab retained recognizable tuning while dispersion, stereo vector coupling, damping, motion, drive, and width created a distinct stable instrument | Ship a conventional one-delay comb or the less controllable modal candidates | Production Comb implements the selected candidate and preserves the rejected-candidate scorecard |
 | macOS VST3 release candidate only | Inherited | Existing release scope and toolchain | Expand AU/Windows now | Keeps the slice finishable; other formats need their own roadmap |
 | No merge/push/deploy/publish by this task | Inherited | Coordinator and user authorization boundary | Treat “end to end” as permission to release | Final result is a clean handoff and artifact, not an external launch |
 
