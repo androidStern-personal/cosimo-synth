@@ -11,6 +11,11 @@ globalThis.__COSIMO_VIDEO_BOUNCE_MODULE_URL__ = new URL("./video-bounce/index.js
 
 const searchParameters = new URLSearchParams(globalThis.location.search);
 const isTestMode = searchParameters.has("test");
+// ?perf=1 turns on the AudioWorklet's render-load counters and a small
+// on-screen HUD without any of test mode's behaviour changes. This is the
+// on-device (iPhone Safari/Chrome) dropout diagnosis path.
+const isPerfHudVisible = searchParameters.has("perf");
+const isPerfMetricsMode = isTestMode || isPerfHudVisible;
 const hostOwnsRuntimeLanes = isTestMode && searchParameters.get("runtime-owner") === "host";
 const browserAudioLeaveEvent = "cosimo-browser-audio-leave";
 const browserAudioReturnEvent = "cosimo-browser-audio-return";
@@ -22,6 +27,7 @@ if (hostOwnsRuntimeLanes) {
 const elements = {
     audioRecoveryNotice: document.getElementById("cosimo-audio-recovery-notice"),
     error: document.getElementById("cosimo-error"),
+    perfHud: document.getElementById("cosimo-perf-hud"),
     startAction: document.getElementById("cosimo-start-action"),
     startOverlay: document.getElementById("cosimo-start-overlay"),
     startStatus: document.getElementById("cosimo-start-status"),
@@ -58,6 +64,7 @@ const state = {
     audioWorkletAcknowledgedPerfEpoch: 0,
     audioWorkletRenderQuantumFrames: null,
     audioWorkletSampleRateHz: null,
+    audioWorkletLatestWindow: null,
     bounceRestore: { status: "idle", digest: null, error: null },
     bounceRestorer: null,
     bounceRestorePromise: null,
@@ -604,6 +611,74 @@ globalThis.__COSIMO_WEB_POC__ = {
     },
 };
 
+function formatPerfLoadPercent(load) {
+    return Number.isFinite(load) ? `${Math.round(load * 100)}%` : "–";
+}
+
+function formatPerfMilliseconds(seconds) {
+    return typeof seconds === "number" && Number.isFinite(seconds)
+        ? (seconds * 1000).toFixed(1)
+        : "–";
+}
+
+// The HUD reads the same counters the ?test harness asserts on. "now" is the
+// most recent ~256-block worklet window; the other rows accumulate until the
+// HUD is tapped. over = blocks whose DSP render exceeded the quantum budget,
+// miss = definite deadline misses, late cb = the worklet callback itself
+// arriving late (starved by the system rather than by our DSP).
+function renderPerfHud() {
+    if (!elements.perfHud) {
+        return;
+    }
+
+    const sampleRateHz = state.audioWorkletSampleRateHz ?? state.audioContext?.sampleRate ?? null;
+    const quantumFrames = state.audioWorkletRenderQuantumFrames;
+    const contextState = state.audioContext?.state ?? "no-context";
+    const lines = [
+        `${sampleRateHz ? `${(sampleRateHz / 1000).toFixed(1)}kHz` : "–"} · ${quantumFrames ?? "–"}f · ${contextState}`,
+    ];
+
+    const latestWindow = state.audioWorkletLatestWindow;
+    const windowIsFresh = latestWindow !== null && (performance.now() - latestWindow.receivedAt) < 2_000;
+    if (windowIsFresh) {
+        lines.push(`now  avg ${formatPerfLoadPercent(latestWindow.averageLoad)} · max ${formatPerfLoadPercent(latestWindow.maxLoad)}`);
+    } else {
+        lines.push(state.started ? "now  (no recent worklet data)" : "now  waiting for audio start…");
+    }
+
+    if (state.audioWorkletBlockCount > 0) {
+        const averageLoad = state.audioWorkletQuantizedLoadSum / state.audioWorkletBlockCount;
+        lines.push(
+            `all  avg ${formatPerfLoadPercent(averageLoad)} · peak ${formatPerfLoadPercent(state.audioWorkletQuantizedMaxLoad)}`,
+            `over ${state.audioWorkletQuantizedOverBudgetBlocks} · miss ${state.audioWorkletDefiniteDeadlineMissBlocks}`
+                + ` / ${state.audioWorkletBlockCount} blocks`,
+            `late cb ${state.audioWorkletCallbackGapBlocks}`
+                + ` (max ${state.audioWorkletMaxCallbackGapLoad.toFixed(1)}× budget)`,
+        );
+    }
+
+    lines.push(
+        `lat ${formatPerfMilliseconds(state.audioContext?.baseLatency)}+${formatPerfMilliseconds(state.audioContext?.outputLatency)}ms`
+            + " · tap to reset",
+    );
+    elements.perfHud.textContent = lines.join("\n");
+}
+
+function startPerfHud() {
+    if (!isPerfHudVisible || !elements.perfHud) {
+        return;
+    }
+
+    elements.perfHud.hidden = false;
+    elements.perfHud.addEventListener("click", () => {
+        globalThis.__COSIMO_WEB_POC__.resetAudioMetrics();
+        state.audioWorkletLatestWindow = null;
+        renderPerfHud();
+    });
+    renderPerfHud();
+    setInterval(renderPerfHud, 500);
+}
+
 async function initialise() {
     const audioContext = new AudioContext(isTestMode
         ? { latencyHint: "interactive", sampleRate: 48_000 }
@@ -656,7 +731,7 @@ async function initialise() {
     state.midiEndpointID = findEndpointID(connection, "midi in");
     audioContext.addEventListener("statechange", handleAudioContextStateChange);
 
-    if (isTestMode) {
+    if (isPerfMetricsMode) {
         connection.audioNode.port.addEventListener("message", (event) => {
             if (event.data?.type === "cosimo-perf-reset-ack") {
                 const epoch = Number(event.data.epoch) || 0;
@@ -703,12 +778,23 @@ async function initialise() {
             state.audioWorkletEventAdjacentCoalescedEvents += Number(event.data.eventAdjacentCoalescedEvents) || 0;
             state.audioWorkletRenderQuantumFrames = Number(event.data.renderQuantumFrames) || null;
             state.audioWorkletSampleRateHz = Number(event.data.sampleRateHz) || state.audioContext?.sampleRate || null;
+            state.audioWorkletLatestWindow = {
+                averageLoad,
+                blockCount,
+                callbackGapBlocks: Number(event.data.callbackGapBlocks) || 0,
+                definiteDeadlineMissBlocks: Number(event.data.definiteDeadlineMissBlocks) || 0,
+                maxLoad: Number(event.data.quantizedMaxLoad) || 0,
+                overBudgetBlocks: Number(event.data.quantizedOverBudgetBlocks) || 0,
+                receivedAt: performance.now(),
+            };
         });
         connection.audioNode.port.postMessage({
             type: "patch",
             payload: { type: "cosimo-perf-config", enabled: true, epoch: state.audioWorkletPerfEpoch },
         });
+    }
 
+    if (isTestMode) {
         connection.addEndpointListener("runtimeState", (message) => {
             state.latestRuntimeState = message;
             const event = endpointEvent(message);
@@ -771,6 +857,7 @@ async function initialise() {
     state.phase = "ready";
     elements.startStatus.textContent = "WebAssembly engine ready";
     elements.startOverlay.disabled = false;
+    startPerfHud();
 }
 
 elements.startOverlay.addEventListener("click", () => {
