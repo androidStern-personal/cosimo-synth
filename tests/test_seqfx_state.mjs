@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { gunzipSync } from "node:zlib";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
@@ -16,6 +18,7 @@ const {
     SEQFX_STEP_COUNT,
     SEQFX_EFFECT_TYPES,
     SEQFX_LANES,
+    SeqFxStateParseError,
     applySeqFxBlockCreate,
     applySeqFxBlockCopy,
     applySeqFxBlockCopyPaint,
@@ -269,17 +272,21 @@ test("seqfx_aux_end_values_clamp_and_round_like_effect_parameters", () => {
 });
 
 test("seqfx_strict_v5_parser_rejects_old_aux_curve_payloads_under_the_new_key", () => {
-    const oldShaped = createDefaultSeqFxState();
-    oldShaped.version = 5;
+    const fixtureEnvelope = JSON.parse(gunzipSync(readFileSync(
+        path.join(repoRoot, "tests/fixtures/seqfx/legacy-v5-dense-state.json.gz"),
+    )).toString("utf8"));
+    const oldShaped = JSON.parse(fixtureEnvelope.storedState);
     oldShaped.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux = {
         curve: "linear",
         targets: oldShaped.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux.targets,
     };
 
-    assert.throws(
-        () => parseStrictSeqFxStateV5(JSON.stringify(oldShaped)),
-        /source/i,
-    );
+    assert.throws(() => parseStrictSeqFxStateV5(JSON.stringify(oldShaped)), (error) => {
+        assert.ok(error instanceof SeqFxStateParseError);
+        assert.equal(error.code, "unknown_field");
+        assert.equal(error.path, "$.patterns[0].lanes[1].steps[0].aux.curve");
+        return true;
+    });
 });
 
 test("chain_steps_clamp_parameters_by_selected_effect_type_not_chain_index", () => {

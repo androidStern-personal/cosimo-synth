@@ -11,6 +11,7 @@ const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts")
 const {
     SEQFX_EFFECT_TYPES,
     SEQFX_LANE_COUNT,
+    SEQFX_LANES,
     SEQFX_PATTERN_COUNT,
     SEQFX_STATE_KEY,
     SEQFX_STEP_COUNT,
@@ -32,10 +33,79 @@ const {
 } = stateModule;
 
 function legacyV5(state) {
-    return {
+    const legacy = {
         ...structuredClone(state),
         version: 5,
     };
+
+    const laneDefaults = [
+        [0, 2_000, 500, 0.707, 1, 0, 0, 0],
+        [8, 1, 0, 0, 0, 0, 0, 0],
+        [1, 1, 1, 25, 0, 0, 0, 0],
+        [8, 1, 0.4375, 0.68, 0, 0, 0, 0],
+    ];
+
+    legacy.patterns.forEach((pattern) => {
+        pattern.lanes.forEach((lane, laneIndex) => {
+            lane.steps.forEach((step) => {
+                if (!step.active) {
+                    const params = [...laneDefaults[laneIndex]];
+                    step.params = params;
+                    step.aux = {
+                        source: {
+                            shape: laneIndex === SEQFX_LANES.filter ? 1 : 0,
+                            sourceCurve: 0,
+                            rateMode: "slice",
+                            tempoMultiplier: 4,
+                            tempoTriplet: false,
+                            sliceCount: 1,
+                        },
+                        targets: params.map((end, paramIndex) => ({
+                            enabled: laneIndex === SEQFX_LANES.filter && paramIndex === 1,
+                            end: laneIndex === SEQFX_LANES.filter && paramIndex === 1 ? params[2] : end,
+                        })),
+                    };
+                }
+
+                for (const memories of [step.effectParams, step.effectAux]) {
+                    if (!memories) {
+                        continue;
+                    }
+                    for (const effectId of Object.keys(memories)) {
+                        if (Number(effectId) > SEQFX_EFFECT_TYPES.stutter) {
+                            delete memories[effectId];
+                        }
+                    }
+                }
+            });
+        });
+    });
+
+    return legacy;
+}
+
+function assertActiveUploadEqual(actual, expected) {
+    assert.deepEqual(actual.activeSteps, expected.activeSteps);
+    assert.deepEqual(actual.triggerSteps, expected.triggerSteps);
+    assert.deepEqual(actual.effectTypes, expected.effectTypes);
+
+    actual.activeSteps.forEach((lane, laneIndex) => {
+        lane.forEach((active, stepIndex) => {
+            if (!active) {
+                return;
+            }
+            assert.equal(actual.mix[laneIndex][stepIndex], expected.mix[laneIndex][stepIndex]);
+            assert.deepEqual(actual.params[laneIndex][stepIndex], expected.params[laneIndex][stepIndex]);
+            assert.deepEqual(actual.auxEnabled[laneIndex][stepIndex], expected.auxEnabled[laneIndex][stepIndex]);
+            assert.deepEqual(actual.auxEnd[laneIndex][stepIndex], expected.auxEnd[laneIndex][stepIndex]);
+            assert.equal(actual.auxShape[laneIndex][stepIndex], expected.auxShape[laneIndex][stepIndex]);
+            assert.equal(actual.auxSourceCurve[laneIndex][stepIndex], expected.auxSourceCurve[laneIndex][stepIndex]);
+            assert.equal(actual.auxRateMode[laneIndex][stepIndex], expected.auxRateMode[laneIndex][stepIndex]);
+            assert.equal(actual.auxTempoMultiplier[laneIndex][stepIndex], expected.auxTempoMultiplier[laneIndex][stepIndex]);
+            assert.equal(actual.auxTempoTriplet[laneIndex][stepIndex], expected.auxTempoTriplet[laneIndex][stepIndex]);
+            assert.equal(actual.auxSliceCount[laneIndex][stepIndex], expected.auxSliceCount[laneIndex][stepIndex]);
+        });
+    });
 }
 
 test("sparse v7 Init is compact and names its key and version consistently", () => {
@@ -178,7 +248,7 @@ test("legacy v5 migration is idempotent and keeps the dense runtime upload audib
     assert.equal(reparsed.sourceVersion, 7);
     assert.equal(reparsed.migrated, false);
     assert.equal(serializeSeqFxState(reparsed.state), v7);
-    assert.deepEqual(
+    assertActiveUploadEqual(
         buildSeqPatternUpload(migrated.state, { patternIndex: 5, authoritative: true }),
         buildSeqPatternUpload(current, { patternIndex: 5, authoritative: true }),
     );
@@ -322,10 +392,34 @@ test("legacy Crush blocks preserve 48 kHz hold behavior and aux endpoints in Ori
 
     const malformed = legacyV5(state);
     malformed.patterns[0].lanes[1].steps[6].aux.targets[1].end = 0;
-    assert.throws(
-        () => parseSeqFxStoredState(JSON.stringify(malformed)),
-        /Legacy Crush aux hold frames must be between 1 and 64/,
-    );
+    assert.throws(() => parseSeqFxStoredState(JSON.stringify(malformed)), (error) => {
+        assert.ok(error instanceof SeqFxStateParseError);
+        assert.equal(error.code, "invalid_number");
+        assert.equal(error.path, "$.patterns[0].lanes[1].steps[6].aux.targets[1].end");
+        assert.match(error.message, /1 to 64/);
+        return true;
+    });
+});
+
+test("strict v5 parsing rejects out-of-range legacy parameters instead of clamping them", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 0,
+        length: 1,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+    });
+    const malformed = legacyV5(state);
+    malformed.patterns[0].lanes[0].steps[0].params[1] = 999_999;
+
+    assert.throws(() => parseSeqFxStoredState(malformed), (error) => {
+        assert.ok(error instanceof SeqFxStateParseError);
+        assert.equal(error.code, "invalid_number");
+        assert.equal(error.path, "$.patterns[0].lanes[0].steps[0].params[1]");
+        assert.match(error.message, /20 to 20000/);
+        return true;
+    });
 });
 
 test("a deliberately dense twelve-pattern v7 document stays below the host-state budget", () => {
@@ -423,7 +517,8 @@ test("malformed legacy state never produces or rewrites a v7 document", () => {
 
     assert.throws(() => parseSeqFxStoredState(malformed), (error) => {
         assert.ok(error instanceof SeqFxStateParseError);
-        assert.equal(error.code, "invalid_legacy_state");
+        assert.equal(error.code, "invalid_step_count");
+        assert.equal(error.path, "$.patterns[0].lanes[0].steps");
         assert.match(error.message, /32 steps/i);
         return true;
     });

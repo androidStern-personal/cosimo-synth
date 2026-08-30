@@ -1236,8 +1236,22 @@ function assertAllowedKeys(value: Record<string, unknown>, allowed: readonly str
     const allowedKeys = new Set(allowed);
     const unknown = Object.keys(value).find((key) => !allowedKeys.has(key));
     if (unknown) {
-        failParse("unknown_field", `${path}.${unknown}`, "is not part of the SeqFX v7 schema");
+        failParse("unknown_field", `${path}.${unknown}`, "is not part of this SeqFX state schema");
     }
+}
+
+function requireField(value: Record<string, unknown>, key: string, path: string): unknown {
+    if (!hasOwnValue(value, key)) {
+        failParse("missing_field", `${path}.${key}`, "is required");
+    }
+    return value[key];
+}
+
+function requireBoolean(value: unknown, path: string): boolean {
+    if (typeof value !== "boolean") {
+        failParse("invalid_boolean", path, "must be boolean");
+    }
+    return value;
 }
 
 function requireInteger(value: unknown, min: number, max: number, path: string): number {
@@ -1510,54 +1524,198 @@ export function parseStrictSeqFxStateV7(value: unknown): SeqFxState {
     return state;
 }
 
-function assertStrictSeqFxLegacyStateShape(value: unknown): asserts value is SeqFxLegacyStateV5 {
-    if (!isPlainRecord(value)) {
-        throw new Error("SeqFX state must be an object.");
+const LEGACY_PARAM_LIMITS: Readonly<Record<number, readonly (readonly [number, number])[]>> = {
+    [SEQFX_EFFECT_TYPES.filter]: [[0, 2], [20, 20_000], [20, 20_000], [0.1, 20], [0.25, 4], [0, 0], [0, 0], [0, 0]],
+    [SEQFX_EFFECT_TYPES.crusher]: [[4, 16], [1, 64], [0, 36], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
+    [SEQFX_EFFECT_TYPES.tapeStop]: [[0.05, 4], [0.25, 4], [0.25, 4], [0, 100], [0, 1], [0, 0], [0, 0], [0, 0]],
+    [SEQFX_EFFECT_TYPES.stutter]: [[2, 32], [0.5, 2], [0, 1], [0, 1], [0, 0], [0, 0], [0, 0], [0, 0]],
+};
+
+function parseLegacyEffectType(value: unknown, path: string): SeqFxEffectType {
+    const effectType = requireInteger(value, SEQFX_EFFECT_TYPES.empty, SEQFX_EFFECT_TYPES.stutter, path);
+    switch (effectType) {
+        case SEQFX_EFFECT_TYPES.empty: return SEQFX_EFFECT_TYPES.empty;
+        case SEQFX_EFFECT_TYPES.filter: return SEQFX_EFFECT_TYPES.filter;
+        case SEQFX_EFFECT_TYPES.crusher: return SEQFX_EFFECT_TYPES.crusher;
+        case SEQFX_EFFECT_TYPES.tapeStop: return SEQFX_EFFECT_TYPES.tapeStop;
+        case SEQFX_EFFECT_TYPES.stutter: return SEQFX_EFFECT_TYPES.stutter;
+        default: return failParse("invalid_effect_type", path, `contains unknown legacy effect ID ${effectType}`);
+    }
+}
+
+function parseLegacyMemoryEffectType(key: string, path: string): SeqFxEffectType {
+    const effectType = parseLegacyEffectType(Number(key), path);
+    if (String(effectType) !== key || effectType === SEQFX_EFFECT_TYPES.empty) {
+        failParse("invalid_effect_type", path, `contains unknown legacy effect ID ${key}`);
+    }
+    return effectType;
+}
+
+function legacyParamLimits(effectType: SeqFxEffectType, paramIndex: number): readonly [number, number] {
+    return LEGACY_PARAM_LIMITS[effectType]?.[paramIndex] ?? [0, 0];
+}
+
+function parseLegacyParamVector(effectType: SeqFxEffectType, value: unknown, path: string): number[] {
+    if (!Array.isArray(value) || value.length !== SEQFX_PARAM_COUNT) {
+        failParse("invalid_params", path, `must contain exactly ${SEQFX_PARAM_COUNT} parameters`);
     }
 
-    const state = value as unknown as Partial<SeqFxLegacyStateV5>;
-    if (state.version !== SEQFX_LEGACY_STATE_VERSION || !Array.isArray(state.patterns)) {
-        throw new Error(`SeqFX state must contain version ${SEQFX_LEGACY_STATE_VERSION} patterns.`);
-    }
-
-    if (state.patterns.length !== SEQFX_PATTERN_COUNT) {
-        throw new Error(`SeqFX state patterns must contain ${SEQFX_PATTERN_COUNT} patterns.`);
-    }
-
-    state.patterns.forEach((pattern, patternIndex) => {
-        if (!pattern || typeof pattern !== "object" || Array.isArray(pattern) || !Array.isArray(pattern.lanes)) {
-            throw new Error(`SeqFX pattern ${patternIndex} is invalid.`);
+    return value.map((rawParam, paramIndex) => {
+        const [min, max] = legacyParamLimits(effectType, paramIndex);
+        const param = requireNumber(rawParam, min, max, `${path}[${paramIndex}]`);
+        const isInteger = (effectType === SEQFX_EFFECT_TYPES.filter && paramIndex === 0)
+            || (effectType === SEQFX_EFFECT_TYPES.crusher && (paramIndex === 0 || paramIndex === 1))
+            || (effectType === SEQFX_EFFECT_TYPES.tapeStop && paramIndex === 4)
+            || (effectType === SEQFX_EFFECT_TYPES.stutter && paramIndex === 0);
+        if (isInteger && !Number.isInteger(param)) {
+            failParse("invalid_integer_param", `${path}[${paramIndex}]`, "must be an integer");
         }
-
-        if (pattern.lanes.length !== SEQFX_LANE_COUNT) {
-            throw new Error(`SeqFX pattern ${patternIndex} must contain ${SEQFX_LANE_COUNT} lanes.`);
-        }
-
-        pattern.lanes.forEach((lane, laneIndex) => {
-            if (!lane || typeof lane !== "object" || Array.isArray(lane) || !Array.isArray(lane.steps)) {
-                throw new Error(`SeqFX pattern ${patternIndex} lane ${laneIndex} is invalid.`);
-            }
-
-            if (lane.steps.length !== SEQFX_STEP_COUNT) {
-                throw new Error(`SeqFX pattern ${patternIndex} lane ${laneIndex} must contain ${SEQFX_STEP_COUNT} steps.`);
-            }
-
-            lane.steps.forEach((step, stepIndex) => {
-                if (!step || typeof step !== "object" || Array.isArray(step)) {
-                    throw new Error(`SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} is invalid.`);
-                }
-
-                if (!Object.prototype.hasOwnProperty.call(step, "aux")) {
-                    throw new Error(`SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} must contain aux.`);
-                }
-
-                const aux = (step as Partial<SeqFxStep>).aux;
-                if (!aux || typeof aux !== "object" || Array.isArray(aux) || !Object.prototype.hasOwnProperty.call(aux, "source")) {
-                    throw new Error(`SeqFX pattern ${patternIndex} lane ${laneIndex} step ${stepIndex} aux must contain source.`);
-                }
-            });
-        });
+        return param;
     });
+}
+
+function parseLegacyAux(
+    effectType: SeqFxEffectType,
+    value: unknown,
+    path: string,
+): SeqFxAuxState {
+    const rawAux = requireRecord(value, path);
+    assertAllowedKeys(rawAux, ["source", "targets"], path);
+    const rawSource = requireRecord(requireField(rawAux, "source", path), `${path}.source`);
+    assertAllowedKeys(rawSource, ["shape", "sourceCurve", "rateMode", "tempoMultiplier", "tempoTriplet", "sliceCount"], `${path}.source`);
+    const rateMode = requireField(rawSource, "rateMode", `${path}.source`);
+    if (rateMode !== SEQFX_AUX_RATE_MODES.tempo && rateMode !== SEQFX_AUX_RATE_MODES.slice) {
+        failParse("invalid_enum", `${path}.source.rateMode`, "must be tempo or slice");
+    }
+    const source: SeqFxAuxSource = {
+        shape: requireNumber(requireField(rawSource, "shape", `${path}.source`), SEQFX_AUX_SHAPE_MIN, SEQFX_AUX_SHAPE_MAX, `${path}.source.shape`),
+        sourceCurve: requireNumber(requireField(rawSource, "sourceCurve", `${path}.source`), SEQFX_AUX_SOURCE_CURVE_MIN, SEQFX_AUX_SOURCE_CURVE_MAX, `${path}.source.sourceCurve`),
+        rateMode,
+        tempoMultiplier: requireInteger(requireField(rawSource, "tempoMultiplier", `${path}.source`), SEQFX_AUX_TEMPO_MULTIPLIER_MIN, SEQFX_AUX_TEMPO_MULTIPLIER_MAX, `${path}.source.tempoMultiplier`),
+        tempoTriplet: requireBoolean(requireField(rawSource, "tempoTriplet", `${path}.source`), `${path}.source.tempoTriplet`),
+        sliceCount: requireInteger(requireField(rawSource, "sliceCount", `${path}.source`), SEQFX_AUX_SLICE_COUNT_MIN, SEQFX_AUX_SLICE_COUNT_MAX, `${path}.source.sliceCount`),
+    };
+    const rawTargets = requireField(rawAux, "targets", path);
+    if (!Array.isArray(rawTargets) || rawTargets.length !== SEQFX_PARAM_COUNT) {
+        failParse("invalid_aux_targets", `${path}.targets`, `must contain exactly ${SEQFX_PARAM_COUNT} targets`);
+    }
+    const targets = rawTargets.map((rawTarget, paramIndex): SeqFxAuxTarget => {
+        const targetPath = `${path}.targets[${paramIndex}]`;
+        const target = requireRecord(rawTarget, targetPath);
+        assertAllowedKeys(target, ["enabled", "end"], targetPath);
+        const [min, max] = legacyParamLimits(effectType, paramIndex);
+        const end = requireNumber(requireField(target, "end", targetPath), min, max, `${targetPath}.end`);
+        const isInteger = (effectType === SEQFX_EFFECT_TYPES.filter && paramIndex === 0)
+            || (effectType === SEQFX_EFFECT_TYPES.crusher && (paramIndex === 0 || paramIndex === 1))
+            || (effectType === SEQFX_EFFECT_TYPES.tapeStop && paramIndex === 4)
+            || (effectType === SEQFX_EFFECT_TYPES.stutter && paramIndex === 0);
+        if (isInteger && !Number.isInteger(end)) {
+            failParse("invalid_integer_param", `${targetPath}.end`, "must be an integer");
+        }
+        return {
+            enabled: requireBoolean(requireField(target, "enabled", targetPath), `${targetPath}.enabled`),
+            end,
+        };
+    });
+    return { source, targets };
+}
+
+function parseLegacyMemories(
+    rawStep: Record<string, unknown>,
+    path: string,
+): Pick<SeqFxStep, "effectParams" | "effectAux"> {
+    const effectParams: Partial<Record<SeqFxEffectType, number[]>> = {};
+    const effectAux: Partial<Record<SeqFxEffectType, SeqFxAuxState>> = {};
+
+    if (hasOwnValue(rawStep, "effectParams")) {
+        const rawParams = requireRecord(rawStep.effectParams, `${path}.effectParams`);
+        for (const [key, params] of Object.entries(rawParams)) {
+            const effectType = parseLegacyMemoryEffectType(key, `${path}.effectParams.${key}`);
+            effectParams[effectType] = parseLegacyParamVector(effectType, params, `${path}.effectParams.${key}`);
+        }
+    }
+    if (hasOwnValue(rawStep, "effectAux")) {
+        const rawAux = requireRecord(rawStep.effectAux, `${path}.effectAux`);
+        for (const [key, aux] of Object.entries(rawAux)) {
+            const effectType = parseLegacyMemoryEffectType(key, `${path}.effectAux.${key}`);
+            effectAux[effectType] = parseLegacyAux(effectType, aux, `${path}.effectAux.${key}`);
+        }
+    }
+
+    return {
+        ...(Object.keys(effectParams).length > 0 ? { effectParams } : {}),
+        ...(Object.keys(effectAux).length > 0 ? { effectAux } : {}),
+    };
+}
+
+function parseStrictSeqFxLegacyState(value: unknown): SeqFxLegacyStateV5 {
+    const rawState = requireRecord(value, "$");
+    assertAllowedKeys(rawState, ["version", "patterns"], "$");
+    if (requireField(rawState, "version", "$") !== SEQFX_LEGACY_STATE_VERSION) {
+        failParse("unsupported_version", "$.version", `must be ${SEQFX_LEGACY_STATE_VERSION}`);
+    }
+    const rawPatterns = requireField(rawState, "patterns", "$");
+    if (!Array.isArray(rawPatterns) || rawPatterns.length !== SEQFX_PATTERN_COUNT) {
+        failParse("invalid_pattern_count", "$.patterns", `must contain exactly ${SEQFX_PATTERN_COUNT} patterns`);
+    }
+
+    const patterns = rawPatterns.map((rawPattern, patternIndex): SeqFxPattern => {
+        const patternPath = `$.patterns[${patternIndex}]`;
+        const pattern = requireRecord(rawPattern, patternPath);
+        assertAllowedKeys(pattern, ["revision", "lanes"], patternPath);
+        const rawLanes = requireField(pattern, "lanes", patternPath);
+        if (!Array.isArray(rawLanes) || rawLanes.length !== SEQFX_LANE_COUNT) {
+            failParse("invalid_lane_count", `${patternPath}.lanes`, `must contain exactly ${SEQFX_LANE_COUNT} lanes`);
+        }
+        return {
+            revision: requireInteger(requireField(pattern, "revision", patternPath), 1, Number.MAX_SAFE_INTEGER, `${patternPath}.revision`),
+            lanes: rawLanes.map((rawLane, laneIndex): SeqFxLane => {
+                const lanePath = `${patternPath}.lanes[${laneIndex}]`;
+                const lane = requireRecord(rawLane, lanePath);
+                assertAllowedKeys(lane, ["steps"], lanePath);
+                const rawSteps = requireField(lane, "steps", lanePath);
+                if (!Array.isArray(rawSteps) || rawSteps.length !== SEQFX_STEP_COUNT) {
+                    failParse("invalid_step_count", `${lanePath}.steps`, `must contain exactly ${SEQFX_STEP_COUNT} steps`);
+                }
+                return {
+                    steps: rawSteps.map((rawStep, stepIndex): SeqFxStep => {
+                        const stepPath = `${lanePath}.steps[${stepIndex}]`;
+                        const step = requireRecord(rawStep, stepPath);
+                        assertAllowedKeys(step, ["active", "trigger", "effectType", "mix", "params", "aux", "effectParams", "effectAux"], stepPath);
+                        const active = requireBoolean(requireField(step, "active", stepPath), `${stepPath}.active`);
+                        const trigger = requireBoolean(requireField(step, "trigger", stepPath), `${stepPath}.trigger`);
+                        const effectType = parseLegacyEffectType(requireField(step, "effectType", stepPath), `${stepPath}.effectType`);
+                        if (active && effectType === SEQFX_EFFECT_TYPES.empty) {
+                            failParse("invalid_effect_type", `${stepPath}.effectType`, "active legacy steps cannot be empty");
+                        }
+                        if (!active && effectType !== SEQFX_EFFECT_TYPES.empty) {
+                            failParse("invalid_effect_type", `${stepPath}.effectType`, "inactive legacy steps must be empty");
+                        }
+                        if (!active && trigger) {
+                            failParse("invalid_trigger", `${stepPath}.trigger`, "inactive legacy steps cannot trigger");
+                        }
+                        const parameterEffectType = effectType === SEQFX_EFFECT_TYPES.empty
+                            ? defaultEffectTypeForLane(laneIndex)
+                            : effectType;
+                        return {
+                            active,
+                            trigger,
+                            effectType,
+                            mix: requireNumber(requireField(step, "mix", stepPath), 0, 1, `${stepPath}.mix`),
+                            params: parseLegacyParamVector(parameterEffectType, requireField(step, "params", stepPath), `${stepPath}.params`),
+                            aux: parseLegacyAux(parameterEffectType, requireField(step, "aux", stepPath), `${stepPath}.aux`),
+                            ...parseLegacyMemories(step, stepPath),
+                        };
+                    }),
+                };
+            }),
+        };
+    });
+
+    return {
+        version: SEQFX_LEGACY_STATE_VERSION,
+        patterns,
+    };
 }
 
 function migrateLegacyTapeParamVector(rawParams: unknown, blockLength: number): number[] {
@@ -1667,7 +1825,7 @@ function migrateLegacyCrushAux(
 }
 
 function migrateLegacyCrushState(value: SeqFxLegacyStateV5): SeqFxLegacyStateV5 {
-    const migrated = JSON.parse(JSON.stringify(value)) as SeqFxLegacyStateV5;
+    const migrated = structuredClone(value);
 
     migrated.patterns.forEach((pattern) => {
         pattern.lanes.forEach((lane, laneIndex) => {
@@ -1687,10 +1845,18 @@ function migrateLegacyCrushState(value: SeqFxLegacyStateV5): SeqFxLegacyStateV5 
                 const oldMemoryParams = step.effectParams?.[SEQFX_EFFECT_TYPES.crusher];
                 if (oldMemoryParams) {
                     const params = migrateLegacyCrushParamVector(oldMemoryParams);
-                    step.effectParams![SEQFX_EFFECT_TYPES.crusher] = params;
+                    const effectParams = step.effectParams;
+                    if (!effectParams) {
+                        throw new Error("Legacy Crush parameter memory disappeared during migration.");
+                    }
+                    effectParams[SEQFX_EFFECT_TYPES.crusher] = params;
                     const oldMemoryAux = step.effectAux?.[SEQFX_EFFECT_TYPES.crusher];
                     if (oldMemoryAux) {
-                        step.effectAux![SEQFX_EFFECT_TYPES.crusher] = migrateLegacyCrushAux(
+                        const effectAux = step.effectAux;
+                        if (!effectAux) {
+                            throw new Error("Legacy Crush aux memory disappeared during migration.");
+                        }
+                        effectAux[SEQFX_EFFECT_TYPES.crusher] = migrateLegacyCrushAux(
                             oldMemoryAux,
                             oldMemoryParams,
                             params,
@@ -1725,7 +1891,7 @@ function resetMigratedTapeAux(step: SeqFxStep, params: number[]): void {
 }
 
 function migrateLegacyTapeState(value: SeqFxLegacyStateV5): SeqFxLegacyStateV5 {
-    const migrated = JSON.parse(JSON.stringify(value)) as SeqFxLegacyStateV5;
+    const migrated = structuredClone(value);
 
     migrated.patterns.forEach((pattern) => {
         pattern.lanes.forEach((lane, laneIndex) => {
@@ -1786,9 +1952,9 @@ function migrateLegacyTapeState(value: SeqFxLegacyStateV5): SeqFxLegacyStateV5 {
 export function parseStrictSeqFxStateV5(value: unknown): SeqFxState {
     try {
         const parsed = parseStateCandidate(value);
-        assertStrictSeqFxLegacyStateShape(parsed);
+        const legacyState = parseStrictSeqFxLegacyState(parsed);
         const normalized = normalizeDenseSeqFxState(
-            migrateLegacyTapeState(migrateLegacyCrushState(parsed)),
+            migrateLegacyTapeState(migrateLegacyCrushState(legacyState)),
         );
         assertSeqFxStateValuesInRange(normalized);
         return normalized;
