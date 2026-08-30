@@ -1648,6 +1648,69 @@ def test_one_cell_tape_stop_can_finish_a_one_beat_gesture_after_its_block(
     assert _rms(output[6_000:6_300, 0]) > 0.08
 
 
+def test_tape_stop_cold_step_zero_trigger_retries_after_history_preroll(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_TAPE,
+        step=0,
+        trigger=True,
+        params=_tape_v2_params(timing_mode=1, free_stop_ms=500.0),
+    )
+
+    input_audio = _sine(4_000, 660.0)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    assert _rms(output[300:1_200] - input_audio[300:1_200]) > 0.05
+
+
+def test_tape_stop_retries_after_internal_reset_invalidates_history(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_TAPE,
+        step=0,
+        trigger=True,
+        params=_tape_v2_params(timing_mode=1, free_stop_ms=500.0),
+    )
+
+    input_audio = _sine(5_000, 660.0)
+    schedule = _base_schedule(upload)
+    schedule[2_000] = [["event", "internalReset", 1]]
+    output = _render(generated_runtime, tmp_path, input_audio, schedule)
+
+    assert _rms(output[2_300:3_200] - input_audio[2_300:3_200]) > 0.05
+
+
+def test_tape_stop_authoritative_load_retries_after_history_reset(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    empty = _empty_upload()
+    replacement = _empty_upload(revision=2)
+    replacement["authoritative"] = True
+    _activate_step(
+        replacement,
+        lane=LANE_TAPE,
+        step=0,
+        trigger=True,
+        params=_tape_v2_params(timing_mode=1, free_stop_ms=500.0),
+    )
+
+    input_audio = _sine(5_000, 660.0)
+    schedule = _base_schedule(empty)
+    schedule[1_500] = [["event", "patternUpload", replacement]]
+    output = _render(generated_runtime, tmp_path, input_audio, schedule)
+
+    assert _rms(output[1_800:2_700] - input_audio[1_800:2_700]) > 0.05
+
+
 def test_tape_stop_lowers_zero_crossing_rate_during_active_block(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -3560,6 +3623,27 @@ def test_vibro_exit_crossfades_back_to_dry_and_has_no_tail(
     np.testing.assert_allclose(output[release + 160 :], source[release + 160 :], atol=1.0e-7, rtol=0.0)
 
 
+def test_vibro_release_uses_the_full_transition_ramp(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source, _slope = _vibro_ramp(STEP_FRAMES * 6)
+    output = _render_vibro(
+        generated_runtime,
+        tmp_path,
+        source,
+        rate_hz=5.5,
+        depth_cents=80.0,
+        spread_degrees=0.0,
+        first_step=1,
+        active_steps=3,
+    )
+    release = STEP_FRAMES * 4
+
+    assert abs(float(output[release + 1, 0] - source[release + 1, 0])) > 1.0e-5
+    np.testing.assert_allclose(output[release + 100 :], source[release + 100 :], atol=1.0e-7, rtol=0.0)
+
+
 def test_vibro_cold_history_becomes_available_without_a_delayed_edge(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -3800,6 +3884,29 @@ def test_flange_extremes_stay_bounded_and_exit_without_a_tail(
     assert float(np.max(np.abs(output))) <= 4.001
     assert _largest_boundary_jump(output[:, 0], 4) < 0.2
     np.testing.assert_allclose(output[release + 160 :], source[release + 160 :], atol=1.0e-7, rtol=0.0)
+
+
+def test_flange_release_uses_the_full_transition_ramp(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source, _slope = _vibro_ramp(STEP_FRAMES * 6)
+    output = _render_flange(
+        generated_runtime,
+        tmp_path,
+        source,
+        delay_ms=3.0,
+        depth_ms=0.0,
+        rate_hz=0.28,
+        feedback=0.0,
+        spread_degrees=0.0,
+        first_step=1,
+        active_steps=3,
+    )
+    release = STEP_FRAMES * 4
+
+    assert abs(float(output[release + 1, 0] - source[release + 1, 0])) > 1.0e-5
+    np.testing.assert_allclose(output[release + 100 :], source[release + 100 :], atol=1.0e-7, rtol=0.0)
 
 
 def test_flange_retrigger_with_identical_settings_preserves_phase_and_feedback_state(

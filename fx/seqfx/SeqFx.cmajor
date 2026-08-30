@@ -949,6 +949,9 @@ processor SeqFx [[ main ]]
     float32<2>[seqfx::laneCount, seqfx::tapeVoiceCount] tapeVoiceToneState;
     float32<2>[seqfx::laneCount, seqfx::tapeVoiceCount] tapeVoiceRestartFrom;
     float32[seqfx::laneCount, seqfx::tapeVoiceCount] tapeVoiceRestartAge;
+    bool[seqfx::laneCount] tapeTriggerPending;
+    float32[seqfx::laneCount] tapePendingMix;
+    float32[seqfx::laneCount, seqfx::paramCount] tapePendingParams;
 
     bool[seqfx::laneCount] stutterLaneActive;
     float32[seqfx::laneCount] stutterMixCurrent;
@@ -1083,6 +1086,10 @@ processor SeqFx [[ main ]]
 
             for (wrap<seqfx::tapeVoiceCount> voice)
                 tapeVoiceRestartAge[lane, voice] = seqfx::transitionCrossfadeFrames;
+            tapeTriggerPending[lane] = false;
+            tapePendingMix[lane] = 1.0f;
+            for (wrap<seqfx::paramCount> param)
+                tapePendingParams[lane, param] = 0.0f;
 
             stutterSliceCount[lane] = 8;
             stutterPlaybackSpeed[lane] = 1.0f;
@@ -1567,6 +1574,7 @@ processor SeqFx [[ main ]]
             tapeCoarseWritePhase[lane] = 0.0f;
             tapePreviousHostSample[lane] = float32<2> (0.0f);
             tapeCoarseLowpassState[lane] = float32<2> (0.0f);
+            tapeTriggerPending[lane] = false;
             for (wrap<seqfx::tapeVoiceCount> voice)
             {
                 tapeVoiceActive[lane, voice] = false;
@@ -2085,6 +2093,8 @@ processor SeqFx [[ main ]]
 
         if (tapeLaneActive[lane])
             latchTapeStep (lane, wasTapeActive);
+        else
+            tapeTriggerPending[lane] = false;
 
         if (stutterLaneActive[lane])
             latchStutterStep (lane, wasStutterActive);
@@ -2164,7 +2174,11 @@ processor SeqFx [[ main ]]
         {
             let blockStart = blockStartStep (lane, currentStep);
             let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
-            startTapeStop (lane, blockStartIndex);
+            tapePendingMix[lane] = seqfx::clampFloat (stepMix[lane, blockStartIndex], 0.0f, 1.0f);
+            for (wrap<seqfx::paramCount> param)
+                tapePendingParams[lane, param] = stepParams[lane, blockStartIndex, param];
+            tapeTriggerPending[lane] = true;
+            startPendingTapeStop (lane);
         }
     }
 
@@ -2464,25 +2478,20 @@ processor SeqFx [[ main ]]
         return stepQuarterNotes();
     }
 
-    float32 tapeDurationFramesForParams (
-        wrap<seqfx::laneCount> lane,
-        wrap<seqfx::stepCount> blockStartIndex,
-        int32 divisionParam,
-        int32 freeTimeParam)
+    float32 tapeDurationFramesForValues (
+        float32 timingModeValue,
+        float32 divisionValue,
+        float32 freeTimeValue)
     {
-        let timingMode = snapValue (stepParams[lane, blockStartIndex, 5], seqfx::tapeTimingSync, seqfx::tapeTimingFree);
+        let timingMode = snapValue (timingModeValue, seqfx::tapeTimingSync, seqfx::tapeTimingFree);
 
         if (timingMode == seqfx::tapeTimingFree)
         {
-            let milliseconds = seqfx::clampFloat (stepParams[lane, blockStartIndex, wrap<seqfx::paramCount> (freeTimeParam)], 20.0f, 8000.0f);
+            let milliseconds = seqfx::clampFloat (freeTimeValue, 20.0f, 8000.0f);
             return std::intrinsics::max (1.0f, milliseconds * float32 (processor.frequency) * 0.001f);
         }
 
-        let division = snapValue (
-            stepParams[lane, blockStartIndex, wrap<seqfx::paramCount> (divisionParam)],
-            0,
-            8
-        );
+        let division = snapValue (divisionValue, 0, 8);
         return float32 (std::intrinsics::max (
             1.0,
             framesPerQuarter() * tapeDivisionQuarterNotes (division)
@@ -2638,10 +2647,10 @@ processor SeqFx [[ main ]]
         return selected;
     }
 
-    void startTapeStop (wrap<seqfx::laneCount> lane, wrap<seqfx::stepCount> blockStartIndex)
+    bool startPendingTapeStop (wrap<seqfx::laneCount> lane)
     {
-        if (tapePrimaryValidSamples[lane] < 8)
-            return;
+        if (! tapeTriggerPending[lane] || tapePrimaryValidSamples[lane] < 8)
+            return false;
 
         let selectedVoiceIndex = allocateTapeVoice (lane);
         let selectedVoice = wrap<seqfx::tapeVoiceCount> (selectedVoiceIndex);
@@ -2658,22 +2667,30 @@ processor SeqFx [[ main ]]
         tapeVoiceGeneration[lane, selectedVoice] = tapeGenerationCounter[lane];
         tapeVoiceActive[lane, selectedVoice] = true;
         tapeVoiceReturnMode[lane, selectedVoice] = snapValue (
-            stepParams[lane, blockStartIndex, 2],
+            tapePendingParams[lane, 2],
             seqfx::tapeReturnCatchUp,
             seqfx::tapeReturnSpinUp
         );
         tapeVoiceAgeFrames[lane, selectedVoice] = 0.0f;
-        tapeVoiceStopFrames[lane, selectedVoice] = tapeDurationFramesForParams (lane, blockStartIndex, 0, 6);
-        tapeVoiceStartFrames[lane, selectedVoice] = tapeDurationFramesForParams (lane, blockStartIndex, 3, 7);
+        tapeVoiceStopFrames[lane, selectedVoice] = tapeDurationFramesForValues (
+            tapePendingParams[lane, 5],
+            tapePendingParams[lane, 0],
+            tapePendingParams[lane, 6]
+        );
+        tapeVoiceStartFrames[lane, selectedVoice] = tapeDurationFramesForValues (
+            tapePendingParams[lane, 5],
+            tapePendingParams[lane, 3],
+            tapePendingParams[lane, 7]
+        );
         tapeVoiceCurvePower[lane, selectedVoice] = seqfx::tapeCurvePowerFromControl (
-            stepParams[lane, blockStartIndex, 1]
+            tapePendingParams[lane, 1]
         );
         tapeVoiceCharacter[lane, selectedVoice] = seqfx::clampFloat (
-            stepParams[lane, blockStartIndex, 4],
+            tapePendingParams[lane, 4],
             0.0f,
             1.0f
         );
-        tapeVoiceMix[lane, selectedVoice] = seqfx::clampFloat (stepMix[lane, blockStartIndex], 0.0f, 1.0f);
+        tapeVoiceMix[lane, selectedVoice] = tapePendingMix[lane];
         tapeVoiceReadPosition[lane, selectedVoice] = float64 (tapePrimarySamplesWritten[lane] - 4);
         tapeVoiceGainCurrent[lane, selectedVoice] = wasActive
             ? tapeVoiceGainCurrent[lane, selectedVoice]
@@ -2687,6 +2704,8 @@ processor SeqFx [[ main ]]
             lane,
             tapeVoiceReadPosition[lane, selectedVoice]
         );
+        tapeTriggerPending[lane] = false;
+        return true;
     }
 
     int32 allocateStutterVoice (wrap<seqfx::laneCount> lane)
@@ -4117,7 +4136,7 @@ processor SeqFx [[ main ]]
             phase + (rateHz / float32 (processor.frequency))
         );
 
-        if (! vibroActive[lane] || vibroMixCurrent[lane] <= 0.000001f || depthCents <= 0.000001f)
+        if (vibroMixCurrent[lane] <= 0.000001f || depthCents <= 0.000001f)
             return stage;
 
         let spreadPhase = seqfx::clampFloat (vibroSpreadCurrent[lane], 0.0f, 180.0f) / 360.0f;
@@ -4317,7 +4336,7 @@ processor SeqFx [[ main ]]
             seqfx::clampFloat (feedbackInput[1], -4.0f, 4.0f)
         ));
 
-        if (! flangeActive[lane] || flangeMixCurrent[lane] <= 0.000001f)
+        if (flangeMixCurrent[lane] <= 0.000001f)
             return stage;
 
         let flanged = (stage + wet) * 0.5f;
@@ -4815,6 +4834,7 @@ processor SeqFx [[ main ]]
         // Pitch, Reverse, and Tape can therefore read it without feeding their
         // own time-remapped output back into future grains/gestures.
         writeTapeHistory (lane, stage);
+        startPendingTapeStop (lane);
         stage = processFilter (lane, stage);
         stage = processCrusher (lane, stage);
         stage = processPitch (lane, stage);
