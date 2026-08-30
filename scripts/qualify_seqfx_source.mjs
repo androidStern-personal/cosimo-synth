@@ -10,6 +10,7 @@ const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..");
 const sourceBrowserTest = "tests/test_seqfx_patch_view_browser.mjs";
 const sourceBrowserOriginEnvironmentKey = "SEQFX_TEST_DEV_SERVER_ORIGIN";
+const seqFxCanonicalRuntimePrebuiltEnvironmentKey = "SEQFX_CANONICAL_RUNTIME_PREBUILT";
 const patchViewLayoutContractName = "desktop and shared effect dev entries load React Grab only in interactive Vite dev mode";
 
 const testGroups = Object.freeze({
@@ -280,6 +281,16 @@ async function runPythonTests() {
 
 let canonicalRuntimeReuseEnvironment;
 
+export function createCanonicalRuntimeBuildInvocation(nodeExecutable = process.execPath) {
+    return {
+        command: nodeExecutable,
+        arguments: ["fx/build-effect.mjs", "seqfx"],
+        environment: {
+            [seqFxCanonicalRuntimePrebuiltEnvironmentKey]: "0",
+        },
+    };
+}
+
 function requireCanonicalRuntimeReuseEnvironment() {
     if (canonicalRuntimeReuseEnvironment === undefined) {
         throw new Error("Canonical SeqFX runtime reuse cannot be authorized before regeneration succeeds.");
@@ -289,12 +300,11 @@ function requireCanonicalRuntimeReuseEnvironment() {
 }
 
 async function regenerateCanonicalSeqFxRuntime() {
-    const {
-        buildPlugin,
-        seqFxCanonicalRuntimePrebuiltEnvironmentKey,
-    } = await import("../fx/build-effect.mjs");
     canonicalRuntimeReuseEnvironment = undefined;
-    await buildPlugin("seqfx", { environment: {} });
+    const invocation = createCanonicalRuntimeBuildInvocation();
+    await runCommand(invocation.command, invocation.arguments, {
+        environment: invocation.environment,
+    });
     canonicalRuntimeReuseEnvironment = Object.freeze({
         [seqFxCanonicalRuntimePrebuiltEnvironmentKey]: "1",
     });

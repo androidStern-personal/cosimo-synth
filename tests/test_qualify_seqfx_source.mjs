@@ -3,8 +3,19 @@ import test from "node:test";
 
 import {
     assertCanonicalRuntimePhaseOrder,
+    createCanonicalRuntimeBuildInvocation,
     qualificationPhases,
 } from "../scripts/qualify_seqfx_source.mjs";
+
+test("aggregate SeqFX runtime regeneration is isolated from the later interactive Vite server", () => {
+    assert.deepEqual(createCanonicalRuntimeBuildInvocation("/approved/node"), {
+        command: "/approved/node",
+        arguments: ["fx/build-effect.mjs", "seqfx"],
+        environment: {
+            SEQFX_CANONICAL_RUNTIME_PREBUILT: "0",
+        },
+    });
+});
 
 test("aggregate SeqFX qualification regenerates one canonical runtime before every packaged claim", () => {
     const generationIndexes = qualificationPhases
