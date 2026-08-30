@@ -3235,7 +3235,11 @@ test("seqfx_shared_snapshot_header_captures_updates_and_recalls_grid_state", asy
 
     snapshot = await getHarnessSnapshot(page);
     const recallUpload = patternUploads(snapshot).at(-1).value;
-    assert.equal(recallUpload.authoritative, false);
+    assert.equal(
+        recallUpload.authoritative,
+        true,
+        "snapshot recall replaces the complete SeqFX document and must clear stale DSP history",
+    );
     assert.equal(recallUpload.activeSteps[0][0], true);
     assert.equal(recallUpload.activeSteps[0][4], false);
     assert.equal(snapshot.storedState[SEQFX_SNAPSHOT_BANK_STATE_KEY].activeSlotID, "A");
