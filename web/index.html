@@ -123,6 +123,30 @@
     #cosimo-audio-recovery-notice[hidden] {
       display: none;
     }
+
+    #cosimo-perf-hud {
+      position: absolute;
+      top: 0.5rem;
+      left: 0.5rem;
+      z-index: 18;
+      max-width: min(80vw, 21rem);
+      border: 1px solid rgb(185 244 93 / 40%);
+      border-radius: 0.4rem;
+      padding: 0.4rem 0.55rem;
+      background: rgb(8 11 20 / 88%);
+      color: #d9ffb0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.68rem;
+      line-height: 1.45;
+      white-space: pre;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #cosimo-perf-hud[hidden] {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -131,6 +155,7 @@
     <div id="cosimo-audio-recovery-notice" role="status" aria-live="polite" hidden>
       Audio restarted — play again
     </div>
+    <div id="cosimo-perf-hud" role="status" aria-live="off" hidden></div>
     <button id="cosimo-start-overlay" type="button" disabled>
       <span id="cosimo-start-copy">
         <span id="cosimo-start-title">Cosimo Synth</span>
