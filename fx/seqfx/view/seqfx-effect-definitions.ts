@@ -48,6 +48,14 @@ export type SeqFxParameterDefinition = {
     options?: readonly string[];
 };
 
+export type SeqFxFactoryEffectPreset = {
+    id: string;
+    name: string;
+    description: string;
+    mix: number;
+    params: readonly number[];
+};
+
 export type SeqFxEffectDefinition = {
     id: SeqFxEffectType;
     key: string;
@@ -56,6 +64,7 @@ export type SeqFxEffectDefinition = {
     fontaudioIcon: string;
     lifecycle: SeqFxEffectLifecycle;
     parameters: readonly SeqFxParameterDefinition[];
+    factoryPresets: readonly SeqFxFactoryEffectPreset[];
 };
 
 const parameter = (
@@ -90,6 +99,7 @@ const definitions = [
         fontaudioIcon: "",
         lifecycle: "gated",
         parameters: [],
+        factoryPresets: [],
     },
     {
         id: SEQFX_EFFECT_TYPES.filter,
@@ -104,6 +114,11 @@ const definitions = [
             parameter("legacyEndCutoff", "End Cutoff", 20, 20_000, 500, 1, { unit: "Hz", scale: "log" }),
             parameter("resonance", "Resonance", 0.1, 20, 0.707, 0.001, { unit: "Q", scale: "log" }),
             parameter("durationScale", "Duration", 0.25, 4, 1, 0.01, { unit: "x" }),
+        ],
+        factoryPresets: [
+            { id: "warm-low-pass", name: "Warm Low Pass", description: "Softly removes the top without hollowing the source.", mix: 0.72, params: [0, 1_250, 1_250, 0.82, 1] },
+            { id: "telephone-band", name: "Telephone Band", description: "Focused mid-band for vocal and drum punctuation.", mix: 0.82, params: [2, 1_350, 1_350, 2.4, 1] },
+            { id: "air-cut", name: "Air Cut", description: "High-pass utility move with restrained resonance.", mix: 0.68, params: [1, 5_800, 5_800, 0.9, 1] },
         ],
     },
     {
@@ -126,6 +141,11 @@ const definitions = [
             parameter("adcQuality", "ADC Q", 0, 1, 0, 0.01, { unit: "%" }),
             parameter("dacQuality", "DAC Q", 0, 1, 0, 0.01, { unit: "%" }),
             parameter("dither", "Dither", 0, 1, 0, 0.01, { unit: "%" }),
+        ],
+        factoryPresets: [
+            { id: "dusty-12-bit", name: "Dusty 12-bit", description: "Gentle converter grain with a stable top end.", mix: 0.58, params: [12, 22_050, 4, 2, 0.35, 0.25, 0.18] },
+            { id: "console-game", name: "Console Game", description: "Audible low-rate crunch without maximum alias stress.", mix: 0.74, params: [7, 8_000, 8, 1, 0.12, 0.18, 0.08] },
+            { id: "broken-converter", name: "Broken Converter", description: "Progressive conversion damage for short fills.", mix: 0.66, params: [5, 3_200, 14, 3, 0.7, 0.62, 0.22] },
         ],
     },
     {
@@ -175,6 +195,11 @@ const definitions = [
                 auxEligible: false,
             }),
         ],
+        factoryPresets: [
+            { id: "one-cell-brake", name: "One-cell Brake", description: "The central authored gesture: one cell triggers a clear stop and quick catch-up.", mix: 1, params: [8, 0.1, 0, 1, 0.18, 0, 500, 125] },
+            { id: "slow-vinyl-stop", name: "Slow Vinyl Stop", description: "Long curved slowdown with a spun-up return.", mix: 1, params: [4, 0.58, 1, 3, 0.42, 0, 1_000, 500] },
+            { id: "free-brake-750", name: "Free Brake 750", description: "Absolute-time brake for material that must ignore tempo changes.", mix: 1, params: [8, -0.22, 0, 1, 0.28, 1, 750, 160] },
+        ],
     },
     {
         id: SEQFX_EFFECT_TYPES.stutter,
@@ -188,6 +213,11 @@ const definitions = [
             parameter("speed", "Speed", STUTTER_SPEED_MIN, STUTTER_SPEED_MAX, STUTTER_DEFAULT_SPEED, 0.01, { unit: "x" }),
             parameter("shape", "Shape", 0, 1, STUTTER_DEFAULT_SHAPE, 0.01),
             parameter("gate", "Gate", 0, 1, STUTTER_DEFAULT_GATE, 0.01, { unit: "%" }),
+        ],
+        factoryPresets: [
+            { id: "tight-eighths", name: "Tight Eighths", description: "Clean repeat fill with a short gated envelope.", mix: 0.82, params: [8, 1, 0.2, 0.72] },
+            { id: "triplet-ratchet", name: "Triplet Ratchet", description: "Fast ratchet whose tail stays controlled.", mix: 0.76, params: [12, 1.25, 0.52, 0.58] },
+            { id: "falling-chop", name: "Falling Chop", description: "Slower repeats with a shaped exit for transitions.", mix: 0.84, params: [6, 0.75, 0.82, 0.88] },
         ],
     },
     {
@@ -203,6 +233,11 @@ const definitions = [
             parameter("grainMs", "Grain", 10, 120, 48, 0.1, { unit: "ms", scale: "log", latch: "trigger", auxEligible: false }),
             parameter("jitter", "Jitter", 0, 1, 0, 0.01, { unit: "%" }),
             parameter("spread", "Spread", 0, 1, 0.35, 0.01, { unit: "%" }),
+        ],
+        factoryPresets: [
+            { id: "octave-up", name: "Octave Up", description: "Focused octave lift with a medium stable grain.", mix: 0.78, params: [12, 0, 52, 0, 0.18] },
+            { id: "octave-down", name: "Octave Down", description: "Weighty octave drop for bass and transitions.", mix: 0.82, params: [-12, 0, 68, 0, 0.12] },
+            { id: "detuned-cloud", name: "Detuned Cloud", description: "Subtle stereo micro-pitch for sustained harmony.", mix: 0.55, params: [0, -11, 74, 0.08, 0.72] },
         ],
     },
     {
@@ -222,6 +257,11 @@ const definitions = [
             parameter("drive", "Drive", 0, 1, 0.18, 0.01, { unit: "%" }),
             parameter("width", "Width", 0, 1, 0.65, 0.01, { unit: "%" }),
         ],
+        factoryPresets: [
+            { id: "wooden-string", name: "Wooden String", description: "Recognizably tuned resonance with restrained dispersion.", mix: 0.64, params: [220, 1.8, 0, 0.22, 6_800, 0.05, 0.12, 0.42] },
+            { id: "vector-bells", name: "Vector Bells", description: "Wide dispersive modes for melodic percussion.", mix: 0.7, params: [440, 2.8, 0, 0.72, 9_500, 0.16, 0.24, 0.82] },
+            { id: "negative-metal", name: "Negative Metal", description: "Darker negative-polarity resonance with slow motion.", mix: 0.62, params: [110, 3.6, 1, 0.62, 4_200, 0.22, 0.2, 0.6] },
+        ],
     },
     {
         id: SEQFX_EFFECT_TYPES.ring,
@@ -238,6 +278,11 @@ const definitions = [
             parameter("spread", "Spread", 0, 1, 0.08, 0.01, { unit: "%" }),
             parameter("bias", "Bias", -1, 1, 0, 0.01, { unit: "%" }),
             parameter("rectify", "Rectify", -1, 1, 0, 0.01, { unit: "%" }),
+        ],
+        factoryPresets: [
+            { id: "soft-tremolo", name: "Soft Tremolo", description: "Low-frequency sine ring for a musical pulse.", mix: 0.56, params: [5.5, 0, 0.08, 0.24, 0.08, 0.34, 0.18] },
+            { id: "sideband-chime", name: "Sideband Chime", description: "Clear pitched sidebands with gentle stereo spread.", mix: 0.72, params: [440, 0, 0, 0.5, 0.2, 0, 0] },
+            { id: "robot-square", name: "Robot Square", description: "Square carrier and motion for short vocal blocks.", mix: 0.64, params: [96, 2, 0.38, 2.2, 0.12, 0.08, 0.32] },
         ],
     },
     {
@@ -264,6 +309,11 @@ const definitions = [
             }),
             parameter("decay", "Decay", 0, 1, 1, 0.01, { unit: "%" }),
         ],
+        factoryPresets: [
+            { id: "one-cell-turn", name: "One-cell Turn", description: "Immediate rolling lookback with a clean cell boundary.", mix: 0.86, params: [4, 0.08, 0, 250, 1] },
+            { id: "eighth-echo", name: "Eighth Echo", description: "Short repeated reverse with a soft decay.", mix: 0.74, params: [2, 0.12, 0, 250, 0.72] },
+            { id: "free-voice-420", name: "Free Voice 420", description: "Absolute window tuned for phrases and spoken words.", mix: 0.82, params: [4, 0.1, 1, 420, 0.86] },
+        ],
     },
     {
         id: SEQFX_EFFECT_TYPES.talkBox,
@@ -280,6 +330,11 @@ const definitions = [
             parameter("lows", "Lows", 0, 1, 0.3, 0.01, { unit: "%" }),
             parameter("highs", "Highs", 0, 1, 0.15, 0.01, { unit: "%" }),
             parameter("driveDb", "Drive", 0, 12, 0, 0.1, { unit: "dB" }),
+        ],
+        factoryPresets: [
+            { id: "a-to-o", name: "A to O", description: "Broad open-vowel morph for sustained source material.", mix: 0.76, params: [0, 3, 0.48, 6.5, 0.3, 0.14, 2] },
+            { id: "ee-whisper", name: "Ee Whisper", description: "Bright focused formants with low passthrough.", mix: 0.68, params: [1, 2, 0.72, 9, 0.12, 0.26, 1] },
+            { id: "robot-vowels", name: "Robot Vowels", description: "Narrow U-to-I scan with controlled saturation.", mix: 0.8, params: [4, 2, 0.36, 12, 0.2, 0.18, 5] },
         ],
     },
     {
@@ -301,6 +356,11 @@ const definitions = [
                 integer: true,
                 options: ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar"],
             }),
+        ],
+        factoryPresets: [
+            { id: "gentle-wobble", name: "Gentle Wobble", description: "Measured shallow Doppler movement for utility width.", mix: 0.54, params: [4.2, 16, 0, 72, 1, 2] },
+            { id: "tape-warble", name: "Tape Warble", description: "Slow triangle drift with moderate pitch depth.", mix: 0.66, params: [0.72, 36, 1, 38, 1, 4] },
+            { id: "wide-chirp", name: "Wide Chirp", description: "Fast wide modulation for short rhythmic blocks.", mix: 0.62, params: [7.8, 54, 0, 150, 1, 1] },
         ],
     },
     {
@@ -325,6 +385,11 @@ const definitions = [
                 options: ["1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars"],
             }),
         ],
+        factoryPresets: [
+            { id: "silk-flange", name: "Silk Flange", description: "Shallow slow comb movement with modest feedback.", mix: 0.52, params: [1.4, 2.2, 0.18, 0.32, 82, 0, 1, 5] },
+            { id: "jet-pass", name: "Jet Pass", description: "Classic pronounced sweep for transition blocks.", mix: 0.68, params: [0.65, 5.8, 0.42, 0.66, 128, 0, 1, 4] },
+            { id: "hollow-inverse", name: "Hollow Inverse", description: "Inverse-loop coloration with restrained feedback.", mix: 0.6, params: [2.4, 3.8, 0.3, 0.48, 160, 1, 1, 5] },
+        ],
     },
     {
         id: SEQFX_EFFECT_TYPES.dirty,
@@ -340,6 +405,11 @@ const definitions = [
             parameter("dynamics", "Dynamics", 0, 1, 0.65, 0.01, { unit: "%" }),
             parameter("toneHz", "Tone", 500, 20_000, 12_000, 1, { unit: "Hz", scale: "log" }),
             parameter("trimDb", "Trim", -18, 6, -6, 0.1, { unit: "dB" }),
+        ],
+        factoryPresets: [
+            { id: "warm-grit", name: "Warm Grit", description: "Level-conscious soft drive that keeps the source dynamic.", mix: 0.58, params: [10, 0, 0, 0.78, 9_500, -5] },
+            { id: "hard-punch", name: "Hard Punch", description: "Harder transient edge with output compensation.", mix: 0.64, params: [17, 1, 0, 0.58, 13_000, -8] },
+            { id: "folded-bias", name: "Folded Bias", description: "Asymmetric folded color for short accents.", mix: 0.56, params: [21, 2, 0.24, 0.42, 7_200, -10] },
         ],
     },
 ] as const satisfies readonly SeqFxEffectDefinition[];

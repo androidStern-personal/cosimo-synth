@@ -178,7 +178,14 @@ test("boot_treats_cmajor_null_stored_value_as_missing_current_state", () => {
     assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0);
     assert.deepEqual(connection.requestedParameters, [
         SEQFX_ENDPOINTS.patternSelect,
+        SEQFX_ENDPOINTS.enabled,
+        SEQFX_ENDPOINTS.globalMix,
+        SEQFX_ENDPOINTS.clockMode,
+        SEQFX_ENDPOINTS.manualBpm,
         SEQFX_ENDPOINTS.rate,
+        SEQFX_ENDPOINTS.swing,
+        SEQFX_ENDPOINTS.loopStart,
+        SEQFX_ENDPOINTS.loopLength,
     ]);
     assert.equal(bridge.getState().patterns.length, 12);
     assert.equal(bridge.getState().patterns[0].lanes[SEQFX_LANES.filter].steps[0].active, false);
@@ -251,7 +258,14 @@ test("boot_waits_for_async_full_stored_state_before_hydrating_or_requesting_runt
     assert.equal(connection.storedWrites.length, 0);
     assert.deepEqual(connection.requestedParameters, [
         SEQFX_ENDPOINTS.patternSelect,
+        SEQFX_ENDPOINTS.enabled,
+        SEQFX_ENDPOINTS.globalMix,
+        SEQFX_ENDPOINTS.clockMode,
+        SEQFX_ENDPOINTS.manualBpm,
         SEQFX_ENDPOINTS.rate,
+        SEQFX_ENDPOINTS.swing,
+        SEQFX_ENDPOINTS.loopStart,
+        SEQFX_ENDPOINTS.loopLength,
     ]);
 
     assert.deepEqual(
@@ -836,6 +850,174 @@ test("rate_parameter_defaults_to_sixteenth_note_grid_and_notifies_snapped_subscr
     assert.equal(observedRates.at(-1), 2);
 });
 
+test("global_control_surface_reads_host_truth_and_writes_clamped_automatable_values", () => {
+    const connection = new FakePatchConnection({}, {
+        enabled: 0,
+        globalMix: 0.42,
+        clockMode: 1,
+        manualBpm: 137.5,
+        rate: 2,
+        swing: 0.18,
+        loopStart: 5,
+        loopLength: 12,
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+    const observed = [];
+
+    bridge.attach();
+    const unsubscribe = bridge.subscribeGlobalControls((controls) => {
+        observed.push({ ...controls });
+    });
+    bridge.requestBootState();
+
+    assert.deepEqual(connection.requestedParameters, [
+        SEQFX_ENDPOINTS.patternSelect,
+        SEQFX_ENDPOINTS.enabled,
+        SEQFX_ENDPOINTS.globalMix,
+        SEQFX_ENDPOINTS.clockMode,
+        SEQFX_ENDPOINTS.manualBpm,
+        SEQFX_ENDPOINTS.rate,
+        SEQFX_ENDPOINTS.swing,
+        SEQFX_ENDPOINTS.loopStart,
+        SEQFX_ENDPOINTS.loopLength,
+    ]);
+    assert.deepEqual(bridge.getGlobalControls(), {
+        enabled: false,
+        globalMix: 0.42,
+        clockMode: 1,
+        manualBpm: 137.5,
+        rateIndex: 2,
+        swing: 0.18,
+        loopStart: 5,
+        loopLength: 12,
+    });
+
+    connection.events = [];
+    bridge.setGlobalControl(SEQFX_ENDPOINTS.enabled, true);
+    bridge.setGlobalControl(SEQFX_ENDPOINTS.globalMix, -2);
+    bridge.setGlobalControl(SEQFX_ENDPOINTS.clockMode, 8);
+    bridge.setGlobalControl(SEQFX_ENDPOINTS.manualBpm, 401);
+    bridge.setGlobalControl(SEQFX_ENDPOINTS.rate, -4);
+    bridge.setGlobalControl(SEQFX_ENDPOINTS.swing, 2);
+    bridge.setLoopRange(29, 32);
+
+    assert.deepEqual(connection.events, [
+        { endpointID: SEQFX_ENDPOINTS.enabled, value: 1 },
+        { endpointID: SEQFX_ENDPOINTS.globalMix, value: 0 },
+        { endpointID: SEQFX_ENDPOINTS.clockMode, value: 2 },
+        { endpointID: SEQFX_ENDPOINTS.manualBpm, value: 300 },
+        { endpointID: SEQFX_ENDPOINTS.rate, value: 0 },
+        { endpointID: SEQFX_ENDPOINTS.swing, value: 0.45 },
+        { endpointID: SEQFX_ENDPOINTS.loopStart, value: 29 },
+        { endpointID: SEQFX_ENDPOINTS.loopLength, value: 3 },
+    ]);
+    assert.deepEqual(bridge.getGlobalControls(), {
+        enabled: true,
+        globalMix: 0,
+        clockMode: 2,
+        manualBpm: 300,
+        rateIndex: 0,
+        swing: 0.45,
+        loopStart: 29,
+        loopLength: 3,
+    });
+    assert.ok(observed.length >= 2);
+
+    unsubscribe();
+});
+
+test("global_parameter_gestures_and_internal_transport_keep_host authority explicit", () => {
+    const connection = new FakePatchConnection();
+    connection.gestureStarts = [];
+    connection.gestureEnds = [];
+    connection.sendParameterGestureStart = (endpointID) => connection.gestureStarts.push(endpointID);
+    connection.sendParameterGestureEnd = (endpointID) => connection.gestureEnds.push(endpointID);
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.beginGlobalGesture(SEQFX_ENDPOINTS.globalMix);
+    bridge.endGlobalGesture(SEQFX_ENDPOINTS.globalMix);
+    bridge.playInternal();
+    bridge.stopInternal();
+    bridge.resetInternal();
+
+    assert.deepEqual(connection.gestureStarts, [SEQFX_ENDPOINTS.globalMix]);
+    assert.deepEqual(connection.gestureEnds, [SEQFX_ENDPOINTS.globalMix]);
+    assert.deepEqual(connection.events, [
+        { endpointID: SEQFX_ENDPOINTS.internalPlay, value: 1 },
+        { endpointID: SEQFX_ENDPOINTS.internalPlay, value: 0 },
+        { endpointID: SEQFX_ENDPOINTS.internalReset, value: 1 },
+    ]);
+});
+
+test("loop edit actions are bounded one-step history gestures with an in-memory clipboard", () => {
+    let initialState = createDefaultSeqFxState();
+    initialState = applySeqFxBlockCreate(initialState, {
+        patternIndex: 0,
+        lane: 0,
+        startStep: 4,
+        length: 3,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+    });
+    initialState = applySeqFxBlockCreate(initialState, {
+        patternIndex: 0,
+        lane: 1,
+        startStep: 10,
+        length: 2,
+        effectType: SEQFX_EFFECT_TYPES.crusher,
+    });
+    initialState = applySeqFxBlockCreate(initialState, {
+        patternIndex: 1,
+        lane: 2,
+        startStep: 7,
+        length: 2,
+        effectType: SEQFX_EFFECT_TYPES.tapeStop,
+    });
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
+    }, {
+        loopStart: 4,
+        loopLength: 8,
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+    connection.storedWrites = [];
+
+    assert.equal(bridge.canPasteLoop(), false);
+    assert.equal(bridge.copyLoop(), true);
+    assert.equal(bridge.canPasteLoop(), true);
+    assert.equal(connection.storedWrites.length, 0, "copy should remain in memory only");
+
+    assert.equal(bridge.clearLoop(), true);
+    assert.equal(connection.storedWrites.length, 1, "clear should be one committed gesture");
+    assert.equal(bridge.getState().patterns[0].lanes.flatMap((lane) => lane.steps).some((step) => step.active), false);
+    assert.equal(bridge.canUndo(), true);
+
+    bridge.undo();
+    assert.equal(bridge.getState().patterns[0].lanes[0].steps[4].active, true);
+    assert.equal(bridge.getState().patterns[0].lanes[1].steps[10].active, true);
+
+    bridge.setLoopRange(16, 24);
+    connection.storedWrites = [];
+    assert.equal(bridge.pasteLoop(), true);
+    assert.equal(connection.storedWrites.length, 1, "paste should be one committed gesture");
+    assert.deepEqual(
+        bridge.getState().patterns[0].lanes[0].steps.slice(16, 19).map((step) => step.active),
+        [true, true, true],
+    );
+    assert.deepEqual(
+        bridge.getState().patterns[0].lanes[1].steps.slice(22, 24).map((step) => step.active),
+        [true, true],
+    );
+
+    connection.storedWrites = [];
+    assert.equal(bridge.initPattern(), true);
+    assert.equal(connection.storedWrites.length, 1, "Init should be one committed gesture");
+    assert.equal(bridge.getState().patterns[0].lanes.flatMap((lane) => lane.steps).some((step) => step.active), false);
+    assert.equal(bridge.getState().patterns[1].lanes[2].steps[7].active, true, "Init must not erase other patterns");
+});
+
 test("boot migrates a valid seqfx.v6 version-5 document once and gives v7 precedence thereafter", () => {
     let legacyState = createDefaultSeqFxState();
     legacyState = applySeqFxBlockCreate(legacyState, {
@@ -954,4 +1136,40 @@ test("invalid authoritative state is atomic and preserves current sound plus und
     assert.equal(bridge.canUndo(), true);
     assert.equal(bridge.getState().patterns[0].lanes[0].steps[2].active, true);
     assert.equal(connection.storedWrites.length, writesBeforeFailure);
+});
+
+test("factory patterns, effect presets, and safe loop variation each commit as one undoable edit", () => {
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(createDefaultSeqFxState()),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+    bridge.attach();
+    bridge.requestBootState();
+    connection.storedWrites = [];
+    connection.events = [];
+
+    assert.equal(bridge.loadFactoryPattern("twelve-effect-tour"), true);
+    assert.equal(connection.storedWrites.length, 1);
+    assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0, "committed edits flow through authoritative stored state");
+    const loaded = serializeSeqFxState(bridge.getState());
+    const loadedEffectTypes = new Set(
+        bridge.getState().patterns[0].lanes.flatMap((lane) => lane.steps.filter((step) => step.trigger).map((step) => step.effectType)),
+    );
+    assert.deepEqual([...loadedEffectTypes].sort((left, right) => left - right), Array.from({ length: 12 }, (_unused, index) => index + 1));
+    assert.equal(bridge.undo(), true);
+    assert.equal(bridge.getState().patterns[0].lanes.flatMap((lane) => lane.steps).some((step) => step.active), false);
+    assert.equal(bridge.redo(), true);
+    assert.equal(serializeSeqFxState(bridge.getState()), loaded);
+
+    const beforePreset = serializeSeqFxState(bridge.getState());
+    bridge.applyBlockPreset({ patternIndex: 0, lane: 0, startStep: 0, mix: 0.25, params: [2, 1_500, 1_500, 4, 1] });
+    assert.equal(bridge.getState().patterns[0].lanes[0].steps[0].mix, 0.25);
+    assert.equal(bridge.undo(), true);
+    assert.equal(serializeSeqFxState(bridge.getState()), beforePreset);
+
+    const beforeVariation = serializeSeqFxState(bridge.getState());
+    assert.equal(bridge.varyLoop(), true);
+    assert.notEqual(serializeSeqFxState(bridge.getState()), beforeVariation);
+    assert.equal(bridge.undo(), true);
+    assert.equal(serializeSeqFxState(bridge.getState()), beforeVariation);
 });

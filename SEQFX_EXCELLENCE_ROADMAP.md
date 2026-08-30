@@ -1,6 +1,6 @@
 # SeqFX Excellence Roadmap
 
-Status: implementation in progress; Phases 0–6 complete; all twelve requested/retained effects are implemented and automatically qualified; Phase 7 product polish and content is active
+Status: implementation in progress; Phases 0–6 complete; Phase 7 controls, discovery, grid polish, factory content, onboarding, and documentation are complete; supported-size visual qualification is active
 Owner thread: `01a05051-d7c7-7e13-bb60-58968b6392cf`
 Branch: `codex/seqfx-excellence-01a05051`
 Worktree: `/Users/winterfell/.codex/worktrees/seqfx-excellence-01a05051/cosimo-synth`
@@ -31,6 +31,8 @@ Execution evidence:
 - Reverse decision and implementation proof: `research/seqfx/reverse-decision.md`
 - Stutter v2 decision and implementation proof:
   `research/seqfx/stutter-v2-decision.md`
+- Product guide and verified release ledger: `SEQFX_USER_GUIDE.md` and
+  `SEQFX_RELEASE_NOTES.md`
 
 ## 1. Outcome
 
@@ -782,13 +784,20 @@ Exit: all requested effect types are available in every chain, can be copied/mov
 
 Tasks:
 
-- `P7.1` Complete the global control surface.
-- `P7.2` Replace effect picker and restructure inspector.
-- `P7.3` Repair chain/grid labeling and all current formatting defects.
-- `P7.4` Complete responsive/contrast/focus/reduced-motion work.
-- `P7.5` Add factory effect presets and full patterns.
-- `P7.6` Add onboarding hint, user guide, release notes, and known issues.
-- `P7.7` Run visual review at every supported size and repair every named overflow/contrast defect.
+- `P7.1` Complete — host-truth global controls, internal transport, loop ruler,
+  one-step history, Init, loop clipboard, and safe preset-bounded Vary.
+- `P7.2` Complete — named 12-effect picker, explicit Effect/Mod tabs, fixed
+  Block Mix, text selection identity, and effect preset action.
+- `P7.3` Complete — visible chain names, in-block effect abbreviations, Tape
+  readout contrast repair, and preserved create/resize/move/copy interactions.
+- `P7.4` Complete pending P7.7 matrix confirmation — owned-region scrolling,
+  fixed supported-size layout, focus treatments, and reduced-motion override.
+- `P7.5` Complete — three bounded musical presets per effect, 12 full patterns,
+  and atomic pattern/preset/variation history contracts.
+- `P7.6` Complete — instance-local onboarding, user guide, pre-release notes,
+  known limits, and explicit unperformed host/release gates.
+- `P7.7` Active — capture and inspect empty/all-effect screenshots at default
+  and compact sizes plus minimum/wide geometry, contrast, focus, and zoom proof.
 
 Exit: no known formatting/visual defect remains in the release ledger; every requested effect is discoverable without memorizing an icon.
 

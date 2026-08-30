@@ -39,6 +39,7 @@ import {
 } from "../../../ui/shared/editor-curve-surface";
 import { AuxSource, auxSourceMonitorPoint, buildAuxSourcePreviewPath } from "./AuxSource";
 import { CrusherEditor, type CrusherModulation } from "./CrusherEditor";
+import { SeqFxGlobalControlSurface } from "./SeqFxGlobalControls";
 import { StutterEnvelopeEditor, type StutterModulation } from "./StutterEnvelopeEditor";
 import {
     SEQFX_EFFECT_TYPES,
@@ -86,7 +87,11 @@ import {
     createSeqFxPresetMigrations,
     createSeqFxSnapshotMigrations,
 } from "./seqfx-preset-migrations";
-import { SEQFX_ENDPOINTS, SeqFxRuntimeBridge } from "./seqfx-runtime-bridge";
+import {
+    SEQFX_ENDPOINTS,
+    SeqFxRuntimeBridge,
+    type SeqFxGlobalControls,
+} from "./seqfx-runtime-bridge";
 
 type SelectedCell = {
     lane: number;
@@ -814,9 +819,11 @@ function SeqFxModToggleButton({
         <button
             aria-label={`Edit modulation, shape ${aux.source.shape.toFixed(2)}, curve ${aux.source.sourceCurve.toFixed(2)}, ${targetCount} ${targetWord}`}
             aria-pressed={active}
+            aria-selected={active}
             className={`seqfx-mod-toggle${active ? " is-selected" : ""}${targetCount > 0 ? " has-targets" : ""}`}
             data-role="seqfx-mod-toggle"
             onClick={onClick}
+            role="tab"
             type="button"
         >
             <span className="seqfx-mod-toggle__label">Mod</span>
@@ -3516,21 +3523,22 @@ function selectionAnchorDragBounds(pattern: SeqFxPattern, lane: number, blockSta
     };
 }
 
-function getSelectionLabel(selection: Selection | null) {
+function getSelectionLabel(selection: Selection | null, effectType: SeqFxEffectType | null = null) {
     if (!selection) {
         return "Select a cell";
     }
 
+    const effectLabel = effectType === null ? "" : ` · ${SEQFX_EFFECT_TYPE_NAMES[effectType]}`;
     const blockStartSteps = selection.blockStartSteps ?? [];
     if (blockStartSteps.length > 1) {
-        return `${SEQFX_LANE_NAMES[selection.lane]} blocks ${blockStartSteps.map((step) => step + 1).join(", ")}`;
+        return `${SEQFX_LANE_NAMES[selection.lane]}${effectLabel} · blocks ${blockStartSteps.map((step) => step + 1).join(", ")}`;
     }
 
     if (selection.steps.length === 1) {
-        return `${SEQFX_LANE_NAMES[selection.lane]} step ${selection.steps[0] + 1}`;
+        return `${SEQFX_LANE_NAMES[selection.lane]}${effectLabel} · step ${selection.steps[0] + 1}`;
     }
 
-    return `${SEQFX_LANE_NAMES[selection.lane]} steps ${selection.steps[0] + 1}-${selection.steps.at(-1)! + 1}`;
+    return `${SEQFX_LANE_NAMES[selection.lane]}${effectLabel} · steps ${selection.steps[0] + 1}-${selection.steps.at(-1)! + 1}`;
 }
 
 function clampBlockStart(startStep: number, length: number) {
@@ -3634,6 +3642,8 @@ export type SeqFxPromoControls = {
     state?: SeqFxState;
     selectedPattern?: number;
     rateIndex?: number;
+    globalControls?: SeqFxGlobalControls;
+    internalRunning?: boolean;
     selectedCell?: SelectedCell | null;
     selection?: Selection | null;
     playheadStep?: number | null;
@@ -3653,6 +3663,9 @@ export function SeqFxPatchView({
     const [runtimeState, setState] = useState<SeqFxState>(() => bridge.getState());
     const [runtimeSelectedPattern, setSelectedPattern] = useState(() => bridge.getSelectedPatternIndex());
     const [runtimeRateIndex, setRateIndex] = useState(() => bridge.getRateIndex());
+    const [runtimeGlobalControls, setGlobalControls] = useState(() => bridge.getGlobalControls());
+    const [runtimeInternalRunning, setInternalRunning] = useState(false);
+    const [runtimeHasLoopClipboard, setHasLoopClipboard] = useState(() => bridge.canPasteLoop());
     const [runtimeSelectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
     const [runtimeSelection, setSelection] = useState<Selection | null>(null);
     const [runtimePlayheadStep, setPlayheadStep] = useState<number | null>(null);
@@ -3667,10 +3680,17 @@ export function SeqFxPatchView({
     const [gestureState, setGestureState] = useState<BlockGesture | null>(null);
     const [patternPreview, setPatternPreview] = useState<PatternPreview | null>(null);
     const [invalidDropTarget, setInvalidDropTarget] = useState<InvalidDropTarget | null>(null);
+    const [showFirstUseHint, setShowFirstUseHint] = useState(true);
     const isPromoControlled = Boolean(promoControls);
     const state = isPromoControlled ? promoControls?.state ?? runtimeState : runtimeState;
     const selectedPattern = isPromoControlled ? promoControls?.selectedPattern ?? runtimeSelectedPattern : runtimeSelectedPattern;
     const rateIndex = isPromoControlled ? promoControls?.rateIndex ?? runtimeRateIndex : runtimeRateIndex;
+    const globalControls = isPromoControlled
+        ? promoControls?.globalControls ?? runtimeGlobalControls
+        : runtimeGlobalControls;
+    const internalRunning = isPromoControlled
+        ? promoControls?.internalRunning ?? runtimeInternalRunning
+        : runtimeInternalRunning;
     const selectedCell = isPromoControlled && promoControls && Object.prototype.hasOwnProperty.call(promoControls, "selectedCell")
         ? promoControls.selectedCell ?? null
         : runtimeSelectedCell;
@@ -3712,6 +3732,12 @@ export function SeqFxPatchView({
             setState(nextState);
             setSelectedPattern(bridge.getSelectedPatternIndex());
         });
+        const unsubscribeGlobalControls = bridge.subscribeGlobalControls((nextControls) => {
+            setGlobalControls(nextControls);
+            if (nextControls.clockMode !== 1) {
+                setInternalRunning(false);
+            }
+        });
         const unsubscribeMonitor = bridge.subscribeMonitor((monitor) => {
             const event = (monitor as { event?: unknown })?.event ?? monitor;
             const stepIndex = Number((event as { stepIndex?: unknown })?.stepIndex);
@@ -3719,7 +3745,11 @@ export function SeqFxPatchView({
             const auxCyclePhase = (event as { auxCyclePhase?: unknown })?.auxCyclePhase;
             const auxAmount = (event as { auxAmount?: unknown })?.auxAmount;
             const auxDurationMs = (event as { auxDurationMs?: unknown })?.auxDurationMs;
+            const transportRunning = Boolean((event as { transportRunning?: unknown })?.transportRunning);
             setPlayheadStep(Number.isFinite(stepIndex) ? stepIndex : null);
+            if (bridge.getGlobalControls().clockMode === 1) {
+                setInternalRunning(transportRunning);
+            }
             if (Number.isFinite(stepDurationMs) && stepDurationMs > 0) {
                 setObservedStepDurationMs(stepDurationMs);
             }
@@ -3754,6 +3784,7 @@ export function SeqFxPatchView({
 
         return () => {
             unsubscribeState();
+            unsubscribeGlobalControls();
             unsubscribeMonitor();
             unsubscribeRate();
             bridge.detach();
@@ -4619,9 +4650,10 @@ export function SeqFxPatchView({
     const inspectedEffectType = inspectedCell?.active
         ? inspectedCell.effectType
         : drawEffectType ?? defaultEffectTypeForChain(inspectedLane ?? 0);
+    const inspectedEffectDefinition = getSeqFxEffectDefinition(inspectedEffectType);
     const inspectedParamDefinitions = PARAM_DEFINITIONS[inspectedEffectType] ?? [];
     const inspectedAuxParamDefinitions = inspectedParamDefinitions.filter((definition) => (
-        getSeqFxEffectDefinition(inspectedEffectType).parameters[definition.index]?.auxEligible === true
+        inspectedEffectDefinition.parameters[definition.index]?.auxEligible === true
     ));
     const inspectedBlock = inspectedLane !== null && inspectedStep !== null
         ? getSeqFxBlockAtStep(renderedPatternState, inspectedLane, inspectedStep)
@@ -4643,13 +4675,19 @@ export function SeqFxPatchView({
         inspectedBlock
         && inspectedCell?.active
         && inspectedEffectType !== SEQFX_EFFECT_TYPES.empty
-        && getSeqFxEffectDefinition(inspectedEffectType).parameters.some((parameter) => parameter.auxEligible)
+        && inspectedEffectDefinition.parameters.some((parameter) => parameter.auxEligible)
         && selectedBlockStartSteps.length <= 1,
     );
     const inspectedAux = auxEditable ? inspectedCell?.aux ?? null : null;
     const inspectedAuxCyclePhase = inspectedLane !== null ? auxMonitor.cyclePhase[inspectedLane] ?? 0 : 0;
     const inspectedAuxAmount = inspectedLane !== null ? auxMonitor.amount[inspectedLane] ?? 0 : 0;
     const showModEditor = inspectorMode === "mod" && Boolean(inspectedAux);
+    const matchingFactoryPreset = inspectedCell
+        ? inspectedEffectDefinition.factoryPresets.find((preset) => (
+            Math.abs(inspectedCell.mix - preset.mix) < 0.000001
+            && preset.params.every((value, paramIndex) => Math.abs(inspectedCell.params[paramIndex] - value) < 0.000001)
+        )) ?? null
+        : null;
 
     useEffect(() => {
         if (!auxEditable && inspectorMode !== "effect") {
@@ -5069,6 +5107,25 @@ export function SeqFxPatchView({
         });
     }
 
+    function applyFactoryPreset(presetId: string) {
+        if (!inspectedBlock || selectedBlockStartSteps.length > 1) {
+            return;
+        }
+
+        const preset = inspectedEffectDefinition.factoryPresets.find((candidate) => candidate.id === presetId);
+        if (!preset) {
+            return;
+        }
+
+        bridge.applyBlockPreset({
+            patternIndex: selectedPattern,
+            lane: inspectedBlock.lane,
+            startStep: inspectedBlock.startStep,
+            mix: preset.mix,
+            params: preset.params,
+        });
+    }
+
     function setFilterValue(nextValue: FilterRangeValue) {
         if (!inspectedCell) {
             return;
@@ -5217,6 +5274,107 @@ export function SeqFxPatchView({
                     ))}
                 </div>
             </section>
+
+            <SeqFxGlobalControlSurface
+                controls={globalControls}
+                internalRunning={internalRunning}
+                playheadStep={playheadStep}
+                canUndo={bridge.canUndo()}
+                canRedo={bridge.canRedo()}
+                hasLoopClipboard={runtimeHasLoopClipboard}
+                onGlobalControl={(endpointID, value) => {
+                    if (!isPromoControlled) {
+                        bridge.setGlobalControl(endpointID, value);
+                    }
+                }}
+                onGlobalGestureStart={(endpointID) => {
+                    if (!isPromoControlled) {
+                        bridge.beginGlobalGesture(endpointID);
+                    }
+                }}
+                onGlobalGestureEnd={(endpointID) => {
+                    if (!isPromoControlled) {
+                        bridge.endGlobalGesture(endpointID);
+                    }
+                }}
+                onLoopRangeChange={(startStep, endStepExclusive) => {
+                    if (!isPromoControlled) {
+                        bridge.setLoopRange(startStep, endStepExclusive);
+                    }
+                }}
+                onInternalTransport={(running) => {
+                    if (isPromoControlled) {
+                        return;
+                    }
+                    setInternalRunning(running);
+                    if (running) {
+                        bridge.playInternal();
+                    } else {
+                        bridge.stopInternal();
+                    }
+                }}
+                onReset={() => {
+                    if (!isPromoControlled) {
+                        bridge.resetInternal();
+                    }
+                }}
+                onUndo={() => {
+                    if (!isPromoControlled) {
+                        bridge.undo();
+                    }
+                }}
+                onRedo={() => {
+                    if (!isPromoControlled) {
+                        bridge.redo();
+                    }
+                }}
+                onInitPattern={() => {
+                    if (!isPromoControlled) {
+                        bridge.initPattern();
+                    }
+                }}
+                onClearLoop={() => {
+                    if (!isPromoControlled) {
+                        bridge.clearLoop();
+                    }
+                }}
+                onCopyLoop={() => {
+                    if (!isPromoControlled) {
+                        bridge.copyLoop();
+                        setHasLoopClipboard(bridge.canPasteLoop());
+                    }
+                }}
+                onPasteLoop={() => {
+                    if (!isPromoControlled) {
+                        bridge.pasteLoop();
+                    }
+                }}
+                onLoadFactoryPattern={(patternId) => {
+                    if (!isPromoControlled) {
+                        bridge.loadFactoryPattern(patternId);
+                    }
+                }}
+                onVaryLoop={() => {
+                    if (!isPromoControlled) {
+                        bridge.varyLoop();
+                    }
+                }}
+            />
+
+            {showFirstUseHint ? (
+                <aside className="seqfx-first-use" data-role="seqfx-first-use" role="status">
+                    <strong>First pattern?</strong>
+                    <span>Click a cell, drag a block edge to resize, choose a named effect, then open Mod.</span>
+                    <button
+                        aria-label="Dismiss first-use hint"
+                        data-role="seqfx-first-use-dismiss"
+                        onClick={() => setShowFirstUseHint(false)}
+                        type="button"
+                    >
+                        Got it
+                    </button>
+                </aside>
+            ) : null}
 
             <section className="seqfx-workspace" style={SEQFX_WORKSPACE_STYLE}>
                 <div className={gridShellClassName} aria-label="Effect sequence grid">
@@ -5378,6 +5536,16 @@ export function SeqFxPatchView({
                                                                             params={stepParams}
                                                                             segmentLength={segmentLength}
                                                                         />
+                                                                        <span
+                                                                            aria-hidden="true"
+                                                                            className="seqfx-block-effect-label"
+                                                                            data-effect={block.effectType}
+                                                                            data-role="seqfx-block-effect-label"
+                                                                        >
+                                                                            {segmentLength > 1
+                                                                                ? SEQFX_EFFECT_TYPE_SHORT_NAMES[block.effectType]
+                                                                                : SEQFX_EFFECT_TYPE_SHORT_NAMES[block.effectType].slice(0, 1)}
+                                                                        </span>
                                                                     </span>
                                                                     {segment.isEndSegment ? (
                                                                         <span
@@ -5409,7 +5577,7 @@ export function SeqFxPatchView({
                 >
                     <div className="seqfx-inspector-heading">
                         <span aria-hidden="true" className="seqfx-inspector-heading__bullet" data-role="seqfx-inspector-bullet" />
-                        <strong>{getSelectionLabel(activeSelection)}</strong>
+                        <strong>{getSelectionLabel(activeSelection, inspectedCell ? inspectedEffectType : null)}</strong>
                         <span aria-hidden="true" className="seqfx-inspector-heading__rule" data-role="seqfx-inspector-rule" />
                     </div>
                     {!inspectedCell || inspectedLane === null ? (
@@ -5436,10 +5604,25 @@ export function SeqFxPatchView({
                                                 onClick={() => setEffectType(effectType)}
                                             >
                                                 <SeqFxEffectIcon effectType={effectType} />
+                                                <span className="seqfx-effect-picker__name">
+                                                    {SEQFX_EFFECT_TYPE_NAMES[effectType]}
+                                                </span>
                                             </button>
                                         );
                                     })}
                                 </div>
+                            </div>
+                            <div className="seqfx-inspector-tabs" role="tablist" aria-label="Inspector view">
+                                <button
+                                    aria-selected={!showModEditor}
+                                    className={!showModEditor ? "is-selected" : undefined}
+                                    data-role="seqfx-effect-tab"
+                                    onClick={() => setInspectorMode("effect")}
+                                    role="tab"
+                                    type="button"
+                                >
+                                    Effect
+                                </button>
                                 {inspectedAux ? (
                                     <SeqFxModToggleButton
                                         aux={inspectedAux}
@@ -5450,6 +5633,28 @@ export function SeqFxPatchView({
                                     />
                                 ) : null}
                             </div>
+                            <label className="seqfx-factory-preset">
+                                <span>Effect preset</span>
+                                <select
+                                    aria-label={`${SEQFX_EFFECT_TYPE_NAMES[inspectedEffectType]} factory preset`}
+                                    data-role="seqfx-factory-effect-preset"
+                                    disabled={!inspectedBlock || selectedBlockStartSteps.length > 1}
+                                    onChange={(event) => applyFactoryPreset(event.currentTarget.value)}
+                                    value={matchingFactoryPreset?.id ?? ""}
+                                >
+                                    <option value="">Custom</option>
+                                    {inspectedEffectDefinition.factoryPresets.map((preset) => (
+                                        <option key={preset.id} value={preset.id}>{preset.name}</option>
+                                    ))}
+                                </select>
+                                <small data-role="seqfx-factory-effect-preset-description">
+                                    {matchingFactoryPreset?.description ?? `Three level-conscious ${SEQFX_EFFECT_TYPE_NAMES[inspectedEffectType]} starting points.`}
+                                </small>
+                            </label>
+                            <SeqFxMixRow
+                                value={inspectedCell.mix}
+                                onChange={inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? setStutterMix : setMix}
+                            />
                             {showModEditor && inspectedAux ? (
                                 <SeqFxModEditor
                                     aux={inspectedAux}
@@ -5555,10 +5760,6 @@ export function SeqFxPatchView({
                                             })}
                                         </>
                                     )}
-                                    <SeqFxMixRow
-                                        value={inspectedCell.mix}
-                                        onChange={inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? setStutterMix : setMix}
-                                    />
                                 </>
                             )}
                             {selectedBlockGroup || (selectedWholeBlock && inspectedBlock) ? (

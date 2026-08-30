@@ -7,8 +7,15 @@ class SeqFxHarnessPatchConnection {
     storedState: Record<string, unknown> = {};
     events: Array<{ endpointID: string; value: unknown }> = [];
     parameters: Record<string, unknown> = {
+        enabled: 1,
+        globalMix: 1,
         patternSelect: 0,
+        clockMode: 0,
+        manualBpm: 120,
         rate: 1,
+        swing: 0,
+        loopStart: 0,
+        loopLength: 32,
     };
     status = {
         details: {

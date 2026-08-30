@@ -615,8 +615,15 @@ async function createLoaderHarness(page) {
                 this.storedState = {};
                 this.events = [];
                 this.parameters = {
+                    enabled: 1,
+                    globalMix: 1,
                     patternSelect: 0,
+                    clockMode: 0,
+                    manualBpm: 120,
                     rate: 1,
+                    swing: 0,
+                    loopStart: 0,
+                    loopLength: 32,
                 };
                 this.status = {
                     details: {
@@ -1002,12 +1009,152 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
     assert.ok(layout.topbar.height <= 42, `expected compact topbar, got ${layout.topbar.height}px`);
     assert.ok(layout.patterns.left >= layout.title.right, "pattern buttons should sit to the right of the title");
     assert.ok(layout.lastPatternRight <= layout.patterns.right + 1, "all pattern buttons should be visible at 567px");
-    assert.equal(layout.laneLabelDisplay, "none");
+    assert.equal(layout.laneLabelDisplay, "flex");
     assertClose(layout.laneTrack.left - layout.grid.left, layout.gridPaddingLeft, 1, "grid cells should start after the reserved frame padding");
     assertClose(layout.grid.right - layout.laneTrack.right, layout.gridPaddingRight, 1, "grid cells should end before the reserved frame padding");
     assert.ok(layout.rootScrollWidth <= layout.viewportWidth + 1, `page should not gain horizontal overflow, got ${layout.rootScrollWidth}px for ${layout.viewportWidth}px viewport`);
     assert.equal(layout.inspectorHeadingFontSize, "13px");
     assert.ok(layout.inspectorHeading.height <= 18, `expected compact inspector heading, got ${layout.inspectorHeading.height}px`);
+
+    await page.close();
+});
+
+test("seqfx_global_surface_wires_host_controls_loop_transport_and_edit_history", async () => {
+    const page = await browser.newPage({ viewport: { width: 1120, height: 680 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    const enabled = page.locator('[data-role="seqfx-enabled"]');
+    const mix = page.locator('[data-role="seqfx-global-mix"]');
+    const clock = page.locator('[data-role="seqfx-clock-mode"]');
+    const bpm = page.locator('[data-role="seqfx-manual-bpm"]');
+    const rate = page.locator('[data-role="seqfx-rate"]');
+    const swing = page.locator('[data-role="seqfx-swing"]');
+    const loopStart = page.locator('[data-role="seqfx-loop-start"]');
+    const loopEnd = page.locator('[data-role="seqfx-loop-end"]');
+    const transport = page.locator('[data-role="seqfx-internal-transport"]');
+    const reset = page.locator('[data-role="seqfx-reset"]');
+    const undo = page.locator('[data-role="seqfx-undo"]');
+    const redo = page.locator('[data-role="seqfx-redo"]');
+
+    assert.equal(await enabled.isVisible(), true, "SeqFX On should be visible");
+    assert.equal(await mix.isVisible(), true, "global mix should be visible");
+    assert.equal(await clock.isVisible(), true, "clock mode should be visible");
+    assert.equal(await rate.isVisible(), true, "rate should be visible");
+    assert.equal(await swing.isVisible(), true, "swing should be visible");
+    assert.equal(await page.locator('[data-role="seqfx-loop-ruler"]').isVisible(), true, "loop ruler should be visible");
+    assert.equal(await enabled.getAttribute("aria-checked"), "true");
+    assert.equal(await bpm.isDisabled(), true, "host clock should make manual BPM unavailable");
+    assert.equal(await transport.isDisabled(), true, "host clock should own transport in Host mode");
+    assert.equal(await undo.isDisabled(), true);
+    assert.equal(await redo.isDisabled(), true);
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await enabled.click();
+    await mix.fill("0.37");
+    await clock.selectOption("1");
+    await bpm.fill("134");
+    await rate.selectOption("2");
+    await swing.fill("0.2");
+    await loopStart.fill("5");
+    await loopEnd.fill("13");
+    await transport.click();
+    await reset.click();
+
+    assert.equal(await bpm.isEnabled(), true);
+    assert.equal(await transport.isEnabled(), true);
+    const snapshot = await getHarnessSnapshot(page);
+    assert.deepEqual(snapshot.events.map(({ endpointID, value }) => ({ endpointID, value })), [
+        { endpointID: "enabled", value: 0 },
+        { endpointID: "globalMix", value: 0.37 },
+        { endpointID: "clockMode", value: 1 },
+        { endpointID: "manualBpm", value: 134 },
+        { endpointID: "rate", value: 2 },
+        { endpointID: "swing", value: 0.2 },
+        { endpointID: "loopStart", value: 4 },
+        { endpointID: "loopLength", value: 28 },
+        { endpointID: "loopStart", value: 4 },
+        { endpointID: "loopLength", value: 9 },
+        { endpointID: "internalPlay", value: 1 },
+        { endpointID: "internalReset", value: 1 },
+    ]);
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    assert.equal(await undo.isEnabled(), true);
+    await undo.click();
+    assert.equal(await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).getAttribute("aria-pressed"), "false");
+    assert.equal(await redo.isEnabled(), true);
+    await redo.click();
+    assert.equal(await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).getAttribute("aria-pressed"), "true");
+
+    const loopCells = await page.locator('[data-role="seqfx-loop-step"]').evaluateAll((nodes) => (
+        nodes.map((node) => ({
+            current: node.getAttribute("aria-current"),
+            inLoop: node.getAttribute("data-in-loop"),
+        }))
+    ));
+    assert.equal(loopCells.length, 32);
+    assert.deepEqual(loopCells.map((cell) => cell.inLoop === "true"), Array.from({ length: 32 }, (_unused, index) => index >= 4 && index < 13));
+
+    await page.close();
+});
+
+test("seqfx_factory_content_and_first_use_hint_are_discoverable_atomic_and_undoable", async () => {
+    const page = await browser.newPage({ viewport: { width: 1120, height: 680 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    const hint = page.locator('[data-role="seqfx-first-use"]');
+    assert.match(await hint.textContent(), /Click a cell/);
+    assert.match(await hint.textContent(), /drag a block edge/);
+    assert.match(await hint.textContent(), /named effect/);
+    assert.match(await hint.textContent(), /open Mod/);
+    await page.locator('[data-role="seqfx-first-use-dismiss"]').click();
+    await page.locator('[data-role="seqfx-pattern"][data-pattern="1"]').click();
+    await page.locator('[data-role="seqfx-pattern"][data-pattern="0"]').click();
+    assert.equal(await hint.count(), 0, "dismissal should survive state and pattern rerenders for this plugin instance");
+
+    const factoryPattern = page.locator('[data-role="seqfx-factory-pattern"]');
+    assert.equal(await factoryPattern.locator("option").count(), 13);
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await factoryPattern.selectOption("twelve-effect-tour");
+    await page.getByRole("button", { name: "Chain 1 Filter block 1-2", exact: true }).waitFor();
+    const loadedEffects = new Set(await page.locator('[data-role="seqfx-block"]').evaluateAll((nodes) => (
+        nodes.map((node) => Number(node.getAttribute("data-effect")))
+    )));
+    assert.deepEqual([...loadedEffects].sort((left, right) => left - right), Array.from({ length: 12 }, (_unused, index) => index + 1));
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 1, "factory pattern should upload once after its atomic stored-state commit");
+
+    await page.getByRole("button", { name: "Chain 1 Filter block 1-2", exact: true }).click();
+    const effectPreset = page.locator('[data-role="seqfx-factory-effect-preset"]');
+    assert.deepEqual(await effectPreset.locator("option").evaluateAll((nodes) => nodes.map((node) => node.textContent)), [
+        "Custom",
+        "Warm Low Pass",
+        "Telephone Band",
+        "Air Cut",
+    ]);
+    assert.equal(await effectPreset.inputValue(), "warm-low-pass");
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await effectPreset.selectOption("telephone-band");
+    let snapshot = await getHarnessSnapshot(page);
+    let storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    assert.equal(storedState.patterns[0].lanes[0].steps[0].mix, 0.82);
+    assert.deepEqual(storedState.patterns[0].lanes[0].steps[0].params.slice(0, 5), [2, 1_350, 1_350, 2.4, 1]);
+    assert.equal(patternUploads(snapshot).length, 1, "effect preset should upload once after one state commit");
+    await page.locator('[data-role="seqfx-undo"]').click();
+    assert.equal(await effectPreset.inputValue(), "warm-low-pass");
+
+    const beforeVariation = parseSeqFxStoredState((await getHarnessSnapshot(page)).storedState[SEQFX_STATE_KEY]);
+    const beforeGeometry = beforeVariation.patterns[0].lanes.map((lane) => (
+        lane.steps.map((step) => step.trigger ? step.effectType : 0)
+    ));
+    await page.locator('[data-role="seqfx-vary-loop"]').click();
+    snapshot = await getHarnessSnapshot(page);
+    storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    assert.deepEqual(storedState.patterns[0].lanes.map((lane) => lane.steps.map((step) => step.trigger ? step.effectType : 0)), beforeGeometry);
+    await page.locator('[data-role="seqfx-undo"]').click();
+    storedState = parseSeqFxStoredState((await getHarnessSnapshot(page)).storedState[SEQFX_STATE_KEY]);
+    assert.deepEqual(storedState.patterns[0], beforeVariation.patterns[0]);
 
     await page.close();
 });
@@ -1097,6 +1244,58 @@ test("seqfx_effect_tab_icons_use_their_cell_palette_when_selected", async () => 
             { offset: "100%", opacity: "0" },
         ]);
     }
+
+    await page.close();
+});
+
+test("seqfx_named_effect_picker_fixed_tabs_and_visible_chain_labels_remove icon guessing", async () => {
+    const page = await browser.newPage({ viewport: { width: 1120, height: 680 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    const laneLabels = page.locator(".seqfx-lane-label");
+    assert.deepEqual(await laneLabels.evaluateAll((nodes) => nodes.slice(0, 4).map((node) => node.textContent?.trim())), [
+        "Chain 1",
+        "Chain 2",
+        "Chain 3",
+        "Chain 4",
+    ]);
+    assert.equal(await laneLabels.first().evaluate((node) => getComputedStyle(node).display), "flex");
+
+    await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
+    const effectOptions = page.locator('[data-role="seqfx-effect-type-option"]');
+    assert.equal(await effectOptions.count(), 12);
+    assert.deepEqual(
+        await effectOptions.evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim())),
+        ["Filter", "Crush", "Tape Stop", "Stutter", "Pitch", "Comb", "Ring", "Reverse", "Talk Box", "Vibro", "Flange", "Dirty"],
+    );
+    assert.equal(await effectOptions.first().locator("svg").count(), 1, "named cards should retain Fontaudio-backed identities");
+
+    const effectTab = page.locator('[data-role="seqfx-effect-tab"]');
+    const modTab = page.locator('[data-role="seqfx-mod-toggle"]');
+    assert.equal(await effectTab.getAttribute("aria-selected"), "true");
+    assert.equal(await modTab.getAttribute("aria-selected"), "false");
+    await modTab.click();
+    assert.equal(await effectTab.getAttribute("aria-selected"), "false");
+    assert.equal(await modTab.getAttribute("aria-selected"), "true");
+    assert.equal(await page.locator('[data-role="seqfx-mix-row"]').isVisible(), true, "Block Mix should stay fixed in Mod view");
+
+    await effectTab.click();
+    const selectionText = await page.locator(".seqfx-inspector-heading strong").textContent();
+    assert.match(selectionText, /Chain 4/);
+    assert.match(selectionText, /Stutter/);
+    assert.match(selectionText, /step 1/);
+    const mixBox = await page.locator('[data-role="seqfx-mix-row"]').boundingBox();
+    const editorBox = await page.locator('[data-role="seqfx-stutter-editor"]').boundingBox();
+    assert.ok(mixBox && editorBox);
+    assert.ok(
+        mixBox.y + mixBox.height <= editorBox.y + 1,
+        `common Block Mix should precede the effect-specific editor, got mix bottom ${mixBox.y + mixBox.height} and editor top ${editorBox.y}`,
+    );
+
+    await resizeBlockToStep(page, 3, 1, 2);
+    const blockLabel = page.locator('[data-role="seqfx-block-effect-label"][data-effect="4"]').first();
+    assert.equal(await blockLabel.textContent(), "STUT");
 
     await page.close();
 });
@@ -1256,7 +1455,7 @@ test("seqfx_renders_mix_row_glyph_and_delete_block_glyph_with_compact_layout", a
 });
 
 test("seqfx_grid_resizes_with_css_after_viewport_round_trip", async () => {
-    const page = await browser.newPage({ viewport: { width: 567, height: 776 } });
+    const page = await browser.newPage({ viewport: { width: 720, height: 776 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
@@ -1281,14 +1480,14 @@ test("seqfx_grid_resizes_with_css_after_viewport_round_trip", async () => {
     });
 
     const initial = await measureGrid();
-    await page.setViewportSize({ width: 840, height: 776 });
+    await page.setViewportSize({ width: 1120, height: 776 });
     await page.waitForFunction((initialCellWidth) => {
         const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
         return cell && cell.getBoundingClientRect().width > initialCellWidth + 4;
     }, initial.cellWidth);
     const grown = await measureGrid();
 
-    await page.setViewportSize({ width: 567, height: 776 });
+    await page.setViewportSize({ width: 720, height: 776 });
     await page.waitForFunction((initialCellWidth) => {
         const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
         return cell && Math.abs(cell.getBoundingClientRect().width - initialCellWidth) <= 1;
@@ -1982,7 +2181,7 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
     await assert.rejects(
         page.locator('[data-role="seqfx-inspector"]').getByText("Select a cell").waitFor({ timeout: 400 }),
     );
-    await page.locator('[data-role="seqfx-inspector"]').getByText("Chain 1 step 1").waitFor({ timeout: 400 });
+    await page.locator('[data-role="seqfx-inspector"]').getByText("Chain 1 · Filter · step 1").waitFor({ timeout: 400 });
 
     const filterEditor = page.locator('[data-role="filter-range-editor"]');
     await filterEditor.waitFor();
@@ -2051,8 +2250,8 @@ test("seqfx_grid_cell_and_inspector_edits_send_complete_pattern_uploads", async 
     });
     assert.equal(inspectorLayout.exactMixLabelCount, 0);
     assert.ok(
-        inspectorLayout.mixTop >= inspectorLayout.filterBottom,
-        `SeqFX mix row should sit below the active effect editor, got mix top ${inspectorLayout.mixTop} and filter bottom ${inspectorLayout.filterBottom}`,
+        inspectorLayout.mixTop < inspectorLayout.filterBottom,
+        `SeqFX mix row should stay fixed before the active effect editor, got mix top ${inspectorLayout.mixTop} and filter bottom ${inspectorLayout.filterBottom}`,
     );
 
     await page.locator('[data-role="filter-range-mode-cycle-button"]').click();
@@ -2343,7 +2542,7 @@ test("seqfx_mod_panel_uses_responsive_inspector_width_without_overflowing", asyn
         `near-breakpoint page should not gain horizontal overflow, got ${nearBreakpointLayout.rootScrollWidth}px for ${nearBreakpointLayout.viewportWidth}px viewport`,
     );
 
-    await page.setViewportSize({ width: 840, height: 820 });
+    await page.setViewportSize({ width: 640, height: 820 });
     const stackedLayout = await measureLayout();
     assert.ok(stackedLayout.inspector.top > stackedLayout.gridShell.bottom, "workspace should stack below the reduced breakpoint");
 
@@ -2618,8 +2817,8 @@ test("seqfx_crusher_inspector_renders_waveform_editor_and_writes_params", async 
         };
     });
     assert.ok(
-        layout.mixTop >= layout.editorBottom,
-        `SeqFX crusher mix row should sit below the crusher editor, got mix top ${layout.mixTop} and editor bottom ${layout.editorBottom}`,
+        layout.mixTop < layout.editorBottom,
+        `SeqFX crusher mix row should stay fixed before the crusher editor, got mix top ${layout.mixTop} and editor bottom ${layout.editorBottom}`,
     );
 
     await page.locator('[data-role="seqfx-crusher-drive-db-mod-toggle"]').click();
@@ -2793,7 +2992,9 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
     assert.equal(await page.locator('[data-role="seqfx-stutter-slices-value"]').textContent(), "9");
     assert.equal(await page.locator('[data-role="seqfx-stutter-speed-value"]').textContent(), "1.05x");
 
-    const graphBox = await page.locator('[data-role="seqfx-stutter-graph"]').boundingBox();
+    const graph = page.locator('[data-role="seqfx-stutter-graph"]');
+    await graph.scrollIntoViewIfNeeded();
+    const graphBox = await graph.boundingBox();
     assert.ok(graphBox);
     const fullGatePoint = await stutterGraphPoint(page, graphBox, 1);
     await page.mouse.click(fullGatePoint.x, fullGatePoint.y);
@@ -2801,14 +3002,16 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
     upload = patternUploads(snapshot).at(-1).value;
     assertClose(upload.params[3][0][3], 1, 0.03, "gate graph click should open the cut fully before sampling the shape path");
 
-    const morphBox = await page.locator('[data-role="seqfx-stutter-morph-track"]').boundingBox();
+    const morphTrack = page.locator('[data-role="seqfx-stutter-morph-track"]');
+    await morphTrack.scrollIntoViewIfNeeded();
+    const morphBox = await morphTrack.boundingBox();
     assert.ok(morphBox);
-    await page.mouse.click(morphBox.x + morphBox.width * 0.8, morphBox.y + morphBox.height / 2);
+    await morphTrack.click({ position: { x: morphBox.width * 0.8, y: morphBox.height / 2 } });
     snapshot = await getHarnessSnapshot(page);
     upload = patternUploads(snapshot).at(-1).value;
     assertClose(upload.params[3][0][2], 0.8, 0.03, "morph track click should write shape");
 
-    await page.mouse.click(morphBox.x + morphBox.width * 0.125, morphBox.y + morphBox.height / 2);
+    await morphTrack.click({ position: { x: morphBox.width * 0.125, y: morphBox.height / 2 } });
     snapshot = await getHarnessSnapshot(page);
     upload = patternUploads(snapshot).at(-1).value;
     assertClose(upload.params[3][0][2], 0.125, 0.03, "morph track should land in the midpoint of the Gate -> Triangle segment");
@@ -2832,7 +3035,10 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
         `Triangle should collapse the trapezoid plateau, got y=${triangleSamples["0.30"]} at 0.30 vs trapezoid y=${trapezoidSamples["0.30"]}`,
     );
 
-    const quarterGatePoint = await stutterGraphPoint(page, graphBox, 0.25);
+    await graph.scrollIntoViewIfNeeded();
+    const refreshedGraphBox = await graph.boundingBox();
+    assert.ok(refreshedGraphBox);
+    const quarterGatePoint = await stutterGraphPoint(page, refreshedGraphBox, 0.25);
     await page.mouse.click(quarterGatePoint.x, quarterGatePoint.y);
     snapshot = await getHarnessSnapshot(page);
     upload = patternUploads(snapshot).at(-1).value;
@@ -2864,8 +3070,8 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
         };
     });
     assert.ok(
-        stutterLayout.mixTop >= stutterLayout.editorBottom,
-        `SeqFX stutter mix row should sit below the envelope editor, got mix top ${stutterLayout.mixTop} and editor bottom ${stutterLayout.editorBottom}`,
+        stutterLayout.mixTop < stutterLayout.editorBottom,
+        `SeqFX stutter mix row should stay fixed before the envelope editor, got mix top ${stutterLayout.mixTop} and editor bottom ${stutterLayout.editorBottom}`,
     );
 
     await page.locator('[data-role="seqfx-stutter-slices-slider"] .editor-tick-slider__label--toggle').click();
@@ -2898,7 +3104,9 @@ test("seqfx_stutter_graph_drag_uploads_live_pattern_before_persisting_final_stat
     const initialStoredState = parseSeqFxStoredState(initialSnapshot.storedState[SEQFX_STATE_KEY]);
     assertClose(initialStoredState.patterns[0].lanes[3].steps[0].params[3], 0.68, 0.000001, "initial stored stutter gate");
 
-    const graphBox = await page.locator('[data-role="seqfx-stutter-graph"]').boundingBox();
+    const graph = page.locator('[data-role="seqfx-stutter-graph"]');
+    await graph.scrollIntoViewIfNeeded();
+    const graphBox = await graph.boundingBox();
     const handleBox = await page.locator('[data-role="seqfx-stutter-gate-handle"]').boundingBox();
     assert.ok(graphBox);
     assert.ok(handleBox);
@@ -3191,7 +3399,7 @@ test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_
             borderTopStyle: styles.borderTopStyle,
         };
     });
-    assert.deepEqual(buttonChrome, { backgroundColor: "rgba(0, 0, 0, 0)", borderTopStyle: "none" });
+    assert.deepEqual(buttonChrome, { backgroundColor: "rgba(255, 248, 232, 0.22)", borderTopStyle: "solid" });
     await tapeStopButton.click();
     assert.equal(await tapeStopButton.getAttribute("aria-pressed"), "true");
 
@@ -4678,7 +4886,7 @@ test("seqfx_keyboard_activation_creates_and_selects_grid_blocks", async () => {
 
     snapshot = await getHarnessSnapshot(page);
     assert.equal(patternUploads(snapshot).at(-1).value.activeSteps[0][8], true);
-    await page.locator('[data-role="seqfx-inspector"]').getByText("Chain 1 step 9").waitFor();
+    await page.locator('[data-role="seqfx-inspector"]').getByText("Chain 1 · Filter · step 9").waitFor();
 
     await page.close();
 });

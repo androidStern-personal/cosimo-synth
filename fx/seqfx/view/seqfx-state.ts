@@ -22,7 +22,7 @@ export {
     SEQFX_SELECTABLE_EFFECT_IDS,
     getSeqFxEffectDefinition,
 } from "./seqfx-effect-definitions";
-export type { SeqFxEffectDefinition, SeqFxEffectLifecycle, SeqFxEffectType, SeqFxParameterDefinition } from "./seqfx-effect-definitions";
+export type { SeqFxEffectDefinition, SeqFxEffectLifecycle, SeqFxEffectType, SeqFxFactoryEffectPreset, SeqFxParameterDefinition } from "./seqfx-effect-definitions";
 
 export const SEQFX_STATE_KEY = "seqfx.v7";
 export const SEQFX_LEGACY_STATE_KEY = "seqfx.v6";
@@ -344,6 +344,11 @@ export type SeqFxBlockMixEdit = SeqFxBlockEditTarget & {
     value: number;
 };
 
+export type SeqFxBlockPresetEdit = SeqFxBlockEditTarget & {
+    mix: number;
+    params: readonly number[];
+};
+
 export type SeqFxCellToggleEdit = {
     patternIndex: number;
     lane: number;
@@ -378,6 +383,22 @@ export type SeqFxStepValueSnapshotTarget = {
 
 export type SeqFxStepValuePasteEdit = SeqFxEditTarget & {
     values: SeqFxStepValueSnapshot;
+};
+
+export type SeqFxLoopRangeTarget = {
+    patternIndex: number;
+    startStep: number;
+    length: number;
+};
+
+export type SeqFxLoopClipboardBlock = {
+    offset: number;
+    steps: SeqFxStep[];
+};
+
+export type SeqFxLoopClipboard = {
+    length: number;
+    lanes: SeqFxLoopClipboardBlock[][];
 };
 
 const FILTER_PARAM_CUTOFF = 1;
@@ -2031,6 +2052,93 @@ export function getSeqFxBlockAtStep(pattern: SeqFxPattern, lane: number, step: n
     );
 }
 
+function resolveLoopRange(target: SeqFxLoopRangeTarget) {
+    const startStep = clampIndex(target.startStep, SEQFX_STEP_COUNT, "startStep");
+    const length = normalizeBlockLength(startStep, target.length);
+    return {
+        patternIndex: clampIndex(target.patternIndex, SEQFX_PATTERN_COUNT, "patternIndex"),
+        startStep,
+        length,
+        endStepExclusive: startStep + length,
+    };
+}
+
+function blockOverlapsRange(block: SeqFxBlock, startStep: number, endStepExclusive: number) {
+    return block.startStep < endStepExclusive && block.endStep >= startStep;
+}
+
+export function copySeqFxLoop(state: SeqFxState, target: SeqFxLoopRangeTarget): SeqFxLoopClipboard {
+    const normalized = normalizeSeqFxState(state);
+    const range = resolveLoopRange(target);
+    const pattern = normalized.patterns[range.patternIndex];
+    return {
+        length: range.length,
+        lanes: Array.from({ length: SEQFX_LANE_COUNT }, (_unused, lane) => (
+            getSeqFxLaneBlocks(pattern, lane)
+                .filter((block) => block.startStep >= range.startStep && block.startStep < range.endStepExclusive)
+                .map((block) => ({
+                    offset: block.startStep - range.startStep,
+                    steps: cloneBlockSteps(pattern, lane, block).slice(0, range.endStepExclusive - block.startStep),
+                }))
+        )),
+    };
+}
+
+export function applySeqFxLoopClear(state: SeqFxState, target: SeqFxLoopRangeTarget): SeqFxState {
+    const range = resolveLoopRange(target);
+    return withEditedPattern(state, range.patternIndex, (pattern) => {
+        for (let lane = 0; lane < SEQFX_LANE_COUNT; lane += 1) {
+            const overlappingBlocks = getSeqFxLaneBlocks(pattern, lane)
+                .filter((block) => blockOverlapsRange(block, range.startStep, range.endStepExclusive));
+            for (const block of overlappingBlocks) {
+                clearBlock(pattern, lane, block);
+            }
+        }
+    });
+}
+
+export function applySeqFxLoopPaste(
+    state: SeqFxState,
+    target: SeqFxLoopRangeTarget,
+    clipboard: SeqFxLoopClipboard,
+): SeqFxState {
+    const range = resolveLoopRange(target);
+    return withEditedPattern(state, range.patternIndex, (pattern) => {
+        for (let lane = 0; lane < SEQFX_LANE_COUNT; lane += 1) {
+            const overlappingBlocks = getSeqFxLaneBlocks(pattern, lane)
+                .filter((block) => blockOverlapsRange(block, range.startStep, range.endStepExclusive));
+            for (const block of overlappingBlocks) {
+                clearBlock(pattern, lane, block);
+            }
+
+            for (const copiedBlock of clipboard.lanes[lane] ?? []) {
+                const targetStartStep = range.startStep + clamp(copiedBlock.offset, 0, range.length - 1);
+                const maximumLength = Math.min(
+                    copiedBlock.steps.length,
+                    range.endStepExclusive - targetStartStep,
+                    SEQFX_STEP_COUNT - targetStartStep,
+                );
+                if (maximumLength <= 0) {
+                    continue;
+                }
+
+                assertBlockRangeAvailable(pattern, lane, targetStartStep, maximumLength);
+                writeBlockSteps(pattern, lane, targetStartStep, copiedBlock.steps.slice(0, maximumLength));
+            }
+        }
+    });
+}
+
+export function applySeqFxPatternInit(state: SeqFxState, patternIndex: number): SeqFxState {
+    return withEditedPattern(state, patternIndex, (pattern) => {
+        for (let lane = 0; lane < SEQFX_LANE_COUNT; lane += 1) {
+            for (let step = 0; step < SEQFX_STEP_COUNT; step += 1) {
+                pattern.lanes[lane].steps[step] = createDefaultStep(lane);
+            }
+        }
+    });
+}
+
 export function applySeqFxBlockCreate(state: SeqFxState, edit: SeqFxBlockCreateEdit): SeqFxState {
     return withEditedPattern(state, edit.patternIndex, (pattern) => {
         const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
@@ -2401,6 +2509,33 @@ export function applySeqFxBlockMixEdit(state: SeqFxState, edit: SeqFxBlockMixEdi
         const mix = normalizeMix(edit.value);
         for (let step = block.startStep; step <= block.endStep; step += 1) {
             pattern.lanes[lane].steps[step].mix = mix;
+        }
+    });
+}
+
+export function applySeqFxBlockPresetEdit(state: SeqFxState, edit: SeqFxBlockPresetEdit): SeqFxState {
+    return withEditedPattern(state, edit.patternIndex, (pattern) => {
+        const lane = clampIndex(edit.lane, SEQFX_LANE_COUNT, "lane");
+        const startStep = clampIndex(edit.startStep, SEQFX_STEP_COUNT, "startStep");
+        const block = getBlockForStep(pattern, lane, startStep);
+        if (!block) {
+            throw new Error("Cannot apply a preset to a missing SeqFX block.");
+        }
+
+        const mix = normalizeMix(edit.mix);
+        const defaults = getSeqFxDefaultParams(block.effectType);
+        const params = defaults.map((defaultValue, paramIndex) => (
+            normalizeParam(block.effectType, paramIndex, edit.params[paramIndex] ?? defaultValue)
+        ));
+
+        for (let step = block.startStep; step <= block.endStep; step += 1) {
+            const target = pattern.lanes[lane].steps[step];
+            target.mix = mix;
+            for (let paramIndex = 0; paramIndex < SEQFX_PARAM_COUNT; paramIndex += 1) {
+                writeStepParamAndTrackAuxEnd(target, block.effectType, paramIndex, params[paramIndex]);
+            }
+            target.effectParams = rememberCurrentEffectParams(target);
+            target.effectAux = rememberCurrentEffectAux(target);
         }
     });
 }

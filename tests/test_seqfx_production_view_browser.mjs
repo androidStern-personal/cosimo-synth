@@ -225,8 +225,15 @@ function patchConnectionSource() {
                 this.storedState = {};
                 this.events = [];
                 this.parameters = {
+                    enabled: 1,
+                    globalMix: 1,
                     patternSelect: 0,
+                    clockMode: 0,
+                    manualBpm: 120,
                     rate: 1,
+                    swing: 0,
+                    loopStart: 0,
+                    loopLength: 32,
                 };
                 this.status = {
                     details: {
@@ -722,8 +729,8 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
                 rateActiveColor: firstRateTick ? getComputedStyle(firstRateTick).backgroundColor : "",
                 rateInactiveColor: lastRateTick ? getComputedStyle(lastRateTick).backgroundColor : "",
                 driveHeight: driveRow?.getBoundingClientRect().height ?? 0,
-                mixGap: mixRow && driveRow
-                    ? mixRow.getBoundingClientRect().top - driveRow.getBoundingClientRect().bottom
+                mixToDriveGap: mixRow && driveRow
+                    ? driveRow.getBoundingClientRect().top - mixRow.getBoundingClientRect().bottom
                     : 0,
             };
         });
@@ -755,8 +762,8 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
 
             return {
                 driveHeight: driveRow?.getBoundingClientRect().height ?? 0,
-                mixGap: mixRow && driveRow
-                    ? mixRow.getBoundingClientRect().top - driveRow.getBoundingClientRect().bottom
+                mixToDriveGap: mixRow && driveRow
+                    ? driveRow.getBoundingClientRect().top - mixRow.getBoundingClientRect().bottom
                     : 0,
             };
         });
@@ -766,8 +773,8 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
             `crusher drive row height should stay stable in production, got ${crusherDriveAfterToggle.driveHeight}px after toggle vs ${crusherLayout.driveHeight}px before`,
         );
         assert.ok(
-            Math.abs(crusherDriveAfterToggle.mixGap - crusherLayout.mixGap) <= 1,
-            `crusher drive modulation should not change the gap above the mix row in production, got ${crusherDriveAfterToggle.mixGap}px after toggle vs ${crusherLayout.mixGap}px before`,
+            Math.abs(crusherDriveAfterToggle.mixToDriveGap - crusherLayout.mixToDriveGap) <= 1,
+            `crusher drive modulation should not change the fixed Mix-to-editor gap in production, got ${crusherDriveAfterToggle.mixToDriveGap}px after toggle vs ${crusherLayout.mixToDriveGap}px before`,
         );
 
         await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();

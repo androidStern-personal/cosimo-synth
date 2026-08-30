@@ -1,5 +1,10 @@
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import {
+    applySeqFxFactoryPattern,
+    applySeqFxSafeLoopVariation,
+    getSeqFxFactoryPattern,
+} from "./seqfx-factory-content";
+import {
     SEQFX_LEGACY_STATE_KEY,
     SEQFX_STATE_KEY,
     SEQFX_STATE_VERSION,
@@ -14,6 +19,7 @@ import {
     applySeqFxBlockMixEdit,
     applySeqFxBlockMove,
     applySeqFxBlockParamEdit,
+    applySeqFxBlockPresetEdit,
     applySeqFxBlockResize,
     applySeqFxBlockSelectionDelete,
     applySeqFxBlockSelectionCopy,
@@ -24,9 +30,13 @@ import {
     applySeqFxBlockSelectionParamEdit,
     applySeqFxCellToggle,
     applySeqFxMixEdit,
+    applySeqFxLoopClear,
+    applySeqFxLoopPaste,
     applySeqFxParamEdit,
+    applySeqFxPatternInit,
     applySeqFxStepValuePaste,
     buildSeqPatternUpload,
+    copySeqFxLoop,
     createDefaultSeqFxState,
     getSeqFxStepValueSnapshot,
     normalizeSeqFxState,
@@ -46,6 +56,7 @@ import {
     type SeqFxBlockMixEdit,
     type SeqFxBlockMoveEdit,
     type SeqFxBlockParamEdit,
+    type SeqFxBlockPresetEdit,
     type SeqFxBlockResizeEdit,
     type SeqFxBlockSelectionEditTarget,
     type SeqFxBlockSelectionAuxTargetEndEdit,
@@ -58,6 +69,7 @@ import {
     type SeqFxBlockSelectionParamEdit,
     type SeqFxCellToggleEdit,
     type SeqFxMixEdit,
+    type SeqFxLoopClipboard,
     type SeqFxParamEdit,
     type SeqFxState,
     type SeqFxStepValuePasteEdit,
@@ -66,9 +78,16 @@ import {
 } from "./seqfx-state";
 
 export const SEQFX_ENDPOINTS = {
+    enabled: "enabled",
+    globalMix: "globalMix",
     patternUpload: "patternUpload",
     patternSelect: "patternSelect",
+    clockMode: "clockMode",
+    manualBpm: "manualBpm",
     rate: "rate",
+    swing: "swing",
+    loopStart: "loopStart",
+    loopLength: "loopLength",
     monitorOut: "monitorOut",
     internalPlay: "internalPlay",
     internalReset: "internalReset",
@@ -84,6 +103,37 @@ type StoredStateMessage = {
 type BridgeListener = (state: SeqFxState) => void;
 type MonitorListener = (value: unknown) => void;
 type RateListener = (rateIndex: number) => void;
+export type SeqFxGlobalControls = {
+    enabled: boolean;
+    globalMix: number;
+    clockMode: number;
+    manualBpm: number;
+    rateIndex: number;
+    swing: number;
+    loopStart: number;
+    loopLength: number;
+};
+type GlobalControlsListener = (controls: SeqFxGlobalControls) => void;
+type SeqFxGlobalEndpoint =
+    | typeof SEQFX_ENDPOINTS.enabled
+    | typeof SEQFX_ENDPOINTS.globalMix
+    | typeof SEQFX_ENDPOINTS.clockMode
+    | typeof SEQFX_ENDPOINTS.manualBpm
+    | typeof SEQFX_ENDPOINTS.rate
+    | typeof SEQFX_ENDPOINTS.swing
+    | typeof SEQFX_ENDPOINTS.loopStart
+    | typeof SEQFX_ENDPOINTS.loopLength;
+
+const DEFAULT_GLOBAL_CONTROLS: SeqFxGlobalControls = {
+    enabled: true,
+    globalMix: 1,
+    clockMode: 0,
+    manualBpm: 120,
+    rateIndex: 1,
+    swing: 0,
+    loopStart: 0,
+    loopLength: 32,
+};
 
 function hasOwnValue(record: Record<string, unknown>, key: string) {
     return Object.prototype.hasOwnProperty.call(record, key);
@@ -151,13 +201,24 @@ function resolveRateIndex(value: unknown): number {
     return Math.min(2, Math.max(0, Math.round(numeric)));
 }
 
+function resolveFiniteNumber(value: unknown, fallback: number, min: number, max: number): number {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? Math.min(max, Math.max(min, numeric)) : fallback;
+}
+
+function resolveInteger(value: unknown, fallback: number, min: number, max: number): number {
+    return Math.round(resolveFiniteNumber(value, fallback, min, max));
+}
+
 export class SeqFxRuntimeBridge {
     private state: SeqFxState = createDefaultSeqFxState();
     private selectedPatternIndex = 0;
     private rateIndex = 1;
+    private globalControls: SeqFxGlobalControls = { ...DEFAULT_GLOBAL_CONTROLS };
     private readonly stateListeners = new Set<BridgeListener>();
     private readonly monitorListeners = new Set<MonitorListener>();
     private readonly rateListeners = new Set<RateListener>();
+    private readonly globalControlsListeners = new Set<GlobalControlsListener>();
     private readonly pendingStoredEchoes = new Map<string, number>();
     private attached = false;
     private bootStoredStatePendingKey: string | null = null;
@@ -170,6 +231,8 @@ export class SeqFxRuntimeBridge {
     private pendingLiveFrame: number | null = null;
     private readonly undoStack: SeqFxState[] = [];
     private readonly redoStack: SeqFxState[] = [];
+    private loopClipboard: SeqFxLoopClipboard | null = null;
+    private variationIndex = 0;
 
     private readonly handleStoredStateValue = (message: unknown) => {
         const stored = message as StoredStateMessage;
@@ -215,7 +278,43 @@ export class SeqFxRuntimeBridge {
         }
 
         this.rateIndex = nextRateIndex;
+        this.globalControls = { ...this.globalControls, rateIndex: nextRateIndex };
         this.notifyRateListeners();
+        this.notifyGlobalControlsListeners();
+    };
+
+    private readonly handleEnabled = (value: unknown) => {
+        this.updateGlobalControls({ enabled: resolveFiniteNumber(value, 1, 0, 1) >= 0.5 });
+    };
+
+    private readonly handleGlobalMix = (value: unknown) => {
+        this.updateGlobalControls({ globalMix: resolveFiniteNumber(value, 1, 0, 1) });
+    };
+
+    private readonly handleClockMode = (value: unknown) => {
+        this.updateGlobalControls({ clockMode: resolveInteger(value, 0, 0, 2) });
+    };
+
+    private readonly handleManualBpm = (value: unknown) => {
+        this.updateGlobalControls({ manualBpm: resolveFiniteNumber(value, 120, 20, 300) });
+    };
+
+    private readonly handleSwing = (value: unknown) => {
+        this.updateGlobalControls({ swing: resolveFiniteNumber(value, 0, 0, 0.45) });
+    };
+
+    private readonly handleLoopStart = (value: unknown) => {
+        const loopStart = resolveInteger(value, 0, 0, 31);
+        this.updateGlobalControls({
+            loopStart,
+            loopLength: Math.min(this.globalControls.loopLength, 32 - loopStart),
+        });
+    };
+
+    private readonly handleLoopLength = (value: unknown) => {
+        this.updateGlobalControls({
+            loopLength: resolveInteger(value, 32, 1, 32 - this.globalControls.loopStart),
+        });
     };
 
     private readonly handleMonitor = (value: unknown) => {
@@ -234,7 +333,14 @@ export class SeqFxRuntimeBridge {
         this.attached = true;
         this.patchConnection.addStoredStateValueListener?.(this.handleStoredStateValue);
         this.patchConnection.addParameterListener?.(SEQFX_ENDPOINTS.patternSelect, this.handlePatternSelect);
+        this.patchConnection.addParameterListener?.(SEQFX_ENDPOINTS.enabled, this.handleEnabled);
+        this.patchConnection.addParameterListener?.(SEQFX_ENDPOINTS.globalMix, this.handleGlobalMix);
+        this.patchConnection.addParameterListener?.(SEQFX_ENDPOINTS.clockMode, this.handleClockMode);
+        this.patchConnection.addParameterListener?.(SEQFX_ENDPOINTS.manualBpm, this.handleManualBpm);
         this.patchConnection.addParameterListener?.(SEQFX_ENDPOINTS.rate, this.handleRate);
+        this.patchConnection.addParameterListener?.(SEQFX_ENDPOINTS.swing, this.handleSwing);
+        this.patchConnection.addParameterListener?.(SEQFX_ENDPOINTS.loopStart, this.handleLoopStart);
+        this.patchConnection.addParameterListener?.(SEQFX_ENDPOINTS.loopLength, this.handleLoopLength);
         this.patchConnection.addEndpointListener?.(SEQFX_ENDPOINTS.monitorOut, this.handleMonitor);
     }
 
@@ -247,7 +353,14 @@ export class SeqFxRuntimeBridge {
         this.attached = false;
         this.patchConnection.removeStoredStateValueListener?.(this.handleStoredStateValue);
         this.patchConnection.removeParameterListener?.(SEQFX_ENDPOINTS.patternSelect, this.handlePatternSelect);
+        this.patchConnection.removeParameterListener?.(SEQFX_ENDPOINTS.enabled, this.handleEnabled);
+        this.patchConnection.removeParameterListener?.(SEQFX_ENDPOINTS.globalMix, this.handleGlobalMix);
+        this.patchConnection.removeParameterListener?.(SEQFX_ENDPOINTS.clockMode, this.handleClockMode);
+        this.patchConnection.removeParameterListener?.(SEQFX_ENDPOINTS.manualBpm, this.handleManualBpm);
         this.patchConnection.removeParameterListener?.(SEQFX_ENDPOINTS.rate, this.handleRate);
+        this.patchConnection.removeParameterListener?.(SEQFX_ENDPOINTS.swing, this.handleSwing);
+        this.patchConnection.removeParameterListener?.(SEQFX_ENDPOINTS.loopStart, this.handleLoopStart);
+        this.patchConnection.removeParameterListener?.(SEQFX_ENDPOINTS.loopLength, this.handleLoopLength);
         this.patchConnection.removeEndpointListener?.(SEQFX_ENDPOINTS.monitorOut, this.handleMonitor);
     }
 
@@ -321,6 +434,15 @@ export class SeqFxRuntimeBridge {
         };
     }
 
+    subscribeGlobalControls(listener: GlobalControlsListener) {
+        this.globalControlsListeners.add(listener);
+        listener(this.getGlobalControls());
+
+        return () => {
+            this.globalControlsListeners.delete(listener);
+        };
+    }
+
     getState() {
         return this.state;
     }
@@ -331,6 +453,10 @@ export class SeqFxRuntimeBridge {
 
     getRateIndex() {
         return this.rateIndex;
+    }
+
+    getGlobalControls(): SeqFxGlobalControls {
+        return { ...this.globalControls };
     }
 
     replaceStateFromPreset(nextState: unknown) {
@@ -383,6 +509,27 @@ export class SeqFxRuntimeBridge {
         this.selectedPatternIndex = nextPatternIndex;
         this.patchConnection.sendEventOrValue?.(SEQFX_ENDPOINTS.patternSelect, nextPatternIndex);
         this.notifyStateListeners();
+    }
+
+    setGlobalControl(endpointID: SeqFxGlobalEndpoint, value: unknown) {
+        const normalizedValue = this.normalizeGlobalControlValue(endpointID, value);
+        this.presentGlobalControlValue(endpointID, normalizedValue);
+        this.patchConnection.sendEventOrValue?.(endpointID, normalizedValue);
+    }
+
+    setLoopRange(startStep: number, endStepExclusive: number) {
+        const loopStart = resolveInteger(startStep, this.globalControls.loopStart, 0, 31);
+        const loopEndExclusive = resolveInteger(endStepExclusive, loopStart + 1, loopStart + 1, 32);
+        this.setGlobalControl(SEQFX_ENDPOINTS.loopStart, loopStart);
+        this.setGlobalControl(SEQFX_ENDPOINTS.loopLength, loopEndExclusive - loopStart);
+    }
+
+    beginGlobalGesture(endpointID: SeqFxGlobalEndpoint) {
+        this.patchConnection.sendParameterGestureStart?.(endpointID);
+    }
+
+    endGlobalGesture(endpointID: SeqFxGlobalEndpoint) {
+        this.patchConnection.sendParameterGestureEnd?.(endpointID);
     }
 
     toggleCell(edit: SeqFxCellToggleEdit) {
@@ -467,6 +614,10 @@ export class SeqFxRuntimeBridge {
         this.commitState(applySeqFxBlockParamEdit(this.state, edit), edit.patternIndex);
     }
 
+    applyBlockPreset(edit: SeqFxBlockPresetEdit) {
+        this.commitState(applySeqFxBlockPresetEdit(this.state, edit), edit.patternIndex);
+    }
+
     setBlockAuxSource(edit: SeqFxBlockAuxSourceEdit) {
         this.commitState(applySeqFxBlockAuxSourceEdit(this.state, edit), edit.patternIndex);
     }
@@ -521,6 +672,60 @@ export class SeqFxRuntimeBridge {
 
     resetInternal() {
         this.patchConnection.sendEventOrValue?.(SEQFX_ENDPOINTS.internalReset, 1);
+    }
+
+    canPasteLoop() {
+        return this.loopClipboard !== null;
+    }
+
+    copyLoop() {
+        this.loopClipboard = copySeqFxLoop(this.state, this.currentLoopTarget());
+        return this.loopClipboard.lanes.some((lane) => lane.length > 0);
+    }
+
+    clearLoop() {
+        return this.commitStateIfChanged(
+            applySeqFxLoopClear(this.state, this.currentLoopTarget()),
+            this.selectedPatternIndex,
+        );
+    }
+
+    pasteLoop() {
+        if (!this.loopClipboard) {
+            return false;
+        }
+
+        return this.commitStateIfChanged(
+            applySeqFxLoopPaste(this.state, this.currentLoopTarget(), this.loopClipboard),
+            this.selectedPatternIndex,
+        );
+    }
+
+    initPattern() {
+        return this.commitStateIfChanged(
+            applySeqFxPatternInit(this.state, this.selectedPatternIndex),
+            this.selectedPatternIndex,
+        );
+    }
+
+    loadFactoryPattern(patternId: string) {
+        const factoryPattern = getSeqFxFactoryPattern(patternId);
+        if (!factoryPattern) {
+            return false;
+        }
+
+        return this.commitStateIfChanged(
+            applySeqFxFactoryPattern(this.state, this.selectedPatternIndex, factoryPattern),
+            this.selectedPatternIndex,
+        );
+    }
+
+    varyLoop() {
+        this.variationIndex += 1;
+        return this.commitStateIfChanged(
+            applySeqFxSafeLoopVariation(this.state, this.currentLoopTarget(), this.variationIndex),
+            this.selectedPatternIndex,
+        );
     }
 
     beginLiveEdit() {
@@ -578,6 +783,23 @@ export class SeqFxRuntimeBridge {
         this.pushUndoState(previous);
         this.persistState();
         this.notifyStateListeners();
+    }
+
+    private commitStateIfChanged(nextState: SeqFxState, editedPatternIndex: number) {
+        if (serializeSeqFxState(nextState) === serializeSeqFxState(this.state)) {
+            return false;
+        }
+
+        this.commitState(nextState, editedPatternIndex);
+        return true;
+    }
+
+    private currentLoopTarget() {
+        return {
+            patternIndex: this.selectedPatternIndex,
+            startStep: this.globalControls.loopStart,
+            length: this.globalControls.loopLength,
+        };
     }
 
     private applyStoredState(rawState: unknown, key: string) {
@@ -704,7 +926,77 @@ export class SeqFxRuntimeBridge {
 
     private requestRuntimeValuesAfterBootState() {
         this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.patternSelect);
+        this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.enabled);
+        this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.globalMix);
+        this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.clockMode);
+        this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.manualBpm);
         this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.rate);
+        this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.swing);
+        this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.loopStart);
+        this.patchConnection.requestParameterValue?.(SEQFX_ENDPOINTS.loopLength);
+    }
+
+    private normalizeGlobalControlValue(endpointID: SeqFxGlobalEndpoint, value: unknown): number {
+        switch (endpointID) {
+            case SEQFX_ENDPOINTS.enabled:
+                return resolveFiniteNumber(value, this.globalControls.enabled ? 1 : 0, 0, 1) >= 0.5 ? 1 : 0;
+            case SEQFX_ENDPOINTS.globalMix:
+                return resolveFiniteNumber(value, this.globalControls.globalMix, 0, 1);
+            case SEQFX_ENDPOINTS.clockMode:
+                return resolveInteger(value, this.globalControls.clockMode, 0, 2);
+            case SEQFX_ENDPOINTS.manualBpm:
+                return resolveFiniteNumber(value, this.globalControls.manualBpm, 20, 300);
+            case SEQFX_ENDPOINTS.rate:
+                return resolveRateIndex(value);
+            case SEQFX_ENDPOINTS.swing:
+                return resolveFiniteNumber(value, this.globalControls.swing, 0, 0.45);
+            case SEQFX_ENDPOINTS.loopStart:
+                return resolveInteger(value, this.globalControls.loopStart, 0, 31);
+            case SEQFX_ENDPOINTS.loopLength:
+                return resolveInteger(value, this.globalControls.loopLength, 1, 32 - this.globalControls.loopStart);
+        }
+    }
+
+    private presentGlobalControlValue(endpointID: SeqFxGlobalEndpoint, value: number) {
+        switch (endpointID) {
+            case SEQFX_ENDPOINTS.enabled:
+                this.handleEnabled(value);
+                break;
+            case SEQFX_ENDPOINTS.globalMix:
+                this.handleGlobalMix(value);
+                break;
+            case SEQFX_ENDPOINTS.clockMode:
+                this.handleClockMode(value);
+                break;
+            case SEQFX_ENDPOINTS.manualBpm:
+                this.handleManualBpm(value);
+                break;
+            case SEQFX_ENDPOINTS.rate:
+                this.handleRate(value);
+                break;
+            case SEQFX_ENDPOINTS.swing:
+                this.handleSwing(value);
+                break;
+            case SEQFX_ENDPOINTS.loopStart:
+                this.handleLoopStart(value);
+                break;
+            case SEQFX_ENDPOINTS.loopLength:
+                this.handleLoopLength(value);
+                break;
+        }
+    }
+
+    private updateGlobalControls(patch: Partial<SeqFxGlobalControls>) {
+        const nextControls = { ...this.globalControls, ...patch };
+        const changed = Object.entries(nextControls).some(([key, value]) => (
+            !Object.is(this.globalControls[key as keyof SeqFxGlobalControls], value)
+        ));
+        if (!changed) {
+            return;
+        }
+
+        this.globalControls = nextControls;
+        this.notifyGlobalControlsListeners();
     }
 
     private rememberStoredEcho(value: unknown) {
@@ -738,6 +1030,13 @@ export class SeqFxRuntimeBridge {
     private notifyRateListeners() {
         for (const listener of this.rateListeners) {
             listener(this.rateIndex);
+        }
+    }
+
+    private notifyGlobalControlsListeners() {
+        const controls = this.getGlobalControls();
+        for (const listener of this.globalControlsListeners) {
+            listener(controls);
         }
     }
 }
