@@ -47,7 +47,7 @@ Use the current test set and pass counts from `TODO_RELEASE.md` and the active r
 node --test tests/test_seqfx_runtime_bridge.mjs tests/test_seqfx_patch_view_browser.mjs
 node --test tests/test_seqfx_release_builder.mjs
 node --test tests/test_seqfx_production_view_browser.mjs
-node --test tests/test_seqfx_state.mjs tests/test_seqfx_runtime_bridge.mjs tests/test_seqfx_worker_service.mjs tests/test_seqfx_preset_adapter.mjs tests/test_seqfx_crusher_preview.mjs tests/test_seqfx_stutter_envelope.mjs tests/test_seqfx_tape_stop_envelope.mjs tests/test_seqfx_aux_source.mjs
+node --test tests/test_seqfx_state.mjs tests/test_seqfx_runtime_bridge.mjs tests/test_seqfx_worker_service.mjs tests/test_seqfx_preset_adapter.mjs tests/test_seqfx_crusher_preview.mjs tests/test_seqfx_stutter_envelope.mjs tests/test_seqfx_tape_stop_v2_trajectory.mjs tests/test_seqfx_aux_source.mjs
 node --test tests/test_seqfx_patch_view_browser.mjs
 npm run test:effect-presets
 PYTHONPATH=. uv run pytest -q tests/test_seqfx_probe.py
