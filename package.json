@@ -23,6 +23,7 @@
     "test:modulation:routing": "node --test tests/test_modulation_runtime_program.mjs",
     "test:native:quickjs": "./scripts/test_quickjs_modulation_restore.sh",
     "test:web:bundle": "node --test tests/test_web_bundle_contract.mjs",
+    "test:distortion:alignment": "node --test tests/test_distortion_mix_alignment.mjs",
     "bounce:bank-from-wav": "node scripts/wav_to_bounce_bank.mjs",
     "probe:bounce:install": "node scripts/probe_bounce_bank_install.mjs",
     "test:bounce:bank": "node --test tests/test_bounce_bank_format.mjs",

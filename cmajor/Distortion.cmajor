@@ -97,11 +97,17 @@ namespace wt
     processor DistortionCoreChannel
     {
         input stream float32 in;
+        // The untouched bus input, carried across the same oversampling
+        // boundary as `in` purely so it exits with the identical resampler
+        // phase: the classic mix must blend two time-aligned signals, and
+        // the resampler pair is the only place that alignment exists.
+        input stream float32 dryIn;
         input value float32 kneeIn [[ init: 0.35f ]];
         input value float32 driveDbIn [[ init: 12.0f ]];
         input value float32 typeIn [[ init: 1.0f ]];
         output stream float32 out;
         output stream float32 thru;
+        output stream float32 dryThru;
         input event int32 resetIn;
 
         int32 selectedType = distortionTypeAsymmetric;
@@ -235,6 +241,7 @@ namespace wt
                     clampDistortionType (typeIn)
                 );
                 thru <- inputSample;
+                dryThru <- dryIn;
                 out <- inputSample + ((shapedSample - inputSample) * engagement);
                 advance();
             }
@@ -369,12 +376,14 @@ namespace wt
                 let driven = filtered * driveGain;
 
                 leftCore.in <- driven[0];
+                leftCore.dryIn <- dry[0];
                 leftCore.kneeIn <- clampDistortionKnee (kneeIn);
                 leftCore.driveDbIn <- driveDb;
                 leftCore.typeIn <- float32 (clampDistortionType (typeIn));
                 leftCore.advance();
 
                 rightCore.in <- driven[1];
+                rightCore.dryIn <- dry[1];
                 rightCore.kneeIn <- clampDistortionKnee (kneeIn);
                 rightCore.driveDbIn <- driveDb;
                 rightCore.typeIn <- float32 (clampDistortionType (typeIn));
@@ -382,16 +391,24 @@ namespace wt
 
                 let shaped = float32<2> (leftCore.out, rightCore.out);
                 let alignedThru = float32<2> (leftCore.thru, rightCore.thru);
+                // Everything blended or compared against the wet signal must
+                // share the resampler pair's phase, or the classic mix combs:
+                // the oversampling round trip lags ~6 samples at 48 kHz, and
+                // (1-w)*dry + w*wet with unaligned copies cancels near 4 kHz
+                // and 12 kHz. The raw `dry` is reserved for the wet<=0 bypass,
+                // which stays bit-exact and latency-free.
+                let alignedDry = float32<2> (leftCore.dryThru, rightCore.dryThru);
                 let rawClassicWet = classicDcBlocker.process (shaped);
                 let rawResidue = residueDcBlocker.process (shaped - alignedThru);
                 let wetAmount = clampDistortionWet (wetIn);
                 let distortionMode = clampDistortionMode (modeIn);
                 let detectorAmount = 1.0f - levelMatchCoefficient;
-                let dryPower = 0.5f * ((dry[0] * dry[0]) + (dry[1] * dry[1]));
+                let dryPower = 0.5f * ((alignedDry[0] * alignedDry[0])
+                                       + (alignedDry[1] * alignedDry[1]));
                 let wetPower = 0.5f * ((rawClassicWet[0] * rawClassicWet[0])
                                        + (rawClassicWet[1] * rawClassicWet[1]));
-                let crossPower = 0.5f * ((dry[0] * rawClassicWet[0])
-                                         + (dry[1] * rawClassicWet[1]));
+                let crossPower = 0.5f * ((alignedDry[0] * rawClassicWet[0])
+                                         + (alignedDry[1] * rawClassicWet[1]));
                 dryPowerState += (dryPower - dryPowerState) * detectorAmount;
                 wetPowerState += (wetPower - wetPowerState) * detectorAmount;
                 dryWetCrossPowerState += (crossPower - dryWetCrossPowerState) * detectorAmount;
@@ -429,9 +446,9 @@ namespace wt
                                       wetActivation + wetActivationStep
                                   );
                 let levelMatchedWet = rawClassicWet * makeupGain;
-                let classicWet = dry + ((levelMatchedWet - dry) * wetActivation);
+                let classicWet = alignedDry + ((levelMatchedWet - alignedDry) * wetActivation);
                 let residue = rawResidue * makeupGain * wetActivation;
-                let baseClassicMix = dry * (1.0f - wetAmount) + classicWet * wetAmount;
+                let baseClassicMix = alignedDry * (1.0f - wetAmount) + classicWet * wetAmount;
                 let classicOut = wetAmount <= 0.0f
                                    ? dry
                                    : (wetAmount >= 1.0f
