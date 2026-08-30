@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createConnection } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
+import { createServer } from "vite";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const origin = "http://127.0.0.1:5175";
@@ -37,23 +38,25 @@ const proofSizes = [
 const zoomLevels = [0.8, 1, 1.25, 1.5, 2];
 
 const focusSelectors = [
-    ["SeqFX On", '[data-role="seqfx-enabled"]'],
-    ["Loop ruler", '.seqfx-loop__ruler button'],
-    ["Grid cell", '[data-role="seqfx-cell"][data-lane="0"][data-step="0"]'],
-    ["Effect picker", '[data-role="seqfx-effect-type-option"][data-effect-type="3"]'],
-    ["Effect tab", '[data-role="seqfx-effect-tab"]'],
-    ["Block Mix", '[data-role="seqfx-mix"]'],
+    ["SeqFX On", '[data-role="seqfx-enabled"]', "first"],
+    ["Loop ruler", '.seqfx-loop__ruler button', "first"],
+    ["Grid cell", '[data-role="seqfx-cell"][data-lane="0"][data-step="0"]', "first"],
+    ["Effect picker", '[data-role="seqfx-effect-type-option"][data-effect-type="3"]', "first"],
+    ["Effect tab", '[data-role="seqfx-effect-tab"]', "first"],
+    ["Block Mix", '[data-role="seqfx-mix"]', "first"],
+    ["Lower inspector control", '[data-role="seqfx-inspector"] :is(button, select, input):not(:disabled)', "last"],
 ];
 
 const zoomReachabilitySelectors = [
-    ["SeqFX On", '[data-role="seqfx-enabled"]'],
-    ["Clock", '[data-role="seqfx-clock-mode"]'],
-    ["Loop pattern", '[data-role="seqfx-factory-pattern"]'],
-    ["Loop ruler", '.seqfx-loop__ruler button'],
-    ["Grid cell", '[data-role="seqfx-cell"][data-lane="0"][data-step="0"]'],
-    ["Effect picker", '[data-role="seqfx-effect-type-option"][data-effect-type="3"]'],
-    ["Effect tab", '[data-role="seqfx-effect-tab"]'],
-    ["Block Mix", '[data-role="seqfx-mix"]'],
+    ["SeqFX On", '[data-role="seqfx-enabled"]', "first"],
+    ["Clock", '[data-role="seqfx-clock-mode"]', "first"],
+    ["Loop pattern", '[data-role="seqfx-factory-pattern"]', "first"],
+    ["Loop ruler", '.seqfx-loop__ruler button', "first"],
+    ["Grid cell", '[data-role="seqfx-cell"][data-lane="0"][data-step="0"]', "first"],
+    ["Effect picker", '[data-role="seqfx-effect-type-option"][data-effect-type="3"]', "first"],
+    ["Effect tab", '[data-role="seqfx-effect-tab"]', "first"],
+    ["Block Mix", '[data-role="seqfx-mix"]', "first"],
+    ["Lower inspector control", '[data-role="seqfx-inspector"] :is(button, select, input):not(:disabled)', "last"],
 ];
 
 async function serverStatus() {
@@ -82,6 +85,44 @@ async function waitForServer() {
         await new Promise((resolve) => setTimeout(resolve, 250));
     }
     throw new Error("SeqFX visual proof server did not become ready on port 5175.");
+}
+
+async function portIsReachable() {
+    return await new Promise((resolve) => {
+        const socket = createConnection({ host: "127.0.0.1", port: 5175 });
+        let settled = false;
+        const finish = (reachable) => {
+            if (settled) return;
+            settled = true;
+            socket.destroy();
+            resolve(reachable);
+        };
+        socket.setTimeout(250);
+        socket.once("connect", () => finish(true));
+        socket.once("error", () => finish(false));
+        socket.once("timeout", () => finish(false));
+    });
+}
+
+async function waitForOwnedPortToClose() {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 5_000) {
+        if (!await portIsReachable()) return true;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return false;
+}
+
+function pickLocator(page, selector, position = "first") {
+    const matches = page.locator(selector);
+    return position === "last" ? matches.last() : matches.first();
+}
+
+async function revealAdvancedInspectorControls(page) {
+    return await page.locator('[data-role="seqfx-inspector"] details').evaluateAll((details) => {
+        for (const disclosure of details) disclosure.open = true;
+        return details.length;
+    });
 }
 
 async function loadHarness(page) {
@@ -120,8 +161,61 @@ async function recordScreenshot(page, fileName, manifest) {
     });
 }
 
-async function measureSurface(page, sizeId, effectName) {
-    return page.evaluate(({ currentSizeId, currentEffectName }) => {
+async function createContactSheet(browser, screenshotManifest) {
+    const entries = await Promise.all(screenshotManifest.map(async (entry) => ({
+        ...entry,
+        source: `data:image/png;base64,${(await readFile(path.join(outputDirectory, entry.file))).toString("base64")}`,
+    })));
+    const page = await browser.newPage({ viewport: { width: 1880, height: 1000 } });
+    try {
+        await page.setContent(`
+            <!doctype html>
+            <html>
+                <head>
+                    <meta charset="utf-8" />
+                    <style>
+                        * { box-sizing: border-box; }
+                        html, body { margin: 0; min-width: 100%; background: #171816; color: #f5f0e6; }
+                        body { padding: 28px; font: 600 15px/1.25 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+                        h1 { margin: 0 0 20px; font-size: 24px; letter-spacing: 0.04em; }
+                        main { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+                        figure { margin: 0; padding: 10px; border: 1px solid #45483f; background: #242620; }
+                        img { display: block; width: 100%; aspect-ratio: 1120 / 680; object-fit: contain; background: #090a09; }
+                        figcaption { margin-top: 8px; overflow-wrap: anywhere; }
+                    </style>
+                </head>
+                <body>
+                    <h1>SeqFX supported-size visual qualification</h1>
+                    <main>
+                        ${entries.map((entry) => `
+                            <figure>
+                                <img alt="" src="${entry.source}" />
+                                <figcaption>${entry.file}</figcaption>
+                            </figure>
+                        `).join("")}
+                    </main>
+                </body>
+            </html>
+        `, { waitUntil: "load" });
+        await page.evaluate(async () => {
+            await Promise.all([...document.images].map((image) => image.decode()));
+        });
+        const file = "contact-sheet.png";
+        const filePath = path.join(outputDirectory, file);
+        await page.screenshot({ animations: "disabled", fullPage: true, path: filePath });
+        const bytes = await readFile(filePath);
+        return {
+            bytes: bytes.byteLength,
+            file,
+            sha256: createHash("sha256").update(bytes).digest("hex"),
+        };
+    } finally {
+        await page.close();
+    }
+}
+
+async function measureSurface(page, sizeId, effectName, inspectorView) {
+    return page.evaluate(({ currentSizeId, currentEffectName, currentInspectorView }) => {
         const root = document.querySelector('[data-role="seqfx-root"]');
         const workspace = document.querySelector(".seqfx-workspace");
         const grid = document.querySelector(".seqfx-grid-shell");
@@ -137,12 +231,25 @@ async function measureSurface(page, sizeId, effectName) {
             return { bottom: rect.bottom, height: rect.height, left: rect.left, right: rect.right, top: rect.top, width: rect.width };
         };
         const inspectorBounds = bounds(inspector);
-        const ownedNodes = [picker, tabs, preset, mix].filter(Boolean);
+        const ownedNodes = [
+            picker,
+            tabs,
+            preset,
+            mix,
+            ...inspector.querySelectorAll("button, select, input, output, label, section, [data-role]"),
+        ].filter(Boolean);
         const ownedOverflow = ownedNodes.flatMap((node) => {
+            if (!(node instanceof HTMLElement)) return [];
             const rect = bounds(node);
-            if (!rect || !inspectorBounds) return [];
+            if (!rect || !inspectorBounds || rect.width <= 0 || rect.height <= 0) return [];
+            if (rect.bottom <= inspectorBounds.top + 1 || rect.top >= inspectorBounds.bottom - 1) return [];
             return rect.left < inspectorBounds.left - 1 || rect.right > inspectorBounds.right + 1
-                ? [{ className: node.className, left: rect.left, right: rect.right }]
+                ? [{
+                    className: typeof node.className === "string" ? node.className : node.getAttribute("class"),
+                    dataRole: node.getAttribute("data-role"),
+                    left: rect.left,
+                    right: rect.right,
+                }]
                 : [];
         });
         const clippedNames = [...document.querySelectorAll(".seqfx-effect-picker__name")]
@@ -257,9 +364,42 @@ async function measureSurface(page, sizeId, effectName) {
                 ? [{ className: node.className, durations }]
                 : [];
         });
+        const interactiveControls = [...inspector.querySelectorAll("button, select, input")]
+            .filter((node) => {
+                const style = getComputedStyle(node);
+                const rect = node.getBoundingClientRect();
+                return style.display !== "none"
+                    && style.visibility !== "hidden"
+                    && !node.disabled
+                    && rect.width > 0
+                    && rect.height > 0;
+            })
+            .map((node, index) => {
+                const rect = bounds(node);
+                const intersectsInspectorViewport = Boolean(inspectorBounds && rect
+                    && rect.bottom > inspectorBounds.top + 1
+                    && rect.top < inspectorBounds.bottom - 1);
+                return {
+                    ariaLabel: node.getAttribute("aria-label"),
+                    dataParam: node.getAttribute("data-param"),
+                    dataRole: node.getAttribute("data-role"),
+                    index,
+                    intersectsInspectorViewport,
+                    tag: node.tagName,
+                    text: node instanceof HTMLButtonElement ? node.textContent?.replace(/\s+/g, " ").trim() : null,
+                    top: rect?.top,
+                    bottom: rect?.bottom,
+                };
+            });
+        const advancedDisclosures = [...inspector.querySelectorAll("details")].map((node) => ({
+            open: node.open,
+            summary: node.querySelector("summary")?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+        }));
+        const maximumInspectorScroll = Math.max(0, inspector.scrollHeight - inspector.clientHeight);
 
         return {
             effect: currentEffectName,
+            inspectorView: currentInspectorView,
             size: currentSizeId,
             viewport: { height: window.innerHeight, width: window.innerWidth },
             documentOverflow: {
@@ -272,9 +412,12 @@ async function measureSurface(page, sizeId, effectName) {
             },
             inspectorOverflow: {
                 horizontal: inspector.scrollWidth > inspector.clientWidth + 1,
+                maximumScroll: maximumInspectorScroll,
                 ownsVerticalScroll: getComputedStyle(inspector).overflowY === "auto",
+                scrollTop: inspector.scrollTop,
                 vertical: inspector.scrollHeight > inspector.clientHeight + 1,
             },
+            advancedDisclosures,
             bounds: {
                 grid: bounds(grid),
                 inspector: inspectorBounds,
@@ -287,9 +430,14 @@ async function measureSurface(page, sizeId, effectName) {
             lowContrastText,
             motionFailures,
             ownedOverflow,
+            interactiveControls,
             undersizedControls,
         };
-    }, { currentSizeId: sizeId, currentEffectName: effectName });
+    }, {
+        currentEffectName: effectName,
+        currentInspectorView: inspectorView,
+        currentSizeId: sizeId,
+    });
 }
 
 function assertMeasurement(measurement) {
@@ -304,13 +452,114 @@ function assertMeasurement(measurement) {
     if (measurement.motionFailures.length > 0) failures.push(`${measurement.motionFailures.length} reduced-motion failures`);
     if (measurement.ownedOverflow.length > 0) failures.push("inspector child outside owned bounds");
     if (measurement.undersizedControls.length > 0) failures.push(`${measurement.undersizedControls.length} interactive controls below 24px`);
+    if (measurement.advancedDisclosures.some((disclosure) => !disclosure.open)) failures.push("advanced inspector disclosure remained closed");
+    if (measurement.inspectorView === "lower"
+        && measurement.inspectorOverflow.maximumScroll > 1
+        && measurement.inspectorOverflow.scrollTop < measurement.inspectorOverflow.maximumScroll - 1) {
+        failures.push("lower capture did not reach the end of the inspector");
+    }
+    return failures;
+}
+
+async function auditInspectorDepth(page, sizeId, effectName) {
+    const advancedDisclosureCount = await revealAdvancedInspectorControls(page);
+    return await page.locator('[data-role="seqfx-inspector"]').evaluate(async (inspector, context) => {
+        const controls = [...inspector.querySelectorAll("button, select, input")].filter((node) => {
+            const style = getComputedStyle(node);
+            const rect = node.getBoundingClientRect();
+            return style.display !== "none"
+                && style.visibility !== "hidden"
+                && !node.disabled
+                && rect.width > 0
+                && rect.height > 0;
+        });
+        const ownedNodes = [...inspector.querySelectorAll("button, select, input, output, label, section, [data-role]")]
+            .filter((node) => node instanceof HTMLElement);
+        const maximumScroll = Math.max(0, inspector.scrollHeight - inspector.clientHeight);
+        const stride = Math.max(1, inspector.clientHeight - 48);
+        const positions = [];
+        for (let position = 0; position < maximumScroll; position += stride) positions.push(position);
+        positions.push(maximumScroll);
+        const uniquePositions = [...new Set(positions.map((position) => Math.round(position)))];
+        const seen = new Set();
+        const horizontalOverflow = new Map();
+        const observations = [];
+
+        for (const position of uniquePositions) {
+            inspector.scrollTop = position;
+            await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+            const viewport = inspector.getBoundingClientRect();
+            const visible = [];
+            controls.forEach((control, index) => {
+                const rect = control.getBoundingClientRect();
+                if (rect.bottom > viewport.top + 1 && rect.top < viewport.bottom - 1) {
+                    seen.add(index);
+                    visible.push(index);
+                }
+            });
+            ownedNodes.forEach((node, index) => {
+                const rect = node.getBoundingClientRect();
+                if (rect.width <= 0 || rect.height <= 0) return;
+                if (rect.bottom <= viewport.top + 1 || rect.top >= viewport.bottom - 1) return;
+                if (rect.left < viewport.left - 1 || rect.right > viewport.right + 1) {
+                    horizontalOverflow.set(index, {
+                        className: typeof node.className === "string" ? node.className : node.getAttribute("class"),
+                        dataRole: node.getAttribute("data-role"),
+                        index,
+                        left: rect.left,
+                        right: rect.right,
+                    });
+                }
+            });
+            observations.push({
+                horizontalOverflow: [...horizontalOverflow.keys()],
+                requestedScrollTop: position,
+                scrollTop: inspector.scrollTop,
+                visible,
+            });
+        }
+
+        inspector.scrollTop = maximumScroll;
+        await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+        return {
+            advancedDisclosureCount: context.advancedDisclosureCount,
+            controlCount: controls.length,
+            controls: controls.map((control, index) => ({
+                ariaLabel: control.getAttribute("aria-label"),
+                dataParam: control.getAttribute("data-param"),
+                dataRole: control.getAttribute("data-role"),
+                index,
+                tag: control.tagName,
+                text: control instanceof HTMLButtonElement ? control.textContent?.replace(/\s+/g, " ").trim() : null,
+            })),
+            effect: context.effectName,
+            finalScrollTop: inspector.scrollTop,
+            horizontalOverflow: [...horizontalOverflow.values()],
+            maximumScroll,
+            missingControlIndexes: controls.map((_, index) => index).filter((index) => !seen.has(index)),
+            observations,
+            size: context.sizeId,
+        };
+    }, { advancedDisclosureCount, effectName, sizeId });
+}
+
+function assertInspectorDepth(depth) {
+    const failures = [];
+    if (depth.missingControlIndexes.length > 0) {
+        failures.push(`inspector traversal never exposed controls ${depth.missingControlIndexes.join(", ")}`);
+    }
+    if (depth.maximumScroll > 1 && depth.finalScrollTop < depth.maximumScroll - 1) {
+        failures.push("inspector traversal did not finish at the lower edge");
+    }
+    if (depth.horizontalOverflow.length > 0) failures.push("inspector child outside owned bounds during depth traversal");
     return failures;
 }
 
 async function auditFocus(page) {
     const results = [];
-    for (const [label, selector] of focusSelectors) {
-        const locator = page.locator(selector).first();
+    await revealAdvancedInspectorControls(page);
+    for (const [label, selector, position] of focusSelectors) {
+        const locator = pickLocator(page, selector, position);
         await page.evaluate(() => {
             document.activeElement?.blur?.();
             document.body.tabIndex = -1;
@@ -350,9 +599,10 @@ async function auditZoom(browser, zoom) {
         await loadHarness(page);
         await page.locator('[data-role="seqfx-first-use-dismiss"]').click();
         await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+        await revealAdvancedInspectorControls(page);
         const controls = [];
-        for (const [label, selector] of zoomReachabilitySelectors) {
-            const locator = page.locator(selector).first();
+        for (const [label, selector, position] of zoomReachabilitySelectors) {
+            const locator = pickLocator(page, selector, position);
             await locator.scrollIntoViewIfNeeded();
             await locator.focus();
             controls.push(await locator.evaluate((node, currentLabel) => {
@@ -382,28 +632,37 @@ async function auditZoom(browser, zoom) {
 
 await mkdir(outputDirectory, { recursive: true });
 
-let serverProcess = null;
 const initialStatus = await serverStatus();
 if (initialStatus && !isThisRepoServer(initialStatus)) {
     throw new Error(`Port 5175 is owned by another workspace (${initialStatus.repoRoot ?? "unknown"}); visual proof will not interrupt it.`);
 }
-if (!isThisRepoServer(initialStatus)) {
-    serverProcess = spawn("npm", ["run", "fx:dev"], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] });
-}
 
-let browser;
+let ownedServer = null;
+let browser = null;
+let report = null;
+let proofError = null;
+let closeVerified = null;
 try {
+    if (!isThisRepoServer(initialStatus)) {
+        ownedServer = await createServer({
+            configFile: path.join(repoRoot, "fx/vite.config.mjs"),
+            logLevel: "warn",
+            root: repoRoot,
+        });
+        await ownedServer.listen();
+    }
     await waitForServer();
     browser = await chromium.launch();
     const screenshotManifest = [];
     const measurements = [];
+    const inspectorDepth = [];
 
     for (const size of proofSizes) {
         const page = await browser.newPage({ viewport: { width: size.width, height: size.height } });
         await page.emulateMedia({ reducedMotion: "reduce" });
         await loadHarness(page);
         await recordScreenshot(page, `${size.id}-empty.png`, screenshotManifest);
-        measurements.push(await measureSurface(page, size.id, "Empty"));
+        measurements.push(await measureSurface(page, size.id, "Empty", "empty"));
         await page.locator('[data-role="seqfx-first-use-dismiss"]').click();
 
         if (size.allEffects) {
@@ -411,15 +670,24 @@ try {
             for (const [effectType, effectName, fileStem] of effects) {
                 await page.locator(`[data-role="seqfx-effect-type-option"][data-effect-type="${effectType}"]`).click();
                 await page.getByRole("button", { name: `Chain 1 ${effectName} block 1`, exact: true }).waitFor();
+                await revealAdvancedInspectorControls(page);
                 await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => { node.scrollTop = 0; });
-                measurements.push(await measureSurface(page, size.id, effectName));
+                measurements.push(await measureSurface(page, size.id, effectName, "top"));
                 await recordScreenshot(page, `${size.id}-${fileStem}.png`, screenshotManifest);
+                inspectorDepth.push(await auditInspectorDepth(page, size.id, effectName));
+                measurements.push(await measureSurface(page, size.id, effectName, "lower"));
+                await recordScreenshot(page, `${size.id}-${fileStem}-lower.png`, screenshotManifest);
             }
         } else {
             await page.locator('[data-role="seqfx-factory-pattern"]').selectOption("twelve-effect-tour");
             await page.getByRole("button", { name: "Chain 1 Filter block 1-2", exact: true }).click();
-            measurements.push(await measureSurface(page, size.id, "Twelve-effect Tour"));
+            await revealAdvancedInspectorControls(page);
+            await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => { node.scrollTop = 0; });
+            measurements.push(await measureSurface(page, size.id, "Twelve-effect Tour", "top"));
             await recordScreenshot(page, `${size.id}-twelve-effect-tour.png`, screenshotManifest);
+            inspectorDepth.push(await auditInspectorDepth(page, size.id, "Twelve-effect Tour"));
+            measurements.push(await measureSurface(page, size.id, "Twelve-effect Tour", "lower"));
+            await recordScreenshot(page, `${size.id}-twelve-effect-tour-lower.png`, screenshotManifest);
         }
 
         await page.close();
@@ -438,9 +706,14 @@ try {
         zoom.push(await auditZoom(browser, zoomLevel));
     }
 
+    const contactSheet = await createContactSheet(browser, screenshotManifest);
+
     const failures = measurements.flatMap((measurement) => (
-        assertMeasurement(measurement).map((failure) => `${measurement.size}/${measurement.effect}: ${failure}`)
+        assertMeasurement(measurement).map((failure) => `${measurement.size}/${measurement.effect}/${measurement.inspectorView}: ${failure}`)
     ));
+    failures.push(...inspectorDepth.flatMap((depth) => (
+        assertInspectorDepth(depth).map((failure) => `${depth.size}/${depth.effect}/depth: ${failure}`)
+    )));
     failures.push(...focus.flatMap((entry) => (
         !entry.active || entry.outlineStyle === "none" || entry.outlineWidth < 1
             ? [`focus/${entry.label}: missing visible focus outline`]
@@ -454,21 +727,55 @@ try {
             ...controlFailures.map((control) => `zoom/${entry.zoom}/${control.label}: core control unreachable`),
         ];
     }));
-    const report = {
+    report = {
+        contactSheet,
         generatedAt: new Date().toISOString(),
         repoRoot,
         screenshots: screenshotManifest,
         measurements,
+        inspectorDepth,
         focus,
         zoom,
         failures,
     };
-    await writeFile(path.join(outputDirectory, "manifest.json"), `${JSON.stringify(report, null, 2)}\n`);
     if (failures.length > 0) {
-        throw new Error(`SeqFX visual proof found ${failures.length} failures:\n${failures.join("\n")}`);
+        proofError = new Error(`SeqFX visual proof found ${failures.length} failures:\n${failures.join("\n")}`);
     }
-    process.stdout.write(`SeqFX visual proof passed: ${screenshotManifest.length} screenshots, ${measurements.length} measured states.\n`);
+} catch (error) {
+    proofError = error;
 } finally {
-    await browser?.close();
-    serverProcess?.kill("SIGTERM");
+    try {
+        await browser?.close();
+    } catch (error) {
+        proofError ??= error;
+    }
+    if (ownedServer) {
+        try {
+            await ownedServer.close();
+        } catch (error) {
+            proofError ??= error;
+        }
+        closeVerified = await waitForOwnedPortToClose();
+        if (!closeVerified) {
+            const closeError = new Error("SeqFX visual proof closed its Vite server, but port 5175 remained reachable.");
+            proofError ??= closeError;
+            report?.failures.push("server lifecycle: owned port 5175 remained reachable after close");
+        }
+    }
 }
+
+if (report) {
+    report.serverLifecycle = {
+        closeVerified,
+        initialPid: initialStatus?.pid ?? null,
+        ownedByProof: Boolean(ownedServer),
+        reusedExistingServer: isThisRepoServer(initialStatus),
+    };
+    await writeFile(path.join(outputDirectory, "manifest.json"), `${JSON.stringify(report, null, 2)}\n`);
+}
+
+if (proofError) throw proofError;
+
+process.stdout.write(
+    `SeqFX visual proof passed: ${report.screenshots.length} screenshots, ${report.measurements.length} measured states, ${report.inspectorDepth.length} full-depth inspector traversals.\n`,
+);
