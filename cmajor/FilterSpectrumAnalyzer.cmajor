@@ -1,5 +1,14 @@
 namespace wt
 {
+    /**
+     * Captures analysis windows for the filter spectrum view. The spectral
+     * math itself (Hann window, zero-padded FFT, magnitudes) runs on the UI
+     * thread at 20fps — see ui/shared/filter-spectrum.ts — because a
+     * 4096-point FFT inside one sample's advance costs several render quanta
+     * on a phone, and observation math belongs on the observer's thread.
+     * This processor only stores one incoming sample per advance and emits
+     * the finished window, so its cost is flat at every sample.
+     */
     processor FilterSpectrumAnalyzer
     {
         input stream float32 in;
@@ -7,7 +16,7 @@ namespace wt
         // ui/shared/analyzer-activity.ts). A plain int32 event, so every
         // fixture that compiles this file alone stays self-contained.
         input event int32 analyzerActivityIn;
-        output event FilterSpectrumFrame filterSpectrum;
+        output event FilterSpectrumCapture filterSpectrum;
 
         bool analyzerActive = false;
 
@@ -20,31 +29,6 @@ namespace wt
         let overlapSize = filterSpectrumWindowSize - hopSize;
 
         float32[filterSpectrumWindowSize] analysisBuffer;
-        float32[filterSpectrumFFTSize] fftBuffer;
-
-        float32[filterSpectrumWindowSize] hann()
-        {
-            float32[filterSpectrumWindowSize] window;
-
-            for (wrap<filterSpectrumWindowSize> index)
-                window[index] = 0.5f * (1.0f - std::intrinsics::cos (
-                    (float32 (twoPi) * float32 (index)) / float32 (filterSpectrumWindowSize - 1)
-                ));
-
-            return window;
-        }
-
-        float32[filterSpectrumWindowSize] window = hann();
-        float32 normalizationFactor = 1.0f / float32 (filterSpectrumWindowSize);
-
-        void copyAnalysisWindowToFFTBuffer()
-        {
-            for (wrap<filterSpectrumWindowSize> index)
-                fftBuffer[index] = analysisBuffer[index] * window[index];
-
-            for (int32 index = filterSpectrumWindowSize; index < filterSpectrumFFTSize; ++index)
-                fftBuffer.at (index) = 0.0f;
-        }
 
         void primeAnalysisWindow()
         {
@@ -89,9 +73,8 @@ namespace wt
             loop
             {
                 // Sleep frame by frame until a view opens, then window from
-                // fresh input. The wait costs one branch per sample; the FFT,
-                // windowing and 2048-float frame emission cost nothing while
-                // no view is listening.
+                // fresh input. The wait costs one branch per sample; the
+                // capture emission costs nothing while no view is listening.
                 while (! analyzerActive)
                     advance();
 
@@ -99,19 +82,9 @@ namespace wt
 
                 while (analyzerActive)
                 {
-                    copyAnalysisWindowToFFTBuffer();
-                    float32[filterSpectrumFFTSize] fft;
-                    std::frequency::realOnlyForwardFFT (fftBuffer, fft);
-
-                    FilterSpectrumFrame result;
+                    FilterSpectrumCapture result;
                     result.sampleRateHz = float32 (processor.frequency);
-
-                    for (wrap<filterSpectrumBinCount> index)
-                    {
-                        let real = fft[index];
-                        let imag = fft.at (filterSpectrumBinCount + index);
-                        result.magnitudes[index] = std::intrinsics::sqrt ((real * real) + (imag * imag)) * normalizationFactor;
-                    }
+                    result.samples = analysisBuffer;
 
                     filterSpectrum <- result;
                     advanceToNextWindow();

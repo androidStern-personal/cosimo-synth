@@ -665,6 +665,50 @@ test("filter spectrum normalization accepts wrapped payloads and rejects malform
     }), null);
 });
 
+test("filter spectrum computes magnitudes from raw engine captures on the UI thread", async () => {
+    const { normalizeFilterSpectrumMessage, computeFilterSpectrumMagnitudes } = await loadFilterSpectrumModule();
+
+    // A full-scale sine exactly on a bin: the Hann-windowed, 4x zero-padded
+    // FFT (4096 bins for a 1024 window) must peak at that bin with the Hann
+    // coherent gain halved across the +/- frequency pair (~0.25) and stay
+    // near-silent away from the lobe.
+    const windowSize = 1024;
+    const sampleRateHz = 48_000;
+    const cycles = 64; // bin 256 of 2048 -> 3 kHz at 48 kHz
+    const samples = Array.from({ length: windowSize }, (_, index) => (
+        Math.sin((2 * Math.PI * cycles * index) / windowSize)
+    ));
+
+    const normalized = normalizeFilterSpectrumMessage({ event: { sampleRateHz, samples } });
+    assert.notEqual(normalized, null);
+    assert.equal(normalized.sampleRateHz, sampleRateHz);
+    assert.equal(normalized.magnitudes.length, 2048);
+
+    const peakBin = normalized.magnitudes.reduce(
+        (best, value, index) => (value > normalized.magnitudes[best] ? index : best),
+        0,
+    );
+    assert.equal(peakBin, cycles * 4);
+    assert.ok(Math.abs(normalized.magnitudes[peakBin] - 0.25) < 0.005, `peak ${normalized.magnitudes[peakBin]}`);
+    assert.ok(normalized.magnitudes[peakBin + 64] < 1e-4, "spectrum leaks far from the sine lobe");
+
+    // Silence stays exactly silent, and the direct compute path agrees with
+    // the normalizer's samples branch.
+    const silent = computeFilterSpectrumMagnitudes(new Array(windowSize).fill(0));
+    assert.equal(silent.length, 2048);
+    assert.ok(silent.every((value) => value === 0));
+    assert.deepEqual(
+        normalizeFilterSpectrumMessage({ event: { sampleRateHz, samples } }).magnitudes,
+        computeFilterSpectrumMagnitudes(samples),
+    );
+
+    // Captures shorter than a real window are rejected like malformed
+    // magnitude payloads.
+    assert.equal(normalizeFilterSpectrumMessage({
+        event: { sampleRateHz, samples: [0, 0, 0] },
+    }), null);
+});
+
 test("filter spectrum bands are dense, monotonic, and log-spaced", async () => {
     const {
         buildFilterSpectrumBands,
