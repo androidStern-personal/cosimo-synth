@@ -23,6 +23,8 @@
     "test:modulation:routing": "node --test tests/test_modulation_runtime_program.mjs",
     "test:native:quickjs": "./scripts/test_quickjs_modulation_restore.sh",
     "test:web:bundle": "node --test tests/test_web_bundle_contract.mjs",
+ "bench:engine": "node scripts/bench_engine_offline.mjs",
+ "test:engine:determinism": "node scripts/compare_engine_renders.mjs build/web/cmaj_Cosimo_Synth.offline.js build/web/cmaj_Cosimo_Synth.offline.js",
     "bounce:bank-from-wav": "node scripts/wav_to_bounce_bank.mjs",
     "probe:bounce:install": "node scripts/probe_bounce_bank_install.mjs",
     "test:bounce:bank": "node --test tests/test_bounce_bank_format.mjs",
