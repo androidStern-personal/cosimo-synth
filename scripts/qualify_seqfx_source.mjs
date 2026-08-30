@@ -2,26 +2,23 @@
 
 import { spawn } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
-import { access, readdir } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..");
 const sourceBrowserTest = "tests/test_seqfx_patch_view_browser.mjs";
-const sourceBrowserOriginEnvironmentKey = "SEQFX_QUALIFICATION_SOURCE_ORIGIN";
-const sourceBrowserOriginLiteral = 'const DEV_SERVER_ORIGIN = "http://127.0.0.1:5175";';
-const effectLoaderOriginLiteral = 'export const DEFAULT_EFFECT_DEV_ORIGIN = "http://127.0.0.1:5175";';
-const sourceBrowserLoaderRegistration = `data:text/javascript,${encodeURIComponent([
-    'import { register } from "node:module";',
-    `register(${JSON.stringify(pathToFileURL(scriptPath).href)}, import.meta.url);`,
-].join(" "))}`;
-const sourceBrowserEffectLoaders = new Set([
-    path.join(repoRoot, "fx/seqfx/view/index.js"),
-    path.join(repoRoot, "ui/shared/effects/effect-view-loader.js"),
-]);
+const sourceBrowserOriginEnvironmentKey = "SEQFX_TEST_DEV_SERVER_ORIGIN";
+const patchViewLayoutContractName = "desktop and shared effect dev entries load React Grab only in interactive Vite dev mode";
 
 const testGroups = Object.freeze({
+    crossSurfaceNode: Object.freeze([
+        "tests/test_effect_snapshot_bank.mjs",
+    ]),
+    patchViewLayoutContract: Object.freeze([
+        "tests/test_patch_view_layout.mjs",
+    ]),
     nodeUnitAndProperty: Object.freeze([
         "tests/test_seqfx_aux_source.mjs",
         "tests/test_seqfx_block_properties.mjs",
@@ -127,6 +124,17 @@ async function assertReadable(relativePath) {
     }
 }
 
+async function assertNamedNodeTest(relativePath, testName) {
+    const source = await readFile(path.join(repoRoot, relativePath), "utf8");
+    const quotedName = JSON.stringify(testName);
+    const matchCount = source.split(quotedName).length - 1;
+    if (matchCount !== 1) {
+        throw new Error(
+            `${relativePath} must contain exactly one test named ${quotedName}; found ${matchCount}.`,
+        );
+    }
+}
+
 async function assertCompleteTestInventory() {
     const discovered = (await readdir(path.join(repoRoot, "tests"), { withFileTypes: true }))
         .filter((entry) => entry.isFile() && /^test_seqfx_.*\.(?:mjs|py)$/u.test(entry.name))
@@ -135,8 +143,12 @@ async function assertCompleteTestInventory() {
     const assignments = Object.entries(testGroups).flatMap(([group, files]) => (
         files.map((file) => ({ file, group }))
     ));
-    const assigned = assignments.map(({ file }) => file).sort();
-    const duplicates = assigned.filter((file, index) => assigned.indexOf(file) !== index);
+    const prefixedAssignments = assignments.filter(({ file }) => (
+        /^tests\/test_seqfx_.*\.(?:mjs|py)$/u.test(file)
+    ));
+    const allAssigned = assignments.map(({ file }) => file).sort();
+    const assigned = prefixedAssignments.map(({ file }) => file).sort();
+    const duplicates = allAssigned.filter((file, index) => allAssigned.indexOf(file) !== index);
     const unassigned = discovered.filter((file) => !assigned.includes(file));
     const missing = assigned.filter((file) => !discovered.includes(file));
 
@@ -152,7 +164,7 @@ async function assertCompleteTestInventory() {
         ].join("\n"));
     }
 
-    console.log(`Discovered and assigned ${discovered.length} test_seqfx_* files across ${assignments.length} unique slots.`);
+    console.log(`Discovered and assigned ${discovered.length} test_seqfx_* files across ${prefixedAssignments.length} unique slots.`);
     for (const [group, files] of Object.entries(testGroups)) {
         console.log(`- ${group}: ${files.length}`);
     }
@@ -160,6 +172,7 @@ async function assertCompleteTestInventory() {
 
 async function preflight() {
     await assertCompleteTestInventory();
+    await assertNamedNodeTest(testGroups.patchViewLayoutContract[0], patchViewLayoutContractName);
 
     const requiredFiles = [
         "fx/seqfx/check-types.mjs",
@@ -195,37 +208,21 @@ async function preflight() {
     ]);
 }
 
-async function runNodeTests(files) {
-    await runCommand(process.execPath, ["--test", "--test-concurrency=1", ...files]);
+async function runNodeTests(files, { testNamePattern } = {}) {
+    const arguments_ = ["--test", "--test-concurrency=1"];
+    if (testNamePattern !== undefined) {
+        arguments_.push(`--test-name-pattern=^${testNamePattern}$`);
+    }
+    arguments_.push(...files);
+    await runCommand(process.execPath, arguments_);
 }
 
 async function runSourceBrowserTests() {
     const { createServer } = await import("vite");
-    let sourceBrowserOrigin;
     const viteServer = await createServer({
         configFile: path.join(repoRoot, "fx/vite.config.mjs"),
         clearScreen: false,
         logLevel: "warn",
-        plugins: [{
-            name: "seqfx-qualification-ephemeral-dev-origin",
-            enforce: "pre",
-            transform(source, id) {
-                const sourcePath = id.split("?", 1)[0];
-                if (!sourceBrowserEffectLoaders.has(sourcePath)) {
-                    return undefined;
-                }
-                if (!sourceBrowserOrigin) {
-                    throw new Error("SeqFX qualification origin was not bound before the effect loader was requested.");
-                }
-                if (!source.includes(effectLoaderOriginLiteral)) {
-                    throw new Error(`SeqFX effect loader origin contract changed: ${path.relative(repoRoot, sourcePath)}`);
-                }
-                return source.replace(
-                    effectLoaderOriginLiteral,
-                    `export const DEFAULT_EFFECT_DEV_ORIGIN = ${JSON.stringify(sourceBrowserOrigin)};`,
-                );
-            },
-        }],
         server: {
             host: "127.0.0.1",
             port: 0,
@@ -239,11 +236,9 @@ async function runSourceBrowserTests() {
         if (!address || typeof address === "string") {
             throw new Error("Ephemeral SeqFX source-browser server did not expose its bound port.");
         }
-        sourceBrowserOrigin = `http://127.0.0.1:${address.port}`;
+        const sourceBrowserOrigin = `http://127.0.0.1:${address.port}`;
         console.log(`Ephemeral source-browser origin: ${sourceBrowserOrigin}`);
         await runCommand(process.execPath, [
-            "--import",
-            sourceBrowserLoaderRegistration,
             "--test",
             "--test-concurrency=1",
             ...testGroups.sourceBrowser,
@@ -286,6 +281,16 @@ const phases = Object.freeze([
     {
         name: "Strict SeqFX TypeScript",
         run: () => runCommand(process.execPath, ["fx/seqfx/check-types.mjs"]),
+    },
+    {
+        name: "SeqFX cross-surface snapshot-bank contracts",
+        run: () => runNodeTests(testGroups.crossSurfaceNode),
+    },
+    {
+        name: "SeqFX shared-effect interactive-tooling contract",
+        run: () => runNodeTests(testGroups.patchViewLayoutContract, {
+            testNamePattern: patchViewLayoutContractName,
+        }),
     },
     {
         name: "SeqFX Node unit and deterministic property suites",
@@ -350,33 +355,6 @@ async function main() {
 
     console.log(`\nSeqFX source qualification passed in ${formatSeconds(performance.now() - qualificationStartedAt)}.`);
     console.log("Excluded by design: native/plugin builds, fixed-port dev servers, installs, signing, notarization, host/DAW acceptance, network publication, and credential access.");
-}
-
-export async function load(url, context, nextLoad) {
-    const loaded = await nextLoad(url, context);
-    const sourceBrowserOrigin = process.env[sourceBrowserOriginEnvironmentKey];
-    if (!sourceBrowserOrigin || url !== pathToFileURL(path.join(repoRoot, sourceBrowserTest)).href) {
-        return loaded;
-    }
-    if (!/^http:\/\/127\.0\.0\.1:\d+$/u.test(sourceBrowserOrigin)) {
-        throw new Error(`Invalid ${sourceBrowserOriginEnvironmentKey}: ${sourceBrowserOrigin}`);
-    }
-
-    const source = Buffer.isBuffer(loaded.source)
-        ? loaded.source.toString("utf8")
-        : String(loaded.source);
-    const replacement = `const DEV_SERVER_ORIGIN = ${JSON.stringify(sourceBrowserOrigin)};`;
-    if (!source.includes(sourceBrowserOriginLiteral)) {
-        throw new Error("SeqFX source-browser origin contract changed; refusing to run a stale qualification override.");
-    }
-    const transformed = source.replace(sourceBrowserOriginLiteral, replacement);
-    if (transformed.includes(sourceBrowserOriginLiteral)) {
-        throw new Error("SeqFX source-browser qualification did not replace the fixed development origin.");
-    }
-    return {
-        ...loaded,
-        source: transformed,
-    };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath) {

@@ -8,7 +8,41 @@ import { inflateSync } from "node:zlib";
 import { chromium } from "playwright";
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
-const DEV_SERVER_ORIGIN = "http://127.0.0.1:5175";
+const DEFAULT_DEV_SERVER_ORIGIN = "http://127.0.0.1:5175";
+const testDevServerOriginOverride = process.env.SEQFX_TEST_DEV_SERVER_ORIGIN;
+
+function resolveTestDevServerOrigin(value) {
+    if (value === undefined) {
+        return DEFAULT_DEV_SERVER_ORIGIN;
+    }
+    if (typeof value !== "string" || value.trim().length === 0) {
+        throw new Error("SEQFX_TEST_DEV_SERVER_ORIGIN must be a non-empty loopback HTTP origin.");
+    }
+
+    let parsed;
+    try {
+        parsed = new URL(value.trim());
+    } catch {
+        throw new Error("SEQFX_TEST_DEV_SERVER_ORIGIN must be a valid loopback HTTP origin.");
+    }
+    const loopbackHost = parsed.hostname === "127.0.0.1"
+        || parsed.hostname === "localhost"
+        || parsed.hostname === "[::1]";
+    const originOnly = parsed.pathname === "/" && parsed.search === "" && parsed.hash === "";
+    if (
+        parsed.protocol !== "http:"
+        || !loopbackHost
+        || parsed.port === ""
+        || parsed.username !== ""
+        || parsed.password !== ""
+        || !originOnly
+    ) {
+        throw new Error("SEQFX_TEST_DEV_SERVER_ORIGIN must be an explicit loopback HTTP origin with no path, query, or credentials.");
+    }
+    return parsed.origin;
+}
+
+const DEV_SERVER_ORIGIN = resolveTestDevServerOrigin(testDevServerOriginOverride);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SEQFX_STEP_COUNT = 32;
 const SEQFX_STATE_KEY = "seqfx.v7";
@@ -612,7 +646,7 @@ async function loadSeqFxHarness(page) {
 
 async function createLoaderHarness(page) {
     await openSameOriginBlankPage(page);
-    await page.evaluate(async () => {
+    await page.evaluate(async ({ devOrigin, useDefaultLoader }) => {
         document.body.innerHTML = '<div id="root" style="width:1120px;height:680px"></div>';
 
         class SeqFxLoaderHarnessPatchConnection {
@@ -736,14 +770,34 @@ async function createLoaderHarness(page) {
         const workerService = workerModule.createSeqFxWorkerService(patchConnection);
         workerService.start();
         const loaderModule = await import(`/fx/seqfx/view/index.js?seqfx-loader-test=${Date.now()}`);
-        const view = await loaderModule.default(patchConnection);
+        const createView = useDefaultLoader
+            ? loaderModule.default
+            : loaderModule.createEffectPatchView({ devOrigin });
+        const view = await createView(patchConnection);
         document.getElementById("root").appendChild(view);
         window.__SEQFX_LOADER_HARNESS__ = {
             patchConnection,
             getSnapshot: () => patchConnection.getSnapshot(),
         };
+    }, {
+        devOrigin: DEV_SERVER_ORIGIN,
+        useDefaultLoader: testDevServerOriginOverride === undefined,
     });
 }
+
+test("seqfx_test_dev_server_origin_defaults_to_the_standalone_5175_contract", () => {
+    assert.equal(resolveTestDevServerOrigin(undefined), DEFAULT_DEV_SERVER_ORIGIN);
+});
+
+test("seqfx_test_dev_server_origin_accepts_only_explicit_loopback_http_origins", () => {
+    assert.equal(resolveTestDevServerOrigin(" http://127.0.0.1:43123/ "), "http://127.0.0.1:43123");
+    assert.equal(resolveTestDevServerOrigin("http://localhost:43123"), "http://localhost:43123");
+    assert.throws(() => resolveTestDevServerOrigin(""), /non-empty loopback HTTP origin/);
+    assert.throws(() => resolveTestDevServerOrigin("https://127.0.0.1:43123"), /explicit loopback HTTP origin/);
+    assert.throws(() => resolveTestDevServerOrigin("http://example.com:43123"), /explicit loopback HTTP origin/);
+    assert.throws(() => resolveTestDevServerOrigin("http://127.0.0.1:43123/path"), /explicit loopback HTTP origin/);
+    assert.throws(() => resolveTestDevServerOrigin("http://user:pass@127.0.0.1:43123"), /explicit loopback HTTP origin/);
+});
 
 before(async () => {
     if (!await canUseExistingServer()) {
