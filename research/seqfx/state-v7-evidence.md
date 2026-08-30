@@ -32,11 +32,19 @@ Measured with `Buffer.byteLength` over the exact JSON sent to Cmajor stored stat
 | Fixture | Baseline v5 | Sparse v7 | Target | Result |
 | --- | ---: | ---: | ---: | --- |
 | Init/default | 663,686 B | 1,010 B | < 16 KiB | pass; 99.85% smaller |
-| 12 patterns × 4 chains × 32 independently triggered active cells | not recorded | 258,978 B | < 256 KiB (262,144 B) | pass; 3,166 B margin |
+| 12 patterns × 4 chains × 32 independently triggered active cells | not recorded | 247,970 B | < 256 KiB (262,144 B) | pass; 14,174 B margin |
 
 The dense fixture intentionally prevents block coalescing. It cycles all 12
 registered effect IDs, assigns a non-default mix, and uses each effect's current
 default parameter vector.
+
+The Flange checkpoint first measured that same fully populated fixture at
+264,866 bytes, 2,722 bytes over budget. The v7 writer now omits the redundant
+`length: 1` field for the common one-step block. The strict parser treats an
+absent length as one while continuing to accept all earlier v7 documents with
+an explicit length. Runtime-upload equivalence remains tested. This is a
+backward-compatible sparse encoding refinement, not a schema-version change or
+a relaxed budget.
 
 ## Migration behavior
 
@@ -96,6 +104,6 @@ cmaj play --dry-run --stop-on-error fx/seqfx/SeqFx.cmajorpatch
   release-phase host gate after all DSP and UI work is integrated.
 - It does not turn automated upload equivalence into subjective Tape Stop
   listening acceptance.
-- The 256 KiB dense stress case has only a 3,166-byte margin. The v7 schema is
+- The 256 KiB dense stress case has a 14,174-byte margin. The v7 schema is
   frozen for the roadmap; any later persisted fields require a new size check
   and should remain optional/default-elided.

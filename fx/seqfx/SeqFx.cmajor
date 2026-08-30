@@ -42,6 +42,9 @@ namespace seqfx
     let vibroMaxDelaySeconds = 0.4f;
     let vibroTimingSync = 0;
     let vibroTimingFree = 1;
+    let flangeMaxDelaySeconds = 0.025f;
+    let flangeTimingSync = 0;
+    let flangeTimingFree = 1;
     let lifecycleIdle = 0;
     let lifecycleEntering = 1;
     let lifecycleActive = 2;
@@ -628,6 +631,7 @@ processor SeqFx [[ main ]]
     let stutterBufferSize = int (processor.maxFrequency * seqfx::maxStutterSeconds) + 8;
     let combBufferSize = int (processor.maxFrequency * seqfx::combMaxDelaySeconds) + 8;
     let vibroBufferSize = int (processor.maxFrequency * seqfx::vibroMaxDelaySeconds) + 8;
+    let flangeBufferSize = int (processor.maxFrequency * seqfx::flangeMaxDelaySeconds) + 8;
 
     bool[seqfx::laneCount, seqfx::stepCount] activeSteps;
     bool[seqfx::laneCount, seqfx::stepCount] triggerSteps;
@@ -658,6 +662,7 @@ processor SeqFx [[ main ]]
     float32<2>[seqfx::laneCount, combBufferSize] combReferenceHistory;
     float32[seqfx::laneCount, seqfx::combModeCount, combBufferSize] combVectorHistory;
     float32<2>[seqfx::laneCount, vibroBufferSize] vibroHistory;
+    float32<2>[seqfx::laneCount, flangeBufferSize] flangeHistory;
     wrap<seqfx::tapePrimaryBufferSize>[seqfx::laneCount] tapePrimaryWriteIndex;
     wrap<seqfx::tapeCoarseBufferSize>[seqfx::laneCount] tapeCoarseWriteIndex;
     int32[seqfx::laneCount] tapePrimaryValidSamples;
@@ -840,6 +845,29 @@ processor SeqFx [[ main ]]
     wrap<vibroBufferSize>[seqfx::laneCount] vibroWriteIndex;
     int32[seqfx::laneCount] vibroValidSamples;
 
+    bool[seqfx::laneCount] flangeActive;
+    float32[seqfx::laneCount] flangeDelayMs;
+    float32[seqfx::laneCount] flangeDepthMs;
+    float32[seqfx::laneCount] flangeRateHz;
+    float32[seqfx::laneCount] flangeFeedback;
+    float32[seqfx::laneCount] flangeSpreadDegrees;
+    int32[seqfx::laneCount] flangeFeedbackPolarity;
+    int32[seqfx::laneCount] flangeTimingMode;
+    int32[seqfx::laneCount] flangeDivision;
+    float32[seqfx::laneCount] flangeDelayCurrent;
+    float32[seqfx::laneCount] flangeDepthCurrent;
+    float32[seqfx::laneCount] flangeRateCurrent;
+    float32[seqfx::laneCount] flangeFeedbackCurrent;
+    float32[seqfx::laneCount] flangeSpreadCurrent;
+    float32[seqfx::laneCount] flangePolarityCurrent;
+    float32[seqfx::laneCount] flangePolarityTarget;
+    float32[seqfx::laneCount] flangeMixCurrent;
+    float32[seqfx::laneCount] flangeMixTarget;
+    float32[seqfx::laneCount] flangeHistoryFade;
+    float32[seqfx::laneCount] flangePhase;
+    wrap<flangeBufferSize>[seqfx::laneCount] flangeWriteIndex;
+    int32[seqfx::laneCount] flangeValidSamples;
+
     bool[seqfx::laneCount] tapeLaneActive;
     float32[seqfx::laneCount] tapeMixCurrent;
     float32[seqfx::laneCount] tapeMixTarget;
@@ -933,6 +961,23 @@ processor SeqFx [[ main ]]
             vibroDepthCurrent[lane] = vibroDepthCents[lane];
             vibroSpreadCurrent[lane] = vibroSpreadDegrees[lane];
             vibroHistoryFade[lane] = 0.0f;
+
+            flangeDelayMs[lane] = 1.2f;
+            flangeDepthMs[lane] = 3.5f;
+            flangeRateHz[lane] = 0.28f;
+            flangeFeedback[lane] = 0.55f;
+            flangeSpreadDegrees[lane] = 120.0f;
+            flangeFeedbackPolarity[lane] = 0;
+            flangeTimingMode[lane] = seqfx::flangeTimingFree;
+            flangeDivision[lane] = 5;
+            flangeDelayCurrent[lane] = flangeDelayMs[lane];
+            flangeDepthCurrent[lane] = flangeDepthMs[lane];
+            flangeRateCurrent[lane] = flangeRateHz[lane];
+            flangeFeedbackCurrent[lane] = 0.0f;
+            flangeSpreadCurrent[lane] = flangeSpreadDegrees[lane];
+            flangePolarityCurrent[lane] = 1.0f;
+            flangePolarityTarget[lane] = 1.0f;
+            flangeHistoryFade[lane] = 0.0f;
 
             for (wrap<seqfx::tapeVoiceCount> voice)
                 tapeVoiceRestartAge[lane, voice] = seqfx::transitionCrossfadeFrames;
@@ -1466,6 +1511,15 @@ processor SeqFx [[ main ]]
             vibroPhase[lane] = 0.0f;
             vibroPreviousWaveform[lane] = vibroWaveform[lane];
             vibroWaveformFade[lane] = 1.0f;
+            flangeWriteIndex[lane] = 0;
+            flangeValidSamples[lane] = 0;
+            flangeFeedbackCurrent[lane] = 0.0f;
+            flangeMixCurrent[lane] = 0.0f;
+            flangeMixTarget[lane] = 0.0f;
+            flangeHistoryFade[lane] = 0.0f;
+            flangePhase[lane] = 0.0f;
+            flangePolarityCurrent[lane] = flangeFeedbackPolarity[lane] == 0 ? 1.0f : -1.0f;
+            flangePolarityTarget[lane] = flangePolarityCurrent[lane];
             filterActive[lane] = false;
             crusherActive[lane] = false;
             ringActive[lane] = false;
@@ -1473,6 +1527,7 @@ processor SeqFx [[ main ]]
             dirtyActive[lane] = false;
             combActive[lane] = false;
             vibroActive[lane] = false;
+            flangeActive[lane] = false;
             tapeLaneActive[lane] = false;
             stutterLaneActive[lane] = false;
             chainPreviousEffectType[lane] = chainEffectType[lane];
@@ -1761,6 +1816,7 @@ processor SeqFx [[ main ]]
         let wasDirtyActive = dirtyActive[lane];
         let wasCombActive = combActive[lane];
         let wasVibroActive = vibroActive[lane];
+        let wasFlangeActive = flangeActive[lane];
         let wasTapeActive = tapeLaneActive[lane];
         let wasStutterActive = stutterLaneActive[lane];
 
@@ -1773,6 +1829,7 @@ processor SeqFx [[ main ]]
         dirtyActive[lane] = effectType == seqfx::effectDirty;
         combActive[lane] = effectType == seqfx::effectComb;
         vibroActive[lane] = effectType == seqfx::effectVibro;
+        flangeActive[lane] = effectType == seqfx::effectFlange;
         tapeLaneActive[lane] = effectType == seqfx::effectTapeStop;
         stutterLaneActive[lane] = effectType == seqfx::effectStutter;
 
@@ -1785,6 +1842,7 @@ processor SeqFx [[ main ]]
         if (combActive[lane])
             combMixTarget[lane] = targetMix;
         vibroMixTarget[lane] = vibroActive[lane] ? targetMix : 0.0f;
+        flangeMixTarget[lane] = flangeActive[lane] ? targetMix : 0.0f;
         tapeMixTarget[lane] = tapeLaneActive[lane] ? targetMix : 0.0f;
         stutterMixTarget[lane] = stutterLaneActive[lane] ? targetMix : 0.0f;
 
@@ -1822,6 +1880,9 @@ processor SeqFx [[ main ]]
 
         if (vibroActive[lane])
             latchVibroStep (lane, wasVibroActive);
+
+        if (flangeActive[lane])
+            latchFlangeStep (lane, wasFlangeActive);
 
         if (tapeLaneActive[lane])
             latchTapeStep (lane, wasTapeActive);
@@ -2050,6 +2111,37 @@ processor SeqFx [[ main ]]
             vibroMixCurrent[lane] = 0.0f;
             vibroPreviousWaveform[lane] = vibroWaveform[lane];
             vibroWaveformFade[lane] = 1.0f;
+        }
+    }
+
+    void latchFlangeStep (wrap<seqfx::laneCount> lane, bool wasActive)
+    {
+        let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
+
+        if (wasActive && ! triggerSteps[lane, currentStepIndex] && ! relatchingFromPatternUpload)
+            return;
+
+        let blockStart = blockStartStep (lane, currentStep);
+        let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        flangeDelayMs[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 0], 0.2f, 10.0f);
+        flangeDepthMs[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 1], 0.0f, 10.0f);
+        flangeRateHz[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 0.02f, 10.0f);
+        flangeFeedback[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.0f, 0.95f);
+        flangeSpreadDegrees[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 180.0f);
+        flangeFeedbackPolarity[lane] = snapValue (stepParams[lane, blockStartIndex, 5], 0, 1);
+        flangeTimingMode[lane] = snapValue (stepParams[lane, blockStartIndex, 6], 0, 1);
+        flangeDivision[lane] = snapValue (stepParams[lane, blockStartIndex, 7], 0, 6);
+        flangePolarityTarget[lane] = flangeFeedbackPolarity[lane] == 0 ? 1.0f : -1.0f;
+
+        if (! wasActive)
+        {
+            flangeDelayCurrent[lane] = flangeDelayMs[lane];
+            flangeDepthCurrent[lane] = flangeDepthMs[lane];
+            flangeRateCurrent[lane] = resolveFlangeRateHz (lane);
+            flangeFeedbackCurrent[lane] = flangeFeedback[lane];
+            flangeSpreadCurrent[lane] = flangeSpreadDegrees[lane];
+            flangePolarityCurrent[lane] = flangePolarityTarget[lane];
+            flangeMixCurrent[lane] = 0.0f;
         }
     }
 
@@ -3299,6 +3391,165 @@ processor SeqFx [[ main ]]
         );
     }
 
+    float64 flangeDivisionQuarterNotes (int32 division)
+    {
+        if (division == 0) return 0.25;
+        if (division == 1) return 0.5;
+        if (division == 2) return 1.0;
+        if (division == 3) return 2.0;
+        if (division == 4) return 4.0;
+        if (division == 5) return 8.0;
+        return 16.0;
+    }
+
+    float32 resolveFlangeRateHz (wrap<seqfx::laneCount> lane)
+    {
+        if (flangeTimingMode[lane] == seqfx::flangeTimingFree)
+            return seqfx::clampFloat (flangeRateHz[lane], 0.02f, 10.0f);
+
+        let cycleFrames = framesPerQuarter() * flangeDivisionQuarterNotes (flangeDivision[lane]);
+        return seqfx::clampFloat (
+            float32 (processor.frequency / std::intrinsics::max (1.0, cycleFrames)),
+            0.005f,
+            40.0f
+        );
+    }
+
+    float32<2> readFlangeAt (wrap<seqfx::laneCount> lane, int32 index)
+    {
+        return flangeHistory[lane, wrap<flangeBufferSize> (index)];
+    }
+
+    float32<2> readFlangeHistory (wrap<seqfx::laneCount> lane, float32 delaySamples)
+    {
+        if (flangeValidSamples[lane] < int32 (std::intrinsics::ceil (delaySamples)) + 3)
+            return float32<2> (0.0f);
+
+        let readPosition = float32 (int32 (flangeWriteIndex[lane])) - delaySamples;
+        let currentIndex = int32 (std::intrinsics::floor (readPosition));
+        let fraction = readPosition - float32 (currentIndex);
+        return seqfx::cubicHermite4 (
+            readFlangeAt (lane, currentIndex - 1),
+            readFlangeAt (lane, currentIndex),
+            readFlangeAt (lane, currentIndex + 1),
+            readFlangeAt (lane, currentIndex + 2),
+            fraction
+        );
+    }
+
+    void writeFlangeHistory (wrap<seqfx::laneCount> lane, float32<2> sample)
+    {
+        let writeIndex = flangeWriteIndex[lane];
+        flangeHistory[lane, writeIndex] = sample;
+        flangeWriteIndex[lane] = wrap<flangeBufferSize> (int32 (writeIndex) + 1);
+        if (flangeValidSamples[lane] < flangeBufferSize - 4)
+            flangeValidSamples[lane] += 1;
+    }
+
+    float32 flangeDelaySamples (float32 phase, float32 delayMs, float32 depthMs)
+    {
+        let modulation = 0.5f - (0.5f * std::intrinsics::cos (phase * 2.0f * seqfx::pi));
+        let totalMs = seqfx::clampFloat (delayMs, 0.2f, 10.0f)
+            + (seqfx::clampFloat (depthMs, 0.0f, 10.0f) * modulation);
+        return seqfx::clampFloat (
+            totalMs * float32 (processor.frequency) * 0.001f,
+            4.0f,
+            float32 (flangeBufferSize - 4)
+        );
+    }
+
+    float32<2> processFlange (wrap<seqfx::laneCount> lane, float32<2> stage)
+    {
+        let parameterSmoothing = 1.0f - std::intrinsics::exp (
+            -1.0f / (0.025f * float32 (processor.frequency))
+        );
+        var targetDelay = flangeDelayMs[lane];
+        var targetDepth = flangeDepthMs[lane];
+        var targetRate = resolveFlangeRateHz (lane);
+        var targetFeedback = 0.0f;
+        var targetSpread = flangeSpreadDegrees[lane];
+        if (flangeActive[lane])
+        {
+            targetDelay = auxLogParamValue (lane, 0, flangeDelayMs[lane], 0.2f, 10.0f);
+            targetDepth = seqfx::clampFloat (auxParamValue (lane, 1, flangeDepthMs[lane]), 0.0f, 10.0f);
+            if (flangeTimingMode[lane] == seqfx::flangeTimingFree)
+                targetRate = auxLogParamValue (lane, 2, flangeRateHz[lane], 0.02f, 10.0f);
+            targetFeedback = seqfx::clampFloat (auxParamValue (lane, 3, flangeFeedback[lane]), 0.0f, 0.95f);
+            targetSpread = seqfx::clampFloat (auxParamValue (lane, 4, flangeSpreadDegrees[lane]), 0.0f, 180.0f);
+        }
+
+        flangeDelayCurrent[lane] += (targetDelay - flangeDelayCurrent[lane]) * parameterSmoothing;
+        flangeDepthCurrent[lane] += (targetDepth - flangeDepthCurrent[lane]) * parameterSmoothing;
+        flangeRateCurrent[lane] += (targetRate - flangeRateCurrent[lane]) * parameterSmoothing;
+        flangeSpreadCurrent[lane] += (targetSpread - flangeSpreadCurrent[lane]) * parameterSmoothing;
+        if (flangeActive[lane])
+            flangeFeedbackCurrent[lane] += (targetFeedback - flangeFeedbackCurrent[lane]) * parameterSmoothing;
+        else
+            flangeFeedbackCurrent[lane] = seqfx::moveTowards (
+                flangeFeedbackCurrent[lane], 0.0f, 1.0f / seqfx::transitionCrossfadeFrames
+            );
+        flangePolarityCurrent[lane] = seqfx::moveTowards (
+            flangePolarityCurrent[lane],
+            flangePolarityTarget[lane],
+            2.0f / seqfx::transitionCrossfadeFrames
+        );
+        flangeMixCurrent[lane] = seqfx::moveTowards (
+            flangeMixCurrent[lane],
+            flangeMixTarget[lane],
+            1.0f / seqfx::transitionCrossfadeFrames
+        );
+
+        let rateHz = seqfx::clampFloat (flangeRateCurrent[lane], 0.005f, 40.0f);
+        let phase = flangePhase[lane];
+        flangePhase[lane] = seqfx::unitWrap (
+            phase + (rateHz / float32 (processor.frequency))
+        );
+        let spreadPhase = seqfx::clampFloat (flangeSpreadCurrent[lane], 0.0f, 180.0f) / 360.0f;
+        let leftDelay = flangeDelaySamples (
+            phase, flangeDelayCurrent[lane], flangeDepthCurrent[lane]
+        );
+        let rightDelay = flangeDelaySamples (
+            seqfx::unitWrap (phase + spreadPhase),
+            flangeDelayCurrent[lane],
+            flangeDepthCurrent[lane]
+        );
+        let requiredDelay = std::intrinsics::max (leftDelay, rightDelay);
+        if (flangeValidSamples[lane] < int32 (std::intrinsics::ceil (requiredDelay)) + 3)
+        {
+            flangeHistoryFade[lane] = 0.0f;
+            writeFlangeHistory (lane, stage);
+            return stage;
+        }
+
+        flangeHistoryFade[lane] = seqfx::moveTowards (
+            flangeHistoryFade[lane],
+            1.0f,
+            1.0f / seqfx::transitionCrossfadeFrames
+        );
+        let leftRead = readFlangeHistory (lane, leftDelay);
+        let rightRead = readFlangeHistory (lane, rightDelay);
+        let wet = float32<2> (leftRead[0], rightRead[1]);
+        let feedbackGain = seqfx::clampFloat (flangeFeedbackCurrent[lane], 0.0f, 0.95f)
+            * seqfx::clampFloat (flangePolarityCurrent[lane], -1.0f, 1.0f);
+        let feedbackInput = stage + (wet * feedbackGain);
+        writeFlangeHistory (lane, float32<2> (
+            seqfx::clampFloat (feedbackInput[0], -4.0f, 4.0f),
+            seqfx::clampFloat (feedbackInput[1], -4.0f, 4.0f)
+        ));
+
+        if (! flangeActive[lane] || flangeMixCurrent[lane] <= 0.000001f)
+            return stage;
+
+        let flanged = (stage + wet) * 0.5f;
+        let combined = stage + (
+            (flanged - stage) * flangeMixCurrent[lane] * flangeHistoryFade[lane]
+        );
+        return float32<2> (
+            seqfx::clampFloat (combined[0], -4.0f, 4.0f),
+            seqfx::clampFloat (combined[1], -4.0f, 4.0f)
+        );
+    }
+
     float32<2> processDirty (wrap<seqfx::laneCount> lane, float32<2> stage)
     {
         dirtyMixCurrent[lane] = seqfx::moveTowards (
@@ -3584,6 +3835,7 @@ processor SeqFx [[ main ]]
         let vibroInput = stage;
         stage = processVibro (lane, stage);
         writeVibroHistory (lane, vibroInput);
+        stage = processFlange (lane, stage);
 
         writeTapeHistory (lane, stage);
         stage = processTapeStop (lane, stage);
@@ -3691,6 +3943,7 @@ processor SeqFx [[ main ]]
                 for (wrap<seqfx::laneCount> lane)
                 {
                     writeVibroHistory (lane, stage);
+                    writeFlangeHistory (lane, stage);
                     writeTapeHistory (lane, stage);
                 }
             }

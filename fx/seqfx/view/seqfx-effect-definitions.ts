@@ -299,12 +299,19 @@ const definitions = [
         fontaudioIcon: "fad-phase",
         lifecycle: "modulatedDelay",
         parameters: [
-            parameter("delayMs", "Delay", 0.1, 10, 1.2, 0.01, { unit: "ms", scale: "log" }),
+            parameter("delayMs", "Delay", 0.2, 10, 1.2, 0.01, { unit: "ms", scale: "log" }),
             parameter("depthMs", "Depth", 0, 10, 3.5, 0.01, { unit: "ms" }),
             parameter("rateHz", "Rate", 0.02, 10, 0.28, 0.01, { unit: "Hz", scale: "log" }),
-            parameter("feedback", "Feedback", -0.95, 0.95, 0.55, 0.01, { unit: "%" }),
+            parameter("feedback", "Feedback", 0, 0.95, 0.55, 0.01, { unit: "%" }),
             parameter("spreadDegrees", "Spread", 0, 180, 120, 1, { unit: "degrees" }),
-            parameter("polarity", "Polarity", 0, 1, 0, 1, { latch: "trigger", auxEligible: false, integer: true, options: ["Positive", "Negative"] }),
+            parameter("polarity", "Polarity", 0, 1, 0, 1, { latch: "trigger", auxEligible: false, integer: true, options: ["Normal", "Inverse"] }),
+            parameter("timingMode", "Timing", 0, 1, 1, 1, { latch: "trigger", auxEligible: false, integer: true, options: ["Sync", "Free"] }),
+            parameter("division", "Division", 0, 6, 5, 1, {
+                latch: "trigger",
+                auxEligible: false,
+                integer: true,
+                options: ["1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars"],
+            }),
         ],
     },
     {

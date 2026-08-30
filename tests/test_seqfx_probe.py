@@ -28,6 +28,7 @@ EFFECT_COMB = 6
 EFFECT_RING = 7
 EFFECT_TALK_BOX = 9
 EFFECT_VIBRO = 10
+EFFECT_FLANGE = 11
 EFFECT_DIRTY = 12
 LIFECYCLE_IDLE = 0
 LIFECYCLE_ENTERING = 1
@@ -3459,3 +3460,333 @@ def test_vibro_cold_history_becomes_available_without_a_delayed_edge(
 
     assert np.all(np.isfinite(output))
     assert float(np.max(np.abs(np.diff(output[:, 0])))) < 0.06
+
+
+def _render_flange(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    input_audio: np.ndarray,
+    *,
+    delay_ms: float = 1.2,
+    depth_ms: float = 3.5,
+    rate_hz: float = 0.28,
+    feedback: float = 0.55,
+    spread_degrees: float = 120.0,
+    polarity: float = 0.0,
+    timing_mode: float = 1.0,
+    division: float = 5.0,
+    first_step: int = 1,
+    active_steps: int = 16,
+    mix: float = 1.0,
+    bpm: float = 120.0,
+) -> np.ndarray:
+    upload = _empty_upload()
+    params = [delay_ms, depth_ms, rate_hz, feedback, spread_degrees, polarity, timing_mode, division]
+    for step in range(first_step, min(STEP_COUNT, first_step + active_steps)):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == first_step),
+            mix=mix,
+            effect_type=EFFECT_FLANGE,
+            params=params,
+        )
+    return _render(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(upload, manual_bpm=bpm),
+    )
+
+
+def test_flange_static_delay_places_the_expected_comb_notch(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    frames = STEP_FRAMES * 10
+    notch_source = _sine(frames, 250.0, amplitude=0.35)
+    peak_source = _sine(frames, 500.0, amplitude=0.35)
+    notch = _render_flange(
+        generated_runtime,
+        tmp_path,
+        notch_source,
+        delay_ms=2.0,
+        depth_ms=0.0,
+        feedback=0.0,
+        spread_degrees=0.0,
+        active_steps=8,
+    )
+    peak = _render_flange(
+        generated_runtime,
+        tmp_path,
+        peak_source,
+        delay_ms=2.0,
+        depth_ms=0.0,
+        feedback=0.0,
+        spread_degrees=0.0,
+        active_steps=8,
+    )
+    window = slice(STEP_FRAMES * 2, STEP_FRAMES * 8)
+
+    assert _rms(notch[window, 0]) < _rms(peak[window, 0]) * 0.08
+    assert _rms(peak[window, 0]) == pytest.approx(_rms(peak_source[window, 0]), rel=0.04)
+
+
+def test_flange_free_rate_moves_between_the_displayed_delay_extremes(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    frames = STEP_FRAMES * 32
+    source, slope = _vibro_ramp(frames, slope=4.0e-6)
+    output = _render_flange(
+        generated_runtime,
+        tmp_path,
+        source,
+        delay_ms=1.5,
+        depth_ms=5.0,
+        rate_hz=3.0,
+        feedback=0.0,
+        spread_degrees=0.0,
+        active_steps=31,
+    )
+    window = slice(STEP_FRAMES * 2, STEP_FRAMES * 31)
+    delay_samples = 2.0 * (source[window, 0] - output[window, 0]) / slope
+    measured_rate = _dominant_frequency_near(delay_samples - np.mean(delay_samples), 3.0)
+    low, high = np.quantile(delay_samples, [0.005, 0.995])
+
+    assert measured_rate == pytest.approx(3.0, abs=0.12)
+    assert low == pytest.approx(1.5e-3 * SAMPLE_RATE, abs=3.0)
+    assert high == pytest.approx(6.5e-3 * SAMPLE_RATE, abs=3.0)
+
+
+def test_flange_sync_rate_follows_host_tempo_and_division(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    frames = STEP_FRAMES * 32
+    source, slope = _vibro_ramp(frames, slope=4.0e-6)
+    output = _render_flange(
+        generated_runtime,
+        tmp_path,
+        source,
+        delay_ms=1.0,
+        depth_ms=4.0,
+        rate_hz=8.0,
+        feedback=0.0,
+        spread_degrees=0.0,
+        timing_mode=0.0,
+        division=2.0,
+        active_steps=31,
+        bpm=90.0,
+    )
+    window = slice(STEP_FRAMES * 2, STEP_FRAMES * 31)
+    delay_samples = 2.0 * (source[window, 0] - output[window, 0]) / slope
+    measured_rate = _dominant_frequency_near(delay_samples - np.mean(delay_samples), 1.5)
+
+    assert measured_rate == pytest.approx(1.5, abs=0.12)
+
+
+def test_flange_spread_has_mono_safe_center_and_useful_stereo_motion(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _sine(STEP_FRAMES * 14, 997.0, amplitude=0.35)
+    centered = _render_flange(
+        generated_runtime,
+        tmp_path,
+        source,
+        rate_hz=2.0,
+        depth_ms=7.0,
+        feedback=0.0,
+        spread_degrees=0.0,
+        active_steps=12,
+    )
+    wide = _render_flange(
+        generated_runtime,
+        tmp_path,
+        source,
+        rate_hz=2.0,
+        depth_ms=7.0,
+        feedback=0.0,
+        spread_degrees=180.0,
+        active_steps=12,
+    )
+    window = slice(STEP_FRAMES * 2, STEP_FRAMES * 12)
+
+    np.testing.assert_allclose(centered[window, 0], centered[window, 1], atol=1.0e-7, rtol=0.0)
+    assert _rms(wide[window, 0] - wide[window, 1]) > 0.08
+    assert _rms(np.mean(wide[window], axis=1)) > 0.04
+
+
+def test_flange_feedback_polarity_controls_the_second_echo_without_changing_the_first(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    frames = STEP_FRAMES * 5
+    impulse_frame = STEP_FRAMES + 300
+    source = np.zeros((frames, 2), dtype=np.float32)
+    source[impulse_frame] = 1.0
+    normal = _render_flange(
+        generated_runtime,
+        tmp_path,
+        source,
+        delay_ms=2.0,
+        depth_ms=0.0,
+        feedback=0.75,
+        spread_degrees=0.0,
+        polarity=0.0,
+        active_steps=3,
+    )
+    inverse = _render_flange(
+        generated_runtime,
+        tmp_path,
+        source,
+        delay_ms=2.0,
+        depth_ms=0.0,
+        feedback=0.75,
+        spread_degrees=0.0,
+        polarity=1.0,
+        active_steps=3,
+    )
+    first_echo = impulse_frame + 96
+    second_echo = impulse_frame + 192
+
+    assert normal[first_echo, 0] == pytest.approx(inverse[first_echo, 0], abs=1.0e-5)
+    assert normal[first_echo, 0] > 0.4
+    assert normal[second_echo, 0] > 0.25
+    assert inverse[second_echo, 0] < -0.25
+
+
+def test_flange_extremes_stay_bounded_and_exit_without_a_tail(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _complex_signal(STEP_FRAMES * 7) * 0.35
+    output = _render_flange(
+        generated_runtime,
+        tmp_path,
+        source,
+        delay_ms=10.0,
+        depth_ms=10.0,
+        rate_hz=10.0,
+        feedback=0.95,
+        spread_degrees=180.0,
+        polarity=1.0,
+        first_step=1,
+        active_steps=3,
+    )
+    release = STEP_FRAMES * 4
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
+    assert _largest_boundary_jump(output[:, 0], 4) < 0.2
+    np.testing.assert_allclose(output[release + 160 :], source[release + 160 :], atol=1.0e-7, rtol=0.0)
+
+
+def test_flange_retrigger_with_identical_settings_preserves_phase_and_feedback_state(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    params = [1.2, 4.0, 2.5, 0.65, 90.0, 0.0, 1.0, 5.0]
+    continuous_upload = _empty_upload()
+    retrigger_upload = _empty_upload()
+    for step in range(1, 7):
+        _activate_step(
+            continuous_upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 1),
+            effect_type=EFFECT_FLANGE,
+            params=params,
+        )
+        _activate_step(
+            retrigger_upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step in (1, 3)),
+            effect_type=EFFECT_FLANGE,
+            params=params,
+        )
+    source = _complex_signal(STEP_FRAMES * 9) * 0.25
+    continuous = _render(generated_runtime, tmp_path, source, _base_schedule(continuous_upload))
+    retriggered = _render(generated_runtime, tmp_path, source, _base_schedule(retrigger_upload))
+
+    np.testing.assert_array_equal(retriggered, continuous)
+
+
+def test_flange_aux_sweeps_every_continuous_control_without_runaway(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = [0.2, 0.0, 0.02, 0.0, 0.0, 0.0, 1.0, 5.0]
+    for step in range(4):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_FLANGE,
+            params=params,
+        )
+    for param, end in ((0, 10.0), (1, 10.0), (2, 10.0), (3, 0.95), (4, 180.0)):
+        _set_aux(upload, lane=LANE_FILTER, step=0, param=param, end=end, shape=0.0)
+
+    source = _complex_signal(STEP_FRAMES * 6) * 0.5
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
+
+
+def test_flange_authoritative_reset_invalidates_feedback_history(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = [2.0, 0.0, 0.28, 0.9, 0.0, 0.0, 1.0, 5.0]
+    for step in range(5):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_FLANGE,
+            params=params,
+        )
+    source = np.zeros((STEP_FRAMES * 6, 2), dtype=np.float32)
+    source[4_200] = 1.0
+    baseline = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+    reset_schedule = _base_schedule(upload)
+    reset_schedule[4_500] = [["event", "internalReset", 1]]
+    reset = _render(generated_runtime, tmp_path, source, reset_schedule)
+
+    assert _rms(baseline[5_000:6_500]) > 1.0e-3
+    assert _rms(reset[5_000:6_500]) < _rms(baseline[5_000:6_500]) * 0.02
+
+
+def test_flange_four_chain_extremes_remain_faster_than_the_generous_js_budget(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = [10.0, 10.0, 10.0, 0.95, 180.0, 1.0, 1.0, 5.0]
+    for lane in range(LANE_COUNT):
+        for step in range(4):
+            _activate_step(
+                upload,
+                lane=lane,
+                step=step,
+                trigger=(step == 0),
+                effect_type=EFFECT_FLANGE,
+                params=params,
+            )
+    source = _complex_signal(STEP_FRAMES * 4) * 0.3
+    started = perf_counter()
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+    elapsed = perf_counter() - started
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
+    assert elapsed < 2.0, f"four-chain generated-JS render took {elapsed:.3f}s for {source.shape[0] / SAMPLE_RATE:.3f}s audio"

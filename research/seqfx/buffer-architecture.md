@@ -63,8 +63,10 @@ array:
 4. **Modulation delays:** effect-owned host-rate stereo float32 banks, kept
    separate from the rate-converted gesture history. Production Vibro uses
    400 ms of raw pre-effect history per chain. Comb owns its shorter feedback
-   histories; Flange will receive a compact short-delay bank after its range is
-   frozen. Keeping Vibro raw and feedback-free prevents an accidental loop.
+   histories. Production Flange owns 25 ms per chain, covering its 20 ms
+   maximum public delay plus four-point interpolation guards at every supported
+   sample rate. Keeping Vibro raw and feedback-free prevents an accidental
+   loop; keeping Flange separate makes its feedback path explicit.
 
 The original probe's tiered candidate measured 39.552 MiB at its 192 kHz build
 maximum. The production Vibro correction adds 150 ms per chain relative to

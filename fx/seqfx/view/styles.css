@@ -22,6 +22,7 @@
     --seqfx-effect-ring: #c7a6d8;
     --seqfx-effect-talk-box: #e5a4b5;
     --seqfx-effect-vibro: #d7a36b;
+    --seqfx-effect-flange: #78aeb8;
     --seqfx-effect-dirty: #79b9a6;
 }
 
@@ -536,6 +537,10 @@ select {
 
 .seqfx-block[data-effect="10"] .seqfx-block-fill {
     background: var(--seqfx-effect-vibro);
+}
+
+.seqfx-block[data-effect="11"] .seqfx-block-fill {
+    background: var(--seqfx-effect-flange);
 }
 
 .seqfx-block[data-effect="12"] .seqfx-block-fill {
@@ -1195,6 +1200,10 @@ select {
 
 .seqfx-effect-picker__options button[data-effect-type="10"] {
     --seqfx-effect-icon-active: var(--seqfx-effect-vibro);
+}
+
+.seqfx-effect-picker__options button[data-effect-type="11"] {
+    --seqfx-effect-icon-active: var(--seqfx-effect-flange);
 }
 
 .seqfx-effect-picker__options button[data-effect-type="12"] {

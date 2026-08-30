@@ -229,6 +229,7 @@ const EFFECT_OPTIONS = [
     SEQFX_EFFECT_TYPES.ring,
     SEQFX_EFFECT_TYPES.talkBox,
     SEQFX_EFFECT_TYPES.vibro,
+    SEQFX_EFFECT_TYPES.flange,
     SEQFX_EFFECT_TYPES.dirty,
 ] as const;
 
@@ -365,6 +366,8 @@ const COMB_ICON_PATH =
     "M25.101 77.628a4.008 4.008 0 0 0 3.997 4.01h16.996c6.632 0 13.927 5.01 16.3 11.202l52.724 85.231c7.115 18.564 18.693 18.571 25.857.025L193.91 92.84c2.39-6.187 9.693-11.202 16.336-11.202h16.49a4.01 4.01 0 0 0 4-4.01V68.82a4 4 0 0 0-3.994-4.009h-23.508c-8.835 0-18.547 6.702-21.69 14.962l-47.147 73.852c-3.533 9.287-9.217 9.262-12.694-.051L75.2 79.805C72.108 71.524 62.44 64.81 53.6 64.81H29.11a4.012 4.012 0 0 0-4.008 4.01v8.808z";
 const VIBRO_ICON_PATH =
     "M35.996 208c-2.207 0-3.077-1.532-1.935-3.434l91.878-153.132c1.138-1.896 2.98-1.902 4.122 0l91.878 153.132c1.138 1.896.272 3.434-1.935 3.434h-8.008c-2.207 0-4.922-1.54-6.054-3.421L130.058 78.42c-1.137-1.89-2.984-1.881-4.116 0L50.058 204.58c-1.138 1.889-3.848 3.42-6.054 3.42h-8.008z";
+const FLANGE_ICON_PATH =
+    "M116.589 182.742l-7.405 20.346a4 4 0 0 1-5.125 2.396l-7.525-2.738a4 4 0 0 1-2.386-5.13l7.435-20.427C83.963 167.623 72 148.959 72 127.5 72 96.296 97.296 71 128.5 71c3.877 0 7.663.39 11.32 1.134l6.996-19.222a4 4 0 0 1 5.125-2.396l7.525 2.738a4 4 0 0 1 2.386 5.13l-6.968 19.142C172.796 87.002 185 105.826 185 127.5c0 31.204-25.296 56.5-56.5 56.5-4.086 0-8.071-.434-11.911-1.258zm5.173-14.213A41.32 41.32 0 0 0 128 169c22.644 0 41-18.356 41-41 0-14.855-7.9-27.864-19.727-35.056l-27.51 75.585zm-15.035-5.473l27.51-75.585A41.32 41.32 0 0 0 128 87c-22.644 0-41 18.356-41 41 0 14.855 7.9 27.864 19.727 35.056z";
 
 // Effect picker SVGs are local silhouettes matched to the riso cell palette.
 function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
@@ -485,6 +488,19 @@ function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
                         fillRule="evenodd"
                     />
                     <path d={VIBRO_ICON_PATH} fill={textureFill} fillRule="evenodd" />
+                </svg>
+            );
+        case SEQFX_EFFECT_TYPES.flange:
+            return (
+                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
+                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
+                    <path
+                        d={FLANGE_ICON_PATH}
+                        data-role="seqfx-effect-icon-fill"
+                        fill="currentColor"
+                        fillRule="evenodd"
+                    />
+                    <path d={FLANGE_ICON_PATH} fill={textureFill} fillRule="evenodd" />
                 </svg>
             );
         case SEQFX_EFFECT_TYPES.dirty:
@@ -984,6 +1000,16 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 4, label: "Timing", min: 0, max: 1, step: 1, kind: "select", options: ["Sync", "Free"], hint: "Sync follows host tempo; Free uses Rate." },
         { index: 5, label: "Division", min: 0, max: 5, step: 1, kind: "select", options: ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar"], hint: "One modulation cycle when Timing is Sync." },
     ],
+    [SEQFX_EFFECT_TYPES.flange]: [
+        { index: 0, label: "Delay", min: 0.2, max: 10, step: 0.01, amountKind: "linear", hint: "Minimum delay before modulation is added, in milliseconds." },
+        { index: 1, label: "Depth", min: 0, max: 10, step: 0.01, amountKind: "linear", hint: "Delay excursion added above the minimum, in milliseconds." },
+        { index: 2, label: "Rate", min: 0.02, max: 10, step: 0.01, amountKind: "cutoffOctaves", hint: "Free-mode sweep rate; Sync derives the rate from Division and host tempo." },
+        { index: 3, label: "Feedback", min: 0, max: 0.95, step: 0.01, amountKind: "percentPoints", hint: "Wet signal returned to the short delay; Polarity chooses normal or inverted return." },
+        { index: 4, label: "Spread", min: 0, max: 180, step: 1, amountKind: "linear", hint: "Right-channel modulation phase offset; 0° stays dual mono." },
+        { index: 5, label: "Polarity", min: 0, max: 1, step: 1, kind: "select", options: ["Normal", "Inverse"], hint: "Trigger-latched feedback polarity." },
+        { index: 6, label: "Timing", min: 0, max: 1, step: 1, kind: "select", options: ["Sync", "Free"], hint: "Sync follows host tempo; Free uses Rate." },
+        { index: 7, label: "Division", min: 0, max: 6, step: 1, kind: "select", options: ["1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars"], hint: "One complete sweep when Timing is Sync." },
+    ],
     [SEQFX_EFFECT_TYPES.dirty]: [
         { index: 0, label: "Drive", min: 0, max: 36, step: 0.1, amountKind: "db", hint: "Level into the oversampled nonlinear stage." },
         { index: 1, label: "Character", min: 0, max: 3, step: 1, kind: "select", options: ["Soft", "Hard", "Fold", "Bias"], hint: "Latched transfer shape; changes crossfade over 2 ms." },
@@ -1040,6 +1066,11 @@ const VIBRO_PARAM_WAVEFORM = 2;
 const VIBRO_PARAM_SPREAD_DEGREES = 3;
 const VIBRO_PARAM_TIMING_MODE = 4;
 const VIBRO_PARAM_DIVISION = 5;
+const FLANGE_PARAM_DELAY_MS = 0;
+const FLANGE_PARAM_DEPTH_MS = 1;
+const FLANGE_PARAM_RATE_HZ = 2;
+const FLANGE_PARAM_TIMING_MODE = 6;
+const FLANGE_PARAM_DIVISION = 7;
 const DIRTY_PARAM_DRIVE_DB = 0;
 const DIRTY_PARAM_CHARACTER = 1;
 const DIRTY_PARAM_BIAS = 2;
@@ -1662,6 +1693,69 @@ function SeqFxVibroBlockGlyph({
     );
 }
 
+function flangeRisoPath(delayMs: number, width: number) {
+    const safeDelaySeconds = clampNumber(delayMs, 0.2, 20) * 0.001;
+    return Array.from({ length: 65 }, (_unused, index) => {
+        const normalized = index / 64;
+        const frequencyHz = 20 * (1_000 ** normalized);
+        const response = Math.abs(Math.cos(Math.PI * frequencyHz * safeDelaySeconds));
+        return `${index === 0 ? "M" : "L"}${roundedPathValue(normalized * width)} ${roundedPathValue(24 - (response * 18))}`;
+    }).join(" ");
+}
+
+function SeqFxFlangeBlockGlyph({
+    params,
+    size,
+    width,
+}: {
+    params: number[];
+    size: SeqFxBlockVisualSize;
+    width: number;
+}) {
+    const delayMs = Number(params[FLANGE_PARAM_DELAY_MS] ?? 1.2);
+    const depthMs = Number(params[FLANGE_PARAM_DEPTH_MS] ?? 3.5);
+    const rateHz = Number(params[FLANGE_PARAM_RATE_HZ] ?? 0.28);
+    const timingMode = Math.round(Number(params[FLANGE_PARAM_TIMING_MODE] ?? 1));
+    const division = Math.round(Number(params[FLANGE_PARAM_DIVISION] ?? 5));
+    const divisionLabel = ["1/16", "1/8", "1/4", "1/2", "1 BAR", "2 BARS", "4 BARS"][division] ?? "2 BARS";
+
+    return (
+        <>
+            <svg
+                aria-hidden="true"
+                className="seqfx-block-glyph"
+                data-effect="flange"
+                data-role="seqfx-block-glyph"
+                data-size={size}
+                focusable="false"
+                preserveAspectRatio="none"
+                viewBox={`0 0 ${width} 28`}
+            >
+                <path
+                    className="seqfx-block-glyph__line"
+                    d={flangeRisoPath(delayMs, width)}
+                    data-role="seqfx-block-glyph-line"
+                />
+                <path
+                    className="seqfx-block-glyph__line seqfx-block-glyph__line--secondary"
+                    d={flangeRisoPath(delayMs + depthMs, width)}
+                    data-role="seqfx-block-glyph-secondary-line"
+                />
+            </svg>
+            {size !== "single" ? (
+                <span className="seqfx-block-glyph-label" data-role="seqfx-block-glyph-label">
+                    {Number(delayMs.toFixed(1))}+{Number(depthMs.toFixed(1))} MS
+                </span>
+            ) : null}
+            {size === "wide" ? (
+                <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
+                    {timingMode === 0 ? `${divisionLabel} SYNC` : `${Number(rateHz.toFixed(2))} Hz`}
+                </span>
+            ) : null}
+        </>
+    );
+}
+
 function dirtyTransferSample(input: number, character: number, bias: number, driveDb: number) {
     const soft = (value: number) => value / Math.sqrt(1 + (value * value));
     const fold = (value: number) => {
@@ -1766,6 +1860,8 @@ export function SeqFxBlockGlyph({
             return <SeqFxTalkBoxBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.vibro:
             return <SeqFxVibroBlockGlyph params={params} size={size} width={width} />;
+        case SEQFX_EFFECT_TYPES.flange:
+            return <SeqFxFlangeBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.dirty:
             return <SeqFxDirtyBlockGlyph params={params} size={size} width={width} />;
         default:

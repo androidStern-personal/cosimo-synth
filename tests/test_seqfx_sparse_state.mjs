@@ -49,6 +49,26 @@ test("sparse v7 Init is compact and names its key and version consistently", () 
     assert.ok(Buffer.byteLength(serialized) < 16 * 1024, `Init state was ${Buffer.byteLength(serialized)} bytes`);
 });
 
+test("sparse v7 omits the default one-step block length without changing recall", () => {
+    const state = applySeqFxBlockCreate(createDefaultSeqFxState(), {
+        patternIndex: 0,
+        lane: 0,
+        startStep: 7,
+        length: 1,
+        effectType: SEQFX_EFFECT_TYPES.flange,
+    });
+    const stored = projectSeqFxStoredStateV7(state);
+    const block = stored.patterns[0].chains[0].blocks[0];
+
+    assert.equal(block.startStep, 7);
+    assert.equal(block.length, undefined);
+    assert.equal(block.effectType, SEQFX_EFFECT_TYPES.flange);
+    assert.deepEqual(
+        buildSeqPatternUpload(parseStrictSeqFxStateV7(stored), { patternIndex: 0, authoritative: true }),
+        buildSeqPatternUpload(state, { patternIndex: 0, authoritative: true }),
+    );
+});
+
 test("sparse v7 round trip preserves blocks, aux, effect memories, and rare per-step overrides", () => {
     let state = createDefaultSeqFxState();
     state = applySeqFxBlockCreate(state, {

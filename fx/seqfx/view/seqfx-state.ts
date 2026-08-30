@@ -150,7 +150,8 @@ export type SeqFxStoredStepOverride = {
 
 export type SeqFxStoredBlock = {
     startStep: number;
-    length: number;
+    /** Omitted for the common one-step block. Parsers treat absence as one. */
+    length?: number;
     effectType: SeqFxEffectType;
     mix?: number;
     params?: number[];
@@ -1130,7 +1131,7 @@ function serializeSparseBlock(pattern: SeqFxPattern, block: SeqFxBlock): SeqFxSt
     const baseMemories = serializeSparseMemories(baseStep);
     const storedBlock: SeqFxStoredBlock = {
         startStep: block.startStep,
-        length: block.length,
+        ...(block.length !== 1 ? { length: block.length } : {}),
         effectType: block.effectType,
         ...(baseStep.mix !== 1 ? { mix: baseStep.mix } : {}),
         ...(!arraysEqual(baseStep.params, defaultParams) ? { params: [...baseStep.params] } : {}),
@@ -1438,7 +1439,9 @@ export function parseStrictSeqFxStateV7(value: unknown): SeqFxState {
                 const block = requireRecord(rawBlock, blockPath);
                 assertAllowedKeys(block, ["startStep", "length", "effectType", "mix", "params", "aux", "memories", "stepOverrides"], blockPath);
                 const startStep = requireInteger(block.startStep, 0, SEQFX_STEP_COUNT - 1, `${blockPath}.startStep`);
-                const length = requireInteger(block.length, 1, SEQFX_STEP_COUNT, `${blockPath}.length`);
+                const length = hasOwnValue(block, "length")
+                    ? requireInteger(block.length, 1, SEQFX_STEP_COUNT, `${blockPath}.length`)
+                    : 1;
                 if (startStep + length > SEQFX_STEP_COUNT) {
                     failParse("block_out_of_bounds", blockPath, `ends after step ${SEQFX_STEP_COUNT - 1}`);
                 }

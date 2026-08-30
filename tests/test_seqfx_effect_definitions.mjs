@@ -196,3 +196,34 @@ test("Vibro is a wet-only Doppler modulation with explicit free and sync timing"
     assert.match(source, /processVibro/);
     assert.doesNotMatch(source, /vibroFeedback/);
 });
+
+test("Flange keeps the established short-delay feedback contract without an unproven scroll mode", async () => {
+    const flange = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.flange);
+    assert.equal(flange.lifecycle, "modulatedDelay");
+    assert.deepEqual(
+        flange.parameters.map(({ id, defaultValue, latch, auxEligible, options }) => ({
+            id,
+            defaultValue,
+            latch,
+            auxEligible,
+            options,
+        })),
+        [
+            { id: "delayMs", defaultValue: 1.2, latch: "continuous", auxEligible: true, options: undefined },
+            { id: "depthMs", defaultValue: 3.5, latch: "continuous", auxEligible: true, options: undefined },
+            { id: "rateHz", defaultValue: 0.28, latch: "continuous", auxEligible: true, options: undefined },
+            { id: "feedback", defaultValue: 0.55, latch: "continuous", auxEligible: true, options: undefined },
+            { id: "spreadDegrees", defaultValue: 120, latch: "continuous", auxEligible: true, options: undefined },
+            { id: "polarity", defaultValue: 0, latch: "trigger", auxEligible: false, options: ["Normal", "Inverse"] },
+            { id: "timingMode", defaultValue: 1, latch: "trigger", auxEligible: false, options: ["Sync", "Free"] },
+            { id: "division", defaultValue: 5, latch: "trigger", auxEligible: false, options: ["1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars"] },
+        ],
+    );
+
+    const source = await readFile(path.join(repoRoot, "fx/seqfx/SeqFx.cmajor"), "utf8");
+    assert.match(source, /flangeMaxDelaySeconds/);
+    assert.match(source, /resolveFlangeRateHz/);
+    assert.match(source, /processFlange/);
+    assert.match(source, /flangeFeedbackPolarity/);
+    assert.doesNotMatch(source, /flangeScroll/);
+});

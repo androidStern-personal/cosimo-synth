@@ -31,7 +31,7 @@ live-touch workflow are not being cloned.
 | Reverse | Play a finite buffered region backward | Window, sync/free, crossfade, mix | Captured | Reverse already recorded lookback audio at trigger, so host latency remains zero | Unavailable history, wrong-region surprise, boundary pops, old audio after seek |
 | Talk Box | Vowel-like formant coloration | Vowel selection/morph, Q, lows, highs | Gated | Two vowel endpoints plus morph; formant filter, not sidechain vocoder | Unstable high-Q filters, coefficient zippering, literal vowel mapping |
 | Vibro | Periodic pitch wobble without dry-path combing | Sync/free rate, depth, waveform, spread | Modulated delay | Wet variable-delay modulation; no feedback; separate ID 10 | Interpolation noise, insufficient slow-rate history, mono loss, accidental chorus/flange identity |
-| Flange | Short modulated delay mixed with dry for moving notches | Delay, depth, rate, feedback, spread, polarity, mix | Modulated delay | Separate ID 11; classic and subtle ranges; optional scroll remains deferred | Feedback instability, comb cancellation, parameter zippering |
+| Flange | Short modulated delay mixed with dry for moving notches | Delay, depth, sync/free rate, feedback, spread, polarity, mix | Modulated delay | Separate ID 11; canonical equal direct/delayed target; Scroll omitted without a listening/CPU win | Feedback instability, comb cancellation, parameter zippering |
 | Dirty | Character distortion distinct from digital Crush | Drive, type/character, bias, dynamics, tone, mix/trim | Gated | Soft, hard, fold, and asymmetric families behind one Character control; level-conscious output | Aliasing, DC, loudness bias, loss of dynamics |
 
 ## Settled lifecycle behavior
@@ -210,12 +210,24 @@ claims about Koala's private implementation.
 
 ### Flange (ID 11)
 
-- Delay: 0.1–10 ms.
+- Delay: 0.2–10 ms, the minimum delay.
 - Depth: 0–10 ms.
-- Rate: synced divisions or 0.02–10 Hz.
-- Feedback: -95–95%, runtime hard-clamped.
+- Rate: 0.02–10 Hz in Free mode.
+- Feedback: 0–95% magnitude, runtime hard-clamped.
 - Spread: 0–180 degrees.
-- Polarity: positive/negative.
+- Polarity: Normal/Inverse feedback, trigger-latched.
+- Timing: Sync/Free, trigger-latched.
+- Division: 1/16 / 1/8 / 1/4 / 1/2 / 1 Bar / 2 Bars / 4 Bars,
+  trigger-latched and used only in Sync mode.
+- Production decision: 25 ms host-rate feedback history, qualified four-point
+  Hermite reads, canonical 0.5 direct/delayed target, literal minimum-plus-depth
+  motion, 25 ms continuous smoothing, 96-frame entry/exit/polarity/history
+  transitions, phase-continuous triggers, bounded feedback writes, and no
+  output tail. Optional Scroll/barber-pole mode was omitted because its
+  conditional listening/CPU gate had no evidence. See `flange-decision.md`.
+- Implementation status: complete through DSP, sequenced UI/state, source
+  browser proof, and packaged-bundle proof; subjective/release gates remain in
+  the shared roadmap.
 
 ### Dirty (ID 12)
 
