@@ -744,6 +744,18 @@ select {
     cursor: grabbing;
 }
 
+.seqfx-block-select-control {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    cursor: inherit;
+    appearance: none;
+}
+
 .seqfx-block:has(.seqfx-block-resize:hover) {
     cursor: col-resize;
 }
@@ -1019,6 +1031,7 @@ select {
     top: 0;
     right: 0;
     bottom: 0;
+    z-index: 4;
     width: 8px;
     border-radius: 0 5px 5px 0;
     background: transparent;
@@ -1040,7 +1053,8 @@ select {
 }
 
 .seqfx-block:hover .seqfx-block-resize::after,
-.seqfx-block:focus-visible .seqfx-block-resize::after {
+.seqfx-block-select-control:focus-visible ~ .seqfx-block-resize::after,
+.seqfx-block-resize:focus-visible::after {
     opacity: 1;
 }
 
@@ -1060,7 +1074,8 @@ select {
 }
 
 .seqfx-cell:focus-visible,
-.seqfx-block:focus-visible {
+.seqfx-block-select-control:focus-visible,
+.seqfx-block-resize:focus-visible {
     outline: 2px solid #f2d16b;
     outline-offset: 2px;
 }

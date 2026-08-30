@@ -4222,10 +4222,11 @@ test("seqfx_blocks_use_a_single_clean_surface_with_hidden_resize_chrome", async 
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
     await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
-    const block = page.getByRole("button", { name: "Chain 2 Crush block 1", exact: true });
+    const blockControl = page.getByRole("button", { name: "Chain 2 Crush block 1", exact: true });
+    const block = page.locator('[data-role="seqfx-block"][data-lane="1"][data-start="0"]');
     const fill = block.locator(".seqfx-block-fill");
     const resizeHandle = page.locator('[data-role="seqfx-block-resize"][data-lane="1"][data-start="0"]');
-    await block.waitFor();
+    await blockControl.waitFor();
     await page.mouse.move(10, 10);
     await page.waitForFunction(() => (
         getComputedStyle(
@@ -4266,14 +4267,14 @@ test("seqfx_blocks_use_a_single_clean_surface_with_hidden_resize_chrome", async 
     assert.equal(initialStyles.resizeCursor, "col-resize");
     assert.equal(initialStyles.resizeGripOpacity, "0");
 
-    const blockBox = await block.boundingBox();
+    const blockBox = await blockControl.boundingBox();
     const fillBox = await fill.boundingBox();
     assert.ok(blockBox);
     assert.ok(fillBox);
     assertClose(fillBox.width, blockBox.width - 2, 1, "block fill should be the only near-full visible surface");
     assertClose(fillBox.height, blockBox.height - 2, 1, "block fill should leave only a 1px inset");
 
-    await block.hover();
+    await blockControl.hover();
     await page.waitForFunction(() => (
         Number(getComputedStyle(
             document.querySelector('[data-role="seqfx-block-resize"][data-lane="1"][data-start="0"]'),
@@ -5232,6 +5233,58 @@ test("seqfx_keyboard_activation_creates_and_selects_grid_blocks", async () => {
     snapshot = await getHarnessSnapshot(page);
     assert.equal(patternUploads(snapshot).at(-1).value.activeSteps[0][8], true);
     await page.locator('[data-role="seqfx-inspector"]').getByText("Chain 1 · Filter · step 9").waitFor();
+
+    await page.close();
+});
+
+test("seqfx_block_duration_is_a_focusable_bounded_keyboard_slider", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 1 step 9", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 step 5", exact: true }).click();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    const duration = page.getByRole("slider", {
+        name: "Chain 1 Filter block at step 5 duration",
+        exact: true,
+    });
+    await page.getByRole("button", { name: "Chain 1 Filter block 5", exact: true }).focus();
+    await page.keyboard.press("Tab");
+    assert.equal(await duration.getAttribute("aria-orientation"), "horizontal");
+    assert.equal(await duration.getAttribute("aria-valuemin"), "1");
+    assert.equal(await duration.getAttribute("aria-valuemax"), "4");
+    assert.equal(await duration.getAttribute("aria-valuenow"), "1");
+    assert.equal(await duration.getAttribute("aria-valuetext"), "1 step");
+    assert.equal(await duration.getAttribute("tabindex"), "0");
+    assert.equal(await duration.evaluate((node) => document.activeElement === node), true);
+
+    await page.keyboard.press("End");
+    await page.getByRole("button", { name: "Chain 1 Filter block 5-8", exact: true }).waitFor();
+    assert.equal(await duration.getAttribute("aria-valuenow"), "4");
+    assert.equal(await duration.getAttribute("aria-valuetext"), "4 steps");
+
+    let uploads = patternUploads(await getHarnessSnapshot(page));
+    assert.equal(uploads.length, 1);
+    assert.deepEqual(uploads[0].value.activeSteps[0].slice(4, 9), [true, true, true, true, true]);
+    assert.deepEqual(uploads[0].value.triggerSteps[0].slice(4, 9), [true, false, false, false, true]);
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await page.keyboard.press("ArrowRight");
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 0, "maximum duration is a no-op");
+
+    await page.keyboard.press("ArrowLeft");
+    await page.getByRole("button", { name: "Chain 1 Filter block 5-7", exact: true }).waitFor();
+    assert.equal(await duration.getAttribute("aria-valuenow"), "3");
+
+    await page.keyboard.press("Home");
+    await page.getByRole("button", { name: "Chain 1 Filter block 5", exact: true }).waitFor();
+    assert.equal(await duration.getAttribute("aria-valuenow"), "1");
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await page.keyboard.press("ArrowLeft");
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 0, "minimum duration is a no-op");
 
     await page.close();
 });

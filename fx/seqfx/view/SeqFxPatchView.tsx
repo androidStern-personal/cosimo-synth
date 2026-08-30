@@ -4267,6 +4267,52 @@ export function SeqFxPatchView({
         beginGesture({ mode: "resize", lane, startStep, length, previewLength: null });
     }
 
+    function handleResizeKeyDown(
+        event: ReactKeyboardEvent<HTMLSpanElement>,
+        lane: number,
+        startStep: number,
+        length: number,
+        maximumLength: number,
+    ) {
+        let requestedLength: number;
+
+        switch (event.key) {
+            case "ArrowLeft":
+            case "ArrowDown":
+                requestedLength = length - 1;
+                break;
+            case "ArrowRight":
+            case "ArrowUp":
+                requestedLength = length + 1;
+                break;
+            case "Home":
+                requestedLength = 1;
+                break;
+            case "End":
+                requestedLength = maximumLength;
+                break;
+            default:
+                return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        const nextLength = Math.min(maximumLength, Math.max(1, requestedLength));
+        if (nextLength === length) {
+            return;
+        }
+
+        bridge.resizeBlock({
+            patternIndex: selectedPatternRef.current,
+            lane,
+            startStep,
+            length: nextLength,
+        });
+        selectBlockRange(lane, startStep, nextLength);
+        setPatternPreview(null);
+        setInvalidDropTarget(null);
+    }
+
     function handleInspectorPointerDownCapture(event: PointerEvent<HTMLElement>) {
         if (isPromoControlled || (event.pointerType === "mouse" && event.button !== 0)) {
             return;
@@ -4749,7 +4795,7 @@ export function SeqFxPatchView({
                                                             />
                                                         ))
                                                 ))}
-                                                {laneBlocks.map((block) => {
+                                                {laneBlocks.map((block, blockIndex) => {
                                                     const blockIsPreview = patternPreview?.patternIndex === selectedPattern
                                                         && patternPreview.lane === lane
                                                         && copyPreviewStartSteps.has(block.startStep);
@@ -4771,6 +4817,9 @@ export function SeqFxPatchView({
                                                     const ariaLabel = block.length === 1
                                                         ? `${laneName} ${effectName} block ${block.startStep + 1}`
                                                         : `${laneName} ${effectName} block ${block.startStep + 1}-${block.endStep + 1}`;
+                                                    const maximumLength = (
+                                                        laneBlocks[blockIndex + 1]?.startStep ?? SEQFX_STEP_COUNT
+                                                    ) - block.startStep;
 
                                                     return gridGeometry.blockSegments(block.startStep, block.length)
                                                         .filter((segment) => segment.barIndex === barIndex)
@@ -4780,7 +4829,6 @@ export function SeqFxPatchView({
                                                             const stepParams = renderedPatternState.lanes[lane].steps[block.startStep]?.params ?? [];
                                                             return (
                                                                         <div
-                                                                            aria-label={primarySegment ? ariaLabel : undefined}
                                                                             className={[
                                                                                 baseClassName,
                                                                                 ...frameCornerClassNames(lane, barIndex, segment.startStep, segment.endStep),
@@ -4793,14 +4841,17 @@ export function SeqFxPatchView({
                                                                     data-segment-start={segment.startStep}
                                                                     key={`${lane}:${block.startStep}:${segment.startStep}`}
                                                                     onDoubleClick={(event) => handleBlockDoubleClick(event, lane, block.startStep)}
-                                                                    onKeyDown={primarySegment
-                                                                        ? (event) => handleBlockKeyDown(event, lane, block.startStep, block.length)
-                                                                        : undefined}
                                                                     onPointerDown={(event) => handleBlockPointerDown(event, lane, block.startStep, block.length)}
-                                                                    role={primarySegment ? "button" : undefined}
                                                                     style={segment.style}
-                                                                    tabIndex={primarySegment ? 0 : undefined}
                                                                 >
+                                                                    {primarySegment ? (
+                                                                        <button
+                                                                            aria-label={ariaLabel}
+                                                                            className="seqfx-block-select-control"
+                                                                            onKeyDown={(event) => handleBlockKeyDown(event, lane, block.startStep, block.length)}
+                                                                            type="button"
+                                                                        />
+                                                                    ) : null}
                                                                     <span className="seqfx-block-fill">
                                                                         <SeqFxBlockGlyph
                                                                             effectType={block.effectType}
@@ -4820,12 +4871,26 @@ export function SeqFxPatchView({
                                                                     </span>
                                                                     {segment.isEndSegment ? (
                                                                         <span
-                                                                            aria-hidden="true"
+                                                                            aria-label={`${laneName} ${effectName} block at step ${block.startStep + 1} duration`}
+                                                                            aria-orientation="horizontal"
+                                                                            aria-valuemax={maximumLength}
+                                                                            aria-valuemin={1}
+                                                                            aria-valuenow={block.length}
+                                                                            aria-valuetext={`${block.length} ${block.length === 1 ? "step" : "steps"}`}
                                                                             className="seqfx-block-resize"
                                                                             data-role="seqfx-block-resize"
                                                                             data-lane={lane}
                                                                             data-start={block.startStep}
+                                                                            onKeyDown={(event) => handleResizeKeyDown(
+                                                                                event,
+                                                                                lane,
+                                                                                block.startStep,
+                                                                                block.length,
+                                                                                maximumLength,
+                                                                            )}
                                                                             onPointerDown={(event) => handleResizePointerDown(event, lane, block.startStep, block.length)}
+                                                                            role="slider"
+                                                                            tabIndex={0}
                                                                         />
                                                                     ) : null}
                                                                 </div>
