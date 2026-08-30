@@ -32,7 +32,7 @@ export function usage(config = seqFxReleaseConfig) {
     return [
         "Usage:",
         "  npm run seqfx:release:plan",
-        "  npm run seqfx:release:build -- [--unsigned] [--skip-build] [--allow-dirty] [--verify-reproducible]",
+        "  npm run seqfx:release:build -- [--unsigned] [--allow-dirty] [--verify-repeatable-packaging]",
         "  npm run seqfx:release:build -- --release",
         "",
         "Modes:",
@@ -42,7 +42,8 @@ export function usage(config = seqFxReleaseConfig) {
         "",
         "Important:",
         "  Unsigned output is never Patreon-ready.",
-        "  --verify-reproducible compares two independently assembled unsigned payloads/packages.",
+        "  --verify-repeatable-packaging compares two assemblies of the same freshly built unsigned VST3.",
+        "  It does not claim that two independent native builds produce identical binaries.",
         "  Developer ID timestamps and Apple notarization make signed release bytes non-reproducible.",
         "  This command never installs a plugin and never uploads or publishes an artifact.",
         "",
@@ -67,9 +68,8 @@ export function parseReleaseArgs(argv) {
         "--json",
         "--plan",
         "--release",
-        "--skip-build",
         "--unsigned",
-        "--verify-reproducible",
+        "--verify-repeatable-packaging",
         "-h",
     ]);
 
@@ -89,27 +89,26 @@ export function parseReleaseArgs(argv) {
         help: flags.has("--help") || flags.has("-h"),
         json: flags.has("--json"),
         mode,
-        skipBuild: flags.has("--skip-build"),
-        verifyReproducible: flags.has("--verify-reproducible"),
+        verifyRepeatablePackaging: flags.has("--verify-repeatable-packaging"),
     };
 
     if (options.mode === "release" && options.allowDirty)
         throw new Error("--release cannot be combined with --allow-dirty.");
 
-    if (options.mode === "release" && options.verifyReproducible) {
+    if (options.mode === "release" && options.verifyRepeatablePackaging) {
         throw new Error(
-            "--verify-reproducible applies to the unsigned payload only; signing timestamps and notarization are intentionally non-reproducible.",
+            "--verify-repeatable-packaging applies to unsigned packaging only; signing timestamps and notarization are intentionally variable.",
         );
     }
 
-    if (options.mode === "plan" && (options.allowDirty || options.skipBuild || options.verifyReproducible))
+    if (options.mode === "plan" && (options.allowDirty || options.verifyRepeatablePackaging))
         throw new Error("--plan is read-only and cannot be combined with build/package flags.");
 
     if (options.json && options.mode !== "plan")
         throw new Error("--json is only valid with --plan.");
 
-    if (options.verifyReproducible && options.allowDirty)
-        throw new Error("Reproducibility verification requires a clean tracked worktree.");
+    if (options.verifyRepeatablePackaging && options.allowDirty)
+        throw new Error("Packaging repeatability verification requires a clean worktree, including untracked files.");
 
     return options;
 }
@@ -142,18 +141,18 @@ function runAllowFailure(command, args, options = {}) {
     });
 }
 
-function gitOutput(args) {
-    return run("git", args, { capture: true }).stdout;
+function gitOutput(args, cwd = repoRoot) {
+    return run("git", args, { capture: true, cwd }).stdout;
 }
 
-export function getReleaseGitState() {
-    const trackedStatus = gitOutput(["status", "--porcelain", "--untracked-files=no"]);
+export function getReleaseGitState({ cwd = repoRoot } = {}) {
+    const worktreeStatus = gitOutput(["status", "--porcelain", "--untracked-files=all"], cwd);
 
     return {
-        branch: gitOutput(["branch", "--show-current"]) || "(detached)",
-        commit: gitOutput(["rev-parse", "HEAD"]),
-        dirty: Boolean(trackedStatus),
-        trackedStatus,
+        branch: gitOutput(["branch", "--show-current"], cwd) || "(detached)",
+        commit: gitOutput(["rev-parse", "HEAD"], cwd),
+        dirty: Boolean(worktreeStatus),
+        worktreeStatus,
     };
 }
 
@@ -213,6 +212,7 @@ export function releaseContractErrors(
         ["release.channelVersion", config.release.channelVersion],
         ["release.outputDirectory", config.release.outputDirectory],
         ["paths.patchManifest", config.paths.patchManifest],
+        ["paths.thirdPartyNotices", config.paths.thirdPartyNotices],
         ["paths.builtVst3", config.paths.builtVst3],
         ["paths.installedVst3", config.paths.installedVst3],
     ];
@@ -288,7 +288,7 @@ export function createReleasePlan({
         source: {
             branch: gitState.branch,
             commit: gitState.commit,
-            trackedWorktreeDirty: gitState.dirty,
+            worktreeDirty: gitState.dirty,
             sourceDateEpoch,
         },
         scope: config.scope,
@@ -301,18 +301,19 @@ export function createReleasePlan({
         },
         commands: {
             nativeBuild: `npm run fx:prod:build -- ${config.productKey} --clean`,
-            unsignedPackage: "npm run seqfx:release:build -- --unsigned --skip-build --verify-reproducible",
-            signedRelease: "npm run seqfx:release:build -- --release --skip-build",
+            unsignedPackage: "npm run seqfx:release:build -- --unsigned --verify-repeatable-packaging",
+            signedRelease: "npm run seqfx:release:build -- --release",
         },
-        reproducibility: {
-            deterministicBoundary: "unsigned normalized VST3 payload plus unsigned package and zip",
+        repeatability: {
+            deterministicBoundary: "two packaging assemblies of one freshly built unsigned VST3 payload plus package and zip",
+            independentNativeBuildsCompared: false,
             signedArtifactBytesReproducible: false,
             reasonSignedBytesDiffer: "Developer ID secure timestamps and Apple notarization tickets are external time-varying attestations.",
         },
         publicReleaseDecisionGates: decisionGates,
         publicReleaseBlocked: decisionGates.length > 0,
         sideEffects: mode === "plan" ? [] : [
-            "builds a native VST3 unless --skip-build is supplied",
+            "builds a fresh native VST3 from the recorded clean source commit",
             "replaces the configured release output directory",
             ...(mode === "release" ? ["signs, submits to Apple notarization, staples, and assesses the package"] : []),
         ],
@@ -334,8 +335,8 @@ function printPlan(plan, { json = false } = {}) {
     console.log(`${plan.product} ${plan.releaseVersion} release plan`);
     console.log(`Built VST3: ${plan.paths.builtVst3}`);
     console.log(`Unsigned output: ${plan.paths.zip}`);
-    console.log(`Tracked worktree: ${plan.source.trackedWorktreeDirty ? "dirty" : "clean"}`);
-    console.log("Reproducibility: unsigned normalized payload/package only; signed/notarized bytes are attestations, not reproducible bytes.");
+    console.log(`Worktree: ${plan.source.worktreeDirty ? "dirty" : "clean"}`);
+    console.log("Repeatability: two unsigned packaging assemblies of one fresh native build; independent native-build reproducibility is not claimed.");
 
     if (plan.publicReleaseDecisionGates.length > 0) {
         console.log("Public release decisions still required:");
@@ -346,15 +347,28 @@ function printPlan(plan, { json = false } = {}) {
     console.log("Plan mode made no filesystem, build, signing, install, upload, or deployment changes.");
 }
 
-function assertTrackedWorktreePolicy(gitState, options) {
+function assertWorktreePolicy(gitState, options) {
     if (gitState.dirty && !options.allowDirty) {
         throw new Error([
-            `${options.mode === "release" ? "Release" : "Unsigned reproducibility"} packaging requires a clean tracked worktree.`,
+            `${options.mode === "release" ? "Release" : "Unsigned repeatability"} packaging requires a clean worktree, including untracked files.`,
             "Use --allow-dirty only for a local unsigned validation artifact.",
             "",
-            gitState.trackedStatus,
+            gitState.worktreeStatus,
         ].join("\n"));
     }
+}
+
+function assertSourceStateUnchanged(beforeBuild, afterBuild) {
+    if (beforeBuild.commit === afterBuild.commit
+        && beforeBuild.worktreeStatus === afterBuild.worktreeStatus) {
+        return;
+    }
+
+    throw new Error([
+        "SeqFX source state changed during the native build; refusing to attach stale provenance to the artifact.",
+        `Before: ${beforeBuild.commit} ${beforeBuild.worktreeStatus || "(clean)"}`,
+        `After: ${afterBuild.commit} ${afterBuild.worktreeStatus || "(clean)"}`,
+    ].join("\n"));
 }
 
 function combinedProcessOutput(result) {
@@ -374,7 +388,7 @@ function assertSignedReleasePrerequisites(config, gitState) {
     const notaryProfile = process.env.COSIMO_NOTARY_PROFILE;
 
     if (gitState.dirty)
-        errors.push("tracked worktree is dirty");
+        errors.push("worktree is dirty, including tracked or untracked files");
 
     if (!applicationIdentity)
         errors.push("COSIMO_DEVELOPER_ID_APPLICATION is not set");
@@ -507,6 +521,21 @@ async function walkTree(rootPath, visitor, relativePath = "") {
 
     for (const entry of await sortedDirectoryEntries(absolutePath))
         await walkTree(rootPath, visitor, path.join(relativePath, entry.name));
+}
+
+export async function assertArchiveTreeContainsOnlyFilesAndDirectories(rootPath) {
+    const unsupportedEntries = [];
+
+    await walkTree(rootPath, async ({ relativePath, stat: entryStat }) => {
+        if (!entryStat.isDirectory() && !entryStat.isFile())
+            unsupportedEntries.push(relativePath);
+    });
+
+    if (unsupportedEntries.length > 0) {
+        throw new Error(
+            `Release archive tree contains symlink or special entries: ${unsupportedEntries.join(", ")}`,
+        );
+    }
 }
 
 async function normalizeTreeTimestamps(rootPath, sourceDateEpoch) {
@@ -725,6 +754,14 @@ async function buildUnsignedFlatPackage(config, stagingRoot, packagePath, workRo
 
 export function payloadInventoryErrors(config, payloadFiles, { signed }) {
     const root = `./Library/Audio/Plug-Ins/VST3/${config.identity.bundleName}.vst3`;
+    const relativeRoot = root.slice(2);
+    const allowedAncestors = new Set([
+        ".",
+        "Library",
+        "Library/Audio",
+        "Library/Audio/Plug-Ins",
+        "Library/Audio/Plug-Ins/VST3",
+    ]);
     const requiredFiles = [
         `${root}/Contents/Info.plist`,
         `${root}/Contents/MacOS/${config.identity.bundleName}`,
@@ -735,6 +772,25 @@ export function payloadInventoryErrors(config, payloadFiles, { signed }) {
         (file) => /(^|\/)\._[^/]*$/u.test(file) || /(^|\/)\.DS_Store$/u.test(file),
     );
     const missingFiles = requiredFiles.filter((file) => !payloadFiles.includes(file));
+    const unexpectedFiles = payloadFiles.filter((file) => {
+        if (file === ".")
+            return false;
+
+        if (!file.startsWith("./"))
+            return true;
+
+        const relativePath = file.slice(2);
+        const isCanonical = relativePath
+            && !relativePath.includes("\\")
+            && path.posix.normalize(relativePath) === relativePath;
+
+        if (!isCanonical)
+            return true;
+
+        return !allowedAncestors.has(relativePath)
+            && relativePath !== relativeRoot
+            && !relativePath.startsWith(`${relativeRoot}/`);
+    });
     const errors = [];
 
     if (metadataFiles.length > 0)
@@ -742,6 +798,9 @@ export function payloadInventoryErrors(config, payloadFiles, { signed }) {
 
     if (missingFiles.length > 0)
         errors.push(`payload is missing required files: ${missingFiles.join(", ")}`);
+
+    if (unexpectedFiles.length > 0)
+        errors.push(`payload contains paths outside the declared VST3 install root: ${unexpectedFiles.join(", ")}`);
 
     return errors;
 }
@@ -895,7 +954,7 @@ export function createReleaseManifest({
     const artifactBaseName = seqFxArtifactBaseName(config);
 
     return {
-        schemaVersion: 2,
+        schemaVersion: 3,
         artifactClass: options.mode === "release" ? "signed-notarized-release-candidate" : "local-unsigned-validation",
         packagingReady: options.mode === "release",
         distributionReady: false,
@@ -906,7 +965,6 @@ export function createReleaseManifest({
         releaseVersion: config.release.channelVersion,
         scope: config.scope,
         source: {
-            branch: gitState.branch,
             commit: gitState.commit,
             dirty: gitState.dirty,
             sourceDateEpoch,
@@ -927,10 +985,11 @@ export function createReleaseManifest({
             webViewRequiredMarkers: config.webViewMarkers.required,
             webViewForbiddenMarkersAbsent: config.webViewMarkers.forbidden,
         },
-        reproducibility: {
-            deterministicBoundary: "normalized unsigned VST3 payload tree, unsigned flat package, generated text, and zip",
+        repeatability: {
+            deterministicBoundary: "two packaging assemblies of one freshly built normalized unsigned VST3 payload tree, flat package, generated text, and zip",
             payloadFingerprint,
-            repeatVerificationRequested: options.verifyReproducible,
+            repeatVerificationRequested: options.verifyRepeatablePackaging,
+            independentNativeBuildsCompared: false,
             signedArtifactBytesReproducible: false,
             signedArtifactExplanation: "Developer ID secure timestamps and Apple notarization tickets are external time-varying attestations.",
         },
@@ -946,6 +1005,7 @@ export function createReleaseManifest({
             pkg: `${artifactBaseName}.pkg`,
             zip: `${artifactBaseName}.zip`,
             readme: "README.txt",
+            thirdPartyNotices: "THIRD_PARTY_NOTICES.txt",
             checksums: `${artifactBaseName}-checksums.txt`,
             zipChecksum: `${artifactBaseName}.zip.sha256`,
         },
@@ -986,15 +1046,51 @@ async function createDeterministicZip(zipRootParent, zipFolderName, zipPath, sou
     run("unzip", ["-t", zipPath], { capture: true });
 }
 
-function assertSafeOutputRoot(config, outputRoot) {
-    const expected = path.resolve(repoRoot, config.release.outputDirectory);
-    const releaseParent = path.resolve(repoRoot, "release", "seqfx");
-
-    if (path.resolve(outputRoot) !== expected && !path.resolve(outputRoot).startsWith(`${releaseParent}${path.sep}.`))
-        throw new Error(`Refusing to replace unexpected release output path: ${outputRoot}`);
+export async function assertSafeOutputRoot(
+    config,
+    outputRoot,
+    { repositoryRoot = repoRoot } = {},
+) {
+    const resolvedRepositoryRoot = path.resolve(repositoryRoot);
+    const expected = path.resolve(resolvedRepositoryRoot, config.release.outputDirectory);
+    const releaseParent = path.resolve(resolvedRepositoryRoot, "release", "seqfx");
+    const repeatabilityRoot = path.join(
+        releaseParent,
+        `.${path.basename(expected)}-packaging-repeatability-check`,
+    );
+    const resolvedOutputRoot = path.resolve(outputRoot);
 
     if (!expected.startsWith(`${releaseParent}${path.sep}`))
         throw new Error(`Configured release output must be below release/seqfx/: ${expected}`);
+
+    if (resolvedOutputRoot !== expected && resolvedOutputRoot !== repeatabilityRoot)
+        throw new Error(`Refusing to replace unexpected release output path: ${outputRoot}`);
+
+    const relativeOutput = path.relative(resolvedRepositoryRoot, resolvedOutputRoot);
+
+    if (!relativeOutput || relativeOutput.startsWith("..") || path.isAbsolute(relativeOutput))
+        throw new Error(`Release output must remain inside the repository: ${resolvedOutputRoot}`);
+
+    let ancestor = resolvedRepositoryRoot;
+
+    for (const segment of relativeOutput.split(path.sep)) {
+        ancestor = path.join(ancestor, segment);
+
+        try {
+            const ancestorStat = await lstat(ancestor);
+
+            if (ancestorStat.isSymbolicLink())
+                throw new Error(`Release output path traverses a symlink: ${ancestor}`);
+
+            if (ancestor !== resolvedOutputRoot && !ancestorStat.isDirectory())
+                throw new Error(`Release output ancestor is not a directory: ${ancestor}`);
+        } catch (error) {
+            if (error && typeof error === "object" && "code" in error && error.code === "ENOENT")
+                break;
+
+            throw error;
+        }
+    }
 }
 
 async function assembleArtifactSet({
@@ -1006,7 +1102,7 @@ async function assembleArtifactSet({
     patchManifest,
     sourceDateEpoch,
 }) {
-    assertSafeOutputRoot(config, outputRoot);
+    await assertSafeOutputRoot(config, outputRoot);
     const artifactBaseName = seqFxArtifactBaseName(config);
     const workRoot = path.join(outputRoot, "_work");
     const stagingRoot = path.join(workRoot, "staging");
@@ -1025,6 +1121,8 @@ async function assembleArtifactSet({
     const checksumsPath = path.join(outputRoot, `${artifactBaseName}-checksums.txt`);
     const zipChecksumPath = path.join(outputRoot, `${artifactBaseName}.zip.sha256`);
     const readmePath = path.join(outputRoot, "README.txt");
+    const thirdPartyNoticesPath = path.join(outputRoot, "THIRD_PARTY_NOTICES.txt");
+    const thirdPartyNoticesSourcePath = path.join(repoRoot, config.paths.thirdPartyNotices);
     const zipRootParent = path.join(workRoot, "zip-root");
     const zipFolder = path.join(zipRootParent, artifactBaseName);
 
@@ -1033,6 +1131,10 @@ async function assembleArtifactSet({
     copyPathWithoutMetadata(builtArtifact.vst3Path, stagedVst3);
     clearExtendedAttributes(stagedVst3);
     removeLocalBuildSignature(stagedVst3);
+    const stagedThirdPartyNoticesPath = path.join(stagedVst3, "Contents", "Resources", "THIRD_PARTY_NOTICES.txt");
+    await mkdir(path.dirname(stagedThirdPartyNoticesPath), { recursive: true });
+    copyPathWithoutMetadata(thirdPartyNoticesSourcePath, stagedThirdPartyNoticesPath);
+    await assertArchiveTreeContainsOnlyFilesAndDirectories(stagingRoot);
     await normalizeTreeTimestamps(stagedVst3, sourceDateEpoch);
 
     const payloadFingerprint = await canonicalPayloadFingerprint(stagingRoot);
@@ -1103,15 +1205,17 @@ async function assembleArtifactSet({
     });
 
     await writeFile(readmePath, readme, "utf8");
+    copyPathWithoutMetadata(thirdPartyNoticesSourcePath, thirdPartyNoticesPath);
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
     await writeChecksums(checksumsPath, [
         { filePath: packagePath, label: path.basename(packagePath) },
         { filePath: readmePath, label: path.basename(readmePath) },
+        { filePath: thirdPartyNoticesPath, label: path.basename(thirdPartyNoticesPath) },
         { filePath: manifestPath, label: path.basename(manifestPath) },
     ]);
     await mkdir(zipFolder, { recursive: true });
 
-    for (const sourcePath of [packagePath, readmePath, manifestPath, checksumsPath])
+    for (const sourcePath of [packagePath, readmePath, thirdPartyNoticesPath, manifestPath, checksumsPath])
         copyPathWithoutMetadata(sourcePath, path.join(zipFolder, path.basename(sourcePath)));
 
     clearExtendedAttributes(zipFolder);
@@ -1119,6 +1223,7 @@ async function assembleArtifactSet({
     await writeChecksums(zipChecksumPath, [
         { filePath: zipPath, label: path.basename(zipPath) },
     ]);
+    await rm(workRoot, { recursive: true, force: true });
 
     return {
         checksumsPath,
@@ -1126,6 +1231,7 @@ async function assembleArtifactSet({
         packagePath,
         payloadFingerprint,
         readmePath,
+        thirdPartyNoticesPath,
         zipChecksumPath,
         zipPath,
     };
@@ -1139,6 +1245,7 @@ async function compareArtifactSets(left, right) {
         ["checksums", left.checksumsPath, right.checksumsPath],
         ["zip checksum", left.zipChecksumPath, right.zipChecksumPath],
         ["README", left.readmePath, right.readmePath],
+        ["third-party notices", left.thirdPartyNoticesPath, right.thirdPartyNoticesPath],
     ];
     const results = [];
 
@@ -1161,7 +1268,7 @@ async function compareArtifactSets(left, right) {
 
     if (failures.length > 0) {
         throw new Error([
-            "Unsigned SeqFX output was not byte-reproducible:",
+            "Unsigned SeqFX packaging was not byte-repeatable for the same freshly built VST3:",
             ...failures.map((failure) => `- ${failure.label}: ${failure.leftSha256} != ${failure.rightSha256}`),
         ].join("\n"));
     }
@@ -1173,13 +1280,13 @@ async function buildReleaseArtifacts({ config, gitState, options, patchManifest,
     if (process.platform !== "darwin")
         throw new Error("SeqFX beta packaging targets macOS and must run on macOS.");
 
-    assertTrackedWorktreePolicy(gitState, options);
+    assertWorktreePolicy(gitState, options);
 
     if (options.mode === "release")
         assertSignedReleasePrerequisites(config, gitState);
 
-    if (!options.skipBuild)
-        run(process.execPath, ["fx/prod-effect.mjs", "build", config.productKey, "--clean"]);
+    run(process.execPath, ["fx/prod-effect.mjs", "build", config.productKey, "--clean"]);
+    assertSourceStateUnchanged(gitState, getReleaseGitState());
 
     const builtArtifact = await verifyBuiltVst3(config);
     const outputRoot = path.join(repoRoot, config.release.outputDirectory);
@@ -1193,10 +1300,10 @@ async function buildReleaseArtifacts({ config, gitState, options, patchManifest,
         sourceDateEpoch,
     });
 
-    if (options.verifyReproducible) {
+    if (options.verifyRepeatablePackaging) {
         const repeatRoot = path.join(
             path.dirname(outputRoot),
-            `.${path.basename(outputRoot)}-reproducibility-check`,
+            `.${path.basename(outputRoot)}-packaging-repeatability-check`,
         );
         const repeatArtifacts = await assembleArtifactSet({
             builtArtifact,
@@ -1208,17 +1315,20 @@ async function buildReleaseArtifacts({ config, gitState, options, patchManifest,
             sourceDateEpoch,
         });
         const results = await compareArtifactSets(primaryArtifacts, repeatArtifacts);
-        const reportPath = path.join(outputRoot, `${seqFxArtifactBaseName(config)}-reproducibility.json`);
+        const reportPath = path.join(outputRoot, `${seqFxArtifactBaseName(config)}-packaging-repeatability.json`);
 
         await writeFile(reportPath, `${JSON.stringify({
-            schemaVersion: 1,
+            schemaVersion: 2,
             sourceCommit: gitState.commit,
             sourceDateEpoch,
+            nativeBuildsCompared: 1,
+            independentNativeBuildReproducibilityVerified: false,
+            claim: "Two packaging assemblies of the same freshly built unsigned VST3 were byte-identical.",
             payloadFingerprint: primaryArtifacts.payloadFingerprint,
             results,
         }, null, 2)}\n`, "utf8");
         await rm(repeatRoot, { recursive: true, force: true });
-        console.log(`Verified repeatable unsigned output: ${path.relative(repoRoot, reportPath)}`);
+        console.log(`Verified repeatable unsigned packaging for one fresh native build: ${path.relative(repoRoot, reportPath)}`);
     }
 
     return primaryArtifacts;

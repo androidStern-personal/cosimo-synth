@@ -40,6 +40,12 @@ automation or evidence.
 - [ ] Andrew explicitly approves the current public name, bundle ID, plugin
   code, and manufacturer code. Changing these after users save projects can
   break recall or create duplicate plugin entries.
+- [ ] Andrew explicitly approves `0.1.0-beta.1` as the public beta version.
+- [ ] Confirm that this exact binary is covered by applicable Cmajor and JUCE
+  commercial distribution entitlements, or approve a fully compliant GPL/AGPL
+  distribution plan. Third-party notices do not replace this rights check.
+- [ ] Andrew explicitly authorizes Developer ID signing and Apple notarization
+  submission for this candidate.
 - [ ] Choose and verify the minimum supported macOS version.
 - [ ] Choose the public support email or support URL for release notes.
 - [ ] Choose the Patreon delivery surface: members-only post or digital product.
@@ -66,17 +72,11 @@ npm run test:seqfx:release-builder
 Build a local unsigned validation artifact from a clean commit:
 
 ```bash
-npm run seqfx:release:build -- --unsigned --verify-reproducible
-```
-
-Reuse an already-built VST3 without launching a native build:
-
-```bash
-npm run seqfx:release:build -- --unsigned --skip-build --verify-reproducible
+npm run seqfx:release:build -- --unsigned --verify-repeatable-packaging
 ```
 
 `--allow-dirty` is only for a local unsigned diagnostic package. It disables a
-clean-source claim and cannot be combined with repeat reproducibility or signed
+clean-source claim and cannot be combined with repeatability verification or signed
 release mode.
 
 Signed/notarized candidate command, only after the product decisions and Apple
@@ -86,22 +86,26 @@ credential gates below are complete:
 COSIMO_DEVELOPER_ID_APPLICATION="Developer ID Application: <name> (<team-id>)" \
 COSIMO_DEVELOPER_ID_INSTALLER="Developer ID Installer: <name> (<team-id>)" \
 COSIMO_NOTARY_PROFILE="<approved-keychain-profile>" \
-npm run seqfx:release:build -- --release --skip-build
+npm run seqfx:release:build -- --release
 ```
 
 The command never installs a plugin, starts a DAW, uploads to Patreon, deploys,
 or publishes. Those are separate gates and authorizations.
 
-## Reproducibility contract
+## Packaging repeatability contract
 
-Unsigned reproducibility and release authenticity are different claims:
+Unsigned packaging repeatability, native-build reproducibility, and release
+authenticity are different claims:
 
 - The deterministic boundary is the normalized unsigned VST3 payload tree,
   generated package metadata, unsigned flat package, README/manifest/checksums,
   and ZIP. The source commit timestamp is the default `SOURCE_DATE_EPOCH`.
-- `--verify-reproducible` assembles the unsigned output twice and requires
+- `--verify-repeatable-packaging` assembles the same freshly built unsigned
+  VST3 twice and requires
   byte-identical package, ZIP, manifest, checksum files, and README plus an
   identical path/kind/mode/content payload fingerprint.
+- This compares one native binary through two packaging assemblies. It does not
+  claim that two independent native builds are byte-identical.
 - A dirty worktree cannot receive that claim.
 - Developer ID signing uses secure timestamps and notarization adds an Apple
   ticket. Signed/notarized bytes are intentionally not claimed reproducible.
@@ -120,16 +124,18 @@ Expected files:
 - `CosimoSeqFX-0.1.0-beta.1-macOS-checksums.txt`
 - `CosimoSeqFX-0.1.0-beta.1-macOS.zip.sha256`
 - `README.txt`
-- a reproducibility report when `--verify-reproducible` is used
+- `THIRD_PARTY_NOTICES.txt`
+- a packaging-repeatability report when `--verify-repeatable-packaging` is used
 
-The ZIP contains the installer, README, release manifest, and payload checksum
-file. The adjacent `.zip.sha256` covers the completed download without creating
-a checksum cycle inside the ZIP.
+The ZIP contains the installer, README, third-party notices, release manifest,
+and payload checksum file. The notices are also embedded inside the VST3
+resources before signing. The adjacent `.zip.sha256` covers the completed
+download without creating a checksum cycle inside the ZIP.
 
 ## Gate A — clean source and product qualification
 
 - [ ] Source review and decision-provenance objection audit are complete.
-- [ ] Branch is committed and `git status --short --untracked-files=no` is clean.
+- [ ] Branch is committed and `git status --short --untracked-files=all` is clean.
 - [ ] Release config, patch manifest, and `fx/build-effect.mjs` identity/path
   contract passes.
 - [ ] Complete focused SeqFX state/runtime/preset/browser suites pass.
@@ -151,9 +157,9 @@ a checksum cycle inside the ZIP.
   architecture, and any inappropriate generated permissions/usage text.
 - [ ] Record VST3 bundle and executable sizes and SHA-256 values.
 
-## Gate C — unsigned deterministic packaging
+## Gate C — unsigned repeatable packaging
 
-- [ ] Run the unsigned builder with `--verify-reproducible` from the same clean
+- [ ] Run the unsigned builder with `--verify-repeatable-packaging` from the same clean
   commit.
 - [ ] Confirm the repeat report has no differing payload/package/ZIP bytes.
 - [ ] Confirm `pkgutil --payload-files` contains exactly the VST3 under
@@ -162,6 +168,8 @@ a checksum cycle inside the ZIP.
 - [ ] Confirm the manifest says `local-unsigned-validation`,
   `distributionReady: false`, and names every unperformed host/public gate.
 - [ ] Confirm the README visibly says the unsigned package is not for Patreon.
+- [ ] Confirm `THIRD_PARTY_NOTICES.txt` is present at the ZIP root and inside
+  the staged VST3 resources, and is covered by checksums.
 
 ## Gate D — Apple credentials, signing, and notarization
 

@@ -38,12 +38,17 @@ export const seqFxReleaseConfig = Object.freeze({
     }),
     approvals: Object.freeze({
         publicIdentityApproved: false,
+        betaVersionApproved: false,
+        signingAndNotarizationApproved: false,
+        cmajorDistributionRightsApproved: false,
+        juceDistributionRightsApproved: false,
     }),
     support: Object.freeze({
         publicContact: null,
     }),
     paths: Object.freeze({
         patchManifest: "fx/seqfx/SeqFx.cmajorpatch",
+        thirdPartyNotices: "legal/seqfx/THIRD_PARTY_NOTICES.txt",
         builtVst3: "build/seqfx_juce/_build/plugin/CosimoSeqFX_artefacts/Release/VST3/CosimoSeqFX.vst3",
         installedVst3: "/Library/Audio/Plug-Ins/VST3/CosimoSeqFX.vst3",
         userInstalledVst3: "~/Library/Audio/Plug-Ins/VST3/CosimoSeqFX.vst3",
@@ -75,6 +80,34 @@ export function unresolvedSeqFxPublicReleaseDecisions(config = seqFxReleaseConfi
         decisions.push({
             id: "public-identity-approval",
             decision: "Approve the current public name, bundle ID, plugin code, and manufacturer code before the first distributed beta.",
+        });
+    }
+
+    if (!config.approvals.betaVersionApproved) {
+        decisions.push({
+            id: "beta-version-approval",
+            decision: `Approve ${config.release.channelVersion} as the first public beta version.`,
+        });
+    }
+
+    if (!config.approvals.cmajorDistributionRightsApproved) {
+        decisions.push({
+            id: "cmajor-distribution-rights",
+            decision: "Confirm that this exact Cmajor-based binary is covered by an applicable commercial entitlement or an approved GPL-compliant distribution plan.",
+        });
+    }
+
+    if (!config.approvals.juceDistributionRightsApproved) {
+        decisions.push({
+            id: "juce-distribution-rights",
+            decision: "Confirm that this exact JUCE-based binary is covered by an applicable commercial entitlement or an approved AGPL-compliant distribution plan.",
+        });
+    }
+
+    if (!config.approvals.signingAndNotarizationApproved) {
+        decisions.push({
+            id: "signing-notarization-authorization",
+            decision: "Explicitly authorize Developer ID signing and submission of this beta candidate to Apple notarization.",
         });
     }
 

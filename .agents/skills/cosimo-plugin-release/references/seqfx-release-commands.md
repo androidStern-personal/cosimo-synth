@@ -5,7 +5,7 @@ Use these commands from the `cosimo-synth` repo root. `scripts/seqfx-release-con
 ## Preflight
 
 ```bash
-git status --short --untracked-files=no
+git status --short --untracked-files=all
 npm ci
 npm audit
 node --check scripts/build_seqfx_beta_release.mjs
@@ -72,10 +72,14 @@ npm ci
 First verify the unsigned deterministic boundary from the clean commit:
 
 ```bash
-npm run seqfx:release:build -- --unsigned --verify-reproducible
+npm run seqfx:release:build -- --unsigned --verify-repeatable-packaging
 ```
 
-The repeat check applies to the normalized unsigned payload, unsigned package, generated text, and ZIP. Developer ID secure timestamps and Apple notarization tickets make signed release bytes intentionally non-reproducible; signed mode is proved through identities, notarization, stapling, Gatekeeper, and checksums instead.
+The repeat check assembles the same freshly built normalized unsigned VST3 into
+two payload/package/ZIP sets. It does not compare independent native builds.
+Developer ID secure timestamps and Apple notarization tickets make signed
+release bytes intentionally variable; signed mode is proved through identities,
+notarization, stapling, Gatekeeper, and checksums instead.
 
 Run the signed release build only after the current public identity, minimum macOS version, support contact, and Patreon delivery surface are explicitly approved in the release config:
 
@@ -111,7 +115,8 @@ release/seqfx/0.1.0-beta.1/CosimoSeqFX-0.1.0-beta.1-macOS-release-manifest.json
 release/seqfx/0.1.0-beta.1/CosimoSeqFX-0.1.0-beta.1-macOS-checksums.txt
 release/seqfx/0.1.0-beta.1/CosimoSeqFX-0.1.0-beta.1-macOS.zip.sha256
 release/seqfx/0.1.0-beta.1/README.txt
-release/seqfx/0.1.0-beta.1/CosimoSeqFX-0.1.0-beta.1-macOS-reproducibility.json  # unsigned repeat check only
+release/seqfx/0.1.0-beta.1/THIRD_PARTY_NOTICES.txt
+release/seqfx/0.1.0-beta.1/CosimoSeqFX-0.1.0-beta.1-macOS-packaging-repeatability.json
 ```
 
 ## Package And Zip Verification

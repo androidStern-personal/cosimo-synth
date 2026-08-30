@@ -36,10 +36,10 @@ If the user asks "what is next?", answer with the next concrete release task and
 
 ## Worktree Discipline
 
-Check the tracked worktree before release operations:
+Check the complete worktree before release operations, including untracked source:
 
 ```bash
-git status --short --untracked-files=no
+git status --short --untracked-files=all
 ```
 
 Do not revert unrelated dirty files. If release mode needs a clean checkout and unrelated files are dirty, create a temporary detached worktree at the current release commit and build there.
@@ -52,7 +52,9 @@ Commit code/script/doc changes that are part of release automation or durable re
 2. Confirm scope and artifact name from `scripts/seqfx-release-config.mjs`.
 3. Install dependencies with the repo lockfile.
 4. Run the relevant SeqFX tests and production build checks.
-5. Prove the clean unsigned payload/package with `--unsigned --verify-reproducible`.
+5. Prove repeatable packaging of one fresh unsigned native build with
+   `--unsigned --verify-repeatable-packaging`; do not call that independent
+   native-build reproducibility.
 6. Confirm Apple Developer ID signing identities and notarization profile.
 7. Build with `npm run seqfx:release:build -- --release`.
 8. Verify the copied `.pkg` and `.zip`.
@@ -88,7 +90,11 @@ npm run seqfx:release:build -- --release
 
 Never call an ad-hoc-signed or non-notarized artifact Patreon-ready. A Patreon-ready macOS beta must be Developer ID signed, notarized, stapled, Gatekeeper accepted, and DAW smoke tested.
 
-Do not call signed/notarized bytes reproducible. The builder's repeatable byte claim ends at the normalized unsigned payload/package/ZIP. Developer ID timestamps and Apple notarization are time-varying authenticity attestations and need their own recorded evidence.
+Do not call signed/notarized bytes reproducible. The builder's byte claim covers
+two packaging assemblies of one fresh normalized unsigned native build; it does
+not compare independent native builds. Developer ID timestamps and Apple
+notarization are time-varying authenticity attestations and need their own
+recorded evidence.
 
 Verify at minimum:
 

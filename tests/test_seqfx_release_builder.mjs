@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmod, mkdtemp, mkdir, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,10 +8,13 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 import {
+    assertArchiveTreeContainsOnlyFilesAndDirectories,
+    assertSafeOutputRoot,
     canonicalPayloadFingerprint,
     createReleaseManifest,
     createReleasePlan,
     deterministicCpioPayload,
+    getReleaseGitState,
     parseReleaseArgs,
     payloadInventoryErrors,
     releaseContractErrors,
@@ -57,6 +60,10 @@ test("unresolved public decisions are explicit release gates, not guessed values
         unresolvedSeqFxPublicReleaseDecisions().map((gate) => gate.id),
         [
             "public-identity-approval",
+            "beta-version-approval",
+            "cmajor-distribution-rights",
+            "juce-distribution-rights",
+            "signing-notarization-authorization",
             "minimum-macos-version",
             "support-contact",
             "patreon-delivery-surface",
@@ -70,27 +77,82 @@ test("release argument parsing defaults to unsigned and separates plan from rele
         help: false,
         json: false,
         mode: "unsigned",
-        skipBuild: false,
-        verifyReproducible: false,
+        verifyRepeatablePackaging: false,
     });
     assert.equal(parseReleaseArgs(["node", "script", "--plan", "--json"]).mode, "plan");
-    assert.equal(parseReleaseArgs(["node", "script", "--release", "--skip-build"]).mode, "release");
+    assert.equal(parseReleaseArgs(["node", "script", "--release"]).mode, "release");
     assert.throws(
         () => parseReleaseArgs(["node", "script", "--release", "--allow-dirty"]),
         /cannot be combined/u,
     );
     assert.throws(
-        () => parseReleaseArgs(["node", "script", "--release", "--verify-reproducible"]),
-        /unsigned payload only/u,
+        () => parseReleaseArgs(["node", "script", "--release", "--verify-repeatable-packaging"]),
+        /unsigned packaging only/u,
     );
     assert.throws(
-        () => parseReleaseArgs(["node", "script", "--plan", "--skip-build"]),
-        /read-only/u,
+        () => parseReleaseArgs(["node", "script", "--release", "--skip-build"]),
+        /Unknown argument/u,
     );
+    assert.throws(
+        () => parseReleaseArgs(["node", "script", "--verify-reproducible"]),
+        /Unknown argument/u,
+    );
+});
+
+test("release git state treats untracked source as dirty", async () => {
+    const isolatedRepo = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-git-state-"));
+
+    try {
+        execFileSync("git", ["init", "--initial-branch=test"], { cwd: isolatedRepo });
+        await writeFile(path.join(isolatedRepo, "tracked.txt"), "tracked\n", "utf8");
+        execFileSync("git", ["add", "tracked.txt"], { cwd: isolatedRepo });
+        execFileSync("git", [
+            "-c", "user.name=SeqFX Release Test",
+            "-c", "user.email=seqfx-release-test@example.invalid",
+            "commit", "-m", "fixture",
+        ], { cwd: isolatedRepo });
+        await writeFile(path.join(isolatedRepo, "untracked.txt"), "untracked\n", "utf8");
+
+        const gitState = getReleaseGitState({ cwd: isolatedRepo });
+        assert.equal(gitState.dirty, true);
+        assert.match(gitState.worktreeStatus, /untracked\.txt/u);
+    } finally {
+        await rm(isolatedRepo, { recursive: true, force: true });
+    }
 });
 
 test("release config matches the current patch manifest and effect build registry", async () => {
     assert.deepEqual(releaseContractErrors(seqFxReleaseConfig, await currentManifest()), []);
+});
+
+test("tracked third-party notices cover the embedded runtime and artwork", async () => {
+    const notices = await readFile(path.join(repoRoot, seqFxReleaseConfig.paths.thirdPartyNotices), "utf8");
+    const requiredComponents = [
+        "Cmajor",
+        "JUCE",
+        "FONTAUDIO SVG ICONS",
+        "CHOC",
+        "QUICKJS",
+        "FLAC",
+        "OGG/VORBIS",
+        "MINIMP3",
+        "STEINBERG VST3 SDK",
+        "HARFBUZZ",
+        "SHEENBIDI",
+        "INDEPENDENT JPEG GROUP",
+        "LIBPNG",
+        "ZLIB",
+        "REACT, REACT-DOM, AND SCHEDULER",
+    ];
+
+    for (const component of requiredComponents)
+        assert.match(notices, new RegExp(`^${component.replaceAll("+", "\\+")}$`, "mu"));
+
+    assert.match(notices, /does not grant distribution\s+rights/u);
+    assert.match(notices, /320ea19819bf66429fa772d6c04614ae75815895/u);
+    assert.match(notices, /Creative Commons Attribution 4\.0 International/u);
+    assert.match(notices, /This software is based in part on the work of the Independent JPEG Group\./u);
+    assert.doesNotMatch(notices, /CHOC_REGISTER_OPEN_SOURCE_LICENCE|^#ifdef|\)"\)$/mu);
 });
 
 test("release contract reports identity and path drift before packaging", async () => {
@@ -110,7 +172,7 @@ test("read-only plan names exact side effects, current paths, and release blocke
             branch: "codex/test",
             commit: "a".repeat(40),
             dirty: false,
-            trackedStatus: "",
+            worktreeStatus: "",
         },
         mode: "plan",
         sourceDateEpoch: 1_700_000_000,
@@ -119,8 +181,9 @@ test("read-only plan names exact side effects, current paths, and release blocke
     assert.deepEqual(plan.sideEffects, []);
     assert.equal(plan.publicReleaseBlocked, true);
     assert.match(plan.paths.builtVst3, /_build\/plugin\/CosimoSeqFX_artefacts/u);
-    assert.match(plan.reproducibility.deterministicBoundary, /unsigned/u);
-    assert.equal(plan.reproducibility.signedArtifactBytesReproducible, false);
+    assert.match(plan.repeatability.deterministicBoundary, /one freshly built unsigned VST3/u);
+    assert.equal(plan.repeatability.independentNativeBuildsCompared, false);
+    assert.equal(plan.repeatability.signedArtifactBytesReproducible, false);
     assert.ok(plan.explicitlyNeverPerformed.includes("Patreon upload"));
 });
 
@@ -240,6 +303,53 @@ test("payload validation requires a signature only for signed release mode", () 
         payloadInventoryErrors(seqFxReleaseConfig, [...unsignedFiles, `${root}/Contents/.DS_Store`], { signed: false }).join("\n"),
         /metadata files/u,
     );
+    assert.match(
+        payloadInventoryErrors(
+            seqFxReleaseConfig,
+            [...unsignedFiles, "./Library/LaunchDaemons/dev.cosimo.seqfx.plist"],
+            { signed: false },
+        ).join("\n"),
+        /outside the declared VST3 install root/u,
+    );
+    assert.match(
+        payloadInventoryErrors(
+            seqFxReleaseConfig,
+            [...unsignedFiles, `${root}/../escaped`],
+            { signed: false },
+        ).join("\n"),
+        /outside the declared VST3 install root/u,
+    );
+});
+
+test("release output deletion rejects symlinked ancestors", async (context) => {
+    const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-output-root-"));
+    const externalRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-external-"));
+    context.after(() => Promise.all([
+        rm(repositoryRoot, { recursive: true, force: true }),
+        rm(externalRoot, { recursive: true, force: true }),
+    ]));
+    await mkdir(path.join(repositoryRoot, "release"), { recursive: true });
+    await writeFile(path.join(externalRoot, "sentinel.txt"), "must survive\n", "utf8");
+    await symlink(externalRoot, path.join(repositoryRoot, "release", "seqfx"));
+
+    const outputRoot = path.join(repositoryRoot, seqFxReleaseConfig.release.outputDirectory);
+    await assert.rejects(
+        assertSafeOutputRoot(seqFxReleaseConfig, outputRoot, { repositoryRoot }),
+        /traverses a symlink/u,
+    );
+    assert.equal(await readFile(path.join(externalRoot, "sentinel.txt"), "utf8"), "must survive\n");
+});
+
+test("release archive rejects symlinks and special entries", async (context) => {
+    const archiveRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-archive-tree-"));
+    context.after(() => rm(archiveRoot, { recursive: true, force: true }));
+    await writeFile(path.join(archiveRoot, "payload.txt"), "payload\n", "utf8");
+    await assertArchiveTreeContainsOnlyFilesAndDirectories(archiveRoot);
+    await symlink("payload.txt", path.join(archiveRoot, "alias.txt"));
+    await assert.rejects(
+        assertArchiveTreeContainsOnlyFilesAndDirectories(archiveRoot),
+        /symlink or special entries: alias\.txt/u,
+    );
 });
 
 test("README labels unsigned output honestly", () => {
@@ -260,7 +370,7 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
             branch: "codex/test",
             commit: "b".repeat(40),
             dirty: false,
-            trackedStatus: "",
+            worktreeStatus: "",
         },
         notarization: {
             gatekeeperAccepted: false,
@@ -270,7 +380,7 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
         },
         options: {
             mode: "unsigned",
-            verifyReproducible: true,
+            verifyRepeatablePackaging: true,
         },
         packagePayloadFileCount: 3,
         patchManifest,
@@ -292,6 +402,9 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
     assert.equal(first.distributionReady, false);
     assert.equal(first.packagingReady, false);
     assert.equal("createdAt" in first, false);
+    assert.equal("branch" in first.source, false);
+    assert.equal(first.repeatability.independentNativeBuildsCompared, false);
+    assert.equal(first.artifacts.thirdPartyNotices, "THIRD_PARTY_NOTICES.txt");
     assert.ok(first.operationsNotPerformed.includes("DAW smoke or listening acceptance"));
     assert.ok(first.operationsNotPerformed.includes("Patreon upload"));
 
@@ -299,7 +412,7 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
         ...inputs,
         options: {
             mode: "release",
-            verifyReproducible: false,
+            verifyRepeatablePackaging: false,
         },
     });
     assert.equal(signedCandidate.packagingReady, true);
