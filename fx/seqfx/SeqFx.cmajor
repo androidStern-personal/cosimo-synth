@@ -4890,7 +4890,22 @@ processor SeqFx [[ main ]]
             vectorMid + ((projectedLeft - vectorMid) * width),
             vectorMid + ((projectedRight - vectorMid) * width)
         );
-        let advancedMix = seqfx::smoothStep01 (dispersion);
+        // The exact-neutral path deliberately leaves this history cold. Keep
+        // the reference audible until every vector mode can read valid audio,
+        // then crossfade over the normal transition window.
+        let maximumModeDelay = std::intrinsics::max (
+            std::intrinsics::max (modeDelay0, modeDelay1),
+            std::intrinsics::max (modeDelay2, modeDelay3)
+        );
+        let vectorWarmupFrames = float32 (combVectorValidSamples[lane])
+            - std::intrinsics::ceil (maximumModeDelay)
+            - 3.0f;
+        let vectorReadiness = seqfx::smoothStep01 (seqfx::clampFloat (
+            vectorWarmupFrames / seqfx::transitionCrossfadeFrames,
+            0.0f,
+            1.0f
+        ));
+        let advancedMix = seqfx::smoothStep01 (dispersion) * vectorReadiness;
         let wet = referenceWet + ((vectorWet - referenceWet) * advancedMix);
         return completeCombFrame (lane, stage, wet, decaySeconds, motion, true);
     }

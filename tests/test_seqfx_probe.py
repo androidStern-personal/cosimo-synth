@@ -3872,6 +3872,55 @@ def test_comb_dispersion_zero_is_an_exact_motion_independent_reference_neutral(
     assert _rms(advanced[512:] - stationary[512:]) > 1.0e-3
 
 
+def test_live_comb_dispersion_edit_keeps_the_reference_while_the_vector_network_warms(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = [30.0, 3.0, 0.0, 0.0, 20_000.0, 0.0, 0.0, 0.65]
+    for step in range(6):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_COMB,
+            params=params,
+        )
+
+    edited = json.loads(json.dumps(upload))
+    edited["revision"] = 2
+    edited["authoritative"] = False
+    edited_params = list(params)
+    edited_params[3] = 1.0
+    for step in range(6):
+        _activate_step(
+            edited,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_COMB,
+            params=edited_params,
+        )
+
+    source = _complex_signal(STEP_FRAMES * 6) * 0.2
+    baseline_path = tmp_path / "baseline"
+    edited_path = tmp_path / "edited"
+    baseline_path.mkdir()
+    edited_path.mkdir()
+    baseline = _render(generated_runtime, baseline_path, source, _base_schedule(upload))
+    edit_frame = (STEP_FRAMES * 2) + 600
+    schedule = _base_schedule(upload)
+    schedule[edit_frame] = [["event", "patternUpload", edited]]
+    changed = _render(generated_runtime, edited_path, source, schedule)
+
+    warmup = slice(edit_frame + 32, edit_frame + 1_200)
+    np.testing.assert_allclose(changed[warmup], baseline[warmup], atol=1.0e-6, rtol=0.0)
+
+    ready = slice(edit_frame + 2_400, edit_frame + 4_800)
+    assert _rms(changed[ready] - baseline[ready]) > 1.0e-3
+
+
 def test_comb_width_has_a_mono_safe_center_and_a_distinct_stereo_projection(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
