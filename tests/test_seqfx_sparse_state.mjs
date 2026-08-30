@@ -477,6 +477,17 @@ test("strict v7 parsing rejects overlap, bounds, unknown fields, and malformed a
             code: "invalid_integer_param",
             path: "$.patterns[0].chains[0].blocks[0].aux.targets[0].end",
         },
+        {
+            mutate(stored) {
+                stored.patterns[0].chains[0].blocks = [{
+                    startStep: 0,
+                    effectType: SEQFX_EFFECT_TYPES.filter,
+                    aux: { targets: [{ index: 0, enabled: true, end: 2 }] },
+                }];
+            },
+            code: "ineligible_aux_target",
+            path: "$.patterns[0].chains[0].blocks[0].aux.targets[0].index",
+        },
     ];
 
     for (const fixture of cases) {

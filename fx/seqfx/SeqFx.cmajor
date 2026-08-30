@@ -4073,8 +4073,7 @@ processor SeqFx [[ main ]]
 
         let cutoffHz = auxCutoffValue (lane, 1, filterStartHz[lane]);
         let currentQ = seqfx::clampFloat (auxParamValue (lane, 3, filterQ[lane]), 0.1f, 20.0f);
-        let currentMode = snapValue (auxParamValue (lane, 0, float32 (filterMode[lane])), 0, 2);
-        let mode = seqfx::resolveFilterMode (currentMode);
+        let mode = seqfx::resolveFilterMode (filterMode[lane]);
 
         filterStates[lane, 0].setMode (mode);
         filterStates[lane, 1].setMode (mode);

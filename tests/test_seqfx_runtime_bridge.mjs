@@ -34,6 +34,7 @@ class FakePatchConnection {
         this.parameters = { patternSelect: 0, rate: 1, ...parameters };
         this.events = [];
         this.storedWrites = [];
+        this.allStoredWrites = [];
         this.requestedParameters = [];
         this.storedStateListeners = new Set();
         this.parameterListeners = new Map();
@@ -63,7 +64,10 @@ class FakePatchConnection {
 
     sendStoredStateValue(key, value) {
         this.storedState[key] = value;
-        this.storedWrites.push({ key, value });
+        this.allStoredWrites.push({ key, value });
+        if (key === SEQFX_STATE_KEY) {
+            this.storedWrites.push({ key, value });
+        }
         for (const listener of this.storedStateListeners) {
             listener({ key, value });
         }
@@ -454,6 +458,7 @@ test("live_selected_pattern_param_edit_uploads_runtime_pattern_without_persistin
     const uploads = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload);
     assert.equal(uploads.length, 1);
     assert.equal(uploads[0].value.patternIndex, 0);
+    assert.equal(uploads[0].value.authoritative, false);
     assert.equal(uploads[0].value.params[SEQFX_LANES.filter][6][1], 330);
     assert.equal(uploads[0].value.revision, bridge.getState().patterns[0].revision);
 
@@ -1232,6 +1237,40 @@ test("a live gesture creates one undo entry and authoritative preset load clears
     bridge.replaceStateFromPreset(serializeSeqFxState(initialState));
     assert.equal(bridge.canUndo(), false);
     assert.equal(bridge.canRedo(), false);
+});
+
+test("an external full-state recall authoritatively replaces the selected runtime pattern", () => {
+    let initialState = createDefaultSeqFxState();
+    initialState = applySeqFxBlockCreate(initialState, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.stutter,
+        startStep: 0,
+        length: 4,
+    });
+    let recalledState = createDefaultSeqFxState();
+    recalledState = applySeqFxBlockCreate(recalledState, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 12,
+        length: 2,
+    });
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+    bridge.attach();
+    bridge.requestBootState();
+    connection.events = [];
+
+    for (const listener of connection.storedStateListeners) {
+        listener({ key: SEQFX_STATE_KEY, value: serializeSeqFxState(recalledState) });
+    }
+
+    const upload = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).at(-1).value;
+    assert.equal(upload.patternIndex, 0);
+    assert.equal(upload.authoritative, true);
+    assert.equal(upload.activeSteps[SEQFX_LANES.stutter][0], false);
+    assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(12, 14), [true, true]);
 });
 
 test("invalid authoritative state is atomic and preserves current sound plus undo history", () => {

@@ -1,5 +1,9 @@
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import {
+    SEQFX_STATE_UPDATE_INTENT_KEY,
+    serializeSeqFxStateUpdateIntent,
+} from "../seqfx-state-update-intent";
+import {
     applySeqFxFactoryPattern,
     applySeqFxSafeLoopVariation,
     getSeqFxFactoryPattern,
@@ -382,6 +386,10 @@ export class SeqFxRuntimeBridge {
 
         this.applyStoredState(stored.value, stored.key);
 
+        if (!isBootResponse) {
+            this.sendPatternUpload(this.selectedPatternIndex, true);
+        }
+
         if (isBootResponse) {
             this.requestRuntimeValuesAfterBootState();
         }
@@ -590,7 +598,8 @@ export class SeqFxRuntimeBridge {
         this.cancelLiveEdit();
         this.clearHistory();
         this.state = parsedState;
-        this.persistState();
+        this.persistState(true);
+        this.sendPatternUpload(this.selectedPatternIndex, true);
         this.notifyStateListeners();
     }
 
@@ -1009,20 +1018,29 @@ export class SeqFxRuntimeBridge {
         this.pendingLiveFrame = null;
 
         if (patternIndex !== null) {
-            this.patchConnection.sendEventOrValue?.(SEQFX_ENDPOINTS.patternUpload, buildSeqPatternUpload(this.state, {
-                patternIndex,
-                authoritative: false,
-            }));
+            this.sendPatternUpload(patternIndex, false);
         }
 
         this.notifyStateListeners();
     }
 
-    private persistState() {
+    private sendPatternUpload(patternIndex: number, authoritative: boolean) {
+        this.patchConnection.sendEventOrValue?.(SEQFX_ENDPOINTS.patternUpload, buildSeqPatternUpload(this.state, {
+            patternIndex,
+            authoritative,
+        }));
+    }
+
+    private persistState(authoritative = false) {
         const serialized = serializeSeqFxState(this.state);
         this.hasCurrentV7State = true;
         this.rememberStoredEcho(serialized);
+        this.patchConnection.sendStoredStateValue?.(
+            SEQFX_STATE_UPDATE_INTENT_KEY,
+            serializeSeqFxStateUpdateIntent(serialized, authoritative),
+        );
         this.patchConnection.sendStoredStateValue?.(SEQFX_STATE_KEY, serialized);
+        this.patchConnection.sendStoredStateValue?.(SEQFX_STATE_UPDATE_INTENT_KEY, null);
     }
 
     private requestLegacyBootState() {

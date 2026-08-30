@@ -9,6 +9,7 @@ import { createLegacyV5StateWithBlock } from "./helpers/seqfx_legacy_v5_fixture.
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
 const workerModule = await loadUIModule(repoRoot, "fx/seqfx/worker/seqfx-worker-service.ts");
+const updateIntentModule = await loadUIModule(repoRoot, "fx/seqfx/seqfx-state-update-intent.ts");
 
 const {
     SEQFX_EFFECT_TYPES,
@@ -24,6 +25,10 @@ const {
 const {
     createSeqFxWorkerService,
 } = workerModule;
+const {
+    SEQFX_STATE_UPDATE_INTENT_KEY,
+    serializeSeqFxStateUpdateIntent,
+} = updateIntentModule;
 
 class FakePatchConnection {
     constructor({ values = {}, parameters = {} } = {}) {
@@ -327,7 +332,7 @@ test("seqfx worker reuploads when patternSelect changes", () => {
     );
 });
 
-test("seqfx worker reuploads the selected pattern when seqfx.v7 changes", () => {
+test("seqfx worker keeps an explicitly marked one-pattern edit non-authoritative", () => {
     const connection = new FakePatchConnection({
         values: {
             [SEQFX_STATE_KEY]: serializeSeqFxState(createDefaultSeqFxState()),
@@ -346,11 +351,18 @@ test("seqfx worker reuploads the selected pattern when seqfx.v7 changes", () => 
 
     service.start();
     connection.events = [];
-    connection.emitStoredState(SEQFX_STATE_KEY, serializeSeqFxState(nextState));
+    const serialized = serializeSeqFxState(nextState);
+    connection.emitStoredState(
+        SEQFX_STATE_UPDATE_INTENT_KEY,
+        serializeSeqFxStateUpdateIntent(serialized, false),
+    );
+    connection.emitStoredState(SEQFX_STATE_KEY, serialized);
+    connection.emitStoredState(SEQFX_STATE_UPDATE_INTENT_KEY, null);
 
     const uploads = patternUploads(connection);
     assert.equal(uploads.length, 1);
     assert.equal(uploads[0].value.patternIndex, 0);
+    assert.equal(uploads[0].value.authoritative, false);
     assert.deepEqual(
         uploads[0].value.activeSteps[SEQFX_LANES.filter].slice(4, 6),
         [true, true],
@@ -359,6 +371,45 @@ test("seqfx worker reuploads the selected pattern when seqfx.v7 changes", () => 
         uploads[0].value.effectTypes[SEQFX_LANES.filter].slice(4, 6),
         [SEQFX_EFFECT_TYPES.filter, SEQFX_EFFECT_TYPES.filter],
     );
+});
+
+test("seqfx worker fails closed for unmarked or mismatched one-pattern host recalls", () => {
+    const liveState = createDefaultSeqFxState();
+    const recalledState = createStateWithBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 12,
+        length: 2,
+    });
+    const recalledSerialized = serializeSeqFxState(recalledState);
+
+    for (const [label, staleIntent] of [
+        ["unmarked", null],
+        ["mismatched", serializeSeqFxStateUpdateIntent(serializeSeqFxState(liveState), false)],
+    ]) {
+        const connection = new FakePatchConnection({
+            values: {
+                [SEQFX_STATE_KEY]: serializeSeqFxState(liveState),
+            },
+            parameters: {
+                patternSelect: 0,
+            },
+        });
+        const service = createSeqFxWorkerService(connection);
+
+        service.start();
+        connection.events = [];
+        if (staleIntent !== null) {
+            connection.emitStoredState(SEQFX_STATE_UPDATE_INTENT_KEY, staleIntent);
+        }
+        connection.emitStoredState(SEQFX_STATE_KEY, recalledSerialized);
+
+        const upload = patternUploads(connection).at(-1).value;
+        assert.equal(upload.patternIndex, 0, label);
+        assert.equal(upload.authoritative, true, label);
+        assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(12, 14), [true, true], label);
+        service.stop();
+    }
 });
 
 test("seqfx worker reads a valid version-5 seqfx.v6 fallback without writing stored state", () => {

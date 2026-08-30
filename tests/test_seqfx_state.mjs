@@ -240,6 +240,53 @@ test("seqfx_filter_blocks_store_the_old_sweep_as_a_default_cutoff_aux_target", (
     assert.deepEqual(upload.auxEnd[SEQFX_LANES.filter].slice(3, 5).map((targets) => targets[1]), [500, 500]);
 });
 
+test("seqfx_filter_mode_cannot_be_authored_persisted_or_uploaded_as_an_aux_target", () => {
+    const state = applySeqFxBlockCreate(createDefaultSeqFxState(), {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 3,
+        length: 1,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+    });
+
+    assert.throws(
+        () => applySeqFxBlockAuxTargetToggle(state, {
+            patternIndex: 0,
+            lane: SEQFX_LANES.filter,
+            startStep: 3,
+            paramIndex: 0,
+            enabled: true,
+        }),
+        /Filter Mode is not eligible for Aux modulation/,
+    );
+    assert.throws(
+        () => applySeqFxBlockAuxTargetEndEdit(state, {
+            patternIndex: 0,
+            lane: SEQFX_LANES.filter,
+            startStep: 3,
+            paramIndex: 0,
+            value: 2,
+        }),
+        /Filter Mode is not eligible for Aux modulation/,
+    );
+
+    const malformedDenseState = structuredClone(state);
+    const malformedStep = malformedDenseState.patterns[0].lanes[SEQFX_LANES.filter].steps[3];
+    malformedStep.aux.targets[0] = { enabled: true, end: 2 };
+    assert.throws(
+        () => assertSeqFxStateValuesInRange(malformedDenseState),
+        /Filter Mode is not eligible for Aux modulation/,
+    );
+
+    const upload = buildSeqPatternUpload(malformedDenseState, {
+        patternIndex: 0,
+        authoritative: false,
+    });
+    assert.equal(upload.auxEnabled[SEQFX_LANES.filter][3][0], false);
+    assert.equal(upload.auxEnd[SEQFX_LANES.filter][3][0], 0);
+    assert.equal(JSON.stringify(JSON.parse(serializeSeqFxState(malformedDenseState))).includes('"index":0'), false);
+});
+
 test("seqfx_aux_target_enabled_normalization_falls_back_when_raw_enabled_is_not_boolean", () => {
     const rawState = createDefaultSeqFxState();
     rawState.patterns[0].lanes[SEQFX_LANES.filter].steps[0].aux.targets[1].enabled = "yes";

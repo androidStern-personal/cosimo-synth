@@ -45,6 +45,7 @@ class FakePatchConnection {
         this.parameters = { patternSelect: 0, rate: 1, ...parameters };
         this.events = [];
         this.storedWrites = [];
+        this.allStoredWrites = [];
         this.storedStateListeners = new Set();
         this.parameterListeners = new Map();
         this.endpointListeners = new Map();
@@ -76,7 +77,10 @@ class FakePatchConnection {
     }
 
     sendStoredStateValue(key, value) {
-        this.storedWrites.push({ key, value });
+        this.allStoredWrites.push({ key, value });
+        if (key === SEQFX_STATE_KEY) {
+            this.storedWrites.push({ key, value });
+        }
         this.storedState[key] = value;
         this.emitStoredState(key, value);
     }
@@ -165,7 +169,7 @@ test("seqfx_adapter_capture_reads_bridge_state_not_dom_and_serializes_all_patter
     assert.equal(restored.patterns[7].lanes[SEQFX_LANES.filter].steps[5].params[1], 440);
 });
 
-test("seqfx_adapter_apply_writes_seqfx_v7_and_worker_uploads_selected_pattern", () => {
+test("seqfx_adapter_apply_writes_seqfx_v7_and_authoritatively_replaces_the_selected_runtime_pattern", () => {
     let state = createDefaultSeqFxState();
     state = applySeqFxCellToggle(state, {
         patternIndex: 4,
@@ -184,17 +188,60 @@ test("seqfx_adapter_apply_writes_seqfx_v7_and_worker_uploads_selected_pattern", 
     bridge.requestBootState();
     connection.events = [];
     connection.storedWrites = [];
+    connection.allStoredWrites = [];
 
     adapter.apply(serializeSeqFxState(state));
 
-    assert.equal(connection.storedWrites.at(-1).key, SEQFX_STATE_KEY);
+    assert.equal(
+        connection.storedWrites.filter(({ key }) => key === SEQFX_STATE_KEY).at(-1).key,
+        SEQFX_STATE_KEY,
+    );
+    const intentWrites = connection.allStoredWrites.filter(({ key }) => key === "seqfx.runtimeUpdateIntent.v1");
+    assert.equal(JSON.parse(intentWrites[0].value).authoritative, true);
+    assert.equal(intentWrites.at(-1).value, null);
     const uploads = patternUploads(connection);
-    assert.equal(uploads.length, 1);
-    const upload = uploads[0];
+    const upload = uploads.at(-1);
+    assert.equal(uploads.length >= 2, true, "worker and runtime bridge both apply the replacement");
+    assert.equal(
+        uploads.every((event) => event.value.authoritative === true),
+        true,
+        "a one-pattern preset with a forward revision must not be mistaken for a sparse edit",
+    );
     assert.equal(upload.value.patternIndex, 4);
-    assert.equal(upload.value.authoritative, false);
+    assert.equal(upload.value.authoritative, true);
     assert.equal(upload.value.activeSteps[SEQFX_LANES.stutter][8], true);
     assert.equal(upload.value.effectTypes[SEQFX_LANES.stutter][8], SEQFX_EFFECT_TYPES.stutter);
+});
+
+test("an ordinary bridge edit stays non-authoritative through the real worker path", () => {
+    const connection = new FakePatchConnection();
+    const workerService = createSeqFxWorkerService(connection);
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    workerService.start();
+    bridge.attach();
+    bridge.requestBootState();
+    connection.events = [];
+    connection.storedWrites = [];
+    connection.allStoredWrites = [];
+
+    bridge.createBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 6,
+        length: 2,
+    });
+
+    const uploads = patternUploads(connection);
+    assert.equal(uploads.length, 1);
+    assert.equal(uploads[0].value.authoritative, false);
+    assert.deepEqual(uploads[0].value.activeSteps[SEQFX_LANES.filter].slice(6, 8), [true, true]);
+    const intentWrites = connection.allStoredWrites.filter(({ key }) => key === "seqfx.runtimeUpdateIntent.v1");
+    assert.equal(JSON.parse(intentWrites[0].value).authoritative, false);
+    assert.equal(intentWrites.at(-1).value, null);
+
+    bridge.detach();
+    workerService.stop();
 });
 
 test("seqfx_adapter_apply_preserves_aux_state_and_worker_uploads_aux_arrays", () => {

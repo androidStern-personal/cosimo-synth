@@ -4,8 +4,10 @@ import {
     SEQFX_EFFECT_TYPE_NAMES,
     SEQFX_EFFECT_TYPE_SHORT_NAMES,
     SEQFX_PARAM_COUNT,
+    getSeqFxEffectDefinition,
     getSeqFxDefaultParams,
     getSeqFxParamLimits,
+    isSeqFxAuxEligibleDefinition,
     isSeqFxEffectType,
     isSeqFxIntegerParam,
     isSeqFxTriggerLatchedDefinition,
@@ -591,6 +593,12 @@ function normalizeAuxState(effectType: number, params: number[], value: unknown)
         targets: createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => {
             const rawTarget = isPlainRecord(rawTargets[paramIndex]) ? rawTargets[paramIndex] : {};
             const defaultTarget = defaultAux.targets[paramIndex];
+            if (!isSeqFxAuxEligibleDefinition(effectType, paramIndex)) {
+                return {
+                    enabled: false,
+                    end: normalizeParam(effectType, paramIndex, Number(params[paramIndex] ?? defaultTarget.end)),
+                };
+            }
             return {
                 enabled: typeof rawTarget["enabled"] === "boolean" ? rawTarget["enabled"] : defaultTarget.enabled,
                 end: normalizeParam(effectType, paramIndex, Number(rawTarget["end"] ?? defaultTarget.end)),
@@ -759,12 +767,23 @@ function writeStepAuxSource(step: SeqFxStep, effectType: SeqFxEffectType, source
     };
 }
 
+function assertSeqFxAuxEligibleParam(effectType: SeqFxEffectType, paramIndex: number): void {
+    if (isSeqFxAuxEligibleDefinition(effectType, paramIndex)) {
+        return;
+    }
+
+    const effect = getSeqFxEffectDefinition(effectType);
+    const parameter = effect.parameters[paramIndex];
+    throw new Error(`${effect.name} ${parameter?.label ?? `parameter ${paramIndex}`} is not eligible for Aux modulation.`);
+}
+
 function writeStepAuxTargetEnabled(
     step: SeqFxStep,
     effectType: SeqFxEffectType,
     paramIndex: number,
     enabled: boolean,
 ): void {
+    assertSeqFxAuxEligibleParam(effectType, paramIndex);
     const aux = normalizeAuxState(effectType, step.params, step.aux);
     aux.targets[paramIndex] = {
         ...aux.targets[paramIndex],
@@ -779,6 +798,7 @@ function writeStepAuxTargetEnd(
     paramIndex: number,
     value: number,
 ): void {
+    assertSeqFxAuxEligibleParam(effectType, paramIndex);
     const aux = normalizeAuxState(effectType, step.params, step.aux);
     aux.targets[paramIndex] = {
         ...aux.targets[paramIndex],
@@ -853,6 +873,12 @@ function assertAuxStateValuesInRange(effectType: number, aux: SeqFxAuxState | un
 
         if (typeof target.enabled !== "boolean") {
             throw new Error(`${label} aux target ${paramIndex} enabled must be boolean.`);
+        }
+
+        if (target.enabled && !isSeqFxAuxEligibleDefinition(effectType, paramIndex)) {
+            const effect = getSeqFxEffectDefinition(effectType);
+            const parameter = effect.parameters[paramIndex];
+            throw new Error(`${effect.name} ${parameter?.label ?? `parameter ${paramIndex}`} is not eligible for Aux modulation.`);
         }
 
         const [min, max] = getSeqFxParamLimits(effectType, paramIndex);
@@ -1428,6 +1454,9 @@ function parseStoredAux(
                 failParse("duplicate_aux_target", `${targetPath}.index`, `duplicates parameter ${index}`);
             }
             seenTargets.add(index);
+            if (!isSeqFxAuxEligibleDefinition(effectType, index)) {
+                failParse("ineligible_aux_target", `${targetPath}.index`, `parameter ${index} is not eligible for Aux modulation`);
+            }
             if (!hasOwnValue(target, "enabled") && !hasOwnValue(target, "end")) {
                 failParse("empty_aux_target", targetPath, "must override enabled or end");
             }
@@ -3097,7 +3126,9 @@ export function buildSeqPatternUpload(
         params: pattern.lanes.map((lane) => lane.steps.map((step) => [...step.params])),
         auxEnabled: pattern.lanes.map((lane) => lane.steps.map((step) => (
             Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
-                step.active && step.aux.targets[paramIndex]?.enabled === true
+                step.active
+                && isSeqFxAuxEligibleDefinition(step.effectType, paramIndex)
+                && step.aux.targets[paramIndex]?.enabled === true
             ))
         ))),
         auxEnd: pattern.lanes.map((lane, laneIndex) => lane.steps.map((step) => {

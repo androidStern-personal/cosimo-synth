@@ -570,3 +570,7 @@ export function isSeqFxIntegerParam(effectType: number, paramIndex: number): boo
 export function isSeqFxTriggerLatchedDefinition(effectType: number, paramIndex: number): boolean {
     return getSeqFxEffectDefinition(effectType).parameters[paramIndex]?.latch === "trigger";
 }
+
+export function isSeqFxAuxEligibleDefinition(effectType: number, paramIndex: number): boolean {
+    return getSeqFxEffectDefinition(effectType).parameters[paramIndex]?.auxEligible === true;
+}

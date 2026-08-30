@@ -1441,31 +1441,32 @@ def test_filter_ignores_legacy_end_cutoff_without_cutoff_aux_target(
     assert fourth_rms < first_rms * 1.25
 
 
-def test_filter_mode_can_be_modulated_by_the_aux_source(
+def test_filter_mode_ignores_malformed_aux_and_remains_trigger_latched(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
-    upload = _empty_upload()
+    baseline_upload = _empty_upload()
+    malformed_upload = _empty_upload()
     for step in range(4):
-        _activate_step(
-            upload,
-            lane=LANE_FILTER,
-            step=step,
-            trigger=(step == 0),
-            params=[0, 1_000.0, 1_000.0, 0.707, 1.0],
-        )
-        _set_aux(upload, lane=LANE_FILTER, step=step, param=0, end=1.0, shape=1.0)
+        for upload in (baseline_upload, malformed_upload):
+            _activate_step(
+                upload,
+                lane=LANE_FILTER,
+                step=step,
+                trigger=(step == 0),
+                params=[0, 1_000.0, 1_000.0, 0.707, 1.0],
+            )
+        _set_aux(malformed_upload, lane=LANE_FILTER, step=step, param=0, end=1.0, shape=1.0)
 
     input_audio = _sine(STEP_FRAMES * 4, 200.0)
-    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+    baseline_path = tmp_path / "baseline"
+    malformed_path = tmp_path / "malformed"
+    baseline_path.mkdir()
+    malformed_path.mkdir()
+    baseline = _render(generated_runtime, baseline_path, input_audio, _base_schedule(baseline_upload))
+    malformed = _render(generated_runtime, malformed_path, input_audio, _base_schedule(malformed_upload))
 
-    early_lowpass_window = output[500:1_300, 0]
-    late_highpass_window = output[(STEP_FRAMES * 3) + 1_100 : (STEP_FRAMES * 3) + 1_900, 0]
-    early_rms = _rms(early_lowpass_window)
-    late_rms = _rms(late_highpass_window)
-
-    assert early_rms > 0.28
-    assert late_rms < early_rms * 0.35
+    np.testing.assert_allclose(malformed, baseline, atol=1.0e-6, rtol=0.0)
 
 
 def test_filter_resonance_can_be_modulated_by_the_aux_source(
@@ -2361,6 +2362,63 @@ def test_authoritative_pattern_replacement_invalidates_captured_history(
     output = _render(generated_runtime, tmp_path, input_audio, schedule)
 
     assert _rms(output[1_300:3_800, 0]) < 1.0e-5
+
+
+def test_product_preset_recall_invalidates_captured_history(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    node = _require_tool("node")
+    result = subprocess.run(
+        [node, str(ROOT / "tests" / "helpers" / "seqfx_product_preset_recall_uploads.mjs")],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        details = "\n".join(part for part in (result.stdout.strip(), result.stderr.strip()) if part)
+        raise AssertionError(f"SeqFX product preset path failed:\n{details}")
+
+    product_events = json.loads(result.stdout)
+    initial_upload = product_events["initialUpload"]
+    replacement_uploads = product_events["replacementUploads"]
+    assert initial_upload["authoritative"] is False
+    assert len(replacement_uploads) >= 2
+    assert all(upload["authoritative"] is True for upload in replacement_uploads)
+    assert replacement_uploads[0]["revision"] > initial_upload["revision"]
+
+    frames = 4_000
+    input_audio = np.zeros((frames, 2), dtype=np.float32)
+    input_audio[:375] = _complex_signal(375)
+    schedule = _base_schedule(initial_upload)
+    schedule[1_000] = [
+        ["event", "patternUpload", upload]
+        for upload in replacement_uploads
+    ]
+    authoritative_path = tmp_path / "authoritative"
+    non_authoritative_path = tmp_path / "non-authoritative"
+    authoritative_path.mkdir()
+    non_authoritative_path.mkdir()
+    output = _render(generated_runtime, authoritative_path, input_audio, schedule)
+
+    non_authoritative_uploads = json.loads(json.dumps(replacement_uploads))
+    for upload in non_authoritative_uploads:
+        upload["authoritative"] = False
+    non_authoritative_schedule = _base_schedule(initial_upload)
+    non_authoritative_schedule[1_000] = [
+        ["event", "patternUpload", upload]
+        for upload in non_authoritative_uploads
+    ]
+    retained_history = _render(
+        generated_runtime,
+        non_authoritative_path,
+        input_audio,
+        non_authoritative_schedule,
+    )
+
+    assert _rms(output[1_300:3_800, 0]) < 1.0e-5
+    assert _rms(retained_history[1_300:3_800, 0]) > 0.02
 
 
 def test_global_bypass_crossfades_instead_of_switching_at_one_sample(
