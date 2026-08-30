@@ -7,7 +7,7 @@
  * product identity.
  */
 export const seqFxReleaseConfig = Object.freeze({
-    schemaVersion: 3,
+    schemaVersion: 4,
     productKey: "seqfx",
     identity: Object.freeze({
         publicName: "Cosimo SeqFX",
@@ -84,6 +84,18 @@ export const seqFxReleaseConfig = Object.freeze({
         controllerClass: Object.freeze({
             category: "Component Controller Class",
             cid: "ABCDEF011234ABCD436F736943734678",
+        }),
+    }),
+    signing: Object.freeze({
+        application: Object.freeze({
+            commonName: null,
+            sha1Fingerprint: null,
+            teamIdentifier: null,
+        }),
+        installer: Object.freeze({
+            commonName: null,
+            sha1Fingerprint: null,
+            teamIdentifier: null,
         }),
     }),
     webViewMarkers: Object.freeze({

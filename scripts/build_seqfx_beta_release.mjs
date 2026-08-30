@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
     access,
+    chmod,
     lstat,
     lutimes,
     mkdir,
@@ -48,9 +49,8 @@ export function usage(config = seqFxReleaseConfig) {
         "  This command never installs a plugin and never uploads or publishes an artifact.",
         "",
         "Release-only environment:",
-        "  COSIMO_DEVELOPER_ID_APPLICATION",
-        "  COSIMO_DEVELOPER_ID_INSTALLER",
         "  COSIMO_NOTARY_PROFILE",
+        "  Approved Developer ID common names, SHA-1 fingerprints, and team IDs come from seqfx-release-config.mjs.",
         "",
         "Output:",
         `  ${config.release.outputDirectory}/${artifactBaseName}.pkg`,
@@ -167,6 +167,15 @@ export function resolveSourceDateEpoch({ env = process.env, gitTimestamp = null 
     }
 
     return parsed;
+}
+
+export function resolveSourceDateEpochEvidence({ env = process.env, gitTimestamp = null } = {}) {
+    const environmentOverride = env.SOURCE_DATE_EPOCH !== undefined;
+
+    return {
+        origin: environmentOverride ? "SOURCE_DATE_EPOCH" : "source-commit-timestamp",
+        sourceDateEpoch: resolveSourceDateEpoch({ env, gitTimestamp }),
+    };
 }
 
 function sourceCommitTimestamp() {
@@ -749,16 +758,17 @@ function assertWorktreePolicy(gitState, options) {
     }
 }
 
-function assertSourceStateUnchanged(beforeBuild, afterBuild) {
-    if (beforeBuild.commit === afterBuild.commit
-        && beforeBuild.worktreeStatus === afterBuild.worktreeStatus) {
+export function assertSourceStateUnchanged(beforeBuild, afterBuild, { phase = "native build" } = {}) {
+    if (beforeBuild && afterBuild
+        && beforeBuild.commit === afterBuild.commit
+        && beforeBuild?.worktreeStatus === afterBuild?.worktreeStatus) {
         return;
     }
 
     throw new Error([
-        "SeqFX source state changed during the native build; refusing to attach stale provenance to the artifact.",
-        `Before: ${beforeBuild.commit} ${beforeBuild.worktreeStatus || "(clean)"}`,
-        `After: ${afterBuild.commit} ${afterBuild.worktreeStatus || "(clean)"}`,
+        `SeqFX source state changed before ${phase}; refusing to attach stale provenance to the artifact.`,
+        `Before: ${beforeBuild?.commit ?? "(missing)"} ${beforeBuild?.worktreeStatus || "(clean)"}`,
+        `After: ${afterBuild?.commit ?? "(missing)"} ${afterBuild?.worktreeStatus || "(clean)"}`,
     ].join("\n"));
 }
 
@@ -766,26 +776,149 @@ function combinedProcessOutput(result) {
     return [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
 }
 
-function identityIsInstalled(identity, output) {
-    return output.includes(`"${identity}"`) || output.includes(identity);
+function parseInstalledSigningIdentities(output) {
+    const identities = [];
+
+    for (const line of output.split(/\r?\n/u)) {
+        const match = line.match(/^\s*\d+\)\s+([A-Fa-f0-9]{40})\s+"([^"]+)"\s*$/u);
+
+        if (!match)
+            continue;
+
+        const commonName = match[2];
+        const teamMatch = commonName.match(/\(([A-Z0-9]{10})\)$/u);
+
+        identities.push({
+            commonName,
+            sha1Fingerprint: match[1].toUpperCase(),
+            teamIdentifier: teamMatch?.[1] ?? null,
+        });
+    }
+
+    return identities;
+}
+
+export function selectApprovedSigningIdentity(approvedIdentity, output, label) {
+    const expected = {
+        commonName: approvedIdentity?.commonName ?? null,
+        sha1Fingerprint: approvedIdentity?.sha1Fingerprint?.toUpperCase() ?? null,
+        teamIdentifier: approvedIdentity?.teamIdentifier ?? null,
+    };
+    const selected = parseInstalledSigningIdentities(output).find(
+        (identity) => identity.commonName === expected.commonName
+            && identity.sha1Fingerprint === expected.sha1Fingerprint
+            && identity.teamIdentifier === expected.teamIdentifier,
+    );
+
+    if (!selected) {
+        throw new Error(
+            `Could not find the exact approved ${label} signing identity, fingerprint, and team.`,
+        );
+    }
+
+    return selected;
+}
+
+function outputField(output, prefix) {
+    return output
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .find((line) => line.startsWith(prefix))
+        ?.slice(prefix.length)
+        .trim() ?? null;
+}
+
+export function parseVst3SigningEvidence(output, approvedIdentity) {
+    const identity = outputField(output, "Authority=");
+    const teamIdentifier = outputField(output, "TeamIdentifier=");
+    const timestamp = outputField(output, "Timestamp=");
+
+    if (!identity?.startsWith("Developer ID Application: ")
+        || identity !== approvedIdentity.commonName) {
+        throw new Error("VST3 signature does not use the exact approved VST3 signing identity.");
+    }
+
+    if (teamIdentifier !== approvedIdentity.teamIdentifier)
+        throw new Error("VST3 signature does not use the exact approved VST3 signing team.");
+
+    if (!timestamp || /^none$/iu.test(timestamp))
+        throw new Error("VST3 signature does not contain secure timestamp evidence.");
+
+    return {
+        identity,
+        signedWithDeveloperId: true,
+        teamIdentifier,
+        timestamp,
+    };
+}
+
+export function parseInstallerSigningEvidence(output, approvedIdentity) {
+    const certificateLine = output
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .find((line) => /^1\.\s+/u.test(line));
+    const identity = certificateLine?.replace(/^1\.\s+/u, "") ?? null;
+    const teamIdentifier = identity?.match(/\(([A-Z0-9]{10})\)$/u)?.[1] ?? null;
+    const timestamp = output.match(
+        /^\s*Signed with a trusted timestamp on:\s*(.+?)\s*$/imu,
+    )?.[1] ?? null;
+    const fingerprint = output.match(
+        /^\s*SHA1 fingerprint:\s*([A-Fa-f0-9 :]+?)\s*$/imu,
+    )?.[1].replace(/[\s:]/gu, "").toUpperCase() ?? null;
+
+    if (!/^\s*Status:\s+signed by (?:a developer certificate issued by Apple for distribution|a certificate trusted by (?:Mac OS X|macOS))\s*$/imu.test(output))
+        throw new Error("Installer signature verification did not report a trusted signed package.");
+
+    if (!identity?.startsWith("Developer ID Installer: ")
+        || identity !== approvedIdentity.commonName) {
+        throw new Error("Installer signature does not use the exact approved installer signing identity.");
+    }
+
+    if (teamIdentifier !== approvedIdentity.teamIdentifier)
+        throw new Error("Installer signature does not use the exact approved installer signing team.");
+
+    if (fingerprint && fingerprint !== approvedIdentity.sha1Fingerprint.toUpperCase())
+        throw new Error("Installer signature fingerprint does not match the approved certificate.");
+
+    if (!timestamp)
+        throw new Error("Installer signature does not contain secure timestamp evidence.");
+
+    return {
+        identity,
+        signedWithDeveloperId: true,
+        teamIdentifier,
+        timestamp,
+    };
 }
 
 function assertSignedReleasePrerequisites(config, gitState) {
     const errors = unresolvedSeqFxPublicReleaseDecisions(config).map(
         (gate) => `${gate.id}: ${gate.decision}`,
     );
-    const applicationIdentity = process.env.COSIMO_DEVELOPER_ID_APPLICATION;
-    const installerIdentity = process.env.COSIMO_DEVELOPER_ID_INSTALLER;
     const notaryProfile = process.env.COSIMO_NOTARY_PROFILE;
 
     if (gitState.dirty)
         errors.push("worktree is dirty, including tracked or untracked files");
 
-    if (!applicationIdentity)
-        errors.push("COSIMO_DEVELOPER_ID_APPLICATION is not set");
+    for (const [label, identity] of [
+        ["application", config.signing?.application],
+        ["installer", config.signing?.installer],
+    ]) {
+        const expectedPrefix = label === "application"
+            ? "Developer ID Application: "
+            : "Developer ID Installer: ";
 
-    if (!installerIdentity)
-        errors.push("COSIMO_DEVELOPER_ID_INSTALLER is not set");
+        if (!identity?.commonName)
+            errors.push(`${label} signing common name is not approved`);
+        else if (!identity.commonName.startsWith(expectedPrefix))
+            errors.push(`${label} signing common name is not a Developer ID ${label} identity`);
+
+        if (!identity?.sha1Fingerprint)
+            errors.push(`${label} signing SHA-1 fingerprint is not approved`);
+
+        if (!identity?.teamIdentifier)
+            errors.push(`${label} signing team identifier is not approved`);
+    }
 
     if (!notaryProfile)
         errors.push("COSIMO_NOTARY_PROFILE is not set");
@@ -804,11 +937,16 @@ function assertSignedReleasePrerequisites(config, gitState) {
     if (allSigningResult.status !== 0)
         throw new Error(allSigningOutput || "Could not list macOS signing identities.");
 
-    if (!identityIsInstalled(applicationIdentity, codeSigningOutput))
-        throw new Error(`Developer ID Application identity is not installed: ${applicationIdentity}`);
-
-    if (!identityIsInstalled(installerIdentity, allSigningOutput))
-        throw new Error(`Developer ID Installer identity is not installed: ${installerIdentity}`);
+    const application = selectApprovedSigningIdentity(
+        config.signing.application,
+        codeSigningOutput,
+        "application",
+    );
+    const installer = selectApprovedSigningIdentity(
+        config.signing.installer,
+        allSigningOutput,
+        "installer",
+    );
 
     run("xcrun", [
         "notarytool",
@@ -818,6 +956,12 @@ function assertSignedReleasePrerequisites(config, gitState) {
         "--output-format",
         "json",
     ], { capture: true });
+
+    return {
+        application,
+        installer,
+        notaryProfile,
+    };
 }
 
 function binaryContainsString(binaryPath, marker) {
@@ -1120,6 +1264,7 @@ async function verifyBuiltVst3(config) {
 
     return {
         architectures: binaryArchitectures(config, binaryPath),
+        artifactEvidence: await captureVst3ArtifactEvidence(config, vst3Path),
         binaryPath,
         vst3Path,
     };
@@ -1175,6 +1320,105 @@ export async function assertArchiveTreeContainsOnlyFilesAndDirectories(rootPath)
     }
 }
 
+function expectedPayloadMode(config, relativePath, entryStat) {
+    if (entryStat.isDirectory())
+        return 0o755;
+
+    const executablePath = path.posix.join(
+        "Library",
+        "Audio",
+        "Plug-Ins",
+        "VST3",
+        `${config.identity.bundleName}.vst3`,
+        "Contents",
+        "MacOS",
+        config.identity.bundleName,
+    );
+
+    return relativePath === executablePath ? 0o755 : 0o644;
+}
+
+async function payloadModeEntries(rootPath) {
+    const entries = [{
+        absolutePath: rootPath,
+        relativePath: ".",
+        stat: await lstat(rootPath),
+    }];
+
+    await walkTree(rootPath, async (entry) => {
+        entries.push(entry);
+    });
+
+    return entries;
+}
+
+export async function assertPayloadModes(config, rootPath) {
+    const errors = [];
+
+    for (const entry of await payloadModeEntries(rootPath)) {
+        const observed = entry.stat.mode & 0o7777;
+        const expected = expectedPayloadMode(config, entry.relativePath, entry.stat);
+
+        if (!entry.stat.isDirectory() && !entry.stat.isFile()) {
+            errors.push(`unsupported entry type: ${entry.relativePath}`);
+            continue;
+        }
+
+        if ((observed & 0o6000) !== 0)
+            errors.push(`setuid/setgid mode ${observed.toString(8)}: ${entry.relativePath}`);
+
+        if ((observed & 0o022) !== 0)
+            errors.push(`group/world-writable mode ${observed.toString(8)}: ${entry.relativePath}`);
+
+        if (observed !== expected) {
+            errors.push(
+                `mode drift at ${entry.relativePath}: expected ${expected.toString(8)}, found ${observed.toString(8)}`,
+            );
+        }
+    }
+
+    if (errors.length > 0) {
+        throw new Error([
+            "SeqFX payload modes rejected:",
+            ...errors.map((error) => `- ${error}`),
+        ].join("\n"));
+    }
+}
+
+export async function normalizePayloadModes(config, rootPath) {
+    const entries = await payloadModeEntries(rootPath);
+    const unsafe = [];
+
+    for (const entry of entries) {
+        const observed = entry.stat.mode & 0o7777;
+
+        if (!entry.stat.isDirectory() && !entry.stat.isFile())
+            unsafe.push(`unsupported entry type: ${entry.relativePath}`);
+
+        if ((observed & 0o6000) !== 0)
+            unsafe.push(`setuid/setgid mode ${observed.toString(8)}: ${entry.relativePath}`);
+
+        if ((observed & 0o022) !== 0)
+            unsafe.push(`group/world-writable mode ${observed.toString(8)}: ${entry.relativePath}`);
+    }
+
+    if (unsafe.length > 0) {
+        throw new Error([
+            "SeqFX payload modes cannot be normalized safely:",
+            ...unsafe.map((error) => `- ${error}`),
+        ].join("\n"));
+    }
+
+    for (const entry of entries) {
+        await chmod(
+            entry.absolutePath,
+            expectedPayloadMode(config, entry.relativePath, entry.stat),
+        );
+    }
+
+    await assertPayloadModes(config, rootPath);
+}
+
 async function normalizeTreeTimestamps(rootPath, sourceDateEpoch) {
     const timestamp = new Date(sourceDateEpoch * 1000);
     const entries = [];
@@ -1223,6 +1467,45 @@ export async function canonicalPayloadFingerprint(rootPath) {
         algorithm: "sha256-path-kind-mode-content-v1",
         digest: hash.digest("hex"),
         entryCount,
+    };
+}
+
+export async function captureVst3ArtifactEvidence(config, vst3Path) {
+    const executableRelativePath = path.posix.join(
+        "Contents",
+        "MacOS",
+        config.identity.bundleName,
+    );
+    const executablePath = path.join(vst3Path, ...executableRelativePath.split("/"));
+    const executableStat = await lstat(executablePath);
+    let fileCount = 0;
+    let sizeBytes = 0;
+
+    if (!executableStat.isFile())
+        throw new Error(`SeqFX executable evidence path is not a regular file: ${executableRelativePath}`);
+
+    await walkTree(vst3Path, async ({ stat: entryStat }) => {
+        if (!entryStat.isFile())
+            return;
+
+        fileCount += 1;
+        sizeBytes += entryStat.size;
+    });
+
+    const bundleFingerprint = await canonicalPayloadFingerprint(vst3Path);
+
+    return {
+        bundle: {
+            algorithm: bundleFingerprint.algorithm,
+            fileCount,
+            sha256: bundleFingerprint.digest,
+            sizeBytes,
+        },
+        executable: {
+            path: executableRelativePath,
+            sha256: await sha256(executablePath),
+            sizeBytes: executableStat.size,
+        },
     };
 }
 
@@ -1456,9 +1739,7 @@ function verifyPackagePayload(config, packagePath, { signed }) {
     return payloadFiles;
 }
 
-function signStagedVst3(vst3Path) {
-    const identity = process.env.COSIMO_DEVELOPER_ID_APPLICATION;
-
+function signStagedVst3(vst3Path, approvedIdentity) {
     run("codesign", [
         "--force",
         "--deep",
@@ -1466,33 +1747,29 @@ function signStagedVst3(vst3Path) {
         "runtime",
         "--timestamp",
         "--sign",
-        identity,
+        approvedIdentity.sha1Fingerprint,
         vst3Path,
     ], { capture: true });
     verifyCodesign(vst3Path);
+    const verification = run("codesign", ["--display", "--verbose=4", vst3Path], { capture: true });
 
-    return {
-        identity,
-        signedWithDeveloperId: true,
-        timestamped: true,
-    };
+    return parseVst3SigningEvidence(combinedProcessOutput(verification), approvedIdentity);
 }
 
 function removeLocalBuildSignature(vst3Path) {
     run("codesign", ["--remove-signature", vst3Path], { capture: true });
 }
 
-function signInstaller(unsignedPackagePath, signedPackagePath) {
-    const identity = process.env.COSIMO_DEVELOPER_ID_INSTALLER;
-
-    run("productsign", ["--sign", identity, unsignedPackagePath, signedPackagePath], { capture: true });
+function signInstaller(unsignedPackagePath, signedPackagePath, approvedIdentity) {
+    run("productsign", [
+        "--sign",
+        approvedIdentity.sha1Fingerprint,
+        unsignedPackagePath,
+        signedPackagePath,
+    ], { capture: true });
     const verification = run("pkgutil", ["--check-signature", signedPackagePath], { capture: true });
 
-    return {
-        identity,
-        signedWithDeveloperId: true,
-        verification: [verification.stdout, verification.stderr].filter(Boolean).join("\n").trim(),
-    };
+    return parseInstallerSigningEvidence(combinedProcessOutput(verification), approvedIdentity);
 }
 
 function notarizeStapleAndAssess(packagePath) {
@@ -1518,6 +1795,9 @@ function notarizeStapleAndAssess(packagePath) {
     if (submission.status !== "Accepted")
         throw new Error(`Apple notarization was not accepted (status: ${String(submission.status)}).`);
 
+    if (typeof submission.id !== "string" || !submission.id.trim())
+        throw new Error("Apple notarization returned Accepted without a submission ID.");
+
     run("xcrun", ["stapler", "staple", packagePath], { capture: true });
     const stapler = run("xcrun", ["stapler", "validate", packagePath], { capture: true });
     const gatekeeper = run("spctl", ["-a", "-vv", "-t", "install", packagePath], { capture: true });
@@ -1525,7 +1805,7 @@ function notarizeStapleAndAssess(packagePath) {
     return {
         gatekeeperAccepted: true,
         notaryProfile: profile,
-        notarizationId: submission.id ?? null,
+        notarizationId: submission.id,
         notarizationStatus: submission.status,
         stapled: true,
         staplerValidation: [stapler.stdout, stapler.stderr].filter(Boolean).join("\n").trim(),
@@ -1576,9 +1856,115 @@ export function renderReleaseReadme(config, { signedRelease }) {
     ].join("\n");
 }
 
+function assertSignedReleaseEvidence(config, signing, notarization) {
+    const errors = [];
+
+    if (config.approvals.signingAndNotarizationApproved !== true)
+        errors.push("signing and notarization are not approved in the release config");
+
+    for (const [label, expected, observed] of [
+        ["VST3", config.signing?.application, signing?.vst3],
+        ["installer", config.signing?.installer, signing?.installer],
+    ]) {
+        const expectedPrefix = label === "VST3"
+            ? "Developer ID Application: "
+            : "Developer ID Installer: ";
+
+        if (typeof expected?.commonName !== "string" || !expected.commonName)
+            errors.push(`${label} signing common name is not approved`);
+        else if (!expected.commonName.startsWith(expectedPrefix))
+            errors.push(`${label} signing common name is not a Developer ID identity`);
+
+        if (typeof expected?.sha1Fingerprint !== "string" || !expected.sha1Fingerprint)
+            errors.push(`${label} signing fingerprint is not approved`);
+
+        if (typeof expected?.teamIdentifier !== "string" || !expected.teamIdentifier)
+            errors.push(`${label} signing team is not approved`);
+
+        if (observed?.signedWithDeveloperId !== true)
+            errors.push(`${label} Developer ID signature was not proven`);
+
+        if (observed?.identity !== expected?.commonName)
+            errors.push(`${label} signing identity does not match the exact approved common name`);
+
+        if (observed?.teamIdentifier !== expected?.teamIdentifier)
+            errors.push(`${label} signing team does not match the exact approved team`);
+
+        if (typeof observed?.timestamp !== "string" || !observed.timestamp.trim())
+            errors.push(`${label} signing timestamp was not proven`);
+    }
+
+    if (notarization?.notarized !== true)
+        errors.push("notarization was not proven");
+
+    if (notarization?.notarizationStatus !== "Accepted")
+        errors.push("notarization status is not Accepted");
+
+    if (typeof notarization?.notarizationId !== "string" || !notarization.notarizationId.trim())
+        errors.push("Accepted notarization ID is missing");
+
+    if (notarization?.stapled !== true)
+        errors.push("notarization ticket was not stapled");
+
+    if (typeof notarization?.staplerValidation !== "string" || !notarization.staplerValidation.trim())
+        errors.push("stapler validation evidence is missing");
+
+    if (notarization?.gatekeeperAccepted !== true)
+        errors.push("Gatekeeper acceptance was not proven");
+
+    if (typeof notarization?.gatekeeperAssessment !== "string" || !notarization.gatekeeperAssessment.trim())
+        errors.push("Gatekeeper assessment evidence is missing");
+
+    if (errors.length > 0) {
+        throw new Error([
+            "SeqFX signed release evidence rejected:",
+            ...errors.map((error) => `- ${error}`),
+        ].join("\n"));
+    }
+}
+
+function assertBuiltVst3Evidence(config, evidence) {
+    const expectedExecutablePath = path.posix.join(
+        "Contents",
+        "MacOS",
+        config.identity.bundleName,
+    );
+    const errors = [];
+
+    if (evidence?.bundle?.algorithm !== "sha256-path-kind-mode-content-v1")
+        errors.push("built VST3 bundle hash algorithm is missing or unsupported");
+
+    if (!Number.isInteger(evidence?.bundle?.fileCount) || evidence.bundle.fileCount <= 0)
+        errors.push("built VST3 bundle file count is missing");
+
+    if (!Number.isInteger(evidence?.bundle?.sizeBytes) || evidence.bundle.sizeBytes <= 0)
+        errors.push("built VST3 bundle size is missing");
+
+    if (!/^[a-f0-9]{64}$/u.test(evidence?.bundle?.sha256 ?? ""))
+        errors.push("built VST3 bundle SHA-256 is missing");
+
+    if (evidence?.executable?.path !== expectedExecutablePath)
+        errors.push(`built VST3 executable path must be ${expectedExecutablePath}`);
+
+    if (!Number.isInteger(evidence?.executable?.sizeBytes) || evidence.executable.sizeBytes <= 0)
+        errors.push("built VST3 executable size is missing");
+
+    if (!/^[a-f0-9]{64}$/u.test(evidence?.executable?.sha256 ?? ""))
+        errors.push("built VST3 executable SHA-256 is missing");
+
+    if (errors.length > 0) {
+        throw new Error([
+            "SeqFX built VST3 evidence rejected:",
+            ...errors.map((error) => `- ${error}`),
+        ].join("\n"));
+    }
+}
+
 export function createReleaseManifest({
     architectures,
+    builtVst3Evidence,
     config,
+    finalGitState,
     gitState,
     nativeDependencyProvenance,
     notarization,
@@ -1588,14 +1974,25 @@ export function createReleaseManifest({
     payloadFingerprint,
     signing,
     sourceDateEpoch,
+    sourceDateEpochOrigin,
     vst3Metadata,
 }) {
     const artifactBaseName = seqFxArtifactBaseName(config);
     assertActualNativeDependencyProvenance(config, nativeDependencyProvenance);
     assertVst3MetadataAttestation(config, vst3Metadata);
+    assertBuiltVst3Evidence(config, builtVst3Evidence);
+    assertSourceStateUnchanged(gitState, finalGitState, {
+        phase: "final manifest construction",
+    });
+
+    if (options.mode === "release")
+        assertSignedReleaseEvidence(config, signing, notarization);
+
+    if (!["SOURCE_DATE_EPOCH", "source-commit-timestamp"].includes(sourceDateEpochOrigin))
+        throw new Error(`SeqFX SOURCE_DATE_EPOCH origin is invalid: ${String(sourceDateEpochOrigin)}`);
 
     return {
-        schemaVersion: 5,
+        schemaVersion: 6,
         artifactClass: options.mode === "release" ? "signed-notarized-release-candidate" : "local-unsigned-validation",
         packagingReady: options.mode === "release",
         distributionReady: false,
@@ -1609,6 +2006,7 @@ export function createReleaseManifest({
             commit: gitState.commit,
             dirty: gitState.dirty,
             sourceDateEpoch,
+            sourceDateEpochOrigin,
             sourceTimestamp: new Date(sourceDateEpoch * 1000).toISOString(),
         },
         identity: config.identity,
@@ -1623,6 +2021,7 @@ export function createReleaseManifest({
         nativeDependencyProvenance,
         build: {
             builtVst3: config.paths.builtVst3,
+            builtVst3Evidence,
             binaryArchitectures: architectures,
             vst3Metadata,
             webViewRequiredMarkers: config.webViewMarkers.required,
@@ -1744,7 +2143,9 @@ async function assembleArtifactSet({
     options,
     outputRoot,
     patchManifest,
+    signingIdentities,
     sourceDateEpoch,
+    sourceDateEpochOrigin,
 }) {
     await assertSafeOutputRoot(config, outputRoot);
     const artifactBaseName = seqFxArtifactBaseName(config);
@@ -1784,6 +2185,7 @@ async function assembleArtifactSet({
         stagedVst3,
     );
     await assertArchiveTreeContainsOnlyFilesAndDirectories(stagingRoot);
+    await normalizePayloadModes(config, stagingRoot);
     await normalizeTreeTimestamps(stagedVst3, sourceDateEpoch);
 
     const payloadFingerprint = await canonicalPayloadFingerprint(stagingRoot);
@@ -1795,7 +2197,7 @@ async function assembleArtifactSet({
     };
 
     if (options.mode === "release")
-        vst3Signing = signStagedVst3(stagedVst3);
+        vst3Signing = signStagedVst3(stagedVst3, signingIdentities.application);
 
     await normalizeTreeTimestamps(stagingRoot, sourceDateEpoch);
     if (options.mode === "release") {
@@ -1809,6 +2211,7 @@ async function assembleArtifactSet({
             path.join(stagedVst3, "Contents", "MacOS", config.identity.bundleName),
         );
     }
+    await assertPayloadModes(config, stagingRoot);
     await mkdir(outputRoot, { recursive: true });
     await buildUnsignedFlatPackage(config, stagingRoot, unsignedPackagePath, workRoot, sourceDateEpoch);
 
@@ -1825,7 +2228,11 @@ async function assembleArtifactSet({
     };
 
     if (options.mode === "release") {
-        installerSigning = signInstaller(unsignedPackagePath, packagePath);
+        installerSigning = signInstaller(
+            unsignedPackagePath,
+            packagePath,
+            signingIdentities.installer,
+        );
         notarization = {
             ...notarizeStapleAndAssess(packagePath),
             notarized: true,
@@ -1837,9 +2244,12 @@ async function assembleArtifactSet({
 
     const payloadFiles = verifyPackagePayload(config, packagePath, { signed: options.mode === "release" });
     const readme = renderReleaseReadme(config, { signedRelease: options.mode === "release" });
+    const finalGitState = getReleaseGitState();
     const manifest = createReleaseManifest({
         architectures: builtArtifact.architectures,
+        builtVst3Evidence: builtArtifact.artifactEvidence,
         config,
+        finalGitState,
         gitState,
         nativeDependencyProvenance,
         notarization,
@@ -1852,6 +2262,7 @@ async function assembleArtifactSet({
             vst3: vst3Signing,
         },
         sourceDateEpoch,
+        sourceDateEpochOrigin,
         vst3Metadata,
     });
 
@@ -1933,14 +2344,16 @@ async function buildReleaseArtifacts({
     options,
     patchManifest,
     sourceDateEpoch,
+    sourceDateEpochOrigin,
 }) {
     if (process.platform !== "darwin")
         throw new Error("SeqFX beta packaging targets macOS and must run on macOS.");
 
     assertWorktreePolicy(gitState, options);
 
-    if (options.mode === "release")
-        assertSignedReleasePrerequisites(config, gitState);
+    const signingIdentities = options.mode === "release"
+        ? assertSignedReleasePrerequisites(config, gitState)
+        : null;
 
     run(process.execPath, ["fx/prod-effect.mjs", "build", config.productKey, "--clean"]);
     assertSourceStateUnchanged(gitState, getReleaseGitState());
@@ -1956,7 +2369,9 @@ async function buildReleaseArtifacts({
         options,
         outputRoot,
         patchManifest,
+        signingIdentities,
         sourceDateEpoch,
+        sourceDateEpochOrigin,
     });
 
     if (options.verifyRepeatablePackaging) {
@@ -1972,7 +2387,9 @@ async function buildReleaseArtifacts({
             options,
             outputRoot: repeatRoot,
             patchManifest,
+            signingIdentities,
             sourceDateEpoch,
+            sourceDateEpochOrigin,
         });
         const results = await compareArtifactSets(primaryArtifacts, repeatArtifacts);
         const reportPath = path.join(outputRoot, `${seqFxArtifactBaseName(config)}-packaging-repeatability.json`);
@@ -1981,6 +2398,7 @@ async function buildReleaseArtifacts({
             schemaVersion: 2,
             sourceCommit: gitState.commit,
             sourceDateEpoch,
+            sourceDateEpochOrigin,
             nativeBuildsCompared: 1,
             independentNativeBuildReproducibilityVerified: false,
             claim: "Two packaging assemblies of the same freshly built unsigned VST3 were byte-identical.",
@@ -2013,7 +2431,10 @@ export async function main(argv = process.argv) {
     assertReleaseContract(config, patchManifest, plugin);
     const declaredNativeDependencies = await readDeclaredNativeDependencyProvenance(config);
     const gitState = getReleaseGitState();
-    const sourceDateEpoch = resolveSourceDateEpoch({
+    const {
+        origin: sourceDateEpochOrigin,
+        sourceDateEpoch,
+    } = resolveSourceDateEpochEvidence({
         gitTimestamp: sourceCommitTimestamp(),
     });
     const plan = createReleasePlan({
@@ -2035,6 +2456,7 @@ export async function main(argv = process.argv) {
         options,
         patchManifest,
         sourceDateEpoch,
+        sourceDateEpochOrigin,
     });
 
     console.log(`Created ${path.relative(repoRoot, artifacts.packagePath)}`);

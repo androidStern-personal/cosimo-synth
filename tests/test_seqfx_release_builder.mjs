@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmod, mkdtemp, mkdir, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { chmod, lstat, mkdtemp, mkdir, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -12,18 +13,24 @@ import {
     assertArchiveTreeContainsOnlyFilesAndDirectories,
     assertSafeOutputRoot,
     canonicalPayloadFingerprint,
+    captureVst3ArtifactEvidence,
     captureActualNativeDependencyProvenance,
     createReleaseManifest,
     createReleasePlan,
     deterministicCpioPayload,
     getReleaseGitState,
+    normalizePayloadModes,
+    parseInstallerSigningEvidence,
     parseReleaseArgs,
+    parseVst3SigningEvidence,
     payloadInventoryErrors,
     readDeclaredNativeDependencyProvenance,
     releaseContractErrors,
     renderPackageInfo,
     renderReleaseReadme,
     resolveSourceDateEpoch,
+    resolveSourceDateEpochEvidence,
+    selectApprovedSigningIdentity,
     verifyVst3Metadata,
 } from "../scripts/build_seqfx_beta_release.mjs";
 import {
@@ -108,6 +115,52 @@ function vst3MetadataSummaryFixture() {
         name: "CosimoSeqFX",
         vendor: "Cosimo",
         version: "0.1.0",
+    };
+}
+
+function approvedSigningConfigFixture() {
+    const config = structuredClone(seqFxReleaseConfig);
+
+    config.approvals.signingAndNotarizationApproved = true;
+    config.signing.application = {
+        commonName: "Developer ID Application: Cosimo Labs (TEAM123456)",
+        sha1Fingerprint: "A".repeat(40),
+        teamIdentifier: "TEAM123456",
+    };
+    config.signing.installer = {
+        commonName: "Developer ID Installer: Cosimo Labs (TEAM123456)",
+        sha1Fingerprint: "B".repeat(40),
+        teamIdentifier: "TEAM123456",
+    };
+
+    return config;
+}
+
+function signedReleaseEvidenceFixture(config = approvedSigningConfigFixture()) {
+    return {
+        notarization: {
+            gatekeeperAccepted: true,
+            gatekeeperAssessment: "accepted",
+            notarizationId: "11111111-2222-3333-4444-555555555555",
+            notarizationStatus: "Accepted",
+            notarized: true,
+            stapled: true,
+            staplerValidation: "The validate action worked!",
+        },
+        signing: {
+            installer: {
+                identity: config.signing.installer.commonName,
+                signedWithDeveloperId: true,
+                teamIdentifier: config.signing.installer.teamIdentifier,
+                timestamp: "2026-08-30T12:00:00Z",
+            },
+            vst3: {
+                identity: config.signing.application.commonName,
+                signedWithDeveloperId: true,
+                teamIdentifier: config.signing.application.teamIdentifier,
+                timestamp: "2026-08-30T12:00:00Z",
+            },
+        },
     };
 }
 
@@ -241,7 +294,7 @@ async function createVst3MetadataFixture(context) {
 }
 
 test("release config freezes the existing beta identity and current native output path", () => {
-    assert.equal(seqFxReleaseConfig.schemaVersion, 3);
+    assert.equal(seqFxReleaseConfig.schemaVersion, 4);
     assert.deepEqual(seqFxReleaseConfig.identity, {
         publicName: "Cosimo SeqFX",
         bundleName: "CosimoSeqFX",
@@ -287,6 +340,18 @@ test("release config freezes the existing beta identity and current native outpu
         controllerClass: {
             category: "Component Controller Class",
             cid: "ABCDEF011234ABCD436F736943734678",
+        },
+    });
+    assert.deepEqual(seqFxReleaseConfig.signing, {
+        application: {
+            commonName: null,
+            sha1Fingerprint: null,
+            teamIdentifier: null,
+        },
+        installer: {
+            commonName: null,
+            sha1Fingerprint: null,
+            teamIdentifier: null,
         },
     });
     assert.equal(seqFxArtifactBaseName(), "CosimoSeqFX-0.1.0-beta.1-macOS");
@@ -336,6 +401,85 @@ test("release argument parsing defaults to unsigned and separates plan from rele
     );
 });
 
+test("installed signing identity selection requires exact common name, fingerprint, and team", () => {
+    const exactIdentity = {
+        commonName: "Developer ID Application: Cosimo Labs (TEAM123456)",
+        sha1Fingerprint: "B".repeat(40),
+        teamIdentifier: "TEAM123456",
+    };
+    const securityOutput = `
+  1) ${"A".repeat(40)} "Developer ID Application: Cosimo Labs Evil (TEAM123456)"
+  2) ${"B".repeat(40)} "Developer ID Application: Cosimo Labs (TEAM123456)"
+     2 valid identities found
+`;
+
+    assert.deepEqual(
+        selectApprovedSigningIdentity(exactIdentity, securityOutput, "application"),
+        exactIdentity,
+    );
+    assert.throws(
+        () => selectApprovedSigningIdentity({
+            ...exactIdentity,
+            sha1Fingerprint: "A".repeat(40),
+        }, securityOutput, "application"),
+        /exact approved application signing identity/u,
+    );
+});
+
+test("artifact signing evidence is parsed from exact identity, team, and timestamp output", () => {
+    const config = approvedSigningConfigFixture();
+    const vst3Output = `
+Authority=${config.signing.application.commonName}
+Authority=Developer ID Certification Authority
+Timestamp=2026-08-30T12:00:00Z
+TeamIdentifier=${config.signing.application.teamIdentifier}
+`;
+    const installerOutput = `
+Package "CosimoSeqFX.pkg":
+   Status: signed by a developer certificate issued by Apple for distribution
+   Signed with a trusted timestamp on: 2026-08-30 12:01:00 +0000
+   Certificate Chain:
+    1. ${config.signing.installer.commonName}
+       SHA1 fingerprint: ${config.signing.installer.sha1Fingerprint.match(/.{2}/gu).join(" ")}
+`;
+
+    assert.deepEqual(
+        parseVst3SigningEvidence(vst3Output, config.signing.application),
+        signedReleaseEvidenceFixture(config).signing.vst3,
+    );
+    assert.deepEqual(
+        parseInstallerSigningEvidence(installerOutput, config.signing.installer),
+        {
+            ...signedReleaseEvidenceFixture(config).signing.installer,
+            timestamp: "2026-08-30 12:01:00 +0000",
+        },
+    );
+    assert.equal(
+        "sha1Fingerprint" in parseInstallerSigningEvidence(
+            installerOutput.replace(/^\s*SHA1 fingerprint:.*$/mu, ""),
+            config.signing.installer,
+        ),
+        false,
+    );
+    assert.throws(
+        () => parseInstallerSigningEvidence(
+            installerOutput.replace(
+                config.signing.installer.sha1Fingerprint.match(/.{2}/gu).join(" "),
+                "C0 ".repeat(19) + "C0",
+            ),
+            config.signing.installer,
+        ),
+        /fingerprint does not match/u,
+    );
+    assert.throws(
+        () => parseVst3SigningEvidence(
+            vst3Output.replace(config.signing.application.commonName, `${config.signing.application.commonName} Evil`),
+            config.signing.application,
+        ),
+        /exact approved VST3 signing identity/u,
+    );
+});
+
 test("release git state treats untracked source as dirty", async () => {
     const isolatedRepo = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-git-state-"));
 
@@ -367,6 +511,32 @@ test("native metadata validation accepts the exact approved VST3 identity and no
     const metadata = await verifyVst3Metadata(seqFxReleaseConfig, vst3Path);
 
     assert.deepEqual(metadata, vst3MetadataSummaryFixture());
+});
+
+test("built VST3 evidence records exact bundle and executable sizes and SHA-256", async (context) => {
+    const vst3Path = await createVst3MetadataFixture(context);
+    const evidence = await captureVst3ArtifactEvidence(seqFxReleaseConfig, vst3Path);
+    const executableContents = Buffer.from("fixture binary\n", "utf8");
+
+    assert.deepEqual(evidence.executable, {
+        path: "Contents/MacOS/CosimoSeqFX",
+        sha256: createHash("sha256").update(executableContents).digest("hex"),
+        sizeBytes: executableContents.length,
+    });
+    assert.equal(evidence.bundle.algorithm, "sha256-path-kind-mode-content-v1");
+    assert.match(evidence.bundle.sha256, /^[a-f0-9]{64}$/u);
+    assert.ok(evidence.bundle.sizeBytes > evidence.executable.sizeBytes);
+    assert.equal(evidence.bundle.fileCount, 3);
+
+    await writeFile(
+        path.join(vst3Path, evidence.executable.path),
+        "changed binary\n",
+        "utf8",
+    );
+    assert.notEqual(
+        (await captureVst3ArtifactEvidence(seqFxReleaseConfig, vst3Path)).bundle.sha256,
+        evidence.bundle.sha256,
+    );
 });
 
 test("native metadata validation rejects identity, category, and binary drift together", async (context) => {
@@ -606,6 +776,23 @@ test("plan CLI is dry-run safe and returns machine-readable output", () => {
 
 test("source date epoch is explicit and ZIP-safe", () => {
     assert.equal(resolveSourceDateEpoch({ env: { SOURCE_DATE_EPOCH: "1700000000" } }), 1_700_000_000);
+    assert.deepEqual(
+        resolveSourceDateEpochEvidence({
+            env: { SOURCE_DATE_EPOCH: "1700000000" },
+            gitTimestamp: "1600000000",
+        }),
+        {
+            origin: "SOURCE_DATE_EPOCH",
+            sourceDateEpoch: 1_700_000_000,
+        },
+    );
+    assert.deepEqual(
+        resolveSourceDateEpochEvidence({ env: {}, gitTimestamp: "1600000000" }),
+        {
+            origin: "source-commit-timestamp",
+            sourceDateEpoch: 1_600_000_000,
+        },
+    );
     assert.equal(resolveSourceDateEpoch({ env: {}, gitTimestamp: "1700000001" }), 1_700_000_001);
     assert.throws(
         () => resolveSourceDateEpoch({ env: { SOURCE_DATE_EPOCH: "123" } }),
@@ -749,6 +936,48 @@ test("release archive rejects symlinks and special entries", async (context) => 
     );
 });
 
+test("payload modes normalize to the release contract and reject writable privilege drift", async (context) => {
+    const stagingRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-modes-"));
+    context.after(() => rm(stagingRoot, { recursive: true, force: true }));
+    const vst3Root = path.join(
+        stagingRoot,
+        "Library",
+        "Audio",
+        "Plug-Ins",
+        "VST3",
+        "CosimoSeqFX.vst3",
+    );
+    const binaryPath = path.join(vst3Root, "Contents", "MacOS", "CosimoSeqFX");
+    const metadataPath = path.join(vst3Root, "Contents", "Info.plist");
+
+    await mkdir(path.dirname(binaryPath), { recursive: true });
+    await writeFile(binaryPath, "binary", "utf8");
+    await writeFile(metadataPath, "metadata", "utf8");
+    await chmod(stagingRoot, 0o700);
+    await chmod(vst3Root, 0o700);
+    await chmod(binaryPath, 0o700);
+    await chmod(metadataPath, 0o600);
+
+    await normalizePayloadModes(seqFxReleaseConfig, stagingRoot);
+
+    assert.equal((await lstat(stagingRoot)).mode & 0o7777, 0o755);
+    assert.equal((await lstat(vst3Root)).mode & 0o7777, 0o755);
+    assert.equal((await lstat(binaryPath)).mode & 0o7777, 0o755);
+    assert.equal((await lstat(metadataPath)).mode & 0o7777, 0o644);
+
+    await chmod(metadataPath, 0o664);
+    await assert.rejects(
+        normalizePayloadModes(seqFxReleaseConfig, stagingRoot),
+        /group\/world-writable.*Info\.plist/iu,
+    );
+    await chmod(metadataPath, 0o644);
+    await chmod(binaryPath, 0o4755);
+    await assert.rejects(
+        normalizePayloadModes(seqFxReleaseConfig, stagingRoot),
+        /setuid\/setgid.*CosimoSeqFX/iu,
+    );
+});
+
 test("README labels unsigned output honestly", () => {
     const unsignedReadme = renderReleaseReadme(seqFxReleaseConfig, { signedRelease: false });
     const signedReadme = renderReleaseReadme(seqFxReleaseConfig, { signedRelease: true });
@@ -762,7 +991,26 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
     const patchManifest = await currentManifest();
     const inputs = {
         architectures: ["arm64", "x86_64"],
+        builtVst3Evidence: {
+            bundle: {
+                algorithm: "sha256-path-kind-mode-content-v1",
+                fileCount: 12,
+                sha256: "d".repeat(64),
+                sizeBytes: 123_456,
+            },
+            executable: {
+                path: "Contents/MacOS/CosimoSeqFX",
+                sha256: "e".repeat(64),
+                sizeBytes: 98_765,
+            },
+        },
         config: seqFxReleaseConfig,
+        finalGitState: {
+            branch: "codex/test",
+            commit: "b".repeat(40),
+            dirty: false,
+            worktreeStatus: "",
+        },
         gitState: {
             branch: "codex/test",
             commit: "b".repeat(40),
@@ -792,6 +1040,7 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
             vst3: { signedWithDeveloperId: false },
         },
         sourceDateEpoch: 1_700_000_000,
+        sourceDateEpochOrigin: "source-commit-timestamp",
         vst3Metadata: {
             built: vst3MetadataSummaryFixture(),
             staged: vst3MetadataSummaryFixture(),
@@ -802,11 +1051,12 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
     const second = createReleaseManifest(inputs);
 
     assert.deepEqual(second, first);
-    assert.equal(first.schemaVersion, 5);
+    assert.equal(first.schemaVersion, 6);
     assert.equal(first.distributionReady, false);
     assert.equal(first.packagingReady, false);
     assert.equal("createdAt" in first, false);
     assert.equal("branch" in first.source, false);
+    assert.equal(first.source.sourceDateEpochOrigin, "source-commit-timestamp");
     assert.equal(first.repeatability.independentNativeBuildsCompared, false);
     assert.equal(
         first.nativeDependencyProvenance.cmajor.actualRevision,
@@ -815,12 +1065,58 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
     assert.equal(first.nativeDependencyProvenance.choc.clean, true);
     assert.equal(first.nativeDependencyProvenance.juce.clean, true);
     assert.deepEqual(first.build.vst3Metadata, inputs.vst3Metadata);
+    assert.deepEqual(first.build.builtVst3Evidence, inputs.builtVst3Evidence);
     assert.equal(first.artifacts.thirdPartyNotices, "THIRD_PARTY_NOTICES.txt");
     assert.ok(first.operationsNotPerformed.includes("DAW smoke or listening acceptance"));
     assert.ok(first.operationsNotPerformed.includes("Patreon upload"));
+    assert.throws(
+        () => createReleaseManifest({
+            ...inputs,
+            builtVst3Evidence: {
+                ...inputs.builtVst3Evidence,
+                executable: {
+                    ...inputs.builtVst3Evidence.executable,
+                    sha256: "not-a-sha256",
+                },
+            },
+        }),
+        /built VST3 executable SHA-256/u,
+    );
+    assert.throws(
+        () => createReleaseManifest({
+            ...inputs,
+            sourceDateEpochOrigin: "guessed",
+        }),
+        /SOURCE_DATE_EPOCH origin is invalid/u,
+    );
+    assert.throws(
+        () => createReleaseManifest({
+            ...inputs,
+            finalGitState: {
+                ...inputs.finalGitState,
+                commit: "f".repeat(40),
+            },
+        }),
+        /source state changed.*final manifest/isu,
+    );
 
+    assert.throws(
+        () => createReleaseManifest({
+            ...inputs,
+            options: {
+                mode: "release",
+                verifyRepeatablePackaging: false,
+            },
+        }),
+        /signed release evidence/u,
+    );
+
+    const signedConfig = approvedSigningConfigFixture();
+    const signedEvidence = signedReleaseEvidenceFixture(signedConfig);
     const signedCandidate = createReleaseManifest({
         ...inputs,
+        config: signedConfig,
+        ...signedEvidence,
         options: {
             mode: "release",
             verifyRepeatablePackaging: false,
@@ -829,6 +1125,90 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
     assert.equal(signedCandidate.packagingReady, true);
     assert.equal(signedCandidate.distributionReady, false);
     assert.match(signedCandidate.distributionReadinessReason, /Ableton\/listening acceptance/u);
+    assert.throws(
+        () => createReleaseManifest({
+            ...inputs,
+            config: signedConfig,
+            ...signedEvidence,
+            signing: {
+                ...signedEvidence.signing,
+                vst3: {
+                    ...signedEvidence.signing.vst3,
+                    timestamp: "",
+                },
+            },
+            options: {
+                mode: "release",
+                verifyRepeatablePackaging: false,
+            },
+        }),
+        /VST3 signing timestamp/u,
+    );
+    assert.throws(
+        () => createReleaseManifest({
+            ...inputs,
+            config: signedConfig,
+            ...signedEvidence,
+            signing: {
+                ...signedEvidence.signing,
+                installer: {
+                    ...signedEvidence.signing.installer,
+                    timestamp: "",
+                },
+            },
+            options: {
+                mode: "release",
+                verifyRepeatablePackaging: false,
+            },
+        }),
+        /installer signing timestamp/u,
+    );
+    assert.throws(
+        () => createReleaseManifest({
+            ...inputs,
+            config: signedConfig,
+            ...signedEvidence,
+            signing: {
+                ...signedEvidence.signing,
+                installer: {
+                    ...signedEvidence.signing.installer,
+                    teamIdentifier: "WRONG12345",
+                },
+            },
+            options: {
+                mode: "release",
+                verifyRepeatablePackaging: false,
+            },
+        }),
+        /installer signing team/u,
+    );
+
+    for (const [field, value, expectedError] of [
+        ["notarized", false, /notarization was not proven/u],
+        ["notarizationStatus", "Rejected", /notarization status is not Accepted/u],
+        ["notarizationId", "", /Accepted notarization ID/u],
+        ["stapled", false, /ticket was not stapled/u],
+        ["staplerValidation", "", /stapler validation evidence/u],
+        ["gatekeeperAccepted", false, /Gatekeeper acceptance was not proven/u],
+        ["gatekeeperAssessment", "", /Gatekeeper assessment evidence/u],
+    ]) {
+        assert.throws(
+            () => createReleaseManifest({
+                ...inputs,
+                config: signedConfig,
+                ...signedEvidence,
+                notarization: {
+                    ...signedEvidence.notarization,
+                    [field]: value,
+                },
+                options: {
+                    mode: "release",
+                    verifyRepeatablePackaging: false,
+                },
+            }),
+            expectedError,
+        );
+    }
 
     assert.throws(
         () => createReleaseManifest({
