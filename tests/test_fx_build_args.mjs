@@ -54,6 +54,7 @@ test("the SeqFX production configure explicitly disables microphone permission m
 
     assert.equal(plugin.disableMicrophonePermission, true);
     assert.deepEqual(prodModule.createCmakeConfigureArgs({
+        cmajExecutable: "/opt/cosimo/bin/cmaj",
         cmakeBuildDir: "/tmp/seqfx-build",
         cmakeSourceDirectory: "/repo/tools/effect_plugin_build",
         disableMicrophonePermission: plugin.disableMicrophonePermission,
@@ -63,6 +64,7 @@ test("the SeqFX production configure explicitly disables microphone permission m
         "-S", "/repo/tools/effect_plugin_build",
         "-B", "/tmp/seqfx-build",
         "-DCMAKE_BUILD_TYPE=Release",
+        "-DCOSIMO_CMAJ_EXECUTABLE:FILEPATH=/opt/cosimo/bin/cmaj",
         "-DCOSIMO_EFFECT_PATCH_PATH=/repo/build/fx/seqfx_runtime/SeqFx.cmajorpatch",
         "-DCOSIMO_EFFECT_OUTPUT_DIR=/repo/build/seqfx_juce",
         "-DCOSIMO_DISABLE_MICROPHONE_PERMISSION=ON",
@@ -71,8 +73,39 @@ test("the SeqFX production configure explicitly disables microphone permission m
         path.join(repoRoot, "tools", "effect_plugin_build", "CMakeLists.txt"),
         "utf8",
     );
+    assert.match(wrapperCmake, /set\(COSIMO_CMAJ_EXECUTABLE "" CACHE FILEPATH/u);
+    assert.match(wrapperCmake, /IS_ABSOLUTE "\$\{COSIMO_CMAJ_EXECUTABLE\}"/u);
     assert.match(wrapperCmake, /option\(COSIMO_DISABLE_MICROPHONE_PERMISSION/u);
     assert.match(wrapperCmake, /cosimo_disable_generated_microphone_permission/u);
+});
+
+test("fx_prod_release_tool_overrides are absolute and PATH-independent", async () => {
+    const { prodModule } = await loadBuildModules();
+    const tools = prodModule.resolveProdBuildToolPaths({
+        COSIMO_RELEASE_CMAJ: "/approved/cmaj",
+        COSIMO_RELEASE_CMAKE: "/approved/cmake",
+        COSIMO_RELEASE_NODE: "/approved/node",
+    }, "darwin");
+
+    assert.deepEqual(tools, {
+        cmaj: "/approved/cmaj",
+        cmake: "/approved/cmake",
+        codesign: "/usr/bin/codesign",
+        grep: "/usr/bin/grep",
+        node: "/approved/node",
+    });
+    assert.throws(
+        () => prodModule.resolveProdBuildToolPaths({ COSIMO_RELEASE_CMAKE: "cmake" }, "darwin"),
+        /COSIMO_RELEASE_CMAKE must be an absolute executable path/u,
+    );
+    assert.throws(
+        () => prodModule.resolveProdBuildToolPaths({ COSIMO_RELEASE_CMAJ: "./cmaj" }, "darwin"),
+        /COSIMO_RELEASE_CMAJ must be an absolute executable path/u,
+    );
+    assert.throws(
+        () => prodModule.resolveProdBuildToolPaths({ COSIMO_RELEASE_NODE: "node" }, "darwin"),
+        /COSIMO_RELEASE_NODE must be an absolute executable path/u,
+    );
 });
 
 test("the production metadata hardener disables Cmajor's generated microphone permission before JUCE configures", async (context) => {

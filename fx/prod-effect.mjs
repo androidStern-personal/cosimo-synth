@@ -33,6 +33,32 @@ const pinnedCmajExecutablePath = path.join(
     process.platform === "win32" ? "cmaj.exe" : "cmaj",
 );
 
+function absoluteReleaseToolOverride(environment, name, fallback) {
+    const value = environment[name];
+
+    if (value === undefined || value === "")
+        return fallback;
+
+    if (!path.isAbsolute(value))
+        throw new Error(`${name} must be an absolute executable path.`);
+
+    return value;
+}
+
+/**
+ * Release callers provide already-attested CMake, cmaj, and Node paths. Ordinary
+ * development builds retain their existing PATH-based CMake/cmaj discovery.
+ */
+export function resolveProdBuildToolPaths(environment = process.env, platform = process.platform) {
+    return {
+        cmaj: absoluteReleaseToolOverride(environment, "COSIMO_RELEASE_CMAJ", null),
+        cmake: absoluteReleaseToolOverride(environment, "COSIMO_RELEASE_CMAKE", "cmake"),
+        codesign: platform === "darwin" ? "/usr/bin/codesign" : "codesign",
+        grep: platform === "darwin" ? "/usr/bin/grep" : "grep",
+        node: absoluteReleaseToolOverride(environment, "COSIMO_RELEASE_NODE", process.execPath),
+    };
+}
+
 function availablePluginNames() {
     return ["all", ...effectPluginTargetNames()].join(", ");
 }
@@ -220,7 +246,7 @@ async function generateJuceProject(pluginName, plugin, options = {}) {
         cmakeSourceDirectory,
     });
 
-    run("cmake", createJuceGenerationConfigureArgs({
+    run(options.toolPaths.cmake, createJuceGenerationConfigureArgs({
         cmakeSourceDirectory,
         cmakeBuildDirectory: cmakeBuildDir,
         runtimePatchPath,
@@ -257,7 +283,10 @@ async function buildJuceProject(pluginName, plugin, options = {}) {
     if (!await pathExists(cmakeListsPath))
         throw new Error(`Generated CMake project not found: ${cmakeListsPath}`);
 
-    run("cmake", createCmakeBuildArgs(cmakeBuildDir, `${plugin.cmakeTarget}_VST3`, options.cmakeJobs));
+    run(
+        options.toolPaths.cmake,
+        createCmakeBuildArgs(cmakeBuildDir, `${plugin.cmakeTarget}_VST3`, options.cmakeJobs),
+    );
 
     const builtVST3 = getBuiltVST3Path(plugin);
 
@@ -265,11 +294,11 @@ async function buildJuceProject(pluginName, plugin, options = {}) {
         throw new Error(`Built VST3 bundle not found: ${builtVST3}`);
 
     if (process.platform === "darwin") {
-        signVST3Bundle(builtVST3);
-        verifyVST3Bundle(builtVST3);
+        signVST3Bundle(builtVST3, options.toolPaths);
+        verifyVST3Bundle(builtVST3, options.toolPaths);
     }
 
-    verifyPatchedWebView(getBuiltVST3BinaryPath(plugin));
+    verifyPatchedWebView(getBuiltVST3BinaryPath(plugin), options.toolPaths);
 
     console.log(`Built ${pluginName} dedicated plugin project at ${path.relative(repoRoot, cmakeBuildDir)}`);
 }
@@ -309,9 +338,9 @@ export function createProdBuildChildArgs(pluginName, options = {}) {
     return args;
 }
 
-function runChildProcess(args, env) {
+function runChildProcess(args, env, nodeExecutable) {
     return new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, args, {
+        const child = spawn(nodeExecutable, args, {
             cwd: repoRoot,
             env,
             stdio: "inherit",
@@ -325,8 +354,8 @@ function runChildProcess(args, env) {
             }
 
             reject(new Error(signal
-                ? `${process.execPath} ${args.join(" ")} exited via ${signal}.`
-                : `${process.execPath} ${args.join(" ")} exited with code ${code}.`));
+                ? `${nodeExecutable} ${args.join(" ")} exited via ${signal}.`
+                : `${nodeExecutable} ${args.join(" ")} exited with code ${code}.`));
         });
     });
 }
@@ -362,6 +391,8 @@ async function runLimited(items, limit, task) {
 }
 
 async function prodBuildAll(pluginNames, options) {
+    const toolPaths = options.toolPaths ?? resolveProdBuildToolPaths();
+    const buildOptions = { ...options, toolPaths };
     const { pluginJobs, cmakeJobs } = resolveProdBuildParallelism(pluginNames.length);
     const cmajExecutable = await preparePinnedCmajExecutable(
         cmakeJobs,
@@ -369,18 +400,22 @@ async function prodBuildAll(pluginNames, options) {
     );
 
     if (pluginNames.length === 1) {
-        await prodBuild(pluginNames[0], { ...options, cmajExecutable, cmakeJobs });
+        await prodBuild(pluginNames[0], { ...buildOptions, cmajExecutable, cmakeJobs });
         return;
     }
 
     console.log(`Building ${pluginNames.join(", ")} with ${pluginJobs} plugin job(s), ${cmakeJobs} CMake job(s) per plugin.`);
 
     await runLimited(pluginNames, pluginJobs, (pluginName) => runChildProcess(
-        createProdBuildChildArgs(pluginName, { ...options, cmajExecutable }),
+        createProdBuildChildArgs(pluginName, { ...buildOptions, cmajExecutable }),
         {
             ...process.env,
             COSIMO_CMAKE_JOBS: String(cmakeJobs),
+            ...(toolPaths.cmaj ? { COSIMO_RELEASE_CMAJ: toolPaths.cmaj } : {}),
+            ...(path.isAbsolute(toolPaths.cmake) ? { COSIMO_RELEASE_CMAKE: toolPaths.cmake } : {}),
+            COSIMO_RELEASE_NODE: toolPaths.node,
         },
+        toolPaths.node,
     ));
 }
 
@@ -401,17 +436,21 @@ function getBuiltVST3BinaryPath(plugin) {
     return path.join(getBuiltVST3Path(plugin), "Contents", "MacOS", plugin.productName);
 }
 
-function signVST3Bundle(vst3Path) {
-    run("codesign", ["--force", "--deep", "--sign", "-", vst3Path], { capture: true });
+function signVST3Bundle(vst3Path, toolPaths) {
+    run(toolPaths.codesign, ["--force", "--deep", "--sign", "-", vst3Path], { capture: true });
 }
 
-function verifyVST3Bundle(vst3Path) {
-    run("codesign", ["--verify", "--deep", "--strict", "--verbose=4", vst3Path], { capture: true });
+function verifyVST3Bundle(vst3Path, toolPaths) {
+    run(toolPaths.codesign, ["--verify", "--deep", "--strict", "--verbose=4", vst3Path], { capture: true });
 }
 
-function verifyPatchedWebView(binaryPath) {
-    const missingStrings = patchedWebViewRequiredStrings.filter((marker) => !binaryContainsString(binaryPath, marker));
-    const presentForbiddenStrings = keyboardBridgeForbiddenStrings.filter((marker) => binaryContainsString(binaryPath, marker));
+function verifyPatchedWebView(binaryPath, toolPaths) {
+    const missingStrings = patchedWebViewRequiredStrings.filter(
+        (marker) => !binaryContainsString(binaryPath, marker, toolPaths),
+    );
+    const presentForbiddenStrings = keyboardBridgeForbiddenStrings.filter(
+        (marker) => binaryContainsString(binaryPath, marker, toolPaths),
+    );
 
     if (missingStrings.length > 0) {
         throw new Error(
@@ -432,8 +471,8 @@ function verifyPatchedWebView(binaryPath) {
     }
 }
 
-function binaryContainsString(binaryPath, marker) {
-    const result = spawnSync("grep", ["-a", "-F", "-q", marker, binaryPath], {
+function binaryContainsString(binaryPath, marker, toolPaths) {
+    const result = spawnSync(toolPaths.grep, ["-a", "-F", "-q", marker, binaryPath], {
         cwd: repoRoot,
         stdio: ["ignore", "ignore", "pipe"],
         encoding: "utf8",
@@ -461,7 +500,7 @@ async function installVST3(pluginName, plugin, options) {
     if (!await pathExists(builtVST3Binary))
         throw new Error(`Built VST3 binary not found: ${builtVST3Binary}`);
 
-    verifyPatchedWebView(builtVST3Binary);
+    verifyPatchedWebView(builtVST3Binary, options.toolPaths);
 
     if (options.dryRun) {
         console.log(`Would install ${pluginName} VST3 from: ${builtVST3}`);
@@ -472,9 +511,9 @@ async function installVST3(pluginName, plugin, options) {
     await mkdir(installDir, { recursive: true });
     await rm(installedVST3, { recursive: true, force: true });
     await cp(builtVST3, installedVST3, { recursive: true });
-    signVST3Bundle(installedVST3);
-    verifyVST3Bundle(installedVST3);
-    verifyPatchedWebView(installedVST3Binary);
+    signVST3Bundle(installedVST3, options.toolPaths);
+    verifyVST3Bundle(installedVST3, options.toolPaths);
+    verifyPatchedWebView(installedVST3Binary, options.toolPaths);
 
     console.log(`Installed ${pluginName} VST3: ${installedVST3}`);
 }
@@ -522,10 +561,11 @@ async function main() {
             return;
         }
 
+        const toolPaths = resolveProdBuildToolPaths();
         const pluginNames = resolveProdPluginNames(options.pluginName);
 
         if (options.action === "build") {
-            await prodBuildAll(pluginNames, options);
+            await prodBuildAll(pluginNames, { ...options, toolPaths });
             return;
         }
 
@@ -534,7 +574,7 @@ async function main() {
                 throw new Error("--clean is only valid with fx:prod:build.");
 
             for (const pluginName of pluginNames) {
-                await installVST3(pluginName, effectPlugins[pluginName], options);
+                await installVST3(pluginName, effectPlugins[pluginName], { ...options, toolPaths });
             }
             return;
         }
