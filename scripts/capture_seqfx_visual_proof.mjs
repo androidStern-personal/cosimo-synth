@@ -1,39 +1,32 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { createConnection } from "node:net";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
-import { createServer } from "vite";
+
+import { buildPlugin } from "../fx/build-effect.mjs";
+import {
+    captureSeqFxProofProvenance,
+    compareSeqFxProofProvenance,
+} from "./seqfx-proof-provenance.mjs";
+import {
+    createSeqFxVisualProofContract,
+    SEQFX_VISUAL_EFFECTS,
+    SEQFX_VISUAL_PROOF_SIZES,
+    validateSeqFxInspectorDepthCoverage,
+    validateSeqFxVisualProofCoverage,
+} from "./seqfx-visual-proof-contract.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const origin = "http://127.0.0.1:5175";
-const outputDirectory = path.resolve(repoRoot, process.argv[2] ?? "build/seqfx_visual_proof");
-
-const effects = [
-    [1, "Filter", "filter"],
-    [2, "Crush", "crush"],
-    [3, "Tape Stop", "tape-stop"],
-    [4, "Stutter", "stutter"],
-    [5, "Pitch", "pitch"],
-    [6, "Comb", "comb"],
-    [7, "Ring", "ring"],
-    [8, "Reverse", "reverse"],
-    [9, "Talk Box", "talk-box"],
-    [10, "Vibro", "vibro"],
-    [11, "Flange", "flange"],
-    [12, "Dirty", "dirty"],
-];
-
-const proofSizes = [
-    { id: "default", width: 1120, height: 680, allEffects: true },
-    { id: "compact", width: 900, height: 600, allEffects: true },
-    { id: "minimum", width: 720, height: 520, allEffects: false },
-    { id: "wide", width: 1440, height: 800, allEffects: false },
-];
+const commandArguments = process.argv.slice(2);
+const requireClean = commandArguments.includes("--require-clean");
+const outputArgument = commandArguments.find((argument) => !argument.startsWith("--"));
+const outputDirectory = path.resolve(repoRoot, outputArgument ?? "build/seqfx_visual_proof");
+let origin = "";
 
 const zoomLevels = [0.8, 1, 1.25, 1.5, 2];
 
@@ -59,58 +52,51 @@ const zoomReachabilitySelectors = [
     ["Lower inspector control", '[data-role="seqfx-inspector"] :is(button, select, input):not(:disabled)', "last"],
 ];
 
-async function serverStatus() {
-    try {
-        const response = await fetch(`${origin}/__fx-dev-status`);
-        return response.ok ? await response.json() : null;
-    } catch {
-        return null;
-    }
+function contentTypeForPath(filePath) {
+    if (filePath.endsWith(".js")) return "text/javascript";
+    if (filePath.endsWith(".json") || filePath.endsWith(".map")) return "application/json";
+    if (filePath.endsWith(".css")) return "text/css";
+    if (filePath.endsWith(".html")) return "text/html";
+    return "application/octet-stream";
 }
 
-function isThisRepoServer(status) {
-    const seqfxPlugin = status?.plugins?.find?.((plugin) => plugin.name === "seqfx");
-    return status?.kind === "fx-vite-dev-server"
-        && path.resolve(status.repoRoot) === repoRoot
-        && seqfxPlugin?.sourceModule === "/fx/seqfx/view/source.tsx";
-}
-
-async function waitForServer() {
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < 20_000) {
-        const status = await serverStatus();
-        if (isThisRepoServer(status)) {
-            return;
+async function startStaticServer() {
+    const server = createServer(async (request, response) => {
+        try {
+            const url = new URL(request.url ?? "/", "http://127.0.0.1");
+            if (url.pathname === "/") {
+                response.writeHead(200, { "Content-Type": "text/html" });
+                response.end("<!doctype html><html><body></body></html>");
+                return;
+            }
+            const requestedPath = decodeURIComponent(url.pathname);
+            const absolutePath = path.resolve(repoRoot, `.${requestedPath}`);
+            if (absolutePath !== repoRoot && !absolutePath.startsWith(`${repoRoot}${path.sep}`)) {
+                response.writeHead(403);
+                response.end("Forbidden");
+                return;
+            }
+            if (!(await stat(absolutePath)).isFile()) {
+                response.writeHead(404);
+                response.end("Not found");
+                return;
+            }
+            response.writeHead(200, { "Content-Type": contentTypeForPath(absolutePath) });
+            response.end(await readFile(absolutePath));
+        } catch {
+            response.writeHead(404);
+            response.end("Not found");
         }
-        await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-    throw new Error("SeqFX visual proof server did not become ready on port 5175.");
-}
-
-async function portIsReachable() {
-    return await new Promise((resolve) => {
-        const socket = createConnection({ host: "127.0.0.1", port: 5175 });
-        let settled = false;
-        const finish = (reachable) => {
-            if (settled) return;
-            settled = true;
-            socket.destroy();
-            resolve(reachable);
-        };
-        socket.setTimeout(250);
-        socket.once("connect", () => finish(true));
-        socket.once("error", () => finish(false));
-        socket.once("timeout", () => finish(false));
     });
-}
-
-async function waitForOwnedPortToClose() {
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < 5_000) {
-        if (!await portIsReachable()) return true;
-        await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    return false;
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address !== "object") throw new Error("SeqFX proof server did not bind a port.");
+    return {
+        origin: `http://127.0.0.1:${address.port}`,
+        close: () => new Promise((resolve, reject) => {
+            server.close((error) => error ? reject(error) : resolve());
+        }),
+    };
 }
 
 function pickLocator(page, selector, position = "first") {
@@ -125,8 +111,8 @@ async function revealAdvancedInspectorControls(page) {
     });
 }
 
-async function loadHarness(page) {
-    await page.goto(`${origin}/__fx-dev-status`);
+async function loadPackagedView(page) {
+    await page.goto(origin);
     await page.setContent(`
         <!doctype html>
         <html>
@@ -136,25 +122,115 @@ async function loadHarness(page) {
             </head>
             <body>
                 <div id="root"></div>
-                <script type="module">
-                    import RefreshRuntime from "/@react-refresh";
-                    RefreshRuntime.injectIntoGlobalHook(window);
-                    window.$RefreshReg$ = () => {};
-                    window.$RefreshSig$ = () => (type) => type;
-                    window.__vite_plugin_react_preamble_installed__ = true;
-                </script>
-                <script type="module" src="/fx/seqfx/view/harness-main.ts"></script>
             </body>
         </html>
     `);
+    const mounted = await page.evaluate(async () => {
+        class SeqFxVisualProofPatchConnection {
+            constructor() {
+                this.manifest = {
+                    view: {
+                        src: "build/fx/seqfx_runtime/view/index.js",
+                        devModule: "",
+                        width: 1120,
+                        height: 680,
+                    },
+                };
+                this.storedState = {};
+                this.events = [];
+                this.parameters = {
+                    enabled: 1,
+                    globalMix: 1,
+                    patternSelect: 0,
+                    clockMode: 0,
+                    manualBpm: 120,
+                    rate: 1,
+                    swing: 0,
+                    loopStart: 0,
+                    loopLength: 32,
+                };
+                this.status = { details: { inputs: [] } };
+                this.statusListeners = new Set();
+                this.storedStateListeners = new Set();
+                this.parameterListeners = new Map();
+                this.endpointListeners = new Map();
+                this.gestureStarts = [];
+                this.gestureEnds = [];
+            }
+
+            getResourceAddress(resourcePath) {
+                return resourcePath.startsWith("/") ? resourcePath : `/${resourcePath}`;
+            }
+
+            addStatusListener(listener) { this.statusListeners.add(listener); }
+            removeStatusListener(listener) { this.statusListeners.delete(listener); }
+            requestStatusUpdate() { for (const listener of this.statusListeners) listener(this.status); }
+            addStoredStateValueListener(listener) { this.storedStateListeners.add(listener); }
+            removeStoredStateValueListener(listener) { this.storedStateListeners.delete(listener); }
+            requestFullStoredState(callback) {
+                callback({ parameters: { ...this.parameters }, values: { ...this.storedState } });
+            }
+            requestStoredStateValue(key) {
+                for (const listener of this.storedStateListeners) listener({ key, value: this.storedState[key] });
+            }
+            sendStoredStateValue(key, value) {
+                this.storedState[key] = value;
+                for (const listener of this.storedStateListeners) listener({ key, value });
+            }
+            addParameterListener(endpointID, listener) {
+                const listeners = this.parameterListeners.get(endpointID) ?? new Set();
+                listeners.add(listener);
+                this.parameterListeners.set(endpointID, listeners);
+            }
+            removeParameterListener(endpointID, listener) { this.parameterListeners.get(endpointID)?.delete(listener); }
+            requestParameterValue(endpointID) {
+                for (const listener of this.parameterListeners.get(endpointID) ?? []) {
+                    listener(this.parameters[endpointID] ?? 0);
+                }
+            }
+            sendEventOrValue(endpointID, value) {
+                this.events.push({ endpointID, value });
+                this.parameters[endpointID] = value;
+                for (const listener of this.parameterListeners.get(endpointID) ?? []) listener(value);
+            }
+            sendParameterGestureStart(endpointID) { this.gestureStarts.push(endpointID); }
+            sendParameterGestureEnd(endpointID) { this.gestureEnds.push(endpointID); }
+            addEndpointListener(endpointID, listener) {
+                const listeners = this.endpointListeners.get(endpointID) ?? new Set();
+                listeners.add(listener);
+                this.endpointListeners.set(endpointID, listeners);
+            }
+            removeEndpointListener(endpointID, listener) { this.endpointListeners.get(endpointID)?.delete(listener); }
+        }
+
+        const patchConnection = new SeqFxVisualProofPatchConnection();
+        const module = await import("/build/fx/seqfx_runtime/view/index.js");
+        const view = await module.default(patchConnection);
+        document.getElementById("root").appendChild(view);
+        window.__SEQFX_VISUAL_PROOF__ = { patchConnection };
+        return { hostTagName: view.tagName.toLowerCase() };
+    });
+    if (mounted.hostTagName !== "cosimo-seqfx-react-view") {
+        throw new Error(`Packaged SeqFX factory returned ${mounted.hostTagName}.`);
+    }
+    await page.waitForFunction(() => {
+        const host = document.querySelector("cosimo-seqfx-react-view");
+        return Boolean(host?.shadowRoot?.querySelector('[data-role="seqfx-root"]'));
+    });
+    const renderedInShadowRoot = await page.evaluate(() => {
+        const host = document.querySelector("cosimo-seqfx-react-view");
+        return Boolean(host?.shadowRoot?.querySelector('[data-role="seqfx-root"]'));
+    });
+    if (!renderedInShadowRoot) throw new Error("Packaged SeqFX visual proof did not render inside its shadow root.");
     await page.locator('[data-role="seqfx-root"]').waitFor();
 }
 
-async function recordScreenshot(page, fileName, manifest) {
+async function recordScreenshot(page, fileName, manifest, metadata = {}) {
     const filePath = path.join(outputDirectory, fileName);
     await page.screenshot({ path: filePath, animations: "disabled" });
     const bytes = await readFile(filePath);
     manifest.push({
+        ...metadata,
         file: fileName,
         bytes: bytes.byteLength,
         sha256: createHash("sha256").update(bytes).digest("hex"),
@@ -162,10 +238,14 @@ async function recordScreenshot(page, fileName, manifest) {
 }
 
 async function createContactSheet(browser, screenshotManifest) {
-    const entries = await Promise.all(screenshotManifest.map(async (entry) => ({
+    const relativeOutputDirectory = path.relative(repoRoot, outputDirectory).replaceAll(path.sep, "/");
+    if (relativeOutputDirectory === ".." || relativeOutputDirectory.startsWith("../")) {
+        throw new Error("SeqFX contact-sheet output must remain inside the repository proof directory.");
+    }
+    const entries = screenshotManifest.map((entry) => ({
         ...entry,
-        source: `data:image/png;base64,${(await readFile(path.join(outputDirectory, entry.file))).toString("base64")}`,
-    })));
+        source: `${origin}/${relativeOutputDirectory}/${encodeURIComponent(entry.file)}`,
+    }));
     const page = await browser.newPage({ viewport: { width: 1880, height: 1000 } });
     try {
         await page.setContent(`
@@ -198,7 +278,9 @@ async function createContactSheet(browser, screenshotManifest) {
             </html>
         `, { waitUntil: "load" });
         await page.evaluate(async () => {
-            await Promise.all([...document.images].map((image) => image.decode()));
+            for (const image of document.images) {
+                await image.decode();
+            }
         });
         const file = "contact-sheet.png";
         const filePath = path.join(outputDirectory, file);
@@ -214,17 +296,22 @@ async function createContactSheet(browser, screenshotManifest) {
     }
 }
 
-async function measureSurface(page, sizeId, effectName, inspectorView) {
-    return page.evaluate(({ currentSizeId, currentEffectName, currentInspectorView }) => {
-        const root = document.querySelector('[data-role="seqfx-root"]');
-        const workspace = document.querySelector(".seqfx-workspace");
-        const grid = document.querySelector(".seqfx-grid-shell");
-        const inspector = document.querySelector('[data-role="seqfx-inspector"]');
-        const picker = document.querySelector('[data-role="seqfx-effect-type"]');
-        const tabs = document.querySelector(".seqfx-inspector-tabs");
-        const preset = document.querySelector('[data-role="seqfx-factory-effect-preset"]')?.closest("label");
-        const mix = document.querySelector('[data-role="seqfx-mix-row"]');
-        const laneLabel = document.querySelector(".seqfx-lane-label");
+async function measureSurface(page, sizeId, effectId, effectName, inspectorView) {
+    return page.evaluate(({ currentSizeId, currentEffectId, currentEffectName, currentInspectorView }) => {
+        const host = document.querySelector("cosimo-seqfx-react-view");
+        const scope = host?.shadowRoot ?? document;
+        const root = scope.querySelector('[data-role="seqfx-root"]');
+        const workspace = scope.querySelector(".seqfx-workspace");
+        const grid = scope.querySelector(".seqfx-grid-shell");
+        const inspector = scope.querySelector('[data-role="seqfx-inspector"]');
+        const picker = scope.querySelector('[data-role="seqfx-effect-type"]');
+        const tabs = scope.querySelector(".seqfx-inspector-tabs");
+        const preset = scope.querySelector('[data-role="seqfx-factory-effect-preset"]')?.closest("label");
+        const mix = scope.querySelector('[data-role="seqfx-mix-row"]');
+        const laneLabel = scope.querySelector(".seqfx-lane-label");
+        if (!root || !workspace || !grid || !inspector || !laneLabel) {
+            throw new Error("SeqFX packaged shadow-root surface was incomplete during measurement.");
+        }
         const bounds = (node) => {
             if (!node) return null;
             const rect = node.getBoundingClientRect();
@@ -252,10 +339,10 @@ async function measureSurface(page, sizeId, effectName, inspectorView) {
                 }]
                 : [];
         });
-        const clippedNames = [...document.querySelectorAll(".seqfx-effect-picker__name")]
+        const clippedNames = [...scope.querySelectorAll(".seqfx-effect-picker__name")]
             .filter((node) => node.scrollWidth > node.clientWidth + 1)
             .map((node) => node.textContent?.trim());
-        const undersizedControls = [...document.querySelectorAll("button, select, input")]
+        const undersizedControls = [...root.querySelectorAll("button, select, input")]
             .filter((node) => {
                 const style = getComputedStyle(node);
                 const rect = node.getBoundingClientRect();
@@ -352,6 +439,18 @@ async function measureSurface(page, sizeId, effectName, inspectorView) {
             };
         });
         const lowContrastText = contrastSamples.filter((sample) => sample.contrastRatio + 0.01 < sample.requiredRatio);
+        const proseClassPattern = /(help|hint|note|description|disabled|source|explanation|guide|empty-state)/i;
+        const undersizedFunctionalText = contrastSamples.flatMap((sample) => {
+            const className = sample.className ?? "";
+            const isProse = sample.tag === "P"
+                || sample.tag === "SMALL"
+                || proseClassPattern.test(className)
+                || proseClassPattern.test(sample.dataRole ?? "");
+            const requiredFontSize = isProse ? 11 : 10;
+            return sample.fontSize + 0.01 < requiredFontSize
+                ? [{ ...sample, kind: isProse ? "prose/help" : "label/readout", requiredFontSize }]
+                : [];
+        });
         const motionFailures = [...root.querySelectorAll("*")].flatMap((node) => {
             const style = getComputedStyle(node);
             const durations = `${style.transitionDuration},${style.animationDuration}`
@@ -399,6 +498,8 @@ async function measureSurface(page, sizeId, effectName, inspectorView) {
 
         return {
             effect: currentEffectName,
+            effectName: currentEffectName,
+            effectId: currentEffectId,
             inspectorView: currentInspectorView,
             size: currentSizeId,
             viewport: { height: window.innerHeight, width: window.innerWidth },
@@ -432,8 +533,10 @@ async function measureSurface(page, sizeId, effectName, inspectorView) {
             ownedOverflow,
             interactiveControls,
             undersizedControls,
+            undersizedFunctionalText,
         };
     }, {
+        currentEffectId: effectId,
         currentEffectName: effectName,
         currentInspectorView: inspectorView,
         currentSizeId: sizeId,
@@ -452,6 +555,7 @@ function assertMeasurement(measurement) {
     if (measurement.motionFailures.length > 0) failures.push(`${measurement.motionFailures.length} reduced-motion failures`);
     if (measurement.ownedOverflow.length > 0) failures.push("inspector child outside owned bounds");
     if (measurement.undersizedControls.length > 0) failures.push(`${measurement.undersizedControls.length} interactive controls below 24px`);
+    if (measurement.undersizedFunctionalText.length > 0) failures.push(`${measurement.undersizedFunctionalText.length} functional text items below type floor`);
     if (measurement.advancedDisclosures.some((disclosure) => !disclosure.open)) failures.push("advanced inspector disclosure remained closed");
     if (measurement.inspectorView === "lower"
         && measurement.inspectorOverflow.maximumScroll > 1
@@ -461,7 +565,7 @@ function assertMeasurement(measurement) {
     return failures;
 }
 
-async function auditInspectorDepth(page, sizeId, effectName) {
+async function auditInspectorDepth(page, sizeId, effectId, effectName) {
     const advancedDisclosureCount = await revealAdvancedInspectorControls(page);
     return await page.locator('[data-role="seqfx-inspector"]').evaluate(async (inspector, context) => {
         const controls = [...inspector.querySelectorAll("button, select, input")].filter((node) => {
@@ -533,6 +637,7 @@ async function auditInspectorDepth(page, sizeId, effectName) {
                 text: control instanceof HTMLButtonElement ? control.textContent?.replace(/\s+/g, " ").trim() : null,
             })),
             effect: context.effectName,
+            effectId: context.effectId,
             finalScrollTop: inspector.scrollTop,
             horizontalOverflow: [...horizontalOverflow.values()],
             maximumScroll,
@@ -540,7 +645,7 @@ async function auditInspectorDepth(page, sizeId, effectName) {
             observations,
             size: context.sizeId,
         };
-    }, { advancedDisclosureCount, effectName, sizeId });
+    }, { advancedDisclosureCount, effectId, effectName, sizeId });
 }
 
 function assertInspectorDepth(depth) {
@@ -561,6 +666,8 @@ async function auditFocus(page) {
     for (const [label, selector, position] of focusSelectors) {
         const locator = pickLocator(page, selector, position);
         await page.evaluate(() => {
+            const host = document.querySelector("cosimo-seqfx-react-view");
+            host?.shadowRoot?.activeElement?.blur?.();
             document.activeElement?.blur?.();
             document.body.tabIndex = -1;
             document.body.focus();
@@ -568,20 +675,20 @@ async function auditFocus(page) {
         let reachedByKeyboard = false;
         for (let index = 0; index < 256; index += 1) {
             await page.keyboard.press("Tab");
-            reachedByKeyboard = await locator.evaluate((node) => document.activeElement === node);
+            reachedByKeyboard = await locator.evaluate((node) => node.getRootNode().activeElement === node);
             if (reachedByKeyboard) break;
         }
         results.push(await locator.evaluate((node, currentLabel) => {
             const style = getComputedStyle(node);
             return {
-                active: document.activeElement === node,
+                active: node.getRootNode().activeElement === node,
                 boxShadow: style.boxShadow,
                 label: currentLabel,
                 outlineColor: style.outlineColor,
                 outlineOffset: style.outlineOffset,
                 outlineStyle: style.outlineStyle,
                 outlineWidth: Number.parseFloat(style.outlineWidth),
-                reachedByKeyboard: document.activeElement === node,
+                reachedByKeyboard: node.getRootNode().activeElement === node,
             };
         }, label));
     }
@@ -596,7 +703,7 @@ async function auditZoom(browser, zoom) {
     const page = await browser.newPage({ viewport: { width, height } });
     await page.emulateMedia({ reducedMotion: "reduce" });
     try {
-        await loadHarness(page);
+        await loadPackagedView(page);
         await page.locator('[data-role="seqfx-first-use-dismiss"]').click();
         await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
         await revealAdvancedInspectorControls(page);
@@ -608,7 +715,7 @@ async function auditZoom(browser, zoom) {
             controls.push(await locator.evaluate((node, currentLabel) => {
                 const rect = node.getBoundingClientRect();
                 return {
-                    active: document.activeElement === node,
+                    active: node.getRootNode().activeElement === node,
                     height: rect.height,
                     intersectsViewport: rect.bottom > 0
                         && rect.right > 0
@@ -632,62 +739,88 @@ async function auditZoom(browser, zoom) {
 
 await mkdir(outputDirectory, { recursive: true });
 
-const initialStatus = await serverStatus();
-if (initialStatus && !isThisRepoServer(initialStatus)) {
-    throw new Error(`Port 5175 is owned by another workspace (${initialStatus.repoRoot ?? "unknown"}); visual proof will not interrupt it.`);
-}
-
-let ownedServer = null;
+let staticServer = null;
 let browser = null;
 let report = null;
 let proofError = null;
-let closeVerified = null;
+let closeVerified = false;
 try {
-    if (!isThisRepoServer(initialStatus)) {
-        ownedServer = await createServer({
-            configFile: path.join(repoRoot, "fx/vite.config.mjs"),
-            logLevel: "warn",
-            root: repoRoot,
-        });
-        await ownedServer.listen();
-    }
-    await waitForServer();
+    await buildPlugin("seqfx");
+    const provenanceBefore = await captureSeqFxProofProvenance(repoRoot, { requireClean });
+    staticServer = await startStaticServer();
+    origin = staticServer.origin;
     browser = await chromium.launch();
     const screenshotManifest = [];
     const measurements = [];
     const inspectorDepth = [];
+    const proofContract = createSeqFxVisualProofContract();
 
-    for (const size of proofSizes) {
+    for (const size of SEQFX_VISUAL_PROOF_SIZES) {
         const page = await browser.newPage({ viewport: { width: size.width, height: size.height } });
         await page.emulateMedia({ reducedMotion: "reduce" });
-        await loadHarness(page);
-        await recordScreenshot(page, `${size.id}-empty.png`, screenshotManifest);
-        measurements.push(await measureSurface(page, size.id, "Empty", "empty"));
+        await loadPackagedView(page);
+        const emptyState = {
+            effectId: 0,
+            effectName: "Empty",
+            inspectorView: "empty",
+            kind: "contract",
+            size: size.id,
+        };
+        measurements.push(await measureSurface(page, size.id, 0, "Empty", "empty"));
+        await recordScreenshot(page, `${size.id}-empty.png`, screenshotManifest, emptyState);
         await page.locator('[data-role="seqfx-first-use-dismiss"]').click();
 
-        if (size.allEffects) {
-            await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
-            for (const [effectType, effectName, fileStem] of effects) {
-                await page.locator(`[data-role="seqfx-effect-type-option"][data-effect-type="${effectType}"]`).click();
-                await page.getByRole("button", { name: `Chain 1 ${effectName} block 1`, exact: true }).waitFor();
-                await revealAdvancedInspectorControls(page);
-                await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => { node.scrollTop = 0; });
-                measurements.push(await measureSurface(page, size.id, effectName, "top"));
-                await recordScreenshot(page, `${size.id}-${fileStem}.png`, screenshotManifest);
-                inspectorDepth.push(await auditInspectorDepth(page, size.id, effectName));
-                measurements.push(await measureSurface(page, size.id, effectName, "lower"));
-                await recordScreenshot(page, `${size.id}-${fileStem}-lower.png`, screenshotManifest);
-            }
-        } else {
-            await page.locator('[data-role="seqfx-factory-pattern"]').selectOption("twelve-effect-tour");
-            await page.getByRole("button", { name: "Chain 1 Filter block 1-2", exact: true }).click();
+        await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+        for (const effect of SEQFX_VISUAL_EFFECTS) {
+            await page.locator(`[data-role="seqfx-effect-type-option"][data-effect-type="${effect.id}"]`).click();
+            await page.getByRole("button", { name: `Chain 1 ${effect.name} block 1`, exact: true }).waitFor();
             await revealAdvancedInspectorControls(page);
             await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => { node.scrollTop = 0; });
-            measurements.push(await measureSurface(page, size.id, "Twelve-effect Tour", "top"));
-            await recordScreenshot(page, `${size.id}-twelve-effect-tour.png`, screenshotManifest);
-            inspectorDepth.push(await auditInspectorDepth(page, size.id, "Twelve-effect Tour"));
-            measurements.push(await measureSurface(page, size.id, "Twelve-effect Tour", "lower"));
-            await recordScreenshot(page, `${size.id}-twelve-effect-tour-lower.png`, screenshotManifest);
+            measurements.push(await measureSurface(page, size.id, effect.id, effect.name, "top"));
+            await recordScreenshot(page, `${size.id}-${effect.fileStem}.png`, screenshotManifest, {
+                effectId: effect.id,
+                effectName: effect.name,
+                inspectorView: "top",
+                kind: "contract",
+                size: size.id,
+            });
+
+            const depth = await auditInspectorDepth(page, size.id, effect.id, effect.name);
+            inspectorDepth.push(depth);
+            const interiorObservations = depth.observations.filter((observation) => (
+                observation.requestedScrollTop > 0
+                && observation.requestedScrollTop < depth.maximumScroll
+            ));
+            for (const [index, observation] of interiorObservations.entries()) {
+                await page.locator('[data-role="seqfx-inspector"]').evaluate((node, scrollTop) => {
+                    node.scrollTop = scrollTop;
+                }, observation.requestedScrollTop);
+                await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())));
+                await recordScreenshot(
+                    page,
+                    `${size.id}-${effect.fileStem}-stride-${index + 1}.png`,
+                    screenshotManifest,
+                    {
+                        effectId: effect.id,
+                        effectName: effect.name,
+                        inspectorView: `stride-${index + 1}`,
+                        kind: "inspector-stride",
+                        size: size.id,
+                    },
+                );
+            }
+            await page.locator('[data-role="seqfx-inspector"]').evaluate((node, maximumScroll) => {
+                node.scrollTop = maximumScroll;
+            }, depth.maximumScroll);
+            await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())));
+            measurements.push(await measureSurface(page, size.id, effect.id, effect.name, "lower"));
+            await recordScreenshot(page, `${size.id}-${effect.fileStem}-lower.png`, screenshotManifest, {
+                effectId: effect.id,
+                effectName: effect.name,
+                inspectorView: "lower",
+                kind: "contract",
+                size: size.id,
+            });
         }
 
         await page.close();
@@ -695,7 +828,7 @@ try {
 
     const focusPage = await browser.newPage({ viewport: { width: 1120, height: 680 } });
     await focusPage.emulateMedia({ reducedMotion: "reduce" });
-    await loadHarness(focusPage);
+    await loadPackagedView(focusPage);
     await focusPage.locator('[data-role="seqfx-first-use-dismiss"]').click();
     await focusPage.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
     const focus = await auditFocus(focusPage);
@@ -706,7 +839,9 @@ try {
         zoom.push(await auditZoom(browser, zoomLevel));
     }
 
-    const contactSheet = await createContactSheet(browser, screenshotManifest);
+    const contractScreenshots = screenshotManifest.filter((entry) => entry.kind === "contract");
+    const contactSheet = await createContactSheet(browser, contractScreenshots);
+    const provenanceAfter = await captureSeqFxProofProvenance(repoRoot, { requireClean });
 
     const failures = measurements.flatMap((measurement) => (
         assertMeasurement(measurement).map((failure) => `${measurement.size}/${measurement.effect}/${measurement.inspectorView}: ${failure}`)
@@ -727,15 +862,32 @@ try {
             ...controlFailures.map((control) => `zoom/${entry.zoom}/${control.label}: core control unreachable`),
         ];
     }));
+    failures.push(...validateSeqFxVisualProofCoverage(measurements).map((failure) => `measurement contract: ${failure}`));
+    failures.push(...validateSeqFxVisualProofCoverage(contractScreenshots).map((failure) => `screenshot contract: ${failure}`));
+    failures.push(...validateSeqFxInspectorDepthCoverage(inspectorDepth).map((failure) => `depth contract: ${failure}`));
+    failures.push(...compareSeqFxProofProvenance(provenanceBefore, provenanceAfter).map((failure) => `provenance: ${failure}`));
     report = {
         contactSheet,
+        contract: {
+            expectedInspectorTraversals: SEQFX_VISUAL_EFFECTS.length * SEQFX_VISUAL_PROOF_SIZES.length,
+            expectedStates: proofContract.length,
+        },
+        productionView: {
+            bundle: "build/fx/seqfx_runtime/view/index.js",
+            customElement: "cosimo-seqfx-react-view",
+            renderRoot: "open-shadow-root",
+            server: "ephemeral-static",
+        },
         generatedAt: new Date().toISOString(),
-        repoRoot,
         screenshots: screenshotManifest,
         measurements,
         inspectorDepth,
         focus,
         zoom,
+        provenance: {
+            before: provenanceBefore,
+            after: provenanceAfter,
+        },
         failures,
     };
     if (failures.length > 0) {
@@ -749,17 +901,12 @@ try {
     } catch (error) {
         proofError ??= error;
     }
-    if (ownedServer) {
+    if (staticServer) {
         try {
-            await ownedServer.close();
+            await staticServer.close();
+            closeVerified = true;
         } catch (error) {
             proofError ??= error;
-        }
-        closeVerified = await waitForOwnedPortToClose();
-        if (!closeVerified) {
-            const closeError = new Error("SeqFX visual proof closed its Vite server, but port 5175 remained reachable.");
-            proofError ??= closeError;
-            report?.failures.push("server lifecycle: owned port 5175 remained reachable after close");
         }
     }
 }
@@ -767,11 +914,14 @@ try {
 if (report) {
     report.serverLifecycle = {
         closeVerified,
-        initialPid: initialStatus?.pid ?? null,
-        ownedByProof: Boolean(ownedServer),
-        reusedExistingServer: isThisRepoServer(initialStatus),
+        fixedPortUsed: false,
+        ownedByProof: Boolean(staticServer),
     };
-    await writeFile(path.join(outputDirectory, "manifest.json"), `${JSON.stringify(report, null, 2)}\n`);
+    const serializedReport = `${JSON.stringify(report, null, 2)}\n`;
+    if (serializedReport.includes(repoRoot)) {
+        throw new Error("SeqFX visual proof manifest leaked the absolute repository root.");
+    }
+    await writeFile(path.join(outputDirectory, "manifest.json"), serializedReport);
 }
 
 if (proofError) throw proofError;

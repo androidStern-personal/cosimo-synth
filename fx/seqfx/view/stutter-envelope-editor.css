@@ -9,7 +9,7 @@
     padding: 6px 8px;
     color: var(--seqfx-shell-ink-muted);
     background: rgba(181, 217, 156, 0.14);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.35;
 }
 
@@ -115,7 +115,7 @@
     color: var(--editor-surface-ink-muted);
     background: transparent;
     font-family: var(--editor-label-font);
-    font-size: 9px;
+    font-size: 10px;
     font-weight: var(--editor-label-weight);
     letter-spacing: var(--editor-label-letter-spacing);
     text-transform: uppercase;
@@ -236,7 +236,7 @@
     border-radius: 3px;
     padding: 1px 5px;
     font-family: var(--editor-label-font);
-    font-size: 9px;
+    font-size: 10px;
     font-weight: var(--editor-label-weight);
     letter-spacing: var(--editor-label-letter-spacing);
     text-transform: uppercase;
@@ -256,7 +256,7 @@
 .seqfx-stutter-editor__shape-arrow {
     color: var(--editor-surface-ink-muted);
     font-family: var(--editor-label-font);
-    font-size: 9px;
+    font-size: 10px;
     font-weight: var(--editor-label-weight);
 }
 

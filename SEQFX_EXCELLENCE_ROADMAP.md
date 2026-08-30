@@ -91,7 +91,7 @@ SeqFX is shippable only when all of the following are true:
 - No effect or inspector section overflows the supported plugin geometry, labels are not hidden, text meets contrast requirements, and every icon-only action has an accessible name.
 - Global bypass, mix, clock, BPM, rate, swing, loop, pattern, play/reset where applicable, undo, and redo are visible and wired to their real endpoint or state owner.
 - The plugin opens without the current unnamed-audio-bus exception, passes the focused suites and strict `pluginval`, and recalls state in Ableton after save/reopen.
-- The release artifact is reproducible, signed/notarized when the required credentials are available, packaged with a manifest/checksum, and tested from a clean install location.
+- Release packaging is repeatable from a clean commit, source/bundle provenance is recorded, the archive has a manifest/checksum, signing/notarization is performed when the required credentials are available, and the candidate is tested from a clean install location. Binary reproducibility is claimed only if two independent native builds prove it.
 - Any unperformed subjective listening, physical host, signing, notarization, or distribution gate is named rather than being inferred from lower-level tests.
 
 ## 4. Current baseline and debt inventory
@@ -666,7 +666,7 @@ At each size:
 - reduced-motion mode removes nonessential movement without hiding state;
 - zoom from 80% through 200% does not make core controls unreachable.
 
-Capture named visual-regression screenshots for empty state and every effect's selected inspector at default and compact geometry.
+Capture named visual-regression screenshots for the empty state and every effect's top and lower selected inspector at all four supported geometries, plus full-depth stride evidence between those endpoints.
 
 ### UX-05 — Presets, onboarding, and documentation
 
@@ -790,14 +790,17 @@ Tasks:
   Block Mix, text selection identity, and effect preset action.
 - `P7.3` Complete — visible chain names, in-block effect abbreviations, Tape
   readout contrast repair, and preserved create/resize/move/copy interactions.
-- `P7.4` Complete — owned-region scrolling,
-  fixed supported-size layout, focus treatments, and reduced-motion override.
+- `P7.4` Implementation complete — owned-region scrolling, fixed supported-size
+  layout, 10 px functional/11 px prose type floors, focus treatments, and
+  reduced-motion override. The clean-commit provenance rerun is a Phase 8 gate.
 - `P7.5` Complete — three bounded musical presets per effect, 12 full patterns,
   and atomic pattern/preset/variation history contracts.
 - `P7.6` Complete — editor-local onboarding, user guide, pre-release notes,
   known limits, and explicit unperformed host/release gates.
-- `P7.7` Complete — captured and inspected empty/all-effect screenshots at default
-  and compact sizes plus minimum/wide geometry, contrast, focus, and zoom proof.
+- `P7.7` Implementation complete — the packaged shadow-root matrix captures and
+  measures empty/all-effect top/lower states at default, compact, minimum, and
+  wide sizes, plus inspector strides, contrast, focus, and zoom. The iterative
+  matrix passes; the final `--require-clean` rerun is a Phase 8 gate.
 
 Exit: no known formatting/visual defect remains in the release ledger; every requested effect is discoverable without memorizing an icon.
 
@@ -819,7 +822,7 @@ Tasks:
 - `P8.12` Test install on a Gatekeeper-enabled clean macOS account/machine when available.
 - `P8.13` Produce the exact coordinator handoff; do not merge, push, deploy, or upload.
 
-Exit: a committed clean release-candidate branch and reproducible artifact exist, with external/user gates plainly identified.
+Exit: a committed clean release-candidate branch and repeatably packaged artifact with checksum and provenance exist, with binary reproducibility and every external/user gate stated only to the level actually proved.
 
 ## 11. Verification matrix
 
@@ -870,7 +873,7 @@ Run at 44.1, 48, 88.2, 96, and 192 kHz where the Cmajor test runner supports it:
 - strict `pluginval` including cold open;
 - Ableton rescan, insert, UI open/resize, audio, automation, transport, save/reopen, preset recall, and multiple-instance stress;
 - packaged artifact install/uninstall instructions;
-- checksum and manifest reproducibility;
+- checksum, manifest, repeatable-packaging, and source/bundle provenance;
 - notarization/stapling/Gatekeeper when credentials/environment exist.
 
 ## 12. Performance and quality budgets

@@ -1,102 +1,100 @@
-# SeqFX supported-size visual qualification
+# SeqFX packaged visual qualification
 
 Date: 2026-08-30
 
-Command: `npm run fx:seqfx:visual-proof`
+Final command: `npm run fx:seqfx:visual-proof -- --require-clean`
 
-Result: pass
+## Proof contract
 
-## What was proved
+The qualification builds the production SeqFX app and worker, serves only the
+built runtime from an ephemeral loopback server, calls the production view
+factory, and asserts that `cosimo-seqfx-react-view` rendered inside its open
+shadow root. It does not use the Vite source harness or reuse a fixed port.
 
-The reproducible Playwright qualification captured 56 named screenshots and
-measured 56 rendered states:
+The mandatory matrix contains exactly 100 measured and captured states:
 
-- empty state plus top and lower inspector captures for all 12 effects at the
-  1120 x 680 default;
-- empty state plus top and lower inspector captures for all 12 effects at the
-  900 x 600 compact size;
-- empty state plus top and lower Twelve-effect Tour captures at the 720 x 520
-  minimum;
-- empty state plus top and lower Twelve-effect Tour captures at the 1440 x 800
-  wide size.
+- empty state at 1120 x 680, 900 x 600, 720 x 520, and 1440 x 800;
+- top and lower inspector captures for all 12 effects at every one of those
+  four supported sizes;
+- 48 complete inspector traversals: 12 effects at four sizes.
 
-The run also performed 26 full-depth inspector traversals. Each traversal
-opened the effect's Advanced disclosure when present, sampled the inspector in
-overlapping viewport-sized increments, finished at the exact lower scroll
-edge, and accounted for every enabled button, select, and input. No inspector
-control was missed, and no visible inspector child crossed its horizontal
-bounds at any depth. This includes all Advanced controls for Pitch, Comb,
-Ring, Reverse, Talk Box, Vibro, Flange, and Dirty at both default and compact
-sizes.
+Each traversal opens every Advanced disclosure and samples the inspector in
+overlapping viewport-sized strides until every enabled button, select, and
+input has appeared. The proof also records a screenshot at every interior
+stride, so visually important content between the named top and lower states
+is not accepted from DOM measurements alone. The current matrix produces 100
+contract screenshots plus 202 stride screenshots.
 
-Across those states the proof found no document/root overflow, no inspector
-horizontal overflow, no inspector child outside its owned bounds, no clipped
-effect name, no hidden chain label, and no enabled button, select, number input,
-or range input below the 24 CSS px desktop target. Vertical overflow remained
-owned by the inspector at every supported two-column size.
+## Automated acceptance
 
-The same run evaluated 8,420 rendered normal-text contrast samples against
-their composited backgrounds. Every sample met WCAG AA's 4.5:1 threshold; the
-run has no low-contrast exception list. It also proved the reduced-motion media
-override across every rendered child.
+Every mandatory state is rejected for any of the following:
 
-Seven representative controls were reached by actual Tab navigation and
-exposed a solid 2 px or 3 px focus outline: SeqFX On, the loop ruler, a grid
-cell, an effect choice, the Effect tab, Block Mix, and the last enabled control
-at the bottom of the inspector.
+- document/root overflow, inspector horizontal overflow, or a visible
+  inspector-owned child crossing its horizontal bounds;
+- missing inspector-owned vertical scrolling or an incomplete lower capture;
+- a clipped effect name or hidden chain label;
+- an enabled interactive control smaller than 24 CSS px;
+- a functional label/readout below 10 CSS px or prose/help text below 11 CSS px;
+- normal text below WCAG AA 4.5:1 against its composited background;
+- nonessential animation remaining under reduced-motion media;
+- a closed Advanced disclosure or a control never exposed during traversal.
 
-Zoom was modeled as the CSS viewport produced when a 1120 x 680 host surface is
-viewed at 80%, 100%, 125%, 150%, and 200%. At each effective viewport, nine
-core controls could be scrolled into view and focused, and the document had no
-horizontal overflow. This covers the global switch, clock source, factory
-pattern, loop ruler, grid, effect picker, Effect tab, Block Mix, and the final
-enabled inspector control.
+The same run reaches representative global, grid, picker, tab, mix, and
+lower-inspector controls by keyboard and requires visible focus. It also models
+80%, 100%, 125%, 150%, and 200% zoom as effective CSS viewports, then requires
+the nine core controls to remain scrollable, focusable, and free of document
+horizontal overflow.
 
-## Server lifecycle
+## Source and bundle provenance
 
-The proof starts Vite through its programmatic API only when port 5175 is free.
-If the port is already serving this exact worktree, it reuses that server and
-does not own or close it; if another workspace owns the port, it fails without
-interrupting it. When this run owned the server, `server.close()` completed and
-an independent TCP probe confirmed that port 5175 was no longer reachable.
-The final manifest records `ownedByProof: true` and `closeVerified: true`.
+Before opening Chromium, the script records repository-relative evidence for:
 
-## Defects found and repaired by the matrix
+- commit, tree, branch, and complete dirty status;
+- `package-lock.json` SHA-256;
+- every tracked or untracked source under the SeqFX, shared-UI, build, and
+  proof-script scopes, including a sorted file list and aggregate SHA-256;
+- production `app.js`, `app.js.map`, `worker.js`, and `worker.js.map` hashes.
 
-- The 12-effect picker's narrow cards truncated longer names. Its minimum card
-  width is now 90 px.
-- Filter, Crush, and Stutter exposed several controls below 24 px. Their scoped
-  hit targets and stop buttons now meet the desktop minimum, and SeqFX range
-  controls have a 24 px minimum height.
-- Muted labels, step numbers, Filter's span readout, and trigger-latched badges
-  missed 4.5:1. SeqFX now uses a darker muted-ink token and dark-on-amber
-  trigger badges.
-- Focus treatment varied between native, shared-editor, grid, and inspector
-  controls. SeqFX now supplies a high-contrast two-tone focus treatment while
-  preserving the grid's existing focus state.
+It records the same evidence again after capture and fails if any field, source
+aggregate, or artifact hash changed. `--require-clean` additionally refuses to
+start from a dirty worktree. Source maps must carry `sourcesContent` that the
+separate build-provenance gate can trace to this exact checkout; absolute
+workspace paths are not written to the visual manifest.
+
+## Defects found and repaired
+
+- Functional text was broadly set at 5.5-9 px. All SeqFX labels/readouts now
+  meet the 10 px floor, while descriptions and behavior notes meet 11 px.
+- Raising the type floor exposed a real wide-layout truncation of `Tape Stop`.
+  Effect cards now reserve 100 px before auto-fitting columns.
+- The larger chain labels exposed insufficient left padding and clipped the
+  leading `C` in `Chain`. The grid now reserves 40 px and renders the full
+  label at every supported size.
+- The old proof covered all effects only at default and compact sizes and used
+  a source harness in light DOM. The matrix now covers all effects at all four
+  sizes through the built production custom element and shadow root.
+- The old proof could reuse a fixed-port Vite server from another run. The new
+  server binds an ephemeral port, is owned only by this command, and closes
+  before the manifest is written.
 
 ## Human inspection
 
-The generated contact sheet plus full-resolution top and lower inspector
-captures were inspected after the final run. The default, compact, minimum,
-and wide surfaces preserve the product hierarchy; all named effects are
-legible; chain identity and block effect identity remain visible; Advanced
-controls remain readable at the lower scroll edge; the inspector owns its
-scroll; and no remaining formatting defect was observed.
+The generated contract contact sheet and full-resolution representative
+captures were inspected after the passing implementation run. Default,
+compact, minimum, and wide layouts preserve the global/grid/inspector
+hierarchy; all effect names and full chain labels remain legible; the Tape Stop
+trajectory and lower behavior controls are readable; Advanced content is
+reachable; and no remaining formatting defect was observed in the supported
+matrix.
 
-## Evidence identity
+## Evidence location and boundary
 
-Generated artifacts live under ignored `build/seqfx_visual_proof/`. The script
-now creates both the named captures and the contact sheet, so the entire visual
-evidence set is reproducible from one command.
+Ignored proof artifacts live under `build/seqfx_visual_proof/`. The manifest
+contains all screenshot hashes, contact-sheet hash, measurements, traversals,
+focus/zoom results, source provenance, artifact provenance, and the zero-length
+failure list. Hashes are intentionally read from that clean-commit manifest
+instead of copied into this document and allowed to become stale.
 
-- `manifest.json` SHA-256:
-  `65871b2dfec5d88489035358bb36baa1bba1f078b451e5f574a36ba50159c5e0`
-- `contact-sheet.png` SHA-256:
-  `436a1261f5b7c6006fde2661d89c32646f67431bc41c8383b5dcf43b38e5afa6`
-
-## Boundary
-
-This is automated Chromium and human screenshot qualification, not physical
-display, Ableton WebView, macOS accessibility-inspector, or listening
-acceptance. Those remain separate release-candidate gates.
+This is production-bundle Chromium plus human screenshot qualification. It is
+not Ableton WebView, physical-display, macOS accessibility-inspector, native
+CPU, or listening acceptance; those remain distinct release-candidate gates.

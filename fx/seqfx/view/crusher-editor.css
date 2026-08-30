@@ -77,7 +77,7 @@
     color: var(--editor-surface-ink-muted);
     background: rgba(255, 255, 255, 0.18);
     font-family: var(--editor-label-font);
-    font-size: 9px;
+    font-size: 10px;
     font-weight: var(--editor-label-weight);
     letter-spacing: 0.035em;
     cursor: pointer;
@@ -226,7 +226,7 @@
 .seqfx-crusher-editor__drive-arrow {
     color: var(--editor-surface-ink-muted);
     font-family: var(--editor-label-font);
-    font-size: 9px;
+    font-size: 10px;
     font-weight: var(--editor-label-weight);
 }
 
