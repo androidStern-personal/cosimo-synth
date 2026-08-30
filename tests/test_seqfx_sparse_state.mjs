@@ -21,6 +21,7 @@ const {
     applySeqFxBlockCreate,
     applySeqFxBlockEffectEdit,
     applySeqFxBlockParamEdit,
+    applySeqFxBlockResize,
     applySeqFxParamEdit,
     buildSeqPatternUpload,
     createDefaultSeqFxState,
@@ -203,6 +204,96 @@ test("legacy Tape Stop blocks migrate through the documented canonical free-time
         assert.ok(step.aux.targets.every((target) => target.enabled === false));
         assert.deepEqual(step.aux.targets.map((target) => target.end), step.params);
     }
+});
+
+test("legacy non-Tape blocks discard obsolete remembered Tape aux during migration", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: 1,
+        startStep: 3,
+        length: 2,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+    });
+    const legacyTapeParams = [2, 4, 0.5, 50, 1, 0, 0, 0];
+    for (const step of state.patterns[0].lanes[1].steps.slice(3, 5)) {
+        step.effectParams = {
+            ...(step.effectParams ?? {}),
+            [SEQFX_EFFECT_TYPES.tapeStop]: [...legacyTapeParams],
+        };
+        step.effectAux = {
+            ...(step.effectAux ?? {}),
+            [SEQFX_EFFECT_TYPES.tapeStop]: {
+                source: structuredClone(step.aux.source),
+                targets: legacyTapeParams.map((end, index) => ({ enabled: index < 3, end })),
+            },
+        };
+    }
+
+    let migrated = parseSeqFxStoredState(JSON.stringify(legacyV5(state))).state;
+    for (const step of migrated.patterns[0].lanes[1].steps.slice(3, 5)) {
+        const rememberedParams = step.effectParams?.[SEQFX_EFFECT_TYPES.tapeStop];
+        const rememberedAux = step.effectAux?.[SEQFX_EFFECT_TYPES.tapeStop];
+        assert.ok(rememberedParams);
+        assert.ok(rememberedAux);
+        assert.equal(rememberedAux.targets.some((target) => target.enabled), false);
+        assert.deepEqual(rememberedAux.targets.map((target) => target.end), rememberedParams);
+    }
+
+    migrated = applySeqFxBlockEffectEdit(migrated, {
+        patternIndex: 0,
+        lane: 1,
+        startStep: 3,
+        effectType: SEQFX_EFFECT_TYPES.tapeStop,
+    });
+    const upload = buildSeqPatternUpload(migrated, { patternIndex: 0, authoritative: true });
+    assert.equal(upload.auxEnabled[1].slice(3, 5).flat().some(Boolean), false);
+});
+
+test("growing and shrinking a block preserves retained sparse per-step overrides", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: 0,
+        startStep: 4,
+        length: 3,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+    });
+    state = applySeqFxParamEdit(state, {
+        patternIndex: 0,
+        lane: 0,
+        steps: [5],
+        paramIndex: 1,
+        value: 777,
+    });
+
+    state = applySeqFxBlockResize(state, {
+        patternIndex: 0,
+        lane: 0,
+        startStep: 4,
+        length: 4,
+    });
+    assert.deepEqual(
+        state.patterns[0].lanes[0].steps.slice(4, 8).map((step) => step.params[1]),
+        [2000, 777, 2000, 2000],
+        "growing should retain existing cells and template only the appended cell",
+    );
+
+    state = applySeqFxBlockResize(state, {
+        patternIndex: 0,
+        lane: 0,
+        startStep: 4,
+        length: 2,
+    });
+    assert.deepEqual(
+        state.patterns[0].lanes[0].steps.slice(4, 6).map((step) => step.params[1]),
+        [2000, 777],
+        "shrinking should retain the surviving override",
+    );
+    assert.equal(state.patterns[0].lanes[0].steps[6].active, false);
+    assert.equal(state.patterns[0].lanes[0].steps[4].trigger, true);
+    assert.equal(state.patterns[0].lanes[0].steps[5].trigger, false);
+    assert.equal(parseStrictSeqFxStateV7(serializeSeqFxState(state)).patterns[0].lanes[0].steps[5].params[1], 777);
 });
 
 test("legacy Crush blocks preserve 48 kHz hold behavior and aux endpoints in Original mode", () => {

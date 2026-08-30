@@ -1739,10 +1739,17 @@ function migrateLegacyTapeState(value: SeqFxLegacyStateV5): SeqFxLegacyStateV5 {
 
                 if (effectType !== SEQFX_EFFECT_TYPES.tapeStop) {
                     if (step.effectParams?.[SEQFX_EFFECT_TYPES.tapeStop]) {
-                        step.effectParams[SEQFX_EFFECT_TYPES.tapeStop] = migrateLegacyTapeParamVector(
+                        const memoryParams = migrateLegacyTapeParamVector(
                             step.effectParams[SEQFX_EFFECT_TYPES.tapeStop],
                             1,
                         );
+                        step.effectParams[SEQFX_EFFECT_TYPES.tapeStop] = memoryParams;
+                        if (step.effectAux?.[SEQFX_EFFECT_TYPES.tapeStop]) {
+                            step.effectAux[SEQFX_EFFECT_TYPES.tapeStop] = defaultAuxForParams(
+                                memoryParams,
+                                SEQFX_EFFECT_TYPES.tapeStop,
+                            );
+                        }
                     }
                     stepIndex += 1;
                     continue;
@@ -2168,10 +2175,14 @@ export function applySeqFxBlockResize(state: SeqFxState, edit: SeqFxBlockResizeE
         }
 
         const length = normalizeBlockLength(block.startStep, edit.length);
-        const template = pattern.lanes[lane].steps[block.startStep];
+        const retainedSteps = cloneBlockSteps(pattern, lane, block).slice(0, length);
+        const template = retainedSteps[0];
+        while (retainedSteps.length < length) {
+            retainedSteps.push(template);
+        }
         assertBlockRangeAvailable(pattern, lane, block.startStep, length, block);
         clearBlock(pattern, lane, block);
-        writeBlock(pattern, lane, block.startStep, length, template);
+        writeBlockSteps(pattern, lane, block.startStep, retainedSteps);
     });
 }
 
