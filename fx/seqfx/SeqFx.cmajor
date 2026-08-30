@@ -857,6 +857,8 @@ processor SeqFx [[ main ]]
     float32[seqfx::laneCount] combTuneHz;
     float32[seqfx::laneCount] combDecaySeconds;
     int32[seqfx::laneCount] combPolarity;
+    float32[seqfx::laneCount] combPolarityCurrent;
+    float32[seqfx::laneCount] combPolarityTarget;
     float32[seqfx::laneCount] combDispersion;
     float32[seqfx::laneCount] combDampingHz;
     float32[seqfx::laneCount] combMotion;
@@ -1053,6 +1055,8 @@ processor SeqFx [[ main ]]
             combMotionCurrent[lane] = combMotion[lane];
             combDriveCurrent[lane] = combDrive[lane];
             combWidthCurrent[lane] = combWidth[lane];
+            combPolarityCurrent[lane] = 1.0f;
+            combPolarityTarget[lane] = 1.0f;
 
             vibroRateHz[lane] = 4.5f;
             vibroDepthCents[lane] = 28.0f;
@@ -1689,6 +1693,8 @@ processor SeqFx [[ main ]]
             combMixTarget[lane] = 0.0f;
             combGateCurrent[lane] = 0.0f;
             combGateTarget[lane] = 0.0f;
+            combPolarityCurrent[lane] = combPolarity[lane] == 0 ? 1.0f : -1.0f;
+            combPolarityTarget[lane] = combPolarityCurrent[lane];
             combTailActive[lane] = false;
             vibroWriteIndex[lane] = 0;
             vibroValidSamples[lane] = 0;
@@ -2115,8 +2121,10 @@ processor SeqFx [[ main ]]
 
         let blockStart = blockStartStep (lane, currentStep);
         let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        let liveEdit = wasActive && relatchingFromPatternUpload;
         previousFilterMode[lane] = filterMode[lane];
-        filterMode[lane] = snapValue (stepParams[lane, blockStartIndex, 0], 0, 2);
+        if (! liveEdit)
+            filterMode[lane] = snapValue (stepParams[lane, blockStartIndex, 0], 0, 2);
         filterStartHz[lane] = clampCutoffHz (stepParams[lane, blockStartIndex, 1]);
         filterQ[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.1f, 20.0f);
 
@@ -2140,12 +2148,15 @@ processor SeqFx [[ main ]]
         let nextBits = snapValue (stepParams[lane, blockStartIndex, 0], 2, 16);
         let nextRateHz = seqfx::clampFloat (stepParams[lane, blockStartIndex, 1], 200.0f, 48000.0f);
         let nextDriveDb = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 0.0f, 36.0f);
-        let nextCharacter = snapValue (stepParams[lane, blockStartIndex, 3], 0, 3);
+        let liveEdit = wasActive && relatchingFromPatternUpload;
+        let nextCharacter = liveEdit
+            ? crusherCharacter[lane]
+            : snapValue (stepParams[lane, blockStartIndex, 3], 0, 3);
         let nextAdcQuality = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 1.0f);
         let nextDacQuality = seqfx::clampFloat (stepParams[lane, blockStartIndex, 5], 0.0f, 1.0f);
         let nextDither = seqfx::clampFloat (stepParams[lane, blockStartIndex, 6], 0.0f, 1.0f);
         let needsFreshHeldSample = ! wasActive
-            || triggerSteps[lane, currentStepIndex]
+            || (triggerSteps[lane, currentStepIndex] && ! relatchingFromPatternUpload)
             || nextRateHz != crusherRateHz[lane]
             || nextDriveDb != crusherDriveDb[lane]
             || nextCharacter != crusherCharacter[lane];
@@ -2191,8 +2202,10 @@ processor SeqFx [[ main ]]
 
         let blockStart = blockStartStep (lane, currentStep);
         let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        let liveEdit = wasActive && relatchingFromPatternUpload;
         ringFrequencyHz[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 0], 0.1f, 12000.0f);
-        ringWaveform[lane] = snapValue (stepParams[lane, blockStartIndex, 1], 0, 3);
+        if (! liveEdit)
+            ringWaveform[lane] = snapValue (stepParams[lane, blockStartIndex, 1], 0, 3);
         ringMotion[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 0.0f, 1.0f);
         ringRateHz[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.02f, 20.0f);
         ringSpread[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 1.0f);
@@ -2209,9 +2222,11 @@ processor SeqFx [[ main ]]
 
         let blockStart = blockStartStep (lane, currentStep);
         let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        let liveEdit = wasActive && relatchingFromPatternUpload;
         pitchSemitones[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 0], -24.0f, 24.0f);
         pitchFineCents[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 1], -100.0f, 100.0f);
-        pitchGrainMs[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 10.0f, 120.0f);
+        if (! liveEdit)
+            pitchGrainMs[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 10.0f, 120.0f);
         pitchJitter[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.0f, 1.0f);
         pitchSpread[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 1.0f);
 
@@ -2237,15 +2252,22 @@ processor SeqFx [[ main ]]
 
         let blockStart = blockStartStep (lane, currentStep);
         let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
-        reverseDivision[lane] = snapValue (stepParams[lane, blockStartIndex, 0], 0, 4);
+        let liveEdit = wasActive && relatchingFromPatternUpload;
+        if (! liveEdit)
+            reverseDivision[lane] = snapValue (stepParams[lane, blockStartIndex, 0], 0, 4);
         reverseCrossfade[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 1], 0.0f, 0.25f);
-        reverseTimingMode[lane] = snapValue (
-            stepParams[lane, blockStartIndex, 2],
-            seqfx::reverseTimingSync,
-            seqfx::reverseTimingFree
-        );
-        reverseFreeMs[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 20.0f, 4000.0f);
+        if (! liveEdit)
+        {
+            reverseTimingMode[lane] = snapValue (
+                stepParams[lane, blockStartIndex, 2],
+                seqfx::reverseTimingSync,
+                seqfx::reverseTimingFree
+            );
+            reverseFreeMs[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 20.0f, 4000.0f);
+        }
         reverseDecay[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 1.0f);
+        if (liveEdit)
+            return;
         reverseBlockAgeFrames[lane] = 0.0f;
         reverseBlockDurationFrames[lane] = segmentDurationFrames (lane, blockStart);
 
@@ -2261,8 +2283,12 @@ processor SeqFx [[ main ]]
 
         let blockStart = blockStartStep (lane, currentStep);
         let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
-        talkBoxFromVowel[lane] = snapValue (stepParams[lane, blockStartIndex, 0], 0, 4);
-        talkBoxToVowel[lane] = snapValue (stepParams[lane, blockStartIndex, 1], 0, 4);
+        let liveEdit = wasActive && relatchingFromPatternUpload;
+        if (! liveEdit)
+        {
+            talkBoxFromVowel[lane] = snapValue (stepParams[lane, blockStartIndex, 0], 0, 4);
+            talkBoxToVowel[lane] = snapValue (stepParams[lane, blockStartIndex, 1], 0, 4);
+        }
         talkBoxMorph[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 0.0f, 1.0f);
         talkBoxResonance[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 1.0f, 20.0f);
         talkBoxLows[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 1.0f);
@@ -2279,8 +2305,10 @@ processor SeqFx [[ main ]]
 
         let blockStart = blockStartStep (lane, currentStep);
         let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        let liveEdit = wasActive && relatchingFromPatternUpload;
         dirtyDriveDb[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 0], 0.0f, 36.0f);
-        dirtyCharacter[lane] = snapValue (stepParams[lane, blockStartIndex, 1], 0, 3);
+        if (! liveEdit)
+            dirtyCharacter[lane] = snapValue (stepParams[lane, blockStartIndex, 1], 0, 3);
         dirtyBias[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], -1.0f, 1.0f);
         dirtyDynamics[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.0f, 1.0f);
         dirtyToneHz[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 500.0f, 20000.0f);
@@ -2316,13 +2344,16 @@ processor SeqFx [[ main ]]
 
         let blockStart = blockStartStep (lane, currentStep);
         let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        let liveEdit = wasActive && relatchingFromPatternUpload;
         let freshNetwork = ! combTailActive[lane];
         if (freshNetwork)
             resetCombNetwork (lane);
 
         combTuneHz[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 0], 30.0f, 8000.0f);
         combDecaySeconds[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 1], 0.02f, 8.0f);
-        combPolarity[lane] = snapValue (stepParams[lane, blockStartIndex, 2], 0, 1);
+        if (! liveEdit)
+            combPolarity[lane] = snapValue (stepParams[lane, blockStartIndex, 2], 0, 1);
+        combPolarityTarget[lane] = combPolarity[lane] == 0 ? 1.0f : -1.0f;
         combDispersion[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.0f, 1.0f);
         combDampingHz[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 500.0f, 20000.0f);
         combMotion[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 5], 0.0f, 1.0f);
@@ -2338,12 +2369,14 @@ processor SeqFx [[ main ]]
             combMotionCurrent[lane] = combMotion[lane];
             combDriveCurrent[lane] = combDrive[lane];
             combWidthCurrent[lane] = combWidth[lane];
+            combPolarityCurrent[lane] = combPolarityTarget[lane];
             combMixCurrent[lane] = 0.0f;
             combGateCurrent[lane] = 1.0f;
         }
 
         combTailActive[lane] = true;
-        combTailAgeFrames[lane] = 0.0f;
+        if (! liveEdit)
+            combTailAgeFrames[lane] = 0.0f;
     }
 
     void latchVibroStep (wrap<seqfx::laneCount> lane, bool wasActive)
@@ -2355,9 +2388,12 @@ processor SeqFx [[ main ]]
 
         let blockStart = blockStartStep (lane, currentStep);
         let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        let liveEdit = wasActive && relatchingFromPatternUpload;
         vibroRateHz[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 0], 0.05f, 12.0f);
         vibroDepthCents[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 1], 0.0f, 100.0f);
-        let nextWaveform = snapValue (stepParams[lane, blockStartIndex, 2], 0, 1);
+        let nextWaveform = liveEdit
+            ? vibroWaveform[lane]
+            : snapValue (stepParams[lane, blockStartIndex, 2], 0, 1);
         if (nextWaveform != vibroWaveform[lane])
         {
             vibroPreviousWaveform[lane] = vibroWaveform[lane];
@@ -2365,8 +2401,11 @@ processor SeqFx [[ main ]]
             vibroWaveformFade[lane] = 0.0f;
         }
         vibroSpreadDegrees[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.0f, 180.0f);
-        vibroTimingMode[lane] = snapValue (stepParams[lane, blockStartIndex, 4], 0, 1);
-        vibroDivision[lane] = snapValue (stepParams[lane, blockStartIndex, 5], 0, 5);
+        if (! liveEdit)
+        {
+            vibroTimingMode[lane] = snapValue (stepParams[lane, blockStartIndex, 4], 0, 1);
+            vibroDivision[lane] = snapValue (stepParams[lane, blockStartIndex, 5], 0, 5);
+        }
 
         if (! wasActive)
         {
@@ -2388,14 +2427,18 @@ processor SeqFx [[ main ]]
 
         let blockStart = blockStartStep (lane, currentStep);
         let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        let liveEdit = wasActive && relatchingFromPatternUpload;
         flangeDelayMs[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 0], 0.2f, 10.0f);
         flangeDepthMs[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 1], 0.0f, 10.0f);
         flangeRateHz[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 0.02f, 10.0f);
         flangeFeedback[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.0f, 0.95f);
         flangeSpreadDegrees[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 180.0f);
-        flangeFeedbackPolarity[lane] = snapValue (stepParams[lane, blockStartIndex, 5], 0, 1);
-        flangeTimingMode[lane] = snapValue (stepParams[lane, blockStartIndex, 6], 0, 1);
-        flangeDivision[lane] = snapValue (stepParams[lane, blockStartIndex, 7], 0, 6);
+        if (! liveEdit)
+        {
+            flangeFeedbackPolarity[lane] = snapValue (stepParams[lane, blockStartIndex, 5], 0, 1);
+            flangeTimingMode[lane] = snapValue (stepParams[lane, blockStartIndex, 6], 0, 1);
+            flangeDivision[lane] = snapValue (stepParams[lane, blockStartIndex, 7], 0, 6);
+        }
         flangePolarityTarget[lane] = flangeFeedbackPolarity[lane] == 0 ? 1.0f : -1.0f;
 
         if (! wasActive)
@@ -2415,7 +2458,11 @@ processor SeqFx [[ main ]]
         let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
         let blockStart = blockStartStep (lane, currentStep);
         let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
-        let nextSliceCount = snapValue (stepParams[lane, blockStartIndex, 0], 2, 32);
+        let authoredTrigger = triggerSteps[lane, currentStepIndex] && ! relatchingFromPatternUpload;
+        let preserveStructure = wasActive && ! authoredTrigger;
+        let nextSliceCount = preserveStructure
+            ? stutterSliceCount[lane]
+            : snapValue (stepParams[lane, blockStartIndex, 0], 2, 32);
         let endSliceCount = stepAuxEnabled[lane, blockStartIndex, 0]
             ? snapValue (stepAuxEnd[lane, blockStartIndex, 0], 2, 32)
             : nextSliceCount;
@@ -2428,10 +2475,8 @@ processor SeqFx [[ main ]]
             2,
             stutterBufferSize - 8
         );
-        let structureChanged = nextSliceCount != stutterSliceCount[lane] || nextReadFrames != stutterReadFrames[lane];
         let shouldRestart = ! wasActive
-            || (! relatchingFromPatternUpload && triggerSteps[lane, currentStepIndex])
-            || (relatchingFromPatternUpload && structureChanged);
+            || (! relatchingFromPatternUpload && triggerSteps[lane, currentStepIndex]);
 
         stutterPlaybackSpeed[lane] = seqfx::clampFloat (stepParams[lane, currentStepIndex, 1], 0.5f, 2.0f);
         stutterSliceCount[lane] = nextSliceCount;
@@ -3699,7 +3744,7 @@ processor SeqFx [[ main ]]
         );
     }
 
-    float32 combFeedbackGain (float32 delaySamples, float32 decaySeconds, int32 polarity)
+    float32 combFeedbackGain (float32 delaySamples, float32 decaySeconds, float32 polarity)
     {
         let safeDecay = seqfx::clampFloat (decaySeconds, 0.02f, 8.0f);
         let delaySeconds = delaySamples / float32 (processor.frequency);
@@ -3707,7 +3752,7 @@ processor SeqFx [[ main ]]
             0.9985f,
             std::intrinsics::pow (10.0f, -3.0f * delaySeconds / safeDecay)
         );
-        return polarity == 0 ? magnitude : -magnitude;
+        return magnitude * seqfx::clampFloat (polarity, -1.0f, 1.0f);
     }
 
     float32 combMeasuredPeriodCompensation (float32 tuneHz)
@@ -3855,6 +3900,11 @@ processor SeqFx [[ main ]]
             combGateTarget[lane],
             1.0f / seqfx::transitionCrossfadeFrames
         );
+        combPolarityCurrent[lane] = seqfx::moveTowards (
+            combPolarityCurrent[lane],
+            combPolarityTarget[lane],
+            2.0f / seqfx::transitionCrossfadeFrames
+        );
 
         let tuneHz = seqfx::clampFloat (combTuneCurrent[lane], 30.0f, 8000.0f);
         let decaySeconds = seqfx::clampFloat (combDecayCurrent[lane], 0.02f, 8.0f);
@@ -3887,16 +3937,16 @@ processor SeqFx [[ main ]]
             + (combReferenceDcOutput[lane] * dcCoefficient);
         combReferenceDcInput[lane] = referenceLimited;
         combReferenceDcOutput[lane] = referenceReturned;
-        let referenceFeedback = combFeedbackGain (referenceDelay, decaySeconds, combPolarity[lane]);
+        let referenceFeedback = combFeedbackGain (referenceDelay, decaySeconds, combPolarityCurrent[lane]);
 
         let modeDelay0 = combModeDelaySamples (0, vectorPeriod, tuneHz, dispersion, motion, combMotionPhase[lane]);
         let modeDelay1 = combModeDelaySamples (1, vectorPeriod, tuneHz, dispersion, motion, combMotionPhase[lane]);
         let modeDelay2 = combModeDelaySamples (2, vectorPeriod, tuneHz, dispersion, motion, combMotionPhase[lane]);
         let modeDelay3 = combModeDelaySamples (3, vectorPeriod, tuneHz, dispersion, motion, combMotionPhase[lane]);
-        let prior0 = combVectorDamped[lane, 0] * combFeedbackGain (modeDelay0, decaySeconds, combPolarity[lane]);
-        let prior1 = combVectorDamped[lane, 1] * combFeedbackGain (modeDelay1, decaySeconds, combPolarity[lane]);
-        let prior2 = combVectorDamped[lane, 2] * combFeedbackGain (modeDelay2, decaySeconds, combPolarity[lane]);
-        let prior3 = combVectorDamped[lane, 3] * combFeedbackGain (modeDelay3, decaySeconds, combPolarity[lane]);
+        let prior0 = combVectorDamped[lane, 0] * combFeedbackGain (modeDelay0, decaySeconds, combPolarityCurrent[lane]);
+        let prior1 = combVectorDamped[lane, 1] * combFeedbackGain (modeDelay1, decaySeconds, combPolarityCurrent[lane]);
+        let prior2 = combVectorDamped[lane, 2] * combFeedbackGain (modeDelay2, decaySeconds, combPolarityCurrent[lane]);
+        let prior3 = combVectorDamped[lane, 3] * combFeedbackGain (modeDelay3, decaySeconds, combPolarityCurrent[lane]);
         let rotated0 = 0.5f * (prior0 + prior1 + prior2 + prior3);
         let rotated1 = 0.5f * (prior0 - prior1 + prior2 - prior3);
         let rotated2 = 0.5f * (prior0 + prior1 - prior2 - prior3);

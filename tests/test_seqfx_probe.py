@@ -1444,6 +1444,72 @@ def test_future_filter_upload_does_not_change_active_filter_block(
     assert _rms(edited[current_block_window, 0] - baseline[current_block_window, 0]) < 1.0e-6
 
 
+@pytest.mark.parametrize(
+    ("effect_type", "initial_params", "latched_param", "edited_value"),
+    [
+        pytest.param(EFFECT_FILTER, [0, 1_000, 1_000, 0.707, 1], 0, 1, id="filter-mode"),
+        pytest.param(EFFECT_CRUSHER, [8, 8_000, 4, 1, 0, 0, 0], 3, 3, id="crush-character"),
+        pytest.param(EFFECT_PITCH, [7, 0, 24, 0, 0.35], 2, 100, id="pitch-grain"),
+        pytest.param(EFFECT_COMB, [220, 2, 0, 0.55, 7_500, 0.12, 0.18, 0.65], 2, 1, id="comb-polarity"),
+        pytest.param(EFFECT_RING, [180, 0, 0.1, 0.5, 0.08, 0, 0], 1, 2, id="ring-waveform"),
+        pytest.param(EFFECT_REVERSE, [4, 0.08, 0, 500, 1], 2, 1, id="reverse-timing"),
+        pytest.param(EFFECT_TALK_BOX, [0, 3, 0.5, 6, 0.3, 0.15, 2], 0, 4, id="talk-box-vowel"),
+        pytest.param(EFFECT_VIBRO, [4, 60, 0, 0, 1, 2], 2, 1, id="vibro-waveform"),
+        pytest.param(EFFECT_FLANGE, [1.2, 3, 0.28, 0.55, 0, 0, 1, 5], 5, 1, id="flange-polarity"),
+        pytest.param(EFFECT_DIRTY, [12, 0, 0, 0.65, 12_000, -6], 1, 2, id="dirty-character"),
+        pytest.param(EFFECT_STUTTER, [8, 1, 0.2, 0.7], 0, 16, id="stutter-slices"),
+    ],
+)
+def test_trigger_latched_current_cell_edits_wait_for_the_next_authored_trigger(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    effect_type: int,
+    initial_params: list[float],
+    latched_param: int,
+    edited_value: float,
+) -> None:
+    upload = _empty_upload()
+    for step in range(6):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=step in (0, 4),
+            effect_type=effect_type,
+            params=initial_params,
+        )
+
+    edited = json.loads(json.dumps(upload))
+    edited["revision"] = 2
+    edited["authoritative"] = False
+    for step in range(6):
+        changed_params = list(initial_params)
+        changed_params[latched_param] = edited_value
+        _activate_step(
+            edited,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=step in (0, 4),
+            effect_type=effect_type,
+            params=changed_params,
+        )
+
+    source = _complex_signal(STEP_FRAMES * 6) * 0.28
+    baseline_path = tmp_path / "baseline"
+    edited_path = tmp_path / "edited"
+    baseline_path.mkdir()
+    edited_path.mkdir()
+    baseline = _render(generated_runtime, baseline_path, source, _base_schedule(upload))
+    schedule = _base_schedule(upload)
+    schedule[2_000] = [["event", "patternUpload", edited]]
+    changed = _render(generated_runtime, edited_path, source, schedule)
+
+    before_next_trigger = slice(2_200, (STEP_FRAMES * 4) - 100)
+    np.testing.assert_allclose(changed[before_next_trigger], baseline[before_next_trigger], atol=1.0e-6, rtol=0.0)
+    after_next_trigger = slice((STEP_FRAMES * 4) + 500, (STEP_FRAMES * 5) - 100)
+    assert _rms(changed[after_next_trigger] - baseline[after_next_trigger]) > 1.0e-4
+
+
 def test_filter_effect_can_run_in_any_chain_not_only_the_old_filter_lane(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -3389,6 +3455,43 @@ def test_comb_authoritative_reset_invalidates_the_live_feedback_tail(
     reset_tail = _rms(reset[5_000:7_000])
     assert baseline_tail > 1.0e-4
     assert reset_tail < baseline_tail * 0.05
+
+
+def test_comb_retrigger_reexcites_the_smoothed_live_network_without_cutting_its_tail(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_FILTER,
+        step=0,
+        trigger=True,
+        effect_type=EFFECT_COMB,
+        params=[220.0, 2.5, 0.0, 0.72, 8_000.0, 0.08, 0.16, 0.7],
+    )
+    _activate_step(
+        upload,
+        lane=LANE_FILTER,
+        step=3,
+        trigger=True,
+        effect_type=EFFECT_COMB,
+        params=[330.0, 2.5, 1.0, 0.38, 6_000.0, 0.14, 0.2, 0.55],
+    )
+
+    source = _comb_impulse(STEP_FRAMES * 5)
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+    retrigger = STEP_FRAMES * 3
+    gap_tail = _rms(output[(STEP_FRAMES * 2) + 200 : retrigger - 100])
+    retained_tail = _rms(output[retrigger + 200 : retrigger + 1_200])
+
+    assert gap_tail > 1.0e-4
+    assert retained_tail > 1.0e-4
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
+    local = output[retrigger - 96 : retrigger + 192, 0]
+    reference_jump = float(np.quantile(np.abs(np.diff(output[retrigger - 1_000 : retrigger - 200, 0])), 0.99))
+    assert float(np.max(np.abs(np.diff(local)))) < max(0.02, reference_jump * 5.0)
 
 
 def test_comb_four_chain_worst_case_remains_faster_than_the_generous_js_budget(
