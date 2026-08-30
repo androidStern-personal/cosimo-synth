@@ -725,6 +725,15 @@ PHASE 4 — REDESIGN MODULATION AROUND QUICK EDITING
     deliberately OUT of test:browser:orphans) until fixed; its other six tests pass after brand/theme
     pin migrations. Fix the product, then wire the suite into the gate script.
 
+[ ] SFX-2 — Take SeqFX from average to a shippable, excellent sequenced multi-effect
+    Active owner (2026-08-30):
+    - Codex task `SFX-2 SeqFX Excellence`, thread `01a05051-d7c7-7e13-bb60-58968b6392cf`, branch `codex/seqfx-excellence-01a05051`, worktree `/Users/winterfell/.codex/worktrees/seqfx-excellence-01a05051/cosimo-synth`, starting checkpoint `7fc89fa3`, model SOL, reasoning max.
+    - This task owns the evidence-driven Tape Stop replacement; requested sequenced Crush, Pitch, Comb, Ring, Stutter, Reverse, Talk Box, Vibro, Flange, and Dirty effects; sparse state/migration and lifecycle foundations; global controls; visual/workflow polish; presets/docs; and macOS VST3 release-candidate qualification.
+    - `SEQFX_EXCELLENCE_ROADMAP.md` is the implementation and evidence contract. Tape Stop and the advanced Comb must pass their research/listening gates there; undocumented competitor behavior must not be guessed.
+    - Final review, rebase, merge, push, deployment, and publication belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`. The owner must not touch the primary checkout or another agent's worktree and must serialize shared native-build/install operations.
+    Done when:
+    - Every roadmap requirement has source, automated, visual, host, and listening evidence proportional to its claim; the branch is committed and clean; strict plugin validation and Ableton recall pass; a reproducible macOS VST3 release candidate is handed to the coordinator; and any credential, clean-machine, or public-distribution gate remains explicitly unperformed unless separately authorized.
+
 [x] T14 — Redesign the Mod overview without hidden functionality
     Depends on: T03B, T11
     Required behavior:
