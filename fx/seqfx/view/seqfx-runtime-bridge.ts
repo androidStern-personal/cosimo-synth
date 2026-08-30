@@ -311,9 +311,13 @@ function resolveInteger(value: unknown, fallback: number, min: number, max: numb
     return Math.round(resolveFiniteNumber(value, fallback, min, max));
 }
 
-function seqFxStateContentToken(state: SeqFxState): string {
+function seqFxPatternContentTokens(state: SeqFxState): string[] {
     const storedState = projectSeqFxStoredStateV7(state);
-    return JSON.stringify(storedState.patterns.map(({ revision: _revision, ...pattern }) => pattern));
+    return storedState.patterns.map(({ revision: _revision, ...pattern }) => JSON.stringify(pattern));
+}
+
+function seqFxStateContentToken(state: SeqFxState): string {
+    return JSON.stringify(seqFxPatternContentTokens(state));
 }
 
 function parseStoredStateMessage(message: unknown): StoredStateMessage | null {
@@ -619,7 +623,7 @@ export class SeqFxRuntimeBridge {
         }
 
         this.redoStack.push(this.cloneStateForHistory(this.state));
-        this.state = previous;
+        this.state = this.restoreStateFromHistory(previous);
         this.persistState();
         this.notifyStateListeners();
         return true;
@@ -633,7 +637,7 @@ export class SeqFxRuntimeBridge {
         }
 
         this.undoStack.push(this.cloneStateForHistory(this.state));
-        this.state = next;
+        this.state = this.restoreStateFromHistory(next);
         this.persistState();
         this.notifyStateListeners();
         return true;
@@ -1061,6 +1065,27 @@ export class SeqFxRuntimeBridge {
 
     private cloneStateForHistory(state: SeqFxState): SeqFxState {
         return normalizeSeqFxState(state);
+    }
+
+    private restoreStateFromHistory(historyState: SeqFxState): SeqFxState {
+        const nextState = this.cloneStateForHistory(historyState);
+        const currentContent = seqFxPatternContentTokens(this.state);
+        const nextContent = seqFxPatternContentTokens(nextState);
+
+        nextState.patterns.forEach((pattern, patternIndex) => {
+            const currentPattern = this.state.patterns[patternIndex];
+            if (currentContent[patternIndex] === nextContent[patternIndex]) {
+                pattern.revision = currentPattern.revision;
+                return;
+            }
+
+            pattern.revision = Math.min(
+                Number.MAX_SAFE_INTEGER,
+                Math.max(currentPattern.revision, pattern.revision) + 1,
+            );
+        });
+
+        return nextState;
     }
 
     private pushUndoState(previous: SeqFxState) {

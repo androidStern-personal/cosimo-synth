@@ -9,6 +9,7 @@ import { createLegacyV5StateWithBlock } from "./helpers/seqfx_legacy_v5_fixture.
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
 const bridgeModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-runtime-bridge.ts");
+const workerModule = await loadUIModule(repoRoot, "fx/seqfx/worker/seqfx-worker-service.ts");
 
 const {
     SEQFX_EFFECT_TYPES,
@@ -27,6 +28,7 @@ const {
     SeqFxRuntimeBridge,
     parseSeqFxMonitorEvent,
 } = bridgeModule;
+const { createSeqFxWorkerService } = workerModule;
 
 class FakePatchConnection {
     constructor(storedState = {}, parameters = {}) {
@@ -163,6 +165,11 @@ function latestStoredSeqFxState(connection) {
     assert.equal(write?.key, SEQFX_STATE_KEY);
     assert.equal(typeof write.value, "string");
     return parseStrictSeqFxStateV7(write.value);
+}
+
+function seqFxStateContent(state) {
+    const stored = JSON.parse(serializeSeqFxState(state));
+    return JSON.stringify(stored.patterns.map(({ revision: _revision, ...pattern }) => pattern));
 }
 
 function monitorEvent(transportRunning) {
@@ -1205,6 +1212,63 @@ test("undo and redo operate on committed edits and clear redo after a divergent 
     assert.equal(connection.storedWrites.length, 5);
 });
 
+test("undo and redo keep selected-pattern uploads newer than the engine revision gate", () => {
+    const initialState = createDefaultSeqFxState();
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
+    });
+    const worker = createSeqFxWorkerService(connection);
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    worker.start();
+    bridge.attach();
+    bridge.requestBootState();
+    connection.events = [];
+
+    bridge.createBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 2,
+        length: 1,
+    });
+    bridge.setBlockParam({
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 2,
+        paramIndex: 1,
+        value: 330,
+    });
+
+    const editUploads = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload);
+    const acceptedRevision = editUploads.at(-1).value.revision;
+    connection.events = [];
+
+    assert.equal(bridge.undo(), true);
+
+    const undoUpload = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).at(-1).value;
+    assert.equal(undoUpload.authoritative, false);
+    assert.ok(
+        undoUpload.revision > acceptedRevision,
+        `undo revision ${undoUpload.revision} must be newer than accepted revision ${acceptedRevision}`,
+    );
+    assert.equal(undoUpload.params[SEQFX_LANES.filter][2][1], 2_000);
+
+    const undoRevision = undoUpload.revision;
+    connection.events = [];
+    assert.equal(bridge.redo(), true);
+
+    const redoUpload = endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).at(-1).value;
+    assert.equal(redoUpload.authoritative, false);
+    assert.ok(
+        redoUpload.revision > undoRevision,
+        `redo revision ${redoUpload.revision} must be newer than undo revision ${undoRevision}`,
+    );
+    assert.equal(redoUpload.params[SEQFX_LANES.filter][2][1], 330);
+
+    bridge.detach();
+    worker.stop();
+});
+
 test("a live gesture creates one undo entry and authoritative preset load clears history", () => {
     let initialState = createDefaultSeqFxState();
     initialState = applySeqFxBlockCreate(initialState, {
@@ -1333,7 +1397,7 @@ test("factory patterns, effect presets, and safe loop variation each commit as o
     assert.equal(bridge.loadFactoryPattern("twelve-effect-tour"), true);
     assert.equal(connection.storedWrites.length, 1);
     assert.equal(endpointEvents(connection, SEQFX_ENDPOINTS.patternUpload).length, 0, "committed edits flow through authoritative stored state");
-    const loaded = serializeSeqFxState(bridge.getState());
+    const loaded = seqFxStateContent(bridge.getState());
     const loadedEffectTypes = new Set(
         bridge.getState().patterns[0].lanes.flatMap((lane) => lane.steps.filter((step) => step.trigger).map((step) => step.effectType)),
     );
@@ -1341,19 +1405,19 @@ test("factory patterns, effect presets, and safe loop variation each commit as o
     assert.equal(bridge.undo(), true);
     assert.equal(bridge.getState().patterns[0].lanes.flatMap((lane) => lane.steps).some((step) => step.active), false);
     assert.equal(bridge.redo(), true);
-    assert.equal(serializeSeqFxState(bridge.getState()), loaded);
+    assert.equal(seqFxStateContent(bridge.getState()), loaded);
 
-    const beforePreset = serializeSeqFxState(bridge.getState());
+    const beforePreset = seqFxStateContent(bridge.getState());
     bridge.applyBlockPreset({ patternIndex: 0, lane: 0, startStep: 0, mix: 0.25, params: [2, 1_500, 1_500, 4, 1] });
     assert.equal(bridge.getState().patterns[0].lanes[0].steps[0].mix, 0.25);
     assert.equal(bridge.undo(), true);
-    assert.equal(serializeSeqFxState(bridge.getState()), beforePreset);
+    assert.equal(seqFxStateContent(bridge.getState()), beforePreset);
 
-    const beforeVariation = serializeSeqFxState(bridge.getState());
+    const beforeVariation = seqFxStateContent(bridge.getState());
     assert.equal(bridge.varyLoop(), true);
-    assert.notEqual(serializeSeqFxState(bridge.getState()), beforeVariation);
+    assert.notEqual(seqFxStateContent(bridge.getState()), beforeVariation);
     assert.equal(bridge.undo(), true);
-    assert.equal(serializeSeqFxState(bridge.getState()), beforeVariation);
+    assert.equal(seqFxStateContent(bridge.getState()), beforeVariation);
 });
 
 test("reapplying an identical factory pattern does not write state or add undo history", () => {
