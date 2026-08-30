@@ -1,12 +1,20 @@
 # SeqFX Excellence Roadmap
 
-Status: approved implementation scope, execution pending
+Status: implementation in progress; Phases 0–1 frozen at the research checkpoint
 Owner thread: `01a05051-d7c7-7e13-bb60-58968b6392cf`
 Branch: `codex/seqfx-excellence-01a05051`
 Worktree: `/Users/winterfell/.codex/worktrees/seqfx-excellence-01a05051/cosimo-synth`
 Base: `origin/master` at `7fc89fa322764221facdd2714e9b16bc91c41157`
 Integration coordinator: `01a042bf-abd2-7820-9d47-b10405b67c5d`
 Roadmap date: 2026-08-30
+
+Execution evidence:
+
+- Phase 0 baseline: `research/seqfx/baseline.md`
+- Tape Stop contract: `research/seqfx/tape-stop-benchmark.md`
+- Requested-effect matrix: `research/seqfx/effect-benchmark-matrix.md`
+- Comb research and selection: `research/seqfx/comb-research.md` and
+  `research/seqfx/comb-lab-decision.md`
 
 ## 1. Outcome
 
