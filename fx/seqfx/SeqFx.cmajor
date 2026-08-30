@@ -88,6 +88,20 @@ namespace seqfx
         return std::intrinsics::max (target, current - maxDelta);
     }
 
+    // Four-point, third-order Catmull-Rom/Hermite fractional read.
+    float32<2> cubicHermite4 (
+        float32<2> previous,
+        float32<2> current,
+        float32<2> following,
+        float32<2> nextFollowing,
+        float32 fraction)
+    {
+        let a = (previous * -0.5f) + (current * 1.5f) - (following * 1.5f) + (nextFollowing * 0.5f);
+        let b = previous - (current * 2.5f) + (following * 2.0f) - (nextFollowing * 0.5f);
+        let c = (previous * -0.5f) + (following * 0.5f);
+        return (((a * fraction) + b) * fraction + c) * fraction + current;
+    }
+
     float32 dbToGain (float32 db)
     {
         return std::intrinsics::pow (10.0f, db / 20.0f);
@@ -1265,27 +1279,41 @@ processor SeqFx [[ main ]]
     float32<2> readTapeHistory (wrap<seqfx::laneCount> lane, float32 position)
     {
         let wrapped = std::intrinsics::wrap (position, float32 (tapeBufferSize));
-        let index0 = int32 (std::intrinsics::floor (wrapped));
-        let fraction = wrapped - float32 (index0);
-        let i0 = wrap<tapeBufferSize> (index0);
-        let i1 = wrap<tapeBufferSize> (index0 + 1);
-        return tapeHistory[lane, i0] + ((tapeHistory[lane, i1] - tapeHistory[lane, i0]) * fraction);
+        let currentIndex = int32 (std::intrinsics::floor (wrapped));
+        let fraction = wrapped - float32 (currentIndex);
+        return seqfx::cubicHermite4 (
+            tapeHistory[lane, wrap<tapeBufferSize> (currentIndex - 1)],
+            tapeHistory[lane, wrap<tapeBufferSize> (currentIndex)],
+            tapeHistory[lane, wrap<tapeBufferSize> (currentIndex + 1)],
+            tapeHistory[lane, wrap<tapeBufferSize> (currentIndex + 2)],
+            fraction
+        );
     }
 
     float32<2> readStutterCapture (wrap<seqfx::laneCount> lane, float32 position)
     {
         let wrapped = std::intrinsics::wrap (position, stutterReadLength[lane]);
-        let index0 = int32 (std::intrinsics::floor (wrapped));
-        let fraction = wrapped - float32 (index0);
-        var index1 = index0 + 1;
+        let currentIndex = int32 (std::intrinsics::floor (wrapped));
+        let fraction = wrapped - float32 (currentIndex);
         let readFrameLimit = seqfx::clampInt (int32 (stutterReadLength[lane]), 2, stutterReadFrames[lane]);
+        var previousIndex = currentIndex - 1;
+        var followingIndex = currentIndex + 1;
+        var nextFollowingIndex = currentIndex + 2;
 
-        if (index1 >= readFrameLimit)
-            index1 = 0;
+        if (previousIndex < 0)
+            previousIndex += readFrameLimit;
+        if (followingIndex >= readFrameLimit)
+            followingIndex -= readFrameLimit;
+        while (nextFollowingIndex >= readFrameLimit)
+            nextFollowingIndex -= readFrameLimit;
 
-        let i0 = wrap<stutterBufferSize> (index0);
-        let i1 = wrap<stutterBufferSize> (index1);
-        return stutterHistory[lane, i0] + ((stutterHistory[lane, i1] - stutterHistory[lane, i0]) * fraction);
+        return seqfx::cubicHermite4 (
+            stutterHistory[lane, wrap<stutterBufferSize> (previousIndex)],
+            stutterHistory[lane, wrap<stutterBufferSize> (currentIndex)],
+            stutterHistory[lane, wrap<stutterBufferSize> (followingIndex)],
+            stutterHistory[lane, wrap<stutterBufferSize> (nextFollowingIndex)],
+            fraction
+        );
     }
 
     float32<2> processFilter (wrap<seqfx::laneCount> lane, float32<2> stage)

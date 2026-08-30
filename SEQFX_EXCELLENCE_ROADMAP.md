@@ -16,6 +16,7 @@ Execution evidence:
 - Comb research and selection: `research/seqfx/comb-research.md` and
   `research/seqfx/comb-lab-decision.md`
 - Sparse state/domain checkpoint: `research/seqfx/state-v7-evidence.md`
+- Shared-buffer decision: `research/seqfx/buffer-architecture.md`
 
 ## 1. Outcome
 
