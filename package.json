@@ -51,6 +51,7 @@
     "test:seqfx:build-provenance": "npm run fx:build -- seqfx && node --test tests/test_seqfx_build_provenance.mjs",
     "test:seqfx:release-builder": "node --test tests/test_seqfx_release_builder.mjs",
     "test:seqfx:state-properties": "node --test --test-concurrency=1 tests/test_seqfx_state_properties.mjs tests/test_seqfx_block_properties.mjs",
+    "test:seqfx:source": "node scripts/qualify_seqfx_source.mjs",
     "fx:prod:build": "node fx/prod-effect.mjs build",
     "fx:prod:install": "node fx/prod-effect.mjs install",
     "test:fx:generated-latency": "node tests/tools/prove_generated_plugin_latency.mjs",
