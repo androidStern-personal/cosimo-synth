@@ -19,6 +19,7 @@
     --seqfx-effect-tape-stop: #98c1d9;
     --seqfx-effect-stutter: #b5d99c;
     --seqfx-effect-ring: #c7a6d8;
+    --seqfx-effect-talk-box: #e5a4b5;
 }
 
 * {
@@ -520,6 +521,10 @@ select {
 
 .seqfx-block[data-effect="7"] .seqfx-block-fill {
     background: var(--seqfx-effect-ring);
+}
+
+.seqfx-block[data-effect="9"] .seqfx-block-fill {
+    background: var(--seqfx-effect-talk-box);
 }
 
 .seqfx-block:hover .seqfx-block-fill {
@@ -1122,7 +1127,7 @@ select {
     display: flex;
     align-items: center;
     min-width: 0;
-    gap: 10px;
+    gap: 6px;
 }
 
 .seqfx-effect-picker__options button {
@@ -1158,6 +1163,10 @@ select {
 
 .seqfx-effect-picker__options button[data-effect-type="7"] {
     --seqfx-effect-icon-active: var(--seqfx-effect-ring);
+}
+
+.seqfx-effect-picker__options button[data-effect-type="9"] {
+    --seqfx-effect-icon-active: var(--seqfx-effect-talk-box);
 }
 
 .seqfx-effect-picker__options button:hover,

@@ -62,6 +62,11 @@ import {
 } from "./seqfx-state";
 import { formatStutterShapeLabel } from "./stutter-envelope";
 import {
+    TALK_BOX_VOWELS,
+    formatTalkBoxVowelPair,
+    resolveTalkBoxFormants,
+} from "./talk-box-contract";
+import {
     TAPE_STOP_MAX_CATCHUP_PERCENT,
     TAPE_STOP_MAX_CURVE,
     TAPE_STOP_MAX_STOP_POINT_PERCENT,
@@ -221,6 +226,7 @@ const EFFECT_OPTIONS = [
     SEQFX_EFFECT_TYPES.tapeStop,
     SEQFX_EFFECT_TYPES.stutter,
     SEQFX_EFFECT_TYPES.ring,
+    SEQFX_EFFECT_TYPES.talkBox,
 ] as const;
 
 function defaultEffectTypeForChain(chain: number) {
@@ -349,6 +355,8 @@ function SeqFxEffectIconTexture({ id, viewBoxSize }: { id: string; viewBoxSize: 
 
 const TAPE_STOP_ICON_PATH =
     "M3 5h18a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5h-3.5l-.55-2.45A1.4 1.4 0 0 0 15.59 15.5H8.41a1.4 1.4 0 0 0-1.36 1.05L6.5 19H3a1.5 1.5 0 0 1-1.5-1.5v-11A1.5 1.5 0 0 1 3 5Zm5 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z";
+const TALK_BOX_ICON_PATH =
+    "M55.618 178.111l75.645-94.377s.03-15.79 12.989-26.864c15.797-13.498 40.626-11.241 53.643 3.201 13.016 14.443 16.545 38.02-1.25 54.93-11.078 10.526-23.552 10.425-23.552 10.425l-94.71 75.646-9.344-9.14-17.266 16.088s-1.429 1.188-2.844-.578c-1.415-1.765-.71-3.282-.71-3.282l17.039-16.203-9.64-9.846zm17.729-1.144l5.687 5.484 75.162-59.15s-8.01-4.416-12.813-9.469c-4.804-5.053-7.58-11.981-7.58-11.981l-60.456 75.116zm75.827-105.668s-13.299 18.34 2.398 33.329c15.698 14.99 33.564 2.4 33.564 2.4s-16.071-3.727-24.79-12.39c-8.72-8.662-11.172-23.34-11.172-23.34zm5.393-4.513s3.702 14.109 12.601 23.073c8.899 8.965 22.874 12.662 22.874 12.662s12.885-19.52-3.271-34.318c-16.157-14.798-32.204-1.417-32.204-1.417z";
 
 // Effect picker SVGs are local silhouettes matched to the riso cell palette.
 function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
@@ -430,6 +438,19 @@ function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
                         fill={textureFill}
                         fillRule="evenodd"
                     />
+                </svg>
+            );
+        case SEQFX_EFFECT_TYPES.talkBox:
+            return (
+                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
+                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
+                    <path
+                        d={TALK_BOX_ICON_PATH}
+                        data-role="seqfx-effect-icon-fill"
+                        fill="currentColor"
+                        fillRule="evenodd"
+                    />
+                    <path d={TALK_BOX_ICON_PATH} fill={textureFill} fillRule="evenodd" />
                 </svg>
             );
         default:
@@ -889,6 +910,15 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 5, label: "Bias", min: -1, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Moves ring modulation toward positive or inverted dry signal." },
         { index: 6, label: "Rectify", min: -1, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Morphs the carrier toward positive or negative full-wave rectification." },
     ],
+    [SEQFX_EFFECT_TYPES.talkBox]: [
+        { index: 0, label: "From", min: 0, max: 4, step: 1, kind: "select", options: [...TALK_BOX_VOWELS], hint: "Starting vowel; latched when the block triggers." },
+        { index: 1, label: "To", min: 0, max: 4, step: 1, kind: "select", options: [...TALK_BOX_VOWELS], hint: "Destination vowel; latched when the block triggers." },
+        { index: 2, label: "Morph", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Moves both formants between the selected vowels on a perceptual frequency scale." },
+        { index: 3, label: "Resonance", min: 1, max: 20, step: 0.01, amountKind: "linear", hint: "Controls the strength and width of both vocal resonances." },
+        { index: 4, label: "Lows", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Restores source signal below the formants." },
+        { index: 5, label: "Highs", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Restores source brightness above the formants." },
+        { index: 6, label: "Drive", min: 0, max: 12, step: 0.1, amountKind: "db", hint: "Adds bounded excitation before the formant filters." },
+    ],
 };
 
 const FILTER_PARAM_MODE = 0;
@@ -924,6 +954,9 @@ const STUTTER_PARAM_SHAPE = 2;
 const STUTTER_PARAM_GATE = 3;
 const RING_PARAM_FREQUENCY = 0;
 const RING_PARAM_WAVEFORM = 1;
+const TALK_BOX_PARAM_FROM_VOWEL = 0;
+const TALK_BOX_PARAM_TO_VOWEL = 1;
+const TALK_BOX_PARAM_MORPH = 2;
 
 type SeqFxBlockVisualSize = "single" | "medium" | "wide";
 
@@ -1343,6 +1376,68 @@ function SeqFxRingBlockGlyph({
     );
 }
 
+function talkBoxRisoPath(firstHz: number, secondHz: number, resonance: number, width: number) {
+    const firstX = cutoffToRisoX(firstHz, width);
+    const secondX = cutoffToRisoX(secondHz, width);
+    const q = clampNumber(Number(resonance), 1, 20);
+    const peakWidth = Math.max(1.25, width * (0.12 - (0.075 * ((q - 1) / 19))));
+    const points = Array.from({ length: 65 }, (_unused, index) => {
+        const x = (index / 64) * width;
+        const firstPeak = 1 / (1 + (((x - firstX) / peakWidth) ** 2));
+        const secondPeak = 1 / (1 + (((x - secondX) / peakWidth) ** 2));
+        const response = Math.min(1, (firstPeak * 0.88) + secondPeak);
+        return `${index === 0 ? "M" : "L"}${roundedPathValue(x)} ${roundedPathValue(25 - (response * 21))}`;
+    });
+    return `${points.join(" ")} L${roundedPathValue(width)} 28 L0 28 Z`;
+}
+
+function SeqFxTalkBoxBlockGlyph({
+    params,
+    size,
+    width,
+}: {
+    params: number[];
+    size: SeqFxBlockVisualSize;
+    width: number;
+}) {
+    const fromVowel = Number(params[TALK_BOX_PARAM_FROM_VOWEL] ?? 0);
+    const toVowel = Number(params[TALK_BOX_PARAM_TO_VOWEL] ?? 3);
+    const morph = Number(params[TALK_BOX_PARAM_MORPH] ?? 0);
+    const resonance = Number(params[3] ?? 6);
+    const formants = resolveTalkBoxFormants(fromVowel, toVowel, morph);
+
+    return (
+        <>
+            <svg
+                aria-hidden="true"
+                className="seqfx-block-glyph"
+                data-effect="talk-box"
+                data-role="seqfx-block-glyph"
+                data-size={size}
+                focusable="false"
+                preserveAspectRatio="none"
+                viewBox={`0 0 ${width} 28`}
+            >
+                <path
+                    className="seqfx-block-glyph__ink"
+                    d={talkBoxRisoPath(formants.firstHz, formants.secondHz, resonance, width)}
+                    data-role="seqfx-block-glyph-ink"
+                />
+            </svg>
+            {size !== "single" ? (
+                <span className="seqfx-block-glyph-label" data-role="seqfx-block-glyph-label">
+                    {formatTalkBoxVowelPair(fromVowel, toVowel)}
+                </span>
+            ) : null}
+            {size === "wide" ? (
+                <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
+                    {Math.round(formants.firstHz)} / {Math.round(formants.secondHz)} Hz
+                </span>
+            ) : null}
+        </>
+    );
+}
+
 export function SeqFxBlockGlyph({
     effectType,
     params,
@@ -1366,6 +1461,8 @@ export function SeqFxBlockGlyph({
             return <SeqFxStutterBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.ring:
             return <SeqFxRingBlockGlyph params={params} size={size} width={width} />;
+        case SEQFX_EFFECT_TYPES.talkBox:
+            return <SeqFxTalkBoxBlockGlyph params={params} size={size} width={width} />;
         default:
             return null;
     }

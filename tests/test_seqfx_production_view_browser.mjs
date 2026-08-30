@@ -673,7 +673,7 @@ test("SeqFX production shadow-root host exposes the shared editor token palette"
     }
 });
 
-test("SeqFX packaged shadow-root flow renders the selected crusher stutter and ring inspectors", async () => {
+test("SeqFX packaged shadow-root flow renders the selected crusher stutter ring and talk box inspectors", async () => {
     const page = await browser.newPage();
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error));
@@ -846,6 +846,25 @@ test("SeqFX packaged shadow-root flow renders the selected crusher stutter and r
             scrollWidth: node.scrollWidth,
         }));
         assert.ok(ringInspectorBounds.scrollWidth <= ringInspectorBounds.clientWidth + 1);
+
+        await page.getByRole("button", { name: "Talk Box", exact: true }).click();
+        await page.getByRole("button", { name: "Chain 4 Talk Box block 1", exact: true }).waitFor();
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 5);
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="0"]').count(), 0);
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="1"]').count(), 0);
+        await page.locator('[data-role="seqfx-mod-toggle"]').click();
+        assert.equal(await page.locator('[data-role="seqfx-param"]').count(), 7);
+        assert.deepEqual(
+            await page.locator('[data-role="seqfx-param"][data-param="0"] option').evaluateAll((options) => options.map((option) => option.textContent)),
+            ["A", "E", "I", "O", "U"],
+        );
+        await page.locator('[data-role="seqfx-param"][data-param="2"]').fill("0.5");
+        assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="talk-box"] [data-role="seqfx-block-glyph-ink"]').getAttribute("d"));
+        const talkBoxInspectorBounds = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => ({
+            clientWidth: node.clientWidth,
+            scrollWidth: node.scrollWidth,
+        }));
+        assert.ok(talkBoxInspectorBounds.scrollWidth <= talkBoxInspectorBounds.clientWidth + 1);
 
         assert.deepEqual(pageErrors.map((error) => error.message), []);
     } finally {

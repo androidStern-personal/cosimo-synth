@@ -197,6 +197,24 @@ namespace seqfx
         return clampFloat (shaped, -2.0f, 2.0f);
     }
 
+    float32 talkBoxFormant1Hz (int32 vowel)
+    {
+        if (vowel == 1) return 530.0f;
+        if (vowel == 2) return 270.0f;
+        if (vowel == 3) return 570.0f;
+        if (vowel == 4) return 300.0f;
+        return 730.0f;
+    }
+
+    float32 talkBoxFormant2Hz (int32 vowel)
+    {
+        if (vowel == 1) return 1840.0f;
+        if (vowel == 2) return 2290.0f;
+        if (vowel == 3) return 840.0f;
+        if (vowel == 4) return 870.0f;
+        return 1090.0f;
+    }
+
     float32 auxRawBump (float32 phase, float32 shape)
     {
         let x = clampFloat (phase, 0.0f, 1.0f);
@@ -564,6 +582,20 @@ processor SeqFx [[ main ]]
     float32<2>[seqfx::laneCount] ringNoiseState;
     std::random::RNG[seqfx::laneCount] ringNoiseRng;
 
+    bool[seqfx::laneCount] talkBoxActive;
+    int32[seqfx::laneCount] talkBoxFromVowel;
+    int32[seqfx::laneCount] talkBoxToVowel;
+    float32[seqfx::laneCount] talkBoxMorph;
+    float32[seqfx::laneCount] talkBoxResonance;
+    float32[seqfx::laneCount] talkBoxLows;
+    float32[seqfx::laneCount] talkBoxHighs;
+    float32[seqfx::laneCount] talkBoxDriveDb;
+    float32[seqfx::laneCount] talkBoxMixCurrent;
+    float32[seqfx::laneCount] talkBoxMixTarget;
+    std::filters::simper::Implementation[seqfx::laneCount, 2, 2] talkBoxFormantStates;
+    float32<2>[seqfx::laneCount] talkBoxLowState;
+    float32<2>[seqfx::laneCount] talkBoxHighLowState;
+
     bool[seqfx::laneCount] tapeLaneActive;
     float32[seqfx::laneCount] tapeMixCurrent;
     float32[seqfx::laneCount] tapeMixTarget;
@@ -619,6 +651,11 @@ processor SeqFx [[ main ]]
             ringRateHz[lane] = 0.5f;
             ringSpread[lane] = 0.08f;
             ringNoiseRng[lane].seed (9109L + int64 (int32 (lane)) * 1613L);
+
+            talkBoxToVowel[lane] = 3;
+            talkBoxResonance[lane] = 6.0f;
+            talkBoxLows[lane] = 0.3f;
+            talkBoxHighs[lane] = 0.15f;
 
             for (wrap<seqfx::tapeVoiceCount> voice)
                 tapeVoiceRestartAge[lane, voice] = seqfx::transitionCrossfadeFrames;
@@ -1125,9 +1162,16 @@ processor SeqFx [[ main ]]
             ringNoiseState[lane] = float32<2> (0.0f);
             ringNoiseRng[lane].seed (9109L + int64 (int32 (lane)) * 1613L);
 
+            for (wrap<2> formant)
+                for (wrap<2> channel)
+                    talkBoxFormantStates[lane, formant, channel].reset();
+            talkBoxLowState[lane] = float32<2> (0.0f);
+            talkBoxHighLowState[lane] = float32<2> (0.0f);
+
             filterActive[lane] = false;
             crusherActive[lane] = false;
             ringActive[lane] = false;
+            talkBoxActive[lane] = false;
             tapeLaneActive[lane] = false;
             stutterLaneActive[lane] = false;
             chainPreviousEffectType[lane] = chainEffectType[lane];
@@ -1410,6 +1454,7 @@ processor SeqFx [[ main ]]
         let wasFilterActive = filterActive[lane];
         let wasCrusherActive = crusherActive[lane];
         let wasRingActive = ringActive[lane];
+        let wasTalkBoxActive = talkBoxActive[lane];
         let wasTapeActive = tapeLaneActive[lane];
         let wasStutterActive = stutterLaneActive[lane];
 
@@ -1418,12 +1463,14 @@ processor SeqFx [[ main ]]
         filterActive[lane] = effectType == seqfx::effectFilter;
         crusherActive[lane] = effectType == seqfx::effectCrusher;
         ringActive[lane] = effectType == seqfx::effectRing;
+        talkBoxActive[lane] = effectType == seqfx::effectTalkBox;
         tapeLaneActive[lane] = effectType == seqfx::effectTapeStop;
         stutterLaneActive[lane] = effectType == seqfx::effectStutter;
 
         filterMixTarget[lane] = filterActive[lane] ? targetMix : 0.0f;
         crusherMixTarget[lane] = crusherActive[lane] ? targetMix : 0.0f;
         ringMixTarget[lane] = ringActive[lane] ? targetMix : 0.0f;
+        talkBoxMixTarget[lane] = talkBoxActive[lane] ? targetMix : 0.0f;
         tapeMixTarget[lane] = tapeLaneActive[lane] ? targetMix : 0.0f;
         stutterMixTarget[lane] = stutterLaneActive[lane] ? targetMix : 0.0f;
 
@@ -1449,6 +1496,9 @@ processor SeqFx [[ main ]]
 
         if (ringActive[lane])
             latchRingStep (lane, wasRingActive);
+
+        if (talkBoxActive[lane])
+            latchTalkBoxStep (lane, wasTalkBoxActive);
 
         if (tapeLaneActive[lane])
             latchTapeStep (lane, wasTapeActive);
@@ -1551,6 +1601,24 @@ processor SeqFx [[ main ]]
         ringSpread[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 1.0f);
         ringBias[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 5], -1.0f, 1.0f);
         ringRectify[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 6], -1.0f, 1.0f);
+    }
+
+    void latchTalkBoxStep (wrap<seqfx::laneCount> lane, bool wasActive)
+    {
+        let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
+
+        if (wasActive && ! triggerSteps[lane, currentStepIndex] && ! relatchingFromPatternUpload)
+            return;
+
+        let blockStart = blockStartStep (lane, currentStep);
+        let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        talkBoxFromVowel[lane] = snapValue (stepParams[lane, blockStartIndex, 0], 0, 4);
+        talkBoxToVowel[lane] = snapValue (stepParams[lane, blockStartIndex, 1], 0, 4);
+        talkBoxMorph[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 0.0f, 1.0f);
+        talkBoxResonance[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 1.0f, 20.0f);
+        talkBoxLows[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 1.0f);
+        talkBoxHighs[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 5], 0.0f, 1.0f);
+        talkBoxDriveDb[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 6], 0.0f, 12.0f);
     }
 
     void latchStutterStep (wrap<seqfx::laneCount> lane, bool wasActive)
@@ -2180,6 +2248,84 @@ processor SeqFx [[ main ]]
         return stage + ((ringed - stage) * ringMixCurrent[lane]);
     }
 
+    float32<2> processTalkBox (wrap<seqfx::laneCount> lane, float32<2> stage)
+    {
+        talkBoxMixCurrent[lane] = seqfx::moveTowards (
+            talkBoxMixCurrent[lane],
+            talkBoxMixTarget[lane],
+            1.0f / seqfx::transitionCrossfadeFrames
+        );
+
+        let currentMorph = seqfx::clampFloat (auxParamValue (lane, 2, talkBoxMorph[lane]), 0.0f, 1.0f);
+        let currentQ = auxLogParamValue (lane, 3, talkBoxResonance[lane], 1.0f, 20.0f);
+        let currentLows = seqfx::clampFloat (auxParamValue (lane, 4, talkBoxLows[lane]), 0.0f, 1.0f);
+        let currentHighs = seqfx::clampFloat (auxParamValue (lane, 5, talkBoxHighs[lane]), 0.0f, 1.0f);
+        let currentDriveDb = seqfx::clampFloat (auxParamValue (lane, 6, talkBoxDriveDb[lane]), 0.0f, 12.0f);
+        let firstFormantHz = seqfx::logLerpHz (
+            seqfx::talkBoxFormant1Hz (talkBoxFromVowel[lane]),
+            seqfx::talkBoxFormant1Hz (talkBoxToVowel[lane]),
+            currentMorph
+        );
+        let secondFormantHz = seqfx::logLerpHz (
+            seqfx::talkBoxFormant2Hz (talkBoxFromVowel[lane]),
+            seqfx::talkBoxFormant2Hz (talkBoxToVowel[lane]),
+            currentMorph
+        );
+        let driveAmount = currentDriveDb / 12.0f;
+        let driveGain = seqfx::dbToGain (currentDriveDb);
+        let amplified = stage * driveGain;
+        let driven = float32<2> (
+            amplified[0] / (1.0f + (std::intrinsics::abs (amplified[0]) * driveAmount * 0.35f)),
+            amplified[1] / (1.0f + (std::intrinsics::abs (amplified[1]) * driveAmount * 0.35f))
+        );
+
+        for (wrap<2> channel)
+        {
+            talkBoxFormantStates[lane, 0, channel].setMode (std::filters::simper::Mode::bandPass);
+            talkBoxFormantStates[lane, 1, channel].setMode (std::filters::simper::Mode::bandPass);
+            talkBoxFormantStates[lane, 0, channel].setFrequency (
+                processor.frequency,
+                firstFormantHz,
+                currentQ,
+                0.0f
+            );
+            talkBoxFormantStates[lane, 1, channel].setFrequency (
+                processor.frequency,
+                secondFormantHz,
+                currentQ,
+                0.0f
+            );
+        }
+
+        let firstFormant = float32<2> (
+            talkBoxFormantStates[lane, 0, 0].process (driven[0]),
+            talkBoxFormantStates[lane, 0, 1].process (driven[1])
+        );
+        let secondFormant = float32<2> (
+            talkBoxFormantStates[lane, 1, 0].process (driven[0]),
+            talkBoxFormantStates[lane, 1, 1].process (driven[1])
+        );
+        let lowCoefficient = 1.0f - std::intrinsics::exp (
+            (-2.0f * seqfx::pi * 180.0f) / float32 (processor.frequency)
+        );
+        let highCoefficient = 1.0f - std::intrinsics::exp (
+            (-2.0f * seqfx::pi * 3000.0f) / float32 (processor.frequency)
+        );
+        talkBoxLowState[lane] += (driven - talkBoxLowState[lane]) * lowCoefficient;
+        talkBoxHighLowState[lane] += (driven - talkBoxHighLowState[lane]) * highCoefficient;
+        let highBand = driven - talkBoxHighLowState[lane];
+        let formantGain = 0.85f + (currentQ * 0.04f);
+        var voiced = ((firstFormant + secondFormant) * formantGain)
+            + (talkBoxLowState[lane] * currentLows)
+            + (highBand * currentHighs);
+        voiced = float32<2> (
+            seqfx::clampFloat (voiced[0], -4.0f, 4.0f),
+            seqfx::clampFloat (voiced[1], -4.0f, 4.0f)
+        );
+
+        return stage + ((voiced - stage) * talkBoxMixCurrent[lane]);
+    }
+
     float32<2> processTapeCharacter (
         wrap<seqfx::laneCount> lane,
         wrap<seqfx::tapeVoiceCount> voice,
@@ -2398,6 +2544,7 @@ processor SeqFx [[ main ]]
         stage = processFilter (lane, stage);
         stage = processCrusher (lane, stage);
         stage = processRing (lane, stage);
+        stage = processTalkBox (lane, stage);
 
         writeTapeHistory (lane, stage);
         stage = processTapeStop (lane, stage);

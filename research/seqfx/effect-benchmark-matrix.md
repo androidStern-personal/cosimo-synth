@@ -177,6 +177,11 @@ SeqFX's precise Spread and Motion depths are engineering inferences frozen in
 - Lows / Highs: 0–100% passthrough.
 - Drive: 0–12 dB.
 
+The vowel endpoints use Peterson-Barney adult-male F1/F2 means and are frozen
+in `talk-box-decision.md`. SeqFX's 180 Hz/3 kHz passthrough crossovers, formant
+make-up gain, and saturation are recorded engineering choices rather than
+claims about Koala's private implementation.
+
 ### Vibro (ID 10)
 
 - Rate: synced divisions or 0.05–12 Hz.

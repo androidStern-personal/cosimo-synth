@@ -8,6 +8,7 @@ import {
     STUTTER_SPEED_MAX,
     STUTTER_SPEED_MIN,
 } from "./stutter-envelope";
+import { TALK_BOX_VOWELS } from "./talk-box-contract";
 
 export const SEQFX_PARAM_COUNT = 8;
 
@@ -260,8 +261,8 @@ const definitions = [
         fontaudioIcon: "fad-microphone",
         lifecycle: "gated",
         parameters: [
-            parameter("fromVowel", "From", 0, 4, 0, 1, { latch: "trigger", auxEligible: false, integer: true, options: ["A", "E", "I", "O", "U"] }),
-            parameter("toVowel", "To", 0, 4, 3, 1, { latch: "trigger", auxEligible: false, integer: true, options: ["A", "E", "I", "O", "U"] }),
+            parameter("fromVowel", "From", 0, 4, 0, 1, { latch: "trigger", auxEligible: false, integer: true, options: TALK_BOX_VOWELS }),
+            parameter("toVowel", "To", 0, 4, 3, 1, { latch: "trigger", auxEligible: false, integer: true, options: TALK_BOX_VOWELS }),
             parameter("morph", "Morph", 0, 1, 0, 0.01, { unit: "%" }),
             parameter("resonance", "Resonance", 1, 20, 6, 0.01, { unit: "Q", scale: "log" }),
             parameter("lows", "Lows", 0, 1, 0.3, 0.01, { unit: "%" }),

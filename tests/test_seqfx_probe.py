@@ -24,6 +24,7 @@ EFFECT_CRUSHER = 2
 EFFECT_TAPE = 3
 EFFECT_STUTTER = 4
 EFFECT_RING = 7
+EFFECT_TALK_BOX = 9
 LIFECYCLE_IDLE = 0
 LIFECYCLE_ENTERING = 1
 LIFECYCLE_ACTIVE = 2
@@ -2666,3 +2667,154 @@ def test_ring_spread_uses_opposite_small_carrier_detunes(
     assert _tone_amplitude(analysis[:, 1], right_lower) > 0.27
     assert _tone_amplitude(analysis[:, 0], left_lower) > _tone_amplitude(analysis[:, 0], right_lower) * 4
     assert _tone_amplitude(analysis[:, 1], right_lower) > _tone_amplitude(analysis[:, 1], left_lower) * 4
+
+
+def test_talk_box_a_vowel_emphasizes_its_two_documented_formants(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    def gain_at(frequency: float) -> float:
+        upload = _empty_upload()
+        for step in range(4):
+            _activate_step(
+                upload,
+                lane=LANE_FILTER,
+                step=step,
+                trigger=(step == 0),
+                effect_type=EFFECT_TALK_BOX,
+                params=[0.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0],
+            )
+        input_audio = _sine(STEP_FRAMES * 4, frequency, amplitude=0.2)
+        output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+        return _rms(output[1_000:, 0]) / _rms(input_audio[1_000:, 0])
+
+    first_formant_gain = gain_at(730.0)
+    second_formant_gain = gain_at(1_090.0)
+    lower_valley_gain = gain_at(400.0)
+    upper_valley_gain = gain_at(1_700.0)
+
+    assert first_formant_gain > lower_valley_gain * 1.8
+    assert second_formant_gain > upper_valley_gain * 1.8
+
+
+@pytest.mark.parametrize(
+    ("vowel", "expected_formants"),
+    [
+        (0.0, (730.0, 1_090.0)),
+        (1.0, (530.0, 1_840.0)),
+        (2.0, (270.0, 2_290.0)),
+        (3.0, (570.0, 840.0)),
+        (4.0, (300.0, 870.0)),
+    ],
+)
+def test_talk_box_vowel_peaks_match_the_documented_formant_table(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    vowel: float,
+    expected_formants: tuple[float, float],
+) -> None:
+    upload = _empty_upload()
+    for step in range(4):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_TALK_BOX,
+            params=[vowel, vowel, 0.0, 12.0, 0.0, 0.0, 0.0],
+        )
+
+    input_audio = np.zeros((STEP_FRAMES * 4, 2), dtype=np.float32)
+    input_audio[512, :] = 0.2
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+    spectrum = np.abs(np.fft.rfft(output[512:, 0], n=65_536))
+    frequencies = np.fft.rfftfreq(65_536, 1.0 / SAMPLE_RATE)
+
+    for expected in expected_formants:
+        local = np.flatnonzero(np.abs(frequencies - expected) <= 75.0)
+        peak_frequency = float(frequencies[local[np.argmax(spectrum[local])]])
+        assert abs(peak_frequency - expected) < 12.0
+
+
+def test_talk_box_morph_interpolates_formants_in_log_frequency(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in range(4):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_TALK_BOX,
+            params=[0.0, 2.0, 0.5, 14.0, 0.0, 0.0, 0.0],
+        )
+
+    input_audio = np.zeros((STEP_FRAMES * 4, 2), dtype=np.float32)
+    input_audio[512, :] = 0.2
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+    spectrum = np.abs(np.fft.rfft(output[512:, 0], n=65_536))
+    frequencies = np.fft.rfftfreq(65_536, 1.0 / SAMPLE_RATE)
+
+    for expected in (np.sqrt(730.0 * 270.0), np.sqrt(1_090.0 * 2_290.0)):
+        local = np.flatnonzero(np.abs(frequencies - expected) <= 75.0)
+        peak_frequency = float(frequencies[local[np.argmax(spectrum[local])]])
+        assert abs(peak_frequency - expected) < 12.0
+
+
+@pytest.mark.parametrize(
+    ("frequency", "parameter_index"),
+    [(80.0, 4), (8_000.0, 5)],
+)
+def test_talk_box_low_and_high_passthrough_controls_restore_extreme_bands(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    frequency: float,
+    parameter_index: int,
+) -> None:
+    def rendered_rms(amount: float) -> float:
+        params = [0.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0]
+        params[parameter_index] = amount
+        upload = _empty_upload()
+        for step in range(3):
+            _activate_step(
+                upload,
+                lane=LANE_FILTER,
+                step=step,
+                trigger=(step == 0),
+                effect_type=EFFECT_TALK_BOX,
+                params=params,
+            )
+        input_audio = _sine(STEP_FRAMES * 3, frequency, amplitude=0.2)
+        output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+        return _rms(output[1_000:, 0])
+
+    muted = rendered_rms(0.0)
+    restored = rendered_rms(1.0)
+    assert restored > muted * 2.5
+
+
+def test_talk_box_extreme_resonance_and_drive_stay_finite_and_bounded(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    baseline_upload = _empty_upload()
+    for step in range(4):
+        for target_upload, trigger in ((upload, True), (baseline_upload, step == 0)):
+            _activate_step(
+                target_upload,
+                lane=LANE_FILTER,
+                step=step,
+                trigger=trigger,
+                effect_type=EFFECT_TALK_BOX,
+                params=[2.0, 4.0, 0.65, 20.0, 1.0, 1.0, 12.0],
+            )
+    input_audio = _complex_signal(STEP_FRAMES * 4) * 1.8
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+    baseline = _render(generated_runtime, tmp_path, input_audio, _base_schedule(baseline_upload))
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
+    assert float(np.max(np.abs(output - baseline))) < 1.0e-6
