@@ -278,10 +278,19 @@ const ENVELOPE_TIME_MIN_SECONDS = 0.001;
 const ENVELOPE_TIME_MAX_SECONDS = 10;
 const AMP_ENVELOPE_EDITOR_SLOT_INDEX = MODULATION_ENV_SLOT_COUNT;
 const ENVELOPE_EDITOR_SLOT_COUNT = MODULATION_ENV_SLOT_COUNT + 1;
-const ENVELOPE_TIME_RESPONSE = 1.4;
-const ENVELOPE_NOTE_OFF_RATIO = 0.76;
-const ENVELOPE_ATTACK_REGION_RATIO = 0.30;
-const ENVELOPE_DECAY_REGION_RATIO = 0.28;
+// The envelope draws to time (Operator-style): attack, decay, and release
+// share the width in proportion to a sublinear warp of their actual times
+// (t^0.45 keeps a 1ms attack grabbable beside a 10s release), sustain is a
+// slim fixed column (it has no time dimension), and the whole envelope
+// always fills the plot. Because the layout renormalizes, horizontal drags
+// are relative in log-time: each pixel multiplies the current value by a
+// constant factor, so short times get proportionally fine control.
+const ENVELOPE_TIME_WARP = 0.45;
+const ENVELOPE_SUSTAIN_COLUMN_RATIO = 0.12;
+const ENVELOPE_SUSTAIN_COLUMN_MIN_PX = 24;
+const ENVELOPE_SUSTAIN_COLUMN_MAX_PX = 64;
+const ENVELOPE_PHASE_MIN_WIDTH_PX = 10;
+const ENVELOPE_DRAG_EFOLD_PX = 48;
 const ENVELOPE_PLOT_PADDING_PX = EDITOR_HIT_RADIUS_PX + 2;
 const ENVELOPE_MAX_PLOT_HEIGHT_TO_WIDTH_RATIO = 0.62;
 const ENVELOPE_HANDLE_INNER_RADIUS_PX = 3.5;
@@ -708,15 +717,26 @@ function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
 }
 
-function secondsToEnvelopeNormalized(seconds: number, minSeconds = ENVELOPE_TIME_MIN_SECONDS) {
-    const clampedSeconds = clamp(seconds, minSeconds, ENVELOPE_TIME_MAX_SECONDS);
-    const raw = Math.log(clampedSeconds / minSeconds) / Math.log(ENVELOPE_TIME_MAX_SECONDS / minSeconds);
-    return clamp(Math.pow(clamp(raw, 0, 1), ENVELOPE_TIME_RESPONSE), 0, 1);
+/** Width share of one time phase: a sublinear warp of its actual seconds. */
+function envelopeTimeShare(seconds: number, minSeconds = ENVELOPE_TIME_MIN_SECONDS) {
+    return Math.pow(
+        clamp(seconds, minSeconds, ENVELOPE_TIME_MAX_SECONDS),
+        ENVELOPE_TIME_WARP,
+    );
 }
 
-function normalizedToEnvelopeSeconds(normalized: number, minSeconds = ENVELOPE_TIME_MIN_SECONDS) {
-    const raw = Math.pow(clamp(normalized, 0, 1), 1 / ENVELOPE_TIME_RESPONSE);
-    return minSeconds * Math.pow(ENVELOPE_TIME_MAX_SECONDS / minSeconds, raw);
+/** Relative log-time drag: dx pixels multiply the anchored seconds. */
+function dragEnvelopeSeconds(
+    anchorSeconds: number,
+    deltaPx: number,
+    minSeconds = ENVELOPE_TIME_MIN_SECONDS,
+) {
+    const anchored = clamp(anchorSeconds, minSeconds, ENVELOPE_TIME_MAX_SECONDS);
+    return clamp(
+        anchored * Math.exp(deltaPx / ENVELOPE_DRAG_EFOLD_PX),
+        minSeconds,
+        ENVELOPE_TIME_MAX_SECONDS,
+    );
 }
 
 function envelopeReleaseMinimumSeconds(slotIndex: number): number {
@@ -749,17 +769,31 @@ function computeEnvelopeGeometry(
     );
     const plotTop = (surfaceHeight - plotHeight) * 0.5;
     const plotBottom = plotTop + plotHeight;
-    const attackRegionWidth = plotWidth * ENVELOPE_ATTACK_REGION_RATIO;
-    const decayRegionWidth = plotWidth * ENVELOPE_DECAY_REGION_RATIO;
-    const noteOffX = plotLeft + (plotWidth * ENVELOPE_NOTE_OFF_RATIO);
-    const releaseRegionWidth = plotRight - noteOffX;
-    const attackX = plotLeft + (secondsToEnvelopeNormalized(envelope.attackSeconds) * attackRegionWidth);
-    const decayRegionStart = plotLeft + attackRegionWidth;
-    const decayX = decayRegionStart + (secondsToEnvelopeNormalized(envelope.decaySeconds) * decayRegionWidth);
-    const sustainY = plotTop + ((1 - clamp(envelope.sustain, 0, 1)) * plotHeight);
-    const releaseX = noteOffX + (
-        secondsToEnvelopeNormalized(envelope.releaseSeconds, releaseMinimumSeconds) * releaseRegionWidth
+
+    // One shared time axis: A, D, and R widths are proportional to the
+    // warped times, sustain is a slim fixed column, and the envelope always
+    // fills the plot. Every phase keeps a minimum grabbable width.
+    const sustainWidth = Math.min(
+        clamp(plotWidth * ENVELOPE_SUSTAIN_COLUMN_RATIO, ENVELOPE_SUSTAIN_COLUMN_MIN_PX, ENVELOPE_SUSTAIN_COLUMN_MAX_PX),
+        plotWidth * 0.5,
     );
+    const timeWidth = Math.max(1, plotWidth - sustainWidth);
+    const attackShare = envelopeTimeShare(envelope.attackSeconds);
+    const decayShare = envelopeTimeShare(envelope.decaySeconds);
+    const releaseShare = envelopeTimeShare(envelope.releaseSeconds, releaseMinimumSeconds);
+    const totalShare = Math.max(1e-6, attackShare + decayShare + releaseShare);
+    const phaseMinWidth = Math.min(ENVELOPE_PHASE_MIN_WIDTH_PX, timeWidth / 3);
+    const flexibleWidth = Math.max(0, timeWidth - (phaseMinWidth * 3));
+    const attackRegionWidth = phaseMinWidth + (flexibleWidth * (attackShare / totalShare));
+    const decayRegionWidth = phaseMinWidth + (flexibleWidth * (decayShare / totalShare));
+    const releaseRegionWidth = phaseMinWidth + (flexibleWidth * (releaseShare / totalShare));
+
+    const attackX = plotLeft + attackRegionWidth;
+    const decayRegionStart = attackX;
+    const decayX = decayRegionStart + decayRegionWidth;
+    const noteOffX = decayX + sustainWidth;
+    const releaseX = noteOffX + releaseRegionWidth;
+    const sustainY = plotTop + ((1 - clamp(envelope.sustain, 0, 1)) * plotHeight);
 
     return {
         noteOffX,
@@ -795,6 +829,11 @@ type ActiveEnvelopeDrag = {
     classifier: RollingAxisState;
     lockedAxis: RollingAxis | null;
     lastValues: Record<EnvelopeEditableField, number>;
+    // Relative log-time drags anchor at the gesture start (or, for the
+    // decay/sustain handle, at the moment the horizontal axis locks) so the
+    // value never jumps to meet the pointer.
+    anchorClientX: number;
+    anchorSeconds: number;
 };
 
 type EnvelopeValueBubble = {
@@ -1927,27 +1966,20 @@ function DesktopEnvelopeEditor({
                 return;
             }
             drag.lockedAxis = classified.state.mode;
+            if (classified.state.mode === "horizontal") {
+                drag.anchorClientX = event.clientX;
+                drag.anchorSeconds = drag.lastValues.decaySeconds;
+            }
             const field = classified.state.mode === "horizontal" ? "decaySeconds" : "sustain";
             setActiveField(field);
             showValueBubble(field, drag.lastValues[field], event.clientX, event.clientY);
         }
 
-        const point = readStagePoint(event.clientX, event.clientY);
-        if (point === null) {
-            return;
-        }
-        const currentGeometry = geometryRef.current;
-
         if (drag.target === "attack") {
-            const normalized = clamp(
-                (point.x - currentGeometry.plotLeft) / Math.max(0.5, currentGeometry.attackRegionWidth),
-                0,
-                1,
-            );
             writeEnvelopeValue(
                 drag,
                 "attackSeconds",
-                normalizedToEnvelopeSeconds(normalized),
+                dragEnvelopeSeconds(drag.anchorSeconds, event.clientX - drag.anchorClientX),
                 event.clientX,
                 event.clientY,
             );
@@ -1955,15 +1987,14 @@ function DesktopEnvelopeEditor({
         }
 
         if (drag.target === "release") {
-            const normalizedRelease = clamp(
-                (point.x - currentGeometry.noteOffX) / Math.max(0.5, currentGeometry.releaseRegionWidth),
-                0,
-                1,
-            );
             writeEnvelopeValue(
                 drag,
                 "releaseSeconds",
-                normalizedToEnvelopeSeconds(normalizedRelease, releaseMinimumSecondsRef.current),
+                dragEnvelopeSeconds(
+                    drag.anchorSeconds,
+                    event.clientX - drag.anchorClientX,
+                    releaseMinimumSecondsRef.current,
+                ),
                 event.clientX,
                 event.clientY,
             );
@@ -1971,6 +2002,11 @@ function DesktopEnvelopeEditor({
         }
 
         if (drag.target === "sustain" || drag.lockedAxis === "vertical") {
+            const point = readStagePoint(event.clientX, event.clientY);
+            if (point === null) {
+                return;
+            }
+            const currentGeometry = geometryRef.current;
             const sustain = clamp(
                 1 - ((point.y - currentGeometry.plotTop) / Math.max(0.5, currentGeometry.plotHeight)),
                 0,
@@ -1980,15 +2016,10 @@ function DesktopEnvelopeEditor({
             return;
         }
 
-        const normalizedDecay = clamp(
-            (point.x - currentGeometry.decayRegionStart) / Math.max(0.5, currentGeometry.decayRegionWidth),
-            0,
-            1,
-        );
         writeEnvelopeValue(
             drag,
             "decaySeconds",
-            normalizedToEnvelopeSeconds(normalizedDecay),
+            dragEnvelopeSeconds(drag.anchorSeconds, event.clientX - drag.anchorClientX),
             event.clientX,
             event.clientY,
         );
@@ -2077,6 +2108,12 @@ function DesktopEnvelopeEditor({
                 sustain: envelope.sustain,
                 releaseSeconds: envelope.releaseSeconds,
             },
+            anchorClientX: event.clientX,
+            anchorSeconds: handleName === "attack"
+                ? envelope.attackSeconds
+                : handleName === "release"
+                    ? envelope.releaseSeconds
+                    : envelope.decaySeconds,
         };
         captureElement.addEventListener("lostpointercapture", handleCaptureLoss, { once: true });
         setActiveHandle(handleName);
