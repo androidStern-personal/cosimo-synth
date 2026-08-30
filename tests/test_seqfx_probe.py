@@ -2073,6 +2073,122 @@ def test_stutter_repeats_the_captured_slice(
     assert difference < reference * 0.12
 
 
+def test_stutter_retrigger_keeps_the_previous_loop_until_the_new_capture_is_ready(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in range(6):
+        _activate_step(
+            upload,
+            lane=LANE_STUTTER,
+            step=step,
+            trigger=(step in (0, 2, 3)),
+            params=[4.0, 1.0, 0.0, 1.0],
+        )
+
+    frames = STEP_FRAMES * 7
+    source = np.zeros((frames, 2), dtype=np.float32)
+    source[:1_500] = 0.5
+    source[STEP_FRAMES * 2 : (STEP_FRAMES * 2) + 750] = -0.5
+    source[STEP_FRAMES * 3 : (STEP_FRAMES * 3) + 2_250] = 0.25
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+
+    # Each retrigger starts a new first-slice capture. The previously completed
+    # loop must remain the audible bridge until that capture is ready, including
+    # when a third trigger arrives while the bounded voices are being reused.
+    assert float(np.mean(output[(STEP_FRAMES * 2) + 160 : (STEP_FRAMES * 2) + 650, 0])) > 0.4
+    assert float(np.mean(output[(STEP_FRAMES * 3) + 160 : (STEP_FRAMES * 3) + 650, 0])) < -0.4
+    assert _largest_boundary_jump(output[:, 0], 2) < 0.08
+    assert _largest_boundary_jump(output[:, 0], 3) < 0.08
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 0.55
+
+
+def test_stutter_block_exit_crossfades_to_dry_instead_of_dropping_the_capture(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_STUTTER,
+            step=step,
+            trigger=(step == 0),
+            params=[4.0, 1.0, 0.0, 1.0],
+        )
+
+    source = np.zeros((STEP_FRAMES * 4, 2), dtype=np.float32)
+    source[:1_500] = 0.5
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+
+    assert _rms(output[(STEP_FRAMES * 2) - 500 : (STEP_FRAMES * 2) - 100, 0]) > 0.4
+    assert _largest_boundary_jump(output[:, 0], 2) < 0.08
+    np.testing.assert_allclose(
+        output[(STEP_FRAMES * 2) + 192 :],
+        source[(STEP_FRAMES * 2) + 192 :],
+        atol=2.0e-5,
+        rtol=0.0,
+    )
+
+
+def test_stutter_authoritative_reset_discards_every_capture_voice(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in range(5):
+        _activate_step(
+            upload,
+            lane=LANE_STUTTER,
+            step=step,
+            trigger=(step == 0),
+            params=[4.0, 1.0, 0.0, 1.0],
+        )
+
+    source = np.zeros((STEP_FRAMES * 7, 2), dtype=np.float32)
+    source[:3_750] = 0.5
+    reset_frame = STEP_FRAMES * 2 + 400
+    schedule = _base_schedule(upload)
+    schedule[reset_frame] = [["event", "internalReset", 1]]
+    output = _render(generated_runtime, tmp_path, source, schedule)
+
+    assert _rms(output[STEP_FRAMES * 2 : reset_frame - 64, 0]) > 0.4
+    np.testing.assert_allclose(
+        output[reset_frame + 192 :],
+        source[reset_frame + 192 :],
+        atol=2.0e-5,
+        rtol=0.0,
+    )
+
+
+def test_stutter_two_voice_retriggers_remain_bounded_across_all_four_chains(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for lane in range(LANE_COUNT):
+        for step in range(6):
+            _activate_step(
+                upload,
+                lane=lane,
+                step=step,
+                trigger=(step in (0, 2, 3)),
+                effect_type=EFFECT_STUTTER,
+                params=[32.0, 2.0, 0.4375, 1.0],
+            )
+
+    source = _complex_signal(STEP_FRAMES * 7) * 0.25
+    started = perf_counter()
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+    elapsed = perf_counter() - started
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
+    assert elapsed < 2.0, f"four-chain two-voice Stutter render took {elapsed:.3f}s"
+
+
 def test_stutter_gate_shortens_each_repeated_cut(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,

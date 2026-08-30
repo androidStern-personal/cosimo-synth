@@ -24,6 +24,7 @@ namespace seqfx
     let auxRateModeTempo = 0;
     let auxRateModeSlice = 1;
     let maxStutterSeconds = 1.0f;
+    let stutterVoiceCount = 2;
     let pitchGrainVoiceCount = 2;
     let pitchJitterCentsMaximum = 35.0f;
     let pitchPositionJitterMaximum = 0.125f;
@@ -667,7 +668,11 @@ processor SeqFx [[ main ]]
     int32[seqfx::tapeCoarseBufferSize] tapeCoarseHistory1;
     int32[seqfx::tapeCoarseBufferSize] tapeCoarseHistory2;
     int32[seqfx::tapeCoarseBufferSize] tapeCoarseHistory3;
-    float32<2>[seqfx::laneCount, stutterBufferSize] stutterHistory;
+    // Keep each capture bank below Cmajor's flattened-array codegen limit.
+    // Together these are the two bounded Stutter voices selected by the
+    // buffer architecture probe.
+    float32<2>[seqfx::laneCount, stutterBufferSize] stutterHistory0;
+    float32<2>[seqfx::laneCount, stutterBufferSize] stutterHistory1;
     float32<2>[seqfx::laneCount, combBufferSize] combReferenceHistory;
     float32[seqfx::laneCount, seqfx::combModeCount, combBufferSize] combVectorHistory;
     float32<2>[seqfx::laneCount, vibroBufferSize] vibroHistory;
@@ -946,8 +951,6 @@ processor SeqFx [[ main ]]
     float32[seqfx::laneCount, seqfx::tapeVoiceCount] tapeVoiceRestartAge;
 
     bool[seqfx::laneCount] stutterLaneActive;
-    bool[seqfx::laneCount] stutterCapturing;
-    bool[seqfx::laneCount] stutterPlaying;
     float32[seqfx::laneCount] stutterMixCurrent;
     float32[seqfx::laneCount] stutterMixTarget;
     int32[seqfx::laneCount] stutterSliceCount;
@@ -955,10 +958,23 @@ processor SeqFx [[ main ]]
     float32[seqfx::laneCount] stutterShape;
     float32[seqfx::laneCount] stutterGate;
     float32[seqfx::laneCount] stutterBlockDurationFrames;
-    float32[seqfx::laneCount] stutterCaptureFrames;
     int32[seqfx::laneCount] stutterReadFrames;
-    float32[seqfx::laneCount] stutterReadLength;
-    float32[seqfx::laneCount] stutterPhaseFrames;
+    int32[seqfx::laneCount] stutterCurrentVoice;
+    int32[seqfx::laneCount] stutterGenerationCounter;
+    bool[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceCapturing;
+    bool[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoicePlaying;
+    int32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceGeneration;
+    float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceGainCurrent;
+    float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceGainTarget;
+    float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceBlockDurationFrames;
+    float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceCaptureFrames;
+    int32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceReadFrames;
+    float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceReadLength;
+    float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoicePhaseFrames;
+    int32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceSliceCount;
+    float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoicePlaybackSpeed;
+    float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceShape;
+    float32[seqfx::laneCount, seqfx::stutterVoiceCount] stutterVoiceGate;
 
     void init()
     {
@@ -1074,7 +1090,17 @@ processor SeqFx [[ main ]]
             stutterGate[lane] = 0.68f;
             stutterBlockDurationFrames[lane] = 1.0f;
             stutterReadFrames[lane] = 2;
-            stutterReadLength[lane] = 2.0f;
+            stutterCurrentVoice[lane] = 0;
+            for (wrap<seqfx::stutterVoiceCount> voice)
+            {
+                stutterVoiceBlockDurationFrames[lane, voice] = 1.0f;
+                stutterVoiceReadFrames[lane, voice] = 2;
+                stutterVoiceReadLength[lane, voice] = 2.0f;
+                stutterVoiceSliceCount[lane, voice] = 8;
+                stutterVoicePlaybackSpeed[lane, voice] = 1.0f;
+                stutterVoiceShape[lane, voice] = 0.55f;
+                stutterVoiceGate[lane, voice] = 0.68f;
+            }
 
             auxBlockStartStep[lane] = 0;
             auxAgeFrames[lane] = 0.0f;
@@ -1499,12 +1525,17 @@ processor SeqFx [[ main ]]
     {
         for (wrap<seqfx::laneCount> lane)
         {
-            stutterCapturing[lane] = false;
-            stutterPlaying[lane] = false;
             tapeMixTarget[lane] = 0.0f;
             stutterMixTarget[lane] = 0.0f;
             pitchMixTarget[lane] = 0.0f;
             reverseMixTarget[lane] = 0.0f;
+            for (wrap<seqfx::stutterVoiceCount> voice)
+            {
+                stutterVoiceCapturing[lane, voice] = false;
+                stutterVoicePlaying[lane, voice] = false;
+                stutterVoiceGainCurrent[lane, voice] = 0.0f;
+                stutterVoiceGainTarget[lane, voice] = 0.0f;
+            }
             for (wrap<seqfx::reverseVoiceCount> voice)
                 reverseVoiceGainTarget[lane, voice] = 0.0f;
         }
@@ -1547,10 +1578,25 @@ processor SeqFx [[ main ]]
                 tapeVoiceRestartAge[lane, voice] = seqfx::transitionCrossfadeFrames;
             }
 
-            stutterCapturing[lane] = false;
-            stutterPlaying[lane] = false;
-            stutterCaptureFrames[lane] = 0.0f;
-            stutterPhaseFrames[lane] = 0.0f;
+            stutterCurrentVoice[lane] = 0;
+            stutterGenerationCounter[lane] = 0;
+            for (wrap<seqfx::stutterVoiceCount> voice)
+            {
+                stutterVoiceCapturing[lane, voice] = false;
+                stutterVoicePlaying[lane, voice] = false;
+                stutterVoiceGeneration[lane, voice] = 0;
+                stutterVoiceGainCurrent[lane, voice] = 0.0f;
+                stutterVoiceGainTarget[lane, voice] = 0.0f;
+                stutterVoiceBlockDurationFrames[lane, voice] = 1.0f;
+                stutterVoiceCaptureFrames[lane, voice] = 0.0f;
+                stutterVoiceReadFrames[lane, voice] = 2;
+                stutterVoiceReadLength[lane, voice] = 2.0f;
+                stutterVoicePhaseFrames[lane, voice] = 0.0f;
+                stutterVoiceSliceCount[lane, voice] = 8;
+                stutterVoicePlaybackSpeed[lane, voice] = 1.0f;
+                stutterVoiceShape[lane, voice] = 0.55f;
+                stutterVoiceGate[lane, voice] = 0.68f;
+            }
 
             filterStates[lane, 0].reset();
             filterStates[lane, 1].reset();
@@ -1997,8 +2043,11 @@ processor SeqFx [[ main ]]
 
         if (! stutterLaneActive[lane])
         {
-            stutterCapturing[lane] = false;
-            stutterPlaying[lane] = false;
+            for (wrap<seqfx::stutterVoiceCount> voice)
+            {
+                stutterVoiceCapturing[lane, voice] = false;
+                stutterVoiceGainTarget[lane, voice] = 0.0f;
+            }
         }
 
         if (filterActive[lane])
@@ -2640,16 +2689,65 @@ processor SeqFx [[ main ]]
         );
     }
 
+    int32 allocateStutterVoice (wrap<seqfx::laneCount> lane)
+    {
+        // A not-yet-audible pending capture is the safest slot to restart when
+        // triggers arrive faster than one slice can be recorded.
+        for (wrap<seqfx::stutterVoiceCount> voice)
+        {
+            if (stutterVoiceCapturing[lane, voice])
+                return int32 (voice);
+        }
+
+        for (wrap<seqfx::stutterVoiceCount> voice)
+        {
+            if (! stutterVoicePlaying[lane, voice])
+                return int32 (voice);
+        }
+
+        var selected = 0;
+        for (int32 voice = 1; voice < seqfx::stutterVoiceCount; ++voice)
+        {
+            let selectedVoice = wrap<seqfx::stutterVoiceCount> (selected);
+            let candidateVoice = wrap<seqfx::stutterVoiceCount> (voice);
+            let quieter = stutterVoiceGainCurrent[lane, candidateVoice]
+                < stutterVoiceGainCurrent[lane, selectedVoice];
+            let sameGainAndOlder = stutterVoiceGainCurrent[lane, candidateVoice]
+                    == stutterVoiceGainCurrent[lane, selectedVoice]
+                && stutterVoiceGeneration[lane, candidateVoice]
+                    < stutterVoiceGeneration[lane, selectedVoice];
+
+            if (quieter || sameGainAndOlder)
+                selected = voice;
+        }
+
+        return selected;
+    }
+
     void startStutter (wrap<seqfx::laneCount> lane, float32 blockFrames, int32 captureSliceCount)
     {
+        let selectedVoiceIndex = allocateStutterVoice (lane);
+        let selectedVoice = wrap<seqfx::stutterVoiceCount> (selectedVoiceIndex);
         stutterBlockDurationFrames[lane] = std::intrinsics::max (1.0f, blockFrames);
         let sliceFrames = resolveSliceFramesForCount (stutterBlockDurationFrames[lane], captureSliceCount);
         stutterReadFrames[lane] = seqfx::clampInt (int32 (sliceFrames), 2, stutterBufferSize - 8);
-        stutterReadLength[lane] = float32 (stutterReadFrames[lane]);
-        stutterCaptureFrames[lane] = 0.0f;
-        stutterPhaseFrames[lane] = 0.0f;
-        stutterCapturing[lane] = true;
-        stutterPlaying[lane] = false;
+
+        stutterGenerationCounter[lane] += 1;
+        stutterVoiceGeneration[lane, selectedVoice] = stutterGenerationCounter[lane];
+        stutterVoiceCapturing[lane, selectedVoice] = true;
+        stutterVoicePlaying[lane, selectedVoice] = false;
+        stutterVoiceGainCurrent[lane, selectedVoice] = 0.0f;
+        stutterVoiceGainTarget[lane, selectedVoice] = 0.0f;
+        stutterVoiceBlockDurationFrames[lane, selectedVoice] = stutterBlockDurationFrames[lane];
+        stutterVoiceCaptureFrames[lane, selectedVoice] = 0.0f;
+        stutterVoiceReadFrames[lane, selectedVoice] = stutterReadFrames[lane];
+        stutterVoiceReadLength[lane, selectedVoice] = float32 (stutterReadFrames[lane]);
+        stutterVoicePhaseFrames[lane, selectedVoice] = 0.0f;
+        stutterVoiceSliceCount[lane, selectedVoice] = stutterSliceCount[lane];
+        stutterVoicePlaybackSpeed[lane, selectedVoice] = stutterPlaybackSpeed[lane];
+        stutterVoiceShape[lane, selectedVoice] = stutterShape[lane];
+        stutterVoiceGate[lane, selectedVoice] = stutterGate[lane];
+        stutterCurrentVoice[lane] = selectedVoiceIndex;
     }
 
     void writeTapePrimarySample (wrap<seqfx::laneCount> lane, float32<2> sample)
@@ -2734,16 +2832,61 @@ processor SeqFx [[ main ]]
         tapePreviousHostSample[lane] = sample;
     }
 
-    void captureStutterSample (wrap<seqfx::laneCount> lane, float32<2> sample)
+    void writeStutterCapture (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::stutterVoiceCount> voice,
+        wrap<stutterBufferSize> index,
+        float32<2> sample)
     {
-        stutterHistory[lane, wrap<stutterBufferSize> (int32 (stutterCaptureFrames[lane]))] = sample;
-        stutterCaptureFrames[lane] += 1.0f;
+        if (voice == 0)
+            stutterHistory0[lane, index] = sample;
+        else
+            stutterHistory1[lane, index] = sample;
+    }
 
-        if (stutterCaptureFrames[lane] >= stutterReadLength[lane])
+    bool hasOtherPlayingStutterVoice (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::stutterVoiceCount> selectedVoice)
+    {
+        for (wrap<seqfx::stutterVoiceCount> voice)
         {
-            stutterCapturing[lane] = false;
-            stutterPlaying[lane] = true;
-            stutterPhaseFrames[lane] = 0.0f;
+            if (voice != selectedVoice
+                && stutterVoicePlaying[lane, voice]
+                && (stutterVoiceGainCurrent[lane, voice] > 0.00001f
+                    || stutterVoiceGainTarget[lane, voice] > 0.00001f))
+                return true;
+        }
+
+        return false;
+    }
+
+    void captureStutterSample (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::stutterVoiceCount> voice,
+        float32<2> sample)
+    {
+        writeStutterCapture (
+            lane,
+            voice,
+            wrap<stutterBufferSize> (int32 (stutterVoiceCaptureFrames[lane, voice])),
+            sample
+        );
+        stutterVoiceCaptureFrames[lane, voice] += 1.0f;
+
+        if (stutterVoiceCaptureFrames[lane, voice] >= stutterVoiceReadLength[lane, voice])
+        {
+            let hasAudiblePredecessor = hasOtherPlayingStutterVoice (lane, voice);
+            stutterVoiceCapturing[lane, voice] = false;
+            stutterVoicePlaying[lane, voice] = true;
+            stutterVoicePhaseFrames[lane, voice] = 0.0f;
+            stutterVoiceGainCurrent[lane, voice] = hasAudiblePredecessor ? 0.0f : 1.0f;
+            stutterVoiceGainTarget[lane, voice] = 1.0f;
+
+            for (wrap<seqfx::stutterVoiceCount> otherVoice)
+            {
+                if (otherVoice != voice)
+                    stutterVoiceGainTarget[lane, otherVoice] = 0.0f;
+            }
         }
     }
 
@@ -3130,12 +3273,30 @@ processor SeqFx [[ main ]]
         );
     }
 
-    float32<2> readStutterCapture (wrap<seqfx::laneCount> lane, float32 position)
+    float32<2> readStutterCaptureAt (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::stutterVoiceCount> voice,
+        wrap<stutterBufferSize> index)
     {
-        let wrapped = std::intrinsics::wrap (position, stutterReadLength[lane]);
+        if (voice == 0)
+            return stutterHistory0[lane, index];
+        return stutterHistory1[lane, index];
+    }
+
+    float32<2> readStutterCapture (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::stutterVoiceCount> voice,
+        float32 position)
+    {
+        let readLength = stutterVoiceReadLength[lane, voice];
+        let wrapped = std::intrinsics::wrap (position, readLength);
         let currentIndex = int32 (std::intrinsics::floor (wrapped));
         let fraction = wrapped - float32 (currentIndex);
-        let readFrameLimit = seqfx::clampInt (int32 (stutterReadLength[lane]), 2, stutterReadFrames[lane]);
+        let readFrameLimit = seqfx::clampInt (
+            int32 (readLength),
+            2,
+            stutterVoiceReadFrames[lane, voice]
+        );
         var previousIndex = currentIndex - 1;
         var followingIndex = currentIndex + 1;
         var nextFollowingIndex = currentIndex + 2;
@@ -3148,10 +3309,10 @@ processor SeqFx [[ main ]]
             nextFollowingIndex -= readFrameLimit;
 
         return seqfx::cubicHermite4 (
-            stutterHistory[lane, wrap<stutterBufferSize> (previousIndex)],
-            stutterHistory[lane, wrap<stutterBufferSize> (currentIndex)],
-            stutterHistory[lane, wrap<stutterBufferSize> (followingIndex)],
-            stutterHistory[lane, wrap<stutterBufferSize> (nextFollowingIndex)],
+            readStutterCaptureAt (lane, voice, wrap<stutterBufferSize> (previousIndex)),
+            readStutterCaptureAt (lane, voice, wrap<stutterBufferSize> (currentIndex)),
+            readStutterCaptureAt (lane, voice, wrap<stutterBufferSize> (followingIndex)),
+            readStutterCaptureAt (lane, voice, wrap<stutterBufferSize> (nextFollowingIndex)),
             fraction
         );
     }
@@ -4505,67 +4666,147 @@ processor SeqFx [[ main ]]
     {
         stutterMixCurrent[lane] = seqfx::moveTowards (stutterMixCurrent[lane], stutterMixTarget[lane], 1.0f / 64.0f);
 
-        let currentPlaybackSpeed = seqfx::clampFloat (auxParamValue (lane, 1, stutterPlaybackSpeed[lane]), 0.5f, 2.0f);
-        let currentShape = seqfx::clampFloat (auxParamValue (lane, 2, stutterShape[lane]), 0.0f, 1.0f);
-        let currentGate = seqfx::clampFloat (auxParamValue (lane, 3, stutterGate[lane]), 0.0f, 1.0f);
-
-        if (stutterCapturing[lane])
+        let controlVoice = wrap<seqfx::stutterVoiceCount> (stutterCurrentVoice[lane]);
+        if (stutterLaneActive[lane]
+            && (stutterVoiceCapturing[lane, controlVoice] || stutterVoicePlaying[lane, controlVoice]))
         {
+            stutterVoiceSliceCount[lane, controlVoice] = snapValue (
+                auxParamValue (lane, 0, float32 (stutterSliceCount[lane])),
+                2,
+                32
+            );
+            stutterVoicePlaybackSpeed[lane, controlVoice] = seqfx::clampFloat (
+                auxParamValue (lane, 1, stutterPlaybackSpeed[lane]),
+                0.5f,
+                2.0f
+            );
+            stutterVoiceShape[lane, controlVoice] = seqfx::clampFloat (
+                auxParamValue (lane, 2, stutterShape[lane]),
+                0.0f,
+                1.0f
+            );
+            stutterVoiceGate[lane, controlVoice] = seqfx::clampFloat (
+                auxParamValue (lane, 3, stutterGate[lane]),
+                0.0f,
+                1.0f
+            );
+        }
+
+        var coldCaptureActive = false;
+        var coldCaptureOutput = stage;
+        for (wrap<seqfx::stutterVoiceCount> voice)
+        {
+            if (! stutterVoiceCapturing[lane, voice])
+                continue;
+
+            let hasAudiblePredecessor = hasOtherPlayingStutterVoice (lane, voice);
             let capturePhase = seqfx::clampFloat (
-                stutterCaptureFrames[lane] / std::intrinsics::max (1.0f, stutterReadLength[lane]),
+                stutterVoiceCaptureFrames[lane, voice]
+                    / std::intrinsics::max (1.0f, stutterVoiceReadLength[lane, voice]),
                 0.0f,
                 1.0f
             );
             let captureEnvelope = seqfx::stutterCaptureEnvelopeAt (
                 capturePhase,
-                currentShape,
-                currentGate,
-                currentPlaybackSpeed
+                stutterVoiceShape[lane, voice],
+                stutterVoiceGate[lane, voice],
+                stutterVoicePlaybackSpeed[lane, voice]
             );
-            captureStutterSample (lane, stage);
-            let captureOut = stage * captureEnvelope;
-            return stage + ((captureOut - stage) * stutterMixCurrent[lane]);
+            captureStutterSample (lane, voice, stage);
+
+            if (! hasAudiblePredecessor)
+            {
+                coldCaptureActive = true;
+                coldCaptureOutput = stage * captureEnvelope;
+            }
         }
 
-        if (stutterMixCurrent[lane] <= 0.00001f || ! stutterPlaying[lane])
+        if (coldCaptureActive)
+            return stage + ((coldCaptureOutput - stage) * stutterMixCurrent[lane]);
+
+        var accumulated = float32<2> (0.0f);
+        var accumulatedGain = 0.0f;
+        for (wrap<seqfx::stutterVoiceCount> voice)
+        {
+            if (! stutterVoicePlaying[lane, voice])
+                continue;
+
+            stutterVoiceGainCurrent[lane, voice] = seqfx::moveTowards (
+                stutterVoiceGainCurrent[lane, voice],
+                stutterVoiceGainTarget[lane, voice],
+                1.0f / seqfx::transitionCrossfadeFrames
+            );
+
+            if (stutterVoiceGainCurrent[lane, voice] <= 0.00001f
+                && stutterVoiceGainTarget[lane, voice] <= 0.00001f)
+            {
+                stutterVoicePlaying[lane, voice] = false;
+                continue;
+            }
+
+            let currentReadLength = resolveSliceFramesForCount (
+                stutterVoiceBlockDurationFrames[lane, voice],
+                stutterVoiceSliceCount[lane, voice]
+            );
+            stutterVoiceReadLength[lane, voice] = seqfx::clampFloat (
+                currentReadLength,
+                2.0f,
+                float32 (stutterVoiceReadFrames[lane, voice])
+            );
+
+            let crossfadeFrames = seqfx::clampFloat (
+                std::intrinsics::min (
+                    float32 (processor.frequency) * 0.005f,
+                    stutterVoiceReadLength[lane, voice] * 0.25f
+                ),
+                1.0f,
+                std::intrinsics::max (1.0f, stutterVoiceReadLength[lane, voice] * 0.5f)
+            );
+            var stutterOut = readStutterCapture (
+                lane,
+                voice,
+                stutterVoicePhaseFrames[lane, voice]
+            );
+            let stutterPhase = seqfx::clampFloat (
+                stutterVoicePhaseFrames[lane, voice]
+                    / std::intrinsics::max (1.0f, stutterVoiceReadLength[lane, voice]),
+                0.0f,
+                1.0f
+            );
+            let stutterEnvelope = seqfx::stutterEnvelopeAt (
+                stutterPhase,
+                stutterVoiceShape[lane, voice],
+                stutterVoiceGate[lane, voice]
+            );
+
+            if (stutterVoicePhaseFrames[lane, voice]
+                > stutterVoiceReadLength[lane, voice] - crossfadeFrames)
+            {
+                let fade = (
+                    stutterVoicePhaseFrames[lane, voice]
+                        - (stutterVoiceReadLength[lane, voice] - crossfadeFrames)
+                ) / crossfadeFrames;
+                let head = readStutterCapture (lane, voice, fade * crossfadeFrames);
+                stutterOut = (stutterOut * (1.0f - fade)) + (head * fade);
+            }
+
+            stutterOut *= stutterEnvelope;
+            let voiceGain = stutterVoiceGainCurrent[lane, voice];
+            accumulated += stutterOut * voiceGain;
+            accumulatedGain += voiceGain;
+
+            stutterVoicePhaseFrames[lane, voice] += stutterVoicePlaybackSpeed[lane, voice];
+
+            while (stutterVoicePhaseFrames[lane, voice] >= stutterVoiceReadLength[lane, voice])
+                stutterVoicePhaseFrames[lane, voice] -= stutterVoiceReadLength[lane, voice];
+        }
+
+        if (stutterMixCurrent[lane] <= 0.00001f || accumulatedGain <= 0.00001f)
             return stage;
 
-        let currentSliceCount = snapValue (auxParamValue (lane, 0, float32 (stutterSliceCount[lane])), 2, 32);
-        let currentReadLength = resolveSliceFramesForCount (stutterBlockDurationFrames[lane], currentSliceCount);
-        stutterReadLength[lane] = seqfx::clampFloat (
-            currentReadLength,
-            2.0f,
-            float32 (stutterReadFrames[lane])
-        );
-
-        let crossfadeFrames = seqfx::clampFloat (
-            std::intrinsics::min (float32 (processor.frequency) * 0.005f, stutterReadLength[lane] * 0.25f),
-            1.0f,
-            std::intrinsics::max (1.0f, stutterReadLength[lane] * 0.5f)
-        );
-        var stutterOut = readStutterCapture (lane, stutterPhaseFrames[lane]);
-        let stutterPhase = seqfx::clampFloat (
-            stutterPhaseFrames[lane] / std::intrinsics::max (1.0f, stutterReadLength[lane]),
-            0.0f,
-            1.0f
-        );
-        let stutterEnvelope = seqfx::stutterEnvelopeAt (stutterPhase, currentShape, currentGate);
-
-        if (stutterPhaseFrames[lane] > stutterReadLength[lane] - crossfadeFrames)
-        {
-            let fade = (stutterPhaseFrames[lane] - (stutterReadLength[lane] - crossfadeFrames)) / crossfadeFrames;
-            let head = readStutterCapture (lane, fade * crossfadeFrames);
-            stutterOut = (stutterOut * (1.0f - fade)) + (head * fade);
-        }
-
-        stutterOut *= stutterEnvelope;
-
-        stutterPhaseFrames[lane] += currentPlaybackSpeed;
-
-        while (stutterPhaseFrames[lane] >= stutterReadLength[lane])
-            stutterPhaseFrames[lane] -= stutterReadLength[lane];
-
-        return stage + ((stutterOut - stage) * stutterMixCurrent[lane]);
+        let wet = accumulated / accumulatedGain;
+        let handoffGain = seqfx::clampFloat (accumulatedGain, 0.0f, 1.0f);
+        return stage + ((wet - stage) * stutterMixCurrent[lane] * handoffGain);
     }
 
     float32<2> processChain (wrap<seqfx::laneCount> lane, float32<2> stage)

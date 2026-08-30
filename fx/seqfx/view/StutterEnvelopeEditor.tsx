@@ -523,6 +523,9 @@ export function StutterEnvelopeEditor({
 
     return (
         <section className="seqfx-stutter-editor" data-role="seqfx-stutter-editor" aria-label="Stutter cut envelope editor">
+            <p className="seqfx-stutter-editor__source-note" data-role="seqfx-stutter-source-note">
+                Captures the first slice, up to one second, then repeats it. A retrigger keeps the previous loop playing until the new capture is ready.
+            </p>
             <div className="seqfx-stutter-editor__panel">
                 <div ref={viewportRef} className="seqfx-stutter-editor__viewport" data-role="seqfx-stutter-viewport">
                     <EditorCurveSurface

@@ -2745,6 +2745,10 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
     await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
     await page.locator('[data-role="seqfx-stutter-editor"]').waitFor();
     await page.locator('[data-role="seqfx-stutter-graph"]').waitFor();
+    assert.match(
+        await page.locator('[data-role="seqfx-stutter-source-note"]').textContent(),
+        /previous loop playing until the new capture is ready/,
+    );
 
     assert.deepEqual(
         await page.locator('[data-role="seqfx-stutter-shape-stop"]').evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? "")),

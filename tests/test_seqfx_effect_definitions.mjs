@@ -122,6 +122,33 @@ test("Cmajor accepts every append-only effect ID without aliasing future effects
     );
 });
 
+test("Stutter uses two bounded capture banks so retriggers preserve the audible loop", async () => {
+    const stutter = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.stutter);
+    assert.equal(stutter.lifecycle, "captured");
+    assert.deepEqual(
+        stutter.parameters.map(({ id, defaultValue, latch, auxEligible }) => ({
+            id,
+            defaultValue,
+            latch,
+            auxEligible,
+        })),
+        [
+            { id: "slices", defaultValue: 8, latch: "trigger", auxEligible: true },
+            { id: "speed", defaultValue: 1, latch: "continuous", auxEligible: true },
+            { id: "shape", defaultValue: 0.4375, latch: "continuous", auxEligible: true },
+            { id: "gate", defaultValue: 0.68, latch: "continuous", auxEligible: true },
+        ],
+    );
+
+    const source = await readFile(path.join(repoRoot, "fx/seqfx/SeqFx.cmajor"), "utf8");
+    assert.match(source, /let stutterVoiceCount = 2;/);
+    assert.match(source, /float32<2>\[seqfx::laneCount, stutterBufferSize\] stutterHistory0;/);
+    assert.match(source, /float32<2>\[seqfx::laneCount, stutterBufferSize\] stutterHistory1;/);
+    assert.match(source, /hasOtherPlayingStutterVoice \(lane, voice\)/);
+    assert.match(source, /stutterVoiceGainTarget\[lane, otherVoice\] = 0\.0f;/);
+    assert.doesNotMatch(source, /stutterHistory\[seqfx::laneCount, seqfx::stutterVoiceCount/);
+});
+
 test("Dirty keeps one sequenced identity while its nonlinear core runs at fixed 4x quality", async () => {
     const dirty = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.dirty);
     assert.equal(dirty.lifecycle, "gated");

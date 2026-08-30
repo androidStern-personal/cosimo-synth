@@ -772,6 +772,10 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
 
         await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
         await page.locator('[data-role="seqfx-stutter-editor"]').waitFor();
+        assert.match(
+            await page.locator('[data-role="seqfx-stutter-source-note"]').textContent(),
+            /first slice, up to one second/,
+        );
         assert.deepEqual(
             await page.locator('[data-role="seqfx-stutter-shape-stop"]').evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? "")),
             ["Gate", "Triangle", "Bell", "Down", "Up"],

@@ -25,7 +25,7 @@ live-touch workflow are not being cloned.
 | Filter | Rhythmic tone opening/closing | Mode, cutoff, resonance/Q, mix | Gated, warm filter state | Retain ID 1; clarify mode and units; preserve current aux sweep | Coefficient instability, zippering, loud resonance |
 | Crush | Digital resolution and sample-rate reduction | Bits, rate, conversion quality/dither, mix | Gated | Retain ID 2 and rename display; keep Bits/Rate, add Character/Dither only if audible | Aliasing, DC/level jumps, confusing samples-vs-Hz display |
 | Tape Stop | Variable-speed slowdown where pitch and speed fall together | Stop Time, Start Time, Curve, motor/return state | Bounded gesture | Follow `tape-stop-benchmark.md`; one-cell trigger may outlive cell | Tail truncation, read discontinuity, speed-up aliasing, stale history |
-| Stutter | Capture a short slice and repeat it rhythmically | Slice/window, speed, gate/envelope, crossfade | Captured | Retain current block-relative slice count, speed, shape, and gate; capture at block start | First-repeat ambiguity, wrap clicks, stale audio, destructive retrigger |
+| Stutter | Capture a short slice and repeat it rhythmically | Slice/window, speed, gate/envelope, crossfade | Captured | Retain block-relative slice count, speed, shape, and gate; capture at block start; hand retriggers across two one-second banks | First-repeat ambiguity, wrap clicks, stale audio, destructive retrigger |
 | Pitch | Shift harmonic pitch without changing authored block rate | Semitones, grain size, jitter, spread, mix | Captured/streaming | Waveform-aligned complementary grains reading warm history; semitone snap with smooth aux path | Latency, transient smear, grain beating, phase resets |
 | Comb | Repeated peaks/notches plus resonant material color | Tune/cutoff, polarity, mix; advanced feedback/decay/damping | Modulated delay/tail | Conventional neutral core plus an evidence-selected dispersive/vector extension | Feedback runaway, tuning error, mono cancellation, generic metallic sound |
 | Ring | Multiply audio by an internal carrier | Frequency, waveform, bias/rectify, spread, mix | Gated | Phase-continuous carrier, documented stereo detune, and free LFO motion; tempo motion remains available through block Aux | Aliasing from carrier shapes, DC from bias, abrupt phase reset |
@@ -60,6 +60,14 @@ Stutter is `captured`:
 - authoritative resets clear the capture.
 
 Reverse remains separate; alternating/reverse Stutter modes are omitted.
+
+Production status: complete through two bounded one-second capture banks per
+chain, fast second/third-trigger handoff, frozen outgoing-loop controls,
+click-screened wrap and block exit, authoritative reset, four-chain resource
+bounds, and source/packaged UI proof. `stutter-v2-decision.md` records the
+Ableton Beat Repeat, Effectrix2, Looperator, and Koala facts separately from the
+SeqFX adaptation. Listening comparison and Ableton acceptance remain release
+gates.
 
 ### Pitch
 

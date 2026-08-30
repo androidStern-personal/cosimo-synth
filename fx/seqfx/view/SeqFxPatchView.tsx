@@ -992,7 +992,7 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 7, label: "Free Start", min: 20, max: 8000, step: 1, amountKind: "linear", hint: "Milliseconds used for a free-time Spin Up return." },
     ],
     [SEQFX_EFFECT_TYPES.stutter]: [
-        { index: 0, label: "Slices", min: 2, max: 32, step: 1, amountKind: "integer", hint: "Record slice 1; repeat the rest." },
+        { index: 0, label: "Slices", min: 2, max: 32, step: 1, amountKind: "integer", hint: "Divide the block, capture its first slice up to one second, then repeat it." },
         { index: 1, label: "Speed", min: 0.5, max: 2, step: 0.01, amountKind: "speed", hint: "1.00 keeps the captured pitch." },
         { index: 2, label: "Shape", min: 0, max: 1, step: 0.01, amountKind: "stutterShape", hint: "Morphs the per-cut envelope." },
         { index: 3, label: "Gate", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Audible portion of each cut." },

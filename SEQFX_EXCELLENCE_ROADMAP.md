@@ -1,6 +1,6 @@
 # SeqFX Excellence Roadmap
 
-Status: implementation in progress; Phases 0–5 complete; Tape Stop v2, Crush v2, Ring, Talk Box, Dirty, production Comb, Vibro, Flange, Pitch, and Reverse complete; Phase 6 continues with Stutter v2 final qualification
+Status: implementation in progress; Phases 0–6 complete; all twelve requested/retained effects are implemented and automatically qualified; Phase 7 product polish and content is active
 Owner thread: `01a05051-d7c7-7e13-bb60-58968b6392cf`
 Branch: `codex/seqfx-excellence-01a05051`
 Worktree: `/Users/winterfell/.codex/worktrees/seqfx-excellence-01a05051/cosimo-synth`
@@ -29,6 +29,8 @@ Execution evidence:
 - Vibro decision and implementation proof: `research/seqfx/vibro-decision.md`
 - Flange decision and implementation proof: `research/seqfx/flange-decision.md`
 - Reverse decision and implementation proof: `research/seqfx/reverse-decision.md`
+- Stutter v2 decision and implementation proof:
+  `research/seqfx/stutter-v2-decision.md`
 
 ## 1. Outcome
 
@@ -415,6 +417,16 @@ Required behavior:
 - Preserve click-free wrap crossfades across playback speeds and slice-count modulation.
 - Acceptance: first repeat begins at the documented boundary, fast retrigger does not murder the active audio, and no stale buffer crosses a seek/pattern authority change.
 
+Production status: complete through capture-first boundary proof, two bounded
+one-second capture banks per chain, second/third-trigger handoff, frozen outgoing
+voice controls, click-screened wrap and block exit, authoritative-reset proof,
+four-chain generated-runtime bounds, literal source/packaged UI, and preserved
+sparse-v7 state. SeqFX keeps block-relative Slices rather than adding a redundant
+Sync/Free system, and leaves reverse playback to the separate Reverse effect;
+the evidence and rejected alternatives are recorded in
+`research/seqfx/stutter-v2-decision.md`. Listening comparison and Ableton
+acceptance remain Phase 8 gates.
+
 ### FX-04 — Pitch
 
 Prototype a granular, delay-line pitch shifter with:
@@ -758,10 +770,9 @@ Order:
 2. Reverse
 3. Stutter v2 final qualification
 
-Checkpoint: Pitch and Reverse are complete through measured DSP, sparse state,
-sequenced source UI, packaged UI, and decision evidence. Stutter v2 final
-qualification is the active slice; subjective Pitch/Reverse listening and
-Ableton timing remain Phase 8 gates.
+Checkpoint: Pitch, Reverse, and Stutter v2 are complete through measured DSP,
+sparse state, sequenced source UI, packaged UI, and decision evidence. The
+subjective listening and Ableton timing checks remain Phase 8 gates.
 
 These arrive after buffer/lifecycle foundations because their latency/capture contracts are the most coupled.
 
@@ -902,6 +913,7 @@ The implementation task must not infer these from a build succeeding.
 | Vibro is a wet-only, phase-continuous Doppler delay with literal Sync/Free timing | Committed and implemented | Academic delay-line theory establishes pure variable delay as vibrato; Kilohearts and Effectrix2 separate the dry-mixed/feedback vocabulary of chorus and flanging; measured depth/rate fixtures provide the oracle | Add feedback/dry combing, guess Koala's private behavior, or ship optional Drift without a listening win | ID 10 sequences Rate, Depth, Wave, Spread, Timing, and Division; its corrected 400 ms history covers the stated slow/deep extreme; Flange remains separately identifiable |
 | Flange is a canonical short dry-plus-delay comb with explicit feedback magnitude and polarity | Committed and implemented | Kilohearts, Effectrix2, and published flanger theory converge on Delay, added Depth, Rate, Spread, Feedback, Mix, interpolation, and optional loop inversion | Guess Koala's private behavior, overload a bipolar feedback control with a second Polarity switch, or ship optional Scroll without its listening/CPU win | ID 11 sequences Delay, Depth, Rate, Feedback, Spread, Polarity, Timing, and Division; a 25 ms private history covers the public range; feedback writes are bounded and output is gated without a tail |
 | Reverse is a zero-added-latency rolling lookback looper with no tail | Committed and implemented | Effectrix establishes active-step backward looping, musical size, smoothing, and decay; Kilohearts establishes repeated finite sections, sync/free time, and proportional crossfade; SeqFX must remain aligned to selectively authored blocks | Delay the first cell by a window, add plugin-wide lookahead, freeze one source window, expose playback speed, or route ordinary audio through Tape's 8 kHz tier | ID 8 sequences Length, Crossfade, Timing, Free Length, and Decay; two bounded voices roll/retrigger through already-heard audio, cold start stays dry, playback returns dry at block exit, and the high-quality window is honestly capped at four seconds |
+| Stutter remains capture-first and hands retriggers across two bounded banks | Committed and implemented | Ableton Beat Repeat validates immediate capture then repeat; Effectrix2 makes recapture policy, size, speed, and decay explicit; Looperator ties loop repetition to authored steps; existing SeqFX projects already use the useful four-control block-relative model | Keep the destructive single buffer, switch to lookback, add redundant Sync/Free timing, or hide Reverse/random modes inside Stutter | ID 4 preserves Slices, Speed, Shape, Gate, and state; each chain has two separate one-second banks, the previous loop remains audible during recapture, the third trigger reuses a safe bank, and exit crossfades to dry |
 | macOS VST3 release candidate only | Inherited | Existing release scope and toolchain | Expand AU/Windows now | Keeps the slice finishable; other formats need their own roadmap |
 | No merge/push/deploy/publish by this task | Inherited | Coordinator and user authorization boundary | Treat “end to end” as permission to release | Final result is a clean handoff and artifact, not an external launch |
 
