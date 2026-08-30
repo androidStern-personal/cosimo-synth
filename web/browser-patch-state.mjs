@@ -1,8 +1,8 @@
 export const BROWSER_PATCH_STATE_KEY = "cosimo.web.patch-state.v2";
 
 const BROWSER_PATCH_STATE_FORMAT = "cosimo.browserPatchState";
-// T28 Polish hard-cuts the complete sound. Earlier snapshots are discarded whole.
-const BROWSER_PATCH_STATE_VERSION = 4;
+// T74 completes the Polish sound contract. Earlier snapshots are discarded whole.
+const BROWSER_PATCH_STATE_VERSION = 5;
 const REQUIRED_SOUND_STORED_STATE_KEYS = Object.freeze([
     "modulation.v6",
     "articulations.v4",
@@ -80,7 +80,7 @@ function isCompleteSoundSnapshot(state, parameterEndpointIDs, requiredStoredStat
     ));
 }
 
-/** Decode v4 storage; the installer validates live completeness before use. */
+/** Decode v5 storage; the installer validates live completeness before use. */
 export function readBrowserPatchState({
     storage,
     storageKey = BROWSER_PATCH_STATE_KEY,

@@ -1361,11 +1361,17 @@ graph WavetableSynth [[ main ]]
     input value float32 voiceEnhancerAmount [[ name: "Voice Enhancer Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 voiceEnhancerKeyTrackEnabled [[ name: "Voice Enhancer Key Track", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
     input value float32 voiceEnhancerKeyTrackOffsetSemitones [[ name: "Voice Enhancer Key Track Offset", min: -12.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
-    // T28 follows the moving append-only host contract after T62. These are
-    // the whole fixed Polish surface; baked stage settings never become endpoints.
+    // T28 follows the moving append-only host contract after T62. T74 keeps
+    // those three slots fixed, then appends only the new compact macro/bypasses.
+    // Baked cutoff, curve, ratio, clip, and timing settings remain private.
     input value float32 polishEnhancerAmount [[ name: "Polish Enhancer Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 polishCompressionClipAmount [[ name: "Polish Compression / Clip Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 polishOutputTrimDb [[ name: "Polish Output Trim", min: -24.0f, max: 12.0f, init: 0.0f, unit: "dB", rampFrames: 0 ]];
+    input value float32 polishSafeBassAmount [[ name: "Polish Safe Bass Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+    input value float32 polishSafeBassBypass [[ name: "Polish Safe Bass Bypass", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
+    input value float32 polishEnhancerBypass [[ name: "Polish Enhancer Bypass", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
+    input value float32 polishCompressionClipBypass [[ name: "Polish Compression / Clip Bypass", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
+    input value float32 polishOutputTrimBypass [[ name: "Polish Output Trim Bypass", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
     // Effects Lane structure and parameter records/fields are patch state and
     // live edits (ADR-007); Solo is runtime-only audition state. These struct
     // events carry no parameter purpose, so none become host automation slots.
@@ -1506,6 +1512,11 @@ graph WavetableSynth [[ main ]]
         polishEnhancerAmount -> polish.enhancerAmountIn;
         polishCompressionClipAmount -> polish.compressionClipAmountIn;
         polishOutputTrimDb -> polish.outputTrimDbIn;
+        polishSafeBassAmount -> polish.safeBassAmountIn;
+        polishSafeBassBypass -> polish.safeBassBypassIn;
+        polishEnhancerBypass -> polish.enhancerBypassIn;
+        polishCompressionClipBypass -> polish.compressionClipBypassIn;
+        polishOutputTrimBypass -> polish.outputTrimBypassIn;
         oscAWavetableSelect -> desiredTableMonitorA.tableSelectIn;
         oscBWavetableSelect -> desiredTableMonitorB.tableSelectIn;
         oscCWavetableSelect -> desiredTableMonitorC.tableSelectIn;

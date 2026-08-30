@@ -7,6 +7,21 @@ export const POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID = "polishCompressionClip
 /** Public host endpoint for the final Polish output trim. */
 export const POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID = "polishOutputTrimDb";
 
+/** Public host endpoint for the fixed Safe Bass treatment strength. */
+export const POLISH_SAFE_BASS_AMOUNT_ENDPOINT_ID = "polishSafeBassAmount";
+
+/** Public host endpoint for Safe Bass's independent bypass. */
+export const POLISH_SAFE_BASS_BYPASS_ENDPOINT_ID = "polishSafeBassBypass";
+
+/** Public host endpoint for the fixed Enhancer's independent bypass. */
+export const POLISH_ENHANCER_BYPASS_ENDPOINT_ID = "polishEnhancerBypass";
+
+/** Public host endpoint for the compressor-plus-soft-clip macro's bypass. */
+export const POLISH_COMPRESSION_CLIP_BYPASS_ENDPOINT_ID = "polishCompressionClipBypass";
+
+/** Public host endpoint for Output Trim's independent bypass. */
+export const POLISH_OUTPUT_TRIM_BYPASS_ENDPOINT_ID = "polishOutputTrimBypass";
+
 /** Read-only post-trim peak and momentary-loudness telemetry endpoint. */
 export const POLISH_METER_ENDPOINT_ID = "polishMeter";
 
@@ -15,6 +30,11 @@ export const POLISH_PARAMETER_ENDPOINT_IDS = Object.freeze([
     POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,
     POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
     POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID,
+    POLISH_SAFE_BASS_AMOUNT_ENDPOINT_ID,
+    POLISH_SAFE_BASS_BYPASS_ENDPOINT_ID,
+    POLISH_ENHANCER_BYPASS_ENDPOINT_ID,
+    POLISH_COMPRESSION_CLIP_BYPASS_ENDPOINT_ID,
+    POLISH_OUTPUT_TRIM_BYPASS_ENDPOINT_ID,
 ] as const);
 
 export type PolishMeterFrame = {

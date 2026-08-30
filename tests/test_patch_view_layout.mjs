@@ -411,13 +411,22 @@ test("Bounce, Global Tune, Amp Envelope, Key Track, Voice Enhancer, and Polish p
     const polishOutputTrimDb = inputValues.find(
         ({ identifier }) => identifier === "polishOutputTrimDb",
     );
+    const polishSafeBassAmount = inputValues.find(
+        ({ identifier }) => identifier === "polishSafeBassAmount",
+    );
+    const polishBypasses = [
+        "polishSafeBassBypass",
+        "polishEnhancerBypass",
+        "polishCompressionClipBypass",
+        "polishOutputTrimBypass",
+    ].map((endpointID) => inputValues.find(({ identifier }) => identifier === endpointID));
 
     assert.deepEqual(
-        parameterOrder.slice(0, -17),
+        parameterOrder.slice(0, -22),
         EXISTING_SYNTH_HOST_PARAMETER_ORDER,
         "appending synth controls must not move any existing DAW automation slot",
     );
-    assert.deepEqual(parameterOrder.slice(-17), [
+    assert.deepEqual(parameterOrder.slice(-22), [
         "filterMix",
         "ampRelease",
         "sourceMode",
@@ -435,8 +444,13 @@ test("Bounce, Global Tune, Amp Envelope, Key Track, Voice Enhancer, and Polish p
         "polishEnhancerAmount",
         "polishCompressionClipAmount",
         "polishOutputTrimDb",
+        "polishSafeBassAmount",
+        "polishSafeBassBypass",
+        "polishEnhancerBypass",
+        "polishCompressionClipBypass",
+        "polishOutputTrimBypass",
     ]);
-    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 17);
+    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 22);
     assert.notEqual(filterMix, undefined);
     assert.equal(filterMix.type, "float32");
     assert.match(filterMix.annotation, /name:\s*"Filter Mix"/);
@@ -534,7 +548,7 @@ test("Bounce, Global Tune, Amp Envelope, Key Track, Voice Enhancer, and Polish p
     assert.match(voiceEnhancerKeyTrackOffset.annotation, /max:\s*60(?:\.0)?f?/);
     assert.match(voiceEnhancerKeyTrackOffset.annotation, /unit:\s*"st"/);
     assert.match(voiceEnhancerKeyTrackOffset.annotation, /rampFrames:\s*0/);
-    for (const amount of [polishEnhancerAmount, polishCompressionClipAmount]) {
+    for (const amount of [polishEnhancerAmount, polishCompressionClipAmount, polishSafeBassAmount]) {
         assert.notEqual(amount, undefined);
         assert.equal(amount.type, "float32");
         assert.match(amount.annotation, /min:\s*0(?:\.0)?f?/);
@@ -549,6 +563,17 @@ test("Bounce, Global Tune, Amp Envelope, Key Track, Voice Enhancer, and Polish p
     assert.match(polishOutputTrimDb.annotation, /init:\s*0(?:\.0)?f?/);
     assert.match(polishOutputTrimDb.annotation, /unit:\s*"dB"/);
     assert.match(polishOutputTrimDb.annotation, /rampFrames:\s*0/);
+    for (const bypass of polishBypasses) {
+        assert.notEqual(bypass, undefined);
+        assert.equal(bypass.type, "float32");
+        assert.match(bypass.annotation, /min:\s*0(?:\.0)?f?/);
+        assert.match(bypass.annotation, /max:\s*1(?:\.0)?f?/);
+        assert.match(bypass.annotation, /init:\s*0(?:\.0)?f?/);
+        assert.match(bypass.annotation, /discrete:\s*true/);
+        assert.match(bypass.annotation, /step:\s*1(?:\.0)?f?/);
+        assert.match(bypass.annotation, /text:\s*"Active\|Bypassed"/);
+        assert.match(bypass.annotation, /rampFrames:\s*0/);
+    }
 });
 
 test("whole Effects Lane Mix and Bypass are struct state, never DAW automation slots", async () => {

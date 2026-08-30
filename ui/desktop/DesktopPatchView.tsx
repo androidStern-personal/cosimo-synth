@@ -5362,6 +5362,9 @@ function DesktopPatchViewBody({
         };
     }, [activeMsegRouteSource.sourceKind, activeMsegRouteSource.sourceSlot]);
     const [selectedRackEffectId, setSelectedRackEffectId] = useState<EffectModuleId>("drive");
+    // T74 owns the compact action and controlled state only. T75 composes its
+    // dedicated surface from this seam without changing the rack footprint.
+    const [polishEditorExpanded, setPolishEditorExpanded] = useState(false);
     useEffect(() => {
         if (typeof window.matchMedia !== "function") {
             return undefined;
@@ -6415,6 +6418,13 @@ function DesktopPatchViewBody({
             polishEnhancerAmount={synthView.polishEnhancerAmount}
             polishCompressionClipAmount={synthView.polishCompressionClipAmount}
             polishOutputTrimDb={synthView.polishOutputTrimDb}
+            polishSafeBassAmount={synthView.polishSafeBassAmount}
+            polishSafeBassBypass={synthView.polishSafeBassBypass}
+            polishEnhancerBypass={synthView.polishEnhancerBypass}
+            polishCompressionClipBypass={synthView.polishCompressionClipBypass}
+            polishOutputTrimBypass={synthView.polishOutputTrimBypass}
+            polishEditorExpanded={polishEditorExpanded}
+            onPolishEditorExpandedChange={setPolishEditorExpanded}
             onAddRouteWithOverrides={synthView.handleAddRouteWithOverrides}
             onRemoveRoute={synthView.handleRemoveRoute}
             onRouteChange={synthView.handleRouteChange}

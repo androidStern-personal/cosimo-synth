@@ -15,7 +15,7 @@ test("speedrun defaults are derived from the current generated synth contract", 
     ]);
     const defaults = patchIO.createDefaultsSnapshot(context.options);
 
-    assert.equal(Object.keys(defaults.parameters).length, 105);
+    assert.equal(Object.keys(defaults.parameters).length, 110);
     assert.equal(defaults.parameters.oscAWavetableSelect, 35);
     assert.ok(Math.abs(defaults.parameters.ampAttack - 0.01) < 1e-6);
     assert.ok(Math.abs(defaults.parameters.ampDecay - 0.001) < 1e-6);
@@ -25,6 +25,11 @@ test("speedrun defaults are derived from the current generated synth contract", 
     assert.equal(defaults.parameters.polishEnhancerAmount, 0);
     assert.equal(defaults.parameters.polishCompressionClipAmount, 0);
     assert.equal(defaults.parameters.polishOutputTrimDb, 0);
+    assert.equal(defaults.parameters.polishSafeBassAmount, 0);
+    assert.equal(defaults.parameters.polishSafeBassBypass, 0);
+    assert.equal(defaults.parameters.polishEnhancerBypass, 0);
+    assert.equal(defaults.parameters.polishCompressionClipBypass, 0);
+    assert.equal(defaults.parameters.polishOutputTrimBypass, 0);
     assert.equal(defaults.annotations.oscAFineCents.unit, "cents");
     assert.equal(defaults.annotations.oscAOctave.discrete, true);
     assert.deepEqual(Object.keys(defaults.lane.devices), ["distortion#1", "delay#1", "reverb#1"]);
@@ -38,7 +43,7 @@ test("bare and browser-state patches complete, clamp, and snap public parameters
     ]);
     const result = patchIO.intakePatch({
         format: "cosimo.browserPatchState",
-        version: 4,
+        version: 5,
         sound: {
             parameters: {
                 oscAWavetablePosition: 2,
@@ -90,14 +95,14 @@ test("current shared-sound envelopes enter through exact contract and strict doc
     assert.deepEqual(result.value.document.lane, lane);
 });
 
-test("speedrun rejects pre-Polish browser and shared-sound versions whole", async () => {
+test("speedrun rejects pre-T74 browser state and unsupported shared-sound versions whole", async () => {
     const [{ patchIO }, context] = await Promise.all([
         loadSpeedrunModules(),
         createCurrentSpeedrunContext(),
     ]);
     const legacyBrowser = patchIO.intakePatch({
         format: "cosimo.browserPatchState",
-        version: 3,
+        version: 4,
         sound: { parameters: {}, storedState: {} },
         auxiliary: {},
     }, context.options);

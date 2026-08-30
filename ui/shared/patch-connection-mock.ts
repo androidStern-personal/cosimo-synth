@@ -38,9 +38,14 @@ import {
 } from "./voice-enhancer";
 import {
     POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
+    POLISH_COMPRESSION_CLIP_BYPASS_ENDPOINT_ID,
     POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,
+    POLISH_ENHANCER_BYPASS_ENDPOINT_ID,
     POLISH_METER_ENDPOINT_ID,
+    POLISH_OUTPUT_TRIM_BYPASS_ENDPOINT_ID,
     POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID,
+    POLISH_SAFE_BASS_AMOUNT_ENDPOINT_ID,
+    POLISH_SAFE_BASS_BYPASS_ENDPOINT_ID,
     type PolishMeterFrame,
 } from "./polish";
 
@@ -387,6 +392,11 @@ function createInitialParameterValues(): Map<string, unknown> {
         [POLISH_ENHANCER_AMOUNT_ENDPOINT_ID, 0],
         [POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID, 0],
         [POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID, 0],
+        [POLISH_SAFE_BASS_AMOUNT_ENDPOINT_ID, 0],
+        [POLISH_SAFE_BASS_BYPASS_ENDPOINT_ID, 0],
+        [POLISH_ENHANCER_BYPASS_ENDPOINT_ID, 0],
+        [POLISH_COMPRESSION_CLIP_BYPASS_ENDPOINT_ID, 0],
+        [POLISH_OUTPUT_TRIM_BYPASS_ENDPOINT_ID, 0],
         [unisonVoicesEndpointID, 1],
         [unisonDetuneEndpointID, 0.1],
         [unisonBlendEndpointID, 0.75],
@@ -757,6 +767,34 @@ function buildHarnessStatus(manifest: unknown) {
                         unit: "dB",
                     },
                 },
+                {
+                    endpointID: POLISH_SAFE_BASS_AMOUNT_ENDPOINT_ID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Polish Safe Bass Amount",
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                    },
+                },
+                ...[
+                    [POLISH_SAFE_BASS_BYPASS_ENDPOINT_ID, "Polish Safe Bass Bypass"],
+                    [POLISH_ENHANCER_BYPASS_ENDPOINT_ID, "Polish Enhancer Bypass"],
+                    [POLISH_COMPRESSION_CLIP_BYPASS_ENDPOINT_ID, "Polish Compression / Clip Bypass"],
+                    [POLISH_OUTPUT_TRIM_BYPASS_ENDPOINT_ID, "Polish Output Trim Bypass"],
+                ].map(([endpointID, name]) => ({
+                    endpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name,
+                        min: 0,
+                        max: 1,
+                        init: 0,
+                        discrete: true,
+                        step: 1,
+                        text: "Active|Bypassed",
+                    },
+                })),
                 {
                     endpointID: sourceModeEndpointID,
                     purpose: "parameter",

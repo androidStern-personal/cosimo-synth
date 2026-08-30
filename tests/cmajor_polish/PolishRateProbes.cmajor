@@ -42,20 +42,21 @@ processor PolishSafeBassResponseProbe
     }
 }
 
-processor PolishSafeBassActivationRateProbe
+processor PolishSafeBassAmountRateProbe
 {
     output stream int32 out;
     node polish = wt::PolishBus;
 
-    float32 render (float32 enhancerAmount)
+    float32 render (float32 safeBassAmount)
     {
-        // Pure side DC makes the settled 120 Hz high-pass output zero. The
-        // microscopic Enhancer amount engages Safe Bass without adding a
-        // measurable competing T26 contribution.
+        // Pure side DC makes the settled 120 Hz high-pass output zero and
+        // isolates the explicit Safe Bass wet/dry ramp.
         polish.in <- float32<2> (0.25f, -0.25f);
-        polish.enhancerAmountIn <- enhancerAmount;
+        polish.enhancerAmountIn <- 0.0f;
         polish.compressionClipAmountIn <- 0.0f;
         polish.outputTrimDbIn <- 0.0f;
+        polish.safeBassAmountIn <- safeBassAmount;
+        polish.safeBassBypassIn <- 0.0f;
         polish.advance();
         return polish.out[0];
     }
@@ -75,7 +76,7 @@ processor PolishSafeBassActivationRateProbe
         int32 crossingFrame = -1;
         for (int32 frame = 0; frame < searchFrames; ++frame)
         {
-            let rendered = std::intrinsics::abs (render (0.0000001f));
+            let rendered = std::intrinsics::abs (render (1.0f));
             if (crossingFrame < 0 && rendered <= threshold)
                 crossingFrame = frame;
         }

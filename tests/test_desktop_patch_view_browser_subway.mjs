@@ -1320,7 +1320,7 @@ test("the fixed FX footer truncates the composed graph without covering its inte
     }
 });
 
-test("POLISH is one permanent post-lane node with only the three locked host controls", async () => {
+test("POLISH composes four compact modules, independent bypasses, and the T75 expansion handoff", async () => {
     const page = await openHarnessPage({
         laneDoc: populatedThreeBandLaneDocJson(),
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
@@ -1337,6 +1337,7 @@ test("POLISH is one permanent post-lane node with only the three locked host con
         await polish.waitFor();
         const structure = await page.locator(".rack-stack").evaluate((stack) => {
             const graph = stack.querySelector('[data-role="rack-module-list"]');
+            const footer = stack.querySelector('[data-role="rack-fixed-footer"]');
             const mix = stack.querySelector('[data-role="rack-lane-mix"]');
             const tail = Array.from(stack.querySelectorAll(
                 '[data-role="rack-ghost-add"][data-lane-path^="trunk:"]',
@@ -1344,15 +1345,27 @@ test("POLISH is one permanent post-lane node with only the three locked host con
             const tailRow = tail?.closest(".subway-ghost-row");
             const polishBoundary = stack.querySelector('[data-role="rack-polish-boundary"]');
             const fixedNode = stack.querySelector('[data-role="rack-polish-node"]');
-            if (!(graph instanceof HTMLElement) || !(mix instanceof HTMLElement)
+            if (!(graph instanceof HTMLElement) || !(footer instanceof HTMLElement)
+                    || !(mix instanceof HTMLElement)
                     || !(tail instanceof HTMLButtonElement) || !(tailRow instanceof HTMLElement)
                     || !(polishBoundary instanceof HTMLElement)
                     || !(fixedNode instanceof HTMLButtonElement)) return null;
+            const stackRect = stack.getBoundingClientRect();
             const graphRect = graph.getBoundingClientRect();
+            const footerRect = footer.getBoundingClientRect();
             const mixRect = mix.getBoundingClientRect();
             const tailRect = tailRow.getBoundingClientRect();
             const polishRect = polishBoundary.getBoundingClientRect();
             return {
+                fixedLayout: {
+                    stackHeight: stackRect.height,
+                    graphHeight: graphRect.height,
+                    footerHeight: footerRect.height,
+                    polishHeight: polishRect.height,
+                    graphScrollTop: graph.scrollTop,
+                    graphScrollHeight: graph.scrollHeight,
+                    graphClientHeight: graph.clientHeight,
+                },
                 vertical: {
                     tailBottom: tailRect.bottom,
                     graphBottom: graphRect.bottom,
@@ -1381,32 +1394,176 @@ test("POLISH is one permanent post-lane node with only the three locked host con
         await polish.click();
         const editor = page.locator('[data-role="rack-editor-polish"]');
         await editor.waitFor();
-        assert.equal(await editor.locator('[data-role^="polish-control-"]').count(), 3);
+        assert.equal(await editor.locator('[data-role^="polish-module-"]').count(), 4);
+        assert.equal(await editor.locator('[data-role^="polish-control-"]').count(), 4);
+        assert.equal(await editor.locator('[data-role^="polish-bypass-"]').count(), 4);
         assert.equal(await editor.locator('[data-modulation-target-kind]').count(), 0);
         assert.equal(await editor.locator('.rack-editor-power').count(), 0);
+        const revealPolishModule = async (locator) => {
+            await locator.scrollIntoViewIfNeeded();
+            await locator.evaluate((element) => {
+                const module = element.closest('[data-role^="polish-module-"]');
+                const scroller = element.closest(".polish-editor-controls");
+                if (!(module instanceof HTMLElement) || !(scroller instanceof HTMLElement)) return;
+                const moduleRect = module.getBoundingClientRect();
+                const scrollerRect = scroller.getBoundingClientRect();
+                scroller.scrollTop += moduleRect.top - scrollerRect.top;
+            });
+        };
+        const clickPolishBypass = async (endpointID) => {
+            const bypass = page.locator(`[data-role="polish-bypass-${endpointID}"]`);
+            await revealPolishModule(bypass);
+            await bypass.click();
+        };
 
+        await page.locator('[data-role="polish-knob-polishSafeBassAmount"]').press("End");
         await page.locator('[data-role="polish-knob-polishEnhancerAmount"]').press("End");
         await page.locator('[data-role="polish-knob-polishCompressionClipAmount"]').press("End");
         await page.locator('[data-role="polish-knob-polishOutputTrimDb"]').press("Home");
         const edited = await waitForHarnessSnapshot(
             page,
-            "three Polish host controls",
-            (snapshot) => snapshot.parameterValues.polishEnhancerAmount === 1
+            "four Polish module controls",
+            (snapshot) => snapshot.parameterValues.polishSafeBassAmount === 1
+                && snapshot.parameterValues.polishEnhancerAmount === 1
                 && snapshot.parameterValues.polishCompressionClipAmount === 1
                 && snapshot.parameterValues.polishOutputTrimDb === -24,
         );
         assert.deepEqual(
             Object.fromEntries([
+                "polishSafeBassAmount",
                 "polishEnhancerAmount",
                 "polishCompressionClipAmount",
                 "polishOutputTrimDb",
             ].map((endpointID) => [endpointID, edited.parameterValues[endpointID]])),
             {
+                polishSafeBassAmount: 1,
                 polishEnhancerAmount: 1,
                 polishCompressionClipAmount: 1,
                 polishOutputTrimDb: -24,
             },
         );
+
+        await clickPolishBypass("polishSafeBassBypass");
+        const safeBassBypassed = await waitForHarnessSnapshot(
+            page,
+            "only Safe Bass bypassed",
+            (snapshot) => snapshot.parameterValues.polishSafeBassBypass === 1,
+        );
+        assert.equal(safeBassBypassed.parameterValues.polishSafeBassAmount, 1);
+        assert.equal(safeBassBypassed.parameterValues.polishEnhancerBypass, 0);
+        assert.equal(safeBassBypassed.parameterValues.polishCompressionClipBypass, 0);
+        assert.equal(safeBassBypassed.parameterValues.polishOutputTrimBypass, 0);
+
+        for (const endpointID of [
+            "polishEnhancerBypass",
+            "polishCompressionClipBypass",
+            "polishOutputTrimBypass",
+        ]) {
+            await clickPolishBypass(endpointID);
+        }
+        const allBypassed = await waitForHarnessSnapshot(
+            page,
+            "every Polish module bypassed independently",
+            (snapshot) => [
+                "polishSafeBassBypass",
+                "polishEnhancerBypass",
+                "polishCompressionClipBypass",
+                "polishOutputTrimBypass",
+            ].every((endpointID) => snapshot.parameterValues[endpointID] === 1),
+        );
+        assert.equal(allBypassed.parameterValues.polishEnhancerAmount, 1);
+        assert.equal(allBypassed.parameterValues.polishCompressionClipAmount, 1);
+        assert.equal(allBypassed.parameterValues.polishOutputTrimDb, -24);
+
+        const expand = page.locator('[data-role="polish-expand"]');
+        await expand.click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="polish-expand"]')?.getAttribute("aria-expanded") === "true"
+        ));
+        assert.equal(await editor.getAttribute("data-expanded"), "true");
+        assert.equal(
+            await page.locator('[data-role="rack-polish-boundary"]').evaluate(
+                (element) => element.getBoundingClientRect().height,
+            ),
+            structure.fixedLayout.polishHeight,
+        );
+        const expandedFixedLayout = await page.locator(".rack-stack").evaluate((stack) => {
+            const graph = stack.querySelector('[data-role="rack-module-list"]');
+            const footer = stack.querySelector('[data-role="rack-fixed-footer"]');
+            const polishBoundary = stack.querySelector('[data-role="rack-polish-boundary"]');
+            if (!(graph instanceof HTMLElement) || !(footer instanceof HTMLElement)
+                    || !(polishBoundary instanceof HTMLElement)) return null;
+            return {
+                stackHeight: stack.getBoundingClientRect().height,
+                graphHeight: graph.getBoundingClientRect().height,
+                footerHeight: footer.getBoundingClientRect().height,
+                polishHeight: polishBoundary.getBoundingClientRect().height,
+                graphScrollTop: graph.scrollTop,
+                graphScrollHeight: graph.scrollHeight,
+                graphClientHeight: graph.clientHeight,
+            };
+        });
+        assert.deepEqual(expandedFixedLayout, structure.fixedLayout);
+        await expand.click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="polish-expand"]')?.getAttribute("aria-expanded") === "false"
+        ));
+        assert.equal(await editor.getAttribute("data-expanded"), "false");
+        assert.equal(await polish.getAttribute("aria-pressed"), "true");
+
+        for (const surface of [
+            { name: "phone", width: 393, height: 852 },
+            { name: "narrow phone", width: 320, height: 700 },
+            { name: "plugin", width: 640, height: 700 },
+            { name: "desktop", width: 1_024, height: 768 },
+        ]) {
+            await page.setViewportSize({ width: surface.width, height: surface.height });
+            await page.evaluate(() => new Promise((resolve) => {
+                requestAnimationFrame(() => requestAnimationFrame(resolve));
+            }));
+            if (await page.locator('[data-role="rack-editor-polish"]').count() === 0) {
+                const surfacePolish = page.locator('[data-role="rack-polish-node"]');
+                await surfacePolish.scrollIntoViewIfNeeded();
+                await surfacePolish.click();
+                await page.locator('[data-role="rack-editor-polish"]').waitFor();
+            }
+            for (const [moduleID, expectedLabel] of [
+                ["safe-bass", "SAFE BASS"],
+                ["enhance", "ENHANCE"],
+                ["comp", "COMP"],
+                ["output-trim", "OUTPUT TRIM"],
+            ]) {
+                const module = page.locator(`[data-role="polish-module-${moduleID}"]`);
+                await revealPolishModule(module);
+                const presentation = await module.evaluate((element) => {
+                    const label = element.querySelector(".polish-module-header > strong");
+                    const bypass = element.querySelector('[data-role^="polish-bypass-"]');
+                    if (!(label instanceof HTMLElement) || !(bypass instanceof HTMLButtonElement)) return null;
+                    const moduleRect = element.getBoundingClientRect();
+                    const bypassRect = bypass.getBoundingClientRect();
+                    const hit = document.elementFromPoint(
+                        bypassRect.left + (bypassRect.width / 2),
+                        bypassRect.top + (bypassRect.height / 2),
+                    );
+                    return {
+                        label: label.textContent,
+                        labelFits: label.scrollWidth <= label.clientWidth + 1
+                            && label.scrollHeight <= label.clientHeight + 1,
+                        moduleWidth: moduleRect.width,
+                        moduleHeight: moduleRect.height,
+                        bypassWidth: bypassRect.width,
+                        bypassHeight: bypassRect.height,
+                        bypassOwnsCenter: bypass.contains(hit),
+                    };
+                });
+                assert.ok(presentation, `${surface.name} ${moduleID}`);
+                assert.equal(presentation.label, expectedLabel, `${surface.name} ${moduleID}`);
+                assert.equal(presentation.labelFits, true, `${surface.name} ${moduleID}`);
+                assert.equal(presentation.moduleWidth > 0 && presentation.moduleHeight > 0, true);
+                assert.equal(presentation.bypassWidth >= 44 && presentation.bypassHeight >= 44, true);
+                assert.equal(presentation.bypassOwnsCenter, true, `${surface.name} ${moduleID}`);
+            }
+        }
 
         await page.locator('[data-role="rack-lane-bypass"]').click();
         const bypassed = await waitForHarnessSnapshot(
@@ -1417,6 +1574,8 @@ test("POLISH is one permanent post-lane node with only the three locked host con
         assert.equal(bypassed.parameterValues.polishEnhancerAmount, 1);
         assert.equal(bypassed.parameterValues.polishCompressionClipAmount, 1);
         assert.equal(bypassed.parameterValues.polishOutputTrimDb, -24);
+        assert.equal(bypassed.parameterValues.polishSafeBassAmount, 1);
+        assert.equal(bypassed.parameterValues.polishSafeBassBypass, 1);
         assert.equal(await page.locator('[data-role="rack-polish-node"]').count(), 1);
     } finally {
         await page.close();

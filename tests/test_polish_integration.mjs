@@ -31,12 +31,17 @@ test("both synth manifests compose the accepted Enhancer only through the fixed 
     }
 });
 
-test("the production graph exposes only three Polish controls and ends rack to Polish to output", async () => {
+test("the production graph exposes the compact Polish controls and ends rack to Polish to output", async () => {
     const source = await read("cmajor/WavetableSynth.cmajor");
     const publicControls = [
         "polishEnhancerAmount",
         "polishCompressionClipAmount",
         "polishOutputTrimDb",
+        "polishSafeBassAmount",
+        "polishSafeBassBypass",
+        "polishEnhancerBypass",
+        "polishCompressionClipBypass",
+        "polishOutputTrimBypass",
     ];
 
     for (const endpointID of publicControls) {
@@ -75,17 +80,23 @@ test("native host state stamps the current complete sound and rejects older chun
     ]);
 
     assert.match(desktopHost, /completeSoundVersionID \{ "completeSoundVersion" \}/);
+    assert.match(desktopHost, /completeSoundStateVersion = 2/);
+    assert.match(desktopHost, /auto state = getUpdatedState\(\);/);
     assert.match(desktopHost, /state\.setProperty \(completeSoundVersionID, completeSoundStateVersion, nullptr\)/);
     assert.match(desktopHost, /getProperty \(completeSoundVersionID, -1\)[\s\S]*?!= completeSoundStateVersion\)[\s\S]*?return;/);
+    assert.match(desktopHost, /readParametersFromState \(loadParams, newState\);/);
     assert.ok(
         desktopHost.indexOf("getProperty (completeSoundVersionID, -1)")
             < desktopHost.indexOf("lastLoadedStateHash != stateHash"),
     );
 
     assert.match(iosHost, /completeSoundVersion \{ "completeSoundVersion" \}/);
+    assert.match(iosHost, /completeSoundStateVersion = 2/);
     assert.match(iosHost, /state\.setProperty \(ids\.completeSoundVersion, completeSoundStateVersion, nullptr\)/);
+    assert.match(iosHost, /for \(const auto& parameter : patch->getParameterList\(\)\)[\s\S]*?parameter->properties\.endpointID[\s\S]*?parameter->currentValue/);
     assert.match(iosHost, /if \(! isCurrentCompleteSoundState \(restoredState\)\)\s*return;/);
     assert.match(iosHost, /void setNewState \(const juce::ValueTree& newState\)[\s\S]*?if \(! isCurrentCompleteSoundState \(newState\)\)\s*return;/);
+    assert.match(iosHost, /loadParams\.parameterValues\[endpointID\] = static_cast<float> \(\*valueProperty\);/);
     assert.ok(
         iosHost.indexOf("isCurrentCompleteSoundState (restoredState)")
             < iosHost.indexOf("lastLoadedStateHash != stateHash"),
@@ -93,23 +104,27 @@ test("native host state stamps the current complete sound and rejects older chun
 });
 
 test("every non-host complete-sound transport hard-cuts to the Polish version", async () => {
-    const [browserState, speedrun, envelope, shareLink, migrations] = await Promise.all([
+    const [browserState, browserStateDeclaration, speedrun, envelope, shareLink, migrations] = await Promise.all([
         read("web/browser-patch-state.mjs"),
+        read("web/browser-patch-state.d.mts"),
         read("ui/speedrun/patch-io.ts"),
         read("ui/shared/sound-share-envelope.ts"),
         read("ui/shared/sound-share-link.ts"),
         read("ui/shared/effects/synth-preset-migrations.ts"),
     ]);
 
-    assert.match(browserState, /BROWSER_PATCH_STATE_VERSION = 4/);
-    assert.match(speedrun, /BROWSER_PATCH_STATE_VERSION = 4/);
+    const runtimeVersion = browserState.match(/BROWSER_PATCH_STATE_VERSION = (\d+)/)?.[1];
+    const declaredVersion = browserStateDeclaration.match(/readonly version: (\d+)/)?.[1];
+    assert.equal(runtimeVersion, "5");
+    assert.equal(declaredVersion, runtimeVersion);
+    assert.match(speedrun, /BROWSER_PATCH_STATE_VERSION = 5/);
     assert.match(envelope, /SOUND_SHARE_ENVELOPE_VERSION = 2/);
     assert.match(shareLink, /SOUND_SHARE_FRAGMENT_VERSION = 2/);
     assert.match(migrations, /return \[\];/);
     assert.doesNotMatch(migrations, /fromHash|migrate:/);
 });
 
-test("the product UI exposes one permanent non-modulatable Polish node and three controls", async () => {
+test("the product UI exposes four compact Polish modules, independent bypasses, and an expansion handoff", async () => {
     const [workspace, subway, meter, modulationTargets] = await Promise.all([
         read("ui/desktop/effects-rack-workspace.tsx"),
         read("ui/desktop/subway-map-column.tsx"),
@@ -135,10 +150,20 @@ test("the product UI exposes one permanent non-modulatable Polish node and three
         ["polishEnhancerAmount", "POLISH_ENHANCER_AMOUNT_ENDPOINT_ID"],
         ["polishCompressionClipAmount", "POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID"],
         ["polishOutputTrimDb", "POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID"],
+        ["polishSafeBassAmount", "POLISH_SAFE_BASS_AMOUNT_ENDPOINT_ID"],
+        ["polishSafeBassBypass", "POLISH_SAFE_BASS_BYPASS_ENDPOINT_ID"],
+        ["polishEnhancerBypass", "POLISH_ENHANCER_BYPASS_ENDPOINT_ID"],
+        ["polishCompressionClipBypass", "POLISH_COMPRESSION_CLIP_BYPASS_ENDPOINT_ID"],
+        ["polishOutputTrimBypass", "POLISH_OUTPUT_TRIM_BYPASS_ENDPOINT_ID"],
     ]) {
         assert.match(workspace, new RegExp(symbol));
         assert.doesNotMatch(modulationTargets, new RegExp(endpointID));
     }
+    assert.match(workspace, /data-role=\{`polish-module-/);
+    assert.match(workspace, /data-role=\{`polish-bypass-/);
+    assert.match(workspace, /data-role="polish-expand"/);
+    assert.match(workspace, /polishEditorExpanded/);
+    assert.match(workspace, /onPolishEditorExpandedChange/);
     const fixedNode = workspace.slice(
         workspace.indexOf('className={`rack-polish-node'),
         workspace.indexOf("</button>", workspace.indexOf('className={`rack-polish-node')),

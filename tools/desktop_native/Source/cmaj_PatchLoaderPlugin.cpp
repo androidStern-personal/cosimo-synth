@@ -575,8 +575,8 @@ public:
     {
         auto restoredState = juce::ValueTree::readFromData (data, static_cast<size_t> (size));
 
-        // Live may send an empty, non-Cmajor, or pre-Polish state chunk when
-        // opening the device. The T28 sound cut rejects each whole document,
+        // Live may send an empty, non-Cmajor, or pre-T74 state chunk when
+        // opening the device. The current sound cut rejects each whole document,
         // leaving the already-running sound untouched.
         if (! restoredState.isValid()
             || ! restoredState.hasType (ids.Cmajor)
@@ -623,7 +623,7 @@ public:
     void refreshExtraComp (juce::Component*) {}
 
 private:
-    static constexpr int completeSoundStateVersion = 1;
+    static constexpr int completeSoundStateVersion = 2;
     const juce::Identifier completeSoundVersionID { "completeSoundVersion" };
 
     void setPendingArticulationTriggerConfig (cosimo::future_daw::ArticulationTriggerConfig config)

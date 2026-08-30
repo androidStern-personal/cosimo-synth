@@ -193,8 +193,13 @@ import {
 } from "./subway-map-column";
 import {
     POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
+    POLISH_COMPRESSION_CLIP_BYPASS_ENDPOINT_ID,
     POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,
+    POLISH_ENHANCER_BYPASS_ENDPOINT_ID,
+    POLISH_OUTPUT_TRIM_BYPASS_ENDPOINT_ID,
     POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID,
+    POLISH_SAFE_BASS_AMOUNT_ENDPOINT_ID,
+    POLISH_SAFE_BASS_BYPASS_ENDPOINT_ID,
 } from "../shared/polish";
 
 type EffectsRackWorkspaceProps = {
@@ -205,6 +210,14 @@ type EffectsRackWorkspaceProps = {
     polishEnhancerAmount: PatchControlBinding<number>;
     polishCompressionClipAmount: PatchControlBinding<number>;
     polishOutputTrimDb: PatchControlBinding<number>;
+    polishSafeBassAmount: PatchControlBinding<number>;
+    polishSafeBassBypass: PatchControlBinding<number>;
+    polishEnhancerBypass: PatchControlBinding<number>;
+    polishCompressionClipBypass: PatchControlBinding<number>;
+    polishOutputTrimBypass: PatchControlBinding<number>;
+    /** T74 owns only this controlled open/close handoff; T75 owns the surface. */
+    polishEditorExpanded: boolean;
+    onPolishEditorExpandedChange: (expanded: boolean) => void;
     onAddRouteWithOverrides: (overrides: GeneratedModulationRouteInput) => boolean;
     onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
@@ -340,56 +353,87 @@ function ModRailVoiceSettingsPopover({
 const POLISH_ACCENT = "#f4c86a";
 
 const POLISH_CONTROL_DESCRIPTORS: ReadonlyArray<{
+    readonly moduleID: "safe-bass" | "enhance" | "comp" | "output-trim";
+    readonly moduleLabel: "SAFE BASS" | "ENHANCE" | "COMP" | "OUTPUT TRIM";
     readonly descriptor: ParameterKnobDescriptor;
-    readonly bindingKey: "enhancer" | "compressionClip" | "trim";
+    readonly moduleKey: "safeBass" | "enhancer" | "compressionClip" | "trim";
+    readonly bypassEndpointID: string;
     readonly unit: "%" | "dB";
     readonly canonicalPerDisplayedUnit: number;
     readonly digits: number;
 }> = [
     {
+        moduleID: "safe-bass",
+        moduleLabel: "SAFE BASS",
+        descriptor: {
+            endpointID: POLISH_SAFE_BASS_AMOUNT_ENDPOINT_ID,
+            label: "Safe Bass Amount",
+            shortLabel: "AMOUNT",
+            min: 0,
+            max: 1,
+            initial: 0,
+            step: 0.01,
+            scale: "linear",
+        },
+        moduleKey: "safeBass",
+        bypassEndpointID: POLISH_SAFE_BASS_BYPASS_ENDPOINT_ID,
+        unit: "%",
+        canonicalPerDisplayedUnit: 0.01,
+        digits: 0,
+    },
+    {
+        moduleID: "enhance",
+        moduleLabel: "ENHANCE",
         descriptor: {
             endpointID: POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,
-            label: "Enhancer Amount",
-            shortLabel: "ENH",
+            label: "Enhance Amount",
+            shortLabel: "AMOUNT",
             min: 0,
             max: 1,
             initial: 0,
             step: 0.01,
             scale: "linear",
         },
-        bindingKey: "enhancer",
+        moduleKey: "enhancer",
+        bypassEndpointID: POLISH_ENHANCER_BYPASS_ENDPOINT_ID,
         unit: "%",
         canonicalPerDisplayedUnit: 0.01,
         digits: 0,
     },
     {
+        moduleID: "comp",
+        moduleLabel: "COMP",
         descriptor: {
             endpointID: POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
-            label: "Compression / Clip Amount",
-            shortLabel: "COMP",
+            label: "Comp Amount",
+            shortLabel: "AMOUNT",
             min: 0,
             max: 1,
             initial: 0,
             step: 0.01,
             scale: "linear",
         },
-        bindingKey: "compressionClip",
+        moduleKey: "compressionClip",
+        bypassEndpointID: POLISH_COMPRESSION_CLIP_BYPASS_ENDPOINT_ID,
         unit: "%",
         canonicalPerDisplayedUnit: 0.01,
         digits: 0,
     },
     {
+        moduleID: "output-trim",
+        moduleLabel: "OUTPUT TRIM",
         descriptor: {
             endpointID: POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID,
             label: "Output Trim",
-            shortLabel: "TRIM",
+            shortLabel: "LEVEL",
             min: -24,
             max: 12,
             initial: 0,
             step: 0.1,
             scale: "linear",
         },
-        bindingKey: "trim",
+        moduleKey: "trim",
+        bypassEndpointID: POLISH_OUTPUT_TRIM_BYPASS_ENDPOINT_ID,
         unit: "dB",
         canonicalPerDisplayedUnit: 1,
         digits: 1,
@@ -4191,23 +4235,45 @@ function GroupEditorPane({
 }
 
 function PolishEditor({
+    safeBassAmount,
     enhancerAmount,
     compressionClipAmount,
     outputTrimDb,
+    safeBassBypass,
+    enhancerBypass,
+    compressionClipBypass,
+    outputTrimBypass,
+    expanded,
+    onExpandedChange,
 }: {
+    readonly safeBassAmount: PatchControlBinding<number>;
     readonly enhancerAmount: PatchControlBinding<number>;
     readonly compressionClipAmount: PatchControlBinding<number>;
     readonly outputTrimDb: PatchControlBinding<number>;
+    readonly safeBassBypass: PatchControlBinding<number>;
+    readonly enhancerBypass: PatchControlBinding<number>;
+    readonly compressionClipBypass: PatchControlBinding<number>;
+    readonly outputTrimBypass: PatchControlBinding<number>;
+    readonly expanded: boolean;
+    readonly onExpandedChange: (expanded: boolean) => void;
 }) {
     const bindings = {
+        safeBass: safeBassAmount,
         enhancer: enhancerAmount,
         compressionClip: compressionClipAmount,
         trim: outputTrimDb,
+    } as const;
+    const bypassBindings = {
+        safeBass: safeBassBypass,
+        enhancer: enhancerBypass,
+        compressionClip: compressionClipBypass,
+        trim: outputTrimBypass,
     } as const;
 
     return (
         <section
             data-role="rack-editor-polish"
+            data-expanded={expanded}
             className="rack-effect-editor polish-editor"
             style={{ "--editor-accent": POLISH_ACCENT } as CSSProperties}
             aria-label="Polish editor"
@@ -4216,48 +4282,70 @@ function PolishEditor({
                 <div className="rack-editor-heading">
                     <span>FIXED OUTPUT SECTION</span>
                     <strong className="rack-editor-name">POLISH</strong>
-                    <p>Safe Bass → Enhancer → Compression / Clip → Trim</p>
+                    <p>Safe Bass → Enhance → Comp / Clip → Output Trim</p>
                 </div>
+                <button
+                    type="button"
+                    className="polish-expand"
+                    data-role="polish-expand"
+                    aria-expanded={expanded}
+                    aria-label={`${expanded ? "Collapse" : "Expand"} Polish editor`}
+                    onClick={() => onExpandedChange(!expanded)}
+                >
+                    {expanded ? "Collapse" : "Expand"}
+                </button>
             </header>
-            <div className="rack-editor-visual polish-editor-flow" aria-hidden="true">
-                <span>SAFE BASS</span>
-                <i />
-                <span>ENHANCER</span>
-                <i />
-                <span>COMP / CLIP</span>
-                <i />
-                <span>TRIM</span>
-            </div>
             <div className="rack-editor-controls polish-editor-controls">
                 {POLISH_CONTROL_DESCRIPTORS.map((control) => {
-                    const binding = bindings[control.bindingKey];
+                    const binding = bindings[control.moduleKey];
+                    const bypassBinding = bypassBindings[control.moduleKey];
+                    const bypassed = bypassBinding.value >= 0.5;
                     return (
-                        <div
+                        <article
                             key={control.descriptor.endpointID}
-                            className="rack-editor-control polish-editor-control"
-                            data-role={`polish-control-${control.descriptor.endpointID}`}
+                            className={`rack-editor-control polish-editor-control${bypassed ? " is-bypassed" : ""}`}
+                            data-role={`polish-module-${control.moduleID}`}
+                            data-bypassed={bypassed}
                         >
-                            <BaseParameterKnob
-                                descriptor={control.descriptor}
-                                binding={binding}
-                                ownerAccent={POLISH_ACCENT}
-                                dataRole={`polish-knob-${control.descriptor.endpointID}`}
-                                trackDataRole={`polish-knob-track-${control.descriptor.endpointID}`}
-                                handleDataRole={`polish-knob-handle-${control.descriptor.endpointID}`}
-                                detentStep={null}
-                                entrySpec={parameterEntrySpecForScalar({
-                                    min: control.descriptor.min,
-                                    max: control.descriptor.max,
-                                    step: control.descriptor.step,
-                                    unit: control.unit,
-                                    canonicalPerDisplayedUnit: control.canonicalPerDisplayedUnit,
-                                    digits: control.digits,
-                                })}
-                                formatValue={(value) => control.bindingKey === "trim"
-                                    ? `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`
-                                    : `${Math.round(value * 100)}%`}
-                            />
-                        </div>
+                            <header className="polish-module-header">
+                                <strong>{control.moduleLabel}</strong>
+                                <button
+                                    type="button"
+                                    className="rack-power polish-module-bypass"
+                                    data-role={`polish-bypass-${control.bypassEndpointID}`}
+                                    aria-label={`${bypassed ? "Enable" : "Bypass"} ${control.moduleLabel}`}
+                                    aria-pressed={bypassed}
+                                    onClick={() => bypassBinding.commitValue(bypassed ? 0 : 1)}
+                                >
+                                    <PowerGlyph />
+                                </button>
+                            </header>
+                            <div
+                                className="polish-module-control"
+                                data-role={`polish-control-${control.descriptor.endpointID}`}
+                            >
+                                <BaseParameterKnob
+                                    descriptor={control.descriptor}
+                                    binding={binding}
+                                    ownerAccent={POLISH_ACCENT}
+                                    dataRole={`polish-knob-${control.descriptor.endpointID}`}
+                                    trackDataRole={`polish-knob-track-${control.descriptor.endpointID}`}
+                                    handleDataRole={`polish-knob-handle-${control.descriptor.endpointID}`}
+                                    detentStep={null}
+                                    entrySpec={parameterEntrySpecForScalar({
+                                        min: control.descriptor.min,
+                                        max: control.descriptor.max,
+                                        step: control.descriptor.step,
+                                        unit: control.unit,
+                                        canonicalPerDisplayedUnit: control.canonicalPerDisplayedUnit,
+                                        digits: control.digits,
+                                    })}
+                                    formatValue={(value) => control.moduleKey === "trim"
+                                        ? `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`
+                                        : `${Math.round(value * 100)}%`}
+                                />
+                            </div>
+                        </article>
                     );
                 })}
             </div>
@@ -4273,6 +4361,13 @@ export function EffectsRackWorkspace({
     polishEnhancerAmount,
     polishCompressionClipAmount,
     polishOutputTrimDb,
+    polishSafeBassAmount,
+    polishSafeBassBypass,
+    polishEnhancerBypass,
+    polishCompressionClipBypass,
+    polishOutputTrimBypass,
+    polishEditorExpanded,
+    onPolishEditorExpandedChange,
     onAddRouteWithOverrides,
     onRemoveRoute,
     onRouteChange,
@@ -6113,9 +6208,16 @@ export function EffectsRackWorkspace({
 
                 {polishSelected ? (
                     <PolishEditor
+                        safeBassAmount={polishSafeBassAmount}
                         enhancerAmount={polishEnhancerAmount}
                         compressionClipAmount={polishCompressionClipAmount}
                         outputTrimDb={polishOutputTrimDb}
+                        safeBassBypass={polishSafeBassBypass}
+                        enhancerBypass={polishEnhancerBypass}
+                        compressionClipBypass={polishCompressionClipBypass}
+                        outputTrimBypass={polishOutputTrimBypass}
+                        expanded={polishEditorExpanded}
+                        onExpandedChange={onPolishEditorExpandedChange}
                     />
                 ) : selectedGroup !== null && selectedGroup.kind !== "device" ? (
                     <GroupEditorPane

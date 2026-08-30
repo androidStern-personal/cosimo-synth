@@ -8,6 +8,51 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
+const LANDED_VOICE_ENHANCER_PARAMETERS = [
+    { endpointID: "voiceEnhancerFrequency", type: "number", min: 20, max: 20_000, defaultValue: 130 },
+    { endpointID: "voiceEnhancerQ", type: "number", min: 0.1, max: 10, defaultValue: 0.71 },
+    { endpointID: "voiceEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+    {
+        endpointID: "voiceEnhancerKeyTrackEnabled",
+        type: "integer",
+        min: 0,
+        max: 1,
+        step: 1,
+        defaultValue: 0,
+        discrete: true,
+        text: "Off|On",
+    },
+    {
+        endpointID: "voiceEnhancerKeyTrackOffsetSemitones",
+        type: "number",
+        min: -12,
+        max: 60,
+        defaultValue: 0,
+    },
+];
+
+const T74_POLISH_PARAMETERS = [
+    { endpointID: "polishEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+    { endpointID: "polishCompressionClipAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+    { endpointID: "polishOutputTrimDb", type: "number", min: -24, max: 12, defaultValue: 0 },
+    { endpointID: "polishSafeBassAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+    ...[
+        "polishSafeBassBypass",
+        "polishEnhancerBypass",
+        "polishCompressionClipBypass",
+        "polishOutputTrimBypass",
+    ].map((endpointID) => ({
+        endpointID,
+        type: "integer",
+        min: 0,
+        max: 1,
+        step: 1,
+        defaultValue: 0,
+        discrete: true,
+        text: "Active|Bypassed",
+    })),
+];
+
 async function loadModules() {
     const [share, contract, preset, migrations] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/sound-share-link.ts"),
@@ -39,9 +84,8 @@ function currentContract(buildCanonicalPluginStateContract) {
             { endpointID: "ampAttack", type: "number", min: 0.001, max: 10, defaultValue: 0.01 },
             { endpointID: "ampDecay", type: "number", min: 0.001, max: 10, defaultValue: 0.001 },
             { endpointID: "ampSustain", type: "number", min: 0, max: 1, defaultValue: 1 },
-            { endpointID: "polishEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
-            { endpointID: "polishCompressionClipAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
-            { endpointID: "polishOutputTrimDb", type: "number", min: -24, max: 12, defaultValue: 0 },
+            ...LANDED_VOICE_ENHANCER_PARAMETERS,
+            ...T74_POLISH_PARAMETERS,
         ],
         storedState: [
             { key: "bounce.v1", schemaVersion: 1, required: true },
@@ -75,6 +119,11 @@ const soundDocumentArbitrary = fc.record({
     polishEnhancerAmount: fc.integer({ min: 0, max: 1_000 }).map((value) => value / 1_000),
     polishCompressionClipAmount: fc.integer({ min: 0, max: 1_000 }).map((value) => value / 1_000),
     polishOutputTrimDb: fc.integer({ min: -2_400, max: 1_200 }).map((value) => value / 100),
+    polishSafeBassAmount: fc.integer({ min: 0, max: 1_000 }).map((value) => value / 1_000),
+    polishSafeBassBypass: fc.integer({ min: 0, max: 1 }),
+    polishEnhancerBypass: fc.integer({ min: 0, max: 1 }),
+    polishCompressionClipBypass: fc.integer({ min: 0, max: 1 }),
+    polishOutputTrimBypass: fc.integer({ min: 0, max: 1 }),
     voiceEnabled: fc.boolean(),
     routes: fc.array(fc.record({
         id: fc.string({ minLength: 1, maxLength: 16 }),
@@ -109,9 +158,19 @@ test("random valid complete sounds survive deflate/base64url round trips exactly
                 ampAttack: document.ampAttack,
                 ampDecay: document.ampDecay,
                 ampSustain: document.ampSustain,
+                voiceEnhancerFrequency: 130,
+                voiceEnhancerQ: 0.71,
+                voiceEnhancerAmount: 0,
+                voiceEnhancerKeyTrackEnabled: 0,
+                voiceEnhancerKeyTrackOffsetSemitones: 0,
                 polishEnhancerAmount: document.polishEnhancerAmount,
                 polishCompressionClipAmount: document.polishCompressionClipAmount,
                 polishOutputTrimDb: document.polishOutputTrimDb,
+                polishSafeBassAmount: document.polishSafeBassAmount,
+                polishSafeBassBypass: document.polishSafeBassBypass,
+                polishEnhancerBypass: document.polishEnhancerBypass,
+                polishCompressionClipBypass: document.polishCompressionClipBypass,
+                polishOutputTrimBypass: document.polishOutputTrimBypass,
             },
             storedState: {
                 "bounce.v1": null,
@@ -177,9 +236,7 @@ test("a decoded pre-Polish shared sound has no compatibility path into the curre
                 text: "Off|On",
             },
             { endpointID: "voiceEnhancerKeyTrackOffsetSemitones", type: "number", min: -12, max: 60, defaultValue: 0 },
-            { endpointID: "polishEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
-            { endpointID: "polishCompressionClipAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
-            { endpointID: "polishOutputTrimDb", type: "number", min: -24, max: 12, defaultValue: 0 },
+            ...T74_POLISH_PARAMETERS,
         ],
         storedState: [
             { key: "modulation.v6", schemaVersion: 6, required: true },
@@ -210,6 +267,58 @@ test("a decoded pre-Polish shared sound has no compatibility path into the curre
         () => preset.normalizeEffectPresetV2(decoded.value.preset, {
             currentContract: nextContract,
             migrations: migrations.buildSynthPresetMigrations(nextContract),
+        }),
+        /No migration is registered/,
+    );
+});
+
+test("a decoded three-control Polish sound cannot enter the T74 contract", async () => {
+    const { share, contract, preset, migrations } = await loadModules();
+    const t74Contract = currentContract(contract.buildCanonicalPluginStateContract);
+    const t74EndpointIDs = new Set([
+        "polishSafeBassAmount",
+        "polishSafeBassBypass",
+        "polishEnhancerBypass",
+        "polishCompressionClipBypass",
+        "polishOutputTrimBypass",
+    ]);
+    const threeControlContract = contract.buildCanonicalPluginStateContract({
+        effectID: t74Contract.effectID,
+        parameters: t74Contract.parameters.filter(
+            ({ endpointID }) => !t74EndpointIDs.has(endpointID),
+        ),
+        storedState: t74Contract.storedState,
+    });
+    const previousPreset = {
+        kind: "cosimo.effectPreset",
+        version: 2,
+        effectID: threeControlContract.effectID,
+        presetID: "user.three-control-polish",
+        label: "Three-control Polish",
+        contract: threeControlContract,
+        parameters: Object.fromEntries(threeControlContract.parameters.map(
+            ({ endpointID, defaultValue }) => [endpointID, defaultValue],
+        )),
+        storedState: {
+            "bounce.v1": null,
+            "modulation.v6": { routes: [] },
+        },
+    };
+    const encoded = await share.encodeSoundShareFragment({
+        format: "cosimo.soundShare",
+        version: 2,
+        preset: previousPreset,
+        supplementalStoredState: {},
+    });
+    assert.equal(encoded.ok, true, encoded.ok ? undefined : encoded.error.message);
+    assert.match(encoded.value, /^#p=2\./);
+
+    const decoded = await share.decodeSoundShareFragment(encoded.value);
+    assert.equal(decoded.ok, true, decoded.ok ? undefined : decoded.error.message);
+    assert.throws(
+        () => preset.normalizeEffectPresetV2(decoded.value.preset, {
+            currentContract: t74Contract,
+            migrations: migrations.buildSynthPresetMigrations(t74Contract),
         }),
         /No migration is registered/,
     );

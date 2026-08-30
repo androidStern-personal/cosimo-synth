@@ -42,6 +42,22 @@ const POLISH_PARAMETERS = [
     { endpointID: "polishEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
     { endpointID: "polishCompressionClipAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
     { endpointID: "polishOutputTrimDb", type: "number", min: -24, max: 12, defaultValue: 0 },
+    { endpointID: "polishSafeBassAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+    ...[
+        "polishSafeBassBypass",
+        "polishEnhancerBypass",
+        "polishCompressionClipBypass",
+        "polishOutputTrimBypass",
+    ].map((endpointID) => ({
+        endpointID,
+        type: "integer",
+        min: 0,
+        max: 1,
+        step: 1,
+        defaultValue: 0,
+        discrete: true,
+        text: "Active|Bypassed",
+    })),
 ];
 
 const REAL_STYLE_VOICE_ENHANCER_ENDPOINTS = [
@@ -208,7 +224,7 @@ test("a pre-Polish preset is rejected atomically before parameter or stored-stat
     assert.deepEqual(writes, []);
 });
 
-test("a current Polish preset keeps all three saved values exact", async () => {
+test("a current Polish preset keeps every compact value and bypass exact", async () => {
     const { contractModule, presetModule, migrationsModule } = await loadModules();
     const currentContract = buildCurrentContract(contractModule.buildCanonicalPluginStateContract);
     const normalized = presetModule.normalizeEffectPresetV2({
@@ -229,6 +245,11 @@ test("a current Polish preset keeps all three saved values exact", async () => {
             polishEnhancerAmount: 0.42,
             polishCompressionClipAmount: 0.73,
             polishOutputTrimDb: -3.5,
+            polishSafeBassAmount: 0.64,
+            polishSafeBassBypass: 1,
+            polishEnhancerBypass: 0,
+            polishCompressionClipBypass: 1,
+            polishOutputTrimBypass: 1,
         },
         storedState: { "lane.v1": { version: 2, chain: [] } },
     }, {
@@ -242,6 +263,11 @@ test("a current Polish preset keeps all three saved values exact", async () => {
             polishEnhancerAmount: 0.42,
             polishCompressionClipAmount: 0.73,
             polishOutputTrimDb: -3.5,
+            polishSafeBassAmount: 0.64,
+            polishSafeBassBypass: 1,
+            polishEnhancerBypass: 0,
+            polishCompressionClipBypass: 1,
+            polishOutputTrimBypass: 1,
         },
     );
 });
@@ -308,6 +334,14 @@ test("the migration boundary rejects missing, duplicate, or non-neutral Polish c
         {
             parameters: POLISH_PARAMETERS.filter(({ endpointID }) => endpointID !== "polishEnhancerAmount"),
             expected: /neutral polishEnhancerAmount/,
+        },
+        {
+            parameters: POLISH_PARAMETERS.filter(({ endpointID }) => endpointID !== "polishSafeBassAmount"),
+            expected: /neutral polishSafeBassAmount/,
+        },
+        {
+            parameters: POLISH_PARAMETERS.filter(({ endpointID }) => endpointID !== "polishOutputTrimBypass"),
+            expected: /neutral polishOutputTrimBypass/,
         },
         {
             parameters: [...POLISH_PARAMETERS, POLISH_PARAMETERS[0]],

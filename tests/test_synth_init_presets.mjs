@@ -82,6 +82,22 @@ const synthStatus = {
                 max: 60,
                 unit: "st",
             }),
+            parameter("polishEnhancerAmount", { init: 0, min: 0, max: 1 }),
+            parameter("polishCompressionClipAmount", { init: 0, min: 0, max: 1 }),
+            parameter("polishOutputTrimDb", { init: 0, min: -24, max: 12, unit: "dB" }),
+            parameter("polishSafeBassAmount", { init: 0, min: 0, max: 1 }),
+            parameter("polishSafeBassBypass", {
+                init: 0, min: 0, max: 1, step: 1, discrete: true, text: "Active|Bypassed",
+            }),
+            parameter("polishEnhancerBypass", {
+                init: 0, min: 0, max: 1, step: 1, discrete: true, text: "Active|Bypassed",
+            }),
+            parameter("polishCompressionClipBypass", {
+                init: 0, min: 0, max: 1, step: 1, discrete: true, text: "Active|Bypassed",
+            }),
+            parameter("polishOutputTrimBypass", {
+                init: 0, min: 0, max: 1, step: 1, discrete: true, text: "Active|Bypassed",
+            }),
             parameter("delayMix", { init: 0.5, min: 0, max: 1 }),
             parameter("reverbMix", { init: 0.5, min: 0, max: 1 }),
             parameter("globalTune", { init: 0, min: -24, max: 24 }),
@@ -422,6 +438,14 @@ async function createSynthFixture({
         ampDecay: 0.81,
         ampSustain: 0.46,
         ampRelease: 1.72,
+        polishEnhancerAmount: 0.36,
+        polishCompressionClipAmount: 0.58,
+        polishOutputTrimDb: -2.5,
+        polishSafeBassAmount: 0.47,
+        polishSafeBassBypass: 1,
+        polishEnhancerBypass: 1,
+        polishCompressionClipBypass: 1,
+        polishOutputTrimBypass: 1,
     };
     for (const [endpointID, value] of Object.entries(representativeEdits)) {
         if (Object.hasOwn(initialValues, endpointID)) {
@@ -663,6 +687,14 @@ test("Init writes the default for every current production public parameter, inc
         "voiceEnhancerAmount",
         "voiceEnhancerKeyTrackEnabled",
         "voiceEnhancerKeyTrackOffsetSemitones",
+        "polishEnhancerAmount",
+        "polishCompressionClipAmount",
+        "polishOutputTrimDb",
+        "polishSafeBassAmount",
+        "polishSafeBassBypass",
+        "polishEnhancerBypass",
+        "polishCompressionClipBypass",
+        "polishOutputTrimBypass",
         "globalTune",
         "ampAttack",
         "ampDecay",
@@ -704,6 +736,28 @@ test("Init writes the default for every current production public parameter, inc
             voiceEnhancerAmount: 0,
             voiceEnhancerKeyTrackEnabled: 0,
             voiceEnhancerKeyTrackOffsetSemitones: 0,
+        },
+    );
+    assert.deepEqual(
+        Object.fromEntries([
+            "polishEnhancerAmount",
+            "polishCompressionClipAmount",
+            "polishOutputTrimDb",
+            "polishSafeBassAmount",
+            "polishSafeBassBypass",
+            "polishEnhancerBypass",
+            "polishCompressionClipBypass",
+            "polishOutputTrimBypass",
+        ].map((endpointID) => [endpointID, fixture.patchConnection.parameterValues[endpointID]])),
+        {
+            polishEnhancerAmount: 0,
+            polishCompressionClipAmount: 0,
+            polishOutputTrimDb: 0,
+            polishSafeBassAmount: 0,
+            polishSafeBassBypass: 0,
+            polishEnhancerBypass: 0,
+            polishCompressionClipBypass: 0,
+            polishOutputTrimBypass: 0,
         },
     );
     assert.deepEqual(
@@ -1165,6 +1219,14 @@ test("a shared sound captures and restores parameters, modulation, articulation,
     source.patchConnection.emitParameterValue("voiceEnhancerAmount", 0.63);
     source.patchConnection.emitParameterValue("voiceEnhancerKeyTrackEnabled", 1);
     source.patchConnection.emitParameterValue("voiceEnhancerKeyTrackOffsetSemitones", 19.37);
+    source.patchConnection.emitParameterValue("polishEnhancerAmount", 0.42);
+    source.patchConnection.emitParameterValue("polishCompressionClipAmount", 0.73);
+    source.patchConnection.emitParameterValue("polishOutputTrimDb", -4.25);
+    source.patchConnection.emitParameterValue("polishSafeBassAmount", 0.64);
+    source.patchConnection.emitParameterValue("polishSafeBassBypass", 1);
+    source.patchConnection.emitParameterValue("polishEnhancerBypass", 1);
+    source.patchConnection.emitParameterValue("polishCompressionClipBypass", 1);
+    source.patchConnection.emitParameterValue("polishOutputTrimBypass", 1);
     source.patchConnection.emitParameterValue("globalTune", 12.37);
     source.patchConnection.emitParameterValue("ampAttack", 0.43);
     source.patchConnection.emitParameterValue("ampDecay", 0.67);
@@ -1225,6 +1287,28 @@ test("a shared sound captures and restores parameters, modulation, articulation,
         },
     );
     assert.deepEqual(
+        Object.fromEntries([
+            "polishEnhancerAmount",
+            "polishCompressionClipAmount",
+            "polishOutputTrimDb",
+            "polishSafeBassAmount",
+            "polishSafeBassBypass",
+            "polishEnhancerBypass",
+            "polishCompressionClipBypass",
+            "polishOutputTrimBypass",
+        ].map((endpointID) => [endpointID, captured.value.preset.parameters[endpointID]])),
+        {
+            polishEnhancerAmount: 0.42,
+            polishCompressionClipAmount: 0.73,
+            polishOutputTrimDb: -4.25,
+            polishSafeBassAmount: 0.64,
+            polishSafeBassBypass: 1,
+            polishEnhancerBypass: 1,
+            polishCompressionClipBypass: 1,
+            polishOutputTrimBypass: 1,
+        },
+    );
+    assert.deepEqual(
         Object.fromEntries(["ampAttack", "ampDecay", "ampSustain", "ampRelease"]
             .map((endpointID) => [endpointID, captured.value.preset.parameters[endpointID]])),
         { ampAttack: 0.43, ampDecay: 0.67, ampSustain: 0.38, ampRelease: 2.4 },
@@ -1256,6 +1340,28 @@ test("a shared sound captures and restores parameters, modulation, articulation,
             voiceEnhancerAmount: 0.63,
             voiceEnhancerKeyTrackEnabled: 1,
             voiceEnhancerKeyTrackOffsetSemitones: 19.37,
+        },
+    );
+    assert.deepEqual(
+        Object.fromEntries([
+            "polishEnhancerAmount",
+            "polishCompressionClipAmount",
+            "polishOutputTrimDb",
+            "polishSafeBassAmount",
+            "polishSafeBassBypass",
+            "polishEnhancerBypass",
+            "polishCompressionClipBypass",
+            "polishOutputTrimBypass",
+        ].map((endpointID) => [endpointID, target.patchConnection.parameterValues[endpointID]])),
+        {
+            polishEnhancerAmount: 0.42,
+            polishCompressionClipAmount: 0.73,
+            polishOutputTrimDb: -4.25,
+            polishSafeBassAmount: 0.64,
+            polishSafeBassBypass: 1,
+            polishEnhancerBypass: 1,
+            polishCompressionClipBypass: 1,
+            polishOutputTrimBypass: 1,
         },
     );
     assert.deepEqual(

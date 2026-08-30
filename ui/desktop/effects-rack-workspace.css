@@ -1365,34 +1365,88 @@
     --rack-editor-scrim: linear-gradient(90deg, rgb(17 16 13 / 0.65), rgb(17 16 13 / 0.94));
     --plate-y: 86%;
 
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.polish-editor-flow {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    padding-inline: 10px;
-    color: rgb(244 225 181 / 0.72);
-    font: 600 8px/1.2 "Departure Mono", ui-monospace, monospace;
-    letter-spacing: 0.07em;
-    text-align: center;
+.polish-expand {
+    min-width: 68px;
+    min-height: var(--cosimo-hit-min);
+    padding: 0 9px;
+    border: 1px solid rgb(244 200 106 / 0.38);
+    border-radius: var(--cosimo-radius-sm);
+    color: #f4d998;
+    background: rgb(244 200 106 / 0.08);
+    font: 600 9px/1 "Departure Mono", ui-monospace, monospace;
+    letter-spacing: 0.05em;
+    cursor: pointer;
 }
 
-.polish-editor-flow > i {
-    width: 13px;
-    height: 1px;
-    flex: 0 1 13px;
+.polish-expand[aria-expanded="true"] {
+    color: #17130b;
     background: #f4c86a;
-    box-shadow: 0 0 5px rgb(244 200 106 / 0.38);
 }
 
 .polish-editor-controls {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 124px;
+    padding-top: 7px;
 }
 
-.polish-editor-control .oscillator-parameter-knob {
+.polish-editor-control {
+    display: grid;
+    grid-template-rows: var(--cosimo-hit-min) minmax(0, 1fr);
+    place-items: stretch;
+}
+
+.polish-module-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--cosimo-hit-min);
+    align-items: center;
+    padding-left: 7px;
+    border-bottom: 1px solid rgb(255 255 255 / 0.07);
+}
+
+.polish-module-header > strong {
+    overflow: hidden;
+    color: #f4e2b8;
+    font: 600 8px/1 "Departure Mono", ui-monospace, monospace;
+    letter-spacing: 0.06em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.polish-module-bypass {
+    width: var(--cosimo-hit-min);
+    height: var(--cosimo-hit-min);
+    border-left: 1px solid rgb(255 255 255 / 0.07);
+    border-radius: 0;
+    color: #f4c86a;
+}
+
+.polish-module-bypass > svg {
+    width: 17px;
+    height: 17px;
+}
+
+.polish-module-bypass[aria-pressed="false"] {
+    color: #f4c86a;
+}
+
+.polish-module-bypass[aria-pressed="true"] {
+    color: rgb(244 225 181 / 0.38);
+    background: rgb(0 0 0 / 0.22);
+}
+
+.polish-module-control {
+    min-width: 0;
+    min-height: 0;
+}
+
+.polish-editor-control.is-bypassed .polish-module-control {
+    opacity: 0.48;
+}
+
+.polish-module-control .oscillator-parameter-knob {
     width: 100%;
     height: 100%;
     min-width: 0;
@@ -2081,17 +2135,23 @@
         padding-inline: 4px;
     }
 
-    .polish-editor-flow {
-        display: grid;
-        height: 58px;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        align-content: center;
-        gap: 6px;
-        padding: 6px;
+    .polish-editor-controls {
+        grid-template-columns: minmax(0, 1fr);
+        grid-auto-rows: 116px;
     }
 
-    .polish-editor-flow > i {
-        display: none;
+    .polish-module-header {
+        grid-template-areas: "bypass label";
+        grid-template-columns: var(--cosimo-hit-min) minmax(0, 1fr);
+        padding-right: 7px;
+        padding-left: 0;
+    }
+
+    .polish-module-header > strong { grid-area: label; }
+    .polish-module-bypass {
+        grid-area: bypass;
+        border-right: 1px solid rgb(255 255 255 / 0.07);
+        border-left: 0;
     }
 
     .rack-editor-control,
@@ -2121,6 +2181,23 @@
     .rack-editor-header { padding-inline: 5px; }
     .rack-editor-name { font-size: 15px; }
     .rack-editor-controls { gap: 4px; padding-inline: 4px; }
+    .polish-editor-controls { grid-auto-rows: 150px; }
+    .polish-editor-control { grid-template-rows: 66px minmax(0, 1fr); }
+    .polish-module-header {
+        grid-template-areas: "label" "bypass";
+        grid-template-rows: 22px var(--cosimo-hit-min);
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: center;
+        padding-left: 0;
+    }
+    .polish-module-header > strong {
+        width: 100%;
+        text-align: center;
+    }
+    .polish-module-bypass {
+        border-top: 1px solid rgb(255 255 255 / 0.07);
+        border-left: 0;
+    }
     .rack-mod-row { grid-template-columns: 20px minmax(0, 1fr) 20px; }
     .rack-mod-paddle { width: 20px; min-width: 20px; }
 

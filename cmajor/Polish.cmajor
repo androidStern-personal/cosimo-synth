@@ -1,8 +1,8 @@
 namespace wt
 {
-    // Fixed end-of-chain mastering section. Its three value endpoints are the
-    // complete public surface; every other choice is baked and intentionally
-    // absent from modulation, lane topology, bypass, and reorder documents.
+    // Fixed end-of-chain mastering section. Each baked stage exposes only its
+    // compact macro/value and bypass; cutoff, topology, modulation, lane, and
+    // reorder choices remain intentionally absent from the public surface.
     let polishEnhancerLatencyFrames = enhancerLatencySamples;
     let polishCompressorLookaheadFrames = 96;
     let polishLatencyFrames = polishEnhancerLatencyFrames + polishCompressorLookaheadFrames;
@@ -196,6 +196,11 @@ namespace wt
         input value float32 enhancerAmountIn [[ name: "Enhancer Amount", group: "Polish", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
         input value float32 compressionClipAmountIn [[ name: "Compression / Clip Amount", group: "Polish", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
         input value float32 outputTrimDbIn [[ name: "Output Trim", group: "Polish", min: polishOutputTrimMinDb, max: polishOutputTrimMaxDb, init: 0.0f, unit: "dB", rampFrames: 0 ]];
+        input value float32 safeBassAmountIn [[ name: "Safe Bass Amount", group: "Polish", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+        input value float32 safeBassBypassIn [[ name: "Safe Bass Bypass", group: "Polish", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
+        input value float32 enhancerBypassIn [[ name: "Enhancer Bypass", group: "Polish", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
+        input value float32 compressionClipBypassIn [[ name: "Compression / Clip Bypass", group: "Polish", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
+        input value float32 outputTrimBypassIn [[ name: "Output Trim Bypass", group: "Polish", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
         output stream float32<2> out;
         output event PolishMeterFrame meterOut [[ name: "Polish Meter" ]];
 
@@ -246,7 +251,7 @@ namespace wt
             let filteredSide = safeBassFilter.process (side);
 
             // Preserve the all-zero sound bit-for-bit; the filter still runs so
-            // engaging the derived path never reveals uninitialised history.
+            // raising Amount or re-enabling never reveals uninitialised history.
             if (safeBassMix == 0.0f)
                 return signal;
 
@@ -289,7 +294,11 @@ namespace wt
             compressorReductionDb = coefficient * compressorReductionDb
                                     + (1.0f - coefficient) * targetReductionDb;
 
-            if (compressionClipAmount == 0.0f)
+            // Bypass/zero Amount releases the existing gain trajectory instead
+            // of deleting residual reduction in one sample. Fresh neutral state
+            // is already exact; the snap only ends an inaudibly small tail.
+            if (compressionClipAmount == 0.0f
+                && std::intrinsics::abs (compressorReductionDb) <= polishControlSnapEpsilon)
                 compressorReductionDb = 0.0f;
 
             let delayed = compressorDelay[compressorWritePosition];
@@ -309,27 +318,32 @@ namespace wt
         {
             enhancerAmount = smoothPolishControl (
                 enhancerAmount,
-                clampPolishAmount (enhancerAmountIn),
+                enhancerBypassIn >= 0.5f ? 0.0f : clampPolishAmount (enhancerAmountIn),
                 macroSmoothingCoefficient,
                 polishControlSnapEpsilon
             );
             compressionClipAmount = smoothPolishControl (
                 compressionClipAmount,
-                clampPolishAmount (compressionClipAmountIn),
+                compressionClipBypassIn >= 0.5f
+                    ? 0.0f
+                    : clampPolishAmount (compressionClipAmountIn),
                 macroSmoothingCoefficient,
                 polishControlSnapEpsilon
             );
-            let safeBassTarget = (enhancerAmountIn > 0.0f || compressionClipAmountIn > 0.0f)
-                ? 1.0f : 0.0f;
+            let safeBassTarget = safeBassBypassIn >= 0.5f
+                ? 0.0f
+                : clampPolishAmount (safeBassAmountIn);
             safeBassMix = smoothPolishControl (
                 safeBassMix,
                 safeBassTarget,
                 macroSmoothingCoefficient,
                 polishControlSnapEpsilon
             );
-            let trimTarget = std::levels::dBtoGain (std::intrinsics::clamp (
-                outputTrimDbIn, polishOutputTrimMinDb, polishOutputTrimMaxDb
-            ));
+            let trimTarget = outputTrimBypassIn >= 0.5f
+                ? 1.0f
+                : std::levels::dBtoGain (std::intrinsics::clamp (
+                    outputTrimDbIn, polishOutputTrimMinDb, polishOutputTrimMaxDb
+                ));
             outputTrimGain = smoothPolishControl (
                 outputTrimGain,
                 trimTarget,

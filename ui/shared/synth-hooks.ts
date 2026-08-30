@@ -180,9 +180,14 @@ import {
 } from "./browser-audio-events";
 import {
     POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
+    POLISH_COMPRESSION_CLIP_BYPASS_ENDPOINT_ID,
     POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,
+    POLISH_ENHANCER_BYPASS_ENDPOINT_ID,
     POLISH_METER_ENDPOINT_ID,
+    POLISH_OUTPUT_TRIM_BYPASS_ENDPOINT_ID,
     POLISH_OUTPUT_TRIM_DB_ENDPOINT_ID,
+    POLISH_SAFE_BASS_AMOUNT_ENDPOINT_ID,
+    POLISH_SAFE_BASS_BYPASS_ENDPOINT_ID,
     SILENT_POLISH_METER_FRAME,
     normalizePolishMeterMessage,
     type PolishMeterFrame,
@@ -494,6 +499,11 @@ export type SynthPatchViewModel = {
     polishEnhancerAmount: PatchControlBinding<number>;
     polishCompressionClipAmount: PatchControlBinding<number>;
     polishOutputTrimDb: PatchControlBinding<number>;
+    polishSafeBassAmount: PatchControlBinding<number>;
+    polishSafeBassBypass: PatchControlBinding<number>;
+    polishEnhancerBypass: PatchControlBinding<number>;
+    polishCompressionClipBypass: PatchControlBinding<number>;
+    polishOutputTrimBypass: PatchControlBinding<number>;
     unisonVoices: PatchControlBinding<number>;
     unisonDetune: PatchControlBinding<number>;
     unisonBlend: PatchControlBinding<number>;
@@ -2808,6 +2818,31 @@ export function useSynthPatchViewModel({
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, -24, 12),
     });
+    const polishSafeBassAmount = usePatchParameterBinding<number>({
+        endpointID: POLISH_SAFE_BASS_AMOUNT_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const polishSafeBassBypass = usePatchParameterBinding<number>({
+        endpointID: POLISH_SAFE_BASS_BYPASS_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => Number(value) >= 0.5 ? 1 : 0,
+    });
+    const polishEnhancerBypass = usePatchParameterBinding<number>({
+        endpointID: POLISH_ENHANCER_BYPASS_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => Number(value) >= 0.5 ? 1 : 0,
+    });
+    const polishCompressionClipBypass = usePatchParameterBinding<number>({
+        endpointID: POLISH_COMPRESSION_CLIP_BYPASS_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => Number(value) >= 0.5 ? 1 : 0,
+    });
+    const polishOutputTrimBypass = usePatchParameterBinding<number>({
+        endpointID: POLISH_OUTPUT_TRIM_BYPASS_ENDPOINT_ID,
+        initialValue: 0,
+        coerce: (value) => Number(value) >= 0.5 ? 1 : 0,
+    });
     const unisonVoices = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("unisonVoices"),
         initialValue: 1,
@@ -4782,6 +4817,11 @@ export function useSynthPatchViewModel({
         polishEnhancerAmount,
         polishCompressionClipAmount,
         polishOutputTrimDb,
+        polishSafeBassAmount,
+        polishSafeBassBypass,
+        polishEnhancerBypass,
+        polishCompressionClipBypass,
+        polishOutputTrimBypass,
         unisonVoices,
         unisonDetune,
         unisonBlend,

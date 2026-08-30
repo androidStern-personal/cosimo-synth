@@ -168,9 +168,10 @@ processor PolishEnhancerCompositionContract [[ main ]]
         bool exact = true;
         float64 changedPower;
 
-        for (int32 frame = 0; frame < 16384; ++frame)
+        for (int32 frame = 0; frame < 24576; ++frame)
         {
-            let target = frame < 8192 ? 1.0f : 0.32f;
+            let bypassed = frame >= 8192 && frame < 16384;
+            let target = bypassed ? 0.0f : 1.0f;
             smoothedAmount = wt::smoothPolishControl (
                 smoothedAmount, target, smoothingCoefficient, wt::polishControlSnapEpsilon
             );
@@ -179,7 +180,10 @@ processor PolishEnhancerCompositionContract [[ main ]]
             ));
             let sampleFrame = float32<2> (mono, mono);
 
-            polish.enhancerAmountIn <- target;
+            // The public Amount never changes; bypass only changes its effective
+            // DSP target, and re-enable must therefore restore the same treatment.
+            polish.enhancerAmountIn <- 1.0f;
+            polish.enhancerBypassIn <- bypassed ? 1.0f : 0.0f;
             polish.compressionClipAmountIn <- 0.0f;
             polish.outputTrimDbIn <- 0.0f;
             polish.in <- sampleFrame;
@@ -209,7 +213,7 @@ processor PolishEnhancerCompositionContract [[ main ]]
 
             if (polish.out[0] != expected[0] || polish.out[1] != expected[1])
                 exact = false;
-            if (frame >= 4096)
+            if ((frame >= 4096 && frame < 8192) || frame >= 20480)
             {
                 let difference = polish.out[0] - mono;
                 changedPower += float64 (difference) * float64 (difference);
@@ -226,8 +230,8 @@ processor PolishEnhancerCompositionContract [[ main ]]
 }
 
 //==============================================================================
-// Safe Bass is a running 120 Hz / 12 dB-oct side filter with a derived smooth
-// crossfade. Its objective response is pinned independently of the Enhancer.
+// Safe Bass is a running 120 Hz / 12 dB-oct side filter with an explicit smooth
+// Amount crossfade. Its objective response is pinned independently of Enhance.
 
 ## testProcessor()
 
@@ -277,92 +281,102 @@ processor PolishSafeBassContract [[ main ]]
 }
 
 //==============================================================================
-// Safe Bass is derived rather than saved: either public Amount engages the one
-// curve, and returning both to zero restores the exact dry-side target. A
-// below-knee constant side signal isolates this crossfade from the compressor
-// and clipper so the production bus itself can prove the transition is smooth.
+// Safe Bass owns one explicit Amount and bypass. A below-knee constant side
+// signal isolates its crossfade from the compressor and clipper so the
+// production bus itself proves neutral zero, the accepted full treatment,
+// preserved Amount across bypass, and click-safe transitions.
 
 ## testProcessor()
 
-processor PolishSafeBassActivationContract [[ main ]]
+processor PolishSafeBassAmountAndBypassContract [[ main ]]
 {
     output stream int32 out;
     node polish = wt::PolishBus;
 
-    float32 render (float32 enhancerAmount, float32 compressionClipAmount)
+    float32 render (float32 safeBassAmount, float32 safeBassBypass)
     {
         polish.in <- float32<2> (0.25f, -0.25f);
-        polish.enhancerAmountIn <- enhancerAmount;
-        polish.compressionClipAmountIn <- compressionClipAmount;
+        polish.enhancerAmountIn <- 0.0f;
+        polish.compressionClipAmountIn <- 0.0f;
         polish.outputTrimDbIn <- 0.0f;
+        polish.safeBassAmountIn <- safeBassAmount;
+        polish.safeBassBypassIn <- safeBassBypass;
         polish.advance();
         return polish.out[0];
     }
 
     void main()
     {
-        // Settle the accepted Enhancer timing path and the running side filter
-        // while the derived crossfade remains exactly dry.
+        // Settle the accepted timing path and running filter at neutral zero.
         float32 previous;
+        float32 neutralMinimum = 1.0f;
         for (int32 frame = 0; frame < 24000; ++frame)
+        {
             previous = render (0.0f, 0.0f);
+            if (frame >= 12000)
+                neutralMinimum = std::intrinsics::min (
+                    neutralMinimum,
+                    std::intrinsics::abs (previous)
+                );
+        }
 
         float32 maximumStep;
-        float32 compressionActivatedMagnitude;
+        float32 fullTreatmentMagnitude;
         for (int32 frame = 0; frame < 24000; ++frame)
         {
-            let current = render (0.0f, 0.01f);
+            let current = render (1.0f, 0.0f);
             maximumStep = std::intrinsics::max (
                 maximumStep,
                 std::intrinsics::abs (current - previous)
             );
             previous = current;
             if (frame >= 12000)
-                compressionActivatedMagnitude = std::intrinsics::max (
-                    compressionActivatedMagnitude,
+                fullTreatmentMagnitude = std::intrinsics::max (
+                    fullTreatmentMagnitude,
                     std::intrinsics::abs (current)
                 );
         }
 
-        float32 recoveredMinimum = 1.0f;
+        float32 bypassedMinimum = 1.0f;
         for (int32 frame = 0; frame < 24000; ++frame)
         {
-            let current = render (0.0f, 0.0f);
+            let current = render (1.0f, 1.0f);
             maximumStep = std::intrinsics::max (
                 maximumStep,
                 std::intrinsics::abs (current - previous)
             );
             previous = current;
             if (frame >= 12000)
-                recoveredMinimum = std::intrinsics::min (
-                    recoveredMinimum,
+                bypassedMinimum = std::intrinsics::min (
+                    bypassedMinimum,
                     std::intrinsics::abs (current)
                 );
         }
 
-        // A minute Enhancer amount is deliberately enough to activate the
-        // derived full Safe Bass curve while contributing negligible residue.
-        float32 enhancerActivatedMagnitude;
+        // Re-enabling without changing Amount must restore the same full curve.
+        float32 restoredTreatmentMagnitude;
         for (int32 frame = 0; frame < 24000; ++frame)
         {
-            let current = render (0.00001f, 0.0f);
+            let current = render (1.0f, 0.0f);
             maximumStep = std::intrinsics::max (
                 maximumStep,
                 std::intrinsics::abs (current - previous)
             );
             previous = current;
             if (frame >= 12000)
-                enhancerActivatedMagnitude = std::intrinsics::max (
-                    enhancerActivatedMagnitude,
+                restoredTreatmentMagnitude = std::intrinsics::max (
+                    restoredTreatmentMagnitude,
                     std::intrinsics::abs (current)
                 );
         }
 
-        out <- compressionActivatedMagnitude < 0.001f ? 1 : 0;
+        out <- neutralMinimum > 0.249f ? 1 : 0;
         advance();
-        out <- recoveredMinimum > 0.249f ? 1 : 0;
+        out <- fullTreatmentMagnitude < 0.001f ? 1 : 0;
         advance();
-        out <- enhancerActivatedMagnitude < 0.001f ? 1 : 0;
+        out <- bypassedMinimum > 0.249f ? 1 : 0;
+        advance();
+        out <- restoredTreatmentMagnitude < 0.001f ? 1 : 0;
         advance();
         out <- maximumStep < 0.002f ? 1 : 0;
         advance();
@@ -396,7 +410,7 @@ graph PolishSafeBassResponseAt48000 [[ main ]]
 graph PolishSafeBassActivationAt44100 [[ main ]]
 {
     output stream int32 out;
-    node probe = PolishSafeBassActivationRateProbe;
+    node probe = PolishSafeBassAmountRateProbe;
     connection { probe.out -> out; }
 }
 
@@ -404,7 +418,7 @@ graph PolishSafeBassActivationAt44100 [[ main ]]
 graph PolishSafeBassActivationAt48000 [[ main ]]
 {
     output stream int32 out;
-    node probe = PolishSafeBassActivationRateProbe;
+    node probe = PolishSafeBassAmountRateProbe;
     connection { probe.out -> out; }
 }
 
@@ -426,6 +440,81 @@ graph PolishCompressorStepAt48000 [[ main ]]
     output stream int32 out;
     node probe = PolishCompressorStepResponseProbe;
     connection { probe.out -> out; }
+}
+
+//==============================================================================
+// Comp bypass drives the accepted compressor-plus-soft-clip macro to neutral
+// without changing its public Amount. The fixed lookahead stays in circuit, and
+// re-enabling restores the same treatment through the smoothed macro path.
+
+## testProcessor()
+
+processor PolishCompressionBypassContract [[ main ]]
+{
+    output stream int32 out;
+    node polish = wt::PolishBus;
+
+    float32 render (float32 bypassed)
+    {
+        polish.in <- float32<2> (2.0f, 2.0f);
+        polish.safeBassAmountIn <- 0.0f;
+        polish.enhancerAmountIn <- 0.0f;
+        polish.compressionClipAmountIn <- 1.0f;
+        polish.compressionClipBypassIn <- bypassed;
+        polish.outputTrimDbIn <- 0.0f;
+        polish.advance();
+        return polish.out[0];
+    }
+
+    void main()
+    {
+        float32 previous;
+        float32 activeMaximum;
+        for (int32 frame = 0; frame < 24000; ++frame)
+        {
+            previous = render (0.0f);
+            if (frame >= 12000)
+                activeMaximum = std::intrinsics::max (activeMaximum, previous);
+        }
+
+        float32 maximumStep;
+        float32 bypassedMinimum = 1000.0f;
+        for (int32 frame = 0; frame < 48000; ++frame)
+        {
+            let current = render (1.0f);
+            maximumStep = std::intrinsics::max (
+                maximumStep,
+                std::intrinsics::abs (current - previous)
+            );
+            previous = current;
+            if (frame >= 36000)
+                bypassedMinimum = std::intrinsics::min (bypassedMinimum, current);
+        }
+
+        float32 restoredMaximum;
+        for (int32 frame = 0; frame < 24000; ++frame)
+        {
+            let current = render (0.0f);
+            maximumStep = std::intrinsics::max (
+                maximumStep,
+                std::intrinsics::abs (current - previous)
+            );
+            previous = current;
+            if (frame >= 12000)
+                restoredMaximum = std::intrinsics::max (restoredMaximum, current);
+        }
+
+        out <- activeMaximum > wt::polishSoftClipKnee && activeMaximum <= 1.0f ? 1 : 0;
+        advance();
+        out <- bypassedMinimum > 1.99f ? 1 : 0;
+        advance();
+        out <- restoredMaximum > wt::polishSoftClipKnee && restoredMaximum <= 1.0f ? 1 : 0;
+        advance();
+        out <- maximumStep < 0.01f ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
 }
 
 //==============================================================================
@@ -520,17 +609,64 @@ processor PolishFinishAndTrimContract [[ main ]]
         }
 
         float32 positiveTrimMinimum = 1000.0f;
+        float32 previous;
         for (int32 frame = 0; frame < 36000; ++frame)
         {
             polish.in <- float32<2> (0.5f, 0.5f);
             polish.enhancerAmountIn <- 0.0f;
             polish.compressionClipAmountIn <- 0.0f;
             polish.outputTrimDbIn <- 12.0f;
+            polish.outputTrimBypassIn <- 0.0f;
             polish.advance();
+            previous = polish.out[0];
             if (frame >= 24000)
                 positiveTrimMinimum = std::intrinsics::min (
                     positiveTrimMinimum,
                     std::intrinsics::min (polish.out[0], polish.out[1])
+                );
+        }
+
+        float32 maximumBypassStep;
+        float32 bypassedTrimMaximum;
+        for (int32 frame = 0; frame < 24000; ++frame)
+        {
+            polish.in <- float32<2> (0.5f, 0.5f);
+            polish.enhancerAmountIn <- 0.0f;
+            polish.compressionClipAmountIn <- 0.0f;
+            // The value remains +12 dB while only bypass changes.
+            polish.outputTrimDbIn <- 12.0f;
+            polish.outputTrimBypassIn <- 1.0f;
+            polish.advance();
+            maximumBypassStep = std::intrinsics::max (
+                maximumBypassStep,
+                std::intrinsics::abs (polish.out[0] - previous)
+            );
+            previous = polish.out[0];
+            if (frame >= 12000)
+                bypassedTrimMaximum = std::intrinsics::max (
+                    bypassedTrimMaximum,
+                    polish.out[0]
+                );
+        }
+
+        float32 restoredTrimMinimum = 1000.0f;
+        for (int32 frame = 0; frame < 24000; ++frame)
+        {
+            polish.in <- float32<2> (0.5f, 0.5f);
+            polish.enhancerAmountIn <- 0.0f;
+            polish.compressionClipAmountIn <- 0.0f;
+            polish.outputTrimDbIn <- 12.0f;
+            polish.outputTrimBypassIn <- 0.0f;
+            polish.advance();
+            maximumBypassStep = std::intrinsics::max (
+                maximumBypassStep,
+                std::intrinsics::abs (polish.out[0] - previous)
+            );
+            previous = polish.out[0];
+            if (frame >= 12000)
+                restoredTrimMinimum = std::intrinsics::min (
+                    restoredTrimMinimum,
+                    polish.out[0]
                 );
         }
 
@@ -539,6 +675,12 @@ processor PolishFinishAndTrimContract [[ main ]]
         out <- fullMacroPeak > wt::polishSoftClipKnee && fullMacroPeak <= 1.0f ? 1 : 0;
         advance();
         out <- positiveTrimMinimum > 1.9f ? 1 : 0;
+        advance();
+        out <- bypassedTrimMaximum < 0.51f ? 1 : 0;
+        advance();
+        out <- restoredTrimMinimum > 1.9f ? 1 : 0;
+        advance();
+        out <- maximumBypassStep < 0.01f ? 1 : 0;
         advance();
         out <- -1;
         advance();

@@ -374,7 +374,7 @@ test("browser patch state distinguishes no saved sound from a complete current d
     const missingStorage = { getItem: () => null };
     const currentDocument = {
         format: "cosimo.browserPatchState",
-        version: 4,
+        version: 5,
         sound: {
             parameters: {
                 filterCutoff: 2_400,
@@ -386,6 +386,11 @@ test("browser patch state distinguishes no saved sound from a complete current d
                 polishEnhancerAmount: 0,
                 polishCompressionClipAmount: 0,
                 polishOutputTrimDb: 0,
+                polishSafeBassAmount: 0,
+                polishSafeBassBypass: 0,
+                polishEnhancerBypass: 0,
+                polishCompressionClipBypass: 0,
+                polishOutputTrimBypass: 0,
             },
             storedState: {
                 "modulation.v6": "current-modulation",
@@ -427,7 +432,7 @@ test("browser patch persistence does not store a state write rejected by the run
     assert.deepEqual(storageWrites, []);
 });
 
-test("a zero-parameter inventory cannot qualify lane-only v4 state as a saved sound", () => {
+test("a zero-parameter inventory cannot qualify lane-only v5 state as a saved sound", () => {
     const runtimeWrites = [];
     const connection = {
         inputEndpoints: [],
@@ -439,7 +444,7 @@ test("a zero-parameter inventory cannot qualify lane-only v4 state as a saved so
         getItem() {
             return JSON.stringify({
                 format: "cosimo.browserPatchState",
-                version: 4,
+                version: 5,
                 sound: {
                     parameters: {},
                     storedState: { "lane.v1": "partial" },
@@ -477,7 +482,7 @@ test("browser patch persistence restores once and coalesces echoed storage write
         getItem() {
             return JSON.stringify({
                 format: "cosimo.browserPatchState",
-                version: 4,
+                version: 5,
                 sound: {
                     parameters: { filterCutoff: 2_400 },
                     storedState: { "lane.v1": "restored" },
@@ -512,7 +517,7 @@ test("browser patch persistence restores once and coalesces echoed storage write
         "test.patch-state",
         JSON.stringify({
             format: "cosimo.browserPatchState",
-            version: 4,
+            version: 5,
             sound: {
                 parameters: { filterCutoff: 2_400 },
                 storedState: { "lane.v1": "updated" },
@@ -522,7 +527,7 @@ test("browser patch persistence restores once and coalesces echoed storage write
     ]]);
 });
 
-test("the complete-sound cut discards a version-3 browser snapshot as one unit", () => {
+test("the T74 complete-sound cut discards a version-4 browser snapshot as one unit", () => {
     const runtimeWrites = [];
     const connection = {
         inputEndpoints: [{ endpointID: "polishEnhancerAmount", purpose: "parameter" }],
@@ -537,7 +542,7 @@ test("the complete-sound cut discards a version-3 browser snapshot as one unit",
         getItem() {
             return JSON.stringify({
                 format: "cosimo.browserPatchState",
-                version: 3,
+                version: 4,
                 sound: {
                     parameters: { polishEnhancerAmount: 0.91 },
                     storedState: { "lane.v1": "pre-polish-lane" },
@@ -555,13 +560,13 @@ test("the complete-sound cut discards a version-3 browser snapshot as one unit",
     assert.deepEqual(runtimeWrites, []);
     assert.deepEqual(persistence.browserState, {
         format: "cosimo.browserPatchState",
-        version: 4,
+        version: 5,
         sound: { parameters: {}, storedState: {} },
         auxiliary: {},
     });
 });
 
-test("a version-4 browser snapshot missing every T62 and Polish value emits no runtime writes", () => {
+test("a version-5 browser snapshot missing every T62 and T74 Polish value emits no runtime writes", () => {
     const runtimeWrites = [];
     const currentParameterEndpointIDs = [
         "filterCutoff",
@@ -573,6 +578,11 @@ test("a version-4 browser snapshot missing every T62 and Polish value emits no r
         "polishEnhancerAmount",
         "polishCompressionClipAmount",
         "polishOutputTrimDb",
+        "polishSafeBassAmount",
+        "polishSafeBassBypass",
+        "polishEnhancerBypass",
+        "polishCompressionClipBypass",
+        "polishOutputTrimBypass",
     ];
     const connection = {
         inputEndpoints: currentParameterEndpointIDs.map((endpointID) => ({
@@ -590,7 +600,7 @@ test("a version-4 browser snapshot missing every T62 and Polish value emits no r
         getItem() {
             return JSON.stringify({
                 format: "cosimo.browserPatchState",
-                version: 4,
+                version: 5,
                 sound: {
                     parameters: { filterCutoff: 2_400 },
                     storedState: {
@@ -624,7 +634,7 @@ test("browser patch host restores Bounce only from the accepted atomic snapshot"
     );
 });
 
-test("browser persistence writes v4 only after the complete live sound image is captured", () => {
+test("browser persistence writes v5 only after the complete live sound image is captured", () => {
     const parameterListeners = new Map();
     const storageWrites = [];
     let fullStoredStateCallback;
@@ -687,7 +697,7 @@ test("browser persistence writes v4 only after the complete live sound image is 
 
     assert.deepEqual(storageWrites, [{
         format: "cosimo.browserPatchState",
-        version: 4,
+        version: 5,
         sound: {
             parameters: {
                 voiceEnhancerAmount: 0.35,
@@ -718,6 +728,11 @@ test("a complete current browser snapshot restores every parameter before struct
         polishEnhancerAmount: 0.3,
         polishCompressionClipAmount: 0.55,
         polishOutputTrimDb: -2.5,
+        polishSafeBassAmount: 0.7,
+        polishSafeBassBypass: 1,
+        polishEnhancerBypass: 0,
+        polishCompressionClipBypass: 1,
+        polishOutputTrimBypass: 0,
     };
     const storedState = {
         "modulation.v6": "restored-modulation",
@@ -744,7 +759,7 @@ test("a complete current browser snapshot restores every parameter before struct
         getItem() {
             return JSON.stringify({
                 format: "cosimo.browserPatchState",
-                version: 4,
+                version: 5,
                 sound: {
                     parameters: parameterValues,
                     storedState,
@@ -769,7 +784,7 @@ test("a complete current browser snapshot restores every parameter before struct
     connection.sendEventOrValue("oscBPan", -0.6);
     assert.deepEqual(JSON.parse(storageWrites.at(-1)[1]), {
         format: "cosimo.browserPatchState",
-        version: 4,
+        version: 5,
         sound: {
             parameters: { ...parameterValues, oscBPan: -0.6 },
             storedState,
@@ -798,7 +813,7 @@ test("deferred sampled mode ignores safety echoes until an explicit user write",
     };
     const initial = {
         format: "cosimo.browserPatchState",
-        version: 4,
+        version: 5,
         sound: {
             parameters: { sourceMode: 1 },
             storedState: { "bounce.v1": "reference" },

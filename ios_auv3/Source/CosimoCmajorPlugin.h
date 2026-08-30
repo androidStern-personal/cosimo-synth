@@ -1906,7 +1906,7 @@ private:
         const juce::Identifier completeSoundVersion { "completeSoundVersion" };
     } ids;
 
-    static constexpr int completeSoundStateVersion = 1;
+    static constexpr int completeSoundStateVersion = 2;
 
     struct NewStateMessage final : public juce::Message
     {
