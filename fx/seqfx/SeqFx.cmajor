@@ -3541,10 +3541,11 @@ processor SeqFx [[ main ]]
         for (wrap<seqfx::adaptiveLowpassDelay> pair)
         {
             let offset = int32 (pair) + 1;
+            let coefficientIndex = wrap<seqfx::adaptiveLowpassTapCount> (offset);
             filtered += (
                 readPitchTierAt (lane, tier, centreIndex - int64 (offset))
                 + readPitchTierAt (lane, tier, centreIndex + int64 (offset))
-            ) * pitchAntialiasCoefficients[lane, voice, offset];
+            ) * pitchAntialiasCoefficients[lane, voice, coefficientIndex];
         }
         return filtered;
     }
@@ -3992,6 +3993,7 @@ processor SeqFx [[ main ]]
         for (wrap<seqfx::adaptiveLowpassDelay> pair)
         {
             let offset = int32 (pair) + 1;
+            let coefficientIndex = wrap<seqfx::adaptiveLowpassTapCount> (offset);
             let previousIndex = wrapStutterReadIndex (centreIndex - offset, readFrameLimit);
             let followingIndex = wrapStutterReadIndex (centreIndex + offset, readFrameLimit);
             filtered += (
@@ -4004,7 +4006,7 @@ processor SeqFx [[ main ]]
                     voice,
                     wrap<stutterBufferSize> (followingIndex)
                 )
-            ) * stutterAntialiasCoefficients[lane, voice, offset];
+            ) * stutterAntialiasCoefficients[lane, voice, coefficientIndex];
         }
         return filtered;
     }
