@@ -4,6 +4,10 @@ set -euo pipefail
 
 TEST_DIR=${0:A:h}
 REPO_DIR=${TEST_DIR:h:h}
+# The macOS default /usr/bin/c++ is clang; Linux runners point this at a
+# clang++ so the clang-spelled warning suppressions hold under -Werror.
+HOST_CXX=${COSIMO_RENDERER_HOST_CXX:-/usr/bin/c++}
+
 LLVM_DIR=${COSIMO_RENDERER_LLVM_DIR:-/opt/homebrew/opt/llvm}
 WASI_C_DIR=${COSIMO_RENDERER_WASI_C_DIR:-/opt/homebrew/opt/wasi-libc/share/wasi-sysroot}
 WASI_CXX_DIR=${COSIMO_RENDERER_WASI_CXX_DIR:-/opt/homebrew/opt/wasi-runtimes/share/wasi-sysroot}
@@ -54,14 +58,14 @@ COMMON_FLAGS=(
 )
 
 # The generated performer must retain a real link-time dependency on the renderer.
-if /usr/bin/c++ "${COMMON_FLAGS[@]}" "$INTEGRATION_SOURCE" \
+if "$HOST_CXX" "${COMMON_FLAGS[@]}" "$INTEGRATION_SOURCE" \
     -o "$BUILD_DIR/provider-missing" 2>"$BUILD_DIR/provider-missing.log"; then
     print -u2 'FAIL: generated performer linked without the external renderer provider'
     exit 1
 fi
 rg -q 'renderAll' "$BUILD_DIR/provider-missing.log"
 
-/usr/bin/c++ "${COMMON_FLAGS[@]}" "${COMMON_SOURCES[@]}" \
+"$HOST_CXX" "${COMMON_FLAGS[@]}" "${COMMON_SOURCES[@]}" \
     -o "$BUILD_DIR/generated-renderer-native"
 NATIVE_FINGERPRINT=$("$BUILD_DIR/generated-renderer-native")
 
