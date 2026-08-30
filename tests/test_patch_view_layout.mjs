@@ -690,7 +690,9 @@ test("the Voice Enhancer reuses the Filter footprint with explicit stages and th
     assert.match(viewSource, /VOICE_ENHANCER_FREQUENCY_TARGET_KIND/);
     assert.match(viewSource, /VOICE_ENHANCER_Q_TARGET_KIND/);
     assert.match(viewSource, /VOICE_ENHANCER_AMOUNT_TARGET_KIND/);
-    assert.match(viewSource, /data-role="key-track-voiceEnhancerFrequency-graph"/);
+    assert.match(viewSource, /<KeyTrackStatus controlKey="voiceEnhancerFrequency"/);
+    assert.match(viewSource, /keyTrack:\s*onKeyTrackToggle === undefined/);
+    assert.doesNotMatch(viewSource, /data-role="key-track-voiceEnhancerFrequency-graph"/);
     assert.match(graphSource, /Horizontal travel owns Frequency or/);
     assert.match(graphSource, /onFrequencyNormalizedChange/);
     assert.match(graphSource, /onAmountChange/);

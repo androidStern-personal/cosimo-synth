@@ -1566,6 +1566,80 @@ test("source-composed iPhone leaves its unused filter spectrum analyzer asleep",
     }
 });
 
+test("source-composed iPhone Key Track uses the shared menu and transparent note status", async () => {
+    const sourceServer = await startIOSSourceHarnessServer();
+    let page = null;
+
+    try {
+        page = await openIOSSourceHarnessPage(browser, sourceServer.baseUrl);
+        await waitForIOSSourceHarnessReady(page);
+        const root = page.locator("cosimo-synth-view");
+        const control = root.locator('[data-role="distortion-wet-hp-slider"]');
+        await control.waitFor();
+        assert.equal(await root.locator(".ios-key-track-button").count(), 0);
+
+        const longPress = async () => {
+            const box = await control.boundingBox();
+            assert.ok(box);
+            await page.mouse.move(box.x + (box.width / 2), box.y + (box.height / 2));
+            await page.mouse.down();
+            await root.locator('[data-role="rack-parameter-menu"]').waitFor();
+            await page.mouse.up();
+        };
+        await longPress();
+        const toggle = root.locator(
+            '[data-role="rack-parameter-menu-item"][data-action="toggle-key-track"]',
+        );
+        assert.equal((await toggle.innerText()).trim(), "Enable Key Track");
+        await toggle.click();
+
+        const status = root.locator('[data-role="key-track-status-distortionWetHPHz"]');
+        await status.waitFor();
+        const presentation = await status.evaluate((element) => {
+            const style = getComputedStyle(element);
+            const statusBox = element.getBoundingClientRect();
+            const outer = element.parentElement;
+            const label = outer?.querySelector(".mseg-depth-label");
+            const labelBox = label?.getBoundingClientRect();
+            const outerBox = outer?.getBoundingClientRect();
+            const overlaps = labelBox === undefined ? true : (
+                statusBox.left < labelBox.right
+                && statusBox.right > labelBox.left
+                && statusBox.top < labelBox.bottom
+                && statusBox.bottom > labelBox.top
+            );
+            return {
+                pointerEvents: style.pointerEvents,
+                color: style.backgroundColor,
+                maskImage: style.maskImage || style.webkitMaskImage,
+                width: statusBox.width,
+                height: statusBox.height,
+                insideTopLeft: outerBox !== undefined
+                    && statusBox.left >= outerBox.left
+                    && statusBox.top >= outerBox.top
+                    && statusBox.right <= outerBox.left + (outerBox.width / 2)
+                    && statusBox.bottom <= outerBox.top + (outerBox.height / 2),
+                overlapsLabel: overlaps,
+            };
+        });
+        assert.equal(presentation.pointerEvents, "none");
+        assert.equal(presentation.color, "rgb(250, 204, 21)");
+        assert.match(presentation.maskImage, /music_note-20px\.svg/);
+        assert.equal(presentation.width, 12);
+        assert.equal(presentation.height, 12);
+        assert.equal(presentation.insideTopLeft, true);
+        assert.equal(presentation.overlapsLabel, false);
+
+        await longPress();
+        assert.equal((await toggle.innerText()).trim(), "Disable Key Track");
+        await toggle.click();
+        await status.waitFor({ state: "detached" });
+    } finally {
+        if (page) await closeIOSHarnessPage(page);
+        await sourceServer.stop();
+    }
+});
+
 test("mounted iPhone MSEG preview shows the selected-slot progress fill from the DSP monitor", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },

@@ -130,8 +130,10 @@ import {
 import {
     ParameterMenuContext,
     useParameterMenu,
+    type ParameterMenuKeyTrackContract,
     type ParameterMenuRequest,
 } from "../shared/parameter-context-menu";
+import { KeyTrackStatus } from "../shared/key-track-status";
 import {
     EDITOR_HIT_RADIUS_PX,
     EDITOR_VALUE_HANDLE_RADIUS_PX,
@@ -2561,7 +2563,7 @@ function VoiceFilterKnob({
 
     return (
         <div
-            className={`mobile-filter-knob-cell${disabled ? " is-disabled" : ""}`}
+            className={`mobile-filter-knob-cell${disabled ? " is-disabled" : ""}${keyTrackEnabled && onKeyTrackToggle !== undefined ? " has-key-track-status" : ""}`}
             data-modulation-target-kind={targetKind}
         >
             {targetRouteCount > 0 ? (
@@ -2613,6 +2615,10 @@ function VoiceFilterKnob({
                         amountSpec: keyTrackEnabled ? FILTER_KEY_TRACK_ROUTE_ENTRY_SPEC : undefined,
                         baseFieldLabel: keyTrackEnabled ? "Key Track Offset" : undefined,
                         routeDestinationLabel: keyTrackEnabled ? "Key Track Offset" : undefined,
+                        keyTrack: onKeyTrackToggle === undefined ? undefined : {
+                            enabled: keyTrackEnabled,
+                            toggle: onKeyTrackToggle,
+                        },
                         baseValue: binding.value,
                         defaultValue: descriptor.initial,
                         commitBase: binding.commitValue,
@@ -2621,16 +2627,9 @@ function VoiceFilterKnob({
                     });
                 }}
             />
-            {onKeyTrackToggle !== undefined ? (
-                <button
-                    type="button"
-                    data-role="key-track-filterCutoff"
-                    aria-pressed={keyTrackEnabled}
-                    className="key-track-button voice-key-track-button is-knob-button"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={onKeyTrackToggle}
-                >Key Track</button>
-            ) : null}
+            {keyTrackEnabled && onKeyTrackToggle !== undefined
+                ? <KeyTrackStatus controlKey="filterCutoff" />
+                : null}
         </div>
     );
 }
@@ -2737,6 +2736,7 @@ function VoiceEnhancerKnob({
     modulationApplication,
     entrySpec,
     keyTrackEnabled = false,
+    onKeyTrackToggle,
 }: {
     descriptor: ParameterKnobDescriptor;
     binding: PatchControlBinding<number>;
@@ -2750,6 +2750,7 @@ function VoiceEnhancerKnob({
     modulationApplication: "linear" | "octaves";
     entrySpec: ParameterEntrySpec;
     keyTrackEnabled?: boolean;
+    onKeyTrackToggle?: () => void;
 }) {
     const armedRoute = routes.find((route) => (
         route.targetKind === targetKind
@@ -2773,7 +2774,7 @@ function VoiceEnhancerKnob({
 
     return (
         <div
-            className="mobile-filter-knob-cell"
+            className={`mobile-filter-knob-cell${keyTrackEnabled && onKeyTrackToggle !== undefined ? " has-key-track-status" : ""}`}
             data-modulation-target-kind={targetKind}
         >
             {targetRouteCount > 0 ? (
@@ -2831,6 +2832,10 @@ function VoiceEnhancerKnob({
                             : parameterEntrySpecForModulationAmount(targetKind, binding.value),
                         baseFieldLabel: descriptor.label,
                         routeDestinationLabel: descriptor.label,
+                        keyTrack: onKeyTrackToggle === undefined ? undefined : {
+                            enabled: keyTrackEnabled,
+                            toggle: onKeyTrackToggle,
+                        },
                         baseValue: ratioValue,
                         defaultValue: keyTrackEnabled ? 1 : descriptor.initial,
                         commitBase: keyTrackEnabled
@@ -2841,6 +2846,9 @@ function VoiceEnhancerKnob({
                     });
                 }}
             />
+            {keyTrackEnabled && onKeyTrackToggle !== undefined
+                ? <KeyTrackStatus controlKey="voiceEnhancerFrequency" />
+                : null}
         </div>
     );
 }
@@ -2899,15 +2907,6 @@ function VoiceEnhancerSection({
                 : `${SYNTH_GRID_CARD_SHELL_CLASS} flex h-full w-full min-h-0 flex-col overflow-hidden border`}
         >
             {compact ? null : <div className={SYNTH_GRID_CARD_INSET_SHADOW_CLASS} />}
-            {compact ? (
-                <button
-                    type="button"
-                    data-role="key-track-voiceEnhancerFrequency-graph"
-                    aria-pressed={keyTrackEnabled}
-                    className="key-track-button voice-enhancer-key-track-button"
-                    onClick={toggleKeyTrack}
-                >Key Track</button>
-            ) : null}
             <div
                 className="relative min-h-0 flex-1"
                 data-role="voice-enhancer-graph-drop-surface"
@@ -2943,15 +2942,6 @@ function VoiceEnhancerSection({
                         className="h-full w-full touch-none"
                     />
                 </div>
-                {compact ? null : (
-                    <button
-                        type="button"
-                        data-role="key-track-voiceEnhancerFrequency-graph"
-                        aria-pressed={keyTrackEnabled}
-                        className="key-track-button absolute right-2 top-2 z-20"
-                        onClick={toggleKeyTrack}
-                    >Key Track</button>
-                )}
             </div>
             <div
                 data-role="voice-enhancer-knob-row"
@@ -2966,6 +2956,7 @@ function VoiceEnhancerSection({
                     formatValue={keyTrackEnabled ? formatVoiceEnhancerRatio : formatCutoffDisplay}
                     modulationApplication="octaves"
                     keyTrackEnabled={keyTrackEnabled}
+                    onKeyTrackToggle={toggleKeyTrack}
                     entrySpec={keyTrackEnabled
                         ? VOICE_ENHANCER_RATIO_ENTRY_SPEC
                         : voiceEnhancerEntrySpec(VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency)}
@@ -3535,17 +3526,14 @@ function FilterSection({
                         menuAmountSpec={keyTrackEnabled ? FILTER_KEY_TRACK_ROUTE_ENTRY_SPEC : undefined}
                         menuBaseFieldLabel={keyTrackEnabled ? "Key Track Offset" : undefined}
                         menuRouteDestinationLabel={keyTrackEnabled ? "Key Track Offset" : undefined}
+                        menuKeyTrack={{
+                            enabled: keyTrackEnabled,
+                            toggle: toggleKeyTrack,
+                        } satisfies ParameterMenuKeyTrackContract}
                         variant="compactOverlay"
                         width={72}
                         height={22}
                     />
-                    <button
-                        type="button"
-                        data-role="key-track-filterCutoff"
-                        aria-pressed={keyTrackEnabled}
-                        className="key-track-button voice-key-track-button"
-                        onClick={toggleKeyTrack}
-                    >Key Track</button>
                 </div>
                 <div className="pointer-events-auto">
                     <PrecisionNumberField

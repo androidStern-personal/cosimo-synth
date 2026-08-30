@@ -1761,25 +1761,13 @@ test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and
 
         const graph = page.locator('[data-role="voice-enhancer-graph"]');
         const graphBox = await graph.boundingBox();
-        const keyTrackButton = page.locator('[data-role="key-track-voiceEnhancerFrequency-graph"]');
-        const keyTrackBox = await keyTrackButton.boundingBox();
+        const frequencyKnob = page.locator('[data-role="voice-enhancer-knob-voiceEnhancerFrequency"]');
         assert.ok(graphBox);
-        assert.ok(keyTrackBox);
-        assert.ok(keyTrackBox.width >= 44 && keyTrackBox.height >= 44);
-        assert.ok(keyTrackBox.x >= footprintAfter.x && keyTrackBox.y >= footprintAfter.y);
-        assert.ok(keyTrackBox.x + keyTrackBox.width <= footprintAfter.x + footprintAfter.width);
-        assert.ok(
-            keyTrackBox.y + keyTrackBox.height <= graphBox.y,
-            "Key Track must remain in the clear tone-card header above the graph",
+        assert.equal(
+            await page.locator('[data-role="key-track-voiceEnhancerFrequency-graph"]').count(),
+            0,
+            "Enhancer must not retain a visible Key Track button.",
         );
-        assert.equal(await keyTrackButton.evaluate((element) => {
-            const bounds = element.getBoundingClientRect();
-            const hit = document.elementFromPoint(
-                bounds.left + (bounds.width / 2),
-                bounds.top + (bounds.height / 2),
-            );
-            return hit === element || (hit instanceof Node && element.contains(hit));
-        }), true, "Key Track must own its reachable center point");
 
         const beforeSecondaryClick = await getHarnessSnapshot(page);
         await clearHarnessDebugLog(page);
@@ -1828,7 +1816,12 @@ test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and
             (candidate) => Math.abs(Number(candidate.parameterValues.voiceEnhancerQ) - 4.2) < 1e-9,
         );
 
-        await keyTrackButton.click();
+        await frequencyKnob.click({ button: "right" });
+        const keyTrackAction = page.locator(
+            '[data-role="rack-parameter-menu-item"][data-action="toggle-key-track"]',
+        );
+        assert.equal((await keyTrackAction.innerText()).trim(), "Enable Key Track");
+        await keyTrackAction.click();
         snapshot = await waitForHarnessSnapshot(
             page,
             "Enhancer Key Track enable",
@@ -1838,6 +1831,32 @@ test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and
         assert.equal(Number(snapshot.parameterValues.voiceEnhancerKeyTrackOffsetSemitones), 0);
         const ratioKnob = page.locator('[data-role="voice-enhancer-knob-voiceEnhancerKeyTrackOffsetSemitones"]');
         assert.match(await ratioKnob.getAttribute("aria-valuetext"), /1×/);
+        const keyTrackStatus = page.locator('[data-role="key-track-status-voiceEnhancerFrequency"]');
+        await keyTrackStatus.waitFor();
+        assert.deepEqual(await keyTrackStatus.evaluate((element) => {
+            const style = getComputedStyle(element);
+            return {
+                pointerEvents: style.pointerEvents,
+                color: style.backgroundColor,
+                width: element.getBoundingClientRect().width,
+                height: element.getBoundingClientRect().height,
+            };
+        }), {
+            pointerEvents: "none",
+            color: "rgb(250, 204, 21)",
+            width: 12,
+            height: 12,
+        });
+        const statusBox = await keyTrackStatus.boundingBox();
+        const ratioLabelBox = await ratioKnob.locator(".rack-knob-label").boundingBox();
+        const ratioReadoutBox = await ratioKnob.locator(".rack-knob-readout").boundingBox();
+        assert.ok(statusBox && ratioLabelBox && ratioReadoutBox);
+        const overlaps = (left, right) => left.x < right.x + right.width
+            && left.x + left.width > right.x
+            && left.y < right.y + right.height
+            && left.y + left.height > right.y;
+        assert.equal(overlaps(statusBox, ratioLabelBox), false);
+        assert.equal(overlaps(statusBox, ratioReadoutBox), false);
 
         await ratioKnob.click({ button: "right" });
         await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
@@ -1889,7 +1908,9 @@ test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and
         assert.equal(Number(snapshot.parameterValues.voiceEnhancerFrequency), retainedFixedFrequency);
         assert.equal(Number(snapshot.parameterValues.voiceEnhancerKeyTrackOffsetSemitones), 12);
 
-        await keyTrackButton.click();
+        await ratioKnob.click({ button: "right" });
+        assert.equal((await keyTrackAction.innerText()).trim(), "Disable Key Track");
+        await keyTrackAction.click();
         snapshot = await waitForHarnessSnapshot(
             page,
             "Enhancer fixed Frequency restore",
@@ -2004,8 +2025,14 @@ test("the per-voice Enhancer phone controls own reachable touch targets without 
             assert.ok(Math.abs(footprintAfter.width - footprintBefore.width) <= 1);
             assert.ok(Math.abs(footprintAfter.height - footprintBefore.height) <= 1);
 
-            const keyTrackButton = page.locator('[data-role="key-track-voiceEnhancerFrequency-graph"]');
-            await assertTouchTarget(keyTrackButton, `${viewportLabel} graph Key Track`);
+            assert.equal(
+                await page.locator('[data-role="key-track-voiceEnhancerFrequency-graph"]').count(),
+                0,
+            );
+            await assertTouchTarget(
+                page.locator('[data-role="voice-enhancer-knob-voiceEnhancerFrequency"]'),
+                `${viewportLabel} Enhancer Frequency menu control`,
+            );
 
             const graph = page.locator('[data-role="voice-enhancer-graph"]');
             const graphHandle = page.locator('[data-role="voice-enhancer-graph-handle"]');

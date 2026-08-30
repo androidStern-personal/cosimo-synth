@@ -127,8 +127,9 @@ function applySplitEnableWritesWithoutStaleOffset(runtimeMirror, writes, which) 
 }
 
 async function longPress(page, locator) {
+    await locator.scrollIntoViewIfNeeded();
     const box = await locator.boundingBox();
-    assert.ok(box, "Key Track control must have a rendered hit area.");
+    assert.ok(box, "Parameter control must have a rendered hit area.");
     await page.mouse.move(box.x + (box.width / 2), box.y + (box.height / 2));
     await page.mouse.down();
     await page.locator('[data-role="rack-parameter-menu"]').waitFor({
@@ -136,6 +137,45 @@ async function longPress(page, locator) {
         timeout: 10_000,
     });
     await page.mouse.up();
+}
+
+async function toggleKeyTrackFromMenu(page, control, expectedLabel) {
+    await longPress(page, control);
+    const action = page.locator(
+        '[data-role="rack-parameter-menu-item"][data-action="toggle-key-track"]',
+    );
+    assert.equal((await action.innerText()).trim(), expectedLabel);
+    await action.click();
+}
+
+async function toggleKeyTrackFromContextMenu(page, control, expectedLabel) {
+    await control.evaluate((node) => node.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 200,
+        clientY: 200,
+    })));
+    const action = page.locator(
+        '[data-role="rack-parameter-menu-item"][data-action="toggle-key-track"]',
+    );
+    await action.waitFor();
+    assert.equal((await action.innerText()).trim(), expectedLabel);
+    await action.click();
+}
+
+function voiceFilterControl(page) {
+    return page.locator([
+        '[data-role="filter-cutoff-field"]',
+        '[data-role="voice-filter-knob-filterCutoff"]',
+        '[data-role="voice-filter-knob-filterCutoffKeyTrackOffsetSemitones"]',
+    ].join(", ")).first();
+}
+
+function boxesOverlap(left, right) {
+    return left.x < right.x + right.width
+        && left.x + left.width > right.x
+        && left.y < right.y + right.height
+        && left.y + left.height > right.y;
 }
 
 async function armMseg1(page) {
@@ -149,6 +189,92 @@ async function armMseg1(page) {
     }
 }
 
+test("FX Key Track uses the shared menu and a gesture-transparent top-left status", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
+        await selectRackEffect(page, "chorus");
+
+        const surface = page.locator('[data-role="rack-parameter-surface-chorusRingFrequencyHz"]');
+        const knob = surface.locator('[data-role="rack-parameter-chorusRingFrequencyHz"]');
+        await knob.waitFor();
+        assert.equal(
+            await surface.locator('[data-role="key-track-chorusRingFrequencyHz"]').count(),
+            0,
+            "The cramped FX control must not retain a visible Key Track button.",
+        );
+
+        await longPress(page, knob);
+        const toggle = page.locator(
+            '[data-role="rack-parameter-menu-item"][data-action="toggle-key-track"]',
+        );
+        assert.equal((await toggle.innerText()).trim(), "Enable Key Track");
+        await toggle.click();
+
+        await waitForHarnessSnapshot(page, "Chorus Ring Key Track enable", (snapshot) => (
+            Number(readLaneDocument(snapshot)?.devices?.["chorus#1"]
+                ?.params?.chorusRingKeyTrackEnabled) === 1
+        ));
+        const status = surface.locator('[data-role="key-track-status-chorusRingFrequencyHz"]');
+        await status.waitFor();
+        const statusPresentation = await status.evaluate((node) => {
+            const style = getComputedStyle(node);
+            return {
+                pointerEvents: style.pointerEvents,
+                backgroundColor: style.backgroundColor,
+                width: node.getBoundingClientRect().width,
+                height: node.getBoundingClientRect().height,
+            };
+        });
+        assert.equal(statusPresentation.pointerEvents, "none");
+        assert.equal(statusPresentation.backgroundColor, "rgb(250, 204, 21)");
+        assert.ok(statusPresentation.width >= 10 && statusPresentation.width <= 16);
+        assert.equal(statusPresentation.width, statusPresentation.height);
+        assert.equal(await status.getAttribute("data-icon-source"), "material-symbols-rounded-music-note");
+
+        const surfaceBox = await surface.boundingBox();
+        const statusBox = await status.boundingBox();
+        const labelBox = await surface.locator(".rack-knob-label").boundingBox();
+        const readoutBox = await surface.locator(".rack-knob-readout").boundingBox();
+        assert.ok(surfaceBox && statusBox && labelBox && readoutBox);
+        assert.ok(statusBox.x >= surfaceBox.x && statusBox.y >= surfaceBox.y);
+        assert.ok(statusBox.x + statusBox.width <= surfaceBox.x + (surfaceBox.width / 2));
+        assert.ok(statusBox.y + statusBox.height <= surfaceBox.y + (surfaceBox.height / 2));
+        assert.equal(
+            boxesOverlap(statusBox, labelBox),
+            false,
+            `Status must not cover the parameter label: ${JSON.stringify({ statusBox, labelBox })}`,
+        );
+        assert.equal(boxesOverlap(statusBox, readoutBox), false, "Status must not cover the readout.");
+
+        await longPress(page, knob);
+        assert.equal((await toggle.innerText()).trim(), "Disable Key Track");
+        await toggle.click();
+        await waitForHarnessSnapshot(page, "Chorus Ring Key Track disable", (snapshot) => (
+            Number(readLaneDocument(snapshot)?.devices?.["chorus#1"]
+                ?.params?.chorusRingKeyTrackEnabled) === 0
+        ));
+        await status.waitFor({ state: "detached" });
+
+        const ringAmount = page.locator(
+            '[data-role="rack-parameter-surface-chorusRingAmount"] [data-role="chorus-ring-amount-control"]',
+        );
+        await ringAmount.evaluate((node) => node.dispatchEvent(new MouseEvent("contextmenu", {
+            bubbles: true,
+            cancelable: true,
+            clientX: 200,
+            clientY: 200,
+        })));
+        await page.locator('[data-role="rack-parameter-menu"]').waitFor();
+        assert.equal(await toggle.count(), 0, "Ineligible parameters must not gain Key Track.");
+    } finally {
+        await page.close();
+    }
+});
+
 test("Voice Filter Key Track centers, restores, and re-centers without rewriting Hertz", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 1280, height: 900 }),
@@ -160,12 +286,11 @@ test("Voice Filter Key Track centers, restores, and re-centers without rewriting
             harness.setParameterValue("filterCutoff", 4_321.25);
             harness.setParameterValue("filterCutoffKeyTrackOffsetSemitones", 8.75);
         });
-        const button = page.locator('[data-role="key-track-filterCutoff"]').first();
-        await button.waitFor();
-        assert.equal((await button.textContent())?.trim(), "Key Track");
-        assert.equal(await button.getAttribute("aria-pressed"), "false");
+        const control = voiceFilterControl(page);
+        await control.waitFor();
+        assert.equal(await page.locator('[data-role="key-track-filterCutoff"]').count(), 0);
 
-        await button.click();
+        await toggleKeyTrackFromMenu(page, control, "Enable Key Track");
         await page.waitForFunction(() => {
             const values = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues;
             return Number(values.filterCutoffKeyTrackEnabled) === 1
@@ -179,7 +304,7 @@ test("Voice Filter Key Track centers, restores, and re-centers without rewriting
                 "filterCutoffKeyTrackOffsetSemitones", 6.375,
             );
         });
-        await button.click();
+        await toggleKeyTrackFromMenu(page, voiceFilterControl(page), "Disable Key Track");
         await page.waitForFunction(() => (
             Number(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot()
                 .parameterValues.filterCutoffKeyTrackEnabled) === 0
@@ -188,7 +313,7 @@ test("Voice Filter Key Track centers, restores, and re-centers without rewriting
         assert.equal(values.filterCutoff, 4_321.25);
         assert.equal(values.filterCutoffKeyTrackOffsetSemitones, 6.375);
 
-        await button.click();
+        await toggleKeyTrackFromMenu(page, voiceFilterControl(page), "Enable Key Track");
         await page.waitForFunction(() => (
             Number(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot()
                 .parameterValues.filterCutoffKeyTrackOffsetSemitones) === 0
@@ -231,10 +356,9 @@ test("Effects Key Track exact entry speaks continuous offsets for the base and a
         await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
         await selectRackEffect(page, "drive");
         await armMseg1(page);
-        const button = page.locator('[data-role="key-track-distortionWetHPHz"]');
-        await button.waitFor();
-        assert.equal((await button.textContent())?.trim(), "Key Track");
-        await button.click();
+        const knob = page.locator('[data-role="rack-parameter-distortionWetHPHz"]');
+        await knob.waitFor();
+        await toggleKeyTrackFromMenu(page, knob, "Enable Key Track");
 
         let snapshot = await waitForHarnessSnapshot(page, "Effects Key Track enable", (next) => {
             const params = readLaneDocument(next)?.devices?.["distortion#1"]?.params;
@@ -244,7 +368,6 @@ test("Effects Key Track exact entry speaks continuous offsets for the base and a
         let params = readLaneDocument(snapshot).devices["distortion#1"].params;
         assert.equal(params.distortionWetHPHz, 777.25);
 
-        const knob = page.locator('[data-role="rack-parameter-distortionWetHPHz"]');
         await longPress(page, knob);
         await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
         const sheet = page.locator('[data-role="rack-parameter-value-sheet"]');
@@ -265,7 +388,7 @@ test("Effects Key Track exact entry speaks continuous offsets for the base and a
         params = readLaneDocument(snapshot).devices["distortion#1"].params;
         assert.equal(params.distortionWetHPHz, 777.25);
 
-        await button.click();
+        await toggleKeyTrackFromMenu(page, knob, "Disable Key Track");
         snapshot = await waitForHarnessSnapshot(page, "Effects Key Track restore", (next) => (
             Number(readLaneDocument(next)?.devices?.["distortion#1"]
                 ?.params?.distortionWetHPKeyTrackEnabled) === 0
@@ -274,7 +397,7 @@ test("Effects Key Track exact entry speaks continuous offsets for the base and a
         assert.equal(params.distortionWetHPHz, 777.25);
         assert.equal(params.distortionWetHPKeyTrackOffsetSemitones, 7.125);
 
-        await button.click();
+        await toggleKeyTrackFromMenu(page, knob, "Enable Key Track");
         snapshot = await waitForHarnessSnapshot(page, "Effects Key Track re-center", (next) => (
             Number(readLaneDocument(next)?.devices?.["distortion#1"]
                 ?.params?.distortionWetHPKeyTrackOffsetSemitones) === 0
@@ -294,8 +417,8 @@ test("Delay mode edits publish one mutually exclusive document and runtime state
 
     try {
         await selectRackEffect(page, "delay");
-        const keyTrackButton = page.locator('[data-role="key-track-delayTime"]');
-        await keyTrackButton.waitFor();
+        const delayTime = page.locator('[data-role="rack-parameter-delayTime"]');
+        await delayTime.waitFor();
 
         await page.locator('[data-role="rack-parameter-delayTimeMode"]').click();
         let snapshot = await waitForHarnessSnapshot(page, "Delay Sync starting state", (next) => {
@@ -305,7 +428,7 @@ test("Delay mode edits publish one mutually exclusive document and runtime state
                 && Number(next.laneParams?.delayTimeMode) === 1;
         });
         await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.clearDebugLog());
-        await keyTrackButton.click();
+        await toggleKeyTrackFromMenu(page, delayTime, "Enable Key Track");
         snapshot = await waitForHarnessSnapshot(page, "Delay Key Track enable runtime fields", (next) => {
             const params = readLaneDocument(next)?.devices?.["delay#1"]?.params;
             return Number(params?.delayTimeMode) === 0
@@ -405,22 +528,56 @@ test("Frequency Split publishes centered enables safely and MAPPINGS edits its l
 
         for (const expected of [{
             which: "Low",
-            buttonRole: "key-track-frequencySplit-low-split#1",
+            controlRole: "rack-split-low-split#1",
             retainedOffset: 5.5,
         }, {
             which: "High",
-            buttonRole: "key-track-frequencySplit-high-split#1",
+            controlRole: "rack-split-high-split#1",
             retainedOffset: -7.25,
         }]) {
             const enabledEndpointID = `xover${expected.which}KeyTrackEnabled`;
             const offsetEndpointID = `xover${expected.which}KeyTrackOffsetSemitones`;
-            const button = page.locator(`[data-role="${expected.buttonRole}"]`);
+            const control = page.locator(`[data-role="${expected.controlRole}"]`);
             await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.clearDebugLog());
-            await button.click();
+            if (expected.which === "Low") {
+                const beforeLongPress = await getHarnessSnapshot(page);
+                const beforeSplit = readLaneDocument(beforeLongPress).chain
+                    .find((node) => node.groupId === "split#1");
+                const box = await control.boundingBox();
+                assert.ok(box);
+                await page.mouse.move(box.x + (box.width / 2), box.y + (box.height / 2));
+                await page.mouse.down();
+                await page.mouse.move(box.x + (box.width / 2) + 3, box.y + (box.height / 2));
+                await page.locator('[data-role="rack-parameter-menu"]').waitFor();
+                await page.mouse.up();
+                const afterLongPress = await getHarnessSnapshot(page);
+                const afterSplit = readLaneDocument(afterLongPress).chain
+                    .find((node) => node.groupId === "split#1");
+                assert.equal(afterSplit.xoverLowHz, beforeSplit.xoverLowHz);
+                assert.deepEqual(readSplitFieldWrites(afterLongPress), []);
+                const action = page.locator(
+                    '[data-role="rack-parameter-menu-item"][data-action="toggle-key-track"]',
+                );
+                assert.equal((await action.innerText()).trim(), "Enable Key Track");
+                await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.clearDebugLog());
+                await action.click();
+            } else {
+                await toggleKeyTrackFromMenu(page, control, "Enable Key Track");
+            }
             let snapshot = await waitForHarnessSnapshot(page, `${expected.which} split Key Track enable`, (next) => {
                 const split = readLaneDocument(next)?.chain?.find((node) => node.groupId === "split#1");
                 return split?.[enabledEndpointID] === true && Number(split?.[offsetEndpointID]) === 0;
             });
+            const status = page.locator(
+                `[data-role="key-track-status-frequencySplit-${expected.which.toLowerCase()}-split#1"]`,
+            );
+            const statusBox = await status.boundingBox();
+            const labelBox = await control.locator(".subway-crossover-label").boundingBox();
+            const readoutBox = await control.locator(".subway-crossover-readout").boundingBox();
+            assert.ok(statusBox && labelBox && readoutBox);
+            assert.equal(await status.evaluate((element) => getComputedStyle(element).pointerEvents), "none");
+            assert.equal(boxesOverlap(statusBox, labelBox), false);
+            assert.equal(boxesOverlap(statusBox, readoutBox), false);
             const enableWrites = readSplitFieldWrites(snapshot);
             assert.deepEqual(enableWrites, [
                 { endpointID: offsetEndpointID, value: 0 },
@@ -435,7 +592,7 @@ test("Frequency Split publishes centered enables safely and MAPPINGS edits its l
             );
 
             await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.clearDebugLog());
-            await button.click();
+            await toggleKeyTrackFromMenu(page, control, "Disable Key Track");
             snapshot = await waitForHarnessSnapshot(page, `${expected.which} split Key Track disable`, (next) => {
                 const split = readLaneDocument(next)?.chain?.find((node) => node.groupId === "split#1");
                 return split?.[enabledEndpointID] === false;
@@ -451,6 +608,12 @@ test("Frequency Split publishes centered enables safely and MAPPINGS edits its l
             '[data-role="mod-mappings-row"][data-route-id="tracked-mapping-split-low"]',
         );
         await row.waitFor();
+        await page.waitForFunction(() => (
+            document.querySelector(
+                '[data-role="mod-mappings-row"][data-route-id="tracked-mapping-split-low"] '
+                    + '[data-role="mod-mappings-base-val"]',
+            )?.textContent?.trim() === "320 Hz"
+        ));
         assert.equal(await row.locator('[data-role="mod-mappings-amount-only"]').count(), 0);
         assert.equal((await row.locator('[data-role="mod-mappings-base-val"]').innerText()).trim(), "320 Hz");
 
@@ -470,8 +633,8 @@ test("Frequency Split publishes centered enables safely and MAPPINGS edits its l
 
         await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
         await page.locator('[data-role="rack-fork-readout-split#1"]').click();
-        const lowKeyTrack = page.locator('[data-role="key-track-frequencySplit-low-split#1"]');
-        await lowKeyTrack.click();
+        const lowCrossover = page.locator('[data-role="rack-split-low-split#1"]');
+        await toggleKeyTrackFromMenu(page, lowCrossover, "Enable Key Track");
         snapshot = await waitForHarnessSnapshot(page, "tracked split MAPPINGS enable", (next) => {
             const nextSplit = readLaneDocument(next)?.chain?.find((node) => node.groupId === "split#1");
             return nextSplit?.xoverLowKeyTrackEnabled === true
@@ -512,7 +675,7 @@ test("Frequency Split publishes centered enables safely and MAPPINGS edits its l
 
         await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
         await page.locator('[data-role="rack-fork-readout-split#1"]').click();
-        await lowKeyTrack.click();
+        await toggleKeyTrackFromMenu(page, lowCrossover, "Disable Key Track");
         snapshot = await waitForHarnessSnapshot(page, "tracked split ordinary restore", (next) => {
             const nextSplit = readLaneDocument(next)?.chain?.find((node) => node.groupId === "split#1");
             return nextSplit?.xoverLowKeyTrackEnabled === false;
@@ -542,8 +705,8 @@ test("tracked rack graphs and X/Y editors preserve their hidden ordinary axes", 
         });
 
         await selectRackEffect(page, "filter");
-        const filterKeyTrack = page.locator('[data-role="key-track-globalFilterCutoff"]');
-        await filterKeyTrack.click();
+        const filterCutoff = page.locator('[data-role="rack-parameter-globalFilterCutoff"]');
+        await toggleKeyTrackFromMenu(page, filterCutoff, "Enable Key Track");
         await waitForHarnessSnapshot(page, "Global Filter Key Track enable", (next) => (
             Number(readLaneDocument(next)?.devices?.["globalFilter#1"]
                 ?.params?.globalFilterCutoffKeyTrackEnabled) === 1
@@ -560,7 +723,7 @@ test("tracked rack graphs and X/Y editors preserve their hidden ordinary axes", 
         assert.equal(params.globalFilterCutoff, 4_321.25);
         assert.equal(params.globalFilterCutoffKeyTrackOffsetSemitones, 0);
         assert.ok(params.globalFilterResonance > 1.125);
-        await filterKeyTrack.click();
+        await toggleKeyTrackFromMenu(page, filterCutoff, "Disable Key Track");
         snapshot = await waitForHarnessSnapshot(page, "Global Filter ordinary restore", (next) => (
             Number(readLaneDocument(next)?.devices?.["globalFilter#1"]
                 ?.params?.globalFilterCutoffKeyTrackEnabled) === 0
@@ -585,8 +748,8 @@ test("tracked rack graphs and X/Y editors preserve their hidden ordinary axes", 
             offsetEndpointID: "phaserFrequencyKeyTrackOffsetSemitones",
         }]) {
             await selectRackEffect(page, expected.effectId);
-            const keyTrack = page.locator(`[data-role="key-track-${expected.ordinaryEndpointID}"]`);
-            await keyTrack.click();
+            const keyTrackControl = page.locator(`[data-role="rack-parameter-${expected.ordinaryEndpointID}"]`);
+            await toggleKeyTrackFromMenu(page, keyTrackControl, "Enable Key Track");
             await waitForHarnessSnapshot(page, `${expected.effectId} Key Track enable`, (next) => (
                 Number(readLaneDocument(next)?.devices?.[`${expected.effectId}#1`]
                     ?.params?.[expected.enabledEndpointID]) === 1
@@ -610,7 +773,7 @@ test("tracked rack graphs and X/Y editors preserve their hidden ordinary axes", 
             assert.equal(params[expected.ordinaryEndpointID], expected.ordinaryValue);
             assert.ok(params[expected.yEndpointID] > expected.yValue);
 
-            await keyTrack.click();
+            await toggleKeyTrackFromMenu(page, keyTrackControl, "Disable Key Track");
             snapshot = await waitForHarnessSnapshot(page, `${expected.effectId} ordinary restore`, (next) => (
                 Number(readLaneDocument(next)?.devices?.[`${expected.effectId}#1`]
                     ?.params?.[expected.enabledEndpointID]) === 0
@@ -657,8 +820,8 @@ test("MAPPINGS edits tracked bases and routes in continuous offset units", async
         }, seededState);
         await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
         await selectRackEffect(page, "delay");
-        const keyTrack = page.locator('[data-role="key-track-delayTime"]');
-        await keyTrack.click();
+        const delayTime = page.locator('[data-role="rack-parameter-delayTime"]');
+        await toggleKeyTrackFromMenu(page, delayTime, "Enable Key Track");
         await waitForHarnessSnapshot(page, "tracked Delay mapping enable", (next) => (
             Number(readLaneDocument(next)?.devices?.["delay#1"]
                 ?.params?.delayTimeKeyTrackEnabled) === 1
@@ -670,6 +833,11 @@ test("MAPPINGS edits tracked bases and routes in continuous offset units", async
             '[data-role="mod-mappings-row"][data-route-id="tracked-mapping-delay-time"]',
         );
         await row.waitFor();
+        await page.waitForFunction(() => (
+            document.querySelector(
+                '[data-role="mod-mappings-row"][data-route-id="tracked-mapping-delay-time"] .mod-mappings-row-target',
+            )?.textContent?.trim().endsWith("Key Track Offset") === true
+        ));
         assert.match(
             (await row.locator(".mod-mappings-row-target").innerText()).trim(),
             /Key Track Offset$/,
@@ -696,7 +864,7 @@ test("MAPPINGS edits tracked bases and routes in continuous offset units", async
 
         await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
         await selectRackEffect(page, "delay");
-        await keyTrack.click();
+        await toggleKeyTrackFromMenu(page, delayTime, "Disable Key Track");
         snapshot = await waitForHarnessSnapshot(page, "tracked MAPPINGS ordinary restore", (next) => (
             Number(readLaneDocument(next)?.devices?.["delay#1"]
                 ?.params?.delayTimeKeyTrackEnabled) === 0
@@ -745,8 +913,7 @@ test("Voice Filter Key Track retains Q travel and presents Cutoff travel in semi
     try {
         await page.locator('[data-role="filter-mode-chip"]').click();
         await page.locator('[data-role="filter-travel-overlay"]').waitFor();
-        const keyTrack = page.locator('[data-role="key-track-filterCutoff"]').first();
-        await keyTrack.click();
+        await toggleKeyTrackFromMenu(page, voiceFilterControl(page), "Enable Key Track");
         const overlay = page.locator('[data-role="filter-travel-overlay"]');
         await overlay.waitFor();
         assert.equal(await overlay.getAttribute("data-cutoff-route-storage"), "0.375");
@@ -791,9 +958,8 @@ test("Voice Filter center-and-enable is one undoable parameter transaction", asy
     });
 
     try {
-        const button = page.locator('[data-role="key-track-filterCutoff"]').first();
         await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.clearDebugLog());
-        await button.click();
+        await toggleKeyTrackFromContextMenu(page, voiceFilterControl(page), "Enable Key Track");
         let snapshot = await waitForHarnessSnapshot(page, "atomic Voice Filter Key Track enable", (next) => (
             Number(next.parameterValues.filterCutoffKeyTrackEnabled) === 1
             && Number(next.parameterValues.filterCutoffKeyTrackOffsetSemitones) === 0

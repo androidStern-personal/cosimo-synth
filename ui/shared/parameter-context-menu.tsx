@@ -39,6 +39,7 @@ import {
 export const PARAMETER_MENU_ITEMS = [
     { action: "edit-values", label: "Edit values…" },
     { action: "reset-base", label: "Reset base to default" },
+    { action: "toggle-key-track", label: "Enable Key Track" },
     { action: "toggle-route", label: "Bypass route" },
     { action: "polarity", label: "Polarity: Unipolar" },
     { action: "reducer", label: "Voice reducer: Maximum" },
@@ -47,6 +48,12 @@ export const PARAMETER_MENU_ITEMS = [
 ] as const;
 
 export type ParameterMenuAction = typeof PARAMETER_MENU_ITEMS[number]["action"];
+
+/** A parameter surface supplies its existing canonical Key Track operation. */
+export type ParameterMenuKeyTrackContract = {
+    readonly enabled: boolean;
+    readonly toggle: () => void;
+};
 
 type ParameterMenuBaseContract =
     | {
@@ -79,6 +86,8 @@ export type ParameterMenuRequestContext = ParameterMenuBaseContract & {
     /** When the host knows the exact route (e.g. a matrix row), it pins it
         here; otherwise the shell resolves by targetKind + armed source. */
     readonly routeIndex?: number;
+    /** Presence means this parameter is eligible for the shared Key Track action. */
+    readonly keyTrack?: ParameterMenuKeyTrackContract;
 };
 
 export type ParameterMenuRequest = ParameterMenuRequestContext & {
@@ -99,7 +108,16 @@ export function useParameterMenu() {
     return useContext(ParameterMenuContext);
 }
 
-const LONG_PRESS_SLOP_PX = 8;
+/** Shared movement tolerance before a stationary parameter-menu press becomes a drag. */
+export const PARAMETER_MENU_LONG_PRESS_SLOP_PX = 8;
+
+export type LongPressParameterMenuProps = {
+    readonly onPointerDown?: (event: ReactPointerEvent<Element>) => void;
+    readonly onPointerMove?: (event: ReactPointerEvent<Element>) => void;
+    readonly onPointerUp?: () => void;
+    readonly onPointerCancel?: () => void;
+    readonly onLostPointerCapture?: () => void;
+};
 
 /**
  * Pointer-prop pack for controls that own their pointer interaction (number
@@ -110,7 +128,7 @@ const LONG_PRESS_SLOP_PX = 8;
  */
 export function useLongPressParameterMenu(
     buildRequest: (() => ParameterMenuRequestContext) | null,
-) {
+): LongPressParameterMenuProps {
     const openMenu = useParameterMenu();
     const pressRef = useRef<{ pointerId: number; startX: number; startY: number; timer: number } | null>(null);
 
@@ -146,7 +164,8 @@ export function useLongPressParameterMenu(
         if (press === null || event.pointerId !== press.pointerId) {
             return;
         }
-        if (Math.hypot(event.clientX - press.startX, event.clientY - press.startY) > LONG_PRESS_SLOP_PX) {
+        if (Math.hypot(event.clientX - press.startX, event.clientY - press.startY)
+                > PARAMETER_MENU_LONG_PRESS_SLOP_PX) {
             clearPress();
         }
     }, [clearPress]);
@@ -182,6 +201,7 @@ export function ParameterContextMenu({
     controlId,
     route,
     targetRouteCount,
+    keyTrackEnabled = null,
     canResetBase = true,
     onClose,
     onSelectAction,
@@ -191,6 +211,8 @@ export function ParameterContextMenu({
     controlId: string;
     route: ModulationRoute | null;
     targetRouteCount: number;
+    /** null means the pressed parameter is not Key Track eligible. */
+    keyTrackEnabled?: boolean | null;
     /** Hidden for controls with no canonical default (document-owned cells). */
     canResetBase?: boolean;
     onClose: () => void;
@@ -221,6 +243,9 @@ export function ParameterContextMenu({
                         if (item.action === "reset-base") {
                             return canResetBase;
                         }
+                        if (item.action === "toggle-key-track") {
+                            return keyTrackEnabled !== null;
+                        }
                         if (item.action === "remove-all-target-routes") {
                             return targetRouteCount > 0;
                         }
@@ -235,6 +260,8 @@ export function ParameterContextMenu({
                     .map((item) => {
                         const label = item.action === "toggle-route"
                             ? (route?.enabled === false ? "Enable route" : "Bypass route")
+                            : item.action === "toggle-key-track"
+                                ? (keyTrackEnabled ? "Disable Key Track" : "Enable Key Track")
                             : item.action === "polarity"
                                 ? `Polarity: ${route?.polarity === "bipolar" ? "Bipolar" : "Unipolar"}`
                                 : item.action === "reducer"

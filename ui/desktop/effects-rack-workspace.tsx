@@ -142,11 +142,15 @@ import {
 } from "../shared/modulation-targets";
 import {
     ParameterContextMenu,
+    PARAMETER_MENU_LONG_PRESS_SLOP_PX,
     ParameterValueSheet,
     RemoveTargetRoutesConfirmation,
+    useLongPressParameterMenu,
     useParameterMenu,
     type ParameterMenuAction,
+    type ParameterMenuKeyTrackContract,
 } from "../shared/parameter-context-menu";
+import { KeyTrackStatus } from "../shared/key-track-status";
 import {
     RACK_MODULATION_SOURCE_PAGES,
     findRackModulationSource,
@@ -174,6 +178,7 @@ import { useSliderDrag, type SliderDragPointer } from "../shared/use-slider-drag
 import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
 import {
     PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
+    PARAMETER_GESTURE_LONG_PRESS_MS,
     PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
     useParameterGesture,
 } from "../shared/parameter-gesture";
@@ -1030,7 +1035,12 @@ function RackParameterControl({
     hovered: boolean;
     onSelect: () => void;
     onRecentParameter: (endpointID: string) => void;
-    onRequestContextMenu: (endpointID: string, clientX: number, clientY: number) => void;
+    onRequestContextMenu: (
+        endpointID: string,
+        clientX: number,
+        clientY: number,
+        keyTrack?: ParameterMenuKeyTrackContract,
+    ) => void;
     presentHudVisualization?: (value: number) => ParameterHudVisualization;
 }) {
     const keyTrack = useRackKeyTrackBinding(descriptor);
@@ -1120,7 +1130,7 @@ function RackParameterControl({
             data-drag-creation={dragCreation ?? undefined}
             data-creation-confirmed={confirmed || undefined}
             data-effectiveness={presentation.effectiveness}
-            className={`rack-editor-control${selected ? " is-selected-target" : ""}${hovered ? " is-mod-hover" : ""}${presentation.effectiveness === "active" ? "" : " is-suspended"}`}
+            className={`rack-editor-control${selected ? " is-selected-target" : ""}${hovered ? " is-mod-hover" : ""}${presentation.effectiveness === "active" ? "" : " is-suspended"}${keyTrack.enabled ? " has-key-track-status" : ""}`}
             style={rootStyle}
         >
             {presentation.badge !== "hidden" ? (
@@ -1169,18 +1179,13 @@ function RackParameterControl({
                     descriptor.endpointID,
                     clientX,
                     clientY,
+                    keyTrack.eligible ? {
+                        enabled: keyTrack.enabled,
+                        toggle: () => keyTrack.setEnabled(!keyTrack.enabled),
+                    } : undefined,
                 )}
             />
-            {keyTrack.eligible ? (
-                <button
-                    type="button"
-                    data-role={`key-track-${descriptor.endpointID}`}
-                    aria-pressed={keyTrack.enabled}
-                    className="key-track-button rack-key-track-button"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={() => keyTrack.setEnabled(!keyTrack.enabled)}
-                >Key Track</button>
-            ) : null}
+            {keyTrack.enabled ? <KeyTrackStatus controlKey={descriptor.endpointID} /> : null}
         </div>
     );
 }
@@ -1487,7 +1492,12 @@ function ParameterList({
     dragSource: SelectedSource | null;
     onSelectTarget: (endpointID: string) => void;
     onRecentParameter: (endpointID: string) => void;
-    onRequestContextMenu: (endpointID: string, clientX: number, clientY: number) => void;
+    onRequestContextMenu: (
+        endpointID: string,
+        clientX: number,
+        clientY: number,
+        keyTrack?: ParameterMenuKeyTrackContract,
+    ) => void;
 }) {
     const descriptor = getRackEffectDescriptor(effectId);
 
@@ -1716,7 +1726,12 @@ function SyncParameterList({
     dragSource: SelectedSource | null;
     onSelectTarget: (endpointID: string) => void;
     onRecentParameter: (endpointID: string) => void;
-    onRequestContextMenu: (endpointID: string, clientX: number, clientY: number) => void;
+    onRequestContextMenu: (
+        endpointID: string,
+        clientX: number,
+        clientY: number,
+        keyTrack?: ParameterMenuKeyTrackContract,
+    ) => void;
 }) {
     const descriptor = getRackEffectDescriptor(effectId);
     const resolveLaneKind = useLaneKindResolver();
@@ -3814,6 +3829,7 @@ type RackParameterMenuState = {
     readonly endpointID: string;
     readonly clientX: number;
     readonly clientY: number;
+    readonly keyTrack?: ParameterMenuKeyTrackContract;
 };
 
 const SPLIT_XOVER_MIN_HZ = 40;
@@ -3878,7 +3894,12 @@ function CrossoverSlider({
     onGestureEnd: () => void;
 }) {
     const surfaceRef = useRef<HTMLButtonElement | null>(null);
-    const ordinaryDragPointerRef = useRef<number | null>(null);
+    const ordinaryDragPointerRef = useRef<{
+        pointerId: number;
+        startClientX: number;
+        startTime: number;
+        moved: boolean;
+    } | null>(null);
     const gestureController = useParameterGesture();
     const openParameterMenu = useParameterMenu();
     const unitNumber = Number(groupId.slice(groupId.indexOf("#") + 1));
@@ -3924,8 +3945,7 @@ function CrossoverSlider({
         onGestureEnd();
     }, [keyTrackEnabled, onGestureEnd, onHzDrag, onKeyTrackOffsetDrag, which]);
 
-    const openExactMenu = useCallback((clientX: number, clientY: number) => {
-        openParameterMenu?.({
+    const buildMenuRequest = useCallback(() => ({
             controlKey: `frequencySplit#${unitNumber}.${which}`,
             label: keyTrackEnabled ? "Key Track Offset" : label,
             targetKind,
@@ -3933,21 +3953,29 @@ function CrossoverSlider({
             amountSpec: keyTrackEnabled ? SPLIT_KEY_TRACK_ROUTE_ENTRY_SPEC : undefined,
             baseFieldLabel: keyTrackEnabled ? "Key Track Offset" : undefined,
             routeDestinationLabel: keyTrackEnabled ? "Key Track Offset" : undefined,
+            keyTrack: {
+                enabled: keyTrackEnabled,
+                toggle: () => onKeyTrackToggle(which, !keyTrackEnabled),
+            },
             baseValue: displayedValue,
             defaultValue: keyTrackEnabled
                 ? 0
                 : which === "low" ? LANE_SPLIT_DEFAULT_XOVER_LOW_HZ : LANE_SPLIT_DEFAULT_XOVER_HIGH_HZ,
             commitBase,
-            clientX,
-            clientY,
-        });
-    }, [commitBase, displayedValue, keyTrackEnabled, label, openParameterMenu, targetKind, unitNumber, which]);
+    }), [commitBase, displayedValue, keyTrackEnabled, label, onKeyTrackToggle, targetKind, unitNumber, which]);
+    const ordinaryLongPressMenu = useLongPressParameterMenu(buildMenuRequest);
+    const openExactMenu = useCallback((clientX: number, clientY: number) => {
+        openParameterMenu?.({ ...buildMenuRequest(), clientX, clientY });
+    }, [buildMenuRequest, openParameterMenu]);
 
     return (
         <div
-            className="subway-crossover-control"
+            className={`subway-crossover-control${keyTrackEnabled ? " has-key-track-status" : ""}`}
             data-modulation-target-kind={targetKind}
         >
+            {keyTrackEnabled ? (
+                <KeyTrackStatus controlKey={`frequencySplit-${which}-${groupId}`} />
+            ) : null}
             {targetRouteCount > 0 ? (
                 <span className={`rack-route-count-badge ${hasEnabledTargetRoute ? "is-solid" : "is-hollow"}`}>
                     {targetRouteCount}
@@ -3970,13 +3998,18 @@ function CrossoverSlider({
                 onPointerDown={(event) => {
                     if (event.pointerType === "mouse" && event.button !== 0) return;
                     if (!keyTrackEnabled) {
+                        ordinaryLongPressMenu.onPointerDown?.(event);
                         try {
                             event.currentTarget.setPointerCapture(event.pointerId);
                         } catch {
                             // Window-level release still ends the ordinary drag.
                         }
-                        ordinaryDragPointerRef.current = event.pointerId;
-                        applyOrdinaryClientX(event.clientX);
+                        ordinaryDragPointerRef.current = {
+                            pointerId: event.pointerId,
+                            startClientX: event.clientX,
+                            startTime: performance.now(),
+                            moved: false,
+                        };
                         return;
                     }
                     gestureController.startGesture(event, {
@@ -4009,20 +4042,46 @@ function CrossoverSlider({
                     });
                 }}
                 onPointerMove={(event) => {
-                    if (ordinaryDragPointerRef.current === event.pointerId) {
-                        applyOrdinaryClientX(event.clientX);
+                    const ordinaryDrag = ordinaryDragPointerRef.current;
+                    if (ordinaryDrag?.pointerId === event.pointerId) {
+                        ordinaryLongPressMenu.onPointerMove?.(event);
+                        if (ordinaryDrag.moved
+                                || Math.abs(event.clientX - ordinaryDrag.startClientX)
+                                    > PARAMETER_MENU_LONG_PRESS_SLOP_PX) {
+                            ordinaryDrag.moved = true;
+                            applyOrdinaryClientX(event.clientX);
+                        }
                     }
                 }}
                 onPointerUp={(event) => {
-                    if (ordinaryDragPointerRef.current === event.pointerId) {
+                    const ordinaryDrag = ordinaryDragPointerRef.current;
+                    if (ordinaryDrag?.pointerId === event.pointerId) {
+                        ordinaryLongPressMenu.onPointerUp?.();
                         ordinaryDragPointerRef.current = null;
-                        onGestureEnd();
+                        const wasLongPress = performance.now() - ordinaryDrag.startTime
+                            >= PARAMETER_GESTURE_LONG_PRESS_MS;
+                        if (!ordinaryDrag.moved && !wasLongPress) {
+                            applyOrdinaryClientX(event.clientX);
+                        }
+                        if (ordinaryDrag.moved || !wasLongPress) {
+                            onGestureEnd();
+                        }
                     }
                 }}
                 onPointerCancel={(event) => {
-                    if (ordinaryDragPointerRef.current === event.pointerId) {
+                    const ordinaryDrag = ordinaryDragPointerRef.current;
+                    if (ordinaryDrag?.pointerId === event.pointerId) {
+                        ordinaryLongPressMenu.onPointerCancel?.();
                         ordinaryDragPointerRef.current = null;
-                        onGestureEnd();
+                        if (ordinaryDrag.moved) onGestureEnd();
+                    }
+                }}
+                onLostPointerCapture={(event) => {
+                    ordinaryLongPressMenu.onLostPointerCapture?.();
+                    const ordinaryDrag = ordinaryDragPointerRef.current;
+                    if (ordinaryDrag?.pointerId === event.pointerId) {
+                        ordinaryDragPointerRef.current = null;
+                        if (ordinaryDrag.moved) onGestureEnd();
                     }
                 }}
                 onContextMenu={(event) => {
@@ -4058,13 +4117,6 @@ function CrossoverSlider({
                         : formatModulationAmountReadout(targetKind, canonicalAmount, route.polarity)}</small>
                 ) : null}
             </button>
-            <button
-                type="button"
-                data-role={`key-track-frequencySplit-${which}-${groupId}`}
-                aria-pressed={keyTrackEnabled}
-                className="key-track-button split-key-track-button"
-                onClick={() => onKeyTrackToggle(which, !keyTrackEnabled)}
-            >Key Track</button>
         </div>
     );
 }
@@ -5691,7 +5743,12 @@ export function EffectsRackWorkspace({
     }, []);
 
     const handleParameterMenuAction = useCallback((action: ParameterMenuAction) => {
-        if (action === "edit-values") {
+        if (action === "toggle-key-track") {
+            if (parameterMenu?.keyTrack === undefined) {
+                throw new Error(`${parameterOverlayDescriptor.endpointID} is not Key Track eligible.`);
+            }
+            parameterMenu.keyTrack.toggle();
+        } else if (action === "edit-values") {
             setParameterValueSheetEndpointID(parameterOverlayDescriptor.endpointID);
         } else if (action === "reset-base") {
             parameterOverlayBinding.commitValue(parameterOverlayKeyTrack.enabled
@@ -5718,6 +5775,7 @@ export function EffectsRackWorkspace({
     }, [
         onRouteChange,
         onRemoveRoute,
+        parameterMenu,
         parameterOverlayBinding,
         parameterOverlayKeyTrack.enabled,
         parameterOverlayDescriptor.endpointID,
@@ -5867,6 +5925,7 @@ export function EffectsRackWorkspace({
                     controlId={parameterMenu.endpointID}
                     route={parameterOverlayRoute}
                     targetRouteCount={parameterOverlayTargetRouteIndices.length}
+                    keyTrackEnabled={parameterMenu.keyTrack?.enabled ?? null}
                     onClose={() => setParameterMenu(null)}
                     onSelectAction={handleParameterMenuAction}
                 />
@@ -6455,9 +6514,9 @@ export function EffectsRackWorkspace({
                             dragSource={dragSource}
                             onSelectTarget={selectTarget}
                             onRecentParameter={(endpointID) => setRecentParameter(selectedEffectId, endpointID)}
-                            onRequestContextMenu={(endpointID, clientX, clientY) => {
+                            onRequestContextMenu={(endpointID, clientX, clientY, keyTrack) => {
                                 selectTarget(endpointID);
-                                setParameterMenu({ endpointID, clientX, clientY });
+                                setParameterMenu({ endpointID, clientX, clientY, keyTrack });
                             }}
                         />
                     </div>

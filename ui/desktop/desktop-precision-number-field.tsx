@@ -2,7 +2,11 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 
 import type { PatchControlBinding } from "../shared/patch-controls";
 import type { ModulationTargetKind } from "../shared/modulation-targets";
-import { useLongPressParameterMenu } from "../shared/parameter-context-menu";
+import {
+    useLongPressParameterMenu,
+    type ParameterMenuKeyTrackContract,
+} from "../shared/parameter-context-menu";
+import { KeyTrackStatus } from "../shared/key-track-status";
 import {
     formatParameterEntry,
     parseParameterEntry,
@@ -32,6 +36,7 @@ export type PrecisionNumberFieldProps = {
     menuAmountSpec?: ParameterEntrySpec | null;
     menuBaseFieldLabel?: string;
     menuRouteDestinationLabel?: string;
+    menuKeyTrack?: ParameterMenuKeyTrackContract;
 };
 
 type ActiveDragState = {
@@ -86,6 +91,7 @@ export function PrecisionNumberField({
     menuAmountSpec,
     menuBaseFieldLabel,
     menuRouteDestinationLabel,
+    menuKeyTrack,
 }: PrecisionNumberFieldProps) {
     const { min, max, step } = entrySpec;
     // T20: a stationary long press opens the ADR-017 parameter menu; the
@@ -98,10 +104,11 @@ export function PrecisionNumberField({
         amountSpec: menuAmountSpec,
         baseFieldLabel: menuBaseFieldLabel,
         routeDestinationLabel: menuRouteDestinationLabel,
+        keyTrack: menuKeyTrack,
         baseValue: binding.value,
         defaultValue: binding.initialValue ?? null,
         commitBase: binding.commitValue,
-    }), [binding.commitValue, binding.endpointID, binding.initialValue, binding.value, entrySpec, menuAmountSpec, menuBaseFieldLabel, menuLabel, menuRouteDestinationLabel, modulationTargetKind]));
+    }), [binding.commitValue, binding.endpointID, binding.initialValue, binding.value, entrySpec, menuAmountSpec, menuBaseFieldLabel, menuKeyTrack, menuLabel, menuRouteDestinationLabel, modulationTargetKind]));
     const inputRef = useRef<HTMLInputElement | null>(null);
     const fieldRef = useRef<HTMLLabelElement | null>(null);
     const activeDragRef = useRef<ActiveDragState | null>(null);
@@ -486,6 +493,9 @@ export function PrecisionNumberField({
                 }
                 style={{ width: `${width}px`, height: `${height}px` }}
             >
+                {menuKeyTrack?.enabled ? (
+                    <KeyTrackStatus controlKey={dataRole ?? binding.endpointID} />
+                ) : null}
                 <input
                     ref={inputRef}
                     aria-label={ariaLabel}

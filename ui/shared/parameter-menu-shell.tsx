@@ -82,6 +82,14 @@ export function useParameterMenuShell({
         if (request === null) {
             throw new Error("A parameter-menu action fired without an open menu.");
         }
+        if (action === "toggle-key-track") {
+            if (request.keyTrack === undefined) {
+                throw new Error(`${request.controlKey} is not Key Track eligible.`);
+            }
+            request.keyTrack.toggle();
+            close();
+            return;
+        }
         if (action === "edit-values") {
             setStage("edit");
             return;
@@ -130,6 +138,7 @@ export function useParameterMenuShell({
                     controlId={request.controlKey}
                     route={route}
                     targetRouteCount={targetRouteIndices.length}
+                    keyTrackEnabled={request.keyTrack?.enabled ?? null}
                     canResetBase={request.defaultValue !== null && request.commitBase !== null}
                     onClose={close}
                     onSelectAction={handleAction}

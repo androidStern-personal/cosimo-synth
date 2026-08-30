@@ -5493,7 +5493,7 @@ test("Phaser and Delay keep the selected Free control visibly ineffective when S
     }
 });
 
-test("desktop chorus mode buttons and Ring Frequency Key Track stay contained", async () => {
+test("desktop chorus mode buttons and Ring Frequency Key Track status stay contained", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -5507,8 +5507,17 @@ test("desktop chorus mode buttons and Ring Frequency Key Track stay contained", 
         await page.waitForFunction(() => (
             document.querySelector('[data-role="chorus-motion-mode-control"]')?.textContent?.trim() === "MotionClassic"
             && document.querySelector('[data-role="chorus-bloom-mode-control"]')?.textContent?.trim() === "BloomLarge"
-            && document.querySelector('[data-role="key-track-chorusRingFrequencyHz"]')?.textContent?.trim() === "Key Track"
+            && document.querySelector('[data-role="rack-parameter-chorusRingFrequencyHz"]') !== null
         ));
+        assert.equal(await page.locator('[data-role="key-track-chorusRingFrequencyHz"]').count(), 0);
+        await page.locator('[data-role="rack-parameter-chorusRingFrequencyHz"]')
+            .click({ button: "right" });
+        const keyTrackAction = page.locator(
+            '[data-role="rack-parameter-menu-item"][data-action="toggle-key-track"]',
+        );
+        assert.equal((await keyTrackAction.innerText()).trim(), "Enable Key Track");
+        await keyTrackAction.click();
+        await page.locator('[data-role="key-track-status-chorusRingFrequencyHz"]').waitFor();
 
         const layout = await page.evaluate(() => {
             const roles = [
@@ -5519,13 +5528,13 @@ test("desktop chorus mode buttons and Ring Frequency Key Track stay contained", 
             const ringSurface = document.querySelector(
                 '[data-role="rack-parameter-surface-chorusRingFrequencyHz"]',
             );
-            const keyTrackButton = document.querySelector(
-                '[data-role="key-track-chorusRingFrequencyHz"]',
+            const keyTrackStatus = document.querySelector(
+                '[data-role="key-track-status-chorusRingFrequencyHz"]',
             );
 
             if (!buttons.every((button) => button instanceof HTMLElement)
                 || !(ringSurface instanceof HTMLElement)
-                || !(keyTrackButton instanceof HTMLElement)) {
+                || !(keyTrackStatus instanceof HTMLElement)) {
                 return null;
             }
 
@@ -5557,14 +5566,14 @@ test("desktop chorus mode buttons and Ring Frequency Key Track stay contained", 
                 ))),
                 clipsInternalOverflow: rects.every((rect) => rect.overflowX === "hidden"),
                 contentFits: rects.every((rect) => rect.scrollWidth <= rect.clientWidth + 1),
-                keyTrackText: keyTrackButton.textContent?.trim(),
+                keyTrackPointerEvents: getComputedStyle(keyTrackStatus).pointerEvents,
                 keyTrackContained: (() => {
                     const surfaceRect = ringSurface.getBoundingClientRect();
-                    const buttonRect = keyTrackButton.getBoundingClientRect();
-                    return buttonRect.left >= surfaceRect.left
-                        && buttonRect.right <= surfaceRect.right
-                        && buttonRect.top >= surfaceRect.top
-                        && buttonRect.bottom <= surfaceRect.bottom;
+                    const statusRect = keyTrackStatus.getBoundingClientRect();
+                    return statusRect.left >= surfaceRect.left
+                        && statusRect.right <= surfaceRect.right
+                        && statusRect.top >= surfaceRect.top
+                        && statusRect.bottom <= surfaceRect.bottom;
                 })(),
             };
         });
@@ -5573,8 +5582,8 @@ test("desktop chorus mode buttons and Ring Frequency Key Track stay contained", 
         assert.equal(layout.noBoxOverlap, true, `Mode button boxes overlap: ${JSON.stringify(layout.rects)}`);
         assert.equal(layout.clipsInternalOverflow, true, `Mode button labels can paint outside their boxes: ${JSON.stringify(layout.rects)}`);
         assert.equal(layout.contentFits, true, `Longest chorus mode labels do not fit their buttons: ${JSON.stringify(layout.rects)}`);
-        assert.equal(layout.keyTrackText, "Key Track");
-        assert.equal(layout.keyTrackContained, true, "Ring Frequency Key Track must stay inside its control.");
+        assert.equal(layout.keyTrackPointerEvents, "none");
+        assert.equal(layout.keyTrackContained, true, "Ring Frequency Key Track status must stay inside its control.");
     } finally {
         await page.close();
     }
@@ -5600,7 +5609,9 @@ test("desktop chorus controls send exact parameter updates", async () => {
         await editRackParameterValue(page, "chorus-feedback-control", "70");
         await editRackParameterValue(page, "chorus-ring-amount-control", "50");
         await editRackParameterValue(page, "rack-parameter-chorusRingFrequencyHz", "440.5 Hz");
-        await page.click('[data-role="key-track-chorusRingFrequencyHz"]');
+        await page.locator('[data-role="rack-parameter-chorusRingFrequencyHz"]')
+            .click({ button: "right" });
+        await page.click('[data-role="rack-parameter-menu-item"][data-action="toggle-key-track"]');
         await editRackParameterValue(page, "rack-parameter-chorusRingFrequencyHz", "-0.75 st");
 
         const snapshot = await waitForHarnessSnapshot(
@@ -5668,7 +5679,7 @@ test("desktop chorus controls render host values before edits", async () => {
                 && readInputValue("chorus-feedback-control") === "0.615"
                 && readInputValue("chorus-ring-amount-control") === "0.285"
                 && readInputValue("rack-parameter-chorusRingFrequencyHz") === "1.25"
-                && document.querySelector('[data-role="key-track-chorusRingFrequencyHz"]')?.getAttribute("aria-pressed") === "true"
+                && document.querySelector('[data-role="key-track-status-chorusRingFrequencyHz"]') !== null
                 && readText("chorus-motion-mode-control").includes("Fast")
                 && readText("chorus-bloom-mode-control").includes("Lg+Sh");
         });
@@ -5679,7 +5690,7 @@ test("desktop chorus controls render host values before edits", async () => {
             feedback: document.querySelector('[data-role="chorus-feedback-control"]')?.value,
             ring: document.querySelector('[data-role="chorus-ring-amount-control"]')?.value,
             ringOffset: document.querySelector('[data-role="rack-parameter-chorusRingFrequencyHz"]')?.value,
-            keyTrackPressed: document.querySelector('[data-role="key-track-chorusRingFrequencyHz"]')?.getAttribute("aria-pressed"),
+            keyTrackStatus: document.querySelector('[data-role="key-track-status-chorusRingFrequencyHz"]') !== null,
             motionText: document.querySelector('[data-role="chorus-motion-mode-control"]')?.textContent?.trim(),
             bloomText: document.querySelector('[data-role="chorus-bloom-mode-control"]')?.textContent?.trim(),
         }));
@@ -5690,7 +5701,7 @@ test("desktop chorus controls render host values before edits", async () => {
             feedback: "0.615",
             ring: "0.285",
             ringOffset: "1.25",
-            keyTrackPressed: "true",
+            keyTrackStatus: true,
             motionText: "MotionFast",
             bloomText: "BloomLg+Sh",
         });

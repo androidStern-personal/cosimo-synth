@@ -1133,8 +1133,7 @@
 .subway-crossover-control {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 5px;
+    grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
 }
 
@@ -1175,6 +1174,10 @@
     text-align: left;
 }
 
+.subway-crossover-control.has-key-track-status .subway-crossover-label {
+    transform: translateX(8px);
+}
+
 .subway-crossover-readout {
     font-size: 11px;
 }
@@ -1185,11 +1188,6 @@
     font-family: var(--cosimo-font-readout);
     font-size: 7px;
     text-align: right;
-}
-
-.split-key-track-button {
-    width: 43px;
-    --key-track-accent: #69d5c5;
 }
 
 .subway-group-editor-actions {
@@ -1576,14 +1574,6 @@
     display: grid;
     place-items: stretch;
     touch-action: none;
-}
-
-.rack-key-track-button {
-    position: absolute;
-    z-index: 5;
-    right: 3px;
-    bottom: 3px;
-    --key-track-accent: var(--editor-accent);
 }
 
 /* ADR-025 row 2: selection brightens the OWNING effect color, never neutral. */
@@ -2208,8 +2198,8 @@
     }
 
     /* The right rail leaves one owned 59px control track at 320px. Keep the
-       crossover drag/readout and Key Track as full-width rows instead of
-       collapsing the slider beside the fixed-width toggle. */
+       crossover drag/readout as one full-width control. Key Track now lives
+       in that control's shared long-press menu. */
     .cosimo-surface[data-mod-rail-edge="right"] .subway-crossover-control {
         grid-template-columns: minmax(0, 1fr);
     }
@@ -2233,10 +2223,6 @@
         justify-self: end;
     }
 
-    .cosimo-surface[data-mod-rail-edge="right"] .split-key-track-button {
-        width: 100%;
-        min-height: var(--cosimo-hit-min);
-    }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -103,9 +103,25 @@ async function assertEditorControlIsVisibleAndOwned(control, label) {
 
 async function assertCompactSplitCrossoverIsUsable(page, which, label) {
     const slider = page.locator(`[data-role="rack-split-${which}-split#1"]`);
-    const keyTrack = page.locator(`[data-role="key-track-frequencySplit-${which}-split#1"]`);
     const sliderEvidence = await assertEditorControlIsVisibleAndOwned(slider, `${label} slider`);
-    const keyTrackEvidence = await assertEditorControlIsVisibleAndOwned(keyTrack, `${label} Key Track`);
+    assert.equal(
+        await page.locator(`[data-role="key-track-frequencySplit-${which}-split#1"]`).count(),
+        0,
+        `${label} must not retain a visible Key Track button.`,
+    );
+    await slider.evaluate((element) => element.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 200,
+        clientY: 200,
+    })));
+    assert.equal(
+        (await page.locator(
+            '[data-role="rack-parameter-menu-item"][data-action="toggle-key-track"]',
+        ).innerText()).trim(),
+        "Enable Key Track",
+    );
+    await page.locator('[data-role="rack-parameter-menu-layer"]').click({ position: { x: 1, y: 1 } });
     const sliderPresentation = await slider.evaluate((element) => {
         const readout = element.querySelector(".subway-crossover-readout");
         if (!(readout instanceof HTMLElement)) {
@@ -138,11 +154,6 @@ async function assertCompactSplitCrossoverIsUsable(page, which, label) {
         sliderEvidence.rect.width >= 56 && sliderEvidence.rect.height >= 44,
         true,
         `${label} must retain a meaningful drag surface: ${JSON.stringify(sliderEvidence)}`,
-    );
-    assert.equal(
-        keyTrackEvidence.rect.width >= 44 && keyTrackEvidence.rect.height >= 44,
-        true,
-        `${label} Key Track must retain a full compact hit target: ${JSON.stringify(keyTrackEvidence)}`,
     );
     assert.equal(
         sliderPresentation.gridTrackWidths.length > 0
@@ -2304,9 +2315,7 @@ test("compact Split Solo wrapping keeps crossovers and group actions scroll-reac
         }
         for (const [selector, label] of [
             ['[data-role="rack-split-low-split#1"]', "393x852 Low crossover"],
-            ['[data-role="key-track-frequencySplit-low-split#1"]', "393x852 Low Key Track"],
             ['[data-role="rack-split-high-split#1"]', "393x852 High crossover"],
-            ['[data-role="key-track-frequencySplit-high-split#1"]', "393x852 High Key Track"],
             ['[data-role="rack-group-remove-band"]', "393x852 Remove mid band"],
             ['[data-role="rack-group-dissolve"]', "393x852 Dissolve group"],
         ]) {

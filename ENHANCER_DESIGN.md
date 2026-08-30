@@ -258,9 +258,12 @@ and Amount. Reuse the existing Voice filter footprint as a two-stage `FILTER` â†
 `ENHANCER` surface selected by explicit taps; do not stack another panel or use a
 horizontal swipe. The Enhancer view puts its draggable bell in the existing graph
 area and the three values in the existing three-cell row. Horizontal bell drag edits
-Frequency/Ratio, vertical drag edits Amount, and Q remains directly editable. A small
-Key Track button in a graph corner switches the first value's label and meaning
-between Frequency and Ratio. The shared surface controls every per-voice instance;
+Frequency/Ratio, vertical drag edits Amount, and Q remains directly editable. A
+stationary long press on the first Frequency/Ratio control opens the shared parameter
+menu, whose dynamic item reads Enable Key Track or Disable Key Track. While enabled,
+a small noninteractive yellow note at that control's top-left reports the state, and
+the first value's label and meaning switch between Frequency and Ratio. The shared
+surface controls every per-voice instance;
 it does not display one panel per sounding note.
 
 Status: the per-voice form, its post-filter placement, fixed linked Mid/Side routing,

@@ -81,6 +81,7 @@ import {
     type ParameterMenuRequest,
 } from "../shared/parameter-context-menu";
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
+import { KeyTrackStatus } from "../shared/key-track-status";
 import {
     clampDisplayPosition,
 } from "../shared/runtime-table-state";
@@ -856,10 +857,14 @@ function IOSDistortionTrackedFrequencyField({
             : undefined,
         baseFieldLabel: keyTrack.enabled ? "Key Track Offset" : undefined,
         routeDestinationLabel: keyTrack.enabled ? "Key Track Offset" : undefined,
+        keyTrack: {
+            enabled: keyTrack.enabled,
+            toggle: () => keyTrack.setEnabled(!keyTrack.enabled),
+        },
         baseValue: keyTrack.binding.value,
         defaultValue: keyTrack.enabled ? 0 : descriptor.initial,
         commitBase: keyTrack.binding.commitValue,
-    }), [descriptor, keyTrack.binding, keyTrack.enabled, targetKind]);
+    }), [descriptor, keyTrack.binding, keyTrack.enabled, keyTrack.setEnabled, targetKind]);
     const longPressProps = useLongPressParameterMenu(buildMenuRequest);
     const displayedValue = keyTrack.binding.value;
     const normalizedValue = keyTrack.enabled
@@ -872,7 +877,13 @@ function IOSDistortionTrackedFrequencyField({
         : formatParameterEntry(IOS_FREQUENCY_ENTRY_SPEC, displayedValue).display;
 
     return (
-        <label style={{ display: "grid", gap: "0.32rem" }}>
+        <label style={{
+            position: "relative",
+            display: "grid",
+            gap: "0.32rem",
+            paddingLeft: keyTrack.enabled ? "1.1rem" : undefined,
+        }}>
+            {keyTrack.enabled ? <KeyTrackStatus controlKey={descriptor.endpointID} /> : null}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
                 <span className="mseg-depth-label">{displayedLabel}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
@@ -885,16 +896,6 @@ function IOSDistortionTrackedFrequencyField({
                     >
                         {displayedReadout}
                     </span>
-                    <button
-                        type="button"
-                        className="key-track-button ios-key-track-button"
-                        style={{ ["--key-track-accent" as string]: "#fb7185" }}
-                        aria-pressed={keyTrack.enabled}
-                        onClick={(event) => {
-                            event.preventDefault();
-                            keyTrack.setEnabled(!keyTrack.enabled);
-                        }}
-                    >Key Track</button>
                 </div>
             </div>
             <input
