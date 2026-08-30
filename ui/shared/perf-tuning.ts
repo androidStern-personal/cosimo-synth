@@ -13,6 +13,7 @@ import {
     type ModSourceTouchTuning,
 } from "./mod-source-touch-geometry";
 import type { ModBarPreferences } from "./mod-bar-preferences";
+import type { KeyboardPresentationPreferences } from "./keyboard-presentation-preferences";
 
 /**
  * Compile-time developer-surface gate. Vite dev serves import.meta.env.DEV ===
@@ -79,6 +80,7 @@ function formatExportSection(
 export function formatPerfTuningSettings(
     current: PerfTuningState,
     modBar: ModBarPreferences,
+    keyboard: KeyboardPresentationPreferences,
 ): string {
     const previewValues = {
         algorithm: current.algorithm,
@@ -99,6 +101,10 @@ export function formatPerfTuningSettings(
         placement: modBar.placement,
         parkedVisibility: modBar.parkedVisibility,
     } satisfies ModBarPreferences;
+    const keyboardValues = {
+        visibleNoteCount: keyboard.visibleNoteCount,
+        heightScale: keyboard.heightScale,
+    } satisfies KeyboardPresentationPreferences;
 
     return [
         "Cosimo Developer settings",
@@ -108,6 +114,8 @@ export function formatPerfTuningSettings(
         ...formatExportSection("Mod drag feel", "drag.", dragValues),
         "",
         ...formatExportSection("Mod bar", "modBar.", modBarValues),
+        "",
+        ...formatExportSection("Keyboard", "keyboard.", keyboardValues),
     ].join("\n");
 }
 

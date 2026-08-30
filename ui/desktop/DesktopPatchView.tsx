@@ -206,6 +206,13 @@ import {
     subscribeModBarPreferences,
 } from "../shared/mod-bar-preferences";
 import {
+    KEYBOARD_COMPACT_DEFAULT_VISIBLE_NOTE_COUNT,
+    KEYBOARD_WIDE_DEFAULT_VISIBLE_NOTE_COUNT,
+    getKeyboardPresentationPreferences,
+    resolveKeyboardVisibleNoteCount,
+    subscribeKeyboardPresentationPreferences,
+} from "../shared/keyboard-presentation-preferences";
+import {
     GLOBAL_TUNE_ENDPOINT_ID,
     GLOBAL_TUNE_INITIAL_SEMITONES,
     GLOBAL_TUNE_MAX_SEMITONES,
@@ -3833,8 +3840,8 @@ function KeyboardSection({
             canOctaveDown={keyboardRootNote > KEYBOARD_ROOT_NOTE_MIN}
             onOctaveUp={onOctaveUp}
             onOctaveDown={onOctaveDown}
-            className="grid-cols-[56px_minmax(0,1fr)]"
-            railClassName="px-2 py-3"
+            className="grid-cols-[44px_minmax(0,1fr)]"
+            railClassName="px-1 py-3"
             toolbar={toolbarOverride ?? (
                 <KeyboardToolbar
                     oscillatorID={oscillatorID}
@@ -5305,6 +5312,16 @@ function DesktopPatchViewBody({
         subscribeModBarPreferences,
         getModBarPreferences,
     );
+    const keyboardPresentationPreferences = useSyncExternalStore(
+        subscribeKeyboardPresentationPreferences,
+        getKeyboardPresentationPreferences,
+    );
+    const keyboardNoteCount = resolveKeyboardVisibleNoteCount(
+        keyboardPresentationPreferences,
+        isCompactViewport
+            ? KEYBOARD_COMPACT_DEFAULT_VISIBLE_NOTE_COUNT
+            : KEYBOARD_WIDE_DEFAULT_VISIBLE_NOTE_COUNT,
+    );
     const [workspaceShell, setWorkspaceShell] = useState<WorkspaceShellState>(() => {
         try {
             return parseStoredShellState(sessionStorage.getItem(WORKSPACE_SHELL_STORAGE_KEY))
@@ -5332,6 +5349,8 @@ function DesktopPatchViewBody({
     const workspacePanelsRef = useRef(new Map<WorkspaceTabId, HTMLElement>());
     const workspacePanelScrollsRef = useRef(new Map<WorkspaceTabId, number>());
     const mobileBottomDockRef = useRef<HTMLDivElement | null>(null);
+    const keyboardDockRef = useRef<HTMLDivElement | null>(null);
+    const [keyboardBottomInset, setKeyboardBottomInset] = useState(0);
     const [mobileModRailPortalTarget, setMobileModRailPortalTarget] = useState<HTMLElement | null>(null);
     const [mobileVoiceHudLayer, setMobileVoiceHudLayer] = useState<HTMLDivElement | null>(null);
     const [globalModRailState, setGlobalModRailState] = useState<GlobalModRailState>({
@@ -5452,6 +5471,44 @@ function DesktopPatchViewBody({
         return true;
     }, [keyboardRootNote]);
     const [keyboardVisible, setKeyboardVisible] = useState(true);
+    useLayoutEffect(() => {
+        const keyboardDock = keyboardDockRef.current;
+        if (!isCompactViewport || keyboardDock === null) {
+            setKeyboardBottomInset(0);
+            return undefined;
+        }
+
+        const updateBottomInset = () => {
+            const bounds = keyboardDock.getBoundingClientRect();
+            const nextInset = bounds.height <= 0
+                ? 0
+                : Math.max(0, window.innerHeight - bounds.top);
+            setKeyboardBottomInset((currentInset) => (
+                Math.abs(currentInset - nextInset) <= 0.25 ? currentInset : nextInset
+            ));
+        };
+        updateBottomInset();
+
+        const observer = typeof ResizeObserver === "function"
+            ? new ResizeObserver(updateBottomInset)
+            : null;
+        observer?.observe(keyboardDock, { box: "border-box" });
+        const visibilityObserver = typeof MutationObserver === "function"
+            ? new MutationObserver(updateBottomInset)
+            : null;
+        visibilityObserver?.observe(keyboardDock, {
+            attributes: true,
+            attributeFilter: ["style"],
+        });
+        window.addEventListener("resize", updateBottomInset);
+        window.visualViewport?.addEventListener("resize", updateBottomInset);
+        return () => {
+            observer?.disconnect();
+            visibilityObserver?.disconnect();
+            window.removeEventListener("resize", updateBottomInset);
+            window.visualViewport?.removeEventListener("resize", updateBottomInset);
+        };
+    }, [isCompactViewport, keyboardPresentationPreferences.heightScale, keyboardVisible]);
     const handleToggleKeyboard = useCallback(() => {
         // Hiding the keyboard must never strand its held notes.
         keyboardElementRef.current?.allNotesOff?.();
@@ -6526,7 +6583,13 @@ function DesktopPatchViewBody({
         <ParameterHudSuppressionProvider>
         <ParameterHudLayerContext.Provider value={mobileVoiceHudLayer}>
         <ParameterMenuContext.Provider value={openShellParameterMenu}>
-        <div className={`cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isCompactViewport ? " is-mobile-shell" : ""}${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`}>
+        <div
+            className={`cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isCompactViewport ? " is-mobile-shell" : ""}${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`}
+            style={{
+                "--cosimo-keyboard-height-scale": keyboardPresentationPreferences.heightScale,
+                "--cosimo-keyboard-bottom-inset": `${keyboardBottomInset}px`,
+            } as CSSProperties}
+        >
             {!isCompactViewport ? <StatusHeader statusText={synthView.topStatus} /> : null}
             <SynthPresetBarHost
                 isHidden={synthView.msegEditor.isOpen && !isCompactViewport}
@@ -6657,6 +6720,7 @@ function DesktopPatchViewBody({
             ) : null}
 
             <div
+                ref={keyboardDockRef}
                 data-role="sticky-keyboard"
                 className="relative z-20 min-w-0 shrink-0 border-t border-white/[0.05] pt-3"
                 style={keyboardVisible
@@ -6682,7 +6746,7 @@ function DesktopPatchViewBody({
                     unisonWarpSpread={synthView.unisonWarpSpread}
                     observedUnisonState={synthView.observedUnisonState}
                     keyboardRootNote={keyboardRootNote}
-                    noteCount={isCompactViewport ? 18 : DEFAULT_KEYBOARD_NOTE_COUNT}
+                    noteCount={keyboardNoteCount}
                     onOctaveDown={handleKeyboardOctaveDown}
                     onOctaveUp={handleKeyboardOctaveUp}
                     playModeFocusBindings={synthView.keyboardRouting.playModeFocusBindings}
@@ -6698,6 +6762,7 @@ function DesktopPatchViewBody({
                 && quickEditorSource !== null
                 && mobileWorkspaceSection !== "mod" ? (
                 <MobileQuickSourceSheet
+                    bottomInset={keyboardBottomInset}
                     source={quickEditorSource}
                     armedSource={activeMsegRouteSourceIdentity}
                     routes={synthView.routes}

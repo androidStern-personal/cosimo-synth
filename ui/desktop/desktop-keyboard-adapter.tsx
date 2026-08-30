@@ -305,6 +305,7 @@ export function KeyboardDock({
             rootNote,
             noteCount,
             availableWidth: hostSize.width,
+            minNaturalWidth: 1,
         });
         const currentNaturalWidth = Number(keyboard.naturalWidth) || 0;
         const currentAccidentalWidth = Number(keyboard.accidentalWidth) || 0;
@@ -322,8 +323,8 @@ export function KeyboardDock({
     }, [hostSize.width, noteCount, rootNote, keyboardRef]);
 
     return (
-        <div className="synth-grid-card-shell min-w-0 max-w-full rounded-[24px] border p-2" data-section-accent="lime" data-liquid-detail="edge-rail">
-            <div ref={hostRef} className="synth-display-recess h-[112px] min-w-0 max-w-full overflow-hidden rounded-[18px]" />
+        <div className="keyboard-keybed-shell synth-grid-card-shell min-w-0 max-w-full overflow-hidden rounded-[24px] py-2" data-section-accent="lime" data-liquid-detail="edge-rail">
+            <div ref={hostRef} className="keyboard-keybed-recess synth-display-recess h-[112px] min-w-0 w-full max-w-full overflow-hidden rounded-[18px]" />
         </div>
     );
 }

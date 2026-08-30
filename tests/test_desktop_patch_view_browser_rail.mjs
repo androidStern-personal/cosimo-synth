@@ -1776,6 +1776,599 @@ test("T60 live preferences park, scale, hide, restore, and float the Mod bar wit
     }
 });
 
+test("T79 Developer Settings updates and persists keyboard geometry without remounting or changing sound", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                if (sessionStorage.getItem("cosimo.t79-keyboard-test-initialized") === "true") {
+                    return;
+                }
+                sessionStorage.setItem("cosimo.t79-keyboard-test-initialized", "true");
+                localStorage.removeItem("cosimo.keyboard.presentation.preferences.v1");
+            });
+        },
+    });
+    const readKeyboardGeometry = async () => page.evaluate(() => {
+        const rectOf = (element) => {
+            if (!(element instanceof Element)) {
+                return null;
+            }
+            const bounds = element.getBoundingClientRect();
+            return {
+                left: bounds.left,
+                right: bounds.right,
+                top: bounds.top,
+                bottom: bounds.bottom,
+                width: bounds.width,
+                height: bounds.height,
+            };
+        };
+        const keyboard = document.querySelector('[data-role="sticky-keyboard"] .keyboard');
+        return {
+            dock: rectOf(document.querySelector('[data-role="sticky-keyboard"]')),
+            section: rectOf(document.querySelector('[data-role="sticky-keyboard"] > section')),
+            rootNote: keyboard?.getAttribute("root-note") ?? null,
+            noteCount: keyboard?.getAttribute("note-count") ?? null,
+            naturalWidth: keyboard && "naturalWidth" in keyboard ? keyboard.naturalWidth : null,
+            sameElement: globalThis.__cosimoT79Keyboard === keyboard,
+        };
+    });
+    const openDeveloperSettings = async () => {
+        await page.locator("cosimo-preset-bar").evaluate((element) => {
+            element.dispatchEvent(new CustomEvent("cosimo-open-perf-tuning"));
+        });
+        const settings = page.locator('[data-role="perf-tuning-page"]');
+        await settings.waitFor({ state: "visible" });
+        return settings;
+    };
+
+    try {
+        const soundBefore = await getHarnessSnapshot(page);
+        await page.evaluate(() => {
+            globalThis.__cosimoT79Keyboard = document.querySelector(
+                '[data-role="sticky-keyboard"] .keyboard',
+            );
+        });
+        const baseline = await readKeyboardGeometry();
+        assert.ok(baseline.dock && baseline.section);
+        assert.equal(baseline.rootNote, "36");
+        assert.equal(baseline.noteCount, "18");
+        assert.equal(baseline.sameElement, true);
+
+        const settings = await openDeveloperSettings();
+        const keyboardSection = settings.locator("section").filter({ hasText: /^Keyboard/ });
+        await keyboardSection.locator('[data-perf-tuning-key="keyboard.visibleNoteCount"]').fill("14");
+        await keyboardSection.locator('[data-perf-tuning-key="keyboard.heightScale"]').fill("1.25");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().keyboardNoteCount === "14"
+        ));
+
+        const adjusted = await readKeyboardGeometry();
+        assert.ok(adjusted.dock && adjusted.section);
+        assert.equal(adjusted.sameElement, true, "A geometry edit must not replace the keyboard owner.");
+        assert.equal(adjusted.rootNote, "36");
+        assert.equal(adjusted.noteCount, "14");
+        assert.ok(adjusted.naturalWidth > baseline.naturalWidth);
+        assert.equal(
+            Math.abs((adjusted.section.height / baseline.section.height) - 1.25) <= 0.01,
+            true,
+        );
+        assert.deepEqual(
+            await page.evaluate(() => (
+                JSON.parse(localStorage.getItem("cosimo.keyboard.presentation.preferences.v1") ?? "null")
+            )),
+            { version: 1, visibleNoteCount: 14, heightScale: 1.25 },
+        );
+        await page.evaluate(() => {
+            Object.defineProperty(navigator, "clipboard", {
+                configurable: true,
+                value: {
+                    writeText: async (value) => {
+                        globalThis.__cosimoT79CopiedSettings = value;
+                    },
+                },
+            });
+        });
+        await settings.locator('[data-action="copy-perf-tuning-settings"]').click();
+        await settings.locator('[data-role="perf-tuning-copy-feedback"][data-state="success"]').waitFor();
+        const copiedSettings = await page.evaluate(() => globalThis.__cosimoT79CopiedSettings ?? "");
+        assert.match(copiedSettings, /\n\[Keyboard\]\n/u);
+        assert.match(copiedSettings, /keyboard\.visibleNoteCount: 14/u);
+        assert.match(copiedSettings, /keyboard\.heightScale: 1\.25/u);
+
+        await settings.getByRole("button", { name: "Close developer settings" }).click();
+        await page.getByRole("button", { name: "Shift keyboard up one octave" }).click();
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().keyboardRootNote === "48"
+        ));
+        const shifted = await readKeyboardGeometry();
+        assert.equal(shifted.noteCount, "14");
+        assert.equal(shifted.rootNote, "48");
+
+        const soundAfter = await getHarnessSnapshot(page);
+        assert.deepEqual(soundAfter.parameterValues, soundBefore.parameterValues);
+        assert.deepEqual(soundAfter.storedState, soundBefore.storedState);
+
+        await page.reload({ waitUntil: "commit" });
+        await waitForHarnessReady(page);
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().keyboardNoteCount === "14"
+        ));
+        const restored = await readKeyboardGeometry();
+        assert.ok(restored.section);
+        assert.equal(restored.rootNote, "36", "Root-note process state remains independent.");
+        assert.equal(restored.noteCount, "14");
+        assert.equal(
+            Math.abs((restored.section.height / baseline.section.height) - 1.25) <= 0.01,
+            true,
+        );
+
+        const restoredSettings = await openDeveloperSettings();
+        const restoredKeyboardSection = restoredSettings.locator("section").filter({ hasText: /^Keyboard/ });
+        await restoredKeyboardSection.getByRole("button", { name: "Reset" }).click();
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().keyboardNoteCount === "18"
+        ));
+        const reset = await readKeyboardGeometry();
+        assert.ok(reset.section);
+        assert.equal(reset.noteCount, "18");
+        assert.equal(Math.abs(reset.section.height - baseline.section.height) <= 0.5, true);
+    } finally {
+        await page.evaluate(() => {
+            localStorage.removeItem("cosimo.keyboard.presentation.preferences.v1");
+            sessionStorage.removeItem("cosimo.t79-keyboard-test-initialized");
+            delete globalThis.__cosimoT79Keyboard;
+            delete globalThis.__cosimoT79CopiedSettings;
+        }).catch(() => {});
+        await page.close();
+    }
+});
+
+test("T79 the adjustable keybed fits edge-to-edge beside narrower octave paddles across layouts", async () => {
+    for (const layout of [
+        { name: "short phone", width: 320, height: 568, compact: true },
+        { name: "tall phone", width: 393, height: 852, compact: true },
+        { name: "plugin", width: 1120, height: 680, compact: false },
+        { name: "desktop", width: 1440, height: 900, compact: false },
+    ]) {
+        const page = await openHarnessPage({
+            beforeGoto: async (nextPage) => {
+                await nextPage.setViewportSize({ width: layout.width, height: layout.height });
+                await nextPage.addInitScript(() => {
+                    localStorage.setItem(
+                        "cosimo.keyboard.presentation.preferences.v1",
+                        JSON.stringify({
+                            version: 1,
+                            visibleNoteCount: 30,
+                            heightScale: 1,
+                        }),
+                    );
+                });
+            },
+        });
+        const readGeometry = async () => page.evaluate(() => {
+            const rectOf = (element) => {
+                if (!(element instanceof Element)) {
+                    return null;
+                }
+                const bounds = element.getBoundingClientRect();
+                return {
+                    left: bounds.left,
+                    right: bounds.right,
+                    top: bounds.top,
+                    bottom: bounds.bottom,
+                    width: bounds.width,
+                    height: bounds.height,
+                };
+            };
+            const keyboard = document.querySelector('[data-role="sticky-keyboard"] .keyboard');
+            const rootNote = Number(keyboard?.getAttribute("root-note") ?? 0);
+            const noteCount = Number(keyboard?.getAttribute("note-count") ?? 0);
+            const naturalPitchClasses = new Set([0, 2, 4, 5, 7, 9, 11]);
+            let naturalCount = 0;
+            for (let noteOffset = 0; noteOffset < noteCount; noteOffset += 1) {
+                if (naturalPitchClasses.has((rootNote + noteOffset) % 12)) {
+                    naturalCount += 1;
+                }
+            }
+            return {
+                dock: rectOf(document.querySelector('[data-role="sticky-keyboard"]')),
+                section: rectOf(document.querySelector('[data-role="sticky-keyboard"] > section')),
+                paddleRail: rectOf(document.querySelector('[data-role="sticky-keyboard"] .synth-control-rail')),
+                upPaddle: rectOf(document.querySelector('button[aria-label="Shift keyboard up one octave"]')),
+                keyShell: rectOf(document.querySelector('[data-role="sticky-keyboard"] .synth-grid-card-shell')),
+                keyRecess: rectOf(document.querySelector('[data-role="sticky-keyboard"] .synth-display-recess')),
+                noteCount,
+                naturalCount,
+                naturalWidth: keyboard && "naturalWidth" in keyboard ? keyboard.naturalWidth : null,
+                documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+            };
+        });
+
+        try {
+            let geometry = await readGeometry();
+            assert.ok(
+                geometry.dock
+                && geometry.section
+                && geometry.paddleRail
+                && geometry.upPaddle
+                && geometry.keyShell
+                && geometry.keyRecess,
+            );
+            assert.equal(geometry.noteCount, 30);
+            assert.equal(geometry.paddleRail.width, layout.compact ? 40 : 44);
+            assert.equal(geometry.upPaddle.width, 36);
+            assert.equal(geometry.upPaddle.height >= 40, true);
+            assert.equal(Math.abs(geometry.keyRecess.left - geometry.keyShell.left) <= 0.5, true);
+            assert.equal(Math.abs(geometry.keyRecess.right - geometry.keyShell.right) <= 0.5, true);
+            assert.equal(
+                (geometry.naturalWidth * geometry.naturalCount) <= geometry.keyRecess.width + 0.5,
+                true,
+                `${layout.name} must fit every requested note: ${JSON.stringify(geometry)}`,
+            );
+            assert.equal(geometry.documentFits, true);
+
+            if (layout.name === "short phone") {
+                await page.locator(".cosimo-surface").evaluate((surface) => {
+                    surface.style.setProperty("--cosimo-safe-area-inset-left", "11px");
+                    surface.style.setProperty("--cosimo-safe-area-inset-right", "13px");
+                });
+                await page.waitForFunction(() => {
+                    const dock = document.querySelector('[data-role="sticky-keyboard"]');
+                    const section = dock?.querySelector(":scope > section");
+                    if (!(dock instanceof HTMLElement) || !(section instanceof HTMLElement)) {
+                        return false;
+                    }
+                    const dockBounds = dock.getBoundingClientRect();
+                    const sectionBounds = section.getBoundingClientRect();
+                    return Math.abs(sectionBounds.left - dockBounds.left - 11) <= 0.5
+                        && Math.abs(dockBounds.right - sectionBounds.right - 13) <= 0.5;
+                });
+                await page.waitForFunction(() => {
+                    const keyboard = document.querySelector('[data-role="sticky-keyboard"] .keyboard');
+                    const recess = document.querySelector(
+                        '[data-role="sticky-keyboard"] .synth-display-recess',
+                    );
+                    if (!(keyboard instanceof Element) || !(recess instanceof Element)) {
+                        return false;
+                    }
+                    const rootNote = Number(keyboard.getAttribute("root-note") ?? 0);
+                    const noteCount = Number(keyboard.getAttribute("note-count") ?? 0);
+                    const naturalPitchClasses = new Set([0, 2, 4, 5, 7, 9, 11]);
+                    let naturalCount = 0;
+                    for (let noteOffset = 0; noteOffset < noteCount; noteOffset += 1) {
+                        if (naturalPitchClasses.has((rootNote + noteOffset) % 12)) {
+                            naturalCount += 1;
+                        }
+                    }
+                    const naturalWidth = "naturalWidth" in keyboard
+                        ? Number(keyboard.naturalWidth)
+                        : 0;
+                    return (naturalWidth * naturalCount) <= recess.getBoundingClientRect().width + 0.5;
+                });
+                geometry = await readGeometry();
+                assert.equal(
+                    (geometry.naturalWidth * geometry.naturalCount) <= geometry.keyRecess.width + 0.5,
+                    true,
+                );
+                assert.equal(geometry.documentFits, true);
+            }
+        } finally {
+            await page.evaluate(() => {
+                localStorage.removeItem("cosimo.keyboard.presentation.preferences.v1");
+            }).catch(() => {});
+            await page.close();
+        }
+    }
+});
+
+test("T79 height scaling reflows plugin and desktop workspaces around the complete keyboard region", async () => {
+    for (const layout of [
+        { name: "plugin", width: 1120, height: 680 },
+        { name: "desktop", width: 1440, height: 900 },
+    ]) {
+        const page = await openHarnessPage({
+            beforeGoto: async (nextPage) => {
+                await nextPage.setViewportSize({ width: layout.width, height: layout.height });
+                await nextPage.addInitScript(() => {
+                    localStorage.setItem(
+                        "cosimo.keyboard.presentation.preferences.v1",
+                        JSON.stringify({
+                            version: 1,
+                            visibleNoteCount: "responsive",
+                            heightScale: 1.4,
+                        }),
+                    );
+                });
+            },
+        });
+
+        try {
+            const geometry = await page.evaluate(() => {
+                const rectOf = (element) => {
+                    if (!(element instanceof Element)) {
+                        return null;
+                    }
+                    const bounds = element.getBoundingClientRect();
+                    return {
+                        left: bounds.left,
+                        right: bounds.right,
+                        top: bounds.top,
+                        bottom: bounds.bottom,
+                        width: bounds.width,
+                        height: bounds.height,
+                    };
+                };
+                return {
+                    surface: rectOf(document.querySelector(".cosimo-surface")),
+                    workspace: rectOf(document.querySelector('[data-role="desktop-scroll-region"]')),
+                    dock: rectOf(document.querySelector('[data-role="sticky-keyboard"]')),
+                    section: rectOf(document.querySelector('[data-role="sticky-keyboard"] > section')),
+                    recess: rectOf(document.querySelector('[data-role="sticky-keyboard"] .synth-display-recess')),
+                    documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+                };
+            });
+            assert.ok(
+                geometry.surface
+                && geometry.workspace
+                && geometry.dock
+                && geometry.section
+                && geometry.recess,
+            );
+            assert.equal(Math.abs(geometry.section.height - (160 * 1.4)) <= 0.5, true);
+            assert.equal(Math.abs(geometry.recess.height - (112 * 1.4)) <= 0.5, true);
+            assert.equal(geometry.workspace.height > 0, true);
+            assert.equal(geometry.workspace.bottom <= geometry.dock.top + 0.5, true);
+            assert.equal(geometry.dock.bottom <= geometry.surface.bottom + 0.5, true);
+            assert.equal(geometry.documentFits, true, `${layout.name} overflows horizontally.`);
+        } finally {
+            await page.evaluate(() => {
+                localStorage.removeItem("cosimo.keyboard.presentation.preferences.v1");
+            }).catch(() => {});
+            await page.close();
+        }
+    }
+});
+
+test("T79 compact adjacent surfaces reflow around visible, hidden, drawer, and full-editor keyboard states", async () => {
+    for (const layout of [
+        {
+            name: "short floating phone",
+            width: 320,
+            height: 568,
+            placement: "floating-right",
+            modBarScale: 0.85,
+            exercisesKeyboardToggle: true,
+        },
+        {
+            name: "tall parked phone",
+            width: 393,
+            height: 852,
+            placement: "parked",
+            modBarScale: 1.1,
+            exercisesKeyboardToggle: false,
+        },
+    ]) {
+        const page = await openHarnessPage({
+            beforeGoto: async (nextPage) => {
+                await nextPage.setViewportSize({ width: layout.width, height: layout.height });
+                await nextPage.addInitScript(({ placement, modBarScale }) => {
+                    localStorage.setItem(
+                        "cosimo.keyboard.presentation.preferences.v1",
+                        JSON.stringify({
+                            version: 1,
+                            visibleNoteCount: 12,
+                            heightScale: 1.4,
+                        }),
+                    );
+                    localStorage.setItem("cosimo.mod-bar.preferences.v1", JSON.stringify({
+                        version: 1,
+                        scale: modBarScale,
+                        placement,
+                        parkedVisibility: "visible",
+                    }));
+                }, {
+                    placement: layout.placement,
+                    modBarScale: layout.modBarScale,
+                });
+            },
+        });
+        const readComposition = async () => page.evaluate(() => {
+            const rectOf = (element) => {
+                if (!(element instanceof Element)) {
+                    return null;
+                }
+                const bounds = element.getBoundingClientRect();
+                return {
+                    left: bounds.left,
+                    right: bounds.right,
+                    top: bounds.top,
+                    bottom: bounds.bottom,
+                    width: bounds.width,
+                    height: bounds.height,
+                };
+            };
+            const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
+            const surface = document.querySelector(".cosimo-surface");
+            return {
+                surface: rectOf(surface),
+                workspace: rectOf(document.querySelector('[data-role="mobile-workspace-panels"]')),
+                bottomDock: rectOf(document.querySelector('[data-role="mobile-bottom-dock"]')),
+                tabs: rectOf(document.querySelector('[data-role="mobile-workspace-tabs"]')),
+                keyboard: rectOf(keyboard),
+                keyboardSection: rectOf(document.querySelector('[data-role="sticky-keyboard"] > section')),
+                rail: rectOf(document.querySelector('[data-role="mobile-global-mod-rail"]')),
+                drawer: rectOf(document.querySelector('[data-role="quick-source-sheet"]')),
+                fullEditor: rectOf(document.querySelector('[data-role="mseg-editor-dialog"]')),
+                fullEditorControls: rectOf(document.querySelector('[data-role="mseg-editor-controls"]')),
+                keyboardVisible: keyboard instanceof HTMLElement
+                    && getComputedStyle(keyboard).display !== "none",
+                keyboardBottomInset: surface instanceof HTMLElement
+                    ? Number.parseFloat(
+                        getComputedStyle(surface).getPropertyValue("--cosimo-keyboard-bottom-inset"),
+                    ) || 0
+                    : 0,
+                documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+            };
+        });
+        const assertVisibleKeyboardComposition = (geometry, label) => {
+            assert.ok(
+                geometry.surface
+                && geometry.workspace
+                && geometry.bottomDock
+                && geometry.tabs
+                && geometry.keyboard
+                && geometry.keyboardSection
+                && geometry.rail,
+                `${layout.name} ${label}: expected the complete compact composition.`,
+            );
+            assert.equal(geometry.keyboardVisible, true);
+            assert.equal(Math.abs(geometry.keyboardSection.height - (84 * 1.4)) <= 0.5, true);
+            assert.equal(geometry.workspace.bottom <= geometry.bottomDock.top + 0.75, true);
+            assert.equal(geometry.tabs.bottom <= geometry.keyboard.top + 0.75, true);
+            assert.equal(geometry.rail.bottom <= geometry.keyboard.top + 0.75, true);
+            assert.equal(geometry.keyboard.bottom <= geometry.surface.bottom + 0.75, true);
+            assert.equal(
+                Math.abs(geometry.keyboardBottomInset - (layout.height - geometry.keyboard.top)) <= 0.75,
+                true,
+            );
+            assert.equal(geometry.documentFits, true);
+        };
+
+        try {
+            const rail = page.locator(layout.placement === "parked"
+                ? '[data-role="mobile-global-mod-rail"][data-placement="parked"]'
+                : '[data-role="mobile-global-mod-rail"][data-edge="right"]');
+            await rail.waitFor();
+            await page.locator('[data-role="sticky-keyboard"]').evaluate((keyboard) => {
+                keyboard.closest(".cosimo-surface")?.style.setProperty(
+                    "--cosimo-safe-area-inset-bottom",
+                    "9px",
+                );
+            });
+            await page.waitForFunction(() => {
+                const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
+                const surface = document.querySelector(".cosimo-surface");
+                if (!(keyboard instanceof HTMLElement) || !(surface instanceof HTMLElement)) {
+                    return false;
+                }
+                const reserved = Number.parseFloat(
+                    getComputedStyle(surface).getPropertyValue("--cosimo-keyboard-bottom-inset"),
+                );
+                return Math.abs(
+                    reserved - (window.innerHeight - keyboard.getBoundingClientRect().top),
+                ) <= 0.75;
+            });
+
+            const initial = await readComposition();
+            assertVisibleKeyboardComposition(initial, "initial");
+
+            if (layout.exercisesKeyboardToggle) {
+                await expandGlobalModRail(page);
+                const keyboardToggle = rail.locator(
+                    '[data-role="mobile-global-mod-rail-keyboard-toggle"]',
+                );
+                await keyboardToggle.click();
+                await page.waitForFunction(() => {
+                    const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
+                    const surface = document.querySelector(".cosimo-surface");
+                    return keyboard instanceof HTMLElement
+                        && getComputedStyle(keyboard).display === "none"
+                        && surface instanceof HTMLElement
+                        && (Number.parseFloat(
+                            getComputedStyle(surface).getPropertyValue("--cosimo-keyboard-bottom-inset"),
+                        ) || 0) <= 0.5;
+                });
+                const hidden = await readComposition();
+                assert.equal(hidden.keyboardVisible, false);
+                assert.ok(hidden.workspace && hidden.tabs && hidden.rail);
+                assert.equal(hidden.workspace.height > initial.workspace.height, true);
+                assert.equal(hidden.tabs.bottom > initial.tabs.bottom, true);
+                assert.equal(hidden.rail.bottom <= layout.height + 0.75, true);
+
+                await keyboardToggle.click();
+                await page.waitForFunction(() => {
+                    const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
+                    const surface = document.querySelector(".cosimo-surface");
+                    if (!(keyboard instanceof HTMLElement) || !(surface instanceof HTMLElement)) {
+                        return false;
+                    }
+                    const height = keyboard.getBoundingClientRect().height;
+                    const reserved = Number.parseFloat(
+                        getComputedStyle(surface).getPropertyValue("--cosimo-keyboard-bottom-inset"),
+                    );
+                    return height > 0 && Math.abs(
+                        reserved - (window.innerHeight - keyboard.getBoundingClientRect().top),
+                    ) <= 0.75;
+                });
+                await collapseGlobalModRail(page);
+                assertVisibleKeyboardComposition(await readComposition(), "restored");
+            }
+
+            await rail.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+            const drawer = page.locator('[data-role="quick-source-sheet"][data-source-kind="mseg"]');
+            await drawer.waitFor();
+            await page.waitForTimeout(220);
+            const withDrawer = await readComposition();
+            assertVisibleKeyboardComposition(withDrawer, "drawer");
+            assert.ok(withDrawer.drawer);
+            assert.equal(
+                Math.abs(withDrawer.drawer.bottom - withDrawer.keyboard.top) <= 1.5,
+                true,
+                `${layout.name}: drawer must meet the measured keyboard edge: ${JSON.stringify(withDrawer)}`,
+            );
+            if (layout.placement === "parked") {
+                assert.equal(
+                    Math.abs(withDrawer.rail.bottom - withDrawer.drawer.top) <= 0.75,
+                    true,
+                    `${layout.name}: parked row must remain attached to the shifted drawer lip.`,
+                );
+            }
+
+            await drawer.locator('[data-role="quick-source-sheet-full-editor"]').click();
+            await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
+            await page.waitForFunction(() => {
+                const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
+                const surface = document.querySelector(".cosimo-surface");
+                return keyboard instanceof HTMLElement
+                    && getComputedStyle(keyboard).display === "none"
+                    && surface instanceof HTMLElement
+                    && (Number.parseFloat(
+                        getComputedStyle(surface).getPropertyValue("--cosimo-keyboard-bottom-inset"),
+                    ) || 0) <= 0.5;
+            });
+            const focused = await readComposition();
+            assert.equal(focused.keyboardVisible, false);
+            assert.equal(focused.tabs, null);
+            assert.equal(focused.drawer, null);
+            assert.ok(focused.surface && focused.fullEditor && focused.fullEditorControls && focused.rail);
+            assert.equal(focused.fullEditor.bottom <= focused.surface.bottom + 0.75, true);
+            assert.equal(focused.fullEditorControls.bottom <= focused.fullEditor.bottom + 0.75, true);
+            assert.equal(focused.rail.bottom <= focused.surface.bottom + 0.75, true);
+            if (layout.placement === "parked") {
+                assert.equal(focused.fullEditorControls.bottom <= focused.rail.top + 0.75, true);
+            }
+
+            await page.locator('[data-action="shell-back"]').click();
+            await page.locator('[data-role="mseg-editor-dialog"]').waitFor({ state: "detached" });
+            await page.waitForFunction(() => {
+                const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
+                return keyboard instanceof HTMLElement
+                    && getComputedStyle(keyboard).display !== "none"
+                    && keyboard.getBoundingClientRect().height > 0;
+            });
+            assertVisibleKeyboardComposition(await readComposition(), "returned from full editor");
+        } finally {
+            await page.evaluate(() => {
+                localStorage.removeItem("cosimo.keyboard.presentation.preferences.v1");
+                localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+            }).catch(() => {});
+            await page.close();
+        }
+    }
+});
+
 test("T60 parked 320px source and tool targets grow with scale and own their inset hit area", async () => {
     const scales = [
         { scale: 0.85, sourceWidth: 44.1094, toolWidth: 44.1094 },

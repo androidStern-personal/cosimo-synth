@@ -1,10 +1,10 @@
 /*
  * T13 quick-editor sheet. Non-modal bottom sheet over the Voice/FX workspace:
  * below the Mod rail (z 60) and the HUD/toast layer (z 70), above the page.
- * It is a DRAWER: it slides up from the screen bottom and may cover whatever
- * sits there (workspace tabs, keyboard) — accepted product behavior
- * (2026-08-20). The strip row reuses the mobile-voice cell classes verbatim;
- * only the graphic area re-orients with its aspect ratio.
+ * It is a DRAWER: it slides up from the live keyboard inset, so keyboard
+ * resizing preserves both surfaces instead of covering either one. The strip
+ * row reuses the mobile-voice cell classes verbatim; only the graphic area
+ * re-orients with its aspect ratio.
  */
 
 @media (max-width: 639px) {
@@ -12,7 +12,7 @@
         position: fixed;
         z-index: 55;
         right: 0;
-        bottom: 0;
+        bottom: var(--cosimo-keyboard-bottom-inset, 0px);
         left: 0;
         display: grid;
         grid-template-rows: auto auto minmax(0, 1fr);
@@ -23,7 +23,7 @@
             linear-gradient(180deg, color-mix(in srgb, var(--quick-sheet-accent) 7%, transparent), transparent 30%),
             rgb(var(--cosimo-ground-rgb) / 0.97);
         box-shadow: 0 -14px 42px var(--cosimo-cast-shadow);
-        transition: height 200ms ease;
+        transition: height 200ms ease, bottom 200ms ease;
     }
 
     /* One compact top row: the whole row is the grab rail; the title and

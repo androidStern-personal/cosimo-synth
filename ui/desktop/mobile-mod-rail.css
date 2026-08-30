@@ -745,7 +745,10 @@
     .mobile-global-mod-rail-portal {
         position: fixed;
         right: 0;
-        bottom: var(--mobile-mseg-drawer-height);
+        bottom: calc(
+            var(--mobile-mseg-drawer-height)
+            + var(--cosimo-keyboard-bottom-inset, 0px)
+        );
         left: 0;
         width: auto;
         transition:

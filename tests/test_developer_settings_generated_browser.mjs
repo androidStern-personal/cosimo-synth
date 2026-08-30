@@ -32,6 +32,10 @@ const expectedCopiedSettings = [
     "modBar.scale: 1.22",
     'modBar.placement: "parked"',
     'modBar.parkedVisibility: "visible"',
+    "",
+    "[Keyboard]",
+    "keyboard.visibleNoteCount: 14",
+    "keyboard.heightScale: 1.25",
 ].join("\n");
 
 async function openPhoneBundle(compiledModuleUrl, { clipboard = false } = {}) {
@@ -41,6 +45,7 @@ async function openPhoneBundle(compiledModuleUrl, { clipboard = false } = {}) {
             await page.setViewportSize(PHONE_VIEWPORT);
             await page.addInitScript(() => {
                 localStorage.removeItem("cosimo.mod-bar.preferences.v1");
+                localStorage.removeItem("cosimo.keyboard.presentation.preferences.v1");
             });
             if (clipboard) {
                 await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
@@ -93,7 +98,7 @@ test("generated ordinary and Codex Sites builds gate the complete developer sett
         await tuningPage.waitFor({ state: "visible" });
         assert.deepEqual(
             await tuningPage.locator("section h3").allTextContents(),
-            ["Auto-preview algorithm", "Mod drag feel", "Mod bar"],
+            ["Auto-preview algorithm", "Mod drag feel", "Mod bar", "Keyboard"],
         );
         assert.deepEqual(
             await tuningPage.locator("[data-perf-tuning-key]").evaluateAll((controls) => (
@@ -110,6 +115,8 @@ test("generated ordinary and Codex Sites builds gate the complete developer sett
                 "drag.gainMax",
                 "drag.referenceTravelPx",
                 "modBar.scale",
+                "keyboard.visibleNoteCount",
+                "keyboard.heightScale",
             ],
         );
         assert.deepEqual(
@@ -131,6 +138,18 @@ test("generated ordinary and Codex Sites builds gate the complete developer sett
         await tuningPage.locator('[data-perf-tuning-key="drag.referenceTravelPx"]').fill("444");
         await tuningPage.locator('[data-perf-tuning-key="modBar.scale"]').fill("1.22");
         await tuningPage.locator('[data-mod-bar-placement="parked"]').click();
+        await tuningPage.locator('[data-perf-tuning-key="keyboard.visibleNoteCount"]').fill("14");
+        await tuningPage.locator('[data-perf-tuning-key="keyboard.heightScale"]').fill("1.25");
+        assert.deepEqual(
+            await sitesPage.evaluate(() => (
+                JSON.parse(localStorage.getItem("cosimo.keyboard.presentation.preferences.v1") ?? "null")
+            )),
+            {
+                version: 1,
+                visibleNoteCount: 14,
+                heightScale: 1.25,
+            },
+        );
 
         const copyButton = tuningPage.locator('[data-action="copy-perf-tuning-settings"]');
         assert.equal(await copyButton.count(), 1);

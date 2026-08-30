@@ -99,6 +99,32 @@
     box-shadow: 0 26px 80px rgb(0 0 0 / 0.48);
 }
 
+/* T79: keyboard chrome fills the platform-safe horizontal band. The custom
+   properties are a host-testable override; real browser safe-area insets are
+   the production fallback. */
+[data-role="sticky-keyboard"] {
+    padding-top: calc(12px * var(--cosimo-keyboard-height-scale, 1));
+    padding-right: var(--cosimo-safe-area-inset-right, env(safe-area-inset-right, 0px));
+    padding-bottom: var(--cosimo-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    padding-left: var(--cosimo-safe-area-inset-left, env(safe-area-inset-left, 0px));
+}
+
+[data-role="sticky-keyboard"] > section,
+[data-role="sticky-keyboard"] .synth-control-rail,
+[data-role="sticky-keyboard"] > section > div:last-child,
+[data-role="sticky-keyboard"] > section > div:last-child > div {
+    height: calc(160px * var(--cosimo-keyboard-height-scale, 1));
+    min-height: 0;
+}
+
+[data-role="sticky-keyboard"] > section {
+    overflow: hidden;
+}
+
+[data-role="sticky-keyboard"] .synth-display-recess {
+    height: calc(112px * var(--cosimo-keyboard-height-scale, 1));
+}
+
 /* ADR-025 row 12: eligibility marks only pairs that can actually be created —
    an existing or ineligible pair must never carry the droppable outline. */
 .cosimo-surface[data-mod-source-mapping] [data-modulation-target-kind]:not([data-drag-creation="existing"]):not([data-drag-creation="ineligible"]) {

@@ -2533,7 +2533,7 @@ export function KeyboardSectionShell({
                 <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/55">Oct</span>
                 <button
                     type="button"
-                    className="cosimo-button flex h-10 w-10 items-center justify-center rounded-2xl p-0 disabled:opacity-35"
+                    className="cosimo-button flex h-10 w-9 items-center justify-center rounded-2xl p-0 disabled:opacity-35"
                     onClick={onOctaveUp}
                     disabled={!canOctaveUp}
                     aria-label="Shift keyboard up one octave"
@@ -2542,7 +2542,7 @@ export function KeyboardSectionShell({
                 </button>
                 <button
                     type="button"
-                    className="cosimo-button flex h-10 w-10 items-center justify-center rounded-2xl p-0 disabled:opacity-35"
+                    className="cosimo-button flex h-10 w-9 items-center justify-center rounded-2xl p-0 disabled:opacity-35"
                     onClick={onOctaveDown}
                     disabled={!canOctaveDown}
                     aria-label="Shift keyboard down one octave"

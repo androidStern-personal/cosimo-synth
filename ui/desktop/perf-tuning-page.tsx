@@ -26,6 +26,19 @@ import {
     updateModBarPreferences,
     type ModBarPlacement,
 } from "../shared/mod-bar-preferences";
+import {
+    KEYBOARD_COMPACT_DEFAULT_VISIBLE_NOTE_COUNT,
+    KEYBOARD_HEIGHT_SCALE_MAX,
+    KEYBOARD_HEIGHT_SCALE_MIN,
+    KEYBOARD_VISIBLE_NOTE_COUNT_MAX,
+    KEYBOARD_VISIBLE_NOTE_COUNT_MIN,
+    KEYBOARD_WIDE_DEFAULT_VISIBLE_NOTE_COUNT,
+    getKeyboardPresentationPreferences,
+    resetKeyboardPresentationPreferences,
+    resolveKeyboardVisibleNoteCount,
+    subscribeKeyboardPresentationPreferences,
+    updateKeyboardPresentationPreferences,
+} from "../shared/keyboard-presentation-preferences";
 
 const ALGORITHM_ROWS: ReadonlyArray<{
     id: AutoPreviewAlgorithm;
@@ -135,6 +148,18 @@ function SectionHeading({ title, onReset }: { title: string; onReset: () => void
 export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
     const state = useSyncExternalStore(subscribePerfTuning, getPerfTuningState);
     const modBar = useSyncExternalStore(subscribeModBarPreferences, getModBarPreferences);
+    const keyboard = useSyncExternalStore(
+        subscribeKeyboardPresentationPreferences,
+        getKeyboardPresentationPreferences,
+    );
+    const responsiveKeyboardNoteCount = typeof globalThis.matchMedia === "function"
+        && globalThis.matchMedia("(max-width: 639px)").matches
+        ? KEYBOARD_COMPACT_DEFAULT_VISIBLE_NOTE_COUNT
+        : KEYBOARD_WIDE_DEFAULT_VISIBLE_NOTE_COUNT;
+    const visibleKeyboardNoteCount = resolveKeyboardVisibleNoteCount(
+        keyboard,
+        responsiveKeyboardNoteCount,
+    );
     const [copyStatus, setCopyStatus] = useState<"idle" | "copying" | "success" | "failure">("idle");
     const setDrag = (next: Partial<ModSourceTouchTuning>) => updatePerfTuning({ drag: next });
     const copySettings = async () => {
@@ -146,7 +171,7 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                 setCopyStatus("failure");
                 return;
             }
-            await writeText(formatPerfTuningSettings(state, modBar));
+            await writeText(formatPerfTuningSettings(state, modBar, keyboard));
             setCopyStatus("success");
         } catch {
             setCopyStatus("failure");
@@ -377,6 +402,42 @@ export default function PerfTuningPage({ onClose }: { onClose: () => void }) {
                         </div>
                         <p className="text-[11px] text-slate-500">
                             Parked hide / restore is also an application preference. It never enters a sound or preset.
+                        </p>
+                    </section>
+
+                    <section className="flex flex-col gap-3">
+                        <SectionHeading title="Keyboard" onReset={resetKeyboardPresentationPreferences} />
+                        <TuningSlider
+                            label="Visible notes"
+                            detail={keyboard.visibleNoteCount === "responsive"
+                                ? "responsive default"
+                                : "fixed across layouts"}
+                            value={visibleKeyboardNoteCount}
+                            min={KEYBOARD_VISIBLE_NOTE_COUNT_MIN}
+                            max={KEYBOARD_VISIBLE_NOTE_COUNT_MAX}
+                            step={1}
+                            settingKey="keyboard.visibleNoteCount"
+                            format={(value) => `${Math.round(value)} notes`}
+                            onChange={(visibleNoteCount) => updateKeyboardPresentationPreferences({
+                                visibleNoteCount,
+                            })}
+                        />
+                        <TuningSlider
+                            label="Height"
+                            detail="complete keyboard region"
+                            value={keyboard.heightScale}
+                            min={KEYBOARD_HEIGHT_SCALE_MIN}
+                            max={KEYBOARD_HEIGHT_SCALE_MAX}
+                            step={0.01}
+                            settingKey="keyboard.heightScale"
+                            format={(value) => `${value.toFixed(2)}×`}
+                            onChange={(heightScale) => updateKeyboardPresentationPreferences({
+                                heightScale,
+                            })}
+                        />
+                        <p className="text-[11px] text-slate-500">
+                            Fewer notes make each key wider. Height changes presentation only;
+                            root note and octave stepping stay unchanged.
                         </p>
                     </section>
                 </div>

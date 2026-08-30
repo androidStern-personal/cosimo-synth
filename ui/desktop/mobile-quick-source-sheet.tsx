@@ -157,6 +157,9 @@ const QUICK_ENVELOPE_STAGES = [
 ] as const;
 
 export type MobileQuickSourceSheetProps = {
+    /** Live compact-shell space below the drawer, including the complete
+        keyboard region, shell edge, and platform safe-area inset. */
+    readonly bottomInset: number;
     readonly source: { readonly sourceKind: RackModulationSourceKind; readonly sourceSlot: number };
     /** The route source shown/edited by the controls. This is deliberately
         independent from `source`, which owns the open editor target. */
@@ -198,6 +201,7 @@ export type MobileQuickSourceSheetProps = {
 };
 
 export function MobileQuickSourceSheet({
+    bottomInset,
     source,
     armedSource,
     routes,
@@ -230,8 +234,8 @@ export function MobileQuickSourceSheet({
     /* ------------------------- Detent geometry ------------------------ */
 
     const usableHeight = useCallback(() => (
-        window.visualViewport?.height ?? window.innerHeight
-    ), []);
+        Math.max(0, (window.visualViewport?.height ?? window.innerHeight) - bottomInset)
+    ), [bottomInset]);
     const [detent, setDetent] = useState<"compact" | "half">("compact");
     const [dragHeight, setDragHeight] = useState<number | null>(null);
     const dragRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
