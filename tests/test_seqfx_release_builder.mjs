@@ -11,6 +11,7 @@ import { gunzipSync } from "node:zlib";
 import {
     attestMatchingVst3Metadata,
     assertArchiveTreeContainsOnlyFilesAndDirectories,
+    assertNativeBuildUsedReleaseToolchain,
     assertSafeOutputRoot,
     canonicalPayloadFingerprint,
     captureVst3ArtifactEvidence,
@@ -99,6 +100,52 @@ function actualNativeDependencyFixture(config = seqFxReleaseConfig) {
             clean: true,
             originVerified: true,
             sourceDirectoryCacheKey: config.nativeDependencies.juce.sourceDirectoryCacheKey,
+        },
+    };
+}
+
+function releaseToolchainFixture({ nativeBuildCacheVerified = true } = {}) {
+    return {
+        schemaVersion: 1,
+        externalTools: {
+            cmaj: {
+                provenance: "approved-binary-toolchain",
+                runtimeSourceAttestation: "separate",
+                sha256: "4bfdd75549a6d51578977ee6e2ac55b2ede459a1ccb1055479d3dd0f9e8cdabf",
+                version: "1.0.3066",
+            },
+            cmake: {
+                provenance: "approved-binary-toolchain",
+                sha256: "2fb3d19ecda5c45dd35f826af5f241a81c699dccf010f877948b37ca2addb290",
+                version: "4.2.3",
+            },
+            node: {
+                provenance: "approved-binary-toolchain",
+                sha256: "5d9d3872911e2340a43b707962e68143de8a4e8d54628845c0c4f2de1fb7cd5c",
+                version: "v22.22.3",
+            },
+        },
+        nativeBuildCacheVerified,
+        systemCommands: {
+            names: [
+                "codesign",
+                "ditto",
+                "git",
+                "grep",
+                "lipo",
+                "mkbom",
+                "pkgutil",
+                "plutil",
+                "productsign",
+                "security",
+                "spctl",
+                "unzip",
+                "xar",
+                "xattr",
+                "xcrun",
+                "zip",
+            ],
+            policy: "macos-absolute-system-command-map-v1",
         },
     };
 }
@@ -212,6 +259,8 @@ async function createNativeDependencyCheckoutFixture(context) {
     await mkdir(path.dirname(cmakeCachePath), { recursive: true });
     await writeFile(cmakeCachePath, [
         `CMAKE_HOME_DIRECTORY:INTERNAL=${cmakeHome}`,
+        "CMAKE_COMMAND:INTERNAL=/approved/cmake",
+        "COSIMO_CMAJ_EXECUTABLE:FILEPATH=/approved/cmaj",
         `CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR:INTERNAL=${cmajorPath}`,
         `CPM_PACKAGE_cosimo_juce_SOURCE_DIR:INTERNAL=${jucePath}`,
         "",
@@ -670,6 +719,32 @@ test("post-build provenance resolves CMake-selected clean Cmajor, CHOC, and JUCE
     );
 });
 
+test("native build provenance rejects CMake or cmaj execution-path drift", async (context) => {
+    const fixture = await createNativeDependencyCheckoutFixture(context);
+
+    await assert.doesNotReject(assertNativeBuildUsedReleaseToolchain(
+        fixture.config,
+        { cmaj: "/approved/cmaj", cmake: "/approved/cmake" },
+        { repositoryRoot: fixture.repositoryRoot },
+    ));
+    await assert.rejects(
+        assertNativeBuildUsedReleaseToolchain(
+            fixture.config,
+            { cmaj: "/approved/cmaj", cmake: "/different/cmake" },
+            { repositoryRoot: fixture.repositoryRoot },
+        ),
+        /CMake executable drift/u,
+    );
+    await assert.rejects(
+        assertNativeBuildUsedReleaseToolchain(
+            fixture.config,
+            { cmaj: "/different/cmaj", cmake: "/approved/cmake" },
+            { repositoryRoot: fixture.repositoryRoot },
+        ),
+        /cmaj executable drift/u,
+    );
+});
+
 test("post-build provenance rejects a CHOC checkout that differs from Cmajor's gitlink", async (context) => {
     const fixture = await createNativeDependencyCheckoutFixture(context);
     await writeFile(path.join(fixture.chocPath, "new.txt"), "different revision\n", "utf8");
@@ -737,10 +812,12 @@ test("read-only plan names exact side effects, current paths, and release blocke
             worktreeStatus: "",
         },
         mode: "plan",
+        releaseToolchain: releaseToolchainFixture({ nativeBuildCacheVerified: false }),
         sourceDateEpoch: 1_700_000_000,
     });
 
     assert.deepEqual(plan.sideEffects, []);
+    assert.equal(plan.schemaVersion, 3);
     assert.equal(plan.publicReleaseBlocked, true);
     assert.match(plan.paths.builtVst3, /_build\/plugin\/CosimoSeqFX_artefacts/u);
     assert.match(plan.repeatability.deterministicBoundary, /one freshly built unsigned VST3/u);
@@ -751,6 +828,7 @@ test("read-only plan names exact side effects, current paths, and release blocke
         seqFxReleaseConfig.nativeDependencies.choc.revision,
     );
     assert.equal(plan.nativeDependencyProvenance.postBuildVerification.requiredBeforePackaging, true);
+    assert.equal(plan.releaseToolchain.nativeBuildCacheVerified, false);
     assert.ok(plan.explicitlyNeverPerformed.includes("Patreon upload"));
 });
 
@@ -1039,6 +1117,7 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
             installer: { signedWithDeveloperId: false },
             vst3: { signedWithDeveloperId: false },
         },
+        releaseToolchain: releaseToolchainFixture(),
         sourceDateEpoch: 1_700_000_000,
         sourceDateEpochOrigin: "source-commit-timestamp",
         vst3Metadata: {
@@ -1051,7 +1130,7 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
     const second = createReleaseManifest(inputs);
 
     assert.deepEqual(second, first);
-    assert.equal(first.schemaVersion, 6);
+    assert.equal(first.schemaVersion, 7);
     assert.equal(first.distributionReady, false);
     assert.equal(first.packagingReady, false);
     assert.equal("createdAt" in first, false);
@@ -1066,9 +1145,17 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
     assert.equal(first.nativeDependencyProvenance.juce.clean, true);
     assert.deepEqual(first.build.vst3Metadata, inputs.vst3Metadata);
     assert.deepEqual(first.build.builtVst3Evidence, inputs.builtVst3Evidence);
+    assert.equal(first.build.releaseToolchain.nativeBuildCacheVerified, true);
     assert.equal(first.artifacts.thirdPartyNotices, "THIRD_PARTY_NOTICES.txt");
     assert.ok(first.operationsNotPerformed.includes("DAW smoke or listening acceptance"));
     assert.ok(first.operationsNotPerformed.includes("Patreon upload"));
+    assert.throws(
+        () => createReleaseManifest({
+            ...inputs,
+            releaseToolchain: releaseToolchainFixture({ nativeBuildCacheVerified: false }),
+        }),
+        /native CMake\/cmaj cache verification/u,
+    );
     assert.throws(
         () => createReleaseManifest({
             ...inputs,

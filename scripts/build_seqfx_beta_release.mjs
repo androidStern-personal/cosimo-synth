@@ -23,9 +23,15 @@ import {
     seqFxReleaseConfig,
     unresolvedSeqFxPublicReleaseDecisions,
 } from "./seqfx-release-config.mjs";
+import {
+    assertApprovedSeqFxReleaseToolEvidence,
+    resolveSeqFxReleaseToolchain,
+    seqFxReleaseSystemCommands,
+} from "./seqfx-release-toolchain.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const minimumZipEpoch = 315532800;
+let releaseCommandEnvironment = process.env;
 
 export function usage(config = seqFxReleaseConfig) {
     const artifactBaseName = seqFxArtifactBaseName(config);
@@ -113,17 +119,36 @@ export function parseReleaseArgs(argv) {
     return options;
 }
 
+function releaseCommandPath(command) {
+    if (path.isAbsolute(command))
+        return command;
+
+    const approvedPath = seqFxReleaseSystemCommands[command];
+
+    if (!approvedPath)
+        throw new Error(`SeqFX release command is not an approved absolute tool: ${command}`);
+
+    return approvedPath;
+}
+
+function commandEnvironment(options) {
+    return options.env
+        ? { ...releaseCommandEnvironment, ...options.env }
+        : releaseCommandEnvironment;
+}
+
 function run(command, args, options = {}) {
-    const result = spawnSync(command, args, {
+    const executable = releaseCommandPath(command);
+    const result = spawnSync(executable, args, {
         cwd: options.cwd ?? repoRoot,
         encoding: "utf8",
-        env: options.env ? { ...process.env, ...options.env } : process.env,
+        env: commandEnvironment(options),
         stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
     });
 
     if (result.status !== 0) {
         const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-        throw new Error(output || `${command} ${args.join(" ")} failed.`);
+        throw new Error(output || `${executable} ${args.join(" ")} failed.`);
     }
 
     return {
@@ -133,10 +158,10 @@ function run(command, args, options = {}) {
 }
 
 function runAllowFailure(command, args, options = {}) {
-    return spawnSync(command, args, {
+    return spawnSync(releaseCommandPath(command), args, {
         cwd: options.cwd ?? repoRoot,
         encoding: "utf8",
-        env: options.env ? { ...process.env, ...options.env } : process.env,
+        env: commandEnvironment(options),
         stdio: ["ignore", "pipe", "pipe"],
     });
 }
@@ -476,6 +501,30 @@ export async function captureActualNativeDependencyProvenance(
     };
 }
 
+/** Prove the completed native configure used the already-attested CMake/cmaj executables. */
+export async function assertNativeBuildUsedReleaseToolchain(
+    config,
+    expectedTools,
+    { repositoryRoot = repoRoot } = {},
+) {
+    const cachePath = path.join(repositoryRoot, config.paths.nativeBuildCmakeCache);
+    const cacheSource = await readFile(cachePath, "utf8");
+    const observedCmake = requireUniqueCmakeCacheValue(cacheSource, "CMAKE_COMMAND");
+    const observedCmaj = requireUniqueCmakeCacheValue(cacheSource, "COSIMO_CMAJ_EXECUTABLE");
+
+    if (observedCmake !== expectedTools.cmake) {
+        throw new Error(
+            `CMake executable drift: expected ${expectedTools.cmake}, found ${observedCmake}.`,
+        );
+    }
+
+    if (observedCmaj !== expectedTools.cmaj) {
+        throw new Error(
+            `cmaj executable drift: expected ${expectedTools.cmaj}, found ${observedCmaj}.`,
+        );
+    }
+}
+
 function expectedBuiltVst3Path(plugin) {
     return path.join(
         plugin.juceOut,
@@ -661,14 +710,16 @@ export function createReleasePlan({
     declaredNativeDependencies,
     gitState,
     mode = "plan",
+    releaseToolchain,
     sourceDateEpoch,
 } = {}) {
     const artifactBaseName = seqFxArtifactBaseName(config);
     const decisionGates = unresolvedSeqFxPublicReleaseDecisions(config);
     assertDeclaredNativeDependencyProvenance(config, declaredNativeDependencies);
+    assertReleaseToolchainAttestation(releaseToolchain, { requireNativeBuildCache: false });
 
     return {
-        schemaVersion: 2,
+        schemaVersion: 3,
         mode,
         product: config.identity.publicName,
         releaseVersion: config.release.channelVersion,
@@ -680,6 +731,7 @@ export function createReleasePlan({
         },
         scope: config.scope,
         identity: config.identity,
+        releaseToolchain,
         nativeDependencyProvenance: {
             declared: declaredNativeDependencies,
             postBuildVerification: {
@@ -1960,6 +2012,49 @@ function assertBuiltVst3Evidence(config, evidence) {
     }
 }
 
+function assertReleaseToolchainAttestation(attestation, { requireNativeBuildCache }) {
+    const errors = [];
+
+    if (attestation?.schemaVersion !== 1)
+        errors.push("toolchain schema version must be 1");
+
+    for (const toolName of ["cmaj", "cmake", "node"]) {
+        try {
+            assertApprovedSeqFxReleaseToolEvidence(toolName, attestation?.externalTools?.[toolName]);
+        } catch (error) {
+            errors.push(error instanceof Error ? error.message : String(error));
+        }
+    }
+
+    if (attestation?.externalTools?.cmaj?.provenance !== "approved-binary-toolchain")
+        errors.push("cmaj binary provenance is missing");
+
+    if (attestation?.externalTools?.cmaj?.runtimeSourceAttestation !== "separate")
+        errors.push("cmaj binary and runtime-source attestations must remain separate");
+
+    for (const toolName of ["cmake", "node"]) {
+        if (attestation?.externalTools?.[toolName]?.provenance !== "approved-binary-toolchain")
+            errors.push(`${toolName} binary provenance is missing`);
+    }
+
+    if (attestation?.systemCommands?.policy !== "macos-absolute-system-command-map-v1")
+        errors.push("absolute macOS system-command policy is missing");
+
+    const expectedSystemCommandNames = Object.keys(seqFxReleaseSystemCommands);
+    if (JSON.stringify(attestation?.systemCommands?.names) !== JSON.stringify(expectedSystemCommandNames))
+        errors.push("absolute macOS system-command inventory drifted");
+
+    if (requireNativeBuildCache && attestation?.nativeBuildCacheVerified !== true)
+        errors.push("native CMake/cmaj cache verification is missing");
+
+    if (errors.length > 0) {
+        throw new Error([
+            "SeqFX release toolchain attestation rejected:",
+            ...errors.map((error) => `- ${error}`),
+        ].join("\n"));
+    }
+}
+
 export function createReleaseManifest({
     architectures,
     builtVst3Evidence,
@@ -1972,6 +2067,7 @@ export function createReleaseManifest({
     packagePayloadFileCount,
     patchManifest,
     payloadFingerprint,
+    releaseToolchain,
     signing,
     sourceDateEpoch,
     sourceDateEpochOrigin,
@@ -1981,6 +2077,7 @@ export function createReleaseManifest({
     assertActualNativeDependencyProvenance(config, nativeDependencyProvenance);
     assertVst3MetadataAttestation(config, vst3Metadata);
     assertBuiltVst3Evidence(config, builtVst3Evidence);
+    assertReleaseToolchainAttestation(releaseToolchain, { requireNativeBuildCache: true });
     assertSourceStateUnchanged(gitState, finalGitState, {
         phase: "final manifest construction",
     });
@@ -1992,7 +2089,7 @@ export function createReleaseManifest({
         throw new Error(`SeqFX SOURCE_DATE_EPOCH origin is invalid: ${String(sourceDateEpochOrigin)}`);
 
     return {
-        schemaVersion: 6,
+        schemaVersion: 7,
         artifactClass: options.mode === "release" ? "signed-notarized-release-candidate" : "local-unsigned-validation",
         packagingReady: options.mode === "release",
         distributionReady: false,
@@ -2022,6 +2119,7 @@ export function createReleaseManifest({
         build: {
             builtVst3: config.paths.builtVst3,
             builtVst3Evidence,
+            releaseToolchain,
             binaryArchitectures: architectures,
             vst3Metadata,
             webViewRequiredMarkers: config.webViewMarkers.required,
@@ -2143,6 +2241,7 @@ async function assembleArtifactSet({
     options,
     outputRoot,
     patchManifest,
+    releaseToolchain,
     signingIdentities,
     sourceDateEpoch,
     sourceDateEpochOrigin,
@@ -2257,6 +2356,7 @@ async function assembleArtifactSet({
         packagePayloadFileCount: payloadFiles.length,
         patchManifest,
         payloadFingerprint,
+        releaseToolchain,
         signing: {
             installer: installerSigning,
             vst3: vst3Signing,
@@ -2345,6 +2445,7 @@ async function buildReleaseArtifacts({
     patchManifest,
     sourceDateEpoch,
     sourceDateEpochOrigin,
+    toolchain,
 }) {
     if (process.platform !== "darwin")
         throw new Error("SeqFX beta packaging targets macOS and must run on macOS.");
@@ -2355,10 +2456,26 @@ async function buildReleaseArtifacts({
         ? assertSignedReleasePrerequisites(config, gitState)
         : null;
 
-    run(process.execPath, ["fx/prod-effect.mjs", "build", config.productKey, "--clean"]);
+    run(toolchain.privateInvocationPaths.node, [
+        "fx/prod-effect.mjs",
+        "build",
+        config.productKey,
+        "--clean",
+    ], {
+        env: {
+            COSIMO_RELEASE_CMAJ: toolchain.privateInvocationPaths.cmaj,
+            COSIMO_RELEASE_CMAKE: toolchain.privateInvocationPaths.cmake,
+            COSIMO_RELEASE_NODE: toolchain.privateInvocationPaths.node,
+        },
+    });
     assertSourceStateUnchanged(gitState, getReleaseGitState());
 
     const nativeDependencyProvenance = await captureActualNativeDependencyProvenance(config);
+    await assertNativeBuildUsedReleaseToolchain(config, toolchain.privateInvocationPaths);
+    const releaseToolchain = {
+        ...toolchain.manifestAttestation,
+        nativeBuildCacheVerified: true,
+    };
     const builtArtifact = await verifyBuiltVst3(config);
     const outputRoot = path.join(repoRoot, config.release.outputDirectory);
     const primaryArtifacts = await assembleArtifactSet({
@@ -2369,6 +2486,7 @@ async function buildReleaseArtifacts({
         options,
         outputRoot,
         patchManifest,
+        releaseToolchain,
         signingIdentities,
         sourceDateEpoch,
         sourceDateEpochOrigin,
@@ -2387,6 +2505,7 @@ async function buildReleaseArtifacts({
             options,
             outputRoot: repeatRoot,
             patchManifest,
+            releaseToolchain,
             signingIdentities,
             sourceDateEpoch,
             sourceDateEpochOrigin,
@@ -2424,50 +2543,63 @@ export async function main(argv = process.argv) {
         return;
     }
 
-    const config = seqFxReleaseConfig;
-    const patchManifest = await readPatchManifest(config);
-    const plugin = effectPlugins[config.productKey];
+    const toolchain = await resolveSeqFxReleaseToolchain({ repositoryRoot: repoRoot });
+    const previousCommandEnvironment = releaseCommandEnvironment;
+    releaseCommandEnvironment = toolchain.childEnvironment;
 
-    assertReleaseContract(config, patchManifest, plugin);
-    const declaredNativeDependencies = await readDeclaredNativeDependencyProvenance(config);
-    const gitState = getReleaseGitState();
-    const {
-        origin: sourceDateEpochOrigin,
-        sourceDateEpoch,
-    } = resolveSourceDateEpochEvidence({
-        gitTimestamp: sourceCommitTimestamp(),
-    });
-    const plan = createReleasePlan({
-        config,
-        declaredNativeDependencies,
-        gitState,
-        mode: options.mode,
-        sourceDateEpoch,
-    });
+    try {
+        const config = seqFxReleaseConfig;
+        const patchManifest = await readPatchManifest(config);
+        const plugin = effectPlugins[config.productKey];
 
-    if (options.mode === "plan") {
-        printPlan(plan, options);
-        return;
-    }
+        assertReleaseContract(config, patchManifest, plugin);
+        const declaredNativeDependencies = await readDeclaredNativeDependencyProvenance(config);
+        const gitState = getReleaseGitState();
+        const {
+            origin: sourceDateEpochOrigin,
+            sourceDateEpoch,
+        } = resolveSourceDateEpochEvidence({
+            gitTimestamp: sourceCommitTimestamp(),
+        });
+        const plan = createReleasePlan({
+            config,
+            declaredNativeDependencies,
+            gitState,
+            mode: options.mode,
+            releaseToolchain: {
+                ...toolchain.manifestAttestation,
+                nativeBuildCacheVerified: false,
+            },
+            sourceDateEpoch,
+        });
 
-    const artifacts = await buildReleaseArtifacts({
-        config,
-        gitState,
-        options,
-        patchManifest,
-        sourceDateEpoch,
-        sourceDateEpochOrigin,
-    });
+        if (options.mode === "plan") {
+            printPlan(plan, options);
+            return;
+        }
 
-    console.log(`Created ${path.relative(repoRoot, artifacts.packagePath)}`);
-    console.log(`Created ${path.relative(repoRoot, artifacts.zipPath)}`);
-    console.log(`Created ${path.relative(repoRoot, artifacts.manifestPath)}`);
-    console.log(`Created ${path.relative(repoRoot, artifacts.checksumsPath)}`);
+        const artifacts = await buildReleaseArtifacts({
+            config,
+            gitState,
+            options,
+            patchManifest,
+            sourceDateEpoch,
+            sourceDateEpochOrigin,
+            toolchain,
+        });
 
-    if (options.mode !== "release") {
-        console.log(
-            "Local unsigned validation artifact is NOT Patreon-ready. Public identity/support/channel decisions, signing, notarization, host acceptance, and clean-account testing remain open.",
-        );
+        console.log(`Created ${path.relative(repoRoot, artifacts.packagePath)}`);
+        console.log(`Created ${path.relative(repoRoot, artifacts.zipPath)}`);
+        console.log(`Created ${path.relative(repoRoot, artifacts.manifestPath)}`);
+        console.log(`Created ${path.relative(repoRoot, artifacts.checksumsPath)}`);
+
+        if (options.mode !== "release") {
+            console.log(
+                "Local unsigned validation artifact is NOT Patreon-ready. Public identity/support/channel decisions, signing, notarization, host acceptance, and clean-account testing remain open.",
+            );
+        }
+    } finally {
+        releaseCommandEnvironment = previousCommandEnvironment;
     }
 }
 
