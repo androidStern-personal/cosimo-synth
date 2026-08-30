@@ -62,10 +62,11 @@ test("the production graph exposes the compact Polish controls and ends rack to 
     assert.deepEqual(polishEndpointMentions, publicControls);
 });
 
-test("Polish reuses the Enhancer analyzer and multiplexes spectrum through its existing telemetry endpoint", async () => {
-    const [source, analyzer, polish, ...manifests] = await Promise.all([
+test("Polish reuses the dormant Enhancer analyzer and multiplexes spectrum through its existing telemetry endpoint", async () => {
+    const [source, analyzer, polishContract, polish, ...manifests] = await Promise.all([
         read("cmajor/WavetableSynth.cmajor"),
         read("cmajor/EnhancerLiteSpectrumAnalyzer.cmajor"),
+        read("ui/shared/polish.ts"),
         read("cmajor/Polish.cmajor"),
         read("WavetableSynth.cmajorpatch").then(JSON.parse),
         read("WavetableSynth.iOS.cmajorpatch").then(JSON.parse),
@@ -76,7 +77,9 @@ test("Polish reuses the Enhancer analyzer and multiplexes spectrum through its e
     }
     assert.match(analyzer, /processor EnhancerSpectrumAnalyzer \(int32 initiallyEnabled\)/);
     assert.match(source, /output event \(wt::PolishMeterFrame, wt::EnhancerSpectrumFrame\) polishMeter;/);
-    assert.match(source, /node polishInputSpectrum = wt::EnhancerSpectrumAnalyzer \(1\);/);
+    assert.match(source, /input event int32 polishAnalyzerEnabledIn \[\[ name: "Polish Analyzer Enable", hidden: true \]\];/);
+    assert.match(source, /node polishInputSpectrum = wt::EnhancerSpectrumAnalyzer \(0\);/);
+    assert.match(source, /polishAnalyzerEnabledIn -> polishInputSpectrum\.enabledIn;/);
     assert.match(polish, /output stream float32<2> enhancerInputMonitor;/);
     assert.match(polish, /let enhancerInput = applySafeBass \(in\);/);
     assert.match(polish, /enhancerInputMonitor <- enhancerInput;/);
@@ -93,7 +96,18 @@ test("Polish reuses the Enhancer analyzer and multiplexes spectrum through its e
         "polishEnhancerAmount",
         "polishCompressionClipAmount",
         "polishOutputTrimDb",
+        "polishSafeBassAmount",
+        "polishSafeBassBypass",
+        "polishEnhancerBypass",
+        "polishCompressionClipBypass",
+        "polishOutputTrimBypass",
     ]);
+    assert.match(polishContract, /POLISH_ANALYZER_ENABLED_ENDPOINT_ID = "polishAnalyzerEnabledIn"/);
+    const publicParameterInventory = polishContract.match(
+        /POLISH_PARAMETER_ENDPOINT_IDS = Object\.freeze\(\[([\s\S]*?)\] as const\)/,
+    )?.[1];
+    assert.ok(publicParameterInventory);
+    assert.doesNotMatch(publicParameterInventory, /POLISH_ANALYZER_ENABLED_ENDPOINT_ID|polishAnalyzerEnabledIn/);
 });
 
 test("native plugin seams forward the compiled graph latency to their hosts", async () => {
@@ -195,7 +209,8 @@ test("the product UI exposes four compact Polish modules, independent bypasses, 
         assert.doesNotMatch(modulationTargets, new RegExp(endpointID));
     }
     assert.match(workspace, /data-role=\{`polish-module-/);
-    assert.match(workspace, /data-role=\{`polish-bypass-/);
+    assert.match(workspace, /surface === "compact" \? "polish-bypass"/);
+    assert.match(workspace, /<PolishBypassControl[\s\S]*?surface="compact"/);
     assert.match(workspace, /data-role="polish-expand"/);
     assert.match(workspace, /polishEditorExpanded/);
     assert.match(workspace, /onPolishEditorExpandedChange/);

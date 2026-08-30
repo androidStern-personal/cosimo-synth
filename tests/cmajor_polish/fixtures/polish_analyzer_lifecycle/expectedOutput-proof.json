@@ -1,0 +1,11 @@
+[
+  {
+    "frameOffset": 5199,
+    "event": {
+      "spectrumEventCount": 1,
+      "sampleRateHz": 48000,
+      "dominantBin": 64,
+      "audioStayedExact": 1
+    }
+  }
+]

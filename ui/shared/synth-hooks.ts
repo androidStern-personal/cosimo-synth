@@ -14,6 +14,7 @@ import { getRackParameterDescriptor } from "./rack-parameter-descriptors";
 import {
     usePatchConnection,
     usePatchEndpoint,
+    usePatchFoldedVisualEndpoint,
     usePatchVisualEndpoint,
     useResourceClient,
     type PatchConnectionLike,
@@ -3084,20 +3085,15 @@ export function useSynthPatchViewModel({
     const observedDistortionHistory = useObservedDistortionHistory(observeDistortionVisuals);
     const observedDistortionScope = useObservedDistortionScope(observeDistortionVisuals);
     const observedMsegState = useObservedMsegState(observeMsegPlayhead);
-    const polishMeterMessage = usePatchVisualEndpoint<unknown | null>(
+    const observedPolishTelemetry = usePatchFoldedVisualEndpoint(
         POLISH_METER_ENDPOINT_ID,
-        null,
-    );
-    const [observedPolishTelemetry, setObservedPolishTelemetry] = useState(
-        createPolishTelemetryDisplay,
-    );
-    useEffect(() => {
-        setObservedPolishTelemetry((current) => advancePolishTelemetryDisplay(
+        createPolishTelemetryDisplay(),
+        (current, message: unknown) => advancePolishTelemetryDisplay(
             current,
-            polishMeterMessage,
+            message,
             globalThis.performance?.now() ?? 0,
-        ));
-    }, [polishMeterMessage]);
+        ),
+    );
     const observedPolishMeter = observedPolishTelemetry.meter;
     const observedPolishSpectrum = observedPolishTelemetry.spectrum;
     const voiceArticulationStartMessage = usePatchEndpoint<VoiceArticulationStartMessage | null>(

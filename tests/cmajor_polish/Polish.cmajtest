@@ -18,48 +18,90 @@ function requirePolishLatency (relativePath)
 ## global ("../../cmajor/Enhancer.cmajor", "../../cmajor/EnhancerLiteSpectrumAnalyzer.cmajor", "../../cmajor/Polish.cmajor", "PolishRateProbes.cmajor")
 
 //==============================================================================
-// Compile the production analyzer from Polish's internal post-Safe-Bass tap.
-// The source-level production test separately pins the exact top-level wire;
-// this fixture proves the endpoint types compose without a host endpoint.
+// Drive the production analyzer from Polish's real post-Safe-Bass,
+// pre-Enhancer tap. It stays dormant for more than one window, emits a known
+// 750 Hz bin only while enabled, returns dormant after disable, and cannot
+// change the observed Polish audio path.
 
-## testProcessor (undefined, { frequency: 48000 })
+## runScript ({ frequency: 48000, blockSize: 64, samplesToRender: 5200, subDir: "fixtures/polish_analyzer_lifecycle" })
+
+namespace polishAnalyzerTest
+{
+    struct Proof
+    {
+        int32 spectrumEventCount;
+        float32 sampleRateHz;
+        int32 dominantBin;
+        int32 audioStayedExact;
+    }
+}
 
 graph PolishEnhancerInputAnalyzerComposition [[ main ]]
 {
-    output event int32 out;
+    output event polishAnalyzerTest::Proof proof;
 
-    node source = PolishEnhancerInputAnalyzerSource;
-    node polish = wt::PolishBus;
-    node analyzer = wt::EnhancerSpectrumAnalyzer (1);
+    node source = PolishEnhancerInputAnalyzerLifecycleSource;
+    node observedPolish = wt::PolishBus;
+    node referencePolish = wt::PolishBus;
+    node analyzer = wt::EnhancerSpectrumAnalyzer (0);
     node witness = PolishEnhancerInputAnalyzerWitness;
 
     connection
     {
-        source.audioOut -> polish.in;
-        source.enhancerAmountOut -> polish.enhancerAmountIn;
-        source.compAmountOut -> polish.compressionClipAmountIn;
-        source.trimOut -> polish.outputTrimDbIn;
-        polish.enhancerInputMonitor -> analyzer.in;
+        source.audioOut -> observedPolish.in, referencePolish.in;
+        source.enhancerAmountOut -> observedPolish.enhancerAmountIn, referencePolish.enhancerAmountIn;
+        source.compAmountOut -> observedPolish.compressionClipAmountIn, referencePolish.compressionClipAmountIn;
+        source.trimOut -> observedPolish.outputTrimDbIn, referencePolish.outputTrimDbIn;
+        source.safeBassAmountOut -> observedPolish.safeBassAmountIn, referencePolish.safeBassAmountIn;
+        source.safeBassBypassOut -> observedPolish.safeBassBypassIn, referencePolish.safeBassBypassIn;
+        source.enhancerBypassOut -> observedPolish.enhancerBypassIn, referencePolish.enhancerBypassIn;
+        source.compBypassOut -> observedPolish.compressionClipBypassIn, referencePolish.compressionClipBypassIn;
+        source.trimBypassOut -> observedPolish.outputTrimBypassIn, referencePolish.outputTrimBypassIn;
+        source.analyzerEnabledOut -> analyzer.enabledIn;
+        observedPolish.enhancerInputMonitor -> analyzer.in;
         analyzer.spectrum -> witness.spectrumIn;
-        witness.out -> out;
+        observedPolish.out -> witness.observedAudioIn;
+        referencePolish.out -> witness.referenceAudioIn;
+        witness.proof -> proof;
     }
 }
 
-processor PolishEnhancerInputAnalyzerSource
+processor PolishEnhancerInputAnalyzerLifecycleSource
 {
     output stream float32<2> audioOut;
+    output event int32 analyzerEnabledOut;
     output value float32 enhancerAmountOut;
     output value float32 compAmountOut;
     output value float32 trimOut;
+    output value float32 safeBassAmountOut;
+    output value float32 safeBassBypassOut;
+    output value float32 enhancerBypassOut;
+    output value float32 compBypassOut;
+    output value float32 trimBypassOut;
 
     void main()
     {
         enhancerAmountOut <- 1.0f;
         compAmountOut <- 0.0f;
         trimOut <- 0.0f;
+        safeBassAmountOut <- 1.0f;
+        safeBassBypassOut <- 0.0f;
+        enhancerBypassOut <- 0.0f;
+        compBypassOut <- 0.0f;
+        trimBypassOut <- 0.0f;
+        int32 frame;
         loop
         {
-            audioOut <- float32<2> (0.25f, -0.25f);
+            if (frame == 1200)
+                analyzerEnabledOut <- 1;
+            if (frame == 2400)
+                analyzerEnabledOut <- 0;
+
+            let tone = 0.25f * float32 (std::intrinsics::sin (
+                float32 (frame) * 0.09817477042468103f
+            ));
+            audioOut <- float32<2> (tone, -tone);
+            ++frame;
             advance();
         }
     }
@@ -68,20 +110,52 @@ processor PolishEnhancerInputAnalyzerSource
 processor PolishEnhancerInputAnalyzerWitness
 {
     input event wt::EnhancerSpectrumFrame spectrumIn;
-    output event int32 out;
+    input stream float32<2> observedAudioIn;
+    input stream float32<2> referenceAudioIn;
+    output event polishAnalyzerTest::Proof proof;
+
+    int32 spectrumEventCount;
+    int32 dominantBin = -1;
+    float32 observedSampleRateHz;
+    bool audioStayedExact = true;
+    int32 renderedFrame;
 
     event spectrumIn (wt::EnhancerSpectrumFrame frame)
     {
+        ++spectrumEventCount;
+        observedSampleRateHz = frame.sampleRateHz;
+        float32 dominantMagnitude = -1.0f;
+        for (wrap<wt::enhancerSpectrumBinCount> index)
+        {
+            if (frame.magnitudes[index] > dominantMagnitude)
+            {
+                dominantMagnitude = frame.magnitudes[index];
+                dominantBin = int32 (index);
+            }
+        }
     }
 
     void main()
     {
-        for (int32 frame = 0; frame < 10; ++frame)
+        loop
+        {
+            if (observedAudioIn[0] != referenceAudioIn[0]
+                || observedAudioIn[1] != referenceAudioIn[1])
+                audioStayedExact = false;
+
+            if (renderedFrame == 5199)
+            {
+                polishAnalyzerTest::Proof result;
+                result.spectrumEventCount = spectrumEventCount;
+                result.sampleRateHz = observedSampleRateHz;
+                result.dominantBin = dominantBin;
+                result.audioStayedExact = audioStayedExact ? 1 : 0;
+                proof <- result;
+            }
+
+            ++renderedFrame;
             advance();
-        out <- 1;
-        advance();
-        out <- -1;
-        advance();
+        }
     }
 }
 

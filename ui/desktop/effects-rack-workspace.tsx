@@ -4234,6 +4234,165 @@ function GroupEditorPane({
     );
 }
 
+type PolishApprovedBindings = {
+    readonly safeBassAmount: PatchControlBinding<number>;
+    readonly enhancerAmount: PatchControlBinding<number>;
+    readonly compressionClipAmount: PatchControlBinding<number>;
+    readonly outputTrimDb: PatchControlBinding<number>;
+    readonly safeBassBypass: PatchControlBinding<number>;
+    readonly enhancerBypass: PatchControlBinding<number>;
+    readonly compressionClipBypass: PatchControlBinding<number>;
+    readonly outputTrimBypass: PatchControlBinding<number>;
+};
+
+function mapPolishApprovedBindings(bindings: PolishApprovedBindings) {
+    return {
+        amounts: {
+            safeBass: bindings.safeBassAmount,
+            enhancer: bindings.enhancerAmount,
+            compressionClip: bindings.compressionClipAmount,
+            trim: bindings.outputTrimDb,
+        },
+        bypasses: {
+            safeBass: bindings.safeBassBypass,
+            enhancer: bindings.enhancerBypass,
+            compressionClip: bindings.compressionClipBypass,
+            trim: bindings.outputTrimBypass,
+        },
+    } as const;
+}
+
+function PolishAmountControl({
+    control,
+    binding,
+    surface,
+}: {
+    readonly control: (typeof POLISH_CONTROL_DESCRIPTORS)[number];
+    readonly binding: PatchControlBinding<number>;
+    readonly surface: "compact" | "full-screen";
+}) {
+    const rolePrefix = surface === "compact" ? "polish-knob" : "polish-fullscreen-control";
+    const trackRolePrefix = surface === "compact" ? "polish-knob-track" : "polish-fullscreen-track";
+    const handleRolePrefix = surface === "compact" ? "polish-knob-handle" : "polish-fullscreen-handle";
+    return (
+        <BaseParameterKnob
+            descriptor={control.descriptor}
+            binding={binding}
+            ownerAccent={POLISH_ACCENT}
+            dataRole={`${rolePrefix}-${control.descriptor.endpointID}`}
+            trackDataRole={`${trackRolePrefix}-${control.descriptor.endpointID}`}
+            handleDataRole={`${handleRolePrefix}-${control.descriptor.endpointID}`}
+            detentStep={null}
+            entrySpec={parameterEntrySpecForScalar({
+                min: control.descriptor.min,
+                max: control.descriptor.max,
+                step: control.descriptor.step,
+                unit: control.unit,
+                canonicalPerDisplayedUnit: control.canonicalPerDisplayedUnit,
+                digits: control.digits,
+            })}
+            formatValue={(value) => control.moduleKey === "trim"
+                ? `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`
+                : `${Math.round(value * 100)}%`}
+        />
+    );
+}
+
+function PolishBypassControl({
+    control,
+    binding,
+    surface,
+}: {
+    readonly control: (typeof POLISH_CONTROL_DESCRIPTORS)[number];
+    readonly binding: PatchControlBinding<number>;
+    readonly surface: "compact" | "full-screen";
+}) {
+    const bypassed = binding.value >= 0.5;
+    return (
+        <button
+            type="button"
+            className={`rack-power polish-module-bypass${surface === "full-screen"
+                ? " polish-fullscreen-module-bypass"
+                : ""}`}
+            data-role={`${surface === "compact" ? "polish-bypass" : "polish-fullscreen-bypass"}-${control.bypassEndpointID}`}
+            aria-label={`${bypassed ? "Enable" : "Bypass"} ${control.moduleLabel}`}
+            aria-pressed={bypassed}
+            onClick={() => binding.commitValue(bypassed ? 0 : 1)}
+        >
+            <PowerGlyph />
+        </button>
+    );
+}
+
+function polishControlDescriptor(
+    moduleKey: (typeof POLISH_CONTROL_DESCRIPTORS)[number]["moduleKey"],
+) {
+    const descriptor = POLISH_CONTROL_DESCRIPTORS.find((candidate) => (
+        candidate.moduleKey === moduleKey
+    ));
+    if (descriptor === undefined) {
+        throw new Error(`Missing approved Polish control descriptor: ${moduleKey}`);
+    }
+    return descriptor;
+}
+
+/**
+ * Project T74's eight approved bindings into T75's larger presentation. The
+ * compact and full-screen surfaces render the same control/action components;
+ * this adapter adds no second parameter implementation or sound state.
+ */
+export function createPolishFullScreenMirror(bindings: PolishApprovedBindings) {
+    const mapped = mapPolishApprovedBindings(bindings);
+    const control = (
+        moduleKey: (typeof POLISH_CONTROL_DESCRIPTORS)[number]["moduleKey"],
+    ) => (
+        <PolishAmountControl
+            control={polishControlDescriptor(moduleKey)}
+            binding={mapped.amounts[moduleKey]}
+            surface="full-screen"
+        />
+    );
+    const action = (
+        moduleKey: (typeof POLISH_CONTROL_DESCRIPTORS)[number]["moduleKey"],
+    ) => (
+        <PolishBypassControl
+            control={polishControlDescriptor(moduleKey)}
+            binding={mapped.bypasses[moduleKey]}
+            surface="full-screen"
+        />
+    );
+    const active = (
+        moduleKey: (typeof POLISH_CONTROL_DESCRIPTORS)[number]["moduleKey"],
+    ) => mapped.bypasses[moduleKey].value < 0.5;
+
+    return {
+        values: {
+            safeBassAmount: bindings.safeBassAmount.value,
+            enhancerAmount: bindings.enhancerAmount.value,
+            compressionClipAmount: bindings.compressionClipAmount.value,
+            outputTrimDb: bindings.outputTrimDb.value,
+        },
+        controls: {
+            safeBass: control("safeBass"),
+            enhancer: control("enhancer"),
+            comp: control("compressionClip"),
+            outputTrim: control("trim"),
+        },
+        moduleActivity: {
+            safeBass: active("safeBass"),
+            enhancer: active("enhancer"),
+            comp: active("compressionClip"),
+            outputTrim: active("trim"),
+        },
+        moduleActions: {
+            safeBass: action("safeBass"),
+            enhancer: action("enhancer"),
+            comp: action("compressionClip"),
+            outputTrim: action("trim"),
+        },
+    } as const;
+}
+
 function PolishEditor({
     safeBassAmount,
     enhancerAmount,
@@ -4245,30 +4404,20 @@ function PolishEditor({
     outputTrimBypass,
     expanded,
     onExpandedChange,
-}: {
-    readonly safeBassAmount: PatchControlBinding<number>;
-    readonly enhancerAmount: PatchControlBinding<number>;
-    readonly compressionClipAmount: PatchControlBinding<number>;
-    readonly outputTrimDb: PatchControlBinding<number>;
-    readonly safeBassBypass: PatchControlBinding<number>;
-    readonly enhancerBypass: PatchControlBinding<number>;
-    readonly compressionClipBypass: PatchControlBinding<number>;
-    readonly outputTrimBypass: PatchControlBinding<number>;
+}: PolishApprovedBindings & {
     readonly expanded: boolean;
     readonly onExpandedChange: (expanded: boolean) => void;
 }) {
-    const bindings = {
-        safeBass: safeBassAmount,
-        enhancer: enhancerAmount,
-        compressionClip: compressionClipAmount,
-        trim: outputTrimDb,
-    } as const;
-    const bypassBindings = {
-        safeBass: safeBassBypass,
-        enhancer: enhancerBypass,
-        compressionClip: compressionClipBypass,
-        trim: outputTrimBypass,
-    } as const;
+    const bindings = mapPolishApprovedBindings({
+        safeBassAmount,
+        enhancerAmount,
+        compressionClipAmount,
+        outputTrimDb,
+        safeBassBypass,
+        enhancerBypass,
+        compressionClipBypass,
+        outputTrimBypass,
+    });
 
     return (
         <section
@@ -4297,8 +4446,8 @@ function PolishEditor({
             </header>
             <div className="rack-editor-controls polish-editor-controls">
                 {POLISH_CONTROL_DESCRIPTORS.map((control) => {
-                    const binding = bindings[control.moduleKey];
-                    const bypassBinding = bypassBindings[control.moduleKey];
+                    const binding = bindings.amounts[control.moduleKey];
+                    const bypassBinding = bindings.bypasses[control.moduleKey];
                     const bypassed = bypassBinding.value >= 0.5;
                     return (
                         <article
@@ -4309,40 +4458,20 @@ function PolishEditor({
                         >
                             <header className="polish-module-header">
                                 <strong>{control.moduleLabel}</strong>
-                                <button
-                                    type="button"
-                                    className="rack-power polish-module-bypass"
-                                    data-role={`polish-bypass-${control.bypassEndpointID}`}
-                                    aria-label={`${bypassed ? "Enable" : "Bypass"} ${control.moduleLabel}`}
-                                    aria-pressed={bypassed}
-                                    onClick={() => bypassBinding.commitValue(bypassed ? 0 : 1)}
-                                >
-                                    <PowerGlyph />
-                                </button>
+                                <PolishBypassControl
+                                    control={control}
+                                    binding={bypassBinding}
+                                    surface="compact"
+                                />
                             </header>
                             <div
                                 className="polish-module-control"
                                 data-role={`polish-control-${control.descriptor.endpointID}`}
                             >
-                                <BaseParameterKnob
-                                    descriptor={control.descriptor}
+                                <PolishAmountControl
+                                    control={control}
                                     binding={binding}
-                                    ownerAccent={POLISH_ACCENT}
-                                    dataRole={`polish-knob-${control.descriptor.endpointID}`}
-                                    trackDataRole={`polish-knob-track-${control.descriptor.endpointID}`}
-                                    handleDataRole={`polish-knob-handle-${control.descriptor.endpointID}`}
-                                    detentStep={null}
-                                    entrySpec={parameterEntrySpecForScalar({
-                                        min: control.descriptor.min,
-                                        max: control.descriptor.max,
-                                        step: control.descriptor.step,
-                                        unit: control.unit,
-                                        canonicalPerDisplayedUnit: control.canonicalPerDisplayedUnit,
-                                        digits: control.digits,
-                                    })}
-                                    formatValue={(value) => control.moduleKey === "trim"
-                                        ? `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`
-                                        : `${Math.round(value * 100)}%`}
+                                    surface="compact"
                                 />
                             </div>
                         </article>

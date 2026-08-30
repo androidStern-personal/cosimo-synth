@@ -27,6 +27,9 @@ export const POLISH_OUTPUT_TRIM_BYPASS_ENDPOINT_ID = "polishOutputTrimBypass";
 /** Read-only post-trim meter and post-Safe-Bass/pre-Enhancer spectrum endpoint. */
 export const POLISH_METER_ENDPOINT_ID = "polishMeter";
 
+/** Hidden presentation lifecycle event; never host, saved, or modulatable sound state. */
+export const POLISH_ANALYZER_ENABLED_ENDPOINT_ID = "polishAnalyzerEnabledIn";
+
 /** The complete public Polish parameter contract, in append-only host order. */
 export const POLISH_PARAMETER_ENDPOINT_IDS = Object.freeze([
     POLISH_ENHANCER_AMOUNT_ENDPOINT_ID,

@@ -8,10 +8,15 @@ import filterRangeEditorCssText from "../../ui/shared/filter-range-editor.css?in
 import {
     PatchConnectionProvider,
     usePatchEndpoint,
+    usePatchFoldedVisualEndpoint,
     usePatchVisualEndpoint,
     type PatchConnectionLike,
 } from "../../ui/shared/cmajor-react";
 import { acquireAnalyzerActivity } from "../../ui/shared/analyzer-activity";
+import {
+    advancePolishTelemetryDisplay,
+    createPolishTelemetryDisplay,
+} from "../../ui/shared/polish-telemetry";
 import {
     usePatchParameterBinding,
     type PatchControlBinding,
@@ -1344,6 +1349,72 @@ export async function installAnalyzerActivityHarness(target: HTMLElement) {
             return { sentMessages: cloneValue(sentMessages) };
         },
     };
+}
+
+export async function installPolishTelemetryFoldHarness(target: HTMLElement) {
+    const endpointListeners = new Set<(value: unknown) => void>();
+    const renderLog: unknown[] = [];
+    let timestampMs = 0;
+
+    const patchConnection: PatchConnectionLike = {
+        addEndpointListener(endpointID, listener) {
+            if (endpointID === "polishMeter") {
+                endpointListeners.add(listener);
+            }
+        },
+        removeEndpointListener(endpointID, listener) {
+            if (endpointID === "polishMeter") {
+                endpointListeners.delete(listener);
+            }
+        },
+    };
+    const mounted = mountHarness(target, (root) => {
+        function Reader() {
+            const telemetry = usePatchFoldedVisualEndpoint(
+                "polishMeter",
+                createPolishTelemetryDisplay(),
+                (current, message) => advancePolishTelemetryDisplay(
+                    current,
+                    message,
+                    ++timestampMs,
+                ),
+            );
+
+            useEffect(() => {
+                renderLog.push(cloneValue(telemetry));
+            }, [telemetry]);
+
+            return null;
+        }
+
+        root.render(
+            <PatchConnectionProvider patchConnection={patchConnection}>
+                <Reader />
+            </PatchConnectionProvider>,
+        );
+    });
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        async emitBurst(values: unknown[]) {
+            for (const value of values) {
+                endpointListeners.forEach((listener) => listener(value));
+            }
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        },
+        getSnapshot() {
+            return {
+                listenerCount: endpointListeners.size,
+                renderLog: cloneValue(renderLog),
+                lastRender: cloneValue(renderLog.at(-1) ?? null),
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
 }
 
 export async function installModulationRouteAmountBindingHarness(target: HTMLElement) {

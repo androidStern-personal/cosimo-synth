@@ -9,6 +9,7 @@
 @import "./mobile-quick-source-sheet.css";
 @import "./mobile-mod-matrix.css";
 @import "./mobile-mod-mappings.css";
+@import "../shared/enhancer-spectrum-graph.css";
 @import "./polish-fullscreen-editor.css";
 @import "../shared/mobile-voice-editor.css";
 

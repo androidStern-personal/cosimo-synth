@@ -185,11 +185,14 @@ import { DesktopModMatrix } from "./desktop-mod-matrix";
 import { MobileModWorkspacePager } from "./mobile-mod-workspace-pager";
 import { MobileModMappingsPanel } from "./mobile-mod-mappings-panel";
 import {
+    createPolishFullScreenMirror,
     EffectsRackWorkspace,
     type GlobalModRailState,
     type ModRailAuditionBindings,
     type ModRailVoiceSettings,
 } from "./effects-rack-workspace";
+import { PolishFullScreenEditor } from "./polish-fullscreen-editor";
+import { POLISH_ANALYZER_ENABLED_ENDPOINT_ID } from "../shared/polish";
 import {
     AUTO_PREVIEW_ENABLED_STORAGE_KEY,
     parseStoredAutoPreviewEnabled,
@@ -5301,6 +5304,7 @@ function DesktopPatchViewBody({
 }: {
     keyboardInputMode: SynthKeyboardInputMode;
 }) {
+    const patchConnection = usePatchConnection();
     const stageRef = useRef<HTMLDivElement | null>(null);
     const scrollRegionRef = useRef<HTMLElement | null>(null);
     const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
@@ -5365,6 +5369,66 @@ function DesktopPatchViewBody({
     // T74 owns the compact action and controlled state only. T75 composes its
     // dedicated surface from this seam without changing the rack footprint.
     const [polishEditorExpanded, setPolishEditorExpanded] = useState(false);
+    const polishFxScrollContextRef = useRef<Array<{
+        readonly element: HTMLElement;
+        readonly scrollTop: number;
+        readonly scrollLeft: number;
+    }>>([]);
+    const handlePolishEditorExpandedChange = useCallback((expanded: boolean) => {
+        if (expanded) {
+            const contextRoot = isCompactViewport
+                ? workspacePanelsRef.current.get("fx") ?? null
+                : scrollRegionRef.current;
+            polishFxScrollContextRef.current = contextRoot === null
+                ? []
+                : [contextRoot, ...contextRoot.querySelectorAll<HTMLElement>("*")]
+                    .filter((element) => element.scrollTop !== 0 || element.scrollLeft !== 0)
+                    .map((element) => ({
+                        element,
+                        scrollTop: element.scrollTop,
+                        scrollLeft: element.scrollLeft,
+                    }));
+        }
+        setPolishEditorExpanded(expanded);
+    }, [isCompactViewport]);
+    useEffect(() => {
+        if (polishEditorExpanded) {
+            return undefined;
+        }
+        const contexts = polishFxScrollContextRef.current;
+        polishFxScrollContextRef.current = [];
+        const restore = () => {
+            for (const context of contexts) {
+                context.element.scrollTop = context.scrollTop;
+                context.element.scrollLeft = context.scrollLeft;
+            }
+        };
+        restore();
+        if (contexts.length === 0 || typeof window.requestAnimationFrame !== "function") {
+            return undefined;
+        }
+
+        let secondFrame: number | null = null;
+        const firstFrame = window.requestAnimationFrame(() => {
+            restore();
+            secondFrame = window.requestAnimationFrame(restore);
+        });
+        return () => {
+            window.cancelAnimationFrame(firstFrame);
+            if (secondFrame !== null) {
+                window.cancelAnimationFrame(secondFrame);
+            }
+        };
+    }, [polishEditorExpanded]);
+    useEffect(() => {
+        patchConnection.sendEventOrValue?.(
+            POLISH_ANALYZER_ENABLED_ENDPOINT_ID,
+            polishEditorExpanded ? 1 : 0,
+        );
+    }, [patchConnection, polishEditorExpanded]);
+    useEffect(() => () => {
+        patchConnection.sendEventOrValue?.(POLISH_ANALYZER_ENABLED_ENDPOINT_ID, 0);
+    }, [patchConnection]);
     useEffect(() => {
         if (typeof window.matchMedia !== "function") {
             return undefined;
@@ -6057,12 +6121,16 @@ function DesktopPatchViewBody({
     const quickMacroBindings = [quickMacro1, quickMacro2, quickMacro3];
 
     const handleUniversalBack = useCallback(() => {
+        if (polishEditorExpanded) {
+            handlePolishEditorExpandedChange(false);
+            return;
+        }
         if (synthView.msegEditor.isOpen) {
             closeMsegEditor();
             return;
         }
         setWorkspaceShell(universalBack);
-    }, [closeMsegEditor, synthView.msegEditor.isOpen]);
+    }, [closeMsegEditor, handlePolishEditorExpandedChange, polishEditorExpanded, synthView.msegEditor.isOpen]);
 
     const resolveMobileVoiceScrollLocks = useCallback(() => (
         Array.from(workspacePanelsRef.current.values())
@@ -6409,6 +6477,16 @@ function DesktopPatchViewBody({
         && synthView.observedMsegPlayhead.hasActive
         ? synthView.observedMsegPlayhead.progress
         : null;
+    const polishFullScreenMirror = createPolishFullScreenMirror({
+        safeBassAmount: synthView.polishSafeBassAmount,
+        enhancerAmount: synthView.polishEnhancerAmount,
+        compressionClipAmount: synthView.polishCompressionClipAmount,
+        outputTrimDb: synthView.polishOutputTrimDb,
+        safeBassBypass: synthView.polishSafeBassBypass,
+        enhancerBypass: synthView.polishEnhancerBypass,
+        compressionClipBypass: synthView.polishCompressionClipBypass,
+        outputTrimBypass: synthView.polishOutputTrimBypass,
+    });
     const effectsRackWorkspace = (
         <EffectsRackWorkspace
             routes={synthView.routes}
@@ -6424,7 +6502,7 @@ function DesktopPatchViewBody({
             polishCompressionClipBypass={synthView.polishCompressionClipBypass}
             polishOutputTrimBypass={synthView.polishOutputTrimBypass}
             polishEditorExpanded={polishEditorExpanded}
-            onPolishEditorExpandedChange={setPolishEditorExpanded}
+            onPolishEditorExpandedChange={handlePolishEditorExpandedChange}
             onAddRouteWithOverrides={synthView.handleAddRouteWithOverrides}
             onRemoveRoute={synthView.handleRemoveRoute}
             onRouteChange={synthView.handleRouteChange}
@@ -6464,12 +6542,15 @@ function DesktopPatchViewBody({
             {!isCompactViewport ? <StatusHeader statusText={synthView.topStatus} /> : null}
             <SynthPresetBarHost
                 isHidden={synthView.msegEditor.isOpen && !isCompactViewport}
-                focusedEditorOpen={isCompactViewport && synthView.msegEditor.isOpen}
+                focusedEditorOpen={polishEditorExpanded
+                    || (isCompactViewport && synthView.msegEditor.isOpen)}
                 storedStateAdapters={synthView.presetStoredStateAdapters}
                 wavetableTables={synthView.tableOptions}
                 polishMeter={synthView.observedPolishMeter}
                 compactSynth={isCompactViewport}
-                backAvailable={synthView.msegEditor.isOpen || mobileReturnTarget !== null}
+                backAvailable={polishEditorExpanded
+                    || synthView.msegEditor.isOpen
+                    || mobileReturnTarget !== null}
                 onShellBack={handleUniversalBack}
                 perfTuningAvailable={PERF_TUNING_AVAILABLE}
                 onOpenPerfTuning={openPerfTuning}
@@ -6479,6 +6560,13 @@ function DesktopPatchViewBody({
                     && !bounceController.state.busy}
                 onBounceAudio={() => void bounceController.bounce()}
                 onBounceVideo={handleBounceVideo}
+            />
+            <PolishFullScreenEditor
+                open={polishEditorExpanded}
+                onClose={() => handlePolishEditorExpandedChange(false)}
+                {...polishFullScreenMirror}
+                meter={synthView.observedPolishMeter}
+                spectrum={synthView.observedPolishSpectrum}
             />
             {PerfTuningPage !== null && perfTuningOpen ? (
                 <Suspense fallback={null}>
@@ -6490,6 +6578,9 @@ function DesktopPatchViewBody({
                 <main
                     data-role="mobile-workspace-panels"
                     className="mobile-workspace-panels min-h-0 flex-1"
+                    hidden={polishEditorExpanded}
+                    aria-hidden={polishEditorExpanded}
+                    inert={polishEditorExpanded}
                 >
                     {([
                         { id: "voice" as const, content: voiceWorkspace },
@@ -6533,6 +6624,9 @@ function DesktopPatchViewBody({
                     ref={scrollRegionRef}
                     data-role="desktop-scroll-region"
                     className="grid min-h-0 flex-1 auto-rows-max gap-4 overflow-x-hidden overflow-y-auto pr-1"
+                    hidden={polishEditorExpanded}
+                    aria-hidden={polishEditorExpanded}
+                    inert={polishEditorExpanded}
                 >
                     {voiceWorkspace}
                     {effectsRackWorkspace}
@@ -6577,7 +6671,9 @@ function DesktopPatchViewBody({
             <div
                 data-role="sticky-keyboard"
                 className="relative z-20 min-w-0 shrink-0 border-t border-white/[0.05] pt-3"
-                style={keyboardVisible && !(isCompactViewport && synthView.msegEditor.isOpen)
+                style={keyboardVisible
+                    && !polishEditorExpanded
+                    && !(isCompactViewport && synthView.msegEditor.isOpen)
                     ? undefined
                     : { display: "none" }}
             >
@@ -6609,7 +6705,10 @@ function DesktopPatchViewBody({
                 />
             </div>
 
-            {isCompactViewport && quickEditorSource !== null && mobileWorkspaceSection !== "mod" ? (
+            {!polishEditorExpanded
+                && isCompactViewport
+                && quickEditorSource !== null
+                && mobileWorkspaceSection !== "mod" ? (
                 <MobileQuickSourceSheet
                     source={quickEditorSource}
                     armedSource={activeMsegRouteSourceIdentity}

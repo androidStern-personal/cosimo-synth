@@ -443,6 +443,94 @@ export function usePatchVisualEndpoint<TValue = unknown>(
     return value;
 }
 
+/**
+ * Subscribes to visual telemetry whose raw endpoint events each carry only
+ * part of the retained display state. Every event is folded immediately;
+ * only the React presentation is coalesced to one update per animation frame.
+ */
+export function usePatchFoldedVisualEndpoint<TValue, TMessage = unknown>(
+    endpointID: string,
+    initialValue: TValue,
+    fold: (current: TValue, message: TMessage) => TValue,
+    active = true,
+) {
+    const patchConnection = usePatchConnection();
+    const [value, setValue] = useState<TValue>(initialValue);
+    const initialValueRef = useRef(initialValue);
+    const foldRef = useRef(fold);
+    const accumulatedValueRef = useRef(initialValue);
+    const committedValueRef = useRef(initialValue);
+    const pendingValueRef = useRef<{ value: TValue } | null>(null);
+    const animationFrameRef = useRef<number | null>(null);
+    initialValueRef.current = initialValue;
+    foldRef.current = fold;
+
+    useEffect(() => {
+        const resetValue = initialValueRef.current;
+        accumulatedValueRef.current = resetValue;
+        committedValueRef.current = resetValue;
+        pendingValueRef.current = null;
+        setValue(resetValue);
+        if (!active) {
+            return undefined;
+        }
+
+        let listening = true;
+        const presentPendingValue = () => {
+            animationFrameRef.current = null;
+            const pending = pendingValueRef.current;
+            pendingValueRef.current = null;
+            if (!listening || !pending
+                    || visualEndpointValuesEqual(committedValueRef.current, pending.value)) {
+                return;
+            }
+
+            committedValueRef.current = pending.value;
+            startTransition(() => {
+                setValue((previousValue) => (
+                    !listening || visualEndpointValuesEqual(previousValue, pending.value)
+                        ? previousValue
+                        : pending.value
+                ));
+            });
+        };
+        const listener = (message: unknown) => {
+            if (!listening) {
+                return;
+            }
+
+            const nextValue = foldRef.current(
+                accumulatedValueRef.current,
+                message as TMessage,
+            );
+            accumulatedValueRef.current = nextValue;
+            pendingValueRef.current = { value: nextValue };
+            if (animationFrameRef.current !== null) {
+                return;
+            }
+            if (typeof window.requestAnimationFrame === "function") {
+                animationFrameRef.current = window.requestAnimationFrame(presentPendingValue);
+            } else {
+                presentPendingValue();
+            }
+        };
+
+        patchConnection.addEndpointListener?.(endpointID, listener);
+
+        return () => {
+            listening = false;
+            pendingValueRef.current = null;
+            if (animationFrameRef.current !== null && typeof window.cancelAnimationFrame === "function") {
+                window.cancelAnimationFrame(animationFrameRef.current);
+            }
+            animationFrameRef.current = null;
+            patchConnection.removeEndpointListener?.(endpointID, listener);
+        };
+    }, [active, endpointID, patchConnection]);
+
+    return value;
+}
+
 export function usePatchStatus<TStatus = unknown>(initialValue: TStatus | null = null) {
     const patchConnection = usePatchConnection();
     const [status, setStatus] = useState<TStatus | null>(initialValue);

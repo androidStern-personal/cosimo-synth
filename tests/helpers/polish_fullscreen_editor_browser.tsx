@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { PolishFullScreenEditor } from "../../ui/desktop/polish-fullscreen-editor";
 import { advanceEnhancerSpectrum } from "../../ui/shared/enhancer-spectrum";
+import "../../ui/shared/enhancer-spectrum-graph.css";
 import "../../ui/desktop/polish-fullscreen-editor.css";
 
 type ModBarPlacement = "floating" | "parked";

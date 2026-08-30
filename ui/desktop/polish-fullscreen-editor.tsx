@@ -117,9 +117,14 @@ function PolishStage({
                     <span>{eyebrow}</span>
                     <h2>{title}</h2>
                 </div>
-                {action === undefined ? null : (
-                    <div className="polish-fullscreen-stage-action">{action}</div>
-                )}
+                <div className="polish-fullscreen-stage-status-actions">
+                    <span className="polish-fullscreen-stage-state">
+                        {active ? "ACTIVE" : "BYPASSED"}
+                    </span>
+                    {action === undefined ? null : (
+                        <div className="polish-fullscreen-stage-action">{action}</div>
+                    )}
+                </div>
             </header>
             <p className="polish-fullscreen-stage-copy">{copy}</p>
             <div className="polish-fullscreen-stage-graphic">{graphic}</div>
@@ -280,12 +285,6 @@ function OutputMeter({
     );
 }
 
-function shouldRemainOutsideModal(candidate: HTMLElement): boolean {
-    return candidate.getAttribute("data-role") === "synth-preset-bar-host"
-        || candidate.getAttribute("data-role") === "mobile-global-mod-rail-portal"
-        || candidate.querySelector('[data-role="mobile-global-mod-rail-portal"]') !== null;
-}
-
 /** Render T75's dedicated, controlled full-page Polish surface. */
 export function PolishFullScreenEditor({
     open,
@@ -315,47 +314,18 @@ export function PolishFullScreenEditor({
         const previouslyFocused = document.activeElement instanceof HTMLElement
             ? document.activeElement
             : null;
-        const siblings = Array.from(editor.parentElement?.children ?? []).filter(
-            (candidate): candidate is HTMLElement => candidate instanceof HTMLElement
-                && candidate !== editor
-                && !shouldRemainOutsideModal(candidate),
-        );
-        const inertStates = siblings.map((element) => ({ element, inert: element.inert }));
-        for (const sibling of siblings) {
-            sibling.inert = true;
-        }
         closeButtonRef.current?.focus({ preventScroll: true });
 
         const handleKeyboard = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
                 event.preventDefault();
                 onCloseRef.current();
-                return;
             }
-            if (event.key !== "Tab") {
-                return;
-            }
-
-            const focusable = Array.from(editor.querySelectorAll<HTMLElement>(
-                'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-            )).filter((element) => !element.hidden);
-            if (focusable.length === 0) {
-                return;
-            }
-            const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
-            const nextIndex = event.shiftKey
-                ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
-                : (currentIndex >= focusable.length - 1 ? 0 : currentIndex + 1);
-            event.preventDefault();
-            focusable[nextIndex]?.focus();
         };
 
         window.addEventListener("keydown", handleKeyboard, true);
         return () => {
             window.removeEventListener("keydown", handleKeyboard, true);
-            for (const state of inertStates) {
-                state.element.inert = state.inert;
-            }
             previouslyFocused?.focus({ preventScroll: true });
         };
     }, [open]);
@@ -372,7 +342,6 @@ export function PolishFullScreenEditor({
             className="polish-fullscreen-backdrop"
             data-role="polish-fullscreen-editor"
             role="dialog"
-            aria-modal="true"
             aria-labelledby="polish-fullscreen-title"
         >
             <div className="polish-fullscreen-frame">

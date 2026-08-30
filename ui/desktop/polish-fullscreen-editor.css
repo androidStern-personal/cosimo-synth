@@ -13,6 +13,18 @@
     overscroll-behavior: contain;
 }
 
+/* In the composed synth the preset row and mobile Mod rail remain intentional
+   live shell chrome. The editor replaces only the workspace below that row. */
+.cosimo-surface > .polish-fullscreen-backdrop {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+    border: 1px solid rgb(244 200 106 / 0.14);
+    border-radius: 14px;
+}
+
 .polish-fullscreen-frame {
     display: grid;
     width: 100%;
@@ -160,20 +172,26 @@
     grid-column: 1 / -1;
 }
 
-.polish-fullscreen-stage[data-stage-active="false"]::before {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    z-index: 1;
+.polish-fullscreen-stage-status-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+}
+
+.polish-fullscreen-stage-state {
     border: 1px solid rgb(255 255 255 / 0.13);
     border-radius: 999px;
     padding: 4px 7px;
-    color: #8f918e;
+    color: #77d9a2;
     background: rgb(8 9 9 / 0.72);
-    content: "INACTIVE";
     font-size: 7px;
     font-weight: 700;
     letter-spacing: 0.1em;
+}
+
+.polish-fullscreen-stage[data-stage-active="false"] .polish-fullscreen-stage-state {
+    color: #8f918e;
 }
 
 .polish-fullscreen-stage[data-stage-active="false"] :is(
@@ -211,6 +229,18 @@
     min-height: 44px;
 }
 
+.polish-fullscreen-module-bypass {
+    width: 44px;
+    height: 44px;
+    border: 1px solid rgb(244 200 106 / 0.25);
+    border-radius: 8px;
+}
+
+.polish-fullscreen-module-bypass > svg {
+    width: 18px;
+    height: 18px;
+}
+
 .polish-fullscreen-stage-copy {
     max-width: 76ch;
     margin: 0;
@@ -239,8 +269,12 @@
     min-height: 44px;
 }
 
+.polish-fullscreen-stage-control .oscillator-parameter-knob {
+    width: min(100%, 190px);
+    min-height: 72px;
+}
+
 .polish-safe-bass-graphic,
-.enhancer-spectrum-graph,
 .polish-transfer-curve {
     display: block;
     width: 100%;
@@ -257,8 +291,7 @@
     letter-spacing: 0.06em;
 }
 
-.polish-stage-grid,
-.enhancer-spectrum-grid-line {
+.polish-stage-grid {
     fill: none;
     stroke: #222522;
     stroke-width: 1;
@@ -275,64 +308,6 @@
 
 .enhancer-spectrum-graph {
     height: clamp(210px, 26vw, 300px);
-    overflow: visible;
-}
-
-.enhancer-spectrum-grid-line.is-baseline {
-    stroke: #464437;
-}
-
-.enhancer-spectrum-axis-label,
-.enhancer-spectrum-axis-unit {
-    fill: #5f625d;
-    font: 8px/1 "Departure Mono", ui-monospace, monospace;
-    pointer-events: none;
-}
-
-.enhancer-spectrum-axis-unit {
-    letter-spacing: 0.08em;
-}
-
-.enhancer-spectrum-level-label {
-    fill: #797457;
-}
-
-.enhancer-spectrum-incoming-trace {
-    fill: none;
-    stroke: #6e7dff;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 1.45;
-    opacity: 0.68;
-    vector-effect: non-scaling-stroke;
-    filter: drop-shadow(0 0 3px rgb(110 125 255 / 0.55));
-}
-
-.enhancer-spectrum-response-curve {
-    fill: none;
-    stroke: var(--enhancer-curve-color);
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 2.35;
-    vector-effect: non-scaling-stroke;
-    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--enhancer-curve-color) 58%, transparent));
-}
-
-.enhancer-spectrum-marker-guide {
-    fill: none;
-    stroke: var(--enhancer-marker-color);
-    stroke-dasharray: 2 4;
-    stroke-width: 1;
-    opacity: 0.45;
-    vector-effect: non-scaling-stroke;
-}
-
-.enhancer-spectrum-marker {
-    fill: var(--enhancer-marker-color);
-    stroke: #090a0a;
-    stroke-width: 3;
-    vector-effect: non-scaling-stroke;
-    filter: drop-shadow(0 0 5px var(--enhancer-marker-color));
 }
 
 .polish-comp-link {

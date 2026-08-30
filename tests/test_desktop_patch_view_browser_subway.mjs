@@ -1476,19 +1476,196 @@ test("POLISH composes four compact modules, independent bypasses, and the T75 ex
         assert.equal(allBypassed.parameterValues.polishCompressionClipAmount, 1);
         assert.equal(allBypassed.parameterValues.polishOutputTrimDb, -24);
 
+        assert.equal(
+            allBypassed.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "polishAnalyzerEnabledIn" && value === 0
+            )),
+            true,
+            "the production analyzer starts dormant while the full-screen editor is closed",
+        );
+        const graphScrollTopBeforeExpand = await graph.evaluate((element) => element.scrollTop);
+        await clearHarnessDebugLog(page);
         const expand = page.locator('[data-role="polish-expand"]');
         await expand.click();
+        const fullScreen = page.locator('[data-role="polish-fullscreen-editor"]');
+        await fullScreen.waitFor();
         await page.waitForFunction(() => (
             document.querySelector('[data-role="polish-expand"]')?.getAttribute("aria-expanded") === "true"
         ));
         assert.equal(await editor.getAttribute("data-expanded"), "true");
+        assert.deepEqual(
+            await fullScreen.locator("[data-polish-stage]").evaluateAll((stages) => (
+                stages.map((stage) => stage.getAttribute("data-polish-stage"))
+            )),
+            ["safe-bass", "enhancer", "compressor", "soft-clipper", "output-trim"],
+        );
+        assert.equal(await fullScreen.getAttribute("role"), "dialog");
+        assert.equal(await fullScreen.getAttribute("aria-modal"), null);
+        assert.equal(await fullScreen.locator('[data-role^="polish-fullscreen-control-"]').count(), 4);
+        assert.equal(await fullScreen.locator('[data-role^="polish-fullscreen-bypass-"]').count(), 4);
+        assert.equal(await fullScreen.locator("input, [data-role*='advanced']").count(), 0);
+        assert.match(
+            await fullScreen.locator('[data-role="polish-comp-explanation"]').textContent(),
+            /compression.+soft clipping/i,
+        );
+        assert.equal(
+            await fullScreen.locator('[data-polish-stage="compressor"]').getAttribute("data-stage-active"),
+            "false",
+        );
+        assert.equal(
+            await fullScreen.locator('[data-polish-stage="soft-clipper"]').getAttribute("data-stage-active"),
+            "false",
+        );
+
+        const analyzerOpen = await waitForHarnessSnapshot(
+            page,
+            "the real full-screen editor to enable its hidden analyzer",
+            (snapshot) => snapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "polishAnalyzerEnabledIn" && value === 1
+            )),
+        );
+        assert.equal(
+            analyzerOpen.sentMessages.some(({ endpointID }) => (
+                endpointID.startsWith("polish") && endpointID !== "polishAnalyzerEnabledIn"
+            )),
+            false,
+            "opening the page must not edit any approved sound parameter",
+        );
+
+        await page.evaluate(() => {
+            const magnitudes = new Array(2_048).fill(0);
+            magnitudes[200] = 1;
+            window.__COSIMO_DESKTOP_HARNESS__.emitPolishMeter({
+                peakDbfs: -1.2,
+                loudnessDbfs: -13.4,
+                compressorGainReductionDb: -3.6,
+            });
+            window.__COSIMO_DESKTOP_HARNESS__.emitPolishMeter({
+                sampleRateHz: 4_096,
+                magnitudes,
+            });
+        });
+        await page.waitForFunction(() => {
+            const fullEditor = document.querySelector('[data-role="polish-fullscreen-editor"]');
+            return fullEditor?.querySelector('[data-role="enhancer-spectrum-incoming"]') !== null
+                && fullEditor?.querySelector('[data-role="polish-compressor-gain-reduction"]')
+                    ?.textContent?.includes("3.6 dB");
+        });
+        assert.match(
+            await fullScreen.locator('[data-role="polish-output-meters"]').textContent(),
+            /-1\.2 dBFS[\s\S]*-13\.4 dBFS/,
+        );
+
+        const fullCompKnob = fullScreen.locator(
+            '[data-role="polish-fullscreen-control-polishCompressionClipAmount"]',
+        );
+        await fullCompKnob.press("Home");
+        await waitForHarnessSnapshot(
+            page,
+            "the full-screen Comp mirror to edit the real T74 binding",
+            (snapshot) => snapshot.parameterValues.polishCompressionClipAmount === 0,
+        );
+        await fullCompKnob.press("End");
+        await waitForHarnessSnapshot(
+            page,
+            "the full-screen Comp mirror to restore the real T74 binding",
+            (snapshot) => snapshot.parameterValues.polishCompressionClipAmount === 1,
+        );
+        const fullCompBypass = fullScreen.locator(
+            '[data-role="polish-fullscreen-bypass-polishCompressionClipBypass"]',
+        );
+        await fullCompBypass.click();
+        await waitForHarnessSnapshot(
+            page,
+            "the full-screen Comp action to enable the real T74 module",
+            (snapshot) => snapshot.parameterValues.polishCompressionClipBypass === 0,
+        );
+        assert.equal(
+            await fullScreen.locator('[data-polish-stage="compressor"]').getAttribute("data-stage-active"),
+            "true",
+        );
+        assert.equal(
+            await fullScreen.locator('[data-polish-stage="soft-clipper"]').getAttribute("data-stage-active"),
+            "true",
+        );
+        await fullCompBypass.click();
+        await waitForHarnessSnapshot(
+            page,
+            "the full-screen Comp action to restore bypass",
+            (snapshot) => snapshot.parameterValues.polishCompressionClipBypass === 1,
+        );
+
+        const close = fullScreen.locator('[data-role="polish-fullscreen-close"]');
+        await close.focus();
+        await page.keyboard.press("Shift+Tab");
+        const keyboardBoundary = await fullScreen.evaluate((editor) => {
+            const viewRoot = editor.getRootNode();
+            let active = viewRoot instanceof ShadowRoot ? viewRoot.activeElement : document.activeElement;
+            const focusChain = [];
+            while (active instanceof HTMLElement) {
+                focusChain.push(
+                    active.getAttribute("data-role")
+                        ?? active.getAttribute("data-action")
+                        ?? active.tagName.toLowerCase(),
+                );
+                const nested = active.shadowRoot?.activeElement;
+                if (!(nested instanceof HTMLElement)) break;
+                active = nested;
+            }
+            return {
+                outsideEditor: active instanceof HTMLElement && !editor.contains(active),
+                focusChain,
+            };
+        });
+        assert.equal(keyboardBoundary.outsideEditor, true, JSON.stringify(keyboardBoundary));
+        assert.equal(
+            keyboardBoundary.focusChain.some((entry) => (
+                entry === "synth-preset-bar-host"
+                    || entry === "cosimo-preset-bar"
+                    || entry === "mobile-bottom-dock"
+                    || entry === "shell-back"
+                    || entry === "toggle-shell-menu"
+            )),
+            true,
+            `Shift+Tab must reach intentional live shell chrome: ${JSON.stringify(keyboardBoundary)}`,
+        );
+
+        await close.focus();
+        await close.click();
+        await fullScreen.waitFor({ state: "detached" });
+        const analyzerClosed = await waitForHarnessSnapshot(
+            page,
+            "the hidden analyzer to stop after close",
+            (snapshot) => [...snapshot.sentMessages].reverse().some(({ endpointID, value }) => (
+                endpointID === "polishAnalyzerEnabledIn" && value === 0
+            )),
+        );
+        assert.equal(
+            [...analyzerClosed.sentMessages].reverse().find(
+                ({ endpointID }) => endpointID === "polishAnalyzerEnabledIn",
+            )?.value,
+            0,
+        );
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="polish-expand"]')?.getAttribute("aria-expanded") === "false"
+        ));
+        assert.equal(await editor.getAttribute("data-expanded"), "false");
+        assert.equal(await polish.getAttribute("aria-pressed"), "true");
+        assert.equal(await expand.evaluate((element) => (
+            element.getRootNode() instanceof ShadowRoot
+                ? element.getRootNode().activeElement === element
+                : document.activeElement === element
+        )), true);
         assert.equal(
             await page.locator('[data-role="rack-polish-boundary"]').evaluate(
                 (element) => element.getBoundingClientRect().height,
             ),
             structure.fixedLayout.polishHeight,
         );
-        const expandedFixedLayout = await page.locator(".rack-stack").evaluate((stack) => {
+        await page.evaluate(() => new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(resolve));
+        }));
+        const restoredFixedLayout = await page.locator(".rack-stack").evaluate((stack) => {
             const graph = stack.querySelector('[data-role="rack-module-list"]');
             const footer = stack.querySelector('[data-role="rack-fixed-footer"]');
             const polishBoundary = stack.querySelector('[data-role="rack-polish-boundary"]');
@@ -1504,13 +1681,10 @@ test("POLISH composes four compact modules, independent bypasses, and the T75 ex
                 graphClientHeight: graph.clientHeight,
             };
         });
-        assert.deepEqual(expandedFixedLayout, structure.fixedLayout);
-        await expand.click();
-        await page.waitForFunction(() => (
-            document.querySelector('[data-role="polish-expand"]')?.getAttribute("aria-expanded") === "false"
-        ));
-        assert.equal(await editor.getAttribute("data-expanded"), "false");
-        assert.equal(await polish.getAttribute("aria-pressed"), "true");
+        assert.deepEqual(restoredFixedLayout, {
+            ...structure.fixedLayout,
+            graphScrollTop: graphScrollTopBeforeExpand,
+        });
 
         for (const surface of [
             { name: "phone", width: 393, height: 852 },

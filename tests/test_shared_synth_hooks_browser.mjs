@@ -259,6 +259,48 @@ test("shared analyzer activity reference-counts observers and disables only afte
     }
 });
 
+test("Polish telemetry folds every union event before one RAF presentation in either arrival order", async () => {
+    const page = await openModulePage();
+    const meterA = {
+        peakDbfs: -1.5,
+        loudnessDbfs: -13.2,
+        compressorGainReductionDb: -3.4,
+    };
+    const meterB = {
+        peakDbfs: -4.25,
+        loudnessDbfs: -17.5,
+        compressorGainReductionDb: -1.75,
+    };
+    const spectrumA = {
+        sampleRateHz: 4_096,
+        magnitudes: Array.from({ length: 2_048 }, (_, index) => index === 200 ? 1 : 0),
+    };
+    const spectrumB = {
+        sampleRateHz: 4_096,
+        magnitudes: Array.from({ length: 2_048 }, (_, index) => index === 1_000 ? 0.75 : 0),
+    };
+
+    try {
+        await installHarness(page, "installPolishTelemetryFoldHarness");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().listenerCount === 1
+        ));
+
+        await invokeHarness(page, "emitBurst", [meterA, spectrumA]);
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.lastRender.meter, meterA);
+        assert.equal(snapshot.lastRender.spectrum.magnitudesDbfs.indexOf(0), 80);
+
+        await invokeHarness(page, "emitBurst", [spectrumB, meterB]);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.lastRender.meter, meterB);
+        assert.notEqual(snapshot.lastRender.spectrum, null);
+        assert.equal(snapshot.lastRender.spectrum.timestampMs, 3);
+    } finally {
+        await page.close();
+    }
+});
+
 test("route amount binding presents the canonical bridge value before the full modulation document rerenders", async () => {
     const page = await openModulePage();
 

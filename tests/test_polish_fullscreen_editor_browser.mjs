@@ -76,7 +76,7 @@ test("the controlled full-screen surface opens, explains Comp, and closes withou
     }
 });
 
-test("live telemetry rerenders preserve focus and the controlled modal boundary", async () => {
+test("live telemetry rerenders preserve focus on the non-modal full-page surface", async () => {
     const page = await openTestHost();
     try {
         await page.locator("[data-role='open-polish-editor']").click();
@@ -87,7 +87,11 @@ test("live telemetry rerenders preserve focus and the controlled modal boundary"
         assert.equal(await compControl.evaluate((element) => document.activeElement === element), true);
         assert.equal(
             await page.locator("[data-role='open-polish-editor']").evaluate((element) => element.inert),
-            true,
+            false,
+        );
+        assert.equal(
+            await page.locator("[data-role='polish-fullscreen-editor']").getAttribute("aria-modal"),
+            null,
         );
     } finally {
         await page.close();

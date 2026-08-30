@@ -1,0 +1,70 @@
+/** Shared presentation for the reusable Enhancer spectrum/response renderer. */
+.enhancer-spectrum-graph {
+    display: block;
+    width: 100%;
+    overflow: visible;
+}
+
+.enhancer-spectrum-grid-line {
+    fill: none;
+    stroke: #222522;
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+}
+
+.enhancer-spectrum-grid-line.is-baseline {
+    stroke: #464437;
+}
+
+.enhancer-spectrum-axis-label,
+.enhancer-spectrum-axis-unit {
+    fill: #5f625d;
+    font: 8px/1 "Departure Mono", ui-monospace, monospace;
+    pointer-events: none;
+}
+
+.enhancer-spectrum-axis-unit {
+    letter-spacing: 0.08em;
+}
+
+.enhancer-spectrum-level-label {
+    fill: #797457;
+}
+
+.enhancer-spectrum-incoming-trace {
+    fill: none;
+    stroke: #6e7dff;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.45;
+    opacity: 0.68;
+    vector-effect: non-scaling-stroke;
+    filter: drop-shadow(0 0 3px rgb(110 125 255 / 0.55));
+}
+
+.enhancer-spectrum-response-curve {
+    fill: none;
+    stroke: var(--enhancer-curve-color);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.35;
+    vector-effect: non-scaling-stroke;
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--enhancer-curve-color) 58%, transparent));
+}
+
+.enhancer-spectrum-marker-guide {
+    fill: none;
+    stroke: var(--enhancer-marker-color);
+    stroke-dasharray: 2 4;
+    stroke-width: 1;
+    opacity: 0.45;
+    vector-effect: non-scaling-stroke;
+}
+
+.enhancer-spectrum-marker {
+    fill: var(--enhancer-marker-color);
+    stroke: #090a0a;
+    stroke-width: 3;
+    vector-effect: non-scaling-stroke;
+    filter: drop-shadow(0 0 5px var(--enhancer-marker-color));
+}

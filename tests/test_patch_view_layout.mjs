@@ -195,7 +195,7 @@ test("checked-in UI source maps keep dependency provenance inside the checkout",
     }
 });
 
-test("generated desktop and iPhone UI artifacts carry the exact T74 source contracts", async () => {
+test("generated desktop and iPhone UI artifacts carry the exact T74/T75 source contracts", async () => {
     const sharedEndpointTokens = [
         "polishSafeBassAmount",
         "polishSafeBassBypass",
@@ -211,8 +211,12 @@ test("generated desktop and iPhone UI artifacts carry the exact T74 source contr
             requiredTokens: [
                 ...sharedEndpointTokens,
                 "polish-module-",
-                "polish-bypass-",
+                "polish-bypass",
                 "polish-expand",
+                "polishAnalyzerEnabledIn",
+                "polish-fullscreen-editor",
+                "enhancer-spectrum-graph",
+                "One Comp Amount",
                 "SAFE BASS",
                 "ENHANCE",
                 "OUTPUT TRIM",
@@ -221,6 +225,11 @@ test("generated desktop and iPhone UI artifacts carry the exact T74 source contr
             sourcePaths: [
                 "ui/desktop/effects-rack-workspace.tsx",
                 "ui/desktop/DesktopPatchView.tsx",
+                "ui/desktop/polish-fullscreen-editor.tsx",
+                "ui/shared/cmajor-react.ts",
+                "ui/shared/enhancer-spectrum.ts",
+                "ui/shared/enhancer-spectrum-graph.tsx",
+                "ui/shared/polish-telemetry.ts",
                 "ui/shared/synth-hooks.ts",
                 "ui/shared/polish.ts",
             ],
@@ -229,8 +238,16 @@ test("generated desktop and iPhone UI artifacts carry the exact T74 source contr
             label: "iPhone",
             bundlePath: "patch_gui/index.ios.js",
             mapPath: "patch_gui/index.ios.js.map",
-            requiredTokens: sharedEndpointTokens,
+            requiredTokens: [
+                ...sharedEndpointTokens,
+                "polishMeter",
+                "compressorGainReductionDb",
+                "sampleRateHz",
+            ],
             sourcePaths: [
+                "ui/shared/cmajor-react.ts",
+                "ui/shared/enhancer-spectrum.ts",
+                "ui/shared/polish-telemetry.ts",
                 "ui/shared/synth-hooks.ts",
                 "ui/shared/polish.ts",
                 "ui/ios/patch-view-entry.tsx",
