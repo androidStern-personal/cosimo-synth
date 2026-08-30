@@ -1322,6 +1322,32 @@ void expandVoiceOscillatorControls (VoiceOscillatorControlsView controls,
     for (std::size_t voiceOscillator = 0; voiceOscillator < voiceOscillatorCount;
          ++voiceOscillator)
     {
+        // A quiescent voice-oscillator (the engine clears its base increment
+        // and gain when the voice retires) expands to exact zeros: active is
+        // 0 on every lane, so amplitude and phase increment are +0 and the
+        // remaining lanes are never read while the note stays inactive.
+        // Write those zeros once - lane 0's phase increment is the sentinel,
+        // since an expanded active voice-oscillator always leaves it > 0 -
+        // and skip the unison math entirely afterwards.
+        if (controls.basePhaseIncrements[voiceOscillator] <= 0.0f)
+        {
+            const auto quietLane = voiceOscillator * maximumUnisonCount;
+            if (workspace.phaseIncrements[quietLane] != 0.0f)
+            {
+                const FloatBatch zero (0.0f);
+                for (std::size_t firstSubVoice = 0; firstSubVoice < maximumUnisonCount;
+                     firstSubVoice += batchSize)
+                {
+                    zero.store_unaligned (workspace.phaseIncrements + quietLane + firstSubVoice);
+                    zero.store_unaligned (workspace.positions + quietLane + firstSubVoice);
+                    zero.store_unaligned (workspace.warpAmounts + quietLane + firstSubVoice);
+                    zero.store_unaligned (workspace.leftGains + quietLane + firstSubVoice);
+                    zero.store_unaligned (workspace.rightGains + quietLane + firstSubVoice);
+                }
+            }
+            continue;
+        }
+
         const auto voices = static_cast<std::size_t> (std::clamp (
             controls.unisonVoices[voiceOscillator], 1,
             static_cast<std::int32_t> (maximumUnisonCount)));
@@ -1893,6 +1919,14 @@ StereoSample renderWarpedNote (WarpRendererStateView state,
                                      atlasBasisWeights, noteIndex, nullptr);
 }
 
+// One drain counter per 4-note filter batch: how many zero pushes its slice
+// of the halfband history still needs before every tap reads exactly zero.
+// A batch with no active note and a drained history is skipped whole - its
+// FIR output over an all-zero history is exactly +0 at any write alignment,
+// so writing 0 directly is bit-identical to convolving. Renderer statics
+// persist per instance, exactly like the packed history they describe.
+static std::array<std::int32_t, logicalNoteCount / batchSize> noteBatchDrainRemaining {};
+
 void renderWarpedNotes (WarpRendererStateView state,
                         WarpRendererControlsView controls,
                         TablePoolView tables,
@@ -1905,6 +1939,7 @@ void renderWarpedNotes (WarpRendererStateView state,
         ? std::int32_t { 1 } : maximumWarpOversampleFactor;
     std::array<std::array<StereoSample, logicalNoteCount>,
                maximumWarpOversampleFactor> mixed {};
+    std::array<bool, logicalNoteCount / batchSize> batchHasActiveNote {};
     for (std::size_t note = 0; note < logicalNoteCount; ++note)
     {
         const auto firstLane = note * lanesPerNote;
@@ -1914,11 +1949,25 @@ void renderWarpedNotes (WarpRendererStateView state,
         if (! isActive)
             continue;
 
+        batchHasActiveNote[note / batchSize] = true;
         StereoSample noteSamples[maximumWarpOversampleFactor] {};
         renderWarpedNoteInternal (state, controls, tables, atlas, atlasDc,
                                   atlasBasisWeights, note, noteSamples);
         for (std::int32_t subSample = 0; subSample < oversampleFactor; ++subSample)
             mixed[static_cast<std::size_t> (subSample)][note] = noteSamples[subSample];
+    }
+
+    // Decide this call's work from the PRE-decrement counters: the call that
+    // drains a counter to zero must still push its final zeros and filter
+    // them, or the history would keep a nonzero remnant forever.
+    std::array<bool, logicalNoteCount / batchSize> processBatch {};
+    for (std::size_t batch = 0; batch < noteBatchDrainRemaining.size(); ++batch)
+    {
+        processBatch[batch] = batchHasActiveNote[batch] || noteBatchDrainRemaining[batch] > 0;
+        if (batchHasActiveNote[batch])
+            noteBatchDrainRemaining[batch] = static_cast<std::int32_t> (secondHalfbandLength);
+        else if (noteBatchDrainRemaining[batch] > 0)
+            noteBatchDrainRemaining[batch] -= oversampleFactor;
     }
 
     auto* history = state.secondHistory;
@@ -1931,6 +1980,9 @@ void renderWarpedNotes (WarpRendererStateView state,
                               + static_cast<std::size_t> (writeIndex)) * logicalNoteCount;
         for (std::size_t note = 0; note < logicalNoteCount; note += batchSize)
         {
+            if (! processBatch[note / batchSize])
+                continue;
+
             alignas (16) std::array<float, batchSize> left;
             alignas (16) std::array<float, batchSize> right;
             for (std::size_t lane = 0; lane < batchSize; ++lane)
@@ -1955,6 +2007,12 @@ void renderWarpedNotes (WarpRendererStateView state,
             {
                 alignas (16) std::array<float, batchSize> left;
                 alignas (16) std::array<float, batchSize> right;
+                if (! processBatch[note / batchSize])
+                {
+                    for (std::size_t lane = 0; lane < batchSize; ++lane)
+                        outputs[note + lane] = { 0.0f, 0.0f };
+                    continue;
+                }
                 filterNoteBatch (history, writeIndex, note, use441Filter)
                     .store_unaligned (left.data());
                 filterNoteBatch (history + channelStride, writeIndex, note, use441Filter)
