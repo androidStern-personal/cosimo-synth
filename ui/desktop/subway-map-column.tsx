@@ -6,6 +6,7 @@ import {
     type KeyboardEvent as ReactKeyboardEvent,
     type MouseEvent as ReactMouseEvent,
     type PointerEvent as ReactPointerEvent,
+    type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 

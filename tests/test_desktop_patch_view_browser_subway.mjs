@@ -1032,12 +1032,16 @@ test("the fixed FX footer truncates the composed graph without covering its inte
                 const graphBoundary = element.closest('[data-role="rack-graph-boundary"]');
                 const footer = stack?.querySelector('[data-role="rack-fixed-footer"]');
                 const bypass = element.querySelector('[data-role="rack-lane-bypass"]');
+                const topCue = stack?.querySelector(".subway-scroll-cue-top");
+                const bottomCue = stack?.querySelector(".subway-scroll-cue-bottom");
                 if (!(stack instanceof HTMLElement) || !(grid instanceof HTMLElement)
                         || !(graphBoundary instanceof HTMLElement) || !(footer instanceof HTMLElement)
-                        || !(bypass instanceof HTMLButtonElement)) {
+                        || !(bypass instanceof HTMLButtonElement) || !(topCue instanceof HTMLElement)
+                        || !(bottomCue instanceof HTMLElement)) {
                     return null;
                 }
                 const bypassRect = rectOf(bypass);
+                const bottomCueRect = rectOf(bottomCue);
                 const interactive = Array.from(element.querySelectorAll([
                     "button.subway-station",
                     "button.subway-ghost-button",
@@ -1071,6 +1075,10 @@ test("the fixed FX footer truncates the composed graph without covering its inte
                     grid: rectOf(grid),
                     footer: rectOf(footer),
                     graphOwnsFooter: element.contains(footer),
+                    topCueInGraphBoundary: graphBoundary.contains(topCue),
+                    bottomCueInGraphBoundary: graphBoundary.contains(bottomCue),
+                    bottomCueVisible: bottomCue.classList.contains("is-visible"),
+                    bottomCue: bottomCueRect,
                     bypass: bypassRect,
                     bypassCenterReachable: bypass.contains(bypassCenterHit),
                     bypassCenterHit: bypassCenterHit instanceof HTMLElement
@@ -1088,6 +1096,18 @@ test("the fixed FX footer truncates the composed graph without covering its inte
                 `${fixture.name}: the graph fills only its reserved boundary`);
             assert.equal(topGeometry.graphOwnsFooter, false,
                 `${fixture.name}: the fixed footer is not graph content`);
+            assert.equal(topGeometry.topCueInGraphBoundary, true,
+                `${fixture.name}: the top scroll cue belongs to the graph boundary`);
+            assert.equal(topGeometry.bottomCueInGraphBoundary, true,
+                `${fixture.name}: the bottom scroll cue belongs to the graph boundary`);
+            if (fixture.name === "overflowing-serial-phone") {
+                assert.equal(topGeometry.bottomCueVisible, true,
+                    `${fixture.name}: the overflow fixture exposes the bottom cue`);
+            }
+            if (topGeometry.bottomCueVisible) {
+                assert.equal(topGeometry.bottomCue.bottom <= topGeometry.footer.top + 1, true,
+                    `${fixture.name}: the visible bottom cue stops above the fixed footer`);
+            }
             assert.equal(Math.abs(topGeometry.graph.bottom - topGeometry.footer.top) <= 1, true,
                 `${fixture.name}: the graph ends flush against the fixed footer`);
             assert.equal(Math.abs(topGeometry.footer.bottom - topGeometry.stack.bottom) <= 1, true,
