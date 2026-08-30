@@ -218,6 +218,10 @@ namespace wt
         input event MsegBufferUpload bufferUpload;
         input event MsegPlaybackConfig playbackUpload;
         input event int32 triggerIn;
+        // A legato pitch change: restarts playback only when the uploaded
+        // playback config opts in (legatoRestarts); otherwise the envelope
+        // keeps its position, the classic legato behavior.
+        input event int32 legatoTriggerIn;
         input event int32 noteOffIn;
         input value float32 durationSecondsIn;
         output stream float32 outA;
@@ -238,6 +242,7 @@ namespace wt
         float32 loopStart = 0.0f;
         float32 loopEnd = 1.0f;
         int32 noteOffPolicy = msegNoteOffPolicyFinishLoop;
+        bool legatoRestarts = false;
         bool stopFutureWraps = false;
 
         void initialiseBufferA()
@@ -372,16 +377,28 @@ namespace wt
             holdFinalValue = config.holdFinalValue;
             setLoopWindow (config.loopEnabled, config.loopStart, config.loopEnd);
             noteOffPolicy = config.noteOffPolicy;
+            legatoRestarts = config.legatoRestarts;
             hasUploadedPlayback = true;
         }
 
-        event triggerIn (int32 unused)
+        void restartPlayback()
         {
             active = true;
             progress = 0.0f;
             currentValueA = sampleBufferAAt (0.0f);
             currentValueB = sampleBufferBAt (0.0f);
             stopFutureWraps = false;
+        }
+
+        event triggerIn (int32 unused)
+        {
+            restartPlayback();
+        }
+
+        event legatoTriggerIn (int32 unused)
+        {
+            if (legatoRestarts)
+                restartPlayback();
         }
 
         event noteOffIn (int32 unused)
