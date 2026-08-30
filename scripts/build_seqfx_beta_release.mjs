@@ -44,12 +44,12 @@ export function usage(config = seqFxReleaseConfig) {
         "",
         "Modes:",
         "  --plan       Read-only contract/path/decision report. It never builds or packages.",
-        "  --unsigned   Build a local unsigned validation package (the default).",
+        "  --unsigned   Build a local validation package with an ad-hoc-signed VST3 (the default).",
         "  --release    Developer ID sign, notarize, staple, and Gatekeeper-check the package.",
         "",
         "Important:",
         "  Unsigned output is never Patreon-ready.",
-        "  --verify-repeatable-packaging compares two assemblies of the same freshly built unsigned VST3.",
+        "  --verify-repeatable-packaging compares two assemblies of the same freshly built ad-hoc-signed VST3.",
         "  It does not claim that two independent native builds produce identical binaries.",
         "  Developer ID timestamps and Apple notarization make signed release bytes non-reproducible.",
         "  This command never installs a plugin and never uploads or publishes an artifact.",
@@ -753,7 +753,7 @@ export function createReleasePlan({
             signedRelease: "npm run seqfx:release:build -- --release",
         },
         repeatability: {
-            deterministicBoundary: "two packaging assemblies of one freshly built unsigned VST3 payload plus package and zip",
+            deterministicBoundary: "two packaging assemblies of one freshly built ad-hoc-signed VST3 payload plus package and zip",
             independentNativeBuildsCompared: false,
             signedArtifactBytesReproducible: false,
             reasonSignedBytesDiffer: "Developer ID secure timestamps and Apple notarization tickets are external time-varying attestations.",
@@ -1818,7 +1818,7 @@ export function payloadInventoryErrors(config, payloadFiles, { signed }) {
         `${root}/Contents/Info.plist`,
         `${root}/Contents/MacOS/${config.identity.bundleName}`,
         `${root}/Contents/Resources/moduleinfo.json`,
-        ...(signed ? [`${root}/Contents/_CodeSignature/CodeResources`] : []),
+        `${root}/Contents/_CodeSignature/CodeResources`,
     ];
     const metadataFiles = payloadFiles.filter(
         (file) => /(^|\/)\._[^/]*$/u.test(file) || /(^|\/)\.DS_Store$/u.test(file),
@@ -1886,6 +1886,30 @@ function signStagedVst3(vst3Path, approvedIdentity) {
     const verification = run("codesign", ["--display", "--verbose=4", vst3Path], { capture: true });
 
     return parseVst3SigningEvidence(combinedProcessOutput(verification), approvedIdentity);
+}
+
+export function adHocVst3SigningArgs(vst3Path) {
+    return ["--force", "--sign", "-", vst3Path];
+}
+
+function signStagedVst3AdHoc(vst3Path) {
+    run("codesign", adHocVst3SigningArgs(vst3Path), { capture: true });
+    verifyCodesign(vst3Path);
+    const verification = run("codesign", ["--display", "--verbose=4", vst3Path], { capture: true });
+    const evidence = combinedProcessOutput(verification);
+
+    if (!/^Signature=adhoc$/mu.test(evidence) || /^Authority=/mu.test(evidence))
+        throw new Error("Local SeqFX VST3 did not receive the required ad-hoc-only signature.");
+
+    return {
+        identity: null,
+        loadableLocally: true,
+        signatureKind: "ad-hoc",
+        signedWithDeveloperId: false,
+        teamIdentifier: null,
+        timestamp: null,
+        note: "The VST3 is ad-hoc signed for local host loading; it is not Developer ID signed or distributable.",
+    };
 }
 
 function removeLocalBuildSignature(vst3Path) {
@@ -1958,7 +1982,10 @@ export function renderReleaseReadme(config, { signedRelease }) {
         "",
         signedRelease
             ? "This installer was produced in signed release mode. Verify its adjacent manifest and checksums before distribution."
-            : "LOCAL UNSIGNED VALIDATION PACKAGE — NOT FOR DISTRIBUTION OR PATREON UPLOAD.",
+            : "LOCAL VALIDATION PACKAGE — NOT FOR DISTRIBUTION OR PATREON UPLOAD.",
+        ...(!signedRelease ? [
+            "The VST3 payload is ad-hoc signed for local loading; the installer is not Developer ID-signed or notarized.",
+        ] : []),
         "",
         "Scope:",
         minimumMacOSLine,
@@ -2169,13 +2196,13 @@ export function createReleaseManifest({
         throw new Error(`SeqFX SOURCE_DATE_EPOCH origin is invalid: ${String(sourceDateEpochOrigin)}`);
 
     return {
-        schemaVersion: 7,
-        artifactClass: options.mode === "release" ? "signed-notarized-release-candidate" : "local-unsigned-validation",
+        schemaVersion: 8,
+        artifactClass: options.mode === "release" ? "signed-notarized-release-candidate" : "local-ad-hoc-validation",
         packagingReady: options.mode === "release",
         distributionReady: false,
         distributionReadinessReason: options.mode === "release"
             ? "The builder does not perform packaged pluginval, Ableton/listening acceptance, clean-account Gatekeeper installation, or an authorized Patreon upload."
-            : "Unsigned local validation output cannot be distributed.",
+            : "The VST3 uses only an ad-hoc local signature, and the installer is neither Developer ID-signed nor notarized.",
         product: config.identity.publicName,
         releaseVersion: config.release.channelVersion,
         scope: config.scope,
@@ -2206,7 +2233,7 @@ export function createReleaseManifest({
             webViewForbiddenMarkersAbsent: config.webViewMarkers.forbidden,
         },
         repeatability: {
-            deterministicBoundary: "two packaging assemblies of one freshly built normalized unsigned VST3 payload tree, flat package, generated text, and zip",
+            deterministicBoundary: "two packaging assemblies of one freshly built normalized ad-hoc-signed VST3 payload tree, flat package, generated text, and zip",
             payloadFingerprint,
             repeatVerificationRequested: options.verifyRepeatablePackaging,
             independentNativeBuildsCompared: false,
@@ -2367,20 +2394,14 @@ async function assembleArtifactSet({
     await normalizePayloadModes(config, stagingRoot);
     await normalizeTreeTimestamps(stagedVst3, sourceDateEpoch);
 
-    const payloadFingerprint = await canonicalPayloadFingerprint(stagingRoot);
-    let vst3Signing = {
-        identity: null,
-        signedWithDeveloperId: false,
-        timestamped: false,
-        note: "The normalized payload is deliberately unsigned and is not distributable.",
-    };
+    const vst3Signing = options.mode === "release"
+        ? signStagedVst3(stagedVst3, signingIdentities.application)
+        : signStagedVst3AdHoc(stagedVst3);
 
-    if (options.mode === "release")
-        vst3Signing = signStagedVst3(stagedVst3, signingIdentities.application);
-
+    await normalizePayloadModes(config, stagingRoot);
     await normalizeTreeTimestamps(stagingRoot, sourceDateEpoch);
+    verifyCodesign(stagedVst3);
     if (options.mode === "release") {
-        verifyCodesign(stagedVst3);
         verifyPatchedWebView(
             config,
             path.join(stagedVst3, "Contents", "MacOS", config.identity.bundleName),
@@ -2391,6 +2412,7 @@ async function assembleArtifactSet({
         );
     }
     await assertPayloadModes(config, stagingRoot);
+    const payloadFingerprint = await canonicalPayloadFingerprint(stagingRoot);
     await mkdir(outputRoot, { recursive: true });
     await buildUnsignedFlatPackage(config, stagingRoot, unsignedPackagePath, workRoot, sourceDateEpoch);
 
@@ -2600,7 +2622,7 @@ async function buildReleaseArtifacts({
             sourceDateEpochOrigin,
             nativeBuildsCompared: 1,
             independentNativeBuildReproducibilityVerified: false,
-            claim: "Two packaging assemblies of the same freshly built unsigned VST3 were byte-identical.",
+            claim: "Two packaging assemblies of the same freshly built ad-hoc-signed VST3 were byte-identical.",
             payloadFingerprint: primaryArtifacts.payloadFingerprint,
             results,
         }, null, 2)}\n`, "utf8");

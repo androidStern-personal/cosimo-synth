@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { deflateSync, gunzipSync, inflateSync } from "node:zlib";
 
 import {
+    adHocVst3SigningArgs,
     attestMatchingVst3Metadata,
     assertArchiveTreeContainsOnlyFilesAndDirectories,
     assertNativeBuildUsedReleaseToolchain,
@@ -847,7 +848,7 @@ test("read-only plan names exact side effects, current paths, and release blocke
     assert.equal(plan.schemaVersion, 3);
     assert.equal(plan.publicReleaseBlocked, true);
     assert.match(plan.paths.builtVst3, /_build\/plugin\/CosimoSeqFX_artefacts/u);
-    assert.match(plan.repeatability.deterministicBoundary, /one freshly built unsigned VST3/u);
+    assert.match(plan.repeatability.deterministicBoundary, /one freshly built ad-hoc-signed VST3/u);
     assert.equal(plan.repeatability.independentNativeBuildsCompared, false);
     assert.equal(plan.repeatability.signedArtifactBytesReproducible, false);
     assert.equal(
@@ -1020,27 +1021,28 @@ test("package metadata comes only from the release config", () => {
     assert.match(packageInfo, /version="0\.1\.0"/u);
 });
 
-test("payload validation requires a signature only for signed release mode", () => {
+test("every packaged payload requires a loadable VST3 signature", () => {
     const root = "./Library/Audio/Plug-Ins/VST3/CosimoSeqFX.vst3";
-    const unsignedFiles = [
+    const loadableFiles = [
         `${root}/Contents/Info.plist`,
         `${root}/Contents/MacOS/CosimoSeqFX`,
         `${root}/Contents/Resources/moduleinfo.json`,
+        `${root}/Contents/_CodeSignature/CodeResources`,
     ];
 
-    assert.deepEqual(payloadInventoryErrors(seqFxReleaseConfig, unsignedFiles, { signed: false }), []);
+    assert.deepEqual(payloadInventoryErrors(seqFxReleaseConfig, loadableFiles, { signed: false }), []);
     assert.match(
-        payloadInventoryErrors(seqFxReleaseConfig, unsignedFiles, { signed: true }).join("\n"),
+        payloadInventoryErrors(seqFxReleaseConfig, loadableFiles.slice(0, -1), { signed: false }).join("\n"),
         /_CodeSignature\/CodeResources/u,
     );
     assert.match(
-        payloadInventoryErrors(seqFxReleaseConfig, [...unsignedFiles, `${root}/Contents/.DS_Store`], { signed: false }).join("\n"),
+        payloadInventoryErrors(seqFxReleaseConfig, [...loadableFiles, `${root}/Contents/.DS_Store`], { signed: false }).join("\n"),
         /metadata files/u,
     );
     assert.match(
         payloadInventoryErrors(
             seqFxReleaseConfig,
-            [...unsignedFiles, "./Library/LaunchDaemons/dev.cosimo.seqfx.plist"],
+            [...loadableFiles, "./Library/LaunchDaemons/dev.cosimo.seqfx.plist"],
             { signed: false },
         ).join("\n"),
         /outside the declared VST3 install root/u,
@@ -1048,11 +1050,20 @@ test("payload validation requires a signature only for signed release mode", () 
     assert.match(
         payloadInventoryErrors(
             seqFxReleaseConfig,
-            [...unsignedFiles, `${root}/../escaped`],
+            [...loadableFiles, `${root}/../escaped`],
             { signed: false },
         ).join("\n"),
         /outside the declared VST3 install root/u,
     );
+});
+
+test("local validation uses a deterministic ad-hoc VST3 signature without release credentials", () => {
+    assert.deepEqual(adHocVst3SigningArgs("/private/tmp/CosimoSeqFX.vst3"), [
+        "--force",
+        "--sign",
+        "-",
+        "/private/tmp/CosimoSeqFX.vst3",
+    ]);
 });
 
 test("release output deletion rejects symlinked ancestors", async (context) => {
@@ -1133,8 +1144,10 @@ test("README labels unsigned output honestly", () => {
     const signedReadme = renderReleaseReadme(seqFxReleaseConfig, { signedRelease: true });
 
     assert.match(unsignedReadme, /NOT FOR DISTRIBUTION OR PATREON UPLOAD/u);
+    assert.match(unsignedReadme, /VST3 payload is ad-hoc signed for local loading/u);
+    assert.match(unsignedReadme, /installer is not Developer ID-signed or notarized/u);
     assert.match(unsignedReadme, /Minimum macOS version is not yet approved/u);
-    assert.doesNotMatch(signedReadme, /LOCAL UNSIGNED VALIDATION PACKAGE/u);
+    assert.doesNotMatch(signedReadme, /LOCAL VALIDATION PACKAGE/u);
 });
 
 test("unsigned manifest is deterministic and never claims host or upload acceptance", async () => {
@@ -1187,7 +1200,11 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
         },
         signing: {
             installer: { signedWithDeveloperId: false },
-            vst3: { signedWithDeveloperId: false },
+            vst3: {
+                loadableLocally: true,
+                signatureKind: "ad-hoc",
+                signedWithDeveloperId: false,
+            },
         },
         releaseToolchain: releaseToolchainFixture(),
         sourceDateEpoch: 1_700_000_000,
@@ -1202,7 +1219,10 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
     const second = createReleaseManifest(inputs);
 
     assert.deepEqual(second, first);
-    assert.equal(first.schemaVersion, 7);
+    assert.equal(first.schemaVersion, 8);
+    assert.equal(first.artifactClass, "local-ad-hoc-validation");
+    assert.equal(first.signing.vst3.signatureKind, "ad-hoc");
+    assert.equal(first.signing.vst3.loadableLocally, true);
     assert.equal(first.distributionReady, false);
     assert.equal(first.packagingReady, false);
     assert.equal("createdAt" in first, false);
