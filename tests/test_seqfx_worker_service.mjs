@@ -209,9 +209,15 @@ test("seqfx worker treats Cmajor null in full stored state as missing seqfx.v7",
     }));
 });
 
-test("seqfx worker rejects old-shaped current seqfx state instead of normalizing missing aux", () => {
-    const savedState = JSON.parse(serializeSeqFxState(createDefaultSeqFxState()));
-    savedState.patterns[0].chains[SEQFX_LANES.crusher].blocks.push({
+test("seqfx worker preserves its last-good runtime state across malformed updates and recovers", () => {
+    const initialState = createStateWithBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.crusher,
+        startStep: 2,
+        length: 1,
+    });
+    const malformedState = JSON.parse(serializeSeqFxState(createDefaultSeqFxState()));
+    malformedState.patterns[0].chains[SEQFX_LANES.crusher].blocks.push({
         startStep: 0,
         length: 1,
         effectType: SEQFX_EFFECT_TYPES.crusher,
@@ -219,7 +225,46 @@ test("seqfx worker rejects old-shaped current seqfx state instead of normalizing
     });
     const connection = new FakePatchConnection({
         values: {
-            [SEQFX_STATE_KEY]: JSON.stringify(savedState),
+            [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
+        },
+        parameters: {
+            patternSelect: 0,
+        },
+    });
+    const service = createSeqFxWorkerService(connection);
+    const recoveredState = createStateWithBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 7,
+        length: 2,
+    });
+
+    service.start();
+    assert.equal(patternUploads(connection).length, 1);
+    connection.events = [];
+
+    assert.doesNotThrow(() => {
+        connection.emitStoredState(SEQFX_STATE_KEY, JSON.stringify(malformedState));
+    });
+    assert.deepEqual(patternUploads(connection), [], "rejected state must not replace or replay last-good audio");
+
+    connection.emitStoredState(SEQFX_STATE_KEY, serializeSeqFxState(recoveredState));
+    const recoveredUpload = patternUploads(connection).at(-1).value;
+    assert.deepEqual(recoveredUpload.activeSteps[SEQFX_LANES.filter].slice(7, 9), [true, true]);
+    assert.equal(recoveredUpload.activeSteps[SEQFX_LANES.crusher][2], false);
+    assert.deepEqual(connection.storedWrites, []);
+});
+
+test("seqfx worker ignores malformed boot state without failing service startup", () => {
+    const malformedState = JSON.parse(serializeSeqFxState(createDefaultSeqFxState()));
+    malformedState.patterns[0].chains[SEQFX_LANES.crusher].blocks.push({
+        startStep: 0,
+        effectType: SEQFX_EFFECT_TYPES.crusher,
+        aux: { curve: "linear" },
+    });
+    const connection = new FakePatchConnection({
+        values: {
+            [SEQFX_STATE_KEY]: JSON.stringify(malformedState),
         },
         parameters: {
             patternSelect: 0,
@@ -227,11 +272,17 @@ test("seqfx worker rejects old-shaped current seqfx state instead of normalizing
     });
     const service = createSeqFxWorkerService(connection);
 
-    assert.throws(
-        () => service.start(),
-        /aux/i,
-    );
+    assert.doesNotThrow(() => service.start());
     assert.deepEqual(patternUploads(connection), []);
+
+    const recoveredState = createStateWithBlock({
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 12,
+        length: 1,
+    });
+    connection.emitStoredState(SEQFX_STATE_KEY, serializeSeqFxState(recoveredState));
+    assert.equal(patternUploads(connection).at(-1).value.activeSteps[SEQFX_LANES.filter][12], true);
     assert.deepEqual(connection.storedWrites, []);
 });
 

@@ -35,7 +35,7 @@ export function createSeqFxPresetStateAdapter({
             return serializeSeqFxState(parseSeqFxStoredState(value).state);
         },
         apply(value: unknown) {
-            bridge.replaceStateFromPreset(parseSeqFxStoredState(value).state);
+            bridge.replaceStateFromPreset(value);
         },
         subscribe(listener: () => void) {
             return bridge.subscribe(() => listener());

@@ -7,7 +7,6 @@ import {
 import {
     SEQFX_LEGACY_STATE_KEY,
     SEQFX_STATE_KEY,
-    SEQFX_STATE_VERSION,
     applySeqFxBlockAuxSourceEdit,
     applySeqFxBlockAuxTargetEndEdit,
     applySeqFxBlockAuxTargetToggle,
@@ -209,6 +208,17 @@ function resolveFiniteNumber(value: unknown, fallback: number, min: number, max:
 
 function resolveInteger(value: unknown, fallback: number, min: number, max: number): number {
     return Math.round(resolveFiniteNumber(value, fallback, min, max));
+}
+
+function seqFxStateContentToken(state: SeqFxState): string {
+    const storedState = JSON.parse(serializeSeqFxState(state)) as {
+        patterns: Array<{ revision: number } & Record<string, unknown>>;
+    };
+    return JSON.stringify(storedState.patterns.map(({ revision: _revision, ...pattern }) => pattern));
+}
+
+function seqFxStatesHaveSameContent(left: SeqFxState, right: SeqFxState): boolean {
+    return seqFxStateContentToken(left) === seqFxStateContentToken(right);
 }
 
 export class SeqFxRuntimeBridge {
@@ -798,26 +808,27 @@ export class SeqFxRuntimeBridge {
     }
 
     private commitState(nextState: SeqFxState, editedPatternIndex: number) {
+        const normalizedNextState = normalizeSeqFxState(nextState);
+        if (seqFxStatesHaveSameContent(this.state, normalizedNextState)) {
+            return false;
+        }
+
         const previous = this.state;
-        this.state = normalizeSeqFxState(nextState);
+        this.state = normalizedNextState;
         if (this.liveEditActive) {
             this.liveEditDirty = true;
             this.scheduleLiveRuntimeUpdate(editedPatternIndex);
-            return;
+            return true;
         }
 
         this.pushUndoState(previous);
         this.persistState();
         this.notifyStateListeners();
+        return true;
     }
 
     private commitStateIfChanged(nextState: SeqFxState, editedPatternIndex: number) {
-        if (serializeSeqFxState(nextState) === serializeSeqFxState(this.state)) {
-            return false;
-        }
-
-        this.commitState(nextState, editedPatternIndex);
-        return true;
+        return this.commitState(nextState, editedPatternIndex);
     }
 
     private currentLoopTarget() {
@@ -912,20 +923,6 @@ export class SeqFxRuntimeBridge {
     }
 
     private parseReplacementState(value: unknown): SeqFxState {
-        if (value && typeof value === "object" && !Array.isArray(value)) {
-            const candidate = value as { version?: unknown; patterns?: unknown };
-            const firstPattern = Array.isArray(candidate.patterns) ? candidate.patterns[0] : undefined;
-            if (
-                candidate.version === SEQFX_STATE_VERSION
-                && firstPattern
-                && typeof firstPattern === "object"
-                && !Array.isArray(firstPattern)
-                && Array.isArray((firstPattern as { lanes?: unknown }).lanes)
-            ) {
-                return normalizeSeqFxState(value);
-            }
-        }
-
         return parseSeqFxStoredState(value).state;
     }
 

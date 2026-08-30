@@ -4,6 +4,7 @@ import {
     SEQFX_PATTERN_COUNT,
     SEQFX_LEGACY_STATE_KEY,
     SEQFX_STATE_KEY,
+    SeqFxStateParseError,
     buildSeqPatternUpload,
     createDefaultSeqFxState,
     parseSeqFxStoredState,
@@ -22,15 +23,28 @@ function resolvePatternIndex(value: unknown) {
     return Math.min(SEQFX_PATTERN_COUNT - 1, Math.max(0, Math.round(numeric)));
 }
 
+function deserializeSeqFxWorkerState(value: unknown) {
+    if (value == null) {
+        return createDefaultSeqFxState();
+    }
+
+    try {
+        return parseSeqFxStoredState(value).state;
+    } catch (error) {
+        if (error instanceof SeqFxStateParseError) {
+            return null;
+        }
+        throw error;
+    }
+}
+
 export function createSeqFxWorkerService(connection: PatchConnectionLike) {
     return createStoredStateRuntimeMirror(connection, {
         stateKey: SEQFX_STATE_KEY,
         fallbackStateKeys: [SEQFX_LEGACY_STATE_KEY],
         parameterEndpointIDs: [patternSelectEndpointID],
         applyDefaultRuntimeStateWhenMissing: true,
-        deserializeStoredState: (value) => value == null
-            ? createDefaultSeqFxState()
-            : parseSeqFxStoredState(value).state,
+        deserializeStoredState: deserializeSeqFxWorkerState,
         buildRuntimeEvents: ({ state, parameters }) => [
             {
                 endpointID: patternUploadEndpointID,

@@ -549,7 +549,7 @@ test("changing_selected_pattern_block_group_aux_persists_enabled_target_and_end_
         value: 880,
     });
 
-    assert.equal(connection.storedWrites.length, 5);
+    assert.equal(connection.storedWrites.length, 4, "enabling an already-enabled target must not write a revision-only state");
     const storedState = latestStoredSeqFxState(connection);
     const editedSteps = [1, 2, 6, 7, 8].map((step) => (
         storedState.patterns[0].lanes[SEQFX_LANES.filter].steps[step].aux.targets[1]
@@ -1031,6 +1031,43 @@ test("loop edit actions are bounded one-step history gestures with an in-memory 
     assert.equal(bridge.getState().patterns[1].lanes[2].steps[7].active, true, "Init must not erase other patterns");
 });
 
+test("empty Clear and Init actions do not write state or create undo history", () => {
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(createDefaultSeqFxState()),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+    bridge.attach();
+    bridge.requestBootState();
+    connection.storedWrites = [];
+
+    assert.equal(bridge.clearLoop(), false);
+    assert.equal(bridge.initPattern(), false);
+    assert.equal(connection.storedWrites.length, 0);
+    assert.equal(bridge.canUndo(), false);
+});
+
+test("same-position move and same-length resize do not write state or create undo history", () => {
+    const initialState = applySeqFxBlockCreate(createDefaultSeqFxState(), {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 4,
+        length: 3,
+    });
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+    bridge.attach();
+    bridge.requestBootState();
+    connection.storedWrites = [];
+
+    bridge.resizeBlock({ patternIndex: 0, lane: SEQFX_LANES.filter, startStep: 4, length: 3 });
+    bridge.moveBlock({ patternIndex: 0, lane: SEQFX_LANES.filter, startStep: 4, targetStartStep: 4 });
+
+    assert.equal(connection.storedWrites.length, 0);
+    assert.equal(bridge.canUndo(), false);
+});
+
 test("boot migrates a valid seqfx.v6 version-5 document once and gives v7 precedence thereafter", () => {
     let legacyState = createDefaultSeqFxState();
     legacyState = applySeqFxBlockCreate(legacyState, {
@@ -1151,6 +1188,27 @@ test("invalid authoritative state is atomic and preserves current sound plus und
     assert.equal(connection.storedWrites.length, writesBeforeFailure);
 });
 
+test("authoritative preset replacement rejects dense editing projections atomically", () => {
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(createDefaultSeqFxState()),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+    bridge.attach();
+    bridge.requestBootState();
+    bridge.createBlock({ patternIndex: 0, lane: 0, startStep: 2, length: 2 });
+    const stateBeforeFailure = serializeSeqFxState(bridge.getState());
+    const writesBeforeFailure = connection.storedWrites.length;
+
+    assert.equal(bridge.canUndo(), true);
+    assert.throws(
+        () => bridge.replaceStateFromPreset(createDefaultSeqFxState()),
+        /lanes|chains/i,
+    );
+    assert.equal(serializeSeqFxState(bridge.getState()), stateBeforeFailure);
+    assert.equal(bridge.canUndo(), true);
+    assert.equal(connection.storedWrites.length, writesBeforeFailure);
+});
+
 test("factory patterns, effect presets, and safe loop variation each commit as one undoable edit", () => {
     const connection = new FakePatchConnection({
         [SEQFX_STATE_KEY]: serializeSeqFxState(createDefaultSeqFxState()),
@@ -1185,4 +1243,21 @@ test("factory patterns, effect presets, and safe loop variation each commit as o
     assert.notEqual(serializeSeqFxState(bridge.getState()), beforeVariation);
     assert.equal(bridge.undo(), true);
     assert.equal(serializeSeqFxState(bridge.getState()), beforeVariation);
+});
+
+test("reapplying an identical factory pattern does not write state or add undo history", () => {
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(createDefaultSeqFxState()),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+    bridge.attach();
+    bridge.requestBootState();
+
+    assert.equal(bridge.loadFactoryPattern("twelve-effect-tour"), true);
+    connection.storedWrites = [];
+    assert.equal(bridge.loadFactoryPattern("twelve-effect-tour"), false);
+    assert.equal(connection.storedWrites.length, 0);
+
+    assert.equal(bridge.undo(), true);
+    assert.equal(bridge.canUndo(), false, "the skipped factory load must not add a second undo entry");
 });
