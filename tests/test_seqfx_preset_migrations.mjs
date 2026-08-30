@@ -23,20 +23,29 @@ async function loadModules() {
 }
 
 function createLegacyDenseState(modules) {
-    let state = modules.createDefaultSeqFxState();
-    state = modules.applySeqFxCellToggle(state, {
-        patternIndex: 6,
-        lane: modules.SEQFX_LANES.tapeStop,
-        step: 11,
-        active: true,
-    });
-    state = modules.applySeqFxParamEdit(state, {
-        patternIndex: 6,
-        lane: modules.SEQFX_LANES.tapeStop,
-        steps: [11],
-        paramIndex: 0,
-        value: 3.25,
-    });
+    const state = modules.createDefaultSeqFxState();
+    const legacyDefaultsByLane = [
+        [0, 2_000, 500, 0.707, 1, 0, 0, 0],
+        [8, 1, 0, 0, 0, 0, 0, 0],
+        [1, 1, 1, 25, 0, 0, 0, 0],
+        [8, 1, 0.4375, 0.68, 0, 0, 0, 0],
+    ];
+    for (const pattern of state.patterns) {
+        pattern.lanes.forEach((lane, laneIndex) => {
+            for (const step of lane.steps) {
+                step.params = [...legacyDefaultsByLane[laneIndex]];
+                step.aux.targets = step.params.map((end) => ({ enabled: false, end }));
+                delete step.effectParams;
+                delete step.effectAux;
+            }
+        });
+    }
+    const legacyTapeStep = state.patterns[6].lanes[modules.SEQFX_LANES.tapeStop].steps[11];
+    legacyTapeStep.active = true;
+    legacyTapeStep.trigger = true;
+    legacyTapeStep.effectType = modules.SEQFX_EFFECT_TYPES.tapeStop;
+    legacyTapeStep.params[0] = 3.25;
+    legacyTapeStep.aux.targets[0].end = 3.25;
     state.version = modules.SEQFX_LEGACY_STATE_VERSION;
     return JSON.stringify(state);
 }
@@ -96,7 +105,8 @@ test("legacy_seqfx_preset_contract_and_dense_v5_state_migrate_to_sparse_v7", asy
     const restored = modules.parseStrictSeqFxStateV7(normalized.storedState[modules.SEQFX_STATE_KEY]);
     const step = restored.patterns[6].lanes[modules.SEQFX_LANES.tapeStop].steps[11];
     assert.equal(step.active, true);
-    assert.equal(step.params[0], 3.25);
+    assert.equal(step.params[5], 1);
+    assert.equal(step.params[6], 406.25);
 });
 
 test("legacy_seqfx_snapshot_contract_and_dense_v5_state_migrate_to_sparse_v7", async () => {
