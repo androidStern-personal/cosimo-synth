@@ -391,9 +391,16 @@ function installEndpointListenerProbe() {
         construct(target, argumentsList) {
             const node = Reflect.construct(target, argumentsList);
             node.port.addEventListener("message", (event) => {
-                const replyType = event.data?.type === "patch" ? event.data.payload?.type : null;
-                if (activeReplies.has(replyType)) activeDeliveries += 1;
-                if (removedReplies.has(replyType)) staleDeliveries += 1;
+                const payload = event.data?.type === "patch" ? event.data.payload : null;
+                // The worklet coalesces multi-event blocks into one
+                // cosimo-event-batch envelope; count the inner deliveries.
+                const deliveredTypes = payload?.type === "cosimo-event-batch"
+                    ? (payload.messages ?? []).map((message) => message?.type)
+                    : [payload?.type];
+                for (const replyType of deliveredTypes) {
+                    if (activeReplies.has(replyType)) activeDeliveries += 1;
+                    if (removedReplies.has(replyType)) staleDeliveries += 1;
+                }
             });
             return node;
         },

@@ -15,6 +15,7 @@ import {
     adaptCosimoAudioWorkletModuleLoading,
     fixCosimoAudioWorkletListenerRemoval,
     instrumentCosimoAudioWorkletSource,
+    poolCosimoAudioWorkletEventDelivery,
 } from "../web/audio-worklet-instrumentation.mjs";
 import {
     installBrowserPatchStatePersistence,
@@ -284,6 +285,67 @@ test("audio-worklet endpoint listener removal matches the stored listener object
 
     assert.match(fixed, /findIndex \(\(listener\) => listener\.replyType === msg\?\.replyType\)/);
     assert.doesNotMatch(fixed, /listeners\.indexOf/);
+});
+
+test("audio-worklet event delivery skips unlistened unpacks and coalesces one port message per block", () => {
+    const generated = `    function makeConsumeOutputEvents ({ wrapper, eventOutputs, dispatchOutputEvent })
+    {
+        const outputEventHandlers = eventOutputs.map (({ endpointID }) =>
+        {
+            const readCount = wrapper[\`getOutputEventCount_\${endpointID}\`]?.bind (wrapper);
+            const reset = wrapper[\`resetOutputEventCount_\${endpointID}\`]?.bind (wrapper);
+            const readEventAtIndex = wrapper[\`getOutputEvent_\${endpointID}\`]?.bind (wrapper);
+
+            return () =>
+            {
+                const count = readCount();
+
+                for (let i = 0; i < count; ++i)
+                    dispatchOutputEvent (endpointID, readEventAtIndex (i));
+
+                reset();
+            };
+        });
+
+        return () => outputEventHandlers.forEach ((consume) => consume() );
+    }
+
+                this.consumeOutputEvents = makeConsumeOutputEvents ({
+                    eventOutputs,
+                    wrapper,
+                    dispatchOutputEvent: (endpointID, event) =>
+                    {
+                        for (const { replyType } of outputEventListeners[endpointID] ?? [])
+                        {
+                            this.sendPatchMessage ({
+                                type: replyType,
+                                message: event.event, // N.B. chucking away frame and typeIndex info for now
+                            });
+                        }
+                    },
+                });
+
+                const msg = e.data.payload;
+
+                if (msg?.type === "status")
+                    msg.message = { manifest: this.manifest, ...msg.message };
+
+                this.deliverMessageFromServer (msg)`;
+
+    const pooled = poolCosimoAudioWorkletEventDelivery(generated);
+
+    assert.match(pooled, /hasEndpointListeners \(endpointID\)/);
+    assert.match(pooled, /flushDispatchedEvents\(\);/);
+    assert.match(pooled, /type: "cosimo-event-batch", messages: pending/);
+    assert.match(pooled, /for \(const batched of msg\.messages\)/);
+    assert.match(pooled, /cosimoPendingEventMessages\.push/);
+    // The render thread must no longer post per event: the only
+    // sendPatchMessage calls left inside the consume path are the flush's.
+    assert.doesNotMatch(pooled, /this\.sendPatchMessage \(\{\n {32}type: replyType/);
+    assert.throws(
+        () => poolCosimoAudioWorkletEventDelivery("unrecognised helper"),
+        /Could not pool the generated Cmajor AudioWorklet event delivery/,
+    );
 });
 
 test("browser patch persistence never blocks a runtime state write when storage fails", () => {

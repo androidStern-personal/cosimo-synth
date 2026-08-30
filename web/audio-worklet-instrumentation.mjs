@@ -247,3 +247,151 @@ export function fixCosimoAudioWorkletListenerRemoval(source) {
 
     return source.replace(generatedListenerRemoval, correctedListenerRemoval);
 }
+
+const generatedConsumeOutputEvents = `    function makeConsumeOutputEvents ({ wrapper, eventOutputs, dispatchOutputEvent })
+    {
+        const outputEventHandlers = eventOutputs.map (({ endpointID }) =>
+        {
+            const readCount = wrapper[\`getOutputEventCount_\${endpointID}\`]?.bind (wrapper);
+            const reset = wrapper[\`resetOutputEventCount_\${endpointID}\`]?.bind (wrapper);
+            const readEventAtIndex = wrapper[\`getOutputEvent_\${endpointID}\`]?.bind (wrapper);
+
+            return () =>
+            {
+                const count = readCount();
+
+                for (let i = 0; i < count; ++i)
+                    dispatchOutputEvent (endpointID, readEventAtIndex (i));
+
+                reset();
+            };
+        });
+
+        return () => outputEventHandlers.forEach ((consume) => consume() );
+    }`;
+
+const pooledConsumeOutputEvents = `    function makeConsumeOutputEvents ({ wrapper, eventOutputs, dispatchOutputEvent, hasEndpointListeners, flushDispatchedEvents })
+    {
+        const outputEventHandlers = eventOutputs.map (({ endpointID }) =>
+        {
+            const readCount = wrapper[\`getOutputEventCount_\${endpointID}\`]?.bind (wrapper);
+            const reset = wrapper[\`resetOutputEventCount_\${endpointID}\`]?.bind (wrapper);
+            const readEventAtIndex = wrapper[\`getOutputEvent_\${endpointID}\`]?.bind (wrapper);
+
+            return () =>
+            {
+                const count = readCount();
+
+                if (count === 0)
+                    return;
+
+                // Unpacking an event allocates its whole JS payload on the
+                // render thread, so only endpoints somebody listens to are
+                // read; the rest reset in wasm memory for free.
+                if (hasEndpointListeners (endpointID))
+                    for (let i = 0; i < count; ++i)
+                        dispatchOutputEvent (endpointID, readEventAtIndex (i));
+
+                reset();
+            };
+        });
+
+        return () =>
+        {
+            outputEventHandlers.forEach ((consume) => consume() );
+            flushDispatchedEvents();
+        };
+    }`;
+
+const generatedConsumeOutputEventsConstruction = `                this.consumeOutputEvents = makeConsumeOutputEvents ({
+                    eventOutputs,
+                    wrapper,
+                    dispatchOutputEvent: (endpointID, event) =>
+                    {
+                        for (const { replyType } of outputEventListeners[endpointID] ?? [])
+                        {
+                            this.sendPatchMessage ({
+                                type: replyType,
+                                message: event.event, // N.B. chucking away frame and typeIndex info for now
+                            });
+                        }
+                    },
+                });`;
+
+const pooledConsumeOutputEventsConstruction = `                // One coalesced port message per render block: dispatches
+                // enqueue, and the flush posts a single batch envelope when a
+                // block produced more than one message. A lone message keeps
+                // the original wire shape.
+                this.cosimoPendingEventMessages = [];
+
+                this.consumeOutputEvents = makeConsumeOutputEvents ({
+                    eventOutputs,
+                    wrapper,
+                    hasEndpointListeners: (endpointID) => (outputEventListeners[endpointID]?.length ?? 0) > 0,
+                    dispatchOutputEvent: (endpointID, event) =>
+                    {
+                        for (const { replyType } of outputEventListeners[endpointID] ?? [])
+                        {
+                            this.cosimoPendingEventMessages.push ({
+                                type: replyType,
+                                message: event.event, // N.B. chucking away frame and typeIndex info for now
+                            });
+                        }
+                    },
+                    flushDispatchedEvents: () =>
+                    {
+                        const pending = this.cosimoPendingEventMessages;
+
+                        if (pending.length === 0)
+                            return;
+
+                        if (pending.length === 1)
+                            this.sendPatchMessage (pending[0]);
+                        else
+                            this.sendPatchMessage ({ type: "cosimo-event-batch", messages: pending });
+
+                        this.cosimoPendingEventMessages = [];
+                    },
+                });`;
+
+const generatedNodeMessageDelivery = `                const msg = e.data.payload;
+
+                if (msg?.type === "status")
+                    msg.message = { manifest: this.manifest, ...msg.message };
+
+                this.deliverMessageFromServer (msg)`;
+
+const unbatchingNodeMessageDelivery = `                const msg = e.data.payload;
+
+                if (msg?.type === "cosimo-event-batch")
+                {
+                    for (const batched of msg.messages)
+                        this.deliverMessageFromServer (batched);
+
+                    return;
+                }
+
+                if (msg?.type === "status")
+                    msg.message = { manifest: this.manifest, ...msg.message };
+
+                this.deliverMessageFromServer (msg)`;
+
+/**
+ * Stops the render thread from generating garbage for nobody: output events
+ * without a registered listener are dropped in wasm memory instead of being
+ * unpacked into JS payloads, and the events one render block does deliver
+ * share one port message (the "cosimo-event-batch" envelope, unwrapped on
+ * the main thread) instead of one postMessage per event per listener.
+ */
+export function poolCosimoAudioWorkletEventDelivery(source) {
+    if (!source.includes(generatedConsumeOutputEvents)
+        || !source.includes(generatedConsumeOutputEventsConstruction)
+        || !source.includes(generatedNodeMessageDelivery)) {
+        throw new Error("Could not pool the generated Cmajor AudioWorklet event delivery.");
+    }
+
+    return source
+        .replace(generatedConsumeOutputEvents, pooledConsumeOutputEvents)
+        .replace(generatedConsumeOutputEventsConstruction, pooledConsumeOutputEventsConstruction)
+        .replace(generatedNodeMessageDelivery, unbatchingNodeMessageDelivery);
+}
