@@ -456,8 +456,18 @@ namespace wt
         input stream float32 previewInputRight;
         input stream float32 previewOutputLeft;
         input stream float32 previewOutputRight;
+        // Demand gate: nonzero while any scope view is open (see
+        // ui/shared/analyzer-activity.ts).
+        input event int32 analyzerActivityIn;
 
         output event DistortionScopeFrame distortionScope;
+
+        bool analyzerActive = false;
+
+        event analyzerActivityIn (int32 activity)
+        {
+            analyzerActive = activity != 0;
+        }
 
         let hopSize = int32 (
             std::intrinsics::max (1.0f, float32 (processor.frequency) / distortionScopeFramesPerSecond)
@@ -524,6 +534,17 @@ namespace wt
         {
             loop
             {
+                // Demand-driven: capture and analyze only while the scope
+                // view is open, and refill the window from fresh signal when
+                // it reopens. Purely observational — audio is elsewhere.
+                if (! analyzerActive)
+                {
+                    warmupFrames = 0;
+                    framesUntilEmit = hopSize;
+                    advance();
+                    continue;
+                }
+
                 pushSample (
                     previewInputLeft,
                     previewInputRight,
@@ -580,7 +601,17 @@ namespace wt
         input stream float32 previewOutputLeft;
         input stream float32 previewOutputRight;
 
+        // Demand gate: nonzero while any history view is open (see
+        // ui/shared/analyzer-activity.ts).
+        input event int32 analyzerActivityIn;
         output event DistortionHistoryFrame distortionHistory;
+
+        bool analyzerActive = false;
+
+        event analyzerActivityIn (int32 activity)
+        {
+            analyzerActive = activity != 0;
+        }
 
         let historyBinFrames = int32 (std::intrinsics::max (
             1.0f,
@@ -715,6 +746,23 @@ namespace wt
 
             loop
             {
+                // Demand-driven like the scope above: bin and emit only
+                // while the history view is open; a reopened view rebuilds
+                // its horizon from fresh signal.
+                if (! analyzerActive)
+                {
+                    if (validBinCount != 0)
+                    {
+                        binWriteIndex = 0;
+                        validBinCount = 0;
+                        framesUntilEmit = emitHopFrames;
+                        resetCurrentBin();
+                    }
+
+                    advance();
+                    continue;
+                }
+
                 pushSample (
                     previewInputLeft,
                     previewInputRight,

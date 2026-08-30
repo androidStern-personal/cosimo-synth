@@ -10,6 +10,7 @@ import {
     useState,
     type ReactNode,
 } from "react";
+import { acquireAnalyzerActivity } from "./analyzer-activity";
 import {
     createPatchConnectionResourceClient,
     type ResourceClient,
@@ -423,6 +424,9 @@ export function usePatchVisualEndpoint<TValue = unknown>(
         };
 
         patchConnection.addEndpointListener?.(endpointID, listener);
+        // Analyzer endpoints are demand-driven in the DSP; observing one
+        // wakes its analyzer for exactly as long as this listener lives.
+        const releaseAnalyzerActivity = acquireAnalyzerActivity(patchConnection, endpointID);
 
         return () => {
             listening = false;
@@ -431,6 +435,7 @@ export function usePatchVisualEndpoint<TValue = unknown>(
                 window.cancelAnimationFrame(animationFrameRef.current);
             }
             animationFrameRef.current = null;
+            releaseAnalyzerActivity?.();
             patchConnection.removeEndpointListener?.(endpointID, listener);
         };
     }, [active, endpointID, patchConnection]);

@@ -1378,6 +1378,13 @@ graph WavetableSynth [[ main ]]
     // automation slot. See wt::TempoMonitor.
     input event std::timeline::Tempo tempo;
     input event int32 engineStatusRequest;
+    // Which analyzer views are open: nonzero while at least one view of
+    // that analyzer is. The diagnostic analyzers only capture and emit
+    // while their view is open; a UI that never sends these leaves them
+    // asleep. Runtime-only UI state, never persisted, no parameter purpose.
+    input event int32 filterSpectrumActivity;
+    input event int32 distortionScopeActivity;
+    input event int32 distortionHistoryActivity;
     output event wt::OscillatorWavetableUploadAck wavetableUploadAck;
     output event wt::OscillatorWavetableMipRequest wavetableMipRequest;
     output event int32 wavetablePrewarmNotification;
@@ -1591,6 +1598,9 @@ graph WavetableSynth [[ main ]]
         sharedEngine.trackingPitchHzOut -> rack.trackingPitchHzIn;
         tempo -> tempoMonitor.tempoIn;
         engineStatusRequest -> engineStatusMonitor.syncIn;
+        filterSpectrumActivity -> filterSpectrumAnalyzer.analyzerActivityIn;
+        distortionScopeActivity -> distortionScopeAnalyzer.analyzerActivityIn;
+        distortionHistoryActivity -> distortionHistoryAnalyzer.analyzerActivityIn;
         tempoMonitor.bpmOut -> rack.tempoBpmIn, engineStatusMonitor.tempoBpmIn;
         sharedEngine.rackModOut -> rack.rackModIn;
         // wt::DistortionBus now lives inside the rack, so the two analyzers read the
