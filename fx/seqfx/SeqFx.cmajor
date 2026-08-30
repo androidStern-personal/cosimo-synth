@@ -752,12 +752,16 @@ processor SeqFx [[ main ]]
 
     int32 selectedPatternIndex;
     int32 currentStep;
+    // The cumulative ordinal owns swing polarity; currentStep is only its
+    // projection into the authored loop.
+    int64 currentStepOrdinal;
     float64 stepProgressFrames;
     float64 currentStepFrames = 1.0;
     bool internalRunning;
     bool hostRunning;
     float32 hostBpm = 120.0f;
     float64 hostQuarterNote;
+    bool hostTempoPending;
     bool resetRequested;
     bool processingResetRequested;
     bool hostPositionPending;
@@ -1456,6 +1460,7 @@ processor SeqFx [[ main ]]
     event tempoIn (std::timeline::Tempo tempo)
     {
         hostBpm = seqfx::clampFloat (tempo.bpm, 20.0f, 300.0f);
+        hostTempoPending = true;
         hasHostPositionAnchor = false;
     }
 
@@ -1472,6 +1477,13 @@ processor SeqFx [[ main ]]
 
     event positionIn (std::timeline::Position position)
     {
+        if (hasHostPositionAnchor
+            && position.frameIndex == lastHostFrameIndex
+            && std::intrinsics::abs (position.quarterNote - lastHostQuarterNote) <= 0.000000001)
+        {
+            return;
+        }
+
         if (hasHostPositionAnchor)
         {
             let elapsedFrames = renderedFrameCounter - renderedFrameAtLastHostPosition;
@@ -1547,17 +1559,48 @@ processor SeqFx [[ main ]]
         return processor.frequency * (60.0 / float64 (bpm));
     }
 
-    float64 stepDurationFramesForStep (int32 step)
+    float64 stepDurationQuarterNotesForOrdinal (int64 stepOrdinal)
     {
-        let base = framesPerQuarter() * stepQuarterNotes();
-        let start = resolveLoopStart();
-        let relativeStep = std::intrinsics::max (0, step - start);
+        let base = stepQuarterNotes();
         let swingAmount = float64 (seqfx::clampFloat (swing, 0.0f, 0.45f));
 
-        if ((relativeStep % 2) == 0)
-            return std::intrinsics::max (16.0, base * (1.0 - swingAmount));
+        if ((stepOrdinal % 2) == 0)
+            return base * (1.0 - swingAmount);
 
-        return std::intrinsics::max (16.0, base * (1.0 + swingAmount));
+        return base * (1.0 + swingAmount);
+    }
+
+    float64 stepDurationFramesForOrdinal (int64 stepOrdinal)
+    {
+        return std::intrinsics::max (
+            16.0,
+            framesPerQuarter() * stepDurationQuarterNotesForOrdinal (stepOrdinal)
+        );
+    }
+
+    int32 loopStepForOrdinal (int64 stepOrdinal)
+    {
+        let length = resolveLoopLength();
+        var relative = int32 (stepOrdinal % int64 (length));
+
+        if (relative < 0)
+            relative += length;
+
+        return resolveLoopStart() + relative;
+    }
+
+    int64 ordinalForCurrentLoopStep (int32 step)
+    {
+        let start = resolveLoopStart();
+        let length = resolveLoopLength();
+        let targetRelative = seqfx::clampInt (step - start, 0, length - 1);
+        let currentRelative = currentStep - start;
+        var stepsBack = currentRelative - targetRelative;
+
+        if (stepsBack < 0)
+            stepsBack += length;
+
+        return currentStepOrdinal - int64 (stepsBack);
     }
 
     int32 nextStepInLoop (int32 step)
@@ -1595,9 +1638,10 @@ processor SeqFx [[ main ]]
 
     void resetClockToLoopStart()
     {
+        currentStepOrdinal = 0;
         currentStep = resolveLoopStart();
         stepProgressFrames = 0.0;
-        currentStepFrames = stepDurationFramesForStep (currentStep);
+        currentStepFrames = stepDurationFramesForOrdinal (currentStepOrdinal);
     }
 
     void refreshControlTransitions()
@@ -1655,21 +1699,41 @@ processor SeqFx [[ main ]]
 
     void syncHostStepFromQuarterNote()
     {
-        let start = resolveLoopStart();
-        let length = resolveLoopLength();
-        let absoluteStep = int64 (std::intrinsics::floor (hostQuarterNote / stepQuarterNotes()));
-        var relative = int32 (absoluteStep % int64 (length));
+        let shortStepQuarterNotes = stepDurationQuarterNotesForOrdinal (0);
+        let longStepQuarterNotes = stepDurationQuarterNotesForOrdinal (1);
+        let pairQuarterNotes = shortStepQuarterNotes + longStepQuarterNotes;
+        let pairOrdinal = int64 (std::intrinsics::floor (hostQuarterNote / pairQuarterNotes));
+        let pairStartQuarterNote = float64 (pairOrdinal) * pairQuarterNotes;
+        let phaseInPair = hostQuarterNote - pairStartQuarterNote;
+        var nextOrdinal = pairOrdinal * 2;
+        var stepStartQuarterNote = pairStartQuarterNote;
+        var stepDurationQuarterNotes = shortStepQuarterNotes;
 
-        if (relative < 0)
-            relative += length;
-
-        let nextStep = start + relative;
-
-        if (nextStep != currentStep)
+        if (phaseInPair >= shortStepQuarterNotes)
         {
-            currentStep = nextStep;
-            stepProgressFrames = 0.0;
-            currentStepFrames = stepDurationFramesForStep (currentStep);
+            nextOrdinal += 1;
+            stepStartQuarterNote += shortStepQuarterNotes;
+            stepDurationQuarterNotes = longStepQuarterNotes;
+        }
+
+        let nextStep = loopStepForOrdinal (nextOrdinal);
+        let stepChanged = nextOrdinal != currentStepOrdinal;
+        currentStepOrdinal = nextOrdinal;
+        currentStep = nextStep;
+        currentStepFrames = std::intrinsics::max (
+            16.0,
+            stepDurationQuarterNotes * framesPerQuarter()
+        );
+        stepProgressFrames = std::intrinsics::min (
+            currentStepFrames,
+            std::intrinsics::max (
+                0.0,
+                (hostQuarterNote - stepStartQuarterNote) * framesPerQuarter()
+            )
+        );
+
+        if (stepChanged)
+        {
             releaseTimeEffects();
             relatchingFromPatternUpload = false;
             needsStepLatch = true;
@@ -1923,6 +1987,7 @@ processor SeqFx [[ main ]]
     {
         var sum = 0.0;
         var cursor = step;
+        var cursorOrdinal = ordinalForCurrentLoopStep (step);
         let effectType = selectedEffectForStep (lane, step);
 
         for (int32 offset = 0; offset < seqfx::stepCount; ++offset)
@@ -1935,8 +2000,9 @@ processor SeqFx [[ main ]]
             if (offset > 0 && triggerSteps[lane, cursorIndex])
                 break;
 
-            sum += stepDurationFramesForStep (cursor);
+            sum += stepDurationFramesForOrdinal (cursorOrdinal);
             cursor = nextStepInLoop (cursor);
+            cursorOrdinal += 1;
 
             if (cursor == step)
                 break;
@@ -1972,6 +2038,7 @@ processor SeqFx [[ main ]]
     {
         var sum = 0.0;
         var cursor = startStep;
+        var cursorOrdinal = ordinalForCurrentLoopStep (startStep);
         let effectType = selectedEffectForStep (lane, startStep);
 
         for (int32 offset = 0; offset < seqfx::stepCount; ++offset)
@@ -1987,8 +2054,9 @@ processor SeqFx [[ main ]]
             if (offset > 0 && triggerSteps[lane, cursorIndex])
                 break;
 
-            sum += stepDurationFramesForStep (cursor);
+            sum += stepDurationFramesForOrdinal (cursorOrdinal);
             cursor = nextStepInLoop (cursor);
+            cursorOrdinal += 1;
 
             if (cursor == startStep)
                 break;
@@ -2759,7 +2827,7 @@ processor SeqFx [[ main ]]
         }
 
         if (reverseDivision[lane] == 4)
-            return float32 (stepDurationFramesForStep (currentStep));
+            return float32 (stepDurationFramesForOrdinal (currentStepOrdinal));
 
         return float32 (framesPerQuarter() * reverseDivisionQuarterNotes (reverseDivision[lane]));
     }
@@ -5880,8 +5948,9 @@ processor SeqFx [[ main ]]
             return;
 
         stepProgressFrames -= currentStepFrames;
-        currentStep = nextStepInLoop (currentStep);
-        currentStepFrames = stepDurationFramesForStep (currentStep);
+        currentStepOrdinal += 1;
+        currentStep = loopStepForOrdinal (currentStepOrdinal);
+        currentStepFrames = stepDurationFramesForOrdinal (currentStepOrdinal);
         latchStep();
     }
 
@@ -5937,6 +6006,25 @@ processor SeqFx [[ main ]]
             if (processingResetRequested)
                 resetProcessingState();
 
+            if (hostTempoPending)
+            {
+                if (resolveClockMode() == 0)
+                {
+                    let priorStepFraction = stepProgressFrames
+                        / std::intrinsics::max (1.0, currentStepFrames);
+                    currentStepFrames = std::intrinsics::max (
+                        16.0,
+                        stepDurationQuarterNotesForOrdinal (currentStepOrdinal) * framesPerQuarter()
+                    );
+                    stepProgressFrames = std::intrinsics::min (
+                        1.0,
+                        std::intrinsics::max (0.0, priorStepFraction)
+                    ) * currentStepFrames;
+                }
+
+                hostTempoPending = false;
+            }
+
             if (hostPositionPending)
             {
                 if (resolveClockMode() == 0)
@@ -5947,7 +6035,7 @@ processor SeqFx [[ main ]]
 
             if (needsStepLatch)
             {
-                currentStepFrames = stepDurationFramesForStep (currentStep);
+                currentStepFrames = stepDurationFramesForOrdinal (currentStepOrdinal);
                 latchStep();
                 relatchingFromPatternUpload = false;
                 needsStepLatch = false;

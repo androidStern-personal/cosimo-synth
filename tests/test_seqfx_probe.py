@@ -672,6 +672,141 @@ def test_host_clock_rate_uses_quarter_note_position_for_step_index(
     assert 6_000 <= first_step_one_frame <= 7_800
 
 
+@pytest.mark.parametrize("seek_frame", [None, 1_599], ids=["start", "seek"])
+def test_host_swing_mid_step_position_preserves_fractional_progress(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    seek_frame: int | None,
+) -> None:
+    upload = _empty_upload()
+    schedule = _base_schedule(upload, clock_mode=0.0, rate=1.0, swing=0.25)
+    schedule[0].extend([
+        ["event", "tempoIn", {"bpm": 120.0}],
+        ["event", "transportStateIn", {"flags": 1}],
+        [
+            "event",
+            "positionIn",
+            {
+                "frameIndex": 0,
+                "quarterNote": 0.09375 if seek_frame is None else 0.0,
+                "barStartQuarterNote": 0.0,
+            },
+        ],
+    ])
+    if seek_frame is not None:
+        schedule[seek_frame] = [[
+            "event",
+            "positionIn",
+            {"frameIndex": seek_frame, "quarterNote": 0.09375, "barStartQuarterNote": 0.0},
+        ]]
+
+    _output, monitors = _render_with_monitor_events(
+        generated_runtime,
+        tmp_path,
+        np.zeros((2_400, 2), dtype=np.float32),
+        schedule,
+    )
+
+    matching = [
+        monitor
+        for monitor in monitors
+        if int(monitor["value"]["event"]["stepIndex"]) == 0
+        and (seek_frame is None or int(monitor["frame"]) > seek_frame)
+    ]
+    assert matching, monitors[:8]
+    first = matching[0]["value"]["event"]
+    assert 0.49 <= float(first["stepProgress"]) <= 0.51
+
+
+def test_host_repeated_position_preserves_accumulated_fractional_progress(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    repeated_frame = 1_599
+    position = {"frameIndex": 0, "quarterNote": 0.0, "barStartQuarterNote": 0.0}
+    schedule = _base_schedule(upload, clock_mode=0.0, rate=1.0, swing=0.25)
+    schedule[0].extend([
+        ["event", "tempoIn", {"bpm": 120.0}],
+        ["event", "transportStateIn", {"flags": 1}],
+        ["event", "positionIn", position],
+    ])
+    schedule[repeated_frame] = [["event", "positionIn", position]]
+
+    _output, monitors = _render_with_monitor_events(
+        generated_runtime,
+        tmp_path,
+        np.zeros((2_400, 2), dtype=np.float32),
+        schedule,
+    )
+
+    matching = [
+        monitor["value"]["event"]
+        for monitor in monitors
+        if int(monitor["frame"]) > repeated_frame
+        and int(monitor["value"]["event"]["stepIndex"]) == 0
+    ]
+    assert matching, monitors[:8]
+    assert 0.34 <= float(matching[0]["stepProgress"]) <= 0.38
+
+
+def test_host_tempo_change_preserves_the_current_swung_step_fraction(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    schedule = _base_schedule(upload, clock_mode=0.0, rate=1.0, swing=0.25)
+    schedule[0].extend([
+        ["event", "tempoIn", {"bpm": 120.0}],
+        ["event", "transportStateIn", {"flags": 1}],
+        [
+            "event",
+            "positionIn",
+            {"frameIndex": 0, "quarterNote": 0.09375, "barStartQuarterNote": 0.0},
+        ],
+    ])
+    schedule[1_000] = [["event", "tempoIn", {"bpm": 60.0}]]
+
+    _output, monitors = _render_with_monitor_events(
+        generated_runtime,
+        tmp_path,
+        np.zeros((5_000, 2), dtype=np.float32),
+        schedule,
+    )
+
+    first_step_one_frame = _first_monitor_frame_for_step(monitors, 1)
+    assert 3_500 <= first_step_one_frame <= 4_050
+
+
+def test_swing_keeps_cumulative_polarity_across_an_odd_length_loop(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _output, monitors = _render_with_monitor_events(
+        generated_runtime,
+        tmp_path,
+        np.zeros((26_000, 2), dtype=np.float32),
+        _base_schedule(
+            upload,
+            clock_mode=1.0,
+            rate=1.0,
+            swing=0.25,
+            loop_start=0.0,
+            loop_length=3.0,
+        ),
+    )
+
+    step_one_after_wrap = [
+        int(monitor["frame"])
+        for monitor in monitors
+        if int(monitor["frame"]) >= 18_000
+        and int(monitor["value"]["event"]["stepIndex"]) == 1
+    ]
+    assert step_one_after_wrap, monitors[-8:]
+    assert 24_000 <= step_one_after_wrap[0] <= 24_600
+
+
 def test_swing_changes_reported_step_durations_without_changing_rate_label(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
