@@ -27,6 +27,7 @@ EFFECT_STUTTER = 4
 EFFECT_PITCH = 5
 EFFECT_COMB = 6
 EFFECT_RING = 7
+EFFECT_REVERSE = 8
 EFFECT_TALK_BOX = 9
 EFFECT_VIBRO = 10
 EFFECT_FLANGE = 11
@@ -4119,6 +4120,348 @@ def test_pitch_four_chain_extremes_remain_faster_than_the_generous_js_budget(
     source = _complex_signal(STEP_FRAMES * 10) * 0.3
     started = perf_counter()
     output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+    elapsed = perf_counter() - started
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
+    assert elapsed < 2.0, f"four-chain generated-JS render took {elapsed:.3f}s for {source.shape[0] / SAMPLE_RATE:.3f}s audio"
+
+
+def _render_reverse(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    input_audio: np.ndarray,
+    *,
+    division: int = 4,
+    crossfade: float = 0.0,
+    timing_mode: int = 0,
+    free_ms: float = 250.0,
+    decay: float = 1.0,
+    first_step: int = 3,
+    active_steps: int = 4,
+    mix: float = 1.0,
+    sample_rate: int = SAMPLE_RATE,
+) -> np.ndarray:
+    upload = _empty_upload()
+    params = [float(division), crossfade, float(timing_mode), free_ms, decay]
+    for step in range(first_step, min(STEP_COUNT, first_step + active_steps)):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == first_step),
+            mix=mix,
+            effect_type=EFFECT_REVERSE,
+            params=params,
+        )
+    return _render(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(upload),
+        sample_rate=sample_rate,
+    )
+
+
+def test_reverse_plays_the_immediately_preceding_cell_backward_without_future_audio(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    frames = STEP_FRAMES * 8
+    trigger_frame = STEP_FRAMES * 3
+    source = np.zeros((frames, 2), dtype=np.float32)
+    preceding = np.linspace(-0.8, 0.8, STEP_FRAMES, dtype=np.float32)
+    source[trigger_frame - STEP_FRAMES : trigger_frame, 0] = preceding
+    source[trigger_frame - STEP_FRAMES : trigger_frame, 1] = preceding
+    source[trigger_frame + 500] = 0.95
+
+    output = _render_reverse(
+        generated_runtime,
+        tmp_path,
+        source,
+        division=4,
+        crossfade=0.0,
+        first_step=3,
+        active_steps=2,
+    )
+
+    window = slice(trigger_frame + 128, trigger_frame + STEP_FRAMES - 128)
+    expected = preceding[::-1][128 : STEP_FRAMES - 128]
+    correlation = float(np.corrcoef(output[window, 0], expected)[0, 1])
+    assert correlation > 0.995
+    assert float(np.max(np.abs(output[trigger_frame + 128 : trigger_frame + 480, 0]))) < 0.9
+
+
+def test_reverse_rolls_forward_to_fresh_lookback_windows_while_the_block_stays_active(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    frames = STEP_FRAMES * 10
+    trigger_step = 3
+    source = np.zeros((frames, 2), dtype=np.float32)
+    values = [0.12, 0.36, 0.68, -0.24]
+    for offset, value in enumerate(values):
+        end = STEP_FRAMES * (trigger_step + offset)
+        source[end - STEP_FRAMES : end] = value
+
+    output = _render_reverse(
+        generated_runtime,
+        tmp_path,
+        source,
+        division=4,
+        crossfade=0.0,
+        first_step=trigger_step,
+        active_steps=5,
+    )
+
+    measured = []
+    for offset in range(3):
+        start = STEP_FRAMES * (trigger_step + offset) + 160
+        measured.append(float(np.mean(output[start : start + STEP_FRAMES - 320, 0])))
+    np.testing.assert_allclose(measured, values[:3], atol=0.015, rtol=0.0)
+
+
+def test_reverse_proportional_crossfade_smooths_rolling_window_boundaries(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    frames = STEP_FRAMES * 9
+    trigger_step = 3
+    source = np.zeros((frames, 2), dtype=np.float32)
+    for step in range(frames // STEP_FRAMES):
+        source[step * STEP_FRAMES : (step + 1) * STEP_FRAMES] = 0.75 if step % 2 == 0 else -0.75
+
+    (tmp_path / "hard").mkdir()
+    (tmp_path / "smooth").mkdir()
+    hard = _render_reverse(
+        generated_runtime,
+        tmp_path / "hard",
+        source,
+        division=4,
+        crossfade=0.0,
+        first_step=trigger_step,
+        active_steps=4,
+    )
+    smooth = _render_reverse(
+        generated_runtime,
+        tmp_path / "smooth",
+        source,
+        division=4,
+        crossfade=0.2,
+        first_step=trigger_step,
+        active_steps=4,
+    )
+    boundary = STEP_FRAMES * (trigger_step + 1)
+    hard_jump = float(np.max(np.abs(np.diff(hard[boundary - 8 : boundary + 8, 0]))))
+    smooth_jump = float(np.max(np.abs(np.diff(smooth[boundary - 8 : boundary + 8, 0]))))
+
+    assert hard_jump > 1.0
+    assert smooth_jump < hard_jump * 0.1
+
+
+def test_reverse_free_length_and_decay_are_bounded_to_the_authored_block(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    frames = STEP_FRAMES * 12
+    trigger_step = 4
+    trigger_frame = STEP_FRAMES * trigger_step
+    source = _complex_signal(frames) * 0.35
+    output = _render_reverse(
+        generated_runtime,
+        tmp_path,
+        source,
+        timing_mode=1,
+        free_ms=125.0,
+        crossfade=0.1,
+        decay=0.5,
+        first_step=trigger_step,
+        active_steps=4,
+    )
+
+    early_delta = _rms(output[trigger_frame + 256 : trigger_frame + 2_000, 0] - source[trigger_frame + 256 : trigger_frame + 2_000, 0])
+    after_decay = STEP_FRAMES * (trigger_step + 2) + 512
+    late_delta = _rms(output[after_decay : after_decay + 1_500, 0] - source[after_decay : after_decay + 1_500, 0])
+    block_end = STEP_FRAMES * (trigger_step + 4)
+
+    assert early_delta > 0.05
+    assert late_delta < early_delta * 0.08
+    np.testing.assert_allclose(output[block_end + 160 :], source[block_end + 160 :], atol=2.0e-5, rtol=0.0)
+
+
+def test_reverse_free_length_reads_the_requested_125_ms_window(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    frames = STEP_FRAMES * 10
+    trigger_frame = STEP_FRAMES * 4
+    source = np.zeros((frames, 2), dtype=np.float32)
+    captured = np.linspace(-0.7, 0.7, STEP_FRAMES * 2, dtype=np.float32)
+    source[trigger_frame - captured.size : trigger_frame, 0] = captured
+    source[trigger_frame - captured.size : trigger_frame, 1] = captured
+
+    output = _render_reverse(
+        generated_runtime,
+        tmp_path,
+        source,
+        timing_mode=1,
+        free_ms=125.0,
+        crossfade=0.0,
+        first_step=4,
+        active_steps=3,
+    )
+    window = slice(trigger_frame + 160, trigger_frame + captured.size - 160)
+    expected = captured[::-1][160 : captured.size - 160]
+
+    assert float(np.corrcoef(output[window, 0], expected)[0, 1]) > 0.995
+
+
+def test_reverse_one_cell_length_tracks_host_sample_rate_while_history_stays_fixed_48k(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    sample_rate = 96_000
+    step_frames = 6_000
+    trigger_frame = step_frames * 3
+    source = np.zeros((step_frames * 7, 2), dtype=np.float32)
+    preceding = np.linspace(-0.75, 0.75, step_frames, dtype=np.float32)
+    source[trigger_frame - step_frames : trigger_frame, 0] = preceding
+    source[trigger_frame - step_frames : trigger_frame, 1] = preceding
+    output = _render_reverse(
+        generated_runtime,
+        tmp_path,
+        source,
+        division=4,
+        crossfade=0.0,
+        first_step=3,
+        active_steps=2,
+        sample_rate=sample_rate,
+    )
+    window = slice(trigger_frame + 256, trigger_frame + step_frames - 256)
+    expected = preceding[::-1][256 : step_frames - 256]
+
+    assert float(np.corrcoef(output[window, 0], expected)[0, 1]) > 0.995
+
+
+def test_reverse_cold_start_uses_dry_audio_until_a_complete_window_exists(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _complex_signal(STEP_FRAMES * 6) * 0.3
+    output = _render_reverse(
+        generated_runtime,
+        tmp_path,
+        source,
+        division=4,
+        crossfade=0.08,
+        first_step=0,
+        active_steps=5,
+    )
+
+    np.testing.assert_array_equal(output[: STEP_FRAMES - 8], source[: STEP_FRAMES - 8])
+    assert _rms(output[STEP_FRAMES + 256 : STEP_FRAMES * 2, 0] - source[STEP_FRAMES + 256 : STEP_FRAMES * 2, 0]) > 0.03
+
+
+def test_reverse_retrigger_and_third_trigger_remain_bounded_and_click_screened(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = [4.0, 0.2, 0.0, 250.0, 1.0]
+    for step in range(3, 8):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step in (3, 4, 5)),
+            effect_type=EFFECT_REVERSE,
+            params=params,
+        )
+    source = _complex_signal(STEP_FRAMES * 10) * 0.3
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 1.25
+    for boundary_step in (3, 4, 5, 8):
+        assert _largest_boundary_jump(output[:, 0], boundary_step) < 0.35
+
+
+def test_reverse_aux_sweeps_only_crossfade_and_decay_without_runaway(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = [4.0, 0.0, 0.0, 250.0, 1.0]
+    for step in range(3, 9):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 3),
+            effect_type=EFFECT_REVERSE,
+            params=params,
+        )
+    _set_aux(upload, lane=LANE_FILTER, step=3, param=1, end=0.25, shape=0.0)
+    _set_aux(upload, lane=LANE_FILTER, step=3, param=4, end=0.15, shape=0.0)
+    source = _complex_signal(STEP_FRAMES * 11) * 0.35
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+
+    assert upload["auxEnabled"][LANE_FILTER][3][0] is False
+    assert upload["auxEnabled"][LANE_FILTER][3][2] is False
+    assert upload["auxEnabled"][LANE_FILTER][3][3] is False
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 1.25
+
+
+def test_reverse_authoritative_reset_invalidates_warm_lookback_history(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = [4.0, 0.1, 0.0, 250.0, 1.0]
+    for step in range(4, 9):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 4),
+            effect_type=EFFECT_REVERSE,
+            params=params,
+        )
+    source = np.zeros((STEP_FRAMES * 11, 2), dtype=np.float32)
+    source[STEP_FRAMES * 3 : STEP_FRAMES * 4] = _complex_signal(STEP_FRAMES) * 0.5
+    (tmp_path / "baseline").mkdir()
+    (tmp_path / "reset").mkdir()
+    baseline = _render(generated_runtime, tmp_path / "baseline", source, _base_schedule(upload))
+    reset_schedule = _base_schedule(upload)
+    reset_frame = STEP_FRAMES * 4 + 400
+    reset_schedule[reset_frame] = [["event", "internalReset", 1]]
+    reset = _render(generated_runtime, tmp_path / "reset", source, reset_schedule)
+    tail = slice(reset_frame + 160, reset_frame + 2_000)
+
+    assert _rms(baseline[tail]) > 0.01
+    assert _rms(reset[tail]) < _rms(baseline[tail]) * 0.02
+
+
+def test_reverse_four_chain_maximum_windows_remain_within_the_generated_js_budget(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = [3.0, 0.25, 0.0, 4000.0, 0.0]
+    for lane in range(LANE_COUNT):
+        for step in range(4, 9):
+            _activate_step(
+                upload,
+                lane=lane,
+                step=step,
+                trigger=(step == 4),
+                effect_type=EFFECT_REVERSE,
+                params=params,
+            )
+    source = _complex_signal(STEP_FRAMES * 11) * 0.25
+    started = perf_counter()
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(upload, manual_bpm=20.0))
     elapsed = perf_counter() - started
 
     assert np.all(np.isfinite(output))

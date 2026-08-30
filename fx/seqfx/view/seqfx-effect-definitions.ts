@@ -246,11 +246,23 @@ const definitions = [
         name: "Reverse",
         shortName: "REV",
         fontaudioIcon: "fad-backward",
-        lifecycle: "gesture",
+        lifecycle: "captured",
         parameters: [
-            parameter("windowSeconds", "Lookback", 0.02, 4, 0.25, 0.001, { scale: "log", latch: "trigger" }),
-            parameter("crossfade", "Crossfade", 0.005, 0.2, 0.04, 0.001, { unit: "%" }),
+            parameter("division", "Length", 0, 4, 4, 1, {
+                latch: "trigger",
+                auxEligible: false,
+                integer: true,
+                options: ["1/32", "1/16", "1/8", "1/4", "1 Cell"],
+            }),
+            parameter("crossfade", "Crossfade", 0, 0.25, 0.08, 0.001, { unit: "%" }),
             parameter("timingMode", "Timing", 0, 1, 0, 1, { latch: "trigger", auxEligible: false, integer: true, options: ["Sync", "Free"] }),
+            parameter("freeMs", "Free Length", 20, 4_000, 250, 1, {
+                unit: "ms",
+                scale: "log",
+                latch: "trigger",
+                auxEligible: false,
+            }),
+            parameter("decay", "Decay", 0, 1, 1, 0.01, { unit: "%" }),
         ],
     },
     {

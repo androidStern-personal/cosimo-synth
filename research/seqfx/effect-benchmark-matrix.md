@@ -29,7 +29,7 @@ live-touch workflow are not being cloned.
 | Pitch | Shift harmonic pitch without changing authored block rate | Semitones, grain size, jitter, spread, mix | Captured/streaming | Waveform-aligned complementary grains reading warm history; semitone snap with smooth aux path | Latency, transient smear, grain beating, phase resets |
 | Comb | Repeated peaks/notches plus resonant material color | Tune/cutoff, polarity, mix; advanced feedback/decay/damping | Modulated delay/tail | Conventional neutral core plus an evidence-selected dispersive/vector extension | Feedback runaway, tuning error, mono cancellation, generic metallic sound |
 | Ring | Multiply audio by an internal carrier | Frequency, waveform, bias/rectify, spread, mix | Gated | Phase-continuous carrier, documented stereo detune, and free LFO motion; tempo motion remains available through block Aux | Aliasing from carrier shapes, DC from bias, abrupt phase reset |
-| Reverse | Play a finite buffered region backward | Window, sync/free, crossfade, mix | Captured | Reverse already recorded lookback audio at trigger, so host latency remains zero | Unavailable history, wrong-region surprise, boundary pops, old audio after seek |
+| Reverse | Play finite buffered sections backward | Window, sync/free, proportional crossfade, within-step decay, mix | Captured | Roll through already-recorded lookback sections at zero host latency; return dry at block exit; cap high-quality windows at four seconds | Unavailable history, wrong-region surprise, boundary pops, old audio after seek |
 | Talk Box | Vowel-like formant coloration | Vowel selection/morph, Q, lows, highs | Gated | Two vowel endpoints plus morph; formant filter, not sidechain vocoder | Unstable high-Q filters, coefficient zippering, literal vowel mapping |
 | Vibro | Periodic pitch wobble without dry-path combing | Sync/free rate, depth, waveform, spread | Modulated delay | Wet variable-delay modulation; no feedback; separate ID 10 | Interpolation noise, insufficient slow-rate history, mono loss, accidental chorus/flange identity |
 | Flange | Short modulated delay mixed with dry for moving notches | Delay, depth, sync/free rate, feedback, spread, polarity, mix | Modulated delay | Separate ID 11; canonical equal direct/delayed target; Scroll omitted without a listening/CPU win | Feedback instability, comb cancellation, parameter zippering |
@@ -80,18 +80,26 @@ timing remain release gates.
 
 SeqFX chooses zero-added-host-latency lookback reversal:
 
-- `Window` names the already-recorded duration ending at block start;
+- `Length` names an already-recorded section immediately behind the current
+  read point;
 - the first output at trigger is the newest sample of that lookback, then the
   head runs backward;
-- missing startup history is silence under a complementary fade, never stale
-  memory;
-- one-shot playback may outlive a short block until its window completes;
-- repeated triggers allocate/crossfade bounded voices rather than overwrite;
+- a long active block rolls into fresh lookback sections rather than freezing
+  and repeating its first source;
+- cold start remains dry until one complete requested section exists;
+- block exit returns dry through the common transition and has no tail;
+- rolling boundaries and repeated triggers use two bounded crossfading voices
+  rather than overwriting a live read head;
+- `Decay` chooses how early within the authored block Reverse fades back to dry;
+- sync lengths stop at 1/4 note plus 1 Cell and Free Length stops at 4000 ms,
+  because the selected 48 kHz history cannot honestly retain longer windows at
+  every tempo;
 - fixed lookahead/capture-then-play is rejected because it would delay the whole
   plugin or make the first authored cell unexpectedly silent.
 
 This source-region choice is a SeqFX product decision and must be written in the
-inspector and user guide.
+inspector and user guide. Production evidence and rejected alternatives are in
+`reverse-decision.md`.
 
 ### Comb, Vibro, Flange
 
@@ -179,10 +187,14 @@ SeqFX's precise Spread and Motion depths are engineering inferences frozen in
 
 ### Reverse (ID 8)
 
-- Window: 1/32–2 bars sync or 20–4000 ms free.
-- Crossfade: 0.5–20% of window.
-- Speed: 0.5× / 1× / 2×, stepped only if listening proves the options useful;
-  default 1× and initial implementation may omit the control.
+- Length: 1/32 / 1/16 / 1/8 / 1/4 / 1 Cell in Sync mode.
+- Crossfade: 0–25% of each reversed section, Aux eligible.
+- Timing: Sync / Free, trigger-latched.
+- Free Length: 20–4000 ms, trigger-latched.
+- Decay: 0–100% of the authored block before Reverse has returned to dry, Aux
+  eligible; 100% keeps Reverse active for the complete block.
+- Playback speed is fixed at -1 so Reverse remains distinct from Pitch and
+  Stutter.
 
 ### Talk Box (ID 9)
 

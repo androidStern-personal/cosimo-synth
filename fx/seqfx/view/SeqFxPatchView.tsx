@@ -228,6 +228,7 @@ const EFFECT_OPTIONS = [
     SEQFX_EFFECT_TYPES.pitch,
     SEQFX_EFFECT_TYPES.comb,
     SEQFX_EFFECT_TYPES.ring,
+    SEQFX_EFFECT_TYPES.reverse,
     SEQFX_EFFECT_TYPES.talkBox,
     SEQFX_EFFECT_TYPES.vibro,
     SEQFX_EFFECT_TYPES.flange,
@@ -371,6 +372,8 @@ const VIBRO_ICON_PATH =
     "M35.996 208c-2.207 0-3.077-1.532-1.935-3.434l91.878-153.132c1.138-1.896 2.98-1.902 4.122 0l91.878 153.132c1.138 1.896.272 3.434-1.935 3.434h-8.008c-2.207 0-4.922-1.54-6.054-3.421L130.058 78.42c-1.137-1.89-2.984-1.881-4.116 0L50.058 204.58c-1.138 1.889-3.848 3.42-6.054 3.42h-8.008z";
 const FLANGE_ICON_PATH =
     "M116.589 182.742l-7.405 20.346a4 4 0 0 1-5.125 2.396l-7.525-2.738a4 4 0 0 1-2.386-5.13l7.435-20.427C83.963 167.623 72 148.959 72 127.5 72 96.296 97.296 71 128.5 71c3.877 0 7.663.39 11.32 1.134l6.996-19.222a4 4 0 0 1 5.125-2.396l7.525 2.738a4 4 0 0 1 2.386 5.13l-6.968 19.142C172.796 87.002 185 105.826 185 127.5c0 31.204-25.296 56.5-56.5 56.5-4.086 0-8.071-.434-11.911-1.258zm5.173-14.213A41.32 41.32 0 0 0 128 169c22.644 0 41-18.356 41-41 0-14.855-7.9-27.864-19.727-35.056l-27.51 75.585zm-15.035-5.473l27.51-75.585A41.32 41.32 0 0 0 128 87c-22.644 0-41 18.356-41 41 0 14.855 7.9 27.864 19.727 35.056z";
+const REVERSE_ICON_PATH =
+    "M117.027 60.858c0 14.184.118 120.734.118 134.66 0 13.925-7.798 16.307-14.543 10.568-6.745-5.74-46.666-60.003-52.014-67.201-5.349-7.198-4.45-12.951.086-20.28 4.535-7.328 47.284-62.224 52.46-68.2 5.175-5.977 13.893-3.73 13.893 10.453zM65.424 132.65l32.874 43.167c1.336 1.754 2.425 1.393 2.424-.814l-.005-92.006c0-2.197-1.072-2.562-2.395-.792l-32.927 44.057c-1.327 1.776-1.31 4.63.03 6.388zm142.603-71.792c0 14.184.118 120.734.118 134.66 0 13.925-7.798 16.307-14.543 10.568-6.745-5.74-46.666-60.003-52.014-67.201-5.349-7.198-4.45-12.951.086-20.28 4.535-7.328 47.284-62.224 52.46-68.2 5.175-5.977 13.893-3.73 13.893 10.453zm-51.603 71.792l32.874 43.167c1.336 1.754 2.425 1.393 2.424-.814l-.005-92.006c0-2.197-1.072-2.562-2.395-.792l-32.927 44.057c-1.327 1.776-1.31 4.63.03 6.388z";
 
 // Effect picker SVGs are local silhouettes matched to the riso cell palette.
 function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
@@ -479,6 +482,19 @@ function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
                         fill={textureFill}
                         fillRule="evenodd"
                     />
+                </svg>
+            );
+        case SEQFX_EFFECT_TYPES.reverse:
+            return (
+                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
+                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
+                    <path
+                        d={REVERSE_ICON_PATH}
+                        data-role="seqfx-effect-icon-fill"
+                        fill="currentColor"
+                        fillRule="evenodd"
+                    />
+                    <path d={REVERSE_ICON_PATH} fill={textureFill} fillRule="evenodd" />
                 </svg>
             );
         case SEQFX_EFFECT_TYPES.talkBox:
@@ -1007,6 +1023,13 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 5, label: "Bias", min: -1, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Moves ring modulation toward positive or inverted dry signal." },
         { index: 6, label: "Rectify", min: -1, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Morphs the carrier toward positive or negative full-wave rectification." },
     ],
+    [SEQFX_EFFECT_TYPES.reverse]: [
+        { index: 0, label: "Length", min: 0, max: 4, step: 1, kind: "select", options: ["1/32", "1/16", "1/8", "1/4", "1 Cell"], hint: "Trigger-latched lookback length; the high-quality source window is bounded to four seconds." },
+        { index: 1, label: "Crossfade", min: 0, max: 0.25, step: 0.001, amountKind: "percentPoints", hint: "Proportion of each window used to blend into the next captured lookback." },
+        { index: 2, label: "Timing", min: 0, max: 1, step: 1, kind: "select", options: ["Sync", "Free"], hint: "Sync follows host tempo; Free uses the millisecond length." },
+        { index: 3, label: "Free Length", min: 20, max: 4000, step: 1, amountKind: "linear", hint: "Milliseconds used when Timing is Free." },
+        { index: 4, label: "Decay", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Choose where the reversed loop fades back to dry within the authored block; 100% keeps the complete block." },
+    ],
     [SEQFX_EFFECT_TYPES.talkBox]: [
         { index: 0, label: "From", min: 0, max: 4, step: 1, kind: "select", options: [...TALK_BOX_VOWELS], hint: "Starting vowel; latched when the block triggers." },
         { index: 1, label: "To", min: 0, max: 4, step: 1, kind: "select", options: [...TALK_BOX_VOWELS], hint: "Destination vowel; latched when the block triggers." },
@@ -1084,6 +1107,11 @@ const COMB_PARAM_DISPERSION = 3;
 const COMB_PARAM_DAMPING_HZ = 4;
 const RING_PARAM_FREQUENCY = 0;
 const RING_PARAM_WAVEFORM = 1;
+const REVERSE_PARAM_DIVISION = 0;
+const REVERSE_PARAM_CROSSFADE = 1;
+const REVERSE_PARAM_TIMING_MODE = 2;
+const REVERSE_PARAM_FREE_MS = 3;
+const REVERSE_PARAM_DECAY = 4;
 const TALK_BOX_PARAM_FROM_VOWEL = 0;
 const TALK_BOX_PARAM_TO_VOWEL = 1;
 const TALK_BOX_PARAM_MORPH = 2;
@@ -1655,6 +1683,76 @@ function SeqFxRingBlockGlyph({
     );
 }
 
+function reverseRisoPath(width: number, decay: number) {
+    const decayPoint = clampNumber(Number(decay), 0, 1);
+    return Array.from({ length: 65 }, (_unused, index) => {
+        const normalized = index / 64;
+        const reversePhase = (1 - normalized) * Math.PI * 6;
+        const decayEnvelope = decayPoint >= 0.999
+            ? 1
+            : clampNumber((decayPoint - normalized) / 0.12, 0, 1);
+        const wave = Math.sin(reversePhase) * decayEnvelope;
+        return `${index === 0 ? "M" : "L"}${roundedPathValue(normalized * width)} ${roundedPathValue(13 - (wave * 8))}`;
+    }).join(" ");
+}
+
+function SeqFxReverseBlockGlyph({
+    params,
+    size,
+    width,
+}: {
+    params: number[];
+    size: SeqFxBlockVisualSize;
+    width: number;
+}) {
+    const division = Math.round(Number(params[REVERSE_PARAM_DIVISION] ?? 4));
+    const crossfade = clampNumber(Number(params[REVERSE_PARAM_CROSSFADE] ?? 0.08), 0, 0.25);
+    const timingMode = Math.round(Number(params[REVERSE_PARAM_TIMING_MODE] ?? 0));
+    const freeMs = clampNumber(Number(params[REVERSE_PARAM_FREE_MS] ?? 250), 20, 4_000);
+    const decay = clampNumber(Number(params[REVERSE_PARAM_DECAY] ?? 1), 0, 1);
+    const syncLabels = ["1/32", "1/16", "1/8", "1/4", "1 CELL"];
+    const lengthLabel = timingMode === 1
+        ? `${Math.round(freeMs)} ms`
+        : (syncLabels[division] ?? "1 CELL");
+    const arrowY = 25;
+
+    return (
+        <>
+            <svg
+                aria-hidden="true"
+                className="seqfx-block-glyph"
+                data-effect="reverse"
+                data-role="seqfx-block-glyph"
+                data-size={size}
+                focusable="false"
+                preserveAspectRatio="none"
+                viewBox={`0 0 ${width} 28`}
+            >
+                <path
+                    className="seqfx-block-glyph__line"
+                    d={reverseRisoPath(width, decay)}
+                    data-role="seqfx-block-glyph-line"
+                />
+                <path
+                    className="seqfx-block-glyph__secondary-line"
+                    d={`M${roundedPathValue(width - 2)} ${arrowY} L2 ${arrowY} M2 ${arrowY} L${roundedPathValue(5 + (crossfade * 10))} 22 M2 ${arrowY} L${roundedPathValue(5 + (crossfade * 10))} 28`}
+                    data-role="seqfx-block-glyph-secondary-line"
+                />
+            </svg>
+            {size !== "single" ? (
+                <span className="seqfx-block-glyph-label" data-role="seqfx-block-glyph-label">
+                    REV
+                </span>
+            ) : null}
+            {size === "wide" ? (
+                <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
+                    {lengthLabel}
+                </span>
+            ) : null}
+        </>
+    );
+}
+
 function talkBoxRisoPath(firstHz: number, secondHz: number, resonance: number, width: number) {
     const firstX = cutoffToRisoX(firstHz, width);
     const secondX = cutoffToRisoX(secondHz, width);
@@ -1948,6 +2046,8 @@ export function SeqFxBlockGlyph({
             return <SeqFxCombBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.ring:
             return <SeqFxRingBlockGlyph params={params} size={size} width={width} />;
+        case SEQFX_EFFECT_TYPES.reverse:
+            return <SeqFxReverseBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.talkBox:
             return <SeqFxTalkBoxBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.vibro:
@@ -5402,50 +5502,59 @@ export function SeqFxPatchView({
                                             onSpeedChange={(value) => setStutterParam(STUTTER_PARAM_SPEED, value)}
                                             modulation={modulationForStutter()}
                                         />
-                                    ) : inspectedParamDefinitions.map((definition) => {
-                                        const triggerLatched = isSeqFxTriggerLatchedParamForEffect(inspectedEffectType, definition.index);
-                                        const disabled = triggerLatched && !selectedBlockGroup && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1;
-                                        const value = inspectedCell.params[definition.index];
+                                    ) : (
+                                        <>
+                                            {inspectedEffectType === SEQFX_EFFECT_TYPES.reverse ? (
+                                                <p className="seqfx-reverse-source-note" data-role="seqfx-reverse-source-note">
+                                                    Reverses audio already heard before the block, so it adds no lookahead latency. On a cold start, dry audio continues until one complete source window exists.
+                                                </p>
+                                            ) : null}
+                                            {inspectedParamDefinitions.map((definition) => {
+                                                const triggerLatched = isSeqFxTriggerLatchedParamForEffect(inspectedEffectType, definition.index);
+                                                const disabled = triggerLatched && !selectedBlockGroup && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1;
+                                                const value = inspectedCell.params[definition.index];
 
-                                        return (
-                                            <label className="seqfx-field" key={definition.index}>
-                                                <span>
-                                                    {definition.label}
-                                                    {triggerLatched ? <em>Trigger</em> : null}
-                                                </span>
-                                                {definition.kind === "select" ? (
-                                                    <select
-                                                        data-role="seqfx-param"
-                                                        data-param={definition.index}
-                                                        disabled={disabled}
-                                                        onChange={(event) => setParam(definition.index, Number(event.currentTarget.value))}
-                                                        value={Math.round(value)}
-                                                    >
-                                                        {definition.options!.map((option, index) => (
-                                                            <option key={option} value={index}>{option}</option>
-                                                        ))}
-                                                    </select>
-                                                ) : (
-                                                    <input
-                                                        data-role="seqfx-param"
-                                                        data-param={definition.index}
-                                                        disabled={disabled}
-                                                        max={definition.max}
-                                                        min={definition.min}
-                                                        onChange={(event) => setParam(definition.index, Number(event.currentTarget.value))}
-                                                        step={definition.step}
-                                                        type="number"
-                                                        value={formatValue(value)}
-                                                    />
-                                                )}
-                                                <small>
-                                                    {disabled
-                                                        ? "Select one cell to edit this trigger."
-                                                        : definition.hint ?? `${definition.min} to ${definition.max}`}
-                                                </small>
-                                            </label>
-                                        );
-                                    })}
+                                                return (
+                                                    <label className="seqfx-field" key={definition.index}>
+                                                        <span>
+                                                            {definition.label}
+                                                            {triggerLatched ? <em>Trigger</em> : null}
+                                                        </span>
+                                                        {definition.kind === "select" ? (
+                                                            <select
+                                                                data-role="seqfx-param"
+                                                                data-param={definition.index}
+                                                                disabled={disabled}
+                                                                onChange={(event) => setParam(definition.index, Number(event.currentTarget.value))}
+                                                                value={Math.round(value)}
+                                                            >
+                                                                {definition.options!.map((option, index) => (
+                                                                    <option key={option} value={index}>{option}</option>
+                                                                ))}
+                                                            </select>
+                                                        ) : (
+                                                            <input
+                                                                data-role="seqfx-param"
+                                                                data-param={definition.index}
+                                                                disabled={disabled}
+                                                                max={definition.max}
+                                                                min={definition.min}
+                                                                onChange={(event) => setParam(definition.index, Number(event.currentTarget.value))}
+                                                                step={definition.step}
+                                                                type="number"
+                                                                value={formatValue(value)}
+                                                            />
+                                                        )}
+                                                        <small>
+                                                            {disabled
+                                                                ? "Select one cell to edit this trigger."
+                                                                : definition.hint ?? `${definition.min} to ${definition.max}`}
+                                                        </small>
+                                                    </label>
+                                                );
+                                            })}
+                                        </>
+                                    )}
                                     <SeqFxMixRow
                                         value={inspectedCell.mix}
                                         onChange={inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? setStutterMix : setMix}

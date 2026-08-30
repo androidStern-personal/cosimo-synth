@@ -21,6 +21,7 @@
     --seqfx-effect-pitch: #9fa9df;
     --seqfx-effect-comb: #7fa8d8;
     --seqfx-effect-ring: #c7a6d8;
+    --seqfx-effect-reverse: #b58fb5;
     --seqfx-effect-talk-box: #e5a4b5;
     --seqfx-effect-vibro: #d7a36b;
     --seqfx-effect-flange: #78aeb8;
@@ -534,6 +535,10 @@ select {
 
 .seqfx-block[data-effect="7"] .seqfx-block-fill {
     background: var(--seqfx-effect-ring);
+}
+
+.seqfx-block[data-effect="8"] .seqfx-block-fill {
+    background: var(--seqfx-effect-reverse);
 }
 
 .seqfx-block[data-effect="9"] .seqfx-block-fill {
@@ -1205,6 +1210,10 @@ select {
     --seqfx-effect-icon-active: var(--seqfx-effect-ring);
 }
 
+.seqfx-effect-picker__options button[data-effect-type="8"] {
+    --seqfx-effect-icon-active: var(--seqfx-effect-reverse);
+}
+
 .seqfx-effect-picker__options button[data-effect-type="9"] {
     --seqfx-effect-icon-active: var(--seqfx-effect-talk-box);
 }
@@ -1233,6 +1242,16 @@ select {
 
 .seqfx-effect-picker__options button:active:not(:disabled) {
     transform: translateY(1px);
+}
+
+.seqfx-reverse-source-note {
+    margin: 0;
+    border-left: 2px solid var(--seqfx-effect-reverse);
+    padding: 7px 9px;
+    color: rgba(28, 28, 28, 0.76);
+    background: rgba(181, 143, 181, 0.13);
+    font-size: 10px;
+    line-height: 1.35;
 }
 
 .seqfx-effect-picker__options button:disabled {

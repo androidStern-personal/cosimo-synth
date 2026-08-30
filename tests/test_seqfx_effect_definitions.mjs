@@ -175,6 +175,36 @@ test("Pitch keeps an established complementary-grain contract with honest modula
     assert.doesNotMatch(source, /pitchCorrelate/);
 });
 
+test("Reverse is a bounded rolling lookback looper with established length fade and decay controls", async () => {
+    const reverse = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.reverse);
+    assert.equal(reverse.lifecycle, "captured");
+    assert.equal(reverse.fontaudioIcon, "fad-backward");
+    assert.deepEqual(
+        reverse.parameters.map(({ id, min, max, defaultValue, latch, auxEligible, options }) => ({
+            id,
+            min,
+            max,
+            defaultValue,
+            latch,
+            auxEligible,
+            options,
+        })),
+        [
+            { id: "division", min: 0, max: 4, defaultValue: 4, latch: "trigger", auxEligible: false, options: ["1/32", "1/16", "1/8", "1/4", "1 Cell"] },
+            { id: "crossfade", min: 0, max: 0.25, defaultValue: 0.08, latch: "continuous", auxEligible: true, options: undefined },
+            { id: "timingMode", min: 0, max: 1, defaultValue: 0, latch: "trigger", auxEligible: false, options: ["Sync", "Free"] },
+            { id: "freeMs", min: 20, max: 4_000, defaultValue: 250, latch: "trigger", auxEligible: false, options: undefined },
+            { id: "decay", min: 0, max: 1, defaultValue: 1, latch: "continuous", auxEligible: true, options: undefined },
+        ],
+    );
+
+    const source = await readFile(path.join(repoRoot, "fx/seqfx/SeqFx.cmajor"), "utf8");
+    assert.match(source, /let reverseVoiceCount = 2;/);
+    assert.match(source, /reverseWindowEnd/);
+    assert.match(source, /processReverse/);
+    assert.doesNotMatch(source, /reversePlaybackSpeed/);
+});
+
 test("Comb keeps the selected reference-neutral vector-dispersive production contract", async () => {
     const comb = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.comb);
     assert.equal(comb.lifecycle, "tail");

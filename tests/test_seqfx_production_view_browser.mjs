@@ -871,6 +871,29 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
         }));
         assert.ok(pitchInspectorBounds.scrollWidth <= pitchInspectorBounds.clientWidth + 1);
 
+        await page.getByRole("button", { name: "Reverse", exact: true }).click();
+        await page.getByRole("button", { name: "Chain 4 Reverse block 1", exact: true }).waitFor();
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 2);
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="1"]').count(), 1);
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="4"]').count(), 1);
+        await page.locator('[data-role="seqfx-mod-toggle"]').click();
+        assert.equal(await page.locator('[data-role="seqfx-param"]').count(), 5);
+        assert.deepEqual(
+            await page.locator('[data-role="seqfx-param"][data-param="0"] option').evaluateAll((options) => options.map((option) => option.textContent)),
+            ["1/32", "1/16", "1/8", "1/4", "1 Cell"],
+        );
+        assert.match(await page.locator('[data-role="seqfx-reverse-source-note"]').textContent(), /adds no lookahead latency/);
+        await page.locator('[data-role="seqfx-param"][data-param="2"]').selectOption("1");
+        await page.locator('[data-role="seqfx-param"][data-param="3"]').fill("480");
+        assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="reverse"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
+        assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="reverse"] [data-role="seqfx-block-glyph-secondary-line"]').getAttribute("d"));
+        const reverseInspectorBounds = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => ({
+            clientWidth: node.clientWidth,
+            scrollWidth: node.scrollWidth,
+        }));
+        assert.ok(reverseInspectorBounds.scrollWidth <= reverseInspectorBounds.clientWidth + 1);
+        await page.locator('[data-role="seqfx-mod-toggle"]').click();
+
         await page.getByRole("button", { name: "Talk Box", exact: true }).click();
         await page.getByRole("button", { name: "Chain 4 Talk Box block 1", exact: true }).waitFor();
         assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 5);

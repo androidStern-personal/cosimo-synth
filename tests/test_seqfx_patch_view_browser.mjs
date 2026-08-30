@@ -25,6 +25,7 @@ const SEQFX_EFFECT_TYPES = {
     pitch: 5,
     comb: 6,
     ring: 7,
+    reverse: 8,
     talkBox: 9,
     vibro: 10,
     flange: 11,
@@ -982,6 +983,7 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
             { effectType: "5", patternCount: 1 },
             { effectType: "6", patternCount: 1 },
             { effectType: "7", patternCount: 1 },
+            { effectType: "8", patternCount: 1 },
             { effectType: "9", patternCount: 1 },
             { effectType: "10", patternCount: 1 },
             { effectType: "11", patternCount: 1 },
@@ -3173,8 +3175,8 @@ test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_
     const effectPicker = page.locator('[data-role="seqfx-effect-type"]');
     assert.equal(await effectPicker.evaluate((element) => element.tagName), "DIV");
     assert.equal(await effectPicker.locator("select").count(), 0);
-    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"]').count(), 11);
-    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"] > svg').count(), 11);
+    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"]').count(), 12);
+    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"] > svg').count(), 12);
     assert.equal(await effectPicker.getByRole("button", { name: "Crush", exact: true }).getAttribute("aria-pressed"), "true");
 
     const tapeStopButton = effectPicker.getByRole("button", { name: "Tape Stop", exact: true });
@@ -3256,6 +3258,67 @@ test("seqfx_ring_inspector_sequences_every_public_control_and_hides_waveform_fro
     const glyph = page.locator('[data-role="seqfx-block"][data-lane="0"][data-start="0"] [data-role="seqfx-block-glyph"]');
     assert.equal(await glyph.getAttribute("data-effect"), "ring");
     assert.ok(await glyph.locator('[data-role="seqfx-block-glyph-line"]').getAttribute("d"));
+
+    await page.close();
+});
+
+test("seqfx_reverse_sequences_a_zero_latency_lookback_with_only_boundary_and_decay modulation", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Reverse", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 Reverse block 1", exact: true }).waitFor();
+
+    const param = (index) => page.locator(`[data-role="seqfx-param"][data-param="${index}"]`);
+    assert.deepEqual(
+        await param(0).locator("option").evaluateAll((options) => options.map((option) => option.textContent)),
+        ["1/32", "1/16", "1/8", "1/4", "1 Cell"],
+    );
+    assert.deepEqual(
+        await param(2).locator("option").evaluateAll((options) => options.map((option) => option.textContent)),
+        ["Sync", "Free"],
+    );
+    assert.match(await page.locator('[data-role="seqfx-reverse-source-note"]').textContent(), /already heard before the block/);
+
+    await param(0).selectOption("3");
+    await param(1).fill("0.12");
+    await param(2).selectOption("1");
+    await param(3).fill("480");
+    await param(4).fill("0.7");
+
+    let snapshot = await getHarnessSnapshot(page);
+    let upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.effectTypes[0][0], SEQFX_EFFECT_TYPES.reverse);
+    assert.deepEqual(upload.params[0][0], [3, 0.12, 1, 480, 0.7, 0, 0, 0]);
+
+    await openSeqFxModView(page);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 2);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="0"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="1"]').count(), 1);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="2"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="3"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="4"]').count(), 1);
+    await toggleSeqFxModTarget(page, 1);
+    await setSeqFxModTargetAmount(page, 1, 5);
+
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.auxEnabled[0][0][1], true);
+    assertClose(upload.auxEnd[0][0][1], 0.17, 0.001, "Reverse Crossfade +5 points should persist as 17%");
+    const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    const storedReverse = storedState.patterns[0].lanes[0].steps[0];
+    assert.equal(storedReverse.effectType, SEQFX_EFFECT_TYPES.reverse);
+    assert.deepEqual(storedReverse.params, [3, 0.12, 1, 480, 0.7, 0, 0, 0]);
+    assert.equal(storedReverse.aux.targets[1].enabled, true);
+    assertClose(storedReverse.aux.targets[1].end, 0.17, 0.001, "Reverse aux target should survive sparse v7 persistence");
+
+    const glyph = page.locator('[data-role="seqfx-block"][data-lane="0"][data-start="0"] [data-role="seqfx-block-glyph"]');
+    assert.equal(await glyph.getAttribute("data-effect"), "reverse");
+    assert.ok(await glyph.locator('[data-role="seqfx-block-glyph-line"]').getAttribute("d"));
+    assert.ok(await glyph.locator('[data-role="seqfx-block-glyph-secondary-line"]').getAttribute("d"));
 
     await page.close();
 });
