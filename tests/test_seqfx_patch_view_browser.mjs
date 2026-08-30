@@ -3490,10 +3490,20 @@ test("seqfx_stutter_editor_applies_shape_and_gate_to_selected_block_group", asyn
     await page.getByRole("button", { name: "Chain 4 Stutter block 7-8", exact: true }).click({ modifiers: ["Shift"] });
     await page.locator('[data-role="seqfx-stutter-editor"]').waitFor();
 
-    const graphBox = await page.locator('[data-role="seqfx-stutter-graph"]').boundingBox();
+    const graph = page.locator('[data-role="seqfx-stutter-graph"]');
+    await graph.scrollIntoViewIfNeeded();
+    const graphBox = await graph.boundingBox();
     assert.ok(graphBox);
     const gatePoint = await stutterGraphPoint(page, graphBox, 0.4);
     await page.mouse.click(gatePoint.x, gatePoint.y);
+
+    const gateSnapshot = await getHarnessSnapshot(page);
+    const gateUpload = patternUploads(gateSnapshot).at(-1).value;
+    assert.deepEqual(
+        [1, 2, 6, 7].map((step) => Number(gateUpload.params[3][step][3].toFixed(2))),
+        [0.4, 0.4, 0.4, 0.4],
+    );
+
     await page.locator('[data-role="seqfx-stutter-shape-stop"][data-stop="2"]').click();
 
     const snapshot = await getHarnessSnapshot(page);
