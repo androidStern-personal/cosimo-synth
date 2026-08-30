@@ -87,8 +87,8 @@ Why this wins:
 
 The selection is conditional on Cmajor proving all of these:
 
-- less than 20 cents error over the core tuned range, with note snapping using
-  measured compensation;
+- less than 20 cents error over the complete continuous public Tune range,
+  using measured resonance evidence rather than a note-snap workaround;
 - finite decaying output through maximum Decay/Drive/Motion aux sweeps;
 - four-chain worst-case codegen and realtime CPU within the roadmap budget;
 - exact deterministic output for the same state and transport history;
@@ -116,8 +116,8 @@ The selected topology is implemented in `fx/seqfx/SeqFx.cmajor` as effect ID
   stereo projection, damping, and unity-small-signal loop limiter remain active
   at the advanced end. A phase-exact fractional tap between adjacent cascade
   depths avoids stale-state reactivation and discontinuous integer topology
-  changes. The blended fractional tap is not claimed to preserve strict
-  allpass magnitude away from Tune.
+  changes. The blended fractional tap is phase-exact only at Tune and is not
+  claimed to preserve strict allpass magnitude away from that frequency.
 
 Tune is continuous and Aux-eligible, with a 10 ms smoothing path. The displayed
 frequency is converted to a fractional delay. The reference and each dispersed
@@ -168,13 +168,14 @@ notch-filter glyph, persists sparse v7 state, and keeps stepped Polarity out of
 Aux mapping. Source and packaged-browser tests cover selection, layout, state,
 modulation rows, octave Tune mapping, and the live comb response glyph.
 
-Checkpoint qualification passed 123 combined DSP/buffer/interpolation/lab
-tests, 109 non-browser state and contract tests, all 59 source-browser tests,
-all 7 explicitly packaged-browser tests, and Cmajor dry-run loading at 32,
-44.1, 48, 88.2, and 96 kHz. The packaged harness now forces the packaged
-branch so a live effects Vite server cannot silently substitute source UI;
-automated source browsers remain hermetic while static contracts prove the
-interactive React Grab imports.
+The latest dedicated Comb generated-runtime selection passed 43 tests,
+including the 135-case tuning matrix, all-rate maximum-tail expiry, and the
+15-case all-rate Tune/Dispersion/Damping discontinuity matrix. A separate
+alternating generated-JavaScript timing probe measured four neutral chains at
+48.02% of four full-Dispersion chains; that is useful discrimination evidence,
+not native realtime proof. Cmajor dry-run loading also passes on the current
+source. Broader state/browser counts are recorded in the release ledger rather
+than frozen here while qualification is still changing.
 
 Still intentionally unperformed at this checkpoint: matched-level listening
 on the five musical fixtures, native-wrapper inspection, Ableton host
