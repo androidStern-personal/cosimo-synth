@@ -1654,6 +1654,29 @@ INFRASTRUCTURE AND TOOLING
     - Final qualification passes the plain-CPM, iOS/native-provider, concurrent staging, effect ownership, artifact-path, and retained PatchWorker gates. Fresh no-install builds pass for CmajPlugin VST3, CmajPerformer, external Cmajor codegen, desktop AU/VST3/standalone, web, and clean plus incremental Enhancer Lite production builds.
     - One iOS benchmark-profile assertion remains a pre-existing float32-versus-Python-double cancellation mismatch and reproduces unchanged on the integration base; no T69 product repair was folded in. Nothing was installed or deployed, and no Ableton or physical-device acceptance was required.
 
+[ ] T72 — Make Cmajor's JUCE generator honor the latency declared by the DSP
+    Confirmed toolchain debt (2026-08-30):
+    - With Cmajor 1.0.3066, `cmaj generate --target=juce` ignores a patch's declared latency and writes zero into the generated C++ wrapper. That is a Cmajor code-generator defect, not a Cosimo product requirement.
+    - Cosimo currently compensates in `fx/prod-effect.mjs` with `replaceGeneratedPluginLatency`/`applyGeneratedHostLatency`: a 53-line regex splice that rewrites the generated latency constant and plugin factory after generation.
+    - `fx/build-effect.mjs` carries `generatedHostLatencySamples` beside each affected plugin (`60` for Enhancer and `3` for Enhancer Lite), duplicating numbers already declared by the DSP. The workaround and duplicate registry field exist only because the generator is wrong.
+    Governing decision:
+    - Fix the generator in the private `androidStern-personal/cmajor` fork. Under T69, that fork is the compiler and ordinary fork commits are the official home for Cmajor/CHOC fixes. Do not add another Cosimo patch, post-generation rewrite, metadata copy, overlay, or compatibility shim.
+    Required implementation order:
+    - First add a minimal failing generator regression in the Cmajor fork: a patch with nonzero declared latency must produce a JUCE wrapper that reports and applies that exact value rather than zero. Preserve the correct zero-latency result for a patch that declares zero or has no latency.
+    - Repair the authoritative JUCE code-generation path so the generated constant and every runtime host-notification path use the latency already present in the compiled patch declaration, including patch creation/reload where the generated wrapper currently initializes or refreshes host latency. Do not parse Cosimo source or copy the number into a new generator-specific field.
+    - Commit the generator fix normally in the private Cmajor fork, then update `cmake/CosimoDependencies.cmake` to pin that reviewed fork commit.
+    - Delete the complete regex splice and its invocation from `fx/prod-effect.mjs`. Delete every `generatedHostLatencySamples` registry entry and the workaround-specific assertions. Replace them with end-to-end generation proof that Enhancer emits 60 samples, Enhancer Lite emits 3 samples, and a zero-latency plugin remains zero using only each patch/DSP declaration.
+    Cross-repository ownership:
+    - Use one coordinator-managed Codex implementation task, but keep the repositories isolated. Never edit the shared CPM cache. Create a clean branch/worktree or clone for the private Cmajor fork and a separate Cosimo task worktree.
+    - The implementation task may push only its named feature branch to the private Cmajor fork so the pinned commit is fetchable. It must not merge the fork's default branch, merge or push Cosimo master, install shared plugins, or deploy. The integration coordinator reviews the Cmajor change first, then the Cosimo pin/cleanup, and owns both final integrations.
+    Done when:
+    - The Cmajor generator's own regression fails before the repair and passes afterward without any post-generation mutation. Generated JUCE source and a running wrapper both expose the DSP-declared latency through the host-facing path.
+    - Cosimo contains one latency value per plugin, in its DSP/patch declaration only. Repository search finds no `generatedHostLatencySamples`, `replaceGeneratedPluginLatency`, `applyGeneratedHostLatency`, generated-source latency regex, or equivalent replacement workaround.
+    - Focused Cmajor generator tests and Cosimo build-argument tests pass first. Final review then runs representative clean and incremental JUCE generation/builds for Enhancer and Enhancer Lite, verifies the declared host latency in the built VST3, and proves the ordinary zero-latency path. Broad/native/install gates run once after source review is clean.
+    - The final handoff records the private-fork branch/commit and Cosimo branch/commit separately, along with exact generated evidence and any unperformed Ableton or physical-device acceptance.
+    Notification on integration:
+    - Only after T72 is reviewed, integrated, and pushed on Cosimo master, text Andrew: `The Cmajor latency generator fix is on master. Resume the Fable session about the Builder Kit extraction architecture.`
+
 [x] T17 — Cut the desktop browser suite's wall clock without losing coverage or stringency
     Implementation evidence (2026-08-19, codex-implemented, independently verified):
     - Four balanced shard files (main 51 / articulation+mseg 39 / fx+modulation 40 / rail 39) sharing tests/helpers/desktop_patch_view_browser_suite.mjs, node --test concurrency 4, wired as the single test:desktop:ui command (TAP mirrored to build/t17-latest-sharded-suite.log).
