@@ -68,8 +68,8 @@ not recorded.
 - [ ] Choose the Patreon delivery surface: members-only post or digital product.
 
 Until these fields are resolved in `scripts/seqfx-release-config.mjs`,
-`--release` must refuse to sign or submit anything to Apple. Local unsigned
-validation remains available.
+`--release` must refuse to sign or submit anything to Apple. Local validation
+remains available with an unsigned installer and an ad-hoc-signed VST3 payload.
 
 ## Commands and safety boundary
 
@@ -86,13 +86,14 @@ Focused automation tests; no native build:
 npm run test:seqfx:release-builder
 ```
 
-Build a local unsigned validation artifact from a clean commit:
+Build a local validation artifact from a clean commit. The installer remains
+unsigned; the VST3 payload is ad-hoc signed for local host loading:
 
 ```bash
 npm run seqfx:release:build -- --unsigned --verify-repeatable-packaging
 ```
 
-`--allow-dirty` is only for a local unsigned diagnostic package. It disables a
+`--allow-dirty` is only for a local diagnostic package. It disables a
 clean-source claim and cannot be combined with repeatability verification or signed
 release mode.
 
@@ -111,13 +112,13 @@ or publishes. Those are separate gates and authorizations.
 
 ## Packaging repeatability contract
 
-Unsigned packaging repeatability, native-build reproducibility, and release
+Local packaging repeatability, native-build reproducibility, and release
 authenticity are different claims:
 
-- The deterministic boundary is the normalized unsigned VST3 payload tree,
+- The deterministic boundary is the normalized ad-hoc-signed VST3 payload tree,
   generated package metadata, unsigned flat package, README/manifest/checksums,
   and ZIP. The source commit timestamp is the default `SOURCE_DATE_EPOCH`.
-- `--verify-repeatable-packaging` assembles the same freshly built unsigned
+- `--verify-repeatable-packaging` assembles the same freshly built ad-hoc-signed
   VST3 twice and requires
   byte-identical package, ZIP, manifest, checksum files, and README plus an
   identical path/kind/mode/content payload fingerprint.
@@ -179,17 +180,18 @@ download without creating a checksum cycle inside the ZIP.
   architecture, and any inappropriate generated permissions/usage text.
 - [ ] Record VST3 bundle and executable sizes and SHA-256 values.
 
-## Gate C — unsigned repeatable packaging
+## Gate C — repeatable local packaging
 
-- [ ] Run the unsigned builder with `--verify-repeatable-packaging` from the same clean
+- [ ] Run the local builder with `--unsigned --verify-repeatable-packaging` from the same clean
   commit.
 - [ ] Confirm the repeat report has no differing payload/package/ZIP bytes.
 - [ ] Confirm `pkgutil --payload-files` contains exactly the VST3 under
   `/Library/Audio/Plug-Ins/VST3/` and contains no `._` or `.DS_Store` entries.
 - [ ] Confirm `unzip -t` succeeds.
-- [ ] Confirm the manifest says `local-unsigned-validation`,
+- [ ] Confirm the manifest says `local-ad-hoc-validation`,
   `distributionReady: false`, and names every unperformed host/public gate.
-- [ ] Confirm the README visibly says the unsigned package is not for Patreon.
+- [ ] Confirm the README visibly says the unsigned installer and ad-hoc-signed
+  VST3 are not for Patreon.
 - [ ] Confirm `THIRD_PARTY_NOTICES.txt` is present at the ZIP root and inside
   the staged VST3 resources, and is covered by checksums.
 
