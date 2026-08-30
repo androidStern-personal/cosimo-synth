@@ -1,6 +1,6 @@
 # SeqFX Excellence Roadmap
 
-Status: implementation in progress; Phases 0–7 complete; release-candidate source review and qualification are active
+Status: Phases 0–7 complete; the local Phase 8 candidate is qualified and installed; human listening, Developer ID/notary, clean-account, and publication gates remain open
 Owner thread: `01a05051-d7c7-7e13-bb60-58968b6392cf`
 Branch: `codex/seqfx-excellence-01a05051`
 Worktree: `/Users/winterfell/.codex/worktrees/seqfx-excellence-01a05051/cosimo-synth`
@@ -808,19 +808,38 @@ Exit: no known formatting/visual defect remains in the release ledger; every req
 
 Tasks:
 
-- `P8.1` Review source and scoped diff before broad gates.
-- `P8.2` Run focused tests again after review repairs.
-- `P8.3` Run the complete relevant Node/browser/Cmajor suites once the source is review-clean.
-- `P8.4` Build universal macOS VST3 from the clean commit.
-- `P8.5` Run strict `pluginval`, codesign verification, bundle inspection, and clean-host discovery.
-- `P8.6` Install the candidate only after checking no other task is using the installed SeqFX path.
-- `P8.7` Run Ableton insert/UI/audio/automation/project-save/reopen/preset/transport tests.
-- `P8.8` Run the structured listening matrix and record human acceptance separately from automation.
-- `P8.9` Port and review release packaging from the historical release branch.
-- `P8.10` Generate package, zip, checksum, build manifest, and release notes from a clean commit.
-- `P8.11` Sign/notarize/staple only when valid Developer ID identities and the approved notary profile are available.
-- `P8.12` Test install on a Gatekeeper-enabled clean macOS account/machine when available.
-- `P8.13` Produce the exact coordinator handoff; do not merge, push, deploy, or upload.
+- `P8.1` Complete — source and scoped diff reviewed before broad gates.
+- `P8.2` Complete — focused suites rerun after review repairs.
+- `P8.3` Complete — the review-clean product-source aggregate passed 19 strict
+  TypeScript modules, 149 Node/state tests, 72 source-browser interactions, seven
+  packaged-browser tests, 453 DSP/runtime tests, Cmajor dry-run, and the clean
+  visual-proof matrix. The later packaging-only repair passed the 65-case release
+  builder/toolchain suite.
+- `P8.4` Complete — universal `arm64 x86_64` VST3 built from clean commit
+  `56eb5c2fda90b5d67490bc83103a8600f5b84a3f`.
+- `P8.5` Complete for the local candidate — built and packaged VST3s pass strict
+  `pluginval` cold/warm load, state, editor, processing, automation, codesign,
+  architecture, metadata, and exact-binary inspection. The separate Steinberg
+  validator was unavailable and is not claimed.
+- `P8.6` Complete — the exact packaged VST3 was installed at the user scan path
+  after the stale user copy was moved recoverably to the dated backup path. The
+  stale system copy was not changed.
+- `P8.7` Partial — Ableton 11.3.43 discovered and inserted the exact user-path
+  binary, and a disposable set saved, unloaded, and recalled it with the exact
+  packaged executable hash. Custom-window/resize, live audio, in-host automation,
+  presets, loop/seek, bypass, and multiple-instance interaction remain unperformed;
+  Live's canvas did not expose those controls to the available UI automation.
+- `P8.8` Open — Andrew's matched-level structured listening acceptance is a human
+  gate and has not been inferred from automated DSP evidence.
+- `P8.9` Complete — the release packaging path was ported, repaired, reviewed, and
+  made repeatable for the local ad-hoc-signed VST3 payload.
+- `P8.10` Complete — PKG, ZIP, checksums, schema-8 manifest, notices, README, and
+  repeatability report were generated from the clean candidate commit.
+- `P8.11` Open by design — no Developer ID signing, Apple submission, notarization,
+  or stapling was authorized or performed.
+- `P8.12` Open — no separate Gatekeeper-enabled clean account/machine was available.
+- `P8.13` Active — produce the exact clean coordinator handoff; do not merge, push,
+  deploy, publish, or upload.
 
 Exit: a committed clean release-candidate branch and repeatably packaged artifact with checksum and provenance exist, with binary reproducibility and every external/user gate stated only to the level actually proved.
 

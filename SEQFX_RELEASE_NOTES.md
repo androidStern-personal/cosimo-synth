@@ -34,15 +34,36 @@ Status: pre-release candidate under qualification. This document records impleme
 
 Implemented behavior is covered by focused state, migration, browser, DSP, lifecycle, sample-rate, finite-output, and generated-runtime tests recorded in `SEQFX_EXCELLENCE_ROADMAP.md` and `research/seqfx/`.
 
-The following are separate release gates and must be recorded as performed or unperformed in the final handoff:
+Local candidate evidence from 2026-08-30:
 
-- source and scoped-diff review;
-- complete relevant automated suites after review repair;
-- universal macOS VST3 build and bundle inspection;
-- strict pluginval cold-open validation;
-- installed-plugin discovery and codesign verification;
-- Ableton insert, resize, audio, automation, transport, save/reopen, preset recall, and multiple-instance stress;
+- The complete SeqFX source qualification aggregate passed, including strict
+  TypeScript, state/property, source and packaged browser, Cmajor, DSP/runtime,
+  lifecycle, performance, and clean visual-proof gates.
+- Clean source commit `56eb5c2fda90b5d67490bc83103a8600f5b84a3f`
+  produced a universal `arm64 x86_64` VST3. Both the build output and the exact
+  untouched VST3 expanded from the PKG passed pluginval strictness 5, including
+  cold/warm load, state, editor, processing, and automation at 44.1/48/96 kHz
+  and block sizes 64–1024.
+- Repeatable local packaging passed for two assemblies of that one native build.
+  PKG SHA-256: `2a75678e3934bb19d804cc8e09948a72c7b34c60198d0e34eeb987763af7a664`.
+  ZIP SHA-256: `0b5a33aba4aafea0e072593b469118681d931cd4d285641c90ffd0a3743fc206`.
+- The exact packaged VST3 is installed at
+  `~/Library/Audio/Plug-Ins/VST3/CosimoSeqFX.vst3`; its executable SHA-256 is
+  `89f1b25c2460a5b6d595528de4e5767b51daa14c570e4606e1200ca3bb42ef4e`.
+  The prior user copy is preserved under the dated `CosimoSeqFX Backups` folder.
+- Ableton Live 11.3.43 discovered and inserted that exact user-path binary. A
+  disposable Live set saved, unloaded, and reopened it; the recalled process
+  again mapped exactly one SeqFX executable with the packaged hash.
+- The local VST3 is ad-hoc signed so hosts can load it. The installer is unsigned;
+  neither artifact is Developer ID-signed, notarized, stapled, Gatekeeper-ready,
+  or approved for distribution.
+
+The following remain separate open release gates and must not be inferred from
+the evidence above:
+
 - matched-level subjective listening across the named fixtures;
+- Ableton custom-editor open/resize, live audio, in-host automation, transport,
+  preset, loop/seek, bypass, and multiple-instance interaction;
 - signing, notarization, stapling, and Gatekeeper testing when approved credentials/environment exist;
 - clean-machine/account install test.
 
