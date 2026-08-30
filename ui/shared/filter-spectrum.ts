@@ -334,6 +334,137 @@ function buildBarRects(
     });
 }
 
+// The engine's FilterSpectrumAnalyzer captures raw analysis windows on the
+// audio thread and leaves the spectral math to us: a 4096-point FFT inside
+// one sample's advance costs several render quanta on a phone, while at
+// 20fps on this thread it is negligible. The math below reproduces what the
+// engine used to compute — Hann window, zero-padded 4x FFT, magnitudes
+// normalized by the window length — so the view is unchanged.
+
+const FILTER_SPECTRUM_FFT_OVERSAMPLING = 4;
+
+type FilterSpectrumFftPlan = {
+    size: number;
+    reversedIndices: Uint32Array;
+    twiddleCos: Float64Array;
+    twiddleSin: Float64Array;
+    real: Float64Array;
+    imaginary: Float64Array;
+};
+
+const filterSpectrumFftPlans = new Map<number, FilterSpectrumFftPlan>();
+const filterSpectrumHannWindows = new Map<number, Float64Array>();
+
+function nextPowerOfTwo(value: number) {
+    let size = 1;
+    while (size < value) {
+        size *= 2;
+    }
+    return size;
+}
+
+function getFilterSpectrumFftPlan(size: number): FilterSpectrumFftPlan {
+    const cached = filterSpectrumFftPlans.get(size);
+    if (cached) {
+        return cached;
+    }
+
+    const reversedIndices = new Uint32Array(size);
+    const bitCount = Math.log2(size);
+    for (let index = 0; index < size; index += 1) {
+        let reversed = 0;
+        for (let bit = 0; bit < bitCount; bit += 1) {
+            reversed = (reversed << 1) | ((index >> bit) & 1);
+        }
+        reversedIndices[index] = reversed;
+    }
+
+    const twiddleCos = new Float64Array(size / 2);
+    const twiddleSin = new Float64Array(size / 2);
+    for (let index = 0; index < size / 2; index += 1) {
+        const angle = (-2 * Math.PI * index) / size;
+        twiddleCos[index] = Math.cos(angle);
+        twiddleSin[index] = Math.sin(angle);
+    }
+
+    const plan = {
+        size,
+        reversedIndices,
+        twiddleCos,
+        twiddleSin,
+        real: new Float64Array(size),
+        imaginary: new Float64Array(size),
+    };
+    filterSpectrumFftPlans.set(size, plan);
+    return plan;
+}
+
+function getFilterSpectrumHannWindow(length: number): Float64Array {
+    const cached = filterSpectrumHannWindows.get(length);
+    if (cached) {
+        return cached;
+    }
+
+    const window = new Float64Array(length);
+    for (let index = 0; index < length; index += 1) {
+        window[index] = 0.5 * (1 - Math.cos((2 * Math.PI * index) / (length - 1)));
+    }
+    filterSpectrumHannWindows.set(length, window);
+    return window;
+}
+
+/**
+ * Hann-windows one captured analysis window, zero-pads it fourfold, and
+ * returns the magnitudes of the lower half of the FFT normalized by the
+ * window length — the exact spectrum the engine's analyzer used to emit.
+ */
+export function computeFilterSpectrumMagnitudes(samples: ArrayLike<number>): number[] {
+    const windowLength = samples.length;
+    const fftSize = nextPowerOfTwo(windowLength * FILTER_SPECTRUM_FFT_OVERSAMPLING);
+    const plan = getFilterSpectrumFftPlan(fftSize);
+    const window = getFilterSpectrumHannWindow(windowLength);
+    const { reversedIndices, twiddleCos, twiddleSin, real, imaginary } = plan;
+
+    for (let index = 0; index < fftSize; index += 1) {
+        const source = reversedIndices[index];
+        real[index] = source < windowLength ? (Number(samples[source]) || 0) * window[source] : 0;
+        imaginary[index] = 0;
+    }
+
+    for (let blockSize = 2; blockSize <= fftSize; blockSize *= 2) {
+        const half = blockSize / 2;
+        const twiddleStride = fftSize / blockSize;
+        for (let start = 0; start < fftSize; start += blockSize) {
+            for (let pair = 0; pair < half; pair += 1) {
+                const twiddleIndex = pair * twiddleStride;
+                const wr = twiddleCos[twiddleIndex];
+                const wi = twiddleSin[twiddleIndex];
+                const even = start + pair;
+                const odd = even + half;
+                const tr = (real[odd] * wr) - (imaginary[odd] * wi);
+                const ti = (real[odd] * wi) + (imaginary[odd] * wr);
+                real[odd] = real[even] - tr;
+                imaginary[odd] = imaginary[even] - ti;
+                real[even] += tr;
+                imaginary[even] += ti;
+            }
+        }
+    }
+
+    const binCount = fftSize / 2;
+    const normalization = 1 / windowLength;
+    const magnitudes = new Array<number>(binCount);
+    for (let bin = 0; bin < binCount; bin += 1) {
+        magnitudes[bin] = Math.sqrt((real[bin] * real[bin]) + (imaginary[bin] * imaginary[bin])) * normalization;
+    }
+    return magnitudes;
+}
+
+function isSampleArray(value: unknown): value is ArrayLike<number> {
+    return Array.isArray(value)
+        || (ArrayBuffer.isView(value) && !(value instanceof DataView));
+}
+
 export function normalizeFilterSpectrumMessage(message: unknown): FilterSpectrumFrame | null {
     const payload = (message as { event?: unknown } | null | undefined)?.event ?? message;
 
@@ -342,9 +473,22 @@ export function normalizeFilterSpectrumMessage(message: unknown): FilterSpectrum
     }
 
     const sampleRateHz = coerceFiniteNumber((payload as { sampleRateHz?: unknown }).sampleRateHz);
-    const magnitudes = (payload as { magnitudes?: unknown }).magnitudes;
+    if (!sampleRateHz || sampleRateHz <= 0) {
+        return null;
+    }
 
-    if (!sampleRateHz || sampleRateHz <= 0 || !Array.isArray(magnitudes) || magnitudes.length < 8) {
+    // The live engine emits raw analysis windows; the mock, recorded
+    // telemetry, and synthetic gallery frames still carry magnitudes.
+    const samples = (payload as { samples?: unknown }).samples;
+    if (isSampleArray(samples) && samples.length >= 8) {
+        return {
+            sampleRateHz,
+            magnitudes: computeFilterSpectrumMagnitudes(samples),
+        };
+    }
+
+    const magnitudes = (payload as { magnitudes?: unknown }).magnitudes;
+    if (!Array.isArray(magnitudes) || magnitudes.length < 8) {
         return null;
     }
 

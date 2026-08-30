@@ -1,13 +1,18 @@
 namespace wt
 {
-    let filterSpectrumFFTSize = 4096;
-    let filterSpectrumBinCount = filterSpectrumFFTSize / 2;
     let filterSpectrumWindowSize = 1024;
     let filterSpectrumFramesPerSecond = 20.0f;
 
-    struct FilterSpectrumFrame
+    /**
+     * One analysis window of the post-filter downmix, captured on the audio
+     * thread and analyzed off it. The UI computes the Hann window, the
+     * zero-padded 4096-point FFT and the bin magnitudes at the frame rate
+     * (ui/shared/filter-spectrum.ts), so the render thread only ever pays
+     * for collecting samples it is already producing.
+     */
+    struct FilterSpectrumCapture
     {
         float32 sampleRateHz;
-        float32[filterSpectrumBinCount] magnitudes;
+        float32[filterSpectrumWindowSize] samples;
     }
 }

@@ -1328,15 +1328,17 @@ export class MockPatchConnection implements PatchConnectionLike {
         {
             sampleRateHz = 44_100,
             magnitudes = [],
+            samples,
         }: {
             sampleRateHz?: number;
             magnitudes?: number[];
+            /** Raw analysis window, as the live engine emits (the UI runs the FFT). */
+            samples?: number[];
         } = {},
     ) {
-        this.emitEndpoint(filterSpectrumEndpointID, {
-            sampleRateHz,
-            magnitudes,
-        });
+        this.emitEndpoint(filterSpectrumEndpointID, samples
+            ? { sampleRateHz, samples }
+            : { sampleRateHz, magnitudes });
     }
 
     /** Emit one read-only post-trim Polish meter frame. */
