@@ -126,17 +126,28 @@
     min-height: 0;
 }
 
-/* The map fills the whole column from one clean cut route end to the other. */
+/* The stack reserves real height for the fixed output footer. The graph owns
+   only the first row, so its scroll surface, background, and hit-testing stop
+   before Mix and POLISH. */
 .rack-stack {
     position: relative;
     display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
     overflow: hidden;
     border-radius: 10px;
+}
+
+.rack-graph-boundary {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .rack-list.subway-map {
     position: relative;
     display: flex;
+    height: 100%;
     flex-direction: column;
     padding: 13px 0 0;
     overflow-x: hidden;
@@ -146,7 +157,8 @@
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
     border: 1px solid #2c2e31;
-    border-radius: 10px;
+    border-bottom: 0;
+    border-radius: 10px 10px 0 0;
     background: #101113;
     box-shadow: inset 0 1px rgb(255 255 255 / 0.03);
 }
@@ -164,10 +176,7 @@
     pointer-events: none;
 }
 
-/* T63: lane-wide controls live inside the graph's existing rectangle. The
-   bypass button occupies the unused top-left pocket; the Mix rail is a real
-   final flow row, so it never covers stations, connectors, add targets, or
-   scrollable content. */
+/* Bypass remains the sole graph overlay in the unused top-left pocket. */
 .rack-lane-bypass {
     position: absolute;
     z-index: 10;
@@ -203,6 +212,18 @@
 
 .rack-lane-bypass-label-compact {
     display: none;
+}
+
+.rack-fixed-footer {
+    position: relative;
+    z-index: 4;
+    display: grid;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid #2c2e31;
+    border-top: 0;
+    border-radius: 0 0 10px 10px;
+    isolation: isolate;
 }
 
 .rack-lane-mix {

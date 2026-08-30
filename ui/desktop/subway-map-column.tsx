@@ -6,7 +6,6 @@ import {
     type KeyboardEvent as ReactKeyboardEvent,
     type MouseEvent as ReactMouseEvent,
     type PointerEvent as ReactPointerEvent,
-    type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 
@@ -122,8 +121,6 @@ type SubwayMapColumnProps = {
         liftOrigin: SubwayReorderLiftOrigin,
     ) => boolean;
     readonly onKeyboardMove: (deviceId: string, offset: -1 | 1) => void;
-    /** Fixed lane-output controls rendered before the final tail insertion row. */
-    readonly tailPrefix?: ReactNode;
     /** A ghost add-stub was tapped: open the type picker for its path. */
     readonly onRequestAdd: (path: LaneDevicePathV2, clientX: number, clientY: number) => void;
 };
@@ -972,7 +969,6 @@ export function SubwayMapColumn({
     onToggleBypass,
     onArmReorder,
     onKeyboardMove,
-    tailPrefix,
     onRequestAdd,
 }: SubwayMapColumnProps) {
     const layout = buildSubwayLayout(laneState);
@@ -1147,7 +1143,6 @@ export function SubwayMapColumn({
                 data-reorder-layout-key="trunk:tail-fill"
                 aria-hidden="true"
             />
-            {tailPrefix}
             {trunkTail}
         </>
     );

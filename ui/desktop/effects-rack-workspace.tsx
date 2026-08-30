@@ -5997,102 +5997,101 @@ export function EffectsRackWorkspace({
 
             <div className="rack-effects-grid">
                 <div className="rack-stack" aria-label="Ordered effects rack">
-                    <div
-                        ref={rackListRef}
-                        className={`rack-list subway-map${rackScrollPresentation.overflow ? " has-overflow" : ""}${rackScrollPresentation.atTop ? " is-at-top" : ""}${rackScrollPresentation.atBottom ? " is-at-bottom" : ""}`}
-                        data-role="rack-module-list"
-                        onScroll={updateRackScrollPresentation}
-                        onPointerMove={updateReorderPreview}
-                        onPointerUp={(event) => finishReorder(event.pointerId, true)}
-                        onPointerCancel={(event) => finishReorder(event.pointerId, false)}
-                        onLostPointerCapture={(event) => {
-                            // The station's capture handoff at the lift
-                            // threshold BUBBLES through here; only the list
-                            // losing its own capture cancels the gesture.
-                            if (event.target !== event.currentTarget) {
-                                return;
-                            }
-                            const gesture = reorderRef.current;
-                            if (gesture?.captureElement === event.currentTarget) {
-                                finishReorder(gesture.pointerId, false);
-                            }
-                        }}
-                    >
-                        <SubwayMapColumn
-                            laneState={mapDoc}
-                            graphWidth={rackGraphWidth}
-                            selectedDeviceId={selectedDeviceId}
-                            selectedGroupId={selectedGroupId}
-                            reorderPresentation={reorderPresentation}
-                            focusedBranchIndices={focusedBranchIndices}
-                            accents={EFFECT_ACCENTS}
-                            onSelect={selectDevice}
-                            onSelectGroup={(groupId) => {
-                                setPolishSelected(false);
-                                setSelectedGroupId(groupId);
-                            }}
-                            onFocusBranch={focusRackBranch}
-                            onOpenStationMenu={setStationMenu}
-                            onOpenGroupMenu={setGroupMenu}
-                            onToggleBypass={toggleDeviceEnabled}
-                            onArmReorder={armStationReorder}
-                            onKeyboardMove={moveDeviceByOffset}
-                            tailPrefix={(
-                                <label
-                                    className="rack-lane-mix"
-                                    data-role="rack-lane-mix"
-                                    data-reorder-layout-key="lane:mix"
-                                >
-                                    <span className="rack-lane-mix-label">MIX</span>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="1"
-                                        step="0.01"
-                                        value={rackState.output.mix}
-                                        disabled={rackState.output.bypassed}
-                                        data-role="rack-lane-mix-slider"
-                                        aria-label="Effects Lane Mix"
-                                        onChange={(event) => setOutputMix(Number(event.currentTarget.value))}
-                                        onPointerUp={persist}
-                                        onPointerCancel={persist}
-                                        onKeyUp={persist}
-                                        onBlur={persist}
-                                    />
-                                    <output
-                                        className="rack-lane-mix-value"
-                                        data-role="rack-lane-mix-value"
-                                    >
-                                        {Math.round(rackState.output.mix * 100)}%
-                                    </output>
-                                </label>
-                            )}
-                            onRequestAdd={(path, clientX, clientY) => setEffectPicker({
-                                _tag: "add",
-                                path,
-                                clientX,
-                                clientY,
-                            })}
-                        />
-                        <button
-                            type="button"
-                            className={`rack-lane-bypass${rackState.output.bypassed ? " is-bypassed" : ""}`}
-                            data-role="rack-lane-bypass"
-                            aria-label="Bypass Effects Lane"
-                            aria-pressed={rackState.output.bypassed}
-                            onClick={() => {
-                                setOutputBypassed(!rackState.output.bypassed);
-                                persist();
-                            }}
-                        >
-                            <span className="rack-lane-bypass-label">BYPASS</span>
-                            <span className="rack-lane-bypass-label-compact" aria-hidden="true">BYP</span>
-                        </button>
+                    <div className="rack-graph-boundary" data-role="rack-graph-boundary">
                         <div
-                            className="rack-polish-boundary"
-                            data-role="rack-polish-boundary"
-                            data-reorder-layout-key="lane:polish"
+                            ref={rackListRef}
+                            className={`rack-list subway-map${rackScrollPresentation.overflow ? " has-overflow" : ""}${rackScrollPresentation.atTop ? " is-at-top" : ""}${rackScrollPresentation.atBottom ? " is-at-bottom" : ""}`}
+                            data-role="rack-module-list"
+                            onScroll={updateRackScrollPresentation}
+                            onPointerMove={updateReorderPreview}
+                            onPointerUp={(event) => finishReorder(event.pointerId, true)}
+                            onPointerCancel={(event) => finishReorder(event.pointerId, false)}
+                            onLostPointerCapture={(event) => {
+                                // The station's capture handoff at the lift
+                                // threshold BUBBLES through here; only the list
+                                // losing its own capture cancels the gesture.
+                                if (event.target !== event.currentTarget) {
+                                    return;
+                                }
+                                const gesture = reorderRef.current;
+                                if (gesture?.captureElement === event.currentTarget) {
+                                    finishReorder(gesture.pointerId, false);
+                                }
+                            }}
                         >
+                            <SubwayMapColumn
+                                laneState={mapDoc}
+                                graphWidth={rackGraphWidth}
+                                selectedDeviceId={selectedDeviceId}
+                                selectedGroupId={selectedGroupId}
+                                reorderPresentation={reorderPresentation}
+                                focusedBranchIndices={focusedBranchIndices}
+                                accents={EFFECT_ACCENTS}
+                                onSelect={selectDevice}
+                                onSelectGroup={(groupId) => {
+                                    setPolishSelected(false);
+                                    setSelectedGroupId(groupId);
+                                }}
+                                onFocusBranch={focusRackBranch}
+                                onOpenStationMenu={setStationMenu}
+                                onOpenGroupMenu={setGroupMenu}
+                                onToggleBypass={toggleDeviceEnabled}
+                                onArmReorder={armStationReorder}
+                                onKeyboardMove={moveDeviceByOffset}
+                                onRequestAdd={(path, clientX, clientY) => setEffectPicker({
+                                    _tag: "add",
+                                    path,
+                                    clientX,
+                                    clientY,
+                                })}
+                            />
+                            <button
+                                type="button"
+                                className={`rack-lane-bypass${rackState.output.bypassed ? " is-bypassed" : ""}`}
+                                data-role="rack-lane-bypass"
+                                aria-label="Bypass Effects Lane"
+                                aria-pressed={rackState.output.bypassed}
+                                onClick={() => {
+                                    setOutputBypassed(!rackState.output.bypassed);
+                                    persist();
+                                }}
+                            >
+                                <span className="rack-lane-bypass-label">BYPASS</span>
+                                <span className="rack-lane-bypass-label-compact" aria-hidden="true">BYP</span>
+                            </button>
+                        </div>
+                        <span
+                            className={`subway-scroll-cue subway-scroll-cue-top${rackScrollPresentation.overflow && !rackScrollPresentation.atTop ? " is-visible" : ""}`}
+                            aria-hidden="true"
+                        >⌃</span>
+                        <span
+                            className={`subway-scroll-cue subway-scroll-cue-bottom${rackScrollPresentation.overflow && !rackScrollPresentation.atBottom ? " is-visible" : ""}`}
+                            aria-hidden="true"
+                        >⌄</span>
+                    </div>
+                    <div className="rack-fixed-footer" data-role="rack-fixed-footer">
+                        <label className="rack-lane-mix" data-role="rack-lane-mix">
+                            <span className="rack-lane-mix-label">MIX</span>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                value={rackState.output.mix}
+                                disabled={rackState.output.bypassed}
+                                data-role="rack-lane-mix-slider"
+                                aria-label="Effects Lane Mix"
+                                onChange={(event) => setOutputMix(Number(event.currentTarget.value))}
+                                onPointerUp={persist}
+                                onPointerCancel={persist}
+                                onKeyUp={persist}
+                                onBlur={persist}
+                            />
+                            <output className="rack-lane-mix-value" data-role="rack-lane-mix-value">
+                                {Math.round(rackState.output.mix * 100)}%
+                            </output>
+                        </label>
+                        <div className="rack-polish-boundary" data-role="rack-polish-boundary">
                             <button
                                 type="button"
                                 className={`rack-polish-node${polishSelected ? " is-selected" : ""}`}
@@ -6110,14 +6109,6 @@ export function EffectsRackWorkspace({
                             </button>
                         </div>
                     </div>
-                    <span
-                        className={`subway-scroll-cue subway-scroll-cue-top${rackScrollPresentation.overflow && !rackScrollPresentation.atTop ? " is-visible" : ""}`}
-                        aria-hidden="true"
-                    >⌃</span>
-                    <span
-                        className={`subway-scroll-cue subway-scroll-cue-bottom${rackScrollPresentation.overflow && !rackScrollPresentation.atBottom ? " is-visible" : ""}`}
-                        aria-hidden="true"
-                    >⌄</span>
                 </div>
 
                 {polishSelected ? (

@@ -118,8 +118,19 @@ test("the product UI exposes one permanent non-modulatable Polish node and three
     ]);
 
     assert.match(workspace, /data-role="rack-polish-node"/);
-    assert.match(workspace, /tailPrefix=\{\(/);
-    assert.match(subway, /rack-trunk-tail-fill[\s\S]*?\{tailPrefix\}[\s\S]*?\{trunkTail\}/);
+    assert.match(workspace, /data-role="rack-graph-boundary"/);
+    assert.match(workspace, /data-role="rack-fixed-footer"/);
+    assert.match(workspace, /data-role="rack-lane-mix"/);
+    assert.match(workspace, /data-role="rack-polish-boundary"/);
+    assert.doesNotMatch(workspace, /tailPrefix/);
+    assert.doesNotMatch(subway, /tailPrefix/);
+    assert.match(subway, /rack-trunk-tail-fill[\s\S]*?\{trunkTail\}/);
+    assert.ok(workspace.indexOf('data-role="rack-graph-boundary"')
+        < workspace.indexOf('data-role="rack-fixed-footer"'));
+    assert.ok(workspace.indexOf('data-role="rack-fixed-footer"')
+        < workspace.indexOf('data-role="rack-lane-mix"'));
+    assert.ok(workspace.indexOf('data-role="rack-lane-mix"')
+        < workspace.indexOf('data-role="rack-polish-boundary"'));
     for (const [endpointID, symbol] of [
         ["polishEnhancerAmount", "POLISH_ENHANCER_AMOUNT_ENDPOINT_ID"],
         ["polishCompressionClipAmount", "POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID"],
