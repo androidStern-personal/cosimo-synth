@@ -1461,7 +1461,10 @@ test("seqfx_factory_content_and_first_use_hint_are_discoverable_atomic_and_undoa
     assert.deepEqual(storedState.patterns[0].lanes.map((lane) => lane.steps.map((step) => step.trigger ? step.effectType : 0)), beforeGeometry);
     await page.locator('[data-role="seqfx-undo"]').click();
     storedState = parseSeqFxStoredState((await getHarnessSnapshot(page)).storedState[SEQFX_STATE_KEY]);
-    assert.deepEqual(storedState.patterns[0], beforeVariation.patterns[0]);
+    const { revision: restoredRevision, ...restoredPattern } = storedState.patterns[0];
+    const { revision: previousRevision, ...previousPattern } = beforeVariation.patterns[0];
+    assert.ok(restoredRevision > previousRevision, "undo must keep the engine-facing pattern revision monotonic");
+    assert.deepEqual(restoredPattern, previousPattern);
 
     await page.close();
 });
