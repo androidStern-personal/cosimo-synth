@@ -2104,10 +2104,6 @@ select {
     cursor: crosshair;
 }
 
-.seqfx-tape-catchup-region {
-    fill: rgba(242, 209, 107, 0.12);
-}
-
 .seqfx-tape-grid-line {
     stroke-dasharray: 4 4;
 }

@@ -5510,11 +5510,11 @@ processor SeqFx [[ main ]]
             let stopFrames = tapeVoiceStopFrames[lane, voice];
             let startFrames = tapeVoiceStartFrames[lane, voice];
             let returnMode = tapeVoiceReturnMode[lane, voice];
-            let catchUpFrames = std::intrinsics::max (
+            let liveCrossfadeFrames = std::intrinsics::max (
                 96.0f,
                 float32 (processor.frequency) * 0.01f
             );
-            let returnFrames = returnMode == seqfx::tapeReturnSpinUp ? startFrames : catchUpFrames;
+            let returnFrames = returnMode == seqfx::tapeReturnSpinUp ? startFrames : liveCrossfadeFrames;
             let totalFrames = stopFrames + returnFrames;
 
             if (age >= totalFrames)

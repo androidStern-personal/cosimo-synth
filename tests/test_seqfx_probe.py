@@ -2418,7 +2418,7 @@ def test_adjacent_different_effects_in_one_chain_do_not_create_a_step_boundary_c
     assert _largest_boundary_jump(output, 2) <= allowed_jump
 
 
-def test_tape_stop_catchup_does_not_play_faster_than_dry_timeline(
+def test_tape_stop_crossfade_to_live_does_not_play_faster_than_dry_timeline(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
@@ -2435,9 +2435,9 @@ def test_tape_stop_catchup_does_not_play_faster_than_dry_timeline(
     input_audio = _sine(STEP_FRAMES * 6, 660.0)
     output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
 
-    catchup_window = slice((STEP_FRAMES * 3) + 400, (STEP_FRAMES * 4) + 2_400)
-    output_zcr = _zero_crossing_rate(output[catchup_window, 0])
-    dry_zcr = _zero_crossing_rate(input_audio[catchup_window, 0])
+    live_handoff_window = slice((STEP_FRAMES * 3) + 400, (STEP_FRAMES * 4) + 2_400)
+    output_zcr = _zero_crossing_rate(output[live_handoff_window, 0])
+    dry_zcr = _zero_crossing_rate(input_audio[live_handoff_window, 0])
 
     assert output_zcr <= dry_zcr * 1.15
 
