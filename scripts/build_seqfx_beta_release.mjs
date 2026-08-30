@@ -803,7 +803,7 @@ function assertWorktreePolicy(gitState, options) {
     if (gitState.dirty && !options.allowDirty) {
         throw new Error([
             `${options.mode === "release" ? "Release" : "Unsigned repeatability"} packaging requires a clean worktree, including untracked files.`,
-            "Use --allow-dirty only for a local unsigned validation artifact.",
+            "Use --allow-dirty only for a local validation artifact.",
             "",
             gitState.worktreeStatus,
         ].join("\n"));
@@ -2627,7 +2627,7 @@ async function buildReleaseArtifacts({
             results,
         }, null, 2)}\n`, "utf8");
         await rm(repeatRoot, { recursive: true, force: true });
-        console.log(`Verified repeatable unsigned packaging for one fresh native build: ${path.relative(repoRoot, reportPath)}`);
+        console.log(`Verified repeatable local packaging for one fresh native build: ${path.relative(repoRoot, reportPath)}`);
     }
 
     return primaryArtifacts;
@@ -2697,7 +2697,7 @@ export async function main(argv = process.argv) {
 
         if (options.mode !== "release") {
             console.log(
-                "Local unsigned validation artifact is NOT Patreon-ready. Public identity/support/channel decisions, signing, notarization, host acceptance, and clean-account testing remain open.",
+                "Local validation artifact is NOT Patreon-ready. Public identity/support/channel decisions, signing, notarization, host acceptance, and clean-account testing remain open.",
             );
         }
     } finally {
