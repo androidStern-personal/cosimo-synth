@@ -967,3 +967,8 @@ Current hosted synth delivery after the completed integration queue — deployed
 - Pushed master `98cf8a74` includes plain CPM dependencies, complete URL sound sharing, the responsive ADSR editor, and the combined Effects graph reorder/Swap/bypass interactions.
 - Sites version 61 was built from that exact pushed source, saved, and publicly deployed to `https://cosimo-synth.andrew-martin-stern.chatgpt.site`. Live checks returned HTTP 200 for both the app root and compiled desktop interface.
 - This deployment completes the current automated integration queue. Physical-phone gesture/visual acceptance and Ableton interaction/listening remain separate manual product checks rather than implementation blockers.
+
+T72 Cmajor-generated plug-in latency — integrated 2026-08-30
+- The private Cmajor generator now preserves the latency declared by the DSP and applies the same authoritative value when a JUCE plug-in is created or its patch is reloaded. The private CHOC fix makes the strict AppleClang 21 command build safe for request method views, and the JUCE helper now accepts unnamed audio buses without a product-source workaround.
+- Cosimo builds the exact pinned Cmajor command and passes its absolute path into ordinary effect production builds. The old generated-source regex rewrite and duplicated 60/3 registry values are removed.
+- Final post-rebase production proof rebuilt the real targets and reported Enhancer 60/60, Enhancer Lite 3/3, and OTT 0/0 for creation/reload latency. The focused build, dependency, strict-generator, and unnamed-bus suites are green. Nothing was installed; Ableton and physical-device acceptance were not performed, and the hosted synth was unaffected.

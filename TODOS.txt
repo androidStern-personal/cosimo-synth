@@ -1727,10 +1727,14 @@ INFRASTRUCTURE AND TOOLING
     - Final qualification passes the plain-CPM, iOS/native-provider, concurrent staging, effect ownership, artifact-path, and retained PatchWorker gates. Fresh no-install builds pass for CmajPlugin VST3, CmajPerformer, external Cmajor codegen, desktop AU/VST3/standalone, web, and clean plus incremental Enhancer Lite production builds.
     - One iOS benchmark-profile assertion remains a pre-existing float32-versus-Python-double cancellation mismatch and reproduces unchanged on the integration base; no T69 product repair was folded in. Nothing was installed or deployed, and no Ableton or physical-device acceptance was required.
 
-[ ] T72 — Make Cmajor's JUCE generator honor the latency declared by the DSP
-    Active owner (2026-08-30):
+[x] T72 — Make Cmajor's JUCE generator honor the latency declared by the DSP
+    Implemented and integrated (2026-08-30):
     - Codex task `Fix Cmajor JUCE latency generation`, thread `01a05218-ccb7-7203-b9e4-5c37e65419b6`, Cosimo branch `codex/t72-cmajor-latency-generator`, worktree `/Users/winterfell/.codex/worktrees/3488/cosimo-synth`, starting checkpoint `8960b206`, model SOL, reasoning max.
     - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b`; the implementation task must not merge or push Cosimo master, merge the Cmajor fork default branch, install shared plugins, or deploy.
+    - Final private CHOC branch `codex/t72-http-method-view-lifetime` is pushed at `98b52fb5`; final private Cmajor branch `codex/t72-juce-declared-latency` is pushed at `a97d8846`. Neither fork's default branch was changed.
+    - Cosimo was source-reviewed, rebased without conflict onto current master, and fast-forwarded through `f2bcc0db`. The regex-generated latency rewrite and duplicate registry values are gone; ordinary effect builds now use the exact pinned Cmajor command by absolute path.
+    - Final post-rebase production proof rebuilt all three ordinary targets and reported Enhancer `creation=60 reload=60`, Enhancer Lite `creation=3 reload=3`, and OTT `creation=0 reload=0`. Build-contract tests pass 18/18, dependency-pin tests pass 4/4, the pinned Cmajor command passes 45/45 unit tests with warnings-as-errors enabled, and the unnamed-bus regression passes 1/1.
+    - No VST3 was installed, no Ableton/physical-device acceptance was performed, and no Sites deployment was required because this changes effect-plugin generation rather than the hosted synth.
     Confirmed toolchain debt (2026-08-30):
     - With Cmajor 1.0.3066, `cmaj generate --target=juce` ignores a patch's declared latency and writes zero into the generated C++ wrapper. That is a Cmajor code-generator defect, not a Cosimo product requirement.
     - Cosimo currently compensates in `fx/prod-effect.mjs` with `replaceGeneratedPluginLatency`/`applyGeneratedHostLatency`: a 53-line regex splice that rewrites the generated latency constant and plugin factory after generation.
