@@ -163,7 +163,7 @@ export const SEQFX_FACTORY_PATTERNS = [
         id: "tape-transition",
         name: "Tape Transition",
         category: "Transitions",
-        description: "A restrained moving bed ends in documented catch-up and spin-up motor gestures.",
+        description: "A restrained moving bed ends in live-crossfade and spin-up motor gestures.",
         blocks: [
             block(0, 0, 8, SEQFX_EFFECT_TYPES.filter, "warm-low-pass"), block(0, 16, 8, SEQFX_EFFECT_TYPES.filter, "telephone-band"),
             block(1, 4, 8, SEQFX_EFFECT_TYPES.vibro, "tape-warble"), block(1, 20, 8, SEQFX_EFFECT_TYPES.vibro, "gentle-wobble"),

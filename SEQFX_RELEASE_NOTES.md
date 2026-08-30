@@ -5,7 +5,7 @@ Status: pre-release candidate under qualification. This document records impleme
 ## Highlights
 
 - Twelve named, step-sequenced effects: Filter, Crush, Tape Stop, Stutter, Pitch, Comb, Ring, Reverse, Talk Box, Vibro, Flange, and Dirty.
-- Tape Stop rebuilt from documented mature-product vocabulary and frozen benchmark decisions: synced/free Stop Time, Curve, Catch Up or Spin Up return, Start Time, bounded character, overlapping retriggers, and gestures that may outlive the triggering cell.
+- Tape Stop rebuilt from documented mature-product vocabulary and frozen benchmark decisions: synced/free Stop Time, Curve, Crossfade to Live or Spin Up return, Start Time, bounded character, overlapping retriggers, and gestures that may outlive the triggering cell.
 - New vector-dispersive Comb extends a neutral tuned comb into four coupled paths with damping, dispersion, motion, drive, and width.
 - Capture-safe Stutter retriggers, rolling zero-lookahead Reverse, complementary-grain Pitch, pure Doppler Vibro, canonical Flange, phase-continuous Ring, measured-vowel Talk Box, converter-style Crush, and fixed-quality oversampled Dirty.
 - Sparse `seqfx.v7` state with strict parsing and legacy v5/v6 migration.
