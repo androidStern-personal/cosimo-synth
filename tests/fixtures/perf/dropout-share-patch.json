@@ -1,0 +1,1018 @@
+{
+ "format": "cosimo.soundShare",
+ "preset": {
+  "contract": {
+   "effectID": "cosimo-synth",
+   "hash": "sha256:7bb31bc36807a86b9d2e4fb2930cca3df43bafd654163a0bb42479d41dd3b5b1",
+   "parameters": [
+    {
+     "defaultValue": 0.009999999776482582,
+     "endpointID": "ampAttack",
+     "max": 10,
+     "min": 0.0010000000474974513,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.0010000000474974513,
+     "endpointID": "ampDecay",
+     "max": 10,
+     "min": 0.0010000000474974513,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.20000000298023224,
+     "endpointID": "ampRelease",
+     "max": 10,
+     "min": 0.004999999888241291,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "endpointID": "ampSustain",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.009999999776482582,
+     "endpointID": "env1Attack",
+     "max": 10,
+     "min": 0.0010000000474974513,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.25,
+     "endpointID": "env1Decay",
+     "max": 10,
+     "min": 0.0010000000474974513,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.20000000298023224,
+     "endpointID": "env1Release",
+     "max": 10,
+     "min": 0.0010000000474974513,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.5,
+     "endpointID": "env1Sustain",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.009999999776482582,
+     "endpointID": "env2Attack",
+     "max": 10,
+     "min": 0.0010000000474974513,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.25,
+     "endpointID": "env2Decay",
+     "max": 10,
+     "min": 0.0010000000474974513,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.20000000298023224,
+     "endpointID": "env2Release",
+     "max": 10,
+     "min": 0.0010000000474974513,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.5,
+     "endpointID": "env2Sustain",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.009999999776482582,
+     "endpointID": "env3Attack",
+     "max": 10,
+     "min": 0.0010000000474974513,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.25,
+     "endpointID": "env3Decay",
+     "max": 10,
+     "min": 0.0010000000474974513,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.20000000298023224,
+     "endpointID": "env3Release",
+     "max": 10,
+     "min": 0.0010000000474974513,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.5,
+     "endpointID": "env3Sustain",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1000,
+     "endpointID": "filterCutoff",
+     "max": 20000,
+     "min": 20,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "filterCutoffKeyTrackEnabled",
+     "max": 1,
+     "min": 0,
+     "step": 1,
+     "text": "Off|On",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "filterCutoffKeyTrackOffsetSemitones",
+     "max": 60,
+     "min": -60,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "endpointID": "filterMix",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "discrete": true,
+     "endpointID": "filterMode",
+     "max": 5,
+     "min": 0,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0.7071070075035095,
+     "endpointID": "filterQ",
+     "max": 20,
+     "min": 0.10000000149011612,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "glideTime",
+     "max": 2,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "globalTune",
+     "max": 24,
+     "min": -24,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "macro1",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "macro2",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "macro3",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "macro4",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "mseg1Morph",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "endpointID": "mseg1Rate",
+     "max": 2,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "mseg2Morph",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "endpointID": "mseg2Rate",
+     "max": 2,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "mseg3Morph",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "endpointID": "mseg3Rate",
+     "max": 2,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscAFineCents",
+     "max": 100,
+     "min": -100,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscAMute",
+     "max": 1,
+     "min": 0,
+     "step": 1,
+     "text": "Off|On",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscAOctave",
+     "max": 4,
+     "min": -4,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscAPan",
+     "max": 1,
+     "min": -1,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscAPhase",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscAPhaseRandom",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "discrete": true,
+     "endpointID": "oscARetrigger",
+     "max": 1,
+     "min": 0,
+     "step": 1,
+     "text": "Off|On",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscASemitone",
+     "max": 12,
+     "min": -12,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscASolo",
+     "max": 1,
+     "min": 0,
+     "step": 1,
+     "text": "Off|On",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0.75,
+     "endpointID": "oscAUnisonBlend",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.10000000149011612,
+     "endpointID": "oscAUnisonDetune",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscAUnisonDetuneMode",
+     "max": 4,
+     "min": 0,
+     "step": 1,
+     "text": "Linear|Super|Exp|Inv|Random",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscAUnisonPositionSpread",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscAUnisonStackMode",
+     "max": 4,
+     "min": 0,
+     "step": 1,
+     "text": "Off|12|12+7|Center-12|Center-24",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 1,
+     "discrete": true,
+     "endpointID": "oscAUnisonVoices",
+     "max": 8,
+     "min": 1,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscAUnisonWarpSpread",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "endpointID": "oscAUnisonWidth",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscAVolumeDb",
+     "max": 6,
+     "min": -48,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscAWarpAmount",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscAWarpMode",
+     "max": 4,
+     "min": 0,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscAWavetablePosition",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 35,
+     "discrete": true,
+     "endpointID": "oscAWavetableSelect",
+     "max": 238,
+     "min": 0,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscBFineCents",
+     "max": 100,
+     "min": -100,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "discrete": true,
+     "endpointID": "oscBMute",
+     "max": 1,
+     "min": 0,
+     "step": 1,
+     "text": "Off|On",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscBOctave",
+     "max": 4,
+     "min": -4,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscBPan",
+     "max": 1,
+     "min": -1,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscBPhase",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscBPhaseRandom",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "discrete": true,
+     "endpointID": "oscBRetrigger",
+     "max": 1,
+     "min": 0,
+     "step": 1,
+     "text": "Off|On",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscBSemitone",
+     "max": 12,
+     "min": -12,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscBSolo",
+     "max": 1,
+     "min": 0,
+     "step": 1,
+     "text": "Off|On",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0.75,
+     "endpointID": "oscBUnisonBlend",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.10000000149011612,
+     "endpointID": "oscBUnisonDetune",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscBUnisonDetuneMode",
+     "max": 4,
+     "min": 0,
+     "step": 1,
+     "text": "Linear|Super|Exp|Inv|Random",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscBUnisonPositionSpread",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscBUnisonStackMode",
+     "max": 4,
+     "min": 0,
+     "step": 1,
+     "text": "Off|12|12+7|Center-12|Center-24",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 1,
+     "discrete": true,
+     "endpointID": "oscBUnisonVoices",
+     "max": 8,
+     "min": 1,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscBUnisonWarpSpread",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "endpointID": "oscBUnisonWidth",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscBVolumeDb",
+     "max": 6,
+     "min": -48,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscBWarpAmount",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscBWarpMode",
+     "max": 4,
+     "min": 0,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscBWavetablePosition",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 35,
+     "discrete": true,
+     "endpointID": "oscBWavetableSelect",
+     "max": 238,
+     "min": 0,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscCFineCents",
+     "max": 100,
+     "min": -100,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "discrete": true,
+     "endpointID": "oscCMute",
+     "max": 1,
+     "min": 0,
+     "step": 1,
+     "text": "Off|On",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscCOctave",
+     "max": 4,
+     "min": -4,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscCPan",
+     "max": 1,
+     "min": -1,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscCPhase",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscCPhaseRandom",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "discrete": true,
+     "endpointID": "oscCRetrigger",
+     "max": 1,
+     "min": 0,
+     "step": 1,
+     "text": "Off|On",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscCSemitone",
+     "max": 12,
+     "min": -12,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscCSolo",
+     "max": 1,
+     "min": 0,
+     "step": 1,
+     "text": "Off|On",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0.75,
+     "endpointID": "oscCUnisonBlend",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.10000000149011612,
+     "endpointID": "oscCUnisonDetune",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscCUnisonDetuneMode",
+     "max": 4,
+     "min": 0,
+     "step": 1,
+     "text": "Linear|Super|Exp|Inv|Random",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscCUnisonPositionSpread",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscCUnisonStackMode",
+     "max": 4,
+     "min": 0,
+     "step": 1,
+     "text": "Off|12|12+7|Center-12|Center-24",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 1,
+     "discrete": true,
+     "endpointID": "oscCUnisonVoices",
+     "max": 8,
+     "min": 1,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscCUnisonWarpSpread",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 1,
+     "endpointID": "oscCUnisonWidth",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscCVolumeDb",
+     "max": 6,
+     "min": -48,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscCWarpAmount",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "oscCWarpMode",
+     "max": 4,
+     "min": 0,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "oscCWavetablePosition",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 35,
+     "discrete": true,
+     "endpointID": "oscCWavetableSelect",
+     "max": 238,
+     "min": 0,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "playMode",
+     "max": 2,
+     "min": 0,
+     "step": 1,
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "polishCompressionClipAmount",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "polishEnhancerAmount",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "polishOutputTrimDb",
+     "max": 12,
+     "min": -24,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "sourceMode",
+     "max": 1,
+     "min": 0,
+     "step": 1,
+     "text": "Oscillator|Bounce",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "voiceEnhancerAmount",
+     "max": 1,
+     "min": 0,
+     "type": "number"
+    },
+    {
+     "defaultValue": 130,
+     "endpointID": "voiceEnhancerFrequency",
+     "max": 20000,
+     "min": 20,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0,
+     "discrete": true,
+     "endpointID": "voiceEnhancerKeyTrackEnabled",
+     "max": 1,
+     "min": 0,
+     "step": 1,
+     "text": "Off|On",
+     "type": "integer"
+    },
+    {
+     "defaultValue": 0,
+     "endpointID": "voiceEnhancerKeyTrackOffsetSemitones",
+     "max": 60,
+     "min": -12,
+     "type": "number"
+    },
+    {
+     "defaultValue": 0.7099999785423279,
+     "endpointID": "voiceEnhancerQ",
+     "max": 10,
+     "min": 0.10000000149011612,
+     "type": "number"
+    }
+   ],
+   "storedState": [
+    {
+     "key": "articulations.v4",
+     "required": true,
+     "schemaVersion": 4
+    },
+    {
+     "key": "bounce.v1",
+     "required": true,
+     "schemaVersion": 1
+    },
+    {
+     "key": "modulation.v6",
+     "required": true,
+     "schemaVersion": 6
+    }
+   ]
+  },
+  "effectID": "cosimo-synth",
+  "kind": "cosimo.effectPreset",
+  "label": "INIT",
+  "parameters": {
+   "ampAttack": 0.013177995933365556,
+   "ampDecay": 0.0010000000474974513,
+   "ampRelease": 1.5553267385158844,
+   "ampSustain": 0.36403508771929927,
+   "env1Attack": 0.014222740753217618,
+   "env1Decay": 0.09745172218141103,
+   "env1Release": 0.20000000298023224,
+   "env1Sustain": 0,
+   "env2Attack": 0.009999999776482582,
+   "env2Decay": 0.25,
+   "env2Release": 0.20000000298023224,
+   "env2Sustain": 0.5,
+   "env3Attack": 0.009999999776482582,
+   "env3Decay": 0.25,
+   "env3Release": 0.20000000298023224,
+   "env3Sustain": 0.5,
+   "filterCutoff": 306.35289823311194,
+   "filterCutoffKeyTrackEnabled": 0,
+   "filterCutoffKeyTrackOffsetSemitones": -0.9090909090908781,
+   "filterMix": 1,
+   "filterMode": 1,
+   "filterQ": 4.095727792523178,
+   "glideTime": 0.248,
+   "globalTune": 0,
+   "macro1": 0,
+   "macro2": 0,
+   "macro3": 0,
+   "macro4": 0,
+   "mseg1Morph": 0,
+   "mseg1Rate": 1,
+   "mseg2Morph": 0,
+   "mseg2Rate": 1,
+   "mseg3Morph": 0,
+   "mseg3Rate": 1,
+   "oscAFineCents": 0,
+   "oscAMute": 0,
+   "oscAOctave": 0,
+   "oscAPan": 0,
+   "oscAPhase": 0,
+   "oscAPhaseRandom": 0,
+   "oscARetrigger": 0,
+   "oscASemitone": 0,
+   "oscASolo": 0,
+   "oscAUnisonBlend": 0.75,
+   "oscAUnisonDetune": 0,
+   "oscAUnisonDetuneMode": 0,
+   "oscAUnisonPositionSpread": 0,
+   "oscAUnisonStackMode": 0,
+   "oscAUnisonVoices": 1,
+   "oscAUnisonWarpSpread": 0,
+   "oscAUnisonWidth": 1,
+   "oscAVolumeDb": 0,
+   "oscAWarpAmount": 0.23,
+   "oscAWarpMode": 1,
+   "oscAWavetablePosition": 0.47900000000000004,
+   "oscAWavetableSelect": 35,
+   "oscBFineCents": 0,
+   "oscBMute": 0,
+   "oscBOctave": 1,
+   "oscBPan": 0,
+   "oscBPhase": 0,
+   "oscBPhaseRandom": 0.8140000000000001,
+   "oscBRetrigger": 1,
+   "oscBSemitone": 0,
+   "oscBSolo": 0,
+   "oscBUnisonBlend": 1,
+   "oscBUnisonDetune": 0.377,
+   "oscBUnisonDetuneMode": 0,
+   "oscBUnisonPositionSpread": 0.073,
+   "oscBUnisonStackMode": 0,
+   "oscBUnisonVoices": 5,
+   "oscBUnisonWarpSpread": 0.114,
+   "oscBUnisonWidth": 1,
+   "oscBVolumeDb": 0,
+   "oscBWarpAmount": 0,
+   "oscBWarpMode": 0,
+   "oscBWavetablePosition": 1,
+   "oscBWavetableSelect": 35,
+   "oscCFineCents": 0,
+   "oscCMute": 1,
+   "oscCOctave": 0,
+   "oscCPan": 0,
+   "oscCPhase": 0,
+   "oscCPhaseRandom": 0,
+   "oscCRetrigger": 1,
+   "oscCSemitone": 0,
+   "oscCSolo": 0,
+   "oscCUnisonBlend": 0.75,
+   "oscCUnisonDetune": 0.10000000149011612,
+   "oscCUnisonDetuneMode": 0,
+   "oscCUnisonPositionSpread": 0,
+   "oscCUnisonStackMode": 0,
+   "oscCUnisonVoices": 1,
+   "oscCUnisonWarpSpread": 0,
+   "oscCUnisonWidth": 1,
+   "oscCVolumeDb": 0,
+   "oscCWarpAmount": 0,
+   "oscCWarpMode": 0,
+   "oscCWavetablePosition": 0,
+   "oscCWavetableSelect": 35,
+   "playMode": 2,
+   "polishCompressionClipAmount": 0,
+   "polishEnhancerAmount": 0,
+   "polishOutputTrimDb": 0,
+   "sourceMode": 0,
+   "voiceEnhancerAmount": 0,
+   "voiceEnhancerFrequency": 580.6886697962522,
+   "voiceEnhancerKeyTrackEnabled": 1,
+   "voiceEnhancerKeyTrackOffsetSemitones": 18.399269469930857,
+   "voiceEnhancerQ": 0.7099999785423279
+  },
+  "presetID": "cosimo.share.current",
+  "storedState": {
+   "articulations.v4": {
+    "activeTriggerMode": "chain",
+    "format": "cosimo.articulations",
+    "selectedSlotId": null,
+    "slots": [],
+    "version": 4
+   },
+   "bounce.v1": null,
+   "modulation.v6": "{\"format\":\"cosimo.modulation\",\"version\":6,\"msegSlots\":[{\"shapeA\":{\"format\":\"cosimo.mseg.shape\",\"version\":1,\"name\":\"MSEG 1\",\"globalSmooth\":false,\"points\":[{\"x\":0,\"y\":0,\"curvePower\":0},{\"x\":1,\"y\":1,\"curvePower\":0}]},\"shapeB\":{\"format\":\"cosimo.mseg.shape\",\"version\":1,\"name\":\"MSEG 1\",\"globalSmooth\":false,\"points\":[{\"x\":0,\"y\":0,\"curvePower\":0},{\"x\":1,\"y\":1,\"curvePower\":0}]},\"playback\":{\"format\":\"cosimo.mseg.playback\",\"version\":1,\"loop\":{\"startX\":0,\"endX\":1},\"noteOffPolicy\":\"finish_loop\",\"legatoRestarts\":false,\"holdFinalValue\":true}},{\"shapeA\":{\"format\":\"cosimo.mseg.shape\",\"version\":1,\"name\":\"MSEG 2\",\"globalSmooth\":false,\"points\":[{\"x\":0,\"y\":0,\"curvePower\":0},{\"x\":1,\"y\":1,\"curvePower\":0}]},\"shapeB\":{\"format\":\"cosimo.mseg.shape\",\"version\":1,\"name\":\"MSEG 2\",\"globalSmooth\":false,\"points\":[{\"x\":0,\"y\":0,\"curvePower\":0},{\"x\":1,\"y\":1,\"curvePower\":0}]},\"playback\":{\"format\":\"cosimo.mseg.playback\",\"version\":1,\"loop\":{\"startX\":0,\"endX\":1},\"noteOffPolicy\":\"finish_loop\",\"legatoRestarts\":false,\"holdFinalValue\":true}},{\"shapeA\":{\"format\":\"cosimo.mseg.shape\",\"version\":1,\"name\":\"MSEG 3\",\"globalSmooth\":false,\"points\":[{\"x\":0,\"y\":0,\"curvePower\":0},{\"x\":1,\"y\":1,\"curvePower\":0}]},\"shapeB\":{\"format\":\"cosimo.mseg.shape\",\"version\":1,\"name\":\"MSEG 3\",\"globalSmooth\":false,\"points\":[{\"x\":0,\"y\":0,\"curvePower\":0},{\"x\":1,\"y\":1,\"curvePower\":0}]},\"playback\":{\"format\":\"cosimo.mseg.playback\",\"version\":1,\"loop\":{\"startX\":0,\"endX\":1},\"noteOffPolicy\":\"finish_loop\",\"legatoRestarts\":false,\"holdFinalValue\":true}}],\"envelopeSlots\":[{\"name\":\"Env 1\"},{\"name\":\"Env 2\"},{\"name\":\"Env 3\"}],\"routes\":[{\"id\":\"mod-route-auto-1\",\"enabled\":true,\"sourceKind\":\"env\",\"sourceSlot\":1,\"polarity\":\"unipolar\",\"targetKind\":\"oscA.wavetablePosition\",\"amount\":0,\"reducer\":\"max\"},{\"id\":\"mod-route-auto-2\",\"enabled\":true,\"sourceKind\":\"env\",\"sourceSlot\":1,\"polarity\":\"unipolar\",\"targetKind\":\"filterCutoffOctaves\",\"amount\":2.273417774573952,\"reducer\":\"max\"},{\"id\":\"mod-route-auto-3\",\"enabled\":true,\"sourceKind\":\"env\",\"sourceSlot\":1,\"polarity\":\"unipolar\",\"targetKind\":\"globalTuneSemitones\",\"amount\":9.596666666666707,\"reducer\":\"max\"},{\"id\":\"mod-route-auto-4\",\"enabled\":true,\"sourceKind\":\"mseg\",\"sourceSlot\":1,\"polarity\":\"unipolar\",\"targetKind\":\"filterCutoffOctaves\",\"amount\":3.8777777777777374,\"reducer\":\"max\"}],\"macroNames\":[\"Macro 1\",\"Macro 2\",\"Macro 3\",\"Macro 4\"]}"
+  },
+  "version": 2
+ },
+ "supplementalStoredState": {
+  "lane.v1": "{\"format\":\"cosimo.lane\",\"version\":2,\"output\":{\"mix\":0.42,\"bypassed\":false},\"devices\":{\"distortion#1\":{\"params\":{\"distortionMode\":0,\"distortionDriveDb\":24.218181818181883,\"distortionKnee\":0.35,\"distortionWet\":0.9954545454545455,\"distortionWetHPHz\":20,\"distortionWetLPHz\":3372.8713611486764,\"distortionType\":1,\"distortionWetHPKeyTrackEnabled\":0,\"distortionWetHPKeyTrackOffsetSemitones\":0,\"distortionWetLPKeyTrackEnabled\":0,\"distortionWetLPKeyTrackOffsetSemitones\":0}},\"distortion#2\":{\"params\":{\"distortionMode\":0,\"distortionDriveDb\":12,\"distortionKnee\":0.35,\"distortionWet\":0.5,\"distortionWetHPHz\":40,\"distortionWetLPHz\":18000,\"distortionType\":1,\"distortionWetHPKeyTrackEnabled\":0,\"distortionWetHPKeyTrackOffsetSemitones\":0,\"distortionWetLPKeyTrackEnabled\":0,\"distortionWetLPKeyTrackOffsetSemitones\":0}},\"distortion#3\":{\"params\":{\"distortionMode\":0,\"distortionDriveDb\":33.98181818181812,\"distortionKnee\":0.9969696969696968,\"distortionWet\":1,\"distortionWetHPHz\":105.6611882849184,\"distortionWetLPHz\":18000,\"distortionType\":1,\"distortionWetHPKeyTrackEnabled\":0,\"distortionWetHPKeyTrackOffsetSemitones\":0,\"distortionWetLPKeyTrackEnabled\":0,\"distortionWetLPKeyTrackOffsetSemitones\":0}},\"ott#1\":{\"params\":{\"ottMix\":61.21212121212122,\"ottAmount\":82.71729957805907,\"ottTimePercent\":292.8644564625238,\"ottBandDrive\":0,\"ottEnvelopeMatch\":0}},\"chorus#1\":{\"params\":{\"chorusMix\":0.5,\"chorusMotionMode\":1,\"chorusBloomMode\":0,\"chorusTone\":0.5,\"chorusFeedback\":0.42,\"chorusRingAmount\":0,\"chorusRingOffsetMode\":0,\"chorusRingFineSemitones\":0,\"chorusRingFrequencyHz\":28,\"chorusRingKeyTrackEnabled\":0,\"chorusRingKeyTrackOffsetSemitones\":0,\"chorusRingLegacyClampEnabled\":0}}},\"chain\":[{\"kind\":\"device\",\"deviceId\":\"distortion#1\",\"enabled\":true},{\"kind\":\"split\",\"groupId\":\"split#1\",\"enabled\":true,\"xoverLowHz\":562,\"xoverHighHz\":2500,\"xoverLowKeyTrackEnabled\":false,\"xoverLowKeyTrackOffsetSemitones\":0,\"xoverHighKeyTrackEnabled\":false,\"xoverHighKeyTrackOffsetSemitones\":0,\"branches\":[[{\"kind\":\"device\",\"deviceId\":\"distortion#2\",\"enabled\":true}],[{\"kind\":\"device\",\"deviceId\":\"distortion#3\",\"enabled\":true},{\"kind\":\"device\",\"deviceId\":\"ott#1\",\"enabled\":true},{\"kind\":\"device\",\"deviceId\":\"chorus#1\",\"enabled\":true}]]}]}"
+ },
+ "version": 2
+}
