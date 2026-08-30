@@ -1,6 +1,6 @@
 # SeqFX Excellence Roadmap
 
-Status: implementation in progress; Phases 0–5 complete; Tape Stop v2, Crush v2, Ring, Talk Box, Dirty, production Comb, Vibro, and Flange complete; Phase 6 continues with Pitch
+Status: implementation in progress; Phases 0–5 complete; Tape Stop v2, Crush v2, Ring, Talk Box, Dirty, production Comb, Vibro, Flange, and Pitch complete; Phase 6 continues with Reverse
 Owner thread: `01a05051-d7c7-7e13-bb60-58968b6392cf`
 Branch: `codex/seqfx-excellence-01a05051`
 Worktree: `/Users/winterfell/.codex/worktrees/seqfx-excellence-01a05051/cosimo-synth`
@@ -18,6 +18,7 @@ Execution evidence:
 - Sparse state/domain checkpoint: `research/seqfx/state-v7-evidence.md`
 - Shared-buffer decision: `research/seqfx/buffer-architecture.md`
 - Lifecycle/reset contract: `research/seqfx/lifecycle-contract.md`
+- Pitch production decision: `research/seqfx/pitch-decision.md`
 - Tape Stop v2 implementation proof: `research/seqfx/tape-stop-v2-evidence.md`
 - Crush v2 decision and implementation proof: `research/seqfx/crush-v2-decision.md`
 - Ring decision and implementation proof: `research/seqfx/ring-decision.md`
@@ -747,6 +748,10 @@ Order:
 2. Reverse
 3. Stutter v2 final qualification
 
+Checkpoint: Pitch is complete through measured DSP, sparse state, sequenced
+source UI, packaged UI, and decision evidence. Reverse is the active slice;
+subjective Pitch listening and Ableton timing remain Phase 8 gates.
+
 These arrive after buffer/lifecycle foundations because their latency/capture contracts are the most coupled.
 
 Exit: all requested effect types are available in every chain, can be copied/moved/persisted, and pass their timing/audio fixtures.
@@ -958,6 +963,7 @@ The owner may call the implementation complete only when:
 - [Sugar Bytes Looperator manual](https://downloads.sugar-bytes.de/manuals/Looperator.pdf)
 - [Kilohearts Tape Stop](https://kilohearts.com/products/tape_stop)
 - [Kilohearts Bitcrush](https://kilohearts.com/products/bitcrush)
+- [Kilohearts Pitch Shifter](https://kilohearts.com/products/pitch_shifter)
 - [Kilohearts Essentials effect documentation](https://kilohearts.com/docs/snapins)
 - [Ableton Live Audio Effect Reference: Redux](https://www.ableton.com/en/manual/live-audio-effect-reference/#redux)
 - [Koala FX official effect list](https://www.elf-audio.com/koalafx/)

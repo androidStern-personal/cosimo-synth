@@ -22,6 +22,7 @@ const SEQFX_EFFECT_TYPES = {
     crusher: 2,
     tapeStop: 3,
     stutter: 4,
+    pitch: 5,
     comb: 6,
     ring: 7,
     talkBox: 9,
@@ -978,6 +979,7 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
             { effectType: "2", patternCount: 1 },
             { effectType: "3", patternCount: 1 },
             { effectType: "4", patternCount: 1 },
+            { effectType: "5", patternCount: 1 },
             { effectType: "6", patternCount: 1 },
             { effectType: "7", patternCount: 1 },
             { effectType: "9", patternCount: 1 },
@@ -1019,6 +1021,7 @@ test("seqfx_effect_tab_icons_use_their_cell_palette_when_selected", async () => 
         2: "rgb(238, 108, 77)",
         3: "rgb(152, 193, 217)",
         4: "rgb(181, 217, 156)",
+        5: "rgb(159, 169, 223)",
         6: "rgb(127, 168, 216)",
         7: "rgb(199, 166, 216)",
         9: "rgb(229, 164, 181)",
@@ -3170,8 +3173,8 @@ test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_
     const effectPicker = page.locator('[data-role="seqfx-effect-type"]');
     assert.equal(await effectPicker.evaluate((element) => element.tagName), "DIV");
     assert.equal(await effectPicker.locator("select").count(), 0);
-    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"]').count(), 10);
-    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"] > svg').count(), 10);
+    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"]').count(), 11);
+    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"] > svg').count(), 11);
     assert.equal(await effectPicker.getByRole("button", { name: "Crush", exact: true }).getAttribute("aria-pressed"), "true");
 
     const tapeStopButton = effectPicker.getByRole("button", { name: "Tape Stop", exact: true });
@@ -3433,6 +3436,53 @@ test("seqfx_flange_sequences_the_short_delay_feedback_contract and latches timin
 
     const glyph = page.locator('[data-role="seqfx-block"][data-lane="0"][data-start="0"] [data-role="seqfx-block-glyph"]');
     assert.equal(await glyph.getAttribute("data-effect"), "flange");
+    assert.ok(await glyph.locator('[data-role="seqfx-block-glyph-line"]').getAttribute("d"));
+    assert.ok(await glyph.locator('[data-role="seqfx-block-glyph-secondary-line"]').getAttribute("d"));
+
+    await page.close();
+});
+
+test("seqfx_pitch_sequences_the_complementary_grain_contract_and_sparse_modulation", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Pitch", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 Pitch block 1", exact: true }).waitFor();
+
+    const param = (index) => page.locator(`[data-role="seqfx-param"][data-param="${index}"]`);
+    await param(0).fill("12");
+    await param(1).fill("25");
+    await param(2).fill("64");
+    await param(3).fill("0.4");
+    await param(4).fill("0.8");
+
+    let snapshot = await getHarnessSnapshot(page);
+    let upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.effectTypes[0][0], SEQFX_EFFECT_TYPES.pitch);
+    assert.deepEqual(upload.params[0][0], [12, 25, 64, 0.4, 0.8, 0, 0, 0]);
+
+    await openSeqFxModView(page);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 4);
+    assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="2"]').count(), 0);
+    await toggleSeqFxModTarget(page, 0);
+    await setSeqFxModTargetAmount(page, 0, 7);
+
+    snapshot = await getHarnessSnapshot(page);
+    upload = patternUploads(snapshot).at(-1).value;
+    assert.equal(upload.auxEnabled[0][0][0], true);
+    assertClose(upload.auxEnd[0][0][0], 19, 0.01, "Pitch +7 semitones should persist as 19 semitones");
+    const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    const storedPitch = storedState.patterns[0].lanes[0].steps[0];
+    assert.equal(storedPitch.effectType, SEQFX_EFFECT_TYPES.pitch);
+    assert.deepEqual(storedPitch.params, [12, 25, 64, 0.4, 0.8, 0, 0, 0]);
+    assert.equal(storedPitch.aux.targets[0].enabled, true);
+    assertClose(storedPitch.aux.targets[0].end, 19, 0.01, "Pitch aux target should survive sparse v7 persistence");
+
+    const glyph = page.locator('[data-role="seqfx-block"][data-lane="0"][data-start="0"] [data-role="seqfx-block-glyph"]');
+    assert.equal(await glyph.getAttribute("data-effect"), "pitch");
     assert.ok(await glyph.locator('[data-role="seqfx-block-glyph-line"]').getAttribute("d"));
     assert.ok(await glyph.locator('[data-role="seqfx-block-glyph-secondary-line"]').getAttribute("d"));
 

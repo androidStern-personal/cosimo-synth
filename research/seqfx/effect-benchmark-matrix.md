@@ -12,6 +12,7 @@ Official sources:
 - https://downloads.sugar-bytes.de/manuals/Looperator.pdf
 - https://kilohearts.com/docs/snapins
 - https://kilohearts.com/products/bitcrush
+- https://kilohearts.com/products/pitch_shifter
 - https://www.ableton.com/en/manual/live-audio-effect-reference/#redux
 
 All listed effects are SeqFX block types. Koala's XY pad, scenes, hold UI, and
@@ -25,7 +26,7 @@ live-touch workflow are not being cloned.
 | Crush | Digital resolution and sample-rate reduction | Bits, rate, conversion quality/dither, mix | Gated | Retain ID 2 and rename display; keep Bits/Rate, add Character/Dither only if audible | Aliasing, DC/level jumps, confusing samples-vs-Hz display |
 | Tape Stop | Variable-speed slowdown where pitch and speed fall together | Stop Time, Start Time, Curve, motor/return state | Bounded gesture | Follow `tape-stop-benchmark.md`; one-cell trigger may outlive cell | Tail truncation, read discontinuity, speed-up aliasing, stale history |
 | Stutter | Capture a short slice and repeat it rhythmically | Slice/window, speed, gate/envelope, crossfade | Captured | Retain current block-relative slice count, speed, shape, and gate; capture at block start | First-repeat ambiguity, wrap clicks, stale audio, destructive retrigger |
-| Pitch | Shift harmonic pitch without changing authored block rate | Semitones, grain size, jitter, spread, mix | Captured/streaming | Dual complementary grains reading warm history; semitone snap with smooth aux path | Latency, transient smear, grain beating, phase resets |
+| Pitch | Shift harmonic pitch without changing authored block rate | Semitones, grain size, jitter, spread, mix | Captured/streaming | Waveform-aligned complementary grains reading warm history; semitone snap with smooth aux path | Latency, transient smear, grain beating, phase resets |
 | Comb | Repeated peaks/notches plus resonant material color | Tune/cutoff, polarity, mix; advanced feedback/decay/damping | Modulated delay/tail | Conventional neutral core plus an evidence-selected dispersive/vector extension | Feedback runaway, tuning error, mono cancellation, generic metallic sound |
 | Ring | Multiply audio by an internal carrier | Frequency, waveform, bias/rectify, spread, mix | Gated | Phase-continuous carrier, documented stereo detune, and free LFO motion; tempo motion remains available through block Aux | Aliasing from carrier shapes, DC from bias, abrupt phase reset |
 | Reverse | Play a finite buffered region backward | Window, sync/free, crossfade, mix | Captured | Reverse already recorded lookback audio at trigger, so host latency remains zero | Unavailable history, wrong-region surprise, boundary pops, old audio after seek |
@@ -68,6 +69,12 @@ blocks and cannot delay the entire dry signal selectively. The wet algorithmic
 delay is displayed through `Grain` and documented; the rolling history is warm
 before the block so the first grain is valid. Factory presets avoid a 50/50 dry
 mix when the combing from wet delay is undesirable.
+
+Production status: complete through measured DSP, sparse-v7 persistence,
+sequenced source and packaged UI, lifecycle/reset proof, and four-chain bounds.
+The normalized grain-birth waveform alignment and rejected blind-overlap
+prototype are recorded in `pitch-decision.md`. Listening comparison and Ableton
+timing remain release gates.
 
 ### Reverse
 

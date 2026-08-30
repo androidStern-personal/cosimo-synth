@@ -143,6 +143,38 @@ test("Dirty keeps one sequenced identity while its nonlinear core runs at fixed 
     assert.match(source, /node dirtyCores = seqfx::DirtyBus\[seqfx::laneCount\];/);
 });
 
+test("Pitch keeps an established complementary-grain contract with honest modulation policy", async () => {
+    const pitch = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.pitch);
+    assert.equal(pitch.lifecycle, "captured");
+    assert.equal(pitch.fontaudioIcon, "fad-arrows-vert");
+    assert.deepEqual(
+        pitch.parameters.map(({ id, min, max, defaultValue, latch, auxEligible }) => ({
+            id,
+            min,
+            max,
+            defaultValue,
+            latch,
+            auxEligible,
+        })),
+        [
+            { id: "semitones", min: -24, max: 24, defaultValue: 0, latch: "continuous", auxEligible: true },
+            { id: "cents", min: -100, max: 100, defaultValue: 0, latch: "continuous", auxEligible: true },
+            { id: "grainMs", min: 10, max: 120, defaultValue: 48, latch: "trigger", auxEligible: false },
+            { id: "jitter", min: 0, max: 1, defaultValue: 0, latch: "continuous", auxEligible: true },
+            { id: "spread", min: 0, max: 1, defaultValue: 0.35, latch: "continuous", auxEligible: true },
+        ],
+    );
+
+    const source = await readFile(path.join(repoRoot, "fx/seqfx/SeqFx.cmajor"), "utf8");
+    assert.match(source, /let pitchGrainVoiceCount = 2;/);
+    assert.match(source, /pitchGrainSourcePosition/);
+    assert.match(source, /pitchHistoryFade/);
+    assert.match(source, /let nextPhase = phase \+ phaseIncrement;/);
+    assert.doesNotMatch(source, /signedPhaseIncrement/);
+    assert.match(source, /processPitch/);
+    assert.doesNotMatch(source, /pitchCorrelate/);
+});
+
 test("Comb keeps the selected reference-neutral vector-dispersive production contract", async () => {
     const comb = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.comb);
     assert.equal(comb.lifecycle, "tail");

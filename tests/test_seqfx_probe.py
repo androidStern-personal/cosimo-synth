@@ -24,6 +24,7 @@ EFFECT_FILTER = 1
 EFFECT_CRUSHER = 2
 EFFECT_TAPE = 3
 EFFECT_STUTTER = 4
+EFFECT_PITCH = 5
 EFFECT_COMB = 6
 EFFECT_RING = 7
 EFFECT_TALK_BOX = 9
@@ -3783,6 +3784,339 @@ def test_flange_four_chain_extremes_remain_faster_than_the_generous_js_budget(
                 params=params,
             )
     source = _complex_signal(STEP_FRAMES * 4) * 0.3
+    started = perf_counter()
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+    elapsed = perf_counter() - started
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
+    assert elapsed < 2.0, f"four-chain generated-JS render took {elapsed:.3f}s for {source.shape[0] / SAMPLE_RATE:.3f}s audio"
+
+
+def _render_pitch(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    input_audio: np.ndarray,
+    *,
+    semitones: float = 12.0,
+    fine_cents: float = 0.0,
+    grain_ms: float = 48.0,
+    jitter: float = 0.0,
+    spread: float = 0.0,
+    first_step: int = 3,
+    active_steps: int = 12,
+    mix: float = 1.0,
+) -> np.ndarray:
+    upload = _empty_upload()
+    params = [semitones, fine_cents, grain_ms, jitter, spread]
+    for step in range(first_step, min(STEP_COUNT, first_step + active_steps)):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == first_step),
+            mix=mix,
+            effect_type=EFFECT_PITCH,
+            params=params,
+        )
+    return _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+
+@pytest.mark.parametrize(
+    ("semitones", "fine_cents", "expected_hz"),
+    [
+        (12.0, 0.0, 880.0),
+        (-12.0, 0.0, 220.0),
+        (0.0, 50.0, 440.0 * (2.0 ** (0.5 / 12.0))),
+    ],
+)
+def test_pitch_tracks_semitones_and_fine_cents_on_a_sustained_tone(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    semitones: float,
+    fine_cents: float,
+    expected_hz: float,
+) -> None:
+    source = _sine(STEP_FRAMES * 20, 440.0, amplitude=0.35)
+    output = _render_pitch(
+        generated_runtime,
+        tmp_path,
+        source,
+        semitones=semitones,
+        fine_cents=fine_cents,
+        first_step=3,
+        active_steps=14,
+    )
+    window = output[STEP_FRAMES * 6 : STEP_FRAMES * 15, 0]
+
+    measured = _dominant_frequency_near(window, expected_hz)
+    assert measured == pytest.approx(expected_hz, abs=0.8)
+
+
+def test_pitch_zero_shift_is_bit_exact_pass_through(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _complex_signal(STEP_FRAMES * 8) * 0.4
+    output = _render_pitch(
+        generated_runtime,
+        tmp_path,
+        source,
+        semitones=0.0,
+        fine_cents=0.0,
+        first_step=1,
+        active_steps=5,
+    )
+
+    np.testing.assert_array_equal(output, source)
+
+
+def test_pitch_grain_lookback_bounds_transient_smear_without_future_audio(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    frames = STEP_FRAMES * 14
+    impulse_frame = STEP_FRAMES * 6 + 500
+    source = np.zeros((frames, 2), dtype=np.float32)
+    source[impulse_frame] = 0.8
+    output = _render_pitch(
+        generated_runtime,
+        tmp_path,
+        source,
+        semitones=12.0,
+        grain_ms=60.0,
+        first_step=4,
+        active_steps=8,
+    )
+    audible = np.flatnonzero(np.abs(output[:, 0]) > 1.0e-5)
+
+    assert audible.size > 0
+    assert int(audible[0]) >= impulse_frame
+    assert int(audible[-1]) < impulse_frame + 8_000
+
+
+def test_pitch_jitter_is_seeded_repeatable_and_changes_grain_texture(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _complex_signal(STEP_FRAMES * 16) * 0.3
+    jittered_a = _render_pitch(
+        generated_runtime,
+        tmp_path,
+        source,
+        semitones=7.0,
+        grain_ms=36.0,
+        jitter=1.0,
+        spread=0.0,
+        first_step=4,
+        active_steps=10,
+    )
+    jittered_b = _render_pitch(
+        generated_runtime,
+        tmp_path,
+        source,
+        semitones=7.0,
+        grain_ms=36.0,
+        jitter=1.0,
+        spread=0.0,
+        first_step=4,
+        active_steps=10,
+    )
+    stable = _render_pitch(
+        generated_runtime,
+        tmp_path,
+        source,
+        semitones=7.0,
+        grain_ms=36.0,
+        jitter=0.0,
+        spread=0.0,
+        first_step=4,
+        active_steps=10,
+    )
+    window = slice(STEP_FRAMES * 6, STEP_FRAMES * 13)
+
+    np.testing.assert_array_equal(jittered_a, jittered_b)
+    assert _rms(jittered_a[window, 0] - stable[window, 0]) > 0.005
+
+
+def test_pitch_zero_shift_jitter_renews_grains_without_drifting_out_of_history(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _sine(STEP_FRAMES * 48, 440.0, amplitude=0.3)
+    output = _render_pitch(
+        generated_runtime,
+        tmp_path,
+        source,
+        semitones=0.0,
+        fine_cents=0.0,
+        grain_ms=32.0,
+        jitter=1.0,
+        spread=0.0,
+        first_step=0,
+        active_steps=16,
+    )
+    late = slice(STEP_FRAMES * 40, STEP_FRAMES * 47)
+
+    assert np.all(np.isfinite(output))
+    assert _rms(output[late, 0] - source[late, 0]) > 0.002
+
+
+def test_pitch_spread_has_dual_mono_zero_and_a_useful_mono_fold(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _complex_signal(STEP_FRAMES * 16) * 0.3
+    centered = _render_pitch(
+        generated_runtime,
+        tmp_path,
+        source,
+        semitones=7.0,
+        grain_ms=48.0,
+        spread=0.0,
+        first_step=4,
+        active_steps=10,
+    )
+    wide = _render_pitch(
+        generated_runtime,
+        tmp_path,
+        source,
+        semitones=7.0,
+        grain_ms=48.0,
+        spread=1.0,
+        first_step=4,
+        active_steps=10,
+    )
+    window = slice(STEP_FRAMES * 6, STEP_FRAMES * 13)
+
+    np.testing.assert_allclose(centered[window, 0], centered[window, 1], atol=1.0e-7, rtol=0.0)
+    assert _rms(wide[window, 0] - wide[window, 1]) > 0.01
+    assert _rms(np.mean(wide[window], axis=1)) > 0.02
+
+
+def test_pitch_identical_retrigger_preserves_grain_phase_and_rng_state(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    params = [7.0, 20.0, 42.0, 0.7, 0.6]
+    continuous_upload = _empty_upload()
+    retrigger_upload = _empty_upload()
+    for step in range(3, 11):
+        _activate_step(
+            continuous_upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 3),
+            effect_type=EFFECT_PITCH,
+            params=params,
+        )
+        _activate_step(
+            retrigger_upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step in (3, 7)),
+            effect_type=EFFECT_PITCH,
+            params=params,
+        )
+    source = _complex_signal(STEP_FRAMES * 14) * 0.25
+    continuous = _render(generated_runtime, tmp_path, source, _base_schedule(continuous_upload))
+    retriggered = _render(generated_runtime, tmp_path, source, _base_schedule(retrigger_upload))
+
+    np.testing.assert_array_equal(retriggered, continuous)
+
+
+def test_pitch_aux_sweeps_continuous_controls_and_excludes_grain_size(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = [-12.0, -100.0, 48.0, 0.0, 0.0]
+    for step in range(5, 13):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 5),
+            effect_type=EFFECT_PITCH,
+            params=params,
+        )
+    for param, end in ((0, 12.0), (1, 100.0), (3, 1.0), (4, 1.0)):
+        _set_aux(upload, lane=LANE_FILTER, step=5, param=param, end=end, shape=0.0)
+
+    source = _complex_signal(STEP_FRAMES * 15) * 0.35
+    output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+
+    assert upload["auxEnabled"][LANE_FILTER][5][2] is False
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
+
+
+def test_pitch_exit_is_click_safe_and_has_no_output_tail(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    source = _sine(STEP_FRAMES * 10, 997.0, amplitude=0.35)
+    output = _render_pitch(
+        generated_runtime,
+        tmp_path,
+        source,
+        semitones=-12.0,
+        grain_ms=64.0,
+        first_step=3,
+        active_steps=3,
+    )
+    release = STEP_FRAMES * 6
+
+    assert _largest_boundary_jump(output[:, 0], 3) < 0.15
+    assert _largest_boundary_jump(output[:, 0], 6) < 0.15
+    np.testing.assert_allclose(output[release + 160 :], source[release + 160 :], atol=1.0e-7, rtol=0.0)
+
+
+def test_pitch_authoritative_reset_invalidates_warm_source_history(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = [12.0, 0.0, 72.0, 0.0, 0.0]
+    for step in range(4, 10):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 4),
+            effect_type=EFFECT_PITCH,
+            params=params,
+        )
+    source = np.zeros((STEP_FRAMES * 12, 2), dtype=np.float32)
+    impulse_frame = STEP_FRAMES * 5 + 500
+    source[impulse_frame] = 1.0
+    baseline = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
+    reset_schedule = _base_schedule(upload)
+    reset_schedule[impulse_frame + 20] = [["event", "internalReset", 1]]
+    reset = _render(generated_runtime, tmp_path, source, reset_schedule)
+    tail = slice(impulse_frame + 100, impulse_frame + 10_000)
+
+    assert _rms(baseline[tail]) > 1.0e-4
+    assert _rms(reset[tail]) < _rms(baseline[tail]) * 0.02
+
+
+def test_pitch_four_chain_extremes_remain_faster_than_the_generous_js_budget(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    params = [24.0, 100.0, 120.0, 1.0, 1.0]
+    for lane in range(LANE_COUNT):
+        for step in range(4, 8):
+            _activate_step(
+                upload,
+                lane=lane,
+                step=step,
+                trigger=(step == 4),
+                effect_type=EFFECT_PITCH,
+                params=params,
+            )
+    source = _complex_signal(STEP_FRAMES * 10) * 0.3
     started = perf_counter()
     output = _render(generated_runtime, tmp_path, source, _base_schedule(upload))
     elapsed = perf_counter() - started

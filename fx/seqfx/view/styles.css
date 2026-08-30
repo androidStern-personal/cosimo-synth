@@ -18,6 +18,7 @@
     --seqfx-effect-crusher: #ee6c4d;
     --seqfx-effect-tape-stop: #98c1d9;
     --seqfx-effect-stutter: #b5d99c;
+    --seqfx-effect-pitch: #9fa9df;
     --seqfx-effect-comb: #7fa8d8;
     --seqfx-effect-ring: #c7a6d8;
     --seqfx-effect-talk-box: #e5a4b5;
@@ -521,6 +522,10 @@ select {
 
 .seqfx-block[data-effect="4"] .seqfx-block-fill {
     background: var(--seqfx-effect-stutter);
+}
+
+.seqfx-block[data-effect="5"] .seqfx-block-fill {
+    background: var(--seqfx-effect-pitch);
 }
 
 .seqfx-block[data-effect="6"] .seqfx-block-fill {
@@ -1142,17 +1147,19 @@ select {
 .seqfx-effect-picker {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(84px, 104px);
-    align-items: center;
+    align-items: start;
     gap: 8px;
     min-width: 0;
-    min-height: 34px;
+    min-height: 72px;
 }
 
 .seqfx-effect-picker__options {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(6, 34px);
     align-items: center;
+    align-content: start;
     min-width: 0;
-    gap: 6px;
+    gap: 4px 6px;
 }
 
 .seqfx-effect-picker__options button {
@@ -1184,6 +1191,10 @@ select {
 
 .seqfx-effect-picker__options button[data-effect-type="4"] {
     --seqfx-effect-icon-active: var(--seqfx-effect-stutter);
+}
+
+.seqfx-effect-picker__options button[data-effect-type="5"] {
+    --seqfx-effect-icon-active: var(--seqfx-effect-pitch);
 }
 
 .seqfx-effect-picker__options button[data-effect-type="6"] {

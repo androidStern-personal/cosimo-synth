@@ -853,6 +853,23 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
             scrollWidth: node.scrollWidth,
         }));
         assert.ok(ringInspectorBounds.scrollWidth <= ringInspectorBounds.clientWidth + 1);
+        await page.locator('[data-role="seqfx-mod-toggle"]').click();
+
+        await page.getByRole("button", { name: "Pitch", exact: true }).click();
+        await page.getByRole("button", { name: "Chain 4 Pitch block 1", exact: true }).waitFor();
+        assert.equal(await page.locator('[data-role="seqfx-param"]').count(), 5);
+        await page.locator('[data-role="seqfx-param"][data-param="0"]').fill("12");
+        await page.locator('[data-role="seqfx-param"][data-param="2"]').fill("64");
+        assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="pitch"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
+        assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="pitch"] [data-role="seqfx-block-glyph-secondary-line"]').getAttribute("d"));
+        await page.locator('[data-role="seqfx-mod-toggle"]').click();
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 4);
+        assert.equal(await page.locator('[data-role="seqfx-mod-target-row"][data-param="2"]').count(), 0);
+        const pitchInspectorBounds = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => ({
+            clientWidth: node.clientWidth,
+            scrollWidth: node.scrollWidth,
+        }));
+        assert.ok(pitchInspectorBounds.scrollWidth <= pitchInspectorBounds.clientWidth + 1);
 
         await page.getByRole("button", { name: "Talk Box", exact: true }).click();
         await page.getByRole("button", { name: "Chain 4 Talk Box block 1", exact: true }).waitFor();

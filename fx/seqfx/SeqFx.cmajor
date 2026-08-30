@@ -24,6 +24,11 @@ namespace seqfx
     let auxRateModeTempo = 0;
     let auxRateModeSlice = 1;
     let maxStutterSeconds = 1.0f;
+    let pitchGrainVoiceCount = 2;
+    let pitchJitterCentsMaximum = 35.0f;
+    let pitchPositionJitterMaximum = 0.125f;
+    let pitchSpreadOffsetMaximum = 0.075f;
+    let pitchAlignmentSearchPrimarySamples = 768.0f;
     let tapePrimaryRate = 48000.0f;
     let tapeCoarseRate = 8000.0f;
     let tapePrimaryBufferSize = 768008;
@@ -761,6 +766,27 @@ processor SeqFx [[ main ]]
     float32<2>[seqfx::laneCount] ringNoiseState;
     std::random::RNG[seqfx::laneCount] ringNoiseRng;
 
+    bool[seqfx::laneCount] pitchActive;
+    float32[seqfx::laneCount] pitchSemitones;
+    float32[seqfx::laneCount] pitchFineCents;
+    float32[seqfx::laneCount] pitchGrainMs;
+    float32[seqfx::laneCount] pitchJitter;
+    float32[seqfx::laneCount] pitchSpread;
+    float32[seqfx::laneCount] pitchSemitonesCurrent;
+    float32[seqfx::laneCount] pitchFineCurrent;
+    float32[seqfx::laneCount] pitchGrainCurrent;
+    float32[seqfx::laneCount] pitchJitterCurrent;
+    float32[seqfx::laneCount] pitchSpreadCurrent;
+    float32[seqfx::laneCount] pitchMixCurrent;
+    float32[seqfx::laneCount] pitchMixTarget;
+    float32[seqfx::laneCount] pitchHistoryFade;
+    bool[seqfx::laneCount] pitchAlignmentPending;
+    float32[seqfx::laneCount, seqfx::pitchGrainVoiceCount] pitchGrainPhase;
+    float64[seqfx::laneCount, seqfx::pitchGrainVoiceCount] pitchGrainSourcePosition;
+    float32[seqfx::laneCount, seqfx::pitchGrainVoiceCount] pitchGrainJitterCents;
+    float32[seqfx::laneCount, seqfx::pitchGrainVoiceCount] pitchGrainPositionJitter;
+    std::random::RNG[seqfx::laneCount, seqfx::pitchGrainVoiceCount] pitchGrainRng;
+
     bool[seqfx::laneCount] talkBoxActive;
     int32[seqfx::laneCount] talkBoxFromVowel;
     int32[seqfx::laneCount] talkBoxToVowel;
@@ -923,6 +949,26 @@ processor SeqFx [[ main ]]
             ringRateHz[lane] = 0.5f;
             ringSpread[lane] = 0.08f;
             ringNoiseRng[lane].seed (9109L + int64 (int32 (lane)) * 1613L);
+
+            pitchSemitones[lane] = 0.0f;
+            pitchFineCents[lane] = 0.0f;
+            pitchGrainMs[lane] = 48.0f;
+            pitchJitter[lane] = 0.0f;
+            pitchSpread[lane] = 0.35f;
+            pitchSemitonesCurrent[lane] = pitchSemitones[lane];
+            pitchFineCurrent[lane] = pitchFineCents[lane];
+            pitchGrainCurrent[lane] = pitchGrainMs[lane];
+            pitchJitterCurrent[lane] = pitchJitter[lane];
+            pitchSpreadCurrent[lane] = pitchSpread[lane];
+            pitchHistoryFade[lane] = 0.0f;
+            pitchAlignmentPending[lane] = true;
+            for (wrap<seqfx::pitchGrainVoiceCount> voice)
+            {
+                pitchGrainPhase[lane, voice] = float32 (int32 (voice)) / float32 (seqfx::pitchGrainVoiceCount);
+                pitchGrainRng[lane, voice].seed (
+                    17011L + int64 (int32 (lane)) * 3251L + int64 (int32 (voice)) * 1877L
+                );
+            }
 
             talkBoxToVowel[lane] = 3;
             talkBoxResonance[lane] = 6.0f;
@@ -1417,6 +1463,7 @@ processor SeqFx [[ main ]]
             stutterPlaying[lane] = false;
             tapeMixTarget[lane] = 0.0f;
             stutterMixTarget[lane] = 0.0f;
+            pitchMixTarget[lane] = 0.0f;
         }
     }
 
@@ -1484,6 +1531,26 @@ processor SeqFx [[ main ]]
             ringNoiseState[lane] = float32<2> (0.0f);
             ringNoiseRng[lane].seed (9109L + int64 (int32 (lane)) * 1613L);
 
+            pitchMixCurrent[lane] = 0.0f;
+            pitchMixTarget[lane] = 0.0f;
+            pitchHistoryFade[lane] = 0.0f;
+            pitchAlignmentPending[lane] = true;
+            pitchSemitonesCurrent[lane] = pitchSemitones[lane];
+            pitchFineCurrent[lane] = pitchFineCents[lane];
+            pitchGrainCurrent[lane] = pitchGrainMs[lane];
+            pitchJitterCurrent[lane] = pitchJitter[lane];
+            pitchSpreadCurrent[lane] = pitchSpread[lane];
+            for (wrap<seqfx::pitchGrainVoiceCount> voice)
+            {
+                pitchGrainPhase[lane, voice] = float32 (int32 (voice)) / float32 (seqfx::pitchGrainVoiceCount);
+                pitchGrainSourcePosition[lane, voice] = -1.0;
+                pitchGrainJitterCents[lane, voice] = 0.0f;
+                pitchGrainPositionJitter[lane, voice] = 0.0f;
+                pitchGrainRng[lane, voice].seed (
+                    17011L + int64 (int32 (lane)) * 3251L + int64 (int32 (voice)) * 1877L
+                );
+            }
+
             for (wrap<2> formant)
                 for (wrap<2> channel)
                     talkBoxFormantStates[lane, formant, channel].reset();
@@ -1523,6 +1590,7 @@ processor SeqFx [[ main ]]
             filterActive[lane] = false;
             crusherActive[lane] = false;
             ringActive[lane] = false;
+            pitchActive[lane] = false;
             talkBoxActive[lane] = false;
             dirtyActive[lane] = false;
             combActive[lane] = false;
@@ -1812,6 +1880,7 @@ processor SeqFx [[ main ]]
         let wasFilterActive = filterActive[lane];
         let wasCrusherActive = crusherActive[lane];
         let wasRingActive = ringActive[lane];
+        let wasPitchActive = pitchActive[lane];
         let wasTalkBoxActive = talkBoxActive[lane];
         let wasDirtyActive = dirtyActive[lane];
         let wasCombActive = combActive[lane];
@@ -1825,6 +1894,7 @@ processor SeqFx [[ main ]]
         filterActive[lane] = effectType == seqfx::effectFilter;
         crusherActive[lane] = effectType == seqfx::effectCrusher;
         ringActive[lane] = effectType == seqfx::effectRing;
+        pitchActive[lane] = effectType == seqfx::effectPitch;
         talkBoxActive[lane] = effectType == seqfx::effectTalkBox;
         dirtyActive[lane] = effectType == seqfx::effectDirty;
         combActive[lane] = effectType == seqfx::effectComb;
@@ -1836,6 +1906,7 @@ processor SeqFx [[ main ]]
         filterMixTarget[lane] = filterActive[lane] ? targetMix : 0.0f;
         crusherMixTarget[lane] = crusherActive[lane] ? targetMix : 0.0f;
         ringMixTarget[lane] = ringActive[lane] ? targetMix : 0.0f;
+        pitchMixTarget[lane] = pitchActive[lane] ? targetMix : 0.0f;
         talkBoxMixTarget[lane] = talkBoxActive[lane] ? targetMix : 0.0f;
         dirtyMixTarget[lane] = dirtyActive[lane] ? targetMix : 0.0f;
         combGateTarget[lane] = combActive[lane] ? 1.0f : 0.0f;
@@ -1868,6 +1939,9 @@ processor SeqFx [[ main ]]
 
         if (ringActive[lane])
             latchRingStep (lane, wasRingActive);
+
+        if (pitchActive[lane])
+            latchPitchStep (lane, wasPitchActive);
 
         if (talkBoxActive[lane])
             latchTalkBoxStep (lane, wasTalkBoxActive);
@@ -1985,6 +2059,34 @@ processor SeqFx [[ main ]]
         ringSpread[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 1.0f);
         ringBias[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 5], -1.0f, 1.0f);
         ringRectify[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 6], -1.0f, 1.0f);
+    }
+
+    void latchPitchStep (wrap<seqfx::laneCount> lane, bool wasActive)
+    {
+        let currentStepIndex = wrap<seqfx::stepCount> (currentStep);
+
+        if (wasActive && ! triggerSteps[lane, currentStepIndex] && ! relatchingFromPatternUpload)
+            return;
+
+        let blockStart = blockStartStep (lane, currentStep);
+        let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
+        pitchSemitones[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 0], -24.0f, 24.0f);
+        pitchFineCents[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 1], -100.0f, 100.0f);
+        pitchGrainMs[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 10.0f, 120.0f);
+        pitchJitter[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 3], 0.0f, 1.0f);
+        pitchSpread[lane] = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 1.0f);
+
+        if (! wasActive)
+        {
+            pitchSemitonesCurrent[lane] = pitchSemitones[lane];
+            pitchFineCurrent[lane] = pitchFineCents[lane];
+            pitchGrainCurrent[lane] = pitchGrainMs[lane];
+            pitchJitterCurrent[lane] = pitchJitter[lane];
+            pitchSpreadCurrent[lane] = pitchSpread[lane];
+            pitchMixCurrent[lane] = 0.0f;
+            pitchAlignmentPending[lane] = true;
+            initialisePitchGrains (lane, true);
+        }
     }
 
     void latchTalkBoxStep (wrap<seqfx::laneCount> lane, bool wasActive)
@@ -2509,6 +2611,298 @@ processor SeqFx [[ main ]]
         let primary = readTapePrimary (lane, primaryPosition);
         let coarse = readTapeCoarse (lane, coarsePosition);
         return primary + ((coarse - primary) * coarseFade);
+    }
+
+    float32 pitchGrainPrimarySamples (wrap<seqfx::laneCount> lane)
+    {
+        return seqfx::clampFloat (pitchGrainCurrent[lane], 10.0f, 120.0f)
+            * seqfx::tapePrimaryRate * 0.001f;
+    }
+
+    float32 pitchRatioForGrain (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::pitchGrainVoiceCount> voice)
+    {
+        let totalCents = (pitchSemitonesCurrent[lane] * 100.0f)
+            + pitchFineCurrent[lane]
+            + pitchGrainJitterCents[lane, voice];
+        return std::intrinsics::pow (2.0f, seqfx::clampFloat (totalCents, -2535.0f, 2535.0f) / 1200.0f);
+    }
+
+    float32 pitchSafetyPrimarySamples (wrap<seqfx::laneCount> lane)
+    {
+        let grainPrimary = pitchGrainPrimarySamples (lane);
+        return 4.0f
+            + seqfx::pitchAlignmentSearchPrimarySamples
+            + ((seqfx::pitchPositionJitterMaximum + seqfx::pitchSpreadOffsetMaximum) * grainPrimary);
+    }
+
+    void resetPitchGrain (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::pitchGrainVoiceCount> voice,
+        float32 phase,
+        bool randomise)
+    {
+        let wrappedPhase = seqfx::unitWrap (phase);
+        let grainPrimary = pitchGrainPrimarySamples (lane);
+        if (randomise)
+        {
+            pitchGrainJitterCents[lane, voice] = pitchGrainRng[lane, voice].getBipolar()
+                * seqfx::pitchJitterCentsMaximum
+                * seqfx::clampFloat (pitchJitterCurrent[lane], 0.0f, 1.0f);
+            pitchGrainPositionJitter[lane, voice] = pitchGrainRng[lane, voice].getBipolar()
+                * seqfx::pitchPositionJitterMaximum
+                * grainPrimary
+                * seqfx::clampFloat (pitchJitterCurrent[lane], 0.0f, 1.0f);
+        }
+
+        pitchGrainPhase[lane, voice] = wrappedPhase;
+        let ratio = pitchRatioForGrain (lane, voice);
+        let birthDelay = pitchSafetyPrimarySamples (lane)
+            + (std::intrinsics::max (0.0f, ratio - 1.0f) * grainPrimary);
+        let currentDelay = birthDelay - ((ratio - 1.0f) * grainPrimary * wrappedPhase);
+        pitchGrainSourcePosition[lane, voice] = float64 (tapePrimarySamplesWritten[lane])
+            - float64 (currentDelay)
+            + float64 (pitchGrainPositionJitter[lane, voice]);
+    }
+
+    void initialisePitchGrains (wrap<seqfx::laneCount> lane, bool randomise)
+    {
+        for (wrap<seqfx::pitchGrainVoiceCount> voice)
+        {
+            pitchGrainJitterCents[lane, voice] = 0.0f;
+            pitchGrainPositionJitter[lane, voice] = 0.0f;
+            resetPitchGrain (
+                lane,
+                voice,
+                float32 (int32 (voice)) / float32 (seqfx::pitchGrainVoiceCount),
+                randomise
+            );
+        }
+    }
+
+    bool pitchGrainPositionIsValid (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::pitchGrainVoiceCount> voice,
+        float32 spreadOffset)
+    {
+        let position = pitchGrainSourcePosition[lane, voice];
+        return tapePrimaryPositionIsValid (lane, position - float64 (spreadOffset))
+            && tapePrimaryPositionIsValid (lane, position + float64 (spreadOffset));
+    }
+
+    float32<2> readPitchGrain (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::pitchGrainVoiceCount> voice,
+        float32 spreadOffset)
+    {
+        let position = pitchGrainSourcePosition[lane, voice];
+        let left = readTapePrimary (lane, position - float64 (spreadOffset));
+        let right = readTapePrimary (lane, position + float64 (spreadOffset));
+        return float32<2> (left[0], right[1]);
+    }
+
+    float32 pitchWindowAt (float32 phase)
+    {
+        // Equally-spaced Hann heads form a partition whose weights sum to one.
+        return (0.5f - (0.5f * std::intrinsics::cos (phase * 2.0f * seqfx::pi)))
+            * (2.0f / float32 (seqfx::pitchGrainVoiceCount));
+    }
+
+    float32 pitchAlignmentScore (
+        wrap<seqfx::laneCount> lane,
+        int64 candidateIndex,
+        int64 referenceIndex)
+    {
+        var dot = 0.0f;
+        var candidateEnergy = 0.0f;
+        var referenceEnergy = 0.0f;
+
+        // A short normalized waveform comparison is deliberately bounded.
+        // It aligns a silent grain birth to the loud complementary head and
+        // avoids the periodic phase jumps that turn the grain rate into a
+        // stronger pitch than the requested semitone ratio.
+        for (wrap<16> tap)
+        {
+            let offset = int64 (int32 (tap) * 2);
+            let candidate = readTapePrimaryAt (lane, candidateIndex - offset);
+            let reference = readTapePrimaryAt (lane, referenceIndex - offset);
+            dot += (candidate[0] * reference[0]) + (candidate[1] * reference[1]);
+            candidateEnergy += (candidate[0] * candidate[0]) + (candidate[1] * candidate[1]);
+            referenceEnergy += (reference[0] * reference[0]) + (reference[1] * reference[1]);
+        }
+
+        if (candidateEnergy < 1.0e-10f || referenceEnergy < 1.0e-10f)
+            return -2.0f;
+
+        let denominator = std::intrinsics::sqrt (
+            std::intrinsics::max (1.0e-12f, candidateEnergy * referenceEnergy)
+        );
+        return dot / denominator;
+    }
+
+    void alignPitchGrain (
+        wrap<seqfx::laneCount> lane,
+        wrap<seqfx::pitchGrainVoiceCount> voice)
+    {
+        let referenceVoice = wrap<seqfx::pitchGrainVoiceCount> (1 - int32 (voice));
+        let referencePosition = pitchGrainSourcePosition[lane, referenceVoice];
+        if (! tapePrimaryPositionIsValid (lane, referencePosition - 32.0))
+            return;
+
+        let nominalPosition = pitchGrainSourcePosition[lane, voice];
+        var bestScore = -2.0f;
+        var bestOffset = 0;
+
+        // Coarse ±16 ms search at the fixed 48 kHz history rate. That covers
+        // half a 30 Hz cycle without making cost depend on host sample rate.
+        for (wrap<97> candidate)
+        {
+            let offset = (int32 (candidate) - 48) * 16;
+            let candidatePosition = nominalPosition + float64 (offset);
+            if (tapePrimaryPositionIsValid (lane, candidatePosition - 32.0))
+            {
+                let score = pitchAlignmentScore (
+                    lane,
+                    int64 (std::intrinsics::floor (candidatePosition)),
+                    int64 (std::intrinsics::floor (referencePosition))
+                );
+                let closer = std::intrinsics::abs (float32 (offset))
+                    < std::intrinsics::abs (float32 (bestOffset));
+                if (score > bestScore + 1.0e-6f
+                    || (std::intrinsics::abs (score - bestScore) <= 1.0e-6f && closer))
+                {
+                    bestScore = score;
+                    bestOffset = offset;
+                }
+            }
+        }
+
+        if (bestScore <= -1.5f)
+            return;
+
+        let coarseOffset = bestOffset;
+        for (wrap<31> refinement)
+        {
+            let offset = coarseOffset + int32 (refinement) - 15;
+            let candidatePosition = nominalPosition + float64 (offset);
+            if (tapePrimaryPositionIsValid (lane, candidatePosition - 32.0))
+            {
+                let score = pitchAlignmentScore (
+                    lane,
+                    int64 (std::intrinsics::floor (candidatePosition)),
+                    int64 (std::intrinsics::floor (referencePosition))
+                );
+                let closer = std::intrinsics::abs (float32 (offset))
+                    < std::intrinsics::abs (float32 (bestOffset));
+                if (score > bestScore + 1.0e-6f
+                    || (std::intrinsics::abs (score - bestScore) <= 1.0e-6f && closer))
+                {
+                    bestScore = score;
+                    bestOffset = offset;
+                }
+            }
+        }
+
+        pitchGrainSourcePosition[lane, voice] += float64 (bestOffset);
+    }
+
+    float32<2> processPitch (wrap<seqfx::laneCount> lane, float32<2> stage)
+    {
+        let parameterSmoothing = 1.0f - std::intrinsics::exp (
+            -1.0f / (0.025f * float32 (processor.frequency))
+        );
+        var targetSemitones = pitchSemitones[lane];
+        var targetFine = pitchFineCents[lane];
+        var targetJitter = pitchJitter[lane];
+        var targetSpread = pitchSpread[lane];
+        if (pitchActive[lane])
+        {
+            targetSemitones = seqfx::clampFloat (auxParamValue (lane, 0, pitchSemitones[lane]), -24.0f, 24.0f);
+            targetFine = seqfx::clampFloat (auxParamValue (lane, 1, pitchFineCents[lane]), -100.0f, 100.0f);
+            targetJitter = seqfx::clampFloat (auxParamValue (lane, 3, pitchJitter[lane]), 0.0f, 1.0f);
+            targetSpread = seqfx::clampFloat (auxParamValue (lane, 4, pitchSpread[lane]), 0.0f, 1.0f);
+        }
+
+        pitchSemitonesCurrent[lane] += (targetSemitones - pitchSemitonesCurrent[lane]) * parameterSmoothing;
+        pitchFineCurrent[lane] += (targetFine - pitchFineCurrent[lane]) * parameterSmoothing;
+        pitchGrainCurrent[lane] += (pitchGrainMs[lane] - pitchGrainCurrent[lane]) * parameterSmoothing;
+        pitchJitterCurrent[lane] += (targetJitter - pitchJitterCurrent[lane]) * parameterSmoothing;
+        pitchSpreadCurrent[lane] += (targetSpread - pitchSpreadCurrent[lane]) * parameterSmoothing;
+        pitchMixCurrent[lane] = seqfx::moveTowards (
+            pitchMixCurrent[lane], pitchMixTarget[lane], 1.0f / seqfx::transitionCrossfadeFrames
+        );
+
+        let grainPrimary = pitchGrainPrimarySamples (lane);
+        let spreadOffset = grainPrimary
+            * seqfx::pitchSpreadOffsetMaximum
+            * seqfx::clampFloat (pitchSpreadCurrent[lane], 0.0f, 1.0f);
+        let grainDurationFrames = std::intrinsics::max (
+            2.0f,
+            seqfx::clampFloat (pitchGrainCurrent[lane], 10.0f, 120.0f)
+                * float32 (processor.frequency) * 0.001f
+        );
+        let phaseIncrement = 1.0f / grainDurationFrames;
+        let primaryPerHostFrame = seqfx::tapePrimaryRate / float32 (processor.frequency);
+        let baseCentsSigned = (pitchSemitonesCurrent[lane] * 100.0f) + pitchFineCurrent[lane];
+        var grains = float32<2> (0.0f);
+        var allHistoryValid = true;
+
+        if (pitchAlignmentPending[lane])
+        {
+            alignPitchGrain (lane, 0);
+            pitchAlignmentPending[lane] = false;
+        }
+
+        for (wrap<seqfx::pitchGrainVoiceCount> voice)
+        {
+            let phase = pitchGrainPhase[lane, voice];
+            let window = pitchWindowAt (phase);
+            let positionValid = pitchGrainPositionIsValid (lane, voice, spreadOffset);
+            if (positionValid)
+                grains += readPitchGrain (lane, voice, spreadOffset) * window;
+            else
+                allHistoryValid = false;
+
+            pitchGrainSourcePosition[lane, voice] += float64 (
+                pitchRatioForGrain (lane, voice) * primaryPerHostFrame
+            );
+            let nextPhase = phase + phaseIncrement;
+            if (nextPhase >= 1.0f)
+            {
+                resetPitchGrain (lane, voice, nextPhase - 1.0f, true);
+                alignPitchGrain (lane, voice);
+            }
+            else
+                pitchGrainPhase[lane, voice] = nextPhase;
+        }
+
+        if (allHistoryValid)
+            pitchHistoryFade[lane] = seqfx::moveTowards (
+                pitchHistoryFade[lane], 1.0f, 1.0f / seqfx::transitionCrossfadeFrames
+            );
+        else
+            pitchHistoryFade[lane] = 0.0f;
+
+        if (pitchMixCurrent[lane] <= 0.000001f)
+            return stage;
+
+        let baseCents = std::intrinsics::abs (baseCentsSigned);
+        let neutralAmount = seqfx::clampFloat (
+            (baseCents + (pitchJitterCurrent[lane] * seqfx::pitchJitterCentsMaximum)) * 2.0f,
+            0.0f,
+            1.0f
+        );
+        if (neutralAmount <= 0.000001f)
+            return stage;
+
+        let availableAmount = neutralAmount * pitchHistoryFade[lane];
+        let pitched = stage + ((grains - stage) * availableAmount);
+        let combined = stage + ((pitched - stage) * pitchMixCurrent[lane]);
+        return float32<2> (
+            seqfx::clampFloat (combined[0], -4.0f, 4.0f),
+            seqfx::clampFloat (combined[1], -4.0f, 4.0f)
+        );
     }
 
     float32<2> readStutterCapture (wrap<seqfx::laneCount> lane, float32 position)
@@ -3826,8 +4220,13 @@ processor SeqFx [[ main ]]
 
     float32<2> processChain (wrap<seqfx::laneCount> lane, float32<2> stage)
     {
+        // The fixed-rate gesture history is the raw input to this serial lane.
+        // Pitch, Reverse, and Tape can therefore read it without feeding their
+        // own time-remapped output back into future grains/gestures.
+        writeTapeHistory (lane, stage);
         stage = processFilter (lane, stage);
         stage = processCrusher (lane, stage);
+        stage = processPitch (lane, stage);
         stage = processRing (lane, stage);
         stage = processTalkBox (lane, stage);
         stage = processDirty (lane, stage);
@@ -3837,7 +4236,6 @@ processor SeqFx [[ main ]]
         writeVibroHistory (lane, vibroInput);
         stage = processFlange (lane, stage);
 
-        writeTapeHistory (lane, stage);
         stage = processTapeStop (lane, stage);
 
         stage = processStutter (lane, stage);

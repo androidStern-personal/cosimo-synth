@@ -225,6 +225,7 @@ const EFFECT_OPTIONS = [
     SEQFX_EFFECT_TYPES.crusher,
     SEQFX_EFFECT_TYPES.tapeStop,
     SEQFX_EFFECT_TYPES.stutter,
+    SEQFX_EFFECT_TYPES.pitch,
     SEQFX_EFFECT_TYPES.comb,
     SEQFX_EFFECT_TYPES.ring,
     SEQFX_EFFECT_TYPES.talkBox,
@@ -364,6 +365,8 @@ const TALK_BOX_ICON_PATH =
 const DIRTY_ICON_PATH = "M232 64.5h-54l-111.5 112H26V193h50L187.5 81H232z";
 const COMB_ICON_PATH =
     "M25.101 77.628a4.008 4.008 0 0 0 3.997 4.01h16.996c6.632 0 13.927 5.01 16.3 11.202l52.724 85.231c7.115 18.564 18.693 18.571 25.857.025L193.91 92.84c2.39-6.187 9.693-11.202 16.336-11.202h16.49a4.01 4.01 0 0 0 4-4.01V68.82a4 4 0 0 0-3.994-4.009h-23.508c-8.835 0-18.547 6.702-21.69 14.962l-47.147 73.852c-3.533 9.287-9.217 9.262-12.694-.051L75.2 79.805C72.108 71.524 62.44 64.81 53.6 64.81H29.11a4.012 4.012 0 0 0-4.008 4.01v8.808z";
+const PITCH_ICON_PATH =
+    "M175.863 100.122c0-2.205 1.293-2.747 2.883-1.214l30.096 28.996-30.11 29.24c-1.585 1.538-2.87 1-2.87-1.209v-19.24l-95.811.637v18.596c0 2.21-1.28 2.746-2.854 1.201l-29.788-29.225 29.774-28.982c1.584-1.542 2.868-1.004 2.868 1.2v19.54h95.812v-19.54z";
 const VIBRO_ICON_PATH =
     "M35.996 208c-2.207 0-3.077-1.532-1.935-3.434l91.878-153.132c1.138-1.896 2.98-1.902 4.122 0l91.878 153.132c1.138 1.896.272 3.434-1.935 3.434h-8.008c-2.207 0-4.922-1.54-6.054-3.421L130.058 78.42c-1.137-1.89-2.984-1.881-4.116 0L50.058 204.58c-1.138 1.889-3.848 3.42-6.054 3.42h-8.008z";
 const FLANGE_ICON_PATH =
@@ -431,6 +434,20 @@ function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
                     <g fill={textureFill} fillRule="evenodd">
                         <path d="M109.533 197.602a1.887 1.887 0 0 1-.034 2.76l-7.583 7.066a4.095 4.095 0 0 1-5.714-.152l-32.918-34.095c-1.537-1.592-1.54-4.162-.002-5.746l33.1-34.092c1.536-1.581 4.11-1.658 5.74-.18l7.655 6.94c.82.743.833 1.952.02 2.708l-21.11 19.659s53.036.129 71.708.064c18.672-.064 33.437-16.973 33.437-34.7c0-7.214-5.578-17.64-5.578-17.64c-.498-.99-.273-2.444.483-3.229l8.61-8.94c.764-.794 1.772-.632 2.242.364c0 0 9.212 18.651 9.212 28.562c0 28.035-21.765 50.882-48.533 50.882s-70.921.201-70.921.201z" />
                         <path d="M144.398 58.435a1.887 1.887 0 0 1 .034-2.76l7.583-7.066a4.095 4.095 0 0 1 5.714.152l32.918 34.095c1.537 1.592 1.54 4.162.002 5.746l-33.1 34.092c-1.536 1.581-4.11 1.658-5.74.18l-7.656-6.94c-.819-.743-.832-1.952-.02-2.708l21.111-19.659s-53.036-.129-71.708-.064c-18.672.064-33.437 16.973-33.437 34.7c0 7.214 5.578 17.64 5.578 17.64c.498.99.273 2.444-.483 3.229l-8.61 8.94c-.764.794-1.772.632-2.242-.364c0 0-9.212-18.65-9.212-28.562c0-28.035 21.765-50.882 48.533-50.882s70.921-.201 70.921-.201z" />
+                    </g>
+                </svg>
+            );
+        case SEQFX_EFFECT_TYPES.pitch:
+            return (
+                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
+                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
+                    <g data-role="seqfx-effect-icon-fill" fill="currentColor" fillRule="evenodd">
+                        <path d={PITCH_ICON_PATH} />
+                        <path d={PITCH_ICON_PATH} transform="rotate(90 128 128)" />
+                    </g>
+                    <g fill={textureFill} fillRule="evenodd">
+                        <path d={PITCH_ICON_PATH} />
+                        <path d={PITCH_ICON_PATH} transform="rotate(90 128 128)" />
                     </g>
                 </svg>
             );
@@ -964,6 +981,13 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 2, label: "Shape", min: 0, max: 1, step: 0.01, amountKind: "stutterShape", hint: "Morphs the per-cut envelope." },
         { index: 3, label: "Gate", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Audible portion of each cut." },
     ],
+    [SEQFX_EFFECT_TYPES.pitch]: [
+        { index: 0, label: "Pitch", min: -24, max: 24, step: 1, amountKind: "integer", hint: "Semitone shift; direct edits snap while modulation follows a smoothed continuous path." },
+        { index: 1, label: "Fine", min: -100, max: 100, step: 1, amountKind: "integer", hint: "Fine pitch offset in cents." },
+        { index: 2, label: "Grain", min: 10, max: 120, step: 0.1, amountKind: "linear", hint: "Trigger-latched grain window in milliseconds; longer values trade transient detail for smoother sustained sound." },
+        { index: 3, label: "Jitter", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Seeded grain-birth pitch and position variation." },
+        { index: 4, label: "Spread", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Symmetric left/right source-position offset; zero remains dual mono." },
+    ],
     [SEQFX_EFFECT_TYPES.comb]: [
         { index: 0, label: "Tune", min: 30, max: 8000, step: 0.01, amountKind: "cutoffOctaves", hint: "Center frequency of the conventional and dispersed resonances." },
         { index: 1, label: "Decay", min: 0.02, max: 8, step: 0.01, amountKind: "linear", hint: "Time for the feedback loop to fall by 60 dB." },
@@ -1051,6 +1075,9 @@ const STUTTER_PARAM_SLICES = 0;
 const STUTTER_PARAM_SPEED = 1;
 const STUTTER_PARAM_SHAPE = 2;
 const STUTTER_PARAM_GATE = 3;
+const PITCH_PARAM_SEMITONES = 0;
+const PITCH_PARAM_FINE_CENTS = 1;
+const PITCH_PARAM_GRAIN_MS = 2;
 const COMB_PARAM_TUNE_HZ = 0;
 const COMB_PARAM_DECAY_SECONDS = 1;
 const COMB_PARAM_DISPERSION = 3;
@@ -1427,6 +1454,69 @@ function SeqFxStutterBlockGlyph({
             {size === "wide" ? (
                 <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
                     x{slices} {shapeLabel}
+                </span>
+            ) : null}
+        </>
+    );
+}
+
+function pitchGrainRisoPath(width: number, phaseOffset: number, semitones: number) {
+    const pitchTilt = clampNumber(semitones, -24, 24) / 24;
+    return Array.from({ length: 65 }, (_unused, index) => {
+        const normalized = index / 64;
+        const phase = (normalized + phaseOffset) % 1;
+        const envelope = Math.sin(Math.PI * phase) ** 2;
+        const tilt = pitchTilt * (normalized - 0.5) * 5;
+        const y = clampNumber(24 - (envelope * 18) - tilt, 2, 26);
+        return `${index === 0 ? "M" : "L"}${roundedPathValue(normalized * width)} ${roundedPathValue(y)}`;
+    }).join(" ");
+}
+
+function SeqFxPitchBlockGlyph({
+    params,
+    size,
+    width,
+}: {
+    params: number[];
+    size: SeqFxBlockVisualSize;
+    width: number;
+}) {
+    const semitones = Number(params[PITCH_PARAM_SEMITONES] ?? 0);
+    const fineCents = Number(params[PITCH_PARAM_FINE_CENTS] ?? 0);
+    const grainMs = Number(params[PITCH_PARAM_GRAIN_MS] ?? 48);
+    const pitchLabel = `${semitones >= 0 ? "+" : ""}${Math.round(semitones)} ST`;
+
+    return (
+        <>
+            <svg
+                aria-hidden="true"
+                className="seqfx-block-glyph"
+                data-effect="pitch"
+                data-role="seqfx-block-glyph"
+                data-size={size}
+                focusable="false"
+                preserveAspectRatio="none"
+                viewBox={`0 0 ${width} 28`}
+            >
+                <path
+                    className="seqfx-block-glyph__line"
+                    d={pitchGrainRisoPath(width, 0, semitones)}
+                    data-role="seqfx-block-glyph-line"
+                />
+                <path
+                    className="seqfx-block-glyph__line seqfx-block-glyph__line--secondary"
+                    d={pitchGrainRisoPath(width, 0.5, semitones)}
+                    data-role="seqfx-block-glyph-secondary-line"
+                />
+            </svg>
+            {size !== "single" ? (
+                <span className="seqfx-block-glyph-label" data-role="seqfx-block-glyph-label">
+                    {pitchLabel}
+                </span>
+            ) : null}
+            {size === "wide" ? (
+                <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
+                    {Number(grainMs.toFixed(1))} MS · {formatSignedFixed(fineCents, 0)}¢
                 </span>
             ) : null}
         </>
@@ -1852,6 +1942,8 @@ export function SeqFxBlockGlyph({
             return <SeqFxTapeStopBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.stutter:
             return <SeqFxStutterBlockGlyph params={params} size={size} width={width} />;
+        case SEQFX_EFFECT_TYPES.pitch:
+            return <SeqFxPitchBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.comb:
             return <SeqFxCombBlockGlyph params={params} size={size} width={width} />;
         case SEQFX_EFFECT_TYPES.ring:

@@ -200,7 +200,7 @@ const definitions = [
         parameters: [
             parameter("semitones", "Pitch", -24, 24, 0, 1, { unit: "semitones", integer: true }),
             parameter("cents", "Fine", -100, 100, 0, 1, { unit: "cents", integer: true }),
-            parameter("grainMs", "Grain", 10, 120, 48, 0.1, { unit: "ms", scale: "log", latch: "trigger" }),
+            parameter("grainMs", "Grain", 10, 120, 48, 0.1, { unit: "ms", scale: "log", latch: "trigger", auxEligible: false }),
             parameter("jitter", "Jitter", 0, 1, 0, 0.01, { unit: "%" }),
             parameter("spread", "Spread", 0, 1, 0.35, 0.01, { unit: "%" }),
         ],
