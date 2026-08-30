@@ -1667,6 +1667,16 @@ namespace wt
         int32[voiceCount] voiceActive;
         int32[voiceCount] voiceGeneration;
         int32[voiceCount] voiceTrackingSerial;
+        // True while the audio loop last saw this voice sounding. A voice
+        // that is not sounding is fully quiescent: its seven modulator nodes
+        // are frozen (an un-advanced node re-emits its previous frame, and
+        // every modulator emits exactly 0 or a held value at rest), its
+        // renderer controls are cleared once at the transition, and nothing
+        // reads it — the mixer, the rack-source reduction, and every
+        // monitor all gate on the same sounding predicate, and a retrigger
+        // resets every modulator from its note-on event before the next
+        // advance. Freezing is therefore bit-identical to advancing.
+        bool[voiceCount] voiceWasSounding;
         // Post-mix effects follow the newest still-held voice. Once no note is
         // held, retain the last realized shared pitch so effect tails never retune.
         float32 trackingPitchHzState = keyTrackFallbackPitchHz;
@@ -2778,12 +2788,6 @@ namespace wt
                 rendererFloats.at (rendererBasePhaseIncrementOffset + voiceOscillator) = 0.0f;
                 rendererFloats.at (rendererOscillatorGainOffset + voiceOscillator) = 0.0f;
             }
-        }
-
-        void clearExternalRendererOutputs()
-        {
-            for (int32 outputIndex = 0; outputIndex < 16 * 2; ++outputIndex)
-                rendererFloats.at (rendererNoteOutputOffset + outputIndex) = 0.0f;
         }
 
         void resetExternalRendererNoteHistory (int32 voiceIndex)
@@ -4741,6 +4745,17 @@ namespace wt
                 resetVoiceOscillatorLifecycle (index);
                 startBounceSampleForVoice (index, change.pitch);
                 resetFilterState (index);
+
+                // A quiescent voice's effective envelope/MSEG values are
+                // frozen along with the rest of it, so a retune out of
+                // quiescence must refresh them from the current bases — the
+                // per-frame reset used to do this implicitly. A retrigger of
+                // a still-sounding voice keeps its live effectives, exactly
+                // as before (startVoiceFromNote's poly path resets
+                // unconditionally because a stolen voice starts over).
+                if (! voiceWasSounding[voice])
+                    resetVoiceGeneratorModulationTargets (index);
+
                 ampEnvelopes[voice].eventIn <- note;
                 triggerVoiceModulators (index);
             }
@@ -5745,6 +5760,20 @@ namespace wt
                 clearVoiceArticulation (int32 (voice));
                 resetVoiceGeneratorModulationTargets (int32 (voice));
                 stopBounceSampleForVoice (int32 (voice));
+
+                // Run every modulator's main() prologue (the MSEG readers
+                // fill their default buffers there) exactly once, before any
+                // event can read that state. The audio loop freezes these
+                // nodes while their voice is quiescent, and a frozen node's
+                // rest state is stationary, so this single advance leaves
+                // each node exactly where an always-advanced node would rest.
+                mseg1[voice].advance();
+                mseg2[voice].advance();
+                mseg3[voice].advance();
+                modEnv1[voice].advance();
+                modEnv2[voice].advance();
+                modEnv3[voice].advance();
+                ampEnvelopes[voice].advance();
             }
 
             initialiseExternalRendererState();
@@ -5785,18 +5814,33 @@ namespace wt
                 float32 trackingPitchHz = trackingPitchHzState;
                 int32 trackingSerial = -1;
 
-                if (! isBounceSource)
-                {
-                    for (wrap<voiceCount> voice)
-                        clearExternalRendererVoiceControls (int32 (voice));
-
-                    clearExternalRendererOutputs();
-                }
                 beginModulationFrame();
 
                 for (wrap<voiceCount> voice)
                 {
                     let voiceIndex = int32 (voice);
+
+                    // A voice that was not sounding after its previous frame
+                    // is frozen whole: no pitch glide, no modulator input
+                    // writes, no node advances. Every frozen node re-emits
+                    // its rest value, nothing downstream reads the voice
+                    // (see voiceWasSounding), and a note-on resets all of it,
+                    // so the skip is bit-identical to advancing. The
+                    // pre-advance view of the amp gain equals the
+                    // post-advance view here because an idle amp envelope is
+                    // stationary at exactly zero.
+                    if (voiceActive.at (voice) == 0 && ampEnvelopes[voice].gainOut <= 0.0f)
+                    {
+                        if (voiceWasSounding[voice])
+                        {
+                            voiceWasSounding[voice] = false;
+                            resetVoiceGeneratorModulationTargets (voiceIndex);
+                            clearExternalRendererVoiceControls (voiceIndex);
+                        }
+
+                        continue;
+                    }
+
                     advanceVoicePitchState (voiceIndex);
                     let msegIndex0 = voiceArticulationMsegIndex (voiceIndex, 0);
                     let msegIndex1 = voiceArticulationMsegIndex (voiceIndex, 1);
@@ -5841,10 +5885,16 @@ namespace wt
 
                     if (! voiceIsSoundingForRackModulation (voiceIndex))
                     {
+                        // The retiring frame: this advance brought the amp
+                        // envelope to exactly zero. Tear the voice down once;
+                        // the frozen path above owns it from the next frame.
+                        voiceWasSounding[voice] = false;
                         resetVoiceGeneratorModulationTargets (voiceIndex);
+                        clearExternalRendererVoiceControls (voiceIndex);
                         continue;
                     }
 
+                    voiceWasSounding[voice] = true;
                     accumulateVoiceModulationTargets (voiceIndex);
                     // Generator destinations consume the prior frame's source
                     // values. This one-frame causal delay makes self/cross
