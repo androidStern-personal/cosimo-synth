@@ -32,10 +32,10 @@ test("the canonical registry owns honest units and primary versus advanced hiera
     assert.deepEqual(defaultReadouts, {
         filter: ["Low Pass", "2 kHz", "500 Hz", "Q 0.707", "1\u00d7"],
         crush: ["8 bits", "48 kHz", "0 dB", "Classic", "0%", "0%", "0%"],
-        tapeStop: ["1 Cell", "0", "Catch Up", "1/16", "0%", "Sync", "500 ms", "125 ms"],
+        tapeStop: ["1 Cell", "0", "Crossfade to Live", "1/16", "0%", "Sync", "500 ms", "125 ms"],
         stutter: ["8", "1\u00d7", "0.44", "68%"],
         pitch: ["0 semitones", "0 cents", "48 ms", "0%", "35%"],
-        comb: ["220 Hz", "1.4 s", "Positive", "55%", "7.5 kHz", "12%", "18%", "65%"],
+        comb: ["220 Hz", "1.4 s", "Positive", "55%", "20 kHz", "12%", "18%", "65%"],
         ring: ["180 Hz", "Sine", "0%", "0.5 Hz", "8%", "0%", "0%"],
         reverse: ["1 Cell", "8%", "Sync", "250 ms", "100%"],
         talkBox: ["A", "O", "0%", "Q 6", "30%", "15%", "0 dB"],
@@ -311,7 +311,7 @@ test("Comb keeps the selected reference-neutral vector-dispersive production con
             { id: "decaySeconds", defaultValue: 1.4, latch: "continuous", auxEligible: true },
             { id: "polarity", defaultValue: 0, latch: "trigger", auxEligible: false },
             { id: "dispersion", defaultValue: 0.55, latch: "continuous", auxEligible: true },
-            { id: "dampingHz", defaultValue: 7_500, latch: "continuous", auxEligible: true },
+            { id: "dampingHz", defaultValue: 20_000, latch: "continuous", auxEligible: true },
             { id: "motion", defaultValue: 0.12, latch: "continuous", auxEligible: true },
             { id: "drive", defaultValue: 0.18, latch: "continuous", auxEligible: true },
             { id: "width", defaultValue: 0.65, latch: "continuous", auxEligible: true },
@@ -322,7 +322,8 @@ test("Comb keeps the selected reference-neutral vector-dispersive production con
     assert.match(source, /let combModeCount = 4;/);
     assert.match(source, /let combAllpassStageCount = 4;/);
     assert.match(source, /combVectorHistory/);
-    assert.match(source, /combMeasuredPeriodCompensation/);
+    assert.match(source, /combAllpassPhaseDelayPerStage/);
+    assert.match(source, /combConditioningDelayOffset/);
     assert.match(source, /combTailActive/);
 });
 

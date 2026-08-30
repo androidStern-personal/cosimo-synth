@@ -28,11 +28,12 @@ matching.
 
 ## Engineering decisions
 
-- `Original` maps Rate to `round(hostSampleRate / Rate)` and exactly preserves
-  the shipped clip, gain, hold, quantize, and mix order at 48 kHz. Legacy v5
-  `Hold Frames` maps to `48000 / holdFrames`, including aux endpoints.
-- `Classic` uses a phase accumulator so the displayed Rate remains the same
-  converter frequency at 48 and 96 kHz. Drive is applied before clipping,
+- `Original` preserves the shipped clip, gain, capture, quantize, and mix order,
+  but advances capture timing with a fractional phase accumulator so the Rate
+  readout remains true across host sample rates. Integral canonical mappings
+  such as 48 kHz / 12 kHz retain the shipped frame indices and oracle exactly.
+  Legacy v5 `Hold Frames` maps to `48000 / holdFrames`, including aux endpoints.
+- `Classic` uses the same sample-rate-stable capture clock. Drive is applied before clipping,
   repairing the old ordering without changing `Original`.
 - `Smooth` uses smoothstep interpolation between captured samples. It keeps the
   reduction identity but widens the useful low-rate region by removing the
@@ -55,7 +56,8 @@ matching.
 The focused fixtures prove:
 
 - the `Original` 48 kHz output matches the shipped Crusher oracle;
-- a 12 kHz Rate produces the same capture frequency at 48 and 96 kHz;
+- a 12 kHz Rate produces the same capture frequency in Original and Classic at
+  44.1, 48, 88.2, 96, and 192 kHz;
 - `Smooth` has more moving samples and smaller discontinuities than `Classic`;
 - deterministic dither repeats exactly and lowers quantization-error
   correlation on the low-level fixture, and an authoritative reset restarts

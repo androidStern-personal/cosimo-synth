@@ -409,7 +409,8 @@ function clamp(value: number, min: number, max: number): number {
         return min;
     }
 
-    return Math.min(max, Math.max(min, value));
+    const clamped = Math.min(max, Math.max(min, value));
+    return Object.is(clamped, -0) ? 0 : clamped;
 }
 
 function clampIndex(value: number, maxExclusive: number, label: string): number {
@@ -632,6 +633,15 @@ function cloneEffectAuxMemory(memory?: Partial<Record<SeqFxEffectType, SeqFxAuxS
     }
 
     return Object.keys(cloned).length > 0 ? cloned : undefined;
+}
+
+function cloneEffectMemories(step?: Pick<SeqFxStep, "effectParams" | "effectAux">): Pick<SeqFxStep, "effectParams" | "effectAux"> {
+    const effectParams = cloneEffectParamMemory(step?.effectParams);
+    const effectAux = cloneEffectAuxMemory(step?.effectAux);
+    return {
+        ...(effectParams ? { effectParams } : {}),
+        ...(effectAux ? { effectAux } : {}),
+    };
 }
 
 function rememberCurrentEffectParams(step: SeqFxStep): Partial<Record<SeqFxEffectType, number[]>> | undefined {
@@ -899,16 +909,20 @@ function cloneState(state: SeqFxState): SeqFxState {
         patterns: state.patterns.map((pattern) => ({
             revision: pattern.revision,
             lanes: pattern.lanes.map((lane) => ({
-                steps: lane.steps.map((step) => ({
-                    active: step.active,
-                    trigger: step.trigger,
-                    effectType: step.effectType,
-                    mix: step.mix,
-                    params: [...step.params],
-                    aux: cloneAuxState(step.aux),
-                    effectParams: cloneEffectParamMemory(step.effectParams),
-                    effectAux: cloneEffectAuxMemory(step.effectAux),
-                })),
+                steps: lane.steps.map((step) => {
+                    const effectParams = cloneEffectParamMemory(step.effectParams);
+                    const effectAux = cloneEffectAuxMemory(step.effectAux);
+                    return {
+                        active: step.active,
+                        trigger: step.trigger,
+                        effectType: step.effectType,
+                        mix: step.mix,
+                        params: [...step.params],
+                        aux: cloneAuxState(step.aux),
+                        ...(effectParams ? { effectParams } : {}),
+                        ...(effectAux ? { effectAux } : {}),
+                    };
+                }),
             })),
         })),
     };
@@ -934,6 +948,7 @@ function normalizeStep(candidate: unknown, lane: number): SeqFxStep {
         : effectType;
 
     const params = normalizeParamVector(paramsEffectType, rawParams);
+    const effectAux = normalizeEffectAuxMemory(step.effectAux, effectParams);
     return {
         active: rawActive && effectType !== SEQFX_EFFECT_TYPES.empty,
         trigger: rawActive && effectType !== SEQFX_EFFECT_TYPES.empty && step.trigger === true,
@@ -941,8 +956,8 @@ function normalizeStep(candidate: unknown, lane: number): SeqFxStep {
         mix: normalizeMix(Number(step.mix ?? fallback.mix)),
         params,
         aux: normalizeAuxState(paramsEffectType, params, step.aux),
-        effectParams,
-        effectAux: normalizeEffectAuxMemory(step.effectAux, effectParams),
+        ...(effectParams ? { effectParams } : {}),
+        ...(effectAux ? { effectAux } : {}),
     };
 }
 
@@ -1265,7 +1280,7 @@ function requireNumber(value: unknown, min: number, max: number, path: string): 
     if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
         failParse("invalid_number", path, `must be a finite number from ${min} to ${max}`);
     }
-    return value;
+    return Object.is(value, -0) ? 0 : value;
 }
 
 function parseStoredParamVector(effectType: SeqFxEffectType, value: unknown, path: string): number[] {
@@ -1418,10 +1433,7 @@ function parseStoredStep(
             : defaultAuxForParams(params, effectType);
     const memories = hasOwnValue(raw, "memories")
         ? parseStoredMemories(raw.memories, `${path}.memories`)
-        : {
-            effectParams: cloneEffectParamMemory(baseStep?.effectParams),
-            effectAux: cloneEffectAuxMemory(baseStep?.effectAux),
-        };
+        : cloneEffectMemories(baseStep);
 
     return {
         active: true,
@@ -2134,8 +2146,7 @@ function writeBlock(
             mix: normalizeMix(template.mix),
             params: [...params],
             aux: cloneAuxState(aux),
-            effectParams: cloneEffectParamMemory(effectParams),
-            effectAux: cloneEffectAuxMemory(effectAux),
+            ...cloneEffectMemories({ effectParams, effectAux }),
         };
     }
 }
@@ -2152,8 +2163,7 @@ function cloneBlockSteps(pattern: SeqFxPattern, lane: number, block: SeqFxBlock)
                 normalizeParam(source.effectType, paramIndex, source.params[paramIndex])
             )),
             aux: normalizeAuxState(source.effectType, source.params, source.aux),
-            effectParams: cloneEffectParamMemory(source.effectParams),
-            effectAux: cloneEffectAuxMemory(source.effectAux),
+            ...cloneEffectMemories(source),
         };
     });
 }
@@ -2192,8 +2202,7 @@ function writeBlockSteps(
                 normalizeParam(source.effectType, paramIndex, source.params[paramIndex])
             )),
             aux: normalizeAuxState(source.effectType, source.params, source.aux),
-            effectParams: cloneEffectParamMemory(source.effectParams),
-            effectAux: cloneEffectAuxMemory(source.effectAux),
+            ...cloneEffectMemories(source),
         };
     }
 }
@@ -2951,8 +2960,7 @@ export function getSeqFxStepValueSnapshot(state: SeqFxState, target: SeqFxStepVa
             normalizeParam(source.effectType === SEQFX_EFFECT_TYPES.empty ? defaultEffectTypeForLane(lane) : source.effectType, paramIndex, source.params[paramIndex])
         )),
         aux: cloneAuxState(source.aux),
-        effectParams: cloneEffectParamMemory(source.effectParams),
-        effectAux: cloneEffectAuxMemory(source.effectAux),
+        ...cloneEffectMemories(source),
     };
 }
 

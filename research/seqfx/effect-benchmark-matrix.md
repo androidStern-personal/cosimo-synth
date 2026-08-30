@@ -141,7 +141,9 @@ but they cannot drift independently across state, UI, and Cmajor.
 - DAC Q: 0–100% post-converter reconstruction filtering, aux eligible.
 - Dither: 0–100%, aux eligible.
 
-`Original` preserves the shipped 48 kHz hold/clip/quantize/gain order exactly.
+`Original` preserves the shipped 48 kHz clip/capture/quantize/gain order exactly
+at integral legacy mappings while a fractional capture clock keeps the Rate
+readout true at every supported host sample rate.
 `Classic` uses the corrected drive order and a Rate in Hz. `Smooth` interpolates
 captures. `Progressive` quantizes capture-to-capture differences and applies a
 bounded DC blocker. Kilohearts' ADC Q/DAC Q vocabulary was selected instead of

@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PATCH_PATH = ROOT / "fx" / "seqfx" / "SeqFx.cmajorpatch"
 SAMPLE_RATE = 48_000
 STEP_FRAMES = 3_000
+RATE_PROBES = (44_100, 48_000, 88_200, 96_000, 192_000)
 LANE_FILTER = 0
 LANE_CRUSHER = 1
 LANE_TAPE = 2
@@ -404,6 +405,86 @@ def _sine_at_rate(frames: int, frequency: float, sample_rate: int, amplitude: fl
     return np.column_stack([mono, mono]).astype(np.float32)
 
 
+def _tape_motor_probe(frames: int, sample_rate: int) -> np.ndarray:
+    """Put a continuous tone and a pulse clock through the same tape gesture."""
+    carrier_hz = 4_000.0
+    pulse_hz = 2_000.0
+    t = np.arange(frames, dtype=np.float64) / sample_rate
+    sine = (0.55 * np.sin(2.0 * np.pi * carrier_hz * t)).astype(np.float32)
+    pulse_phase = np.mod(t * pulse_hz, 1.0)
+    pulse = np.where(
+        pulse_phase < 0.25,
+        0.65 * np.sin(np.pi * pulse_phase / 0.25) ** 2,
+        0.0,
+    ).astype(np.float32)
+    return np.column_stack([sine, pulse]).astype(np.float32)
+
+
+def _local_tape_speed_from_sine(
+    samples: np.ndarray,
+    *,
+    sample_rate: int,
+    carrier_hz: float = 4_000.0,
+) -> float:
+    signal = np.asarray(samples, dtype=np.float64)
+    signs = np.signbit(signal)
+    crossing_indices = np.flatnonzero(signs[1:] != signs[:-1])
+    if crossing_indices.size < 2:
+        return 0.0
+    left = np.abs(signal[crossing_indices])
+    right = np.abs(signal[crossing_indices + 1])
+    fractions = left / np.maximum(left + right, 1.0e-12)
+    crossing_positions = crossing_indices.astype(np.float64) + fractions
+    frequency_hz = (
+        (crossing_positions.size - 1)
+        * sample_rate
+        / (2.0 * max(1.0, crossing_positions[-1] - crossing_positions[0]))
+    )
+    return float(frequency_hz / carrier_hz)
+
+
+def _local_tape_speed_from_pulses(
+    samples: np.ndarray,
+    *,
+    sample_rate: int,
+    pulse_hz: float = 2_000.0,
+) -> float:
+    signal = np.asarray(samples, dtype=np.float64)
+    threshold = max(0.08, float(np.max(signal)) * 0.45)
+    above = signal >= threshold
+    rising_edges = np.flatnonzero(above[1:] & ~above[:-1])
+    if rising_edges.size < 2:
+        return 0.0
+    frequency_hz = (
+        (rising_edges.size - 1)
+        * sample_rate
+        / max(1, int(rising_edges[-1] - rising_edges[0]))
+    )
+    return float(frequency_hz / pulse_hz)
+
+
+def _centered_window(center_frame: int, radius_frames: int) -> slice:
+    return slice(center_frame - radius_frames, center_frame + radius_frames)
+
+
+def _first_permanently_dry_frame(
+    output: np.ndarray,
+    dry: np.ndarray,
+    *,
+    search_start: int,
+    tolerance: float = 2.0e-5,
+) -> int:
+    error = np.max(np.abs(output - dry), axis=1)
+    suffix_max = np.maximum.accumulate(error[::-1])[::-1]
+    candidates = np.flatnonzero(suffix_max[search_start:] <= tolerance)
+    if candidates.size == 0:
+        raise AssertionError(
+            f"Tape output never returned permanently to dry after frame {search_start}; "
+            f"trailing error was {suffix_max[-1]:.3g}"
+        )
+    return search_start + int(candidates[0])
+
+
 def _step_frames_at_rate(sample_rate: int) -> int:
     return int(round(STEP_FRAMES * sample_rate / SAMPLE_RATE))
 
@@ -677,11 +758,13 @@ def test_per_step_crusher_parameters_are_latched_at_step_boundaries(
     assert np.unique(second_step).size > np.unique(first_step).size * 6
 
 
-@pytest.mark.parametrize("sample_rate", [48_000, 96_000])
-def test_crush_rate_hz_keeps_the_same_capture_frequency_across_host_sample_rates(
+@pytest.mark.parametrize("sample_rate", [44_100, 48_000, 88_200, 96_000, 192_000])
+@pytest.mark.parametrize("character", [0, 1])
+def test_crush_rate_hz_keeps_original_and_classic_capture_frequency_across_host_sample_rates(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
     sample_rate: int,
+    character: int,
 ) -> None:
     upload = _empty_upload()
     for step in (0, 1):
@@ -690,7 +773,7 @@ def test_crush_rate_hz_keeps_the_same_capture_frequency_across_host_sample_rates
             lane=LANE_CRUSHER,
             step=step,
             trigger=step == 0,
-            params=[16, 12_000, 0, 1, 0, 0, 0],
+            params=[16, 12_000, 0, character, 0, 0, 0],
         )
     frames = sample_rate // 10
     input_audio = _sine_at_rate(frames, 997.0, sample_rate)
@@ -1851,6 +1934,241 @@ def test_tape_stop_lowers_zero_crossing_rate_during_active_block(
     assert _zero_crossing_rate(late) < _zero_crossing_rate(early) * 0.72
 
 
+@pytest.mark.parametrize("sample_rate", RATE_PROBES)
+def test_tape_impulse_spacing_and_sine_pitch_follow_the_same_motor_curve(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    sample_rate: int,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_TAPE,
+        step=1,
+        trigger=True,
+        params=_tape_v2_params(
+            curve=0.0,
+            timing_mode=1,
+            free_stop_ms=1_000.0,
+        ),
+    )
+    trigger_frame = _step_frames_at_rate(sample_rate)
+    stop_frames = sample_rate
+    frames = trigger_frame + stop_frames + round(sample_rate * 0.08)
+    output = _render(
+        generated_runtime,
+        tmp_path,
+        _tape_motor_probe(frames, sample_rate),
+        _base_schedule(upload),
+        sample_rate=sample_rate,
+    )
+    radius = round(sample_rate * 0.03)
+
+    for progress in (0.2, 0.5, 0.8):
+        center = trigger_frame + round(stop_frames * progress)
+        window = _centered_window(center, radius)
+        sine_speed = _local_tape_speed_from_sine(
+            output[window, 0],
+            sample_rate=sample_rate,
+        )
+        impulse_speed = _local_tape_speed_from_pulses(
+            output[window, 1],
+            sample_rate=sample_rate,
+        )
+        expected = 0.005 + (0.995 * (1.0 - progress))
+
+        assert abs(sine_speed - expected) <= 0.08
+        assert abs(impulse_speed - expected) <= 0.08
+        assert abs(impulse_speed - sine_speed) <= 0.05
+
+
+@pytest.mark.parametrize("sample_rate", RATE_PROBES)
+def test_tape_center_curve_is_monotonic_and_hits_displayed_stop_time(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    sample_rate: int,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_TAPE,
+        step=1,
+        trigger=True,
+        params=_tape_v2_params(
+            curve=0.0,
+            return_mode=0,
+            timing_mode=1,
+            free_stop_ms=1_000.0,
+        ),
+    )
+    trigger_frame = _step_frames_at_rate(sample_rate)
+    stop_frames = sample_rate
+    frames = trigger_frame + stop_frames + round(sample_rate * 0.08)
+    dry = _tape_motor_probe(frames, sample_rate)
+    output = _render(
+        generated_runtime,
+        tmp_path,
+        dry,
+        _base_schedule(upload),
+        sample_rate=sample_rate,
+    )
+    radius = round(sample_rate * 0.02)
+    measured_speeds: list[float] = []
+    for progress in np.linspace(0.1, 0.8, 8):
+        center = trigger_frame + round(stop_frames * float(progress))
+        measured_speeds.append(
+            _local_tape_speed_from_sine(
+                output[_centered_window(center, radius), 0],
+                sample_rate=sample_rate,
+            )
+        )
+
+    assert all(
+        later <= earlier + 0.02
+        for earlier, later in zip(measured_speeds, measured_speeds[1:])
+    )
+
+    last_pre_terminal_center = trigger_frame + round(stop_frames * 0.96)
+    last_pre_terminal_speed = _local_tape_speed_from_sine(
+        output[
+            _centered_window(last_pre_terminal_center, round(sample_rate * 0.008)),
+            0,
+        ],
+        sample_rate=sample_rate,
+    )
+    assert last_pre_terminal_speed < 0.05
+
+    first_dry = _first_permanently_dry_frame(
+        output,
+        dry,
+        search_start=trigger_frame + stop_frames,
+    )
+    latest_allowed = trigger_frame + stop_frames + round(sample_rate * 0.01) + 512
+    assert first_dry <= latest_allowed
+
+
+@pytest.mark.parametrize("sample_rate", RATE_PROBES)
+def test_tape_spin_up_reaches_one_x_at_displayed_start_time_without_overspeed(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    sample_rate: int,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_TAPE,
+        step=1,
+        trigger=True,
+        params=_tape_v2_params(
+            curve=0.0,
+            return_mode=1,
+            timing_mode=1,
+            free_stop_ms=250.0,
+            free_start_ms=500.0,
+        ),
+    )
+    trigger_frame = _step_frames_at_rate(sample_rate)
+    stop_frames = round(sample_rate * 0.25)
+    start_frames = round(sample_rate * 0.5)
+    completion_frame = trigger_frame + stop_frames + start_frames
+    frames = completion_frame + round(sample_rate * 0.08)
+    dry = _tape_motor_probe(frames, sample_rate)
+    output = _render(
+        generated_runtime,
+        tmp_path,
+        dry,
+        _base_schedule(upload),
+        sample_rate=sample_rate,
+    )
+    radius = round(sample_rate * 0.025)
+    measured_speeds: list[float] = []
+    for progress in (0.2, 0.5, 0.8):
+        center = trigger_frame + stop_frames + round(start_frames * progress)
+        speed = _local_tape_speed_from_sine(
+            output[_centered_window(center, radius), 0],
+            sample_rate=sample_rate,
+        )
+        expected = 0.005 + (0.995 * progress)
+        assert abs(speed - expected) <= 0.08
+        measured_speeds.append(speed)
+
+    assert max(measured_speeds) <= 1.05
+    distinguishable = slice(
+        completion_frame - round(sample_rate * 0.025),
+        completion_frame - round(sample_rate * 0.02),
+    )
+    assert _rms(output[distinguishable] - dry[distinguishable]) > 0.02
+    first_dry = _first_permanently_dry_frame(
+        output,
+        dry,
+        search_start=completion_frame,
+    )
+    assert first_dry <= completion_frame + 512
+
+
+@pytest.mark.parametrize("sample_rate", RATE_PROBES)
+def test_future_block_edit_does_not_change_a_sounding_tape_gesture(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    sample_rate: int,
+) -> None:
+    upload = _empty_upload()
+    params = _tape_v2_params(timing_mode=1, free_stop_ms=500.0)
+    for step in (1, 20):
+        _activate_step(
+            upload,
+            lane=LANE_TAPE,
+            step=step,
+            trigger=True,
+            params=params,
+        )
+
+    future_edit = json.loads(json.dumps(upload))
+    future_edit["revision"] = 2
+    future_edit["authoritative"] = False
+    _activate_step(
+        future_edit,
+        lane=LANE_TAPE,
+        step=20,
+        trigger=True,
+        params=_tape_v2_params(timing_mode=1, free_stop_ms=20.0),
+    )
+
+    step_frames = _step_frames_at_rate(sample_rate)
+    current_trigger = step_frames
+    upload_frame = current_trigger + round(sample_rate * 0.1)
+    future_trigger = step_frames * 20
+    frames = future_trigger + round(sample_rate * 0.35)
+    input_audio = _tape_motor_probe(frames, sample_rate)
+    baseline_path = tmp_path / "baseline"
+    edited_path = tmp_path / "edited"
+    baseline_path.mkdir()
+    edited_path.mkdir()
+    baseline = _render(
+        generated_runtime,
+        baseline_path,
+        input_audio,
+        _base_schedule(upload),
+        sample_rate=sample_rate,
+    )
+    schedule = _base_schedule(upload)
+    schedule[upload_frame] = [["event", "patternUpload", future_edit]]
+    edited = _render(
+        generated_runtime,
+        edited_path,
+        input_audio,
+        schedule,
+        sample_rate=sample_rate,
+    )
+
+    np.testing.assert_array_equal(edited[upload_frame:future_trigger], baseline[upload_frame:future_trigger])
+    future_window = slice(
+        future_trigger + round(sample_rate * 0.1),
+        future_trigger + round(sample_rate * 0.25),
+    )
+    assert _rms(edited[future_window] - baseline[future_window]) > 0.05
+
+
 def test_tape_stop_time_is_trigger_latched_and_ignores_mid_gesture_aux_motion(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -2197,9 +2515,11 @@ def test_tape_stop_character_is_bounded_and_changes_the_slow_tape_timbre(
 
 
 @pytest.mark.reference
-def test_tape_stop_long_synced_gesture_crosses_to_packed_history_without_dropping_out(
+@pytest.mark.parametrize("sample_rate", [48_000, 96_000, 192_000])
+def test_tape_coarse_history_rejects_out_of_band_content(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
+    sample_rate: int,
 ) -> None:
     empty = _empty_upload()
     gesture = _empty_upload(revision=2)
@@ -2213,21 +2533,35 @@ def test_tape_stop_long_synced_gesture_crosses_to_packed_history_without_droppin
             params=_tape_v2_params(stop_division=7, curve=1.0),
         )
 
-    pre_roll_frames = SAMPLE_RATE * 20
-    post_trigger_frames = SAMPLE_RATE * 26
-    input_audio = _sine(pre_roll_frames + post_trigger_frames, 730.0, amplitude=0.35)
+    pre_roll_frames = sample_rate * 20
+    post_trigger_frames = sample_rate * 27
+    frames = pre_roll_frames + post_trigger_frames
+    t = np.arange(frames, dtype=np.float64) / sample_rate
+    input_audio = np.column_stack(
+        [
+            0.35 * np.sin(2.0 * np.pi * 2_000.0 * t),
+            0.35 * np.sin(2.0 * np.pi * 6_000.0 * t),
+        ]
+    ).astype(np.float32)
     schedule = _base_schedule(empty, manual_bpm=20.0)
     schedule[pre_roll_frames] = [["event", "patternUpload", gesture]]
-    output = _render(generated_runtime, tmp_path, input_audio, schedule)
+    output = _render(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        schedule,
+        sample_rate=sample_rate,
+    )
     crossover = output[
-        pre_roll_frames + (SAMPLE_RATE * 23) :
-        pre_roll_frames + (SAMPLE_RATE * 25),
-        0,
+        pre_roll_frames + round(sample_rate * 25.5) :
+        pre_roll_frames + round(sample_rate * 26.5),
     ]
 
     assert np.all(np.isfinite(crossover))
-    assert _rms(crossover) > 0.04
-    assert float(np.max(np.abs(np.diff(crossover)))) < 0.12
+    in_band_rms = _rms(crossover[:, 0])
+    out_of_band_rms = _rms(crossover[:, 1])
+    assert in_band_rms > 0.1
+    assert out_of_band_rms / in_band_rms < 0.02
 
 
 def test_stutter_repeats_the_captured_slice(
@@ -3316,11 +3650,12 @@ def _render_comb(
     decay_seconds: float = 1.4,
     polarity: float = 0.0,
     dispersion: float = 0.55,
-    damping_hz: float = 7_500.0,
+    damping_hz: float = 20_000.0,
     motion: float = 0.12,
     drive: float = 0.18,
     width: float = 0.65,
     active_steps: int = 1,
+    sample_rate: int = SAMPLE_RATE,
 ) -> np.ndarray:
     upload = _empty_upload()
     params = [tune_hz, decay_seconds, polarity, dispersion, damping_hz, motion, drive, width]
@@ -3333,7 +3668,13 @@ def _render_comb(
             effect_type=EFFECT_COMB,
             params=params,
         )
-    return _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+    return _render(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(upload),
+        sample_rate=sample_rate,
+    )
 
 
 def _comb_impulse(frames: int, frame: int = 256) -> np.ndarray:
@@ -3350,6 +3691,37 @@ def _dominant_frequency_near(samples: np.ndarray, target_hz: float) -> float:
     candidates = np.flatnonzero((frequencies >= target_hz * 0.75) & (frequencies <= target_hz * 1.25))
     peak = int(candidates[np.argmax(spectrum[candidates])])
     return float(frequencies[peak])
+
+
+def _credible_refined_frequency_near(
+    samples: np.ndarray,
+    target_hz: float,
+    sample_rate: int,
+) -> tuple[float, float]:
+    signal = np.asarray(samples, dtype=np.float64)
+    tail_size = min(64, signal.size)
+    signal = signal - np.mean(signal[-tail_size:])
+    transform_size = 1 << int(np.ceil(np.log2(max(8 * signal.size, 512))))
+    spectrum = np.abs(np.fft.rfft(signal, n=transform_size))
+    frequencies = np.fft.rfftfreq(transform_size, 1.0 / sample_rate)
+    candidates = np.flatnonzero(
+        (frequencies >= target_hz * 0.75)
+        & (frequencies <= target_hz * 1.25)
+    )
+    candidates = candidates[(candidates > 0) & (candidates < spectrum.size - 1)]
+    assert candidates.size >= 3
+    peak = int(candidates[np.argmax(spectrum[candidates])])
+    log_magnitudes = np.log(np.maximum(spectrum[peak - 1 : peak + 2], 1.0e-300))
+    denominator = log_magnitudes[0] - (2.0 * log_magnitudes[1]) + log_magnitudes[2]
+    delta = 0.0 if abs(float(denominator)) < 1.0e-15 else 0.5 * (
+        log_magnitudes[0] - log_magnitudes[2]
+    ) / denominator
+    delta = float(np.clip(delta, -0.5, 0.5))
+    measured_hz = (peak + delta) * sample_rate / transform_size
+    prominence = float(
+        spectrum[peak] / max(float(np.median(spectrum[candidates])), 1.0e-300)
+    )
+    return measured_hz, prominence
 
 
 def test_comb_impulse_tail_outlives_its_trigger_block_and_decays(
@@ -3371,25 +3743,62 @@ def test_comb_impulse_tail_outlives_its_trigger_block_and_decays(
     assert _rms(late_tail) < _rms(early_tail) * 0.55
 
 
-@pytest.mark.parametrize("tune_hz", [110.0, 220.0, 880.0])
-def test_comb_vector_dispersive_mode_tracks_tune_within_twenty_cents(
+@pytest.mark.parametrize("sample_rate", [44_100, 48_000, 88_200, 96_000, 192_000])
+@pytest.mark.parametrize("dispersion", [0.0, 0.7, 1.0])
+def test_comb_reference_and_vector_modes_track_the_full_public_tune_range(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
-    tune_hz: float,
+    sample_rate: int,
+    dispersion: float,
 ) -> None:
-    output = _render_comb(
-        generated_runtime,
-        tmp_path,
-        _comb_impulse(SAMPLE_RATE),
-        tune_hz=tune_hz,
-        decay_seconds=1.4,
-        dispersion=0.7,
-        motion=0.0,
-    )
-    measured_hz = _dominant_frequency_near(np.mean(output[320:], axis=1), tune_hz)
-    cents = 1_200.0 * np.log2(measured_hz / tune_hz)
+    for tune_hz in (30.0, 55.0, 110.0, 220.0, 440.0, 880.0, 2_000.0, 4_000.0, 8_000.0):
+        impulse_frame = max(256, round(sample_rate * 0.01))
+        settle_frames = max(3, int(np.ceil(2.0 * sample_rate / tune_hz)))
+        analysis_frames = max(
+            round(sample_rate * 0.05),
+            int(np.ceil(128.0 * sample_rate / tune_hz)),
+        )
+        analysis_start = impulse_frame + settle_frames
+        total_frames = analysis_start + analysis_frames + 1
+        output = _render_comb(
+            generated_runtime,
+            tmp_path,
+            _comb_impulse(total_frames, frame=impulse_frame),
+            tune_hz=tune_hz,
+            decay_seconds=3.0,
+            dispersion=dispersion,
+            damping_hz=20_000.0,
+            motion=0.0,
+            drive=0.0,
+            sample_rate=sample_rate,
+        )
+        response = np.mean(
+            output[analysis_start : analysis_start + analysis_frames],
+            axis=1,
+        )
+        measured_hz, prominence = _credible_refined_frequency_near(
+            response,
+            tune_hz,
+            sample_rate,
+        )
+        half_cosine = np.cos(
+            0.5 * np.pi * np.arange(response.size) / max(1, response.size - 1)
+        ) ** 2
+        tapered_hz, tapered_prominence = _credible_refined_frequency_near(
+            response * half_cosine,
+            tune_hz,
+            sample_rate,
+        )
+        cents = 1_200.0 * np.log2(measured_hz / tune_hz)
+        estimator_delta_cents = 1_200.0 * np.log2(tapered_hz / measured_hz)
 
-    assert abs(float(cents)) < 20.0, f"{tune_hz=}, {measured_hz=}, {cents=}"
+        case = f"{sample_rate=}, {dispersion=}, {tune_hz=}"
+        assert prominence >= 3.0, f"{case}, {prominence=}"
+        assert tapered_prominence >= 3.0, f"{case}, {tapered_prominence=}"
+        assert abs(float(cents)) < 20.0, f"{case}, {measured_hz=}, {cents=}"
+        assert abs(float(estimator_delta_cents)) <= 10.0, (
+            f"{case}, {measured_hz=}, {tapered_hz=}, {estimator_delta_cents=}"
+        )
 
 
 def test_comb_dispersion_zero_is_an_exact_motion_independent_reference_neutral(
@@ -3458,6 +3867,38 @@ def test_comb_extreme_feedback_controls_are_deterministic_finite_and_bounded(
     assert float(np.max(np.abs(first))) <= 4.001
 
 
+@pytest.mark.parametrize("sample_rate", [44_100, 48_000, 88_200, 96_000, 192_000])
+def test_comb_maximum_tail_finishes_atomically_at_every_supported_rate(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    sample_rate: int,
+) -> None:
+    decay_seconds = 8.0
+    step_frames = _step_frames_at_rate(sample_rate)
+    maximum_tail_frames = int(round((decay_seconds * 1.5 + 0.25) * sample_rate))
+    exact_idle_start = step_frames + maximum_tail_frames + 4
+    total_frames = exact_idle_start + int(round(sample_rate * 0.05))
+    source = _comb_impulse(total_frames, frame=max(256, round(sample_rate * 0.01)))
+    output = _render_comb(
+        generated_runtime,
+        tmp_path,
+        source,
+        tune_hz=30.0,
+        decay_seconds=decay_seconds,
+        polarity=1.0,
+        dispersion=1.0,
+        damping_hz=20_000.0,
+        motion=1.0,
+        drive=1.0,
+        width=1.0,
+        sample_rate=sample_rate,
+    )
+
+    assert np.all(np.isfinite(output))
+    assert float(np.max(np.abs(output))) <= 4.001
+    np.testing.assert_array_equal(output[exact_idle_start:], np.zeros_like(output[exact_idle_start:]))
+
+
 def test_comb_aux_sweeps_all_continuous_feedback_controls_without_runaway(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
@@ -3482,6 +3923,80 @@ def test_comb_aux_sweeps_all_continuous_feedback_controls_without_runaway(
 
     assert np.all(np.isfinite(output))
     assert float(np.max(np.abs(output))) <= 4.001
+
+
+@pytest.mark.parametrize("sample_rate", RATE_PROBES)
+@pytest.mark.parametrize(
+    ("control_name", "params", "param_index", "end_value"),
+    [
+        pytest.param(
+            "tune",
+            [2_000.0, 3.0, 0.0, 1.0, 20_000.0, 0.0, 0.0, 0.65],
+            0,
+            8_000.0,
+            id="tune",
+        ),
+        pytest.param(
+            "dispersion",
+            [4_000.0, 3.0, 0.0, 0.0, 20_000.0, 0.0, 0.0, 0.65],
+            3,
+            1.0,
+            id="dispersion",
+        ),
+        pytest.param(
+            "damping",
+            [4_000.0, 3.0, 0.0, 1.0, 500.0, 0.0, 0.0, 0.65],
+            4,
+            20_000.0,
+            id="damping",
+        ),
+    ],
+)
+def test_comb_tune_dispersion_and_damping_sweeps_have_no_isolated_discontinuity(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    sample_rate: int,
+    control_name: str,
+    params: list[float],
+    param_index: int,
+    end_value: float,
+) -> None:
+    del control_name
+    upload = _empty_upload()
+    for step in range(16):
+        _activate_step(
+            upload,
+            lane=LANE_FILTER,
+            step=step,
+            trigger=(step == 0),
+            effect_type=EFFECT_COMB,
+            params=params,
+        )
+    _set_aux(
+        upload,
+        lane=LANE_FILTER,
+        step=0,
+        param=param_index,
+        end=end_value,
+        shape=0.0,
+        source_curve=0.0,
+        rate_mode=1,
+        slice_count=1,
+    )
+    frames = _step_frames_at_rate(sample_rate) * 16
+    output = _render(
+        generated_runtime,
+        tmp_path,
+        _sine_at_rate(frames, 997.0, sample_rate, amplitude=0.12),
+        _base_schedule(upload),
+        sample_rate=sample_rate,
+    )
+    analysis = output[round(frames * 0.08) : round(frames * 0.92), 0]
+    differences = np.abs(np.diff(analysis))
+
+    assert np.all(np.isfinite(analysis))
+    assert float(np.max(np.abs(analysis))) <= 4.001
+    assert float(np.max(differences)) <= float(np.quantile(differences, 0.999)) * 1.2 + 1.0e-7
 
 
 def test_comb_authoritative_reset_invalidates_the_live_feedback_tail(

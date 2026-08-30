@@ -54,7 +54,7 @@ A block boundary does not mean the same thing for every algorithm:
 - Reverse reads a rolling window of audio already heard. It adds no lookahead latency and returns dry at block exit. On a cold start, it stays dry until the requested history exists.
 - Stutter captures immediately, then repeats. A retrigger captures into a second bank so the old repeat is not destroyed before the new capture is ready.
 - Comb has a resonant tail. The triggering block can end while its bounded feedback decay continues.
-- Tape Stop is a motor gesture. The block triggers it, but configured Stop and Start times can outlive that cell. Catch Up returns quickly to live audio; Spin Up accelerates back over Start Time. A second gesture crossfades rather than killing the first.
+- Tape Stop is a motor gesture. The block triggers it, but configured Stop and Start times can outlive that cell. Crossfade to Live hands off directly in 10 ms. Spin Up restarts the captured motor from 0x to 1x over Start Time, then hands off without pretending to catch up to the moving live timeline. A second gesture crossfades rather than killing the first.
 
 Transport stops, seeks, authoritative state loads, and resets clear or relatch history according to the documented lifecycle so old buffered audio does not leak into a new context.
 

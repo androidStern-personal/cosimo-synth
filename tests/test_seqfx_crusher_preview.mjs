@@ -24,10 +24,9 @@ function quantizeLikeSeqFxCrusher(sample, levels) {
 function expectedOriginalSamples({ bits, rateHz, driveDb, mix, pointCount }) {
     const driveGain = 10 ** (driveDb / 20);
     const levels = (2 ** (bits - 1)) - 1;
-    const holdFrames = clamp(Math.round(48_000 / rateHz), 1, 256);
     const samples = [];
     let heldSample = 0;
-    let holdCounter = 0;
+    let capturePhase = 0;
     let needsRecapture = true;
 
     for (let index = 0; index < pointCount; index += 1) {
@@ -36,13 +35,18 @@ function expectedOriginalSamples({ bits, rateHz, driveDb, mix, pointCount }) {
         const legacyDriven = clamp(dry, -1, 1) * driveGain;
         const legacyClipped = clamp(legacyDriven, -1, 1);
 
-        if (needsRecapture || holdCounter <= 0) {
-            heldSample = legacyClipped;
-            needsRecapture = false;
-            holdCounter = holdFrames;
+        let shouldCapture = needsRecapture;
+        if (!shouldCapture) {
+            capturePhase += rateHz / 48_000;
+            shouldCapture = capturePhase >= 1;
         }
 
-        holdCounter -= 1;
+        if (shouldCapture) {
+            heldSample = legacyClipped;
+            needsRecapture = false;
+            capturePhase = capturePhase >= 1 ? capturePhase - 1 : 0;
+        }
+
         const crushed = quantizeLikeSeqFxCrusher(heldSample, levels);
         samples.push({ phase, dry, wet: dry + ((crushed - dry) * mix) });
     }

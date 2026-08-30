@@ -123,6 +123,32 @@ test("default_seqfx_v7_runtime_projection_contains_four_serial_chains with empty
     assert.equal(upload.auxSliceCount[SEQFX_LANES.crusher][0], 1);
 });
 
+test("seqfx normalization is structurally idempotent when optional effect memories are absent", () => {
+    const once = normalizeSeqFxState("");
+    const twice = normalizeSeqFxState(once);
+
+    assert.deepEqual(twice, once);
+    assert.equal(Object.hasOwn(once.patterns[0].lanes[0].steps[0], "effectParams"), false);
+    assert.equal(Object.hasOwn(once.patterns[0].lanes[0].steps[0], "effectAux"), false);
+    assert.equal(Object.hasOwn(twice.patterns[0].lanes[0].steps[0], "effectParams"), false);
+    assert.equal(Object.hasOwn(twice.patterns[0].lanes[0].steps[0], "effectAux"), false);
+});
+
+test("seqfx canonicalizes negative zero before strict serialization round trips", () => {
+    const state = createDefaultSeqFxState();
+    const step = state.patterns[0].lanes[SEQFX_LANES.tapeStop].steps[0];
+    step.active = true;
+    step.trigger = true;
+    step.effectType = SEQFX_EFFECT_TYPES.tapeStop;
+    step.params[2] = -0;
+    step.aux.targets[2].end = -0;
+
+    const normalized = normalizeSeqFxState(state);
+    const curve = normalized.patterns[0].lanes[SEQFX_LANES.tapeStop].steps[0].params[2];
+    assert.equal(Object.is(curve, -0), false);
+    assert.deepEqual(parseStrictSeqFxStateV7(serializeSeqFxState(normalized)), normalized);
+});
+
 test("seqfx_block_aux_source_and_target_edits_write_the_whole_block_and_upload_aux_arrays", () => {
     let state = createDefaultSeqFxState();
     state = applySeqFxBlockCreate(state, {

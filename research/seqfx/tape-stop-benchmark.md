@@ -80,7 +80,7 @@ sequencer. The adaptation is an explicit SeqFX decision.
 - A block start triggers one tape-stop gesture.
 - The gesture's `Stop Time`, not the block's right edge, determines when its
   slowdown reaches rest. A one-cell block can therefore produce a one-beat or
-  one-bar tail.
+  four-beat tail.
 - The block still owns mix and parameter automation while it is active. When it
   ends, the latched gesture parameters remain authoritative until that gesture
   completes; editing a future block cannot mutate the sounding gesture.
@@ -94,9 +94,9 @@ signal running underneath it.
 
 | Control | Contract |
 |---|---|
-| Stop Time | Sync values from 1/32 through 4 bars, with 1 cell, 1 beat, and 1 bar as strong snaps; free range 20 ms through 8 s |
+| Stop Time | Sync values from 1/32 through 16 beats, plus the current cell; free range 20 ms through 8 s |
 | Curve | Continuous centered control spanning front-loaded, linear-speed, and back-loaded deceleration; center is the safe default |
-| Return | `Catch Up` or `Spin Up`; names describe audible behavior |
+| Return | `Crossfade to Live` or `Spin Up`; names describe audible behavior |
 | Start Time | Used only by `Spin Up`; same sync/free timing vocabulary, default faster than Stop Time |
 | Character | A bounded high-frequency loss/saturation amount coupled to slow playback; neutral remains clean |
 | Mix | Common SeqFX block mix, with equal-power transition at state changes |
@@ -107,13 +107,16 @@ is unsupported by the gathered product documentation.
 
 ### Return behavior
 
-- `Catch Up` is the sequencer default. After the stop gesture reaches its
+- `Crossfade to Live` is the sequencer default. After the stop gesture reaches its
   terminal fade, the processor crossfades to the current live chain signal. It
   is the SeqFX equivalent of documented instant catch-up, but it is smoothed and
   does not expose a discontinuous read-head teleport.
-- `Spin Up` accelerates the captured timeline according to `Start Time` and the
-  inverse motor curve, then crossfades to live only when its read position is
-  close enough to make the handoff click-safe.
+- `Spin Up` restarts the captured motor from stopped speed to 1x according to
+  `Start Time`, matching the established Tape Start meaning documented by
+  Kilohearts and Effectrix. It does not temporally catch the captured read head
+  up to the moving live timeline. A bounded final handoff crosses to current
+  live input inside Start Time; Arturia documents instant catch-up as a separate
+  behavior, so SeqFX does not silently conflate the two.
 - Neither mode plays a hidden overspeed burst above the documented motor curve.
 
 ### Capture, retrigger, and reset
@@ -155,7 +158,7 @@ reference: 120 BPM with 1/16 cells, or 125 ms per cell.
 - `freeStopMs = clamp(oldDurationScale * blockLength * 125, 20, 8000)`;
 - old curve power `0.25..4` maps logarithmically to the new centered `-1..1`
   Curve control;
-- old Stop mode maps to `Catch Up`; old Spin-up mode maps to `Spin Up` return;
+- old Stop mode maps to `Crossfade to Live`; old Spin-up mode maps to `Spin Up` return;
 - old Catch-up percent maps to free Start Time against the same canonical block
   duration;
 - migrated timing is explicitly `Free`, Character is neutral, and old aux
@@ -174,7 +177,7 @@ Production Tape Stop v2 is not accepted until automated renders prove:
 2. impulse spacing and sine zero-crossing rate follow the same speed curve;
 3. center Curve is monotonic and reaches the displayed Stop Time within one
    render block tolerance;
-4. Catch Up never creates a boundary jump larger than the dry-source screening
+4. Crossfade to Live never creates a boundary jump larger than the dry-source screening
    threshold;
 5. Spin Up reaches live speed in the displayed Start Time without overspeed;
 6. two quick retriggers and a third-trigger steal remain finite and click-safe;

@@ -3380,6 +3380,12 @@ test("seqfx_tape_stop_v2_inspector_exposes_established_motor_controls_and_persis
     assert.equal(await page.locator('[data-control="seqfx-tape-start-time"]').count(), 0);
     assert.equal(await page.locator('[data-control="seqfx-tape-stop-time"]').inputValue(), "8");
     assert.equal(await page.locator('[data-control="seqfx-tape-return"]').inputValue(), "0");
+    assert.equal(await page.locator('[data-control="seqfx-tape-return"] option:checked').textContent(), "Crossfade to Live");
+    await page.locator('[data-role="seqfx-tape-v2-live-handoff"]').waitFor();
+    assert.match(
+        await page.locator('[data-role="seqfx-tape-v2-trajectory"]').getAttribute("aria-label"),
+        /crossfades directly to live input/u,
+    );
     const initialPath = await page.locator('[data-role="seqfx-tape-v2-curve"]').getAttribute("d");
 
     await page.locator('[data-control="seqfx-tape-return"]').selectOption("1");
@@ -3400,7 +3406,7 @@ test("seqfx_tape_stop_v2_inspector_exposes_established_motor_controls_and_persis
         trajectoryLabel: node.querySelector('[data-role="seqfx-tape-v2-trajectory"]')?.getAttribute("aria-label"),
     }));
     assert.ok(layout.scrollWidth <= layout.clientWidth + 1, `Tape Stop editor overflowed by ${layout.scrollWidth - layout.clientWidth}px`);
-    assert.equal(layout.trajectoryLabel, "Tape slows over 1200 ms, then spins up over 800 ms");
+    assert.equal(layout.trajectoryLabel, "Tape slows over 1200 ms, then restarts its motor over 800 ms and crossfades to live");
 
     const snapshot = await getHarnessSnapshot(page);
     const lastUpload = patternUploads(snapshot).at(-1).value;

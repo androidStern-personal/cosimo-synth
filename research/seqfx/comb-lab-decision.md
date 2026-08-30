@@ -111,20 +111,29 @@ The selected topology is implemented in `fx/seqfx/SeqFx.cmajor` as effect ID
   ignored there, so the neutral reference is exact and deterministic rather
   than an approximation made by collapsing the advanced network.
 - Raising `Dispersion` morphs through the complete four-delay vector network.
-  Its normalized Hadamard feedback rotation, four compensated allpass stages
-  per path, deterministic quarter-cycle motion offsets, complementary stereo
-  projection, damping, and unity-small-signal loop limiter remain active at
-  the advanced end.
+  Its normalized Hadamard feedback rotation, four continuously warmed allpass
+  stages per path, deterministic quarter-cycle motion offsets, complementary
+  stereo projection, damping, and unity-small-signal loop limiter remain active
+  at the advanced end. A phase-exact fractional tap between adjacent cascade
+  depths avoids stale-state reactivation and discontinuous integer topology
+  changes. The blended fractional tap is not claimed to preserve strict
+  allpass magnitude away from Tune.
 
 Tune is continuous and Aux-eligible, with a 10 ms smoothing path. The displayed
-frequency is converted to a fractional delay and receives two measured phase
-corrections: a small host-rate-independent reference correction, then an
-octave- and Dispersion-dependent vector correction. The latter compensates
-aggregate phase introduced by the four different dispersed loops; it becomes
-exactly 1 at `Dispersion = 0` and is bounded to 0.96–1.04. These are measured
-implementation corrections, not new user controls.
+frequency is converted to a fractional delay. The reference and each dispersed
+mode analytically subtract the phase delay of their active allpass depth and
+one-pole damping filter, and add the 10 Hz DC blocker's phase lead at that
+mode's intended frequency. The earlier hand-fit octave/Dispersion correction
+was removed. Short high-frequency periods reserve a safe 2.01-sample cubic
+read distance and continuously reduce effective cascade depth rather than
+clamping Tune off target.
 
 The loop also contains frequency-dependent damping and a 10 Hz DC blocker.
+New blocks default Damping to its bright 20 kHz ceiling because the former
+7.5 kHz default erased an identifiable upper-range resonance before a normal
+analysis/listening window. Darker factory presets name and store their lower
+Damping deliberately; lowering the control is therefore an audible decay
+choice rather than a hidden requirement for making Tune work.
 Continuous controls move over 10 ms; entering and leaving a block uses the
 shared 96-frame routing crossfade. On release the comb stops accepting new
 audio but its bounded tail continues additively until its measured energy is
@@ -137,7 +146,13 @@ state.
 Automated production probes establish:
 
 - an impulse tail survives its trigger block and decays;
-- the vector-dispersive mode measures within 20 cents at 110, 220, and 880 Hz;
+- a controlled bright-loop matrix at 44.1, 48, 88.2, 96, and 192 kHz covers
+  Tune 30/55/110/220/440/880/2000/4000/8000 Hz and Dispersion 0/0.7/1; all 135
+  cases measure within 20 cents, with a worst case of -15.29 cents at 44.1 kHz,
+  8 kHz, and full Dispersion;
+- Tune, Dispersion, and Damping Aux sweeps at every supported rate remain
+  finite and show no isolated discontinuity at fractional-stage or neutral-path
+  boundaries;
 - `Dispersion = 0` is bit-exact with Motion at either extreme while the
   advanced setting is materially different;
 - Width has a mono-safe center, a distinct stereo extreme, and a nonzero mono

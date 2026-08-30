@@ -129,7 +129,6 @@ export function sampleCrusherPreview({
     let dcPreviousInput = 0;
     let dcPreviousOutput = 0;
     let capturePhase = 0;
-    let holdCounter = 0;
     let needsRecapture = true;
 
     const converterCutoff = Math.max(
@@ -146,24 +145,23 @@ export function sampleCrusherPreview({
         let crushed = 0;
 
         if (resolvedCharacter === 0) {
-            const holdFrames = clamp(
-                Math.round(CRUSHER_PREVIEW_SAMPLE_RATE / resolvedRateHz),
-                1,
-                256,
-            );
             const legacyDriven = clamp(dry, -1, 1) * driveGain;
             const legacyClipped = clamp(legacyDriven, -1, 1);
+            let shouldCapture = needsRecapture;
+            if (!shouldCapture) {
+                capturePhase += resolvedRateHz / CRUSHER_PREVIEW_SAMPLE_RATE;
+                shouldCapture = capturePhase >= 1;
+            }
 
-            if (needsRecapture || holdCounter <= 0) {
+            if (shouldCapture) {
                 held = legacyClipped;
                 needsRecapture = false;
-                holdCounter = holdFrames;
+                capturePhase = capturePhase >= 1 ? capturePhase - 1 : 0;
                 if (index > 0) {
                     captureMarkerPhases.push(phase);
                 }
             }
 
-            holdCounter -= 1;
             crushed = quantizeLikeSeqFxCrusher(held, levels);
         } else {
             const driven = clamp(dry * driveGain, -1, 1);

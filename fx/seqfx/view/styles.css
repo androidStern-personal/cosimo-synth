@@ -2318,6 +2318,21 @@ select {
     stroke-width: 4;
 }
 
+.seqfx-tape-v2__handoff {
+    fill: none;
+    stroke: #a35c32;
+    stroke-dasharray: 5 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+.seqfx-tape-v2__marker {
+    stroke: rgba(28, 28, 28, 0.34);
+    stroke-dasharray: 2 3;
+    stroke-width: 1;
+}
+
 .seqfx-tape-v2__axis-label {
     fill: var(--seqfx-shell-ink-muted);
     font-family: var(--editor-value-font);

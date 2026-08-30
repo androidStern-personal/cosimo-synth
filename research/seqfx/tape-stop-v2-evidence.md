@@ -11,14 +11,15 @@ invented: the named products were not installed in this worktree.
 
 - A block trigger starts a one-shot motor gesture. The configured gesture owns
   its lifetime and is not killed when the triggering block ends.
-- Stop Time is selectable from 1/32 through four bars, plus the exact current
+- Stop Time is selectable from 1/32 through sixteen beats, plus the exact current
   cell duration. Free timing covers 20–8000 ms.
 - Curve changes the speed trajectory while preserving Stop Time.
-- Catch Up returns to live input through a 10 ms click-safe crossfade. It never
+- Crossfade to Live returns through a 10 ms click-safe handoff. It never
   secretly overspeeds the captured material.
-- Spin Up accelerates the captured material from stopped speed to 1x over its
-  separately configured Start Time, then crossfades to live input over the last
-  ten percent of the return.
+- Spin Up restarts the captured material from stopped speed to 1x over its
+  separately configured Start Time. Entry and the final live handoff are bounded
+  to at most 10 ms rather than scaling to ten percent of long gestures. Spin Up
+  does not claim to catch the captured timeline up to the moving live head.
 - Tempo, timing, curve, return, character, mix, and start/stop durations are
   latched when the gesture starts. Later edits affect the next trigger.
 - Two bounded playback voices let a retrigger crossfade away from an existing
@@ -52,7 +53,7 @@ therefore explicitly canonical, not falsely described as sample-accurate:
 - 120 BPM and a 1/16-note cell establish 125 ms per legacy cell;
 - old duration scale becomes Free Stop milliseconds;
 - old curve power becomes the logarithmic v2 curve control;
-- old Stop becomes Catch Up and old Spin Up remains Spin Up;
+- old Stop becomes Crossfade to Live and old Spin Up remains Spin Up;
 - old catch-up percentage becomes Free Start milliseconds; and
 - Character starts neutral while old Tape aux targets are disabled.
 
@@ -69,7 +70,7 @@ The focused Cmajor and state suites prove:
 - exit, adjacent retrigger, and third-trigger stealing stay finite and bounded;
 - a tempo edit does not retime an active synced gesture;
 - reset invalidates history;
-- Catch Up does not play faster than the dry timeline;
+- Crossfade to Live does not play faster than the dry timeline;
 - 20 ms and 8000 ms Free stops remain distinctly short and long;
 - Character is finite, bounded, and audibly changes the slow-tape waveform;
 - a 48-second synced stop crosses into packed coarse history without silence or
