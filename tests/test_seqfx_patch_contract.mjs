@@ -11,4 +11,3 @@ test("SeqFX exposes named stereo host buses", async () => {
     assert.match(source, /input stream float32<2> audioIn \[\[ name: "Input" \]\]/);
     assert.match(source, /output stream float32<2> audioOut \[\[ name: "Output" \]\]/);
 });
-

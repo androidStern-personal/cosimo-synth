@@ -10,7 +10,7 @@ Status: pre-release candidate under qualification. This document records impleme
 - Capture-safe Stutter retriggers, rolling zero-lookahead Reverse, complementary-grain Pitch, pure Doppler Vibro, canonical Flange, phase-continuous Ring, measured-vowel Talk Box, converter-style Crush, and fixed-quality oversampled Dirty.
 - Sparse `seqfx.v7` state with strict parsing and legacy v5/v6 migration.
 - Complete global surface: bypass, global Mix, Host/Internal/Manual clocking, BPM, rate, swing, loop, internal transport, reset, Undo/Redo, Init, loop clipboard, and safe Vary.
-- Named effect cards, visible chain and block identities, fixed Effect/Mod tabs, fixed Block Mix, honest units, and instance-local first-use guidance.
+- Named effect cards, visible chain and block identities, fixed Effect/Mod tabs, fixed Block Mix, honest units, and first-use guidance for the current editor session.
 - Three curated factory presets per effect and 12 complete factory patterns across drums, vocals, bass, harmony, transitions, subtle processing, and all-effect demonstration.
 
 ## Compatibility
@@ -27,7 +27,7 @@ Status: pre-release candidate under qualification. This document records impleme
 - Reverse is capped at four seconds. Tape Stop, Stutter, Pitch, and delay effects use bounded buffers documented in the research ledger.
 - Loading a host state or top-level plugin preset is authoritative and clears instance-local Undo/Redo. Factory pattern and effect-preset actions remain undoable.
 - Manual clock runs continuously. Internal clock is the mode with an in-plugin Play/Stop button; Host follows the DAW.
-- First-use dismissal, loop clipboard, and Undo/Redo history last for the current plugin instance and are not project state.
+- First-use dismissal lasts only while the editor stays open. Loop clipboard and Undo/Redo history last for the current plugin instance. None are project state.
 - Final public display name, bundle identifier, plugin/manufacturer codes, beta version, support address, and distribution channel still require product approval.
 
 ## Qualification status

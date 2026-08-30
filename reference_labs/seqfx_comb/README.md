@@ -14,4 +14,3 @@ Outputs are written under `build/seqfx-comb-lab/`. They are research evidence,
 not production DSP. The implementation intentionally favors literal equations
 and measurements over realtime optimization; the selected topology must be
 rewritten and bounded in Cmajor.
-

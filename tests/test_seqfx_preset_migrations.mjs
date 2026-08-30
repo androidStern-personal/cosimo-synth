@@ -1,10 +1,36 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { gunzipSync } from "node:zlib";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
+const legacyFixturePath = path.join(repoRoot, "tests/fixtures/seqfx/legacy-v5-dense-state.json.gz");
+const legacyProvenancePath = path.join(repoRoot, "tests/fixtures/seqfx/legacy-v5-dense-state.provenance.json");
+
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+async function loadLegacyFixture() {
+    const [compressed, rawProvenance] = await Promise.all([
+        readFile(legacyFixturePath),
+        readFile(legacyProvenancePath, "utf8"),
+    ]);
+    const provenance = JSON.parse(rawProvenance);
+    const uncompressed = gunzipSync(compressed);
+    const fixture = JSON.parse(uncompressed.toString("utf8"));
+
+    assert.equal(sha256(compressed), provenance.compressedSha256);
+    assert.equal(compressed.byteLength, provenance.compressedBytes);
+    assert.equal(sha256(uncompressed), provenance.uncompressedSha256);
+    assert.equal(uncompressed.byteLength, provenance.uncompressedBytes);
+    assert.equal(sha256(fixture.storedState), provenance.storedStateSha256);
+    assert.equal(Buffer.byteLength(fixture.storedState), provenance.storedStateBytes);
+
+    return { fixture, provenance };
+}
 
 async function loadModules() {
     const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
@@ -20,34 +46,6 @@ async function loadModules() {
         ...presetModule,
         ...snapshotModule,
     };
-}
-
-function createLegacyDenseState(modules) {
-    const state = modules.createDefaultSeqFxState();
-    const legacyDefaultsByLane = [
-        [0, 2_000, 500, 0.707, 1, 0, 0, 0],
-        [8, 1, 0, 0, 0, 0, 0, 0],
-        [1, 1, 1, 25, 0, 0, 0, 0],
-        [8, 1, 0.4375, 0.68, 0, 0, 0, 0],
-    ];
-    for (const pattern of state.patterns) {
-        pattern.lanes.forEach((lane, laneIndex) => {
-            for (const step of lane.steps) {
-                step.params = [...legacyDefaultsByLane[laneIndex]];
-                step.aux.targets = step.params.map((end) => ({ enabled: false, end }));
-                delete step.effectParams;
-                delete step.effectAux;
-            }
-        });
-    }
-    const legacyTapeStep = state.patterns[6].lanes[modules.SEQFX_LANES.tapeStop].steps[11];
-    legacyTapeStep.active = true;
-    legacyTapeStep.trigger = true;
-    legacyTapeStep.effectType = modules.SEQFX_EFFECT_TYPES.tapeStop;
-    legacyTapeStep.params[0] = 3.25;
-    legacyTapeStep.aux.targets[0].end = 3.25;
-    state.version = modules.SEQFX_LEGACY_STATE_VERSION;
-    return JSON.stringify(state);
 }
 
 function createCurrentContract(modules) {
@@ -78,8 +76,41 @@ function createStoredStateAdapter(modules) {
     };
 }
 
+test("the frozen v5 fixture is byte-qualified output from the predecessor serializer", async () => {
+    const { fixture, provenance } = await loadLegacyFixture();
+    assert.equal(fixture.format, "cosimo.seqfxLegacyStoredStateFixture");
+    assert.equal(fixture.formatVersion, 1);
+    assert.equal(fixture.storedStateKey, "seqfx.v6");
+    assert.equal(fixture.schemaVersion, 5);
+    assert.equal(provenance.sourceCommit, "7fc89fa322764221facdd2714e9b16bc91c41157");
+    assert.equal(provenance.captureBoundary, "The predecessor revision's exported SeqFX state edit and serialize functions.");
+    assert.equal(provenance.storedStateSha256, "daf1354662c1e252050e52698f11e8b1d68ba8aa9560ac8bac59a38527e74060");
+    assert.equal(provenance.compressedSha256, "97c810de880aecf6502ac9fd6cc0f49575c015303b49a12a29730aa63dd4254c");
+    assert.deepEqual(provenance.sourceFiles, {
+        "fx/seqfx/view/seqfx-state.ts": "aa0b297a08f3474d30365d554ec8d852070d5db2aee712affb1167ff5b2a7abf",
+        "fx/seqfx/view/stutter-envelope.ts": "3e5572d468e72da1764f74997c9efe43f77e07d0ec2938fb474d4ff36e195c38",
+    });
+
+    const storedState = JSON.parse(fixture.storedState);
+    assert.equal(storedState.version, 5);
+    assert.equal(storedState.patterns.length, 12);
+    assert.equal(storedState.patterns[0].lanes.length, 4);
+    assert.equal(storedState.patterns[0].lanes[0].steps.length, 32);
+
+    const crusher = storedState.patterns[6].lanes[1].steps[5];
+    assert.deepEqual(crusher.params, [6, 8, 12, 0, 0, 0, 0, 0]);
+    assert.equal(crusher.aux.source.shape, 0.25);
+    assert.deepEqual(crusher.aux.targets[1], { enabled: true, end: 16 });
+
+    const tape = storedState.patterns[6].lanes[2].steps[11];
+    assert.equal(tape.trigger, true);
+    assert.deepEqual(tape.params, [3.25, 2, 0.5, 40, 1, 0, 0, 0]);
+    assert.equal(storedState.patterns[6].lanes[2].steps[14].trigger, false);
+});
+
 test("legacy_seqfx_preset_contract_and_dense_v5_state_migrate_to_sparse_v7", async () => {
     const modules = await loadModules();
+    const { fixture } = await loadLegacyFixture();
     const currentContract = createCurrentContract(modules);
     const legacyContract = modules.buildLegacySeqFxPluginStateContract(currentContract);
     const normalized = modules.normalizeEffectPresetV2({
@@ -91,7 +122,7 @@ test("legacy_seqfx_preset_contract_and_dense_v5_state_migrate_to_sparse_v7", asy
         contract: legacyContract,
         parameters: { patternSelect: 6, rate: 1 },
         storedState: {
-            [modules.SEQFX_LEGACY_STATE_KEY]: createLegacyDenseState(modules),
+            [modules.SEQFX_LEGACY_STATE_KEY]: fixture.storedState,
         },
     }, {
         currentContract,
@@ -103,14 +134,32 @@ test("legacy_seqfx_preset_contract_and_dense_v5_state_migrate_to_sparse_v7", asy
     assert.deepEqual(Object.keys(normalized.storedState), [modules.SEQFX_STATE_KEY]);
     assert.equal(JSON.parse(normalized.storedState[modules.SEQFX_STATE_KEY]).version, 7);
     const restored = modules.parseStrictSeqFxStateV7(normalized.storedState[modules.SEQFX_STATE_KEY]);
-    const step = restored.patterns[6].lanes[modules.SEQFX_LANES.tapeStop].steps[11];
-    assert.equal(step.active, true);
-    assert.equal(step.params[5], 1);
-    assert.equal(step.params[6], 406.25);
+    const tape = restored.patterns[6].lanes[modules.SEQFX_LANES.tapeStop].steps[11];
+    assert.equal(tape.active, true);
+    assert.deepEqual(tape.params, [8, 0.5, 1, 1, 0, 1, 1_625, 200]);
+
+    const crusher = restored.patterns[6].lanes[modules.SEQFX_LANES.crusher].steps[5];
+    assert.deepEqual(crusher.params, [6, 6_000, 12, 0, 0, 0, 0, 0]);
+    assert.equal(crusher.aux.source.shape, 0.25);
+    assert.deepEqual(crusher.aux.targets[1], { enabled: true, end: 3_000 });
+
+    const filter = restored.patterns[6].lanes[modules.SEQFX_LANES.filter].steps[1];
+    assert.equal(filter.mix, 0.7);
+    assert.deepEqual(filter.params, [0, 1_200, 500, 4.5, 1, 0, 0, 0]);
+
+    const stutter = restored.patterns[6].lanes[modules.SEQFX_LANES.stutter].steps[20];
+    assert.deepEqual(stutter.params, [12, 0.75, 0.3, 0.6, 0, 0, 0, 0]);
+    assert.deepEqual(
+        restored.patterns[6].lanes.map((_lane, laneIndex) => (
+            modules.getSeqFxLaneBlocks(restored.patterns[6], laneIndex)[0]?.length
+        )),
+        [2, 3, 4, 5],
+    );
 });
 
 test("legacy_seqfx_snapshot_contract_and_dense_v5_state_migrate_to_sparse_v7", async () => {
     const modules = await loadModules();
+    const { fixture } = await loadLegacyFixture();
     const currentContract = createCurrentContract(modules);
     const legacyContract = modules.buildLegacySeqFxPluginStateContract(currentContract);
     const normalized = modules.normalizeEffectSnapshot({
@@ -122,7 +171,7 @@ test("legacy_seqfx_snapshot_contract_and_dense_v5_state_migrate_to_sparse_v7", a
         contract: legacyContract,
         parameters: { patternSelect: 6, rate: 1 },
         storedState: {
-            [modules.SEQFX_LEGACY_STATE_KEY]: createLegacyDenseState(modules),
+            [modules.SEQFX_LEGACY_STATE_KEY]: fixture.storedState,
         },
     }, {
         currentContract,

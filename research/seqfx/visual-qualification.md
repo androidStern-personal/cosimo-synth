@@ -1,7 +1,9 @@
 # SeqFX supported-size visual qualification
 
-Date: 2026-08-30  
-Command: `npm run fx:seqfx:visual-proof`  
+Date: 2026-08-30
+
+Command: `npm run fx:seqfx:visual-proof`
+
 Result: pass
 
 ## What was proved

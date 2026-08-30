@@ -1,0 +1,18 @@
+{
+  "fixture": "legacy-v5-dense-state.json.gz",
+  "sourceCommit": "7fc89fa322764221facdd2714e9b16bc91c41157",
+  "sourceFiles": {
+    "fx/seqfx/view/seqfx-state.ts": "aa0b297a08f3474d30365d554ec8d852070d5db2aee712affb1167ff5b2a7abf",
+    "fx/seqfx/view/stutter-envelope.ts": "3e5572d468e72da1764f74997c9efe43f77e07d0ec2938fb474d4ff36e195c38"
+  },
+  "captureBoundary": "The predecessor revision's exported SeqFX state edit and serialize functions.",
+  "captureScenario": "One non-default block for each pre-v7 effect, including Crush aux modulation and a four-cell Tape Stop gesture.",
+  "storedStateKey": "seqfx.v6",
+  "schemaVersion": 5,
+  "storedStateBytes": 669361,
+  "storedStateSha256": "daf1354662c1e252050e52698f11e8b1d68ba8aa9560ac8bac59a38527e74060",
+  "uncompressedBytes": 765684,
+  "uncompressedSha256": "d5fbf4ad3f37dfc616891dd687ca763c21d2ac753ffb4de91510365a7fd7fcb0",
+  "compressedBytes": 5325,
+  "compressedSha256": "97c810de880aecf6502ac9fd6cc0f49575c015303b49a12a29730aa63dd4254c"
+}

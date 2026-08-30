@@ -63,6 +63,24 @@ a relaxed budget.
 - Migration equivalence is compared at the dense `SeqPatternUpload` boundary,
   including active/trigger/effect/mix/parameter/aux arrays.
 
+### Literal predecessor fixture
+
+The migration suite no longer fabricates its representative v5 document with
+the current v7 constructors. `tests/fixtures/seqfx/legacy-v5-dense-state.json.gz`
+contains the exact 669,361-byte `seqfx.v6` string emitted by commit
+`7fc89fa322764221facdd2714e9b16bc91c41157`, immediately before the v7 work,
+through that revision's exported block-edit and serialization API. It includes
+one non-default Filter, Crusher, Tape Stop, and Stutter block; Crusher Aux state;
+and a four-cell Tape Stop gesture.
+
+The gzip keeps the repetitive dense document at 5,325 bytes. Its sidecar pins
+the source commit, source-file hashes, uncompressed and compressed sizes, and
+SHA-256 values. `tests/helpers/generate_seqfx_legacy_v5_fixture.mjs` reproduces
+the capture from Git history, and the migration test hard-codes those hashes
+before checking the Tape Stop and Crush mappings. This proves recall from the
+actual predecessor serializer. It is not represented as a customer-supplied
+preset or as Ableton save/reopen evidence.
+
 ## Qualification at checkpoint
 
 - Focused state/runtime/worker/preset/snapshot/mirror suite: 114/114 passing.

@@ -673,7 +673,7 @@ Capture named visual-regression screenshots for empty state and every effect's s
 - Provide Init plus at least three musically named effect presets per effect.
 - Provide at least twelve full SeqFX patterns spanning drums, vocals, bass, sustained harmony, transitions, and subtle utility.
 - Presets must be level-conscious and must not depend on unavailable external audio.
-- Add a compact in-product first-use hint for drawing, resizing, selecting an effect, and opening modulation; it must dismiss and stay dismissed for the plugin instance.
+- Add a compact in-product first-use hint for drawing, resizing, selecting an effect, and opening modulation; it dismisses for the current mounted editor and must not imply project-state persistence.
 - Write `SEQFX_USER_GUIDE.md` with clocking, blocks, triggers/tails, each effect, modulation, state/preset behavior, and host limitations.
 - Write release notes and a known-issues section from verified facts.
 
@@ -716,7 +716,7 @@ Tasks:
 - `P2.2` Create the effect-definition domain module and replace duplicated UI switch tables incrementally.
 - `P2.3` Add append-only effect IDs 5–12 and contract tests against Cmajor.
 - `P2.4` Implement strict v7 boundary parsers and sparse state projection.
-- `P2.5` Implement v6/version-5 migration with frozen real fixtures.
+- `P2.5` Implement v6/version-5 migration with a frozen predecessor-produced dense fixture plus constructed edge-case fixtures.
 - `P2.6` Implement sparse edit operations behind the existing mutation interface or a narrower replacement, preserving observable block gestures.
 - `P2.7` Expand sparse state into the existing dense runtime upload.
 - `P2.8` Add state-size, round-trip, migration, malformed-input, and preset tests.
@@ -794,7 +794,7 @@ Tasks:
   fixed supported-size layout, focus treatments, and reduced-motion override.
 - `P7.5` Complete — three bounded musical presets per effect, 12 full patterns,
   and atomic pattern/preset/variation history contracts.
-- `P7.6` Complete — instance-local onboarding, user guide, pre-release notes,
+- `P7.6` Complete — editor-local onboarding, user guide, pre-release notes,
   known limits, and explicit unperformed host/release gates.
 - `P7.7` Complete — captured and inspected empty/all-effect screenshots at default
   and compact sizes plus minimum/wide geometry, contrast, focus, and zoom proof.

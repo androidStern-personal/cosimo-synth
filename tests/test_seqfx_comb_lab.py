@@ -69,4 +69,3 @@ def test_advanced_candidates_are_not_reference_in_disguise(
     assert float(np.sqrt(np.mean((reference - dispersive) ** 2))) > 1.0e-3
     assert float(np.sqrt(np.mean((reference - vector) ** 2))) > 1.0e-3
     assert float(np.sqrt(np.mean((vector[:, 0] - vector[:, 1]) ** 2))) > 1.0e-4
-

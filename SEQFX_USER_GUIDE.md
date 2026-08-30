@@ -126,6 +126,8 @@ Current projects store sparse `seqfx.v7` block state. The plugin migrates valid 
 
 Host or preset loads are authoritative history boundaries: they replace the current authored document and clear in-memory Undo/Redo. The loop clipboard and edit history are intentionally instance-local.
 
+The first-use editing hint stays dismissed only while the editor remains open. Its dismissal is not saved in project state.
+
 ## Current host limitations
 
 - The release-candidate target is macOS VST3. AU and Windows are not part of this tranche.
@@ -133,4 +135,3 @@ Host or preset loads are authoritative history boundaries: they replace the curr
 - The maximum Reverse window is four seconds; Tape Stop and Stutter use their documented bounded history tiers.
 - Manual clock runs continuously; use Internal when an in-plugin Play/Stop control is required.
 - Final Ableton save/reopen, automation, multiple-instance, and subjective listening results belong in the release qualification ledger. Do not infer them from browser or offline DSP tests.
-
