@@ -11,6 +11,8 @@ Official sources:
 - https://downloads.sugar-bytes.de/manuals/Effectrix2.pdf
 - https://downloads.sugar-bytes.de/manuals/Looperator.pdf
 - https://kilohearts.com/docs/snapins
+- https://kilohearts.com/products/bitcrush
+- https://www.ableton.com/en/manual/live-audio-effect-reference/#redux
 
 All listed effects are SeqFX block types. Koala's XY pad, scenes, hold UI, and
 live-touch workflow are not being cloned.
@@ -109,12 +111,20 @@ but they cannot drift independently across state, UI, and Cmajor.
 - Bits: 2–16 bits, integer, aux eligible.
 - Rate: 200 Hz–48 kHz display, logarithmic; runtime normalizes against sample
   rate instead of exposing an unexplained hold-frame count.
-- Character: Clean / ADC / DAC, stepped and trigger-latched.
+- Drive: 0–36 dB, aux eligible.
+- Character: Original / Classic / Smooth / Progressive, stepped and
+  trigger-latched.
+- ADC Q: 0–100% pre-converter filtering, aux eligible.
+- DAC Q: 0–100% post-converter reconstruction filtering, aux eligible.
 - Dither: 0–100%, aux eligible.
-- Drive: 0–18 dB, aux eligible.
 
-The legacy hold-frame parameter migrates to the nearest effective Rate at 48
-kHz and remains deterministic across save/reopen.
+`Original` preserves the shipped 48 kHz hold/clip/quantize/gain order exactly.
+`Classic` uses the corrected drive order and a Rate in Hz. `Smooth` interpolates
+captures. `Progressive` quantizes capture-to-capture differences and applies a
+bounded DC blocker. Kilohearts' ADC Q/DAC Q vocabulary was selected instead of
+an overlapping Tone control; the full source/inference split is recorded in
+`crush-v2-decision.md`. The legacy hold-frame parameter migrates to
+`48000 / holdFrames` and remains deterministic across save/reopen.
 
 ### Pitch (ID 5)
 

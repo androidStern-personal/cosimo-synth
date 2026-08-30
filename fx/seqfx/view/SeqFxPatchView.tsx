@@ -839,9 +839,12 @@ const PARAM_DEFINITIONS: Record<number, ParamDefinition[]> = {
         { index: 3, label: "Resonance", min: 0.1, max: 20, step: 0.01, amountKind: "linear" },
     ],
     [SEQFX_EFFECT_TYPES.crusher]: [
-        { index: 0, label: "Bits", min: 4, max: 16, step: 1, amountKind: "integer" },
-        { index: 1, label: "Hold frames", min: 1, max: 64, step: 1, amountKind: "integer" },
+        { index: 0, label: "Bits", min: 2, max: 16, step: 1, amountKind: "integer" },
+        { index: 1, label: "Rate", min: 200, max: 48000, step: 1, amountKind: "cutoffOctaves", hint: "Converter sample rate; lower values produce wider steps and more aliasing." },
         { index: 2, label: "Drive", min: 0, max: 36, step: 0.1, amountKind: "db" },
+        { index: 4, label: "ADC Q", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Pre-converter anti-alias filtering." },
+        { index: 5, label: "DAC Q", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Post-converter reconstruction filtering." },
+        { index: 6, label: "Dither", min: 0, max: 1, step: 0.01, amountKind: "percentPoints", hint: "Deterministic TPDF dither at the quantizer." },
     ],
     [SEQFX_EFFECT_TYPES.tapeStop]: [
         { index: 0, label: "Stop Time", min: 0, max: 8, step: 1, kind: "select", options: ["1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars", "1 Cell"], hint: "How long the motor takes to stop; it may outlive the block." },
@@ -865,8 +868,12 @@ const FILTER_PARAM_MODE = 0;
 const FILTER_PARAM_CUTOFF = 1;
 const FILTER_PARAM_RESONANCE = 3;
 const CRUSHER_PARAM_BITS = 0;
-const CRUSHER_PARAM_HOLD_FRAMES = 1;
+const CRUSHER_PARAM_RATE_HZ = 1;
 const CRUSHER_PARAM_DRIVE_DB = 2;
+const CRUSHER_PARAM_CHARACTER = 3;
+const CRUSHER_PARAM_ADC_QUALITY = 4;
+const CRUSHER_PARAM_DAC_QUALITY = 5;
+const CRUSHER_PARAM_DITHER = 6;
 const TAPE_STOP_PARAM_START_LENGTH = 0;
 const TAPE_STOP_PARAM_START_CURVE = 1;
 const TAPE_STOP_PARAM_CATCHUP_CURVE = 2;
@@ -1024,14 +1031,15 @@ function SeqFxFilterBlockGlyph({
     );
 }
 
-function crusherStepCount(bits: number, holdFrames: number) {
-    const safeBits = Math.min(16, Math.max(4, Math.round(Number(bits) || 8)));
-    const holdNormalized = clampUnit((Number(holdFrames) - 1) / 63);
-    return Math.max(2, Math.min(12, Math.round(safeBits + 2 - (holdNormalized * 4))));
+function crusherStepCount(bits: number, rateHz: number) {
+    const safeBits = Math.min(16, Math.max(2, Math.round(Number(bits) || 8)));
+    const safeRateHz = Math.min(48_000, Math.max(200, Number(rateHz) || 48_000));
+    const rateNormalized = Math.log(safeRateHz / 200) / Math.log(48_000 / 200);
+    return Math.max(2, Math.min(12, Math.round((safeBits * 0.5) + (rateNormalized * 6))));
 }
 
-function crusherRisoPath(bits: number, holdFrames: number, driveDb: number, width: number) {
-    const stepCount = crusherStepCount(bits, holdFrames);
+function crusherRisoPath(bits: number, rateHz: number, driveDb: number, width: number) {
+    const stepCount = crusherStepCount(bits, rateHz);
     const levelCount = Math.max(2, Math.round(Number(bits)));
     const driveLift = clampUnit(Number(driveDb) / 36) * 5;
     const stepWidth = width / stepCount;
@@ -1065,7 +1073,7 @@ function SeqFxCrusherBlockGlyph({
     width: number;
 }) {
     const bits = Math.round(Number(params[CRUSHER_PARAM_BITS] ?? 8));
-    const holdFrames = Math.max(1, Number(params[CRUSHER_PARAM_HOLD_FRAMES] ?? 1));
+    const rateHz = Math.max(200, Number(params[CRUSHER_PARAM_RATE_HZ] ?? 48_000));
     const driveDb = Number(params[CRUSHER_PARAM_DRIVE_DB] ?? 0);
 
     return (
@@ -1082,7 +1090,7 @@ function SeqFxCrusherBlockGlyph({
             >
                 <path
                     className="seqfx-block-glyph__ink"
-                    d={crusherRisoPath(bits, holdFrames, driveDb, width)}
+                    d={crusherRisoPath(bits, rateHz, driveDb, width)}
                     data-role="seqfx-block-glyph-ink"
                 />
             </svg>
@@ -1093,7 +1101,7 @@ function SeqFxCrusherBlockGlyph({
             ) : null}
             {size === "wide" ? (
                 <span className="seqfx-block-glyph-readout" data-role="seqfx-block-glyph-readout">
-                    H{Math.round(holdFrames)} · {formatSignedFixed(driveDb, 0)} dB
+                    {rateHz >= 1_000 ? `${(rateHz / 1_000).toFixed(rateHz >= 10_000 ? 0 : 1)}k` : Math.round(rateHz)} Hz · {formatSignedFixed(driveDb, 0)} dB
                 </span>
             ) : null}
         </>
@@ -1315,8 +1323,12 @@ function filterRangeEndpointsFromSeqFxStep(step: SeqFxStep): FilterRangeEndpoint
 function crusherValueFromSeqFxStep(step: SeqFxStep) {
     return {
         bits: step.params[CRUSHER_PARAM_BITS],
-        holdFrames: step.params[CRUSHER_PARAM_HOLD_FRAMES],
+        rateHz: step.params[CRUSHER_PARAM_RATE_HZ],
         driveDb: step.params[CRUSHER_PARAM_DRIVE_DB],
+        character: step.params[CRUSHER_PARAM_CHARACTER],
+        adcQuality: step.params[CRUSHER_PARAM_ADC_QUALITY],
+        dacQuality: step.params[CRUSHER_PARAM_DAC_QUALITY],
+        dither: step.params[CRUSHER_PARAM_DITHER],
         mix: step.mix,
     };
 }
@@ -3982,11 +3994,17 @@ export function SeqFxPatchView({
         return {
             phase: inspectedAuxAmount,
             bits: auxTarget(CRUSHER_PARAM_BITS),
-            holdFrames: auxTarget(CRUSHER_PARAM_HOLD_FRAMES),
+            rateHz: auxTarget(CRUSHER_PARAM_RATE_HZ),
             driveDb: auxTarget(CRUSHER_PARAM_DRIVE_DB),
+            adcQuality: auxTarget(CRUSHER_PARAM_ADC_QUALITY),
+            dacQuality: auxTarget(CRUSHER_PARAM_DAC_QUALITY),
+            dither: auxTarget(CRUSHER_PARAM_DITHER),
             onToggleBits: () => toggleAuxTarget(CRUSHER_PARAM_BITS),
-            onToggleHoldFrames: () => toggleAuxTarget(CRUSHER_PARAM_HOLD_FRAMES),
+            onToggleRateHz: () => toggleAuxTarget(CRUSHER_PARAM_RATE_HZ),
             onToggleDriveDb: () => toggleAuxTarget(CRUSHER_PARAM_DRIVE_DB),
+            onToggleAdcQuality: () => toggleAuxTarget(CRUSHER_PARAM_ADC_QUALITY),
+            onToggleDacQuality: () => toggleAuxTarget(CRUSHER_PARAM_DAC_QUALITY),
+            onToggleDither: () => toggleAuxTarget(CRUSHER_PARAM_DITHER),
         };
     }
 
@@ -4677,8 +4695,12 @@ export function SeqFxPatchView({
                                         <CrusherEditor
                                             value={crusherValueFromSeqFxStep(inspectedCell)}
                                             onBitsChange={(value) => setParam(CRUSHER_PARAM_BITS, value)}
-                                            onHoldFramesChange={(value) => setParam(CRUSHER_PARAM_HOLD_FRAMES, value)}
+                                            onRateHzChange={(value) => setParam(CRUSHER_PARAM_RATE_HZ, value)}
                                             onDriveDbChange={(value) => setParam(CRUSHER_PARAM_DRIVE_DB, value)}
+                                            onCharacterChange={(value) => setParam(CRUSHER_PARAM_CHARACTER, value)}
+                                            onAdcQualityChange={(value) => setParam(CRUSHER_PARAM_ADC_QUALITY, value)}
+                                            onDacQualityChange={(value) => setParam(CRUSHER_PARAM_DAC_QUALITY, value)}
+                                            onDitherChange={(value) => setParam(CRUSHER_PARAM_DITHER, value)}
                                             modulation={modulationForCrusher()}
                                         />
                                     ) : inspectedEffectType === SEQFX_EFFECT_TYPES.tapeStop ? (

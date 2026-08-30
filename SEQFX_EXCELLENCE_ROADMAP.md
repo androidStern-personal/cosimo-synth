@@ -1,6 +1,6 @@
 # SeqFX Excellence Roadmap
 
-Status: implementation in progress; Phases 0–3 complete, Tape Stop v2 complete; Phase 4 continues with Crush v2
+Status: implementation in progress; Phases 0–3 complete, Tape Stop v2 and Crush v2 complete; Phase 4 continues with Ring
 Owner thread: `01a05051-d7c7-7e13-bb60-58968b6392cf`
 Branch: `codex/seqfx-excellence-01a05051`
 Worktree: `/Users/winterfell/.codex/worktrees/seqfx-excellence-01a05051/cosimo-synth`
@@ -19,6 +19,7 @@ Execution evidence:
 - Shared-buffer decision: `research/seqfx/buffer-architecture.md`
 - Lifecycle/reset contract: `research/seqfx/lifecycle-contract.md`
 - Tape Stop v2 implementation proof: `research/seqfx/tape-stop-v2-evidence.md`
+- Crush v2 decision and implementation proof: `research/seqfx/crush-v2-decision.md`
 
 ## 1. Outcome
 
@@ -861,6 +862,7 @@ The implementation task must not infer these from a build succeeding.
 | Vibro and Flange are separate IDs | Committed from wording | The user listed both, while Koala combines them | One bipolar Vibro/Flange block | Clearer authored intent and independent focused controls |
 | Sparse v7 block state | Committed engineering direction | Removes hundreds of kilobytes of empty repeated state and creates one coherent version boundary | Extend dense version 5 again | Requires migration, but lowers host-state risk and effect-expansion cost |
 | Tape is a trigger-latched motor gesture with explicit Stop Time, Curve, Catch Up/Spin Up, optional Start Time, and Sync/Free timing | Committed and implemented | Official mature-product vocabulary plus the frozen benchmark; block end does not define motor lifetime | Invent Tail/Throw controls or keep the old block-bound ramp | Two gesture voices, tiered history, explicit v5 migration, and a dedicated v2 inspector |
+| Crush uses Original/Classic/Smooth/Progressive characters plus ADC Q, DAC Q, and deterministic Dither | Committed and implemented | Kilohearts, Effectrix2, and Redux establish the converter vocabulary; measured fixtures preserve the old sound and distinguish the new modes | Keep opaque Hold Frames or add an overlapping Tone control | ID 2 persists; legacy Hold maps at canonical 48 kHz; Rate is stable across host sample rates |
 | Comb uses the selected vector-dispersive feedback topology | Committed by lab evidence | The lab retained recognizable tuning while dispersion, stereo vector coupling, damping, motion, drive, and width created a distinct stable instrument | Ship a conventional one-delay comb or the less controllable modal candidates | Production Comb implements the selected candidate and preserves the rejected-candidate scorecard |
 | macOS VST3 release candidate only | Inherited | Existing release scope and toolchain | Expand AU/Windows now | Keeps the slice finishable; other formats need their own roadmap |
 | No merge/push/deploy/publish by this task | Inherited | Coordinator and user authorization boundary | Treat “end to end” as permission to release | Final result is a clean handoff and artifact, not an external launch |
@@ -934,7 +936,9 @@ The owner may call the implementation complete only when:
 - [Sugar Bytes Effectrix2 manual](https://downloads.sugar-bytes.de/manuals/Effectrix2.pdf)
 - [Sugar Bytes Looperator manual](https://downloads.sugar-bytes.de/manuals/Looperator.pdf)
 - [Kilohearts Tape Stop](https://kilohearts.com/products/tape_stop)
+- [Kilohearts Bitcrush](https://kilohearts.com/products/bitcrush)
 - [Kilohearts Essentials effect documentation](https://kilohearts.com/docs/snapins)
+- [Ableton Live Audio Effect Reference: Redux](https://www.ableton.com/en/manual/live-audio-effect-reference/#redux)
 - [Koala FX official effect list](https://www.elf-audio.com/koalafx/)
 - [Arturia Tape MELLO-FI](https://www.arturia.com/products/software-effects/tape-mello-fi/overview)
 - [Arturia Tape MELLO-FI FAQ](https://support.arturia.com/hc/en-us/articles/4414426565010-Tape-MELLO-FI-General-Questions)

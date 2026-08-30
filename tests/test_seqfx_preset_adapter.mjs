@@ -292,6 +292,9 @@ test("seqfx_adapter_migrates_supported_version-5 preset state to sparse v7", () 
         step: 13,
         active: true,
     });
+    const legacyCrushStep = state.patterns[9].lanes[SEQFX_LANES.crusher].steps[13];
+    legacyCrushStep.params = [8, 1, 0, 0, 0, 0, 0, 0];
+    legacyCrushStep.aux.targets = legacyCrushStep.params.map((end) => ({ enabled: false, end }));
     state.version = 5;
     const connection = new FakePatchConnection({}, { patternSelect: 9 });
     const bridge = new SeqFxRuntimeBridge(connection);

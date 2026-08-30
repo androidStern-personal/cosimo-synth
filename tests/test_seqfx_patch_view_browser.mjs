@@ -27,8 +27,12 @@ const FILTER_PARAM_MODE = 0;
 const FILTER_PARAM_CUTOFF = 1;
 const FILTER_PARAM_RESONANCE = 3;
 const CRUSHER_PARAM_BITS = 0;
-const CRUSHER_PARAM_HOLD_FRAMES = 1;
+const CRUSHER_PARAM_RATE_HZ = 1;
 const CRUSHER_PARAM_DRIVE_DB = 2;
+const CRUSHER_PARAM_CHARACTER = 3;
+const CRUSHER_PARAM_ADC_QUALITY = 4;
+const CRUSHER_PARAM_DAC_QUALITY = 5;
+const CRUSHER_PARAM_DITHER = 6;
 const TAPE_STOP_PARAM_CURVE = 1;
 const TAPE_STOP_PARAM_RETURN = 2;
 const STUTTER_PARAM_SLICES = 0;
@@ -305,10 +309,34 @@ async function pressSliderKey(locator, key) {
     await locator.press(key);
 }
 
-async function setCrushEditorValues(page, { bits, holdFrames, driveDb }) {
+function crushRateSliderValue(rateHz) {
+    return Math.log(rateHz / 200) / Math.log(48_000 / 200);
+}
+
+async function setCrushEditorValues(page, {
+    bits,
+    rateHz,
+    driveDb,
+    character,
+    adcQuality,
+    dacQuality,
+    dither,
+}) {
     await setRangeInputValue(page.locator('[data-role="seqfx-crusher-bits"]'), bits);
-    await setRangeInputValue(page.locator('[data-role="seqfx-crusher-hold-frames"]'), holdFrames);
+    await setRangeInputValue(page.locator('[data-role="seqfx-crusher-rate"]'), crushRateSliderValue(rateHz));
     await setRangeInputValue(page.locator('[data-role="seqfx-crusher-drive-db"]'), driveDb);
+    if (character !== undefined) {
+        await page.locator(`[data-role="seqfx-crusher-character-option"][data-character="${character}"]`).click();
+    }
+    if (adcQuality !== undefined) {
+        await setRangeInputValue(page.locator('[data-role="seqfx-crusher-adc-quality"]'), adcQuality);
+    }
+    if (dacQuality !== undefined) {
+        await setRangeInputValue(page.locator('[data-role="seqfx-crusher-dac-quality"]'), dacQuality);
+    }
+    if (dither !== undefined) {
+        await setRangeInputValue(page.locator('[data-role="seqfx-crusher-dither"]'), dither);
+    }
 }
 
 async function assertSharedCurveContract(page, { graphRole, pathRole, fillRole = null, handleRole = null }) {
@@ -2461,34 +2489,36 @@ test("seqfx_crusher_inspector_renders_waveform_editor_and_writes_params", async 
     assert.equal(await page.locator('[data-role="seqfx-param"][data-param="0"]').count(), 0);
     assert.equal(await page.locator('[data-role="seqfx-param"][data-param="1"]').count(), 0);
     assert.equal(await page.locator('[data-role="seqfx-param"][data-param="2"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-param"][data-param="6"]').count(), 0);
 
     const bitTicks = page.locator('[data-role="seqfx-crusher-bits-slider"] [data-role="editor-tick-slider-tick"]');
-    assert.equal(await bitTicks.count(), 13);
+    assert.equal(await bitTicks.count(), 15);
     const bitTickBox = await bitTicks.first().boundingBox();
     assert.ok(bitTickBox);
     assert.ok(bitTickBox.height >= 12, `crusher bit ticks should match editor strip thickness, got ${bitTickBox.height}`);
 
-    const holdTicks = page.locator('[data-role="seqfx-crusher-hold-frames-slider"] [data-role="editor-tick-slider-tick"]');
-    assert.equal(await holdTicks.count(), 16);
+    const rateTicks = page.locator('[data-role="seqfx-crusher-rate-slider"] [data-role="editor-tick-slider-tick"]');
+    assert.equal(await rateTicks.count(), 16);
     const narrowLayout = await page.locator('[data-role="seqfx-crusher-editor"]').evaluate((node) => {
         const bitsRow = node.querySelector('[data-role="seqfx-crusher-bits-slider"]');
         const bitsTrack = bitsRow?.querySelector(".editor-tick-slider__track");
         const bitsValue = bitsRow?.querySelector('[data-role="seqfx-crusher-bits-value"]');
-        const holdRow = node.querySelector('[data-role="seqfx-crusher-hold-frames-slider"]');
-        const holdTrack = holdRow?.querySelector(".editor-tick-slider__track");
-        const holdTicks = holdRow?.querySelectorAll('[data-role="editor-tick-slider-tick"]') ?? [];
-        const firstHoldTick = holdTicks[0];
-        const lastHoldTick = holdTicks[holdTicks.length - 1];
+        const rateRow = node.querySelector('[data-role="seqfx-crusher-rate-slider"]');
+        const rateTrack = rateRow?.querySelector(".editor-tick-slider__track");
+        const rateTicks = rateRow?.querySelectorAll('[data-role="editor-tick-slider-tick"]') ?? [];
+        const firstRateTick = rateTicks[0];
+        const lastRateTick = rateTicks[rateTicks.length - 1];
 
         return {
             bitsRowWidth: bitsRow?.getBoundingClientRect().width ?? 0,
             bitsTrackWidth: bitsTrack?.getBoundingClientRect().width ?? 0,
             bitsValueWidth: bitsValue?.getBoundingClientRect().width ?? 0,
-            holdRowWidth: holdRow?.getBoundingClientRect().width ?? 0,
-            holdTrackWidth: holdTrack?.getBoundingClientRect().width ?? 0,
-            holdTickWidth: firstHoldTick?.getBoundingClientRect().width ?? 0,
-            holdActiveColor: firstHoldTick ? getComputedStyle(firstHoldTick).backgroundColor : "",
-            holdInactiveColor: lastHoldTick ? getComputedStyle(lastHoldTick).backgroundColor : "",
+            rateRowWidth: rateRow?.getBoundingClientRect().width ?? 0,
+            rateTrackWidth: rateTrack?.getBoundingClientRect().width ?? 0,
+            rateTickWidth: firstRateTick?.getBoundingClientRect().width ?? 0,
+            rateActiveTickCount: Array.from(rateTicks).filter((tick) => tick.classList.contains("is-active")).length,
+            rateActiveColor: firstRateTick ? getComputedStyle(firstRateTick).backgroundColor : "",
+            rateInactiveColor: lastRateTick ? getComputedStyle(lastRateTick).backgroundColor : "",
         };
     });
     assert.ok(
@@ -2500,18 +2530,14 @@ test("seqfx_crusher_inspector_renders_waveform_editor_and_writes_params", async 
         `crusher bits readout should stay compact, got ${narrowLayout.bitsValueWidth}px of ${narrowLayout.bitsRowWidth}px`,
     );
     assert.ok(
-        narrowLayout.holdTrackWidth > narrowLayout.holdRowWidth * 0.45,
-        `crusher hold rail should keep most of the row, got ${narrowLayout.holdTrackWidth}px of ${narrowLayout.holdRowWidth}px`,
+        narrowLayout.rateTrackWidth > narrowLayout.rateRowWidth * 0.45,
+        `crusher rate rail should keep most of the row, got ${narrowLayout.rateTrackWidth}px of ${narrowLayout.rateRowWidth}px`,
     );
     assert.ok(
-        narrowLayout.holdTickWidth >= 4,
-        `crusher hold ticks should remain visible in the narrow inspector, got ${narrowLayout.holdTickWidth}px`,
+        narrowLayout.rateTickWidth >= 4,
+        `crusher rate ticks should remain visible in the narrow inspector, got ${narrowLayout.rateTickWidth}px`,
     );
-    assert.notEqual(
-        narrowLayout.holdActiveColor,
-        narrowLayout.holdInactiveColor,
-        "crusher hold row should visibly distinguish active ticks from inactive ticks",
-    );
+    assert.equal(narrowLayout.rateActiveTickCount, 16, "the default 48 kHz rate should fill the logarithmic rate rail");
 
     assert.equal(
         await page.locator('[data-role="seqfx-crusher-bits-slider"] .editor-tick-slider__label--toggle').count(),
@@ -2519,9 +2545,9 @@ test("seqfx_crusher_inspector_renders_waveform_editor_and_writes_params", async 
         "crusher bits should keep its inline modulation toggle in the effect editor",
     );
     assert.equal(
-        await page.locator('[data-role="seqfx-crusher-hold-frames-slider"] .editor-tick-slider__label--toggle').count(),
+        await page.locator('[data-role="seqfx-crusher-rate-slider"] .editor-tick-slider__label--toggle').count(),
         1,
-        "crusher hold should keep its inline modulation toggle in the effect editor",
+        "crusher rate should keep its inline modulation toggle in the effect editor",
     );
     assert.equal(
         await page.locator('[data-role="seqfx-crusher-drive-db-mod-toggle"]').count(),
@@ -2532,16 +2558,28 @@ test("seqfx_crusher_inspector_renders_waveform_editor_and_writes_params", async 
     const beforePath = await page.locator('[data-role="seqfx-crusher-wet-path"]').getAttribute("d");
     assert.ok(beforePath && beforePath.length > 20, "crusher graph should render a non-empty wet waveform path");
 
-    await setCrushEditorValues(page, { bits: 4, holdFrames: 32, driveDb: 30 });
+    await setCrushEditorValues(page, {
+        bits: 4,
+        rateHz: 3_098,
+        driveDb: 30,
+        character: 2,
+        adcQuality: 0.75,
+        dacQuality: 0.5,
+        dither: 0.25,
+    });
     let snapshot = await getHarnessSnapshot(page);
     let upload = patternUploads(snapshot).at(-1).value;
-    assert.deepEqual(upload.params[1][0].slice(0, 3), [4, 32, 30]);
+    assert.deepEqual(upload.params[1][0].slice(0, 7), [4, 3_098, 30, 2, 0.75, 0.5, 0.25]);
 
     const afterParamPath = await page.locator('[data-role="seqfx-crusher-wet-path"]').getAttribute("d");
-    assert.notEqual(afterParamPath, beforePath, "crusher graph should redraw after bits/hold/drive changes");
+    assert.notEqual(afterParamPath, beforePath, "crusher graph should redraw after converter controls change");
     assert.equal(await page.locator('[data-role="seqfx-crusher-bits-value"]').textContent(), "4");
-    assert.equal(await page.locator('[data-role="seqfx-crusher-hold-frames-value"]').textContent(), "32");
+    assert.equal(await page.locator('[data-role="seqfx-crusher-rate-value"]').textContent(), "3.1 kHz");
     assert.equal(await page.locator('[data-role="seqfx-crusher-drive-db-value"]').textContent(), "30.0 dB");
+    assert.equal(await page.locator('[data-role="seqfx-crusher-character-option"][aria-pressed="true"]').textContent(), "Smooth");
+    assert.equal(await page.locator('[data-role="seqfx-crusher-adc-quality-value"]').textContent(), "75%");
+    assert.equal(await page.locator('[data-role="seqfx-crusher-dac-quality-value"]').textContent(), "50%");
+    assert.equal(await page.locator('[data-role="seqfx-crusher-dither-value"]').textContent(), "25%");
 
     await setRangeInputValue(page.locator('[data-role="seqfx-mix"]'), 0.25);
     snapshot = await getHarnessSnapshot(page);
@@ -2572,15 +2610,15 @@ test("seqfx_crusher_inspector_renders_waveform_editor_and_writes_params", async 
     assert.equal(upload.auxEnd[1][0][CRUSHER_PARAM_DRIVE_DB], 36);
     assert.equal(await page.locator('[data-role="seqfx-mod-target-badge"]').textContent(), "1");
 
-    await setRangeInputValue(page.locator('[data-role="seqfx-crusher-hold-frames"]'), 8);
-    await page.locator('[data-role="seqfx-crusher-hold-frames-slider"] .editor-tick-slider__label--toggle').click();
-    const holdEndSlider = page.getByRole("slider", { name: "Hold end", exact: true });
-    await pressSliderKey(holdEndSlider, "End");
-    await holdEndSlider.focus();
+    await setRangeInputValue(page.locator('[data-role="seqfx-crusher-rate"]'), 0.25);
+    await page.locator('[data-role="seqfx-crusher-rate-slider"] .editor-tick-slider__label--toggle').click();
+    const rateEndSlider = page.getByRole("slider", { name: "Rate end", exact: true });
+    await pressSliderKey(rateEndSlider, "End");
+    await rateEndSlider.focus();
     await page.keyboard.down("Shift");
     await page.keyboard.press("ArrowLeft");
     await page.keyboard.up("Shift");
-    const holdModRange = await page.locator('[data-role="seqfx-crusher-hold-frames-slider"]').evaluate((node) => {
+    const rateModRange = await page.locator('[data-role="seqfx-crusher-rate-slider"]').evaluate((node) => {
         const baseTicks = Array.from(node.querySelectorAll('[data-role="editor-tick-slider-tick"]'));
         const rangeRail = node.querySelector('[data-role="editor-tick-slider-mod-range-rail"]');
         const rangeTicks = Array.from(rangeRail?.querySelectorAll(".editor-tick-slider__tick") ?? []);
@@ -2609,19 +2647,19 @@ test("seqfx_crusher_inspector_renders_waveform_editor_and_writes_params", async 
             rangeTickCount: rangeTicks.length,
         };
     });
-    assert.equal(holdModRange.connectorCount, 0, "modulated tick sliders should not render a continuous yellow range bar");
-    assert.equal(holdModRange.isModRangeClassCount, 0, "base rail should not choose range cells with rounded tick indexes");
-    assert.equal(holdModRange.rangeRailCount, 1);
-    assert.equal(holdModRange.rangeTickCount, holdModRange.baseTickCount);
-    assert.equal(holdModRange.rangeTickColor, "rgb(242, 209, 107)");
-    assert.match(holdModRange.clipPathStyle, /^inset\(/);
+    assert.equal(rateModRange.connectorCount, 0, "modulated tick sliders should not render a continuous yellow range bar");
+    assert.equal(rateModRange.isModRangeClassCount, 0, "base rail should not choose range cells with rounded tick indexes");
+    assert.equal(rateModRange.rangeRailCount, 1);
+    assert.equal(rateModRange.rangeTickCount, rateModRange.baseTickCount);
+    assert.equal(rateModRange.rangeTickColor, "rgb(242, 209, 107)");
+    assert.match(rateModRange.clipPathStyle, /^inset\(/);
     assert.ok(
-        Math.abs(holdModRange.clipLeftX - holdModRange.lowHandleX) <= 1,
-        `yellow range clip should start at lower handle center, got ${holdModRange.clipLeftX} vs ${holdModRange.lowHandleX}`,
+        Math.abs(rateModRange.clipLeftX - rateModRange.lowHandleX) <= 1,
+        `yellow range clip should start at lower handle center, got ${rateModRange.clipLeftX} vs ${rateModRange.lowHandleX}`,
     );
     assert.ok(
-        Math.abs(holdModRange.clipRightX - holdModRange.highHandleX) <= 1,
-        `yellow range clip should end at upper handle center, got ${holdModRange.clipRightX} vs ${holdModRange.highHandleX}`,
+        Math.abs(rateModRange.clipRightX - rateModRange.highHandleX) <= 1,
+        `yellow range clip should end at upper handle center, got ${rateModRange.clipRightX} vs ${rateModRange.highHandleX}`,
     );
 
     await page.close();
@@ -3250,7 +3288,7 @@ test("seqfx_blocks_render_risograph_glyphs_from_effect_parameters", async () => 
 
         createBlock(1, 0, 3, module.SEQFX_EFFECT_TYPES.crusher);
         setParam(1, 0, params.crusherBits, 6);
-        setParam(1, 0, params.crusherHoldFrames, 8);
+        setParam(1, 0, params.crusherRateHz, 6_000);
         setParam(1, 0, params.crusherDriveDb, 9);
 
         createBlock(2, 0, 4, module.SEQFX_EFFECT_TYPES.tapeStop);
@@ -3269,7 +3307,7 @@ test("seqfx_blocks_render_risograph_glyphs_from_effect_parameters", async () => 
             filterCutoff: FILTER_PARAM_CUTOFF,
             filterResonance: FILTER_PARAM_RESONANCE,
             crusherBits: CRUSHER_PARAM_BITS,
-            crusherHoldFrames: CRUSHER_PARAM_HOLD_FRAMES,
+            crusherRateHz: CRUSHER_PARAM_RATE_HZ,
             crusherDriveDb: CRUSHER_PARAM_DRIVE_DB,
             tapeCurve: TAPE_STOP_PARAM_CURVE,
             tapeReturn: TAPE_STOP_PARAM_RETURN,
@@ -3837,7 +3875,7 @@ test("seqfx_cmd_c_and_cmd_v_copy_cell_values_to_single_or_group_selection", asyn
 
     await page.getByRole("button", { name: "Chain 2 Crush block 2", exact: true }).click();
     await setRangeInputValue(page.locator('[data-role="seqfx-mix"]'), 0.42);
-    await setCrushEditorValues(page, { bits: 5, holdFrames: 7, driveDb: 12 });
+    await setCrushEditorValues(page, { bits: 5, rateHz: 3_098, driveDb: 12 });
 
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
     await page.getByRole("button", { name: "Chain 2 Crush block 2", exact: true }).click();
@@ -3858,9 +3896,9 @@ test("seqfx_cmd_c_and_cmd_v_copy_cell_values_to_single_or_group_selection", asyn
 
     snapshot = await getHarnessSnapshot(page);
     let upload = patternUploads(snapshot).at(-1).value;
-    assert.deepEqual(upload.params[1][4].slice(0, 3), [5, 7, 12]);
+    assert.deepEqual(upload.params[1][4].slice(0, 3), [5, 3_098, 12]);
     assert.equal(upload.mix[1][4], 0.42);
-    assert.deepEqual(upload.params[1][7].slice(0, 3), [8, 1, 0]);
+    assert.deepEqual(upload.params[1][7].slice(0, 3), [8, 48_000, 0]);
     assert.equal(upload.mix[1][7], 1);
 
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
@@ -3877,7 +3915,7 @@ test("seqfx_cmd_c_and_cmd_v_copy_cell_values_to_single_or_group_selection", asyn
     upload = patternUploads(snapshot).at(-1).value;
     assert.deepEqual(
         [4, 7].map((step) => upload.params[1][step].slice(0, 3)),
-        [[5, 7, 12], [5, 7, 12]],
+        [[5, 3_098, 12], [5, 3_098, 12]],
     );
     assert.deepEqual(
         [4, 7].map((step) => upload.mix[1][step]),
@@ -3898,7 +3936,7 @@ test("seqfx_clipboard_events_copy_and_paste_cell_values_when_keydown_is_missing"
 
     await page.getByRole("button", { name: "Chain 2 Crush block 2", exact: true }).click();
     await setRangeInputValue(page.locator('[data-role="seqfx-mix"]'), 0.37);
-    await setCrushEditorValues(page, { bits: 6, holdFrames: 9, driveDb: 15 });
+    await setCrushEditorValues(page, { bits: 6, rateHz: 12_195, driveDb: 15 });
 
     const copyResult = await dispatchClipboardEvent(
         page,
@@ -3932,9 +3970,9 @@ test("seqfx_clipboard_events_copy_and_paste_cell_values_when_keydown_is_missing"
 
     snapshot = await getHarnessSnapshot(page);
     let upload = patternUploads(snapshot).at(-1).value;
-    assert.deepEqual(upload.params[1][4].slice(0, 3), [6, 9, 15]);
+    assert.deepEqual(upload.params[1][4].slice(0, 3), [6, 12_195, 15]);
     assert.equal(upload.mix[1][4], 0.37);
-    assert.deepEqual(upload.params[1][7].slice(0, 3), [8, 1, 0]);
+    assert.deepEqual(upload.params[1][7].slice(0, 3), [8, 48_000, 0]);
     assert.equal(upload.mix[1][7], 1);
 
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
@@ -3956,7 +3994,7 @@ test("seqfx_clipboard_events_copy_and_paste_cell_values_when_keydown_is_missing"
     upload = patternUploads(snapshot).at(-1).value;
     assert.deepEqual(
         [4, 7].map((step) => upload.params[1][step].slice(0, 3)),
-        [[6, 9, 15], [6, 9, 15]],
+        [[6, 12_195, 15], [6, 12_195, 15]],
     );
     assert.deepEqual(
         [4, 7].map((step) => upload.mix[1][step]),

@@ -316,6 +316,9 @@ test("seqfx worker reads a valid version-5 seqfx.v6 fallback without writing sto
         startStep: 12,
         length: 3,
     });
+    for (const step of legacyState.patterns[6].lanes[SEQFX_LANES.tapeStop].steps.slice(12, 15)) {
+        step.params = [1, 1, 1, 25, 0, 0, 0, 0];
+    }
     legacyState.version = 5;
     const connection = new FakePatchConnection({
         values: {

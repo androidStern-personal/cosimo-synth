@@ -414,7 +414,7 @@ test("changing_selected_pattern_block_effect_persists_effect_types_and_restores_
         SEQFX_EFFECT_TYPES.crusher,
         SEQFX_EFFECT_TYPES.crusher,
     ]);
-    assert.deepEqual(storedState.patterns[0].lanes[0].steps[2].params.slice(0, 3), [8, 1, 0]);
+    assert.deepEqual(storedState.patterns[0].lanes[0].steps[2].params.slice(0, 3), [8, 48_000, 0]);
 
     bridge.setBlockEffect({
         patternIndex: 0,
@@ -844,6 +844,9 @@ test("boot migrates a valid seqfx.v6 version-5 document once and gives v7 preced
         startStep: 7,
         length: 3,
     });
+    for (const step of legacyState.patterns[3].lanes[SEQFX_LANES.tapeStop].steps.slice(7, 10)) {
+        step.params = [1, 1, 1, 25, 0, 0, 0, 0];
+    }
     legacyState.version = 5;
     const legacyText = JSON.stringify(legacyState);
     const connection = new FakePatchConnection({

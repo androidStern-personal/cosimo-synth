@@ -36,7 +36,7 @@
     stroke-dasharray: 3 3;
 }
 
-.seqfx-crusher-editor__hold-marker {
+.seqfx-crusher-editor__capture-marker {
     stroke: var(--editor-accent-end);
     stroke-opacity: 0.74;
     stroke-width: 1;
@@ -44,6 +44,7 @@
 }
 
 .seqfx-crusher-editor__axis-label,
+.seqfx-crusher-editor__character-label,
 .seqfx-crusher-editor__drive-label,
 .seqfx-crusher-editor__drive-value {
     fill: var(--editor-surface-ink-muted);
@@ -53,6 +54,51 @@
     font-weight: var(--editor-label-weight);
     letter-spacing: var(--editor-label-letter-spacing);
     text-transform: uppercase;
+}
+
+.seqfx-crusher-editor__character {
+    display: grid;
+    gap: 7px;
+    padding: 10px 12px 12px;
+    border-top: 1px solid rgba(28, 28, 28, 0.18);
+}
+
+.seqfx-crusher-editor__character-options {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.seqfx-crusher-editor__character-options button {
+    min-width: 0;
+    border: 1px solid rgba(28, 28, 28, 0.22);
+    border-radius: 3px;
+    padding: 6px 3px;
+    color: var(--editor-surface-ink-muted);
+    background: rgba(255, 255, 255, 0.18);
+    font-family: var(--editor-label-font);
+    font-size: 9px;
+    font-weight: var(--editor-label-weight);
+    letter-spacing: 0.035em;
+    cursor: pointer;
+}
+
+.seqfx-crusher-editor__character-options button:is(:hover, :focus-visible) {
+    border-color: var(--editor-accent-start);
+    color: var(--editor-surface-ink);
+    outline: none;
+}
+
+.seqfx-crusher-editor__character-options button.is-active {
+    border-color: rgba(28, 28, 28, 0.68);
+    color: var(--editor-accent-start-ink);
+    background: var(--editor-accent-start);
+}
+
+.seqfx-crusher-editor__converter {
+    display: grid;
+    gap: 6px;
+    padding-top: 6px;
 }
 
 .seqfx-crusher-editor__drive {

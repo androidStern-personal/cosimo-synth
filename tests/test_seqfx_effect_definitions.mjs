@@ -65,6 +65,28 @@ test("Crush keeps persisted ID 2 while adopting the requested display name", () 
     assert.equal(crush.id, 2);
     assert.equal(crush.key, "crush");
     assert.equal(crush.name, "Crush");
+    assert.deepEqual(
+        crush.parameters.map(({ id, label, min, max, defaultValue, unit, latch, auxEligible, options }) => ({
+            id,
+            label,
+            min,
+            max,
+            defaultValue,
+            unit,
+            latch,
+            auxEligible,
+            options,
+        })),
+        [
+            { id: "bits", label: "Bits", min: 2, max: 16, defaultValue: 8, unit: "bits", latch: "continuous", auxEligible: true, options: undefined },
+            { id: "rateHz", label: "Rate", min: 200, max: 48_000, defaultValue: 48_000, unit: "Hz", latch: "continuous", auxEligible: true, options: undefined },
+            { id: "drive", label: "Drive", min: 0, max: 36, defaultValue: 0, unit: "dB", latch: "continuous", auxEligible: true, options: undefined },
+            { id: "character", label: "Character", min: 0, max: 3, defaultValue: 1, unit: "", latch: "trigger", auxEligible: false, options: ["Original", "Classic", "Smooth", "Progressive"] },
+            { id: "adcQuality", label: "ADC Q", min: 0, max: 1, defaultValue: 0, unit: "%", latch: "continuous", auxEligible: true, options: undefined },
+            { id: "dacQuality", label: "DAC Q", min: 0, max: 1, defaultValue: 0, unit: "%", latch: "continuous", auxEligible: true, options: undefined },
+            { id: "dither", label: "Dither", min: 0, max: 1, defaultValue: 0, unit: "%", latch: "continuous", auxEligible: true, options: undefined },
+        ],
+    );
 });
 
 test("Cmajor accepts every append-only effect ID without aliasing future effects to Stutter", async () => {

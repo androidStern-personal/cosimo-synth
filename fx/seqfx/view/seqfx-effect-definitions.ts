@@ -113,9 +113,18 @@ const definitions = [
         fontaudioIcon: "fad-digital0",
         lifecycle: "gated",
         parameters: [
-            parameter("bits", "Bits", 4, 16, 8, 1, { unit: "bits", integer: true }),
-            parameter("holdFrames", "Rate", 1, 64, 1, 1, { integer: true }),
+            parameter("bits", "Bits", 2, 16, 8, 1, { unit: "bits", integer: true }),
+            parameter("rateHz", "Rate", 200, 48_000, 48_000, 1, { unit: "Hz", scale: "log" }),
             parameter("drive", "Drive", 0, 36, 0, 0.1, { unit: "dB" }),
+            parameter("character", "Character", 0, 3, 1, 1, {
+                latch: "trigger",
+                auxEligible: false,
+                integer: true,
+                options: ["Original", "Classic", "Smooth", "Progressive"],
+            }),
+            parameter("adcQuality", "ADC Q", 0, 1, 0, 0.01, { unit: "%" }),
+            parameter("dacQuality", "DAC Q", 0, 1, 0, 0.01, { unit: "%" }),
+            parameter("dither", "Dither", 0, 1, 0, 0.01, { unit: "%" }),
         ],
     },
     {

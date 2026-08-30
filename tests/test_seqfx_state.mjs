@@ -256,7 +256,7 @@ test("seqfx_aux_end_values_clamp_and_round_like_effect_parameters", () => {
         lane: SEQFX_LANES.crusher,
         startStep: 2,
         paramIndex: 1,
-        value: 7.4,
+        value: 100,
     });
 
     const upload = buildSeqPatternUpload(state, {
@@ -265,7 +265,7 @@ test("seqfx_aux_end_values_clamp_and_round_like_effect_parameters", () => {
     });
 
     assert.equal(upload.auxEnd[SEQFX_LANES.crusher][2][0], 16);
-    assert.equal(upload.auxEnd[SEQFX_LANES.crusher][2][1], 7);
+    assert.equal(upload.auxEnd[SEQFX_LANES.crusher][2][1], 200);
 });
 
 test("seqfx_strict_v5_parser_rejects_old_aux_curve_payloads_under_the_new_key", () => {
@@ -1399,7 +1399,7 @@ test("cell_value_snapshots_paste_mix_and_params_without_changing_block_shape", (
         lane: SEQFX_LANES.crusher,
         steps: [2],
         paramIndex: 1,
-        value: 7,
+        value: 7_000,
     });
     state = applySeqFxParamEdit(state, {
         patternIndex: 0,
@@ -1439,7 +1439,7 @@ test("cell_value_snapshots_paste_mix_and_params_without_changing_block_shape", (
     );
     assert.deepEqual(
         [2, 5, 8].map((step) => upload.params[SEQFX_LANES.crusher][step].slice(0, 3)),
-        [[5, 7, 12], [5, 7, 12], [5, 7, 12]],
+        [[5, 7_000, 12], [5, 7_000, 12], [5, 7_000, 12]],
     );
     let crossChainState = applySeqFxBlockCreate(state, {
         patternIndex: 0,
@@ -1459,7 +1459,7 @@ test("cell_value_snapshots_paste_mix_and_params_without_changing_block_shape", (
         authoritative: false,
     });
     assert.equal(crossChainUpload.effectTypes[SEQFX_LANES.filter][1], SEQFX_EFFECT_TYPES.crusher);
-    assert.deepEqual(crossChainUpload.params[SEQFX_LANES.filter][1].slice(0, 3), [5, 7, 12]);
+    assert.deepEqual(crossChainUpload.params[SEQFX_LANES.filter][1].slice(0, 3), [5, 7_000, 12]);
 
     const inactivePaste = applySeqFxStepValuePaste(createDefaultSeqFxState(), {
         patternIndex: 0,

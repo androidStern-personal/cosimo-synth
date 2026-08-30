@@ -693,11 +693,11 @@ test("SeqFX packaged shadow-root flow renders the selected crusher and stutter i
             const bitsRow = editor?.querySelector('[data-role="seqfx-crusher-bits-slider"]');
             const bitsTrack = bitsRow?.querySelector(".editor-tick-slider__track");
             const bitsValue = bitsRow?.querySelector('[data-role="seqfx-crusher-bits-value"]');
-            const holdRow = editor?.querySelector('[data-role="seqfx-crusher-hold-frames-slider"]');
-            const holdTrack = holdRow?.querySelector(".editor-tick-slider__track");
-            const holdTicks = holdRow?.querySelectorAll('[data-role="editor-tick-slider-tick"]') ?? [];
-            const firstHoldTick = holdTicks[0];
-            const lastHoldTick = holdTicks[holdTicks.length - 1];
+            const rateRow = editor?.querySelector('[data-role="seqfx-crusher-rate-slider"]');
+            const rateTrack = rateRow?.querySelector(".editor-tick-slider__track");
+            const rateTicks = rateRow?.querySelectorAll('[data-role="editor-tick-slider-tick"]') ?? [];
+            const firstRateTick = rateTicks[0];
+            const lastRateTick = rateTicks[rateTicks.length - 1];
             const driveRow = node.querySelector(".seqfx-crusher-editor__drive");
             const mixRow = node.querySelector('[data-role="seqfx-mix-row"]');
             const panelStyle = panel ? getComputedStyle(panel) : null;
@@ -708,11 +708,12 @@ test("SeqFX packaged shadow-root flow renders the selected crusher and stutter i
                 bitsRowWidth: bitsRow?.getBoundingClientRect().width ?? 0,
                 bitsTrackWidth: bitsTrack?.getBoundingClientRect().width ?? 0,
                 bitsValueWidth: bitsValue?.getBoundingClientRect().width ?? 0,
-                holdRowWidth: holdRow?.getBoundingClientRect().width ?? 0,
-                holdTrackWidth: holdTrack?.getBoundingClientRect().width ?? 0,
-                holdTickWidth: firstHoldTick?.getBoundingClientRect().width ?? 0,
-                holdActiveColor: firstHoldTick ? getComputedStyle(firstHoldTick).backgroundColor : "",
-                holdInactiveColor: lastHoldTick ? getComputedStyle(lastHoldTick).backgroundColor : "",
+                rateRowWidth: rateRow?.getBoundingClientRect().width ?? 0,
+                rateTrackWidth: rateTrack?.getBoundingClientRect().width ?? 0,
+                rateTickWidth: firstRateTick?.getBoundingClientRect().width ?? 0,
+                rateActiveTickCount: Array.from(rateTicks).filter((tick) => tick.classList.contains("is-active")).length,
+                rateActiveColor: firstRateTick ? getComputedStyle(firstRateTick).backgroundColor : "",
+                rateInactiveColor: lastRateTick ? getComputedStyle(lastRateTick).backgroundColor : "",
                 driveHeight: driveRow?.getBoundingClientRect().height ?? 0,
                 mixGap: mixRow && driveRow
                     ? mixRow.getBoundingClientRect().top - driveRow.getBoundingClientRect().bottom
@@ -731,18 +732,14 @@ test("SeqFX packaged shadow-root flow renders the selected crusher and stutter i
             `crusher bits readout should stay compact, got ${crusherLayout.bitsValueWidth}px of ${crusherLayout.bitsRowWidth}px`,
         );
         assert.ok(
-            crusherLayout.holdTrackWidth > crusherLayout.holdRowWidth * 0.45,
-            `crusher hold rail should keep most of the row, got ${crusherLayout.holdTrackWidth}px of ${crusherLayout.holdRowWidth}px`,
+            crusherLayout.rateTrackWidth > crusherLayout.rateRowWidth * 0.45,
+            `crusher rate rail should keep most of the row, got ${crusherLayout.rateTrackWidth}px of ${crusherLayout.rateRowWidth}px`,
         );
         assert.ok(
-            crusherLayout.holdTickWidth >= 4,
-            `crusher hold ticks should remain visible in the production inspector, got ${crusherLayout.holdTickWidth}px`,
+            crusherLayout.rateTickWidth >= 4,
+            `crusher rate ticks should remain visible in the production inspector, got ${crusherLayout.rateTickWidth}px`,
         );
-        assert.notEqual(
-            crusherLayout.holdActiveColor,
-            crusherLayout.holdInactiveColor,
-            "crusher hold row should visibly distinguish active ticks from inactive ticks",
-        );
+        assert.equal(crusherLayout.rateActiveTickCount, 16, "the default 48 kHz rate should fill the logarithmic rate rail");
 
         await page.locator('[data-role="seqfx-crusher-drive-db-mod-toggle"]').click();
         const crusherDriveAfterToggle = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => {

@@ -1580,6 +1580,106 @@ function migrateLegacyTapeParamVector(rawParams: unknown, blockLength: number): 
     ];
 }
 
+function migrateLegacyCrushParamVector(rawParams: unknown): number[] {
+    const params = Array.isArray(rawParams) ? rawParams.map(Number) : [];
+    const bits = Number(params[0] ?? 8);
+    const holdFrames = Number(params[1] ?? 1);
+    const driveDb = Number(params[2] ?? 0);
+
+    const legacyValues: Array<[number, number, number, string]> = [
+        [bits, 4, 16, "bits"],
+        [holdFrames, 1, 64, "hold frames"],
+        [driveDb, 0, 36, "drive"],
+    ];
+    for (const [value, min, max, label] of legacyValues) {
+        if (!Number.isFinite(value) || value < min || value > max) {
+            throw new Error(`Legacy Crush ${label} must be between ${min} and ${max}.`);
+        }
+    }
+    if (!Number.isInteger(bits) || !Number.isInteger(holdFrames)) {
+        throw new Error("Legacy Crush bits and hold frames must be integers.");
+    }
+
+    return [bits, 48_000 / holdFrames, driveDb, 0, 0, 0, 0, 0];
+}
+
+function migrateLegacyCrushAux(
+    oldAux: SeqFxAuxState | undefined,
+    oldParams: unknown,
+    newParams: number[],
+): SeqFxAuxState {
+    const oldVector = Array.isArray(oldParams) ? oldParams.map(Number) : [];
+    const migrated = defaultAuxForParams(newParams, SEQFX_EFFECT_TYPES.crusher);
+    if (!oldAux) {
+        return migrated;
+    }
+
+    migrated.source = normalizeAuxSource(oldAux.source);
+    const oldBitsEnd = Number(oldAux.targets?.[0]?.end ?? oldVector[0] ?? 8);
+    const oldHoldEnd = Number(oldAux.targets?.[1]?.end ?? oldVector[1] ?? 1);
+    const oldDriveEnd = Number(oldAux.targets?.[2]?.end ?? oldVector[2] ?? 0);
+    const legacyEnds: Array<[number, number, number, string]> = [
+        [oldBitsEnd, 4, 16, "bits"],
+        [oldHoldEnd, 1, 64, "hold frames"],
+        [oldDriveEnd, 0, 36, "drive"],
+    ];
+    for (const [value, min, max, label] of legacyEnds) {
+        if (!Number.isFinite(value) || value < min || value > max) {
+            throw new Error(`Legacy Crush aux ${label} must be between ${min} and ${max}.`);
+        }
+    }
+    if (!Number.isInteger(oldBitsEnd) || !Number.isInteger(oldHoldEnd)) {
+        throw new Error("Legacy Crush aux bits and hold frames must be integers.");
+    }
+
+    const migratedEnds = [oldBitsEnd, 48_000 / oldHoldEnd, oldDriveEnd];
+    for (let paramIndex = 0; paramIndex < migratedEnds.length; paramIndex += 1) {
+        migrated.targets[paramIndex] = {
+            enabled: oldAux.targets?.[paramIndex]?.enabled === true,
+            end: normalizeParam(SEQFX_EFFECT_TYPES.crusher, paramIndex, migratedEnds[paramIndex]),
+        };
+    }
+    return migrated;
+}
+
+function migrateLegacyCrushState(value: SeqFxLegacyStateV5): SeqFxLegacyStateV5 {
+    const migrated = JSON.parse(JSON.stringify(value)) as SeqFxLegacyStateV5;
+
+    migrated.patterns.forEach((pattern) => {
+        pattern.lanes.forEach((lane, laneIndex) => {
+            lane.steps.forEach((step) => {
+                const fallbackEffectType = defaultEffectTypeForLane(laneIndex);
+                const effectType = step.active
+                    ? normalizeEffectType(Number(step.effectType ?? fallbackEffectType), fallbackEffectType)
+                    : SEQFX_EFFECT_TYPES.empty;
+
+                if (effectType === SEQFX_EFFECT_TYPES.crusher) {
+                    const oldParams = step.params;
+                    const params = migrateLegacyCrushParamVector(oldParams);
+                    step.params = params;
+                    step.aux = migrateLegacyCrushAux(step.aux, oldParams, params);
+                }
+
+                const oldMemoryParams = step.effectParams?.[SEQFX_EFFECT_TYPES.crusher];
+                if (oldMemoryParams) {
+                    const params = migrateLegacyCrushParamVector(oldMemoryParams);
+                    step.effectParams![SEQFX_EFFECT_TYPES.crusher] = params;
+                    const oldMemoryAux = step.effectAux?.[SEQFX_EFFECT_TYPES.crusher];
+                    if (oldMemoryAux) {
+                        step.effectAux![SEQFX_EFFECT_TYPES.crusher] = migrateLegacyCrushAux(
+                            oldMemoryAux,
+                            oldMemoryParams,
+                            params,
+                        );
+                    }
+                }
+            });
+        });
+    });
+
+    return migrated;
+}
+
 function resetMigratedTapeAux(step: SeqFxStep, params: number[]): void {
     step.params = params;
     step.aux = defaultAuxForParams(params, SEQFX_EFFECT_TYPES.tapeStop);
@@ -1656,7 +1756,9 @@ export function parseStrictSeqFxStateV5(value: unknown): SeqFxState {
     try {
         const parsed = parseStateCandidate(value);
         assertStrictSeqFxLegacyStateShape(parsed);
-        const normalized = normalizeDenseSeqFxState(migrateLegacyTapeState(parsed));
+        const normalized = normalizeDenseSeqFxState(
+            migrateLegacyTapeState(migrateLegacyCrushState(parsed)),
+        );
         assertSeqFxStateValuesInRange(normalized);
         return normalized;
     } catch (error) {

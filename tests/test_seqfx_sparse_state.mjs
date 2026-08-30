@@ -185,6 +185,38 @@ test("legacy Tape Stop blocks migrate through the documented canonical free-time
     }
 });
 
+test("legacy Crush blocks preserve 48 kHz hold behavior and aux endpoints in Original mode", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxBlockCreate(state, {
+        patternIndex: 0,
+        lane: 1,
+        startStep: 6,
+        length: 2,
+        effectType: SEQFX_EFFECT_TYPES.crusher,
+    });
+    for (const step of state.patterns[0].lanes[1].steps.slice(6, 8)) {
+        step.params = [6, 4, 12, 0, 0, 0, 0, 0];
+        step.aux.targets = step.params.map((end, index) => ({
+            enabled: index < 3,
+            end: index === 0 ? 8 : index === 1 ? 16 : index === 2 ? 24 : end,
+        }));
+    }
+
+    const migrated = parseSeqFxStoredState(JSON.stringify(legacyV5(state))).state;
+    for (const step of migrated.patterns[0].lanes[1].steps.slice(6, 8)) {
+        assert.deepEqual(step.params, [6, 12_000, 12, 0, 0, 0, 0, 0]);
+        assert.deepEqual(step.aux.targets.map((target) => target.enabled), [true, true, true, false, false, false, false, false]);
+        assert.deepEqual(step.aux.targets.map((target) => target.end), [8, 3_000, 24, 0, 0, 0, 0, 0]);
+    }
+
+    const malformed = legacyV5(state);
+    malformed.patterns[0].lanes[1].steps[6].aux.targets[1].end = 0;
+    assert.throws(
+        () => parseSeqFxStoredState(JSON.stringify(malformed)),
+        /Legacy Crush aux hold frames must be between 1 and 64/,
+    );
+});
+
 test("a deliberately dense twelve-pattern v7 document stays below the host-state budget", () => {
     const state = createDefaultSeqFxState();
     const effectTypes = [

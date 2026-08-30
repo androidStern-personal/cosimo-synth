@@ -29,19 +29,27 @@ import {
     CRUSHER_BITS_MIN,
     CRUSHER_DRIVE_DB_MAX,
     CRUSHER_DRIVE_DB_MIN,
-    CRUSHER_HOLD_FRAMES_MAX,
-    CRUSHER_HOLD_FRAMES_MIN,
+    CRUSHER_QUALITY_MAX,
+    CRUSHER_QUALITY_MIN,
     clampCrusherBits,
+    clampCrusherCharacter,
     clampCrusherDriveDb,
-    clampCrusherHoldFrames,
+    clampCrusherQuality,
+    clampCrusherRateHz,
+    crusherRateFromNormalized,
+    crusherRateToNormalized,
     sampleCrusherPreview,
     type CrusherPreviewSample,
 } from "./crusher-preview";
 
 export type CrusherEditorValue = {
     bits: number;
-    holdFrames: number;
+    rateHz: number;
     driveDb: number;
+    character: number;
+    adcQuality: number;
+    dacQuality: number;
+    dither: number;
     mix: number;
 };
 
@@ -53,24 +61,35 @@ type CrusherModulatedParam = {
 
 export type CrusherModulation = {
     bits?: CrusherModulatedParam | null;
-    holdFrames?: CrusherModulatedParam | null;
+    rateHz?: CrusherModulatedParam | null;
     driveDb?: CrusherModulatedParam | null;
+    adcQuality?: CrusherModulatedParam | null;
+    dacQuality?: CrusherModulatedParam | null;
+    dither?: CrusherModulatedParam | null;
     phase?: number;
     onToggleBits?: () => void;
-    onToggleHoldFrames?: () => void;
+    onToggleRateHz?: () => void;
     onToggleDriveDb?: () => void;
+    onToggleAdcQuality?: () => void;
+    onToggleDacQuality?: () => void;
+    onToggleDither?: () => void;
 };
 
 export type CrusherEditorProps = {
     value: Partial<CrusherEditorValue>;
     onBitsChange: (value: number) => void;
-    onHoldFramesChange: (value: number) => void;
+    onRateHzChange: (value: number) => void;
     onDriveDbChange: (value: number) => void;
+    onCharacterChange: (value: number) => void;
+    onAdcQualityChange: (value: number) => void;
+    onDacQualityChange: (value: number) => void;
+    onDitherChange: (value: number) => void;
     modulation?: CrusherModulation | null;
 };
 
 const CRUSHER_POINT_COUNT = 240;
 const CRUSHER_TOP_RESERVE_PX = 14;
+const CRUSHER_CHARACTER_NAMES = ["Original", "Classic", "Smooth", "Progressive"] as const;
 
 function clamp(value: number, min: number, max: number) {
     if (!Number.isFinite(value)) {
@@ -83,8 +102,12 @@ function clamp(value: number, min: number, max: number) {
 function resolveValue(value: Partial<CrusherEditorValue>): CrusherEditorValue {
     return {
         bits: clampCrusherBits(value.bits ?? 8),
-        holdFrames: clampCrusherHoldFrames(value.holdFrames ?? 1),
+        rateHz: clampCrusherRateHz(value.rateHz ?? 48_000),
         driveDb: clampCrusherDriveDb(value.driveDb ?? 0),
+        character: clampCrusherCharacter(value.character ?? 1),
+        adcQuality: clampCrusherQuality(value.adcQuality ?? 0),
+        dacQuality: clampCrusherQuality(value.dacQuality ?? 0),
+        dither: clampCrusherQuality(value.dither ?? 0),
         mix: clamp(value.mix ?? 1, 0, 1),
     };
 }
@@ -125,6 +148,15 @@ function formatDriveDb(value: number) {
     return `${clampCrusherDriveDb(value).toFixed(1)} dB`;
 }
 
+function formatRateHz(value: number) {
+    const rateHz = clampCrusherRateHz(value);
+    return rateHz >= 1_000 ? `${(rateHz / 1_000).toFixed(rateHz >= 10_000 ? 0 : 1)} kHz` : `${Math.round(rateHz)} Hz`;
+}
+
+function formatPercent(value: number) {
+    return `${Math.round(clampCrusherQuality(value) * 100)}%`;
+}
+
 function lerp(start: number, end: number, phase: number) {
     return start + ((end - start) * Math.max(0, Math.min(1, phase)));
 }
@@ -132,8 +164,12 @@ function lerp(start: number, end: number, phase: number) {
 export function CrusherEditor({
     value,
     onBitsChange,
-    onHoldFramesChange,
+    onRateHzChange,
     onDriveDbChange,
+    onCharacterChange,
+    onAdcQualityChange,
+    onDacQualityChange,
+    onDitherChange,
     modulation = null,
 }: CrusherEditorProps) {
     const resolved = resolveValue(value);
@@ -150,22 +186,35 @@ export function CrusherEditor({
         bits: modulation?.bits
             ? clampCrusherBits(lerp(resolved.bits, modulation.bits.end, phase))
             : resolved.bits,
-        holdFrames: modulation?.holdFrames
-            ? clampCrusherHoldFrames(lerp(resolved.holdFrames, modulation.holdFrames.end, phase))
-            : resolved.holdFrames,
+        rateHz: modulation?.rateHz
+            ? clampCrusherRateHz(lerp(resolved.rateHz, modulation.rateHz.end, phase))
+            : resolved.rateHz,
         driveDb: modulation?.driveDb
             ? clampCrusherDriveDb(lerp(resolved.driveDb, modulation.driveDb.end, phase))
             : resolved.driveDb,
-    }), [modulation, phase, resolved.bits, resolved.driveDb, resolved.holdFrames]);
+        adcQuality: modulation?.adcQuality
+            ? clampCrusherQuality(lerp(resolved.adcQuality, modulation.adcQuality.end, phase))
+            : resolved.adcQuality,
+        dacQuality: modulation?.dacQuality
+            ? clampCrusherQuality(lerp(resolved.dacQuality, modulation.dacQuality.end, phase))
+            : resolved.dacQuality,
+        dither: modulation?.dither
+            ? clampCrusherQuality(lerp(resolved.dither, modulation.dither.end, phase))
+            : resolved.dither,
+    }), [modulation, phase, resolved.adcQuality, resolved.bits, resolved.dacQuality, resolved.dither, resolved.driveDb, resolved.rateHz]);
     const preview = useMemo(
         () => sampleCrusherPreview({
             bits: previewValues.bits,
-            holdFrames: previewValues.holdFrames,
+            rateHz: previewValues.rateHz,
             driveDb: previewValues.driveDb,
+            character: resolved.character,
+            adcQuality: previewValues.adcQuality,
+            dacQuality: previewValues.dacQuality,
+            dither: previewValues.dither,
             mix: resolved.mix,
             pointCount: CRUSHER_POINT_COUNT,
         }),
-        [previewValues.bits, previewValues.driveDb, previewValues.holdFrames, resolved.mix],
+        [previewValues.adcQuality, previewValues.bits, previewValues.dacQuality, previewValues.dither, previewValues.driveDb, previewValues.rateHz, resolved.character, resolved.mix],
     );
     const dryPath = useMemo(() => samplePath(preview.samples, plot, "dry"), [plot, preview.samples]);
     const wetPath = useMemo(() => samplePath(preview.samples, plot, "wet"), [plot, preview.samples]);
@@ -231,12 +280,12 @@ export function CrusherEditor({
                         <EditorCurveFill className="seqfx-crusher-editor__wet-fill" data-role="seqfx-crusher-wet-fill" d={wetFill} />
                         <EditorCurvePath className="seqfx-crusher-editor__dry-path" d={dryPath} variant="muted" />
                         <EditorCurvePath className="seqfx-crusher-editor__wet-path" data-role="seqfx-crusher-wet-path" d={wetPath} />
-                        {preview.holdMarkerPhases.map((phase) => {
+                        {preview.captureMarkerPhases.map((phase) => {
                             const x = plot.plotLeft + (plot.plotWidth * phase);
                             return (
                                 <line
-                                    className="seqfx-crusher-editor__hold-marker"
-                                    key={`hold-${phase.toFixed(4)}`}
+                                    className="seqfx-crusher-editor__capture-marker"
+                                    key={`capture-${phase.toFixed(4)}`}
                                     x1={x}
                                     x2={x}
                                     y1={markerTop}
@@ -279,25 +328,43 @@ export function CrusherEditor({
                 />
                 <EditorTickSlider
                     accent="end"
-                    dataRole="seqfx-crusher-hold-frames-slider"
-                    formatValue={(nextValue) => String(Math.round(nextValue))}
-                    inputDataRole="seqfx-crusher-hold-frames"
-                    label="Hold"
-                    max={CRUSHER_HOLD_FRAMES_MAX}
-                    min={CRUSHER_HOLD_FRAMES_MIN}
-                    onChange={(nextValue) => onHoldFramesChange(clampCrusherHoldFrames(nextValue))}
-                    step={1}
+                    dataRole="seqfx-crusher-rate-slider"
+                    formatValue={(nextValue) => formatRateHz(crusherRateFromNormalized(nextValue))}
+                    inputDataRole="seqfx-crusher-rate"
+                    label="Rate"
+                    max={1}
+                    min={0}
+                    onChange={(nextValue) => onRateHzChange(Math.round(crusherRateFromNormalized(nextValue)))}
+                    step={0.001}
                     tickCount={16}
-                    value={resolved.holdFrames}
-                    valueDataRole="seqfx-crusher-hold-frames-value"
-                    modulation={modulation?.holdFrames ? {
-                        end: modulation.holdFrames.end,
-                        onEndChange: (nextValue) => modulation.holdFrames!.onEndChange(clampCrusherHoldFrames(nextValue)),
+                    value={crusherRateToNormalized(resolved.rateHz)}
+                    valueDataRole="seqfx-crusher-rate-value"
+                    modulation={modulation?.rateHz ? {
+                        end: crusherRateToNormalized(modulation.rateHz.end),
+                        onEndChange: (nextValue) => modulation.rateHz!.onEndChange(Math.round(crusherRateFromNormalized(nextValue))),
                         phase,
-                        direction: modulation.holdFrames.direction,
+                        direction: modulation.rateHz.direction,
                     } : null}
-                    onModulationToggle={modulation?.onToggleHoldFrames ?? null}
+                    onModulationToggle={modulation?.onToggleRateHz ?? null}
                 />
+                <div className="seqfx-crusher-editor__character" data-role="seqfx-crusher-character">
+                    <span className="seqfx-crusher-editor__character-label">Character</span>
+                    <div className="seqfx-crusher-editor__character-options" role="group" aria-label="Crusher character">
+                        {CRUSHER_CHARACTER_NAMES.map((name, index) => (
+                            <button
+                                aria-pressed={resolved.character === index}
+                                className={resolved.character === index ? "is-active" : ""}
+                                data-character={index}
+                                data-role="seqfx-crusher-character-option"
+                                key={name}
+                                onClick={() => onCharacterChange(clampCrusherCharacter(index))}
+                                type="button"
+                            >
+                                {name}
+                            </button>
+                        ))}
+                    </div>
+                </div>
                 <div className={`seqfx-crusher-editor__drive${isDriveModulated ? " seqfx-crusher-editor__drive--modulated" : ""}`}>
                     <div className="seqfx-crusher-editor__drive-head">
                         {modulation?.onToggleDriveDb ? (
@@ -376,6 +443,71 @@ export function CrusherEditor({
                             )}
                         </span>
                     </div>
+                </div>
+                <div className="seqfx-crusher-editor__converter" data-role="seqfx-crusher-converter">
+                    <EditorTickSlider
+                        accent="start"
+                        dataRole="seqfx-crusher-adc-quality-slider"
+                        formatValue={formatPercent}
+                        inputDataRole="seqfx-crusher-adc-quality"
+                        label="ADC Q"
+                        max={CRUSHER_QUALITY_MAX}
+                        min={CRUSHER_QUALITY_MIN}
+                        onChange={(nextValue) => onAdcQualityChange(clampCrusherQuality(nextValue))}
+                        step={0.01}
+                        tickCount={11}
+                        value={resolved.adcQuality}
+                        valueDataRole="seqfx-crusher-adc-quality-value"
+                        modulation={modulation?.adcQuality ? {
+                            end: modulation.adcQuality.end,
+                            onEndChange: (nextValue) => modulation.adcQuality!.onEndChange(clampCrusherQuality(nextValue)),
+                            phase,
+                            direction: modulation.adcQuality.direction,
+                        } : null}
+                        onModulationToggle={modulation?.onToggleAdcQuality ?? null}
+                    />
+                    <EditorTickSlider
+                        accent="end"
+                        dataRole="seqfx-crusher-dac-quality-slider"
+                        formatValue={formatPercent}
+                        inputDataRole="seqfx-crusher-dac-quality"
+                        label="DAC Q"
+                        max={CRUSHER_QUALITY_MAX}
+                        min={CRUSHER_QUALITY_MIN}
+                        onChange={(nextValue) => onDacQualityChange(clampCrusherQuality(nextValue))}
+                        step={0.01}
+                        tickCount={11}
+                        value={resolved.dacQuality}
+                        valueDataRole="seqfx-crusher-dac-quality-value"
+                        modulation={modulation?.dacQuality ? {
+                            end: modulation.dacQuality.end,
+                            onEndChange: (nextValue) => modulation.dacQuality!.onEndChange(clampCrusherQuality(nextValue)),
+                            phase,
+                            direction: modulation.dacQuality.direction,
+                        } : null}
+                        onModulationToggle={modulation?.onToggleDacQuality ?? null}
+                    />
+                    <EditorTickSlider
+                        accent="start"
+                        dataRole="seqfx-crusher-dither-slider"
+                        formatValue={formatPercent}
+                        inputDataRole="seqfx-crusher-dither"
+                        label="Dither"
+                        max={CRUSHER_QUALITY_MAX}
+                        min={CRUSHER_QUALITY_MIN}
+                        onChange={(nextValue) => onDitherChange(clampCrusherQuality(nextValue))}
+                        step={0.01}
+                        tickCount={11}
+                        value={resolved.dither}
+                        valueDataRole="seqfx-crusher-dither-value"
+                        modulation={modulation?.dither ? {
+                            end: modulation.dither.end,
+                            onEndChange: (nextValue) => modulation.dither!.onEndChange(clampCrusherQuality(nextValue)),
+                            phase,
+                            direction: modulation.dither.direction,
+                        } : null}
+                        onModulationToggle={modulation?.onToggleDither ?? null}
+                    />
                 </div>
             </div>
         </section>

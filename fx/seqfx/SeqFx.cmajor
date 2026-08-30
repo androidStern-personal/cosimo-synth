@@ -471,11 +471,24 @@ processor SeqFx [[ main ]]
 
     bool[seqfx::laneCount] crusherActive;
     int32[seqfx::laneCount] crusherBits;
-    int32[seqfx::laneCount] crusherHoldFrames;
+    float32[seqfx::laneCount] crusherRateHz;
     float32[seqfx::laneCount] crusherDriveDb;
+    int32[seqfx::laneCount] crusherCharacter;
+    float32[seqfx::laneCount] crusherAdcQuality;
+    float32[seqfx::laneCount] crusherDacQuality;
+    float32[seqfx::laneCount] crusherDither;
     float32[seqfx::laneCount] crusherMixCurrent;
     float32[seqfx::laneCount] crusherMixTarget;
     float32<2>[seqfx::laneCount] crusherHeld;
+    float32<2>[seqfx::laneCount] crusherPreviousHeld;
+    float32<2>[seqfx::laneCount] crusherPreviousCapture;
+    float32<2>[seqfx::laneCount] crusherProgressiveOutput;
+    float32<2>[seqfx::laneCount] crusherAdcState;
+    float32<2>[seqfx::laneCount] crusherDacState;
+    float32<2>[seqfx::laneCount] crusherDcPreviousInput;
+    float32<2>[seqfx::laneCount] crusherDcPreviousOutput;
+    float32[seqfx::laneCount] crusherCapturePhase;
+    std::random::RNG[seqfx::laneCount, 2] crusherDitherRng;
     int32[seqfx::laneCount] crusherHoldCounter;
     bool[seqfx::laneCount] crusherNeedsRecapture;
 
@@ -525,7 +538,10 @@ processor SeqFx [[ main ]]
             filterModeFade[lane] = 1.0f;
 
             crusherBits[lane] = 8;
-            crusherHoldFrames[lane] = 1;
+            crusherRateHz[lane] = 48000.0f;
+            crusherCharacter[lane] = 1;
+            for (wrap<2> channel)
+                crusherDitherRng[lane, channel].seed (1201L + int64 (int32 (lane)) * 313L + int64 (int32 (channel)) * 977L);
 
             for (wrap<seqfx::tapeVoiceCount> voice)
                 tapeVoiceRestartAge[lane, voice] = seqfx::transitionCrossfadeFrames;
@@ -582,8 +598,12 @@ processor SeqFx [[ main ]]
             stepParams[seqfx::laneFilter, step, 4] = 1.0f;
 
             stepParams[seqfx::laneCrusher, step, 0] = 8.0f;
-            stepParams[seqfx::laneCrusher, step, 1] = 1.0f;
+            stepParams[seqfx::laneCrusher, step, 1] = 48000.0f;
             stepParams[seqfx::laneCrusher, step, 2] = 0.0f;
+            stepParams[seqfx::laneCrusher, step, 3] = 1.0f;
+            stepParams[seqfx::laneCrusher, step, 4] = 0.0f;
+            stepParams[seqfx::laneCrusher, step, 5] = 0.0f;
+            stepParams[seqfx::laneCrusher, step, 6] = 0.0f;
 
             stepParams[seqfx::laneTapeStop, step, 0] = 8.0f;
             stepParams[seqfx::laneTapeStop, step, 1] = 0.0f;
@@ -1010,8 +1030,18 @@ processor SeqFx [[ main ]]
             filterStates[lane, 1].reset();
             filterModeFade[lane] = 0.0f;
             crusherHeld[lane] = float32<2> (0.0f);
+            crusherPreviousHeld[lane] = float32<2> (0.0f);
+            crusherPreviousCapture[lane] = float32<2> (0.0f);
+            crusherProgressiveOutput[lane] = float32<2> (0.0f);
+            crusherAdcState[lane] = float32<2> (0.0f);
+            crusherDacState[lane] = float32<2> (0.0f);
+            crusherDcPreviousInput[lane] = float32<2> (0.0f);
+            crusherDcPreviousOutput[lane] = float32<2> (0.0f);
+            crusherCapturePhase[lane] = 0.0f;
             crusherHoldCounter[lane] = 0;
             crusherNeedsRecapture[lane] = true;
+            for (wrap<2> channel)
+                crusherDitherRng[lane, channel].seed (1201L + int64 (int32 (lane)) * 313L + int64 (int32 (channel)) * 977L);
 
             filterActive[lane] = false;
             crusherActive[lane] = false;
@@ -1349,21 +1379,31 @@ processor SeqFx [[ main ]]
 
         let blockStart = blockStartStep (lane, currentStep);
         let blockStartIndex = wrap<seqfx::stepCount> (blockStart);
-        let nextBits = snapValue (stepParams[lane, blockStartIndex, 0], 4, 16);
-        let nextHoldFrames = snapValue (stepParams[lane, blockStartIndex, 1], 1, 64);
+        let nextBits = snapValue (stepParams[lane, blockStartIndex, 0], 2, 16);
+        let nextRateHz = seqfx::clampFloat (stepParams[lane, blockStartIndex, 1], 200.0f, 48000.0f);
         let nextDriveDb = seqfx::clampFloat (stepParams[lane, blockStartIndex, 2], 0.0f, 36.0f);
+        let nextCharacter = snapValue (stepParams[lane, blockStartIndex, 3], 0, 3);
+        let nextAdcQuality = seqfx::clampFloat (stepParams[lane, blockStartIndex, 4], 0.0f, 1.0f);
+        let nextDacQuality = seqfx::clampFloat (stepParams[lane, blockStartIndex, 5], 0.0f, 1.0f);
+        let nextDither = seqfx::clampFloat (stepParams[lane, blockStartIndex, 6], 0.0f, 1.0f);
         let needsFreshHeldSample = ! wasActive
             || triggerSteps[lane, currentStepIndex]
-            || nextHoldFrames != crusherHoldFrames[lane]
-            || nextDriveDb != crusherDriveDb[lane];
+            || nextRateHz != crusherRateHz[lane]
+            || nextDriveDb != crusherDriveDb[lane]
+            || nextCharacter != crusherCharacter[lane];
 
         crusherBits[lane] = nextBits;
-        crusherHoldFrames[lane] = nextHoldFrames;
+        crusherRateHz[lane] = nextRateHz;
         crusherDriveDb[lane] = nextDriveDb;
+        crusherCharacter[lane] = nextCharacter;
+        crusherAdcQuality[lane] = nextAdcQuality;
+        crusherDacQuality[lane] = nextDacQuality;
+        crusherDither[lane] = nextDither;
 
         if (needsFreshHeldSample)
         {
             crusherHoldCounter[lane] = 0;
+            crusherCapturePhase[lane] = 0.0f;
             crusherNeedsRecapture[lane] = true;
         }
     }
@@ -1807,35 +1847,129 @@ processor SeqFx [[ main ]]
         if (crusherMixCurrent[lane] <= 0.00001f)
             return stage;
 
-        let currentBits = snapValue (auxParamValue (lane, 0, float32 (crusherBits[lane])), 4, 16);
-        let currentHoldFrames = snapValue (auxParamValue (lane, 1, float32 (crusherHoldFrames[lane])), 1, 64);
-        let currentDriveDb = seqfx::clampFloat (auxParamValue (lane, 2, crusherDriveDb[lane]), 0.0f, 36.0f);
-        let driveGain = seqfx::dbToGain (currentDriveDb);
-        let driven = float32<2> (
-            seqfx::clampFloat (stage[0], -1.0f, 1.0f),
-            seqfx::clampFloat (stage[1], -1.0f, 1.0f)
-        ) * driveGain;
-        let clipped = float32<2> (
-            seqfx::clampFloat (driven[0], -1.0f, 1.0f),
-            seqfx::clampFloat (driven[1], -1.0f, 1.0f)
+        let currentBits = snapValue (auxParamValue (lane, 0, float32 (crusherBits[lane])), 2, 16);
+        let currentRateHz = seqfx::clampFloat (
+            auxParamValue (lane, 1, crusherRateHz[lane]),
+            200.0f,
+            std::intrinsics::min (48000.0f, float32 (processor.frequency))
         );
+        let currentDriveDb = seqfx::clampFloat (auxParamValue (lane, 2, crusherDriveDb[lane]), 0.0f, 36.0f);
+        let currentAdcQuality = seqfx::clampFloat (auxParamValue (lane, 4, crusherAdcQuality[lane]), 0.0f, 1.0f);
+        let currentDacQuality = seqfx::clampFloat (auxParamValue (lane, 5, crusherDacQuality[lane]), 0.0f, 1.0f);
+        let currentDither = seqfx::clampFloat (auxParamValue (lane, 6, crusherDither[lane]), 0.0f, 1.0f);
+        let driveGain = seqfx::dbToGain (currentDriveDb);
+        let levels = float32 ((1 << (currentBits - 1)) - 1);
 
-        if (crusherNeedsRecapture[lane] || crusherHoldCounter[lane] <= 0)
+        if (crusherCharacter[lane] == 0)
         {
-            crusherHeld[lane] = clipped;
-            crusherNeedsRecapture[lane] = false;
-            crusherHoldCounter[lane] = currentHoldFrames;
+            let currentHoldFrames = seqfx::clampInt (
+                seqfx::roundToInt (float32 (processor.frequency) / currentRateHz),
+                1,
+                256
+            );
+            let legacyDriven = float32<2> (
+                seqfx::clampFloat (stage[0], -1.0f, 1.0f),
+                seqfx::clampFloat (stage[1], -1.0f, 1.0f)
+            ) * driveGain;
+            let legacyClipped = float32<2> (
+                seqfx::clampFloat (legacyDriven[0], -1.0f, 1.0f),
+                seqfx::clampFloat (legacyDriven[1], -1.0f, 1.0f)
+            );
+
+            if (crusherNeedsRecapture[lane] || crusherHoldCounter[lane] <= 0)
+            {
+                crusherHeld[lane] = legacyClipped;
+                crusherNeedsRecapture[lane] = false;
+                crusherHoldCounter[lane] = currentHoldFrames;
+            }
+
+            crusherHoldCounter[lane] -= 1;
+            let legacyCrushed = float32<2> (
+                seqfx::quantize (crusherHeld[lane][0], levels),
+                seqfx::quantize (crusherHeld[lane][1], levels)
+            );
+            return stage + ((legacyCrushed - stage) * crusherMixCurrent[lane]);
         }
 
-        crusherHoldCounter[lane] -= 1;
+        let driven = float32<2> (
+            seqfx::clampFloat (stage[0] * driveGain, -1.0f, 1.0f),
+            seqfx::clampFloat (stage[1] * driveGain, -1.0f, 1.0f)
+        );
+        let converterCutoff = std::intrinsics::max (
+            20.0f,
+            std::intrinsics::min (float32 (processor.frequency) * 0.45f, currentRateHz * 0.45f)
+        );
+        let converterCoefficient = 1.0f - std::intrinsics::exp (
+            (-2.0f * seqfx::pi * converterCutoff) / float32 (processor.frequency)
+        );
+        crusherAdcState[lane] += (driven - crusherAdcState[lane]) * converterCoefficient;
+        let convertedInput = driven + ((crusherAdcState[lane] - driven) * currentAdcQuality);
 
-        let levels = float32 ((1 << (currentBits - 1)) - 1);
-        let crushed = float32<2> (
-            seqfx::quantize (crusherHeld[lane][0], levels),
-            seqfx::quantize (crusherHeld[lane][1], levels)
+        crusherCapturePhase[lane] += currentRateHz / float32 (processor.frequency);
+        let shouldCapture = crusherNeedsRecapture[lane] || crusherCapturePhase[lane] >= 1.0f;
+        if (shouldCapture)
+        {
+            crusherPreviousHeld[lane] = crusherHeld[lane];
+            let ditherScale = currentDither * 0.5f / levels;
+            let ditherNoise = float32<2> (
+                (crusherDitherRng[lane, 0].getBipolar() + crusherDitherRng[lane, 0].getBipolar()) * ditherScale,
+                (crusherDitherRng[lane, 1].getBipolar() + crusherDitherRng[lane, 1].getBipolar()) * ditherScale
+            );
+
+            if (crusherCharacter[lane] == 3)
+            {
+                let delta = convertedInput - crusherPreviousCapture[lane];
+                let quantizedDelta = float32<2> (
+                    seqfx::quantize (delta[0] + ditherNoise[0], levels),
+                    seqfx::quantize (delta[1] + ditherNoise[1], levels)
+                );
+                crusherProgressiveOutput[lane] += quantizedDelta;
+                crusherProgressiveOutput[lane] = float32<2> (
+                    seqfx::clampFloat (crusherProgressiveOutput[lane][0], -1.0f, 1.0f),
+                    seqfx::clampFloat (crusherProgressiveOutput[lane][1], -1.0f, 1.0f)
+                );
+                crusherHeld[lane] = crusherProgressiveOutput[lane];
+            }
+            else
+            {
+                crusherHeld[lane] = float32<2> (
+                    seqfx::quantize (convertedInput[0] + ditherNoise[0], levels),
+                    seqfx::quantize (convertedInput[1] + ditherNoise[1], levels)
+                );
+                crusherProgressiveOutput[lane] = crusherHeld[lane];
+            }
+
+            crusherPreviousCapture[lane] = convertedInput;
+            crusherNeedsRecapture[lane] = false;
+            if (crusherCapturePhase[lane] >= 1.0f)
+                crusherCapturePhase[lane] -= 1.0f;
+            else
+                crusherCapturePhase[lane] = 0.0f;
+        }
+
+        var crushed = crusherHeld[lane];
+        if (crusherCharacter[lane] == 2)
+        {
+            let interpolation = seqfx::smoothStep01 (crusherCapturePhase[lane]);
+            crushed = crusherPreviousHeld[lane] + ((crusherHeld[lane] - crusherPreviousHeld[lane]) * interpolation);
+        }
+
+        crusherDacState[lane] += (crushed - crusherDacState[lane]) * converterCoefficient;
+        crushed += (crusherDacState[lane] - crushed) * currentDacQuality;
+
+        var dcBlocked = crushed;
+        if (crusherCharacter[lane] == 3)
+        {
+            dcBlocked = crushed - crusherDcPreviousInput[lane] + (crusherDcPreviousOutput[lane] * 0.99935f);
+            crusherDcPreviousInput[lane] = crushed;
+            crusherDcPreviousOutput[lane] = dcBlocked;
+        }
+        dcBlocked = float32<2> (
+            seqfx::clampFloat (dcBlocked[0], -1.2f, 1.2f),
+            seqfx::clampFloat (dcBlocked[1], -1.2f, 1.2f)
         );
 
-        return stage + ((crushed - stage) * crusherMixCurrent[lane]);
+        return stage + ((dcBlocked - stage) * crusherMixCurrent[lane]);
     }
 
     float32<2> processTapeCharacter (

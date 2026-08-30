@@ -294,8 +294,16 @@ def _render(
     tmp_path: Path,
     input_audio: np.ndarray,
     schedule: dict[int, list[list[object]]],
+    *,
+    sample_rate: int = SAMPLE_RATE,
 ) -> np.ndarray:
-    return _render_with_monitor_events(generated_runtime, tmp_path, input_audio, schedule)[0]
+    return _render_with_monitor_events(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        schedule,
+        sample_rate=sample_rate,
+    )[0]
 
 
 def _render_with_monitor_events(
@@ -303,6 +311,8 @@ def _render_with_monitor_events(
     tmp_path: Path,
     input_audio: np.ndarray,
     schedule: dict[int, list[list[object]]],
+    *,
+    sample_rate: int = SAMPLE_RATE,
 ) -> tuple[np.ndarray, list[dict[str, object]]]:
     node = _require_tool("node")
     input_audio = np.asarray(input_audio, dtype=np.float32)
@@ -325,7 +335,7 @@ def _render_with_monitor_events(
             str(schedule_path),
             str(output_path),
             str(input_audio.shape[0]),
-            str(SAMPLE_RATE),
+            str(sample_rate),
             str(monitor_path),
         ],
         cwd=PATCH_PATH.parent,
@@ -375,6 +385,12 @@ def _base_schedule(
 
 def _sine(frames: int, frequency: float, amplitude: float = 0.55) -> np.ndarray:
     t = np.arange(frames, dtype=np.float64) / SAMPLE_RATE
+    mono = (amplitude * np.sin(2.0 * np.pi * frequency * t)).astype(np.float32)
+    return np.column_stack([mono, mono]).astype(np.float32)
+
+
+def _sine_at_rate(frames: int, frequency: float, sample_rate: int, amplitude: float = 0.55) -> np.ndarray:
+    t = np.arange(frames, dtype=np.float64) / sample_rate
     mono = (amplitude * np.sin(2.0 * np.pi * frequency * t)).astype(np.float32)
     return np.column_stack([mono, mono]).astype(np.float32)
 
@@ -581,8 +597,8 @@ def test_per_step_crusher_parameters_are_latched_at_step_boundaries(
     tmp_path: Path,
 ) -> None:
     upload = _empty_upload()
-    _activate_step(upload, lane=LANE_CRUSHER, step=0, params=[4, 8, 0])
-    _activate_step(upload, lane=LANE_CRUSHER, step=1, params=[16, 1, 0])
+    _activate_step(upload, lane=LANE_CRUSHER, step=0, params=[4, 6_000, 0, 1, 0, 0, 0])
+    _activate_step(upload, lane=LANE_CRUSHER, step=1, params=[16, 48_000, 0, 1, 0, 0, 0])
     input_audio = _ramp(STEP_FRAMES * 2)
     output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
 
@@ -593,7 +609,219 @@ def test_per_step_crusher_parameters_are_latched_at_step_boundaries(
     assert np.unique(second_step).size > np.unique(first_step).size * 6
 
 
-def test_live_crusher_hold_upload_changes_active_continuation_without_retrigger(
+@pytest.mark.parametrize("sample_rate", [48_000, 96_000])
+def test_crush_rate_hz_keeps_the_same_capture_frequency_across_host_sample_rates(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+    sample_rate: int,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_CRUSHER,
+            step=step,
+            trigger=step == 0,
+            params=[16, 12_000, 0, 1, 0, 0, 0],
+        )
+    frames = sample_rate // 10
+    input_audio = _sine_at_rate(frames, 997.0, sample_rate)
+    output = _render(
+        generated_runtime,
+        tmp_path,
+        input_audio,
+        _base_schedule(upload),
+        sample_rate=sample_rate,
+    )
+    observed_transitions = int(np.count_nonzero(np.abs(np.diff(output[512:, 0])) > 1.0e-5))
+    expected_transitions = ((frames - 512) / sample_rate) * 12_000
+
+    assert abs(observed_transitions - expected_transitions) < expected_transitions * 0.04
+
+
+def test_crush_original_mode_matches_the_legacy_48_khz_hold_and_quantizer(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    for step in (0, 1):
+        _activate_step(
+            upload,
+            lane=LANE_CRUSHER,
+            step=step,
+            trigger=step == 0,
+            params=[6, 12_000, 12, 0, 0, 0, 0],
+        )
+    input_audio = _ramp(5_000)
+    output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
+
+    levels = (2 ** (6 - 1)) - 1
+    drive = 10 ** (12 / 20)
+    expected = np.empty(5_000, dtype=np.float64)
+    held = 0.0
+    counter = 0
+    mix = 0.0
+    for index, dry in enumerate(input_audio[:, 0].astype(np.float64)):
+        clipped = np.clip(np.clip(dry, -1.0, 1.0) * drive, -1.0, 1.0)
+        if counter <= 0:
+            held = clipped
+            counter = 4
+        counter -= 1
+        quantized = np.copysign(np.floor(abs(held * levels) + 0.5) / levels, held)
+        mix = min(1.0, mix + (1.0 / 64.0))
+        expected[index] = dry + ((quantized - dry) * mix)
+
+    np.testing.assert_allclose(output[:, 0], expected, atol=2.0e-6, rtol=0.0)
+
+
+def test_crush_smooth_character_interpolates_between_captures_instead_of_stair_stepping(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    classic_upload = _empty_upload()
+    smooth_upload = _empty_upload()
+    for upload, character in ((classic_upload, 1), (smooth_upload, 2)):
+        for step in (0, 1):
+            _activate_step(
+                upload,
+                lane=LANE_CRUSHER,
+                step=step,
+                trigger=step == 0,
+                params=[12, 2_000, 0, character, 0, 0, 0],
+            )
+
+    input_audio = _sine(5_000, 733.0)
+    classic_path = tmp_path / "classic"
+    smooth_path = tmp_path / "smooth"
+    classic_path.mkdir()
+    smooth_path.mkdir()
+    classic = _render(generated_runtime, classic_path, input_audio, _base_schedule(classic_upload))[512:, 0]
+    smooth = _render(generated_runtime, smooth_path, input_audio, _base_schedule(smooth_upload))[512:, 0]
+    classic_diff = np.abs(np.diff(classic))
+    smooth_diff = np.abs(np.diff(smooth))
+
+    assert float(np.max(smooth_diff)) < float(np.max(classic_diff)) * 0.35
+    assert float(np.mean(smooth_diff > 1.0e-5)) > float(np.mean(classic_diff > 1.0e-5)) * 8
+
+
+def test_crush_dither_is_repeatable_and_decorrelates_low_level_quantization_error(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    clean_upload = _empty_upload()
+    dither_upload = _empty_upload()
+    for upload, dither in ((clean_upload, 0.0), (dither_upload, 1.0)):
+        for step in (0, 1):
+            _activate_step(
+                upload,
+                lane=LANE_CRUSHER,
+                step=step,
+                trigger=step == 0,
+                params=[4, 48_000, 0, 1, 0, 0, dither],
+            )
+
+    input_audio = _sine(5_000, 997.0, amplitude=0.02)
+    clean_path = tmp_path / "clean"
+    dither_a_path = tmp_path / "dither-a"
+    dither_b_path = tmp_path / "dither-b"
+    clean_path.mkdir()
+    dither_a_path.mkdir()
+    dither_b_path.mkdir()
+    clean = _render(generated_runtime, clean_path, input_audio, _base_schedule(clean_upload))
+    dither_a = _render(generated_runtime, dither_a_path, input_audio, _base_schedule(dither_upload))
+    dither_b = _render(generated_runtime, dither_b_path, input_audio, _base_schedule(dither_upload))
+    window = slice(512, 4_800)
+    dry = input_audio[window, 0]
+    clean_error = clean[window, 0] - dry
+    dither_error = dither_a[window, 0] - dry
+    clean_correlation = abs(float(np.corrcoef(dry, clean_error)[0, 1]))
+    dither_correlation = abs(float(np.corrcoef(dry, dither_error)[0, 1]))
+
+    np.testing.assert_array_equal(dither_a, dither_b)
+    assert _rms(dither_error) > _rms(clean_error)
+    assert dither_correlation < clean_correlation * 0.8
+
+
+def test_crush_dither_sequence_restarts_on_authoritative_processing_reset(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    upload = _empty_upload()
+    _activate_step(
+        upload,
+        lane=LANE_CRUSHER,
+        step=0,
+        trigger=True,
+        params=[4, 48_000, 0, 1, 0, 0, 1],
+    )
+    segment = _sine(4_000, 997.0, amplitude=0.02)
+    input_audio = np.concatenate((segment, segment), axis=0)
+    schedule = _base_schedule(upload)
+    schedule[4_000] = [["event", "internalReset", 1]]
+    output = _render(generated_runtime, tmp_path, input_audio, schedule)
+
+    np.testing.assert_array_equal(output[512:3_500], output[4_512:7_500])
+
+
+def test_crush_adc_and_dac_quality_tame_alias_energy_at_low_capture_rates(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    raw_upload = _empty_upload()
+    filtered_upload = _empty_upload()
+    for upload, quality in ((raw_upload, 0.0), (filtered_upload, 1.0)):
+        for step in (0, 1):
+            _activate_step(
+                upload,
+                lane=LANE_CRUSHER,
+                step=step,
+                trigger=step == 0,
+                params=[16, 4_000, 0, 1, quality, quality, 0],
+            )
+
+    input_audio = _sine(5_000, 10_000.0)
+    raw_path = tmp_path / "raw"
+    filtered_path = tmp_path / "filtered"
+    raw_path.mkdir()
+    filtered_path.mkdir()
+    raw = _render(generated_runtime, raw_path, input_audio, _base_schedule(raw_upload))[1_000:4_800, 0]
+    filtered = _render(generated_runtime, filtered_path, input_audio, _base_schedule(filtered_upload))[1_000:4_800, 0]
+
+    assert _rms(filtered) < _rms(raw) * 0.45
+
+
+def test_crush_progressive_character_is_distinct_finite_and_dc_bounded(
+    generated_runtime: GeneratedRuntime,
+    tmp_path: Path,
+) -> None:
+    classic_upload = _empty_upload()
+    progressive_upload = _empty_upload()
+    for upload, character in ((classic_upload, 1), (progressive_upload, 3)):
+        for step in range(4):
+            _activate_step(
+                upload,
+                lane=LANE_CRUSHER,
+                step=step,
+                trigger=step == 0,
+                params=[5, 6_000, 0, character, 0, 0, 0],
+            )
+
+    input_audio = _sine(STEP_FRAMES * 4, 733.0)
+    classic_path = tmp_path / "classic"
+    progressive_path = tmp_path / "progressive"
+    classic_path.mkdir()
+    progressive_path.mkdir()
+    classic = _render(generated_runtime, classic_path, input_audio, _base_schedule(classic_upload))
+    progressive = _render(generated_runtime, progressive_path, input_audio, _base_schedule(progressive_upload))
+    window = slice(1_000, (STEP_FRAMES * 4) - 500)
+
+    assert np.all(np.isfinite(progressive))
+    assert float(np.max(np.abs(progressive))) <= 1.21
+    assert abs(float(np.mean(progressive[window, 0]))) < 0.02
+    assert _rms(progressive[window] - classic[window]) > 0.03
+
+
+def test_live_crusher_rate_upload_changes_active_continuation_without_retrigger(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
@@ -604,7 +832,7 @@ def test_live_crusher_hold_upload_changes_active_continuation_without_retrigger(
             lane=LANE_CRUSHER,
             step=step,
             trigger=(step == 0),
-            params=[16, 1, 0],
+            params=[16, 48_000, 0, 1, 0, 0, 0],
         )
 
     edited = json.loads(json.dumps(upload))
@@ -616,7 +844,7 @@ def test_live_crusher_hold_upload_changes_active_continuation_without_retrigger(
             lane=LANE_CRUSHER,
             step=step,
             trigger=(step == 0),
-            params=[16, 64, 0],
+            params=[16, 750, 0, 1, 0, 0, 0],
         )
 
     input_audio = _ramp(STEP_FRAMES * 2)
@@ -630,10 +858,10 @@ def test_live_crusher_hold_upload_changes_active_continuation_without_retrigger(
     post_held_fraction = float(np.mean(np.abs(np.diff(post_upload)) < 1.0e-8))
 
     assert pre_held_fraction < 0.05, (
-        f"Hold=1 should not create a staircase before the upload; held fraction was {pre_held_fraction:.3f}"
+        f"Rate=48 kHz should not create a staircase before the upload; held fraction was {pre_held_fraction:.3f}"
     )
     assert post_held_fraction > 0.80, (
-        f"Hold=64 should create a staircase immediately after the upload; held fraction was {post_held_fraction:.3f}"
+        f"Rate=750 Hz should create a staircase immediately after the upload; held fraction was {post_held_fraction:.3f}"
     )
 
 
@@ -648,7 +876,7 @@ def test_live_block_start_upload_relatches_active_continuation(
             lane=LANE_CRUSHER,
             step=step,
             trigger=(step == 0),
-            params=[16, 1, 0],
+            params=[16, 48_000, 0, 1, 0, 0, 0],
         )
 
     edited = json.loads(json.dumps(upload))
@@ -659,7 +887,7 @@ def test_live_block_start_upload_relatches_active_continuation(
         lane=LANE_CRUSHER,
         step=0,
         trigger=True,
-        params=[4, 1, 0],
+        params=[4, 48_000, 0, 1, 0, 0, 0],
     )
 
     input_audio = _ramp(STEP_FRAMES * 2)
@@ -685,7 +913,7 @@ def test_aux_envelope_sweeps_crusher_bits_across_the_full_block(
             lane=LANE_CRUSHER,
             step=step,
             trigger=(step == 0),
-            params=[16, 1, 0],
+            params=[16, 48_000, 0, 1, 0, 0, 0],
         )
         _set_aux(upload, lane=LANE_CRUSHER, step=step, param=0, end=4)
 
@@ -769,7 +997,7 @@ def test_aux_source_shapes_render_distinct_stutter_gate_signatures(
                 assert ratio < 0.08, f"{shape_name} should mute {window_name}, got ratio {ratio:.3f}"
 
 
-def test_aux_envelope_sweeps_crusher_hold_frames_across_the_full_block(
+def test_aux_envelope_sweeps_crusher_rate_across_the_full_block(
     generated_runtime: GeneratedRuntime,
     tmp_path: Path,
 ) -> None:
@@ -780,9 +1008,9 @@ def test_aux_envelope_sweeps_crusher_hold_frames_across_the_full_block(
             lane=LANE_CRUSHER,
             step=step,
             trigger=(step == 0),
-            params=[16, 1, 0],
+            params=[16, 48_000, 0, 1, 0, 0, 0],
         )
-        _set_aux(upload, lane=LANE_CRUSHER, step=step, param=1, end=64)
+        _set_aux(upload, lane=LANE_CRUSHER, step=step, param=1, end=200)
 
     input_audio = _ramp(STEP_FRAMES * 4)
     output = _render(generated_runtime, tmp_path, input_audio, _base_schedule(upload))
@@ -792,7 +1020,7 @@ def test_aux_envelope_sweeps_crusher_hold_frames_across_the_full_block(
     early_change_rate = float(np.count_nonzero(np.diff(early)) / max(1, early.size - 1))
     late_change_rate = float(np.count_nonzero(np.diff(late)) / max(1, late.size - 1))
 
-    assert early_change_rate > late_change_rate * 8
+    assert early_change_rate > late_change_rate * 6
 
 
 def test_aux_envelope_sweeps_crusher_drive_into_clipping_late_in_the_block(
@@ -808,7 +1036,7 @@ def test_aux_envelope_sweeps_crusher_drive_into_clipping_late_in_the_block(
                 lane=LANE_CRUSHER,
                 step=step,
                 trigger=(step == 0),
-                params=[16, 1, 0],
+                params=[16, 48_000, 0, 1, 0, 0, 0],
             )
         _set_aux(aux_upload, lane=LANE_CRUSHER, step=step, param=2, end=36)
 
@@ -839,7 +1067,7 @@ def test_monitor_reports_raw_aux_cycle_phase_and_shaped_amount_for_the_active_bl
             lane=LANE_CRUSHER,
             step=step,
             trigger=(step == 0),
-            params=[16, 1, 0],
+            params=[16, 48_000, 0, 1, 0, 0, 0],
         )
         _set_aux(upload, lane=LANE_CRUSHER, step=step, param=0, end=4)
 
@@ -878,7 +1106,7 @@ def test_monitor_reports_falling_shape_with_raw_phase_increasing_and_amount_fall
             lane=LANE_CRUSHER,
             step=step,
             trigger=(step == 0),
-            params=[16, 1, 0],
+            params=[16, 48_000, 0, 1, 0, 0, 0],
         )
         _set_aux(upload, lane=LANE_CRUSHER, step=step, param=0, end=4, shape=-1.0)
 
@@ -927,7 +1155,7 @@ def test_tempo_synced_aux_rate_controls_raw_cycle_phase(
             lane=LANE_CRUSHER,
             step=step,
             trigger=(step == 0),
-            params=[16, 1, 0],
+            params=[16, 48_000, 0, 1, 0, 0, 0],
         )
         _set_aux(
             upload,
@@ -975,7 +1203,7 @@ def test_slice_aux_rate_divides_the_active_block_duration(
             lane=LANE_CRUSHER,
             step=step,
             trigger=(step == 0),
-            params=[16, 1, 0],
+            params=[16, 48_000, 0, 1, 0, 0, 0],
         )
         _set_aux(
             upload,
@@ -1011,7 +1239,7 @@ def test_global_mix_zero_returns_dry_even_when_all_lanes_are_active(
             _activate_step(upload, lane=lane, step=step)
 
     _activate_step(upload, lane=LANE_FILTER, step=0, params=[0, 160.0, 160.0, 0.707, 1.0])
-    _activate_step(upload, lane=LANE_CRUSHER, step=0, params=[4, 12, 12.0])
+    _activate_step(upload, lane=LANE_CRUSHER, step=0, params=[4, 4_000, 12.0, 1, 0, 0, 0])
     _activate_step(upload, lane=LANE_TAPE, step=0, params=[1.0, 1.0, 1.0, 20.0])
     _activate_step(upload, lane=LANE_STUTTER, step=0, params=[1.0, 1.0, 0.0, 1.0])
 
