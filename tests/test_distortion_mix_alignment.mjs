@@ -8,6 +8,10 @@
 // routes the untouched input across the same boundary (dryThru) and blends
 // against that aligned copy, so these probes pin the blend flat.
 //
+// The wet prefilters default to their range extremes (20 Hz / 20 kHz) and a
+// filter parked at its extreme is truly out of the path - otherwise its
+// phase alone would color the blend at partial Mix with nothing audibly cut.
+//
 // Drives the production wt::DistortionBus through the T25 calibration patch,
 // generated with the repo's own codegen.
 
@@ -56,8 +60,9 @@ async function render(fixture, {
     knee = 0.35,
     wet = 0.5,
     mode = 0,
-    wetHPHz = 40,
-    wetLPHz = 18_000,
+    // Product defaults: both wet prefilters parked at their off extremes.
+    wetHPHz = 20,
+    wetLPHz = 20_000,
     sampleRate = SAMPLE_RATE,
 } = {}) {
     const performer = new RuntimeClass();
@@ -142,7 +147,9 @@ test("50% wet does not carve the oversampler comb into the blend", async () => {
     // keeps both near unity, an un-aligned one fails them by many dB.
     for (const frequencyHz of [4_075, 12_225]) {
         const fixture = makeSine(frequencyHz, 0.1);
-        const change = levelChangeDb(fixture, await render(fixture, { wet: 0.5, driveDb: 12 }));
+        const change = levelChangeDb(fixture, await render(fixture, {
+            wet: 0.5, driveDb: 12, wetHPHz: 40, wetLPHz: 18_000,
+        }));
         assert.ok(
             Math.abs(change) <= 2,
             `${frequencyHz} Hz at 50% wet changed by ${change.toFixed(2)} dB (limit 2 dB)`,
@@ -159,6 +166,21 @@ test("zero drive plus blend is transparent - no shaping means no coloration", as
         Math.abs(change) <= 1,
         `4075 Hz at drive 0, 50% wet changed by ${change.toFixed(2)} dB (limit 1 dB)`,
     );
+});
+
+test("prefilters parked at their extremes are truly off - low notes keep their weight", async () => {
+    // Even a corner that cuts nothing rotates phase, and at partial Mix
+    // that rotation cancels against the dry leg (an always-on 20 Hz
+    // high-pass costs several dB at 33 Hz). Parked filters must therefore
+    // be out of the path entirely, not merely wide open.
+    for (const frequencyHz of [33, 55]) {
+        const fixture = makeSine(frequencyHz, 0.1);
+        const change = levelChangeDb(fixture, await render(fixture, { wet: 0.5, driveDb: 12 }));
+        assert.ok(
+            Math.abs(change) <= 1.5,
+            `${frequencyHz} Hz at 50% wet, filters parked, changed by ${change.toFixed(2)} dB (limit 1.5 dB)`,
+        );
+    }
 });
 
 test("the ends of the wet knob hold their level promise", async () => {

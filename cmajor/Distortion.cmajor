@@ -256,8 +256,8 @@ namespace wt
         input value float32 wetIn [[ init: 0.5f ]];
         input value float32 modeIn [[ init: 0.0f ]];
         input value float32 typeIn [[ init: 1.0f ]];
-        input value float32 wetHPHzIn [[ init: 40.0f ]];
-        input value float32 wetLPHzIn [[ init: 18000.0f ]];
+        input value float32 wetHPHzIn [[ init: 20.0f ]];
+        input value float32 wetLPHzIn [[ init: 20000.0f ]];
 
         // The one verification seam authorised by T25. EffectsRack never forwards it;
         // only the deterministic offline production-path probe bypasses matching.
@@ -281,12 +281,12 @@ namespace wt
         var wetHighPass = std::filters (float32<2>, float64, 32)::butterworth (4)::create (
             distortionHighPassMode,
             processor.frequency,
-            40.0f
+            20.0f
         );
         var wetLowPass = std::filters (float32<2>, float64, 32)::butterworth (4)::create (
             distortionLowPassMode,
             processor.frequency,
-            18000.0f
+            20000.0f
         );
         var classicDcBlocker = std::filters (float32<2>, float64, 32)::dcblocker::create();
         var residueDcBlocker = std::filters (float32<2>, float64, 32)::dcblocker::create();
@@ -342,8 +342,10 @@ namespace wt
             );
         }
 
-        float32 currentWetHPHz = 40.0f;
-        float32 currentWetLPHz = 18000.0f;
+        float32 currentWetHPHz = 20.0f;
+        float32 currentWetLPHz = 20000.0f;
+        bool wetHPEngaged = false;
+        bool wetLPEngaged = false;
 
         void updatePrefilterFrequencies()
         {
@@ -361,6 +363,12 @@ namespace wt
                 wetLowPass.setFrequency (processor.frequency, nextWetLPHz);
                 currentWetLPHz = nextWetLPHz;
             }
+
+            // Parked at its range extreme, a wet prefilter is truly out of
+            // the path: even a corner that cuts nothing still rotates phase,
+            // and at partial Mix that rotation cancels against the dry leg.
+            wetHPEngaged = currentWetHPHz > distortionWetHPMinHz + 0.001f;
+            wetLPEngaged = currentWetLPHz < distortionWetLPMaxHz - 0.001f;
         }
 
         void main()
@@ -372,7 +380,14 @@ namespace wt
                 let dry = in;
                 let driveDb = clampDistortionDriveDb (driveDbIn);
                 let driveGain = std::levels::dBtoGain (driveDb);
-                let filtered = wetLowPass.process (wetHighPass.process (dry));
+                // A disengaged prefilter still processes so its state keeps
+                // tracking the signal it would see - re-engaging from the
+                // range extreme then switches between near-identical outputs
+                // instead of waking a filter on stale history.
+                let highPassed = wetHighPass.process (dry);
+                let afterHP = wetHPEngaged ? highPassed : dry;
+                let lowPassed = wetLowPass.process (afterHP);
+                let filtered = wetLPEngaged ? lowPassed : afterHP;
                 let driven = filtered * driveGain;
 
                 leftCore.in <- driven[0];
