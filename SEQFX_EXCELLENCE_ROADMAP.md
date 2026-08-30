@@ -1,6 +1,6 @@
 # SeqFX Excellence Roadmap
 
-Status: implementation in progress; Phases 0–6 complete; Phase 7 controls, discovery, grid polish, factory content, onboarding, and documentation are complete; supported-size visual qualification is active
+Status: implementation in progress; Phases 0–7 complete; release-candidate source review and qualification are active
 Owner thread: `01a05051-d7c7-7e13-bb60-58968b6392cf`
 Branch: `codex/seqfx-excellence-01a05051`
 Worktree: `/Users/winterfell/.codex/worktrees/seqfx-excellence-01a05051/cosimo-synth`
@@ -790,13 +790,13 @@ Tasks:
   Block Mix, text selection identity, and effect preset action.
 - `P7.3` Complete — visible chain names, in-block effect abbreviations, Tape
   readout contrast repair, and preserved create/resize/move/copy interactions.
-- `P7.4` Complete pending P7.7 matrix confirmation — owned-region scrolling,
+- `P7.4` Complete — owned-region scrolling,
   fixed supported-size layout, focus treatments, and reduced-motion override.
 - `P7.5` Complete — three bounded musical presets per effect, 12 full patterns,
   and atomic pattern/preset/variation history contracts.
 - `P7.6` Complete — instance-local onboarding, user guide, pre-release notes,
   known limits, and explicit unperformed host/release gates.
-- `P7.7` Active — capture and inspect empty/all-effect screenshots at default
+- `P7.7` Complete — captured and inspected empty/all-effect screenshots at default
   and compact sizes plus minimum/wide geometry, contrast, focus, and zoom proof.
 
 Exit: no known formatting/visual defect remains in the release ledger; every requested effect is discoverable without memorizing an icon.

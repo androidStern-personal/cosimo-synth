@@ -13,8 +13,11 @@
     --seqfx-shell-border-strong: rgba(28, 28, 28, 0.28);
     --seqfx-shell-panel-bg: rgba(28, 28, 28, 0.035);
     --seqfx-shell-panel-bg-strong: rgba(28, 28, 28, 0.08);
+    --editor-surface-ink-muted: #555752;
     --seqfx-shell-ink: var(--editor-surface-ink);
     --seqfx-shell-ink-muted: var(--editor-surface-ink-muted);
+    --seqfx-focus-ring-dark: #4f3b12;
+    --seqfx-focus-ring-light: #fff8e8;
     --seqfx-effect-filter: #f4d35e;
     --seqfx-effect-crusher: #ee6c4d;
     --seqfx-effect-tape-stop: #98c1d9;
@@ -656,7 +659,7 @@ select {
 }
 
 .seqfx-step-number {
-    color: rgba(28, 28, 28, 0.48);
+    color: var(--seqfx-shell-ink-muted);
     font-size: 9px;
     height: var(--seqfx-step-number-height, 9px);
     line-height: var(--seqfx-step-number-height, 9px);
@@ -664,7 +667,8 @@ select {
 }
 
 .seqfx-step-number.is-playhead {
-    color: #8bbf9a;
+    color: #35523d;
+    font-weight: 700;
 }
 
 .seqfx-cell {
@@ -1218,7 +1222,8 @@ select {
     border: 1px solid rgba(242, 209, 107, 0.4);
     border-radius: 999px;
     padding: 2px 6px;
-    color: #f2d16b;
+    color: var(--seqfx-focus-ring-dark);
+    background: rgba(242, 209, 107, 0.72);
     font-size: 10px;
     font-style: normal;
 }
@@ -1514,7 +1519,7 @@ select {
 
 .seqfx-effect-picker__options {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
     align-items: center;
     align-content: start;
     min-width: 0;
@@ -2273,7 +2278,7 @@ select {
 .seqfx-tape-v2-control em {
     border-radius: 999px;
     padding: 1px 5px;
-    color: rgba(28, 28, 28, 0.62);
+    color: var(--seqfx-focus-ring-dark);
     background: rgba(242, 209, 107, 0.72);
     font-size: 8px;
     font-style: normal;
@@ -2467,6 +2472,41 @@ select {
 
 .seqfx-inspector .seqfx-mod-target-row input[type="range"]::-moz-range-track {
     border-color: rgba(126, 116, 101, 0.24);
+}
+
+.seqfx-inspector .filter-range-editor__mode-cycle {
+    width: 24px;
+    height: 24px;
+}
+
+.seqfx-inspector :is(
+    .editor-tick-slider__label--toggle,
+    .seqfx-crusher-editor__drive-label--toggle,
+    .seqfx-stutter-editor__gate-toggle,
+    .seqfx-stutter-editor__shape-toggle
+) {
+    min-height: 24px;
+}
+
+.seqfx-inspector .seqfx-stutter-editor__morph-labels button {
+    min-width: 24px;
+    min-height: 24px;
+}
+
+.seqfx-root input[type="range"] {
+    min-height: 24px;
+}
+
+.seqfx-inspector .filter-range-editor__chip--span {
+    color: var(--seqfx-shell-ink-muted);
+}
+
+.seqfx-root :is(button, input, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--seqfx-focus-ring-dark);
+    outline-offset: 2px;
+    box-shadow:
+        0 0 0 2px var(--seqfx-focus-ring-light),
+        0 0 0 4px var(--seqfx-focus-ring-dark);
 }
 
 @media (max-width: 860px) {

@@ -45,6 +45,7 @@
     "synth:desktop:dev": "./scripts/run_desktop_native_dev.sh",
     "fx:dev": "vite --config fx/vite.config.mjs",
     "fx:build": "node fx/build-effect.mjs",
+    "fx:seqfx:visual-proof": "node scripts/capture_seqfx_visual_proof.mjs",
     "fx:prod:build": "node fx/prod-effect.mjs build",
     "fx:prod:install": "node fx/prod-effect.mjs install",
     "test:fx:generated-latency": "node tests/tools/prove_generated_plugin_latency.mjs",
