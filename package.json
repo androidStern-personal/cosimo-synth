@@ -44,6 +44,7 @@
     "fx:build": "node fx/build-effect.mjs",
     "fx:prod:build": "node fx/prod-effect.mjs build",
     "fx:prod:install": "node fx/prod-effect.mjs install",
+    "test:fx:generated-latency": "node tests/tools/prove_generated_plugin_latency.mjs",
     "fx:jit:install": "./scripts/install_fx_cmajplugin.sh",
     "ableton:dummy2": "./scripts/relaunch_ableton_dummy2.sh",
     "cmajplugin:build": "./scripts/build_cmajplugin_vst3.sh",

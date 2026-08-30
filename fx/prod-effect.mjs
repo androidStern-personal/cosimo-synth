@@ -1,4 +1,4 @@
-import { access, cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,13 @@ const keyboardBridgeForbiddenStrings = [
     "cosimo-keyboard-probe-panel",
     "forwarded-buffered-flags-changed",
 ];
+const cmajCommandBuildSourceDirectory = path.join(repoRoot, "tools", "cmajor_command_build");
+const cmajCommandBuildDirectory = path.join(repoRoot, "build", "cmajor_command");
+const pinnedCmajExecutablePath = path.join(
+    cmajCommandBuildDirectory,
+    "bin",
+    process.platform === "win32" ? "cmaj.exe" : "cmaj",
+);
 
 function availablePluginNames() {
     return ["all", ...effectPluginTargetNames()].join(", ");
@@ -103,58 +110,66 @@ async function pathExists(nextPath) {
     }
 }
 
-export function replaceGeneratedPluginLatency(source, latencySamples) {
-    if (!Number.isInteger(latencySamples) || latencySamples < 0)
-        throw new Error("generatedHostLatencySamples must be a non-negative integer.");
-
-    const pattern = /static constexpr double\s+latency\s*=\s*[-+0-9.eE]+;/g;
-    const matches = [...source.matchAll(pattern)];
-
-    if (matches.length !== 1) {
-        throw new Error(
-            `Expected exactly one generated Cmajor latency constant, found ${matches.length}.`,
-        );
-    }
-
-    const correctedConstant = source.replace(
-        pattern,
-        `static constexpr double   latency            = ${latencySamples.toFixed(6)};`,
-    );
-    const factoryPattern = /([ \t]*)return new (cmaj::plugin::GeneratedPlugin<[^\n;]+> \(std::make_shared<cmaj::Patch>\(\)\));/g;
-    const factoryMatches = [...correctedConstant.matchAll(factoryPattern)];
-
-    if (factoryMatches.length !== 1) {
-        throw new Error(
-            `Expected exactly one generated Cmajor plugin factory, found ${factoryMatches.length}.`,
-        );
-    }
-
-    return correctedConstant.replace(
-        factoryPattern,
-        (_, indent, construction) => [
-            `${indent}auto* plugin = new ${construction};`,
-            `${indent}plugin->patchChangeCallback = [] (auto& changedPlugin) { changedPlugin.setLatencySamples (${latencySamples}); };`,
-            `${indent}plugin->setLatencySamples (${latencySamples});`,
-            `${indent}return plugin;`,
-        ].join("\n"),
-    );
+export function getPinnedCmajExecutablePath() {
+    return pinnedCmajExecutablePath;
 }
 
-async function applyGeneratedHostLatency(pluginName, plugin, juceOut) {
-    if (plugin.generatedHostLatencySamples === undefined)
-        return;
+export function validatePinnedCmajExecutable(candidate) {
+    if (typeof candidate !== "string" || path.resolve(candidate) !== pinnedCmajExecutablePath) {
+        throw new Error(
+            `COSIMO_CMAJ_EXECUTABLE must be the Cmajor command built from the pinned source: ${pinnedCmajExecutablePath}`,
+        );
+    }
 
-    const generatedSourcePath = path.join(juceOut, "cmajor_plugin.cpp");
-    const generatedSource = await readFile(generatedSourcePath, "utf8");
-    const correctedSource = replaceGeneratedPluginLatency(
-        generatedSource,
-        plugin.generatedHostLatencySamples,
-    );
-    await writeFile(generatedSourcePath, correctedSource, "utf8");
-    console.log(
-        `Pinned ${pluginName} generated host latency to `
-        + `${plugin.generatedHostLatencySamples} samples for Cmajor 1.0.3066.`,
-    );
+    return pinnedCmajExecutablePath;
+}
+
+export function createPinnedCmajConfigureArgs() {
+    return [
+        "-S", cmajCommandBuildSourceDirectory,
+        "-B", cmajCommandBuildDirectory,
+        "-DCMAKE_BUILD_TYPE=Release",
+    ];
+}
+
+export function createJuceGenerationConfigureArgs({
+    cmakeSourceDirectory,
+    cmakeBuildDirectory,
+    runtimePatchPath,
+    juceOutputDirectory,
+    pluginTarget,
+    cmajExecutable,
+}) {
+    const pinnedExecutable = validatePinnedCmajExecutable(cmajExecutable);
+
+    return [
+        "-S", cmakeSourceDirectory,
+        "-B", cmakeBuildDirectory,
+        "-DCMAKE_BUILD_TYPE=Release",
+        `-DCOSIMO_EFFECT_PATCH_PATH=${runtimePatchPath}`,
+        `-DCOSIMO_EFFECT_OUTPUT_DIR=${juceOutputDirectory}`,
+        `-DCOSIMO_EFFECT_PLUGIN_TARGET=${pluginTarget}`,
+        `-DCOSIMO_CMAJ_EXECUTABLE=${pinnedExecutable}`,
+    ];
+}
+
+async function preparePinnedCmajExecutable(cmakeJobs, preparedExecutable = null) {
+    if (preparedExecutable !== null) {
+        const executable = validatePinnedCmajExecutable(preparedExecutable);
+
+        if (!await pathExists(executable))
+            throw new Error(`Pinned Cmajor command not found: ${executable}`);
+
+        return executable;
+    }
+
+    run("cmake", createPinnedCmajConfigureArgs());
+    run("cmake", createCmakeBuildArgs(cmajCommandBuildDirectory, "cmaj", cmakeJobs));
+
+    if (!await pathExists(pinnedCmajExecutablePath))
+        throw new Error(`Pinned Cmajor command was not built: ${pinnedCmajExecutablePath}`);
+
+    return pinnedCmajExecutablePath;
 }
 
 export async function prepareJuceProjectOutput(juceOut, {
@@ -205,14 +220,14 @@ async function generateJuceProject(pluginName, plugin, options = {}) {
         cmakeSourceDirectory,
     });
 
-    run("cmake", [
-        "-S", cmakeSourceDirectory,
-        "-B", cmakeBuildDir,
-        "-DCMAKE_BUILD_TYPE=Release",
-        `-DCOSIMO_EFFECT_PATCH_PATH=${runtimePatchPath}`,
-        `-DCOSIMO_EFFECT_OUTPUT_DIR=${juceOut}`,
-    ]);
-    await applyGeneratedHostLatency(pluginName, plugin, juceOut);
+    run("cmake", createJuceGenerationConfigureArgs({
+        cmakeSourceDirectory,
+        cmakeBuildDirectory: cmakeBuildDir,
+        runtimePatchPath,
+        juceOutputDirectory: juceOut,
+        pluginTarget: plugin.cmakeTarget,
+        cmajExecutable: options.cmajExecutable,
+    }));
 
     console.log(`Generated ${pluginName} JUCE plugin project at ${path.relative(repoRoot, juceOut)}`);
 }
@@ -288,6 +303,9 @@ export function createProdBuildChildArgs(pluginName, options = {}) {
     if (options.clean)
         args.push("--clean");
 
+    if (options.cmajExecutable)
+        args.push(`--prepared-cmaj-executable=${validatePinnedCmajExecutable(options.cmajExecutable)}`);
+
     return args;
 }
 
@@ -345,16 +363,20 @@ async function runLimited(items, limit, task) {
 
 async function prodBuildAll(pluginNames, options) {
     const { pluginJobs, cmakeJobs } = resolveProdBuildParallelism(pluginNames.length);
+    const cmajExecutable = await preparePinnedCmajExecutable(
+        cmakeJobs,
+        options.cmajExecutable ?? null,
+    );
 
     if (pluginNames.length === 1) {
-        await prodBuild(pluginNames[0], { ...options, cmakeJobs });
+        await prodBuild(pluginNames[0], { ...options, cmajExecutable, cmakeJobs });
         return;
     }
 
     console.log(`Building ${pluginNames.join(", ")} with ${pluginJobs} plugin job(s), ${cmakeJobs} CMake job(s) per plugin.`);
 
     await runLimited(pluginNames, pluginJobs, (pluginName) => runChildProcess(
-        createProdBuildChildArgs(pluginName, options),
+        createProdBuildChildArgs(pluginName, { ...options, cmajExecutable }),
         {
             ...process.env,
             COSIMO_CMAKE_JOBS: String(cmakeJobs),
@@ -460,7 +482,20 @@ async function installVST3(pluginName, plugin, options) {
 export function parseArgs(argv) {
     const action = argv[2];
     const pluginName = argv[3];
-    const flags = new Set(argv.slice(4));
+    const flags = new Set();
+    let cmajExecutable = null;
+
+    for (const argument of argv.slice(4)) {
+        if (argument.startsWith("--prepared-cmaj-executable=")) {
+            if (cmajExecutable !== null)
+                throw new Error("The prepared Cmajor executable may only be provided once.");
+
+            cmajExecutable = validatePinnedCmajExecutable(argument.slice(argument.indexOf("=") + 1));
+            continue;
+        }
+
+        flags.add(argument);
+    }
 
     for (const flag of flags) {
         if (!["--clean", "--dry-run", "--help", "-h"].includes(flag))
@@ -473,6 +508,7 @@ export function parseArgs(argv) {
         clean: flags.has("--clean"),
         dryRun: flags.has("--dry-run"),
         help: flags.has("--help") || flags.has("-h"),
+        cmajExecutable,
     };
 }
 

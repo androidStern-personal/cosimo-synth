@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -62,7 +63,6 @@ test("the Enhancer production plugin packages the canonical T26 DSP instead of a
         { repoPath: "cmajor/Enhancer.cmajor", runtimePath: "Enhancer.cmajor" },
         { repoPath: "fx/enhancer/EnhancerPlugin.cmajor", runtimePath: "EnhancerPlugin.cmajor" },
     ]);
-    assert.equal(buildModule.effectPlugins.enhancer.generatedHostLatencySamples, 60);
 });
 
 test("the Enhancer Lite plugin packages its isolated one-band prototype", async () => {
@@ -80,7 +80,6 @@ test("the Enhancer Lite plugin packages its isolated one-band prototype", async 
         },
         { repoPath: "fx/enhancer_lite/EnhancerLitePlugin.cmajor", runtimePath: "EnhancerLitePlugin.cmajor" },
     ]);
-    assert.equal(buildModule.effectPlugins["enhancer-lite"].generatedHostLatencySamples, 3);
     assert.equal(buildModule.effectPlugins["enhancer-lite"].productName, "CosimoEnhancerLite");
     assert.deepEqual(manifest.resources, ["assets/enhancer-lite-wordmark.png"]);
 });
@@ -100,36 +99,110 @@ test("the Enhancer Lite shelf audition target is isolated from production all", 
     assert.equal(manifest.plugin.pluginCode, "CsLS");
 });
 
-test("the generated Enhancer plugin host latency is corrected at the narrow Cmajor seam", async () => {
+test("effect production builds and passes the exact pinned Cmajor command instead of resolving PATH", async () => {
     const { prodModule } = await loadBuildModules();
-    const latencyConstant = "static constexpr double   latency            = 0.000000;";
-    const pluginFactory = "    return new cmaj::plugin::GeneratedPlugin<::CosimoEnhancer> (std::make_shared<cmaj::Patch>());";
-    const generated = `${latencyConstant}\n${pluginFactory}`;
-    assert.equal(
-        prodModule.replaceGeneratedPluginLatency(generated, 60),
+    const expectedExecutable = path.join(
+        repoRoot,
+        "build",
+        "cmajor_command",
+        "bin",
+        process.platform === "win32" ? "cmaj.exe" : "cmaj",
+    );
+    const staleSystemExecutable = path.join(os.tmpdir(), "stale-system-cmaj");
+    const generationProject = await readFile(
+        path.join(repoRoot, "tools/effect_plugin_build/CMakeLists.txt"),
+        "utf8",
+    );
+    const commandProject = await readFile(
+        path.join(repoRoot, "tools/cmajor_command_build/CMakeLists.txt"),
+        "utf8",
+    );
+
+    assert.equal(prodModule.getPinnedCmajExecutablePath(), expectedExecutable);
+    assert.deepEqual(
+        prodModule.createJuceGenerationConfigureArgs({
+            cmakeSourceDirectory: "/tmp/effect-source",
+            cmakeBuildDirectory: "/tmp/effect-build",
+            runtimePatchPath: "/tmp/effect.cmajorpatch",
+            juceOutputDirectory: "/tmp/effect-juce",
+            pluginTarget: "CosimoEnhancer",
+            cmajExecutable: expectedExecutable,
+        }),
         [
-            "static constexpr double   latency            = 60.000000;",
-            "    auto* plugin = new cmaj::plugin::GeneratedPlugin<::CosimoEnhancer> (std::make_shared<cmaj::Patch>());",
-            "    plugin->patchChangeCallback = [] (auto& changedPlugin) { changedPlugin.setLatencySamples (60); };",
-            "    plugin->setLatencySamples (60);",
-            "    return plugin;",
-        ].join("\n"),
+            "-S", "/tmp/effect-source",
+            "-B", "/tmp/effect-build",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DCOSIMO_EFFECT_PATCH_PATH=/tmp/effect.cmajorpatch",
+            "-DCOSIMO_EFFECT_OUTPUT_DIR=/tmp/effect-juce",
+            "-DCOSIMO_EFFECT_PLUGIN_TARGET=CosimoEnhancer",
+            `-DCOSIMO_CMAJ_EXECUTABLE=${expectedExecutable}`,
+        ],
     );
     assert.throws(
-        () => prodModule.replaceGeneratedPluginLatency(`no latency here\n${pluginFactory}`, 60),
-        /exactly one generated Cmajor latency constant, found 0/,
+        () => prodModule.validatePinnedCmajExecutable(staleSystemExecutable),
+        /must be the Cmajor command built from the pinned source/,
     );
-    assert.throws(
-        () => prodModule.replaceGeneratedPluginLatency(
-            `${latencyConstant}\n${latencyConstant}\n${pluginFactory}`,
-            60,
-        ),
-        /exactly one generated Cmajor latency constant, found 2/,
+    assert.doesNotMatch(generationProject, /find_program\s*\([^)]*cmaj/s);
+    assert.match(generationProject, /COSIMO_CMAJ_EXECUTABLE/);
+    assert.match(commandProject, /cosimo_add_production_dependencies\(\)/);
+    assert.match(commandProject, /add_subdirectory\s*\(\s*"\$\{COSIMO_CMAJOR_SOURCE_DIR\}"/s);
+    assert.match(commandProject, /set\(WARNINGS_AS_ERRORS ON CACHE BOOL/);
+    assert.doesNotMatch(commandProject, /WARNINGS_AS_ERRORS OFF/);
+    assert.deepEqual(
+        prodModule.createProdBuildChildArgs("enhancer", { cmajExecutable: expectedExecutable }),
+        [
+            path.join(repoRoot, "fx/prod-effect.mjs"),
+            "build",
+            "enhancer",
+            `--prepared-cmaj-executable=${expectedExecutable}`,
+        ],
     );
-    assert.throws(
-        () => prodModule.replaceGeneratedPluginLatency(latencyConstant, 60),
-        /exactly one generated Cmajor plugin factory, found 0/,
+});
+
+test("generated latency probe resolves the generator-authored factory type exactly once", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-generated-plugin-type-"));
+    const extractor = path.join(
+        repoRoot,
+        "tools/effect_plugin_build/read_generated_plugin_info_class.cmake",
     );
+    const runExtractor = (sourcePath) => spawnSync(
+        "cmake",
+        [`-DCOSIMO_GENERATED_PLUGIN_SOURCE=${sourcePath}`, "-P", extractor],
+        { cwd: repoRoot, encoding: "utf8" },
+    );
+
+    try {
+        const ottSource = path.join(tempRoot, "ott.cpp");
+        const enhancerSource = path.join(tempRoot, "enhancer.cpp");
+        const ambiguousSource = path.join(tempRoot, "ambiguous.cpp");
+        const missingSource = path.join(tempRoot, "missing.cpp");
+        const factoryLine = (infoClass) =>
+            `    using Plugin = cmaj::plugin::GeneratedPlugin<::${infoClass}>;\n`;
+
+        await writeFile(ottSource, factoryLine("OttLab"));
+        await writeFile(enhancerSource, factoryLine("CosimoEnhancer"));
+        await writeFile(
+            ambiguousSource,
+            factoryLine("OttLab") + factoryLine("CosimoEnhancer"),
+        );
+        await writeFile(missingSource, "juce::AudioProcessor* createPluginFilter();\n");
+
+        const ottResult = runExtractor(ottSource);
+        const enhancerResult = runExtractor(enhancerSource);
+        const ambiguousResult = runExtractor(ambiguousSource);
+        const missingResult = runExtractor(missingSource);
+
+        assert.equal(ottResult.status, 0, ottResult.stderr);
+        assert.match(`${ottResult.stdout}${ottResult.stderr}`, /-- OttLab/);
+        assert.equal(enhancerResult.status, 0, enhancerResult.stderr);
+        assert.match(`${enhancerResult.stdout}${enhancerResult.stderr}`, /-- CosimoEnhancer/);
+        assert.notEqual(ambiguousResult.status, 0);
+        assert.match(ambiguousResult.stderr, /Expected exactly one.*found 2/s);
+        assert.notEqual(missingResult.status, 0);
+        assert.match(missingResult.stderr, /Expected exactly one.*found 0/s);
+    } finally {
+        await rm(tempRoot, { recursive: true, force: true });
+    }
 });
 
 test("fx_prod_install_accepts_all_with_dry_run_without_swallowing_unknown_flags", async () => {
@@ -141,6 +214,7 @@ test("fx_prod_install_accepts_all_with_dry_run_without_swallowing_unknown_flags"
         clean: false,
         dryRun: true,
         help: false,
+        cmajExecutable: null,
     });
     assert.deepEqual(prodModule.parseArgs(["node", "prod-effect.mjs", "build", "seqfx", "--clean"]), {
         action: "build",
@@ -148,6 +222,7 @@ test("fx_prod_install_accepts_all_with_dry_run_without_swallowing_unknown_flags"
         clean: true,
         dryRun: false,
         help: false,
+        cmajExecutable: null,
     });
     assert.throws(
         () => prodModule.parseArgs(["node", "prod-effect.mjs", "install", "all", "--wat"]),

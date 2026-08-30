@@ -10,6 +10,7 @@ PRODUCTION_CMAKE_CALLERS = (
     "ios_auv3/CMakeLists.txt",
     "tests/native/CMakeLists.txt",
     "tools/cmajor_external_codegen/CMakeLists.txt",
+    "tools/cmajor_command_build/CMakeLists.txt",
     "tools/cmajor_runtime_build/CMakeLists.txt",
     "tools/cmajor_web_runtime/CMakeLists.txt",
     "tools/cmajplugin_build/CMakeLists.txt",
@@ -88,8 +89,8 @@ def test_t26_runner_builds_against_research_juce_7_through_cpm() -> None:
     )
 
 
-PRODUCTION_CMAJOR_COMMIT = "f1c9a9a8e85dcc82141326a2fc1c5160241f346c"
-PRODUCTION_CHOC_COMMIT = "037e34a2b382175c8bee4be5a0707724130f10e8"
+PRODUCTION_CMAJOR_COMMIT = "a97d8846605c433db561d07f23fc9ff372e20ced"
+PRODUCTION_CHOC_COMMIT = "98b52fb54c3b9fec03c0c13218f6557aef33eabe"
 PRODUCTION_JUCE_COMMIT = "501c07674e1ad693085a7e7c398f205c2677f5da"
 
 

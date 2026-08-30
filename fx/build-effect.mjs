@@ -53,7 +53,6 @@ export const effectPlugins = {
         juceOut: "build/enhancer_juce",
         cmakeTarget: "CosimoEnhancer",
         productName: "CosimoEnhancer",
-        generatedHostLatencySamples: 60,
         runtimeSources: [
             { repoPath: "cmajor/Enhancer.cmajor", runtimePath: "Enhancer.cmajor" },
             { repoPath: "fx/enhancer/EnhancerPlugin.cmajor", runtimePath: "EnhancerPlugin.cmajor" },
@@ -65,7 +64,6 @@ export const effectPlugins = {
         juceOut: "build/enhancer_lite_juce",
         cmakeTarget: "CosimoEnhancerLite",
         productName: "CosimoEnhancerLite",
-        generatedHostLatencySamples: 3,
         runtimeSources: [
             { repoPath: "cmajor/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
             { repoPath: "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor", runtimePath: "EnhancerLiteSpectrumAnalyzer.cmajor" },
@@ -78,7 +76,6 @@ export const effectPlugins = {
         juceOut: "build/enhancer_lite_shelves_audition_juce",
         cmakeTarget: "CosimoEnhancerLiteShelvesAudition",
         productName: "CosimoEnhancerLiteShelvesAudition",
-        generatedHostLatencySamples: 3,
         includeInAll: false,
         runtimeSources: [
             { repoPath: "cmajor/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
