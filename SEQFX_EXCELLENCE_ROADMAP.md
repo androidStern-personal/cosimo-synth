@@ -1,6 +1,6 @@
 # SeqFX Excellence Roadmap
 
-Status: implementation in progress; Phases 0–1 frozen at the research checkpoint
+Status: implementation in progress; Phases 0–2 complete, Phase 3 next
 Owner thread: `01a05051-d7c7-7e13-bb60-58968b6392cf`
 Branch: `codex/seqfx-excellence-01a05051`
 Worktree: `/Users/winterfell/.codex/worktrees/seqfx-excellence-01a05051/cosimo-synth`
@@ -15,6 +15,7 @@ Execution evidence:
 - Requested-effect matrix: `research/seqfx/effect-benchmark-matrix.md`
 - Comb research and selection: `research/seqfx/comb-research.md` and
   `research/seqfx/comb-lab-decision.md`
+- Sparse state/domain checkpoint: `research/seqfx/state-v7-evidence.md`
 
 ## 1. Outcome
 
@@ -259,6 +260,7 @@ SeqFxStateV7
         params (current effect only)
         aux (only enabled/non-default data)
         memories? (only effect types actually visited on this block)
+        stepOverrides? (rare legacy continuation-cell differences, without a false retrigger)
 ```
 
 Rules:
@@ -270,6 +272,7 @@ Rules:
 - The bridge reads v7 first, otherwise parses and migrates the legacy `seqfx.v6` version-5 payload.
 - Legacy inactive-cell defaults are discarded because they have no audible meaning.
 - Legacy active contiguous steps become blocks and keep mix, current parameters, aux state, and meaningful per-effect memories.
+- Legacy per-cell values inside one non-retriggering block remain optional sparse `stepOverrides`; splitting them into new blocks would change trigger/capture behavior.
 - Migration is idempotent and never rewrites state until parsing succeeds.
 - Preset parsing is strict; malformed public presets fail with a useful typed error instead of silently becoming Init.
 - Runtime upload remains a dense fixed-size projection so the Cmajor event contract stays deterministic.

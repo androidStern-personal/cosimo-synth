@@ -42,6 +42,7 @@ const {
     createDefaultSeqFxState,
     getSeqFxStepValueSnapshot,
     parseStrictSeqFxStateV5,
+    parseStrictSeqFxStateV7,
     serializeSeqFxState,
     normalizeSeqFxState,
 } = stateModule;
@@ -64,11 +65,12 @@ function assertDefaultAuxMatchesParams(step, laneIndex) {
     });
 }
 
-test("default_seqfx_v6_storage_key_contains_four_serial_chains_with_empty_effect_steps_and_aux_source_defaults", () => {
+test("default_seqfx_v7_runtime_projection_contains_four_serial_chains with empty effect steps and aux defaults", () => {
     const state = createDefaultSeqFxState();
 
-    assert.equal(stateModule.SEQFX_STATE_KEY, "seqfx.v6");
-    assert.equal(state.version, 5);
+    assert.equal(stateModule.SEQFX_STATE_KEY, "seqfx.v7");
+    assert.equal(stateModule.SEQFX_LEGACY_STATE_KEY, "seqfx.v6");
+    assert.equal(state.version, 7);
     assert.equal(state.patterns.length, SEQFX_PATTERN_COUNT);
 
     for (const pattern of state.patterns) {
@@ -87,6 +89,15 @@ test("default_seqfx_v6_storage_key_contains_four_serial_chains_with_empty_effect
             }
         }
     }
+
+    const serialized = serializeSeqFxState(state);
+    const stored = JSON.parse(serialized);
+    assert.equal(stored.version, 7);
+    assert.equal(stored.patterns.length, SEQFX_PATTERN_COUNT);
+    assert.equal(stored.patterns[0].chains.length, SEQFX_LANE_COUNT);
+    assert.deepEqual(stored.patterns[0].chains[0].blocks, []);
+    assert.ok(serialized.length < 16 * 1024);
+    assert.deepEqual(parseStrictSeqFxStateV7(serialized), state);
 
     const upload = buildSeqPatternUpload(state, {
         patternIndex: 0,
@@ -259,6 +270,7 @@ test("seqfx_aux_end_values_clamp_and_round_like_effect_parameters", () => {
 
 test("seqfx_strict_v5_parser_rejects_old_aux_curve_payloads_under_the_new_key", () => {
     const oldShaped = createDefaultSeqFxState();
+    oldShaped.version = 5;
     oldShaped.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux = {
         curve: "linear",
         targets: oldShaped.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux.targets,
@@ -521,7 +533,7 @@ test("adjacent_different_effect_steps_are_separate_blocks_even_without_a_second_
 test("default_seqfx_state_contains_twelve_complete_four_lane_patterns", () => {
     const state = createDefaultSeqFxState();
 
-    assert.equal(state.version, 5);
+    assert.equal(state.version, 7);
     assert.equal(state.patterns.length, SEQFX_PATTERN_COUNT);
 
     for (const pattern of state.patterns) {

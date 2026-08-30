@@ -19,6 +19,8 @@ export type RuntimeEndpointDependency = {
 
 export type StoredStateRuntimeMirrorOptions<TState> = {
     stateKey: string;
+    /** Ordered read-only fallbacks used only when the primary key is absent. */
+    fallbackStateKeys?: string[];
     /** Return null to reject an invalid document without changing the runtime snapshot. */
     deserializeStoredState: (value: unknown) => TState | null;
     buildRuntimeEvents: (
@@ -83,6 +85,7 @@ export class StoredStateRuntimeMirror<TState> {
     private readonly options: StoredStateRuntimeMirrorOptions<TState>;
     private readonly parameterEndpointIDs: string[];
     private readonly runtimeEndpointDependencies: RuntimeEndpointDependency[];
+    private readonly stateKeys: string[];
     private readonly parameterValues = new Map<string, unknown>();
     private readonly parameterListeners = new Map<string, (value: unknown) => void>();
     private readonly runtimeEndpointValues = new Map<string, unknown>();
@@ -96,10 +99,13 @@ export class StoredStateRuntimeMirror<TState> {
     private lastAppliedToken: string | null = null;
     private lastAppliedRuntimeEndpointsToken: string | null = null;
     private lastAppliedSnapshot: StoredStateRuntimeSnapshot<TState> | null = null;
+    private pendingStateKeyIndex: number | null = null;
+    private activeStateKeyIndex: number | null = null;
 
     constructor(connection: PatchConnectionLike, options: StoredStateRuntimeMirrorOptions<TState>) {
         this.connection = connection;
         this.options = options;
+        this.stateKeys = [...new Set([options.stateKey, ...(options.fallbackStateKeys ?? [])])];
         this.parameterEndpointIDs = [...new Set(options.parameterEndpointIDs ?? [])];
         this.runtimeEndpointDependencies = dedupeRuntimeEndpointDependencies(options.runtimeEndpointDependencies ?? []);
         this.handleStoredStateValue = this.handleStoredStateValue.bind(this);
@@ -111,6 +117,8 @@ export class StoredStateRuntimeMirror<TState> {
         }
 
         this.started = true;
+        this.pendingStateKeyIndex = null;
+        this.activeStateKeyIndex = null;
         this.connection.addStoredStateValueListener?.(this.handleStoredStateValue);
 
         for (const endpointID of this.parameterEndpointIDs) {
@@ -158,14 +166,17 @@ export class StoredStateRuntimeMirror<TState> {
     private requestStoredState() {
         if (typeof this.connection.requestFullStoredState === "function") {
             this.connection.requestFullStoredState((storedState) => {
-                const storedValue = getFullStoredStateValue(storedState, this.options.stateKey);
-
-                if (storedValue.found) {
-                    this.applyStoredValue(storedValue.value);
-                    return;
+                for (let keyIndex = 0; keyIndex < this.stateKeys.length; keyIndex += 1) {
+                    const storedValue = getFullStoredStateValue(storedState, this.stateKeys[keyIndex]);
+                    if (storedValue.found && storedValue.value != null) {
+                        this.activeStateKeyIndex = keyIndex;
+                        this.applyStoredValue(storedValue.value);
+                        return;
+                    }
                 }
 
                 if (this.options.applyDefaultRuntimeStateWhenMissing) {
+                    this.activeStateKeyIndex = null;
                     this.applyStoredValue(undefined);
                 }
             });
@@ -173,7 +184,7 @@ export class StoredStateRuntimeMirror<TState> {
         }
 
         if (typeof this.connection.requestStoredStateValue === "function") {
-            this.connection.requestStoredStateValue(this.options.stateKey);
+            this.requestStateKeyAtIndex(0);
             return;
         }
 
@@ -188,15 +199,49 @@ export class StoredStateRuntimeMirror<TState> {
         }
 
         const nextMessage = message as { key?: unknown; value?: unknown };
-        if (nextMessage.key !== this.options.stateKey) {
+        if (typeof nextMessage.key !== "string") {
             return;
         }
 
-        if (nextMessage.value === undefined && !this.options.applyDefaultRuntimeStateWhenMissing) {
+        const keyIndex = this.stateKeys.indexOf(nextMessage.key);
+        if (keyIndex < 0) {
             return;
         }
 
+        const isPendingResponse = this.pendingStateKeyIndex === keyIndex;
+        if (isPendingResponse) {
+            this.pendingStateKeyIndex = null;
+        }
+
+        if (nextMessage.value == null && isPendingResponse && keyIndex + 1 < this.stateKeys.length) {
+            this.activeStateKeyIndex = null;
+            this.requestStateKeyAtIndex(keyIndex + 1);
+            return;
+        }
+
+        if (nextMessage.value == null && !this.options.applyDefaultRuntimeStateWhenMissing) {
+            return;
+        }
+
+        if (this.activeStateKeyIndex !== null && keyIndex > this.activeStateKeyIndex) {
+            return;
+        }
+
+        this.activeStateKeyIndex = nextMessage.value == null ? null : keyIndex;
         this.applyStoredValue(nextMessage.value);
+    }
+
+    private requestStateKeyAtIndex(keyIndex: number) {
+        if (keyIndex >= this.stateKeys.length) {
+            if (this.options.applyDefaultRuntimeStateWhenMissing) {
+                this.activeStateKeyIndex = null;
+                this.applyStoredValue(undefined);
+            }
+            return;
+        }
+
+        this.pendingStateKeyIndex = keyIndex;
+        this.connection.requestStoredStateValue?.(this.stateKeys[keyIndex]);
     }
 
     private getParameterListener(endpointID: string) {

@@ -2,10 +2,11 @@ import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import { createStoredStateRuntimeMirror } from "../../../ui/shared/stored-state-runtime-mirror";
 import {
     SEQFX_PATTERN_COUNT,
+    SEQFX_LEGACY_STATE_KEY,
     SEQFX_STATE_KEY,
     buildSeqPatternUpload,
     createDefaultSeqFxState,
-    parseStrictSeqFxStateV5,
+    parseSeqFxStoredState,
 } from "../view/seqfx-state";
 
 const patternSelectEndpointID = "patternSelect";
@@ -24,11 +25,12 @@ function resolvePatternIndex(value: unknown) {
 export function createSeqFxWorkerService(connection: PatchConnectionLike) {
     return createStoredStateRuntimeMirror(connection, {
         stateKey: SEQFX_STATE_KEY,
+        fallbackStateKeys: [SEQFX_LEGACY_STATE_KEY],
         parameterEndpointIDs: [patternSelectEndpointID],
         applyDefaultRuntimeStateWhenMissing: true,
         deserializeStoredState: (value) => value == null
             ? createDefaultSeqFxState()
-            : parseStrictSeqFxStateV5(value),
+            : parseSeqFxStoredState(value).state,
         buildRuntimeEvents: ({ state, parameters }) => [
             {
                 endpointID: patternUploadEndpointID,

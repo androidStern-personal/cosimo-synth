@@ -61,7 +61,13 @@ export type EffectSnapshotBankControllerOptions = {
     storedStateKey?: string;
     slotIDs?: readonly string[];
     storedStateAdapters?: EffectStoredStateAdapter[];
-    snapshotMigrations?: EffectSnapshotMigration[];
+    /**
+     * Contract migrations for stored snapshots. The function form derives
+     * source hashes from the live parameter contract after status arrives.
+     */
+    snapshotMigrations?:
+        | EffectSnapshotMigration[]
+        | ((currentContract: EffectPluginStateContract) => EffectSnapshotMigration[]);
     legacyBankProvider?: (context: { fullStoredState?: Record<string, unknown> }) => unknown | null | undefined;
     readClipboardText?: () => string | Promise<string>;
     writeClipboardText?: (text: string) => void | Promise<void>;
@@ -250,7 +256,8 @@ export class EffectSnapshotBankController {
     private readonly storedStateKey: string;
     private readonly slotIDs: readonly string[];
     private readonly storedStateAdapters: EffectStoredStateAdapter[];
-    private readonly snapshotMigrations: EffectSnapshotMigration[];
+    private readonly snapshotMigrationsOption: NonNullable<EffectSnapshotBankControllerOptions["snapshotMigrations"]>;
+    private resolvedSnapshotMigrations: { contractHash: string; migrations: EffectSnapshotMigration[] } | null = null;
     private readonly listeners = new Set<SnapshotBankListener>();
     private readonly parameterListenerCleanups: Array<() => void> = [];
     private readonly storedAdapterCleanups: Array<() => void> = [];
@@ -281,7 +288,7 @@ export class EffectSnapshotBankController {
         this.storedStateKey = options.storedStateKey ?? snapshotBankStoredStateKey(this.effectID);
         this.slotIDs = options.slotIDs ?? DEFAULT_EFFECT_SNAPSHOT_SLOT_IDS;
         this.storedStateAdapters = options.storedStateAdapters ?? [];
-        this.snapshotMigrations = options.snapshotMigrations ?? [];
+        this.snapshotMigrationsOption = options.snapshotMigrations ?? [];
         this.readClipboardText = options.readClipboardText;
         this.writeClipboardText = options.writeClipboardText;
         this.bank = createEmptyEffectSnapshotBank({ effectID: this.effectID, slotIDs: this.slotIDs });
@@ -436,13 +443,14 @@ export class EffectSnapshotBankController {
         return this.runMutation(() => {
             this.requireKnownSlot(slotID);
             const parsed = parseEffectSnapshotText(text);
+            const currentContract = this.requireCurrentContract();
             const snapshot = normalizeEffectSnapshot({
                 ...(parsed as EffectSnapshot),
                 slotID,
             }, {
-                currentContract: this.requireCurrentContract(),
+                currentContract,
                 storedStateAdapters: this.storedStateAdapters,
-                migrations: this.snapshotMigrations,
+                migrations: this.resolveSnapshotMigrations(currentContract),
             });
 
             const previousBank = this.bank;
@@ -538,13 +546,14 @@ export class EffectSnapshotBankController {
     }
 
     private bankWithSlot(slotID: string, snapshot: EffectSnapshot) {
+        const currentContract = this.requireCurrentContract();
         const normalizedSnapshot = normalizeEffectSnapshot({
             ...snapshot,
             slotID,
         }, {
-            currentContract: this.requireCurrentContract(),
+            currentContract,
             storedStateAdapters: this.storedStateAdapters,
-            migrations: this.snapshotMigrations,
+            migrations: this.resolveSnapshotMigrations(currentContract),
         });
         return {
             ...this.bank,
@@ -794,20 +803,22 @@ export class EffectSnapshotBankController {
     }
 
     private normalizeBank(payload: unknown) {
+        const currentContract = this.requireCurrentContract();
         return normalizeEffectSnapshotBank(payload, {
             effectID: this.effectID,
             slotIDs: this.slotIDs,
-            currentContract: this.requireCurrentContract(),
+            currentContract,
             storedStateAdapters: this.storedStateAdapters,
-            snapshotMigrations: this.snapshotMigrations,
+            snapshotMigrations: this.resolveSnapshotMigrations(currentContract),
         });
     }
 
     private normalizeSnapshotForCurrentContract(snapshot: EffectSnapshot) {
+        const currentContract = this.requireCurrentContract();
         return normalizeEffectSnapshot(snapshot, {
-            currentContract: this.requireCurrentContract(),
+            currentContract,
             storedStateAdapters: this.storedStateAdapters,
-            migrations: this.snapshotMigrations,
+            migrations: this.resolveSnapshotMigrations(currentContract),
         });
     }
 
@@ -815,16 +826,32 @@ export class EffectSnapshotBankController {
         this.suppressActiveSlotCaptureDepth += 1;
 
         try {
+            const currentContract = this.requireCurrentContract();
             return applyEffectSnapshot({
                 snapshot,
-                currentContract: this.requireCurrentContract(),
+                currentContract,
                 patchConnection: this.patchConnection,
                 storedStateAdapters: this.storedStateAdapters,
-                migrations: this.snapshotMigrations,
+                migrations: this.resolveSnapshotMigrations(currentContract),
             });
         } finally {
             this.suppressActiveSlotCaptureDepth = Math.max(0, this.suppressActiveSlotCaptureDepth - 1);
         }
+    }
+
+    private resolveSnapshotMigrations(currentContract: EffectPluginStateContract): EffectSnapshotMigration[] {
+        if (typeof this.snapshotMigrationsOption !== "function") {
+            return this.snapshotMigrationsOption;
+        }
+
+        if (this.resolvedSnapshotMigrations?.contractHash !== currentContract.hash) {
+            this.resolvedSnapshotMigrations = {
+                contractHash: currentContract.hash,
+                migrations: this.snapshotMigrationsOption(currentContract),
+            };
+        }
+
+        return this.resolvedSnapshotMigrations.migrations;
     }
 
     private restoreBankAndSoundAfterApplyFailure(

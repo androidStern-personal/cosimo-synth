@@ -2,7 +2,8 @@ import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import type { EffectStoredStateAdapter } from "../../../ui/shared/effects/effect-preset-v2";
 import {
     SEQFX_STATE_KEY,
-    parseStrictSeqFxStateV5,
+    SEQFX_STATE_VERSION,
+    parseSeqFxStoredState,
     serializeSeqFxState,
 } from "./seqfx-state";
 import type { SeqFxRuntimeBridge } from "./seqfx-runtime-bridge";
@@ -16,11 +17,11 @@ export function createSeqFxPresetStateAdapter({
 }): EffectStoredStateAdapter {
     return {
         key: SEQFX_STATE_KEY,
-        schemaVersion: 5,
+        schemaVersion: SEQFX_STATE_VERSION,
         getContract() {
             return {
                 key: SEQFX_STATE_KEY,
-                schemaVersion: 5,
+                schemaVersion: SEQFX_STATE_VERSION,
                 required: true,
             };
         },
@@ -28,13 +29,13 @@ export function createSeqFxPresetStateAdapter({
             return serializeSeqFxState(bridge.getState());
         },
         normalizeForPreset(value: unknown) {
-            return serializeSeqFxState(parseStrictSeqFxStateV5(value));
+            return serializeSeqFxState(parseSeqFxStoredState(value).state);
         },
         serializeForPreset(value: unknown) {
-            return serializeSeqFxState(parseStrictSeqFxStateV5(value));
+            return serializeSeqFxState(parseSeqFxStoredState(value).state);
         },
         apply(value: unknown) {
-            bridge.replaceStateFromPreset(parseStrictSeqFxStateV5(value));
+            bridge.replaceStateFromPreset(parseSeqFxStoredState(value).state);
         },
         subscribe(listener: () => void) {
             return bridge.subscribe(() => listener());

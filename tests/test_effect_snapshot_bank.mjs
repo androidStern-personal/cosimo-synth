@@ -300,6 +300,7 @@ async function createController(options = {}) {
         patchConnection,
         storedStateKey: snapshotBankStoredStateKey("unit"),
         storedStateAdapters: options.storedStateAdapters ?? [],
+        snapshotMigrations: options.snapshotMigrations,
         legacyBankProvider: options.legacyBankProvider,
         readClipboardText: options.readClipboardText,
         writeClipboardText: options.writeClipboardText,
@@ -307,6 +308,60 @@ async function createController(options = {}) {
 
     return { controller, patchConnection, key: snapshotBankStoredStateKey("unit") };
 }
+
+test("snapshot_bank_derives_contract_migrations_after_live_status_arrives", async () => {
+    const { buildPluginStateContract, buildCanonicalPluginStateContract } = await loadSnapshotBankModule();
+    const currentContract = buildPluginStateContract({ effectID: "unit", status });
+    const legacyContract = buildCanonicalPluginStateContract({
+        effectID: "unit",
+        parameters: [currentContract.parameters.find((entry) => entry.endpointID === "mix")],
+    });
+    const legacySnapshot = {
+        kind: "cosimo.effectSnapshot",
+        version: 2,
+        effectID: "unit",
+        slotID: "A",
+        label: "Legacy A",
+        contract: legacyContract,
+        parameters: { mix: 17 },
+        storedState: {},
+    };
+    const bank = await createBankPayload({
+        activeSlotID: "A",
+        slots: { ...(await createBankPayload()).slots, A: legacySnapshot },
+    });
+    let migrationFactoryCalls = 0;
+    const { controller } = await createController({
+        patchOptions: {
+            storedState: { "cosimo.effectSnapshotBank.unit.v1": bank },
+        },
+        snapshotMigrations(liveContract) {
+            migrationFactoryCalls += 1;
+            return [{
+                effectID: "unit",
+                fromHash: legacyContract.hash,
+                toHash: liveContract.hash,
+                migrate(snapshot) {
+                    return {
+                        ...snapshot,
+                        contract: liveContract,
+                        parameters: { mix: snapshot.parameters.mix, tone: 5 },
+                    };
+                },
+            }];
+        },
+    });
+
+    controller.attach();
+    const state = controller.getState();
+
+    assert.equal(state.lastError, null);
+    assert.equal(state.slots.A.contract.hash, currentContract.hash);
+    assert.deepEqual(state.slots.A.parameters, { mix: 17, tone: 5 });
+    assert.equal(migrationFactoryCalls, 1);
+
+    controller.detach();
+});
 
 test("snapshot_bank_hydrates_existing_stored_bank_without_writing_on_open", async () => {
     const slot = await createSnapshot({ slotID: "B", parameters: { mix: 13, tone: 8 }, label: "saved slot" });

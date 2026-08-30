@@ -13,6 +13,14 @@ namespace seqfx
     let effectCrusher = 2;
     let effectTapeStop = 3;
     let effectStutter = 4;
+    let effectPitch = 5;
+    let effectComb = 6;
+    let effectRing = 7;
+    let effectReverse = 8;
+    let effectTalkBox = 9;
+    let effectVibro = 10;
+    let effectFlange = 11;
+    let effectDirty = 12;
     let auxRateModeTempo = 0;
     let auxRateModeSlice = 1;
     let maxTapeSeconds = 1.0f;
@@ -580,7 +588,7 @@ processor SeqFx [[ main ]]
             {
                 let nextActive = upload.activeSteps[lane, step];
                 let nextEffectType = nextActive
-                    ? seqfx::clampInt (upload.effectTypes[lane, step], seqfx::effectEmpty, seqfx::effectStutter)
+                    ? seqfx::clampInt (upload.effectTypes[lane, step], seqfx::effectEmpty, seqfx::effectDirty)
                     : seqfx::effectEmpty;
                 let watchesCurrentPlayback = step == currentStep
                     || (currentLaneEffect != seqfx::effectEmpty && step == currentLaneBlockStart);
@@ -588,7 +596,7 @@ processor SeqFx [[ main ]]
                 if (watchesCurrentPlayback && ! currentCellChanged)
                 {
                     let currentEffectType = activeSteps[lane, step]
-                        ? seqfx::clampInt (stepEffectTypes[lane, step], seqfx::effectEmpty, seqfx::effectStutter)
+                        ? seqfx::clampInt (stepEffectTypes[lane, step], seqfx::effectEmpty, seqfx::effectDirty)
                         : seqfx::effectEmpty;
 
                     if (nextActive != activeSteps[lane, step]
@@ -839,7 +847,7 @@ processor SeqFx [[ main ]]
         if (! activeSteps[lane, stepIndex])
             return seqfx::effectEmpty;
 
-        return seqfx::clampInt (stepEffectTypes[lane, stepIndex], seqfx::effectEmpty, seqfx::effectStutter);
+        return seqfx::clampInt (stepEffectTypes[lane, stepIndex], seqfx::effectEmpty, seqfx::effectDirty);
     }
 
     float32 segmentDurationFrames (wrap<seqfx::laneCount> lane, int32 step)

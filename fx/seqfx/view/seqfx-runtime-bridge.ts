@@ -1,6 +1,8 @@
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import {
+    SEQFX_LEGACY_STATE_KEY,
     SEQFX_STATE_KEY,
+    SEQFX_STATE_VERSION,
     applySeqFxBlockAuxSourceEdit,
     applySeqFxBlockAuxTargetEndEdit,
     applySeqFxBlockAuxTargetToggle,
@@ -28,7 +30,9 @@ import {
     createDefaultSeqFxState,
     getSeqFxStepValueSnapshot,
     normalizeSeqFxState,
+    parseSeqFxStoredState,
     parseStrictSeqFxStateV5,
+    parseStrictSeqFxStateV7,
     serializeSeqFxState,
     type SeqFxBlockAuxSourceEdit,
     type SeqFxBlockAuxTargetEndEdit,
@@ -69,6 +73,8 @@ export const SEQFX_ENDPOINTS = {
     internalPlay: "internalPlay",
     internalReset: "internalReset",
 } as const;
+
+export const SEQFX_UNDO_HISTORY_LIMIT = 100;
 
 type StoredStateMessage = {
     key?: unknown;
@@ -154,27 +160,43 @@ export class SeqFxRuntimeBridge {
     private readonly rateListeners = new Set<RateListener>();
     private readonly pendingStoredEchoes = new Map<string, number>();
     private attached = false;
-    private bootStoredStatePending = false;
+    private bootStoredStatePendingKey: string | null = null;
+    private hasCurrentV7State = false;
     private liveEditActive = false;
     private liveEditDirty = false;
+    private liveEditOrigin: SeqFxState | null = null;
     private pendingLiveNotify = false;
     private pendingLivePatternUpload: number | null = null;
     private pendingLiveFrame: number | null = null;
+    private readonly undoStack: SeqFxState[] = [];
+    private readonly redoStack: SeqFxState[] = [];
 
     private readonly handleStoredStateValue = (message: unknown) => {
         const stored = message as StoredStateMessage;
 
-        if (stored?.key !== SEQFX_STATE_KEY) {
+        if (stored?.key !== SEQFX_STATE_KEY && stored?.key !== SEQFX_LEGACY_STATE_KEY) {
             return;
         }
 
-        if (this.consumeStoredEcho(stored.value)) {
+        if (stored.key === SEQFX_STATE_KEY && this.consumeStoredEcho(stored.value)) {
             return;
         }
 
-        const isBootResponse = this.bootStoredStatePending;
-        this.bootStoredStatePending = false;
-        this.applyStoredState(stored.value);
+        const isBootResponse = this.bootStoredStatePendingKey === stored.key;
+        if (isBootResponse) {
+            this.bootStoredStatePendingKey = null;
+        }
+
+        if (stored.key === SEQFX_STATE_KEY && stored.value == null && isBootResponse) {
+            this.requestLegacyBootState();
+            return;
+        }
+
+        if (stored.key === SEQFX_LEGACY_STATE_KEY && this.hasCurrentV7State) {
+            return;
+        }
+
+        this.applyStoredState(stored.value, stored.key);
 
         if (isBootResponse) {
             this.requestRuntimeValuesAfterBootState();
@@ -233,35 +255,43 @@ export class SeqFxRuntimeBridge {
         if (typeof this.patchConnection.requestFullStoredState === "function") {
             this.patchConnection.requestFullStoredState((storedState) => {
                 const storedValue = getFullStoredStateValue(storedState, SEQFX_STATE_KEY);
+                const legacyStoredValue = getFullStoredStateValue(storedState, SEQFX_LEGACY_STATE_KEY);
 
-                if (storedValue.found) {
-                    this.bootStoredStatePending = false;
-                    this.applyStoredState(storedValue.value);
+                if (storedValue.found && storedValue.value != null) {
+                    this.bootStoredStatePendingKey = null;
+                    this.applyStoredState(storedValue.value, SEQFX_STATE_KEY);
+                    this.requestRuntimeValuesAfterBootState();
+                    return;
+                }
+
+                if (legacyStoredValue.found && legacyStoredValue.value != null) {
+                    this.bootStoredStatePendingKey = null;
+                    this.applyStoredState(legacyStoredValue.value, SEQFX_LEGACY_STATE_KEY);
                     this.requestRuntimeValuesAfterBootState();
                     return;
                 }
 
                 if (typeof this.patchConnection.requestStoredStateValue === "function") {
-                    this.bootStoredStatePending = true;
+                    this.bootStoredStatePendingKey = SEQFX_STATE_KEY;
                     this.patchConnection.requestStoredStateValue(SEQFX_STATE_KEY);
                     return;
                 }
 
-                this.bootStoredStatePending = false;
-                this.applyStoredState(undefined);
+                this.bootStoredStatePendingKey = null;
+                this.applyStoredState(undefined, SEQFX_STATE_KEY);
                 this.requestRuntimeValuesAfterBootState();
             });
             return;
         }
 
         if (typeof this.patchConnection.requestStoredStateValue === "function") {
-            this.bootStoredStatePending = true;
+            this.bootStoredStatePendingKey = SEQFX_STATE_KEY;
             this.patchConnection.requestStoredStateValue(SEQFX_STATE_KEY);
             return;
         }
 
-        this.bootStoredStatePending = false;
-        this.applyStoredState(undefined);
+        this.bootStoredStatePendingKey = null;
+        this.applyStoredState(undefined, SEQFX_STATE_KEY);
         this.requestRuntimeValuesAfterBootState();
     }
 
@@ -303,11 +333,49 @@ export class SeqFxRuntimeBridge {
         return this.rateIndex;
     }
 
-    replaceStateFromPreset(nextState: SeqFxState) {
+    replaceStateFromPreset(nextState: unknown) {
+        const parsedState = this.parseReplacementState(nextState);
         this.cancelLiveEdit();
-        this.state = parseStrictSeqFxStateV5(nextState);
+        this.clearHistory();
+        this.state = parsedState;
         this.persistState();
         this.notifyStateListeners();
+    }
+
+    canUndo() {
+        return this.undoStack.length > 0;
+    }
+
+    canRedo() {
+        return this.redoStack.length > 0;
+    }
+
+    undo() {
+        this.commitLiveEdit();
+        const previous = this.undoStack.pop();
+        if (!previous) {
+            return false;
+        }
+
+        this.redoStack.push(this.cloneStateForHistory(this.state));
+        this.state = previous;
+        this.persistState();
+        this.notifyStateListeners();
+        return true;
+    }
+
+    redo() {
+        this.commitLiveEdit();
+        const next = this.redoStack.pop();
+        if (!next) {
+            return false;
+        }
+
+        this.undoStack.push(this.cloneStateForHistory(this.state));
+        this.state = next;
+        this.persistState();
+        this.notifyStateListeners();
+        return true;
     }
 
     selectPattern(patternIndex: number) {
@@ -462,6 +530,7 @@ export class SeqFxRuntimeBridge {
 
         this.liveEditActive = true;
         this.liveEditDirty = false;
+        this.liveEditOrigin = this.cloneStateForHistory(this.state);
     }
 
     commitLiveEdit() {
@@ -471,10 +540,15 @@ export class SeqFxRuntimeBridge {
 
         this.flushLiveRuntimeUpdate();
         const shouldPersist = this.liveEditDirty;
+        const origin = this.liveEditOrigin;
         this.liveEditActive = false;
         this.liveEditDirty = false;
+        this.liveEditOrigin = null;
 
         if (shouldPersist) {
+            if (origin) {
+                this.pushUndoState(origin);
+            }
             this.persistState();
         }
     }
@@ -486,12 +560,14 @@ export class SeqFxRuntimeBridge {
 
         this.liveEditActive = false;
         this.liveEditDirty = false;
+        this.liveEditOrigin = null;
         this.pendingLiveNotify = false;
         this.pendingLivePatternUpload = null;
         this.pendingLiveFrame = null;
     }
 
     private commitState(nextState: SeqFxState, editedPatternIndex: number) {
+        const previous = this.state;
         this.state = normalizeSeqFxState(nextState);
         if (this.liveEditActive) {
             this.liveEditDirty = true;
@@ -499,17 +575,26 @@ export class SeqFxRuntimeBridge {
             return;
         }
 
+        this.pushUndoState(previous);
         this.persistState();
         this.notifyStateListeners();
     }
 
-    private applyStoredState(rawState: unknown) {
-        this.cancelLiveEdit();
+    private applyStoredState(rawState: unknown, key: string) {
         const nextState = rawState == null
             ? createDefaultSeqFxState()
-            : parseStrictSeqFxStateV5(rawState);
+            : key === SEQFX_STATE_KEY
+                ? parseStrictSeqFxStateV7(rawState)
+                : parseStrictSeqFxStateV5(rawState);
 
+        this.cancelLiveEdit();
+        this.clearHistory();
         this.state = nextState;
+        if (key === SEQFX_STATE_KEY) {
+            this.hasCurrentV7State = rawState != null;
+        } else if (rawState != null) {
+            this.persistState();
+        }
         this.notifyStateListeners();
     }
 
@@ -561,8 +646,60 @@ export class SeqFxRuntimeBridge {
 
     private persistState() {
         const serialized = serializeSeqFxState(this.state);
+        this.hasCurrentV7State = true;
         this.rememberStoredEcho(serialized);
         this.patchConnection.sendStoredStateValue?.(SEQFX_STATE_KEY, serialized);
+    }
+
+    private requestLegacyBootState() {
+        if (typeof this.patchConnection.requestStoredStateValue === "function") {
+            this.bootStoredStatePendingKey = SEQFX_LEGACY_STATE_KEY;
+            this.patchConnection.requestStoredStateValue(SEQFX_LEGACY_STATE_KEY);
+            return;
+        }
+
+        this.bootStoredStatePendingKey = null;
+        this.applyStoredState(undefined, SEQFX_STATE_KEY);
+        this.requestRuntimeValuesAfterBootState();
+    }
+
+    private parseReplacementState(value: unknown): SeqFxState {
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+            const candidate = value as { version?: unknown; patterns?: unknown };
+            const firstPattern = Array.isArray(candidate.patterns) ? candidate.patterns[0] : undefined;
+            if (
+                candidate.version === SEQFX_STATE_VERSION
+                && firstPattern
+                && typeof firstPattern === "object"
+                && !Array.isArray(firstPattern)
+                && Array.isArray((firstPattern as { lanes?: unknown }).lanes)
+            ) {
+                return normalizeSeqFxState(value);
+            }
+        }
+
+        return parseSeqFxStoredState(value).state;
+    }
+
+    private cloneStateForHistory(state: SeqFxState): SeqFxState {
+        return normalizeSeqFxState(state);
+    }
+
+    private pushUndoState(previous: SeqFxState) {
+        if (serializeSeqFxState(previous) === serializeSeqFxState(this.state)) {
+            return;
+        }
+
+        this.undoStack.push(this.cloneStateForHistory(previous));
+        if (this.undoStack.length > SEQFX_UNDO_HISTORY_LIMIT) {
+            this.undoStack.splice(0, this.undoStack.length - SEQFX_UNDO_HISTORY_LIMIT);
+        }
+        this.redoStack.length = 0;
+    }
+
+    private clearHistory() {
+        this.undoStack.length = 0;
+        this.redoStack.length = 0;
     }
 
     private requestRuntimeValuesAfterBootState() {

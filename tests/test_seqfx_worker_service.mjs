@@ -11,6 +11,7 @@ const workerModule = await loadUIModule(repoRoot, "fx/seqfx/worker/seqfx-worker-
 
 const {
     SEQFX_EFFECT_TYPES,
+    SEQFX_LEGACY_STATE_KEY,
     SEQFX_LANES,
     SEQFX_STATE_KEY,
     applySeqFxBlockCreate,
@@ -156,7 +157,7 @@ test("seqfx worker uploads the selected saved pattern from Cmajor stored-state v
     assert.deepEqual(connection.storedWrites, []);
 });
 
-test("seqfx worker ignores old state keys and applies a default empty pattern when seqfx.v6 is missing", () => {
+test("seqfx worker ignores unsupported old state keys when v7 and the v6 fallback are missing", () => {
     const oldKeyState = createStateWithBlock({
         patternIndex: 0,
         lane: SEQFX_LANES.tapeStop,
@@ -186,7 +187,7 @@ test("seqfx worker ignores old state keys and applies a default empty pattern wh
     assert.deepEqual(connection.storedWrites, []);
 });
 
-test("seqfx worker treats Cmajor null in full stored state as missing seqfx.v6", () => {
+test("seqfx worker treats Cmajor null in full stored state as missing seqfx.v7", () => {
     const connection = new FakePatchConnection({
         values: {
             [SEQFX_STATE_KEY]: null,
@@ -209,8 +210,13 @@ test("seqfx worker treats Cmajor null in full stored state as missing seqfx.v6",
 });
 
 test("seqfx worker rejects old-shaped current seqfx state instead of normalizing missing aux", () => {
-    const savedState = createDefaultSeqFxState();
-    delete savedState.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux;
+    const savedState = JSON.parse(serializeSeqFxState(createDefaultSeqFxState()));
+    savedState.patterns[0].chains[SEQFX_LANES.crusher].blocks.push({
+        startStep: 0,
+        length: 1,
+        effectType: SEQFX_EFFECT_TYPES.crusher,
+        aux: { curve: "linear" },
+    });
     const connection = new FakePatchConnection({
         values: {
             [SEQFX_STATE_KEY]: JSON.stringify(savedState),
@@ -269,7 +275,7 @@ test("seqfx worker reuploads when patternSelect changes", () => {
     );
 });
 
-test("seqfx worker reuploads the selected pattern when seqfx.v6 changes", () => {
+test("seqfx worker reuploads the selected pattern when seqfx.v7 changes", () => {
     const connection = new FakePatchConnection({
         values: {
             [SEQFX_STATE_KEY]: serializeSeqFxState(createDefaultSeqFxState()),
@@ -301,4 +307,30 @@ test("seqfx worker reuploads the selected pattern when seqfx.v6 changes", () => 
         uploads[0].value.effectTypes[SEQFX_LANES.filter].slice(4, 6),
         [SEQFX_EFFECT_TYPES.filter, SEQFX_EFFECT_TYPES.filter],
     );
+});
+
+test("seqfx worker reads a valid version-5 seqfx.v6 fallback without writing stored state", () => {
+    const legacyState = createStateWithBlock({
+        patternIndex: 6,
+        lane: SEQFX_LANES.tapeStop,
+        startStep: 12,
+        length: 3,
+    });
+    legacyState.version = 5;
+    const connection = new FakePatchConnection({
+        values: {
+            [SEQFX_LEGACY_STATE_KEY]: JSON.stringify(legacyState),
+        },
+        parameters: {
+            patternSelect: 6,
+        },
+    });
+    const service = createSeqFxWorkerService(connection);
+
+    service.start();
+
+    const upload = patternUploads(connection).at(-1).value;
+    assert.deepEqual(upload.activeSteps[SEQFX_LANES.tapeStop].slice(12, 15), [true, true, true]);
+    assert.deepEqual(upload.triggerSteps[SEQFX_LANES.tapeStop].slice(12, 15), [true, false, false]);
+    assert.deepEqual(connection.storedWrites, []);
 });

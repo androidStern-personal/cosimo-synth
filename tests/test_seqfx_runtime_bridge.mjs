@@ -11,11 +11,13 @@ const bridgeModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-runtime-b
 
 const {
     SEQFX_EFFECT_TYPES,
+    SEQFX_LEGACY_STATE_KEY,
     SEQFX_LANES,
     SEQFX_STATE_KEY,
     SEQFX_PARAM_COUNT,
     applySeqFxBlockCreate,
     createDefaultSeqFxState,
+    parseStrictSeqFxStateV7,
     serializeSeqFxState,
 } = stateModule;
 
@@ -148,7 +150,7 @@ function latestStoredSeqFxState(connection) {
     const write = connection.storedWrites.at(-1);
     assert.equal(write?.key, SEQFX_STATE_KEY);
     assert.equal(typeof write.value, "string");
-    return JSON.parse(write.value);
+    return parseStrictSeqFxStateV7(write.value);
 }
 
 test("boot_without_saved_seqfx_state_hydrates_defaults_without_persisting_or_uploading", () => {
@@ -202,8 +204,13 @@ test("boot_ignores_old_seqfx_v3_state_and_uses_defaults_when_current_key_is_miss
 });
 
 test("boot_rejects_old_shaped_current_seqfx_state_instead_of_filling_missing_aux", () => {
-    const savedState = createDefaultSeqFxState();
-    delete savedState.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux;
+    const savedState = JSON.parse(serializeSeqFxState(createDefaultSeqFxState()));
+    savedState.patterns[0].chains[SEQFX_LANES.crusher].blocks.push({
+        startStep: 0,
+        length: 1,
+        effectType: SEQFX_EFFECT_TYPES.crusher,
+        aux: { curve: "linear", targets: [] },
+    });
     const connection = new FakePatchConnection({
         [SEQFX_STATE_KEY]: JSON.stringify(savedState),
     });
@@ -827,4 +834,121 @@ test("rate_parameter_defaults_to_sixteenth_note_grid_and_notifies_snapped_subscr
     unsubscribe();
     connection.emitParameter(SEQFX_ENDPOINTS.rate, 0);
     assert.equal(observedRates.at(-1), 2);
+});
+
+test("boot migrates a valid seqfx.v6 version-5 document once and gives v7 precedence thereafter", () => {
+    let legacyState = createDefaultSeqFxState();
+    legacyState = applySeqFxBlockCreate(legacyState, {
+        patternIndex: 3,
+        lane: SEQFX_LANES.tapeStop,
+        startStep: 7,
+        length: 3,
+    });
+    legacyState.version = 5;
+    const legacyText = JSON.stringify(legacyState);
+    const connection = new FakePatchConnection({
+        [SEQFX_LEGACY_STATE_KEY]: legacyText,
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+
+    bridge.attach();
+    bridge.requestBootState();
+
+    assert.equal(connection.storedWrites.length, 1);
+    assert.equal(connection.storedWrites[0].key, SEQFX_STATE_KEY);
+    assert.equal(connection.storedState[SEQFX_LEGACY_STATE_KEY], legacyText);
+    assert.equal(JSON.parse(connection.storedWrites[0].value).version, 7);
+    assert.equal(bridge.getState().patterns[3].lanes[SEQFX_LANES.tapeStop].steps[7].active, true);
+
+    const secondBridge = new SeqFxRuntimeBridge(connection);
+    connection.storedWrites = [];
+    secondBridge.attach();
+    secondBridge.requestBootState();
+    assert.equal(connection.storedWrites.length, 0);
+    assert.equal(secondBridge.getState().patterns[3].lanes[SEQFX_LANES.tapeStop].steps[7].active, true);
+});
+
+test("undo and redo operate on committed edits and clear redo after a divergent edit", () => {
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(createDefaultSeqFxState()),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+    bridge.attach();
+    bridge.requestBootState();
+    connection.storedWrites = [];
+
+    assert.equal(bridge.canUndo(), false);
+    assert.equal(bridge.canRedo(), false);
+    bridge.createBlock({ patternIndex: 0, lane: 0, startStep: 2, length: 2 });
+    assert.equal(bridge.canUndo(), true);
+    assert.equal(bridge.undo(), true);
+    assert.equal(bridge.getState().patterns[0].lanes[0].steps[2].active, false);
+    assert.equal(bridge.canRedo(), true);
+    assert.equal(bridge.redo(), true);
+    assert.equal(bridge.getState().patterns[0].lanes[0].steps[2].active, true);
+
+    assert.equal(bridge.undo(), true);
+    bridge.createBlock({ patternIndex: 0, lane: 0, startStep: 9, length: 1 });
+    assert.equal(bridge.canRedo(), false);
+    assert.equal(connection.storedWrites.length, 5);
+});
+
+test("a live gesture creates one undo entry and authoritative preset load clears history", () => {
+    let initialState = createDefaultSeqFxState();
+    initialState = applySeqFxBlockCreate(initialState, {
+        patternIndex: 0,
+        lane: SEQFX_LANES.filter,
+        startStep: 4,
+        length: 2,
+    });
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+    bridge.attach();
+    bridge.requestBootState();
+    connection.storedWrites = [];
+
+    bridge.beginLiveEdit();
+    bridge.setBlockParam({ patternIndex: 0, lane: 0, startStep: 4, paramIndex: 1, value: 900 });
+    bridge.setBlockParam({ patternIndex: 0, lane: 0, startStep: 4, paramIndex: 1, value: 600 });
+    bridge.setBlockParam({ patternIndex: 0, lane: 0, startStep: 4, paramIndex: 1, value: 330 });
+    bridge.commitLiveEdit();
+
+    assert.equal(connection.storedWrites.length, 1);
+    assert.equal(bridge.canUndo(), true);
+    assert.equal(bridge.undo(), true);
+    assert.equal(bridge.getState().patterns[0].lanes[0].steps[4].params[1], 2_000);
+    assert.equal(bridge.canUndo(), false);
+    assert.equal(bridge.canRedo(), true);
+
+    bridge.replaceStateFromPreset(serializeSeqFxState(initialState));
+    assert.equal(bridge.canUndo(), false);
+    assert.equal(bridge.canRedo(), false);
+});
+
+test("invalid authoritative state is atomic and preserves current sound plus undo history", () => {
+    const connection = new FakePatchConnection({
+        [SEQFX_STATE_KEY]: serializeSeqFxState(createDefaultSeqFxState()),
+    });
+    const bridge = new SeqFxRuntimeBridge(connection);
+    bridge.attach();
+    bridge.requestBootState();
+    bridge.createBlock({ patternIndex: 0, lane: 0, startStep: 2, length: 2 });
+    const writesBeforeFailure = connection.storedWrites.length;
+
+    assert.equal(bridge.canUndo(), true);
+    assert.throws(() => bridge.replaceStateFromPreset("{}"), /version.*7.*legacy.*5/i);
+    assert.equal(bridge.canUndo(), true);
+    assert.equal(bridge.getState().patterns[0].lanes[0].steps[2].active, true);
+    assert.equal(connection.storedWrites.length, writesBeforeFailure);
+
+    assert.throws(() => {
+        for (const listener of connection.storedStateListeners) {
+            listener({ key: SEQFX_STATE_KEY, value: "{}" });
+        }
+    }, /must be 7/i);
+    assert.equal(bridge.canUndo(), true);
+    assert.equal(bridge.getState().patterns[0].lanes[0].steps[2].active, true);
+    assert.equal(connection.storedWrites.length, writesBeforeFailure);
 });

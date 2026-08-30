@@ -76,6 +76,10 @@ import {
     stopPointPercentToMultiplier,
 } from "./tape-stop-envelope";
 import { createSeqFxPresetStateAdapter } from "./seqfx-preset-adapter";
+import {
+    createSeqFxPresetMigrations,
+    createSeqFxSnapshotMigrations,
+} from "./seqfx-preset-migrations";
 import { SEQFX_ENDPOINTS, SeqFxRuntimeBridge } from "./seqfx-runtime-bridge";
 
 type SelectedCell = {
@@ -2560,11 +2564,13 @@ function SeqFxPresetBarHost({
         effectID: "seqfx",
         patchConnection,
         storedStateAdapters: [storedStateAdapter],
+        presetMigrations: createSeqFxPresetMigrations,
     }), [patchConnection, storedStateAdapter]);
     const snapshotController = useMemo(() => new EffectSnapshotBankController({
         effectID: "seqfx",
         patchConnection,
         storedStateAdapters: [storedStateAdapter],
+        snapshotMigrations: createSeqFxSnapshotMigrations,
     }), [patchConnection, storedStateAdapter]);
 
     useEffect(() => {

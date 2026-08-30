@@ -22,6 +22,7 @@ const {
     applySeqFxCellToggle,
     applySeqFxParamEdit,
     createDefaultSeqFxState,
+    parseStrictSeqFxStateV7,
     serializeSeqFxState,
 } = stateModule;
 
@@ -118,14 +119,14 @@ function patternUploads(connection) {
     return connection.events.filter((event) => event.endpointID === SEQFX_ENDPOINTS.patternUpload);
 }
 
-test("seqfx_adapter_contract_registers_required_seqfx_v6_state", () => {
+test("seqfx_adapter_contract_registers_required_seqfx_v7_state", () => {
     const connection = new FakePatchConnection();
     const bridge = new SeqFxRuntimeBridge(connection);
     const adapter = createSeqFxPresetStateAdapter({ bridge, patchConnection: connection });
 
     assert.deepEqual(adapter.getContract(), {
-        key: "seqfx.v6",
-        schemaVersion: 5,
+        key: "seqfx.v7",
+        schemaVersion: 7,
         required: true,
     });
 });
@@ -156,14 +157,14 @@ test("seqfx_adapter_capture_reads_bridge_state_not_dom_and_serializes_all_patter
     bridge.requestBootState();
 
     const serialized = adapter.capture();
-    const restored = JSON.parse(serialized);
+    const restored = parseStrictSeqFxStateV7(serialized);
 
     assert.equal(restored.patterns[7].lanes[SEQFX_LANES.filter].steps[5].active, true);
     assert.equal(restored.patterns[7].lanes[SEQFX_LANES.filter].steps[5].effectType, SEQFX_EFFECT_TYPES.filter);
     assert.equal(restored.patterns[7].lanes[SEQFX_LANES.filter].steps[5].params[1], 440);
 });
 
-test("seqfx_adapter_apply_writes_seqfx_v6_and_worker_uploads_selected_pattern", () => {
+test("seqfx_adapter_apply_writes_seqfx_v7_and_worker_uploads_selected_pattern", () => {
     let state = createDefaultSeqFxState();
     state = applySeqFxCellToggle(state, {
         patternIndex: 4,
@@ -265,7 +266,6 @@ test("seqfx_adapter_rejects_legacy_v1_state_instead_of_migrating", () => {
     });
     const legacyState = JSON.parse(serializeSeqFxState(state));
     legacyState.version = 1;
-    delete legacyState.patterns[2].lanes[SEQFX_LANES.crusher].steps[9].effectType;
 
     const connection = new FakePatchConnection({}, { patternSelect: 2 });
     const bridge = new SeqFxRuntimeBridge(connection);
@@ -278,10 +278,28 @@ test("seqfx_adapter_rejects_legacy_v1_state_instead_of_migrating", () => {
 
     assert.throws(
         () => adapter.apply(JSON.stringify(legacyState)),
-        /version 5 patterns/i,
+        /version.*7.*legacy.*5/i,
     );
     assert.deepEqual(connection.storedWrites, []);
     assert.deepEqual(connection.events, []);
+});
+
+test("seqfx_adapter_migrates_supported_version-5 preset state to sparse v7", () => {
+    let state = createDefaultSeqFxState();
+    state = applySeqFxCellToggle(state, {
+        patternIndex: 9,
+        lane: SEQFX_LANES.crusher,
+        step: 13,
+        active: true,
+    });
+    state.version = 5;
+    const connection = new FakePatchConnection({}, { patternSelect: 9 });
+    const bridge = new SeqFxRuntimeBridge(connection);
+    const adapter = createSeqFxPresetStateAdapter({ bridge, patchConnection: connection });
+
+    const normalized = adapter.normalizeForPreset(JSON.stringify(state));
+    assert.equal(JSON.parse(normalized).version, 7);
+    assert.equal(parseStrictSeqFxStateV7(normalized).patterns[9].lanes[SEQFX_LANES.crusher].steps[13].active, true);
 });
 
 test("seqfx_adapter_rejects_invalid_matrix_shape_in_presets_instead_of_normalizing_to_default", () => {
@@ -290,24 +308,26 @@ test("seqfx_adapter_rejects_invalid_matrix_shape_in_presets_instead_of_normalizi
     const adapter = createSeqFxPresetStateAdapter({ bridge, patchConnection: connection });
 
     assert.throws(() => adapter.normalizeForPreset({
-        version: 5,
+        version: 7,
         patterns: [],
-    }), /seqfx.*patterns/i);
+    }), /patterns.*12/i);
 });
 
 test("seqfx_adapter_rejects_old_shaped_state_without_aux_source", () => {
     const connection = new FakePatchConnection();
     const bridge = new SeqFxRuntimeBridge(connection);
     const adapter = createSeqFxPresetStateAdapter({ bridge, patchConnection: connection });
-    const presetState = createDefaultSeqFxState();
-    presetState.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux = {
-        curve: "linear",
-        targets: presetState.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux.targets,
-    };
+    const presetState = JSON.parse(serializeSeqFxState(createDefaultSeqFxState()));
+    presetState.patterns[0].chains[SEQFX_LANES.crusher].blocks.push({
+        startStep: 0,
+        length: 1,
+        effectType: SEQFX_EFFECT_TYPES.crusher,
+        aux: { curve: "linear" },
+    });
 
     assert.throws(
         () => adapter.normalizeForPreset(JSON.stringify(presetState)),
-        /source/i,
+        /aux\.curve/i,
     );
 });
 
@@ -315,13 +335,17 @@ test("seqfx_adapter_rejects_out_of_range_mix_values_instead_of_clamping_presets"
     const connection = new FakePatchConnection();
     const bridge = new SeqFxRuntimeBridge(connection);
     const adapter = createSeqFxPresetStateAdapter({ bridge, patchConnection: connection });
-    const presetState = createDefaultSeqFxState();
-
-    presetState.patterns[0].lanes[SEQFX_LANES.filter].steps[0].mix = 1.5;
+    const presetState = JSON.parse(serializeSeqFxState(createDefaultSeqFxState()));
+    presetState.patterns[0].chains[SEQFX_LANES.filter].blocks.push({
+        startStep: 0,
+        length: 1,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+        mix: 1.5,
+    });
 
     assert.throws(
         () => adapter.normalizeForPreset(JSON.stringify(presetState)),
-        /pattern 0 lane 0 step 0 mix value 1\.5 is outside 0 to 1/i,
+        /blocks\[0\]\.mix.*0 to 1/i,
     );
 });
 
@@ -329,16 +353,17 @@ test("seqfx_adapter_rejects_out_of_range_parameter_values_instead_of_clamping_pr
     const connection = new FakePatchConnection();
     const bridge = new SeqFxRuntimeBridge(connection);
     const adapter = createSeqFxPresetStateAdapter({ bridge, patchConnection: connection });
-    const presetState = createDefaultSeqFxState();
-
-    presetState.patterns[0].lanes[SEQFX_LANES.filter].steps[0].active = true;
-    presetState.patterns[0].lanes[SEQFX_LANES.filter].steps[0].trigger = true;
-    presetState.patterns[0].lanes[SEQFX_LANES.filter].steps[0].effectType = SEQFX_EFFECT_TYPES.filter;
-    presetState.patterns[0].lanes[SEQFX_LANES.filter].steps[0].params[1] = 20001;
+    const presetState = JSON.parse(serializeSeqFxState(createDefaultSeqFxState()));
+    presetState.patterns[0].chains[SEQFX_LANES.filter].blocks.push({
+        startStep: 0,
+        length: 1,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+        params: [0, 20_001, 500, 0.707, 1, 0, 0, 0],
+    });
 
     assert.throws(
         () => adapter.apply(JSON.stringify(presetState)),
-        /pattern 0 lane 0 step 0 param 1 value 20001 is outside 20 to 20000/i,
+        /blocks\[0\]\.params\[1\].*20 to 20000/i,
     );
     assert.equal(connection.storedWrites.length, 0);
     assert.equal(connection.events.length, 0);
@@ -348,15 +373,16 @@ test("seqfx_adapter_rejects_fractional_integer_parameter_values_in_presets", () 
     const connection = new FakePatchConnection();
     const bridge = new SeqFxRuntimeBridge(connection);
     const adapter = createSeqFxPresetStateAdapter({ bridge, patchConnection: connection });
-    const presetState = createDefaultSeqFxState();
-
-    presetState.patterns[0].lanes[SEQFX_LANES.filter].steps[0].active = true;
-    presetState.patterns[0].lanes[SEQFX_LANES.filter].steps[0].trigger = true;
-    presetState.patterns[0].lanes[SEQFX_LANES.filter].steps[0].effectType = SEQFX_EFFECT_TYPES.filter;
-    presetState.patterns[0].lanes[SEQFX_LANES.filter].steps[0].params[0] = 1.5;
+    const presetState = JSON.parse(serializeSeqFxState(createDefaultSeqFxState()));
+    presetState.patterns[0].chains[SEQFX_LANES.filter].blocks.push({
+        startStep: 0,
+        length: 1,
+        effectType: SEQFX_EFFECT_TYPES.filter,
+        params: [1.5, 2_000, 500, 0.707, 1, 0, 0, 0],
+    });
 
     assert.throws(
         () => adapter.serializeForPreset(JSON.stringify(presetState)),
-        /pattern 0 lane 0 step 0 param 0 must be an integer/i,
+        /blocks\[0\]\.params\[0\].*integer/i,
     );
 });

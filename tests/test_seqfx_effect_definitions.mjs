@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -64,4 +65,37 @@ test("Crush keeps persisted ID 2 while adopting the requested display name", () 
     assert.equal(crush.id, 2);
     assert.equal(crush.key, "crush");
     assert.equal(crush.name, "Crush");
+});
+
+test("Cmajor accepts every append-only effect ID without aliasing future effects to Stutter", async () => {
+    const source = await readFile(path.join(repoRoot, "fx/seqfx/SeqFx.cmajor"), "utf8");
+    const cmajorNames = {
+        empty: "effectEmpty",
+        filter: "effectFilter",
+        crusher: "effectCrusher",
+        tapeStop: "effectTapeStop",
+        stutter: "effectStutter",
+        pitch: "effectPitch",
+        comb: "effectComb",
+        ring: "effectRing",
+        reverse: "effectReverse",
+        talkBox: "effectTalkBox",
+        vibro: "effectVibro",
+        flange: "effectFlange",
+        dirty: "effectDirty",
+    };
+
+    for (const [key, cmajorName] of Object.entries(cmajorNames)) {
+        assert.match(source, new RegExp(`\\blet ${cmajorName} = ${SEQFX_EFFECT_TYPES[key]};`));
+    }
+
+    assert.equal(
+        [...source.matchAll(/clampInt \(stepEffectTypes\[[^\n]+effectEmpty, seqfx::(effect\w+)\)/g)]
+            .every((match) => match[1] === "effectDirty"),
+        true,
+    );
+    assert.doesNotMatch(
+        source,
+        /clampInt \(upload\.effectTypes\[[^\n]+effectEmpty, seqfx::effectStutter\)/,
+    );
 });
