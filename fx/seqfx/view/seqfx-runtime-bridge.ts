@@ -100,7 +100,19 @@ type StoredStateMessage = {
 };
 
 type BridgeListener = (state: SeqFxState) => void;
-type MonitorListener = (value: unknown) => void;
+type SeqFxMonitorVector = readonly [number, number, number, number];
+
+/** A monitor frame parsed from the Cmajor endpoint representation used by the SeqFX view. */
+export type SeqFxMonitorEvent = {
+    readonly stepIndex: number | null;
+    readonly stepDurationMs: number | null;
+    readonly transportRunning: boolean;
+    readonly auxCyclePhase: SeqFxMonitorVector | null;
+    readonly auxAmount: SeqFxMonitorVector | null;
+    readonly auxDurationMs: SeqFxMonitorVector | null;
+};
+
+type MonitorListener = (event: SeqFxMonitorEvent) => void;
 type RateListener = (rateIndex: number) => void;
 export type SeqFxGlobalControls = {
     enabled: boolean;
@@ -137,6 +149,78 @@ const DEFAULT_GLOBAL_CONTROLS: SeqFxGlobalControls = {
 
 function hasOwnValue(record: Record<string, unknown>, key: string) {
     return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function isSeqFxMonitorRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseMonitorTransportRunning(value: unknown): boolean | null {
+    if (value === true || value === 1 || value === "1" || value === "true") {
+        return true;
+    }
+
+    if (value === false || value === 0 || value === "0" || value === "false") {
+        return false;
+    }
+
+    return null;
+}
+
+function parseMonitorNumber(value: unknown): number | null {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function parseMonitorVector(
+    value: unknown,
+    minimum: number,
+    maximum: number,
+): SeqFxMonitorVector | null {
+    if (!Array.isArray(value)) {
+        return null;
+    }
+
+    const values: readonly unknown[] = value;
+    const normalize = (entry: unknown) => {
+        const numeric = parseMonitorNumber(entry);
+        return numeric === null ? 0 : Math.min(maximum, Math.max(minimum, numeric));
+    };
+
+    return [
+        normalize(values[0]),
+        normalize(values[1]),
+        normalize(values[2]),
+        normalize(values[3]),
+    ];
+}
+
+/**
+ * Parses direct and Cmajor-envelope monitor payloads without applying JavaScript truthiness.
+ * Invalid or missing transport tokens reject the whole frame so subscribers preserve prior state.
+ */
+export function parseSeqFxMonitorEvent(value: unknown): SeqFxMonitorEvent | null {
+    if (!isSeqFxMonitorRecord(value)) {
+        return null;
+    }
+
+    const eventCandidate = value.event ?? value;
+    if (!isSeqFxMonitorRecord(eventCandidate)) {
+        return null;
+    }
+
+    const transportRunning = parseMonitorTransportRunning(eventCandidate.transportRunning);
+    if (transportRunning === null) {
+        return null;
+    }
+
+    return {
+        stepIndex: parseMonitorNumber(eventCandidate.stepIndex),
+        stepDurationMs: parseMonitorNumber(eventCandidate.stepDurationMs),
+        transportRunning,
+        auxCyclePhase: parseMonitorVector(eventCandidate.auxCyclePhase, 0, 1),
+        auxAmount: parseMonitorVector(eventCandidate.auxAmount, 0, 1),
+        auxDurationMs: parseMonitorVector(eventCandidate.auxDurationMs, 0, Number.POSITIVE_INFINITY),
+    };
 }
 
 function getFullStoredStateValue(storedState: unknown, key: string) {
@@ -329,8 +413,13 @@ export class SeqFxRuntimeBridge {
     };
 
     private readonly handleMonitor = (value: unknown) => {
+        const event = parseSeqFxMonitorEvent(value);
+        if (event === null) {
+            return;
+        }
+
         for (const listener of this.monitorListeners) {
-            listener(value);
+            listener(event);
         }
     };
 

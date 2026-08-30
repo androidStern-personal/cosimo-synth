@@ -2953,34 +2953,22 @@ export function SeqFxPatchView({
             }
         });
         const unsubscribeMonitor = bridge.subscribeMonitor((monitor) => {
-            const event = (monitor as { event?: unknown })?.event ?? monitor;
-            const stepIndex = Number((event as { stepIndex?: unknown })?.stepIndex);
-            const stepDurationMs = Number((event as { stepDurationMs?: unknown })?.stepDurationMs);
-            const auxCyclePhase = (event as { auxCyclePhase?: unknown })?.auxCyclePhase;
-            const auxAmount = (event as { auxAmount?: unknown })?.auxAmount;
-            const auxDurationMs = (event as { auxDurationMs?: unknown })?.auxDurationMs;
-            const transportRunning = Boolean((event as { transportRunning?: unknown })?.transportRunning);
-            setPlayheadStep(Number.isFinite(stepIndex) ? stepIndex : null);
+            setPlayheadStep(monitor.stepIndex);
             if (bridge.getGlobalControls().clockMode === 1) {
-                setInternalRunning(transportRunning);
+                setInternalRunning(monitor.transportRunning);
             }
-            if (Number.isFinite(stepDurationMs) && stepDurationMs > 0) {
-                setObservedStepDurationMs(stepDurationMs);
+            if (monitor.stepDurationMs !== null && monitor.stepDurationMs > 0) {
+                setObservedStepDurationMs(monitor.stepDurationMs);
             }
-            if (Array.isArray(auxCyclePhase) || Array.isArray(auxAmount) || Array.isArray(auxDurationMs)) {
+            if (
+                monitor.auxCyclePhase !== null
+                || monitor.auxAmount !== null
+                || monitor.auxDurationMs !== null
+            ) {
                 setAuxMonitor({
-                    cyclePhase: Array.from({ length: 4 }, (_unused, index) => {
-                        const value = Number(Array.isArray(auxCyclePhase) ? auxCyclePhase[index] : 0);
-                        return Number.isFinite(value) ? clampNumber(value, 0, 1) : 0;
-                    }),
-                    amount: Array.from({ length: 4 }, (_unused, index) => {
-                        const value = Number(Array.isArray(auxAmount) ? auxAmount[index] : 0);
-                        return Number.isFinite(value) ? clampNumber(value, 0, 1) : 0;
-                    }),
-                    durationMs: Array.from({ length: 4 }, (_unused, index) => {
-                        const value = Number(Array.isArray(auxDurationMs) ? auxDurationMs[index] : 0);
-                        return Number.isFinite(value) ? Math.max(0, value) : 0;
-                    }),
+                    cyclePhase: monitor.auxCyclePhase === null ? [0, 0, 0, 0] : [...monitor.auxCyclePhase],
+                    amount: monitor.auxAmount === null ? [0, 0, 0, 0] : [...monitor.auxAmount],
+                    durationMs: monitor.auxDurationMs === null ? [0, 0, 0, 0] : [...monitor.auxDurationMs],
                 });
             }
         });

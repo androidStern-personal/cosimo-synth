@@ -1157,6 +1157,65 @@ test("seqfx_global_surface_wires_host_controls_loop_transport_and_edit_history",
     await page.close();
 });
 
+test("seqfx_internal_transport_parses_explicit_monitor_booleans_and_rejects_malformed_values", async () => {
+    const page = await browser.newPage({ viewport: { width: 1120, height: 680 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    const clock = page.locator('[data-role="seqfx-clock-mode"]');
+    const transport = page.locator('[data-role="seqfx-internal-transport"]');
+    const emitTransport = async (transportRunning, wrapped) => {
+        await page.evaluate(({ nextTransportRunning, useEnvelope }) => {
+            const event = {
+                patternIndex: 0,
+                stepIndex: 0,
+                transportRunning: nextTransportRunning,
+                stepProgress: 0,
+                stepDurationMs: 125,
+                auxCyclePhase: [0, 0, 0, 0],
+                auxAmount: [0, 0, 0, 0],
+                auxDurationMs: [0, 0, 0, 0],
+            };
+            window.__SEQFX_HARNESS__?.patchConnection.emitEndpoint(
+                "monitorOut",
+                useEnvelope ? { event } : event,
+            );
+        }, { nextTransportRunning: transportRunning, useEnvelope: wrapped });
+    };
+
+    await clock.selectOption("1");
+    await transport.waitFor({ state: "visible" });
+    assert.equal(await transport.isEnabled(), true);
+
+    for (const [index, token] of [true, 1, "1", "true"].entries()) {
+        await emitTransport(false, false);
+        await page.getByRole("button", { name: "Play internal clock", exact: true }).waitFor();
+        await emitTransport(token, index % 2 === 1);
+        await page.getByRole("button", { name: "Stop internal clock", exact: true }).waitFor();
+    }
+
+    for (const [index, token] of [false, 0, "0", "false"].entries()) {
+        await emitTransport(true, false);
+        await page.getByRole("button", { name: "Stop internal clock", exact: true }).waitFor();
+        await emitTransport(token, index % 2 === 1);
+        await page.getByRole("button", { name: "Play internal clock", exact: true }).waitFor();
+    }
+
+    await emitTransport(true, false);
+    await page.getByRole("button", { name: "Stop internal clock", exact: true }).waitFor();
+    for (const malformed of [undefined, null, 2, "", "false ", "TRUE", {}, []]) {
+        await emitTransport(malformed, true);
+        await page.waitForTimeout(20);
+        assert.equal(
+            await transport.getAttribute("aria-label"),
+            "Stop internal clock",
+            `malformed transport token ${String(malformed)} must preserve the prior state`,
+        );
+    }
+
+    await page.close();
+});
+
 test("seqfx_factory_content_and_first_use_hint_are_discoverable_atomic_and_undoable", async () => {
     const page = await browser.newPage({ viewport: { width: 1120, height: 680 } });
     await loadSeqFxHarness(page);

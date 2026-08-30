@@ -24,6 +24,7 @@ const {
 const {
     SEQFX_ENDPOINTS,
     SeqFxRuntimeBridge,
+    parseSeqFxMonitorEvent,
 } = bridgeModule;
 
 class FakePatchConnection {
@@ -105,6 +106,12 @@ class FakePatchConnection {
     removeEndpointListener(endpointID, listener) {
         this.endpointListeners.get(endpointID)?.delete(listener);
     }
+
+    emitEndpoint(endpointID, value) {
+        for (const listener of this.endpointListeners.get(endpointID) ?? []) {
+            listener(value);
+        }
+    }
 }
 
 class AsyncFullStatePatchConnection extends FakePatchConnection {
@@ -152,6 +159,74 @@ function latestStoredSeqFxState(connection) {
     assert.equal(typeof write.value, "string");
     return parseStrictSeqFxStateV7(write.value);
 }
+
+function monitorEvent(transportRunning) {
+    return {
+        patternIndex: 0,
+        stepIndex: 5,
+        transportRunning,
+        stepProgress: 0.25,
+        stepDurationMs: 125,
+        auxCyclePhase: [0, 0.5, 1, 0],
+        auxAmount: [0, 0.25, 1, 0],
+        auxDurationMs: [0, 250, 500, 0],
+    };
+}
+
+test("monitor_parser_accepts_only_explicit_transport_boolean_wire_tokens", () => {
+    for (const token of [true, 1, "1", "true"]) {
+        assert.deepEqual(parseSeqFxMonitorEvent({ event: monitorEvent(token) }), {
+            stepIndex: 5,
+            stepDurationMs: 125,
+            transportRunning: true,
+            auxCyclePhase: [0, 0.5, 1, 0],
+            auxAmount: [0, 0.25, 1, 0],
+            auxDurationMs: [0, 250, 500, 0],
+        });
+    }
+
+    for (const token of [false, 0, "0", "false"]) {
+        assert.deepEqual(parseSeqFxMonitorEvent(monitorEvent(token)), {
+            stepIndex: 5,
+            stepDurationMs: 125,
+            transportRunning: false,
+            auxCyclePhase: [0, 0.5, 1, 0],
+            auxAmount: [0, 0.25, 1, 0],
+            auxDurationMs: [0, 250, 500, 0],
+        });
+    }
+
+    for (const token of [undefined, null, 2, -1, "", "false ", "TRUE", {}, []]) {
+        assert.equal(parseSeqFxMonitorEvent(monitorEvent(token)), null);
+    }
+    assert.equal(parseSeqFxMonitorEvent(null), null);
+    assert.equal(parseSeqFxMonitorEvent({ event: "not-an-event" }), null);
+});
+
+test("monitor_subscription_emits_parsed_booleans_and_rejects_malformed_frames", () => {
+    const connection = new FakePatchConnection();
+    const bridge = new SeqFxRuntimeBridge(connection);
+    const received = [];
+    const tokens = [true, 1, "1", "true", false, 0, "0", "false"];
+
+    bridge.subscribeMonitor((event) => received.push(event.transportRunning));
+    bridge.attach();
+
+    tokens.forEach((token, index) => {
+        const event = monitorEvent(token);
+        connection.emitEndpoint(SEQFX_ENDPOINTS.monitorOut, index % 2 === 0 ? event : { event });
+    });
+
+    assert.deepEqual(received, [true, true, true, true, false, false, false, false]);
+
+    const receivedCount = received.length;
+    for (const token of [undefined, null, 2, "", "false ", "TRUE", {}, []]) {
+        connection.emitEndpoint(SEQFX_ENDPOINTS.monitorOut, monitorEvent(token));
+    }
+    connection.emitEndpoint(SEQFX_ENDPOINTS.monitorOut, { event: "not-an-event" });
+
+    assert.equal(received.length, receivedCount, "malformed frames must preserve subscriber state");
+});
 
 test("boot_without_saved_seqfx_state_hydrates_defaults_without_persisting_or_uploading", () => {
     const connection = new FakePatchConnection();
