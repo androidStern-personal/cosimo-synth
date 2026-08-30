@@ -1570,6 +1570,22 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Browser tests prove first tap selects/opens, second selected-icon tap bypasses, the next selected-icon tap re-enables, and neither action closes or changes the selected editor.
     - Real touch tests starting on trunk and branch nodes prove immediate vertical drags scroll without selecting, bypassing, reordering, or requesting haptics; hold-and-drag still reorders and requests exactly one bump when it lifts; stationary long-press still opens the menu without the reorder bump; and releasing any cancelled scroll/reorder gesture produces no stray tap.
 
+[ ] T73 — Put the FX tail add, whole-lane Mix, and Polish in their real signal order without overlap
+    Confirmed production problem (2026-08-30):
+    - At 393x852 the bottom bands are currently laid out as Mix, then the final trunk `+`, then POLISH. Their boxes are adjacent, but the graph rail and graph-owned background continue through the control stack, so the three controls visually collide and expose graph line/gap space behind what should be a compact bottom boundary.
+    - This is encoded rather than accidental: `EffectsRackWorkspace` passes Mix as `tailPrefix`, `SubwayMapColumn` renders that prefix before the trunk-tail add row, and the composed browser tests explicitly assert `mixBeforeTail`. Those assertions preserve the wrong signal order.
+    Governing signal order:
+    - The editable Effects Lane ends at its final `+`; choosing an effect there inserts it before the lane output blend. Whole-lane Mix then blends the complete editable lane with dry input. The fixed Polish section processes that chosen result afterward and remains outside Mix and whole-lane Bypass. Therefore the visible order is effects → final `+` → Mix → POLISH.
+    Required layout:
+    - Keep the final `+` as the graph's last insertion point, immediately after the final effect/path. It remains part of the scrollable graph content and keeps its existing exact insertion behavior.
+    - Move Mix and POLISH into a real bottom stack that consumes layout height and sits flush against the bottom of the FX graph column. Mix is directly above POLISH. They must not be overlaid into the graph canvas or merely raised with z-index.
+    - Truncate the scrollable graph/canvas above that fixed bottom stack. The subway rail and graph background end at the graph boundary and must not continue behind Mix or POLISH. Leave no empty row or exposed connector gap between the final `+`, Mix, and POLISH when the graph is at its tail.
+    - Preserve the top-left whole-lane Bypass control, POLISH selection/editor behavior, Mix and Bypass sound/state behavior, all trunk/branch insertion paths, drag destinations, graph scrolling, the permanent fixed Polish position, and representative phone/plugin/desktop layouts. This task does not add Polish-module bypass controls or change Polish DSP.
+    Done when:
+    - A red-before composed-browser regression proves the shipped Mix-before-`+` order and graph-behind-footer symptom. The corrected test proves final `+` before Mix before POLISH, exact flush adjacency, no geometric or painted overlap, no graph rail/background beneath the fixed footer, and reachable 44px controls at short and tall phone sizes plus plugin/desktop widths.
+    - Empty, short, overflowing serial, Parallel, and Frequency Split racks keep every final insertion point usable; scrolling reaches the real tail without moving Mix/POLISH away from the bottom boundary; reorder and modulation drags cannot target or pass behind the footer.
+    - Source review removes or renames the misleading `tailPrefix` contract and replaces the old `mixBeforeTail` assertions rather than preserving them through another offset. Focused geometry/hit tests run during repair; the broad UI/build gates run once after the source is review-clean.
+
 [x] T66 — Make one MSEG's mapping to another MSEG's Rate editable
     Active owner (2026-08-27):
     - Codex task `Fix T66 MSEG rate mapping controls`, thread `01a0434d-6730-7340-a091-ff0d448199ff`, branch `codex/t66-mseg-rate-mapping`, worktree `/Users/winterfell/.codex/worktrees/4533/cosimo-synth`, model SOL, reasoning max.
