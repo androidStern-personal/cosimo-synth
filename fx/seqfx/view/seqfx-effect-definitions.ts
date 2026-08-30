@@ -127,11 +127,13 @@ export function formatSeqFxParameterValue(definition: SeqFxParameterDefinition, 
             return `${compactNumber(safeValue, decimals)} dB`;
         case "degrees":
             return `${compactNumber(safeValue, decimals)}\u00b0`;
-        case "Hz":
-            if (Math.abs(safeValue) >= 1_000) {
-                return `${compactNumber(safeValue / 1_000, Math.abs(safeValue) >= 10_000 ? 1 : 2)} kHz`;
+        case "Hz": {
+            const displayHz = Number(safeValue.toFixed(decimals));
+            if (Math.abs(displayHz) >= 1_000) {
+                return `${compactNumber(displayHz / 1_000, Math.abs(displayHz) >= 10_000 ? 1 : 2)} kHz`;
             }
-            return `${compactNumber(safeValue, decimals)} Hz`;
+            return `${compactNumber(displayHz, decimals)} Hz`;
+        }
         case "ms":
             if (Math.abs(safeValue) >= 1_000) {
                 return `${compactNumber(safeValue / 1_000, 2)} s`;

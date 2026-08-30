@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 
 import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
 import { createEffectHeader } from "../../../ui/shared/effects/effect-header";
@@ -327,229 +327,22 @@ function SeqFxDeleteGlyph() {
     );
 }
 
-function effectIconTextureId(effectType: SeqFxEffectType, reactId: string) {
-    return `seqfx-effect-icon-texture-${effectType}-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
-}
-
-function SeqFxEffectIconTexture({ id, viewBoxSize }: { id: string; viewBoxSize: number }) {
-    const scale = viewBoxSize / 24;
-    const tile = 2.5 * scale;
-    const solidRadius = 1 * scale;
-    const fadeRadius = 1.2 * scale;
-    const dotId = `${id}-dot`;
-    return (
-        <defs>
-            <radialGradient data-role="seqfx-effect-icon-texture-gradient" id={dotId}>
-                <stop offset="0%" stopColor="#000" stopOpacity="0.10" />
-                <stop offset={`${(solidRadius / fadeRadius) * 100}%`} stopColor="#000" stopOpacity="0.10" />
-                <stop offset="100%" stopColor="#000" stopOpacity="0" />
-            </radialGradient>
-            <pattern
-                data-role="seqfx-effect-icon-texture"
-                height={tile}
-                id={id}
-                patternUnits="userSpaceOnUse"
-                width={tile}
-            >
-                <circle cx={tile / 2} cy={tile / 2} fill={`url(#${dotId})`} r={fadeRadius} />
-            </pattern>
-        </defs>
-    );
-}
-
-const TAPE_STOP_ICON_PATH =
-    "M3 5h18a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5h-3.5l-.55-2.45A1.4 1.4 0 0 0 15.59 15.5H8.41a1.4 1.4 0 0 0-1.36 1.05L6.5 19H3a1.5 1.5 0 0 1-1.5-1.5v-11A1.5 1.5 0 0 1 3 5Zm5 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z";
-const TALK_BOX_ICON_PATH =
-    "M55.618 178.111l75.645-94.377s.03-15.79 12.989-26.864c15.797-13.498 40.626-11.241 53.643 3.201 13.016 14.443 16.545 38.02-1.25 54.93-11.078 10.526-23.552 10.425-23.552 10.425l-94.71 75.646-9.344-9.14-17.266 16.088s-1.429 1.188-2.844-.578c-1.415-1.765-.71-3.282-.71-3.282l17.039-16.203-9.64-9.846zm17.729-1.144l5.687 5.484 75.162-59.15s-8.01-4.416-12.813-9.469c-4.804-5.053-7.58-11.981-7.58-11.981l-60.456 75.116zm75.827-105.668s-13.299 18.34 2.398 33.329c15.698 14.99 33.564 2.4 33.564 2.4s-16.071-3.727-24.79-12.39c-8.72-8.662-11.172-23.34-11.172-23.34zm5.393-4.513s3.702 14.109 12.601 23.073c8.899 8.965 22.874 12.662 22.874 12.662s12.885-19.52-3.271-34.318c-16.157-14.798-32.204-1.417-32.204-1.417z";
-const DIRTY_ICON_PATH = "M232 64.5h-54l-111.5 112H26V193h50L187.5 81H232z";
-const COMB_ICON_PATH =
-    "M25.101 77.628a4.008 4.008 0 0 0 3.997 4.01h16.996c6.632 0 13.927 5.01 16.3 11.202l52.724 85.231c7.115 18.564 18.693 18.571 25.857.025L193.91 92.84c2.39-6.187 9.693-11.202 16.336-11.202h16.49a4.01 4.01 0 0 0 4-4.01V68.82a4 4 0 0 0-3.994-4.009h-23.508c-8.835 0-18.547 6.702-21.69 14.962l-47.147 73.852c-3.533 9.287-9.217 9.262-12.694-.051L75.2 79.805C72.108 71.524 62.44 64.81 53.6 64.81H29.11a4.012 4.012 0 0 0-4.008 4.01v8.808z";
-const PITCH_ICON_PATH =
-    "M175.863 100.122c0-2.205 1.293-2.747 2.883-1.214l30.096 28.996-30.11 29.24c-1.585 1.538-2.87 1-2.87-1.209v-19.24l-95.811.637v18.596c0 2.21-1.28 2.746-2.854 1.201l-29.788-29.225 29.774-28.982c1.584-1.542 2.868-1.004 2.868 1.2v19.54h95.812v-19.54z";
-const VIBRO_ICON_PATH =
-    "M35.996 208c-2.207 0-3.077-1.532-1.935-3.434l91.878-153.132c1.138-1.896 2.98-1.902 4.122 0l91.878 153.132c1.138 1.896.272 3.434-1.935 3.434h-8.008c-2.207 0-4.922-1.54-6.054-3.421L130.058 78.42c-1.137-1.89-2.984-1.881-4.116 0L50.058 204.58c-1.138 1.889-3.848 3.42-6.054 3.42h-8.008z";
-const FLANGE_ICON_PATH =
-    "M116.589 182.742l-7.405 20.346a4 4 0 0 1-5.125 2.396l-7.525-2.738a4 4 0 0 1-2.386-5.13l7.435-20.427C83.963 167.623 72 148.959 72 127.5 72 96.296 97.296 71 128.5 71c3.877 0 7.663.39 11.32 1.134l6.996-19.222a4 4 0 0 1 5.125-2.396l7.525 2.738a4 4 0 0 1 2.386 5.13l-6.968 19.142C172.796 87.002 185 105.826 185 127.5c0 31.204-25.296 56.5-56.5 56.5-4.086 0-8.071-.434-11.911-1.258zm5.173-14.213A41.32 41.32 0 0 0 128 169c22.644 0 41-18.356 41-41 0-14.855-7.9-27.864-19.727-35.056l-27.51 75.585zm-15.035-5.473l27.51-75.585A41.32 41.32 0 0 0 128 87c-22.644 0-41 18.356-41 41 0 14.855 7.9 27.864 19.727 35.056z";
-const REVERSE_ICON_PATH =
-    "M117.027 60.858c0 14.184.118 120.734.118 134.66 0 13.925-7.798 16.307-14.543 10.568-6.745-5.74-46.666-60.003-52.014-67.201-5.349-7.198-4.45-12.951.086-20.28 4.535-7.328 47.284-62.224 52.46-68.2 5.175-5.977 13.893-3.73 13.893 10.453zM65.424 132.65l32.874 43.167c1.336 1.754 2.425 1.393 2.424-.814l-.005-92.006c0-2.197-1.072-2.562-2.395-.792l-32.927 44.057c-1.327 1.776-1.31 4.63.03 6.388zm142.603-71.792c0 14.184.118 120.734.118 134.66 0 13.925-7.798 16.307-14.543 10.568-6.745-5.74-46.666-60.003-52.014-67.201-5.349-7.198-4.45-12.951.086-20.28 4.535-7.328 47.284-62.224 52.46-68.2 5.175-5.977 13.893-3.73 13.893 10.453zm-51.603 71.792l32.874 43.167c1.336 1.754 2.425 1.393 2.424-.814l-.005-92.006c0-2.197-1.072-2.562-2.395-.792l-32.927 44.057c-1.327 1.776-1.31 4.63.03 6.388z";
-
-// Effect picker SVGs are local silhouettes matched to the riso cell palette.
 function SeqFxEffectIcon({ effectType }: { effectType: SeqFxEffectType }) {
-    const textureId = effectIconTextureId(effectType, useId());
-    const textureFill = `url(#${textureId})`;
+    const fontaudioIcon = getSeqFxEffectDefinition(effectType).fontaudioIcon;
+    const iconUrl = new URL(`../../../ui/assets/fontaudio/${fontaudioIcon}.svg`, import.meta.url).href;
+    const iconStyle: CSSProperties & { "--seqfx-effect-icon-mask": string } = {
+        "--seqfx-effect-icon-mask": `url("${iconUrl}")`,
+    };
 
-    switch (effectType) {
-        case SEQFX_EFFECT_TYPES.filter:
-            return (
-                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
-                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
-                    <path
-                        data-role="seqfx-effect-icon-fill"
-                        fill="currentColor"
-                        fillRule="evenodd"
-                        d="M24.22 67.796a3.995 3.995 0 0 1 4.008-3.991h85.498c8.834 0 19.732 6.112 24.345 13.657l53.76 87.936c3.46 5.66 11.628 10.247 18.256 10.247h16.718a3.996 3.996 0 0 1 3.994 4.007v8.985a4.007 4.007 0 0 1-4.007 4.008h-24.7c-8.835 0-19.709-6.13-24.283-13.683l-52.324-86.4c-3.43-5.665-11.577-10.257-18.202-10.257H28.214a3.995 3.995 0 0 1-3.993-3.992V67.796z"
-                    />
-                    <path
-                        fill={textureFill}
-                        fillRule="evenodd"
-                        d="M24.22 67.796a3.995 3.995 0 0 1 4.008-3.991h85.498c8.834 0 19.732 6.112 24.345 13.657l53.76 87.936c3.46 5.66 11.628 10.247 18.256 10.247h16.718a3.996 3.996 0 0 1 3.994 4.007v8.985a4.007 4.007 0 0 1-4.007 4.008h-24.7c-8.835 0-19.709-6.13-24.283-13.683l-52.324-86.4c-3.43-5.665-11.577-10.257-18.202-10.257H28.214a3.995 3.995 0 0 1-3.993-3.992V67.796z"
-                    />
-                </svg>
-            );
-        case SEQFX_EFFECT_TYPES.crusher:
-            return (
-                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 24 24">
-                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={24} />
-                    <path
-                        d="M3 20 V12 H6 V5 H12 V20 H18 V12 H21 V16 H20 V22 H10 V7 H8 V14 H5 V22 H3 Z"
-                        data-role="seqfx-effect-icon-fill"
-                        fill="currentColor"
-                    />
-                    <path
-                        d="M3 20 V12 H6 V5 H12 V20 H18 V12 H21 V16 H20 V22 H10 V7 H8 V14 H5 V22 H3 Z"
-                        fill={textureFill}
-                    />
-                </svg>
-            );
-        case SEQFX_EFFECT_TYPES.tapeStop:
-            return (
-                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 24 24">
-                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={24} />
-                    <path
-                        data-role="seqfx-effect-icon-fill"
-                        fill="currentColor"
-                        fillRule="evenodd"
-                        d={TAPE_STOP_ICON_PATH}
-                    />
-                    <path fill={textureFill} fillRule="evenodd" d={TAPE_STOP_ICON_PATH} />
-                </svg>
-            );
-        case SEQFX_EFFECT_TYPES.stutter:
-            return (
-                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
-                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
-                    <g data-role="seqfx-effect-icon-fill" fill="currentColor" fillRule="evenodd">
-                        <path d="M109.533 197.602a1.887 1.887 0 0 1-.034 2.76l-7.583 7.066a4.095 4.095 0 0 1-5.714-.152l-32.918-34.095c-1.537-1.592-1.54-4.162-.002-5.746l33.1-34.092c1.536-1.581 4.11-1.658 5.74-.18l7.655 6.94c.82.743.833 1.952.02 2.708l-21.11 19.659s53.036.129 71.708.064c18.672-.064 33.437-16.973 33.437-34.7c0-7.214-5.578-17.64-5.578-17.64c-.498-.99-.273-2.444.483-3.229l8.61-8.94c.764-.794 1.772-.632 2.242.364c0 0 9.212 18.651 9.212 28.562c0 28.035-21.765 50.882-48.533 50.882s-70.921.201-70.921.201z" />
-                        <path d="M144.398 58.435a1.887 1.887 0 0 1 .034-2.76l7.583-7.066a4.095 4.095 0 0 1 5.714.152l32.918 34.095c1.537 1.592 1.54 4.162.002 5.746l-33.1 34.092c-1.536 1.581-4.11 1.658-5.74.18l-7.656-6.94c-.819-.743-.832-1.952-.02-2.708l21.111-19.659s-53.036-.129-71.708-.064c-18.672.064-33.437 16.973-33.437 34.7c0 7.214 5.578 17.64 5.578 17.64c.498.99.273 2.444-.483 3.229l-8.61 8.94c-.764.794-1.772.632-2.242-.364c0 0-9.212-18.65-9.212-28.562c0-28.035 21.765-50.882 48.533-50.882s70.921-.201 70.921-.201z" />
-                    </g>
-                    <g fill={textureFill} fillRule="evenodd">
-                        <path d="M109.533 197.602a1.887 1.887 0 0 1-.034 2.76l-7.583 7.066a4.095 4.095 0 0 1-5.714-.152l-32.918-34.095c-1.537-1.592-1.54-4.162-.002-5.746l33.1-34.092c1.536-1.581 4.11-1.658 5.74-.18l7.655 6.94c.82.743.833 1.952.02 2.708l-21.11 19.659s53.036.129 71.708.064c18.672-.064 33.437-16.973 33.437-34.7c0-7.214-5.578-17.64-5.578-17.64c-.498-.99-.273-2.444.483-3.229l8.61-8.94c.764-.794 1.772-.632 2.242.364c0 0 9.212 18.651 9.212 28.562c0 28.035-21.765 50.882-48.533 50.882s-70.921.201-70.921.201z" />
-                        <path d="M144.398 58.435a1.887 1.887 0 0 1 .034-2.76l7.583-7.066a4.095 4.095 0 0 1 5.714.152l32.918 34.095c1.537 1.592 1.54 4.162.002 5.746l-33.1 34.092c-1.536 1.581-4.11 1.658-5.74.18l-7.656-6.94c-.819-.743-.832-1.952-.02-2.708l21.111-19.659s-53.036-.129-71.708-.064c-18.672.064-33.437 16.973-33.437 34.7c0 7.214 5.578 17.64 5.578 17.64c.498.99.273 2.444-.483 3.229l-8.61 8.94c-.764.794-1.772.632-2.242-.364c0 0-9.212-18.65-9.212-28.562c0-28.035 21.765-50.882 48.533-50.882s70.921-.201 70.921-.201z" />
-                    </g>
-                </svg>
-            );
-        case SEQFX_EFFECT_TYPES.pitch:
-            return (
-                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
-                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
-                    <g data-role="seqfx-effect-icon-fill" fill="currentColor" fillRule="evenodd">
-                        <path d={PITCH_ICON_PATH} />
-                        <path d={PITCH_ICON_PATH} transform="rotate(90 128 128)" />
-                    </g>
-                    <g fill={textureFill} fillRule="evenodd">
-                        <path d={PITCH_ICON_PATH} />
-                        <path d={PITCH_ICON_PATH} transform="rotate(90 128 128)" />
-                    </g>
-                </svg>
-            );
-        case SEQFX_EFFECT_TYPES.comb:
-            return (
-                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="18 18 220 220">
-                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={220} />
-                    <path
-                        d={COMB_ICON_PATH}
-                        data-role="seqfx-effect-icon-fill"
-                        fill="currentColor"
-                        fillRule="evenodd"
-                    />
-                    <path d={COMB_ICON_PATH} fill={textureFill} fillRule="evenodd" />
-                </svg>
-            );
-        case SEQFX_EFFECT_TYPES.ring:
-            return (
-                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
-                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
-                    <path
-                        d="M48 128c-1.955-29.248 19.364-64 37.364-64 18 0 36.136 13.843 36.136 64.5s19.136 80.5 49.136 80.5c30 0 53.364-40.125 53.364-80.5-8.182 0-7.273-.752-16 0 0 32.35-20.455 64.45-37.364 64.45s-33.909-13.542-33.909-64.45S120.273 48 85.364 48C50.454 48 32 88.626 32 127.748c6 0 8.364.252 16 .252z"
-                        data-role="seqfx-effect-icon-fill"
-                        fill="currentColor"
-                        fillRule="evenodd"
-                    />
-                    <path
-                        d="M48 128c-1.955-29.248 19.364-64 37.364-64 18 0 36.136 13.843 36.136 64.5s19.136 80.5 49.136 80.5c30 0 53.364-40.125 53.364-80.5-8.182 0-7.273-.752-16 0 0 32.35-20.455 64.45-37.364 64.45s-33.909-13.542-33.909-64.45S120.273 48 85.364 48C50.454 48 32 88.626 32 127.748c6 0 8.364.252 16 .252z"
-                        fill={textureFill}
-                        fillRule="evenodd"
-                    />
-                </svg>
-            );
-        case SEQFX_EFFECT_TYPES.reverse:
-            return (
-                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
-                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
-                    <path
-                        d={REVERSE_ICON_PATH}
-                        data-role="seqfx-effect-icon-fill"
-                        fill="currentColor"
-                        fillRule="evenodd"
-                    />
-                    <path d={REVERSE_ICON_PATH} fill={textureFill} fillRule="evenodd" />
-                </svg>
-            );
-        case SEQFX_EFFECT_TYPES.talkBox:
-            return (
-                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
-                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
-                    <path
-                        d={TALK_BOX_ICON_PATH}
-                        data-role="seqfx-effect-icon-fill"
-                        fill="currentColor"
-                        fillRule="evenodd"
-                    />
-                    <path d={TALK_BOX_ICON_PATH} fill={textureFill} fillRule="evenodd" />
-                </svg>
-            );
-        case SEQFX_EFFECT_TYPES.vibro:
-            return (
-                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
-                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
-                    <path
-                        d={VIBRO_ICON_PATH}
-                        data-role="seqfx-effect-icon-fill"
-                        fill="currentColor"
-                        fillRule="evenodd"
-                    />
-                    <path d={VIBRO_ICON_PATH} fill={textureFill} fillRule="evenodd" />
-                </svg>
-            );
-        case SEQFX_EFFECT_TYPES.flange:
-            return (
-                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
-                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
-                    <path
-                        d={FLANGE_ICON_PATH}
-                        data-role="seqfx-effect-icon-fill"
-                        fill="currentColor"
-                        fillRule="evenodd"
-                    />
-                    <path d={FLANGE_ICON_PATH} fill={textureFill} fillRule="evenodd" />
-                </svg>
-            );
-        case SEQFX_EFFECT_TYPES.dirty:
-            return (
-                <svg aria-hidden="true" className="seqfx-effect-icon" focusable="false" viewBox="0 0 256 256">
-                    <SeqFxEffectIconTexture id={textureId} viewBoxSize={256} />
-                    <path
-                        d={DIRTY_ICON_PATH}
-                        data-role="seqfx-effect-icon-fill"
-                        fill="currentColor"
-                        fillRule="evenodd"
-                    />
-                    <path d={DIRTY_ICON_PATH} fill={textureFill} fillRule="evenodd" />
-                </svg>
-            );
-        default:
-            return null;
-    }
+    return (
+        <span
+            aria-hidden="true"
+            className="seqfx-effect-icon"
+            data-fontaudio-icon={fontaudioIcon}
+            data-role="seqfx-effect-icon"
+            style={iconStyle}
+        />
+    );
 }
 
 function SeqFxMixRow({

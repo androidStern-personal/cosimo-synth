@@ -187,7 +187,9 @@ export const SEQFX_FACTORY_PATTERNS = [
     },
 ] as const satisfies readonly SeqFxFactoryPattern[];
 
-const patternById = new Map(SEQFX_FACTORY_PATTERNS.map((pattern) => [pattern.id, pattern]));
+const patternById = new Map<string, SeqFxFactoryPattern>(
+    SEQFX_FACTORY_PATTERNS.map((pattern) => [pattern.id, pattern]),
+);
 
 export function getSeqFxFactoryPattern(patternId: string): SeqFxFactoryPattern | null {
     return patternById.get(patternId) ?? null;

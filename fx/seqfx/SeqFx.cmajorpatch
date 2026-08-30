@@ -3,7 +3,7 @@
   "ID": "dev.cosimo.seqfx",
   "version": "0.1.0",
   "name": "Cosimo SeqFX",
-  "description": "Step-sequenced stereo effect with filter envelope, bit crusher, tape stop, and stutter lanes.",
+  "description": "Step-sequenced stereo multi-effect with Filter, Crush, Tape Stop, Stutter, Pitch, Comb, Ring, Reverse, Talk Box, Vibro, Flange, and Dirty lanes.",
   "category": "effect",
   "manufacturer": "Cosimo",
   "plugin": {

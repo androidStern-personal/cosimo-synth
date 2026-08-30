@@ -899,7 +899,7 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
         document.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"]')?.matches(":hover") ?? false
     ));
     await page.waitForFunction(() => (
-        getComputedStyle(document.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"] svg')).color
+        getComputedStyle(document.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"] [data-role="seqfx-effect-icon"]')).color
         === "rgb(238, 108, 77)"
     ));
 
@@ -931,14 +931,14 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
         const snapshotBar = effectHeader?.shadowRoot?.querySelector("cosimo-snapshot-bar");
         const snapshotLabel = snapshotBar?.shadowRoot?.querySelector(".snapshot-label");
         const selectedEffectButton = document.querySelector(".seqfx-effect-picker__options button.is-selected");
-        const selectedEffectIcon = selectedEffectButton?.querySelector("svg");
+        const selectedEffectIcon = selectedEffectButton?.querySelector('[data-role="seqfx-effect-icon"]');
         const hoveredEffectButton = document.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"]');
-        const hoveredEffectIcon = hoveredEffectButton?.querySelector("svg");
+        const hoveredEffectIcon = hoveredEffectButton?.querySelector('[data-role="seqfx-effect-icon"]');
         const effectIconDetails = Array.from(document.querySelectorAll('[data-role="seqfx-effect-type-option"]')).map((button) => {
-            const svg = button.querySelector("svg");
+            const icon = button.querySelector('[data-role="seqfx-effect-icon"]');
             return {
                 effectType: button.getAttribute("data-effect-type"),
-                patternCount: svg?.querySelectorAll('[data-role="seqfx-effect-icon-texture"]').length ?? 0,
+                fontaudioIcon: icon?.getAttribute("data-fontaudio-icon") ?? "",
             };
         });
 
@@ -993,20 +993,20 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
     assert.deepEqual(
         layout.effectIconDetails,
         [
-            { effectType: "1", patternCount: 1 },
-            { effectType: "2", patternCount: 1 },
-            { effectType: "3", patternCount: 1 },
-            { effectType: "4", patternCount: 1 },
-            { effectType: "5", patternCount: 1 },
-            { effectType: "6", patternCount: 1 },
-            { effectType: "7", patternCount: 1 },
-            { effectType: "8", patternCount: 1 },
-            { effectType: "9", patternCount: 1 },
-            { effectType: "10", patternCount: 1 },
-            { effectType: "11", patternCount: 1 },
-            { effectType: "12", patternCount: 1 },
+            { effectType: "1", fontaudioIcon: "fad-filter-lowpass" },
+            { effectType: "2", fontaudioIcon: "fad-digital0" },
+            { effectType: "3", fontaudioIcon: "fad-stop" },
+            { effectType: "4", fontaudioIcon: "fad-repeat" },
+            { effectType: "5", fontaudioIcon: "fad-arrows-vert" },
+            { effectType: "6", fontaudioIcon: "fad-filter-notch" },
+            { effectType: "7", fontaudioIcon: "fad-modsine" },
+            { effectType: "8", fontaudioIcon: "fad-backward" },
+            { effectType: "9", fontaudioIcon: "fad-microphone" },
+            { effectType: "10", fontaudioIcon: "fad-modtri" },
+            { effectType: "11", fontaudioIcon: "fad-phase" },
+            { effectType: "12", fontaudioIcon: "fad-hardclipcurve" },
         ],
-        "every effect tab icon should carry the same internal halftone texture technique as the cells",
+        "every effect tab should consume its canonical registry-backed Fontaudio identity",
     );
     assert.ok(layout.presetRow.top <= 0.5, `preset row should touch the top edge, got ${layout.presetRow.top}px`);
     assert.ok(layout.presetRow.left <= 0.5, `preset row should touch the left edge, got ${layout.presetRow.left}px`);
@@ -1217,90 +1217,87 @@ test("seqfx_factory_content_and_first_use_hint_are_discoverable_atomic_and_undoa
     await page.close();
 });
 
-test("seqfx_effect_tab_icons_use_their_cell_palette_when_selected", async () => {
+test("seqfx_effect_tab_icons_resolve_registry_fontaudio_masks_in_their_cell_palette", async () => {
     const page = await browser.newPage({ viewport: { width: 900, height: 720 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
 
-    const expectedSelectedColors = {
-        1: "rgb(244, 211, 94)",
-        2: "rgb(238, 108, 77)",
-        3: "rgb(152, 193, 217)",
-        4: "rgb(181, 217, 156)",
-        5: "rgb(159, 169, 223)",
-        6: "rgb(127, 168, 216)",
-        7: "rgb(199, 166, 216)",
-        9: "rgb(229, 164, 181)",
-        12: "rgb(121, 185, 166)",
+    const expectedIcons = {
+        1: { color: "rgb(244, 211, 94)", icon: "fad-filter-lowpass", name: "Filter" },
+        2: { color: "rgb(238, 108, 77)", icon: "fad-digital0", name: "Crush" },
+        3: { color: "rgb(152, 193, 217)", icon: "fad-stop", name: "Tape Stop" },
+        4: { color: "rgb(181, 217, 156)", icon: "fad-repeat", name: "Stutter" },
+        5: { color: "rgb(159, 169, 223)", icon: "fad-arrows-vert", name: "Pitch" },
+        6: { color: "rgb(127, 168, 216)", icon: "fad-filter-notch", name: "Comb" },
+        7: { color: "rgb(199, 166, 216)", icon: "fad-modsine", name: "Ring" },
+        8: { color: "rgb(181, 143, 181)", icon: "fad-backward", name: "Reverse" },
+        9: { color: "rgb(229, 164, 181)", icon: "fad-microphone", name: "Talk Box" },
+        10: { color: "rgb(215, 163, 107)", icon: "fad-modtri", name: "Vibro" },
+        11: { color: "rgb(120, 174, 184)", icon: "fad-phase", name: "Flange" },
+        12: { color: "rgb(121, 185, 166)", icon: "fad-hardclipcurve", name: "Dirty" },
     };
 
-    for (const [effectType, expectedColor] of Object.entries(expectedSelectedColors)) {
-        await page.locator(`[data-role="seqfx-effect-type-option"][data-effect-type="${effectType}"]`).click();
+    for (const [effectType, expected] of Object.entries(expectedIcons)) {
+        const button = page.locator(`[data-role="seqfx-effect-type-option"][data-effect-type="${effectType}"]`);
+        await button.click();
         await page.waitForFunction(
             ({ type, color }) => {
-                const button = document.querySelector(`[data-role="seqfx-effect-type-option"][data-effect-type="${type}"]`);
-                const svg = button?.querySelector("svg");
-                return button?.getAttribute("aria-pressed") === "true"
-                    && svg
-                    && getComputedStyle(svg).color === color;
+                const option = document.querySelector(`[data-role="seqfx-effect-type-option"][data-effect-type="${type}"]`);
+                const icon = option?.querySelector('[data-role="seqfx-effect-icon"]');
+                return option?.getAttribute("aria-pressed") === "true"
+                    && icon
+                    && getComputedStyle(icon).backgroundColor === color;
             },
-            { type: effectType, color: expectedColor },
+            { type: effectType, color: expected.color },
         );
-        const actual = await page.evaluate((type) => {
-            const button = document.querySelector(`[data-role="seqfx-effect-type-option"][data-effect-type="${type}"]`);
-            const svg = button?.querySelector("svg");
-            const filledShape = svg?.querySelector('[data-role="seqfx-effect-icon-fill"]');
-            const viewBoxSize = Number(svg?.getAttribute("viewBox")?.split(/\s+/)[2] ?? 24);
-            const viewBoxScale = viewBoxSize / 24;
-            const pattern = svg?.querySelector('[data-role="seqfx-effect-icon-texture"]');
-            const textureDot = pattern?.querySelector("circle");
-            const textureGradient = svg?.querySelector('[data-role="seqfx-effect-icon-texture-gradient"]');
-            const textureStops = Array.from(textureGradient?.querySelectorAll("stop") ?? []).map((stop) => ({
-                offset: stop.getAttribute("offset"),
-                opacity: stop.getAttribute("stop-opacity"),
-            }));
-            return {
-                bodyBox: filledShape ? {
-                    height: filledShape.getBBox().height / viewBoxScale,
-                    width: filledShape.getBBox().width / viewBoxScale,
-                } : null,
-                color: svg ? getComputedStyle(svg).color : "",
-                fill: filledShape?.getAttribute("fill") ?? "",
-                filter: svg ? getComputedStyle(svg).filter : "",
-                patternHeight: Number(pattern?.getAttribute("height") ?? 0) / viewBoxScale,
-                patternWidth: Number(pattern?.getAttribute("width") ?? 0) / viewBoxScale,
-                pressed: button?.getAttribute("aria-pressed") ?? "",
-                strokeCount: svg?.querySelectorAll("[stroke]").length ?? 0,
-                textureDotFill: textureDot?.getAttribute("fill") ?? "",
-                textureDotRadius: Number(textureDot?.getAttribute("r") ?? 0) / viewBoxScale,
-                textureCount: svg?.querySelectorAll('[data-role="seqfx-effect-icon-texture"]').length ?? 0,
-                textureFillCount: Array.from(svg?.querySelectorAll("[fill]") ?? [])
-                    .filter((node) => node.getAttribute("fill")?.startsWith("url(#seqfx-effect-icon-texture-"))
-                    .length,
-                textureStops,
-            };
-        }, effectType);
+        const actual = await button.evaluate((option) => {
+            const icon = option.querySelector('[data-role="seqfx-effect-icon"]');
+            if (!icon) {
+                return null;
+            }
 
-        assert.equal(actual.pressed, "true", `effect ${effectType} should be selected before checking color`);
-        assert.equal(actual.color, expectedColor);
-        assert.equal(actual.fill, "currentColor", "icon should use the effect color directly, not a black outline");
-        assert.equal(actual.filter, "none");
-        assert.equal(actual.strokeCount, 0, "effect tab icons should be filled silhouettes, not thin stroked outlines");
-        assert.equal(actual.textureCount, 1);
-        assert.ok(actual.bodyBox, "effect tab icon should expose its filled silhouette for visual checks");
-        assert.ok(actual.bodyBox.width >= 14, `effect ${effectType} icon silhouette should be wide enough to read, got ${actual.bodyBox.width}`);
-        assert.ok(actual.bodyBox.height >= 12, `effect ${effectType} icon silhouette should be tall enough to read, got ${actual.bodyBox.height}`);
-        assert.equal(actual.patternWidth, 2.5);
-        assert.equal(actual.patternHeight, 2.5);
-        assert.equal(actual.textureDotRadius, 1.2);
-        assert.match(actual.textureDotFill, /^url\(#seqfx-effect-icon-texture-.*-dot\)$/);
-        assert.ok(actual.textureFillCount > 0, "halftone texture must be clipped into the icon shape");
-        assert.deepEqual(actual.textureStops, [
-            { offset: "0%", opacity: "0.10" },
-            { offset: "83.33333333333334%", opacity: "0.10" },
-            { offset: "100%", opacity: "0" },
-        ]);
+            const styles = getComputedStyle(icon);
+            const maskImage = styles.maskImage === "none" ? styles.webkitMaskImage : styles.maskImage;
+            const maskUrlMatch = /^url\(["']?(.*?)["']?\)$/u.exec(maskImage);
+            const bounds = icon.getBoundingClientRect();
+            return {
+                ariaHidden: icon.getAttribute("aria-hidden"),
+                backgroundColor: styles.backgroundColor,
+                childElementCount: icon.childElementCount,
+                color: styles.color,
+                fontaudioIcon: icon.getAttribute("data-fontaudio-icon"),
+                height: bounds.height,
+                maskImage,
+                maskRepeat: styles.maskRepeat,
+                maskSize: styles.maskSize,
+                maskUrl: maskUrlMatch?.[1] ?? "",
+                pressed: option.getAttribute("aria-pressed"),
+                tagName: icon.tagName,
+                width: bounds.width,
+            };
+        });
+
+        assert.ok(actual, `effect ${effectType} should expose a Fontaudio identity leaf`);
+        assert.equal(actual.pressed, "true");
+        assert.equal(await button.getAttribute("aria-label"), expected.name);
+        assert.equal(actual.ariaHidden, "true", "the named button owns accessibility; its identity art stays decorative");
+        assert.equal(actual.tagName, "SPAN");
+        assert.equal(actual.childElementCount, 0, "the identity leaf should not embed hand-authored SVG paths");
+        assert.equal(actual.fontaudioIcon, expected.icon);
+        assert.equal(actual.color, expected.color);
+        assert.equal(actual.backgroundColor, expected.color, "currentColor should paint the Fontaudio mask");
+        assert.equal(actual.width, 24);
+        assert.equal(actual.height, 24);
+        assert.equal(actual.maskSize, "contain");
+        assert.equal(actual.maskRepeat, "no-repeat");
+        assert.match(actual.maskImage, /^url\(/u);
+        assert.notEqual(actual.maskUrl, "");
+        assert.equal(
+            await page.evaluate(async (maskUrl) => (await fetch(maskUrl)).ok, actual.maskUrl),
+            true,
+            `effect ${effectType} should resolve a loadable vendored Fontaudio asset`,
+        );
     }
 
     await page.close();
@@ -1327,7 +1324,11 @@ test("seqfx_named_effect_picker_fixed_tabs_and_visible_chain_labels_remove icon 
         await effectOptions.evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim())),
         ["Filter", "Crush", "Tape Stop", "Stutter", "Pitch", "Comb", "Ring", "Reverse", "Talk Box", "Vibro", "Flange", "Dirty"],
     );
-    assert.equal(await effectOptions.first().locator("svg").count(), 1, "named cards should retain Fontaudio-backed identities");
+    assert.equal(
+        await effectOptions.first().locator('[data-role="seqfx-effect-icon"][data-fontaudio-icon="fad-filter-lowpass"]').count(),
+        1,
+        "named cards should retain registry-backed Fontaudio identities",
+    );
 
     const effectTab = page.locator('[data-role="seqfx-effect-tab"]');
     const modTab = page.locator('[data-role="seqfx-mod-toggle"]');
@@ -2405,7 +2406,7 @@ test("seqfx_filter_mod_panel_edits_signed_amounts_without_hiding_inline_ranges",
     snapshot = await getHarnessSnapshot(page);
     upload = patternUploads(snapshot).at(-1).value;
     assertClose(upload.params[0][0][3], 0.707, 0.000001, "resonance Mod amount edit should not rewrite base Q");
-    assertClose(upload.auxEnd[0][0][3], 3.71, 0.000001, "resonance +3 amount should write base Q plus amount rounded to the public Q step");
+    assertClose(upload.auxEnd[0][0][3], 3.707, 0.000001, "resonance +3 amount should preserve the canonical 0.001 Q precision");
     assert.equal(await page.locator('[data-role="seqfx-mod-target-amount-value"][data-param="3"]').textContent(), "Q +3.00");
     assert.equal(await page.locator('[data-role="seqfx-mod-target-destination"][data-param="3"]').textContent(), "Q 3.707");
 
@@ -3446,7 +3447,7 @@ test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_
     assert.equal(await effectPicker.evaluate((element) => element.tagName), "DIV");
     assert.equal(await effectPicker.locator("select").count(), 0);
     assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"]').count(), 12);
-    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"] > svg').count(), 12);
+    assert.equal(await effectPicker.locator('[data-role="seqfx-effect-type-option"] > [data-role="seqfx-effect-icon"]').count(), 12);
     assert.equal(await effectPicker.getByRole("button", { name: "Crush", exact: true }).getAttribute("aria-pressed"), "true");
 
     const tapeStopButton = effectPicker.getByRole("button", { name: "Tape Stop", exact: true });

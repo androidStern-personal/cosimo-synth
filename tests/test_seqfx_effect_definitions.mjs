@@ -70,11 +70,22 @@ test("the canonical registry owns honest units and primary versus advanced hiera
     assert.equal(formatSeqFxParameterValue(freeStop, 8_000), "8 s");
     assert.equal(formatSeqFxParameterRange(freeStop), "20 ms to 8 s");
 
+    const filterCutoff = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.filter).parameters[1];
+    assert.equal(
+        formatSeqFxParameterValue(filterCutoff, 999.999999999),
+        "1 kHz",
+        "display rounding should happen before the Hz/kHz boundary is selected",
+    );
+
     const patchViewSource = await readFile(path.join(repoRoot, "fx/seqfx/view/SeqFxPatchView.tsx"), "utf8");
     assert.doesNotMatch(patchViewSource, /const PARAM_DEFINITIONS/);
     assert.match(patchViewSource, /paramDefinitionsForEffect\(inspectedEffectType\)/);
     assert.match(patchViewSource, /data-role="seqfx-advanced-parameters"/);
     assert.match(patchViewSource, /formatSeqFxParameterValue\(definition, value\)/);
+    assert.match(patchViewSource, /getSeqFxEffectDefinition\(effectType\)\.fontaudioIcon/);
+    assert.match(patchViewSource, /data-role="seqfx-effect-icon"/);
+    assert.doesNotMatch(patchViewSource, /SeqFxEffectIconTexture/);
+    assert.doesNotMatch(patchViewSource, /_ICON_PATH\b/);
 });
 
 test("seqfx effect IDs are append-only and cover the requested sequenced effects", () => {

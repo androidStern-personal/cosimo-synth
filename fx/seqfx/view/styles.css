@@ -1716,11 +1716,14 @@ select {
     background: rgba(255, 248, 232, 0.62);
 }
 
-.seqfx-effect-picker__options svg {
+.seqfx-effect-picker__options .seqfx-effect-icon {
     display: block;
+    flex: 0 0 auto;
     width: 24px;
     height: 24px;
-    color: currentColor;
+    background-color: currentColor;
+    -webkit-mask: var(--seqfx-effect-icon-mask) center / contain no-repeat;
+    mask: var(--seqfx-effect-icon-mask) center / contain no-repeat;
 }
 
 .seqfx-effect-picker__name {
@@ -2436,7 +2439,7 @@ select {
     grid-template-columns: auto 1fr auto;
     align-items: center;
     gap: 10px;
-    padding: 8px 14px;
+    padding: 6px 14px;
     border-top: 1px solid var(--seqfx-shell-border);
     color: var(--seqfx-shell-ink-muted);
     font-size: 11px;

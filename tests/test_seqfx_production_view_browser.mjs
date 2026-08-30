@@ -210,6 +210,16 @@ function stutterGraphPoint(graphBox, normalizedGate) {
     };
 }
 
+async function openSeqFxAdvancedParameters(page) {
+    const disclosure = page.locator('[data-role="seqfx-advanced-parameters"]');
+    await disclosure.waitFor();
+    if ((await disclosure.getAttribute("open")) === null) {
+        await disclosure.locator("summary").click();
+    }
+    assert.notEqual(await disclosure.getAttribute("open"), null, "Advanced controls should disclose on request");
+    return disclosure;
+}
+
 function patchConnectionSource() {
     return `
         class SeqFxProductionSmokePatchConnection {
@@ -895,6 +905,7 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
         );
         assert.match(await page.locator('[data-role="seqfx-reverse-source-note"]').textContent(), /adds no lookahead latency/);
         await page.locator('[data-role="seqfx-param"][data-param="2"]').selectOption("1");
+        await openSeqFxAdvancedParameters(page);
         await page.locator('[data-role="seqfx-param"][data-param="3"]').fill("480");
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="reverse"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="reverse"] [data-role="seqfx-block-glyph-secondary-line"]').getAttribute("d"));
@@ -931,6 +942,7 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
             await page.locator('[data-role="seqfx-param"][data-param="2"] option').evaluateAll((options) => options.map((option) => option.textContent)),
             ["Sine", "Triangle"],
         );
+        await openSeqFxAdvancedParameters(page);
         assert.deepEqual(
             await page.locator('[data-role="seqfx-param"][data-param="4"] option').evaluateAll((options) => options.map((option) => option.textContent)),
             ["Sync", "Free"],
@@ -954,6 +966,7 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
         await page.getByRole("button", { name: "Flange", exact: true }).click();
         await page.getByRole("button", { name: "Chain 4 Flange block 1", exact: true }).waitFor();
         assert.equal(await page.locator('[data-role="seqfx-param"]').count(), 8);
+        await openSeqFxAdvancedParameters(page);
         assert.deepEqual(
             await page.locator('[data-role="seqfx-param"][data-param="5"] option').evaluateAll((options) => options.map((option) => option.textContent)),
             ["Normal", "Inverse"],
