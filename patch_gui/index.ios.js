@@ -29965,9 +29965,16 @@ function useMsegEditorInteractions({
       cancelActivePointer();
     };
   }, [cancelActivePointer, isOpen]);
-  const openEditor = reactExports.useCallback(() => {
+  const beginEditorSession = reactExports.useCallback(() => {
     setUndoShape(null);
     activeGestureUndoCapturedRef.current = false;
+    cancelActivePointer();
+  }, [cancelActivePointer]);
+  const openEditor = reactExports.useCallback(() => {
+    beginEditorSession();
+    setIsOpen(true);
+  }, [beginEditorSession]);
+  const resumeEditorSession = reactExports.useCallback(() => {
     setIsOpen(true);
   }, []);
   const closeEditor = reactExports.useCallback(() => {
@@ -30253,7 +30260,9 @@ function useMsegEditorInteractions({
     hoveredSegmentIndex,
     activeSegmentIndex,
     canUndo: undoShape !== null,
+    beginEditorSession,
     openEditor,
+    resumeEditorSession,
     closeEditor,
     undoLastEdit,
     handlePointerDown,
