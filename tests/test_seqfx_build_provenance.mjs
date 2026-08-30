@@ -53,6 +53,54 @@ function assertRelativeCheckoutProvenance(source, label) {
     assert.doesNotMatch(source, /^[/\\]Users[/\\]/, `${label} must not encode an absolute user path: ${source}`);
 }
 
+function asList(value) {
+    if (value === undefined || value === null)
+        return [];
+
+    return Array.isArray(value) ? value : [value];
+}
+
+test("SeqFX packaged patch inputs and loader are byte-exact copies of current source", async () => {
+    const patchRoot = path.join(repoRoot, "fx", "seqfx");
+    const sourceManifestPath = path.join(patchRoot, "SeqFx.cmajorpatch");
+    const runtimeManifestPath = path.join(runtimeRoot, "SeqFx.cmajorpatch");
+    const [sourceManifestText, runtimeManifestText] = await Promise.all([
+        readFile(sourceManifestPath, "utf8"),
+        readFile(runtimeManifestPath, "utf8"),
+    ]);
+    const sourceManifest = JSON.parse(sourceManifestText);
+    const runtimeManifest = JSON.parse(runtimeManifestText);
+
+    assert.deepEqual(runtimeManifest, {
+        ...sourceManifest,
+        worker: "worker.js",
+    });
+
+    for (const field of ["source", "resources", "sourceTransformer"]) {
+        for (const relativePath of asList(sourceManifest[field])) {
+            const [sourceBytes, runtimeBytes] = await Promise.all([
+                readFile(path.join(patchRoot, relativePath)),
+                readFile(path.join(runtimeRoot, relativePath)),
+            ]);
+            assert.equal(
+                runtimeBytes.equals(sourceBytes),
+                true,
+                `SeqFX packaged ${field} must match current source: ${relativePath}`,
+            );
+        }
+    }
+
+    const [loaderSource, packagedLoader] = await Promise.all([
+        readFile(path.join(repoRoot, "ui", "shared", "effects", "effect-view-loader.js")),
+        readFile(path.join(runtimeRoot, "view", "index.js")),
+    ]);
+    assert.equal(
+        packagedLoader.equals(loaderSource),
+        true,
+        "SeqFX packaged loader must match current shared source",
+    );
+});
+
 test("SeqFX production app and worker bundles retain checkout-local source provenance", async () => {
     for (const contract of artifactContracts) {
         const mapPath = `${contract.bundlePath}.map`;

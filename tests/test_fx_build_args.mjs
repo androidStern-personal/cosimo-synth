@@ -48,6 +48,23 @@ test("fx_build_single_plugin_still_resolves_to_only_that_plugin", async () => {
     );
 });
 
+test("SeqFX canonical runtime reuse is opt-in and scoped to the aggregate handoff", async () => {
+    const { buildModule } = await loadBuildModules();
+    const environmentKey = buildModule.seqFxCanonicalRuntimePrebuiltEnvironmentKey;
+
+    assert.equal(environmentKey, "SEQFX_CANONICAL_RUNTIME_PREBUILT");
+    assert.equal(buildModule.shouldReuseSeqFxCanonicalRuntime("seqfx", {}), false);
+    assert.equal(buildModule.shouldReuseSeqFxCanonicalRuntime("seqfx", {
+        [environmentKey]: "true",
+    }), false);
+    assert.equal(buildModule.shouldReuseSeqFxCanonicalRuntime("seqfx", {
+        [environmentKey]: "1",
+    }), true);
+    assert.equal(buildModule.shouldReuseSeqFxCanonicalRuntime("spectral", {
+        [environmentKey]: "1",
+    }), false);
+});
+
 test("the SeqFX production configure explicitly disables microphone permission metadata", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
     const plugin = buildModule.effectPlugins.seqfx;

@@ -6,6 +6,7 @@ import { build } from "vite";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 export const repoRoot = path.resolve(scriptDir, "..");
+export const seqFxCanonicalRuntimePrebuiltEnvironmentKey = "SEQFX_CANONICAL_RUNTIME_PREBUILT";
 
 export const effectPlugins = {
     ott: {
@@ -109,6 +110,11 @@ export function resolvePluginNames(pluginName) {
         return [pluginName];
 
     throw new Error(usage());
+}
+
+export function shouldReuseSeqFxCanonicalRuntime(pluginName, environment = process.env) {
+    return pluginName === "seqfx"
+        && environment[seqFxCanonicalRuntimePrebuiltEnvironmentKey] === "1";
 }
 
 function asList(value) {
@@ -229,11 +235,16 @@ function getView(manifest, patchPath) {
     return manifest.view;
 }
 
-export async function buildPlugin(pluginName) {
+export async function buildPlugin(pluginName, { environment = process.env } = {}) {
     const plugin = effectPlugins[pluginName];
 
     if (!plugin)
         throw new Error(usage());
+
+    if (shouldReuseSeqFxCanonicalRuntime(pluginName, environment)) {
+        console.log("Reusing aggregate-prebuilt SeqFX canonical runtime");
+        return;
+    }
 
     const patchPath = path.join(repoRoot, plugin.patch);
     const patchRoot = path.dirname(patchPath);

@@ -43,12 +43,14 @@ const testGroups = Object.freeze({
         "tests/test_seqfx_production_view_browser.mjs",
     ]),
     buildProvenance: Object.freeze([
+        "tests/test_qualify_seqfx_source.mjs",
         "tests/test_seqfx_build_provenance.mjs",
     ]),
     pythonDspRuntimePerformanceLifecycle: Object.freeze([
         "tests/test_seqfx_antialias_reference.py",
         "tests/test_seqfx_buffer_probe.py",
         "tests/test_seqfx_comb_lab.py",
+        "tests/test_seqfx_comb_performance.py",
         "tests/test_seqfx_interpolation.py",
         "tests/test_seqfx_multirate_effects.py",
         "tests/test_seqfx_probe.py",
@@ -173,6 +175,7 @@ async function assertCompleteTestInventory() {
 }
 
 async function preflight() {
+    assertCanonicalRuntimePhaseOrder(qualificationPhases);
     await assertCompleteTestInventory();
     await assertNamedNodeTest(testGroups.patchViewLayoutContract[0], patchViewLayoutContractName);
 
@@ -210,13 +213,13 @@ async function preflight() {
     ]);
 }
 
-async function runNodeTests(files, { testNamePattern } = {}) {
+async function runNodeTests(files, { environment = {}, testNamePattern } = {}) {
     const arguments_ = ["--test", "--test-concurrency=1"];
     if (testNamePattern !== undefined) {
         arguments_.push(`--test-name-pattern=^${testNamePattern}$`);
     }
     arguments_.push(...files);
-    await runCommand(process.execPath, arguments_);
+    await runCommand(process.execPath, arguments_, { environment });
 }
 
 async function runSourceBrowserTests() {
@@ -275,7 +278,50 @@ async function runPythonTests() {
     });
 }
 
-const phases = Object.freeze([
+let canonicalRuntimeReuseEnvironment;
+
+function requireCanonicalRuntimeReuseEnvironment() {
+    if (canonicalRuntimeReuseEnvironment === undefined) {
+        throw new Error("Canonical SeqFX runtime reuse cannot be authorized before regeneration succeeds.");
+    }
+
+    return canonicalRuntimeReuseEnvironment;
+}
+
+async function regenerateCanonicalSeqFxRuntime() {
+    const {
+        buildPlugin,
+        seqFxCanonicalRuntimePrebuiltEnvironmentKey,
+    } = await import("../fx/build-effect.mjs");
+    canonicalRuntimeReuseEnvironment = undefined;
+    await buildPlugin("seqfx", { environment: {} });
+    canonicalRuntimeReuseEnvironment = Object.freeze({
+        [seqFxCanonicalRuntimePrebuiltEnvironmentKey]: "1",
+    });
+}
+
+export function assertCanonicalRuntimePhaseOrder(phases) {
+    const generationIndexes = phases
+        .map((phase, index) => phase.producesCanonicalRuntime ? index : -1)
+        .filter((index) => index >= 0);
+    const claimIndexes = phases
+        .map((phase, index) => phase.requiresCanonicalRuntime ? index : -1)
+        .filter((index) => index >= 0);
+
+    if (generationIndexes.length !== 1) {
+        throw new Error(
+            `SeqFX qualification requires exactly one canonical SeqFX runtime regeneration; found ${generationIndexes.length}.`,
+        );
+    }
+
+    if (claimIndexes.some((index) => index <= generationIndexes[0])) {
+        throw new Error(
+            "Canonical SeqFX runtime regeneration must run before every packaged runtime claim.",
+        );
+    }
+}
+
+export const qualificationPhases = Object.freeze([
     {
         name: "Fail-closed tool and test inventory",
         run: preflight,
@@ -303,7 +349,13 @@ const phases = Object.freeze([
         run: () => runNodeTests(testGroups.releaseBuilder),
     },
     {
+        name: "Regenerate canonical SeqFX packaged runtime from tracked source",
+        producesCanonicalRuntime: true,
+        run: regenerateCanonicalSeqFxRuntime,
+    },
+    {
         name: "SeqFX visual-proof contract and provenance units",
+        requiresCanonicalRuntime: true,
         run: () => runNodeTests(testGroups.visualProofContracts),
     },
     {
@@ -312,14 +364,19 @@ const phases = Object.freeze([
     },
     {
         name: "SeqFX packaged production-view browser suite",
-        run: () => runNodeTests(testGroups.packagedBrowser),
+        requiresCanonicalRuntime: true,
+        run: () => runNodeTests(testGroups.packagedBrowser, {
+            environment: requireCanonicalRuntimeReuseEnvironment(),
+        }),
     },
     {
         name: "SeqFX packaged source-map provenance",
+        requiresCanonicalRuntime: true,
         run: () => runNodeTests(testGroups.buildProvenance),
     },
     {
         name: "SeqFX Cmajor packaged-patch dry-run",
+        requiresCanonicalRuntime: true,
         run: () => runCommand("cmaj", [
             "play",
             "--dry-run",
@@ -333,19 +390,22 @@ const phases = Object.freeze([
     },
     {
         name: "SeqFX complete packaged visual proof",
+        requiresCanonicalRuntime: true,
         run: () => runCommand(process.execPath, [
             "scripts/capture_seqfx_visual_proof.mjs",
             "--require-clean",
-        ]),
+        ], {
+            environment: requireCanonicalRuntimeReuseEnvironment(),
+        }),
     },
 ]);
 
 async function main() {
     const qualificationStartedAt = performance.now();
 
-    for (const [index, phase] of phases.entries()) {
+    for (const [index, phase] of qualificationPhases.entries()) {
         const phaseStartedAt = performance.now();
-        console.log(`\n[${index + 1}/${phases.length}] ${phase.name}`);
+        console.log(`\n[${index + 1}/${qualificationPhases.length}] ${phase.name}`);
         try {
             await phase.run();
         } catch (error) {
