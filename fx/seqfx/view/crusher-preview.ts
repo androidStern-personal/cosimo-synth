@@ -77,7 +77,12 @@ export function clampCrusherDriveDb(value: number) {
 }
 
 export function clampCrusherCharacter(value: number): CrusherCharacter {
-    return Math.round(clamp(value, CRUSHER_CHARACTER_MIN, CRUSHER_CHARACTER_MAX)) as CrusherCharacter;
+    switch (Math.round(clamp(value, CRUSHER_CHARACTER_MIN, CRUSHER_CHARACTER_MAX))) {
+        case 1: return 1;
+        case 2: return 2;
+        case 3: return 3;
+        default: return 0;
+    }
 }
 
 export function clampCrusherQuality(value: number) {

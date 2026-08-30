@@ -144,7 +144,11 @@ export function SeqFxGlobalControlSurface({
     }
 
     function handleLoopPointerDown(event: PointerEvent<HTMLDivElement>) {
-        const target = (event.target as Element).closest<HTMLElement>("[data-loop-step]");
+        if (!(event.target instanceof Element)) {
+            return;
+        }
+
+        const target = event.target.closest<HTMLElement>("[data-loop-step]");
         const step = Number(target?.dataset.loopStep);
         if (!Number.isInteger(step)) {
             return;

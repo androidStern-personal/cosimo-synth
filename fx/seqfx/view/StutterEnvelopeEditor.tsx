@@ -132,6 +132,10 @@ function lerp(start: number, end: number, phase: number) {
     return start + ((end - start) * t);
 }
 
+function optionalDirection(direction: ModulationDirection | undefined): { direction?: ModulationDirection } {
+    return direction === undefined ? {} : { direction };
+}
+
 function pointerToNormalizedX(element: Element, clientX: number) {
     const bounds = element.getBoundingClientRect();
     if (bounds.width <= 0) {
@@ -250,14 +254,20 @@ export function StutterEnvelopeEditor({
         [effectiveHeight, effectiveWidth],
     );
     const phase = modulation?.phase ?? 0;
-    const shapeEnd = modulation?.shape
-        ? clampStutterShape(modulation.shape.end)
+    const gateModulation = modulation?.gate ?? null;
+    const shapeModulation = modulation?.shape ?? null;
+    const slicesModulation = modulation?.slices ?? null;
+    const speedModulation = modulation?.speed ?? null;
+    const toggleGateModulation = modulation?.onToggleGate;
+    const toggleShapeModulation = modulation?.onToggleShape;
+    const shapeEnd = shapeModulation
+        ? clampStutterShape(shapeModulation.end)
         : resolved.shape;
-    const effectiveShape = modulation?.shape
+    const effectiveShape = shapeModulation
         ? clampStutterShape(lerp(resolved.shape, shapeEnd, phase))
         : resolved.shape;
-    const effectiveGate = modulation?.gate
-        ? clampStutterGate(lerp(resolved.gate, modulation.gate.end, phase))
+    const effectiveGate = gateModulation
+        ? clampStutterGate(lerp(resolved.gate, gateModulation.end, phase))
         : resolved.gate;
     const paths = useMemo(
         () => envelopePaths(effectiveShape, effectiveGate, plot),
@@ -265,15 +275,15 @@ export function StutterEnvelopeEditor({
     );
     const waveSilhouette = useMemo(() => waveSilhouettePath(plot), [plot]);
     const gateStartX = plot.plotLeft + (plot.plotWidth * resolved.gate);
-    const gateEndX = modulation?.gate
-        ? plot.plotLeft + (plot.plotWidth * clampStutterGate(modulation.gate.end))
+    const gateEndX = gateModulation
+        ? plot.plotLeft + (plot.plotWidth * clampStutterGate(gateModulation.end))
         : gateStartX;
     const liveGateX = plot.plotLeft + (plot.plotWidth * effectiveGate);
     const gridXs = useMemo(() => (
         [0.25, 0.5, 0.75].map((t) => plot.plotLeft + (plot.plotWidth * t))
     ), [plot]);
-    const isGateModulated = Boolean(modulation?.gate);
-    const isShapeModulated = Boolean(modulation?.shape);
+    const isGateModulated = gateModulation !== null;
+    const isShapeModulated = shapeModulation !== null;
 
     const pickGateTarget = (clientX: number): "start" | "end" => {
         if (!isGateModulated || !surfaceRef.current) {
@@ -291,26 +301,26 @@ export function StutterEnvelopeEditor({
 
     const setGateValue = (target: "start" | "end", value: number) => {
         const nextNormalized = clampStutterGate(value);
-        const direction = modulation?.gate?.direction ?? "both";
+        const direction = gateModulation?.direction ?? "both";
 
-        if (target === "end" && modulation?.gate) {
+        if (target === "end" && gateModulation) {
             let nextEnd = nextNormalized;
             if (direction === "up") {
                 nextEnd = Math.max(nextEnd, resolved.gate);
             } else if (direction === "down") {
                 nextEnd = Math.min(nextEnd, resolved.gate);
             }
-            modulation.gate.onEndChange(clampStutterGate(nextEnd));
+            gateModulation.onEndChange(clampStutterGate(nextEnd));
             return;
         }
 
         const nextStart = nextNormalized;
         onGateChange(nextStart);
-        if (modulation?.gate) {
-            if (direction === "up" && modulation.gate.end < nextStart) {
-                modulation.gate.onEndChange(nextStart);
-            } else if (direction === "down" && modulation.gate.end > nextStart) {
-                modulation.gate.onEndChange(nextStart);
+        if (gateModulation) {
+            if (direction === "up" && gateModulation.end < nextStart) {
+                gateModulation.onEndChange(nextStart);
+            } else if (direction === "down" && gateModulation.end > nextStart) {
+                gateModulation.onEndChange(nextStart);
             }
         }
     };
@@ -331,7 +341,7 @@ export function StutterEnvelopeEditor({
 
         const step = event.shiftKey ? 0.1 : 0.02;
         const directionSign = event.key === "ArrowLeft" || event.key === "ArrowDown" ? -1 : 1;
-        const baseValue = target === "end" ? modulation?.gate?.end ?? resolved.gate : resolved.gate;
+        const baseValue = target === "end" ? gateModulation?.end ?? resolved.gate : resolved.gate;
         const nextValue = event.key === "Home"
             ? 0
             : event.key === "End"
@@ -374,25 +384,25 @@ export function StutterEnvelopeEditor({
 
     const setShapeValue = (target: "start" | "end", value: number) => {
         const nextNormalized = clampStutterShape(value);
-        const direction = modulation?.shape?.direction ?? "both";
+        const direction = shapeModulation?.direction ?? "both";
 
-        if (target === "end" && modulation?.shape) {
+        if (target === "end" && shapeModulation) {
             let nextEnd = nextNormalized;
             if (direction === "up") {
                 nextEnd = Math.max(nextEnd, resolved.shape);
             } else if (direction === "down") {
                 nextEnd = Math.min(nextEnd, resolved.shape);
             }
-            modulation.shape.onEndChange(clampStutterShape(nextEnd));
+            shapeModulation.onEndChange(clampStutterShape(nextEnd));
             return;
         }
 
         onShapeChange(nextNormalized);
-        if (modulation?.shape) {
-            if (direction === "up" && modulation.shape.end < nextNormalized) {
-                modulation.shape.onEndChange(nextNormalized);
-            } else if (direction === "down" && modulation.shape.end > nextNormalized) {
-                modulation.shape.onEndChange(nextNormalized);
+        if (shapeModulation) {
+            if (direction === "up" && shapeModulation.end < nextNormalized) {
+                shapeModulation.onEndChange(nextNormalized);
+            } else if (direction === "down" && shapeModulation.end > nextNormalized) {
+                shapeModulation.onEndChange(nextNormalized);
             }
         }
     };
@@ -513,8 +523,8 @@ export function StutterEnvelopeEditor({
         onKeyDown: handleMorphKeyDown,
     };
 
-    const gateChipLabel = isGateModulated
-        ? `${resolved.gate.toFixed(2)} -> ${clampStutterGate(modulation!.gate!.end).toFixed(2)}`
+    const gateChipLabel = gateModulation
+        ? `${resolved.gate.toFixed(2)} -> ${clampStutterGate(gateModulation.end).toFixed(2)}`
         : `${Math.round(resolved.gate * 100)}%`;
     const axisLabelY = effectiveHeight - 10;
     const gateHandleY = plot.plotBottom;
@@ -571,7 +581,7 @@ export function StutterEnvelopeEditor({
                             d={waveSilhouette}
                         />
 
-                        {isGateModulated ? (
+                        {gateModulation ? (
                             <rect
                                 className="seqfx-stutter-editor__gate-mod-region"
                                 x={Math.min(gateStartX, gateEndX)}
@@ -682,7 +692,7 @@ export function StutterEnvelopeEditor({
                                 aria-label="Gate end"
                                 aria-valuemin={0}
                                 aria-valuemax={100}
-                                aria-valuenow={Math.round(clampStutterGate(modulation!.gate!.end) * 100)}
+                                aria-valuenow={Math.round(clampStutterGate(gateModulation.end) * 100)}
                                 className="seqfx-stutter-editor__gate-hit-target seqfx-stutter-editor__gate-hit-target--end"
                                 role="slider"
                                 cx={gateEndX}
@@ -731,7 +741,7 @@ export function StutterEnvelopeEditor({
                             </text>
                         </g>
                     </EditorCurveSurface>
-                    {modulation?.onToggleGate ? (
+                    {toggleGateModulation ? (
                         <button
                             aria-pressed={isGateModulated}
                             className="seqfx-stutter-editor__gate-toggle"
@@ -739,12 +749,12 @@ export function StutterEnvelopeEditor({
                             onClick={(event) => {
                                 event.preventDefault();
                                 event.stopPropagation();
-                                modulation.onToggleGate!();
+                                toggleGateModulation();
                             }}
                             type="button"
                         >
                             <span>Gate</span>
-                            <ModBadge isOn={isGateModulated} direction={modulation.gate?.direction} />
+                            <ModBadge isOn={isGateModulated} {...optionalDirection(gateModulation?.direction)} />
                         </button>
                     ) : null}
                 </div>
@@ -762,11 +772,11 @@ export function StutterEnvelopeEditor({
                     tickCount={(STUTTER_SLICES_MAX - STUTTER_SLICES_MIN) + 1}
                     value={resolved.slices}
                     valueDataRole="seqfx-stutter-slices-value"
-                    modulation={modulation?.slices ? {
-                        end: modulation.slices.end,
-                        onEndChange: (nextValue) => modulation.slices!.onEndChange(clampStutterSlices(nextValue)),
+                    modulation={slicesModulation ? {
+                        end: slicesModulation.end,
+                        onEndChange: (nextValue) => slicesModulation.onEndChange(clampStutterSlices(nextValue)),
                         phase,
-                        direction: modulation.slices.direction,
+                        ...optionalDirection(slicesModulation.direction),
                     } : null}
                     onModulationToggle={modulation?.onToggleSlices ?? null}
                 />
@@ -843,7 +853,7 @@ export function StutterEnvelopeEditor({
                         )}
                     </div>
                     <div className="seqfx-stutter-editor__morph-footer">
-                        {modulation?.onToggleShape ? (
+                        {toggleShapeModulation ? (
                             <button
                                 aria-pressed={isShapeModulated}
                                 className="seqfx-stutter-editor__shape-toggle"
@@ -851,12 +861,12 @@ export function StutterEnvelopeEditor({
                                 onClick={(event) => {
                                     event.preventDefault();
                                     event.stopPropagation();
-                                    modulation.onToggleShape!();
+                                    toggleShapeModulation();
                                 }}
                                 type="button"
                             >
                                 <span>Shape</span>
-                                <ModBadge isOn={isShapeModulated} direction={modulation.shape?.direction} />
+                                <ModBadge isOn={isShapeModulated} {...optionalDirection(shapeModulation?.direction)} />
                             </button>
                         ) : null}
                         {shapeFooterReadout}
@@ -875,11 +885,11 @@ export function StutterEnvelopeEditor({
                     tickCount={16}
                     value={resolved.speed}
                     valueDataRole="seqfx-stutter-speed-value"
-                    modulation={modulation?.speed ? {
-                        end: modulation.speed.end,
-                        onEndChange: (nextValue) => modulation.speed!.onEndChange(roundSpeed(clampStutterSpeed(nextValue))),
+                    modulation={speedModulation ? {
+                        end: speedModulation.end,
+                        onEndChange: (nextValue) => speedModulation.onEndChange(roundSpeed(clampStutterSpeed(nextValue))),
                         phase,
-                        direction: modulation.speed.direction,
+                        ...optionalDirection(speedModulation.direction),
                     } : null}
                     onModulationToggle={modulation?.onToggleSpeed ?? null}
                 />

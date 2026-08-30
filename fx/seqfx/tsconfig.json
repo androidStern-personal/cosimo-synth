@@ -1,0 +1,50 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    "jsx": "react-jsx",
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "useUnknownInCatchVariables": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": [
+      "vite/client"
+    ]
+  },
+  "files": [
+    "view/AuxSource.tsx",
+    "view/CrusherEditor.tsx",
+    "view/SeqFxGlobalControls.tsx",
+    "view/SeqFxPatchView.tsx",
+    "view/StutterEnvelopeEditor.tsx",
+    "view/crusher-preview.ts",
+    "view/seqfx-effect-definitions.ts",
+    "view/seqfx-factory-content.ts",
+    "view/seqfx-preset-adapter.ts",
+    "view/seqfx-preset-migrations.ts",
+    "view/seqfx-runtime-bridge.ts",
+    "view/seqfx-state.ts",
+    "view/source.tsx",
+    "view/stutter-envelope.ts",
+    "view/talk-box-contract.ts",
+    "view/tape-stop-v2-trajectory.ts",
+    "worker/seqfx-worker-service.ts",
+    "worker/source.ts"
+  ]
+}

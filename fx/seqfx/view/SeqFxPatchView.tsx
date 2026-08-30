@@ -209,6 +209,10 @@ type ParamAmountKind =
     | "percentPoints"
     | "stutterShape";
 
+type SeqFxCSSProperties = CSSProperties & {
+    [customProperty: `--${string}`]: string | number;
+};
+
 const EFFECT_OPTIONS = [
     SEQFX_EFFECT_TYPES.filter,
     SEQFX_EFFECT_TYPES.crusher,
@@ -223,6 +227,10 @@ const EFFECT_OPTIONS = [
     SEQFX_EFFECT_TYPES.flange,
     SEQFX_EFFECT_TYPES.dirty,
 ] as const;
+
+function isEffectOption(value: number): value is typeof EFFECT_OPTIONS[number] {
+    return EFFECT_OPTIONS.some((effectType) => effectType === value);
+}
 
 function defaultEffectTypeForChain(chain: number) {
     return EFFECT_OPTIONS[Math.min(EFFECT_OPTIONS.length - 1, Math.max(0, chain))] ?? SEQFX_EFFECT_TYPES.filter;
@@ -634,10 +642,10 @@ function SeqFxModEditor({
                     const physicalAmount = modAmountFromTarget(definition, currentValue, endValue);
                     const normalizedAmount = normalizedAmountFromPhysical(physicalAmount, amountBounds.min, amountBounds.max);
                     const fillPosition = 50 + (normalizedAmount * 50);
-                    const amountTrackStyle = {
+                    const amountTrackStyle: SeqFxCSSProperties = {
                         "--mod-amount-fill-start": `${Math.min(50, fillPosition)}%`,
                         "--mod-amount-fill-end": `${Math.max(50, fillPosition)}%`,
-                    } as CSSProperties;
+                    };
 
                     return (
                         <div
@@ -658,7 +666,7 @@ function SeqFxModEditor({
                             >
                                 <ModBadge isOn={enabled} direction={direction} />
                             </button>
-                            {definition.kind === "select" ? (
+                            {definition.kind === "select" && definition.options !== undefined ? (
                                 <select
                                     aria-label={`${definition.label} modulation destination`}
                                     className="seqfx-mod-target-row__select"
@@ -668,7 +676,7 @@ function SeqFxModEditor({
                                     onChange={(event) => onTargetEndChange(definition.index, Number(event.currentTarget.value))}
                                     value={Math.round(endValue)}
                                 >
-                                    {definition.options!.map((option, index) => (
+                                    {definition.options.map((option, index) => (
                                         <option key={option} value={index}>{option}</option>
                                     ))}
                                 </select>
@@ -761,7 +769,7 @@ function paramDefinitionsForEffect(effectType: SeqFxEffectType): ParamDefinition
     return getSeqFxEffectDefinition(effectType).parameters.map((definition, index) => ({
         ...definition,
         index,
-        kind: definition.options ? "select" : undefined,
+        ...(definition.options ? { kind: "select" as const } : {}),
         amountKind: paramAmountKind(effectType, definition),
     }));
 }
@@ -787,7 +795,7 @@ function SeqFxParameterField({
                 {definition.label}
                 {triggerLatched ? <em>Trigger</em> : null}
             </span>
-            {definition.kind === "select" ? (
+            {definition.kind === "select" && definition.options !== undefined ? (
                 <select
                     aria-label={definition.label}
                     data-role="seqfx-param"
@@ -796,7 +804,7 @@ function SeqFxParameterField({
                     onChange={(event) => onChange(Number(event.currentTarget.value))}
                     value={Math.round(value)}
                 >
-                    {definition.options!.map((option, index) => (
+                    {definition.options.map((option, index) => (
                         <option key={option} value={index}>{option}</option>
                     ))}
                 </select>
@@ -916,8 +924,12 @@ function clampUnit(value: number) {
     return Math.min(1, Math.max(0, value));
 }
 
+function finiteOrFallback(value: number, fallback: number) {
+    return Number.isFinite(value) ? value : fallback;
+}
+
 function cutoffToRisoX(cutoffHz: number, width: number) {
-    const safeCutoff = Math.min(20_000, Math.max(20, Number(cutoffHz) || 2_000));
+    const safeCutoff = Math.min(20_000, Math.max(20, finiteOrFallback(cutoffHz, 2_000)));
     const normalized = (Math.log10(safeCutoff) - Math.log10(20)) / (Math.log10(20_000) - Math.log10(20));
     const margin = width <= 28 ? 7 : Math.min(18, Math.max(9, width * 0.12));
     return margin + (clampUnit(normalized) * Math.max(1, width - (margin * 2)));
@@ -957,7 +969,7 @@ function filterRisoPath(mode: number, cutoffHz: number, resonance: number, width
 }
 
 function formatRisoCutoff(cutoffHz: number) {
-    const cutoff = Math.min(20_000, Math.max(20, Math.round(Number(cutoffHz) || 2_000)));
+    const cutoff = Math.min(20_000, Math.max(20, Math.round(finiteOrFallback(cutoffHz, 2_000))));
     if (cutoff >= 1000) {
         return `${Number((cutoff / 1000).toFixed(cutoff >= 10_000 ? 1 : 2))}k`;
     }
@@ -966,7 +978,7 @@ function formatRisoCutoff(cutoffHz: number) {
 }
 
 function formatRisoResonance(resonance: number) {
-    return `q${Number(Number(resonance || 0).toFixed(2))}`;
+    return `q${Number(finiteOrFallback(resonance, 0).toFixed(2))}`;
 }
 
 function SeqFxFilterBlockGlyph({
@@ -1022,16 +1034,16 @@ function SeqFxFilterBlockGlyph({
 }
 
 function crusherStepCount(bits: number, rateHz: number) {
-    const safeBits = Math.min(16, Math.max(2, Math.round(Number(bits) || 8)));
-    const safeRateHz = Math.min(48_000, Math.max(200, Number(rateHz) || 48_000));
+    const safeBits = Math.min(16, Math.max(2, Math.round(finiteOrFallback(bits, 8))));
+    const safeRateHz = Math.min(48_000, Math.max(200, finiteOrFallback(rateHz, 48_000)));
     const rateNormalized = Math.log(safeRateHz / 200) / Math.log(48_000 / 200);
     return Math.max(2, Math.min(12, Math.round((safeBits * 0.5) + (rateNormalized * 6))));
 }
 
 function crusherRisoPath(bits: number, rateHz: number, driveDb: number, width: number) {
     const stepCount = crusherStepCount(bits, rateHz);
-    const levelCount = Math.max(2, Math.round(Number(bits)));
-    const driveLift = clampUnit(Number(driveDb) / 36) * 5;
+    const levelCount = Math.max(2, Math.round(finiteOrFallback(bits, 8)));
+    const driveLift = clampUnit(finiteOrFallback(driveDb, 0) / 36) * 5;
     const stepWidth = width / stepCount;
     const tops = Array.from({ length: stepCount }, (_unused, index) => {
         const position = stepCount <= 1 ? 0 : index / (stepCount - 1);
@@ -1910,12 +1922,12 @@ const SEQFX_INSPECTOR_TOP_ALIGN_OFFSET_PX = SEQFX_GRID_SHELL_PADDING_TOP_PX
     + SEQFX_STEP_HEADER_GAP_PX
     - (SEQFX_BAR_FRAME_NUMBER_BAND_PX + SEQFX_BAR_FRAME_GAP_PX + SEQFX_BAR_FRAME_INNER_GAP_PX)
     + SEQFX_BAR_FRAME_STROKE_INSET_PX;
-const SEQFX_WORKSPACE_STYLE = {
+const SEQFX_WORKSPACE_STYLE: SeqFxCSSProperties = {
     "--seqfx-grid-shell-padding-top": `${SEQFX_GRID_SHELL_PADDING_TOP_PX}px`,
     "--seqfx-inspector-top-align-offset": `${SEQFX_INSPECTOR_TOP_ALIGN_OFFSET_PX}px`,
     "--seqfx-step-header-gap": `${SEQFX_STEP_HEADER_GAP_PX}px`,
     "--seqfx-step-number-height": `${SEQFX_STEP_NUMBER_HEIGHT_PX}px`,
-} as CSSProperties;
+};
 
 function cellsPerBeatForRateIndex(rateIndex: number) {
     return SEQFX_RATE_CELLS_PER_BEAT[Math.min(2, Math.max(0, Math.round(rateIndex)))] ?? 4;
@@ -2120,8 +2132,8 @@ function SeqFxBarFrame({ barIndex, hasArrow }: { barIndex: number; hasArrow: boo
         const update = () => {
             const bounds = cellStack.getBoundingClientRect();
             setCellStackSize({
-                width: Math.max(1, bounds.width || 1),
-                height: Math.max(1, bounds.height || 1),
+                width: Math.max(1, finiteOrFallback(bounds.width, 1)),
+                height: Math.max(1, finiteOrFallback(bounds.height, 1)),
             });
         };
 
@@ -4317,8 +4329,8 @@ export function SeqFxPatchView({
     }
 
     function setEffectType(value: number) {
-        const nextEffectType = EFFECT_OPTIONS.includes(value as typeof EFFECT_OPTIONS[number])
-            ? value as SeqFxEffectType
+        const nextEffectType = isEffectOption(value)
+            ? value
             : SEQFX_EFFECT_TYPES.filter;
         setDrawEffectType(nextEffectType);
 

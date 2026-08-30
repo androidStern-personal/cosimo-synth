@@ -27,9 +27,8 @@ type ErrorBoundaryState = {
 };
 
 function formatErrorMessage(error: unknown) {
-    if (error && typeof error === "object") {
-        const maybeError = error as { stack?: string; message?: string };
-        return maybeError.stack || maybeError.message || String(error);
+    if (error instanceof Error) {
+        return error.stack ?? error.message;
     }
 
     return String(error);
@@ -47,7 +46,7 @@ class SeqFxErrorBoundary extends Component<
     { children: ReturnType<typeof createElement> },
     ErrorBoundaryState
 > {
-    state: ErrorBoundaryState = {
+    override state: ErrorBoundaryState = {
         errorMessage: null,
     };
 
@@ -57,16 +56,16 @@ class SeqFxErrorBoundary extends Component<
         };
     }
 
-    componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
-        const combinedMessage = [
-            formatErrorMessage(error),
-            errorInfo.componentStack,
-        ].filter(Boolean).join("\n\n");
+    override componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
+        const errorMessage = formatErrorMessage(error);
+        const combinedMessage = errorInfo.componentStack
+            ? `${errorMessage}\n\n${errorInfo.componentStack}`
+            : errorMessage;
         this.setState({ errorMessage: combinedMessage });
         console.error("SeqFX patch view crashed during render", error, errorInfo);
     }
 
-    render() {
+    override render() {
         if (this.state.errorMessage) {
             return createElement(
                 "pre",
@@ -122,7 +121,10 @@ class SeqFxPatchViewElement extends HTMLElement {
             }
 
             if (!this.mountPoint || !this.root) {
-                const shadowRoot = this.shadowRoot!;
+                const shadowRoot = this.shadowRoot;
+                if (!shadowRoot) {
+                    throw new Error("SeqFX production view could not create its shadow root.");
+                }
                 const style = document.createElement("style");
                 const mountPoint = document.createElement("div");
                 mountPoint.style.width = "100%";
@@ -197,7 +199,10 @@ export function createSeqFxPatchView(patchConnection: PatchConnectionLike) {
         window.customElements.define(tagName, SeqFxPatchViewElement);
     }
 
-    const element = document.createElement(tagName) as SeqFxPatchViewElement;
+    const element = document.createElement(tagName);
+    if (!(element instanceof SeqFxPatchViewElement)) {
+        throw new Error(`Custom element ${tagName} was registered with the wrong constructor.`);
+    }
     element.setPatchConnection(patchConnection);
     return element;
 }

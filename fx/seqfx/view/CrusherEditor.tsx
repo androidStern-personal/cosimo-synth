@@ -161,6 +161,10 @@ function lerp(start: number, end: number, phase: number) {
     return start + ((end - start) * Math.max(0, Math.min(1, phase)));
 }
 
+function optionalDirection(direction: ModulationDirection | undefined): { direction?: ModulationDirection } {
+    return direction === undefined ? {} : { direction };
+}
+
 export function CrusherEditor({
     value,
     onBitsChange,
@@ -182,6 +186,13 @@ export function CrusherEditor({
         [effectiveHeight, effectiveWidth],
     );
     const phase = modulation?.phase ?? 0;
+    const bitsModulation = modulation?.bits ?? null;
+    const rateModulation = modulation?.rateHz ?? null;
+    const driveModulation = modulation?.driveDb ?? null;
+    const adcModulation = modulation?.adcQuality ?? null;
+    const dacModulation = modulation?.dacQuality ?? null;
+    const ditherModulation = modulation?.dither ?? null;
+    const toggleDriveModulation = modulation?.onToggleDriveDb;
     const previewValues = useMemo(() => ({
         bits: modulation?.bits
             ? clampCrusherBits(lerp(resolved.bits, modulation.bits.end, phase))
@@ -227,12 +238,12 @@ export function CrusherEditor({
     const markerTop = Math.max(2, plot.plotTop - 18);
     const markerBottom = Math.max(markerTop + 1, plot.plotTop - 7);
     const driveStartPercent = (resolved.driveDb / CRUSHER_DRIVE_DB_MAX) * 100;
-    const driveEndPercent = modulation?.driveDb
-        ? (clampCrusherDriveDb(modulation.driveDb.end) / CRUSHER_DRIVE_DB_MAX) * 100
+    const driveEndPercent = driveModulation
+        ? (clampCrusherDriveDb(driveModulation.end) / CRUSHER_DRIVE_DB_MAX) * 100
         : driveStartPercent;
     const driveSweepLeft = Math.min(driveStartPercent, driveEndPercent);
     const driveSweepRight = 100 - Math.max(driveStartPercent, driveEndPercent);
-    const isDriveModulated = Boolean(modulation?.driveDb);
+    const isDriveModulated = driveModulation !== null;
 
     return (
         <section className="seqfx-crusher-editor" data-role="seqfx-crusher-editor" aria-label="Crusher editor">
@@ -318,11 +329,11 @@ export function CrusherEditor({
                     tickCount={(CRUSHER_BITS_MAX - CRUSHER_BITS_MIN) + 1}
                     value={resolved.bits}
                     valueDataRole="seqfx-crusher-bits-value"
-                    modulation={modulation?.bits ? {
-                        end: modulation.bits.end,
-                        onEndChange: (nextValue) => modulation.bits!.onEndChange(clampCrusherBits(nextValue)),
+                    modulation={bitsModulation ? {
+                        end: bitsModulation.end,
+                        onEndChange: (nextValue) => bitsModulation.onEndChange(clampCrusherBits(nextValue)),
                         phase,
-                        direction: modulation.bits.direction,
+                        ...optionalDirection(bitsModulation.direction),
                     } : null}
                     onModulationToggle={modulation?.onToggleBits ?? null}
                 />
@@ -339,11 +350,11 @@ export function CrusherEditor({
                     tickCount={16}
                     value={crusherRateToNormalized(resolved.rateHz)}
                     valueDataRole="seqfx-crusher-rate-value"
-                    modulation={modulation?.rateHz ? {
-                        end: crusherRateToNormalized(modulation.rateHz.end),
-                        onEndChange: (nextValue) => modulation.rateHz!.onEndChange(Math.round(crusherRateFromNormalized(nextValue))),
+                    modulation={rateModulation ? {
+                        end: crusherRateToNormalized(rateModulation.end),
+                        onEndChange: (nextValue) => rateModulation.onEndChange(Math.round(crusherRateFromNormalized(nextValue))),
                         phase,
-                        direction: modulation.rateHz.direction,
+                        ...optionalDirection(rateModulation.direction),
                     } : null}
                     onModulationToggle={modulation?.onToggleRateHz ?? null}
                 />
@@ -367,7 +378,7 @@ export function CrusherEditor({
                 </div>
                 <div className={`seqfx-crusher-editor__drive${isDriveModulated ? " seqfx-crusher-editor__drive--modulated" : ""}`}>
                     <div className="seqfx-crusher-editor__drive-head">
-                        {modulation?.onToggleDriveDb ? (
+                        {toggleDriveModulation ? (
                             <button
                                 aria-pressed={isDriveModulated}
                                 className="seqfx-crusher-editor__drive-label seqfx-crusher-editor__drive-label--toggle"
@@ -375,24 +386,24 @@ export function CrusherEditor({
                                 onClick={(event) => {
                                     event.preventDefault();
                                     event.stopPropagation();
-                                    modulation.onToggleDriveDb!();
+                                    toggleDriveModulation();
                                 }}
                                 type="button"
                             >
                                 <span>Drive</span>
-                                <ModBadge isOn={isDriveModulated} direction={modulation.driveDb?.direction} />
+                                <ModBadge isOn={isDriveModulated} {...optionalDirection(driveModulation?.direction)} />
                             </button>
                         ) : (
                             <span className="seqfx-crusher-editor__drive-label">Drive</span>
                         )}
-                        {isDriveModulated ? (
+                        {driveModulation ? (
                             <output className="seqfx-crusher-editor__drive-value seqfx-crusher-editor__drive-value--modulated" data-role="seqfx-crusher-drive-db-value">
                                 <span className="seqfx-crusher-editor__drive-chip seqfx-crusher-editor__drive-chip--start">
                                     {formatDriveDb(resolved.driveDb)}
                                 </span>
                                 <span className="seqfx-crusher-editor__drive-arrow">-&gt;</span>
                                 <span className="seqfx-crusher-editor__drive-chip seqfx-crusher-editor__drive-chip--end">
-                                    {formatDriveDb(modulation!.driveDb!.end)}
+                                    {formatDriveDb(driveModulation.end)}
                                 </span>
                             </output>
                         ) : (
@@ -405,7 +416,7 @@ export function CrusherEditor({
                             <span className="seqfx-crusher-editor__drive-notch" style={{ left: "25%" }} />
                             <span className="seqfx-crusher-editor__drive-notch" style={{ left: "50%" }} />
                             <span className="seqfx-crusher-editor__drive-notch" style={{ left: "75%" }} />
-                            {isDriveModulated ? (
+                            {driveModulation ? (
                                 <span
                                     className="seqfx-crusher-editor__drive-range"
                                     style={{ left: `${driveSweepLeft}%`, right: `${driveSweepRight}%` }}
@@ -415,17 +426,17 @@ export function CrusherEditor({
                                 className="seqfx-crusher-editor__drive-thumb"
                                 style={{ left: `${driveStartPercent}%` }}
                             />
-                            {isDriveModulated ? (
+                            {driveModulation ? (
                                 <span
                                     className="seqfx-crusher-editor__drive-thumb seqfx-crusher-editor__drive-thumb--end"
                                     style={{ left: `${driveEndPercent}%` }}
                                 />
                             ) : null}
-                            {isDriveModulated ? (
+                            {driveModulation ? (
                                 <DriveModulationDragSurface
-                                    direction={modulation!.driveDb!.direction ?? "both"}
-                                    endValue={modulation!.driveDb!.end}
-                                    onEndChange={(nextValue) => modulation!.driveDb!.onEndChange(clampCrusherDriveDb(nextValue))}
+                                    direction={driveModulation.direction ?? "both"}
+                                    endValue={driveModulation.end}
+                                    onEndChange={(nextValue) => driveModulation.onEndChange(clampCrusherDriveDb(nextValue))}
                                     onStartChange={(nextValue) => onDriveDbChange(clampCrusherDriveDb(nextValue))}
                                     startValue={resolved.driveDb}
                                 />
@@ -458,11 +469,11 @@ export function CrusherEditor({
                         tickCount={11}
                         value={resolved.adcQuality}
                         valueDataRole="seqfx-crusher-adc-quality-value"
-                        modulation={modulation?.adcQuality ? {
-                            end: modulation.adcQuality.end,
-                            onEndChange: (nextValue) => modulation.adcQuality!.onEndChange(clampCrusherQuality(nextValue)),
+                        modulation={adcModulation ? {
+                            end: adcModulation.end,
+                            onEndChange: (nextValue) => adcModulation.onEndChange(clampCrusherQuality(nextValue)),
                             phase,
-                            direction: modulation.adcQuality.direction,
+                            ...optionalDirection(adcModulation.direction),
                         } : null}
                         onModulationToggle={modulation?.onToggleAdcQuality ?? null}
                     />
@@ -479,11 +490,11 @@ export function CrusherEditor({
                         tickCount={11}
                         value={resolved.dacQuality}
                         valueDataRole="seqfx-crusher-dac-quality-value"
-                        modulation={modulation?.dacQuality ? {
-                            end: modulation.dacQuality.end,
-                            onEndChange: (nextValue) => modulation.dacQuality!.onEndChange(clampCrusherQuality(nextValue)),
+                        modulation={dacModulation ? {
+                            end: dacModulation.end,
+                            onEndChange: (nextValue) => dacModulation.onEndChange(clampCrusherQuality(nextValue)),
                             phase,
-                            direction: modulation.dacQuality.direction,
+                            ...optionalDirection(dacModulation.direction),
                         } : null}
                         onModulationToggle={modulation?.onToggleDacQuality ?? null}
                     />
@@ -500,11 +511,11 @@ export function CrusherEditor({
                         tickCount={11}
                         value={resolved.dither}
                         valueDataRole="seqfx-crusher-dither-value"
-                        modulation={modulation?.dither ? {
-                            end: modulation.dither.end,
-                            onEndChange: (nextValue) => modulation.dither!.onEndChange(clampCrusherQuality(nextValue)),
+                        modulation={ditherModulation ? {
+                            end: ditherModulation.end,
+                            onEndChange: (nextValue) => ditherModulation.onEndChange(clampCrusherQuality(nextValue)),
                             phase,
-                            direction: modulation.dither.direction,
+                            ...optionalDirection(ditherModulation.direction),
                         } : null}
                         onModulationToggle={modulation?.onToggleDither ?? null}
                     />

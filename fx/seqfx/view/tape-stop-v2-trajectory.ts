@@ -42,11 +42,16 @@ function boundedTransitionMs(durationMs: number) {
     return Math.min(durationMs / 2, TAPE_STOP_V2_HANDOFF_MS);
 }
 
+function positiveDurationMs(value: number) {
+    const durationMs = Number(value);
+    return Number.isFinite(durationMs) && durationMs >= 1 ? durationMs : 1;
+}
+
 export function resolveTapeStopV2Trajectory(
     input: TapeStopV2TrajectoryInput,
 ): ResolvedTapeStopV2Trajectory {
-    const stopDurationMs = Math.max(1, Number(input.stopDurationMs) || 1);
-    const startDurationMs = Math.max(1, Number(input.startDurationMs) || 1);
+    const stopDurationMs = positiveDurationMs(input.stopDurationMs);
+    const startDurationMs = positiveDurationMs(input.startDurationMs);
     const returnMode = Math.round(Number(input.returnMode)) === TAPE_STOP_RETURN_SPIN_UP
         ? TAPE_STOP_RETURN_SPIN_UP
         : TAPE_STOP_RETURN_CROSSFADE_TO_LIVE;

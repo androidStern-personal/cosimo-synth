@@ -495,7 +495,7 @@ const definitions = [
 ] as const satisfies readonly SeqFxEffectDefinition[];
 
 export const SEQFX_EFFECT_DEFINITIONS: readonly SeqFxEffectDefinition[] = definitions;
-export const SEQFX_EFFECT_IDS = definitions.map((definition) => definition.id) as readonly SeqFxEffectType[];
+export const SEQFX_EFFECT_IDS: readonly SeqFxEffectType[] = definitions.map((definition) => definition.id);
 export const SEQFX_SELECTABLE_EFFECT_IDS = SEQFX_EFFECT_IDS.filter(
     (effectType) => effectType !== SEQFX_EFFECT_TYPES.empty,
 );
@@ -504,20 +504,39 @@ const definitionByID = new Map<SeqFxEffectType, SeqFxEffectDefinition>(
     definitions.map((definition) => [definition.id, definition]),
 );
 
-export const SEQFX_EFFECT_TYPE_NAMES = Object.fromEntries(
-    definitions.map((definition) => [definition.id, definition.name]),
-) as Record<SeqFxEffectType, string>;
+function buildEffectNameRecord(
+    selectName: (definition: SeqFxEffectDefinition) => string,
+): Record<SeqFxEffectType, string> {
+    return {
+        [definitions[0].id]: selectName(definitions[0]),
+        [definitions[1].id]: selectName(definitions[1]),
+        [definitions[2].id]: selectName(definitions[2]),
+        [definitions[3].id]: selectName(definitions[3]),
+        [definitions[4].id]: selectName(definitions[4]),
+        [definitions[5].id]: selectName(definitions[5]),
+        [definitions[6].id]: selectName(definitions[6]),
+        [definitions[7].id]: selectName(definitions[7]),
+        [definitions[8].id]: selectName(definitions[8]),
+        [definitions[9].id]: selectName(definitions[9]),
+        [definitions[10].id]: selectName(definitions[10]),
+        [definitions[11].id]: selectName(definitions[11]),
+        [definitions[12].id]: selectName(definitions[12]),
+    };
+}
 
-export const SEQFX_EFFECT_TYPE_SHORT_NAMES = Object.fromEntries(
-    definitions.map((definition) => [definition.id, definition.shortName]),
-) as Record<SeqFxEffectType, string>;
+export const SEQFX_EFFECT_TYPE_NAMES = buildEffectNameRecord((definition) => definition.name);
+export const SEQFX_EFFECT_TYPE_SHORT_NAMES = buildEffectNameRecord((definition) => definition.shortName);
 
 export function isSeqFxEffectType(value: unknown): value is SeqFxEffectType {
-    return typeof value === "number" && Number.isInteger(value) && definitionByID.has(value as SeqFxEffectType);
+    return typeof value === "number"
+        && Number.isInteger(value)
+        && SEQFX_EFFECT_IDS.some((effectType) => effectType === value);
 }
 
 export function getSeqFxEffectDefinition(effectType: number): SeqFxEffectDefinition {
-    return definitionByID.get(effectType as SeqFxEffectType) ?? definitionByID.get(SEQFX_EFFECT_TYPES.empty)!;
+    return isSeqFxEffectType(effectType)
+        ? definitionByID.get(effectType) ?? definitions[0]
+        : definitions[0];
 }
 
 export function getSeqFxDefaultParams(effectType: number): number[] {

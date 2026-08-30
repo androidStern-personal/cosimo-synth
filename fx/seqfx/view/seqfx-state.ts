@@ -32,6 +32,21 @@ export const SEQFX_STEP_COUNT = 32;
 export const SEQFX_LANE_COUNT = 4;
 export const SEQFX_PATTERN_COUNT = 12;
 
+type TupleOf<T, Length extends number, Accumulator extends T[] = []> =
+    Accumulator["length"] extends Length
+        ? Accumulator
+        : TupleOf<T, Length, [...Accumulator, T]>;
+
+type FixedDenseArray<T, Length extends number> = TupleOf<T, Length> & {
+    [index: number]: T;
+};
+
+type SeqFxParamVector = FixedDenseArray<number, typeof SEQFX_PARAM_COUNT>;
+type SeqFxAuxTargetVector = FixedDenseArray<SeqFxAuxTarget, typeof SEQFX_PARAM_COUNT>;
+type SeqFxStepVector = FixedDenseArray<SeqFxStep, typeof SEQFX_STEP_COUNT>;
+type SeqFxLaneVector = FixedDenseArray<SeqFxLane, typeof SEQFX_LANE_COUNT>;
+type SeqFxPatternVector = FixedDenseArray<SeqFxPattern, typeof SEQFX_PATTERN_COUNT>;
+
 export const SEQFX_AUX_RATE_MODES = {
     tempo: "tempo",
     slice: "slice",
@@ -93,7 +108,7 @@ export type SeqFxAuxTarget = {
 
 export type SeqFxAuxState = {
     source: SeqFxAuxSource;
-    targets: SeqFxAuxTarget[];
+    targets: SeqFxAuxTargetVector;
 };
 
 export type SeqFxStep = {
@@ -101,25 +116,25 @@ export type SeqFxStep = {
     trigger: boolean;
     effectType: SeqFxEffectType;
     mix: number;
-    params: number[];
+    params: SeqFxParamVector;
     aux: SeqFxAuxState;
-    effectParams?: Partial<Record<SeqFxEffectType, number[]>>;
+    effectParams?: Partial<Record<SeqFxEffectType, SeqFxParamVector>>;
     effectAux?: Partial<Record<SeqFxEffectType, SeqFxAuxState>>;
 };
 
 export type SeqFxLane = {
-    steps: SeqFxStep[];
+    steps: SeqFxStepVector;
 };
 
 export type SeqFxPattern = {
     revision: number;
-    lanes: SeqFxLane[];
+    lanes: SeqFxLaneVector;
 };
 
 export type SeqFxState = {
     /** Dense, normalized editing/runtime projection. Persistence uses SeqFxStoredStateV7. */
     version: typeof SEQFX_STATE_VERSION;
-    patterns: SeqFxPattern[];
+    patterns: SeqFxPatternVector;
 };
 
 export type SeqFxStoredAuxSource = Partial<SeqFxAuxSource>;
@@ -369,9 +384,9 @@ export type SeqFxStepValueSnapshot = {
     lane: number;
     effectType: SeqFxEffectType;
     mix: number;
-    params: number[];
+    params: SeqFxParamVector;
     aux: SeqFxAuxState;
-    effectParams?: Partial<Record<SeqFxEffectType, number[]>>;
+    effectParams?: Partial<Record<SeqFxEffectType, SeqFxParamVector>>;
     effectAux?: Partial<Record<SeqFxEffectType, SeqFxAuxState>>;
 };
 
@@ -413,6 +428,26 @@ function clamp(value: number, min: number, max: number): number {
     return Object.is(clamped, -0) ? 0 : clamped;
 }
 
+function positiveIntegerOrFallback(value: unknown, fallback: number): number {
+    const integer = Math.trunc(Number(value));
+    return Number.isFinite(integer) && integer >= 1 ? integer : fallback;
+}
+
+function createFixedDenseArray<T, const Length extends number>(
+    length: Length,
+    createValue: (index: number) => T,
+): FixedDenseArray<T, Length> {
+    const values = Array.from({ length }, (_unused, index) => createValue(index));
+
+    // SAFETY: Array.from creates every index from zero through length - 1, and
+    // the newly owned array cannot change length before it is returned.
+    return values as FixedDenseArray<T, Length>;
+}
+
+function cloneParamVector(params: readonly number[]): SeqFxParamVector {
+    return createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => Number(params[paramIndex] ?? 0));
+}
+
 function clampIndex(value: number, maxExclusive: number, label: string): number {
     const index = Math.trunc(value);
     if (index < 0 || index >= maxExclusive) {
@@ -446,26 +481,26 @@ function normalizeEffectType(value: number, fallback: SeqFxEffectType = SEQFX_EF
     return fallback;
 }
 
-function defaultParamsForEffect(effectType: number): number[] {
+function defaultParamsForEffect(effectType: number): SeqFxParamVector {
     const resolved = normalizeEffectType(effectType, SEQFX_EFFECT_TYPES.empty);
-    return getSeqFxDefaultParams(resolved);
+    return cloneParamVector(getSeqFxDefaultParams(resolved));
 }
 
-function normalizeParamVector(effectType: number, params: unknown): number[] {
+function normalizeParamVector(effectType: number, params: unknown): SeqFxParamVector {
     const rawParams = Array.isArray(params) ? params : [];
     const defaults = defaultParamsForEffect(effectType);
-    return Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
+    return createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => (
         normalizeParam(effectType, paramIndex, Number(rawParams[paramIndex] ?? defaults[paramIndex]))
     ));
 }
 
-function normalizeEffectParamMemory(value: unknown): Partial<Record<SeqFxEffectType, number[]>> | undefined {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
+function normalizeEffectParamMemory(value: unknown): Partial<Record<SeqFxEffectType, SeqFxParamVector>> | undefined {
+    if (!isPlainRecord(value)) {
         return undefined;
     }
 
-    const rawMemory = value as Record<string, unknown>;
-    const memory: Partial<Record<SeqFxEffectType, number[]>> = {};
+    const rawMemory = value;
+    const memory: Partial<Record<SeqFxEffectType, SeqFxParamVector>> = {};
 
     for (const effectType of SEQFX_EFFECT_IDS) {
         if (effectType === SEQFX_EFFECT_TYPES.empty) {
@@ -487,9 +522,7 @@ function normalizeAuxRateMode(value: unknown): SeqFxAuxRateMode {
 }
 
 function normalizeAuxSource(value: unknown): SeqFxAuxSource {
-    const rawSource = value && typeof value === "object" && !Array.isArray(value)
-        ? value as Partial<SeqFxAuxSource>
-        : {};
+    const rawSource = isPlainRecord(value) ? value : {};
 
     return {
         shape: clamp(Number(rawSource.shape ?? SEQFX_AUX_SOURCE_DEFAULT.shape), SEQFX_AUX_SHAPE_MIN, SEQFX_AUX_SHAPE_MAX),
@@ -518,7 +551,7 @@ export function seqFxAuxRateModeToUploadValue(mode: SeqFxAuxRateMode): number {
 function defaultAuxForParams(params: number[], effectType: number = SEQFX_EFFECT_TYPES.empty): SeqFxAuxState {
     const aux: SeqFxAuxState = {
         source: normalizeAuxSource(SEQFX_AUX_SOURCE_DEFAULT),
-        targets: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => ({
+        targets: createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => ({
             enabled: false,
             end: Number(params[paramIndex] ?? 0),
         })),
@@ -545,26 +578,22 @@ function defaultAuxForParams(params: number[], effectType: number = SEQFX_EFFECT
 }
 
 function normalizeAuxState(effectType: number, params: number[], value: unknown): SeqFxAuxState {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
+    if (!isPlainRecord(value)) {
         return defaultAuxForParams(params, normalizeEffectType(effectType, SEQFX_EFFECT_TYPES.empty));
     }
 
-    const rawAux = value && typeof value === "object" && !Array.isArray(value)
-        ? value as Partial<SeqFxAuxState>
-        : {};
-    const rawTargets = Array.isArray(rawAux.targets) ? rawAux.targets : [];
+    const rawAux = value;
+    const rawTargets = Array.isArray(rawAux["targets"]) ? rawAux["targets"] : [];
     const defaultAux = defaultAuxForParams(params, normalizeEffectType(effectType, SEQFX_EFFECT_TYPES.empty));
 
     return {
-        source: normalizeAuxSource(rawAux.source ?? defaultAux.source),
-        targets: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => {
-            const rawTarget = rawTargets[paramIndex] && typeof rawTargets[paramIndex] === "object"
-                ? rawTargets[paramIndex] as Partial<SeqFxAuxTarget>
-                : {};
+        source: normalizeAuxSource(rawAux["source"] ?? defaultAux.source),
+        targets: createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => {
+            const rawTarget = isPlainRecord(rawTargets[paramIndex]) ? rawTargets[paramIndex] : {};
             const defaultTarget = defaultAux.targets[paramIndex];
             return {
-                enabled: typeof rawTarget.enabled === "boolean" ? rawTarget.enabled : defaultTarget.enabled,
-                end: normalizeParam(effectType, paramIndex, Number(rawTarget.end ?? defaultTarget.end)),
+                enabled: typeof rawTarget["enabled"] === "boolean" ? rawTarget["enabled"] : defaultTarget.enabled,
+                end: normalizeParam(effectType, paramIndex, Number(rawTarget["end"] ?? defaultTarget.end)),
             };
         }),
     };
@@ -572,13 +601,13 @@ function normalizeAuxState(effectType: number, params: number[], value: unknown)
 
 function normalizeEffectAuxMemory(
     value: unknown,
-    effectParamMemory?: Partial<Record<SeqFxEffectType, number[]>>,
+    effectParamMemory?: Partial<Record<SeqFxEffectType, SeqFxParamVector>>,
 ): Partial<Record<SeqFxEffectType, SeqFxAuxState>> | undefined {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
+    if (!isPlainRecord(value)) {
         return undefined;
     }
 
-    const rawMemory = value as Record<string, unknown>;
+    const rawMemory = value;
     const memory: Partial<Record<SeqFxEffectType, SeqFxAuxState>> = {};
 
     for (const effectType of SEQFX_EFFECT_IDS) {
@@ -595,15 +624,18 @@ function normalizeEffectAuxMemory(
     return Object.keys(memory).length > 0 ? memory : undefined;
 }
 
-function cloneEffectParamMemory(memory?: Partial<Record<SeqFxEffectType, number[]>>): Partial<Record<SeqFxEffectType, number[]>> | undefined {
+function cloneEffectParamMemory(memory?: Partial<Record<SeqFxEffectType, SeqFxParamVector>>): Partial<Record<SeqFxEffectType, SeqFxParamVector>> | undefined {
     if (!memory) {
         return undefined;
     }
 
-    const cloned: Partial<Record<SeqFxEffectType, number[]>> = {};
+    const cloned: Partial<Record<SeqFxEffectType, SeqFxParamVector>> = {};
     for (const [effectType, params] of Object.entries(memory)) {
         if (Array.isArray(params)) {
-            cloned[Number(effectType) as SeqFxEffectType] = [...params];
+            const parsedEffectType = Number(effectType);
+            if (isSeqFxEffectType(parsedEffectType)) {
+                cloned[parsedEffectType] = cloneParamVector(params);
+            }
         }
     }
 
@@ -613,7 +645,7 @@ function cloneEffectParamMemory(memory?: Partial<Record<SeqFxEffectType, number[
 function cloneAuxState(aux: SeqFxAuxState): SeqFxAuxState {
     return {
         source: normalizeAuxSource(aux.source),
-        targets: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => ({
+        targets: createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => ({
             enabled: aux.targets[paramIndex]?.enabled === true,
             end: Number(aux.targets[paramIndex]?.end ?? 0),
         })),
@@ -627,8 +659,9 @@ function cloneEffectAuxMemory(memory?: Partial<Record<SeqFxEffectType, SeqFxAuxS
 
     const cloned: Partial<Record<SeqFxEffectType, SeqFxAuxState>> = {};
     for (const [effectType, aux] of Object.entries(memory)) {
-        if (aux) {
-            cloned[Number(effectType) as SeqFxEffectType] = cloneAuxState(aux);
+        const parsedEffectType = Number(effectType);
+        if (aux && isSeqFxEffectType(parsedEffectType)) {
+            cloned[parsedEffectType] = cloneAuxState(aux);
         }
     }
 
@@ -644,7 +677,7 @@ function cloneEffectMemories(step?: Pick<SeqFxStep, "effectParams" | "effectAux"
     };
 }
 
-function rememberCurrentEffectParams(step: SeqFxStep): Partial<Record<SeqFxEffectType, number[]>> | undefined {
+function rememberCurrentEffectParams(step: SeqFxStep): Partial<Record<SeqFxEffectType, SeqFxParamVector>> | undefined {
     const memory = cloneEffectParamMemory(step.effectParams) ?? {};
     if (step.active && step.effectType !== SEQFX_EFFECT_TYPES.empty) {
         memory[step.effectType] = normalizeParamVector(step.effectType, step.params);
@@ -662,10 +695,36 @@ function rememberCurrentEffectAux(step: SeqFxStep): Partial<Record<SeqFxEffectTy
     return Object.keys(memory).length > 0 ? memory : undefined;
 }
 
-function rememberedParamsForEffect(step: SeqFxStep, effectType: SeqFxEffectType): number[] {
+function rememberedParamsForEffect(step: SeqFxStep, effectType: SeqFxEffectType): SeqFxParamVector {
     return step.effectParams?.[effectType]
-        ? [...step.effectParams[effectType]]
+        ? cloneParamVector(step.effectParams[effectType])
         : defaultParamsForEffect(effectType);
+}
+
+function replaceStepEffectParamMemory(
+    step: SeqFxStep,
+    memory: Partial<Record<SeqFxEffectType, SeqFxParamVector>> | undefined,
+): void {
+    if (memory) {
+        step.effectParams = memory;
+        return;
+    }
+
+    // Absence is part of the canonical dense-state shape. An own property with
+    // an undefined value would make normalization structurally non-idempotent.
+    delete step.effectParams;
+}
+
+function replaceStepEffectAuxMemory(
+    step: SeqFxStep,
+    memory: Partial<Record<SeqFxEffectType, SeqFxAuxState>> | undefined,
+): void {
+    if (memory) {
+        step.effectAux = memory;
+        return;
+    }
+
+    delete step.effectAux;
 }
 
 function rememberedAuxForEffect(step: SeqFxStep, effectType: SeqFxEffectType, params: number[]): SeqFxAuxState {
@@ -890,8 +949,8 @@ function createDefaultStep(lane: number): SeqFxStep {
 function createDefaultPattern(): SeqFxPattern {
     return {
         revision: 1,
-        lanes: Array.from({ length: SEQFX_LANE_COUNT }, (_unused, lane) => ({
-            steps: Array.from({ length: SEQFX_STEP_COUNT }, () => createDefaultStep(lane)),
+        lanes: createFixedDenseArray(SEQFX_LANE_COUNT, (lane) => ({
+            steps: createFixedDenseArray(SEQFX_STEP_COUNT, () => createDefaultStep(lane)),
         })),
     };
 }
@@ -899,46 +958,51 @@ function createDefaultPattern(): SeqFxPattern {
 export function createDefaultSeqFxState(): SeqFxState {
     return {
         version: SEQFX_STATE_VERSION,
-        patterns: Array.from({ length: SEQFX_PATTERN_COUNT }, () => createDefaultPattern()),
+        patterns: createFixedDenseArray(SEQFX_PATTERN_COUNT, () => createDefaultPattern()),
     };
 }
 
 function cloneState(state: SeqFxState): SeqFxState {
     return {
         version: SEQFX_STATE_VERSION,
-        patterns: state.patterns.map((pattern) => ({
-            revision: pattern.revision,
-            lanes: pattern.lanes.map((lane) => ({
-                steps: lane.steps.map((step) => {
-                    const effectParams = cloneEffectParamMemory(step.effectParams);
-                    const effectAux = cloneEffectAuxMemory(step.effectAux);
+        patterns: createFixedDenseArray(SEQFX_PATTERN_COUNT, (patternIndex) => {
+            const pattern = state.patterns[patternIndex];
+            return {
+                revision: pattern.revision,
+                lanes: createFixedDenseArray(SEQFX_LANE_COUNT, (laneIndex) => {
+                    const lane = pattern.lanes[laneIndex];
                     return {
-                        active: step.active,
-                        trigger: step.trigger,
-                        effectType: step.effectType,
-                        mix: step.mix,
-                        params: [...step.params],
-                        aux: cloneAuxState(step.aux),
-                        ...(effectParams ? { effectParams } : {}),
-                        ...(effectAux ? { effectAux } : {}),
+                        steps: createFixedDenseArray(SEQFX_STEP_COUNT, (stepIndex) => {
+                            const step = lane.steps[stepIndex];
+                            const effectParams = cloneEffectParamMemory(step.effectParams);
+                            const effectAux = cloneEffectAuxMemory(step.effectAux);
+                            return {
+                                active: step.active,
+                                trigger: step.trigger,
+                                effectType: step.effectType,
+                                mix: step.mix,
+                                params: cloneParamVector(step.params),
+                                aux: cloneAuxState(step.aux),
+                                ...(effectParams ? { effectParams } : {}),
+                                ...(effectAux ? { effectAux } : {}),
+                            };
+                        }),
                     };
                 }),
-            })),
-        })),
+            };
+        }),
     };
 }
 
 function normalizeStep(candidate: unknown, lane: number): SeqFxStep {
     const fallback = createDefaultStep(lane);
-    const step = candidate && typeof candidate === "object"
-        ? candidate as Partial<SeqFxStep>
-        : {};
-    const rawParams = Array.isArray(step.params) ? step.params : [];
-    const effectParams = normalizeEffectParamMemory(step.effectParams);
-    const rawActive = step.active === true;
+    const step = isPlainRecord(candidate) ? candidate : {};
+    const rawParams = Array.isArray(step["params"]) ? step["params"] : [];
+    const effectParams = normalizeEffectParamMemory(step["effectParams"]);
+    const rawActive = step["active"] === true;
     const fallbackEffectType = defaultEffectTypeForLane(lane);
     const rawEffectType = Object.prototype.hasOwnProperty.call(step, "effectType")
-        ? Number(step.effectType)
+        ? Number(step["effectType"])
         : fallbackEffectType;
     const effectType = rawActive
         ? normalizeEffectType(rawEffectType, fallbackEffectType)
@@ -948,14 +1012,14 @@ function normalizeStep(candidate: unknown, lane: number): SeqFxStep {
         : effectType;
 
     const params = normalizeParamVector(paramsEffectType, rawParams);
-    const effectAux = normalizeEffectAuxMemory(step.effectAux, effectParams);
+    const effectAux = normalizeEffectAuxMemory(step["effectAux"], effectParams);
     return {
         active: rawActive && effectType !== SEQFX_EFFECT_TYPES.empty,
-        trigger: rawActive && effectType !== SEQFX_EFFECT_TYPES.empty && step.trigger === true,
+        trigger: rawActive && effectType !== SEQFX_EFFECT_TYPES.empty && step["trigger"] === true,
         effectType,
-        mix: normalizeMix(Number(step.mix ?? fallback.mix)),
+        mix: normalizeMix(Number(step["mix"] ?? fallback.mix)),
         params,
-        aux: normalizeAuxState(paramsEffectType, params, step.aux),
+        aux: normalizeAuxState(paramsEffectType, params, step["aux"]),
         ...(effectParams ? { effectParams } : {}),
         ...(effectAux ? { effectAux } : {}),
     };
@@ -991,21 +1055,19 @@ function repairPatternBlocks(pattern: SeqFxPattern): SeqFxPattern {
 }
 
 function normalizePattern(candidate: unknown): SeqFxPattern {
-    const pattern = candidate && typeof candidate === "object"
-        ? candidate as Partial<SeqFxPattern>
-        : {};
-    const rawLanes = Array.isArray(pattern.lanes) ? pattern.lanes : [];
+    const pattern = isPlainRecord(candidate) ? candidate : {};
+    const rawLanes = Array.isArray(pattern["lanes"]) ? pattern["lanes"] : [];
 
     return repairPatternBlocks({
-        revision: Math.max(1, Math.trunc(Number(pattern.revision ?? 1)) || 1),
-        lanes: Array.from({ length: SEQFX_LANE_COUNT }, (_unused, lane) => {
+        revision: positiveIntegerOrFallback(pattern["revision"], 1),
+        lanes: createFixedDenseArray(SEQFX_LANE_COUNT, (lane) => {
             const rawLane = rawLanes[lane];
-            const rawSteps = rawLane && typeof rawLane === "object" && Array.isArray((rawLane as SeqFxLane).steps)
-                ? (rawLane as SeqFxLane).steps
+            const rawSteps = isPlainRecord(rawLane) && Array.isArray(rawLane["steps"])
+                ? rawLane["steps"]
                 : [];
 
             return {
-                steps: Array.from({ length: SEQFX_STEP_COUNT }, (_unusedStep, step) => (
+                steps: createFixedDenseArray(SEQFX_STEP_COUNT, (step) => (
                     normalizeStep(rawSteps[step], lane)
                 )),
             };
@@ -1014,7 +1076,7 @@ function normalizePattern(candidate: unknown): SeqFxPattern {
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
-    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+    return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function hasOwnValue(value: object, key: string): boolean {
@@ -1027,7 +1089,7 @@ function normalizeDenseSeqFxState(candidate: unknown): SeqFxState {
 
     return {
         version: SEQFX_STATE_VERSION,
-        patterns: Array.from({ length: SEQFX_PATTERN_COUNT }, (_unused, pattern) => (
+        patterns: createFixedDenseArray(SEQFX_PATTERN_COUNT, (pattern) => (
             normalizePattern(rawPatterns[pattern])
         )),
     };
@@ -1085,10 +1147,23 @@ function serializeSparseAux(effectType: SeqFxEffectType, params: number[], aux: 
     const defaults = defaultAuxForParams(params, effectType);
     const source: SeqFxStoredAuxSource = {};
 
-    for (const key of ["shape", "sourceCurve", "rateMode", "tempoMultiplier", "tempoTriplet", "sliceCount"] as const) {
-        if (normalized.source[key] !== defaults.source[key]) {
-            (source as Record<string, unknown>)[key] = normalized.source[key];
-        }
+    if (normalized.source.shape !== defaults.source.shape) {
+        source.shape = normalized.source.shape;
+    }
+    if (normalized.source.sourceCurve !== defaults.source.sourceCurve) {
+        source.sourceCurve = normalized.source.sourceCurve;
+    }
+    if (normalized.source.rateMode !== defaults.source.rateMode) {
+        source.rateMode = normalized.source.rateMode;
+    }
+    if (normalized.source.tempoMultiplier !== defaults.source.tempoMultiplier) {
+        source.tempoMultiplier = normalized.source.tempoMultiplier;
+    }
+    if (normalized.source.tempoTriplet !== defaults.source.tempoTriplet) {
+        source.tempoTriplet = normalized.source.tempoTriplet;
+    }
+    if (normalized.source.sliceCount !== defaults.source.sliceCount) {
+        source.sliceCount = normalized.source.sliceCount;
     }
 
     const targets = normalized.targets.flatMap((target, index): SeqFxStoredAuxTarget[] => {
@@ -1283,12 +1358,13 @@ function requireNumber(value: unknown, min: number, max: number, path: string): 
     return Object.is(value, -0) ? 0 : value;
 }
 
-function parseStoredParamVector(effectType: SeqFxEffectType, value: unknown, path: string): number[] {
+function parseStoredParamVector(effectType: SeqFxEffectType, value: unknown, path: string): SeqFxParamVector {
     if (!Array.isArray(value) || value.length !== SEQFX_PARAM_COUNT) {
         failParse("invalid_params", path, `must contain exactly ${SEQFX_PARAM_COUNT} parameters`);
     }
 
-    return value.map((rawParam, paramIndex) => {
+    return createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => {
+        const rawParam = value[paramIndex];
         const [min, max] = getSeqFxParamLimits(effectType, paramIndex);
         const param = requireNumber(rawParam, min, max, `${path}[${paramIndex}]`);
         if (isSeqFxIntegerParam(effectType, paramIndex) && !Number.isInteger(param)) {
@@ -1384,12 +1460,12 @@ function parseMemoryEffectType(key: string, path: string): SeqFxEffectType {
 }
 
 function parseStoredMemories(value: unknown, path: string): {
-    effectParams?: Partial<Record<SeqFxEffectType, number[]>>;
+    effectParams?: Partial<Record<SeqFxEffectType, SeqFxParamVector>>;
     effectAux?: Partial<Record<SeqFxEffectType, SeqFxAuxState>>;
 } {
     const rawMemories = requireRecord(value, path);
     assertAllowedKeys(rawMemories, ["params", "aux"], path);
-    const effectParams: Partial<Record<SeqFxEffectType, number[]>> = {};
+    const effectParams: Partial<Record<SeqFxEffectType, SeqFxParamVector>> = {};
     const effectAux: Partial<Record<SeqFxEffectType, SeqFxAuxState>> = {};
 
     if (hasOwnValue(rawMemories, "params")) {
@@ -1424,7 +1500,7 @@ function parseStoredStep(
     const params = hasOwnValue(raw, "params")
         ? parseStoredParamVector(effectType, raw.params, `${path}.params`)
         : baseStep
-            ? [...baseStep.params]
+            ? cloneParamVector(baseStep.params)
             : defaultParamsForEffect(effectType);
     const aux = hasOwnValue(raw, "aux")
         ? parseStoredAux(effectType, params, raw.aux, `${path}.aux`)
@@ -1567,12 +1643,13 @@ function legacyParamLimits(effectType: SeqFxEffectType, paramIndex: number): rea
     return LEGACY_PARAM_LIMITS[effectType]?.[paramIndex] ?? [0, 0];
 }
 
-function parseLegacyParamVector(effectType: SeqFxEffectType, value: unknown, path: string): number[] {
+function parseLegacyParamVector(effectType: SeqFxEffectType, value: unknown, path: string): SeqFxParamVector {
     if (!Array.isArray(value) || value.length !== SEQFX_PARAM_COUNT) {
         failParse("invalid_params", path, `must contain exactly ${SEQFX_PARAM_COUNT} parameters`);
     }
 
-    return value.map((rawParam, paramIndex) => {
+    return createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => {
+        const rawParam = value[paramIndex];
         const [min, max] = legacyParamLimits(effectType, paramIndex);
         const param = requireNumber(rawParam, min, max, `${path}[${paramIndex}]`);
         const isInteger = (effectType === SEQFX_EFFECT_TYPES.filter && paramIndex === 0)
@@ -1611,7 +1688,8 @@ function parseLegacyAux(
     if (!Array.isArray(rawTargets) || rawTargets.length !== SEQFX_PARAM_COUNT) {
         failParse("invalid_aux_targets", `${path}.targets`, `must contain exactly ${SEQFX_PARAM_COUNT} targets`);
     }
-    const targets = rawTargets.map((rawTarget, paramIndex): SeqFxAuxTarget => {
+    const targets = createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex): SeqFxAuxTarget => {
+        const rawTarget = rawTargets[paramIndex];
         const targetPath = `${path}.targets[${paramIndex}]`;
         const target = requireRecord(rawTarget, targetPath);
         assertAllowedKeys(target, ["enabled", "end"], targetPath);
@@ -1636,7 +1714,7 @@ function parseLegacyMemories(
     rawStep: Record<string, unknown>,
     path: string,
 ): Pick<SeqFxStep, "effectParams" | "effectAux"> {
-    const effectParams: Partial<Record<SeqFxEffectType, number[]>> = {};
+    const effectParams: Partial<Record<SeqFxEffectType, SeqFxParamVector>> = {};
     const effectAux: Partial<Record<SeqFxEffectType, SeqFxAuxState>> = {};
 
     if (hasOwnValue(rawStep, "effectParams")) {
@@ -1671,7 +1749,8 @@ function parseStrictSeqFxLegacyState(value: unknown): SeqFxLegacyStateV5 {
         failParse("invalid_pattern_count", "$.patterns", `must contain exactly ${SEQFX_PATTERN_COUNT} patterns`);
     }
 
-    const patterns = rawPatterns.map((rawPattern, patternIndex): SeqFxPattern => {
+    const patterns = createFixedDenseArray(SEQFX_PATTERN_COUNT, (patternIndex): SeqFxPattern => {
+        const rawPattern = rawPatterns[patternIndex];
         const patternPath = `$.patterns[${patternIndex}]`;
         const pattern = requireRecord(rawPattern, patternPath);
         assertAllowedKeys(pattern, ["revision", "lanes"], patternPath);
@@ -1681,7 +1760,8 @@ function parseStrictSeqFxLegacyState(value: unknown): SeqFxLegacyStateV5 {
         }
         return {
             revision: requireInteger(requireField(pattern, "revision", patternPath), 1, Number.MAX_SAFE_INTEGER, `${patternPath}.revision`),
-            lanes: rawLanes.map((rawLane, laneIndex): SeqFxLane => {
+            lanes: createFixedDenseArray(SEQFX_LANE_COUNT, (laneIndex): SeqFxLane => {
+                const rawLane = rawLanes[laneIndex];
                 const lanePath = `${patternPath}.lanes[${laneIndex}]`;
                 const lane = requireRecord(rawLane, lanePath);
                 assertAllowedKeys(lane, ["steps"], lanePath);
@@ -1690,7 +1770,8 @@ function parseStrictSeqFxLegacyState(value: unknown): SeqFxLegacyStateV5 {
                     failParse("invalid_step_count", `${lanePath}.steps`, `must contain exactly ${SEQFX_STEP_COUNT} steps`);
                 }
                 return {
-                    steps: rawSteps.map((rawStep, stepIndex): SeqFxStep => {
+                    steps: createFixedDenseArray(SEQFX_STEP_COUNT, (stepIndex): SeqFxStep => {
+                        const rawStep = rawSteps[stepIndex];
                         const stepPath = `${lanePath}.steps[${stepIndex}]`;
                         const step = requireRecord(rawStep, stepPath);
                         assertAllowedKeys(step, ["active", "trigger", "effectType", "mix", "params", "aux", "effectParams", "effectAux"], stepPath);
@@ -1730,7 +1811,7 @@ function parseStrictSeqFxLegacyState(value: unknown): SeqFxLegacyStateV5 {
     };
 }
 
-function migrateLegacyTapeParamVector(rawParams: unknown, blockLength: number): number[] {
+function migrateLegacyTapeParamVector(rawParams: unknown, blockLength: number): SeqFxParamVector {
     const params = Array.isArray(rawParams) ? rawParams.map(Number) : [];
     const durationScale = Number(params[0] ?? 1);
     const curvePower = Number(params[1] ?? 1);
@@ -1762,7 +1843,7 @@ function migrateLegacyTapeParamVector(rawParams: unknown, blockLength: number): 
     const freeStartMs = clamp((catchupPercent / 100) * canonicalBlockMs, 20, 8_000);
     const curve = clamp(Math.log(curvePower) / Math.log(4), -1, 1);
 
-    return [
+    return cloneParamVector([
         8, // One Cell remains the direct-edit default when switching back to Sync.
         curve,
         legacyMode === 1 ? 1 : 0,
@@ -1771,10 +1852,10 @@ function migrateLegacyTapeParamVector(rawParams: unknown, blockLength: number): 
         1, // Free timing preserves the deterministic millisecond mapping above.
         freeStopMs,
         freeStartMs,
-    ];
+    ]);
 }
 
-function migrateLegacyCrushParamVector(rawParams: unknown): number[] {
+function migrateLegacyCrushParamVector(rawParams: unknown): SeqFxParamVector {
     const params = Array.isArray(rawParams) ? rawParams.map(Number) : [];
     const bits = Number(params[0] ?? 8);
     const holdFrames = Number(params[1] ?? 1);
@@ -1794,13 +1875,13 @@ function migrateLegacyCrushParamVector(rawParams: unknown): number[] {
         throw new Error("Legacy Crush bits and hold frames must be integers.");
     }
 
-    return [bits, 48_000 / holdFrames, driveDb, 0, 0, 0, 0, 0];
+    return cloneParamVector([bits, 48_000 / holdFrames, driveDb, 0, 0, 0, 0, 0]);
 }
 
 function migrateLegacyCrushAux(
     oldAux: SeqFxAuxState | undefined,
     oldParams: unknown,
-    newParams: number[],
+    newParams: SeqFxParamVector,
 ): SeqFxAuxState {
     const oldVector = Array.isArray(oldParams) ? oldParams.map(Number) : [];
     const migrated = defaultAuxForParams(newParams, SEQFX_EFFECT_TYPES.crusher);
@@ -1882,8 +1963,8 @@ function migrateLegacyCrushState(value: SeqFxLegacyStateV5): SeqFxLegacyStateV5 
     return migrated;
 }
 
-function resetMigratedTapeAux(step: SeqFxStep, params: number[]): void {
-    step.params = params;
+function resetMigratedTapeAux(step: SeqFxStep, params: SeqFxParamVector): void {
+    step.params = cloneParamVector(params);
     step.aux = defaultAuxForParams(params, SEQFX_EFFECT_TYPES.tapeStop);
 
     if (step.effectParams?.[SEQFX_EFFECT_TYPES.tapeStop]) {
@@ -2029,7 +2110,7 @@ function normalizeSteps(steps: number[]): number[] {
 
 function normalizeBlockLength(startStep: number, length: number): number {
     const maximum = SEQFX_STEP_COUNT - startStep;
-    return Math.min(maximum, Math.max(1, Math.trunc(Number(length)) || 1));
+    return Math.min(maximum, positiveIntegerOrFallback(length, 1));
 }
 
 function stepIsInsideRange(step: number, startStep: number, length: number): boolean {
@@ -2132,7 +2213,7 @@ function writeBlock(
         : template.effectType;
     const defaultParams = defaultParamsForEffect(effectType);
     const effectParams = cloneEffectParamMemory(template.effectParams);
-    const params = Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
+    const params = createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => (
         normalizeParam(effectType, paramIndex, template.params[paramIndex] ?? defaultParams[paramIndex])
     ));
     const aux = normalizeAuxState(effectType, params, template.aux);
@@ -2144,9 +2225,12 @@ function writeBlock(
             trigger: offset === 0,
             effectType,
             mix: normalizeMix(template.mix),
-            params: [...params],
+            params: cloneParamVector(params),
             aux: cloneAuxState(aux),
-            ...cloneEffectMemories({ effectParams, effectAux }),
+            ...cloneEffectMemories({
+                ...(effectParams ? { effectParams } : {}),
+                ...(effectAux ? { effectAux } : {}),
+            }),
         };
     }
 }
@@ -2159,7 +2243,7 @@ function cloneBlockSteps(pattern: SeqFxPattern, lane: number, block: SeqFxBlock)
             trigger: offset === 0,
             effectType: source.effectType,
             mix: normalizeMix(source.mix),
-            params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unusedParam, paramIndex) => (
+            params: createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => (
                 normalizeParam(source.effectType, paramIndex, source.params[paramIndex])
             )),
             aux: normalizeAuxState(source.effectType, source.params, source.aux),
@@ -2198,7 +2282,7 @@ function writeBlockSteps(
             trigger: offset === 0,
             effectType: source.effectType,
             mix: normalizeMix(source.mix),
-            params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unusedParam, paramIndex) => (
+            params: createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => (
                 normalizeParam(source.effectType, paramIndex, source.params[paramIndex])
             )),
             aux: normalizeAuxState(source.effectType, source.params, source.aux),
@@ -2676,8 +2760,8 @@ export function applySeqFxBlockSelectionParamEdit(state: SeqFxState, edit: SeqFx
             for (let step = block.startStep; step <= block.endStep; step += 1) {
                 const target = pattern.lanes[lane].steps[step];
                 writeStepParamAndTrackAuxEnd(target, block.effectType, paramIndex, value);
-                target.effectParams = rememberCurrentEffectParams(target);
-                target.effectAux = rememberCurrentEffectAux(target);
+                replaceStepEffectParamMemory(target, rememberCurrentEffectParams(target));
+                replaceStepEffectAuxMemory(target, rememberCurrentEffectAux(target));
             }
         }
     });
@@ -2720,8 +2804,8 @@ export function applySeqFxBlockPresetEdit(state: SeqFxState, edit: SeqFxBlockPre
             for (let paramIndex = 0; paramIndex < SEQFX_PARAM_COUNT; paramIndex += 1) {
                 writeStepParamAndTrackAuxEnd(target, block.effectType, paramIndex, params[paramIndex]);
             }
-            target.effectParams = rememberCurrentEffectParams(target);
-            target.effectAux = rememberCurrentEffectAux(target);
+            replaceStepEffectParamMemory(target, rememberCurrentEffectParams(target));
+            replaceStepEffectAuxMemory(target, rememberCurrentEffectAux(target));
         }
     });
 }
@@ -2740,8 +2824,8 @@ export function applySeqFxBlockParamEdit(state: SeqFxState, edit: SeqFxBlockPara
         for (let step = block.startStep; step <= block.endStep; step += 1) {
             const target = pattern.lanes[lane].steps[step];
             writeStepParamAndTrackAuxEnd(target, block.effectType, paramIndex, value);
-            target.effectParams = rememberCurrentEffectParams(target);
-            target.effectAux = rememberCurrentEffectAux(target);
+            replaceStepEffectParamMemory(target, rememberCurrentEffectParams(target));
+            replaceStepEffectAuxMemory(target, rememberCurrentEffectAux(target));
         }
     });
 }
@@ -2758,7 +2842,7 @@ export function applySeqFxBlockAuxSourceEdit(state: SeqFxState, edit: SeqFxBlock
         for (let step = block.startStep; step <= block.endStep; step += 1) {
             const target = pattern.lanes[lane].steps[step];
             writeStepAuxSource(target, block.effectType, edit.source);
-            target.effectAux = rememberCurrentEffectAux(target);
+            replaceStepEffectAuxMemory(target, rememberCurrentEffectAux(target));
         }
     });
 }
@@ -2777,7 +2861,7 @@ export function applySeqFxBlockAuxTargetToggle(state: SeqFxState, edit: SeqFxBlo
             const target = pattern.lanes[lane].steps[step];
             const aux = normalizeAuxState(block.effectType, target.params, target.aux);
             writeStepAuxTargetEnabled(target, block.effectType, paramIndex, edit.enabled ?? !aux.targets[paramIndex].enabled);
-            target.effectAux = rememberCurrentEffectAux(target);
+            replaceStepEffectAuxMemory(target, rememberCurrentEffectAux(target));
         }
     });
 }
@@ -2795,7 +2879,7 @@ export function applySeqFxBlockAuxTargetEndEdit(state: SeqFxState, edit: SeqFxBl
         for (let step = block.startStep; step <= block.endStep; step += 1) {
             const target = pattern.lanes[lane].steps[step];
             writeStepAuxTargetEnd(target, block.effectType, paramIndex, edit.value);
-            target.effectAux = rememberCurrentEffectAux(target);
+            replaceStepEffectAuxMemory(target, rememberCurrentEffectAux(target));
         }
     });
 }
@@ -2813,7 +2897,7 @@ export function applySeqFxBlockSelectionAuxTargetEndEdit(
             for (let step = block.startStep; step <= block.endStep; step += 1) {
                 const target = pattern.lanes[lane].steps[step];
                 writeStepAuxTargetEnd(target, block.effectType, paramIndex, edit.value);
-                target.effectAux = rememberCurrentEffectAux(target);
+                replaceStepEffectAuxMemory(target, rememberCurrentEffectAux(target));
             }
         }
     });
@@ -2833,7 +2917,7 @@ export function applySeqFxBlockSelectionAuxTargetToggle(
                 const target = pattern.lanes[lane].steps[step];
                 const aux = normalizeAuxState(block.effectType, target.params, target.aux);
                 writeStepAuxTargetEnabled(target, block.effectType, paramIndex, edit.enabled ?? !aux.targets[paramIndex].enabled);
-                target.effectAux = rememberCurrentEffectAux(target);
+                replaceStepEffectAuxMemory(target, rememberCurrentEffectAux(target));
             }
         }
     });
@@ -2857,14 +2941,14 @@ export function applySeqFxBlockEffectEdit(state: SeqFxState, edit: SeqFxBlockEff
             const target = pattern.lanes[lane].steps[step];
             const effectParams = rememberCurrentEffectParams(target);
             const effectAux = rememberCurrentEffectAux(target);
-            target.effectParams = effectParams;
-            target.effectAux = effectAux;
+            replaceStepEffectParamMemory(target, effectParams);
+            replaceStepEffectAuxMemory(target, effectAux);
             target.effectType = effectType;
             target.trigger = step === block.startStep;
             target.params = rememberedParamsForEffect(target, effectType);
             target.aux = rememberedAuxForEffect(target, effectType, target.params);
-            target.effectParams = rememberCurrentEffectParams(target);
-            target.effectAux = rememberCurrentEffectAux(target);
+            replaceStepEffectParamMemory(target, rememberCurrentEffectParams(target));
+            replaceStepEffectAuxMemory(target, rememberCurrentEffectAux(target));
         }
     });
 }
@@ -2939,8 +3023,8 @@ export function applySeqFxParamEdit(state: SeqFxState, edit: SeqFxParamEdit): Se
                 target.active = true;
                 target.trigger = true;
             }
-            target.effectParams = rememberCurrentEffectParams(target);
-            target.effectAux = rememberCurrentEffectAux(target);
+            replaceStepEffectParamMemory(target, rememberCurrentEffectParams(target));
+            replaceStepEffectAuxMemory(target, rememberCurrentEffectAux(target));
         }
     });
 }
@@ -2956,7 +3040,7 @@ export function getSeqFxStepValueSnapshot(state: SeqFxState, target: SeqFxStepVa
         lane,
         effectType: source.effectType,
         mix: normalizeMix(source.mix),
-        params: Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
+        params: createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => (
             normalizeParam(source.effectType === SEQFX_EFFECT_TYPES.empty ? defaultEffectTypeForLane(lane) : source.effectType, paramIndex, source.params[paramIndex])
         )),
         aux: cloneAuxState(source.aux),
@@ -2973,7 +3057,7 @@ export function applySeqFxStepValuePaste(state: SeqFxState, edit: SeqFxStepValue
             ? defaultEffectTypeForLane(lane)
             : normalizeEffectType(edit.values.effectType, defaultEffectTypeForLane(lane));
         const mix = normalizeMix(edit.values.mix);
-        const params = Array.from({ length: SEQFX_PARAM_COUNT }, (_unused, paramIndex) => (
+        const params = createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => (
             normalizeParam(effectType, paramIndex, edit.values.params[paramIndex])
         ));
         const aux = normalizeAuxState(effectType, params, edit.values.aux);
@@ -2984,12 +3068,12 @@ export function applySeqFxStepValuePaste(state: SeqFxState, edit: SeqFxStepValue
             const target = pattern.lanes[lane].steps[step];
             target.mix = mix;
             target.effectType = target.active ? effectType : SEQFX_EFFECT_TYPES.empty;
-            target.params = [...params];
-            target.effectParams = target.active ? cloneEffectParamMemory(effectParams) : undefined;
+            target.params = cloneParamVector(params);
+            replaceStepEffectParamMemory(target, target.active ? cloneEffectParamMemory(effectParams) : undefined);
             target.aux = target.active
                 ? cloneAuxState(aux)
                 : defaultAuxForParams(defaultParamsForEffect(defaultEffectTypeForLane(lane)), defaultEffectTypeForLane(lane));
-            target.effectAux = target.active ? cloneEffectAuxMemory(effectAux) : undefined;
+            replaceStepEffectAuxMemory(target, target.active ? cloneEffectAuxMemory(effectAux) : undefined);
         }
     });
 }

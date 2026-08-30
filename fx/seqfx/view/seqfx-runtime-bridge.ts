@@ -42,6 +42,7 @@ import {
     parseSeqFxStoredState,
     parseStrictSeqFxStateV5,
     parseStrictSeqFxStateV7,
+    projectSeqFxStoredStateV7,
     serializeSeqFxState,
     type SeqFxBlockAuxSourceEdit,
     type SeqFxBlockAuxTargetEndEdit,
@@ -95,8 +96,8 @@ export const SEQFX_ENDPOINTS = {
 export const SEQFX_UNDO_HISTORY_LIMIT = 100;
 
 type StoredStateMessage = {
-    key?: unknown;
-    value?: unknown;
+    readonly key: typeof SEQFX_STATE_KEY | typeof SEQFX_LEGACY_STATE_KEY;
+    readonly value: unknown;
 };
 
 type BridgeListener = (state: SeqFxState) => void;
@@ -147,11 +148,22 @@ const DEFAULT_GLOBAL_CONTROLS: SeqFxGlobalControls = {
     loopLength: 32,
 };
 
+function globalControlsEqual(left: SeqFxGlobalControls, right: SeqFxGlobalControls): boolean {
+    return left.enabled === right.enabled
+        && Object.is(left.globalMix, right.globalMix)
+        && Object.is(left.clockMode, right.clockMode)
+        && Object.is(left.manualBpm, right.manualBpm)
+        && Object.is(left.rateIndex, right.rateIndex)
+        && Object.is(left.swing, right.swing)
+        && Object.is(left.loopStart, right.loopStart)
+        && Object.is(left.loopLength, right.loopLength);
+}
+
 function hasOwnValue(record: Record<string, unknown>, key: string) {
     return Object.prototype.hasOwnProperty.call(record, key);
 }
 
-function isSeqFxMonitorRecord(value: unknown): value is Record<string, unknown> {
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
@@ -199,12 +211,12 @@ function parseMonitorVector(
  * Invalid or missing transport tokens reject the whole frame so subscribers preserve prior state.
  */
 export function parseSeqFxMonitorEvent(value: unknown): SeqFxMonitorEvent | null {
-    if (!isSeqFxMonitorRecord(value)) {
+    if (!isUnknownRecord(value)) {
         return null;
     }
 
     const eventCandidate = value.event ?? value;
-    if (!isSeqFxMonitorRecord(eventCandidate)) {
+    if (!isUnknownRecord(eventCandidate)) {
         return null;
     }
 
@@ -224,12 +236,9 @@ export function parseSeqFxMonitorEvent(value: unknown): SeqFxMonitorEvent | null
 }
 
 function getFullStoredStateValue(storedState: unknown, key: string) {
-    const fullState = storedState && typeof storedState === "object"
-        ? storedState as Record<string, unknown>
-        : {};
-    const values = fullState.values && typeof fullState.values === "object"
-        ? fullState.values as Record<string, unknown>
-        : {};
+    const fullState = isUnknownRecord(storedState) ? storedState : {};
+    const rawValues = fullState["values"];
+    const values = isUnknownRecord(rawValues) ? rawValues : {};
 
     if (hasOwnValue(values, key)) {
         return {
@@ -252,7 +261,11 @@ function getFullStoredStateValue(storedState: unknown, key: string) {
 }
 
 function toEchoToken(value: unknown): string {
-    return typeof value === "string" ? value : JSON.stringify(value);
+    if (typeof value === "string") {
+        return `string:${value}`;
+    }
+
+    return `json:${JSON.stringify(value) ?? "undefined"}`;
 }
 
 function resolvePatternIndex(value: unknown): number {
@@ -295,10 +308,24 @@ function resolveInteger(value: unknown, fallback: number, min: number, max: numb
 }
 
 function seqFxStateContentToken(state: SeqFxState): string {
-    const storedState = JSON.parse(serializeSeqFxState(state)) as {
-        patterns: Array<{ revision: number } & Record<string, unknown>>;
-    };
+    const storedState = projectSeqFxStoredStateV7(state);
     return JSON.stringify(storedState.patterns.map(({ revision: _revision, ...pattern }) => pattern));
+}
+
+function parseStoredStateMessage(message: unknown): StoredStateMessage | null {
+    if (!isUnknownRecord(message)) {
+        return null;
+    }
+
+    const key = message["key"];
+    if (key !== SEQFX_STATE_KEY && key !== SEQFX_LEGACY_STATE_KEY) {
+        return null;
+    }
+
+    return {
+        key,
+        value: message["value"],
+    };
 }
 
 function seqFxStatesHaveSameContent(left: SeqFxState, right: SeqFxState): boolean {
@@ -330,9 +357,8 @@ export class SeqFxRuntimeBridge {
     private variationIndex = 0;
 
     private readonly handleStoredStateValue = (message: unknown) => {
-        const stored = message as StoredStateMessage;
-
-        if (stored?.key !== SEQFX_STATE_KEY && stored?.key !== SEQFX_LEGACY_STATE_KEY) {
+        const stored = parseStoredStateMessage(message);
+        if (!stored) {
             return;
         }
 
@@ -1100,9 +1126,7 @@ export class SeqFxRuntimeBridge {
 
     private updateGlobalControls(patch: Partial<SeqFxGlobalControls>) {
         const nextControls = { ...this.globalControls, ...patch };
-        const changed = Object.entries(nextControls).some(([key, value]) => (
-            !Object.is(this.globalControls[key as keyof SeqFxGlobalControls], value)
-        ));
+        const changed = !globalControlsEqual(this.globalControls, nextControls);
         if (!changed) {
             return;
         }
