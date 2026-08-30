@@ -15,7 +15,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { gzipSync } from "node:zlib";
+import { deflateSync, gzipSync, inflateSync } from "node:zlib";
 
 import { effectPlugins, repoRoot } from "../fx/build-effect.mjs";
 import {
@@ -1717,11 +1717,91 @@ async function buildUnsignedFlatPackage(config, stagingRoot, packagePath, workRo
         env: { COPYFILE_DISABLE: "1", SOURCE_DATE_EPOCH: String(sourceDateEpoch) },
     });
     await normalizeTreeTimestamps(packageRoot, sourceDateEpoch);
-    run("xar", ["--compression", "none", "-cf", packagePath, "Bom", "Payload", "PackageInfo"], {
+    run("xar", deterministicFlatPackageXarArgs(packagePath), {
         capture: true,
         cwd: packageRoot,
         env: { COPYFILE_DISABLE: "1", SOURCE_DATE_EPOCH: String(sourceDateEpoch) },
     });
+    await writeFile(
+        packagePath,
+        normalizeUnsignedFlatPackageXar(await readFile(packagePath), sourceDateEpoch),
+    );
+    run("xar", ["-tf", packagePath], { capture: true });
+}
+
+export function deterministicFlatPackageXarArgs(packagePath) {
+    return [
+        "--compression",
+        "none",
+        "--distribution",
+        "-cf",
+        packagePath,
+        "Bom",
+        "Payload",
+        "PackageInfo",
+    ];
+}
+
+export function normalizeUnsignedFlatPackageXar(archive, sourceDateEpoch) {
+    const headerSize = 28;
+
+    if (!Buffer.isBuffer(archive) || archive.length < headerSize)
+        throw new Error("Unsigned flat package is too small to contain a XAR header.");
+
+    if (archive.subarray(0, 4).toString("ascii") !== "xar!")
+        throw new Error("Unsigned flat package does not have the XAR magic header.");
+
+    if (archive.readUInt16BE(4) !== headerSize || archive.readUInt16BE(6) !== 1)
+        throw new Error("Unsigned flat package uses an unsupported XAR header shape.");
+
+    if (archive.readUInt32BE(24) !== 1)
+        throw new Error("Unsigned flat package must use the XAR SHA-1 TOC checksum contract.");
+
+    const compressedLength = Number(archive.readBigUInt64BE(8));
+    const uncompressedLength = Number(archive.readBigUInt64BE(16));
+    const compressedStart = headerSize;
+    const compressedEnd = compressedStart + compressedLength;
+    const checksumSize = 20;
+
+    if (!Number.isSafeInteger(compressedLength) || compressedLength <= 0 || compressedEnd + checksumSize > archive.length)
+        throw new Error("Unsigned flat package has invalid XAR TOC bounds.");
+
+    const compressedToc = archive.subarray(compressedStart, compressedEnd);
+    const heap = archive.subarray(compressedEnd);
+    const expectedTocChecksum = createHash("sha1").update(compressedToc).digest();
+
+    if (!heap.subarray(0, checksumSize).equals(expectedTocChecksum))
+        throw new Error("Unsigned flat package XAR TOC checksum does not match its header.");
+
+    const toc = inflateSync(compressedToc);
+
+    if (toc.length !== uncompressedLength)
+        throw new Error("Unsigned flat package XAR TOC length does not match its header.");
+
+    const sourceToc = toc.toString("utf8");
+    const creationTimePattern = /<creation-time>[^<]+<\/creation-time>/gu;
+    const creationTimes = sourceToc.match(creationTimePattern) ?? [];
+
+    if (creationTimes.length !== 1)
+        throw new Error(`Unsigned flat package must contain exactly one XAR creation time, found ${creationTimes.length}.`);
+
+    const normalizedCreationTime = new Date(sourceDateEpoch * 1000).toISOString().slice(0, 19);
+    const normalizedToc = Buffer.from(
+        sourceToc.replace(
+            creationTimePattern,
+            `<creation-time>${normalizedCreationTime}</creation-time>`,
+        ),
+        "utf8",
+    );
+    const normalizedCompressedToc = deflateSync(normalizedToc, { level: 9 });
+    const normalizedHeader = Buffer.from(archive.subarray(0, headerSize));
+    const normalizedHeap = Buffer.from(heap);
+
+    normalizedHeader.writeBigUInt64BE(BigInt(normalizedCompressedToc.length), 8);
+    normalizedHeader.writeBigUInt64BE(BigInt(normalizedToc.length), 16);
+    createHash("sha1").update(normalizedCompressedToc).digest().copy(normalizedHeap, 0);
+
+    return Buffer.concat([normalizedHeader, normalizedCompressedToc, normalizedHeap]);
 }
 
 export function payloadInventoryErrors(config, payloadFiles, { signed }) {

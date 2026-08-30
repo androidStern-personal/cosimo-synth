@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { gunzipSync } from "node:zlib";
+import { deflateSync, gunzipSync, inflateSync } from "node:zlib";
 
 import {
     attestMatchingVst3Metadata,
@@ -18,9 +18,11 @@ import {
     captureActualNativeDependencyProvenance,
     createReleaseManifest,
     createReleasePlan,
+    deterministicFlatPackageXarArgs,
     deterministicCpioPayload,
     getReleaseGitState,
     normalizePayloadModes,
+    normalizeUnsignedFlatPackageXar,
     parseInstallerSigningEvidence,
     parseReleaseArgs,
     parseVst3SigningEvidence,
@@ -42,6 +44,31 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const scriptPath = path.join(repoRoot, "scripts", "build_seqfx_beta_release.mjs");
+
+function syntheticUnsignedFlatPackage(creationTime) {
+    const toc = Buffer.from([
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        "<xar>",
+        " <toc>",
+        '  <checksum style="sha1"><size>20</size><offset>0</offset></checksum>',
+        `  <creation-time>${creationTime}</creation-time>`,
+        " </toc>",
+        "</xar>",
+        "",
+    ].join("\n"), "utf8");
+    const compressedToc = deflateSync(toc);
+    const header = Buffer.alloc(28);
+    const checksum = createHash("sha1").update(compressedToc).digest();
+
+    header.write("xar!", 0, "ascii");
+    header.writeUInt16BE(28, 4);
+    header.writeUInt16BE(1, 6);
+    header.writeBigUInt64BE(BigInt(compressedToc.length), 8);
+    header.writeBigUInt64BE(BigInt(toc.length), 16);
+    header.writeUInt32BE(1, 24);
+
+    return Buffer.concat([header, compressedToc, checksum, Buffer.from("payload", "utf8")]);
+}
 
 function currentManifest() {
     return readFile(path.join(repoRoot, seqFxReleaseConfig.paths.patchManifest), "utf8")
@@ -934,6 +961,51 @@ test("unsigned cpio payload bytes do not depend on filesystem inode or timestamp
     assert.notDeepEqual(
         await deterministicCpioPayload(secondRoot, 1_700_000_000),
         first,
+    );
+});
+
+test("unsigned flat-package XAR creation excludes host metadata and fixes its archive time", () => {
+    const packagePath = "/private/tmp/CosimoSeqFX.pkg";
+    assert.deepEqual(deterministicFlatPackageXarArgs(packagePath), [
+        "--compression",
+        "none",
+        "--distribution",
+        "-cf",
+        packagePath,
+        "Bom",
+        "Payload",
+        "PackageInfo",
+    ]);
+
+    const sourceDateEpoch = 1_700_000_000;
+    const first = normalizeUnsignedFlatPackageXar(
+        syntheticUnsignedFlatPackage("2025-01-01T00:00:00"),
+        sourceDateEpoch,
+    );
+    const second = normalizeUnsignedFlatPackageXar(
+        syntheticUnsignedFlatPackage("2026-08-30T11:35:20"),
+        sourceDateEpoch,
+    );
+
+    assert.deepEqual(second, first);
+
+    const compressedLength = Number(first.readBigUInt64BE(8));
+    const compressedToc = first.subarray(28, 28 + compressedLength);
+    const toc = inflateSync(compressedToc).toString("utf8");
+    const heap = first.subarray(28 + compressedLength);
+
+    assert.match(toc, /<creation-time>2023-11-14T22:13:20<\/creation-time>/u);
+    assert.deepEqual(heap.subarray(0, 20), createHash("sha1").update(compressedToc).digest());
+    assert.equal(heap.subarray(20).toString("utf8"), "payload");
+});
+
+test("unsigned flat-package XAR normalization rejects an invalid TOC checksum", () => {
+    const archive = syntheticUnsignedFlatPackage("2025-01-01T00:00:00");
+    archive[archive.length - "payload".length - 1] ^= 0xff;
+
+    assert.throws(
+        () => normalizeUnsignedFlatPackageXar(archive, 1_700_000_000),
+        /TOC checksum does not match/u,
     );
 });
 
