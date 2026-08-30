@@ -165,6 +165,37 @@ async function copyRuntimeSources(runtimeSources, runtimeRoot) {
     }
 }
 
+function createProductionBundleConfig({ entry, fileName, outDir, plugins = [] }) {
+    return {
+        configFile: false,
+        root: repoRoot,
+        resolve: {
+            preserveSymlinks: true,
+        },
+        define: {
+            "process.env.NODE_ENV": JSON.stringify("production"),
+        },
+        plugins,
+        build: {
+            target: "esnext",
+            minify: false,
+            sourcemap: true,
+            emptyOutDir: false,
+            lib: {
+                entry,
+                formats: ["es"],
+                fileName: () => fileName,
+            },
+            outDir,
+            rollupOptions: {
+                output: {
+                    inlineDynamicImports: true,
+                },
+            },
+        },
+    };
+}
+
 async function buildWorker(plugin, runtimeRoot) {
     if (!plugin.workerSource) {
         return;
@@ -173,29 +204,11 @@ async function buildWorker(plugin, runtimeRoot) {
     const workerEntry = path.join(repoRoot, plugin.workerSource);
     const workerOut = plugin.workerOut ?? "worker.js";
 
-    await build({
-        configFile: false,
-        root: repoRoot,
-        define: {
-            "process.env.NODE_ENV": JSON.stringify("production"),
-        },
-        build: {
-            target: "esnext",
-            minify: false,
-            emptyOutDir: false,
-            lib: {
-                entry: workerEntry,
-                formats: ["es"],
-                fileName: () => workerOut,
-            },
-            outDir: runtimeRoot,
-            rollupOptions: {
-                output: {
-                    inlineDynamicImports: true,
-                },
-            },
-        },
-    });
+    await build(createProductionBundleConfig({
+        entry: workerEntry,
+        fileName: workerOut,
+        outDir: runtimeRoot,
+    }));
 }
 
 export async function readPatchManifest(patchPath) {
@@ -250,32 +263,14 @@ export async function buildPlugin(pluginName) {
     await copyRelativeEntries(manifest.sourceTransformer, patchRoot, runtimeRoot, "sourceTransformer");
     await cp(sharedLoaderPath, path.join(runtimeViewRoot, "index.js"));
 
-    await build({
-        configFile: false,
-        root: repoRoot,
-        define: {
-            "process.env.NODE_ENV": JSON.stringify("production"),
-        },
+    await build(createProductionBundleConfig({
+        entry: sourceEntry,
+        fileName: "app.js",
+        outDir: runtimeViewRoot,
         plugins: [
             react(),
         ],
-        build: {
-            target: "esnext",
-            minify: false,
-            emptyOutDir: false,
-            lib: {
-                entry: sourceEntry,
-                formats: ["es"],
-                fileName: () => "app.js",
-            },
-            outDir: runtimeViewRoot,
-            rollupOptions: {
-                output: {
-                    inlineDynamicImports: true,
-                },
-            },
-        },
-    });
+    }));
 
     await buildWorker(plugin, runtimeRoot);
 

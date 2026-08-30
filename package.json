@@ -48,6 +48,7 @@
     "fx:seqfx:visual-proof": "node scripts/capture_seqfx_visual_proof.mjs",
     "seqfx:release:plan": "node scripts/build_seqfx_beta_release.mjs --plan",
     "seqfx:release:build": "node scripts/build_seqfx_beta_release.mjs",
+    "test:seqfx:build-provenance": "npm run fx:build -- seqfx && node --test tests/test_seqfx_build_provenance.mjs",
     "test:seqfx:release-builder": "node --test tests/test_seqfx_release_builder.mjs",
     "fx:prod:build": "node fx/prod-effect.mjs build",
     "fx:prod:install": "node fx/prod-effect.mjs install",
