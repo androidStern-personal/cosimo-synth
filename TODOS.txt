@@ -1451,7 +1451,7 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
 [ ] T70 — Move the parked Mod bar to the top lip of an open MSEG drawer
     Active combined owner (2026-08-30):
     - Codex task `Fix parked Mod bar MSEG layouts`, thread `01a0521d-8859-72e0-bc16-f7dab267f2a3`, branch `codex/t70-t71-mseg-parked-layout-implementation`, worktree `/Users/winterfell/.codex/worktrees/5d2b/cosimo-synth`, starting commit `209b4a0b44645e6675289e50059cde6fc4160e30`, model SOL, reasoning max, Full Access with approvals disabled. This is the sole implementation owner for T70 and T71; permission-failed shells `01a051f2-0a3f-7f21-a8c8-af367ffe9a90` and `01a0521b-500f-7032-b401-5e44cf48b58d` made no product changes and are not implementation inputs.
-    - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push master, run serialized native/HMR/install gates, or deploy.
+    - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b`; the implementation task must not merge or push master, run serialized native/HMR/install gates, or deploy.
     Confirmed failure (2026-08-30):
     - The failure reproduces on current master and the deployed Sites build at 393x852. The MSEG drawer occupies y=596-852 while the parked Mod bar stays at y=681-721, so the bar sits inside the drawer and covers its editable graph.
     Required result:
@@ -1463,7 +1463,7 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
 
 [ ] T71 — Keep the parked Mod bar from covering full-screen MSEG controls
     Active combined owner (2026-08-30):
-    - The sole T70+T71 owner is Codex task `Fix parked Mod bar MSEG layouts`, thread `01a0521d-8859-72e0-bc16-f7dab267f2a3`, branch `codex/t70-t71-mseg-parked-layout-implementation`, worktree `/Users/winterfell/.codex/worktrees/5d2b/cosimo-synth`, starting commit `209b4a0b44645e6675289e50059cde6fc4160e30`, model SOL, reasoning max, Full Access with approvals disabled. Final review, repair direction, rebase, merge, master push, and any generated/native/install/deployment gates belong to coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d`.
+    - The sole T70+T71 owner is Codex task `Fix parked Mod bar MSEG layouts`, thread `01a0521d-8859-72e0-bc16-f7dab267f2a3`, branch `codex/t70-t71-mseg-parked-layout-implementation`, worktree `/Users/winterfell/.codex/worktrees/5d2b/cosimo-synth`, starting commit `209b4a0b44645e6675289e50059cde6fc4160e30`, model SOL, reasoning max, Full Access with approvals disabled. Final review, repair direction, rebase, merge, master push, and any generated/native/install/deployment gates belong to coordinator thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b`.
     Confirmed failure (2026-08-30):
     - In the 393x852 full-screen MSEG editor, the A/B, Rate, Morph, and Loop control row and the parked Mod bar occupy the exact same y=812-852 rectangle. The Mod bar therefore hides the controls and takes their touches.
     Required result:
@@ -1474,7 +1474,7 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Focused regression coverage proves Rate, Morph, A/B, and Loop remain operable with the parked row visible; the Mod bar remains operable; and floating placements retain their existing global-overlay behavior.
 
     Coordinator assignment for T70 and T71 (2026-08-30):
-    - Send both items as one combined implementation task to `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`. They share the same `mobile-bottom-dock`, MSEG drawer, and full-editor layout boundary and must not be implemented by competing branches.
+    - Send both items as one combined implementation task to `Coordinate Cosimo task integrations`, thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b`. They share the same `mobile-bottom-dock`, MSEG drawer, and full-editor layout boundary and must not be implemented by competing branches.
     - The implementation task must start from current `origin/master`, use its own Codex worktree with SOL at max reasoning, reproduce both geometry failures before editing, report its committed clean handoff to that coordinator, and must not merge or push master or deploy.
     - Review source and the scoped layout diff before broad tests. Repair failures with focused drawer/full-editor geometry and hit-testing tests; run the complete relevant UI/build/native/install/deployment gates only once after review is clean.
 
@@ -1609,8 +1609,9 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Product UI code contains no direct native or browser haptic calls outside the shared adapter, and the audit table accounts for every haptic call site.
 
 [ ] T67 — Coordinate review and integration of all delegated Codex tasks
-    Active coordinator (2026-08-27):
-    - Codex task `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`, branch `codex/task-integration-coordinator`, worktree `/Users/winterfell/.codex/worktrees/74e4/cosimo-synth`, model SOL, reasoning max.
+    Active coordinator (2026-08-30):
+    - Codex task `Coordinate Cosimo task integrations`, thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b`, branch `codex/task-integration-coordinator-v2`, worktree `/Users/winterfell/.codex/worktrees/2314/cosimo-synth`, model SOL, reasoning max, Full Access with approvals disabled.
+    - Prior coordinator thread `01a042bf-abd2-7820-9d47-b10405b67c5d` is archived and has no continuing review, integration, merge, push, or deployment ownership.
     Standing responsibility:
     - Receive clean committed handoffs from every implementation task; maintain the one authoritative queue of task, thread, branch, worktree, commit, scope, dependencies, review state, and remaining merge/push/deploy work.
     - Every delegated thread must be classified explicitly as either an Andrew-owned product/design conversation or a coordinator-managed implementation task. Review source and scoped diffs before broad suites or complete rebuilds. Return defects only to a thread explicitly classified as a coordinator-managed implementation task; use focused tests during repair loops, and run the complete relevant suite plus expensive build/install gates once only after rebased source is review-clean.
@@ -1662,7 +1663,7 @@ INFRASTRUCTURE AND TOOLING
 [ ] T72 — Make Cmajor's JUCE generator honor the latency declared by the DSP
     Active owner (2026-08-30):
     - Codex task `Fix Cmajor JUCE latency generation`, thread `01a05218-ccb7-7203-b9e4-5c37e65419b6`, Cosimo branch `codex/t72-cmajor-latency-generator`, worktree `/Users/winterfell/.codex/worktrees/3488/cosimo-synth`, starting checkpoint `8960b206`, model SOL, reasoning max.
-    - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a042bf-abd2-7820-9d47-b10405b67c5d`; the implementation task must not merge or push Cosimo master, merge the Cmajor fork default branch, install shared plugins, or deploy.
+    - Coordinator-managed by `Coordinate Cosimo task integrations`, thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b`; the implementation task must not merge or push Cosimo master, merge the Cmajor fork default branch, install shared plugins, or deploy.
     Confirmed toolchain debt (2026-08-30):
     - With Cmajor 1.0.3066, `cmaj generate --target=juce` ignores a patch's declared latency and writes zero into the generated C++ wrapper. That is a Cmajor code-generator defect, not a Cosimo product requirement.
     - Cosimo currently compensates in `fx/prod-effect.mjs` with `replaceGeneratedPluginLatency`/`applyGeneratedHostLatency`: a 53-line regex splice that rewrites the generated latency constant and plugin factory after generation.
