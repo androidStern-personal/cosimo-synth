@@ -1664,6 +1664,46 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Gesture tests prove ordinary drag and modulation gestures never activate the menu or note, stationary long press still opens the complete existing parameter menu, and selecting the Key Track action does not accidentally edit/reset/remove a modulation route.
     - Existing Key Track DSP/state/browser suites remain green. Physical phone acceptance checks note legibility and menu reachability separately from automated behavior.
 
+[ ] T78 — Add a modulatable, host-automatable Output Trim to every Effects Lane effect
+    Approved scope (2026-08-30):
+    - Add Output Trim to every editable Effects Lane effect type and every resident effect instance. Do not add gain controls to Parallel/Frequency Split branches or group markers, and do not replace Polish's existing Output Trim.
+    - Per-effect signal order is the effect's complete processed/wet-dry Mix output → Output Trim → the next effect or branch merge. Output Trim is the final editor control after Mix/Wet, or simply the final control when that effect has no Mix/Wet control.
+    Gain law and smoothing:
+    - Default is 0 dB. The lower endpoint is exact digital silence and the maximum is +35 dB. Give the normal range useful precision and accelerate travel toward silence.
+    - Smooth manual edits, modulation, host automation, preset recall, and topology transitions so they do not click. The hard-silence endpoint remains silent even under a positive modulation offset.
+    Modulation, automation, and identity:
+    - Output Trim is both a continuous internal modulation destination and a real host automation parameter for every resident effect instance. These are separate obligations; UI gesture messages are not host-automation proof.
+    - Modulation amounts are dB offsets and clamp safely to the supported range.
+    - Identity belongs to the effect instance, never its graph position, so reorder preserves it. Swap follows the existing complete replacement/reset behavior. Effect bypass bypasses that effect's Output Trim with the rest of the effect.
+    State and performance:
+    - Save and restore every trim through lane state, presets, host state, Init, and shared URLs. New effects and Init default to 0 dB. Do not add old-preset compatibility code.
+    - Under the current simplest catalog, eight static target kinds mirrored across five resident instance banks grow rack target cells from 195 to 235, about 2.24 KB in the full program payload. Keep the existing sparse execution model, add focused zero-route and mapped-route performance regressions, and run one real physical-iPhone benchmark before final acceptance.
+    - If measured fixed overhead is materially unsafe, stop and report it. Do not silently redesign the modulation engine or remove modulation/automation.
+    Done when:
+    - DSP proof covers placement after Mix, exact silence, default unity, smoothing, bypass, reorder/swap identity, and every supported effect type and resident instance.
+    - Modulation proof covers real dB-offset execution and the hard-silence clamp. Native VST3 and AUv3 proof covers actual host-automation identities independently from UI gestures.
+    - Complete state, preset, host, Init, and URL round trips preserve every trim, while branch and group semantics remain unchanged.
+    - Focused zero-route/mapped-route performance and one physical-iPhone benchmark establish that the added fixed catalog overhead is safe.
+    Decision provenance:
+    - Andrew selected per-effect Output Trim as a general gain-staging feature. It is not semantically equivalent to branch gain, so branch gain remains unimplemented rather than being marked solved.
+
+[ ] T79 — Make the on-screen keyboard geometry adjustable from Developer Settings
+    Approved behavior (2026-08-30):
+    - Add a Developer Settings control for the number of visible keyboard notes. Fewer notes make keys proportionally wider; more notes fit more keys. Preserve the existing starting/root note and octave-paddle behavior: this changes visible span/zoom, not pitch semantics.
+    - Add a separate keyboard-height scaling control. The complete keyboard region resizes, and the main workspace, Voice/FX/Mod tabs, parked/floating Mod bar, drawers, and full-screen editors reflow rather than overlap it.
+    - Make the left octave-down/up paddles visibly and structurally narrower to reclaim horizontal key space while keeping them reliably tappable.
+    - Remove decorative horizontal keyboard margins so the keyboard uses the available width edge-to-edge. Continue honoring real platform safe-area insets; do not retain extra cosmetic gaps.
+    Preference ownership:
+    - These are application presentation preferences, not sound state. Persist them through the existing Developer Settings/preferences mechanism, update live without reload, and include them in Copy settings.
+    - Exclude them from presets, shared URLs, host state, Init, automation, and modulation.
+    - Keep current geometry as the default. The implementation may choose practical bounded ranges only after measuring current short/tall-phone, plugin, and desktop layouts; record the selected ranges and evidence.
+    - Do not change note-on/off behavior, held-note ownership, octave stepping, velocity, Auto-preview, or keyboard show/hide semantics.
+    Done when:
+    - Automated composed-layout proof covers representative short/tall phones, plugin/desktop, keyboard hidden/visible, parked/floating Mod bar, drawers, and full-screen editors without overlap.
+    - Visible-note and height preferences persist and update live, Copy settings includes them, and sound/preset/URL/host/Init/modulation inventories exclude them.
+    - Octave paddles are narrower but remain reliably tappable; the keyboard uses the safe available width edge-to-edge.
+    - Physical touch comfort remains explicit Andrew acceptance and is never inferred from automated geometry.
+
 [x] T66 — Make one MSEG's mapping to another MSEG's Rate editable
     Active owner (2026-08-27):
     - Codex task `Fix T66 MSEG rate mapping controls`, thread `01a0434d-6730-7340-a091-ff0d448199ff`, branch `codex/t66-mseg-rate-mapping`, worktree `/Users/winterfell/.codex/worktrees/4533/cosimo-synth`, model SOL, reasoning max.
