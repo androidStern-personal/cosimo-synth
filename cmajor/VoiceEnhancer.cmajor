@@ -12,9 +12,23 @@ namespace wt
     let voiceEnhancerAmountMax = 1.0f;
     let voiceEnhancerAmountDefault = 0.0f;
     let voiceEnhancerBandGainRangeDb = 12.0f;
+    let voiceEnhancerResponseVoiceCapacity = 16;
+    let voiceEnhancerResponseFramesPerSecond = 20.0f;
     let voiceEnhancerCoefficientUpdateFrames = 16;
     let voiceEnhancerCoefficientSmoothingSeconds = 0.005f;
     let voiceEnhancerAdaaDifferenceEpsilon = 0.00001f;
+
+    /** Read-only editor telemetry for the exact effective response of every
+        sounding voice. Entries are densely packed in ascending voice-index
+        order; responseCount 0 explicitly clears a previously visible set. */
+    struct VoiceEnhancerResponseFrame
+    {
+        int32 responseCount;
+        int32[voiceEnhancerResponseVoiceCapacity] voiceIndices;
+        float32[voiceEnhancerResponseVoiceCapacity] frequenciesHz;
+        float32[voiceEnhancerResponseVoiceCapacity] qValues;
+        float32[voiceEnhancerResponseVoiceCapacity] amounts;
+    }
 
     float32 clampVoiceEnhancerFrequencyHz (float32 value, float32 sampleRateHz)
     {

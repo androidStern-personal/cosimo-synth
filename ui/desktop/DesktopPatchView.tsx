@@ -33,6 +33,7 @@ import { MobileWorkspaceTabs } from "./mobile-workspace-tabs";
 import {
     PatchConnectionProvider,
     usePatchConnection,
+    usePatchFoldedVisualEndpoint,
     type PatchConnectionLike,
 } from "../shared/cmajor-react";
 import { useBounceInPlace } from "../shared/use-bounce-in-place";
@@ -161,6 +162,9 @@ import {
     VOICE_ENHANCER_Q_TARGET_KIND,
     VOICE_ENHANCER_RATIO_MAX_SEMITONES,
     VOICE_ENHANCER_RATIO_MIN_SEMITONES,
+    VOICE_ENHANCER_SPECTRUM_ENDPOINT_ID,
+    advanceVoiceEnhancerTelemetryDisplay,
+    createVoiceEnhancerTelemetryDisplay,
     denormalizeVoiceEnhancerValue,
     formatVoiceEnhancerRatio,
     normalizeVoiceEnhancerRatio,
@@ -579,6 +583,7 @@ type VoiceToneSectionProps = FilterSectionProps & {
     voiceEnhancerAmount: PatchControlBinding<number>;
     voiceEnhancerKeyTrackEnabled: PatchControlBinding<number>;
     voiceEnhancerKeyTrackOffsetSemitones: PatchControlBinding<number>;
+    voiceEnhancerVisualizationActive: boolean;
 };
 
 type MsegEditorModalProps = {
@@ -2869,6 +2874,7 @@ function VoiceEnhancerSection({
     routes,
     armedSource,
     compact,
+    visualizationActive,
 }: {
     frequency: PatchControlBinding<number>;
     q: PatchControlBinding<number>;
@@ -2878,8 +2884,20 @@ function VoiceEnhancerSection({
     routes: ModulationRoute[];
     armedSource: MobileModSource;
     compact: boolean;
+    visualizationActive: boolean;
 }) {
     const keyTrackEnabled = keyTrackEnabledBinding.value >= 0.5;
+    const initialTelemetry = useMemo(createVoiceEnhancerTelemetryDisplay, []);
+    const telemetry = usePatchFoldedVisualEndpoint(
+        VOICE_ENHANCER_SPECTRUM_ENDPOINT_ID,
+        initialTelemetry,
+        (current, message: unknown) => advanceVoiceEnhancerTelemetryDisplay(
+            current,
+            message,
+            globalThis.performance?.now() ?? Date.now(),
+        ),
+        visualizationActive,
+    );
     const displayedFrequency = keyTrackEnabled ? keyTrackOffsetSemitones : frequency;
     const displayedFrequencyDescriptor = keyTrackEnabled
         ? VOICE_ENHANCER_RATIO_KNOB_DESCRIPTOR
@@ -2928,6 +2946,11 @@ function VoiceEnhancerSection({
                         frequencyNormalized={frequencyNormalized}
                         q={q.value}
                         amount={amount.value}
+                        frequencyHz={keyTrackEnabled ? null : frequency.value}
+                        frequencyMode={keyTrackEnabled ? "ratio" : "frequency"}
+                        spectrum={telemetry.spectrum}
+                        responses={telemetry.responses}
+                        compact={compact}
                         disabled={!ready}
                         onGestureStart={() => {
                             displayedFrequency.beginGesture();
@@ -3003,6 +3026,7 @@ function VoiceToneSection(props: VoiceToneSectionProps) {
         voiceEnhancerAmount,
         voiceEnhancerKeyTrackEnabled,
         voiceEnhancerKeyTrackOffsetSemitones,
+        voiceEnhancerVisualizationActive,
         ...filterProps
     } = props;
     if (!filterProps.routes || !filterProps.armedSource) {
@@ -3031,6 +3055,7 @@ function VoiceToneSection(props: VoiceToneSectionProps) {
                     routes={filterProps.routes}
                     armedSource={filterProps.armedSource}
                     compact={compact}
+                    visualizationActive={voiceEnhancerVisualizationActive}
                 />
             )}
             <div
@@ -6232,6 +6257,11 @@ function DesktopPatchViewBody({
         synthView.wavetablePosition,
     ]);
 
+    // Compact workspace panels retain their mounted state while hidden. Keep
+    // the analyzer lease tied to the visible Voice surface, including when the
+    // Polish full-screen editor temporarily obscures the selected panel.
+    const voiceEnhancerVisualizationActive = !polishEditorExpanded
+        && (!isCompactViewport || mobileWorkspaceSection === "voice");
     const voiceWorkspace = (
         <>
         <section
@@ -6364,6 +6394,7 @@ function DesktopPatchViewBody({
                 voiceEnhancerAmount={synthView.voiceEnhancerAmount}
                 voiceEnhancerKeyTrackEnabled={synthView.voiceEnhancerKeyTrackEnabled}
                 voiceEnhancerKeyTrackOffsetSemitones={synthView.voiceEnhancerKeyTrackOffsetSemitones}
+                voiceEnhancerVisualizationActive={voiceEnhancerVisualizationActive}
                 observedFilterState={synthView.observedFilterState}
                 observedFilterSpectrum={synthView.observedFilterSpectrum}
                 resonanceNormalizedFromQ={resonanceNormalizedFromQ}

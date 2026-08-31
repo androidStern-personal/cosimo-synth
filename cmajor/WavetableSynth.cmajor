@@ -1439,6 +1439,9 @@ graph WavetableSynth [[ main ]]
     // Hidden editor lifecycle only. This starts the read-only Polish FFT while
     // its full-screen surface is open; it is not sound, host, or saved state.
     input event int32 polishAnalyzerEnabledIn;
+    // Read-only T76 view lifecycle. One lease wakes both the exact pre-Enhancer
+    // input tap and active-voice response telemetry; closed views leave both dormant.
+    input event int32 voiceEnhancerSpectrumActivity;
     output event wt::OscillatorWavetableUploadAck wavetableUploadAck;
     output event wt::OscillatorWavetableMipRequest wavetableMipRequest;
     output event int32 wavetablePrewarmNotification;
@@ -1474,6 +1477,9 @@ graph WavetableSynth [[ main ]]
     // read-only post-Safe-Bass/pre-Enhancer spectrum; no new host endpoint or
     // sound control is added.
     output event (wt::PolishMeterFrame, wt::EnhancerSpectrumFrame) polishMeter;
+    // One read-only union keeps the shared input spectrum and every active
+    // voice's effective response synchronized without adding sound state.
+    output event (wt::EnhancerSpectrumFrame, wt::VoiceEnhancerResponseFrame) voiceEnhancerSpectrum;
 
     let voiceCount = 16;
 
@@ -1492,6 +1498,7 @@ graph WavetableSynth [[ main ]]
     node analyzerDownmix = wt::StereoToMonoAverage;
     node filterSpectrumAnalyzer = wt::FilterSpectrumAnalyzer;
     node polishInputSpectrum = wt::EnhancerSpectrumAnalyzer (0);
+    node voiceEnhancerInputSpectrum = wt::EnhancerSpectrumAnalyzer (0);
     node distortionScopeAnalyzer = wt::DistortionScopeAnalyzer;
     node distortionHistoryAnalyzer = wt::DistortionHistoryAnalyzer;
     node desiredTableMonitorA = wt::DesiredTableMonitor (wt::oscillatorA);
@@ -1663,6 +1670,8 @@ graph WavetableSynth [[ main ]]
         filterSpectrumActivity -> filterSpectrumAnalyzer.analyzerActivityIn;
         distortionScopeActivity -> distortionScopeAnalyzer.analyzerActivityIn;
         distortionHistoryActivity -> distortionHistoryAnalyzer.analyzerActivityIn;
+        voiceEnhancerSpectrumActivity -> sharedEngine.voiceEnhancerVisualizationEnabledIn,
+                                         voiceEnhancerInputSpectrum.enabledIn;
         tempoMonitor.bpmOut -> rack.tempoBpmIn, engineStatusMonitor.tempoBpmIn;
         sharedEngine.rackModOut -> rack.rackModIn;
         // wt::DistortionBus now lives inside the rack, so the two analyzers read the
@@ -1680,9 +1689,12 @@ graph WavetableSynth [[ main ]]
         rack.out -> polish.in;
         polishAnalyzerEnabledIn -> polishInputSpectrum.enabledIn;
         polish.enhancerInputMonitor -> polishInputSpectrum.in;
+        sharedEngine.voiceEnhancerInputMonitor -> voiceEnhancerInputSpectrum.in;
         polish.out -> audioOut;
         polish.meterOut -> polishMeter;
         polishInputSpectrum.spectrum -> polishMeter;
+        sharedEngine.voiceEnhancerResponseOut -> voiceEnhancerSpectrum;
+        voiceEnhancerInputSpectrum.spectrum -> voiceEnhancerSpectrum;
         rack.laneCommittedChainLength -> rackStateMonitor.laneCommittedChainLengthIn;
         rack.laneCommittedChainCode -> rackStateMonitor.laneCommittedChainCodeIn;
         rack.laneCommittedPositionMask -> rackStateMonitor.laneCommittedPositionMaskIn;

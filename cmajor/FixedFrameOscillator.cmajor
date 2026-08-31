@@ -1651,6 +1651,9 @@ namespace wt
         input value float32 ampReleaseIn [[ name: "Amp Release", min: 0.005f, max: 10.0f, init: 0.2f, unit: "s", rampFrames: 0 ]];
         input value float32 sourceModeIn [[ name: "Source Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Oscillator|Bounce", rampFrames: 0 ]];
         input value float32 globalTuneIn [[ name: "Global Tune", min: -24.0f, max: 24.0f, init: 0.0f, unit: "st", rampFrames: 64 ]];
+        // Read-only editor lifecycle. The monitor is silent and costs no
+        // per-voice summation while the per-voice Enhancer view is closed.
+        input event int32 voiceEnhancerVisualizationEnabledIn;
         output event OscillatorWavetableUploadAck oscillatorWavetableUploadAckOut;
         output event OscillatorWavetableMipRequest oscillatorWavetableMipRequestOut;
         output event OscillatorRuntimeServiceState oscillatorRuntimeServiceStateOut;
@@ -1663,7 +1666,9 @@ namespace wt
         output event wt::EffectiveModSourceStateMonitor effectiveModSourceStateOut;
         output event wt::VoiceArticulationMonitor voiceArticulationStartOut;
         output event wt::OscillatorVoiceStartMonitor oscillatorVoiceStartOut;
+        output event wt::VoiceEnhancerResponseFrame voiceEnhancerResponseOut;
         output stream float32<2> out;
+        output stream float32<2> voiceEnhancerInputMonitor;
         output stream float32 trackingPitchHzOut;
         output stream float32 rackModOut[rackModTargetCount];
         output event int32 modulationRejectedRouteCountOut;
@@ -2061,6 +2066,9 @@ namespace wt
         int32 framesUntilNextMsegMonitorUpdate = 0;
         int32 modSourceMonitorUpdateIntervalFrames = 1;
         int32 framesUntilNextModSourceMonitorUpdate = 0;
+        int32 voiceEnhancerResponseIntervalFrames = 1;
+        int32 framesUntilNextVoiceEnhancerResponse = 0;
+        bool voiceEnhancerVisualizationEnabled;
         float32 previewFrequencyHzState = previewFrequencyHz;
         float32 glideTimeSecondsState = 0.0f;
         float32[oscillatorCount] indexedFramePositionState;
@@ -4632,6 +4640,58 @@ namespace wt
             oscillatorVoiceStartOut <- monitor;
         }
 
+        event voiceEnhancerVisualizationEnabledIn (int32 value)
+        {
+            voiceEnhancerVisualizationEnabled = value != 0;
+            framesUntilNextVoiceEnhancerResponse = 0;
+        }
+
+        void emitVoiceEnhancerResponse()
+        {
+            wt::VoiceEnhancerResponseFrame response;
+            response.responseCount = 0;
+            response.voiceIndices = ();
+            response.frequenciesHz = ();
+            response.qValues = ();
+            response.amounts = ();
+
+            for (wrap<voiceCount> voice)
+            {
+                let voiceIndex = int32 (voice);
+                if (! voiceIsSoundingForRackModulation (voiceIndex))
+                    continue;
+
+                let responseIndex = response.responseCount;
+                response.voiceIndices.at (responseIndex) = voiceIndex;
+                response.frequenciesHz.at (responseIndex)
+                    = voiceEffectiveEnhancerFrequencyHz.at (voice);
+                response.qValues.at (responseIndex)
+                    = voiceEffectiveEnhancerQ.at (voice);
+                response.amounts.at (responseIndex)
+                    = voiceEffectiveEnhancerAmount.at (voice);
+                response.responseCount += 1;
+            }
+
+            voiceEnhancerResponseOut <- response;
+        }
+
+        void maybeEmitVoiceEnhancerResponse()
+        {
+            if (! voiceEnhancerVisualizationEnabled)
+                return;
+
+            if (framesUntilNextVoiceEnhancerResponse <= 0)
+            {
+                emitVoiceEnhancerResponse();
+                framesUntilNextVoiceEnhancerResponse
+                    = voiceEnhancerResponseIntervalFrames - 1;
+            }
+            else
+            {
+                framesUntilNextVoiceEnhancerResponse -= 1;
+            }
+        }
+
         void resetVoiceOscillatorLifecycle (int32 voiceIndex)
         {
             let voice = int32 (wrap<voiceCount> (voiceIndex));
@@ -6014,6 +6074,13 @@ namespace wt
             );
             modSourceMonitorUpdateIntervalFrames = std::intrinsics::max (1, requestedModSourceInterval);
             framesUntilNextModSourceMonitorUpdate = 0;
+            let requestedVoiceEnhancerResponseInterval = int32 (
+                std::intrinsics::floor ((processor.frequency
+                    / wt::voiceEnhancerResponseFramesPerSecond) + 0.5f)
+            );
+            voiceEnhancerResponseIntervalFrames = std::intrinsics::max (
+                1, requestedVoiceEnhancerResponseInterval);
+            framesUntilNextVoiceEnhancerResponse = 0;
             rackModGateReleaseStepState = rackModGateReleaseStep (float32 (processor.frequency));
             rackModSmoothingCoefficientState = rackModOnePoleCoefficient (
                 rackModSmoothingMs, float32 (processor.frequency));
@@ -6087,6 +6154,8 @@ namespace wt
                 float32 rightMix = 0.0f;
                 float32 enhancerResidueLeftMix = 0.0f;
                 float32 enhancerResidueRightMix = 0.0f;
+                float32 voiceEnhancerInputLeftMix = 0.0f;
+                float32 voiceEnhancerInputRightMix = 0.0f;
                 bool hasEnhancerResidue = false;
                 float32 trackingPitchHz = trackingPitchHzState;
                 int32 trackingSerial = -1;
@@ -6480,6 +6549,11 @@ namespace wt
                     // Voice Filter above feeds this note-owned Enhancer; the
                     // shared per-note Amp Envelope then scales both dry and
                     // residue before voices are summed.
+                    if (voiceEnhancerVisualizationEnabled)
+                    {
+                        voiceEnhancerInputLeftMix += noteLeft;
+                        voiceEnhancerInputRightMix += noteRight;
+                    }
                     let enhancerResidue = voiceEnhancers.at (voice).process (
                         float32<2> (noteLeft, noteRight),
                         voiceEffectiveEnhancerFrequencyHz.at (voice),
@@ -6526,6 +6600,12 @@ namespace wt
                 out <- float32<2> (
                     (leftMix + blockedEnhancerResidue[0]) * sourceModeGain,
                     (rightMix + blockedEnhancerResidue[1]) * sourceModeGain);
+                voiceEnhancerInputMonitor <- voiceEnhancerVisualizationEnabled
+                    ? float32<2> (
+                        voiceEnhancerInputLeftMix,
+                        voiceEnhancerInputRightMix)
+                    : float32<2> (0.0f);
+                maybeEmitVoiceEnhancerResponse();
                 trackingPitchHzOut <- trackingPitchHz;
                 maybeEmitMonitorUpdate();
                 advance();

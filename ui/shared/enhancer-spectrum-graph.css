@@ -68,3 +68,31 @@
     vector-effect: non-scaling-stroke;
     filter: drop-shadow(0 0 5px var(--enhancer-marker-color));
 }
+
+.voice-enhancer-graph {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 12px;
+    background: #080d10;
+}
+
+.voice-enhancer-graph > .enhancer-spectrum-graph.voice-enhancer-spectrum {
+    height: 100%;
+}
+
+.voice-enhancer-graph-topline {
+    position: absolute;
+    top: 7px;
+    left: 48px;
+    color: rgb(216 204 255 / 0.5);
+    font: 8px/1 "Departure Mono", ui-monospace, monospace;
+    letter-spacing: 0.08em;
+    pointer-events: none;
+}
+
+.voice-enhancer-graph.is-compact .enhancer-spectrum-level-label,
+.voice-enhancer-graph.is-compact .enhancer-spectrum-axis-unit {
+    display: none;
+}

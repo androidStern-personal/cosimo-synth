@@ -301,6 +301,28 @@ test("Polish telemetry folds every union event before one RAF presentation in ei
     }
 });
 
+test("ordinary and folded per-voice Enhancer observers share and release analyzer activity", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installFoldedAnalyzerActivityHarness");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().listenerCount === 2
+        ));
+        assert.deepEqual((await getHarnessSnapshot(page)).sentMessages, [
+            { endpointID: "voiceEnhancerSpectrumActivity", value: 1 },
+        ]);
+
+        await invokeHarness(page, "unmount");
+        assert.deepEqual((await getHarnessSnapshot(page)).sentMessages, [
+            { endpointID: "voiceEnhancerSpectrumActivity", value: 1 },
+            { endpointID: "voiceEnhancerSpectrumActivity", value: 0 },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("route amount binding presents the canonical bridge value before the full modulation document rerenders", async () => {
     const page = await openModulePage();
 
