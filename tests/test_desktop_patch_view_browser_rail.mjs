@@ -3550,6 +3550,33 @@ test("T71 full-screen MSEG and parked Mod bar stay operable across compact phone
 
             const drawer = page.locator('[data-role="quick-source-sheet"][data-source-kind="mseg"]');
             const drawerSurface = drawer.locator('[data-role="quick-sheet-mseg-surface"]');
+            await drawer.waitFor();
+            const compactDrawerGeometry = await drawer.evaluate((element) => {
+                const surface = element.querySelector('[data-role="quick-sheet-mseg-surface"]');
+                const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
+                if (!(surface instanceof SVGElement) || !(keyboard instanceof HTMLElement)) {
+                    return null;
+                }
+                const drawerBounds = element.getBoundingClientRect();
+                const surfaceBounds = surface.getBoundingClientRect();
+                const keyboardBounds = keyboard.getBoundingClientRect();
+                return {
+                    drawerBottom: drawerBounds.bottom,
+                    keyboardTop: keyboardBounds.top,
+                    surfaceHeight: surfaceBounds.height,
+                };
+            });
+            assert.ok(compactDrawerGeometry, `${viewport.name} must mount the compact MSEG drawer.`);
+            assert.equal(
+                compactDrawerGeometry.drawerBottom <= compactDrawerGeometry.keyboardTop + 0.75,
+                true,
+                `${viewport.name} compact MSEG drawer must remain above the keyboard.`,
+            );
+            assert.equal(
+                compactDrawerGeometry.surfaceHeight > 0,
+                true,
+                `${viewport.name} compact MSEG drawer must leave a visible editing surface.`,
+            );
             await drawerSurface.waitFor();
             const grip = drawer.locator('[data-role="quick-source-sheet-grip"]');
             const halfGripBounds = await grip.boundingBox();

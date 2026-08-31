@@ -233,16 +233,24 @@ export function MobileQuickSourceSheet({
 
     /* ------------------------- Detent geometry ------------------------ */
 
+    const viewportHeight = useCallback(() => (
+        window.visualViewport?.height ?? window.innerHeight
+    ), []);
     const usableHeight = useCallback(() => (
-        Math.max(0, (window.visualViewport?.height ?? window.innerHeight) - bottomInset)
-    ), [bottomInset]);
+        Math.max(0, viewportHeight() - bottomInset)
+    ), [bottomInset, viewportHeight]);
     const [detent, setDetent] = useState<"compact" | "half">("compact");
     const [dragHeight, setDragHeight] = useState<number | null>(null);
     const dragRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
 
-    const detentHeight = useCallback((which: "compact" | "half") => (
-        Math.round(usableHeight() * (which === "compact" ? COMPACT_FRACTION : HALF_FRACTION))
-    ), [usableHeight]);
+    const detentHeight = useCallback((which: "compact" | "half") => {
+        const preferredHeight = Math.round(
+            viewportHeight() * (which === "compact" ? COMPACT_FRACTION : HALF_FRACTION),
+        );
+        // The keyboard relocates the sheet but must not shrink its preferred
+        // detents a second time. Cap only when the available band is smaller.
+        return Math.min(preferredHeight, usableHeight() * 0.92);
+    }, [usableHeight, viewportHeight]);
 
     const sheetHeight = dragHeight ?? detentHeight(detent);
 
