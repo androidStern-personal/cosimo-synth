@@ -172,7 +172,7 @@ select {
 
 .seqfx-global__controls {
     display: grid;
-    grid-template-columns: auto minmax(120px, 1.3fr) 88px 76px 88px minmax(108px, 1fr) auto;
+    grid-template-columns: auto minmax(120px, 1.3fr) 88px minmax(142px, 1.1fr) 88px minmax(108px, 1fr) auto;
     align-items: end;
     gap: 7px;
     min-width: 0;
@@ -265,6 +265,30 @@ select {
     opacity: 0.42;
 }
 
+.seqfx-global__segmented,
+.seqfx-loop__segmented {
+    min-width: 0;
+}
+
+.seqfx-global__segmented .editor-tick-slider,
+.seqfx-loop__segmented .editor-tick-slider {
+    grid-template-columns: auto minmax(44px, 1fr) 48px;
+    gap: 5px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+}
+
+.seqfx-global__segmented .editor-tick-slider__label,
+.seqfx-loop__segmented .editor-tick-slider__label {
+    font-size: 10px;
+}
+
+.seqfx-global__segmented .editor-tick-slider__value,
+.seqfx-loop__segmented .editor-tick-slider__value {
+    font-size: 9px;
+}
+
 .seqfx-global__actions {
     display: grid;
     grid-template-columns: repeat(4, auto);
@@ -288,7 +312,7 @@ select {
 
 .seqfx-loop__meta {
     display: grid;
-    grid-template-columns: auto auto auto auto auto;
+    grid-template-columns: auto minmax(132px, 1fr) minmax(132px, 1fr) auto auto;
     align-items: center;
     gap: 6px;
     color: var(--seqfx-shell-ink-muted);
@@ -309,7 +333,7 @@ select {
     gap: 4px;
 }
 
-.seqfx-loop__meta input {
+.seqfx-loop__meta > label input {
     width: 38px;
     height: 24px;
     padding: 2px 4px;
@@ -2686,6 +2710,12 @@ select {
     box-shadow:
         0 0 0 2px var(--seqfx-focus-ring-light),
         0 0 0 4px var(--seqfx-focus-ring-dark);
+}
+
+@media (max-width: 1000px) {
+    .seqfx-loop {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 @media (max-width: 860px) {

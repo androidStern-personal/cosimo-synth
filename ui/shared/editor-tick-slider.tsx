@@ -39,6 +39,8 @@ export type EditorTickSliderProps = {
     inputData?: Readonly<Record<`data-${string}`, string | number | undefined>>;
     valueData?: Readonly<Record<`data-${string}`, string | number | undefined>>;
     entrySpec?: ParameterEntrySpec | null;
+    onGestureStart?: (() => void) | null;
+    onGestureEnd?: (() => void) | null;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -157,6 +159,8 @@ export function EditorTickSlider({
     inputData,
     valueData,
     entrySpec = null,
+    onGestureStart = null,
+    onGestureEnd = null,
 }: EditorTickSliderProps) {
     const dragTargetRef = useRef<"start" | "end" | null>(null);
     const exactInputRef = useRef<HTMLInputElement | null>(null);
@@ -300,9 +304,11 @@ export function EditorTickSlider({
             return;
         }
 
+        skipExactCommitOnBlurRef.current = false;
         setExactDraft(formatParameterEntry(entrySpec, normalizedValue).draft);
         setExactError("");
         setIsEditingExactValue(true);
+        onGestureStart?.();
     };
 
     const commitExactEntry = () => {
@@ -325,6 +331,7 @@ export function EditorTickSlider({
         onChange(result.commit.value);
         setExactError("");
         setIsEditingExactValue(false);
+        onGestureEnd?.();
     };
 
     const handleExactEntryKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -337,6 +344,7 @@ export function EditorTickSlider({
             skipExactCommitOnBlurRef.current = true;
             setExactError("");
             setIsEditingExactValue(false);
+            onGestureEnd?.();
             event.preventDefault();
         }
     };
@@ -515,7 +523,9 @@ export function EditorTickSlider({
                         disabled={disabled}
                         max={scale === "log" ? 1 : max}
                         min={scale === "log" ? 0 : min}
+                        onBlur={() => onGestureEnd?.()}
                         onChange={handleChange}
+                        onFocus={() => onGestureStart?.()}
                         onKeyDown={handleInputKeyDown}
                         step={scale === "log" ? 0.000001 : step}
                         type="range"

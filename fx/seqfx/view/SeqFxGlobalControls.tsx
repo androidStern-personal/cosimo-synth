@@ -1,5 +1,7 @@
 import { useEffect, useRef, type PointerEvent } from "react";
 
+import { EditorTickSlider } from "../../../ui/shared/editor-tick-slider";
+import { parameterEntrySpecForScalar } from "../../../ui/shared/parameter-value-entry";
 import { SEQFX_FACTORY_PATTERNS } from "./seqfx-factory-content";
 import {
     SEQFX_ENDPOINTS,
@@ -20,6 +22,17 @@ type LoopDragEdge = "start" | "end";
 
 const CLOCK_OPTIONS = ["Host", "Internal", "Manual"] as const;
 const RATE_OPTIONS = ["1/8", "1/16", "1/32"] as const;
+const MANUAL_BPM_ENTRY_SPEC = parameterEntrySpecForScalar({
+    min: 20,
+    max: 300,
+    step: 0.1,
+    unit: "BPM",
+    digits: 1,
+});
+
+function loopStepEntrySpec(min: number, max: number) {
+    return parameterEntrySpecForScalar({ min, max, step: 1, unit: "", digits: 0 });
+}
 
 function clampStep(value: number, min: number, max: number) {
     return Math.min(max, Math.max(min, Math.round(value)));
@@ -312,22 +325,28 @@ export function SeqFxGlobalControlSurface({
                     </select>
                 </label>
 
-                <label className="seqfx-global__field" title={manualTempoAvailable ? "Manual tempo" : "The host supplies tempo in Host mode."}>
-                    <span>BPM</span>
-                    <input
-                        aria-label="Manual BPM"
-                        data-role="seqfx-manual-bpm"
+                <div
+                    className="seqfx-global__segmented seqfx-global__segmented--bpm"
+                    title={manualTempoAvailable ? "Manual tempo" : "The host supplies tempo in Host mode."}
+                >
+                    <EditorTickSlider
+                        dataRole="seqfx-manual-bpm-control"
                         disabled={!manualTempoAvailable}
-                        max="300"
-                        min="20"
-                        onBlur={() => endGesture(SEQFX_ENDPOINTS.manualBpm)}
-                        onChange={(event) => onGlobalControl(SEQFX_ENDPOINTS.manualBpm, Number(event.currentTarget.value))}
-                        onFocus={() => beginGesture(SEQFX_ENDPOINTS.manualBpm)}
-                        step="0.1"
-                        type="number"
-                        value={Number(controls.manualBpm.toFixed(1))}
+                        entrySpec={MANUAL_BPM_ENTRY_SPEC}
+                        formatValue={(value) => `${Number(value.toFixed(1))} BPM`}
+                        inputDataRole="seqfx-manual-bpm"
+                        label="BPM"
+                        max={300}
+                        min={20}
+                        onChange={(value) => onGlobalControl(SEQFX_ENDPOINTS.manualBpm, value)}
+                        onGestureEnd={() => endGesture(SEQFX_ENDPOINTS.manualBpm)}
+                        onGestureStart={() => beginGesture(SEQFX_ENDPOINTS.manualBpm)}
+                        step={0.1}
+                        tickCount={12}
+                        value={controls.manualBpm}
+                        valueDataRole="seqfx-manual-bpm-value"
                     />
-                </label>
+                </div>
 
                 <label className="seqfx-global__field">
                     <span>Rate</span>
@@ -382,34 +401,44 @@ export function SeqFxGlobalControlSurface({
             <div className="seqfx-loop">
                 <div className="seqfx-loop__meta">
                     <strong>Loop</strong>
-                    <label>
-                        <span>Start</span>
-                        <input
-                            aria-label="Loop start step"
-                            data-role="seqfx-loop-start"
+                    <div className="seqfx-loop__segmented">
+                        <EditorTickSlider
+                            dataRole="seqfx-loop-start-control"
+                            discrete
+                            entrySpec={loopStepEntrySpec(1, loopEndExclusive)}
+                            formatValue={(value) => String(Math.round(value))}
+                            inputDataRole="seqfx-loop-start"
+                            label="Start"
                             max={loopEndExclusive}
-                            min="1"
-                            onBlur={endLoopGesture}
-                            onChange={(event) => onLoopRangeChange(Number(event.currentTarget.value) - 1, loopEndExclusive)}
-                            onFocus={beginLoopGesture}
-                            type="number"
+                            min={1}
+                            onChange={(value) => onLoopRangeChange(value - 1, loopEndExclusive)}
+                            onGestureEnd={endLoopGesture}
+                            onGestureStart={beginLoopGesture}
+                            step={1}
+                            tickCount={Math.min(16, loopEndExclusive)}
                             value={controls.loopStart + 1}
+                            valueDataRole="seqfx-loop-start-value"
                         />
-                    </label>
-                    <label>
-                        <span>End</span>
-                        <input
-                            aria-label="Loop end step"
-                            data-role="seqfx-loop-end"
-                            max="32"
+                    </div>
+                    <div className="seqfx-loop__segmented">
+                        <EditorTickSlider
+                            dataRole="seqfx-loop-end-control"
+                            discrete
+                            entrySpec={loopStepEntrySpec(controls.loopStart + 1, 32)}
+                            formatValue={(value) => String(Math.round(value))}
+                            inputDataRole="seqfx-loop-end"
+                            label="End"
+                            max={32}
                             min={controls.loopStart + 1}
-                            onBlur={endLoopGesture}
-                            onChange={(event) => onLoopRangeChange(controls.loopStart, Number(event.currentTarget.value))}
-                            onFocus={beginLoopGesture}
-                            type="number"
+                            onChange={(value) => onLoopRangeChange(controls.loopStart, value)}
+                            onGestureEnd={endLoopGesture}
+                            onGestureStart={beginLoopGesture}
+                            step={1}
+                            tickCount={Math.min(16, 32 - controls.loopStart)}
                             value={loopEndExclusive}
+                            valueDataRole="seqfx-loop-end-value"
                         />
-                    </label>
+                    </div>
                     <output>{controls.loopLength} steps</output>
                     <div className="seqfx-loop__actions" role="group" aria-label="Loop edit actions">
                         <button data-role="seqfx-init-pattern" onClick={onInitPattern} title="Clear this pattern. Undo restores it." type="button">Init</button>

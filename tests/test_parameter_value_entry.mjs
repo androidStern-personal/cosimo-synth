@@ -207,6 +207,33 @@ test("normalized percentage controls round-trip through their displayed percent 
     });
 });
 
+test("scalar exact entry supports BPM and unitless step values without display artifacts", async () => {
+    const [entries] = await modulesPromise;
+    const bpmSpec = entries.parameterEntrySpecForScalar({ min: 20, max: 300, step: 0.1, unit: "BPM", digits: 1 });
+    const stepSpec = entries.parameterEntrySpecForScalar({ min: 1, max: 32, step: 1, unit: "", digits: 0 });
+
+    const bpm = entries.parseParameterEntry(bpmSpec, "134.5 bpm");
+    assert.equal(bpm._tag, "accepted");
+    assert.equal(bpm.commit.value, 134.5);
+    assert.deepEqual(entries.formatParameterEntry(bpmSpec, 134.5), {
+        display: "134.5 BPM",
+        draft: "134.5",
+        unit: "BPM",
+    });
+
+    const step = entries.parseParameterEntry(stepSpec, "17");
+    assert.equal(step._tag, "accepted");
+    assert.equal(step.commit.value, 17);
+    assert.deepEqual(entries.formatParameterEntry(stepSpec, 17), {
+        display: "17",
+        draft: "17",
+        unit: "",
+    });
+    const incompatibleStep = entries.parseParameterEntry(stepSpec, "17 bpm");
+    assert.equal(incompatibleStep._tag, "rejected");
+    assert.match(incompatibleStep.message, /unitless/i);
+});
+
 test("rack base families round-trip through descriptor-owned units", async () => {
     const [entries, rackDescriptors] = await modulesPromise;
     const cases = [

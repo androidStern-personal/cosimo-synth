@@ -41,7 +41,7 @@ type FrequencyParameterEntrySpec = ParameterEntryBounds & {
     readonly percentScale: "log" | null;
 };
 
-type ScalarParameterEntryUnit = "%" | "Q" | "dB" | "°" | "st" | "oct" | "ct" | "x";
+type ScalarParameterEntryUnit = "" | "%" | "BPM" | "Q" | "dB" | "°" | "st" | "oct" | "ct" | "x";
 
 type ScalarParameterEntrySpec = ParameterEntryBounds & {
     readonly _tag: "scalar";
@@ -698,6 +698,9 @@ export function parameterEntrySpecForMobileVoiceControl(
 function scalarDisplay(spec: ScalarParameterEntrySpec, canonicalValue: number): FormattedParameterEntry {
     const displayedValue = canonicalValue / spec.canonicalPerDisplayedUnit;
     const draft = formatTrimmed(displayedValue, spec.digits);
+    if (spec.defaultUnit === "") {
+        return { display: draft, draft, unit: "" };
+    }
     if (spec.defaultUnit === "%" || spec.defaultUnit === "°" || spec.defaultUnit === "x") {
         return { display: `${draft}${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
     }
@@ -791,18 +794,24 @@ function parseFrequency(spec: FrequencyParameterEntrySpec, text: string): Parame
     return valueCommit(value, spec);
 }
 
+function scalarEntryPrompt(spec: ScalarParameterEntrySpec, finite: boolean) {
+    if (spec.defaultUnit === "x") {
+        return "Enter a finite number of voices.";
+    }
+    if (spec.defaultUnit === "") {
+        return finite ? "Enter a finite unitless number." : "Enter a unitless number.";
+    }
+    return `Enter ${finite ? "a finite number" : "a number"} in ${spec.defaultUnit}.`;
+}
+
 function parseScalar(spec: ScalarParameterEntrySpec, text: string): ParameterEntryResult {
     const parsed = parseNumericAndUnit(text);
     if (parsed === null) {
-        return {
-            _tag: "rejected",
-            message: spec.defaultUnit === "x"
-                ? "Enter a finite number of voices."
-                : `Enter a number in ${spec.defaultUnit}.`,
-        };
+        return { _tag: "rejected", message: scalarEntryPrompt(spec, false) };
     }
     const compatible = parsed.unit === undefined
         || (spec.defaultUnit === "%" && parsed.unit === "%")
+        || (spec.defaultUnit === "BPM" && unitIs(parsed.unit, "bpm"))
         || (spec.defaultUnit === "Q" && unitIs(parsed.unit, "q"))
         || (spec.defaultUnit === "dB" && unitIs(parsed.unit, "db"))
         || (spec.defaultUnit === "°" && unitIs(parsed.unit, "°", "deg", "degree", "degrees"))
@@ -811,16 +820,14 @@ function parseScalar(spec: ScalarParameterEntrySpec, text: string): ParameterEnt
         || (spec.defaultUnit === "ct" && unitIs(parsed.unit, "ct", "cent", "cents"))
         || (spec.defaultUnit === "x" && unitIs(parsed.unit, "x", "voice", "voices"));
     if (!compatible && parsed.unit !== undefined) {
+        if (spec.defaultUnit === "") {
+            return { _tag: "rejected", message: `${parsed.unit} is not compatible with a unitless value.` };
+        }
         return rejectForUnit(parsed.unit, spec.defaultUnit);
     }
     const numericValue = Number(parsed.numericText);
     if (!Number.isFinite(numericValue)) {
-        return {
-            _tag: "rejected",
-            message: spec.defaultUnit === "x"
-                ? "Enter a finite number of voices."
-                : `Enter a finite number in ${spec.defaultUnit}.`,
-        };
+        return { _tag: "rejected", message: scalarEntryPrompt(spec, true) };
     }
     const centsScale = spec.defaultUnit === "st" && unitIs(parsed.unit, "ct", "cent", "cents") ? 0.01 : 1;
     return valueCommit(numericValue * centsScale * spec.canonicalPerDisplayedUnit, spec);

@@ -4211,6 +4211,88 @@ test("seqfx segmented sliders preserve proportional continuous fill, whole discr
     await page.close();
 });
 
+test("seqfx global numeric controls use compact segmented ranges with host-owned Space", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    assert.equal(await page.locator('.seqfx-root input[type="number"]').count(), 0);
+
+    const bpm = page.locator('[data-role="seqfx-manual-bpm"]');
+    const loopStart = page.locator('[data-role="seqfx-loop-start"]');
+    const loopEnd = page.locator('[data-role="seqfx-loop-end"]');
+    for (const [label, control, rowRole] of [
+        ["Manual BPM", bpm, "seqfx-manual-bpm-control"],
+        ["Loop start", loopStart, "seqfx-loop-start-control"],
+        ["Loop end", loopEnd, "seqfx-loop-end-control"],
+    ]) {
+        assert.equal(await control.getAttribute("type"), "range", `${label} should use a range input`);
+        assert.equal(await page.locator(`[data-role="${rowRole}"] .editor-tick-slider__track`).count(), 1);
+    }
+
+    await page.locator('[data-role="seqfx-clock-mode"]').selectOption("1");
+    const spaceOwnership = await bpm.evaluate((input) => {
+        input.focus();
+        const event = new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            code: "Space",
+            key: " ",
+        });
+        input.dispatchEvent(event);
+        return {
+            activeType: document.activeElement instanceof HTMLInputElement ? document.activeElement.type : null,
+            defaultPrevented: event.defaultPrevented,
+        };
+    });
+    assert.deepEqual(spaceOwnership, { activeType: "range", defaultPrevented: false });
+
+    await bpm.evaluate((input) => input.blur());
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await page.locator('[data-role="seqfx-manual-bpm-value"]').click();
+    const bpmEntry = page.getByRole("textbox", { name: "BPM exact value" });
+    await bpmEntry.fill("134.5 bpm");
+    await bpmEntry.press("Enter");
+    await bpmEntry.waitFor({ state: "detached" });
+
+    await page.locator('[data-role="seqfx-loop-start-value"]').click();
+    const loopStartEntry = page.getByRole("textbox", { name: "Start exact value" });
+    await loopStartEntry.fill("5");
+    await loopStartEntry.press("Enter");
+    await loopStartEntry.waitFor({ state: "detached" });
+
+    await page.locator('[data-role="seqfx-loop-end-value"]').click();
+    const loopEndEntry = page.getByRole("textbox", { name: "End exact value" });
+    await loopEndEntry.fill("13");
+    await loopEndEntry.press("Enter");
+    await loopEndEntry.waitFor({ state: "detached" });
+
+    const snapshot = await getHarnessSnapshot(page);
+    assert.deepEqual(snapshot.events.map(({ endpointID, value }) => ({ endpointID, value })), [
+        { endpointID: "manualBpm", value: 134.5 },
+        { endpointID: "loopStart", value: 4 },
+        { endpointID: "loopLength", value: 28 },
+        { endpointID: "loopStart", value: 4 },
+        { endpointID: "loopLength", value: 9 },
+    ]);
+    assert.deepEqual(snapshot.gestureStarts, [
+        "manualBpm",
+        "loopStart",
+        "loopLength",
+        "loopStart",
+        "loopLength",
+    ]);
+    assert.deepEqual(snapshot.gestureEnds, snapshot.gestureStarts);
+    assert.equal(await page.locator('.seqfx-global input[type="text"]').count(), 0, "exact editors should remain temporary");
+
+    const discreteFills = await page.locator('[data-role="seqfx-loop-start-control"] [data-role="editor-tick-slider-tick"]').evaluateAll(
+        (ticks) => ticks.map((tick) => Number(tick.getAttribute("data-fill"))),
+    );
+    assert.ok(discreteFills.every((fill) => fill === 0 || fill === 1), "loop boundaries should fill whole cells only");
+
+    await page.close();
+});
+
 test("seqfx Tape Stop free durations use the shared log segmented slider without persistent help", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
@@ -4256,6 +4338,19 @@ test("seqfx segmented readouts open temporary unit-aware exact entry and preserv
 
     let snapshot = await getHarnessSnapshot(page);
     assertClose(patternUploads(snapshot).at(-1).value.params[0][0][0], 2_000, 0.001, "frequency exact entry should commit Hz to SeqFX state");
+
+    await frequencyReadout.click();
+    await frequencyEntry.fill("5 khz");
+    await frequencyEntry.press("Escape");
+    await frequencyEntry.waitFor({ state: "detached" });
+    await frequencyReadout.click();
+    await frequencyEntry.fill("3 khz");
+    await page.getByRole("button", { name: "Ring", exact: true }).focus();
+    await frequencyEntry.waitFor({ state: "detached" });
+    assert.equal(await frequencyReadout.textContent(), "3 kHz", "blur after reopening an escaped editor should still commit");
+
+    snapshot = await getHarnessSnapshot(page);
+    assertClose(patternUploads(snapshot).at(-1).value.params[0][0][0], 3_000, 0.001, "reopened exact entry should commit its physical value on blur");
 
     await page.getByRole("button", { name: "Tape Stop", exact: true }).click();
     await page.getByRole("button", { name: "Chain 1 Tape Stop block 1", exact: true }).waitFor();
