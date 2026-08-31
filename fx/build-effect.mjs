@@ -7,6 +7,7 @@ import { build } from "vite";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 export const repoRoot = path.resolve(scriptDir, "..");
 export const seqFxCanonicalRuntimePrebuiltEnvironmentKey = "SEQFX_CANONICAL_RUNTIME_PREBUILT";
+export const seqFxDistributableRuntimeEnvironmentKey = "SEQFX_DISTRIBUTABLE_RUNTIME";
 
 export const effectPlugins = {
     ott: {
@@ -117,6 +118,12 @@ export function shouldReuseSeqFxCanonicalRuntime(pluginName, environment = proce
         && environment[seqFxCanonicalRuntimePrebuiltEnvironmentKey] === "1";
 }
 
+/** Keep qualification provenance local while removing source maps from SeqFX distribution builds. */
+export function shouldEmitEffectRuntimeSourceMaps(pluginName, environment = process.env) {
+    return pluginName !== "seqfx"
+        || environment[seqFxDistributableRuntimeEnvironmentKey] !== "1";
+}
+
 function asList(value) {
     if (value === undefined || value === null)
         return [];
@@ -172,7 +179,7 @@ async function copyRuntimeSources(runtimeSources, runtimeRoot) {
     }
 }
 
-function createProductionBundleConfig({ entry, fileName, outDir, plugins = [] }) {
+function createProductionBundleConfig({ entry, fileName, outDir, plugins = [], sourcemap = true }) {
     return {
         configFile: false,
         root: repoRoot,
@@ -186,7 +193,7 @@ function createProductionBundleConfig({ entry, fileName, outDir, plugins = [] })
         build: {
             target: "esnext",
             minify: false,
-            sourcemap: true,
+            sourcemap,
             emptyOutDir: false,
             lib: {
                 entry,
@@ -203,7 +210,7 @@ function createProductionBundleConfig({ entry, fileName, outDir, plugins = [] })
     };
 }
 
-async function buildWorker(plugin, runtimeRoot) {
+async function buildWorker(plugin, runtimeRoot, { sourcemap }) {
     if (!plugin.workerSource) {
         return;
     }
@@ -215,6 +222,7 @@ async function buildWorker(plugin, runtimeRoot) {
         entry: workerEntry,
         fileName: workerOut,
         outDir: runtimeRoot,
+        sourcemap,
     }));
 }
 
@@ -255,6 +263,7 @@ export async function buildPlugin(pluginName, { environment = process.env } = {}
     const view = getView(manifest, patchPath);
     const devModule = normalizeRepoPath(view.devModule, `${pluginName} view.devModule`);
     const sourceEntry = path.join(repoRoot, devModule);
+    const sourcemap = shouldEmitEffectRuntimeSourceMaps(pluginName, environment);
 
     if (view.src !== "view/index.js")
         throw new Error(`${plugin.patch} must set view.src to "view/index.js".`);
@@ -282,9 +291,10 @@ export async function buildPlugin(pluginName, { environment = process.env } = {}
         plugins: [
             react(),
         ],
+        sourcemap,
     }));
 
-    await buildWorker(plugin, runtimeRoot);
+    await buildWorker(plugin, runtimeRoot, { sourcemap });
 
     console.log(`Built ${pluginName} effect runtime at ${path.relative(repoRoot, runtimeRoot)}`);
 }

@@ -32,26 +32,28 @@ endif()
 
 file(MAKE_DIRECTORY "${COSIMO_EFFECT_OUTPUT_DIR}")
 
+set(_cosimo_cmaj_generate_arguments
+    generate
+    --target=juce
+    "${COSIMO_EFFECT_PATCH_PATH}"
+    "--output=${COSIMO_EFFECT_OUTPUT_DIR}"
+    "--jucePath=${COSIMO_JUCE_SOURCE_DIR}"
+    "--cmajorIncludePath=${COSIMO_CMAJOR_SOURCE_DIR}/include")
+if(COSIMO_DISABLE_MICROPHONE_PERMISSION)
+    list(APPEND _cosimo_cmaj_generate_arguments
+        --juceMicrophonePermissionEnabled=false)
+endif()
+
 execute_process(
-    COMMAND "${COSIMO_CMAJ_EXECUTABLE}" generate
-        --target=juce
-        "${COSIMO_EFFECT_PATCH_PATH}"
-        "--output=${COSIMO_EFFECT_OUTPUT_DIR}"
-        "--jucePath=${COSIMO_JUCE_SOURCE_DIR}"
-        "--cmajorIncludePath=${COSIMO_CMAJOR_SOURCE_DIR}/include"
+    COMMAND "${COSIMO_CMAJ_EXECUTABLE}" ${_cosimo_cmaj_generate_arguments}
     RESULT_VARIABLE generate_result
     OUTPUT_VARIABLE generate_output
     ERROR_VARIABLE generate_error
 )
+unset(_cosimo_cmaj_generate_arguments)
 
 if(NOT generate_result EQUAL 0)
     message(FATAL_ERROR "cmaj generate failed:\n${generate_output}${generate_error}")
-endif()
-
-if(COSIMO_DISABLE_MICROPHONE_PERMISSION)
-    include("${COSIMO_REPO_ROOT}/cmake/SeqFxGeneratedPluginMetadata.cmake")
-    cosimo_disable_generated_microphone_permission(
-        "${COSIMO_EFFECT_OUTPUT_DIR}/CMakeLists.txt")
 endif()
 
 message(STATUS "${generate_output}${generate_error}")

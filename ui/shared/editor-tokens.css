@@ -6,8 +6,8 @@
  * stroke weights, fonts, paddings, and accent colors stay in sync.
  *
  * The numeric layout tokens that need to be read by geometry math
- * (gutter ratios, padding, handle radii) live in editor-tokens.ts and
- * the two files must be kept consistent with each other.
+ * (gutter ratios, padding, handle radii) live in the shared geometry tokens;
+ * keep the CSS and geometry values consistent with each other.
  */
 
 :host,

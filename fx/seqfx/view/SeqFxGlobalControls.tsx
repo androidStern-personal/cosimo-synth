@@ -106,7 +106,7 @@ export function SeqFxGlobalControlSurface({
     const loopPointerIdRef = useRef<number | null>(null);
     const loopGestureActiveRef = useRef(false);
     const activeGestureEndpointsRef = useRef(new Set<GlobalControlEndpoint>());
-    const pointerGestureEndpointsRef = useRef(new Set<GlobalControlEndpoint>());
+    const pointerGestureOwnersRef = useRef(new Map<GlobalControlEndpoint, number>());
     const globalGestureStartRef = useRef(onGlobalGestureStart);
     const globalGestureEndRef = useRef(onGlobalGestureEnd);
     globalGestureStartRef.current = onGlobalGestureStart;
@@ -135,8 +135,10 @@ export function SeqFxGlobalControlSurface({
     useEffect(() => {
         const endPointerInteraction = (event: globalThis.PointerEvent) => {
             endLoopPointerInteraction(event.pointerId);
-            for (const endpointID of [...pointerGestureEndpointsRef.current]) {
-                endPointerGesture(endpointID);
+            for (const [endpointID, pointerId] of [...pointerGestureOwnersRef.current]) {
+                if (pointerId === event.pointerId) {
+                    endPointerGesture(endpointID, pointerId);
+                }
             }
         };
         const endAllInteractions = () => {
@@ -146,7 +148,7 @@ export function SeqFxGlobalControlSurface({
             for (const endpointID of [...activeGestureEndpointsRef.current]) {
                 endGesture(endpointID);
             }
-            pointerGestureEndpointsRef.current.clear();
+            pointerGestureOwnersRef.current.clear();
         };
         window.addEventListener("pointerup", endPointerInteraction);
         window.addEventListener("pointercancel", endPointerInteraction);
@@ -236,13 +238,27 @@ export function SeqFxGlobalControlSurface({
         globalGestureEndRef.current(endpointID);
     }
 
-    function beginPointerGesture(endpointID: GlobalControlEndpoint) {
-        pointerGestureEndpointsRef.current.add(endpointID);
+    function beginPointerGesture(endpointID: GlobalControlEndpoint, event: PointerEvent<HTMLInputElement>) {
+        if (pointerGestureOwnersRef.current.has(endpointID)) {
+            return;
+        }
+
+        pointerGestureOwnersRef.current.set(endpointID, event.pointerId);
         beginGesture(endpointID);
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+            // Synthetic pointers still close through the window-level owner listener.
+        }
     }
 
-    function endPointerGesture(endpointID: GlobalControlEndpoint) {
-        pointerGestureEndpointsRef.current.delete(endpointID);
+    function endPointerGesture(endpointID: GlobalControlEndpoint, pointerId?: number) {
+        const ownerPointerId = pointerGestureOwnersRef.current.get(endpointID);
+        if (ownerPointerId === undefined || (pointerId !== undefined && ownerPointerId !== pointerId)) {
+            return;
+        }
+
+        pointerGestureOwnersRef.current.delete(endpointID);
         endGesture(endpointID);
     }
 
@@ -271,10 +287,12 @@ export function SeqFxGlobalControlSurface({
                         data-role="seqfx-global-mix"
                         max="1"
                         min="0"
-                        onBlur={() => endGesture(SEQFX_ENDPOINTS.globalMix)}
+                        onBlur={() => endPointerGesture(SEQFX_ENDPOINTS.globalMix)}
                         onChange={(event) => onGlobalControl(SEQFX_ENDPOINTS.globalMix, Number(event.currentTarget.value))}
-                        onPointerDown={() => beginPointerGesture(SEQFX_ENDPOINTS.globalMix)}
-                        onPointerUp={() => endPointerGesture(SEQFX_ENDPOINTS.globalMix)}
+                        onLostPointerCapture={(event) => endPointerGesture(SEQFX_ENDPOINTS.globalMix, event.pointerId)}
+                        onPointerCancel={(event) => endPointerGesture(SEQFX_ENDPOINTS.globalMix, event.pointerId)}
+                        onPointerDown={(event) => beginPointerGesture(SEQFX_ENDPOINTS.globalMix, event)}
+                        onPointerUp={(event) => endPointerGesture(SEQFX_ENDPOINTS.globalMix, event.pointerId)}
                         step="0.01"
                         type="range"
                         value={controls.globalMix}
@@ -330,10 +348,12 @@ export function SeqFxGlobalControlSurface({
                         data-role="seqfx-swing"
                         max="0.45"
                         min="0"
-                        onBlur={() => endGesture(SEQFX_ENDPOINTS.swing)}
+                        onBlur={() => endPointerGesture(SEQFX_ENDPOINTS.swing)}
                         onChange={(event) => onGlobalControl(SEQFX_ENDPOINTS.swing, Number(event.currentTarget.value))}
-                        onPointerDown={() => beginPointerGesture(SEQFX_ENDPOINTS.swing)}
-                        onPointerUp={() => endPointerGesture(SEQFX_ENDPOINTS.swing)}
+                        onLostPointerCapture={(event) => endPointerGesture(SEQFX_ENDPOINTS.swing, event.pointerId)}
+                        onPointerCancel={(event) => endPointerGesture(SEQFX_ENDPOINTS.swing, event.pointerId)}
+                        onPointerDown={(event) => beginPointerGesture(SEQFX_ENDPOINTS.swing, event)}
+                        onPointerUp={(event) => endPointerGesture(SEQFX_ENDPOINTS.swing, event.pointerId)}
                         step="0.01"
                         type="range"
                         value={controls.swing}

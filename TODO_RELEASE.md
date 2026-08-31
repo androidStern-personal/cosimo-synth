@@ -38,7 +38,7 @@ automation or evidence.
 The native dependency contract is also fail-closed:
 
 - Cmajor: `androidStern-personal/cmajor` at
-  `a97d8846605c433db561d07f23fc9ff372e20ced`
+  `a7ff151623196561b2fd8ce8e788048b23062100`
 - CHOC: the Cmajor `include/choc` gitlink at
   `98b52fb54c3b9fec03c0c13218f6557aef33eabe`
 - JUCE: `juce-framework/JUCE` at
@@ -56,8 +56,10 @@ Production builds compile the canonical Cmajor command from those pinned sources
 at `build/cmajor_command/bin/cmaj` and pass that absolute repository build output
 to generation. There is no external Cmajor 1.0.3066 authority,
 `COSIMO_RELEASE_CMAJ` override, or `PATH` fallback. The pinned generator owns the
-declared plugin latency; the release proof checks its creation and reload
-behavior without rewriting generated C++.
+declared plugin latency and accepts the explicit
+`--juceMicrophonePermissionEnabled=false` generation option; the release proof
+checks latency creation and reload behavior without rewriting generated C++ or
+generated CMake.
 
 ## Product decisions required before public beta
 

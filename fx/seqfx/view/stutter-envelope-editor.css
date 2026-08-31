@@ -20,7 +20,7 @@
     color: var(--editor-surface-ink);
     background: var(--editor-surface-bg);
     overflow: hidden;
-    /* Matches EDITOR_PLOT_BOTTOM_PADDING_PX in editor-tokens.ts — axis labels
+    /* Matches the shared plot-bottom geometry token — axis labels
        + gate handle + halo all live within this strip below the plot floor. */
     --editor-bottom-reserve: 40px;
     /* Matches STUTTER_GATE_CHIP_TOP_RESERVE_PX — gate chip caps the gate line

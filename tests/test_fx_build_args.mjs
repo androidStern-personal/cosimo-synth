@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -65,6 +65,23 @@ test("SeqFX canonical runtime reuse is opt-in and scoped to the aggregate handof
     }), false);
 });
 
+test("SeqFX release runtime source-map suppression is opt-in and leaves local qualification maps enabled", async () => {
+    const { buildModule } = await loadBuildModules();
+    const environmentKey = buildModule.seqFxDistributableRuntimeEnvironmentKey;
+
+    assert.equal(environmentKey, "SEQFX_DISTRIBUTABLE_RUNTIME");
+    assert.equal(buildModule.shouldEmitEffectRuntimeSourceMaps("seqfx", {}), true);
+    assert.equal(buildModule.shouldEmitEffectRuntimeSourceMaps("seqfx", {
+        [environmentKey]: "true",
+    }), true);
+    assert.equal(buildModule.shouldEmitEffectRuntimeSourceMaps("seqfx", {
+        [environmentKey]: "1",
+    }), false);
+    assert.equal(buildModule.shouldEmitEffectRuntimeSourceMaps("spectral", {
+        [environmentKey]: "1",
+    }), true);
+});
+
 test("the SeqFX production configure explicitly disables microphone permission metadata", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
     const plugin = buildModule.effectPlugins.seqfx;
@@ -96,7 +113,9 @@ test("the SeqFX production configure explicitly disables microphone permission m
     assert.match(wrapperCmake, /set\(COSIMO_CMAJ_EXECUTABLE "" CACHE FILEPATH/u);
     assert.match(wrapperCmake, /IS_ABSOLUTE "\$\{COSIMO_CMAJ_EXECUTABLE\}"/u);
     assert.match(wrapperCmake, /option\(COSIMO_DISABLE_MICROPHONE_PERMISSION/u);
-    assert.match(wrapperCmake, /cosimo_disable_generated_microphone_permission/u);
+    assert.match(wrapperCmake, /--juceMicrophonePermissionEnabled=false/u);
+    assert.doesNotMatch(wrapperCmake, /SeqFxGeneratedPluginMetadata/u);
+    assert.doesNotMatch(wrapperCmake, /cosimo_disable_generated_microphone_permission/u);
 });
 
 test("fx_prod_release_tool_overrides are absolute and PATH-independent", async () => {
@@ -119,48 +138,6 @@ test("fx_prod_release_tool_overrides are absolute and PATH-independent", async (
     assert.throws(
         () => prodModule.resolveProdBuildToolPaths({ COSIMO_RELEASE_NODE: "node" }, "darwin"),
         /COSIMO_RELEASE_NODE must be an absolute executable path/u,
-    );
-});
-
-test("the production metadata hardener disables Cmajor's generated microphone permission before JUCE configures", async (context) => {
-    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-generated-metadata-"));
-    context.after(() => rm(fixtureRoot, { recursive: true, force: true }));
-    const generatedCmake = path.join(fixtureRoot, "CMakeLists.txt");
-    const driver = path.join(fixtureRoot, "harden.cmake");
-    await writeFile(generatedCmake, `juce_add_plugin(CosimoSeqFX
-    PRODUCT_NAME "CosimoSeqFX"
-    MICROPHONE_PERMISSION_ENABLED TRUE
-    IS_SYNTH FALSE
-)
-`, "utf8");
-    await writeFile(driver, `include("${path.join(repoRoot, "cmake", "SeqFxGeneratedPluginMetadata.cmake")}")
-cosimo_disable_generated_microphone_permission("\${GENERATED_PLUGIN_CMAKE}")
-`, "utf8");
-
-    execFileSync("cmake", [`-DGENERATED_PLUGIN_CMAKE=${generatedCmake}`, "-P", driver], {
-        encoding: "utf8",
-    });
-    assert.match(await readFile(generatedCmake, "utf8"), /MICROPHONE_PERMISSION_ENABLED FALSE\s+MICROPHONE_PERMISSION_TEXT ""/u);
-    assert.doesNotMatch(await readFile(generatedCmake, "utf8"), /MICROPHONE_PERMISSION_ENABLED TRUE/u);
-});
-
-test("the production metadata hardener fails closed when Cmajor's generated permission shape drifts", async (context) => {
-    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-generated-metadata-drift-"));
-    context.after(() => rm(fixtureRoot, { recursive: true, force: true }));
-    const generatedCmake = path.join(fixtureRoot, "CMakeLists.txt");
-    const driver = path.join(fixtureRoot, "harden.cmake");
-    await writeFile(generatedCmake, "juce_add_plugin(CosimoSeqFX IS_SYNTH FALSE)\n", "utf8");
-    await writeFile(driver, `include("${path.join(repoRoot, "cmake", "SeqFxGeneratedPluginMetadata.cmake")}")
-cosimo_disable_generated_microphone_permission("\${GENERATED_PLUGIN_CMAKE}")
-`, "utf8");
-
-    assert.throws(
-        () => execFileSync("cmake", [
-            `-DGENERATED_PLUGIN_CMAKE=${generatedCmake}`,
-            "-P",
-            driver,
-        ], { encoding: "utf8" }),
-        /Expected exactly one generated MICROPHONE_PERMISSION_ENABLED TRUE entry,\s+found 0/u,
     );
 });
 

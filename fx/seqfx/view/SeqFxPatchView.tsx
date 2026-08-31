@@ -4350,6 +4350,10 @@ export function SeqFxPatchView({
             return;
         }
 
+        if (liveEditPointerIdRef.current !== null) {
+            return;
+        }
+
         liveEditPointerIdRef.current = event.pointerId;
         bridge.beginLiveEdit();
     }

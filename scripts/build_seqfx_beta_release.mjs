@@ -17,7 +17,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync, gzipSync, inflateSync } from "node:zlib";
 
-import { effectPlugins, repoRoot } from "../fx/build-effect.mjs";
+import {
+    effectPlugins,
+    repoRoot,
+    seqFxDistributableRuntimeEnvironmentKey,
+} from "../fx/build-effect.mjs";
 import {
     seqFxArtifactBaseName,
     seqFxReleaseConfig,
@@ -1312,6 +1316,36 @@ export async function attestMatchingVst3Metadata(config, builtVst3Path, stagedVs
     };
 }
 
+/** Reject source provenance embedded in the executable copied into release staging. */
+export async function assertSeqFxDistributableExecutableIsSourceFree(executablePath) {
+    const executable = await readFile(executablePath);
+    const executableText = executable.toString("latin1");
+    const findings = [];
+
+    for (const marker of ["sourceMappingURL", "sourcesContent"]) {
+        if (executable.includes(Buffer.from(marker))) {
+            findings.push(marker);
+        }
+    }
+
+    const sourceMapFilenames = executableText.match(/[A-Za-z0-9_@+./?-]+\.(?:css|js)\.map/gu) ?? [];
+    for (const filename of new Set(sourceMapFilenames)) {
+        findings.push(`source map filename ${filename}`);
+    }
+
+    const typeScriptFilenames = executableText.match(/[A-Za-z0-9_@+./?-]+\.(?:cts|mts|ts|tsx)(?=[^A-Za-z0-9_]|$)/gu) ?? [];
+    for (const filename of new Set(typeScriptFilenames)) {
+        findings.push(`TypeScript filename ${filename}`);
+    }
+
+    if (findings.length > 0) {
+        throw new Error([
+            `SeqFX distributable executable contains source provenance: ${executablePath}`,
+            ...findings.map((finding) => `- ${finding}`),
+        ].join("\n"));
+    }
+}
+
 async function verifyBuiltVst3(config) {
     const vst3Path = path.join(repoRoot, config.paths.builtVst3);
     const binaryPath = path.join(vst3Path, "Contents", "MacOS", config.identity.bundleName);
@@ -2401,6 +2435,13 @@ async function assembleArtifactSet({
     const stagedThirdPartyNoticesPath = path.join(stagedVst3, "Contents", "Resources", "THIRD_PARTY_NOTICES.txt");
     await mkdir(path.dirname(stagedThirdPartyNoticesPath), { recursive: true });
     copyPathWithoutMetadata(thirdPartyNoticesSourcePath, stagedThirdPartyNoticesPath);
+    const stagedExecutablePath = path.join(
+        stagedVst3,
+        "Contents",
+        "MacOS",
+        config.identity.bundleName,
+    );
+    await assertSeqFxDistributableExecutableIsSourceFree(stagedExecutablePath);
     const vst3Metadata = await attestMatchingVst3Metadata(
         config,
         builtArtifact.vst3Path,
@@ -2583,6 +2624,7 @@ async function buildReleaseArtifacts({
         env: {
             COSIMO_RELEASE_CMAKE: toolchain.privateInvocationPaths.cmake,
             COSIMO_RELEASE_NODE: toolchain.privateInvocationPaths.node,
+            [seqFxDistributableRuntimeEnvironmentKey]: "1",
         },
     });
     assertSourceStateUnchanged(gitState, getReleaseGitState());

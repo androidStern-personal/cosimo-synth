@@ -14,6 +14,7 @@ import {
     assertArchiveTreeContainsOnlyFilesAndDirectories,
     assertNativeBuildUsedReleaseToolchain,
     assertSafeOutputRoot,
+    assertSeqFxDistributableExecutableIsSourceFree,
     canonicalPayloadFingerprint,
     captureVst3ArtifactEvidence,
     captureActualNativeDependencyProvenance,
@@ -45,6 +46,28 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const scriptPath = path.join(repoRoot, "scripts", "build_seqfx_beta_release.mjs");
+
+test("release staging rejects embedded source maps, source content, and TypeScript filenames", async (context) => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-source-leak-"));
+    const executablePath = path.join(fixtureRoot, "CosimoSeqFX");
+    context.after(() => rm(fixtureRoot, { recursive: true, force: true }));
+
+    await writeFile(executablePath, Buffer.from([
+        "Mach-O fixture",
+        "//# sourceMappingURL=app.js.map",
+        '\"sourcesContent\":[\"export const leaked = true;\"]',
+        "../../../../fx/seqfx/view/SeqFxPatchView.tsx",
+        "../../../../fx/seqfx/worker/seqfx-worker-service.ts",
+    ].join("\0")));
+
+    await assert.rejects(
+        assertSeqFxDistributableExecutableIsSourceFree(executablePath),
+        /sourceMappingURL.*sourcesContent.*SeqFxPatchView\.tsx.*seqfx-worker-service\.ts/su,
+    );
+
+    await writeFile(executablePath, Buffer.from("Mach-O fixture without private UI provenance"));
+    await assert.doesNotReject(assertSeqFxDistributableExecutableIsSourceFree(executablePath));
+});
 
 function syntheticUnsignedFlatPackage(creationTime) {
     const toc = Buffer.from([
@@ -149,7 +172,7 @@ function releaseToolchainFixture({ nativeBuildCacheVerified = true } = {}) {
         },
         sourceBuiltTools: {
             cmaj: {
-                cmajorCommit: "a97d8846605c433db561d07f23fc9ff372e20ced",
+                cmajorCommit: "a7ff151623196561b2fd8ce8e788048b23062100",
                 chocCommit: "98b52fb54c3b9fec03c0c13218f6557aef33eabe",
                 executablePolicy: "absolute-repository-build-output-no-path-fallback",
                 provenance: "repository-pinned-source-build",
@@ -395,7 +418,7 @@ test("release config freezes the existing beta identity and current native outpu
             cpmName: "cosimo_cmajor",
             sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",
             repository: "https://github.com/androidStern-personal/cmajor.git",
-            revision: "a97d8846605c433db561d07f23fc9ff372e20ced",
+            revision: "a7ff151623196561b2fd8ce8e788048b23062100",
         },
         choc: {
             repository: "https://github.com/androidStern-personal/choc.git",
@@ -821,7 +844,7 @@ test("tracked third-party notices cover the embedded runtime and artwork", async
         assert.match(notices, new RegExp(`^${component.replaceAll("+", "\\+")}$`, "mu"));
 
     assert.match(notices, /does not grant distribution\s+rights/u);
-    assert.match(notices, /a97d8846605c433db561d07f23fc9ff372e20ced/u);
+    assert.match(notices, /a7ff151623196561b2fd8ce8e788048b23062100/u);
     assert.match(notices, /98b52fb54c3b9fec03c0c13218f6557aef33eabe/u);
     assert.match(notices, /501c07674e1ad693085a7e7c398f205c2677f5da/u);
     assert.match(notices, /320ea19819bf66429fa772d6c04614ae75815895/u);

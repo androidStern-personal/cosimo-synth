@@ -40,7 +40,7 @@ const approvedExternalTools = Object.freeze({
 });
 
 const pinnedSourceBuiltGenerator = Object.freeze({
-    cmajorCommit: "a97d8846605c433db561d07f23fc9ff372e20ced",
+    cmajorCommit: "a7ff151623196561b2fd8ce8e788048b23062100",
     chocCommit: "98b52fb54c3b9fec03c0c13218f6557aef33eabe",
 });
 

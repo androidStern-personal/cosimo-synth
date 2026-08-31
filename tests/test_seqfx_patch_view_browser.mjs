@@ -126,6 +126,10 @@ function patternUploads(snapshot) {
     return snapshot.events.filter((entry) => entry.endpointID === "patternUpload");
 }
 
+function seqFxStateWrites(snapshot) {
+    return snapshot.storedStateWrites.filter((entry) => entry.key === SEQFX_STATE_KEY);
+}
+
 function snapshotSlotLocator(page, slotID) {
     return page.locator("cosimo-effect-header").evaluateHandle((header, nextSlotID) => (
         header.shadowRoot
@@ -1261,6 +1265,218 @@ test("seqfx_global_surface_wires_host_controls_loop_transport_and_edit_history",
     ));
     assert.equal(loopCells.length, 32);
     assert.deepEqual(loopCells.map((cell) => cell.inLoop === "true"), Array.from({ length: 32 }, (_unused, index) => index >= 4 && index < 13));
+
+    await page.close();
+});
+
+test("seqfx_global_mix_and_swing_gestures_keep_the_initiating_pointer_owner", async () => {
+    const page = await browser.newPage({ viewport: { width: 1120, height: 680 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    for (const [endpointID, selector, ownerPointerId] of [
+        ["globalMix", '[data-role="seqfx-global-mix"]', 41],
+        ["swing", '[data-role="seqfx-swing"]', 51],
+    ]) {
+        await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+        await dispatchSyntheticPointer(page, selector, "pointerdown", {
+            buttons: 1,
+            pointerId: ownerPointerId,
+            pointerType: "touch",
+        });
+        await dispatchSyntheticPointer(page, selector, "pointerdown", {
+            buttons: 1,
+            pointerId: 99,
+            pointerType: "touch",
+        });
+        await dispatchSyntheticPointer(page, "window", "pointerup", {
+            buttons: 0,
+            pointerId: 99,
+            pointerType: "touch",
+        });
+        await dispatchSyntheticPointer(page, "window", "pointercancel", {
+            buttons: 0,
+            pointerId: 99,
+            pointerType: "touch",
+        });
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureStarts, [endpointID]);
+        assert.deepEqual(snapshot.gestureEnds, [], "foreign pointer lifecycle must not close the owner gesture");
+
+        await dispatchSyntheticPointer(page, selector, "lostpointercapture", {
+            buttons: 0,
+            pointerId: ownerPointerId,
+            pointerType: "touch",
+        });
+        await dispatchSyntheticPointer(page, "window", "pointerup", {
+            buttons: 0,
+            pointerId: ownerPointerId,
+            pointerType: "touch",
+        });
+        await dispatchSyntheticPointer(page, "window", "pointercancel", {
+            buttons: 0,
+            pointerId: ownerPointerId,
+            pointerType: "touch",
+        });
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureEnds, [endpointID], "capture loss and owner release must close exactly once");
+    }
+
+    await page.close();
+});
+
+test("seqfx_global_pointer_gestures_close_once_on_blur_and_unmount", async () => {
+    const page = await browser.newPage({ viewport: { width: 1120, height: 680 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    const beginBothGestures = async () => {
+        await dispatchSyntheticPointer(page, '[data-role="seqfx-global-mix"]', "pointerdown", {
+            buttons: 1,
+            pointerId: 61,
+            pointerType: "touch",
+        });
+        await dispatchSyntheticPointer(page, '[data-role="seqfx-swing"]', "pointerdown", {
+            buttons: 1,
+            pointerId: 71,
+            pointerType: "touch",
+        });
+    };
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await beginBothGestures();
+    await page.evaluate(() => {
+        window.dispatchEvent(new Event("blur"));
+        window.dispatchEvent(new Event("blur"));
+    });
+    let snapshot = await getHarnessSnapshot(page);
+    assert.deepEqual(snapshot.gestureStarts, ["globalMix", "swing"]);
+    assert.deepEqual(snapshot.gestureEnds, ["globalMix", "swing"]);
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await beginBothGestures();
+    await page.evaluate(() => document.querySelector("cosimo-seqfx-react-view")?.remove());
+    snapshot = await getHarnessSnapshot(page);
+    assert.deepEqual(snapshot.gestureStarts, ["globalMix", "swing"]);
+    assert.deepEqual(snapshot.gestureEnds, ["globalMix", "swing"]);
+
+    await page.close();
+});
+
+test("seqfx_inspector_undo_gesture_rejects_foreign_pointer_acquisition", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    const mix = page.locator('[data-role="seqfx-mix"]');
+    await mix.waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    await dispatchSyntheticPointer(page, '[data-role="seqfx-mix"]', "pointerdown", {
+        buttons: 1,
+        pointerId: 81,
+        pointerType: "touch",
+    });
+    await setRangeInputValue(mix, 0.44);
+    await page.waitForFunction(() => (
+        window.__SEQFX_HARNESS__?.getSnapshot().events
+            .some((entry) => entry.endpointID === "patternUpload")
+    ));
+    assert.equal(seqFxStateWrites(await getHarnessSnapshot(page)).length, 0);
+
+    await dispatchSyntheticPointer(page, '[data-role="seqfx-mix"]', "pointerdown", {
+        buttons: 1,
+        pointerId: 91,
+        pointerType: "touch",
+    });
+    await dispatchSyntheticPointer(page, "window", "pointerup", {
+        buttons: 0,
+        pointerId: 91,
+        pointerType: "touch",
+    });
+    await dispatchSyntheticPointer(page, "window", "pointercancel", {
+        buttons: 0,
+        pointerId: 91,
+        pointerType: "touch",
+    });
+    assert.equal(
+        seqFxStateWrites(await getHarnessSnapshot(page)).length,
+        0,
+        "foreign pointer down/up must not steal or commit the owner's Undo gesture",
+    );
+
+    await setRangeInputValue(mix, 0.31);
+    await dispatchSyntheticPointer(page, "window", "pointerup", {
+        buttons: 0,
+        pointerId: 81,
+        pointerType: "touch",
+    });
+    await page.waitForFunction((stateKey) => (
+        window.__SEQFX_HARNESS__?.getSnapshot().storedStateWrites
+            .filter((entry) => entry.key === stateKey).length === 1
+    ), SEQFX_STATE_KEY);
+    await dispatchSyntheticPointer(page, "window", "pointerup", {
+        buttons: 0,
+        pointerId: 81,
+        pointerType: "touch",
+    });
+    await dispatchSyntheticPointer(page, "window", "pointercancel", {
+        buttons: 0,
+        pointerId: 81,
+        pointerType: "touch",
+    });
+
+    const snapshot = await getHarnessSnapshot(page);
+    assert.equal(seqFxStateWrites(snapshot).length, 1, "owner release must commit the Undo gesture once");
+    assertClose(
+        parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]).patterns[0].lanes[0].steps[0].mix,
+        0.31,
+        0.001,
+        "owner release persisted the final block mix",
+    );
+
+    await page.close();
+});
+
+test("seqfx_inspector_undo_gesture_closes_once_on_blur_and_unmount", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    const mix = page.locator('[data-role="seqfx-mix"]');
+    await mix.waitFor();
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await dispatchSyntheticPointer(page, '[data-role="seqfx-mix"]', "pointerdown", {
+        buttons: 1,
+        pointerId: 82,
+        pointerType: "touch",
+    });
+    await setRangeInputValue(mix, 0.55);
+    await page.evaluate(() => {
+        window.dispatchEvent(new Event("blur"));
+        window.dispatchEvent(new Event("blur"));
+    });
+    await dispatchSyntheticPointer(page, "window", "pointerup", {
+        buttons: 0,
+        pointerId: 82,
+        pointerType: "touch",
+    });
+    let snapshot = await getHarnessSnapshot(page);
+    assert.equal(seqFxStateWrites(snapshot).length, 1, "blur must commit the live Undo gesture once");
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await dispatchSyntheticPointer(page, '[data-role="seqfx-mix"]', "pointerdown", {
+        buttons: 1,
+        pointerId: 83,
+        pointerType: "touch",
+    });
+    await setRangeInputValue(mix, 0.66);
+    await page.evaluate(() => document.querySelector("cosimo-seqfx-react-view")?.remove());
+    snapshot = await getHarnessSnapshot(page);
+    assert.equal(seqFxStateWrites(snapshot).length, 1, "unmount must commit the live Undo gesture once");
 
     await page.close();
 });

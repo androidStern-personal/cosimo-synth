@@ -8,6 +8,7 @@ class SeqFxHarnessPatchConnection {
     events: Array<{ endpointID: string; value: unknown }> = [];
     gestureStarts: string[] = [];
     gestureEnds: string[] = [];
+    storedStateWrites: Array<{ key: string; value: unknown }> = [];
     parameters: Record<string, unknown> = {
         enabled: 1,
         globalMix: 1,
@@ -67,6 +68,7 @@ class SeqFxHarnessPatchConnection {
 
     sendStoredStateValue(key: string, value: unknown) {
         this.storedState[key] = value;
+        this.storedStateWrites.push({ key, value });
         for (const listener of this.storedStateListeners) {
             listener({ key, value });
         }
@@ -129,6 +131,7 @@ class SeqFxHarnessPatchConnection {
             events: [...this.events],
             gestureStarts: [...this.gestureStarts],
             gestureEnds: [...this.gestureEnds],
+            storedStateWrites: [...this.storedStateWrites],
             storedState: { ...this.storedState },
             parameters: { ...this.parameters },
         };
@@ -166,6 +169,7 @@ window.__SEQFX_HARNESS__ = {
         patchConnection.events = [];
         patchConnection.gestureStarts = [];
         patchConnection.gestureEnds = [];
+        patchConnection.storedStateWrites = [];
     },
     emitParameter: (endpointID: string, value: unknown) => {
         patchConnection.emitParameter(endpointID, value);
