@@ -9,6 +9,7 @@ const laneV1Promise = loadUIModule(repoRoot, "ui/shared/lane-state.ts");
 const laneV2Promise = loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
 const laneSlotParamsPromise = loadUIModule(repoRoot, "ui/shared/lane-slot-params.ts");
 const rackDescriptorsPromise = loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts");
+const effectOutputTrimPromise = loadUIModule(repoRoot, "ui/shared/effect-output-trim.ts");
 
 const MIX_DEFAULT_CASES = [
     { effectId: "drive", deviceType: "distortion", endpointID: "distortionWet", expected: 0.5 },
@@ -432,9 +433,10 @@ test("instances list in identity order and hold their slot ordinals by number", 
                      { deviceType: "delay", instanceNumber: 2 });
 });
 
-test("the compiled wire matches lane.v1 exactly for an upgraded serial document", async () => {
+test("the upgraded serial wire adds instance host trims without changing slot records or topology", async () => {
     const laneV1 = await laneV1Promise;
     const laneV2 = await laneV2Promise;
+    const outputTrim = await effectOutputTrimPromise;
 
     const v1 = laneV1.createDefaultLaneState();
     const edited = { ...v1, order: [...v1.order].reverse(), enabled: { ...v1.enabled, ott: true } };
@@ -442,17 +444,24 @@ test("the compiled wire matches lane.v1 exactly for an upgraded serial document"
     const v1Events = laneV1.buildLaneRuntimeEvents(edited);
     const v2Events = laneV2.buildLaneRuntimeEventsV2(laneV2.upgradeLaneStateV1(edited));
 
-    // v2 adds the whole-lane output-control event; the legacy device records
-    // and topology remain identical bit for bit.
+    // v2 adds the whole-lane output-control event and one real host parameter
+    // event per resident device. Device records and topology stay identical.
     assert.deepEqual(v2Events[0], {
         endpointID: "laneOutputControl",
         value: { mix: 1, bypassed: false },
     });
-    assert.equal(v2Events.length, v1Events.length + 1);
+    const expectedHostEndpointIDs = outputTrim.EFFECT_OUTPUT_TRIM_DEVICE_TYPES.map(
+        (deviceType) => outputTrim.effectOutputTrimHostEndpointID(deviceType, 1),
+    );
+    const hostEvents = v2Events.filter((event) => (
+        outputTrim.parseEffectOutputTrimHostEndpointID(event.endpointID) !== null
+    ));
+    assert.deepEqual(hostEvents, expectedHostEndpointIDs.map((endpointID) => ({
+        endpointID,
+        value: 0,
+    })));
+    assert.equal(v2Events.length, v1Events.length + 1 + expectedHostEndpointIDs.length);
     assert.deepEqual(v2Events[v2Events.length - 1], v1Events[v1Events.length - 1]);
-    for (const event of v2Events.slice(1, -1)) {
-        assert.equal(event.endpointID, "laneSlotParams");
-    }
     // Records cover the same slots with the same values (order may differ).
     const recordBySlot = (events) => new Map(
         events.filter((event) => event.endpointID === "laneSlotParams")

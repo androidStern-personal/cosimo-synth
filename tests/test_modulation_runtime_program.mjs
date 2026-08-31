@@ -190,7 +190,7 @@ async function assertSingleStructuralReinstall(previousRoutes, nextRoutes) {
 test("rack target catalog compilation rejects indices outside the DSP domain", async () => {
     const { compileRackModulationTargetCatalog } = await programModulePromise;
 
-    for (const modulationTargetIndex of [-1, 39, 1.5]) {
+    for (const modulationTargetIndex of [-1, 47, 1.5]) {
         assert.throws(
             () => compileRackModulationTargetCatalog([{
                 endpointID: "invalidRackTarget",
@@ -248,9 +248,9 @@ test("a deliberate 101st final-legal sentinel survives in its active prefix", as
         { voice: 30, macroVoice: 20, voiceRack: 30, macroRack: 20 },
     );
     // Cell indices run at the rackMod BUS width (static vocabulary + Effects
-    // Lane pool block): the final static macroRack pair (source 3, target 38)
-    // sits at 3*MODULATION_RACK_TARGET_TOTAL + 38.
-    const finalLegalCellIndex = (3 * runtime.MODULATION_RACK_TARGET_TOTAL) + 38;
+    // Lane pool block): the final static macroRack pair (source 3, target 46)
+    // sits at 3*MODULATION_RACK_TARGET_TOTAL + 46.
+    const finalLegalCellIndex = (3 * runtime.MODULATION_RACK_TARGET_TOTAL) + 46;
     const finalLegalRoute = allRoutes.find((route) => {
         const cell = runtime.getModulationRuntimeCell(route);
         return cell.path === "macroRack" && cell.cellIndex === finalLegalCellIndex;
@@ -270,20 +270,20 @@ test("a deliberate 101st final-legal sentinel survives in its active prefix", as
     assert.deepEqual(runtimeLaneTail(program, macroRack), {
         cellIndex: finalLegalCellIndex,
         sourceIndex: 3,
-        targetIndex: 38,
+        targetIndex: 46,
         polarity: 1,
         amount: 0.5,
         reducer: null,
     });
 });
 
-test("all 1372 legal mappings publish exact deterministic lane tails without truncation", async () => {
+test("all 1484 legal mappings publish exact deterministic lane tails without truncation", async () => {
     const runtime = await programModulePromise;
     const routes = await createAllLegalRoutes();
     const program = runtime.compileModulationRuntimeProgram(routes);
 
     assert.equal(routes.length, runtime.MODULATION_MAPPING_CELL_COUNT);
-    assert.deepEqual(runtimeLaneCounts(program), [590, 236, 390, 156]);
+    assert.deepEqual(runtimeLaneCounts(program), [590, 236, 470, 188]);
     // Rack-path cell indices run at the BUS width (static + lane pool):
     // source*TOTAL + target. Voice-path indices are untouched by the pool.
     assert.deepEqual(
@@ -291,8 +291,8 @@ test("all 1372 legal mappings publish exact deterministic lane tails without tru
         [
             { cellIndex: 589, sourceIndex: 9, targetIndex: 58, polarity: 1, amount: 0.25, reducer: null },
             { cellIndex: 235, sourceIndex: 3, targetIndex: 58, polarity: 1, amount: 0.25, reducer: null },
-            { cellIndex: (9 * runtime.MODULATION_RACK_TARGET_TOTAL) + 38, sourceIndex: 9, targetIndex: 38, polarity: 1, amount: 0.25, reducer: 1 },
-            { cellIndex: (3 * runtime.MODULATION_RACK_TARGET_TOTAL) + 38, sourceIndex: 3, targetIndex: 38, polarity: 1, amount: 0.25, reducer: null },
+            { cellIndex: (9 * runtime.MODULATION_RACK_TARGET_TOTAL) + 46, sourceIndex: 9, targetIndex: 46, polarity: 1, amount: 0.25, reducer: 1 },
+            { cellIndex: (3 * runtime.MODULATION_RACK_TARGET_TOTAL) + 46, sourceIndex: 3, targetIndex: 46, polarity: 1, amount: 0.25, reducer: null },
         ],
     );
     assert.deepEqual(
@@ -302,7 +302,7 @@ test("all 1372 legal mappings publish exact deterministic lane tails without tru
     );
 });
 
-test("1372 stored mappings with the same 100 active mappings publish identical execution lanes", async () => {
+test("1484 stored mappings with the same 100 active mappings publish identical execution lanes", async () => {
     const runtime = await programModulePromise;
     const allRoutes = await createAllLegalRoutes();
     const activeRoutes = selectActiveRoutesByLane(
@@ -316,7 +316,7 @@ test("1372 stored mappings with the same 100 active mappings publish identical e
     ));
 
     assert.equal(activeRoutes.length, 100);
-    assert.equal(storedDomain.length, 1372);
+    assert.equal(storedDomain.length, 1484);
     assert.deepEqual(
         projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(storedDomain)),
         projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(activeRoutes)),
@@ -533,7 +533,7 @@ test("the DSP hot path consumes published active prefixes instead of transport c
     assert.match(hotPath, /int32 \(routeIndex\) >= voiceRackRouteCount/);
     assert.match(hotPath, /macroRackRouteSourceUsed\[sourceIndex\]/);
     // The macro-rack application stays a fused VECTOR op, blocked at the
-    // proven 39-wide SIMD width (one block per pool mirror set) — a single
+    // proven 47-wide SIMD width (one block per pool mirror set) — a single
     // wide vector scalarises in the pinned browser backend.
     assert.match(hotPath, /macroRackRouteScaleVectors\[sourceIndex, block\] \* macroSourceValues\[sourceIndex\]/);
     assert.doesNotMatch(

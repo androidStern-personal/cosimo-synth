@@ -1373,6 +1373,50 @@ graph WavetableSynth [[ main ]]
     input value float32 polishEnhancerBypass [[ name: "Polish Enhancer Bypass", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
     input value float32 polishCompressionClipBypass [[ name: "Polish Compression / Clip Bypass", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
     input value float32 polishOutputTrimBypass [[ name: "Polish Output Trim Bypass", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
+    // T78 appends one real host automation parameter for every resident effect
+    // instance after the complete Polish contract. These are deliberately
+    // type+ordinal identities, not graph positions, and remain separate from
+    // the fixed Polish trim above.
+    input rack.laneGlobalFilter1OutputTrimDb;
+    input rack.laneGlobalFilter2OutputTrimDb;
+    input rack.laneGlobalFilter3OutputTrimDb;
+    input rack.laneGlobalFilter4OutputTrimDb;
+    input rack.laneGlobalFilter5OutputTrimDb;
+    input rack.laneDistortion1OutputTrimDb;
+    input rack.laneDistortion2OutputTrimDb;
+    input rack.laneDistortion3OutputTrimDb;
+    input rack.laneDistortion4OutputTrimDb;
+    input rack.laneDistortion5OutputTrimDb;
+    input rack.laneOtt1OutputTrimDb;
+    input rack.laneOtt2OutputTrimDb;
+    input rack.laneOtt3OutputTrimDb;
+    input rack.laneOtt4OutputTrimDb;
+    input rack.laneOtt5OutputTrimDb;
+    input rack.laneChorus1OutputTrimDb;
+    input rack.laneChorus2OutputTrimDb;
+    input rack.laneChorus3OutputTrimDb;
+    input rack.laneChorus4OutputTrimDb;
+    input rack.laneChorus5OutputTrimDb;
+    input rack.laneFlanger1OutputTrimDb;
+    input rack.laneFlanger2OutputTrimDb;
+    input rack.laneFlanger3OutputTrimDb;
+    input rack.laneFlanger4OutputTrimDb;
+    input rack.laneFlanger5OutputTrimDb;
+    input rack.lanePhaser1OutputTrimDb;
+    input rack.lanePhaser2OutputTrimDb;
+    input rack.lanePhaser3OutputTrimDb;
+    input rack.lanePhaser4OutputTrimDb;
+    input rack.lanePhaser5OutputTrimDb;
+    input rack.laneDelay1OutputTrimDb;
+    input rack.laneDelay2OutputTrimDb;
+    input rack.laneDelay3OutputTrimDb;
+    input rack.laneDelay4OutputTrimDb;
+    input rack.laneDelay5OutputTrimDb;
+    input rack.laneReverb1OutputTrimDb;
+    input rack.laneReverb2OutputTrimDb;
+    input rack.laneReverb3OutputTrimDb;
+    input rack.laneReverb4OutputTrimDb;
+    input rack.laneReverb5OutputTrimDb;
     // Effects Lane structure and parameter records/fields are patch state and
     // live edits (ADR-007); Solo is runtime-only audition state. These struct
     // events carry no parameter purpose, so none become host automation slots.

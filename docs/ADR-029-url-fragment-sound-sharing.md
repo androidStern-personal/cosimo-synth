@@ -42,8 +42,8 @@ payloads are subject to equivalent fragment and decompressed-size bounds.
 
 The threshold is measured against the current contract rather than inherited
 from generic URL folklore. Default and representative sounds are about
-3.0–3.2K characters. The deliberate current maximum fills all 110 public
-parameters, 1,372 legal modulation pairs, 96 MSEG shape points, all 128
+3.0–3.2K characters. The deliberate current maximum fills all 150 public
+parameters, 1,484 legal modulation pairs, 96 MSEG shape points, all 128
 articulation slots with every override and articulable route, and all eight
 Effects Lane devices. With the generated performer's complete endpoint
 contract it is 3,110,089 bytes before compression, 71,656 characters as a

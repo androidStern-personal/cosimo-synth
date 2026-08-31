@@ -44,6 +44,13 @@ import {
     type LaneState,
 } from "./lane-state";
 import { getLaneKeyTrackEndpoints } from "./key-track";
+import {
+    EFFECT_OUTPUT_TRIM_MAX_DB,
+    EFFECT_OUTPUT_TRIM_SILENCE_DB,
+    effectOutputTrimHostEndpointID,
+    effectOutputTrimLaneEndpointID,
+    parseEffectOutputTrimHostEndpointID,
+} from "./effect-output-trim";
 
 /**
  * lane.v2 — the device-instance + topology-tree document (M3).
@@ -203,7 +210,6 @@ function parseDeviceRecord(deviceId: string, input: unknown):
         return { failure: err(`device ${deviceId} must be { params }`) };
     }
     const endpoints = laneDeviceParamEndpoints(parsedId.deviceType);
-    const legacyEndpoints = LEGACY_LANE_DEVICE_PARAM_ENDPOINTS[parsedId.deviceType];
     const effectId = LANE_TYPE_TO_EFFECT_ID.get(parsedId.deviceType);
     if (effectId === undefined) {
         return { failure: err(`device ${deviceId} has no effect descriptor`) };
@@ -214,11 +220,24 @@ function parseDeviceRecord(deviceId: string, input: unknown):
     const inputKeys = Object.keys(inputParams);
     const hasShape = (expected: ReadonlyArray<string>) => inputKeys.length === expected.length
         && inputKeys.every((key) => expected.includes(key));
-    const hasValidShape = hasShape(endpoints)
-        || hasShape(legacyEndpoints)
-        || (parsedId.deviceType === "chorus" && hasShape(PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS))
-        || hasShape(presentationEndpoints);
-    if (!hasValidShape) {
+    const trimEndpointID = effectOutputTrimLaneEndpointID(parsedId.deviceType);
+    const currentLegacyEndpoints = [
+        ...LEGACY_LANE_DEVICE_PARAM_ENDPOINTS[parsedId.deviceType],
+        trimEndpointID,
+    ];
+    const currentPreClampChorusEndpoints = [
+        ...PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS,
+        trimEndpointID,
+    ];
+    // T78 deliberately introduces no old-preset compatibility path. Both
+    // full and previously supported supplemental shapes must already carry
+    // Output Trim; pre-Output-Trim records receive no hidden 0 dB migration.
+    const hasCurrentShape = inputKeys.includes(trimEndpointID)
+        && (hasShape(endpoints)
+            || hasShape(presentationEndpoints)
+            || hasShape(currentLegacyEndpoints)
+            || (parsedId.deviceType === "chorus" && hasShape(currentPreClampChorusEndpoints)));
+    if (!hasCurrentShape) {
         return { failure: err(`device ${deviceId} must carry every parameter once`) };
     }
     for (const endpointID of inputKeys) {
@@ -711,6 +730,19 @@ export function buildLaneRuntimeEventsV2(state: LaneStateV2): ReadonlyArray<{ re
     let deliverySerial = 0;
 
     for (const device of listLaneDeviceInstancesV2(state)) {
+        const parsedId = parseLaneInstanceId(device.instanceId);
+        if (parsedId === null) {
+            throw new Error(`Invalid lane device identity during replay: ${device.instanceId}`);
+        }
+        events.push({
+            endpointID: effectOutputTrimHostEndpointID(
+                parsedId.deviceType,
+                parsedId.instanceNumber,
+            ),
+            value: state.devices[device.instanceId].params[
+                effectOutputTrimLaneEndpointID(parsedId.deviceType)
+            ],
+        });
         deliverySerial += 1;
         events.push({
             endpointID: LANE_SLOT_PARAMS_ENDPOINT_ID,
@@ -956,6 +988,44 @@ export function setLaneDeviceParam(
             [deviceId]: { params },
         },
     };
+}
+
+/**
+ * Reconcile the lane document's durable Output Trim mirrors from the 40 real
+ * host parameters. Host endpoints are runtime/automation authority; the lane
+ * records carry the same value through topology, Init, presets, and links.
+ */
+export function synchronizeLaneOutputTrimsFromHostParameters(
+    state: LaneStateV2,
+    parameters: Readonly<Record<string, unknown>>,
+): LaneStateV2 {
+    let nextState = state;
+
+    for (const [endpointID, rawValue] of Object.entries(parameters)) {
+        const parsed = parseEffectOutputTrimHostEndpointID(endpointID);
+        if (parsed === null || typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+            continue;
+        }
+        const deviceId = `${parsed.deviceType}#${parsed.instanceNumber}`;
+        if (nextState.devices[deviceId] === undefined) {
+            continue;
+        }
+        const value = Math.min(
+            EFFECT_OUTPUT_TRIM_MAX_DB,
+            Math.max(EFFECT_OUTPUT_TRIM_SILENCE_DB, rawValue),
+        );
+        if (Object.is(nextState.devices[deviceId]?.params[parsed.laneEndpointID], value)) {
+            continue;
+        }
+        nextState = setLaneDeviceParam(
+            nextState,
+            deviceId,
+            parsed.laneEndpointID,
+            value,
+        ) ?? nextState;
+    }
+
+    return nextState;
 }
 
 /** Shared lane transition: enabling centres the offset and leaves the ordinary value untouched. */

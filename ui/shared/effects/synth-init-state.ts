@@ -25,6 +25,7 @@ import {
     createDefaultLaneStateV2,
     parseLaneStateV2Compat,
     serializeLaneStateV2,
+    synchronizeLaneOutputTrimsFromHostParameters,
     type LaneStateV2,
 } from "../lane-state-v2";
 import type { EffectStoredStateAdapter } from "./effect-preset-v2";
@@ -178,13 +179,19 @@ export function createSynthRackInitStateAdapter(
         createDefaultValue() {
             return createDefaultLaneStateV2();
         },
-        normalizeForTransaction(value: unknown) {
-            return parseStrictRackState(value);
+        normalizeForTransaction(value: unknown, context) {
+            return synchronizeLaneOutputTrimsFromHostParameters(
+                parseStrictRackState(value),
+                context?.parameters ?? {},
+            );
         },
-        serializeForTransaction(value: unknown) {
-            return serializeLaneStateV2(parseStrictRackState(value));
+        serializeForTransaction(value: unknown, context) {
+            return serializeLaneStateV2(synchronizeLaneOutputTrimsFromHostParameters(
+                parseStrictRackState(value),
+                context?.parameters ?? {},
+            ));
         },
-        apply(value: unknown) {
+        apply(value: unknown, context) {
             if (typeof patchConnection.sendEventOrValue !== "function") {
                 throw new Error(`Cannot apply ${LANE_STATE_KEY} because rack runtime writes are unavailable.`);
             }
@@ -193,7 +200,10 @@ export function createSynthRackInitStateAdapter(
                 throw new Error(`Cannot apply ${LANE_STATE_KEY} because stored-state writes are unavailable.`);
             }
 
-            const nextState = parseStrictRackState(value);
+            const nextState = synchronizeLaneOutputTrimsFromHostParameters(
+                parseStrictRackState(value),
+                context?.parameters ?? {},
+            );
             const previousState = currentState;
             const serialized = serializeLaneStateV2(nextState);
             currentState = nextState;

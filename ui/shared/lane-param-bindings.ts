@@ -31,6 +31,7 @@ import {
     setLaneSplitCrossoverHz,
     setLaneSplitKeyTrackEnabled as transitionLaneSplitKeyTrackEnabled,
     setLaneSplitKeyTrackOffset as transitionLaneSplitKeyTrackOffset,
+    synchronizeLaneOutputTrimsFromHostParameters,
     type LaneSplitGroupV2,
     type LaneStateV2,
 } from "./lane-state-v2";
@@ -66,16 +67,23 @@ import {
     toggleLaneSoloAudition,
 } from "./lane-solo-audition";
 import type { LaneSoloState } from "./lane-solo-state";
+import {
+    effectOutputTrimHostEndpointID,
+    effectOutputTrimLaneEndpointID,
+} from "./effect-output-trim";
+import { EffectOutputTrimHostMirror } from "./effect-output-trim-host-mirror";
 
 /**
  * One shared lane-document store per patch connection.
  *
- * Since the B3 parameter cut, effect parameters have no host endpoints: the
- * lane.v1 stored-state document owns every value durably. Live device edits
- * ride the laneSlotParamValue field event; whole-lane output edits ride the
- * laneOutputControl event. Every binding surface (the desktop rack workspace,
- * the iOS view) reads and writes THIS store, so the document cannot fork
- * between surfaces sharing a connection.
+ * Since the B3 parameter cut, ordinary effect parameters have no host
+ * endpoints: the lane.v1 stored-state document owns every value durably.
+ * T78 Output Trim is mirrored to one real type+instance host parameter so DAW
+ * automation and the lane document share one observed value. Other live
+ * device edits ride laneSlotParamValue; whole-lane output edits ride
+ * laneOutputControl. Every binding surface (the desktop rack workspace, the
+ * iOS view) reads and writes THIS store, so the document cannot fork between
+ * surfaces sharing a connection.
  *
  * Write discipline: setValue is the low-latency audible path (optimistic
  * store update + one field event, no document write); endGesture persists
@@ -89,6 +97,9 @@ type LaneStateStore = {
     deliverySerial: number;
     /** The serialized form of `state`, for identity-stable dedupe. */
     serialized: string;
+    outputTrimPersistTimer: ReturnType<typeof setTimeout> | null;
+    hasHydratedStoredState: boolean;
+    outputTrimHostMirror: EffectOutputTrimHostMirror | null;
 };
 
 const stores = new WeakMap<object, LaneStateStore>();
@@ -116,6 +127,27 @@ function acceptLaneState(store: LaneStateStore, nextState: LaneStateV2) {
     }
 }
 
+function cancelPendingOutputTrimPersist(store: LaneStateStore) {
+    if (store.outputTrimPersistTimer !== null) {
+        globalThis.clearTimeout(store.outputTrimPersistTimer);
+        store.outputTrimPersistTimer = null;
+    }
+}
+
+function persistLaneState(store: LaneStateStore) {
+    cancelPendingOutputTrimPersist(store);
+    store.hasHydratedStoredState = true;
+    store.connection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(store.state));
+}
+
+function scheduleOutputTrimPersist(store: LaneStateStore) {
+    cancelPendingOutputTrimPersist(store);
+    store.outputTrimPersistTimer = globalThis.setTimeout(() => {
+        store.outputTrimPersistTimer = null;
+        store.connection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(store.state));
+    }, 120);
+}
+
 function getLaneStateStore(connection: PatchConnectionLike): LaneStateStore {
     const key = connection as unknown as object;
     const existing = stores.get(key);
@@ -129,6 +161,9 @@ function getLaneStateStore(connection: PatchConnectionLike): LaneStateStore {
         listeners: new Set(),
         deliverySerial: 0,
         serialized: serializeLaneStateV2(initialState),
+        outputTrimPersistTimer: null,
+        hasHydratedStoredState: false,
+        outputTrimHostMirror: null,
     };
     stores.set(key, created);
 
@@ -140,12 +175,36 @@ function getLaneStateStore(connection: PatchConnectionLike): LaneStateStore {
             return;
         }
         if (Reflect.get(message, "key") === LANE_STATE_KEY) {
-            acceptLaneState(created, deserializeLaneStateV2(Reflect.get(message, "value")));
+            created.hasHydratedStoredState = true;
+            const hydrated = deserializeLaneStateV2(Reflect.get(message, "value"));
+            acceptLaneState(created,
+                created.outputTrimHostMirror?.synchronizeLaneState(hydrated) ?? hydrated);
         }
     });
     connection.requestFullStoredState?.((fullState) => {
-        acceptLaneState(created, deserializeLaneStateV2(readLaneStateFromFullStoredState(fullState)));
+        created.hasHydratedStoredState = true;
+        const hydrated = deserializeLaneStateV2(readLaneStateFromFullStoredState(fullState));
+        acceptLaneState(created,
+            created.outputTrimHostMirror?.synchronizeLaneState(hydrated) ?? hydrated);
     });
+    created.outputTrimHostMirror = new EffectOutputTrimHostMirror(
+        connection,
+        (endpointID, value) => {
+            const nextState = synchronizeLaneOutputTrimsFromHostParameters(
+                created.state,
+                { [endpointID]: value },
+            );
+            if (nextState === created.state) {
+                return;
+            }
+            acceptLaneState(created, nextState);
+            // DAW automation has no UI gesture-end callback. Once the lane
+            // document has hydrated, coalesce automation into one durable mirror.
+            if (created.hasHydratedStoredState) {
+                scheduleOutputTrimPersist(created);
+            }
+        },
+    );
 
     return created;
 }
@@ -214,9 +273,10 @@ export function useLaneStateDoc(): {
     );
 
     const commit = useCallback((nextState: LaneStateV2) => {
+        store.outputTrimHostMirror?.captureLaneState(nextState);
         acceptLaneState(store, nextState);
         commitLaneStateV2(patchConnection, nextState);
-        patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(nextState));
+        persistLaneState(store);
     }, [patchConnection, store]);
 
     const setParamValue = useCallback((deviceId: string, endpointID: string, value: number) => {
@@ -230,6 +290,9 @@ export function useLaneStateDoc(): {
         const previousParams = store.state.devices[deviceId]?.params;
         const nextState = setLaneDeviceParam(store.state, deviceId, endpointID, value) ?? store.state;
         const nextParams = nextState.devices[deviceId]?.params;
+        if (endpointID === effectOutputTrimLaneEndpointID(parsedId.deviceType)) {
+            store.outputTrimHostMirror?.captureLaneState(nextState);
+        }
         acceptLaneState(store, nextState);
         const sendField = (nextEndpointID: string, nextValue: number) => {
             const nextParamIndex = getLaneSlotParamIndex(parsedId.deviceType, nextEndpointID);
@@ -390,8 +453,8 @@ export function useLaneStateDoc(): {
     }, [patchConnection, store]);
 
     const persist = useCallback(() => {
-        patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(store.state));
-    }, [patchConnection, store]);
+        persistLaneState(store);
+    }, [store]);
 
     return useMemo(() => ({
         laneState,
@@ -461,6 +524,15 @@ export function useLaneParameterBinding(
     const patchConnection = usePatchConnection();
     const { laneState, setParamValue, persist } = useLaneStateDoc();
     const boundDeviceId = deviceId ?? `${EFFECT_ID_TO_LANE_TYPE[descriptor.effectId]}#1`;
+    const parsedDeviceId = parseLaneInstanceId(boundDeviceId);
+    const isOutputTrim = parsedDeviceId !== null
+        && descriptor.endpointID === effectOutputTrimLaneEndpointID(parsedDeviceId.deviceType);
+    const hostEndpointID = parsedDeviceId === null || !isOutputTrim
+        ? descriptor.endpointID
+        : effectOutputTrimHostEndpointID(
+            parsedDeviceId.deviceType,
+            parsedDeviceId.instanceNumber,
+        );
 
     const clampValue = useCallback((value: number) => {
         const numeric = Number.isFinite(value) ? value : descriptor.initial;
@@ -468,8 +540,19 @@ export function useLaneParameterBinding(
         return descriptor.choices !== undefined ? Math.round(clamped) : clamped;
     }, [descriptor.choices, descriptor.initial, descriptor.max, descriptor.min]);
 
-    const value = clampValue(
+    // Hooks stay unconditional: ordinary Effects Lane parameters keep their
+    // record-only path, while T78 Output Trim activates the matching
+    // type+instance host endpoint as the audio/automation authority.
+    const hostBinding = usePatchParameterBinding<number>({
+        endpointID: hostEndpointID,
+        initialValue: descriptor.initial,
+        coerce: clampValue,
+        active: isOutputTrim,
+    });
+
+    const laneValue = clampValue(
         laneState.devices[boundDeviceId]?.params[descriptor.endpointID] ?? descriptor.initial);
+    const value = isOutputTrim && hostBinding.isReady ? hostBinding.value : laneValue;
     const valueRef = { current: value };
     valueRef.current = value;
 
@@ -479,20 +562,38 @@ export function useLaneParameterBinding(
     const setValue = useCallback((nextValue: number) => {
         const coerced = clampValue(nextValue);
         const changed = !Object.is(coerced, valueRef.current);
+        if (isOutputTrim) {
+            hostBinding.setValue(coerced);
+        }
         setParamValue(boundDeviceId, descriptor.endpointID, coerced);
         reportUserParameterEdit({ endpointID: descriptor.endpointID, changed });
-    }, [boundDeviceId, clampValue, descriptor.endpointID, setParamValue]);
+    }, [
+        boundDeviceId,
+        clampValue,
+        descriptor.endpointID,
+        hostBinding.setValue,
+        isOutputTrim,
+        setParamValue,
+    ]);
 
     const beginGesture = useCallback(() => {
-        patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
+        if (isOutputTrim) {
+            hostBinding.beginGesture();
+        } else {
+            patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
+        }
         reportUserGestureStart();
-    }, [descriptor.endpointID, patchConnection]);
+    }, [descriptor.endpointID, hostBinding.beginGesture, isOutputTrim, patchConnection]);
 
     const endGesture = useCallback(() => {
-        patchConnection.sendParameterGestureEnd?.(descriptor.endpointID);
+        if (isOutputTrim) {
+            hostBinding.endGesture();
+        } else {
+            patchConnection.sendParameterGestureEnd?.(descriptor.endpointID);
+        }
         reportUserGestureEnd();
         persist();
-    }, [descriptor.endpointID, patchConnection, persist]);
+    }, [descriptor.endpointID, hostBinding.endGesture, isOutputTrim, patchConnection, persist]);
 
     const commitValue = useCallback((nextValue: number) => {
         beginGesture();
@@ -503,13 +604,25 @@ export function useLaneParameterBinding(
     return useMemo(() => ({
         endpointID: descriptor.endpointID,
         value,
-        isReady: true,
+        isReady: isOutputTrim ? hostBinding.isReady : true,
+        hostBaseline: isOutputTrim ? hostBinding.hostBaseline : undefined,
         initialValue: descriptor.initial,
         setValue,
         commitValue,
         beginGesture,
         endGesture,
-    }), [descriptor.endpointID, descriptor.initial, value, setValue, commitValue, beginGesture, endGesture]);
+    }), [
+        descriptor.endpointID,
+        descriptor.initial,
+        value,
+        isOutputTrim,
+        hostBinding.hostBaseline,
+        hostBinding.isReady,
+        setValue,
+        commitValue,
+        beginGesture,
+        endGesture,
+    ]);
 }
 
 /** Live base binding for one Frequency Split marker field. This is a real

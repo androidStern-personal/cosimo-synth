@@ -199,9 +199,10 @@ export const RACK_MODULATION_TARGET_IDENTITIES: ReadonlyArray<ModulationTargetId
         kind: laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
         group: "rack" as const,
         runtimeIndex: parameter.modulationTargetIndex as number,
-    })).sort((left, right) => left.runtimeIndex - right.runtimeIndex),
+    })),
     { kind: "lane.frequencySplit#1.xoverLowHz", group: "rack" as const, runtimeIndex: 37 },
-    { kind: "lane.frequencySplit#1.xoverHighHz", group: "rack" as const, runtimeIndex: 38 }],
+    { kind: "lane.frequencySplit#1.xoverHighHz", group: "rack" as const, runtimeIndex: 38 }]
+        .sort((left, right) => left.runtimeIndex - right.runtimeIndex),
 );
 
 /** Every canonical modulation target, with voice and rack indexes kept in separate runtime groups. */
@@ -229,8 +230,8 @@ const targetIdentityByKind = new Map(MODULATION_TARGET_IDENTITIES.map((identity)
 function assertCanonicalIdentities(): void {
     if (MODULATION_SOURCE_COUNT !== 14
         || MODULATION_VOICE_TARGET_COUNT !== 59
-        || MODULATION_RACK_TARGET_COUNT !== 39
-        || MODULATION_LEGAL_PAIR_COUNT !== 1372) {
+        || MODULATION_RACK_TARGET_COUNT !== 47
+        || MODULATION_LEGAL_PAIR_COUNT !== 1484) {
         throw new Error("Unexpected modulation domain size");
     }
 
@@ -244,7 +245,7 @@ function assertCanonicalIdentities(): void {
         }
     }
 
-    for (const [group, expectedCount] of [["voice", 59], ["rack", 39]] as const) {
+    for (const [group, expectedCount] of [["voice", 59], ["rack", 47]] as const) {
         const identities = MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
         if (identities.length !== expectedCount
             || identities.some((identity, position) => identity.runtimeIndex !== position)) {

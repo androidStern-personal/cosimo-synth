@@ -125,7 +125,13 @@ test("the Init-only rack adapter strictly hydrates, applies runtime and stored s
     // a bypassed or partial-Mix preset cannot flash full-wet while it restores.
     assert.deepEqual(
         connection.events.map((event) => event.endpointID),
-        ["laneOutputControl", ...Array(3).fill("laneSlotParams"), "laneTopology"],
+        [
+            "laneOutputControl",
+            "laneDistortion1OutputTrimDb", "laneSlotParams",
+            "laneDelay1OutputTrimDb", "laneSlotParams",
+            "laneReverb1OutputTrimDb", "laneSlotParams",
+            "laneTopology",
+        ],
     );
     assert.deepEqual(connection.events[0].value, { mix: 0.37, bypassed: true });
     assert.equal(connection.storedWrites.length, 1);

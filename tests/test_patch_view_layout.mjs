@@ -60,6 +60,23 @@ function parseGraphInputValues(sourceText, graphName) {
     }));
 }
 
+function parseProcessorInputValues(sourceText, processorName) {
+    const processorStart = sourceText.indexOf(`processor ${processorName}`);
+
+    if (processorStart < 0) {
+        throw new Error(`Processor not found: ${processorName}`);
+    }
+
+    const processorText = sourceText.slice(processorStart);
+    const inputValuePattern = /^\s*input value\s+([^\s]+)\s+([A-Za-z_][A-Za-z0-9_]*)\s+\[\[([^\]]*)\]\];/gm;
+
+    return Array.from(processorText.matchAll(inputValuePattern), ([, type, identifier, annotation]) => ({
+        type,
+        identifier,
+        annotation,
+    }));
+}
+
 function parseGraphHostParameterIdentifiers(sourceText, graphName) {
     const graphStart = sourceText.indexOf(`graph ${graphName}`);
 
@@ -458,10 +475,16 @@ test("desktop synth reserves Cmajor host parameter slot 0 away from musical cont
     );
 });
 
-test("Bounce, Global Tune, Amp Envelope, Key Track, Voice Enhancer, and Polish preserve the frozen synth host-parameter order", async () => {
-    const synthSource = await fs.readFile(path.join(repoRoot, "cmajor", "WavetableSynth.cmajor"), "utf8");
+test("Bounce, Global Tune, Amp Envelope, Key Track, Voice Enhancer, Polish, and effect Output Trim preserve the frozen synth host-parameter order", async () => {
+    const [synthSource, rackSource, outputTrim] = await Promise.all([
+        fs.readFile(path.join(repoRoot, "cmajor", "WavetableSynth.cmajor"), "utf8"),
+        fs.readFile(path.join(repoRoot, "cmajor", "EffectsRack.cmajor"), "utf8"),
+        loadUIModule(repoRoot, "ui/shared/effect-output-trim.ts"),
+    ]);
     const parameterOrder = parseGraphHostParameterIdentifiers(synthSource, "WavetableSynth");
     const inputValues = parseGraphInputValues(synthSource, "WavetableSynth");
+    const rackInputValues = parseProcessorInputValues(rackSource, "EffectsRack");
+    const outputTrimHostEndpointIDs = outputTrim.allEffectOutputTrimHostEndpointIDs();
     const filterMix = inputValues.find(({ identifier }) => identifier === "filterMix");
     const ampRelease = inputValues.find(({ identifier }) => identifier === "ampRelease");
     const sourceMode = inputValues.find(({ identifier }) => identifier === "sourceMode");
@@ -505,12 +528,7 @@ test("Bounce, Global Tune, Amp Envelope, Key Track, Voice Enhancer, and Polish p
         "polishOutputTrimBypass",
     ].map((endpointID) => inputValues.find(({ identifier }) => identifier === endpointID));
 
-    assert.deepEqual(
-        parameterOrder.slice(0, -22),
-        EXISTING_SYNTH_HOST_PARAMETER_ORDER,
-        "appending synth controls must not move any existing DAW automation slot",
-    );
-    assert.deepEqual(parameterOrder.slice(-22), [
+    const preT78Tail = [
         "filterMix",
         "ampRelease",
         "sourceMode",
@@ -533,8 +551,21 @@ test("Bounce, Global Tune, Amp Envelope, Key Track, Voice Enhancer, and Polish p
         "polishEnhancerBypass",
         "polishCompressionClipBypass",
         "polishOutputTrimBypass",
+    ];
+    const t78AppendCount = preT78Tail.length + outputTrimHostEndpointIDs.length;
+    assert.deepEqual(
+        parameterOrder.slice(0, -t78AppendCount),
+        EXISTING_SYNTH_HOST_PARAMETER_ORDER,
+        "appending synth controls must not move any existing DAW automation slot",
+    );
+    assert.deepEqual(parameterOrder.slice(-t78AppendCount), [
+        ...preT78Tail,
+        ...outputTrimHostEndpointIDs,
     ]);
-    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 22);
+    assert.equal(
+        parameterOrder.length,
+        EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + t78AppendCount,
+    );
     assert.notEqual(filterMix, undefined);
     assert.equal(filterMix.type, "float32");
     assert.match(filterMix.annotation, /name:\s*"Filter Mix"/);
@@ -657,6 +688,18 @@ test("Bounce, Global Tune, Amp Envelope, Key Track, Voice Enhancer, and Polish p
         assert.match(bypass.annotation, /step:\s*1(?:\.0)?f?/);
         assert.match(bypass.annotation, /text:\s*"Active\|Bypassed"/);
         assert.match(bypass.annotation, /rampFrames:\s*0/);
+    }
+    assert.equal(outputTrimHostEndpointIDs.length, 40);
+    for (const endpointID of outputTrimHostEndpointIDs) {
+        const parameter = rackInputValues.find(({ identifier }) => identifier === endpointID);
+        assert.notEqual(parameter, undefined, `${endpointID} must be a real rack value endpoint`);
+        assert.equal(parameter.type, "float32");
+        assert.match(parameter.annotation, /name:\s*"[^"]+ Output Trim"/);
+        assert.match(parameter.annotation, /min:\s*-100(?:\.0)?f?/);
+        assert.match(parameter.annotation, /max:\s*35(?:\.0)?f?/);
+        assert.match(parameter.annotation, /init:\s*0(?:\.0)?f?/);
+        assert.match(parameter.annotation, /unit:\s*"dB"/);
+        assert.match(parameter.annotation, /rampFrames:\s*64/);
     }
 });
 

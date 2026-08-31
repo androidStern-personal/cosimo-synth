@@ -528,6 +528,7 @@ export type SynthPatchViewModel = {
     distortionWetHPHz: PatchControlBinding<number>;
     distortionWetLPHz: PatchControlBinding<number>;
     distortionType: PatchControlBinding<number>;
+    distortionOutputTrim: PatchControlBinding<number>;
     chorusMix: PatchControlBinding<number>;
     chorusMotionMode: PatchControlBinding<number>;
     chorusBloomMode: PatchControlBinding<number>;
@@ -3027,6 +3028,7 @@ export function useSynthPatchViewModel({
     const distortionWetHPHz = useLaneParameterBinding(requireLaneParameterDescriptor("distortionWetHPHz"));
     const distortionWetLPHz = useLaneParameterBinding(requireLaneParameterDescriptor("distortionWetLPHz"));
     const distortionType = useLaneParameterBinding(requireLaneParameterDescriptor(DISTORTION_TYPE_ENDPOINT_ID));
+    const distortionOutputTrim = useLaneParameterBinding(requireLaneParameterDescriptor("distortionOutputTrimDb"));
     const chorusMix = useLaneParameterBinding(requireLaneParameterDescriptor("chorusMix"));
     const chorusMotionMode = useLaneParameterBinding(requireLaneParameterDescriptor("chorusMotionMode"));
     const chorusBloomMode = useLaneParameterBinding(requireLaneParameterDescriptor("chorusBloomMode"));
@@ -4850,6 +4852,7 @@ export function useSynthPatchViewModel({
         distortionWetHPHz,
         distortionWetLPHz,
         distortionType,
+        distortionOutputTrim,
         chorusMix,
         chorusMotionMode,
         chorusBloomMode,

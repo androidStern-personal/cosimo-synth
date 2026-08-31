@@ -5,10 +5,14 @@ import {
     type RackModulationTargetKind,
 } from "./modulation";
 import type { RackParameterDescriptor } from "./rack-parameter-descriptors";
+import {
+    effectOutputTrimEffectiveDb,
+    effectOutputTrimNormalizedValue,
+} from "./effect-output-trim";
 
 export type ModulatedParameterProjectionDescriptor = Pick<
     RackParameterDescriptor,
-    "min" | "max" | "scale" | "modulationApplication"
+    "min" | "max" | "scale" | "modulationApplication" | "valueKind"
 >;
 
 export type RackRouteSource = {
@@ -142,6 +146,9 @@ function clamp(value: number, min: number, max: number) {
 
 function normalizeDisplayedValue(descriptor: ModulatedParameterProjectionDescriptor, value: number) {
     const clamped = clamp(value, descriptor.min, descriptor.max);
+    if (descriptor.valueKind === "effect-output-trim-db") {
+        return effectOutputTrimNormalizedValue(clamped);
+    }
     if (descriptor.scale === "log") {
         return Math.log(clamped / descriptor.min) / Math.log(descriptor.max / descriptor.min);
     }
@@ -149,6 +156,9 @@ function normalizeDisplayedValue(descriptor: ModulatedParameterProjectionDescrip
 }
 
 function applyRouteOffset(descriptor: ModulatedParameterProjectionDescriptor, baseValue: number, offset: number) {
+    if (descriptor.valueKind === "effect-output-trim-db") {
+        return effectOutputTrimEffectiveDb(baseValue, offset);
+    }
     const rawValue = descriptor.modulationApplication === "octaves"
         ? baseValue * (2 ** offset)
         : descriptor.modulationApplication === "semitones"

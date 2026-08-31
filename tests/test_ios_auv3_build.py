@@ -931,11 +931,11 @@ def test_ios_modulation_benchmark_installs_state_through_the_production_worker()
     assert "cpuPercent" not in host_harness
     assert 'setParameterWithIdentifier:@"voiceEnhancerAmount"' in host_controller
     assert 'payload[@"voiceEnhancerAmount"] = voiceEnhancerResult' in host_controller
-    assert "@590.0, @236.0, @390.0, @156.0" in host_harness
+    assert "@590.0, @236.0, @470.0, @188.0" in host_harness
     assert "benchmarkInstalledVoiceRouteCount.load(), 590.0" in plugin_shell
     assert "benchmarkInstalledMacroVoiceRouteCount.load(), 236.0" in plugin_shell
-    assert "benchmarkInstalledVoiceRackRouteCount.load(), 390.0" in plugin_shell
-    assert "benchmarkInstalledMacroRackRouteCount.load(), 156.0" in plugin_shell
+    assert "benchmarkInstalledVoiceRackRouteCount.load(), 470.0" in plugin_shell
+    assert "benchmarkInstalledMacroRackRouteCount.load(), 188.0" in plugin_shell
 
     install_body = plugin_shell.split("void installBenchmarkProfile", 1)[1].split("void beginModulationBenchmarkCapture", 1)[0]
     assert plugin_shell.count("benchmarkInstallStatus.store (1);") == 1
@@ -976,26 +976,26 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
     assert profiles["voice-100"]["activeRouteCount"] == 100
     assert profiles["voice-rack-100"]["activeRouteCount"] == 100
     assert profiles["mixed-100"]["activeRouteCount"] == 100
-    assert profiles["stored-1372-active-100"]["storedRouteCount"] == 1372
-    assert profiles["stored-1372-active-100"]["activeRouteCount"] == 100
+    assert profiles["stored-1484-active-100"]["storedRouteCount"] == 1484
+    assert profiles["stored-1484-active-100"]["activeRouteCount"] == 100
     assert (
-        profiles["stored-1372-active-100"]["executionFingerprint"]
+        profiles["stored-1484-active-100"]["executionFingerprint"]
         == profiles["mixed-100"]["executionFingerprint"]
     )
     assert profiles["combined-200"]["activeRouteCount"] == 200
     assert profiles["combined-200"]["compiledCounts"]["voice"] == 100
     assert profiles["combined-200"]["compiledCounts"]["voiceRack"] == 100
-    assert profiles["active-1372"]["activeRouteCount"] == 1372
-    assert profiles["active-1372"]["compiledCounts"] == {
+    assert profiles["active-1484"]["activeRouteCount"] == 1484
+    assert profiles["active-1484"]["compiledCounts"] == {
         "voice": 590,
         "macroVoice": 236,
-        "voiceRack": 390,
-        "macroRack": 156,
+        "voiceRack": 470,
+        "macroRack": 188,
     }
 
     host_source = (REPO_ROOT / "ios_auv3/Source/CosimoHostViewController.mm").read_text()
-    assert '@"stored-1372-active-100": @45.0' in host_source
-    assert '@"active-1372": @20.0' in host_source
+    assert '@"stored-1484-active-100": @45.0' in host_source
+    assert '@"active-1484": @20.0' in host_source
     assert "stored-1144-active-100" not in host_source
     assert "active-1144" not in host_source
 
@@ -1008,7 +1008,7 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
         for route in json.loads(profiles["voice-rack-100"]["stateJSON"])["routes"]
     }
     assert len(voice_rack_sources) == 10
-    assert len(voice_rack_targets) == 36
+    assert len(voice_rack_targets) == 47
 
     for profile_index, profile in enumerate(payload["profiles"]):
         assert profile["profileIndex"] == profile_index
@@ -1157,8 +1157,8 @@ def _valid_ios_modulation_benchmark_payload() -> dict[str, object]:
         "voice-rack-100": 45.0,
         "mixed-100": 45.0,
         "combined-200": 45.0,
-        "stored-1372-active-100": 45.0,
-        "active-1372": 20.0,
+        "stored-1484-active-100": 45.0,
+        "active-1484": 20.0,
     }
     compiled_counts = {
         "empty": {"voice": 0, "macroVoice": 0, "voiceRack": 0, "macroRack": 0},
@@ -1166,8 +1166,8 @@ def _valid_ios_modulation_benchmark_payload() -> dict[str, object]:
         "voice-rack-100": {"voice": 0, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
         "mixed-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
         "combined-200": {"voice": 100, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
-        "stored-1372-active-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
-        "active-1372": {"voice": 590, "macroVoice": 236, "voiceRack": 390, "macroRack": 156},
+        "stored-1484-active-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
+        "active-1484": {"voice": 590, "macroVoice": 236, "voiceRack": 470, "macroRack": 188},
     }
     phases = []
     for name in _load_ios_modulation_benchmark_module().PROFILE_NAMES:
@@ -1331,11 +1331,11 @@ def test_ios_modulation_benchmark_rejects_expensive_matrix_delta() -> None:
         module.assert_shipping_contract(payload)
 
 
-def test_ios_full_1372_route_profile_is_diagnostic_until_the_merged_product_budget_is_set() -> None:
+def test_ios_full_1484_route_profile_is_diagnostic_until_the_merged_product_budget_is_set() -> None:
     module = _load_ios_modulation_benchmark_module()
 
-    assert "active-1372" in module.PROFILE_NAMES
-    assert "active-1372" not in module.MATRIX_LOAD_BUDGETS
+    assert "active-1484" in module.PROFILE_NAMES
+    assert "active-1484" not in module.MATRIX_LOAD_BUDGETS
 
 
 def test_ios_modulation_benchmark_requires_adjacent_empty_brackets() -> None:

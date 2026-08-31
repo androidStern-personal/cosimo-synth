@@ -56,7 +56,7 @@ namespace wt
     //     value output endpoint. That is the better design anyway: the iPhone UI can
     //     read back what the DSP is actually running instead of assuming its upload
     //     landed.
-    //   - `rackModIn` carries the 36 reduced modulation offsets from
+    //   - `rackModIn` carries the 235-cell pooled rack modulation bus from
     //     wt::SharedVoiceEngine's `rackModOut` in ONE graph connection. The destination
     //     vocabulary and reduction rules live in VoiceReducer.cmajor; the engine runs
     //     only active instructions from its compiled sparse route program.
@@ -210,7 +210,7 @@ namespace wt
 
     // Per-slot parameter records travel in LaneSlotParamsUpload.values; each pool
     // slot type documents its own value vocabulary below (indices into `values`).
-    let laneSlotParamCount = 12;
+    let laneSlotParamCount = 13;
 
     // Delay-type pool slots.
     let laneDelayParamTimeMs   = 0;
@@ -223,6 +223,7 @@ namespace wt
     let laneDelayParamTimeKeyTrackOffsetSemitones = 7;
     let laneDelayParamFilterKeyTrackEnabled = 8;
     let laneDelayParamFilterKeyTrackOffsetSemitones = 9;
+    let laneDelayParamOutputTrimDb = 10;
 
     // GlobalFilter-type pool slots.
     let laneGlobalFilterParamMode      = 0;
@@ -231,6 +232,7 @@ namespace wt
     let laneGlobalFilterParamDrive     = 3;
     let laneGlobalFilterParamCutoffKeyTrackEnabled = 4;
     let laneGlobalFilterParamCutoffKeyTrackOffsetSemitones = 5;
+    let laneGlobalFilterParamOutputTrimDb = 6;
 
     // Distortion-type pool slots.
     let laneDistortionParamMode    = 0;
@@ -244,6 +246,7 @@ namespace wt
     let laneDistortionParamWetHPKeyTrackOffsetSemitones = 8;
     let laneDistortionParamWetLPKeyTrackEnabled = 9;
     let laneDistortionParamWetLPKeyTrackOffsetSemitones = 10;
+    let laneDistortionParamOutputTrimDb = 11;
 
     // OTT-type pool slots.
     let laneOttParamMix           = 0;
@@ -251,6 +254,7 @@ namespace wt
     let laneOttParamTimePercent   = 2;
     let laneOttParamBandDrive     = 3;
     let laneOttParamEnvelopeMatch = 4;
+    let laneOttParamOutputTrimDb = 5;
 
     // Chorus-type pool slots.
     let laneChorusParamMix               = 0;
@@ -265,6 +269,7 @@ namespace wt
     let laneChorusParamRingKeyTrackEnabled = 9;
     let laneChorusParamRingKeyTrackOffsetSemitones = 10;
     let laneChorusParamRingLegacyClampEnabled = 11;
+    let laneChorusParamOutputTrimDb = 12;
 
     // Flanger-type pool slots.
     let laneFlangerParamRate     = 0;
@@ -274,6 +279,7 @@ namespace wt
     let laneFlangerParamBaseDelayMs = 4;
     let laneFlangerParamBaseDelayKeyTrackEnabled = 5;
     let laneFlangerParamBaseDelayKeyTrackOffsetSemitones = 6;
+    let laneFlangerParamOutputTrimDb = 7;
 
     // Phaser-type pool slots.
     let lanePhaserParamRate         = 0;
@@ -286,12 +292,14 @@ namespace wt
     let lanePhaserParamMix          = 7;
     let lanePhaserParamFrequencyKeyTrackEnabled = 8;
     let lanePhaserParamFrequencyKeyTrackOffsetSemitones = 9;
+    let lanePhaserParamOutputTrimDb = 10;
 
     // Reverb-type pool slots.
     let laneReverbParamSize    = 0;
     let laneReverbParamDecay   = 1;
     let laneReverbParamDamping = 2;
     let laneReverbParamMix     = 3;
+    let laneReverbParamOutputTrimDb = 4;
 
     // Host-style parameter smoothing for pool records, mirroring each base
     // endpoint's rampFrames annotation EXACTLY (the annotations are inert on
@@ -308,18 +316,21 @@ namespace wt
         table[wrap<rackModuleCount> (rackModuleGlobalFilter), 1] = 64;
         table[wrap<rackModuleCount> (rackModuleGlobalFilter), 2] = 64;
         table[wrap<rackModuleCount> (rackModuleGlobalFilter), 3] = 64;
+        table[wrap<rackModuleCount> (rackModuleGlobalFilter), laneGlobalFilterParamOutputTrimDb] = 64;
         // distortion: mode/type 0, driveDb 64, knee 64, wet 64, wetHP 64, wetLP 64
         table[wrap<rackModuleCount> (rackModuleDistortion), 1] = 64;
         table[wrap<rackModuleCount> (rackModuleDistortion), 2] = 64;
         table[wrap<rackModuleCount> (rackModuleDistortion), 3] = 64;
         table[wrap<rackModuleCount> (rackModuleDistortion), 4] = 64;
         table[wrap<rackModuleCount> (rackModuleDistortion), 5] = 64;
+        table[wrap<rackModuleCount> (rackModuleDistortion), laneDistortionParamOutputTrimDb] = 64;
         // ott: all five 128
         table[wrap<rackModuleCount> (rackModuleOtt), 0] = 128;
         table[wrap<rackModuleCount> (rackModuleOtt), 1] = 128;
         table[wrap<rackModuleCount> (rackModuleOtt), 2] = 128;
         table[wrap<rackModuleCount> (rackModuleOtt), 3] = 128;
         table[wrap<rackModuleCount> (rackModuleOtt), 4] = 128;
+        table[wrap<rackModuleCount> (rackModuleOtt), laneOttParamOutputTrimDb] = 64;
         // chorus: mix 128, motion 0, bloom 0, tone 128, feedback 128,
         // ringAmount 128, legacy mode 0/fine 128, ordinary frequency 128.
         table[wrap<rackModuleCount> (rackModuleChorus), 0] = 128;
@@ -328,11 +339,13 @@ namespace wt
         table[wrap<rackModuleCount> (rackModuleChorus), 5] = 128;
         table[wrap<rackModuleCount> (rackModuleChorus), 7] = 128;
         table[wrap<rackModuleCount> (rackModuleChorus), 8] = 128;
+        table[wrap<rackModuleCount> (rackModuleChorus), laneChorusParamOutputTrimDb] = 64;
         // flanger: rate 64, depth 64, feedback 64, mix 128
         table[wrap<rackModuleCount> (rackModuleFlanger), 0] = 64;
         table[wrap<rackModuleCount> (rackModuleFlanger), 1] = 64;
         table[wrap<rackModuleCount> (rackModuleFlanger), 2] = 64;
         table[wrap<rackModuleCount> (rackModuleFlanger), 3] = 128;
+        table[wrap<rackModuleCount> (rackModuleFlanger), laneFlangerParamOutputTrimDb] = 64;
         // phaser: rate 64, rateMode 0, division 0, depth 64, frequency 64,
         // feedback 64, phase 64, mix 128
         table[wrap<rackModuleCount> (rackModulePhaser), 0] = 64;
@@ -341,16 +354,19 @@ namespace wt
         table[wrap<rackModuleCount> (rackModulePhaser), 5] = 64;
         table[wrap<rackModuleCount> (rackModulePhaser), 6] = 64;
         table[wrap<rackModuleCount> (rackModulePhaser), 7] = 128;
+        table[wrap<rackModuleCount> (rackModulePhaser), lanePhaserParamOutputTrimDb] = 64;
         // delay: timeMs 0 (module glides), feedback 64, filterHz 64, mix 128,
         // timeMode 0, division 0
         table[wrap<rackModuleCount> (rackModuleDelay), 1] = 64;
         table[wrap<rackModuleCount> (rackModuleDelay), 2] = 64;
         table[wrap<rackModuleCount> (rackModuleDelay), 3] = 128;
+        table[wrap<rackModuleCount> (rackModuleDelay), laneDelayParamOutputTrimDb] = 64;
         // reverb: all four 128
         table[wrap<rackModuleCount> (rackModuleReverb), 0] = 128;
         table[wrap<rackModuleCount> (rackModuleReverb), 1] = 128;
         table[wrap<rackModuleCount> (rackModuleReverb), 2] = 128;
         table[wrap<rackModuleCount> (rackModuleReverb), 3] = 128;
+        table[wrap<rackModuleCount> (rackModuleReverb), laneReverbParamOutputTrimDb] = 64;
 
         return table;
     }
@@ -535,6 +551,52 @@ namespace wt
         return base + offset;
     }
 
+    // T78 Output Trim is a post-effect dB stage. -100 dB is the UI/host's finite
+    // sentinel for exact digital silence; unlike an ordinary clamp, that endpoint
+    // remains silent under positive modulation. Other base values take modulation
+    // as a dB offset and clamp before conversion to linear gain.
+    let effectOutputTrimSilenceDb = -100.0f;
+    let effectOutputTrimMaxDb = 35.0f;
+
+    float32 effectOutputTrimGain (float32 baseDb, float32 modulationDb)
+    {
+        if (baseDb <= effectOutputTrimSilenceDb)
+            return 0.0f;
+
+        let effectiveDb = std::intrinsics::clamp (
+            baseDb + modulationDb, effectOutputTrimSilenceDb, effectOutputTrimMaxDb);
+
+        if (effectiveDb <= effectOutputTrimSilenceDb)
+            return 0.0f;
+
+        return std::intrinsics::pow (10.0f, effectiveDb * 0.05f);
+    }
+
+    float32<rackChannelCount> selectEffectOutputWithTrim (
+        bool isEnabled,
+        float32<rackChannelCount> dryInput,
+        float32<rackChannelCount> processedOutput,
+        float32 baseDb,
+        float32 modulationDb)
+    {
+        if (! isEnabled)
+            return dryInput;
+
+        return processedOutput * effectOutputTrimGain (baseDb, modulationDb);
+    }
+
+    int32 effectOutputTrimTargetForModule (int32 moduleType)
+    {
+        if (moduleType == rackModuleGlobalFilter) return rackModTargetGlobalFilterOutputTrimDb;
+        if (moduleType == rackModuleDistortion)   return rackModTargetDistortionOutputTrimDb;
+        if (moduleType == rackModuleOtt)          return rackModTargetOttOutputTrimDb;
+        if (moduleType == rackModuleChorus)       return rackModTargetChorusOutputTrimDb;
+        if (moduleType == rackModuleFlanger)      return rackModTargetFlangerOutputTrimDb;
+        if (moduleType == rackModulePhaser)       return rackModTargetPhaserOutputTrimDb;
+        if (moduleType == rackModuleDelay)        return rackModTargetDelayOutputTrimDb;
+        return rackModTargetReverbOutputTrimDb;
+    }
+
     struct RackOctaveScaler
     {
         float32 offsetOctaves;
@@ -615,6 +677,50 @@ namespace wt
         // The graph should drive it from the host transport; unconnected it sits at 120,
         // which keeps the sync divisions meaningful in a standalone render.
         input value float32 tempoBpmIn [[ init: 120.0f ]];
+
+        // T78's only host-parameter exception to Effects Lane record ownership:
+        // one append-only Output Trim identity for every resident effect instance.
+        // Type + ordinal is the identity; moving a slot never changes the endpoint.
+        input value float32 laneGlobalFilter1OutputTrimDb [[ name: "Global Filter 1 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneGlobalFilter2OutputTrimDb [[ name: "Global Filter 2 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneGlobalFilter3OutputTrimDb [[ name: "Global Filter 3 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneGlobalFilter4OutputTrimDb [[ name: "Global Filter 4 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneGlobalFilter5OutputTrimDb [[ name: "Global Filter 5 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneDistortion1OutputTrimDb [[ name: "Distortion 1 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneDistortion2OutputTrimDb [[ name: "Distortion 2 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneDistortion3OutputTrimDb [[ name: "Distortion 3 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneDistortion4OutputTrimDb [[ name: "Distortion 4 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneDistortion5OutputTrimDb [[ name: "Distortion 5 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneOtt1OutputTrimDb [[ name: "OTT 1 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneOtt2OutputTrimDb [[ name: "OTT 2 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneOtt3OutputTrimDb [[ name: "OTT 3 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneOtt4OutputTrimDb [[ name: "OTT 4 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneOtt5OutputTrimDb [[ name: "OTT 5 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneChorus1OutputTrimDb [[ name: "Chorus 1 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneChorus2OutputTrimDb [[ name: "Chorus 2 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneChorus3OutputTrimDb [[ name: "Chorus 3 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneChorus4OutputTrimDb [[ name: "Chorus 4 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneChorus5OutputTrimDb [[ name: "Chorus 5 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneFlanger1OutputTrimDb [[ name: "Flanger 1 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneFlanger2OutputTrimDb [[ name: "Flanger 2 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneFlanger3OutputTrimDb [[ name: "Flanger 3 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneFlanger4OutputTrimDb [[ name: "Flanger 4 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneFlanger5OutputTrimDb [[ name: "Flanger 5 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 lanePhaser1OutputTrimDb [[ name: "Phaser 1 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 lanePhaser2OutputTrimDb [[ name: "Phaser 2 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 lanePhaser3OutputTrimDb [[ name: "Phaser 3 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 lanePhaser4OutputTrimDb [[ name: "Phaser 4 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 lanePhaser5OutputTrimDb [[ name: "Phaser 5 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneDelay1OutputTrimDb [[ name: "Delay 1 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneDelay2OutputTrimDb [[ name: "Delay 2 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneDelay3OutputTrimDb [[ name: "Delay 3 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneDelay4OutputTrimDb [[ name: "Delay 4 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneDelay5OutputTrimDb [[ name: "Delay 5 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneReverb1OutputTrimDb [[ name: "Reverb 1 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneReverb2OutputTrimDb [[ name: "Reverb 2 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneReverb3OutputTrimDb [[ name: "Reverb 3 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneReverb4OutputTrimDb [[ name: "Reverb 4 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 laneReverb5OutputTrimDb [[ name: "Reverb 5 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
 
         //----------------------------------------------------------------------
         // Lane control. Topology and parameter records are patch state (ADR-007),
@@ -742,6 +848,13 @@ namespace wt
         float32[lanePoolInstanceCount, laneTrackedFrequencyCount] trackedFrequencyHz;
         float32[lanePoolInstanceCount] trackedDelayTimeMs;
         float32[lanePoolInstanceCount] trackedFlangerBaseDelayMs;
+        // T78 Output Trim smoothing stays sparse: only a slot actually walked by
+        // advanceLaneSlot advances its cell. A slot entering the chain snaps on the
+        // transition's fully-dry commit frame, then fades in with the topology.
+        let effectOutputTrimRampFrames = 64;
+        float32[rackModuleCount, lanePoolInstanceCount] effectOutputTrimCurrentDb;
+        float32[rackModuleCount, lanePoolInstanceCount] effectOutputTrimKnownTargetDb;
+        float32[rackModuleCount, lanePoolInstanceCount] effectOutputTrimStepDb;
         float32 keyTrackSmoothingCoefficientState;
         RackOctaveScaler[rackOctaveScalerCount] octaveScalers;
 
@@ -1072,6 +1185,7 @@ namespace wt
                             let poolType = selector % rackModuleCount;
 
                             resetTrackedKeyTrackStateForPoolDevice (ordinal, poolType);
+                            resetEffectOutputTrimSmoothingForInstance (poolType, ordinal);
 
                             if (poolType == rackModuleGlobalFilter)  globalFilterPool[ordinal].poolResetIn <- 1;
                             if (poolType == rackModuleDistortion)    distortionPool[ordinal].poolResetIn <- 1;
@@ -1651,6 +1765,136 @@ namespace wt
         // lines hold the history they would have held. It simply contributes no wet
         // output and passes the signal through EXACTLY (ADR-005's hard audible bypass).
 
+        float32 effectOutputTrimEndpointForInstance (int32 poolType,
+                                                      wrap<lanePoolInstanceCount> ordinal)
+        {
+            let instance = int32 (ordinal);
+
+            if (poolType == rackModuleGlobalFilter)
+            {
+                if (instance == 0) return laneGlobalFilter1OutputTrimDb;
+                if (instance == 1) return laneGlobalFilter2OutputTrimDb;
+                if (instance == 2) return laneGlobalFilter3OutputTrimDb;
+                if (instance == 3) return laneGlobalFilter4OutputTrimDb;
+                return laneGlobalFilter5OutputTrimDb;
+            }
+
+            if (poolType == rackModuleDistortion)
+            {
+                if (instance == 0) return laneDistortion1OutputTrimDb;
+                if (instance == 1) return laneDistortion2OutputTrimDb;
+                if (instance == 2) return laneDistortion3OutputTrimDb;
+                if (instance == 3) return laneDistortion4OutputTrimDb;
+                return laneDistortion5OutputTrimDb;
+            }
+
+            if (poolType == rackModuleOtt)
+            {
+                if (instance == 0) return laneOtt1OutputTrimDb;
+                if (instance == 1) return laneOtt2OutputTrimDb;
+                if (instance == 2) return laneOtt3OutputTrimDb;
+                if (instance == 3) return laneOtt4OutputTrimDb;
+                return laneOtt5OutputTrimDb;
+            }
+
+            if (poolType == rackModuleChorus)
+            {
+                if (instance == 0) return laneChorus1OutputTrimDb;
+                if (instance == 1) return laneChorus2OutputTrimDb;
+                if (instance == 2) return laneChorus3OutputTrimDb;
+                if (instance == 3) return laneChorus4OutputTrimDb;
+                return laneChorus5OutputTrimDb;
+            }
+
+            if (poolType == rackModuleFlanger)
+            {
+                if (instance == 0) return laneFlanger1OutputTrimDb;
+                if (instance == 1) return laneFlanger2OutputTrimDb;
+                if (instance == 2) return laneFlanger3OutputTrimDb;
+                if (instance == 3) return laneFlanger4OutputTrimDb;
+                return laneFlanger5OutputTrimDb;
+            }
+
+            if (poolType == rackModulePhaser)
+            {
+                if (instance == 0) return lanePhaser1OutputTrimDb;
+                if (instance == 1) return lanePhaser2OutputTrimDb;
+                if (instance == 2) return lanePhaser3OutputTrimDb;
+                if (instance == 3) return lanePhaser4OutputTrimDb;
+                return lanePhaser5OutputTrimDb;
+            }
+
+            if (poolType == rackModuleDelay)
+            {
+                if (instance == 0) return laneDelay1OutputTrimDb;
+                if (instance == 1) return laneDelay2OutputTrimDb;
+                if (instance == 2) return laneDelay3OutputTrimDb;
+                if (instance == 3) return laneDelay4OutputTrimDb;
+                return laneDelay5OutputTrimDb;
+            }
+
+            if (instance == 0) return laneReverb1OutputTrimDb;
+            if (instance == 1) return laneReverb2OutputTrimDb;
+            if (instance == 2) return laneReverb3OutputTrimDb;
+            if (instance == 3) return laneReverb4OutputTrimDb;
+            return laneReverb5OutputTrimDb;
+        }
+
+        void resetEffectOutputTrimSmoothingForInstance (
+            int32 poolType, wrap<lanePoolInstanceCount> ordinal)
+        {
+            let type = wrap<rackModuleCount> (poolType);
+            let targetDb = std::intrinsics::clamp (
+                effectOutputTrimEndpointForInstance (poolType, ordinal),
+                effectOutputTrimSilenceDb, effectOutputTrimMaxDb);
+            effectOutputTrimCurrentDb[type, ordinal] = targetDb;
+            effectOutputTrimKnownTargetDb[type, ordinal] = targetDb;
+            effectOutputTrimStepDb[type, ordinal] = 0.0f;
+        }
+
+        float32 advanceEffectOutputTrimBaseForInstance (
+            int32 poolType, wrap<lanePoolInstanceCount> ordinal)
+        {
+            let type = wrap<rackModuleCount> (poolType);
+            let targetDb = std::intrinsics::clamp (
+                effectOutputTrimEndpointForInstance (poolType, ordinal),
+                effectOutputTrimSilenceDb, effectOutputTrimMaxDb);
+
+            if (targetDb != effectOutputTrimKnownTargetDb[type, ordinal])
+            {
+                effectOutputTrimKnownTargetDb[type, ordinal] = targetDb;
+                effectOutputTrimStepDb[type, ordinal] =
+                    (targetDb - effectOutputTrimCurrentDb[type, ordinal])
+                        / float32 (effectOutputTrimRampFrames);
+            }
+
+            let stepDb = effectOutputTrimStepDb[type, ordinal];
+
+            if (stepDb != 0.0f)
+            {
+                var nextDb = effectOutputTrimCurrentDb[type, ordinal] + stepDb;
+
+                if ((stepDb > 0.0f && nextDb >= targetDb)
+                     || (stepDb < 0.0f && nextDb <= targetDb))
+                {
+                    nextDb = targetDb;
+                    effectOutputTrimStepDb[type, ordinal] = 0.0f;
+                }
+
+                effectOutputTrimCurrentDb[type, ordinal] = nextDb;
+            }
+
+            return effectOutputTrimCurrentDb[type, ordinal];
+        }
+
+        float32 effectOutputTrimModulationForInstance (
+            int32 poolType, wrap<lanePoolInstanceCount> ordinal)
+        {
+            return rackModIn[wrap<rackModTargetCount> (
+                int32 (ordinal) * rackModStaticTargetCount
+                    + effectOutputTrimTargetForModule (poolType))];
+        }
+
         float32<rackChannelCount> advanceLaneSlot (wrap<laneSlotCount> slotId,
                                                    float32<rackChannelCount> signal)
         {
@@ -1658,59 +1902,77 @@ namespace wt
             let isEnabled = currentLaneEnabled[wrap<laneChainSlotCount> (selector)];
             let ordinal = wrap<lanePoolInstanceCount> (selector / rackModuleCount);
             let poolType = selector % rackModuleCount;
+            let outputTrimBaseDb = advanceEffectOutputTrimBaseForInstance (poolType, ordinal);
+            let outputTrimModulationDb = effectOutputTrimModulationForInstance (poolType, ordinal);
 
             if (poolType == rackModuleGlobalFilter)
             {
                 globalFilterPool[ordinal].in <- signal;
                 globalFilterPool[ordinal].advance();
-                return isEnabled ? globalFilterPool[ordinal].out : signal;
+                return selectEffectOutputWithTrim (
+                    isEnabled, signal, globalFilterPool[ordinal].out,
+                    outputTrimBaseDb, outputTrimModulationDb);
             }
 
             if (poolType == rackModuleDistortion)
             {
                 distortionPool[ordinal].in <- signal;
                 distortionPool[ordinal].advance();
-                return isEnabled ? distortionPool[ordinal].out : signal;
+                return selectEffectOutputWithTrim (
+                    isEnabled, signal, distortionPool[ordinal].out,
+                    outputTrimBaseDb, outputTrimModulationDb);
             }
 
             if (poolType == rackModuleOtt)
             {
                 ottPool[ordinal].in <- signal;
                 ottPool[ordinal].advance();
-                return isEnabled ? ottPool[ordinal].out : signal;
+                return selectEffectOutputWithTrim (
+                    isEnabled, signal, ottPool[ordinal].out,
+                    outputTrimBaseDb, outputTrimModulationDb);
             }
 
             if (poolType == rackModuleChorus)
             {
                 chorusPool[ordinal].in <- signal;
                 chorusPool[ordinal].advance();
-                return isEnabled ? chorusPool[ordinal].out : signal;
+                return selectEffectOutputWithTrim (
+                    isEnabled, signal, chorusPool[ordinal].out,
+                    outputTrimBaseDb, outputTrimModulationDb);
             }
 
             if (poolType == rackModuleFlanger)
             {
                 flangerPool[ordinal].in <- signal;
                 flangerPool[ordinal].advance();
-                return isEnabled ? flangerPool[ordinal].out : signal;
+                return selectEffectOutputWithTrim (
+                    isEnabled, signal, flangerPool[ordinal].out,
+                    outputTrimBaseDb, outputTrimModulationDb);
             }
 
             if (poolType == rackModulePhaser)
             {
                 phaserPool[ordinal].in <- signal;
                 phaserPool[ordinal].advance();
-                return isEnabled ? phaserPool[ordinal].out : signal;
+                return selectEffectOutputWithTrim (
+                    isEnabled, signal, phaserPool[ordinal].out,
+                    outputTrimBaseDb, outputTrimModulationDb);
             }
 
             if (poolType == rackModuleDelay)
             {
                 delayPool[ordinal].in <- signal;
                 delayPool[ordinal].advance();
-                return isEnabled ? delayPool[ordinal].out : signal;
+                return selectEffectOutputWithTrim (
+                    isEnabled, signal, delayPool[ordinal].out,
+                    outputTrimBaseDb, outputTrimModulationDb);
             }
 
             reverbPool[ordinal].in <- signal;
             reverbPool[ordinal].advance();
-            return isEnabled ? reverbPool[ordinal].out : signal;
+            return selectEffectOutputWithTrim (
+                isEnabled, signal, reverbPool[ordinal].out,
+                outputTrimBaseDb, outputTrimModulationDb);
         }
 
         //----------------------------------------------------------------------

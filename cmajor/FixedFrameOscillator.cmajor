@@ -69,12 +69,12 @@ namespace wt
     let modulationVoiceGeneratorLaneCount = 32;
     // Shared rack destination domain. Kept here because several isolated oscillator
     // tests compile this module without VoiceReducer.cmajor.
-    // The bus is the STATIC vocabulary (39 append-only base-module destinations,
+    // The bus is the STATIC vocabulary (47 append-only base-module destinations,
     // VoiceReducer.cmajor) plus the Effects Lane pool block: one lane per
     // modulatable pool destination (M1: delay #2's four). Cell math, program
     // validation, and the rackMod bus all run at the TOTAL width; the static
     // count remains the contiguous named-vocabulary pin.
-    let rackModStaticTargetCount = 39;
+    let rackModStaticTargetCount = 47;
     // Effects Lane pool sizing lives HERE with the other shared wire
     // constants: lanePoolSetCount ADDITIONAL resident instances per type,
     // each set mirroring the static vocabulary on the bus.
@@ -82,7 +82,7 @@ namespace wt
     let laneModPoolTargetCount = lanePoolSetCount * rackModStaticTargetCount;
     let rackModTargetCount = rackModStaticTargetCount + laneModPoolTargetCount;
     // SIMD discipline (see the 32-wide note above): rack vectors stay at the
-    // proven static width and the pool adds whole BLOCKS of it — one 39-wide
+    // proven static width and the pool adds whole BLOCKS of it — one 47-wide
     // vector per mirror set, never one wide vector that scalarises.
     let rackModBlockCount = 1 + lanePoolSetCount;
     // Uniform instance count per effect type: ordinal 0 is the (former) base
@@ -95,11 +95,11 @@ namespace wt
 
     // Wire ROUTE CAPACITY for the two rack tables. Their per-route upload
     // arrays are deliberately NOT sized as the full source x target matrix:
-    // at the 195-wide pooled target bus that matrix put the program upload at
+    // at the 235-wide pooled target bus that matrix puts the program upload at
     // 68KB, and cmaj::Patch's native performer event FIFO is a fixed 64KB —
     // the event could never be delivered on the native (iPhone) transport.
-    // The budget covers the ENTIRE 39-target static domain active at once
-    // (the shipping 1,330-route stress contract needs 390 voice-rack and 156
+    // The budget covers the ENTIRE 47-target static domain active at once
+    // (the complete 1,484-route static contract needs 470 voice-rack and 188
     // macro-rack routes) with lane-pool routes on top. The per-CELL amount
     // tables keep the full cell space: cell indexes, live amount edits and
     // the reducer vocabulary are untouched by this budget.

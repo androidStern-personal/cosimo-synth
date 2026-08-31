@@ -73,6 +73,11 @@ import {
     VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID,
     VOICE_ENHANCER_PARAMETER_DESCRIPTORS,
 } from "./voice-enhancer";
+import {
+    effectOutputTrimEffectiveDb,
+    effectOutputTrimNormalizedValue,
+    effectOutputTrimValueFromNormalized,
+} from "./effect-output-trim";
 
 export type ModulationTargetRailProjection = {
     /** Value -> [0,1] track position in the parameter's own display scale. */
@@ -144,23 +149,30 @@ export type KeyTrackModulationTargetBasePresentation = {
 
 const RAIL_EPSILON = 1e-9;
 
-function buildRailProjection({ min, max, scale, application }: {
+function buildRailProjection({ min, max, scale, application, valueKind }: {
     min: number;
     max: number;
     scale: "linear" | "log";
     application: "linear" | "octaves" | "semitones";
+    valueKind?: RackParameterDescriptor["valueKind"];
 }): ModulationTargetRailProjection {
     if (!(max > min) || (scale === "log" && !(min > 0))) {
         throw new Error(`Invalid rail projection domain [${min}, ${max}] (${scale}).`);
     }
     const normalizeValue = (value: number) => {
         const clamped = Math.min(max, Math.max(min, value));
+        if (valueKind === "effect-output-trim-db") {
+            return effectOutputTrimNormalizedValue(clamped);
+        }
         return scale === "log"
             ? Math.log(clamped / min) / Math.log(max / min)
             : (clamped - min) / (max - min);
     };
     const denormalizeValue = (normalized: number) => {
         const clamped = Math.min(1, Math.max(0, normalized));
+        if (valueKind === "effect-output-trim-db") {
+            return effectOutputTrimValueFromNormalized(clamped);
+        }
         return scale === "log"
             ? min * ((max / min) ** clamped)
             : min + (clamped * (max - min));
@@ -172,16 +184,15 @@ function buildRailProjection({ min, max, scale, application }: {
         const clampedBase = Math.min(1, Math.max(0, baseNormalized));
         const baseValue = denormalizeValue(clampedBase);
         const offsets = routeAmountOffsets(route);
-        const rawLow = application === "octaves"
-            ? baseValue * (2 ** offsets[0])
-            : application === "semitones"
-                ? baseValue * (2 ** (offsets[0] / 12))
-                : baseValue + offsets[0];
-        const rawHigh = application === "octaves"
-            ? baseValue * (2 ** offsets[1])
-            : application === "semitones"
-                ? baseValue * (2 ** (offsets[1] / 12))
-                : baseValue + offsets[1];
+        const applyOffset = (offset: number) => valueKind === "effect-output-trim-db"
+            ? effectOutputTrimEffectiveDb(baseValue, offset)
+            : application === "octaves"
+                ? baseValue * (2 ** offset)
+                : application === "semitones"
+                    ? baseValue * (2 ** (offset / 12))
+                    : baseValue + offset;
+        const rawLow = applyOffset(offsets[0]);
+        const rawHigh = applyOffset(offsets[1]);
         const lowNormalized = normalizeValue(rawLow);
         const highNormalized = normalizeValue(rawHigh);
         const magnitude = Math.abs(route.amount);
@@ -345,6 +356,7 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
                 max: entrySpec.max,
                 scale: descriptor.scale,
                 application: descriptor.modulationApplication ?? "linear",
+                valueKind: descriptor.valueKind,
             }),
             amountDragStyle: descriptor.modulationDragStyle ?? "amount-span",
             keyTrack: keyTrackDefinition === null ? null : {

@@ -8,7 +8,7 @@ const repoRoot = path.resolve(import.meta.dirname, "..");
 
 // Effects Lane target kinds (M1 slice 3): `lane.<instanceId>.<endpointID>`
 // names one pool device's parameter. Lane kinds are per-patch dynamic — they
-// never join the static 1,330-pair domain — and they speak their device
+// never join the static 1,484-pair domain — and they speak their device
 // type's canonical modulation language (the base module's units and limits).
 
 test("lane kind grammar accepts real device params and rejects everything else", async () => {
@@ -193,8 +193,8 @@ test("the compiler places lane routes in the pool block statically and drops out
     assert.equal(dropped.voiceRackRouteCount, 0);
 
     // The wire shape: the per-CELL tables are sources x TOTAL (the engine's
-    // rackModTargetCount = 195: static vocabulary + its full pool mirror).
-    assert.equal(program.MODULATION_RACK_TARGET_TOTAL, 195);
+    // rackModTargetCount = 235: static vocabulary + its full pool mirror).
+    assert.equal(program.MODULATION_RACK_TARGET_TOTAL, 235);
     assert.equal(
         program.MODULATION_VOICE_RACK_ROUTE_CELL_COUNT,
         program.MODULATION_VOICE_SOURCE_COUNT * program.MODULATION_RACK_TARGET_TOTAL,
@@ -221,7 +221,7 @@ test("base rack routes are untouched by the widening", async () => {
     const compiled = program.compileModulationRuntimeProgram([route]);
     assert.equal(compiled.voiceRackRouteCount, 1);
     const targetIndex = compiled.voiceRackRouteTargets[0];
-    assert.ok(targetIndex < 39, `base target leaked into the pool block: ${targetIndex}`);
+    assert.ok(targetIndex < 47, `base target leaked into the pool block: ${targetIndex}`);
     assert.equal(compiled.voiceRackRouteCells[0] % program.MODULATION_RACK_TARGET_TOTAL, targetIndex);
 });
 
@@ -358,12 +358,13 @@ test("the per-patch target domain is the static core plus one entry per live lan
         ...resident,
         { instanceId: "delay#2", deviceType: "delay" },
     ]);
-    assert.equal(withPoolDelay.length, residentOptions.length + 4);
+    assert.equal(withPoolDelay.length, residentOptions.length + 5);
     assert.deepEqual(withPoolDelay.slice(0, residentOptions.length), residentOptions);
-    assert.deepEqual(withPoolDelay.slice(-4), [
+    assert.deepEqual(withPoolDelay.slice(-5), [
         { value: "lane.delay#2.delayTime", label: "DELAY 2 TIME" },
         { value: "lane.delay#2.delayFeedback", label: "DELAY 2 FEEDBACK" },
         { value: "lane.delay#2.delayFilter", label: "DELAY 2 FILTER" },
         { value: "lane.delay#2.delayMix", label: "DELAY 2 MIX" },
+        { value: "lane.delay#2.delayOutputTrimDb", label: "DELAY 2 OUTPUT TRIM" },
     ]);
 });

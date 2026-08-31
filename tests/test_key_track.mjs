@@ -229,7 +229,7 @@ test("lane records append Key Track fields without moving deployed parameter ind
     assert.equal(slots.getLaneSlotParamIndex("chorus", "chorusRingFrequencyHz"), 8);
     assert.equal(slots.getLaneSlotParamIndex("flanger", "flangerBaseDelayMs"), 4);
     assert.equal(slots.getLaneSlotParamIndex("delay", "delayFilterKeyTrackOffsetSemitones"), 9);
-    assert.equal(slots.LANE_SLOT_PARAM_COUNT, 12);
+    assert.equal(slots.LANE_SLOT_PARAM_COUNT, 13);
 });
 
 test("incomplete pre-Key-Track lane records are rejected instead of default-filled", async () => {
@@ -237,12 +237,14 @@ test("incomplete pre-Key-Track lane records are rejected instead of default-fill
     const legacy = {
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices: {
             "globalFilter#1": { params: {
                 globalFilterMode: 1,
                 globalFilterCutoff: 7_321.25,
                 globalFilterResonance: 0.707107,
                 globalFilterDrive: 0,
+                globalFilterOutputTrimDb: 0,
             } },
             "delay#1": { params: {
                 delayTime: 123.456,
@@ -251,6 +253,7 @@ test("incomplete pre-Key-Track lane records are rejected instead of default-fill
                 delayMix: 0.5,
                 delayTimeMode: 1,
                 delayDivision: 8,
+                delayOutputTrimDb: 0,
             } },
         },
         chain: [
@@ -268,6 +271,7 @@ test("incomplete legacy Chorus Ring lane records are rejected", async () => {
     const legacy = {
         format: "cosimo.lane",
         version: 2,
+        output: { mix: 1, bypassed: false },
         devices: {
             "chorus#1": { params: {
                 chorusMix: 0.5,
@@ -278,6 +282,7 @@ test("incomplete legacy Chorus Ring lane records are rejected", async () => {
                 chorusRingAmount: 0.8,
                 chorusRingOffsetMode: 1,
                 chorusRingFineSemitones: 0.75,
+                chorusOutputTrimDb: 0,
             } },
         },
         chain: [{ kind: "device", deviceId: "chorus#1", enabled: true }],
@@ -298,6 +303,7 @@ test("legacy Chorus mode-zero/fine-zero remains distinguishable from new linear 
         chorusRingAmount: 0,
         chorusRingOffsetMode: 0,
         chorusRingFineSemitones: 0,
+        chorusOutputTrimDb: 0,
     };
     const legacy = slots.materializeLaneDeviceParams("chorus", legacyInput);
     const nonExactLegacyLookalike = slots.materializeLaneDeviceParams("chorus", {
@@ -318,7 +324,7 @@ test("legacy Chorus mode-zero/fine-zero remains distinguishable from new linear 
     assert.equal(current.chorusRingKeyTrackOffsetSemitones, 7);
     assert.equal(current.chorusRingLegacyClampEnabled, 0);
     assert.equal(slots.getLaneSlotParamIndex("chorus", "chorusRingLegacyClampEnabled"), 11);
-    assert.equal(slots.LANE_SLOT_PARAM_COUNT, 12);
+    assert.equal(slots.LANE_SLOT_PARAM_COUNT, 13);
 });
 
 test("incomplete pre-compatibility Chorus records are rejected", async () => {
@@ -342,7 +348,8 @@ test("incomplete pre-compatibility Chorus records are rejected", async () => {
     const parsed = lane.parseLaneStateV2({
         format: "cosimo.lane",
         version: 2,
-        devices: { "chorus#1": { params: currentParams } },
+        output: { mix: 1, bypassed: false },
+        devices: { "chorus#1": { params: { ...currentParams, chorusOutputTrimDb: 0 } } },
         chain: [{ kind: "device", deviceId: "chorus#1", enabled: true }],
     });
 
@@ -460,13 +467,13 @@ test("both frequency-split crossovers have append-only modulation identities", a
         "lane.frequencySplit#1.xoverLowHz"), 37);
     assert.equal(targets.getRackModulationTargetIndex(
         "lane.frequencySplit#1.xoverHighHz"), 38);
-    assert.equal(targets.MODULATION_RACK_TARGET_COUNT, 39);
-    assert.equal(runtime.MODULATION_RACK_TARGET_TOTAL, 195);
+    assert.equal(targets.MODULATION_RACK_TARGET_COUNT, 47);
+    assert.equal(runtime.MODULATION_RACK_TARGET_TOTAL, 235);
 
     const fourthHigh = lanes.parseLaneModulationTargetKind(
         "lane.frequencySplit#4.xoverHighHz");
     assert.notEqual(fourthHigh, null);
-    assert.equal(lanes.getLaneModulationTargetIndex(fourthHigh), (3 * 39) + 38);
+    assert.equal(lanes.getLaneModulationTargetIndex(fourthHigh), (3 * 47) + 38);
     assert.deepEqual(
         modulation.getModulationAmountBounds("lane.frequencySplit#4.xoverHighHz"),
         { min: -4, max: 4, step: 0.01 },
@@ -477,7 +484,7 @@ test("both frequency-split crossovers have append-only modulation identities", a
         polarity: "unipolar", targetKind: "lane.frequencySplit#4.xoverHighHz",
         amount: 0.5, reducer: "max",
     };
-    assert.equal(runtime.getModulationRuntimeCell(route).targetIndex, (3 * 39) + 38);
+    assert.equal(runtime.getModulationRuntimeCell(route).targetIndex, (3 * 47) + 38);
 });
 
 test("the compiled source wires every current eligible control and no named exclusion", async () => {
