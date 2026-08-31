@@ -611,7 +611,7 @@ test("Mono retriggers the Amp Envelope while connected Legato notes preserve its
         `Mono ${monoConnectedLevel} should restart below Legato ${legatoConnectedLevel}`);
 });
 
-test("polyphonic voice stealing replaces the oldest tail and restarts that voice's Amp Envelope", async () => {
+test("polyphonic voice stealing fades the oldest tail before restarting that voice's Amp Envelope", async () => {
     const CmajorClass = await loadGeneratedClass();
     const sessionID = 42_219;
     const performer = await createSamplerPerformer(CmajorClass, sessionID);
@@ -640,10 +640,31 @@ test("polyphonic voice stealing replaces the oldest tail and restarts that voice
     assert.equal(meanAbsolute(channel(beforeSteal, 1).subarray(2_500)), 0);
 
     noteOn(performer, 64, captureVelocity);
-    const stealStart = renderFrames(performer, 240);
-    assert.equal(meanAbsolute(channel(stealStart, 0)), 0,
-        "stealing must remove the oldest voice instead of leaving its tail summed");
-    const restartedRight = meanAbsolute(channel(stealStart, 1));
+    const stealStart = renderFrames(performer, 512);
+    const stealFadeFrames = Math.round(sampleRate * 0.0015);
+    const dyingLeft = channel(stealStart, 0);
+    const incomingRight = channel(stealStart, 1);
+    assert.ok(Math.abs(dyingLeft[0]) > 0.015,
+        "the stolen voice must enter the bounded fade instead of being hard-cut");
+    const fadeStartFrame = dyingLeft.findIndex(
+        (sample) => Math.abs(sample) < Math.abs(dyingLeft[0]) * 0.99,
+    );
+    const incomingStartFrame = incomingRight.findIndex((sample) => Math.abs(sample) > 1e-6);
+    assert.ok(fadeStartFrame >= 0, "the stolen voice must begin fading");
+    assert.equal(incomingStartFrame - fadeStartFrame, stealFadeFrames,
+        "the replacement note must wait for the complete 1.5 ms fade");
+    assert.equal(
+        meanAbsolute(dyingLeft.subarray(fadeStartFrame + stealFadeFrames + 64)),
+        0,
+        "the stolen voice and the fixed downstream impulse must settle to exact silence",
+    );
+
+    const boundary = beforeSteal.subarray(beforeSteal.length - 16);
+    const maximumStealStep = maxInterSampleStep(boundary, stealStart);
+    assert.ok(maximumStealStep < 0.002,
+        `voice stealing introduced a ${maximumStealStep} FS one-sample discontinuity`);
+
+    const restartedRight = meanAbsolute(incomingRight.subarray(incomingStartFrame));
     const stealSettled = renderFrames(performer, 3_000);
     const settledRight = meanAbsolute(channel(stealSettled, 1).subarray(2_500));
     assert.ok(restartedRight < settledRight * 0.35,
