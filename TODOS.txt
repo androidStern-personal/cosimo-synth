@@ -1597,10 +1597,13 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Empty, short, overflowing serial, Parallel, and Frequency Split racks keep every final insertion point usable; scrolling reaches the real tail without moving Mix/POLISH away from the bottom boundary; reorder and modulation drags cannot target or pass behind the footer.
     - Source review removes or renames the misleading `tailPrefix` contract and replaces the old `mixBeforeTail` assertions rather than preserving them through another offset. Focused geometry/hit tests run during repair; the broad UI/build gates run once after the source is review-clean.
 
-[ ] T74 — Give every Polish stage a compact control and independent bypass
+[x] T74 — Give every Polish stage a compact control and independent bypass
     Active owner (2026-08-30):
     - Codex task `Build compact Polish stage controls`, thread `01a05256-3d5b-7f63-9f90-fa22885e5f0a`, branch `codex/t74-polish-compact-controls`, worktree `/Users/winterfell/.codex/worktrees/ac93/cosimo-synth`, base `3eb361fba1f223c99dad50ead473280d442370ea`, model SOL, reasoning max, Full Access with approval prompts disabled.
     - Coordinator-managed by thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b`. T74 owns compact Polish DSP/state/UI and only the explicit handoff seam to T75; it must not invent T75's expanded controls, merge or push master, install shared plugins, or deploy.
+    Integrated (2026-08-31):
+    - Rebased implementation commits `38f50c12` and `190f5241` are integrated on master. The compact Safe Bass, Enhance, Comp, and Output Trim controls, independent bypasses, complete-sound state, and controlled Expand handoff compose with T73's fixed FX footer.
+    - Focused DSP/state/browser proof is green; the complete desktop suite is green for this scope apart from the unchanged React Grab baseline. A final compiled native build installed the signed VST3 at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`. Andrew listening and physical-phone acceptance remain separate and unclaimed.
     Product contract (2026-08-30):
     - Keep the fixed Polish section downstream of the editable Effects Lane and its whole-lane Mix/Bypass. This task does not move Polish into the editable rack and does not change T73's approved footer signal order.
     - The compact Polish view shows Safe Bass, Enhance, and Comp as three clearly named modules. Each module has one Amount knob and its own bypass control. Output Trim remains directly available in the compact view with its level control and its own bypass; do not hide it inside the expanded editor.
@@ -1614,10 +1617,13 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Composed phone/plugin/desktop tests prove the compact controls remain readable and reachable inside the T73 footer without overlap, the Expand action opens T75's full-screen surface, and collapsing it returns to the exact prior FX context.
     - Listening acceptance for the Amount curves and click-free transitions is reported separately from automated correctness; do not claim Andrew approved their feel without an actual listening pass.
 
-[ ] T75 — Build the full-screen Polish editor and one correctly aligned Enhancer spectrum graph
+[x] T75 — Build the full-screen Polish editor and one correctly aligned Enhancer spectrum graph
     Active owner (2026-08-30):
     - Codex task `Build Polish editor and shared Enhancer analyzer`, thread `01a05256-411c-78c1-b597-80b5b5d67f1b`, branch `codex/t75-polish-enhancer-analyzer`, worktree `/Users/winterfell/.codex/worktrees/3126/cosimo-synth`, base `3eb361fba1f223c99dad50ead473280d442370ea`, model SOL, reasoning max, Full Access with approval prompts disabled.
     - Coordinator-managed by thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b`. T75 owns the full-screen surface and the one shared analyzer/axis foundation. It must return any proposed advanced-control list for product approval before wiring new public sound parameters, and must not merge or push master, install shared plugins, or deploy.
+    Integrated (2026-08-31):
+    - Rebased implementation commits `954f15e2`, `17ab2298`, and `43adc5be` are integrated on master. The full Polish page reuses T74's bindings, folds live meter/reduction/spectrum telemetry, gates its analyzer while closed, and shares one logarithmic frequency geometry with Enhancer Lite.
+    - Focused Polish, Enhancer Lite, state/share, generated-map, compiled-browser, native, and fresh HMR qualification is green. The two web size-budget assertions also fail on the pre-T74/T75 master and remain baseline debt; no new public advanced control was introduced. Human visual/listening, Ableton interaction, and physical-iPhone acceptance remain unclaimed.
     Full-screen Polish editor:
     - Open from T74's compact Expand action using the established full-screen MSEG interaction vocabulary: a dedicated full-page surface, a clear close/back action, and no permanent reduction of the compact FX workspace.
     - Give the Safe Bass, Enhancer, Compressor, Soft Clipper, and Output Trim stages enough room for accurate explanations, values, and stage-specific graphics. The expanded editor must make the compact Comp macro understandable by showing that it drives both compression and soft clipping.
