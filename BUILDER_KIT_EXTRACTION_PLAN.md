@@ -44,12 +44,12 @@ Decisions from Andrew:
 ## Phase 1 — Toolchain root fixes
 
 - [x] **1.1 Latency generator fix** — done on master (`f2bcc0d`), see above.
-- [ ] **1.2 Upstream check (small).** Inspect the latest public
+- [x] **1.2 Upstream check — DONE 2026-08-31.** Inspect the latest public
   `cmajor-lang/cmajor` release for (a) a fix to the JUCE-target latency
   generation, (b) movement on the WebView keyboard/user-files behavior our CHOC
   fork patches. Record findings in `PROGRESS.txt`. Informational only — it tells
   us how much fork diff a future rebase could shed. No upstream PRs.
-- [ ] **1.3 Consolidate the CHOC marker check.** The same eight magic strings are
+- [ ] **1.3 Consolidate the CHOC marker check (wave 2).** The same eight magic strings are
   checked in five places (`fx/prod-effect.mjs`, `scripts/install_fx_cmajplugin.sh`,
   `scripts/build_cmajplugin_vst3.sh`, `scripts/install_cmajplugin_vst3.sh`,
   `scripts/seqfx-release-config.mjs`) with at least two divergent
@@ -90,7 +90,7 @@ JS/TS work; parallelizable across worktrees except where noted.
   two hand-rolled reimplementations, add path-containment to the harness-HTML
   handler, cache discovery instead of re-scanning per request. Same files as
   2.1 — run sequentially with it.
-- [ ] **2.3 View loader rewrite.** `ui/shared/effects/effect-view-loader.js`:
+- [x] **2.3 View loader rewrite — DONE 2026-08-31 (wave 1).** `ui/shared/effects/effect-view-loader.js`:
   release builds must contain zero dev behavior — no `127.0.0.1:5175` probe, no
   code execution from a local port, no 500 ms startup stall, no `error.stack`
   rendered to end users, no repo-internal error copy. Generalize `b1d5f5b`'s
@@ -116,7 +116,7 @@ JS/TS work; parallelizable across worktrees except where noted.
   defaults. Dedupe the five `isPlainObject`s, four `requireString`s, three
   stored-state envelope unwraps, two toasts. Synth behavior must be
   unchanged — the desktop suite is the gate.
-- [ ] **2.5 Enhancer Lite self-containment.** Move `cmajor/EnhancerLite.cmajor`
+- [x] **2.5 Enhancer Lite self-containment — DONE 2026-08-31 (wave 1), one deviation.** Move `cmajor/EnhancerLite.cmajor`
   and `cmajor/EnhancerLiteSpectrumAnalyzer.cmajor` into `fx/enhancer_lite/`
   (nothing else references them — verified, and
   `tests/test_enhancer_lite_state.mjs` asserts the non-coupling). Move
@@ -125,7 +125,7 @@ JS/TS work; parallelizable across worktrees except where noted.
   Update both patch manifests, the tests, and `tests/cmajor_enhancer_lite/`
   paths. Measurement scripts (`scripts/measure_enhancer_lite*.mjs`) stay
   Cosimo-private and unmoved.
-- [ ] **2.6 Test infrastructure.** One static file server: keep
+- [x] **2.6 Test infrastructure — DONE 2026-08-31 (wave 1).** One static file server: keep
   `tests/helpers/static_web_server.mjs`, delete the duplicated server +
   MIME tables inside `desktop_harness_browser.mjs` and `live_review_server.mjs`
   (those two files otherwise stay, they are synth/speedrun tools). Port the
@@ -137,7 +137,7 @@ JS/TS work; parallelizable across worktrees except where noted.
   if it fits; three tests currently hand-roll one) and parameterize
   `module_test_shell.html`'s hard-coded viewport. Fix `load_ui_module.mjs`
   cache key (missing `repoRoot`) and rejected-promise cache poisoning.
-- [ ] **2.7 Script hygiene.** Add `npm run typecheck` (`tsc --noEmit`; fix
+- [x] **2.7 Script hygiene — DONE 2026-08-31 (wave 1).** Add `npm run typecheck` (`tsc --noEmit`; fix
   cheap errors, record the rest in `PROGRESS.txt`), an aggregate `npm test`
   (node unit + browser groups; cmaj/native/python suites stay separate
   commands), and wire up or delete the ~39 test files reachable by no script.
@@ -201,3 +201,37 @@ Sequential, after Phase 2 lands.
 Host-automation/state migration, real AU, Developer ID signing/notarization,
 naming, licensing (Gate 0), commerce. They run in parallel and gate selling,
 not this extraction.
+
+## Execution log
+
+- **2026-08-31 wave 1** (commits `d99490d`, `e3bb13c`; verified green: `npm test`
+  1086/1087 with one intentional corpus self-skip, all ported browser suites,
+  `tsc --noEmit` unchanged at 27 pre-existing errors, none in touched files).
+  - 1.2: upstream cmajor-lang/cmajor has NOT fixed the JUCE-target latency
+    emission through 1.0.3177 (generator line unchanged since publication;
+    latest release 1.0.3175; fork base 1.0.3066 is 57 commits behind). No
+    upstream movement on the CHOC WebView keyboard/userFiles behavior either —
+    both fork patches remain fork-only. Any fork rebase must carry the T72
+    latency fix (`codex/t72-juce-declared-latency`) forward.
+  - 2.3: loader production path proven zero-network/zero-timer by spy tests
+    (12/12); error views show message-only neutral copy; packaged loader
+    byte-exact in seqfx runtime.
+  - 2.5 deviation: `cmajor/EnhancerLiteSpectrumAnalyzer.cmajor` was NOT moved —
+    the synth now uses `wt::EnhancerSpectrumAnalyzer` (Polish meter +
+    voice-enhancer spectrum, both synth manifests, polish tests). Analyzer
+    ownership must be resolved in task 3.1 boundary work: either the synth gets
+    its own processor or the analyzer joins the kit surface.
+    `scripts/measure_enhancer_lite_shelves.mjs` intentionally keeps old paths
+    (reads a pinned historical checkpoint via git show).
+  - 2.6: shared static server gained fallback roots, lazy `/cmaj_api` mount
+    (fixes container runs that cannot clone the private fork eagerly), and
+    opt-in esbuild TS bundling mirroring Vite dev; four effect browser suites
+    ported off the desktop synth server; `tests/helpers/patch_connection_mock.ts`
+    added (Node adoption for the three hand-rolled fakes deferred to the preset
+    wave — the mock extends HTMLElement at module scope).
+  - 2.7: root `npm test` aggregate + `typecheck` added; 36 of 38 orphan test
+    files wired; left unwired deliberately: `tests/test_claude_session_start.mjs`
+    (stale expected git-config key count, hook now emits 3) and
+    `tests/test_key_track.mjs` (3 subtests fail against current head — product
+    question). 27 typecheck errors recorded (bounce/*.mjs missing declarations,
+    DesktopPatchView sourceSlot union, sound-share-link lib types).
