@@ -2,7 +2,7 @@ import {
     ENHANCER_LITE_SETTING_DESCRIPTORS,
     type EnhancerLiteShape,
     type EnhancerLiteSettingDescriptor,
-} from "../../../ui/shared/enhancer-lite-state";
+} from "./enhancer-lite-state";
 import {
     ENHANCER_FREQUENCY_TICKS as ENHANCER_LITE_FREQUENCY_TICKS,
     ENHANCER_SPECTRUM_PLOT as ENHANCER_LITE_PLOT,

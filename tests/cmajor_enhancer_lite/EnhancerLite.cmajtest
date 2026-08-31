@@ -1,4 +1,4 @@
-## global ("../../cmajor/EnhancerLite.cmajor", "EnhancerLiteSampleRateProbe.cmajor")
+## global ("../../fx/enhancer_lite/EnhancerLite.cmajor", "EnhancerLiteSampleRateProbe.cmajor")
 
 //==============================================================================
 // Neutral equality, mono/stereo coherence, side-only preservation, reset, and

@@ -802,7 +802,7 @@ try {
         version: 1,
         comparison: {
             accepted: "cmajor/Enhancer.cmajor, band 1 only, de-emphasis 0%",
-            lite: "cmajor/EnhancerLite.cmajor",
+            lite: "fx/enhancer_lite/EnhancerLite.cmajor",
             note: "The benchmark compares the accepted complete two-band bus against the one-band Lite bus.",
         },
         fixedArchitecture: {

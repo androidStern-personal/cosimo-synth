@@ -22,7 +22,7 @@
   ],
   "isInstrument": false,
   "source": [
-    "../../cmajor/EnhancerLite.cmajor",
+    "EnhancerLite.cmajor",
     "../../cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
     "EnhancerLitePlugin.cmajor"
   ]

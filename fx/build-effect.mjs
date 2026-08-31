@@ -68,7 +68,7 @@ export const effectPlugins = {
         cmakeTarget: "CosimoEnhancerLite",
         productName: "CosimoEnhancerLite",
         runtimeSources: [
-            { repoPath: "cmajor/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
+            { repoPath: "fx/enhancer_lite/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
             { repoPath: "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor", runtimePath: "EnhancerLiteSpectrumAnalyzer.cmajor" },
             { repoPath: "fx/enhancer_lite/EnhancerLitePlugin.cmajor", runtimePath: "EnhancerLitePlugin.cmajor" },
         ],
@@ -81,7 +81,7 @@ export const effectPlugins = {
         productName: "CosimoEnhancerLiteShelvesAudition",
         includeInAll: false,
         runtimeSources: [
-            { repoPath: "cmajor/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
+            { repoPath: "fx/enhancer_lite/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
             { repoPath: "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor", runtimePath: "EnhancerLiteSpectrumAnalyzer.cmajor" },
             { repoPath: "fx/enhancer_lite/EnhancerLitePlugin.cmajor", runtimePath: "EnhancerLitePlugin.cmajor" },
         ],

@@ -43,6 +43,8 @@ function normalizeTimeoutMs(timeoutMs) {
         : DEFAULT_EFFECT_DEV_STATUS_TIMEOUT_MS;
 }
 
+// The timeout guards only this status probe. Module imports on both the dev and
+// production paths run without one, so slow-but-working loads are never cut off.
 async function readDevServerStatus(origin, timeoutMs = DEFAULT_EFFECT_DEV_STATUS_TIMEOUT_MS) {
     const controller = typeof AbortController === "function" ? new AbortController() : undefined;
     let timeoutID;
@@ -89,6 +91,9 @@ function modulePathsMatch(left, right) {
     return normalizeModulePath(left) === normalizeModulePath(right);
 }
 
+// Rejects a reachable-but-stale dev server (typically one started from another
+// worktree): it must identify itself as the fx dev server and be serving the
+// exact module this plugin wants, or the loader falls back to the packaged UI.
 function isExpectedDevServer(status, devModulePath = "") {
     if (status?.kind !== EFFECT_DEV_STATUS_KIND) {
         return false;
@@ -160,54 +165,39 @@ async function loadEffectDevTools(origin) {
     }
 }
 
-function createProductionLoadError({ productionModuleUrl, devOrigin, devModulePath, cause }) {
-    const devHint = devModulePath
-        ? `The effects dev server at ${normalizeOrigin(devOrigin)}${EFFECT_DEV_STATUS_PATH} was not reachable or was not serving ${normalizeModulePath(devModulePath)}. Start the shared effects Vite dev server from this repo, or build a production runtime that contains ${DEFAULT_EFFECT_PRODUCTION_MODULE}.`
-        : "The patch manifest is missing view.devModule, and the production UI module could not be loaded.";
-
-    const error = new Error(
-        [
-            `Could not load the production effect UI module at ${productionModuleUrl}.`,
-            devHint,
-            cause?.message ? `Original error: ${cause.message}` : "",
-        ].filter(Boolean).join(" "),
-    );
-
+function createLoadError(message, cause) {
+    const error = new Error(message);
     error.cause = cause;
     return error;
+}
+
+function createProductionLoadError({ productionModuleUrl, cause }) {
+    return createLoadError(
+        `Could not load the production effect UI module at ${productionModuleUrl}. The effect UI is missing or damaged; reinstalling the plugin should restore it.`,
+        cause,
+    );
 }
 
 function createDevLoadError({ devModuleUrl, cause }) {
-    const error = new Error(
-        [
-            `Could not load the effect UI from the shared effects dev server at ${devModuleUrl}.`,
-            "Stop the stale effects dev server, restart it from this repo, or build and install a production runtime.",
-            cause?.message ? `Original error: ${cause.message}` : "",
-        ].filter(Boolean).join(" "),
+    return createLoadError(
+        `Could not load the effect UI from the dev server at ${devModuleUrl}.`,
+        cause,
     );
-
-    error.cause = cause;
-    return error;
 }
 
-function formatLoadError(error) {
-    if (error && typeof error === "object") {
-        const maybeError = error;
-        const message = maybeError.stack || maybeError.message || String(maybeError);
-        const cause = maybeError.cause ? formatLoadError(maybeError.cause) : "";
-        return [message, cause ? `\nCause:\n${cause}` : ""].filter(Boolean).join("\n");
-    }
-
-    return String(error);
-}
-
+// End users only ever see error.message. The stack and the underlying cause
+// chain go to the console for developers.
 function createLoadErrorView(error) {
     console.error(error);
+
+    for (let cause = error?.cause, depth = 0; cause !== undefined && depth < 8; cause = cause?.cause, depth += 1) {
+        console.error("Caused by:", cause);
+    }
 
     const element = document.createElement("pre");
     element.dataset.role = "effect-load-error";
     element.setAttribute("role", "alert");
-    element.textContent = formatLoadError(error);
+    element.textContent = error?.message || String(error);
     element.style.cssText = [
         "display:block",
         "box-sizing:border-box",
@@ -232,45 +222,57 @@ export async function canLoadEffectDevServer(
     return isExpectedDevServer(await readDevServerStatus(origin, timeoutMs), devModulePath);
 }
 
+async function loadDevView(devOrigin, devModulePath, patchConnection) {
+    const devModuleUrl = resolveDevModuleUrl(devOrigin, devModulePath);
+
+    try {
+        await loadViteClient(devOrigin);
+        await loadReactRefreshPreamble(devOrigin);
+        await loadEffectDevTools(devOrigin);
+        return await loadViewFromModule(devModuleUrl, patchConnection, `Dev module ${devModuleUrl}`);
+    } catch (error) {
+        return createLoadErrorView(createDevLoadError({
+            devModuleUrl,
+            cause: error,
+        }));
+    }
+}
+
+async function loadProductionView(productionModuleUrl, patchConnection) {
+    try {
+        return await loadViewFromModule(
+            productionModuleUrl,
+            patchConnection,
+            `Production module ${productionModuleUrl}`,
+        );
+    } catch (error) {
+        return createLoadErrorView(createProductionLoadError({
+            productionModuleUrl,
+            cause: error,
+        }));
+    }
+}
+
 export function createEffectPatchView(options = {}) {
     return async function createPatchView(patchConnection) {
-        const devOrigin = normalizeOrigin(options.devOrigin);
-        const devStatusTimeoutMs = normalizeTimeoutMs(options.devStatusTimeoutMs);
         const devModulePath = getDevModulePath(patchConnection, options);
         const productionModuleUrl = resolveProductionModuleUrl(
             options.productionModule ?? DEFAULT_EFFECT_PRODUCTION_MODULE,
         );
 
-        if (devModulePath && await canLoadEffectDevServer(devOrigin, devStatusTimeoutMs, devModulePath)) {
-            const devModuleUrl = resolveDevModuleUrl(devOrigin, devModulePath);
+        // Dev-server loading is an explicit opt-in: without a devModule (either
+        // from options.source or the patch manifest) this loads the packaged
+        // production module immediately — no probe, no timer, no network.
+        if (devModulePath) {
+            const devOrigin = normalizeOrigin(options.devOrigin);
+            const devStatusTimeoutMs = normalizeTimeoutMs(options.devStatusTimeoutMs);
 
-            try {
-                await loadViteClient(devOrigin);
-                await loadReactRefreshPreamble(devOrigin);
-                await loadEffectDevTools(devOrigin);
-                return await loadViewFromModule(devModuleUrl, patchConnection, `Dev module ${devModuleUrl}`);
-            } catch (error) {
-                return createLoadErrorView(createDevLoadError({
-                    devModuleUrl,
-                    cause: error,
-                }));
+            if (await canLoadEffectDevServer(devOrigin, devStatusTimeoutMs, devModulePath)) {
+                return await loadDevView(devOrigin, devModulePath, patchConnection);
             }
         }
 
-        try {
-            return await loadViewFromModule(
-                productionModuleUrl,
-                patchConnection,
-                `Production module ${productionModuleUrl}`,
-            );
-        } catch (error) {
-            return createLoadErrorView(createProductionLoadError({
-                productionModuleUrl,
-                devOrigin,
-                devModulePath,
-                cause: error,
-            }));
-        }
+        return await loadProductionView(productionModuleUrl, patchConnection);
     };
 }
 

@@ -1,11 +1,20 @@
-import {
-    ENHANCER_CURVES,
-    ENHANCER_MODES,
-    ENHANCER_SATURATION_MODES,
-    type EnhancerCurve,
-    type EnhancerMode,
-    type EnhancerSaturationMode,
-} from "./enhancer-state";
+/** The two locked nonlinear character choices. */
+export const ENHANCER_CURVES = ["tube", "solid"] as const;
+
+/** A saved band character. */
+export type EnhancerCurve = typeof ENHANCER_CURVES[number];
+
+/** The saved routing domain for the band. */
+export const ENHANCER_MODES = ["stereo", "mid-side"] as const;
+
+/** A saved band routing domain. */
+export type EnhancerMode = typeof ENHANCER_MODES[number];
+
+/** The measured global saturation intensity choices. */
+export const ENHANCER_SATURATION_MODES = ["subtle", "medium"] as const;
+
+/** A saved global nonlinear intensity choice. */
+export type EnhancerSaturationMode = typeof ENHANCER_SATURATION_MODES[number];
 
 /** Self-identifying state document for the isolated one-band prototype. */
 export const ENHANCER_LITE_STATE_FORMAT = "cosimo.enhancer-lite";

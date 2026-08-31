@@ -195,7 +195,7 @@ test("the Enhancer Lite plugin packages its isolated one-band prototype", async 
     ));
 
     assert.deepEqual(buildModule.effectPlugins["enhancer-lite"].runtimeSources, [
-        { repoPath: "cmajor/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
+        { repoPath: "fx/enhancer_lite/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
         {
             repoPath: "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
             runtimePath: "EnhancerLiteSpectrumAnalyzer.cmajor",

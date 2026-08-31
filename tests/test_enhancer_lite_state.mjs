@@ -8,7 +8,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 async function loadEnhancerLiteState() {
-    return loadUIModule(repoRoot, "ui/shared/enhancer-lite-state.ts");
+    return loadUIModule(repoRoot, "fx/enhancer_lite/view/enhancer-lite-state.ts");
 }
 
 test("Enhancer Lite saves exactly one band's static Stereo/M/S sound controls", async () => {
@@ -105,7 +105,10 @@ test("Enhancer Lite rejects partial, extra, non-finite, and out-of-range state",
 });
 
 test("the isolated Lite DSP keeps the accepted laws while removing de-emphasis", async () => {
-    const source = await fs.readFile(path.join(repoRoot, "cmajor/EnhancerLite.cmajor"), "utf8");
+    const source = await fs.readFile(
+        path.join(repoRoot, "fx/enhancer_lite/EnhancerLite.cmajor"),
+        "utf8",
+    );
     const graph = await fs.readFile(
         path.join(repoRoot, "fx/enhancer_lite/EnhancerLitePlugin.cmajor"),
         "utf8",
@@ -165,6 +168,7 @@ test("the isolated Lite DSP keeps the accepted laws while removing de-emphasis",
     }
 
     assert.equal(desktopManifest.source.includes("cmajor/EnhancerLite.cmajor"), false);
+    assert.equal(desktopManifest.source.includes("fx/enhancer_lite/EnhancerLite.cmajor"), false);
     assert.doesNotMatch(synth, /EnhancerLiteBus/);
     assert.doesNotMatch(rack, /EnhancerLiteBus/);
 });
