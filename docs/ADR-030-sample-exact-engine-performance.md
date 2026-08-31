@@ -132,6 +132,23 @@ phone is measured with the web host's `?perf=1` HUD):
 | stress 3x8 + 10 FX + 12 rt  | 186.2% | 142.8% |
 | transitions                 |  99.2% | 62.5% |
 
+The final moving-master integration rerun used the distinct clean artifacts
+from master `02159e0f` and candidate `3d3fc5d9` on arm64 macOS, Node
+22.22.3/V8 12.4, again taking the minimum of three serial reps. Absolute load
+is machine-specific; the paired result is the qualification evidence:
+
+| scenario                    | master | candidate | reduction |
+|-----------------------------|--------|-----------|-----------|
+| init-idle                   |  16.2% |      8.5% |     47.5% |
+| init-poly8                  |  28.8% |     20.1% |     30.2% |
+| shared-patch (dropout repro)|  37.5% |     25.7% |     31.5% |
+| stress 3x8 + 10 FX + 12 rt  |  54.0% |     40.6% |     24.8% |
+| transitions                 |  31.6% |     21.3% |     32.6% |
+
+The companion five-scenario render comparison authenticated different paths
+and SHA-256 hashes, pinned the same Cmajor/JUCE sources, and found every output
+sample bit-identical.
+
 Per-device lane costs after this program (held note, same container, above
 a 35.5% base): distortion +36, phaser +31, chorus +29, OTT +28, reverb +10,
 flanger/delay/globalFilter ≈ +1. These are now dominated by
