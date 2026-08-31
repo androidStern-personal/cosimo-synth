@@ -138,10 +138,29 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 0.68rem;
       line-height: 1.45;
-      white-space: pre;
-      cursor: pointer;
       user-select: none;
       -webkit-user-select: none;
+    }
+
+    #cosimo-perf-hud-metrics {
+      white-space: pre;
+    }
+
+    #cosimo-perf-hud-reset {
+      display: block;
+      margin-top: 0.35rem;
+      border: 1px solid rgb(185 244 93 / 45%);
+      border-radius: 0.25rem;
+      padding: 0.2rem 0.45rem;
+      background: rgb(185 244 93 / 10%);
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    #cosimo-perf-hud-reset:focus-visible {
+      outline: 2px solid #d9ffb0;
+      outline-offset: 2px;
     }
 
     #cosimo-perf-hud[hidden] {
@@ -155,7 +174,10 @@
     <div id="cosimo-audio-recovery-notice" role="status" aria-live="polite" hidden>
       Audio restarted — play again
     </div>
-    <div id="cosimo-perf-hud" role="status" aria-live="off" hidden></div>
+    <div id="cosimo-perf-hud" hidden>
+      <div id="cosimo-perf-hud-metrics" role="status" aria-live="off"></div>
+      <button id="cosimo-perf-hud-reset" type="button">Reset metrics</button>
+    </div>
     <button id="cosimo-start-overlay" type="button" disabled>
       <span id="cosimo-start-copy">
         <span id="cosimo-start-title">Cosimo Synth</span>

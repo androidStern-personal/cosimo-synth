@@ -26,6 +26,7 @@ import {
     emitIOSHarnessEffectiveMsegState,
     getIOSHarnessRenderedState,
     getIOSHarnessSnapshot,
+    getIOSSourceHarnessSnapshot,
     openIOSHarnessPage,
     openIOSSourceHarnessPage,
     releaseIOSHarnessParameterResponse,
@@ -1538,6 +1539,27 @@ test("source-composed iPhone preview and editor keep A, B, and realized Morph id
         });
     } finally {
         if (page) {
+            await closeIOSHarnessPage(page);
+        }
+        await sourceServer.stop();
+    }
+});
+
+test("source-composed iPhone leaves its unused filter spectrum analyzer asleep", async () => {
+    const sourceServer = await startIOSSourceHarnessServer();
+    let page = null;
+
+    try {
+        page = await openIOSSourceHarnessPage(browser, sourceServer.baseUrl);
+        await waitForIOSSourceHarnessReady(page);
+        const snapshot = await getIOSSourceHarnessSnapshot(page);
+
+        assert.equal(snapshot.endpointListenerCounts.filterSpectrum ?? 0, 0);
+        assert.equal(snapshot.sentMessages.some(({ endpointID, value }) => (
+            endpointID === "filterSpectrumActivity" && Number(value) !== 0
+        )), false);
+    } finally {
+        if (page !== null) {
             await closeIOSHarnessPage(page);
         }
         await sourceServer.stop();

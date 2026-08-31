@@ -1076,6 +1076,9 @@ export async function openIOSSourceHarnessPage(browser, baseUrl, {
             for (const [key, value] of Object.entries(initialStoredState)) {
                 patchConnection.setStoredStateValue(key, value);
             }
+            globalThis.__COSIMO_IOS_SOURCE_HARNESS__ = {
+                getSnapshot: () => patchConnection.getDebugSnapshot(),
+            };
             mountPoint.replaceChildren(createIOSPatchView(patchConnection));
         }, storedState);
 
@@ -1124,6 +1127,10 @@ export async function getIOSHarnessSnapshot(page) {
 
 export async function getIOSHarnessRenderedState(page) {
     return page.evaluate(() => window.__COSIMO_IOS_HARNESS__.getRenderedState());
+}
+
+export async function getIOSSourceHarnessSnapshot(page) {
+    return page.evaluate(() => window.__COSIMO_IOS_SOURCE_HARNESS__.getSnapshot());
 }
 
 export async function clearIOSHarnessDebugLog(page) {

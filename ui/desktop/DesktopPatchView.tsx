@@ -279,13 +279,14 @@ const ENVELOPE_TIME_MAX_SECONDS = 10;
 const AMP_ENVELOPE_EDITOR_SLOT_INDEX = MODULATION_ENV_SLOT_COUNT;
 const ENVELOPE_EDITOR_SLOT_COUNT = MODULATION_ENV_SLOT_COUNT + 1;
 // The envelope draws to time (Operator-style): attack, decay, and release
-// share the width in proportion to a sublinear warp of their actual times
-// (t^0.45 keeps a 1ms attack grabbable beside a 10s release), sustain is a
-// slim fixed column (it has no time dimension), and the whole envelope
-// always fills the plot. Because the layout renormalizes, horizontal drags
-// are relative in log-time: each pixel multiplies the current value by a
-// constant factor, so short times get proportionally fine control.
+// share their active width in proportion to a sublinear warp of actual time
+// (t^0.45 keeps a 1ms phase grabbable beside a 10s phase), while sustain is a
+// slim fixed column because it has no time dimension. The release value also
+// expands that active width into a reserved tail, so its endpoint moves in the
+// same direction as the pointer instead of remaining pinned to the plot edge.
+// Horizontal drags stay relative in log-time for fine short-time edits.
 const ENVELOPE_TIME_WARP = 0.45;
+const ENVELOPE_MINIMUM_ACTIVE_TIME_RATIO = 0.6;
 const ENVELOPE_SUSTAIN_COLUMN_RATIO = 0.12;
 const ENVELOPE_SUSTAIN_COLUMN_MIN_PX = 24;
 const ENVELOPE_SUSTAIN_COLUMN_MAX_PX = 64;
@@ -770,9 +771,10 @@ function computeEnvelopeGeometry(
     const plotTop = (surfaceHeight - plotHeight) * 0.5;
     const plotBottom = plotTop + plotHeight;
 
-    // One shared time axis: A, D, and R widths are proportional to the
-    // warped times, sustain is a slim fixed column, and the envelope always
-    // fills the plot. Every phase keeps a minimum grabbable width.
+    // Preserve the relative temporal profile across A/D/R, but reserve part
+    // of the plot as direct-manipulation travel for Release. The release
+    // endpoint therefore moves monotonically from the minimum active extent
+    // to the right plot edge as its value reaches ten seconds.
     const sustainWidth = Math.min(
         clamp(plotWidth * ENVELOPE_SUSTAIN_COLUMN_RATIO, ENVELOPE_SUSTAIN_COLUMN_MIN_PX, ENVELOPE_SUSTAIN_COLUMN_MAX_PX),
         plotWidth * 0.5,
@@ -781,9 +783,15 @@ function computeEnvelopeGeometry(
     const attackShare = envelopeTimeShare(envelope.attackSeconds);
     const decayShare = envelopeTimeShare(envelope.decaySeconds);
     const releaseShare = envelopeTimeShare(envelope.releaseSeconds, releaseMinimumSeconds);
+    const maximumShare = envelopeTimeShare(ENVELOPE_TIME_MAX_SECONDS);
+    const releaseExtent = releaseShare / maximumShare;
+    const activeTimeWidth = timeWidth * (
+        ENVELOPE_MINIMUM_ACTIVE_TIME_RATIO
+        + ((1 - ENVELOPE_MINIMUM_ACTIVE_TIME_RATIO) * releaseExtent)
+    );
     const totalShare = Math.max(1e-6, attackShare + decayShare + releaseShare);
-    const phaseMinWidth = Math.min(ENVELOPE_PHASE_MIN_WIDTH_PX, timeWidth / 3);
-    const flexibleWidth = Math.max(0, timeWidth - (phaseMinWidth * 3));
+    const phaseMinWidth = Math.min(ENVELOPE_PHASE_MIN_WIDTH_PX, activeTimeWidth / 3);
+    const flexibleWidth = Math.max(0, activeTimeWidth - (phaseMinWidth * 3));
     const attackRegionWidth = phaseMinWidth + (flexibleWidth * (attackShare / totalShare));
     const decayRegionWidth = phaseMinWidth + (flexibleWidth * (decayShare / totalShare));
     const releaseRegionWidth = phaseMinWidth + (flexibleWidth * (releaseShare / totalShare));

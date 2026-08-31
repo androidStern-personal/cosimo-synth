@@ -24,7 +24,7 @@
     "test:native:quickjs": "./scripts/test_quickjs_modulation_restore.sh",
     "test:web:bundle": "node --test tests/test_web_bundle_contract.mjs",
     "bench:engine": "node scripts/bench_engine_offline.mjs",
-    "test:engine:determinism": "node scripts/compare_engine_renders.mjs build/web/cmaj_Cosimo_Synth.offline.js build/web/cmaj_Cosimo_Synth.offline.js",
+    "test:engine:determinism": "node scripts/compare_engine_renders.mjs --self-check build/web/cmaj_Cosimo_Synth.offline.js",
     "test:engine:retrigger": "node --test tests/test_engine_retrigger_declick.mjs",
     "bounce:bank-from-wav": "node scripts/wav_to_bounce_bank.mjs",
     "probe:bounce:install": "node scripts/probe_bounce_bank_install.mjs",

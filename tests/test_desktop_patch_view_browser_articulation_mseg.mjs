@@ -1981,6 +1981,77 @@ test("desktop envelope editor drags handles and commits compact rail values for 
     }
 });
 
+test("Amp Envelope Release grip follows direct manipulation without jumping and stays bounded", async () => {
+    const page = await openHarnessPage();
+
+    const readReleaseGeometry = async () => page.evaluate(() => {
+        const surface = document.querySelector('[data-role="adsr-editor-surface"]');
+        const handle = document.querySelector('[data-role="adsr-release-handle"]');
+        if (!(surface instanceof SVGSVGElement) || !(handle instanceof SVGCircleElement)) {
+            throw new Error("Expected the Amp Envelope release surface and visible grip.");
+        }
+        return {
+            handleX: Number(handle.getAttribute("cx")),
+            surfaceWidth: surface.viewBox.baseVal.width,
+        };
+    });
+
+    try {
+        await page.getByRole("button", { name: "Select Amp Envelope" }).click();
+        const hitTarget = page.locator('[data-role="adsr-release-handle-hit-target"]');
+        await hitTarget.scrollIntoViewIfNeeded();
+        const initialValue = Number((await getHarnessSnapshot(page)).parameterValues.ampRelease);
+        const initialGeometry = await readReleaseGeometry();
+        const initialBox = await hitTarget.boundingBox();
+        assert.ok(initialBox, "Expected the Amp Envelope Release grip to be visible.");
+
+        await page.mouse.move(
+            initialBox.x + (initialBox.width * 0.5),
+            initialBox.y + (initialBox.height * 0.5),
+        );
+        await page.mouse.down();
+        await page.waitForTimeout(50);
+        assert.equal(Number((await getHarnessSnapshot(page)).parameterValues.ampRelease), initialValue);
+        assert.equal((await readReleaseGeometry()).handleX, initialGeometry.handleX);
+        await page.mouse.up();
+
+        await dragEnvelopeHandleBy(page, "adsr-release-handle-hit-target", 48, 0);
+        const increased = await waitForHarnessSnapshot(
+            page,
+            "Amp Envelope Release increases under a rightward grip drag",
+            (snapshot) => Number(snapshot.parameterValues.ampRelease) > initialValue,
+        );
+        const increasedGeometry = await readReleaseGeometry();
+        assert.equal(Number(increased.parameterValues.ampRelease) > initialValue, true);
+        assert.equal(increasedGeometry.handleX > initialGeometry.handleX, true);
+
+        await dragEnvelopeHandleBy(page, "adsr-release-handle-hit-target", -480, 0);
+        const minimum = await waitForHarnessSnapshot(
+            page,
+            "Amp Envelope Release clamps at its five-millisecond floor",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.ampRelease) - 0.005) <= 1e-9,
+        );
+        const minimumGeometry = await readReleaseGeometry();
+        assert.equal(Number(minimum.parameterValues.ampRelease), 0.005);
+        assert.equal(minimumGeometry.handleX < increasedGeometry.handleX, true);
+        assert.equal(minimumGeometry.handleX >= 0, true);
+
+        await dragEnvelopeHandleBy(page, "adsr-release-handle-hit-target", 480, 0);
+        const maximum = await waitForHarnessSnapshot(
+            page,
+            "Amp Envelope Release clamps at ten seconds",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.ampRelease) - 10) <= 1e-9,
+        );
+        const maximumGeometry = await readReleaseGeometry();
+        assert.equal(Number(maximum.parameterValues.ampRelease), 10);
+        assert.equal(maximumGeometry.handleX > minimumGeometry.handleX, true);
+        assert.equal(maximumGeometry.handleX <= maximumGeometry.surfaceWidth, true);
+    } finally {
+        await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
 test("desktop envelope exact entry preserves the focused draft across a host echo", async () => {
     const page = await openHarnessPage();
 

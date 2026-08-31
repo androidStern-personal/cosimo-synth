@@ -1364,6 +1364,7 @@ function IOSPatchViewBody() {
         msegEditorSurfaceRef,
         keyboardRef,
         voiceModeCount: VOICE_MODE_OPTIONS.length,
+        observeFilterSpectrum: false,
         msegSurfaceOrientation: msegEditorOrientation,
         msegCurveEditActivationMode: "hold-or-drag",
         onMsegCurveEditHoldActivated: () => {

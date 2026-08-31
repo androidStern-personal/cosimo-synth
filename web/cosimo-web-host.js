@@ -28,6 +28,8 @@ const elements = {
     audioRecoveryNotice: document.getElementById("cosimo-audio-recovery-notice"),
     error: document.getElementById("cosimo-error"),
     perfHud: document.getElementById("cosimo-perf-hud"),
+    perfHudMetrics: document.getElementById("cosimo-perf-hud-metrics"),
+    perfHudReset: document.getElementById("cosimo-perf-hud-reset"),
     startAction: document.getElementById("cosimo-start-action"),
     startOverlay: document.getElementById("cosimo-start-overlay"),
     startStatus: document.getElementById("cosimo-start-status"),
@@ -623,11 +625,11 @@ function formatPerfMilliseconds(seconds) {
 
 // The HUD reads the same counters the ?test harness asserts on. "now" is the
 // most recent ~256-block worklet window; the other rows accumulate until the
-// HUD is tapped. over = blocks whose DSP render exceeded the quantum budget,
+// HUD is reset. over = blocks whose DSP render exceeded the quantum budget,
 // miss = definite deadline misses, late cb = the worklet callback itself
 // arriving late (starved by the system rather than by our DSP).
 function renderPerfHud() {
-    if (!elements.perfHud) {
+    if (!elements.perfHudMetrics) {
         return;
     }
 
@@ -657,20 +659,17 @@ function renderPerfHud() {
         );
     }
 
-    lines.push(
-        `lat ${formatPerfMilliseconds(state.audioContext?.baseLatency)}+${formatPerfMilliseconds(state.audioContext?.outputLatency)}ms`
-            + " · tap to reset",
-    );
-    elements.perfHud.textContent = lines.join("\n");
+    lines.push(`lat ${formatPerfMilliseconds(state.audioContext?.baseLatency)}+${formatPerfMilliseconds(state.audioContext?.outputLatency)}ms`);
+    elements.perfHudMetrics.textContent = lines.join("\n");
 }
 
 function startPerfHud() {
-    if (!isPerfHudVisible || !elements.perfHud) {
+    if (!isPerfHudVisible || !elements.perfHud || !elements.perfHudMetrics || !elements.perfHudReset) {
         return;
     }
 
     elements.perfHud.hidden = false;
-    elements.perfHud.addEventListener("click", () => {
+    elements.perfHudReset.addEventListener("click", () => {
         globalThis.__COSIMO_WEB_POC__.resetAudioMetrics();
         state.audioWorkletLatestWindow = null;
         renderPerfHud();

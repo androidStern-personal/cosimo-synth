@@ -228,6 +228,37 @@ test("visual endpoint delivery presents the latest frame without rendering repea
     }
 });
 
+test("shared analyzer activity reference-counts observers and disables only after the final release", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installAnalyzerActivityHarness");
+        assert.equal(await invokeHarness(page, "acquireNonAnalyzer"), true);
+        assert.deepEqual((await getHarnessSnapshot(page)).sentMessages, []);
+
+        await invokeHarness(page, "acquireFirst");
+        await invokeHarness(page, "acquireSecond");
+        assert.deepEqual((await getHarnessSnapshot(page)).sentMessages, [
+            { endpointID: "filterSpectrumActivity", value: 1 },
+        ]);
+
+        await invokeHarness(page, "releaseFirst");
+        await invokeHarness(page, "releaseFirst");
+        assert.deepEqual((await getHarnessSnapshot(page)).sentMessages, [
+            { endpointID: "filterSpectrumActivity", value: 1 },
+        ]);
+
+        await invokeHarness(page, "releaseSecond");
+        await invokeHarness(page, "releaseSecond");
+        assert.deepEqual((await getHarnessSnapshot(page)).sentMessages, [
+            { endpointID: "filterSpectrumActivity", value: 1 },
+            { endpointID: "filterSpectrumActivity", value: 0 },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("route amount binding presents the canonical bridge value before the full modulation document rerenders", async () => {
     const page = await openModulePage();
 

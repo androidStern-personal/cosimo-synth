@@ -95,9 +95,13 @@ performer deterministically (fixed session id seeds all engine randomness)
 through the product's own adapters — the modulation program compiler and the
 lane v2 event builder — so scenarios replay exactly what the app sends.
 
-- `scripts/compare_engine_renders.mjs <engineA> <engineB>` renders five
-  canonical scenarios through two builds and fails on the first
-  non-identical sample (`Object.is`, so NaN and signed zero count). The
+- `scripts/compare_engine_renders.mjs <baseline> <candidate> --report <path>`
+  records each artifact's realpath, SHA-256, source commit, dirty state,
+  Cmajor/JUCE pins, and Node/V8 runtime before rendering. Integration mode
+  rejects the same realpath or identical bytes; a baseline-versus-itself run
+  cannot qualify a change. It renders five canonical scenarios through two
+  distinct builds and fails on the first non-identical sample (`Object.is`,
+  so NaN and signed zero count). The
   scenarios cover idleness, an 8-note chord, the dropout-report patch, a
   stress patch at the product ceiling (3 oscillators x 8 unison, a
   10-device lane with a 3-band split, 12 routes with swept macros), and a
@@ -105,7 +109,9 @@ lane v2 event builder — so scenarios replay exactly what the app sends.
   silence, retrigger, lane topology swap).
 - `scripts/bench_engine_offline.mjs` reports wall-clock DSP cost as percent
   of realtime per scenario (`npm run bench:engine`).
-- `npm run test:engine:determinism` self-compares one build.
+- `npm run test:engine:determinism` uses the explicit `--self-check` mode to
+  render one build twice. This proves deterministic replay, not integration
+  equivalence, and the report labels it separately.
 
 The gate caught two real bugs during this program — a stale first-attack
 frame on mono retunes out of quiescence, and a drain counter that skipped

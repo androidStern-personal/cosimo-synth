@@ -21,16 +21,27 @@ fi
 
 cd "$CLAUDE_PROJECT_DIR"
 
-echo "[session-start] installing npm dependencies"
-npm install --no-audit --no-fund
+echo "[session-start] installing lockfile-exact npm dependencies"
+npm ci --no-audit --no-fund
+echo "[session-start] JavaScript toolchain: node $(node --version), npm $(npm --version)"
+
+readonly WASI_PACKAGES=(
+  wasi-libc
+  libc++-18-dev-wasm32
+  libclang-rt-18-dev-wasm32
+  lld-18
+)
 
 if [ ! -f /usr/lib/wasm32-wasi/crt1-reactor.o ] || [ ! -x /usr/lib/llvm-18/bin/wasm-ld ]; then
   echo "[session-start] installing wasm32-wasi toolchain (wasi-libc, libc++ wasm32, clang-rt wasm32, lld)"
   apt-get update -qq
-  apt-get install -y -qq wasi-libc libc++-18-dev-wasm32 libclang-rt-18-dev-wasm32 lld-18
+  apt-get install -y -qq "${WASI_PACKAGES[@]}"
 else
   echo "[session-start] wasm32-wasi toolchain already present"
 fi
+
+echo "[session-start] resolved wasm32-wasi packages:"
+dpkg-query -W -f='  ${binary:Package}=${Version}\n' "${WASI_PACKAGES[@]}"
 
 # The renderer build script defaults to Homebrew paths; point it at the
 # Ubuntu layout for every shell in this session.
@@ -42,16 +53,49 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   } >> "$CLAUDE_ENV_FILE"
 fi
 
-# The Cmajor fork pins its public submodules (boost, cmajor-lang/llvm, clap)
-# with git@github.com SSH URLs. Remote sessions have HTTPS-proxy git access
-# only, so rewrite them.
-ensure_git_url_rewrite() {
-  if ! git config --global --get-all url."https://github.com/".insteadOf 2>/dev/null | grep -qxF "$1"; then
-    git config --global --add url."https://github.com/".insteadOf "$1"
-  fi
+# The Cmajor fork pins public submodules with SSH URLs while remote sessions
+# use the HTTPS credential proxy. Scope those rewrites to this Claude session;
+# never mutate the account's global Git configuration from a project hook.
+session_has_git_url_rewrite() {
+  local needle="$1"
+  local count="${GIT_CONFIG_COUNT:-0}"
+  local index key_name value_name
+  for ((index = 0; index < count; index += 1)); do
+    key_name="GIT_CONFIG_KEY_${index}"
+    value_name="GIT_CONFIG_VALUE_${index}"
+    if [ "${!key_name:-}" = "url.https://github.com/.insteadOf" ] && [ "${!value_name:-}" = "$needle" ]; then
+      return 0
+    fi
+  done
+  return 1
 }
-ensure_git_url_rewrite "git@github.com:"
-ensure_git_url_rewrite "ssh://git@github.com/"
+
+append_session_git_url_rewrite() {
+  local needle="$1"
+  if session_has_git_url_rewrite "$needle"; then
+    return
+  fi
+
+  local index="${GIT_CONFIG_COUNT:-0}"
+  local key_name="GIT_CONFIG_KEY_${index}"
+  local value_name="GIT_CONFIG_VALUE_${index}"
+  export "${key_name}=url.https://github.com/.insteadOf"
+  export "${value_name}=${needle}"
+  export GIT_CONFIG_COUNT="$((index + 1))"
+
+}
+
+append_session_git_url_rewrite "git@github.com:"
+append_session_git_url_rewrite "ssh://git@github.com/"
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  for ((index = 0; index < GIT_CONFIG_COUNT; index += 1)); do
+    key_name="GIT_CONFIG_KEY_${index}"
+    value_name="GIT_CONFIG_VALUE_${index}"
+    printf 'export %s=%q\n' "$key_name" "${!key_name}" >> "$CLAUDE_ENV_FILE"
+    printf 'export %s=%q\n' "$value_name" "${!value_name}" >> "$CLAUDE_ENV_FILE"
+  done
+  printf 'export GIT_CONFIG_COUNT=%q\n' "$GIT_CONFIG_COUNT" >> "$CLAUDE_ENV_FILE"
+fi
 
 # CPM in cmake/CosimoDependencies.cmake clones the private Cmajor fork on the
 # first engine build. Report reachability so a session knows up front whether

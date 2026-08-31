@@ -11,6 +11,7 @@ import {
     usePatchVisualEndpoint,
     type PatchConnectionLike,
 } from "../../ui/shared/cmajor-react";
+import { acquireAnalyzerActivity } from "../../ui/shared/analyzer-activity";
 import {
     usePatchParameterBinding,
     type PatchControlBinding,
@@ -1310,6 +1311,39 @@ export async function installPatchVisualEndpointHarness(target: HTMLElement) {
     };
 
     await waitForMicrotask();
+}
+
+export async function installAnalyzerActivityHarness(target: HTMLElement) {
+    target.replaceChildren();
+    const sentMessages: Array<{ endpointID: string; value: unknown }> = [];
+    const patchConnection: PatchConnectionLike = {
+        sendEventOrValue(endpointID, value) {
+            sentMessages.push({ endpointID, value });
+        },
+    };
+    let releaseFirst: (() => void) | null = null;
+    let releaseSecond: (() => void) | null = null;
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        acquireFirst() {
+            releaseFirst = acquireAnalyzerActivity(patchConnection, "filterSpectrum");
+        },
+        acquireSecond() {
+            releaseSecond = acquireAnalyzerActivity(patchConnection, "filterSpectrum");
+        },
+        acquireNonAnalyzer() {
+            return acquireAnalyzerActivity(patchConnection, "effectiveMsegState") === null;
+        },
+        releaseFirst() {
+            releaseFirst?.();
+        },
+        releaseSecond() {
+            releaseSecond?.();
+        },
+        getSnapshot() {
+            return { sentMessages: cloneValue(sentMessages) };
+        },
+    };
 }
 
 export async function installModulationRouteAmountBindingHarness(target: HTMLElement) {
