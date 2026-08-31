@@ -17,7 +17,7 @@ function(cosimo_add_production_dependencies)
     CPMAddPackage(
         NAME cosimo_cmajor
         GIT_REPOSITORY "https://github.com/androidStern-personal/cmajor.git"
-        GIT_TAG "a7ff151623196561b2fd8ce8e788048b23062100"
+        GIT_TAG "cb616bf1d0931ff92da3826d15a01eadfd8e35b1"
         GIT_SHALLOW FALSE
         GIT_SUBMODULES_RECURSE TRUE
         DOWNLOAD_ONLY YES

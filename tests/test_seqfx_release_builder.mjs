@@ -172,7 +172,7 @@ function releaseToolchainFixture({ nativeBuildCacheVerified = true } = {}) {
         },
         sourceBuiltTools: {
             cmaj: {
-                cmajorCommit: "a7ff151623196561b2fd8ce8e788048b23062100",
+                cmajorCommit: "cb616bf1d0931ff92da3826d15a01eadfd8e35b1",
                 chocCommit: "98b52fb54c3b9fec03c0c13218f6557aef33eabe",
                 executablePolicy: "absolute-repository-build-output-no-path-fallback",
                 provenance: "repository-pinned-source-build",
@@ -418,7 +418,7 @@ test("release config freezes the existing beta identity and current native outpu
             cpmName: "cosimo_cmajor",
             sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",
             repository: "https://github.com/androidStern-personal/cmajor.git",
-            revision: "a7ff151623196561b2fd8ce8e788048b23062100",
+            revision: "cb616bf1d0931ff92da3826d15a01eadfd8e35b1",
         },
         choc: {
             repository: "https://github.com/androidStern-personal/choc.git",
@@ -844,7 +844,7 @@ test("tracked third-party notices cover the embedded runtime and artwork", async
         assert.match(notices, new RegExp(`^${component.replaceAll("+", "\\+")}$`, "mu"));
 
     assert.match(notices, /does not grant distribution\s+rights/u);
-    assert.match(notices, /a7ff151623196561b2fd8ce8e788048b23062100/u);
+    assert.match(notices, /cb616bf1d0931ff92da3826d15a01eadfd8e35b1/u);
     assert.match(notices, /98b52fb54c3b9fec03c0c13218f6557aef33eabe/u);
     assert.match(notices, /501c07674e1ad693085a7e7c398f205c2677f5da/u);
     assert.match(notices, /320ea19819bf66429fa772d6c04614ae75815895/u);
