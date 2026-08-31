@@ -33,13 +33,18 @@ function auv3ParameterAddress(endpointID) {
 }
 
 function snapshotParameters(snapshotSource) {
-    return [...snapshotSource.matchAll(
-        /\{\s*"address":\s*(\d+),\s*"identifier":\s*"([^"]+)",\s*"displayName":\s*"([^"]+)"\s*\}/g,
-    )].map((match) => ({
-        address: BigInt(match[1]),
-        identifier: match[2],
-        displayName: match[3],
-    }));
+    return [...snapshotSource.matchAll(/\{([^{}]*"address"[^{}]*)\}/g)].map((match) => {
+        const address = match[1].match(/"address":\s*(\d+)/);
+        const identifier = match[1].match(/"identifier":\s*"([^"]+)"/);
+        const displayName = match[1].match(/"displayName":\s*"([^"]+)"/);
+
+        assert.ok(address && identifier && displayName);
+        return {
+            address: BigInt(address[1]),
+            identifier: identifier[1],
+            displayName: displayName[1],
+        };
+    });
 }
 
 function effectOutputTrimDeclarations(source) {
@@ -190,9 +195,13 @@ test("the out-of-process AUv3 smoke freezes and writes every T78 trim identity",
     );
     const fullSnapshot = snapshotParameters(fullSnapshotSource);
 
-    assert.equal(fullSnapshot.length, 65);
-    assert.deepEqual(fullSnapshot.slice(-40), expectedParameters);
+    assert.equal(fullSnapshot.length, 156);
+    assert.equal(fullSnapshot[115]?.identifier, "polishOutputTrimBypass");
+    assert.deepEqual(fullSnapshot.slice(116), expectedParameters);
     assert.deepEqual(snapshotParameters(t78SnapshotSource), expectedParameters);
+    assert.equal(fullSnapshot.some(({ identifier }) => identifier === "polishAnalyzerEnabledIn"), false);
+    assert.equal(new Set(fullSnapshot.map(({ identifier }) => identifier)).size, 156);
+    assert.equal(new Set(fullSnapshot.map(({ address }) => address.toString())).size, 156);
     assert.equal(new Set(expectedParameters.map(({ address }) => address.toString())).size, 40);
     assert.equal(new Set(expectedParameters.map(({ displayName }) => displayName)).size, 40);
     assert.match(harnessSource, /native\/CompleteSoundState\.h/);

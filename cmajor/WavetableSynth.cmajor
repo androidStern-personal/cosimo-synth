@@ -1438,7 +1438,7 @@ graph WavetableSynth [[ main ]]
     input event int32 distortionHistoryActivity;
     // Hidden editor lifecycle only. This starts the read-only Polish FFT while
     // its full-screen surface is open; it is not sound, host, or saved state.
-    input event int32 polishAnalyzerEnabledIn [[ name: "Polish Analyzer Enable", hidden: true ]];
+    input event int32 polishAnalyzerEnabledIn;
     output event wt::OscillatorWavetableUploadAck wavetableUploadAck;
     output event wt::OscillatorWavetableMipRequest wavetableMipRequest;
     output event int32 wavetablePrewarmNotification;

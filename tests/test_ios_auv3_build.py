@@ -920,10 +920,15 @@ def test_ios_host_smoke_source_qualifies_the_exact_t78_automation_bank() -> None
     assert len(endpoint_ids) == 40
     assert len(set(endpoint_ids)) == 40
     assert expected["t78EffectOutputTrimParameters"] == expected_parameters
-    assert len(expected["parameters"]) == 65
+    assert len(expected["parameters"]) == 156
     assert expected["parameters"][-40:] == expected_parameters
     assert expected["parameters"][0]["identifier"] == "hostSlot0Guard"
-    assert expected["parameters"][24]["identifier"] == "chorusRingFineSemitones"
+    assert expected["parameters"][115]["identifier"] == "polishOutputTrimBypass"
+    assert "polishAnalyzerEnabledIn" not in {
+        parameter["identifier"] for parameter in expected["parameters"]
+    }
+    assert len({parameter["identifier"] for parameter in expected["parameters"]}) == 156
+    assert len({parameter["address"] for parameter in expected["parameters"]}) == 156
     assert len({parameter["address"] for parameter in expected_parameters}) == 40
     assert len({parameter["displayName"] for parameter in expected_parameters}) == 40
 
