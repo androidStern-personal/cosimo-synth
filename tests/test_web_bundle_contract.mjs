@@ -88,6 +88,23 @@ test("the generated modulation module ships its canonical identity dependency", 
     assert.match(generatedTargets, /^\/\/ Generated from ui\/shared\/modulation-targets\.ts /);
 });
 
+test("the generated rack catalog ships its Output Trim dependency", async () => {
+    const catalogURL = new URL("../patch_gui/rack-parameter-descriptors.js", import.meta.url);
+    catalogURL.searchParams.set("generated-contract", String(Date.now()));
+    const catalog = await import(catalogURL.href);
+    const [buildScript, generatedTrim] = await Promise.all([
+        fs.readFile(path.join(repoRoot, "ui", "build.mjs"), "utf8"),
+        fs.readFile(path.join(repoRoot, "patch_gui", "effect-output-trim.js"), "utf8"),
+    ]);
+
+    assert.equal(catalog.getRackEffectDescriptor("delay").parameters.at(-1).label, "Output Trim");
+    assert.match(
+        buildScript,
+        /emitGeneratedPatchGuiModule\("ui\/shared\/effect-output-trim\.ts", "patch_gui\/effect-output-trim\.js"\)/,
+    );
+    assert.match(generatedTrim, /^\/\/ Generated from ui\/shared\/effect-output-trim\.ts /);
+});
+
 test("the generated oscillator contract ships only the runtime defaults module", async () => {
     const [buildScript, generatedDefaults] = await Promise.all([
         fs.readFile(path.join(repoRoot, "ui", "build.mjs"), "utf8"),

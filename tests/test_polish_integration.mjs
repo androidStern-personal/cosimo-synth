@@ -63,11 +63,12 @@ test("the production graph exposes the compact Polish controls and ends rack to 
 });
 
 test("Polish reuses the dormant Enhancer analyzer and multiplexes spectrum through its existing telemetry endpoint", async () => {
-    const [source, analyzer, polishContract, polish, ...manifests] = await Promise.all([
+    const [source, analyzer, polishContract, polish, hostSnapshot, ...manifests] = await Promise.all([
         read("cmajor/WavetableSynth.cmajor"),
         read("cmajor/EnhancerLiteSpectrumAnalyzer.cmajor"),
         read("ui/shared/polish.ts"),
         read("cmajor/Polish.cmajor"),
+        read("ios_auv3/expected_host_smoke.json").then(JSON.parse),
         read("WavetableSynth.cmajorpatch").then(JSON.parse),
         read("WavetableSynth.iOS.cmajorpatch").then(JSON.parse),
     ]);
@@ -77,7 +78,8 @@ test("Polish reuses the dormant Enhancer analyzer and multiplexes spectrum throu
     }
     assert.match(analyzer, /processor EnhancerSpectrumAnalyzer \(int32 initiallyEnabled\)/);
     assert.match(source, /output event \(wt::PolishMeterFrame, wt::EnhancerSpectrumFrame\) polishMeter;/);
-    assert.match(source, /input event int32 polishAnalyzerEnabledIn \[\[ name: "Polish Analyzer Enable", hidden: true \]\];/);
+    assert.match(source, /^\s*input event int32 polishAnalyzerEnabledIn;\s*$/m);
+    assert.doesNotMatch(source, /input event int32 polishAnalyzerEnabledIn\s*\[\[/);
     assert.match(source, /node polishInputSpectrum = wt::EnhancerSpectrumAnalyzer \(0\);/);
     assert.match(source, /polishAnalyzerEnabledIn -> polishInputSpectrum\.enabledIn;/);
     assert.match(polish, /output stream float32<2> enhancerInputMonitor;/);
@@ -108,6 +110,11 @@ test("Polish reuses the dormant Enhancer analyzer and multiplexes spectrum throu
     )?.[1];
     assert.ok(publicParameterInventory);
     assert.doesNotMatch(publicParameterInventory, /POLISH_ANALYZER_ENABLED_ENDPOINT_ID|polishAnalyzerEnabledIn/);
+    assert.equal(
+        hostSnapshot.parameters.some(({ identifier }) => identifier === "polishAnalyzerEnabledIn"),
+        false,
+        "the runtime-only analyzer lifecycle event must stay out of the frozen host inventory",
+    );
 });
 
 test("native plugin seams forward the compiled graph latency to their hosts", async () => {
@@ -129,19 +136,17 @@ test("native host state stamps the current complete sound and rejects older chun
     ]);
 
     assert.match(desktopHost, /completeSoundVersionID \{ "completeSoundVersion" \}/);
-    assert.match(desktopHost, /completeSoundStateVersion = 2/);
     assert.match(desktopHost, /auto state = getUpdatedState\(\);/);
-    assert.match(desktopHost, /state\.setProperty \(completeSoundVersionID, completeSoundStateVersion, nullptr\)/);
-    assert.match(desktopHost, /getProperty \(completeSoundVersionID, -1\)[\s\S]*?!= completeSoundStateVersion\)[\s\S]*?return;/);
+    assert.match(desktopHost, /state\.setProperty \(completeSoundVersionID, cosimo::complete_sound::version, nullptr\)/);
+    assert.match(desktopHost, /if \(! isCurrentCompleteSoundState \(restoredState\)\)\s*return;/);
     assert.match(desktopHost, /readParametersFromState \(loadParams, newState\);/);
     assert.ok(
-        desktopHost.indexOf("getProperty (completeSoundVersionID, -1)")
+        desktopHost.indexOf("isCurrentCompleteSoundState (restoredState)")
             < desktopHost.indexOf("lastLoadedStateHash != stateHash"),
     );
 
     assert.match(iosHost, /completeSoundVersion \{ "completeSoundVersion" \}/);
-    assert.match(iosHost, /completeSoundStateVersion = 2/);
-    assert.match(iosHost, /state\.setProperty \(ids\.completeSoundVersion, completeSoundStateVersion, nullptr\)/);
+    assert.match(iosHost, /state\.setProperty \(ids\.completeSoundVersion, cosimo::complete_sound::version, nullptr\)/);
     assert.match(iosHost, /for \(const auto& parameter : patch->getParameterList\(\)\)[\s\S]*?parameter->properties\.endpointID[\s\S]*?parameter->currentValue/);
     assert.match(iosHost, /if \(! isCurrentCompleteSoundState \(restoredState\)\)\s*return;/);
     assert.match(iosHost, /void setNewState \(const juce::ValueTree& newState\)[\s\S]*?if \(! isCurrentCompleteSoundState \(newState\)\)\s*return;/);

@@ -18,7 +18,8 @@
         "distortionWetHPKeyTrackEnabled": 0,
         "distortionWetHPKeyTrackOffsetSemitones": 0,
         "distortionWetLPKeyTrackEnabled": 0,
-        "distortionWetLPKeyTrackOffsetSemitones": 0
+        "distortionWetLPKeyTrackOffsetSemitones": 0,
+        "distortionOutputTrimDb": 0
       }
     },
     "delay#2": {
@@ -32,7 +33,8 @@
         "delayTimeKeyTrackEnabled": 0,
         "delayTimeKeyTrackOffsetSemitones": 0,
         "delayFilterKeyTrackEnabled": 0,
-        "delayFilterKeyTrackOffsetSemitones": 0
+        "delayFilterKeyTrackOffsetSemitones": 0,
+        "delayOutputTrimDb": 0
       }
     },
     "reverb#1": {
@@ -40,7 +42,8 @@
         "reverbSize": 0.7,
         "reverbDecay": 0.65,
         "reverbDamping": 0.3,
-        "reverbMix": 0.31
+        "reverbMix": 0.31,
+        "reverbOutputTrimDb": 0
       }
     }
   },

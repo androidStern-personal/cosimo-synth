@@ -5807,7 +5807,6 @@ test("effect bypass and mode suspension preserve route geometry without claiming
         });
         await page.evaluate((state) => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("globalFilterMode", 0);
         }, seededState);
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
@@ -5859,6 +5858,12 @@ test("effect bypass and mode suspension preserve route geometry without claiming
         assert.equal(readStoredModulationState(afterBypassedEdit).routes.find((route) => route.id === "env-reverb")?.enabled, true);
 
         await selectRackEffect(page, "filter");
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("globalFilterMode", 0);
+        });
+        await page.waitForFunction(() => (
+            Number(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().laneParams.globalFilterMode) === 0
+        ));
         await page.click('[data-role="rack-editor-power"]');
         const filterMode = page.locator('[data-role="rack-parameter-globalFilterMode"]');
         const resonance = page.locator('[data-role="rack-parameter-globalFilterResonance"]');

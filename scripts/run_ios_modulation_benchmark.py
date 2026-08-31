@@ -34,8 +34,8 @@ PROFILE_BASE_DURATIONS_SECONDS = {
     "voice-rack-100": 45.0,
     "mixed-100": 45.0,
     "combined-200": 45.0,
-    "stored-1372-active-100": 45.0,
-    "active-1372": 20.0,
+    "stored-1484-active-100": 45.0,
+    "active-1484": 20.0,
 }
 PROFILE_NAMES = tuple(PROFILE_BASE_DURATIONS_SECONDS)
 EXECUTABLE_PROFILE_NAMES = PROFILE_NAMES

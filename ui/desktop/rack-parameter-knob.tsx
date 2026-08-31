@@ -52,6 +52,10 @@ import {
 } from "../shared/rack-route-presentation";
 import { useModSourceLight, type ModSourceLightPlacement } from "../shared/mod-source-live";
 import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
+import {
+    effectOutputTrimNormalizedValue,
+    effectOutputTrimValueFromNormalized,
+} from "../shared/effect-output-trim";
 
 const KNOB_CENTER = 50;
 const KNOB_SWEEP_START_DEGREES = 225;
@@ -72,7 +76,7 @@ type Point = {
 
 export type ParameterKnobDescriptor = Pick<
     RackParameterDescriptor,
-    "endpointID" | "label" | "shortLabel" | "min" | "max" | "initial" | "step" | "scale"
+    "endpointID" | "label" | "shortLabel" | "min" | "max" | "initial" | "step" | "scale" | "valueKind"
 >;
 
 export type BaseParameterKnobProps = {
@@ -171,6 +175,9 @@ function clamp(value: number, min: number, max: number) {
 
 function normalizedValue(descriptor: ParameterKnobDescriptor, value: number) {
     const clamped = clamp(value, descriptor.min, descriptor.max);
+    if (descriptor.valueKind === "effect-output-trim-db") {
+        return effectOutputTrimNormalizedValue(clamped);
+    }
     if (descriptor.scale === "log") {
         return Math.log(clamped / descriptor.min) / Math.log(descriptor.max / descriptor.min);
     }
@@ -179,6 +186,9 @@ function normalizedValue(descriptor: ParameterKnobDescriptor, value: number) {
 
 function valueFromNormalized(descriptor: ParameterKnobDescriptor, normalized: number) {
     const clamped = clamp(normalized, 0, 1);
+    if (descriptor.valueKind === "effect-output-trim-db") {
+        return effectOutputTrimValueFromNormalized(clamped);
+    }
     return descriptor.scale === "log"
         ? descriptor.min * ((descriptor.max / descriptor.min) ** clamped)
         : descriptor.min + (clamped * (descriptor.max - descriptor.min));

@@ -243,7 +243,7 @@ processor RackModulationReachesRealDsp [[ main ]]
 //==============================================================================
 // MACRO-rack live amount edits are SURGICAL.
 //
-// The macro tables run as 39-wide blocked vectors, and the live amount-edit
+// The macro tables run as 47-wide blocked vectors, and the live amount-edit
 // path once collapsed the blocked subscript: one edit smeared its scale across
 // an entire block (audibly detuning every other macro route from that source).
 // Two routes from macro 1 - one static-block target, one lane-pool mirror -

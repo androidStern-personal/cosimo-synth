@@ -25,8 +25,8 @@ EXPECTED_PROFILE_NAMES = {
     "voice-rack-100",
     "mixed-100",
     "combined-200",
-    "stored-1372-active-100",
-    "active-1372",
+    "stored-1484-active-100",
+    "active-1484",
 }
 EXECUTABLE_PROFILE_NAMES = set(EXPECTED_PROFILE_NAMES)
 EXPECTED_EFFECT_CONFIGURATION = {

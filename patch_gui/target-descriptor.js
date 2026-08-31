@@ -9,6 +9,7 @@
  * inside each binding's conversion pair and are property-tested to roundtrip.
  */
 import { laneInstanceNumber, laneMirrorRackKind, parseLaneModulationTargetKind, } from "./lane-modulation-targets.js";
+import { effectOutputTrimNormalizedValue, effectOutputTrimValueFromNormalized, } from "./effect-output-trim.js";
 import { MODULATION_TARGET_IDENTITIES, OSCILLATOR_IDS, laneBaseKindForRackEndpoint, } from "./modulation-targets.js";
 import { RACK_EFFECT_DESCRIPTORS, rackModulationIdentityEndpointID, } from "./rack-parameter-descriptors.js";
 import { casesHandled, err, ok, shouldNeverHappen } from "./result.js";
@@ -338,15 +339,19 @@ function rackTargetId(parameter) {
     return `${parameter.effectId}.${parameter.endpointID}`;
 }
 function rackNormalizedFromEngine(parameter, value) {
-    const normalizedValue = parameter.scale === "log"
-        ? Math.log(value / parameter.min) / Math.log(parameter.max / parameter.min)
-        : (value - parameter.min) / (parameter.max - parameter.min);
+    const normalizedValue = parameter.valueKind === "effect-output-trim-db"
+        ? effectOutputTrimNormalizedValue(value)
+        : parameter.scale === "log"
+            ? Math.log(value / parameter.min) / Math.log(parameter.max / parameter.min)
+            : (value - parameter.min) / (parameter.max - parameter.min);
     return normalized(normalizedValue, `${parameter.endpointID} endpoint conversion`);
 }
 function rackEngineFromNormalized(parameter, value) {
-    return parameter.scale === "log"
-        ? parameter.min * (parameter.max / parameter.min) ** value
-        : parameter.min + (parameter.max - parameter.min) * value;
+    return parameter.valueKind === "effect-output-trim-db"
+        ? effectOutputTrimValueFromNormalized(value)
+        : parameter.scale === "log"
+            ? parameter.min * (parameter.max / parameter.min) ** value
+            : parameter.min + (parameter.max - parameter.min) * value;
 }
 function rackValueFormat(parameter) {
     if (parameter.unit === "Hz") {

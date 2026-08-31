@@ -47,7 +47,8 @@ namespace wt
     // ADR-012: "Every continuous creative parameter owned by a rack module is eligible
     // to be a modulation destination, including Mix/Wet." Established identities
     // remain 0..35; T50 appends Flanger Base Delay and both split crossovers at
-    // 36..38. Rack order, enabled state and discrete mode selectors are deliberately
+    // 36..38. T78 appends one Output Trim destination per editable effect type at
+    // 39..46. Rack order, enabled state and discrete mode selectors are deliberately
     // absent - they are not continuous, and the glossary's "Routable Effect Parameter"
     // excludes them in v1. Hiding a destination from the v1 UI is a UI-surface
     // decision; this table is where DSP eligibility lives, and it withholds nothing.
@@ -98,6 +99,14 @@ namespace wt
     let rackModTargetFlangerBaseDelayOctaves    = 36;
     let rackModTargetFrequencySplitLowOctaves   = 37;
     let rackModTargetFrequencySplitHighOctaves  = 38;
+    let rackModTargetGlobalFilterOutputTrimDb   = 39;
+    let rackModTargetDistortionOutputTrimDb     = 40;
+    let rackModTargetOttOutputTrimDb            = 41;
+    let rackModTargetChorusOutputTrimDb         = 42;
+    let rackModTargetFlangerOutputTrimDb        = 43;
+    let rackModTargetPhaserOutputTrimDb         = 44;
+    let rackModTargetDelayOutputTrimDb          = 45;
+    let rackModTargetReverbOutputTrimDb         = 46;
 
     // Effects Lane pool block: a complete MIRROR of the static vocabulary at
     // indices rackModStaticTargetCount.. — one lane per pool instance's
@@ -140,6 +149,14 @@ namespace wt
     let rackModTargetLaneReverbDamping = rackModStaticTargetCount + rackModTargetReverbDamping;
     let rackModTargetLaneReverbMix = rackModStaticTargetCount + rackModTargetReverbMix;
     let rackModTargetLaneFlangerBaseDelayOctaves = rackModStaticTargetCount + rackModTargetFlangerBaseDelayOctaves;
+    let rackModTargetLaneGlobalFilterOutputTrimDb = rackModStaticTargetCount + rackModTargetGlobalFilterOutputTrimDb;
+    let rackModTargetLaneDistortionOutputTrimDb = rackModStaticTargetCount + rackModTargetDistortionOutputTrimDb;
+    let rackModTargetLaneOttOutputTrimDb = rackModStaticTargetCount + rackModTargetOttOutputTrimDb;
+    let rackModTargetLaneChorusOutputTrimDb = rackModStaticTargetCount + rackModTargetChorusOutputTrimDb;
+    let rackModTargetLaneFlangerOutputTrimDb = rackModStaticTargetCount + rackModTargetFlangerOutputTrimDb;
+    let rackModTargetLanePhaserOutputTrimDb = rackModStaticTargetCount + rackModTargetPhaserOutputTrimDb;
+    let rackModTargetLaneDelayOutputTrimDb = rackModStaticTargetCount + rackModTargetDelayOutputTrimDb;
+    let rackModTargetLaneReverbOutputTrimDb = rackModStaticTargetCount + rackModTargetReverbOutputTrimDb;
 
     //==============================================================================
     // Timing.

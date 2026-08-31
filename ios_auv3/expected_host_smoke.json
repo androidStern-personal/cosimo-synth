@@ -2,128 +2,985 @@
   "parameters": [
     {
       "address": 182584410154073987,
-      "identifier": "hostSlot0Guard",
-      "displayName": "Host Slot 0 Guard"
+      "displayName": "Host Slot 0 Guard",
+      "identifier": "hostSlot0Guard"
     },
     {
-      "address": 10299632488404189556,
-      "identifier": "wavetablePosition",
-      "displayName": "Wavetable Position"
+      "address": 14620396203103544981,
+      "displayName": "Oscillator A Wavetable Select",
+      "identifier": "oscAWavetableSelect"
     },
     {
-      "address": 6614061662679701423,
-      "identifier": "wavetableSelect",
-      "displayName": "Wavetable Select"
+      "address": 735520966137769066,
+      "displayName": "Oscillator A Wavetable Position",
+      "identifier": "oscAWavetablePosition"
+    },
+    {
+      "address": 119047768049577,
+      "displayName": "Oscillator A Pan",
+      "identifier": "oscAPan"
+    },
+    {
+      "address": 11974570016695126604,
+      "displayName": "Oscillator A Octave",
+      "identifier": "oscAOctave"
+    },
+    {
+      "address": 16696659180486214194,
+      "displayName": "Oscillator A Semitone",
+      "identifier": "oscASemitone"
+    },
+    {
+      "address": 7568525018318116497,
+      "displayName": "Oscillator A Fine Cents",
+      "identifier": "oscAFineCents"
+    },
+    {
+      "address": 1214406281880826187,
+      "displayName": "Oscillator A Phase",
+      "identifier": "oscAPhase"
+    },
+    {
+      "address": 3484324612975326688,
+      "displayName": "Oscillator A Phase Random",
+      "identifier": "oscAPhaseRandom"
+    },
+    {
+      "address": 7698045478561136341,
+      "displayName": "Oscillator A Retrigger",
+      "identifier": "oscARetrigger"
+    },
+    {
+      "address": 16696991427024658256,
+      "displayName": "Oscillator A Volume",
+      "identifier": "oscAVolumeDb"
+    },
+    {
+      "address": 12023824570121101,
+      "displayName": "Oscillator A Mute",
+      "identifier": "oscAMute"
+    },
+    {
+      "address": 12023824576240903,
+      "displayName": "Oscillator A Solo",
+      "identifier": "oscASolo"
+    },
+    {
+      "address": 16697083841785197157,
+      "displayName": "Oscillator A Warp Mode",
+      "identifier": "oscAWarpMode"
+    },
+    {
+      "address": 8164237364188308968,
+      "displayName": "Oscillator A Warp Amount",
+      "identifier": "oscAWarpAmount"
+    },
+    {
+      "address": 9332975395238225671,
+      "displayName": "Oscillator A Unison",
+      "identifier": "oscAUnisonVoices"
+    },
+    {
+      "address": 9332975205027330467,
+      "displayName": "Oscillator A Unison Detune",
+      "identifier": "oscAUnisonDetune"
+    },
+    {
+      "address": 9041816186103842123,
+      "displayName": "Oscillator A Unison Blend",
+      "identifier": "oscAUnisonBlend"
+    },
+    {
+      "address": 9041816188286010050,
+      "displayName": "Oscillator A Unison Width",
+      "identifier": "oscAUnisonWidth"
+    },
+    {
+      "address": 13694665001824311196,
+      "displayName": "Oscillator A Unison Detune Mode",
+      "identifier": "oscAUnisonDetuneMode"
+    },
+    {
+      "address": 2673940488689441193,
+      "displayName": "Oscillator A Unison Stack",
+      "identifier": "oscAUnisonStackMode"
+    },
+    {
+      "address": 1706543890825462034,
+      "displayName": "Oscillator A Unison WT Pos",
+      "identifier": "oscAUnisonPositionSpread"
+    },
+    {
+      "address": 15984406823631288795,
+      "displayName": "Oscillator A Unison Warp",
+      "identifier": "oscAUnisonWarpSpread"
+    },
+    {
+      "address": 14970009081205457602,
+      "displayName": "Oscillator B Wavetable Select",
+      "identifier": "oscBWavetableSelect"
+    },
+    {
+      "address": 6914884257804953999,
+      "displayName": "Oscillator B Wavetable Position",
+      "identifier": "oscBWavetablePosition"
+    },
+    {
+      "address": 119047769079878,
+      "displayName": "Oscillator B Pan",
+      "identifier": "oscBPan"
+    },
+    {
+      "address": 11974571078215277205,
+      "displayName": "Oscillator B Octave",
+      "identifier": "oscBOctave"
+    },
+    {
+      "address": 16707487747542494995,
+      "displayName": "Oscillator B Semitone",
+      "identifier": "oscBSemitone"
+    },
+    {
+      "address": 8662210291002477398,
+      "displayName": "Oscillator B Fine Cents",
+      "identifier": "oscBFineCents"
+    },
+    {
+      "address": 1214406292390926688,
+      "displayName": "Oscillator B Phase",
+      "identifier": "oscBPhase"
+    },
+    {
+      "address": 18334370745571701725,
+      "displayName": "Oscillator B Phase Random",
+      "identifier": "oscBPhaseRandom"
+    },
+    {
+      "address": 8791730751245497242,
+      "displayName": "Oscillator B Retrigger",
+      "identifier": "oscBRetrigger"
+    },
+    {
+      "address": 16707819994080939057,
+      "displayName": "Oscillator B Volume",
+      "identifier": "oscBVolumeDb"
+    },
+    {
+      "address": 12023824674181502,
+      "displayName": "Oscillator B Mute",
+      "identifier": "oscBMute"
+    },
+    {
+      "address": 12023824680301304,
+      "displayName": "Oscillator B Solo",
+      "identifier": "oscBSolo"
+    },
+    {
+      "address": 16707912408841477958,
+      "displayName": "Oscillator B Warp Mode",
+      "identifier": "oscBWarpMode"
+    },
+    {
+      "address": 7945985463051450273,
+      "displayName": "Oscillator B Warp Amount",
+      "identifier": "oscBWarpAmount"
+    },
+    {
+      "address": 15001364816998423512,
+      "displayName": "Oscillator B Unison",
+      "identifier": "oscBUnisonVoices"
+    },
+    {
+      "address": 15001364626787528308,
+      "displayName": "Oscillator B Unison Detune",
+      "identifier": "oscBUnisonDetune"
+    },
+    {
+      "address": 5445118244990665544,
+      "displayName": "Oscillator B Unison Blend",
+      "identifier": "oscBUnisonBlend"
+    },
+    {
+      "address": 5445118247172833471,
+      "displayName": "Oscillator B Unison Width",
+      "identifier": "oscBUnisonWidth"
+    },
+    {
+      "address": 12112077542698382685,
+      "displayName": "Oscillator B Unison Detune Mode",
+      "identifier": "oscBUnisonDetuneMode"
+    },
+    {
+      "address": 3023553366791353814,
+      "displayName": "Oscillator B Unison Stack",
+      "identifier": "oscBUnisonStackMode"
+    },
+    {
+      "address": 7316176210741680323,
+      "displayName": "Oscillator B Unison WT Pos",
+      "identifier": "oscBUnisonPositionSpread"
+    },
+    {
+      "address": 14401819364505360284,
+      "displayName": "Oscillator B Unison Warp",
+      "identifier": "oscBUnisonWarpSpread"
+    },
+    {
+      "address": 15319621959307370223,
+      "displayName": "Oscillator C Wavetable Select",
+      "identifier": "oscCWavetableSelect"
+    },
+    {
+      "address": 13094247549472138932,
+      "displayName": "Oscillator C Wavetable Position",
+      "identifier": "oscCWavetablePosition"
+    },
+    {
+      "address": 119047770110179,
+      "displayName": "Oscillator C Pan",
+      "identifier": "oscCPan"
+    },
+    {
+      "address": 11974572139735427806,
+      "displayName": "Oscillator C Octave",
+      "identifier": "oscCOctave"
+    },
+    {
+      "address": 16718316314598775796,
+      "displayName": "Oscillator C Semitone",
+      "identifier": "oscCSemitone"
+    },
+    {
+      "address": 9755895563686838299,
+      "displayName": "Oscillator C Fine Cents",
+      "identifier": "oscCFineCents"
+    },
+    {
+      "address": 1214406302901027189,
+      "displayName": "Oscillator C Phase",
+      "identifier": "oscCPhase"
+    },
+    {
+      "address": 14737672804458525146,
+      "displayName": "Oscillator C Phase Random",
+      "identifier": "oscCPhaseRandom"
+    },
+    {
+      "address": 9885416023929858143,
+      "displayName": "Oscillator C Retrigger",
+      "identifier": "oscCRetrigger"
+    },
+    {
+      "address": 16718648561137219858,
+      "displayName": "Oscillator C Volume",
+      "identifier": "oscCVolumeDb"
+    },
+    {
+      "address": 12023824778241903,
+      "displayName": "Oscillator C Mute",
+      "identifier": "oscCMute"
+    },
+    {
+      "address": 12023824784361705,
+      "displayName": "Oscillator C Solo",
+      "identifier": "oscCSolo"
+    },
+    {
+      "address": 16718740975897758759,
+      "displayName": "Oscillator C Warp Mode",
+      "identifier": "oscCWarpMode"
+    },
+    {
+      "address": 7727733561914591578,
+      "displayName": "Oscillator C Warp Amount",
+      "identifier": "oscCWarpAmount"
+    },
+    {
+      "address": 2223010165049069737,
+      "displayName": "Oscillator C Unison",
+      "identifier": "oscCUnisonVoices"
+    },
+    {
+      "address": 2223009974838174533,
+      "displayName": "Oscillator C Unison Detune",
+      "identifier": "oscCUnisonDetune"
+    },
+    {
+      "address": 1848420303877488965,
+      "displayName": "Oscillator C Unison Blend",
+      "identifier": "oscCUnisonBlend"
+    },
+    {
+      "address": 1848420306059656892,
+      "displayName": "Oscillator C Unison Width",
+      "identifier": "oscCUnisonWidth"
+    },
+    {
+      "address": 10529490083572454174,
+      "displayName": "Oscillator C Unison Detune Mode",
+      "identifier": "oscCUnisonDetuneMode"
+    },
+    {
+      "address": 3373166244893266435,
+      "displayName": "Oscillator C Unison Stack",
+      "identifier": "oscCUnisonStackMode"
+    },
+    {
+      "address": 12925808530657898612,
+      "displayName": "Oscillator C Unison WT Pos",
+      "identifier": "oscCUnisonPositionSpread"
+    },
+    {
+      "address": 12819231905379431773,
+      "displayName": "Oscillator C Unison Warp",
+      "identifier": "oscCUnisonWarpSpread"
     },
     {
       "address": 12123592271396227,
-      "identifier": "playMode",
-      "displayName": "Play Mode"
+      "displayName": "Play Mode",
+      "identifier": "playMode"
     },
     {
       "address": 1127033989823269416,
-      "identifier": "glideTime",
-      "displayName": "Glide Time"
+      "displayName": "Glide Time",
+      "identifier": "glideTime"
     },
     {
-      "address": 1152419,
-      "identifier": "pan",
-      "displayName": "Pan"
+      "address": 1155797987479,
+      "displayName": "Macro 1",
+      "identifier": "macro1"
     },
     {
-      "address": 12862588031379431,
-      "identifier": "warpMode",
-      "displayName": "Warp Mode"
+      "address": 1155797987480,
+      "displayName": "Macro 2",
+      "identifier": "macro2"
     },
     {
-      "address": 2084051865816895258,
-      "identifier": "warpAmount",
-      "displayName": "Warp Amount"
+      "address": 1155797987481,
+      "displayName": "Macro 3",
+      "identifier": "macro3"
+    },
+    {
+      "address": 1155797987482,
+      "displayName": "Macro 4",
+      "identifier": "macro4"
     },
     {
       "address": 2024136184060723739,
-      "identifier": "filterMode",
-      "displayName": "Filter Mode"
+      "displayName": "Filter Mode",
+      "identifier": "filterMode"
     },
     {
       "address": 6306595017994557861,
-      "identifier": "filterCutoff",
-      "displayName": "Filter Cutoff"
+      "displayName": "Filter Cutoff",
+      "identifier": "filterCutoff"
     },
     {
       "address": 109389974994027,
-      "identifier": "filterQ",
-      "displayName": "Filter Q"
+      "displayName": "Filter Q",
+      "identifier": "filterQ"
     },
     {
-      "address": 12674614796774714668,
-      "identifier": "distortionMode",
-      "displayName": "Distortion Mode"
+      "address": 9787453918565226499,
+      "displayName": "MSEG 1 Morph",
+      "identifier": "mseg1Morph"
     },
     {
-      "address": 15255758461290921375,
-      "identifier": "distortionDriveDb",
-      "displayName": "Distortion Drive"
+      "address": 9787453929075327000,
+      "displayName": "MSEG 2 Morph",
+      "identifier": "mseg2Morph"
     },
     {
-      "address": 12674614796772643966,
-      "identifier": "distortionKnee",
-      "displayName": "Distortion Knee"
+      "address": 9787453939585427501,
+      "displayName": "MSEG 3 Morph",
+      "identifier": "mseg3Morph"
     },
     {
-      "address": 15467337791964230227,
-      "identifier": "distortionWet",
-      "displayName": "Distortion Mix"
+      "address": 1192751666943845873,
+      "displayName": "MSEG 1 Time",
+      "identifier": "mseg1Rate"
     },
     {
-      "address": 15255778494639533053,
-      "identifier": "distortionWetHPHz",
-      "displayName": "Distortion Band HP"
+      "address": 1192751667047906274,
+      "displayName": "MSEG 2 Time",
+      "identifier": "mseg2Rate"
     },
     {
-      "address": 15255778494643654257,
-      "identifier": "distortionWetLPHz",
-      "displayName": "Distortion Band LP"
+      "address": 1192751667151966675,
+      "displayName": "MSEG 3 Time",
+      "identifier": "mseg3Rate"
     },
     {
-      "address": 1083297385416233762,
-      "identifier": "chorusMix",
-      "displayName": "Chorus Mix"
+      "address": 985594382044325182,
+      "displayName": "ENV 1 Attack",
+      "identifier": "env1Attack"
     },
     {
-      "address": 2899369631486326543,
-      "identifier": "chorusMotionMode",
-      "displayName": "Chorus Motion"
+      "address": 1105604543111420964,
+      "displayName": "ENV 1 Decay",
+      "identifier": "env1Decay"
     },
     {
-      "address": 16164317215524407742,
-      "identifier": "chorusBloomMode",
-      "displayName": "Chorus Bloom"
+      "address": 7311331335717391445,
+      "displayName": "ENV 1 Sustain",
+      "identifier": "env1Sustain"
     },
     {
-      "address": 17179315558499124286,
-      "identifier": "chorusTone",
-      "displayName": "Chorus Tone"
+      "address": 7311330105291756507,
+      "displayName": "ENV 1 Release",
+      "identifier": "env1Release"
     },
     {
-      "address": 9292515583589543021,
-      "identifier": "chorusFeedback",
-      "displayName": "Chorus Feedback"
+      "address": 985595443564475783,
+      "displayName": "ENV 2 Attack",
+      "identifier": "env2Attack"
     },
     {
-      "address": 8302178704785289852,
-      "identifier": "chorusRingAmount",
-      "displayName": "Chorus Ring"
+      "address": 1105604553621521465,
+      "displayName": "ENV 2 Decay",
+      "identifier": "env2Decay"
     },
     {
-      "address": 18435406500741510400,
-      "identifier": "chorusRingOffsetMode",
-      "displayName": "Chorus Ring Pitch"
+      "address": 7311438549252602146,
+      "displayName": "ENV 2 Sustain",
+      "identifier": "env2Sustain"
     },
     {
-      "address": 8850256332223215657,
-      "identifier": "chorusRingFineSemitones",
-      "displayName": "Chorus Ring Fine"
+      "address": 7311437318826967208,
+      "displayName": "ENV 2 Release",
+      "identifier": "env2Release"
+    },
+    {
+      "address": 985596505084626384,
+      "displayName": "ENV 3 Attack",
+      "identifier": "env3Attack"
+    },
+    {
+      "address": 1105604564131621966,
+      "displayName": "ENV 3 Decay",
+      "identifier": "env3Decay"
+    },
+    {
+      "address": 7311545762787812847,
+      "displayName": "ENV 3 Sustain",
+      "identifier": "env3Sustain"
+    },
+    {
+      "address": 7311544532362177909,
+      "displayName": "ENV 3 Release",
+      "identifier": "env3Release"
+    },
+    {
+      "address": 1115887134914039348,
+      "displayName": "Filter Mix",
+      "identifier": "filterMix"
+    },
+    {
+      "address": 15046160924429539943,
+      "displayName": "Amp Release",
+      "identifier": "ampRelease"
+    },
+    {
+      "address": 16307978907698709150,
+      "displayName": "Source Mode",
+      "identifier": "sourceMode"
+    },
+    {
+      "address": 3150609648499358241,
+      "displayName": "Global Tune",
+      "identifier": "globalTune"
+    },
+    {
+      "address": 1062176865402125018,
+      "displayName": "Amp Envelope Attack",
+      "identifier": "ampAttack"
+    },
+    {
+      "address": 10516602924297104,
+      "displayName": "Amp Envelope Decay",
+      "identifier": "ampDecay"
+    },
+    {
+      "address": 15046162154855174881,
+      "displayName": "Amp Envelope Sustain",
+      "identifier": "ampSustain"
+    },
+    {
+      "address": 10135780674621997210,
+      "displayName": "Voice Filter Key Track",
+      "identifier": "filterCutoffKeyTrackEnabled"
+    },
+    {
+      "address": 16411347462303923485,
+      "displayName": "Voice Filter Key Track Offset",
+      "identifier": "filterCutoffKeyTrackOffsetSemitones"
+    },
+    {
+      "address": 16485088530585500488,
+      "displayName": "Voice Enhancer Frequency",
+      "identifier": "voiceEnhancerFrequency"
+    },
+    {
+      "address": 12999229658839431195,
+      "displayName": "Voice Enhancer Q",
+      "identifier": "voiceEnhancerQ"
+    },
+    {
+      "address": 15268831157302728350,
+      "displayName": "Voice Enhancer Amount",
+      "identifier": "voiceEnhancerAmount"
+    },
+    {
+      "address": 17548842521752844787,
+      "displayName": "Voice Enhancer Key Track",
+      "identifier": "voiceEnhancerKeyTrackEnabled"
+    },
+    {
+      "address": 10433460575659798614,
+      "displayName": "Voice Enhancer Key Track Offset",
+      "identifier": "voiceEnhancerKeyTrackOffsetSemitones"
+    },
+    {
+      "address": 5414217473175933435,
+      "displayName": "Polish Enhancer Amount",
+      "identifier": "polishEnhancerAmount"
+    },
+    {
+      "address": 104684238466317837,
+      "displayName": "Polish Compression / Clip Amount",
+      "identifier": "polishCompressionClipAmount"
+    },
+    {
+      "address": 12827745830595410546,
+      "displayName": "Polish Output Trim",
+      "identifier": "polishOutputTrimDb"
+    },
+    {
+      "address": 9799415007992594575,
+      "displayName": "Polish Safe Bass Amount",
+      "identifier": "polishSafeBassAmount"
+    },
+    {
+      "address": 9799415019752246673,
+      "displayName": "Polish Safe Bass Bypass",
+      "identifier": "polishSafeBassBypass"
+    },
+    {
+      "address": 5414217484935585533,
+      "displayName": "Polish Enhancer Bypass",
+      "identifier": "polishEnhancerBypass"
+    },
+    {
+      "address": 104684250225969935,
+      "displayName": "Polish Compression / Clip Bypass",
+      "identifier": "polishCompressionClipBypass"
+    },
+    {
+      "address": 17157797716293735306,
+      "displayName": "Polish Output Trim Bypass",
+      "identifier": "polishOutputTrimBypass"
+    },
+    {
+      "address": 15400887995157858187,
+      "displayName": "Global Filter 1 Output Trim",
+      "identifier": "laneGlobalFilter1OutputTrimDb"
+    },
+    {
+      "address": 2622533343208504412,
+      "displayName": "Global Filter 2 Output Trim",
+      "identifier": "laneGlobalFilter2OutputTrimDb"
+    },
+    {
+      "address": 8290922764968702253,
+      "displayName": "Global Filter 3 Output Trim",
+      "identifier": "laneGlobalFilter3OutputTrimDb"
+    },
+    {
+      "address": 13959312186728900094,
+      "displayName": "Global Filter 4 Output Trim",
+      "identifier": "laneGlobalFilter4OutputTrimDb"
+    },
+    {
+      "address": 1180957534779546319,
+      "displayName": "Global Filter 5 Output Trim",
+      "identifier": "laneGlobalFilter5OutputTrimDb"
+    },
+    {
+      "address": 8218006057061679807,
+      "displayName": "Distortion 1 Output Trim",
+      "identifier": "laneDistortion1OutputTrimDb"
+    },
+    {
+      "address": 13886395478821877648,
+      "displayName": "Distortion 2 Output Trim",
+      "identifier": "laneDistortion2OutputTrimDb"
+    },
+    {
+      "address": 1108040826872523873,
+      "displayName": "Distortion 3 Output Trim",
+      "identifier": "laneDistortion3OutputTrimDb"
+    },
+    {
+      "address": 6776430248632721714,
+      "displayName": "Distortion 4 Output Trim",
+      "identifier": "laneDistortion4OutputTrimDb"
+    },
+    {
+      "address": 12444819670392919555,
+      "displayName": "Distortion 5 Output Trim",
+      "identifier": "laneDistortion5OutputTrimDb"
+    },
+    {
+      "address": 8404692111889362187,
+      "displayName": "OTT 1 Output Trim",
+      "identifier": "laneOtt1OutputTrimDb"
+    },
+    {
+      "address": 14073081533649560028,
+      "displayName": "OTT 2 Output Trim",
+      "identifier": "laneOtt2OutputTrimDb"
+    },
+    {
+      "address": 1294726881700206253,
+      "displayName": "OTT 3 Output Trim",
+      "identifier": "laneOtt3OutputTrimDb"
+    },
+    {
+      "address": 6963116303460404094,
+      "displayName": "OTT 4 Output Trim",
+      "identifier": "laneOtt4OutputTrimDb"
+    },
+    {
+      "address": 12631505725220601935,
+      "displayName": "OTT 5 Output Trim",
+      "identifier": "laneOtt5OutputTrimDb"
+    },
+    {
+      "address": 7034894642752731816,
+      "displayName": "Chorus 1 Output Trim",
+      "identifier": "laneChorus1OutputTrimDb"
+    },
+    {
+      "address": 12703284064512929657,
+      "displayName": "Chorus 2 Output Trim",
+      "identifier": "laneChorus2OutputTrimDb"
+    },
+    {
+      "address": 18371673486273127498,
+      "displayName": "Chorus 3 Output Trim",
+      "identifier": "laneChorus3OutputTrimDb"
+    },
+    {
+      "address": 5593318834323773723,
+      "displayName": "Chorus 4 Output Trim",
+      "identifier": "laneChorus4OutputTrimDb"
+    },
+    {
+      "address": 11261708256083971564,
+      "displayName": "Chorus 5 Output Trim",
+      "identifier": "laneChorus5OutputTrimDb"
+    },
+    {
+      "address": 509258046572869087,
+      "displayName": "Flanger 1 Output Trim",
+      "identifier": "laneFlanger1OutputTrimDb"
+    },
+    {
+      "address": 6177647468333066928,
+      "displayName": "Flanger 2 Output Trim",
+      "identifier": "laneFlanger2OutputTrimDb"
+    },
+    {
+      "address": 11846036890093264769,
+      "displayName": "Flanger 3 Output Trim",
+      "identifier": "laneFlanger3OutputTrimDb"
+    },
+    {
+      "address": 17514426311853462610,
+      "displayName": "Flanger 4 Output Trim",
+      "identifier": "laneFlanger4OutputTrimDb"
+    },
+    {
+      "address": 4736071659904108835,
+      "displayName": "Flanger 5 Output Trim",
+      "identifier": "laneFlanger5OutputTrimDb"
+    },
+    {
+      "address": 13526742905336248327,
+      "displayName": "Phaser 1 Output Trim",
+      "identifier": "lanePhaser1OutputTrimDb"
+    },
+    {
+      "address": 748388253386894552,
+      "displayName": "Phaser 2 Output Trim",
+      "identifier": "lanePhaser2OutputTrimDb"
+    },
+    {
+      "address": 6416777675147092393,
+      "displayName": "Phaser 3 Output Trim",
+      "identifier": "lanePhaser3OutputTrimDb"
+    },
+    {
+      "address": 12085167096907290234,
+      "displayName": "Phaser 4 Output Trim",
+      "identifier": "lanePhaser4OutputTrimDb"
+    },
+    {
+      "address": 17753556518667488075,
+      "displayName": "Phaser 5 Output Trim",
+      "identifier": "lanePhaser5OutputTrimDb"
+    },
+    {
+      "address": 16947875420353957979,
+      "displayName": "Delay 1 Output Trim",
+      "identifier": "laneDelay1OutputTrimDb"
+    },
+    {
+      "address": 4169520768404604204,
+      "displayName": "Delay 2 Output Trim",
+      "identifier": "laneDelay2OutputTrimDb"
+    },
+    {
+      "address": 9837910190164802045,
+      "displayName": "Delay 3 Output Trim",
+      "identifier": "laneDelay3OutputTrimDb"
+    },
+    {
+      "address": 15506299611924999886,
+      "displayName": "Delay 4 Output Trim",
+      "identifier": "laneDelay4OutputTrimDb"
+    },
+    {
+      "address": 2727944959975646111,
+      "displayName": "Delay 5 Output Trim",
+      "identifier": "laneDelay5OutputTrimDb"
+    },
+    {
+      "address": 11272639510969298158,
+      "displayName": "Reverb 1 Output Trim",
+      "identifier": "laneReverb1OutputTrimDb"
+    },
+    {
+      "address": 16941028932729495999,
+      "displayName": "Reverb 2 Output Trim",
+      "identifier": "laneReverb2OutputTrimDb"
+    },
+    {
+      "address": 4162674280780142224,
+      "displayName": "Reverb 3 Output Trim",
+      "identifier": "laneReverb3OutputTrimDb"
+    },
+    {
+      "address": 9831063702540340065,
+      "displayName": "Reverb 4 Output Trim",
+      "identifier": "laneReverb4OutputTrimDb"
+    },
+    {
+      "address": 15499453124300537906,
+      "displayName": "Reverb 5 Output Trim",
+      "identifier": "laneReverb5OutputTrimDb"
+    }
+  ],
+  "t78EffectOutputTrimParameters": [
+    {
+      "address": 15400887995157858187,
+      "identifier": "laneGlobalFilter1OutputTrimDb",
+      "displayName": "Global Filter 1 Output Trim"
+    },
+    {
+      "address": 2622533343208504412,
+      "identifier": "laneGlobalFilter2OutputTrimDb",
+      "displayName": "Global Filter 2 Output Trim"
+    },
+    {
+      "address": 8290922764968702253,
+      "identifier": "laneGlobalFilter3OutputTrimDb",
+      "displayName": "Global Filter 3 Output Trim"
+    },
+    {
+      "address": 13959312186728900094,
+      "identifier": "laneGlobalFilter4OutputTrimDb",
+      "displayName": "Global Filter 4 Output Trim"
+    },
+    {
+      "address": 1180957534779546319,
+      "identifier": "laneGlobalFilter5OutputTrimDb",
+      "displayName": "Global Filter 5 Output Trim"
+    },
+    {
+      "address": 8218006057061679807,
+      "identifier": "laneDistortion1OutputTrimDb",
+      "displayName": "Distortion 1 Output Trim"
+    },
+    {
+      "address": 13886395478821877648,
+      "identifier": "laneDistortion2OutputTrimDb",
+      "displayName": "Distortion 2 Output Trim"
+    },
+    {
+      "address": 1108040826872523873,
+      "identifier": "laneDistortion3OutputTrimDb",
+      "displayName": "Distortion 3 Output Trim"
+    },
+    {
+      "address": 6776430248632721714,
+      "identifier": "laneDistortion4OutputTrimDb",
+      "displayName": "Distortion 4 Output Trim"
+    },
+    {
+      "address": 12444819670392919555,
+      "identifier": "laneDistortion5OutputTrimDb",
+      "displayName": "Distortion 5 Output Trim"
+    },
+    {
+      "address": 8404692111889362187,
+      "identifier": "laneOtt1OutputTrimDb",
+      "displayName": "OTT 1 Output Trim"
+    },
+    {
+      "address": 14073081533649560028,
+      "identifier": "laneOtt2OutputTrimDb",
+      "displayName": "OTT 2 Output Trim"
+    },
+    {
+      "address": 1294726881700206253,
+      "identifier": "laneOtt3OutputTrimDb",
+      "displayName": "OTT 3 Output Trim"
+    },
+    {
+      "address": 6963116303460404094,
+      "identifier": "laneOtt4OutputTrimDb",
+      "displayName": "OTT 4 Output Trim"
+    },
+    {
+      "address": 12631505725220601935,
+      "identifier": "laneOtt5OutputTrimDb",
+      "displayName": "OTT 5 Output Trim"
+    },
+    {
+      "address": 7034894642752731816,
+      "identifier": "laneChorus1OutputTrimDb",
+      "displayName": "Chorus 1 Output Trim"
+    },
+    {
+      "address": 12703284064512929657,
+      "identifier": "laneChorus2OutputTrimDb",
+      "displayName": "Chorus 2 Output Trim"
+    },
+    {
+      "address": 18371673486273127498,
+      "identifier": "laneChorus3OutputTrimDb",
+      "displayName": "Chorus 3 Output Trim"
+    },
+    {
+      "address": 5593318834323773723,
+      "identifier": "laneChorus4OutputTrimDb",
+      "displayName": "Chorus 4 Output Trim"
+    },
+    {
+      "address": 11261708256083971564,
+      "identifier": "laneChorus5OutputTrimDb",
+      "displayName": "Chorus 5 Output Trim"
+    },
+    {
+      "address": 509258046572869087,
+      "identifier": "laneFlanger1OutputTrimDb",
+      "displayName": "Flanger 1 Output Trim"
+    },
+    {
+      "address": 6177647468333066928,
+      "identifier": "laneFlanger2OutputTrimDb",
+      "displayName": "Flanger 2 Output Trim"
+    },
+    {
+      "address": 11846036890093264769,
+      "identifier": "laneFlanger3OutputTrimDb",
+      "displayName": "Flanger 3 Output Trim"
+    },
+    {
+      "address": 17514426311853462610,
+      "identifier": "laneFlanger4OutputTrimDb",
+      "displayName": "Flanger 4 Output Trim"
+    },
+    {
+      "address": 4736071659904108835,
+      "identifier": "laneFlanger5OutputTrimDb",
+      "displayName": "Flanger 5 Output Trim"
+    },
+    {
+      "address": 13526742905336248327,
+      "identifier": "lanePhaser1OutputTrimDb",
+      "displayName": "Phaser 1 Output Trim"
+    },
+    {
+      "address": 748388253386894552,
+      "identifier": "lanePhaser2OutputTrimDb",
+      "displayName": "Phaser 2 Output Trim"
+    },
+    {
+      "address": 6416777675147092393,
+      "identifier": "lanePhaser3OutputTrimDb",
+      "displayName": "Phaser 3 Output Trim"
+    },
+    {
+      "address": 12085167096907290234,
+      "identifier": "lanePhaser4OutputTrimDb",
+      "displayName": "Phaser 4 Output Trim"
+    },
+    {
+      "address": 17753556518667488075,
+      "identifier": "lanePhaser5OutputTrimDb",
+      "displayName": "Phaser 5 Output Trim"
+    },
+    {
+      "address": 16947875420353957979,
+      "identifier": "laneDelay1OutputTrimDb",
+      "displayName": "Delay 1 Output Trim"
+    },
+    {
+      "address": 4169520768404604204,
+      "identifier": "laneDelay2OutputTrimDb",
+      "displayName": "Delay 2 Output Trim"
+    },
+    {
+      "address": 9837910190164802045,
+      "identifier": "laneDelay3OutputTrimDb",
+      "displayName": "Delay 3 Output Trim"
+    },
+    {
+      "address": 15506299611924999886,
+      "identifier": "laneDelay4OutputTrimDb",
+      "displayName": "Delay 4 Output Trim"
+    },
+    {
+      "address": 2727944959975646111,
+      "identifier": "laneDelay5OutputTrimDb",
+      "displayName": "Delay 5 Output Trim"
+    },
+    {
+      "address": 11272639510969298158,
+      "identifier": "laneReverb1OutputTrimDb",
+      "displayName": "Reverb 1 Output Trim"
+    },
+    {
+      "address": 16941028932729495999,
+      "identifier": "laneReverb2OutputTrimDb",
+      "displayName": "Reverb 2 Output Trim"
+    },
+    {
+      "address": 4162674280780142224,
+      "identifier": "laneReverb3OutputTrimDb",
+      "displayName": "Reverb 3 Output Trim"
+    },
+    {
+      "address": 9831063702540340065,
+      "identifier": "laneReverb4OutputTrimDb",
+      "displayName": "Reverb 4 Output Trim"
+    },
+    {
+      "address": 15499453124300537906,
+      "identifier": "laneReverb5OutputTrimDb",
+      "displayName": "Reverb 5 Output Trim"
     }
   ],
   "savedStateKeys": [

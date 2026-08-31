@@ -37,7 +37,7 @@ test("the native matrix Amp Envelope pair cancels exactly in float32 for both po
     assert.equal(document.sourceContract.expressionMidiValue, 100);
     assert.equal(document.sourceContract.ampEnvelopeSustain, 1);
 
-    const active = document.profiles.find((profile) => profile.name === "active-1372");
+    const active = document.profiles.find((profile) => profile.name === "active-1484");
     assert.ok(active, "missing full active native benchmark profile");
     const routes = JSON.parse(active.stateJSON).routes;
     const velocity = Math.fround(document.sourceContract.expressionMidiValue / 127);

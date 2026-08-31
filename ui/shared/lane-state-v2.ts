@@ -34,16 +34,20 @@ import {
     LANE_SPLIT_UNIT_COUNT,
     LANE_TOPOLOGY_ENDPOINT_ID,
     RACK_EFFECT_ORDER,
-    createDefaultLaneState,
     decodeLaneBranchTag,
     decodeLaneSlotId,
     encodeLaneSlotWithBranchTag,
     isLaneGroupMarkerSlot,
     isLaneSplitMarkerSlot,
-    parseLaneState,
-    type LaneState,
 } from "./lane-state";
 import { getLaneKeyTrackEndpoints } from "./key-track";
+import {
+    EFFECT_OUTPUT_TRIM_MAX_DB,
+    EFFECT_OUTPUT_TRIM_SILENCE_DB,
+    effectOutputTrimHostEndpointID,
+    effectOutputTrimLaneEndpointID,
+    parseEffectOutputTrimHostEndpointID,
+} from "./effect-output-trim";
 
 /**
  * lane.v2 — the device-instance + topology-tree document (M3).
@@ -66,9 +70,9 @@ import { getLaneKeyTrackEndpoints } from "./key-track";
  * The document stores what the wire validates: crossovers live in the
  * engine's 40..18000 clamp range, fan-outs in 2..4 (parallel) / 2..3
  * (split), and the flattened chain — placements plus one marker per group —
- * fits one topology upload. Parsing validates and never coerces (C11);
- * deserializing falls back to the clean default, upgrading v1 documents in
- * place so existing patches load unchanged.
+ * fits one topology upload. Parsing validates and never coerces (C11). Since
+ * T78, persisted intake is greenfield: only a complete lane.v2 document is
+ * accepted, and only true absence creates the current clean default.
  */
 
 export const LANE_SPLIT_XOVER_MIN_HZ = 40;
@@ -203,7 +207,6 @@ function parseDeviceRecord(deviceId: string, input: unknown):
         return { failure: err(`device ${deviceId} must be { params }`) };
     }
     const endpoints = laneDeviceParamEndpoints(parsedId.deviceType);
-    const legacyEndpoints = LEGACY_LANE_DEVICE_PARAM_ENDPOINTS[parsedId.deviceType];
     const effectId = LANE_TYPE_TO_EFFECT_ID.get(parsedId.deviceType);
     if (effectId === undefined) {
         return { failure: err(`device ${deviceId} has no effect descriptor`) };
@@ -214,11 +217,24 @@ function parseDeviceRecord(deviceId: string, input: unknown):
     const inputKeys = Object.keys(inputParams);
     const hasShape = (expected: ReadonlyArray<string>) => inputKeys.length === expected.length
         && inputKeys.every((key) => expected.includes(key));
-    const hasValidShape = hasShape(endpoints)
-        || hasShape(legacyEndpoints)
-        || (parsedId.deviceType === "chorus" && hasShape(PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS))
-        || hasShape(presentationEndpoints);
-    if (!hasValidShape) {
+    const trimEndpointID = effectOutputTrimLaneEndpointID(parsedId.deviceType);
+    const currentLegacyEndpoints = [
+        ...LEGACY_LANE_DEVICE_PARAM_ENDPOINTS[parsedId.deviceType],
+        trimEndpointID,
+    ];
+    const currentPreClampChorusEndpoints = [
+        ...PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS,
+        trimEndpointID,
+    ];
+    // T78 deliberately introduces no old-preset compatibility path. Both
+    // full and previously supported supplemental shapes must already carry
+    // Output Trim; pre-Output-Trim records receive no hidden 0 dB migration.
+    const hasCurrentShape = inputKeys.includes(trimEndpointID)
+        && (hasShape(endpoints)
+            || hasShape(presentationEndpoints)
+            || hasShape(currentLegacyEndpoints)
+            || (parsedId.deviceType === "chorus" && hasShape(currentPreClampChorusEndpoints)));
+    if (!hasCurrentShape) {
         return { failure: err(`device ${deviceId} must carry every parameter once`) };
     }
     for (const endpointID of inputKeys) {
@@ -436,15 +452,13 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
     return { _tag: "ok", value: { format: "cosimo.lane", version: 2, output, devices, chain } };
 }
 
-/** Upgrade a parsed v1 document: eight instance-#1 devices, serial chain.
-    Params serialize in WIRE order so upgrade -> serialize -> parse ->
-    serialize is byte-stable (the echo-dedupe paths depend on it). */
-export function upgradeLaneStateV1(state: LaneState): LaneStateV2 {
+/** Create a resident-eight lane directly from the complete current schema. */
+export function createFullDefaultLaneStateV2(): LaneStateV2 {
     const devices: Record<string, LaneDeviceRecordV2> = {};
     for (const effectId of RACK_EFFECT_ORDER) {
         const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
         devices[`${deviceType}#1`] = {
-            params: materializeLaneDeviceParams(deviceType, state.params[effectId]),
+            params: laneDefaultParamsForType(deviceType),
         };
     }
     return {
@@ -452,10 +466,10 @@ export function upgradeLaneStateV1(state: LaneState): LaneStateV2 {
         version: 2,
         output: createDefaultLaneOutputState(),
         devices,
-        chain: state.order.map((effectId) => ({
+        chain: RACK_EFFECT_ORDER.map((effectId) => ({
             kind: "device",
             deviceId: `${EFFECT_ID_TO_LANE_TYPE[effectId]}#1`,
-            enabled: state.enabled[effectId],
+            enabled: false,
         })),
     };
 }
@@ -466,17 +480,16 @@ const STARTER_DEVICE_IDS = ["distortion#1", "delay#1", "reverb#1"] as const;
  * The fresh-instrument STARTER (M4): a compact bypassed line — drive →
  * delay → reverb — so the out-of-box sound stays the deployed dry voice
  * while the map opens with a short line and add-ghosts instead of eight
- * resident pills. Sliced from the v1 upgrade so params keep their wire
- * order (the serialize∘parse byte-stability rule) and their v1 default
- * values. Stored v1 documents still upgrade to all eight, untouched.
+ * resident pills. It is sliced from the current resident-eight constructor,
+ * so every record is complete under the T78 schema.
  */
 export function createDefaultLaneStateV2(): LaneStateV2 {
-    const legacy = upgradeLaneStateV1(createDefaultLaneState());
+    const full = createFullDefaultLaneStateV2();
     const devices: Record<string, LaneDeviceRecordV2> = {};
     for (const deviceId of STARTER_DEVICE_IDS) {
-        const record = legacy.devices[deviceId];
+        const record = full.devices[deviceId];
         if (record === undefined) {
-            throw new Error(`The v1 default is missing starter device ${deviceId}`);
+            throw new Error(`The current default is missing starter device ${deviceId}`);
         }
         devices[deviceId] = record;
     }
@@ -485,47 +498,23 @@ export function createDefaultLaneStateV2(): LaneStateV2 {
         version: 2,
         output: createDefaultLaneOutputState(),
         devices,
-        chain: legacy.chain.filter((node) => (
+        chain: full.chain.filter((node) => (
             node.kind === "device" && (STARTER_DEVICE_IDS as ReadonlyArray<string>).includes(node.deviceId)
         )),
     };
 }
 
 /**
- * STRICT two-format parse: v2 verbatim, v1 upgraded in place, an error for
- * anything else (the v2 diagnosis leads — documents are v2 going forward).
- * The strict consumers (the bridge adapter, init presets) use this where
- * they used the v1 strict parse; the store uses the defaulting deserializer.
+ * Deserialize current persisted state. Only true absence creates a fresh
+ * T78 document; old, corrupt, and incomplete documents are rejected instead
+ * of acquiring implicit Output Trim defaults.
  */
-export function parseLaneStateV2Compat(input: unknown): LaneStateV2ParseOutcome {
-    const v2 = parseLaneStateV2(input);
-    if (v2._tag === "ok") {
-        return v2;
-    }
-    const v1 = parseLaneState(input);
-    if (v1._tag === "ok") {
-        return { _tag: "ok", value: upgradeLaneStateV1(v1.value) };
-    }
-    return v2;
-}
-
-/**
- * Deserialize persisted state: v2 verbatim, v1 upgraded in place, the clean
- * default for anything missing or corrupt.
- */
-export function deserializeLaneStateV2(input: unknown): LaneStateV2 {
+export function deserializeLaneStateV2(input: unknown): LaneStateV2 | null {
     if (input === undefined) {
         return createDefaultLaneStateV2();
     }
     const v2 = parseLaneStateV2(input);
-    if (v2._tag === "ok") {
-        return v2.value;
-    }
-    const v1 = parseLaneState(input);
-    if (v1._tag === "ok") {
-        return upgradeLaneStateV1(v1.value);
-    }
-    return createDefaultLaneStateV2();
+    return v2._tag === "ok" ? v2.value : null;
 }
 
 /** Serialize the complete canonical lane.v2 document. */
@@ -711,6 +700,19 @@ export function buildLaneRuntimeEventsV2(state: LaneStateV2): ReadonlyArray<{ re
     let deliverySerial = 0;
 
     for (const device of listLaneDeviceInstancesV2(state)) {
+        const parsedId = parseLaneInstanceId(device.instanceId);
+        if (parsedId === null) {
+            throw new Error(`Invalid lane device identity during replay: ${device.instanceId}`);
+        }
+        events.push({
+            endpointID: effectOutputTrimHostEndpointID(
+                parsedId.deviceType,
+                parsedId.instanceNumber,
+            ),
+            value: state.devices[device.instanceId].params[
+                effectOutputTrimLaneEndpointID(parsedId.deviceType)
+            ],
+        });
         deliverySerial += 1;
         events.push({
             endpointID: LANE_SLOT_PARAMS_ENDPOINT_ID,
@@ -958,6 +960,44 @@ export function setLaneDeviceParam(
     };
 }
 
+/**
+ * Reconcile the lane document's durable Output Trim mirrors from the 40 real
+ * host parameters. Host endpoints are runtime/automation authority; the lane
+ * records carry the same value through topology, Init, presets, and links.
+ */
+export function synchronizeLaneOutputTrimsFromHostParameters(
+    state: LaneStateV2,
+    parameters: Readonly<Record<string, unknown>>,
+): LaneStateV2 {
+    let nextState = state;
+
+    for (const [endpointID, rawValue] of Object.entries(parameters)) {
+        const parsed = parseEffectOutputTrimHostEndpointID(endpointID);
+        if (parsed === null || typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+            continue;
+        }
+        const deviceId = `${parsed.deviceType}#${parsed.instanceNumber}`;
+        if (nextState.devices[deviceId] === undefined) {
+            continue;
+        }
+        const value = Math.min(
+            EFFECT_OUTPUT_TRIM_MAX_DB,
+            Math.max(EFFECT_OUTPUT_TRIM_SILENCE_DB, rawValue),
+        );
+        if (Object.is(nextState.devices[deviceId]?.params[parsed.laneEndpointID], value)) {
+            continue;
+        }
+        nextState = setLaneDeviceParam(
+            nextState,
+            deviceId,
+            parsed.laneEndpointID,
+            value,
+        ) ?? nextState;
+    }
+
+    return nextState;
+}
+
 /** Shared lane transition: enabling centres the offset and leaves the ordinary value untouched. */
 export function setLaneKeyTrackEnabled(
     state: LaneStateV2,
@@ -1198,7 +1238,7 @@ export function setLaneGroupBranchCount(
 }
 
 /** One device type's default parameter record, descriptor initials in WIRE
-    order (serialize stability rides on the order — see upgradeLaneStateV1). */
+    order so complete current documents serialize stably. */
 export function laneDefaultParamsForType(deviceType: LaneDeviceType): Record<string, number> {
     const effectId = LANE_TYPE_TO_EFFECT_ID.get(deviceType);
     if (effectId === undefined) {

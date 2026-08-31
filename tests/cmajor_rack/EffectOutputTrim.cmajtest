@@ -1,0 +1,439 @@
+// T78's common post-effect gain law. Full rack dispatch tests remain in the
+// lane topology family; these assertions pin the exact silence, dB offset,
+// clamp, bypass, and eight-type target vocabulary at their owner.
+
+## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/VoiceEnhancer.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "../../cmajor/GlobalFilter.cmajor", "../../cmajor/Distortion.cmajor", "../../cmajor/Ott.cmajor", "../../cmajor/Chorus.cmajor", "../../cmajor/Flanger.cmajor", "../../cmajor/Phaser.cmajor", "../../cmajor/Delay.cmajor", "../../cmajor/Reverb.cmajor", "../../cmajor/EffectsRack.cmajor")
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor EffectOutputTrimContractTest [[ main ]]
+{
+    output stream int32 out;
+    node rack = wt::EffectsRack;
+
+    bool gainLawHasUnityExactSilenceAndDbOffsets()
+    {
+        let plusSix = wt::effectOutputTrimGain (0.0f, 6.0f);
+        let plusSixReference = std::intrinsics::pow (10.0f, 6.0f / 20.0f);
+        let maxReference = std::intrinsics::pow (10.0f, 35.0f / 20.0f);
+
+        return wt::effectOutputTrimGain (0.0f, 0.0f) == 1.0f
+            && wt::effectOutputTrimGain (wt::effectOutputTrimSilenceDb, 35.0f) == 0.0f
+            && wt::effectOutputTrimGain (-99.0f, -1.0f) == 0.0f
+            && std::intrinsics::abs (plusSix - plusSixReference) < 0.000001f
+            && std::intrinsics::abs (wt::effectOutputTrimGain (34.0f, 12.0f) - maxReference) < 0.000001f;
+    }
+
+    bool bypassesWithItsEffect()
+    {
+        let dryInput = float32<2> (0.25f, -0.5f);
+        let processed = float32<2> (0.5f, -0.25f);
+        let trimmed = wt::selectEffectOutputWithTrim (true, dryInput, processed, 6.0f, 0.0f);
+        let bypassed = wt::selectEffectOutputWithTrim (
+            false, dryInput, processed, wt::effectOutputTrimSilenceDb, 35.0f);
+        let gain = wt::effectOutputTrimGain (6.0f, 0.0f);
+        let expectedTrimmed = processed * gain;
+
+        return trimmed[0] == expectedTrimmed[0]
+            && trimmed[1] == expectedTrimmed[1]
+            && bypassed[0] == dryInput[0]
+            && bypassed[1] == dryInput[1];
+    }
+
+    bool everyEffectTypeOwnsOneAppendOnlyTrimTarget()
+    {
+        return wt::effectOutputTrimTargetForModule (wt::rackModuleGlobalFilter)
+                == wt::rackModTargetGlobalFilterOutputTrimDb
+            && wt::effectOutputTrimTargetForModule (wt::rackModuleDistortion)
+                == wt::rackModTargetDistortionOutputTrimDb
+            && wt::effectOutputTrimTargetForModule (wt::rackModuleOtt)
+                == wt::rackModTargetOttOutputTrimDb
+            && wt::effectOutputTrimTargetForModule (wt::rackModuleChorus)
+                == wt::rackModTargetChorusOutputTrimDb
+            && wt::effectOutputTrimTargetForModule (wt::rackModuleFlanger)
+                == wt::rackModTargetFlangerOutputTrimDb
+            && wt::effectOutputTrimTargetForModule (wt::rackModulePhaser)
+                == wt::rackModTargetPhaserOutputTrimDb
+            && wt::effectOutputTrimTargetForModule (wt::rackModuleDelay)
+                == wt::rackModTargetDelayOutputTrimDb
+            && wt::effectOutputTrimTargetForModule (wt::rackModuleReverb)
+                == wt::rackModTargetReverbOutputTrimDb;
+    }
+
+    void main()
+    {
+        loop
+        {
+            let passed = gainLawHasUnityExactSilenceAndDbOffsets()
+                         && bypassesWithItsEffect()
+                         && everyEffectTypeOwnsOneAppendOnlyTrimTarget();
+            out <- passed ? 1 : 0;
+            advance();
+        }
+    }
+}
+
+//==============================================================================
+// Reverb #5 is the last resident identity and has an exact dry child output at Mix
+// zero. That makes it a discriminating placement probe: only post-Mix trim changes
+// the sample. The same render pins active-instance smoothing and the 234th target.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor EffectOutputTrimPlacementAndSmoothingTest [[ main ]]
+{
+    output stream int32 out;
+    node rack = wt::EffectsRack;
+
+    let dryLevel = 0.125f;
+    let reverbFiveSlot = (4 * wt::rackModuleCount) + wt::rackModuleReverb;
+    let reverbFiveTrimTarget = (4 * wt::rackModStaticTargetCount)
+                               + wt::rackModTargetReverbOutputTrimDb;
+
+    float32 trimDb;
+    float32 modulationDb;
+
+    bool near (float32 actual, float32 expected)
+    {
+        return std::intrinsics::abs (actual - expected) <= 0.00001f;
+    }
+
+    void configure()
+    {
+        wt::LaneSlotParamsUpload params;
+        params.slotId = reverbFiveSlot;
+        params.deliverySerial = 1;
+        params.values[wt::laneReverbParamSize] = 0.5f;
+        params.values[wt::laneReverbParamDecay] = 0.5f;
+        params.values[wt::laneReverbParamDamping] = 0.5f;
+        params.values[wt::laneReverbParamMix] = 0.0f;
+        params.values[wt::laneReverbParamOutputTrimDb] = 0.0f;
+        rack.laneSlotParams <- params;
+
+        wt::LaneTopologyUpload topology;
+        topology.chainLength = 1;
+        topology.slotIds[0] = reverbFiveSlot;
+        topology.enabledMask = 0b1;
+        rack.laneTopology <- topology;
+    }
+
+    float32 render()
+    {
+        rack.laneReverb5OutputTrimDb <- trimDb;
+        rack.rackModIn[reverbFiveTrimTarget] <- modulationDb;
+        rack.in <- float32<2> (dryLevel, dryLevel);
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+        return rack.out[0];
+    }
+
+    void settle (int32 frameCount)
+    {
+        for (int32 frame = 0; frame < frameCount; ++frame)
+            render();
+    }
+
+    void main()
+    {
+        configure();
+        trimDb = 0.0f;
+        modulationDb = 0.0f;
+        settle (512);
+
+        // Unity is exact enough to expose an accidental pre-Mix placement.
+        out <- near (render(), dryLevel) ? 1 : 0;
+        advance();
+
+        // A live edit advances through the rack-owned 64-frame dB ramp.
+        trimDb = 6.0f;
+        let firstRampSample = render();
+        let plusSix = dryLevel * std::intrinsics::pow (10.0f, 6.0f / 20.0f);
+        out <- (firstRampSample > dryLevel && firstRampSample < plusSix) ? 1 : 0;
+        advance();
+        settle (64);
+        out <- near (render(), plusSix) ? 1 : 0;
+        advance();
+
+        // The finite minimum is an exact-zero sentinel even under positive mod.
+        trimDb = wt::effectOutputTrimSilenceDb;
+        modulationDb = 35.0f;
+        settle (64);
+        out <- render() == 0.0f ? 1 : 0;
+        advance();
+
+        // Modulation is a dB offset on the fifth resident's own target cell.
+        trimDb = 0.0f;
+        modulationDb = 6.0f;
+        settle (64);
+        out <- near (render(), plusSix) ? 1 : 0;
+        advance();
+
+        // A non-sentinel base can still be modulated down to exact silence.
+        trimDb = -99.0f;
+        modulationDb = -1.0f;
+        settle (64);
+        out <- render() == 0.0f ? 1 : 0;
+        advance();
+
+        loop { out <- -1; advance(); }
+    }
+}
+
+//==============================================================================
+// Parallel branches own independent effect-instance trims. The merged output
+// must be the sum of each already-trimmed branch; one branch's silence latch
+// cannot change its sibling.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor EffectOutputTrimBeforeParallelMergeTest [[ main ]]
+{
+    output stream int32 out;
+    node rack = wt::EffectsRack;
+
+    let dryLevel = 0.125f;
+    let reverbOneSlot = wt::rackModuleReverb;
+    let reverbTwoSlot = wt::rackModuleCount + wt::rackModuleReverb;
+    float32 reverbOneTrimDb;
+
+    bool near (float32 actual, float32 expected)
+    {
+        return std::intrinsics::abs (actual - expected) <= 0.00001f;
+    }
+
+    void configureReverb (int32 slotId, int32 deliverySerial)
+    {
+        wt::LaneSlotParamsUpload params;
+        params.slotId = slotId;
+        params.deliverySerial = deliverySerial;
+        params.values[wt::laneReverbParamSize] = 0.5f;
+        params.values[wt::laneReverbParamDecay] = 0.5f;
+        params.values[wt::laneReverbParamDamping] = 0.5f;
+        params.values[wt::laneReverbParamMix] = 0.0f;
+        params.values[wt::laneReverbParamOutputTrimDb] = 0.0f;
+        rack.laneSlotParams <- params;
+    }
+
+    void configure()
+    {
+        configureReverb (reverbOneSlot, 1);
+        configureReverb (reverbTwoSlot, 2);
+
+        wt::LaneTopologyUpload topology;
+        topology.chainLength = 3;
+        topology.slotIds[0] = wt::laneEncodeSlotWithBranchTag (
+            wt::laneParallelSlotBase, 2);
+        topology.slotIds[1] = wt::laneEncodeSlotWithBranchTag (reverbOneSlot, 1);
+        topology.slotIds[2] = wt::laneEncodeSlotWithBranchTag (reverbTwoSlot, 2);
+        topology.enabledMask = 0b111;
+        rack.laneTopology <- topology;
+    }
+
+    float32 render()
+    {
+        rack.laneReverb1OutputTrimDb <- reverbOneTrimDb;
+        rack.laneReverb2OutputTrimDb <- 0.0f;
+        rack.in <- float32<2> (dryLevel, dryLevel);
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+        return rack.out[0];
+    }
+
+    void settle (int32 frameCount)
+    {
+        for (int32 frame = 0; frame < frameCount; ++frame)
+            render();
+    }
+
+    void main()
+    {
+        reverbOneTrimDb = 6.0f;
+        configure();
+        settle (512);
+
+        let plusSixGain = std::intrinsics::pow (10.0f, 6.0f / 20.0f);
+        out <- near (render(), dryLevel * (plusSixGain + 1.0f)) ? 1 : 0;
+        advance();
+
+        reverbOneTrimDb = wt::effectOutputTrimSilenceDb;
+        settle (64);
+        out <- near (render(), dryLevel) ? 1 : 0;
+        advance();
+
+        loop { out <- -1; advance(); }
+    }
+}
+
+//==============================================================================
+// Every editable effect type and all five resident identities reach the same
+// post-child trim seam. Running one at a time prevents an earlier muted child
+// from masking a missing trim on a later one.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor EffectOutputTrimAllTypesAndBypassTest [[ main ]]
+{
+    output stream int32 out;
+    node rack = wt::EffectsRack;
+    let dryLevel = 0.125f;
+
+    void configureSafeRecord (int32 moduleType, int32 ordinal)
+    {
+        wt::LaneSlotParamsUpload params;
+        params.slotId = (ordinal * wt::rackModuleCount) + moduleType;
+        params.deliverySerial = params.slotId + 1;
+
+        if (moduleType == wt::rackModuleGlobalFilter)
+        {
+            params.values[wt::laneGlobalFilterParamMode] = 0.0f;
+            params.values[wt::laneGlobalFilterParamCutoffHz] = 18000.0f;
+            params.values[wt::laneGlobalFilterParamResonance] = 0.707107f;
+        }
+        else if (moduleType == wt::rackModuleDistortion)
+        {
+            params.values[wt::laneDistortionParamDriveDb] = 0.0f;
+            params.values[wt::laneDistortionParamKnee] = 0.5f;
+            params.values[wt::laneDistortionParamWet] = 0.0f;
+            params.values[wt::laneDistortionParamWetHPHz] = 40.0f;
+            params.values[wt::laneDistortionParamWetLPHz] = 18000.0f;
+        }
+        else if (moduleType == wt::rackModuleOtt)
+        {
+            params.values[wt::laneOttParamMix] = 0.0f;
+            params.values[wt::laneOttParamAmount] = 0.0f;
+            params.values[wt::laneOttParamTimePercent] = 100.0f;
+            params.values[wt::laneOttParamBandDrive] = 1.0f;
+            params.values[wt::laneOttParamEnvelopeMatch] = 0.5f;
+        }
+        else if (moduleType == wt::rackModuleChorus)
+        {
+            params.values[wt::laneChorusParamMix] = 0.0f;
+            params.values[wt::laneChorusParamTone] = 0.5f;
+            params.values[wt::laneChorusParamRingFrequencyHz] = 28.0f;
+        }
+        else if (moduleType == wt::rackModuleFlanger)
+        {
+            params.values[wt::laneFlangerParamRate] = 0.2f;
+            params.values[wt::laneFlangerParamMix] = 0.0f;
+            params.values[wt::laneFlangerParamBaseDelayMs] = 0.6f;
+        }
+        else if (moduleType == wt::rackModulePhaser)
+        {
+            params.values[wt::lanePhaserParamRate] = 0.2f;
+            params.values[wt::lanePhaserParamRateDivision] = 1.0f;
+            params.values[wt::lanePhaserParamFrequency] = 1000.0f;
+            params.values[wt::lanePhaserParamMix] = 0.0f;
+        }
+        else if (moduleType == wt::rackModuleDelay)
+        {
+            params.values[wt::laneDelayParamTimeMs] = 100.0f;
+            params.values[wt::laneDelayParamFilterHz] = 18000.0f;
+            params.values[wt::laneDelayParamMix] = 0.0f;
+            params.values[wt::laneDelayParamDivision] = 1.0f;
+        }
+        else
+        {
+            params.values[wt::laneReverbParamSize] = 0.5f;
+            params.values[wt::laneReverbParamDecay] = 0.5f;
+            params.values[wt::laneReverbParamDamping] = 0.5f;
+            params.values[wt::laneReverbParamMix] = 0.0f;
+        }
+
+        rack.laneSlotParams <- params;
+    }
+
+    void configureSafeRecords()
+    {
+        for (int32 ordinal = 0; ordinal < wt::lanePoolInstanceCount; ++ordinal)
+            for (int32 moduleType = 0; moduleType < wt::rackModuleCount; ++moduleType)
+                configureSafeRecord (moduleType, ordinal);
+    }
+
+    wt::LaneTopologyUpload oneEffect (int32 slotId, bool enabled)
+    {
+        wt::LaneTopologyUpload topology;
+        topology.chainLength = 1;
+        topology.slotIds[0] = slotId;
+        topology.enabledMask = enabled ? 0b1 : 0;
+        return topology;
+    }
+
+    float32 render()
+    {
+        rack.laneGlobalFilter1OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneGlobalFilter2OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneGlobalFilter3OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneGlobalFilter4OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneGlobalFilter5OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneDistortion1OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneDistortion2OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneDistortion3OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneDistortion4OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneDistortion5OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneOtt1OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneOtt2OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneOtt3OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneOtt4OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneOtt5OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneChorus1OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneChorus2OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneChorus3OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneChorus4OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneChorus5OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneFlanger1OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneFlanger2OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneFlanger3OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneFlanger4OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneFlanger5OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.lanePhaser1OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.lanePhaser2OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.lanePhaser3OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.lanePhaser4OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.lanePhaser5OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneDelay1OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneDelay2OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneDelay3OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneDelay4OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneDelay5OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneReverb1OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneReverb2OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneReverb3OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneReverb4OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.laneReverb5OutputTrimDb <- wt::effectOutputTrimSilenceDb;
+        rack.in <- float32<2> (dryLevel, dryLevel);
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.tempoBpmIn <- 120.0f;
+        rack.advance();
+        return rack.out[0];
+    }
+
+    void settle()
+    {
+        for (int32 frame = 0; frame < 512; ++frame)
+            render();
+    }
+
+    void main()
+    {
+        configureSafeRecords();
+
+        for (int32 ordinal = 0; ordinal < wt::lanePoolInstanceCount; ++ordinal)
+            for (int32 moduleType = 0; moduleType < wt::rackModuleCount; ++moduleType)
+            {
+                let slotId = (ordinal * wt::rackModuleCount) + moduleType;
+                rack.laneTopology <- oneEffect (slotId, true);
+                settle();
+                out <- render() == 0.0f ? 1 : 0;
+                advance();
+            }
+
+        // Effect bypass bypasses its trim as well as its child processor.
+        rack.laneTopology <- oneEffect (
+            (4 * wt::rackModuleCount) + wt::rackModuleReverb, false);
+        settle();
+        out <- render() == dryLevel ? 1 : 0;
+        advance();
+
+        loop { out <- -1; advance(); }
+    }
+}

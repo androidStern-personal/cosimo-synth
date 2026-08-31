@@ -5,9 +5,13 @@
 #import <CoreAudioKit/AUViewController.h>
 #import <WebKit/WebKit.h>
 
+#include "../../native/CompleteSoundState.h"
+
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <cmath>
+#include <cstdlib>
 #include <memory>
 #include <vector>
 
@@ -25,6 +29,14 @@ static NSString * const CosimoHostHarnessErrorDomain = @"CosimoHostHarnessError"
 static NSString * const CosimoPrimaryParameterIdentifier = @"oscAWavetablePosition";
 static NSString * const CosimoTableSelectParameterIdentifier = @"oscAWavetableSelect";
 static const float CosimoStateVerificationTolerance = 0.001f;
+static constexpr double CosimoT78MinimumDb = -100.0;
+static constexpr double CosimoT78MaximumDb = 35.0;
+static constexpr double CosimoT78SpanDb = CosimoT78MaximumDb - CosimoT78MinimumDb;
+static constexpr AUValue CosimoT78DefaultNormalized = 100.0f / 135.0f;
+static const double CosimoT78DefaultTextToleranceDb = 0.5
+    * static_cast<double> (std::nextafter (CosimoT78DefaultNormalized, 1.0f)
+                           - CosimoT78DefaultNormalized)
+    * CosimoT78SpanDb;
 static const NSTimeInterval CosimoStateVerificationTimeoutSeconds = 5.0;
 static const NSTimeInterval CosimoFirstNoteOffSeconds = 1.2;
 static const NSTimeInterval CosimoSecondNoteOnSeconds = 1.8;
@@ -57,6 +69,40 @@ static NSString * const CosimoBenchmarkResultFieldResponseParameter = @"cosimoBe
 static const NSUInteger CosimoBenchmarkInstallFieldCount = 5;
 static const NSUInteger CosimoBenchmarkRenderFieldStart = CosimoBenchmarkInstallFieldCount;
 
+static bool CosimoParseT78NumericText (NSString *value, double& result)
+{
+    NSString *trimmed = [value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    const char *text = trimmed.UTF8String;
+
+    if (text == nullptr || *text == '\0')
+        return false;
+
+    char *end = nullptr;
+    errno = 0;
+    result = std::strtod (text, &end);
+    return errno != ERANGE
+        && end != text
+        && *end == '\0'
+        && std::isfinite (result);
+}
+
+static NSArray<NSString *> *CosimoT78EffectOutputTrimParameterIdentifiers()
+{
+    NSMutableArray<NSString *> *identifiers = [[NSMutableArray alloc] initWithCapacity:cosimo::complete_sound::t78EffectOutputTrimParameterIDs.size()];
+
+    for (const auto endpointID : cosimo::complete_sound::t78EffectOutputTrimParameterIDs)
+    {
+        NSString *identifier = [[NSString alloc] initWithBytes:endpointID.data()
+                                                        length:endpointID.size()
+                                                      encoding:NSUTF8StringEncoding];
+
+        if (identifier != nil)
+            [identifiers addObject:identifier];
+    }
+
+    return identifiers;
+}
+
 static NSArray<NSString *> *CosimoBenchmarkResultFieldIdentifiers()
 {
     return @[
@@ -70,7 +116,7 @@ static NSArray<NSString *> *CosimoBenchmarkResultFieldIdentifiers()
 
 static NSArray<NSNumber *> *CosimoBenchmarkResultFieldScales()
 {
-    return @[ @100000.0, @590.0, @236.0, @390.0, @156.0,
+    return @[ @100000.0, @590.0, @236.0, @470.0, @188.0,
               @100000.0, @100000.0, @192000.0, @10000000.0, @4096.0, @4096.0, @200.0,
               @200.0, @200.0, @1000.0, @10000.0, @65535.0, @255.0 ];
 }
@@ -201,6 +247,10 @@ static AudioComponentDescription CosimoComponentDescription()
 - (void)coolForModulationMeasurementWithCompletion:(CosimoHostResultBlock)completion;
 - (void)waitForSafeThermalStateUntil:(NSDate *)deadline
                            completion:(CosimoHostResultBlock)completion;
+- (void)setT78EffectOutputTrimParameters:(NSArray<NSString *> *)identifiers
+                                  atIndex:(NSUInteger)index
+                                  results:(NSMutableArray<NSDictionary<NSString *, id> *> *)results
+                               completion:(CosimoHostResultBlock)completion;
 
 @end
 
@@ -308,6 +358,173 @@ static AudioComponentDescription CosimoComponentDescription()
             @"observedValue": @(parameter.value),
         }, nil);
     });
+}
+
+- (void)qualifyT78EffectOutputTrimParametersWithCompletion:(CosimoHostResultBlock)completion
+{
+    if (self.instrumentUnit == nil)
+    {
+        completion (nil, CosimoMakeError (54, @"Instantiate the AUv3 before qualifying T78 Output Trim parameters."));
+        return;
+    }
+
+    NSArray<NSString *> *identifiers = CosimoT78EffectOutputTrimParameterIdentifiers();
+
+    if (identifiers.count != cosimo::complete_sound::t78EffectOutputTrimParameterIDs.size())
+    {
+        completion (nil, CosimoMakeError (55, @"Could not materialise the complete canonical T78 Output Trim identifier bank."));
+        return;
+    }
+
+    NSArray<AUParameter *> *runtimeParameters = self.instrumentUnit.AUAudioUnit.parameterTree.allParameters;
+    NSMutableSet<NSNumber *> *addresses = [[NSMutableSet alloc] initWithCapacity:identifiers.count];
+    NSMutableSet<NSString *> *displayNames = [[NSMutableSet alloc] initWithCapacity:identifiers.count];
+    NSMutableArray<NSDictionary<NSString *, id> *> *qualifiedParameters = [[NSMutableArray alloc] initWithCapacity:identifiers.count];
+
+    for (NSString *identifier in identifiers)
+    {
+        AUParameter *matchedParameter = nil;
+        NSUInteger matchCount = 0;
+
+        for (AUParameter *parameter in runtimeParameters)
+        {
+            if ([parameter.identifier isEqualToString:identifier])
+            {
+                matchedParameter = parameter;
+                ++matchCount;
+            }
+        }
+
+        if (matchCount != 1 || matchedParameter == nil)
+        {
+            completion (nil, CosimoMakeError (56,
+                                               [NSString stringWithFormat:@"Expected exactly one runtime AU parameter with identifier %@; found %lu.",
+                                                                          identifier,
+                                                                          (unsigned long) matchCount]));
+            return;
+        }
+
+        NSNumber *address = @(matchedParameter.address);
+        NSString *displayName = matchedParameter.displayName ?: @"";
+        const AudioUnitParameterOptions requiredFlags = kAudioUnitParameterFlag_IsReadable
+            | kAudioUnitParameterFlag_IsWritable
+            | kAudioUnitParameterFlag_CanRamp;
+        const AudioUnitParameterOptions flags = matchedParameter.flags;
+        AUValue minimumValue = 0.0f;
+        AUValue defaultValue = CosimoT78DefaultNormalized;
+        AUValue maximumValue = 1.0f;
+        NSString *minimumText = [matchedParameter stringFromValue:&minimumValue] ?: @"";
+        NSString *defaultText = [matchedParameter stringFromValue:&defaultValue] ?: @"";
+        NSString *maximumText = [matchedParameter stringFromValue:&maximumValue] ?: @"";
+
+        if (matchedParameter.minValue != 0.0f
+            || matchedParameter.maxValue != 1.0f
+            || (flags & requiredFlags) != requiredFlags
+            || (flags & kAudioUnitParameterFlag_NonRealTime) != 0)
+        {
+            completion (nil, CosimoMakeError (57,
+                                               [NSString stringWithFormat:@"Runtime AU parameter %@ did not report a writable, readable, rampable 0 through 1 automation range.", identifier]));
+            return;
+        }
+
+        double minimumTextDb = 0.0;
+        double defaultTextDb = 0.0;
+        double maximumTextDb = 0.0;
+        const auto reconstructedDefaultDb = CosimoT78MinimumDb
+            + (CosimoT78SpanDb * static_cast<double> (defaultValue));
+
+        if (! CosimoParseT78NumericText (minimumText, minimumTextDb)
+            || ! CosimoParseT78NumericText (defaultText, defaultTextDb)
+            || ! CosimoParseT78NumericText (maximumText, maximumTextDb)
+            || minimumTextDb != CosimoT78MinimumDb
+            || maximumTextDb != CosimoT78MaximumDb
+            || std::fabs(reconstructedDefaultDb) > CosimoT78DefaultTextToleranceDb
+            || std::fabs(defaultTextDb) > CosimoT78DefaultTextToleranceDb)
+        {
+            completion (nil, CosimoMakeError (60,
+                                               [NSString stringWithFormat:@"Runtime AU parameter %@ did not map normalized 0, 100/135, and 1 to -100 dB, 0 dB, and +35 dB; minimumNormalized=%.9g minimumText=\"%@\" defaultNormalized=%.9g defaultText=\"%@\" maximumNormalized=%.9g maximumText=\"%@\".",
+                                                                          identifier,
+                                                                          (double) minimumValue,
+                                                                          minimumText,
+                                                                          (double) defaultValue,
+                                                                          defaultText,
+                                                                          (double) maximumValue,
+                                                                          maximumText]));
+            return;
+        }
+
+        if ([addresses containsObject:address] || displayName.length == 0 || [displayNames containsObject:displayName])
+        {
+            completion (nil, CosimoMakeError (59,
+                                               [NSString stringWithFormat:@"Runtime AU parameter %@ does not have a unique 64-bit address and display name.", identifier]));
+            return;
+        }
+
+        [addresses addObject:address];
+        [displayNames addObject:displayName];
+        [qualifiedParameters addObject:@{
+            @"address": address,
+            @"identifier": identifier,
+            @"displayName": displayName,
+        }];
+    }
+
+    NSMutableArray<NSDictionary<NSString *, id> *> *results = [[NSMutableArray alloc] initWithCapacity:identifiers.count];
+    [self setT78EffectOutputTrimParameters:identifiers
+                                   atIndex:0
+                                   results:results
+                                completion:^ (NSDictionary<NSString *,id> * _Nullable result, NSError * _Nullable error)
+    {
+        if (error != nil)
+        {
+            completion (nil, error);
+            return;
+        }
+
+        completion (@{
+            @"parameters": qualifiedParameters,
+            @"parameterSet": result[@"parameterSet"] ?: @[],
+        }, nil);
+    }];
+}
+
+- (void)setT78EffectOutputTrimParameters:(NSArray<NSString *> *)identifiers
+                                  atIndex:(NSUInteger)index
+                                  results:(NSMutableArray<NSDictionary<NSString *, id> *> *)results
+                               completion:(CosimoHostResultBlock)completion
+{
+    if (index >= identifiers.count)
+    {
+        completion (@{ @"parameterSet": [results copy] }, nil);
+        return;
+    }
+
+    NSString *identifier = identifiers[index];
+    const float value = 0.2f + (0.1f * (float) (index % 5u));
+
+    [self setParameterWithIdentifier:identifier value:value completion:^ (NSDictionary<NSString *,id> * _Nullable result, NSError * _Nullable error)
+    {
+        if (error != nil)
+        {
+            completion (nil, error);
+            return;
+        }
+
+        NSNumber *observedValue = [result[@"observedValue"] isKindOfClass:[NSNumber class]] ? result[@"observedValue"] : nil;
+
+        if (observedValue == nil || fabsf(observedValue.floatValue - value) > CosimoStateVerificationTolerance)
+        {
+            completion (nil, CosimoMakeError (58,
+                                               [NSString stringWithFormat:@"Runtime AU parameter %@ did not read back its requested value.", identifier]));
+            return;
+        }
+
+        [results addObject:result];
+        [self setT78EffectOutputTrimParameters:identifiers
+                                       atIndex:index + 1u
+                                       results:results
+                                    completion:completion];
+    }];
 }
 
 - (void)sendTestNoteWithCompletion:(CosimoHostResultBlock)completion

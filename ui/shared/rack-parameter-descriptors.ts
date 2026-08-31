@@ -1,4 +1,8 @@
 import type { EffectModuleId } from "./target-descriptor";
+import {
+    EFFECT_OUTPUT_TRIM_MAX_DB,
+    EFFECT_OUTPUT_TRIM_SILENCE_DB,
+} from "./effect-output-trim";
 
 /** One choice exposed by a discrete rack parameter. */
 export type RackParameterChoice = {
@@ -24,6 +28,8 @@ export type RackParameterDescriptor = {
     readonly modulationTargetIndex: number | null;
     /** DSP application for one route offset; independent of the control's display scale. */
     readonly modulationApplication: "linear" | "octaves" | "semitones" | null;
+    /** Selects the hard-silence law and accelerated low-tail control taper. */
+    readonly valueKind?: "effect-output-trim-db";
     /** Stable pre-redesign route identity when presentation and base storage move. */
     readonly modulationIdentityEndpointID?: string;
     /**
@@ -121,9 +127,32 @@ const p = (
     modulationTargetIndex: options.modulationTargetIndex ?? null,
     modulationApplication: options.modulationApplication
         ?? (options.modulationTargetIndex === undefined || options.modulationTargetIndex === null ? null : "linear"),
+    valueKind: options.valueKind,
     modulationIdentityEndpointID: options.modulationIdentityEndpointID,
     modulationDragStyle: options.modulationDragStyle,
 });
+
+function outputTrimParameter(
+    effectId: EffectModuleId,
+    endpointID: string,
+    modulationTargetIndex: number,
+): RackParameterDescriptor {
+    return p(
+        effectId,
+        endpointID,
+        "Output Trim",
+        "Trim",
+        EFFECT_OUTPUT_TRIM_SILENCE_DB,
+        EFFECT_OUTPUT_TRIM_MAX_DB,
+        0,
+        {
+            unit: "dB",
+            modulationTargetIndex,
+            modulationApplication: "linear",
+            valueKind: "effect-output-trim-db",
+        },
+    );
+}
 
 const PHASER_DIVISIONS = ["4/1", "2/1", "1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16"];
 const DELAY_DIVISIONS = ["1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/8.", "1/4T", "1/8", "1/16.", "1/8T", "1/16", "1/16T"];
@@ -142,6 +171,7 @@ const definitions: ReadonlyArray<Omit<RackEffectDescriptor, "parameters"> & { re
             p("filter", "globalFilterCutoff", "Cutoff", "Cut", 20, 20_000, 20_000, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 0, modulationApplication: "octaves" }),
             p("filter", "globalFilterResonance", "Resonance", "Res", 0.1, 20, 0.707107, { scale: "log", modulationTargetIndex: 1, modulationDragStyle: "effective-value" }),
             p("filter", "globalFilterDrive", "Drive", "Drv", 0, 1, 0, { modulationTargetIndex: 2 }),
+            outputTrimParameter("filter", "globalFilterOutputTrimDb", 39),
         ],
     },
     {
@@ -160,6 +190,7 @@ const definitions: ReadonlyArray<Omit<RackEffectDescriptor, "parameters"> & { re
             p("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4_000, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6, modulationApplication: "octaves" }),
             p("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 20_000, 18_000, { unit: "Hz", scale: "log", modulationTargetIndex: 7, modulationApplication: "octaves" }),
             p("drive", "distortionType", "Type", "Type", 0, 2, 1, { step: 1, choices: [choice("Symmetric", 0), choice("Asymmetric", 1), choice("Wavefold", 2)] }),
+            outputTrimParameter("drive", "distortionOutputTrimDb", 40),
         ],
     },
     {
@@ -176,6 +207,7 @@ const definitions: ReadonlyArray<Omit<RackEffectDescriptor, "parameters"> & { re
             p("ott", "ottTimePercent", "Time", "Time", 10, 1_000, 100, { unit: "%", scale: "log", modulationTargetIndex: 10 }),
             p("ott", "ottBandDrive", "Band Drive", "Drv", 0, 100, 0, { unit: "%", modulationTargetIndex: 11 }),
             p("ott", "ottEnvelopeMatch", "Envelope Match", "Env", 0, 100, 0, { unit: "%", modulationTargetIndex: 12 }),
+            outputTrimParameter("ott", "ottOutputTrimDb", 41),
         ],
     },
     {
@@ -197,6 +229,7 @@ const definitions: ReadonlyArray<Omit<RackEffectDescriptor, "parameters"> & { re
                 unit: "Hz", scale: "log", modulationTargetIndex: 17, modulationApplication: "semitones",
                 modulationIdentityEndpointID: "chorusRingFineSemitones",
             }),
+            outputTrimParameter("chorus", "chorusOutputTrimDb", 42),
         ],
     },
     {
@@ -215,6 +248,7 @@ const definitions: ReadonlyArray<Omit<RackEffectDescriptor, "parameters"> & { re
             p("flanger", "flangerBaseDelayMs", "Base Delay / Tune", "Tune", 0.2, 16, 0.6, {
                 unit: "ms", scale: "log", modulationTargetIndex: 36, modulationApplication: "octaves",
             }),
+            outputTrimParameter("flanger", "flangerOutputTrimDb", 43),
         ],
     },
     {
@@ -234,6 +268,7 @@ const definitions: ReadonlyArray<Omit<RackEffectDescriptor, "parameters"> & { re
             p("phaser", "phaserFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 25 }),
             p("phaser", "phaserPhase", "Stereo Phase", "Phase", -180, 180, 90, { unit: "deg", modulationTargetIndex: 26 }),
             p("phaser", "phaserMix", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 27 }),
+            outputTrimParameter("phaser", "phaserOutputTrimDb", 44),
         ],
     },
     {
@@ -251,6 +286,7 @@ const definitions: ReadonlyArray<Omit<RackEffectDescriptor, "parameters"> & { re
             p("delay", "delayFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0.35, { modulationTargetIndex: 29 }),
             p("delay", "delayFilter", "Filter", "Filt", 200, 18_000, 6_000, { unit: "Hz", scale: "log", modulationTargetIndex: 30, modulationApplication: "octaves" }),
             p("delay", "delayMix", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 31 }),
+            outputTrimParameter("delay", "delayOutputTrimDb", 45),
         ],
     },
     {
@@ -266,6 +302,7 @@ const definitions: ReadonlyArray<Omit<RackEffectDescriptor, "parameters"> & { re
             p("reverb", "reverbDecay", "Decay", "Dcy", 0, 1, 0.4, { quick: true, modulationTargetIndex: 33 }),
             p("reverb", "reverbDamping", "Damping", "Dmp", 0, 1, 0.5, { modulationTargetIndex: 34 }),
             p("reverb", "reverbMix", "Mix", "Mix", 0, 1, 0.5, { modulationTargetIndex: 35 }),
+            outputTrimParameter("reverb", "reverbOutputTrimDb", 46),
         ],
     },
 ];
@@ -322,6 +359,7 @@ export function formatRackParameterValue(descriptor: RackParameterDescriptor, va
     if (descriptor.unit === "%") return `${Math.round(value)}%`;
     if (descriptor.unit === "Hz") return value >= 1_000 ? `${(value / 1_000).toFixed(value >= 10_000 ? 1 : 2)}kHz` : `${Math.round(value)}Hz`;
     if (descriptor.unit === "ms") return `${Math.round(value)}ms`;
+    if (descriptor.valueKind === "effect-output-trim-db" && value <= descriptor.min) return "−∞dB";
     if (descriptor.unit === "dB") return `${value.toFixed(1)}dB`;
     if (descriptor.unit === "deg") return `${Math.round(value)}°`;
     if (descriptor.unit === "st") return `${value >= 0 ? "+" : ""}${value.toFixed(1)}st`;

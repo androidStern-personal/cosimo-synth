@@ -8,6 +8,7 @@ import math
 import os
 import platform
 import plistlib
+import re
 import shutil
 import socket
 import struct
@@ -49,11 +50,89 @@ IOS_HOST_SOURCE_RUNTIME = REPO_ROOT / "ui" / "ios" / "runtime-host.js"
 IOS_PATCH_HOST_HTML = REPO_ROOT / "patch_gui" / "index.ios.html"
 IOS_PATCH_HOST_RUNTIME = REPO_ROOT / "patch_gui" / "index.ios-host.js"
 PACKAGE_JSON = REPO_ROOT / "package.json"
+COMPLETE_SOUND_STATE_CONTRACT = REPO_ROOT / "native" / "CompleteSoundState.h"
+EFFECTS_RACK_SOURCE = REPO_ROOT / "cmajor" / "EffectsRack.cmajor"
 
 CONTAINER_BUNDLE_ID = "dev.cosimo.wavetable-synth"
 HOST_BUNDLE_ID = "dev.cosimo.wavetable-synth-host"
 EXTENSION_BUNDLE_ID = "dev.cosimo.wavetable-synth.wavetable-synthAUv3"
 APP_GROUP_ID = "group.dev.cosimo.wavetable-synth"
+
+
+def _t78_effect_output_trim_endpoint_ids() -> list[str]:
+    return re.findall(
+        r'"(lane[A-Za-z]+[1-5]OutputTrimDb)"',
+        COMPLETE_SOUND_STATE_CONTRACT.read_text(encoding="utf-8"),
+    )
+
+
+def _juce_auv3_parameter_address(identifier: str) -> int:
+    result = 0
+
+    for character in identifier:
+        result = ((result * 101) + ord(character)) & ((1 << 64) - 1)
+
+    return result
+
+
+def _float32(value: float) -> float:
+    return struct.unpack("!f", struct.pack("!f", value))[0]
+
+
+def _benchmark_source_value(route: dict[str, object]) -> float:
+    if route["sourceKind"] == "env" and route["sourceSlot"] == 4:
+        return 1.0
+    if route["sourceKind"] in {"velocity", "pressure", "slide"}:
+        return 100 / 127
+    if route["sourceKind"] == "macro":
+        return 0.75
+    return 0.0
+
+
+def _runtime_polarity_value(source_value: float, polarity: object) -> float:
+    source = _float32(max(0.0, min(1.0, source_value)))
+    if polarity == "bipolar":
+        return _float32(_float32(source * 2.0) - 1.0)
+    return source
+
+
+def _runtime_direct_route_contribution(route: dict[str, object]) -> float:
+    source = _float32(max(0.0, min(1.0, _benchmark_source_value(route))))
+    amount = _float32(float(route["amount"]))
+    scale = _float32(amount * 2.0) if route["polarity"] == "bipolar" else amount
+    bias = _float32(-amount) if route["polarity"] == "bipolar" else 0.0
+    return _float32(_float32(scale * source) + bias)
+
+
+def _runtime_reduced_rack_route_contribution(route: dict[str, object]) -> float:
+    source = _float32(max(0.0, min(1.0, _benchmark_source_value(route))))
+    if route["reducer"] == "mean":
+        source_sum = _float32(0.0)
+        for _voice_index in range(16):
+            source_sum = _float32(source_sum + source)
+        reduced_source = _float32(source_sum * _float32(1.0 / 16.0))
+    else:
+        assert route["reducer"] == "max"
+        reduced_source = source
+
+    polarised_source = _runtime_polarity_value(reduced_source, route["polarity"])
+    gated_source = _float32(polarised_source * _float32(1.0))
+    return _float32(gated_source * _float32(float(route["amount"])))
+
+
+def _runtime_route_group_contribution(
+    path_kind: object,
+    routes: list[dict[str, object]],
+) -> float:
+    contribution = _float32(0.0)
+    for route in routes:
+        route_contribution = (
+            _runtime_reduced_rack_route_contribution(route)
+            if path_kind == "voiceRack"
+            else _runtime_direct_route_contribution(route)
+        )
+        contribution = _float32(contribution + route_contribution)
+    return contribution
 
 
 def _normalise_whitespace(text: str) -> str:
@@ -821,6 +900,87 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert "cosimo_ios_auv3_generated_plugin" not in cmake_text
 
 
+def test_ios_host_smoke_source_qualifies_the_exact_t78_automation_bank() -> None:
+    endpoint_ids = _t78_effect_output_trim_endpoint_ids()
+    rack_source = EFFECTS_RACK_SOURCE.read_text(encoding="utf-8")
+    display_names = dict(re.findall(
+        r'input value float32 (lane[A-Za-z]+[1-5]OutputTrimDb) \[\[ name: "([^"]+)"',
+        rack_source,
+    ))
+    expected = json.loads(IOS_AUV3_HOST_SNAPSHOT.read_text(encoding="utf-8"))
+    expected_parameters = [
+        {
+            "address": _juce_auv3_parameter_address(identifier),
+            "identifier": identifier,
+            "displayName": display_names[identifier],
+        }
+        for identifier in endpoint_ids
+    ]
+
+    assert len(endpoint_ids) == 40
+    assert len(set(endpoint_ids)) == 40
+    assert expected["t78EffectOutputTrimParameters"] == expected_parameters
+    assert len(expected["parameters"]) == 156
+    assert expected["parameters"][-40:] == expected_parameters
+    assert expected["parameters"][0]["identifier"] == "hostSlot0Guard"
+    assert expected["parameters"][115]["identifier"] == "polishOutputTrimBypass"
+    assert "polishAnalyzerEnabledIn" not in {
+        parameter["identifier"] for parameter in expected["parameters"]
+    }
+    assert len({parameter["identifier"] for parameter in expected["parameters"]}) == 156
+    assert len({parameter["address"] for parameter in expected["parameters"]}) == 156
+    assert len({parameter["address"] for parameter in expected_parameters}) == 40
+    assert len({parameter["displayName"] for parameter in expected_parameters}) == 40
+
+    harness = IOS_AUV3_HOST_HARNESS.read_text(encoding="utf-8")
+    harness_header = (REPO_ROOT / "ios_auv3" / "Source" / "CosimoAUv3HostHarness.h").read_text(encoding="utf-8")
+    host_controller = IOS_HOST_VIEW_CONTROLLER.read_text(encoding="utf-8")
+    runner = IOS_AUV3_HOST_SMOKE.read_text(encoding="utf-8")
+
+    assert '../../native/CompleteSoundState.h' in harness
+    assert "t78EffectOutputTrimParameterIDs" in harness
+    assert "qualifyT78EffectOutputTrimParametersWithCompletion" in harness_header
+    assert "qualifyT78EffectOutputTrimParametersWithCompletion" in harness
+    assert "NSMutableSet<NSNumber *> *addresses" in harness
+    assert "matchedParameter.minValue != 0.0f" in harness
+    assert "matchedParameter.maxValue != 1.0f" in harness
+    assert "kAudioUnitParameterFlag_IsReadable" in harness
+    assert "kAudioUnitParameterFlag_IsWritable" in harness
+    assert "kAudioUnitParameterFlag_CanRamp" in harness
+    assert "kAudioUnitParameterFlag_NonRealTime" in harness
+    assert "stringFromValue:&minimumValue" in harness
+    assert "stringFromValue:&defaultValue" in harness
+    assert "stringFromValue:&maximumValue" in harness
+    assert "CosimoParseT78NumericText" in harness
+    assert "errno != ERANGE" in harness
+    assert "CosimoT78DefaultTextToleranceDb" in harness
+    assert "std::nextafter (CosimoT78DefaultNormalized, 1.0f)" in harness
+    assert "std::fabs(reconstructedDefaultDb) > CosimoT78DefaultTextToleranceDb" in harness
+    assert "std::fabs(defaultTextDb) > CosimoT78DefaultTextToleranceDb" in harness
+    assert "*end == '\\0'" in harness
+    assert "std::isfinite (result)" in harness
+    assert "minimumNormalized=" in harness
+    assert "minimumText=" in harness
+    assert "maximumNormalized=" in harness
+    assert "maximumText=" in harness
+    assert "defaultNormalized=" in harness
+    assert "defaultText=" in harness
+    assert "minimumText isEqualToString" not in harness
+    assert "defaultText isEqualToString" not in harness
+    assert "maximumText isEqualToString" not in harness
+    assert "setParameterWithIdentifier:identifier" in harness
+    assert "qualifyT78EffectOutputTrimParametersWithCompletion" in host_controller
+    assert 'payload[@"effectOutputTrimParameterSet"]' in host_controller
+    assert '"effectOutputTrimParameterSet"' in runner
+
+    combined = _load_ios_host_smoke_module().combine_results(
+        {"effectOutputTrimParameterSet": [{"identifier": endpoint_ids[0]}]},
+        {},
+        {},
+    )
+    assert combined["phone"]["effectOutputTrimParameterSet"] == [{"identifier": endpoint_ids[0]}]
+
+
 def test_ios_modulation_benchmark_build_can_be_installed_without_replacing_cosimo() -> None:
     cmake_text = IOS_AUV3_CMAKE.read_text(encoding="utf-8")
     project_script = IOS_AUV3_XCODE_PROJECT.read_text(encoding="utf-8")
@@ -931,11 +1091,11 @@ def test_ios_modulation_benchmark_installs_state_through_the_production_worker()
     assert "cpuPercent" not in host_harness
     assert 'setParameterWithIdentifier:@"voiceEnhancerAmount"' in host_controller
     assert 'payload[@"voiceEnhancerAmount"] = voiceEnhancerResult' in host_controller
-    assert "@590.0, @236.0, @390.0, @156.0" in host_harness
+    assert "@590.0, @236.0, @470.0, @188.0" in host_harness
     assert "benchmarkInstalledVoiceRouteCount.load(), 590.0" in plugin_shell
     assert "benchmarkInstalledMacroVoiceRouteCount.load(), 236.0" in plugin_shell
-    assert "benchmarkInstalledVoiceRackRouteCount.load(), 390.0" in plugin_shell
-    assert "benchmarkInstalledMacroRackRouteCount.load(), 156.0" in plugin_shell
+    assert "benchmarkInstalledVoiceRackRouteCount.load(), 470.0" in plugin_shell
+    assert "benchmarkInstalledMacroRackRouteCount.load(), 188.0" in plugin_shell
 
     install_body = plugin_shell.split("void installBenchmarkProfile", 1)[1].split("void beginModulationBenchmarkCapture", 1)[0]
     assert plugin_shell.count("benchmarkInstallStatus.store (1);") == 1
@@ -976,26 +1136,26 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
     assert profiles["voice-100"]["activeRouteCount"] == 100
     assert profiles["voice-rack-100"]["activeRouteCount"] == 100
     assert profiles["mixed-100"]["activeRouteCount"] == 100
-    assert profiles["stored-1372-active-100"]["storedRouteCount"] == 1372
-    assert profiles["stored-1372-active-100"]["activeRouteCount"] == 100
+    assert profiles["stored-1484-active-100"]["storedRouteCount"] == 1484
+    assert profiles["stored-1484-active-100"]["activeRouteCount"] == 100
     assert (
-        profiles["stored-1372-active-100"]["executionFingerprint"]
+        profiles["stored-1484-active-100"]["executionFingerprint"]
         == profiles["mixed-100"]["executionFingerprint"]
     )
     assert profiles["combined-200"]["activeRouteCount"] == 200
     assert profiles["combined-200"]["compiledCounts"]["voice"] == 100
     assert profiles["combined-200"]["compiledCounts"]["voiceRack"] == 100
-    assert profiles["active-1372"]["activeRouteCount"] == 1372
-    assert profiles["active-1372"]["compiledCounts"] == {
+    assert profiles["active-1484"]["activeRouteCount"] == 1484
+    assert profiles["active-1484"]["compiledCounts"] == {
         "voice": 590,
         "macroVoice": 236,
-        "voiceRack": 390,
-        "macroRack": 156,
+        "voiceRack": 470,
+        "macroRack": 188,
     }
 
     host_source = (REPO_ROOT / "ios_auv3/Source/CosimoHostViewController.mm").read_text()
-    assert '@"stored-1372-active-100": @45.0' in host_source
-    assert '@"active-1372": @20.0' in host_source
+    assert '@"stored-1484-active-100": @45.0' in host_source
+    assert '@"active-1484": @20.0' in host_source
     assert "stored-1144-active-100" not in host_source
     assert "active-1144" not in host_source
 
@@ -1008,7 +1168,7 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
         for route in json.loads(profiles["voice-rack-100"]["stateJSON"])["routes"]
     }
     assert len(voice_rack_sources) == 10
-    assert len(voice_rack_targets) == 36
+    assert len(voice_rack_targets) == 47
 
     for profile_index, profile in enumerate(payload["profiles"]):
         assert profile["profileIndex"] == profile_index
@@ -1050,24 +1210,8 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
 
         for key, routes in route_groups.items():
             if all(route["enabled"] for route in routes):
-                def source_value(route: dict[str, object]) -> float:
-                    if route["sourceKind"] == "env" and route["sourceSlot"] == 4:
-                        return 1.0
-                    if route["sourceKind"] in {"velocity", "pressure", "slide"}:
-                        return 100 / 127
-                    if route["sourceKind"] == "macro":
-                        return 0.75
-                    return 0.0
-
-                contribution = math.fsum(
-                    float(route["amount"]) * (
-                        source_value(route)
-                        if route["polarity"] == "unipolar"
-                        else (2 * source_value(route)) - 1
-                    )
-                    for route in routes
-                )
-                assert math.isclose(contribution, 0.0, abs_tol=1e-12), key
+                contribution = _runtime_route_group_contribution(key[0], routes)
+                assert contribution == 0.0, (key, contribution)
 
 
 def test_ios_modulation_benchmark_has_no_post_cut_unavailable_profile_path() -> None:
@@ -1157,8 +1301,8 @@ def _valid_ios_modulation_benchmark_payload() -> dict[str, object]:
         "voice-rack-100": 45.0,
         "mixed-100": 45.0,
         "combined-200": 45.0,
-        "stored-1372-active-100": 45.0,
-        "active-1372": 20.0,
+        "stored-1484-active-100": 45.0,
+        "active-1484": 20.0,
     }
     compiled_counts = {
         "empty": {"voice": 0, "macroVoice": 0, "voiceRack": 0, "macroRack": 0},
@@ -1166,8 +1310,8 @@ def _valid_ios_modulation_benchmark_payload() -> dict[str, object]:
         "voice-rack-100": {"voice": 0, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
         "mixed-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
         "combined-200": {"voice": 100, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
-        "stored-1372-active-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
-        "active-1372": {"voice": 590, "macroVoice": 236, "voiceRack": 390, "macroRack": 156},
+        "stored-1484-active-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
+        "active-1484": {"voice": 590, "macroVoice": 236, "voiceRack": 470, "macroRack": 188},
     }
     phases = []
     for name in _load_ios_modulation_benchmark_module().PROFILE_NAMES:
@@ -1331,11 +1475,11 @@ def test_ios_modulation_benchmark_rejects_expensive_matrix_delta() -> None:
         module.assert_shipping_contract(payload)
 
 
-def test_ios_full_1372_route_profile_is_diagnostic_until_the_merged_product_budget_is_set() -> None:
+def test_ios_full_1484_route_profile_is_diagnostic_until_the_merged_product_budget_is_set() -> None:
     module = _load_ios_modulation_benchmark_module()
 
-    assert "active-1372" in module.PROFILE_NAMES
-    assert "active-1372" not in module.MATRIX_LOAD_BUDGETS
+    assert "active-1484" in module.PROFILE_NAMES
+    assert "active-1484" not in module.MATRIX_LOAD_BUDGETS
 
 
 def test_ios_modulation_benchmark_requires_adjacent_empty_brackets() -> None:
@@ -2632,6 +2776,7 @@ def test_ios_host_smoke_discovers_the_extension_and_restores_state_across_relaun
 ) -> None:
     phone = ios_host_smoke_result["phone"]
     parameter_set = phone["parameterSet"]
+    effect_output_trim_parameter_set = phone["effectOutputTrimParameterSet"]
     table_selection_set = phone["tableSelectionSet"]
     state = phone["state"]
     host_page = phone["editor"]["hostPage"]
@@ -2647,6 +2792,12 @@ def test_ios_host_smoke_discovers_the_extension_and_restores_state_across_relaun
     assert parameter_set["identifier"] == "oscAWavetablePosition"
     assert parameter_set["requestedValue"] == pytest.approx(0.625, abs=0.001)
     assert parameter_set["observedValue"] == pytest.approx(0.625, abs=0.001)
+    assert [result["identifier"] for result in effect_output_trim_parameter_set] == _t78_effect_output_trim_endpoint_ids()
+    assert len(effect_output_trim_parameter_set) == 40
+    for index, result in enumerate(effect_output_trim_parameter_set):
+        requested_value = 0.2 + (0.1 * (index % 5))
+        assert result["requestedValue"] == pytest.approx(requested_value, abs=0.001)
+        assert result["observedValue"] == pytest.approx(requested_value, abs=0.001)
     assert table_selection_set["identifier"] == "oscAWavetableSelect"
     assert table_selection_set["requestedValue"] == pytest.approx(5.0, abs=0.001)
     assert table_selection_set["observedValue"] == pytest.approx(5.0, abs=0.001)
@@ -2665,8 +2816,15 @@ def test_ios_host_smoke_freezes_parameter_and_state_shape(
 ) -> None:
     expected = json.loads(IOS_AUV3_HOST_SNAPSHOT.read_text(encoding="utf-8"))
     phone = ios_host_smoke_result["phone"]
+    runtime_parameters = phone["parameters"]
+    runtime_by_identifier = {parameter["identifier"]: parameter for parameter in runtime_parameters}
+    t78_endpoint_ids = _t78_effect_output_trim_endpoint_ids()
+    t78_runtime_parameters = [runtime_by_identifier[identifier] for identifier in t78_endpoint_ids]
 
     assert phone["parameters"] == expected["parameters"]
+    assert t78_runtime_parameters == expected["t78EffectOutputTrimParameters"]
+    assert len({parameter["address"] for parameter in t78_runtime_parameters}) == 40
+    assert len({parameter["displayName"] for parameter in t78_runtime_parameters}) == 40
     assert phone["state"]["savedStateKeys"] == expected["savedStateKeys"]
     assert phone["state"]["savedStateSource"] == expected["savedStateSource"]
 

@@ -8,6 +8,60 @@ import {
     readSpeedrunFixture,
 } from "./helpers/speedrun_test_context.mjs";
 
+function createSourceOnlyT78IntakeContext({ patchIO, contractModule, synthIdentity }) {
+    const currentContract = contractModule.buildCanonicalPluginStateContract({
+        effectID: synthIdentity.SYNTH_PRESET_EFFECT_ID,
+        parameters: [
+            { endpointID: "voiceEnhancerFrequency", type: "number", min: 20, max: 20_000, defaultValue: 130 },
+            { endpointID: "voiceEnhancerQ", type: "number", min: 0.1, max: 10, defaultValue: 0.71 },
+            { endpointID: "voiceEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+            {
+                endpointID: "voiceEnhancerKeyTrackEnabled",
+                type: "integer",
+                min: 0,
+                max: 1,
+                step: 1,
+                defaultValue: 0,
+                discrete: true,
+                text: "Off|On",
+            },
+            {
+                endpointID: "voiceEnhancerKeyTrackOffsetSemitones",
+                type: "number",
+                min: -12,
+                max: 60,
+                defaultValue: 0,
+            },
+            { endpointID: "polishEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+            { endpointID: "polishCompressionClipAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+            { endpointID: "polishOutputTrimDb", type: "number", min: -24, max: 12, defaultValue: 0 },
+            { endpointID: "polishSafeBassAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+            ...[
+                "polishSafeBassBypass",
+                "polishEnhancerBypass",
+                "polishCompressionClipBypass",
+                "polishOutputTrimBypass",
+            ].map((endpointID) => ({
+                endpointID,
+                type: "integer",
+                min: 0,
+                max: 1,
+                step: 1,
+                defaultValue: 0,
+                discrete: true,
+                text: "Active|Bypassed",
+            })),
+        ],
+        storedState: [
+            { key: "modulation.v6", schemaVersion: 6, required: true },
+            { key: "articulations.v4", schemaVersion: 4, required: true },
+            { key: "bounce.v1", schemaVersion: 1, required: true },
+        ],
+    });
+    const options = { currentContract };
+    return { options, defaults: patchIO.createDefaultsSnapshot(options) };
+}
+
 test("speedrun defaults are derived from the current generated synth contract", async () => {
     const [{ patchIO }, context] = await Promise.all([
         loadSpeedrunModules(),
@@ -15,7 +69,7 @@ test("speedrun defaults are derived from the current generated synth contract", 
     ]);
     const defaults = patchIO.createDefaultsSnapshot(context.options);
 
-    assert.equal(Object.keys(defaults.parameters).length, 115);
+    assert.equal(Object.keys(defaults.parameters).length, 155);
     assert.equal(defaults.parameters.oscAWavetableSelect, 35);
     assert.ok(Math.abs(defaults.parameters.ampAttack - 0.01) < 1e-6);
     assert.ok(Math.abs(defaults.parameters.ampDecay - 0.001) < 1e-6);
@@ -95,7 +149,49 @@ test("current shared-sound envelopes enter through exact contract and strict doc
     assert.deepEqual(result.value.document.lane, lane);
 });
 
-test("speedrun rejects pre-T74 browser state and unsupported shared-sound versions whole", async () => {
+test("speedrun browser and URL-share intake reject old or incomplete T78 lane state", async () => {
+    const modules = await loadSpeedrunModules();
+    const { patchIO } = modules;
+    const context = createSourceOnlyT78IntakeContext(modules);
+    const oldVersion = { ...context.defaults.lane, version: 1 };
+    const missingTrim = structuredClone(context.defaults.lane);
+    delete missingTrim.devices["delay#1"].params.delayOutputTrimDb;
+
+    const makeEnvelope = (lane) => ({
+        format: "cosimo.soundShare",
+        version: 2,
+        preset: {
+            kind: "cosimo.effectPreset",
+            version: 2,
+            effectID: context.options.currentContract.effectID,
+            presetID: "speedrun.t78-rejection",
+            label: "Rejected T78 State",
+            contract: context.options.currentContract,
+            parameters: context.defaults.parameters,
+            storedState: {
+                "modulation.v6": context.defaults.modulation,
+                "articulations.v4": context.defaults.articulations,
+                "bounce.v1": null,
+            },
+        },
+        supplementalStoredState: { "lane.v1": lane },
+    });
+
+    for (const lane of [oldVersion, missingTrim]) {
+        const browser = patchIO.intakePatch(
+            barePatchFromDefaults(context.defaults, { lane }),
+            context.options,
+        );
+        assert.equal(browser.ok, false);
+        assert.equal(browser.error._tag, "InvalidLane");
+
+        const shared = patchIO.intakePatch(makeEnvelope(lane), context.options);
+        assert.equal(shared.ok, false);
+        assert.equal(shared.error._tag, "InvalidLane");
+    }
+});
+
+test("speedrun rejects pre-Polish browser and shared-sound versions whole", async () => {
     const [{ patchIO }, context] = await Promise.all([
         loadSpeedrunModules(),
         createCurrentSpeedrunContext(),

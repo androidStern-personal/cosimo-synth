@@ -23,8 +23,9 @@ import { LANE_STATE_KEY } from "../lane-state";
 import {
     commitLaneStateV2,
     createDefaultLaneStateV2,
-    parseLaneStateV2Compat,
+    parseLaneStateV2,
     serializeLaneStateV2,
+    synchronizeLaneOutputTrimsFromHostParameters,
     type LaneStateV2,
 } from "../lane-state-v2";
 import type { EffectStoredStateAdapter } from "./effect-preset-v2";
@@ -53,7 +54,7 @@ function readFullStoredStateValue(storedState: unknown, key: string) {
 }
 
 function parseStrictRackState(value: unknown): LaneStateV2 {
-    const outcome = parseLaneStateV2Compat(value);
+    const outcome = parseLaneStateV2(value);
 
     if (outcome._tag === "err") {
         throw new Error(outcome.message);
@@ -178,13 +179,19 @@ export function createSynthRackInitStateAdapter(
         createDefaultValue() {
             return createDefaultLaneStateV2();
         },
-        normalizeForTransaction(value: unknown) {
-            return parseStrictRackState(value);
+        normalizeForTransaction(value: unknown, context) {
+            return synchronizeLaneOutputTrimsFromHostParameters(
+                parseStrictRackState(value),
+                context?.parameters ?? {},
+            );
         },
-        serializeForTransaction(value: unknown) {
-            return serializeLaneStateV2(parseStrictRackState(value));
+        serializeForTransaction(value: unknown, context) {
+            return serializeLaneStateV2(synchronizeLaneOutputTrimsFromHostParameters(
+                parseStrictRackState(value),
+                context?.parameters ?? {},
+            ));
         },
-        apply(value: unknown) {
+        apply(value: unknown, context) {
             if (typeof patchConnection.sendEventOrValue !== "function") {
                 throw new Error(`Cannot apply ${LANE_STATE_KEY} because rack runtime writes are unavailable.`);
             }
@@ -193,7 +200,10 @@ export function createSynthRackInitStateAdapter(
                 throw new Error(`Cannot apply ${LANE_STATE_KEY} because stored-state writes are unavailable.`);
             }
 
-            const nextState = parseStrictRackState(value);
+            const nextState = synchronizeLaneOutputTrimsFromHostParameters(
+                parseStrictRackState(value),
+                context?.parameters ?? {},
+            );
             const previousState = currentState;
             const serialized = serializeLaneStateV2(nextState);
             currentState = nextState;
@@ -235,7 +245,8 @@ function createCanonicalStoredState(currentContract: EffectPluginStateContract) 
         },
         [LANE_STATE_KEY]: {
             // The slot name predates the tree document; the value inside is
-            // self-versioned lane.v2 (the compat parse still reads v1).
+            // self-versioned lane.v2. T78 intentionally offers no lane-v1
+            // or missing-Output-Trim migration path.
             schemaVersion: 2,
             create: () => serializeLaneStateV2(createDefaultLaneStateV2()),
         },

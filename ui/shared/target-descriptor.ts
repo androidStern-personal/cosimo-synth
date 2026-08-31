@@ -17,6 +17,10 @@ import {
     type ParsedLaneModulationTarget,
 } from "./lane-modulation-targets";
 import {
+    effectOutputTrimNormalizedValue,
+    effectOutputTrimValueFromNormalized,
+} from "./effect-output-trim";
+import {
     MODULATION_TARGET_IDENTITIES,
     OSCILLATOR_IDS,
     type ModulationTargetKind,
@@ -619,14 +623,18 @@ function rackTargetId(parameter: RackParameterDescriptor): TargetId {
 }
 
 function rackNormalizedFromEngine(parameter: RackParameterDescriptor, value: number): NormalizedValue {
-    const normalizedValue = parameter.scale === "log"
+    const normalizedValue = parameter.valueKind === "effect-output-trim-db"
+        ? effectOutputTrimNormalizedValue(value)
+        : parameter.scale === "log"
         ? Math.log(value / parameter.min) / Math.log(parameter.max / parameter.min)
         : (value - parameter.min) / (parameter.max - parameter.min);
     return normalized(normalizedValue, `${parameter.endpointID} endpoint conversion`);
 }
 
 function rackEngineFromNormalized(parameter: RackParameterDescriptor, value: NormalizedValue) {
-    return parameter.scale === "log"
+    return parameter.valueKind === "effect-output-trim-db"
+        ? effectOutputTrimValueFromNormalized(value)
+        : parameter.scale === "log"
         ? parameter.min * (parameter.max / parameter.min) ** value
         : parameter.min + (parameter.max - parameter.min) * value;
 }

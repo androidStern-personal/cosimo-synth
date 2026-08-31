@@ -67,11 +67,11 @@ export const MODULATION_MACRO_RACK_ROUTE_CELL_COUNT = MODULATION_MACRO_SOURCE_CO
  * Wire ROUTE CAPACITY for the two rack tables (engine
  * modulationVoiceRackRouteCapacity / modulationMacroRackRouteCapacity).
  * The per-route upload arrays are deliberately NOT sized as the full
- * source x target matrix: at the 195-wide pooled bus that matrix put the
+ * source x target matrix: at the 235-wide pooled bus that matrix puts the
  * program upload at 68KB, and cmaj::Patch's native performer event FIFO is
  * a fixed 64KB — the event could never be delivered on the native (iPhone)
- * transport. The budget covers the entire 39-target static domain active at
- * once (390 voice-rack + 156 macro-rack routes) with lane-pool routes on
+ * transport. The budget covers the entire 47-target static domain active at
+ * once (470 voice-rack + 188 macro-rack routes) with lane-pool routes on
  * top. The per-CELL amount tables keep the full cell space.
  */
 export const MODULATION_VOICE_RACK_ROUTE_CAPACITY = 512;
@@ -82,7 +82,7 @@ export const MODULATION_ARTICULATION_ROUTE_CELL_COUNT = MODULATION_VOICE_ROUTE_C
     + MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT;
 
 /** Number of legal source/target pairs in the closed STATIC modulation
-    domain (1,330). Lane-pool pairs are per-patch dynamic and deliberately
+    domain (1,484). Lane-pool pairs are per-patch dynamic and deliberately
     excluded: they exist only while their device instance does. */
 export const MODULATION_MAPPING_CELL_COUNT = MODULATION_VOICE_ROUTE_CELL_COUNT
     + MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT

@@ -99,10 +99,15 @@ import {
     type ParameterKnobDescriptor,
 } from "../desktop/rack-parameter-knob";
 import {
+    formatRackParameterValue,
     getRackParameterDescriptor,
     type RackParameterDescriptor,
 } from "../shared/rack-parameter-descriptors";
 import { requireKeyTrackRange } from "../shared/key-track";
+import {
+    effectOutputTrimNormalizedValue,
+    effectOutputTrimValueFromNormalized,
+} from "../shared/effect-output-trim";
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
@@ -123,6 +128,7 @@ function requireIOSRackParameterDescriptor(endpointID: string): RackParameterDes
 }
 const DISTORTION_WET_HP_DESCRIPTOR = requireIOSRackParameterDescriptor("distortionWetHPHz");
 const DISTORTION_WET_LP_DESCRIPTOR = requireIOSRackParameterDescriptor("distortionWetLPHz");
+const DISTORTION_OUTPUT_TRIM_DESCRIPTOR = requireIOSRackParameterDescriptor("distortionOutputTrimDb");
 const IOS_DISTORTION_KEY_TRACK_RANGE = requireKeyTrackRange("filter-frequency");
 const IOS_PERCENT_ENTRY_SPEC = parameterEntrySpecForScalar({
     min: 0,
@@ -943,6 +949,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
     driveValue,
     kneeValue,
     wetValue,
+    outputTrimValue,
     wetHPKeyTrack,
     wetLPKeyTrack,
     historyFrame,
@@ -952,12 +959,14 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
     onDriveChange,
     onKneeChange,
     onWetChange,
+    onOutputTrimChange,
 }: {
     modeValue: number;
     typeValue: number;
     driveValue: number;
     kneeValue: number;
     wetValue: number;
+    outputTrimValue: number;
     wetHPKeyTrack: LaneKeyTrackControlBinding;
     wetLPKeyTrack: LaneKeyTrackControlBinding;
     historyFrame: ReturnType<typeof useSynthPatchViewModel>["observedDistortionHistory"];
@@ -967,6 +976,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
     onDriveChange: (nextValue: number) => void;
     onKneeChange: (nextValue: number) => void;
     onWetChange: (nextValue: number) => void;
+    onOutputTrimChange: (nextValue: number) => void;
 }) {
     const inputPeak = scopeFrame?.inputPeak ?? 0;
     const outputPeak = scopeFrame?.outputPeak ?? 0;
@@ -1153,6 +1163,33 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
                     role="distortion-wet-lp-slider"
                     isHighPass={false}
                 />
+
+                <label style={{ display: "grid", gap: "0.32rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
+                        <span className="mseg-depth-label">Output Trim</span>
+                        <span style={{
+                            fontFamily: "\"SF Mono\", Menlo, monospace",
+                            fontSize: "0.72rem",
+                            letterSpacing: "0.08em",
+                            color: "rgba(226,232,240,0.92)",
+                        }}
+                        >
+                            {formatRackParameterValue(DISTORTION_OUTPUT_TRIM_DESCRIPTOR, outputTrimValue)}
+                        </span>
+                    </div>
+                    <input
+                        data-role="distortion-output-trim-slider"
+                        className="mseg-rate-slider"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.001"
+                        value={effectOutputTrimNormalizedValue(outputTrimValue)}
+                        onChange={(event) => onOutputTrimChange(
+                            effectOutputTrimValueFromNormalized(Number(event.target.value)),
+                        )}
+                    />
+                </label>
             </div>
 
             <div style={{
@@ -1587,6 +1624,7 @@ function IOSPatchViewBody() {
                                 driveValue={synthView.distortionDriveDb.value}
                                 kneeValue={synthView.distortionKnee.value}
                                 wetValue={synthView.distortionWet.value}
+                                outputTrimValue={synthView.distortionOutputTrim.value}
                                 wetHPKeyTrack={distortionWetHPKeyTrack}
                                 wetLPKeyTrack={distortionWetLPKeyTrack}
                                 historyFrame={synthView.observedDistortionHistory}
@@ -1596,6 +1634,7 @@ function IOSPatchViewBody() {
                                 onDriveChange={synthView.distortionDriveDb.commitValue}
                                 onKneeChange={synthView.distortionKnee.commitValue}
                                 onWetChange={synthView.distortionWet.commitValue}
+                                onOutputTrimChange={synthView.distortionOutputTrim.commitValue}
                             />
 
                             <IOSMsegLauncher

@@ -76,6 +76,7 @@ import {
     clickPresetBarAction,
     saveSynthPresetAs,
     waitForPresetBarDirtyState,
+    legacyEightLaneDocJson,
     dragArticulationCardToLane,
     previewArticulationCardDragOver,
     readDesktopRangeSegments,
@@ -2236,15 +2237,30 @@ test("short-phone rack knobs form a touchable three-column matrix", async () => 
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         const controls = page.locator('[data-role="rack-editor-reverb"] .rack-editor-control');
-        assert.equal(await controls.count(), 4);
+        assert.equal(await controls.count(), 5);
         const boxes = await controls.evaluateAll((elements) => elements.map((element) => {
             const bounds = element.getBoundingClientRect();
-            return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+            const hit = document.elementFromPoint(
+                bounds.left + Math.min(12, bounds.width / 4),
+                bounds.top + (bounds.height / 2),
+            );
+            return {
+                x: bounds.x,
+                y: bounds.y,
+                width: bounds.width,
+                height: bounds.height,
+                ownsInteriorHit: hit !== null && element.contains(hit),
+                hitRole: hit?.closest("[data-role]")?.getAttribute("data-role") ?? null,
+            };
         }));
         assert.equal(Math.abs(boxes[0].y - boxes[1].y) < 1, true);
         assert.equal(Math.abs(boxes[1].y - boxes[2].y) < 1, true);
+        assert.equal(Math.abs(boxes[3].y - boxes[4].y) < 1, true);
         assert.equal(boxes[3].y > boxes[0].y + 40, true);
+        assert.equal(Math.abs(boxes[0].x - boxes[3].x) < 1, true);
+        assert.equal(Math.abs(boxes[1].x - boxes[4].x) < 1, true);
         assert.equal(boxes.every((box) => box.width >= 52 && box.height >= 68), true);
+        assert.equal(boxes.every((box) => box.ownsInteriorHit), true, JSON.stringify(boxes));
     } finally {
         await page.close();
     }
@@ -3375,25 +3391,30 @@ test("rack no-op release adopts authoritative stored order received during the g
     const page = await openHarnessPage();
 
     try {
+        const authoritativeLane = {
+            ...JSON.parse(legacyEightLaneDocJson()),
+            chain: [
+                "reverb#1",
+                "globalFilter#1",
+                "distortion#1",
+                "ott#1",
+                "chorus#1",
+                "flanger#1",
+                "phaser#1",
+                "delay#1",
+            ].map((deviceId) => ({
+                kind: "device",
+                deviceId,
+                enabled: deviceId === "chorus#1",
+            })),
+        };
+        const authoritativeLaneJson = JSON.stringify(authoritativeLane);
         await clearHarnessDebugLog(page);
         await beginRackReorderWithoutPointerCapture(page, { pointerId: 94 });
         await page.waitForSelector(".subway-station-row.is-reordering");
-        await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("lane.v1", JSON.stringify({
-                ...window.__COSIMO_DESKTOP_HARNESS__.createDefaultLaneState(),
-                order: ["reverb", "filter", "drive", "ott", "chorus", "flanger", "phaser", "delay"],
-                enabled: {
-                    filter: false,
-                    drive: false,
-                    ott: false,
-                    chorus: true,
-                    flanger: false,
-                    phaser: false,
-                    delay: false,
-                    reverb: false,
-                },
-            }));
-        });
+        await page.evaluate((serialized) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("lane.v1", serialized);
+        }, authoritativeLaneJson);
         await page.waitForFunction(() => (
             document.querySelector('[data-role="rack-module-chorus"]')?.getAttribute("data-enabled") === "true"
             && document.querySelector('[data-role="rack-module-list"]')?.firstElementChild
@@ -3407,12 +3428,14 @@ test("rack no-op release adopts authoritative stored order received during the g
 
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
-        // The release was a no-op: nothing was written, so storage still
-        // holds the seeded v1 document verbatim (it upgrades to lane.v2 on
-        // the next real edit).
+        // The release was a no-op: storage keeps the accepted complete
+        // current document verbatim and no compatibility rewrite occurs.
+        assert.equal(String(snapshot.storedState["lane.v1"]), authoritativeLaneJson);
         const storedRack = JSON.parse(String(snapshot.storedState["lane.v1"]));
-        assert.equal(storedRack.order[0], "reverb");
-        assert.equal(storedRack.enabled.chorus, true);
+        assert.equal(storedRack.version, 2);
+        assert.equal(storedRack.chain[0].deviceId, "reverb#1");
+        assert.equal(storedRack.chain.find(({ deviceId }) => deviceId === "chorus#1").enabled, true);
+        assert.equal(storedRack.devices["chorus#1"].params.chorusOutputTrimDb, 0);
     } finally {
         await page.close();
     }

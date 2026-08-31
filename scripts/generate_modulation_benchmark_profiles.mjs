@@ -221,8 +221,8 @@ function buildNeutralRouteGroups() {
         groupsByPath.set(name, targetGroups);
     }
 
-    if (allRoutes.length !== 1372) {
-        throw new Error(`Expected the complete 1372-cell domain, received ${allRoutes.length}`);
+    if (allRoutes.length !== 1484) {
+        throw new Error(`Expected the complete 1484-cell domain, received ${allRoutes.length}`);
     }
     return { allRoutes, groupsByPath };
 }
@@ -243,15 +243,15 @@ function buildProfileRoutes(groupsByPath) {
         Array.from({ length: 10 }, (_, targetIndex) => ({ targetIndex, groupIndexes: fiveVoiceGroups })),
     );
 
-    // Retain the shipping profile's all-destination coverage while rotating
-    // through all five Amp-inclusive source pairs. One pair per 36 targets is
-    // 72 routes; a second pair on the first 14 targets makes exactly 100.
+    // Cover all 47 static rack destinations while rotating through all five
+    // Amp-inclusive source pairs. One pair per target is 94 routes; a second
+    // pair on the first three targets makes exactly 100.
     const voiceRackHundred = flattenSelectedGroups(
         groupsByPath,
         "voiceRack",
-        Array.from({ length: 36 }, (_, targetIndex) => ({
+        Array.from({ length: 47 }, (_, targetIndex) => ({
             targetIndex,
-            groupIndexes: targetIndex < 14
+            groupIndexes: targetIndex < 3
                 ? [targetIndex % fiveVoiceGroups.length, (targetIndex + 1) % fiveVoiceGroups.length]
                 : [targetIndex % fiveVoiceGroups.length],
         })),
@@ -343,14 +343,14 @@ export function buildModulationBenchmarkProfiles() {
         createProfile("voice-rack-100", voiceRackHundred),
         createProfile("mixed-100", mixedHundred),
         createProfile("combined-200", [...voiceHundred, ...voiceRackHundred]),
-        createProfile("stored-1372-active-100", allRoutes.map((route) => ({
+        createProfile("stored-1484-active-100", allRoutes.map((route) => ({
             ...route,
             enabled: mixedActiveIDs.has(route.id),
         }))),
-        createProfile("active-1372", allRoutes),
+        createProfile("active-1484", allRoutes),
     ];
     const mixed = profiles.find((profile) => profile.name === "mixed-100");
-    const stored = profiles.find((profile) => profile.name === "stored-1372-active-100");
+    const stored = profiles.find((profile) => profile.name === "stored-1484-active-100");
     if (mixed.executionFingerprint !== stored.executionFingerprint) {
         throw new Error("Disabled stored routes changed the compiled real-time execution program");
     }
