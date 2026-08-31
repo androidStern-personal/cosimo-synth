@@ -23,6 +23,8 @@ test("Key Track status vendors the reviewed Material Symbols Rounded note unchan
     assert.equal(asset, '<svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20"><path d="M306-186q-42-42-42-102t42-102q42-42 102-42 20 0 38 5.5t34 14.5v-368q0-15.3 10.33-25.65Q500.67-816 515.94-816h143.78q15.28 0 25.78 10.32 10.5 10.33 10.5 25.59v71.83q0 15.26-10.35 25.76Q675.3-672 660-672H552v384q0 60-42 102t-102 42q-60 0-102-42Z"/></svg>');
     assert.match(license, /^\s*Apache License\s+Version 2\.0, January 2004/);
     assert.match(credits, /Material Symbols.*Rounded `music_note` 20px SVG.*Apache License 2\.0/);
+    assert.match(statusSource, /music_note-20px\.svg\?raw/);
+    assert.doesNotMatch(statusSource, /new URL\s*\(/);
     assert.doesNotMatch(statusSource, /\bas CSSProperties\b/);
     assert.match(statusSource, /}\s+satisfies CSSProperties;/);
 });

@@ -7,11 +7,13 @@ import {
     getHarnessSnapshot,
     legacyEightLaneDocJson,
     normalizeModulationState,
+    openBuiltDesktopBundlePage,
     openHarnessPage,
     readStoredModulationState,
     selectRackEffect,
     waitForHarnessSnapshot,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
+import { decodePng } from "./helpers/png_pixels.mjs";
 
 function readLaneDocument(snapshot) {
     const raw = snapshot.storedStateValues?.["lane.v1"]
@@ -178,6 +180,23 @@ function boxesOverlap(left, right) {
         && left.y + left.height > right.y;
 }
 
+function countYellowNotePixels(screenshot) {
+    const png = decodePng(screenshot);
+    let yellowPixels = 0;
+
+    for (let offset = 0; offset < png.pixels.length; offset += 4) {
+        const red = png.pixels[offset];
+        const green = png.pixels[offset + 1];
+        const blue = png.pixels[offset + 2];
+        const alpha = png.pixels[offset + 3];
+        if (red >= 220 && green >= 160 && blue <= 90 && alpha >= 200) {
+            yellowPixels += 1;
+        }
+    }
+
+    return yellowPixels;
+}
+
 async function armMseg1(page) {
     await expandGlobalModRail(page);
     await page.locator('[data-role="rack-mod-source-mseg-1"]').click();
@@ -272,6 +291,112 @@ test("FX Key Track uses the shared menu and a gesture-transparent top-left statu
         assert.equal(await toggle.count(), 0, "Ineligible parameters must not gain Key Track.");
     } finally {
         await page.close();
+    }
+});
+
+test("compiled desktop Key Track paints its embedded note without a failed asset", async () => {
+    const failedMusicNoteAssets = [];
+    const page = await openBuiltDesktopBundlePage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            nextPage.on("response", (response) => {
+                if (response.url().includes("music_note-20px.svg") && !response.ok()) {
+                    failedMusicNoteAssets.push(`${response.status()} ${response.url()}`);
+                }
+            });
+            nextPage.on("requestfailed", (request) => {
+                if (request.url().includes("music_note-20px.svg")) {
+                    failedMusicNoteAssets.push(`request failed ${request.url()}`);
+                }
+            });
+        },
+    });
+
+    try {
+        await page.locator('[data-role="filter-mode-chip"]').click();
+        const cutoff = voiceFilterControl(page);
+        await toggleKeyTrackFromMenu(page, cutoff, "Enable Key Track");
+
+        const status = page.locator('[data-role="key-track-status-filterCutoff"]');
+        await status.waitFor();
+        await page.waitForTimeout(100);
+        const maskImage = await status.evaluate((element) => {
+            const style = getComputedStyle(element);
+            return style.maskImage || style.webkitMaskImage;
+        });
+        const yellowPixels = countYellowNotePixels(await status.screenshot({
+            animations: "disabled",
+        }));
+
+        assert.match(maskImage, /^url\("data:image\/svg\+xml,/);
+        assert.ok(yellowPixels >= 10, `Expected painted yellow note pixels, got ${yellowPixels}.`);
+        assert.deepEqual(failedMusicNoteAssets, []);
+    } finally {
+        await page.close();
+    }
+});
+
+test("Global Filter Key Track and mode-suspension badges own separate compact and wide geometry", async () => {
+    for (const viewport of [
+        { label: "compact", width: 393, height: 852 },
+        { label: "wide", width: 1280, height: 900 },
+    ]) {
+        const page = await openHarnessPage({
+            beforeGoto: (nextPage) => nextPage.setViewportSize(viewport),
+        });
+
+        try {
+            await page.evaluate(() => {
+                window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("globalFilterMode", 0);
+            });
+            const fxTab = page.locator('[data-role="mobile-workspace-tab-fx"]');
+            if (await fxTab.isVisible()) {
+                await fxTab.click();
+            }
+            await selectRackEffect(page, "filter");
+            const editor = page.locator('[data-role="rack-editor-filter"]');
+            if (await editor.getAttribute("data-effect-enabled") === "false") {
+                await page.locator('[data-role="rack-editor-power"]').click();
+                await page.waitForFunction(() => (
+                    document.querySelector('[data-role="rack-editor-filter"]')
+                        ?.getAttribute("data-effect-enabled") === "true"
+                ));
+            }
+
+            const surface = page.locator('[data-role="rack-parameter-surface-globalFilterCutoff"]');
+            const cutoff = surface.locator('[data-role="rack-parameter-globalFilterCutoff"]');
+            assert.equal(await cutoff.getAttribute("data-route-effectiveness"), "target-suspended");
+            await toggleKeyTrackFromMenu(page, cutoff, "Enable Key Track");
+
+            const status = surface.locator('[data-role="key-track-status-globalFilterCutoff"]');
+            const mode = surface.locator(".rack-target-suspended-label");
+            await status.waitFor();
+            await mode.waitFor();
+            const surfaceBox = await surface.boundingBox();
+            const statusBox = await status.boundingBox();
+            const modeBox = await mode.boundingBox();
+            assert.ok(surfaceBox && statusBox && modeBox);
+            assert.equal(
+                boxesOverlap(statusBox, modeBox),
+                false,
+                `${viewport.label} status badges overlap: ${JSON.stringify({ statusBox, modeBox })}`,
+            );
+            assert.ok(
+                modeBox.x >= statusBox.x + statusBox.width + 2,
+                `${viewport.label} MODE badge must start after the note's owned geometry.`,
+            );
+            for (const [name, box] of [["note", statusBox], ["MODE", modeBox]]) {
+                assert.ok(
+                    box.x >= surfaceBox.x
+                        && box.y >= surfaceBox.y
+                        && box.x + box.width <= surfaceBox.x + surfaceBox.width
+                        && box.y + box.height <= surfaceBox.y + surfaceBox.height,
+                    `${viewport.label} ${name} badge must stay inside the outer control.`,
+                );
+            }
+        } finally {
+            await page.close();
+        }
     }
 });
 

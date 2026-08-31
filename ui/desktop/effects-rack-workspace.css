@@ -1638,6 +1638,10 @@
     letter-spacing: 0.08em;
 }
 
+.rack-editor-control.has-key-track-status .rack-target-suspended-label {
+    left: 19px;
+}
+
 .rack-choice-control {
     display: grid;
     place-items: center;

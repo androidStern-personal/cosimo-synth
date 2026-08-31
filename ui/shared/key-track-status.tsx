@@ -1,9 +1,7 @@
 import type { CSSProperties } from "react";
+import musicNoteSvg from "../assets/material-symbols-rounded/music_note-20px.svg?raw";
 
-const MUSIC_NOTE_URL = new URL(
-    "../assets/material-symbols-rounded/music_note-20px.svg",
-    import.meta.url,
-).href;
+const MUSIC_NOTE_URL = `data:image/svg+xml,${encodeURIComponent(musicNoteSvg)}`;
 
 const KEY_TRACK_STATUS_STYLE = {
     position: "absolute",

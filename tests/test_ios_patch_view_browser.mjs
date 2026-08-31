@@ -39,6 +39,7 @@ import {
     waitForIOSHarnessReady,
     waitForIOSSourceHarnessReady,
 } from "./helpers/ios_harness_browser.mjs";
+import { decodePng } from "./helpers/png_pixels.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -85,6 +86,23 @@ const IOS_MSEG_IDENTITY_SHAPES = {
 
 function cloneJson(value) {
     return JSON.parse(JSON.stringify(value));
+}
+
+function countYellowNotePixels(screenshot) {
+    const png = decodePng(screenshot);
+    let yellowPixels = 0;
+
+    for (let offset = 0; offset < png.pixels.length; offset += 4) {
+        const red = png.pixels[offset];
+        const green = png.pixels[offset + 1];
+        const blue = png.pixels[offset + 2];
+        const alpha = png.pixels[offset + 3];
+        if (red >= 220 && green >= 160 && blue <= 90 && alpha >= 200) {
+            yellowPixels += 1;
+        }
+    }
+
+    return yellowPixels;
 }
 
 function expectedMsegPreviewProgressClipWidth(previewState, progress) {
@@ -1624,7 +1642,7 @@ test("source-composed iPhone Key Track uses the shared menu and transparent note
         });
         assert.equal(presentation.pointerEvents, "none");
         assert.equal(presentation.color, "rgb(250, 204, 21)");
-        assert.match(presentation.maskImage, /music_note-20px\.svg/);
+        assert.match(presentation.maskImage, /^url\("data:image\/svg\+xml,/);
         assert.equal(presentation.width, 12);
         assert.equal(presentation.height, 12);
         assert.equal(presentation.insideTopLeft, true);
@@ -1637,6 +1655,58 @@ test("source-composed iPhone Key Track uses the shared menu and transparent note
     } finally {
         if (page) await closeIOSHarnessPage(page);
         await sourceServer.stop();
+    }
+});
+
+test("compiled iPhone Key Track paints its embedded note without a failed asset", async () => {
+    const page = await openIOSHarnessPage(browser, server.baseUrl, {
+        viewportSize: { width: 390, height: 844 },
+    });
+    const failedMusicNoteAssets = [];
+    page.on("response", (response) => {
+        if (response.url().includes("music_note-20px.svg") && !response.ok()) {
+            failedMusicNoteAssets.push(`${response.status()} ${response.url()}`);
+        }
+    });
+    page.on("requestfailed", (request) => {
+        if (request.url().includes("music_note-20px.svg")) {
+            failedMusicNoteAssets.push(`request failed ${request.url()}`);
+        }
+    });
+
+    try {
+        await waitForIOSHarnessReady(page);
+        const root = page.locator("cosimo-synth-view");
+        const control = root.locator('[data-role="distortion-wet-hp-slider"]');
+        await control.evaluate((element) => element.dispatchEvent(new MouseEvent("contextmenu", {
+            bubbles: true,
+            cancelable: true,
+            clientX: 180,
+            clientY: 240,
+        })));
+        await root.locator('[data-role="rack-parameter-menu"]').waitFor();
+        const toggle = root.locator(
+            '[data-role="rack-parameter-menu-item"][data-action="toggle-key-track"]',
+        );
+        assert.equal((await toggle.innerText()).trim(), "Enable Key Track");
+        await toggle.click();
+
+        const status = root.locator('[data-role="key-track-status-distortionWetHPHz"]');
+        await status.waitFor();
+        await page.waitForTimeout(100);
+        const maskImage = await status.evaluate((element) => {
+            const style = getComputedStyle(element);
+            return style.maskImage || style.webkitMaskImage;
+        });
+        const yellowPixels = countYellowNotePixels(await status.screenshot({
+            animations: "disabled",
+        }));
+
+        assert.match(maskImage, /^url\("data:image\/svg\+xml,/);
+        assert.ok(yellowPixels >= 10, `Expected painted yellow note pixels, got ${yellowPixels}.`);
+        assert.deepEqual(failedMusicNoteAssets, []);
+    } finally {
+        await closeIOSHarnessPage(page);
     }
 });
 
