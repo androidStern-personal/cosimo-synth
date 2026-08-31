@@ -232,7 +232,7 @@ test("lane records append Key Track fields without moving deployed parameter ind
     assert.equal(slots.LANE_SLOT_PARAM_COUNT, 12);
 });
 
-test("legacy lane records migrate Key Track off while preserving every ordinary value", async () => {
+test("incomplete pre-Key-Track lane records are rejected instead of default-filled", async () => {
     const lane = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
     const legacy = {
         format: "cosimo.lane",
@@ -260,22 +260,10 @@ test("legacy lane records migrate Key Track off while preserving every ordinary 
     };
 
     const parsed = lane.parseLaneStateV2(legacy);
-    assert.equal(parsed._tag, "ok");
-    assert.equal(parsed.value.devices["globalFilter#1"].params.globalFilterCutoff, 7_321.25);
-    assert.equal(parsed.value.devices["globalFilter#1"].params.globalFilterCutoffKeyTrackEnabled, 0);
-    assert.equal(parsed.value.devices["globalFilter#1"].params.globalFilterCutoffKeyTrackOffsetSemitones, 0);
-    assert.equal(parsed.value.devices["delay#1"].params.delayTime, 123.456);
-    assert.equal(parsed.value.devices["delay#1"].params.delayFilter, 4_567.89);
-    assert.equal(parsed.value.devices["delay#1"].params.delayTimeMode, 1);
-    assert.equal(parsed.value.devices["delay#1"].params.delayTimeKeyTrackEnabled, 0);
-    assert.equal(parsed.value.devices["delay#1"].params.delayFilterKeyTrackEnabled, 0);
-
-    const reparsed = lane.parseLaneStateV2(lane.serializeLaneStateV2(parsed.value));
-    assert.equal(reparsed._tag, "ok");
-    assert.deepEqual(reparsed.value, parsed.value);
+    assert.equal(parsed._tag, "err");
 });
 
-test("legacy Chorus Ring migrates to the same tracked pitch without changing route identity", async () => {
+test("incomplete legacy Chorus Ring lane records are rejected", async () => {
     const lane = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
     const legacy = {
         format: "cosimo.lane",
@@ -296,17 +284,7 @@ test("legacy Chorus Ring migrates to the same tracked pitch without changing rou
     };
 
     const parsed = lane.parseLaneStateV2(legacy);
-    assert.equal(parsed._tag, "ok");
-    const params = parsed.value.devices["chorus#1"].params;
-    assert.equal(params.chorusRingFrequencyHz, 28);
-    assert.equal(params.chorusRingKeyTrackEnabled, 1);
-    assert.equal(params.chorusRingKeyTrackOffsetSemitones, -4.25);
-    assert.equal(params.chorusRingFineSemitones, 0.75, "the deployed route/slot identity remains stored");
-    assert.equal(params.chorusRingLegacyClampEnabled, 1);
-
-    const reparsed = lane.parseLaneStateV2(lane.serializeLaneStateV2(parsed.value));
-    assert.equal(reparsed._tag, "ok");
-    assert.equal(reparsed.value.devices["chorus#1"].params.chorusRingLegacyClampEnabled, 1);
+    assert.equal(parsed._tag, "err");
 });
 
 test("legacy Chorus mode-zero/fine-zero remains distinguishable from new linear state", async () => {
@@ -343,7 +321,7 @@ test("legacy Chorus mode-zero/fine-zero remains distinguishable from new linear 
     assert.equal(slots.LANE_SLOT_PARAM_COUNT, 12);
 });
 
-test("pre-compatibility T50 Chorus records default to the new linear law", async () => {
+test("incomplete pre-compatibility Chorus records are rejected", async () => {
     const lane = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
     const slots = await loadUIModule(repoRoot, "ui/shared/lane-slot-params.ts");
     const currentParams = Object.fromEntries(
@@ -368,8 +346,7 @@ test("pre-compatibility T50 Chorus records default to the new linear law", async
         chain: [{ kind: "device", deviceId: "chorus#1", enabled: true }],
     });
 
-    assert.equal(parsed._tag, "ok");
-    assert.equal(parsed.value.devices["chorus#1"].params.chorusRingLegacyClampEnabled, 0);
+    assert.equal(parsed._tag, "err");
 });
 
 test("Chorus legacy clamp metadata is absent from public UI and modulation inventories", async () => {
@@ -425,7 +402,7 @@ test("lane Key Track transitions preserve ordinary values and make Delay modes e
     assert.equal(state.devices["delay#1"].params.delayTimeKeyTrackEnabled, 0);
 });
 
-test("frequency-split Key Track state migrates off and rides the marker record", async () => {
+test("incomplete pre-Key-Track split records are rejected", async () => {
     const lane = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
     const legacy = {
         format: "cosimo.lane",
@@ -446,19 +423,7 @@ test("frequency-split Key Track state migrates off and rides the marker record",
         }],
     };
     const parsed = lane.parseLaneStateV2(legacy);
-    assert.equal(parsed._tag, "ok");
-    const split = parsed.value.chain[0];
-    assert.equal(split.xoverLowHz, 333);
-    assert.equal(split.xoverHighHz, 3_333);
-    assert.equal(split.xoverLowKeyTrackEnabled, false);
-    assert.equal(split.xoverLowKeyTrackOffsetSemitones, 0);
-    assert.equal(split.xoverHighKeyTrackEnabled, false);
-    assert.equal(split.xoverHighKeyTrackOffsetSemitones, 0);
-
-    const runtime = lane.buildLaneRuntimeEventsV2(parsed.value);
-    const marker = runtime.find((event) => event.value?.slotId === 44);
-    assert.notEqual(marker, undefined);
-    assert.deepEqual(marker.value.values.slice(0, 6), [333, 3_333, 0, 0, 0, 0]);
+    assert.equal(parsed._tag, "err");
 });
 
 test("frequency-split Key Track transitions preserve ordinary crossovers", async () => {
