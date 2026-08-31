@@ -954,15 +954,16 @@ test("MAPPINGS edits tracked bases and routes in continuous offset units", async
 
         await page.locator('[data-role="mobile-workspace-tab-mod"]').click();
         await page.locator('[data-role="mobile-mod-panel-tab-mappings"]').click();
-        const row = page.locator(
-            '[data-role="mod-mappings-row"][data-route-id="tracked-mapping-delay-time"]',
-        );
+        const rowSelector = '[data-role="mod-mappings-row"][data-route-id="tracked-mapping-delay-time"]';
+        const row = page.locator(`${rowSelector}:visible`);
         await row.waitFor();
-        await page.waitForFunction(() => (
-            document.querySelector(
-                '[data-role="mod-mappings-row"][data-route-id="tracked-mapping-delay-time"] .mod-mappings-row-target',
-            )?.textContent?.trim().endsWith("Key Track Offset") === true
-        ));
+        await page.waitForFunction((selector) => (
+            Array.from(document.querySelectorAll(`${selector} .mod-mappings-row-target`))
+                .some((element) => (
+                    element.getClientRects().length > 0
+                    && element.textContent?.trim().endsWith("Key Track Offset") === true
+                ))
+        ), rowSelector);
         assert.match(
             (await row.locator(".mod-mappings-row-target").innerText()).trim(),
             /Key Track Offset$/,
