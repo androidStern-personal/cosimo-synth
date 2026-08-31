@@ -1701,10 +1701,13 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     Decision provenance:
     - Andrew selected per-effect Output Trim as a general gain-staging feature. It is not semantically equivalent to branch gain, so branch gain remains unimplemented rather than being marked solved.
 
-[ ] T79 — Make the on-screen keyboard geometry adjustable from Developer Settings
-    Active owner (2026-08-30):
+[x] T79 — Make the on-screen keyboard geometry adjustable from Developer Settings
+    Integrated (2026-08-31):
     - Codex task `T79 Adjustable Keyboard Geometry`, thread `01a052ba-1eff-7973-bbae-27994cc1c261`, branch `codex/t79-keyboard-geometry`, worktree `/Users/winterfell/.codex/worktrees/t79full/cosimo-synth`, base `4638030252c82f0ee3e5174de928a4b5ecd231e4`, model `gpt-5.6-sol`, reasoning `max`, approval policy `never`, sandbox `danger-full-access`, and no active permission profile.
-    - This is a coordinator-managed implementation task. Its clean committed handoff goes to `Coordinate Cosimo task integrations`, thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b`; it must not merge or push master, deploy, install shared plugins, or claim host/physical acceptance.
+    - Landed through rebased implementation commits `1aa92ba3` and `3f7ceb47`, followed by canonical desktop/iOS generated-bundle commits `017fe805` and `bff67704`.
+    - Developer Settings now controls 12–30 visible notes and 1.00–1.40 keyboard height with the accepted 18-note compact and 25-note wide defaults. The keyboard updates live, uses the available safe width edge-to-edge, keeps real safe-area padding, narrows the octave rail/buttons, and reflows the workspace, tabs, Mod bar, drawers, and full-screen editors from the measured keyboard inset.
+    - Focused preference/layout/adjacent checks are green, the generated Developer Settings and source-map gates are green, and every T79 case passed in the 324/326 full desktop run. The two failures are unchanged repository baselines: React Grab's test-environment registration assertion and the pre-existing zero-height MSEG quick-sheet timeout, which was reproduced in isolation and on the pre-repair T79 source.
+    - Fresh compiled native and HMR modes were both built from the final source; the exact HMR server/app were verified and stopped, port 5174 is clear, and a final compiled signed VST3 was installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` with executable SHA-256 `a039adca613251da8409f2e5445c25f10cb988236afa0107a78cce0161cafa1e`. Physical iPhone touch comfort remains unclaimed.
     Approved behavior (2026-08-30):
     - Add a Developer Settings control for the number of visible keyboard notes. Fewer notes make keys proportionally wider; more notes fit more keys. Preserve the existing starting/root note and octave-paddle behavior: this changes visible span/zoom, not pitch semantics.
     - Add a separate keyboard-height scaling control. The complete keyboard region resizes, and the main workspace, Voice/FX/Mod tabs, parked/floating Mod bar, drawers, and full-screen editors reflow rather than overlap it.
