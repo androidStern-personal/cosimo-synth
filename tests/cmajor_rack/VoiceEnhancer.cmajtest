@@ -622,7 +622,8 @@ graph VoiceEnhancerStealReset [[ main ]]
     connection
     {
         source.firstNoteOut -> reused.voiceEventIn[0];
-        source.secondNoteOut -> reused.voiceEventIn[0], fresh.voiceEventIn[0];
+        source.secondReusedNoteOut -> reused.voiceEventIn[0];
+        source.secondFreshNoteOut -> fresh.voiceEventIn[0];
         source.attackOut -> reused.ampAttackIn, fresh.ampAttackIn;
         source.decayOut -> reused.ampDecayIn, fresh.ampDecayIn;
         source.sustainOut -> reused.ampSustainIn, fresh.ampSustainIn;
@@ -644,7 +645,8 @@ graph VoiceEnhancerStealReset [[ main ]]
 processor VoiceEnhancerStealResetSource
 {
     output event std::notes::NoteOn firstNoteOut;
-    output event std::notes::NoteOn secondNoteOut;
+    output event std::notes::NoteOn secondReusedNoteOut;
+    output event std::notes::NoteOn secondFreshNoteOut;
     output value float32 attackOut;
     output value float32 decayOut;
     output value float32 sustainOut;
@@ -683,7 +685,12 @@ processor VoiceEnhancerStealResetSource
         amountOut <- 0.0f;
         advance();
         amountOut <- 0.9f;
-        secondNoteOut <- noteOn (72.0f);
+        secondReusedNoteOut <- noteOn (72.0f);
+        // At 600 Hz the production 1.5 ms steal fade is exactly one frame.
+        // Start the fresh reference when the reused slot's deferred note
+        // actually begins, so this isolates the post-fade lifecycle reset.
+        advance();
+        secondFreshNoteOut <- noteOn (72.0f);
         loop advance();
     }
 }
