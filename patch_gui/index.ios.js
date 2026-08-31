@@ -12498,7 +12498,8 @@ const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 const ANALYZER_ACTIVITY_ENDPOINT_IDS = {
   filterSpectrum: "filterSpectrumActivity",
   distortionScope: "distortionScopeActivity",
-  distortionHistory: "distortionHistoryActivity"
+  distortionHistory: "distortionHistoryActivity",
+  voiceEnhancerSpectrum: "voiceEnhancerSpectrumActivity"
 };
 const countsByConnection = /* @__PURE__ */ new WeakMap();
 function publishActivity(connection, endpointID, counts) {
@@ -13087,8 +13088,10 @@ function usePatchEndpoint(endpointID, initialValue, active = true) {
       }
     };
     patchConnection.addEndpointListener?.(endpointID, listener);
+    const releaseAnalyzerActivity = acquireAnalyzerActivity(patchConnection, endpointID);
     return () => {
       listening = false;
+      releaseAnalyzerActivity?.();
       patchConnection.removeEndpointListener?.(endpointID, listener);
     };
   }, [active, endpointID, patchConnection]);
@@ -13234,6 +13237,7 @@ function usePatchFoldedVisualEndpoint(endpointID, initialValue, fold, active = t
       }
     };
     patchConnection.addEndpointListener?.(endpointID, listener);
+    const releaseAnalyzerActivity = acquireAnalyzerActivity(patchConnection, endpointID);
     return () => {
       listening = false;
       pendingValueRef.current = null;
@@ -13241,6 +13245,7 @@ function usePatchFoldedVisualEndpoint(endpointID, initialValue, fold, active = t
         window.cancelAnimationFrame(animationFrameRef.current);
       }
       animationFrameRef.current = null;
+      releaseAnalyzerActivity?.();
       patchConnection.removeEndpointListener?.(endpointID, listener);
     };
   }, [active, endpointID, patchConnection]);
@@ -16609,6 +16614,148 @@ const OSCILLATOR_DEFAULT_MUTE_BY_ID = Object.freeze({
 function getOscillatorDefaultMute(oscillatorID) {
   return OSCILLATOR_DEFAULT_MUTE_BY_ID[oscillatorID];
 }
+const ENHANCER_SPECTRUM_PLOT = Object.freeze({
+  width: 760,
+  height: 272,
+  left: 42,
+  right: 42,
+  top: 18,
+  bottom: 28,
+  minimumHz: 20,
+  maximumHz: 2e4,
+  minimumGainDb: 0,
+  maximumGainDb: 12,
+  minimumLevelDbfs: -72,
+  maximumLevelDbfs: 0
+});
+const spectrumPointCount = 241;
+const spectrumAttackMs = 55;
+const spectrumReleaseMs = 190;
+function clamp$d(value, minimum, maximum) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+function isRecord$4(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function normalizeSpectrumMessage(message) {
+  const payload = isRecord$4(message) && Object.hasOwn(message, "event") ? message.event : message;
+  if (!isRecord$4(payload)) {
+    return null;
+  }
+  const sampleRateHz = payload.sampleRateHz;
+  const magnitudes = payload.magnitudes;
+  if (typeof sampleRateHz !== "number" || !Number.isFinite(sampleRateHz) || sampleRateHz <= 0 || !Array.isArray(magnitudes) || magnitudes.length < 8) {
+    return null;
+  }
+  return {
+    sampleRateHz,
+    magnitudes: magnitudes.map((value) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0)
+  };
+}
+function interpolateLogFrequency(normalized2) {
+  return ENHANCER_SPECTRUM_PLOT.minimumHz * Math.pow(
+    ENHANCER_SPECTRUM_PLOT.maximumHz / ENHANCER_SPECTRUM_PLOT.minimumHz,
+    clamp$d(normalized2, 0, 1)
+  );
+}
+const spectrumRanges = Object.freeze(
+  Array.from({ length: spectrumPointCount }, (_, index) => {
+    const normalized2 = index / (spectrumPointCount - 1);
+    const centerHz = interpolateLogFrequency(normalized2);
+    const previousHz = interpolateLogFrequency(
+      Math.max(0, index - 0.5) / (spectrumPointCount - 1)
+    );
+    const nextHz = interpolateLogFrequency(
+      Math.min(spectrumPointCount - 1, index + 0.5) / (spectrumPointCount - 1)
+    );
+    return {
+      centerHz,
+      lowHz: index === 0 ? ENHANCER_SPECTRUM_PLOT.minimumHz : previousHz,
+      highHz: index === spectrumPointCount - 1 ? ENHANCER_SPECTRUM_PLOT.maximumHz : nextHz
+    };
+  })
+);
+function magnitudeToDbfs(magnitude) {
+  return 20 * Math.log10(Math.max(1e-9, magnitude));
+}
+function sampleFrame(frame) {
+  const binHz = frame.sampleRateHz / (frame.magnitudes.length * 2);
+  const maximumBin = frame.magnitudes.length - 1;
+  return spectrumRanges.map(({ lowHz, highHz }) => {
+    const firstBin = clamp$d(Math.floor(lowHz / binHz), 0, maximumBin);
+    const lastBin = clamp$d(Math.ceil(highHz / binHz), firstBin, maximumBin);
+    let maximumMagnitude = 0;
+    for (let bin = firstBin; bin <= lastBin; bin += 1) {
+      maximumMagnitude = Math.max(maximumMagnitude, frame.magnitudes[bin] ?? 0);
+    }
+    return magnitudeToDbfs(maximumMagnitude);
+  });
+}
+function smoothSpectrum(previous, targetDbfs, timestampMs) {
+  if (previous === null || previous.magnitudesDbfs.length !== targetDbfs.length) {
+    return targetDbfs;
+  }
+  const deltaMs = clamp$d(timestampMs - previous.timestampMs, 0, 1e3);
+  return targetDbfs.map((target, index) => {
+    const prior = previous.magnitudesDbfs[index] ?? target;
+    const timeMs = target > prior ? spectrumAttackMs : spectrumReleaseMs;
+    const coefficient = Math.exp(-deltaMs / timeMs);
+    return target + (prior - target) * coefficient;
+  });
+}
+function findPeakDbfs(magnitudesDbfs) {
+  let peak = ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs;
+  for (const magnitudeDbfs of magnitudesDbfs) {
+    peak = Math.max(peak, magnitudeDbfs);
+  }
+  return peak;
+}
+function enhancerFrequencyX(frequencyHz) {
+  const normalized2 = Math.log(
+    clamp$d(
+      frequencyHz,
+      ENHANCER_SPECTRUM_PLOT.minimumHz,
+      ENHANCER_SPECTRUM_PLOT.maximumHz
+    ) / ENHANCER_SPECTRUM_PLOT.minimumHz
+  ) / Math.log(
+    ENHANCER_SPECTRUM_PLOT.maximumHz / ENHANCER_SPECTRUM_PLOT.minimumHz
+  );
+  return ENHANCER_SPECTRUM_PLOT.left + normalized2 * (ENHANCER_SPECTRUM_PLOT.width - ENHANCER_SPECTRUM_PLOT.left - ENHANCER_SPECTRUM_PLOT.right);
+}
+function enhancerLevelY(levelDbfs) {
+  const normalized2 = (clamp$d(
+    levelDbfs,
+    ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs,
+    ENHANCER_SPECTRUM_PLOT.maximumLevelDbfs
+  ) - ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs) / (ENHANCER_SPECTRUM_PLOT.maximumLevelDbfs - ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs);
+  return ENHANCER_SPECTRUM_PLOT.height - ENHANCER_SPECTRUM_PLOT.bottom - normalized2 * (ENHANCER_SPECTRUM_PLOT.height - ENHANCER_SPECTRUM_PLOT.top - ENHANCER_SPECTRUM_PLOT.bottom);
+}
+function createEnhancerFrequencyPath(yAtFrequency) {
+  return spectrumRanges.map(({ centerHz }, index) => `${index === 0 ? "M" : "L"} ${enhancerFrequencyX(centerHz).toFixed(2)} ` + yAtFrequency(centerHz).toFixed(2)).join(" ");
+}
+function advanceEnhancerSpectrum(message, previous, timestampMs) {
+  const frame = normalizeSpectrumMessage(message);
+  if (frame === null) {
+    return previous;
+  }
+  const magnitudesDbfs = smoothSpectrum(previous, sampleFrame(frame), timestampMs);
+  const path = createEnhancerFrequencyPath((frequencyHz) => {
+    const index = Math.round(
+      Math.log(frequencyHz / ENHANCER_SPECTRUM_PLOT.minimumHz) / Math.log(
+        ENHANCER_SPECTRUM_PLOT.maximumHz / ENHANCER_SPECTRUM_PLOT.minimumHz
+      ) * (spectrumPointCount - 1)
+    );
+    return enhancerLevelY(
+      magnitudesDbfs[index] ?? ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs
+    );
+  });
+  return {
+    path,
+    peakDbfs: findPeakDbfs(magnitudesDbfs),
+    magnitudesDbfs,
+    timestampMs
+  };
+}
 const VOICE_ENHANCER_FREQUENCY_ENDPOINT_ID = "voiceEnhancerFrequency";
 const VOICE_ENHANCER_Q_ENDPOINT_ID = "voiceEnhancerQ";
 const VOICE_ENHANCER_AMOUNT_ENDPOINT_ID = "voiceEnhancerAmount";
@@ -17278,12 +17425,12 @@ function readFullStoredStateValue$2(storedState, key) {
   }
   return void 0;
 }
-function clamp$d(value, min, max) {
+function clamp$c(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampEnvSeconds(value, fallback) {
   const numeric = Number(value);
-  return clamp$d(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
+  return clamp$c(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
 }
 function formatMagnitude(value, digits) {
   const numeric = Number.isFinite(value) ? value : 0;
@@ -17378,7 +17525,7 @@ function getModulationAmountBounds(targetKind) {
 function clampModulationRouteAmount(targetKind, value) {
   const limits = getRouteAmountLimit(targetKind);
   const numeric = Number(value);
-  return clamp$d(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
+  return clamp$c(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
 }
 function getModulationAmountDepth(targetKind, amount) {
   const clampedAmount = clampModulationRouteAmount(targetKind, amount);
@@ -17386,11 +17533,11 @@ function getModulationAmountDepth(targetKind, amount) {
   if (limit <= 0) {
     return 0;
   }
-  return clamp$d(Math.abs(clampedAmount) / limit, 0, 1);
+  return clamp$c(Math.abs(clampedAmount) / limit, 0, 1);
 }
 function composeModulationAmount(targetKind, depth) {
   const limits = getRouteAmountLimit(targetKind);
-  const clampedDepth = clamp$d(Number.isFinite(depth) ? depth : 0, 0, 1);
+  const clampedDepth = clamp$c(Number.isFinite(depth) ? depth : 0, 0, 1);
   if (Math.abs(clampedDepth - 0.5) <= 1e-9) {
     return 0;
   }
@@ -17417,12 +17564,12 @@ function getModulationAmountSliderPosition(targetKind, amount) {
     if (Math.abs(limits.min) <= 1e-9) {
       return 0.5;
     }
-    return clamp$d(0.5 * (1 - Math.abs(clampedAmount) / Math.abs(limits.min)), 0, 0.5);
+    return clamp$c(0.5 * (1 - Math.abs(clampedAmount) / Math.abs(limits.min)), 0, 0.5);
   }
   if (Math.abs(limits.max) <= 1e-9) {
     return 0.5;
   }
-  return clamp$d(0.5 + 0.5 * (clampedAmount / limits.max), 0.5, 1);
+  return clamp$c(0.5 + 0.5 * (clampedAmount / limits.max), 0.5, 1);
 }
 function formatModulationAmountReadout(rawTargetKind, amount, polarity = "unipolar") {
   const targetKind = amountAuthorityKind(rawTargetKind);
@@ -17608,7 +17755,7 @@ function normalizeSourceSlot(sourceKind, rawSlot) {
     return null;
   }
   const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : sourceKind === "macro" ? MODULATION_MACRO_SLOT_COUNT : AMP_ENVELOPE_SOURCE_SLOT;
-  return clamp$d(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
+  return clamp$c(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
 }
 function createDefaultEnvelope(slotIndex) {
   return {
@@ -17933,13 +18080,13 @@ class ModulationRuntimeBridge {
     return routeIndex === void 0 ? false : this.setRouteAmount(routeIndex, nextAmount);
   }
   getMsegSlotController(slotIndex) {
-    return this.slotControllers[clamp$d(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
+    return this.slotControllers[clamp$c(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
   }
   getMsegSlotEditShapeIndex(slotIndex) {
-    return this.msegSlotEditShapeIndexes[clamp$d(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
+    return this.msegSlotEditShapeIndexes[clamp$c(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
   }
   setMsegSlotEditShapeIndex(slotIndex, shapeIndex) {
-    const normalizedSlotIndex = clamp$d(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1);
+    const normalizedSlotIndex = clamp$c(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1);
     const normalizedShapeIndex = Math.round(Number(shapeIndex)) === 1 ? 1 : 0;
     if (this.msegSlotEditShapeIndexes[normalizedSlotIndex] === normalizedShapeIndex) {
       return;
@@ -18250,7 +18397,7 @@ function useResizeObserver$1(ref) {
   }, [ref]);
   return size;
 }
-function clamp$c(value, min, max) {
+function clamp$b(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function buildMsegSurfacePaths(points, width, height, options = {}) {
@@ -18280,7 +18427,7 @@ function buildMsegMorphSurfacePaths(shapeAPoints, shapeBPoints, morphValue, widt
   try {
     const bufferA = renderMsegShape({ points: shapeAPoints });
     const bufferB = renderMsegShape({ points: shapeBPoints });
-    const morph = clamp$c(Number(morphValue) || 0, 0, 1);
+    const morph = clamp$b(Number(morphValue) || 0, 0, 1);
     const metrics = createMsegEditorMetrics(width, height, {
       pointRadius: options.pointRadius,
       horizontalPadding: options.horizontalPadding ?? MSEG_EDITOR_HORIZONTAL_PADDING_PX,
@@ -18291,7 +18438,7 @@ function buildMsegMorphSurfacePaths(shapeAPoints, shapeBPoints, morphValue, widt
       const x = sampleIndex / Math.max(1, sampleCount - 1);
       const valueA = sampleRenderedMsegBuffer(bufferA, x);
       const valueB = sampleRenderedMsegBuffer(bufferB, x);
-      const y = clamp$c(valueA + (valueB - valueA) * morph, 0, 1);
+      const y = clamp$b(valueA + (valueB - valueA) * morph, 0, 1);
       return pointToMsegEditorCoordinates({ x, y }, width, height, options);
     });
     const curvePath = polylineToSvgPath(polyline);
@@ -18386,7 +18533,7 @@ function MsegPreview({
       morphShapeBFillPath: shapeBReferencePaths?.fillPath ?? ""
     };
   }, [morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, size.height, size.width]);
-  const clampedProgressFillEnd = progressFillEnd !== null && progressFillEnd !== void 0 && Number.isFinite(Number(progressFillEnd)) ? clamp$c(Number(progressFillEnd), 0, 1) : null;
+  const clampedProgressFillEnd = progressFillEnd !== null && progressFillEnd !== void 0 && Number.isFinite(Number(progressFillEnd)) ? clamp$b(Number(progressFillEnd), 0, 1) : null;
   const progressClipRect = reactExports.useMemo(() => {
     if (clampedProgressFillEnd === null) {
       return null;
@@ -18969,7 +19116,7 @@ function buildMagnitudePlotPoints(magnitudesDb, width, height, {
   const points = [];
   for (let index = 0; index < magnitudesDb.length; index += 1) {
     const x = plotLeft + plotWidth * (index / Math.max(1, magnitudesDb.length - 1));
-    const normalized2 = clamp$c((clamp$c(magnitudesDb[index], minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
+    const normalized2 = clamp$b((clamp$b(magnitudesDb[index], minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
     const y = plotBottom - plotHeight * normalized2;
     points.push({ x, y });
   }
@@ -19216,7 +19363,7 @@ function FilterResponseGraph({
   }, [size.height, size.width, spectrumGeometry]);
   const baseHandle = reactExports.useMemo(() => {
     const cutoffNormalized = filterCutoffHzToNormalized(baseModel.cutoffHz);
-    const qNormalized = clamp$c(resonanceNormalizedFromQ(baseModel.q), 0, 1);
+    const qNormalized = clamp$b(resonanceNormalizedFromQ(baseModel.q), 0, 1);
     return {
       cutoffNormalized,
       qNormalized,
@@ -19229,12 +19376,12 @@ function FilterResponseGraph({
       return null;
     }
     const pointFor = (state2) => ({
-      x: basePath.plotLeft + basePath.plotWidth * clamp$c(
-        filterCutoffHzToNormalized(clamp$c(state2.cutoffHz, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ)),
+      x: basePath.plotLeft + basePath.plotWidth * clamp$b(
+        filterCutoffHzToNormalized(clamp$b(state2.cutoffHz, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ)),
         0,
         1
       ),
-      y: basePath.plotBottom - basePath.plotHeight * clamp$c(resonanceNormalizedFromQ(state2.q), 0, 1)
+      y: basePath.plotBottom - basePath.plotHeight * clamp$b(resonanceNormalizedFromQ(state2.q), 0, 1)
     });
     const toPolyline = (points) => points.map((point) => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" L ");
     const startResponse = buildFilterResponsePath(
@@ -19310,21 +19457,21 @@ function FilterResponseGraph({
     }
     const bounds = surface.getBoundingClientRect();
     const stateAtPlotPoint = (rawPlotX, rawPlotY) => {
-      const plotX = clamp$c(rawPlotX, basePath.plotLeft, basePath.plotRight);
-      const plotY = clamp$c(rawPlotY, basePath.plotTop, basePath.plotBottom);
-      const cutoffNormalized = clamp$c(
+      const plotX = clamp$b(rawPlotX, basePath.plotLeft, basePath.plotRight);
+      const plotY = clamp$b(rawPlotY, basePath.plotTop, basePath.plotBottom);
+      const cutoffNormalized = clamp$b(
         (plotX - basePath.plotLeft) / Math.max(1, basePath.plotWidth),
         0,
         1
       );
-      const qNormalized = clamp$c(
+      const qNormalized = clamp$b(
         1 - (plotY - basePath.plotTop) / Math.max(1, basePath.plotHeight),
         0,
         1
       );
       return {
-        cutoffHz: clamp$c(normalizedToFilterCutoffHz(cutoffNormalized), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ),
-        q: clamp$c(resonanceQFromSurface(qNormalized), FILTER_Q_MIN$1, FILTER_Q_MAX$1)
+        cutoffHz: clamp$b(normalizedToFilterCutoffHz(cutoffNormalized), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ),
+        q: clamp$b(resonanceQFromSurface(qNormalized), FILTER_Q_MIN$1, FILTER_Q_MAX$1)
       };
     };
     if (dragState.target === "center") {
@@ -19338,8 +19485,8 @@ function FilterResponseGraph({
       const maxX = Math.max(anchor.startPoint.x, anchor.endPoint.x);
       const minY = Math.min(anchor.startPoint.y, anchor.endPoint.y);
       const maxY = Math.max(anchor.startPoint.y, anchor.endPoint.y);
-      const deltaX = clamp$c(rawDeltaX, basePath.plotLeft - minX, basePath.plotRight - maxX);
-      const deltaY = clamp$c(rawDeltaY, basePath.plotTop - minY, basePath.plotBottom - maxY);
+      const deltaX = clamp$b(rawDeltaX, basePath.plotLeft - minX, basePath.plotRight - maxX);
+      const deltaY = clamp$b(rawDeltaY, basePath.plotTop - minY, basePath.plotBottom - maxY);
       onTravelTranslateRef.current?.(
         stateAtPlotPoint(anchor.startPoint.x + deltaX, anchor.startPoint.y + deltaY),
         stateAtPlotPoint(anchor.endPoint.x + deltaX, anchor.endPoint.y + deltaY)
@@ -19897,13 +20044,13 @@ function FilterResponseGraph({
                               event.preventDefault();
                               onTravelGestureStartRef.current?.(side);
                               onTravelEndpointSetRef.current?.(side, {
-                                cutoffHz: clamp$c(
+                                cutoffHz: clamp$b(
                                   state2.cutoffHz * 2 ** stepOctaves,
                                   FILTER_CUTOFF_MIN_HZ,
                                   FILTER_CUTOFF_MAX_HZ
                                 ),
-                                q: clamp$c(
-                                  resonanceQFromSurface(clamp$c(
+                                q: clamp$b(
+                                  resonanceQFromSurface(clamp$b(
                                     resonanceNormalizedFromQ(state2.q) + stepSurface,
                                     0,
                                     1
@@ -19937,7 +20084,7 @@ const DISTORTION_CURVE_POINT_COUNT = 241;
 const DISTORTION_TRANSFER_OCCUPANCY_BIN_COUNT = 81;
 const DISTORTION_TRANSFER_OCCUPANCY_ACTIVITY_EPSILON = 0.035;
 const DISTORTION_DRIVE_ENGAGEMENT_DB = 6;
-function clamp$b(value, min, max) {
+function clamp$a(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function coerceFiniteNumber(value) {
@@ -19991,7 +20138,7 @@ function normalizeDistortionScopeMessage(message) {
   const computedRemovedPeak = findPeak(normalizedInput.map((inputSample, index) => inputSample - normalizedOutput[index]));
   return {
     sampleRateHz: Math.max(1, coerceFiniteNumber(record.sampleRateHz) ?? 44100),
-    dominantChannel: clamp$b(Math.round(coerceFiniteNumber(record.dominantChannel) ?? 0), 0, 1),
+    dominantChannel: clamp$a(Math.round(coerceFiniteNumber(record.dominantChannel) ?? 0), 0, 1),
     inputPeak: Math.max(0, coerceFiniteNumber(record.inputPeak) ?? computedInputPeak),
     outputPeak: Math.max(0, coerceFiniteNumber(record.outputPeak) ?? computedOutputPeak),
     removedPeak: Math.max(0, coerceFiniteNumber(record.removedPeak) ?? computedRemovedPeak),
@@ -20021,12 +20168,12 @@ function normalizeDistortionHistoryMessage(message) {
   if (availableBinCount <= 0) {
     return null;
   }
-  const binCount = clamp$b(
+  const binCount = clamp$a(
     Math.round(coerceFiniteNumber(record.binCount) ?? availableBinCount),
     1,
     availableBinCount
   );
-  const validBinCount = clamp$b(
+  const validBinCount = clamp$a(
     Math.round(coerceFiniteNumber(record.validBinCount) ?? binCount),
     0,
     binCount
@@ -20052,7 +20199,7 @@ function normalizeDistortionHistoryMessage(message) {
   };
 }
 function shapeSymmetricDistortionSample(inputSample, knee) {
-  const clampedKnee = clamp$b(Number(knee) || 0, 0, 1);
+  const clampedKnee = clamp$a(Number(knee) || 0, 0, 1);
   const exponent = 2 + 10 * clampedKnee * clampedKnee;
   const magnitude = Math.abs(Number(inputSample) || 0);
   const denominator = Math.pow(1 + Math.pow(magnitude, exponent), 1 / exponent);
@@ -20060,7 +20207,7 @@ function shapeSymmetricDistortionSample(inputSample, knee) {
 }
 function shapeDistortionSample(inputSample, knee, type = 0, driveDb = DISTORTION_DRIVE_ENGAGEMENT_DB) {
   const input = Number(inputSample) || 0;
-  const selectedType = clamp$b(Math.round(Number(type) || 0), 0, 2);
+  const selectedType = clamp$a(Math.round(Number(type) || 0), 0, 2);
   let shapedSample;
   if (selectedType === 1) {
     const bias = 0.08;
@@ -20071,18 +20218,18 @@ function shapeDistortionSample(inputSample, knee, type = 0, driveDb = DISTORTION
       shapedSample = input;
     } else {
       const segment = Math.floor((magnitude - 1) * 0.5);
-      const phase = clamp$b((magnitude - (1 + 2 * segment)) * 0.5, 0, 1);
+      const phase = clamp$a((magnitude - (1 + 2 * segment)) * 0.5, 0, 1);
       const segmentSign = segment % 2 === 0 ? 1 : -1;
       const roundedReflection = segmentSign * Math.cos(Math.PI * phase);
       const mirrorReflection = segmentSign * (1 - 2 * phase);
-      const reflectionStrength = clamp$b(Number(knee) || 0, 0, 1);
+      const reflectionStrength = clamp$a(Number(knee) || 0, 0, 1);
       const folded = roundedReflection + (mirrorReflection - roundedReflection) * reflectionStrength;
       shapedSample = input < 0 ? -folded : folded;
     }
   } else {
     shapedSample = shapeSymmetricDistortionSample(input, knee);
   }
-  const engagement = clamp$b(
+  const engagement = clamp$a(
     (Number(driveDb) || 0) / DISTORTION_DRIVE_ENGAGEMENT_DB,
     0,
     1
@@ -20113,7 +20260,7 @@ function buildDistortionHistoryBins(frame) {
     frame.outputMins.length,
     frame.outputMaxs.length
   );
-  const safeValidBinCount = clamp$b(frame.validBinCount, 0, activeBinCount);
+  const safeValidBinCount = clamp$a(frame.validBinCount, 0, activeBinCount);
   const leadingPaddingCount = Math.max(0, activeBinCount - safeValidBinCount);
   const bins = [];
   for (let index = 0; index < leadingPaddingCount; index += 1) {
@@ -20261,7 +20408,7 @@ function buildDistortionTransferOccupancy({
       continue;
     }
     const normalized2 = (point.input + safeInputRange) / (safeInputRange * 2);
-    const binIndex = clamp$b(
+    const binIndex = clamp$a(
       Math.round(normalized2 * (safeBinCount - 1)),
       0,
       safeBinCount - 1
@@ -20358,15 +20505,15 @@ const COMPACT_PLOT = {
 function joinClasses(...classes) {
   return classes.filter(Boolean).join(" ");
 }
-function clamp$a(value, min, max) {
+function clamp$9(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function mapPlotX(sampleValue, plot, range) {
-  const normalized2 = clamp$a((sampleValue + range) / (Math.max(range, 1e-6) * 2), 0, 1);
+  const normalized2 = clamp$9((sampleValue + range) / (Math.max(range, 1e-6) * 2), 0, 1);
   return plot.left + plot.width * normalized2;
 }
 function mapPlotY(sampleValue, plot, range) {
-  const normalized2 = clamp$a((range - sampleValue) / (Math.max(range, 1e-6) * 2), 0, 1);
+  const normalized2 = clamp$9((range - sampleValue) / (Math.max(range, 1e-6) * 2), 0, 1);
   return plot.top + plot.height * normalized2;
 }
 function buildPolylinePath(points) {
@@ -20541,7 +20688,7 @@ function DistortionVisualizer({
     const peakDensity = mappedPoints.reduce((peak, point) => Math.max(peak, point.density), 0);
     return {
       glowPath: buildRibbonPath(mappedPoints),
-      glowOpacity: clamp$a(0.12 + peakDensity * 0.12, 0.12, 0.24),
+      glowOpacity: clamp$9(0.12 + peakDensity * 0.12, 0.12, 0.24),
       regions: splitTransferRibbonByClipping(mappedPoints).map((region) => {
         const regionPeakDensity = region.points.reduce(
           (peak, point) => Math.max(peak, point.density),
@@ -20550,7 +20697,7 @@ function DistortionVisualizer({
         return {
           clipped: region.clipped,
           path: buildRibbonPath(region.points),
-          opacity: region.clipped ? clamp$a(0.82 + regionPeakDensity * 0.16, 0.82, 0.98) : clamp$a(0.58 + regionPeakDensity * 0.26, 0.58, 0.84)
+          opacity: region.clipped ? clamp$9(0.82 + regionPeakDensity * 0.16, 0.82, 0.98) : clamp$9(0.58 + regionPeakDensity * 0.26, 0.58, 0.84)
         };
       }).filter((region) => region.path)
     };
@@ -21464,7 +21611,7 @@ function parseLaneGroupId(value) {
   }
   return { groupKind, unitNumber };
 }
-function isRecord$4(value) {
+function isRecord$3(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function hasExactKeys(value, keys) {
@@ -21479,7 +21626,7 @@ function parseDeviceRecord(deviceId, input) {
   if (parsedId === null) {
     return { failure: err(`device id ${deviceId} is not a pool instance`) };
   }
-  if (!isRecord$4(input) || !hasExactKeys(input, ["params"]) || !isRecord$4(input.params)) {
+  if (!isRecord$3(input) || !hasExactKeys(input, ["params"]) || !isRecord$3(input.params)) {
     return { failure: err(`device ${deviceId} must be { params }`) };
   }
   const endpoints = laneDeviceParamEndpoints(parsedId.deviceType);
@@ -21513,7 +21660,7 @@ function parseDeviceRecord(deviceId, input) {
   return { record: { params: materializeLaneDeviceParams(parsedId.deviceType, inputParams) } };
 }
 function parsePlacement(input, deviceIds) {
-  if (!isRecord$4(input) || input.kind !== "device") {
+  if (!isRecord$3(input) || input.kind !== "device") {
     return { failure: err("branches may hold device placements only") };
   }
   if (!hasExactKeys(input, ["kind", "deviceId", "enabled"])) {
@@ -21534,7 +21681,7 @@ function createDefaultLaneOutputState() {
   return { mix: 1, bypassed: false };
 }
 function parseLaneOutputState(input) {
-  if (!isRecord$4(input) || !hasExactKeys(input, ["mix", "bypassed"])) {
+  if (!isRecord$3(input) || !hasExactKeys(input, ["mix", "bypassed"])) {
     return null;
   }
   if (typeof input.mix !== "number" || !Number.isFinite(input.mix) || input.mix < 0 || input.mix > 1 || typeof input.bypassed !== "boolean") {
@@ -21552,13 +21699,13 @@ function parseLaneStateV2(input) {
       return err(`is not valid JSON: ${detail}`);
     }
   }
-  if (!isRecord$4(document2) || !hasExactKeys(document2, ["format", "version", "output", "devices", "chain"])) {
+  if (!isRecord$3(document2) || !hasExactKeys(document2, ["format", "version", "output", "devices", "chain"])) {
     return err("must be { format, version, output, devices, chain }");
   }
   if (document2.format !== "cosimo.lane" || document2.version !== 2) {
     return err("must be cosimo.lane version 2");
   }
-  if (!isRecord$4(document2.devices)) {
+  if (!isRecord$3(document2.devices)) {
     return err("devices must be an object");
   }
   if (!Array.isArray(document2.chain)) {
@@ -21596,7 +21743,7 @@ function parseLaneStateV2(input) {
     return parsed;
   };
   for (const rawNode of document2.chain) {
-    if (!isRecord$4(rawNode)) {
+    if (!isRecord$3(rawNode)) {
       return err("chain nodes must be objects");
     }
     if (rawNode.kind === "device") {
@@ -23206,16 +23353,16 @@ function assertManifestCoverage() {
   }
 }
 assertManifestCoverage();
-function clamp$9(value, min, max) {
+function clamp$8(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function quantize(value, spec) {
   if (!(spec.step > 0)) {
-    return clamp$9(value, spec.min, spec.max);
+    return clamp$8(value, spec.min, spec.max);
   }
-  const clamped = clamp$9(value, spec.min, spec.max);
+  const clamped = clamp$8(value, spec.min, spec.max);
   const stepped = spec.min + Math.round((clamped - spec.min) / spec.step) * spec.step;
-  return clamp$9(Number(stepped.toFixed(8)), spec.min, spec.max);
+  return clamp$8(Number(stepped.toFixed(8)), spec.min, spec.max);
 }
 function formatFrequencyDisplay(value) {
   if (value >= 1e4) {
@@ -25120,11 +25267,11 @@ function ParameterPrecisionHud({ model }) {
   );
 }
 const AMOUNT_EPSILON = 1e-9;
-function clamp$8(value, min, max) {
+function clamp$7(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clamp01$3(value) {
-  return clamp$8(value, 0, 1);
+  return clamp$7(value, 0, 1);
 }
 function resolveMobileVoiceRailState(input) {
   if (!input.modulatable) {
@@ -25163,12 +25310,12 @@ function projectMobileVoiceRailBand(domain, baseValue, route) {
   if (!(range > 0)) {
     throw new Error("A rail domain must span a positive range");
   }
-  const clampedBase = clamp$8(baseValue, domain.min, domain.max);
+  const clampedBase = clamp$7(baseValue, domain.min, domain.max);
   const offsets = routeAmountOffsets(route);
   const rawLow = clampedBase + offsets[0];
   const rawHigh = clampedBase + offsets[1];
-  const lowValue = clamp$8(rawLow, domain.min, domain.max);
-  const highValue = clamp$8(rawHigh, domain.min, domain.max);
+  const lowValue = clamp$7(rawLow, domain.min, domain.max);
+  const highValue = clamp$7(rawHigh, domain.min, domain.max);
   const lowNormalized = (lowValue - domain.min) / range;
   const highNormalized = (highValue - domain.min) / range;
   const magnitude = Math.abs(route.amount);
@@ -25203,11 +25350,11 @@ function aggregateTuneBaseSemitones(octave, semitone, fineCents) {
   return octave * 12 + semitone + fineCents / 100;
 }
 function projectAggregateTuneTravel(baseSemitones, route) {
-  const clampedBase = clamp$8(baseSemitones, AGGREGATE_TUNE_DOMAIN.min, AGGREGATE_TUNE_DOMAIN.max);
+  const clampedBase = clamp$7(baseSemitones, AGGREGATE_TUNE_DOMAIN.min, AGGREGATE_TUNE_DOMAIN.max);
   const offsets = routeAmountOffsets(route);
   return Object.freeze({
-    lowSemitones: clamp$8(clampedBase + offsets[0], AGGREGATE_TUNE_DOMAIN.min, AGGREGATE_TUNE_DOMAIN.max),
-    highSemitones: clamp$8(clampedBase + offsets[1], AGGREGATE_TUNE_DOMAIN.min, AGGREGATE_TUNE_DOMAIN.max)
+    lowSemitones: clamp$7(clampedBase + offsets[0], AGGREGATE_TUNE_DOMAIN.min, AGGREGATE_TUNE_DOMAIN.max),
+    highSemitones: clamp$7(clampedBase + offsets[1], AGGREGATE_TUNE_DOMAIN.min, AGGREGATE_TUNE_DOMAIN.max)
   });
 }
 function projectTuneComponentBand(component, componentBaseNormalized, route) {
@@ -25236,17 +25383,17 @@ function clearUiTimeout(handle) {
 }
 const HUD_LINGER_MS = 420;
 const STICKY_AMOUNT_CAPTURE = 0.2;
-function clamp$7(value, min, max) {
+function clamp$6(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clamp01$2(value) {
-  return clamp$7(value, 0, 1);
+  return clamp$6(value, 0, 1);
 }
 const HIDDEN_HUD = { phase: "hidden", axis: "base", cellId: null };
 function presentReadoutCell(cell, binding, routes, armedSource, liveRoute, liveAmount) {
   const display = cell.display;
-  const value = clamp$7(binding.value, display.min, display.max);
-  const baseNormalized = cell.normalizeValue !== void 0 ? clamp$7(cell.normalizeValue(value), 0, 1) : (value - display.min) / (display.max - display.min);
+  const value = clamp$6(binding.value, display.min, display.max);
+  const baseNormalized = cell.normalizeValue !== void 0 ? clamp$6(cell.normalizeValue(value), 0, 1) : (value - display.min) / (display.max - display.min);
   const topologyRoute = cell.targetKind === null || armedSource === null ? null : routes.find((route2) => route2.targetKind === cell.targetKind && route2.sourceKind === armedSource.sourceKind && route2.sourceSlot === armedSource.sourceSlot) ?? null;
   const amount = topologyRoute !== null && liveRoute !== null && topologyRoute.id === liveRoute.id && liveAmount !== null ? liveAmount : topologyRoute?.amount ?? 0;
   const route = topologyRoute === null ? null : { ...topologyRoute, amount };
@@ -25369,7 +25516,7 @@ function useReadoutCells({
       lastDetentValue: null,
       lastStickyAmount: topologyRoute !== null && Math.abs(topologyRoute.amount - Math.round(topologyRoute.amount)) <= STICKY_AMOUNT_CAPTURE ? Math.round(topologyRoute.amount) : null
     };
-    const startValue = clamp$7(bindingsRef.current[cellId].value, display.min, display.max);
+    const startValue = clamp$6(bindingsRef.current[cellId].value, display.min, display.max);
     const baseChannel = {
       // The drag walks the cell's DISPLAY scale: gesture-normalized and
       // tick position are the same number, so the tick tracks the
@@ -25379,7 +25526,7 @@ function useReadoutCells({
       write: (normalized2) => {
         const raw = cell.denormalizeValue !== void 0 ? cell.denormalizeValue(normalized2) : display.min + normalized2 * (display.max - display.min);
         const snapped = display.step > 0 ? display.min + Math.round((raw - display.min) / display.step) * display.step : raw;
-        const value = clamp$7(snapped, display.min, display.max);
+        const value = clamp$6(snapped, display.min, display.max);
         if (cell.detented) {
           if (gestureScratchRef.current.lastDetentValue !== value) {
             if (gestureScratchRef.current.lastDetentValue !== null) {
@@ -25398,7 +25545,7 @@ function useReadoutCells({
       }
     };
     const dialWalk = cell.amountDragStyle === "effective-value" && cell.normalizeValue !== void 0 && cell.denormalizeValue !== void 0;
-    const baseValueAtStart = clamp$7(bindingsRef.current[cellId].value, display.min, display.max);
+    const baseValueAtStart = clamp$6(bindingsRef.current[cellId].value, display.min, display.max);
     const modulationChannel = {
       startNormalized: amountBounds === null ? 0 : dialWalk ? clamp01$2(cell.normalizeValue(baseValueAtStart + (topologyRoute?.amount ?? 0))) : clamp01$2(((topologyRoute?.amount ?? 0) - amountBounds.min) / (amountBounds.max - amountBounds.min)),
       pixelsPerFullSpan: dialWalk ? PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE : PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
@@ -25408,7 +25555,7 @@ function useReadoutCells({
         if (dialWalk) {
           const amountBinding2 = activeAmountBindingRef.current;
           if (amountBinding2.value !== null) {
-            amountBinding2.setValue(clamp$7(
+            amountBinding2.setValue(clamp$6(
               cell.denormalizeValue(normalized2) - baseValueAtStart,
               amountBounds.min,
               amountBounds.max
@@ -25487,13 +25634,13 @@ function useReadoutCells({
     if (!binding.isReady) return;
     if (cell.normalizeValue !== void 0 && cell.denormalizeValue !== void 0) {
       const travel = 0.01 * (coarse ? 10 : 1) * direction;
-      const next = cell.denormalizeValue(clamp$7(cell.normalizeValue(binding.value) + travel, 0, 1));
-      binding.commitValue(clamp$7(next, cell.display.min, cell.display.max));
+      const next = cell.denormalizeValue(clamp$6(cell.normalizeValue(binding.value) + travel, 0, 1));
+      binding.commitValue(clamp$6(next, cell.display.min, cell.display.max));
       return;
     }
     const baseStep = cell.display.step > 0 ? cell.display.step : (cell.display.max - cell.display.min) / 100;
     const step = baseStep * (coarse ? 10 : 1);
-    binding.commitValue(clamp$7(binding.value + direction * step, cell.display.min, cell.display.max));
+    binding.commitValue(clamp$6(binding.value + direction * step, cell.display.min, cell.display.max));
   }, []);
   const handleReadoutKeyDown = reactExports.useCallback((event, cellId) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "ArrowUp" && event.key !== "ArrowDown" && event.key !== "Home" && event.key !== "End") {
@@ -25577,7 +25724,7 @@ function useReadoutCells({
       sourceAccent,
       baseNormalized: presentation.baseNormalized,
       baseOriginNormalized: baseOrigin,
-      baseText: cell.formatValue(clamp$7(bindings[cell.id].value, display.min, display.max)),
+      baseText: cell.formatValue(clamp$6(bindings[cell.id].value, display.min, display.max)),
       lowText,
       highText,
       limitsVisible,
@@ -25714,7 +25861,7 @@ function ReadoutCell({
     const display2 = cell.display;
     const choices = display2.choices ?? [];
     const binding2 = bindings[cell.id];
-    const index = clamp$7(Math.round(binding2.value), display2.min, display2.max);
+    const index = clamp$6(Math.round(binding2.value), display2.min, display2.max);
     const label = choices[index - display2.min] ?? String(index);
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "button",
@@ -25736,7 +25883,7 @@ function ReadoutCell({
   const display = cell.display;
   const binding = bindings[cell.id];
   const presentation = api.presentCell(cell.id);
-  const value = clamp$7(binding.value, display.min, display.max);
+  const value = clamp$6(binding.value, display.min, display.max);
   const dragging = api.draggingCell !== null && api.draggingCell.cellId === cell.id ? api.draggingCell.mode : void 0;
   const compactKnob = cell.presentation === "compact-knob";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -25983,11 +26130,11 @@ const MOBILE_VOICE_OWNER_ACCENT_RGB = "105 213 197";
 function isBindableControlID(candidate) {
   return Object.hasOwn(MOBILE_VOICE_DISPLAY_DESCRIPTORS, candidate);
 }
-function clamp$6(value, min, max) {
+function clamp$5(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clamp01$1(value) {
-  return clamp$6(value, 0, 1);
+  return clamp$5(value, 0, 1);
 }
 function signedInteger(value) {
   const rounded = Math.round(value);
@@ -26042,7 +26189,7 @@ function useOscillatorToggleBinding(oscillatorID, controlID) {
   return usePatchParameterBinding({
     endpointID: getOscillatorControlAddress(oscillatorID, controlID).endpointID,
     initialValue: 0,
-    coerce: reactExports.useCallback((value) => clamp$6(Math.round(Number(value) || 0), 0, 1), [])
+    coerce: reactExports.useCallback((value) => clamp$5(Math.round(Number(value) || 0), 0, 1), [])
   });
 }
 function MobileVoiceFocusedEditor({
@@ -26272,7 +26419,7 @@ function MobileVoiceFocusedEditor({
     const display = MOBILE_VOICE_DISPLAY_DESCRIPTORS[controlID];
     const presentation = cellApi.presentCell(controlID);
     const binding = bindings[controlID];
-    const value = clamp$6(binding.value, display.min, display.max);
+    const value = clamp$5(binding.value, display.min, display.max);
     const format = spec.format ?? "percent";
     const modulationTargetKind = spec.modulationParameterKind !== null ? targetKindFor(spec.modulationParameterKind) : void 0;
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -26326,7 +26473,7 @@ function MobileVoiceFocusedEditor({
       controlID
     );
   };
-  const warpModeIndex = clamp$6(Math.round(bindings.warpMode.value), 0, WARP_MODE_LABELS.length - 1);
+  const warpModeIndex = clamp$5(Math.round(bindings.warpMode.value), 0, WARP_MODE_LABELS.length - 1);
   const graphValueText = graphAxis === "horizontal" ? formatMobileVoiceValue("percent", clamp01$1(bindings.warpAmount.value)) : formatMobileVoiceValue("percent", clamp01$1(bindings.framePosition.value));
   const indexPresentation = cellApi.presentCell("framePosition");
   const indexShading = wavetableModulationShadingRange(indexPresentation.railState, indexPresentation.band);
@@ -27350,18 +27497,18 @@ const ARTICULATION_DEFAULT_NAMES$1 = [
   "Tin Halo",
   "Sugar Gate"
 ];
-function clamp$5(value, min, max) {
+function clamp$4(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clamp01(value) {
-  return clamp$5(Number.isFinite(value) ? value : 0, 0, 1);
+  return clamp$4(Number.isFinite(value) ? value : 0, 0, 1);
 }
 function normalizeNumber(value, fallback, min = -Number.MAX_VALUE, max = Number.MAX_VALUE) {
   const numericValue = Number(value);
-  return clamp$5(Number.isFinite(numericValue) ? numericValue : fallback, min, max);
+  return clamp$4(Number.isFinite(numericValue) ? numericValue : fallback, min, max);
 }
 function normalizeInteger(value, fallback, min, max) {
-  return clamp$5(Math.round(normalizeNumber(value, fallback)), min, max);
+  return clamp$4(Math.round(normalizeNumber(value, fallback)), min, max);
 }
 function normalizeTriggerMode(value) {
   return value === "key" || value === "vel" || value === "chain" ? value : "chain";
@@ -27986,7 +28133,7 @@ const BOUNCE_PATCH_DOCUMENT_VERSION = 1;
 function invariant(condition, message) {
   if (!condition) throw new Error(message);
 }
-function isRecord$3(value) {
+function isRecord$2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function cloneJsonValue(value, field = "value") {
@@ -27998,7 +28145,7 @@ function cloneJsonValue(value, field = "value") {
   if (Array.isArray(value)) {
     return value.map((entry, index) => cloneJsonValue(entry, `${field}[${index}]`));
   }
-  invariant(isRecord$3(value), `${field} must be JSON-compatible`);
+  invariant(isRecord$2(value), `${field} must be JSON-compatible`);
   return Object.fromEntries(
     Object.keys(value).sort().map((key) => [key, cloneJsonValue(value[key], `${field}.${key}`)])
   );
@@ -28015,8 +28162,8 @@ function canonicalJsonStringify(value) {
   return JSON.stringify(cloneJsonValue(value));
 }
 function createBouncePatchDocument({ parameters, storedState } = {}) {
-  invariant(isRecord$3(parameters), "Bounce patch parameters must be an object");
-  invariant(isRecord$3(storedState), "Bounce patch storedState must be an object");
+  invariant(isRecord$2(parameters), "Bounce patch parameters must be an object");
+  invariant(isRecord$2(storedState), "Bounce patch storedState must be an object");
   const normalizedParameters = {};
   for (const endpointID of Object.keys(parameters).sort()) {
     const value = parameters[endpointID];
@@ -28040,7 +28187,7 @@ function createBouncePatchDocument({ parameters, storedState } = {}) {
 function parseBouncePatchDocument(value) {
   const parsed = parseJsonDocument(value, "Bounce patch document");
   invariant(
-    isRecord$3(parsed) && parsed.format === BOUNCE_PATCH_DOCUMENT_FORMAT && parsed.version === BOUNCE_PATCH_DOCUMENT_VERSION,
+    isRecord$2(parsed) && parsed.format === BOUNCE_PATCH_DOCUMENT_FORMAT && parsed.version === BOUNCE_PATCH_DOCUMENT_VERSION,
     "Unsupported Bounce patch document"
   );
   invariant(
@@ -28052,7 +28199,7 @@ function parseBouncePatchDocument(value) {
 function parseBounceDocument(value) {
   const parsed = parseJsonDocument(value, BOUNCE_STATE_KEY);
   invariant(
-    isRecord$3(parsed) && parsed.format === BOUNCE_DOCUMENT_FORMAT && parsed.version === BOUNCE_DOCUMENT_VERSION,
+    isRecord$2(parsed) && parsed.format === BOUNCE_DOCUMENT_FORMAT && parsed.version === BOUNCE_DOCUMENT_VERSION,
     "Unsupported bounce.v1 document"
   );
   const exactKeys = [
@@ -28093,16 +28240,16 @@ function parseBounceDocument(value) {
   let expectedOffset = 0;
   parsed.segments.forEach((segment, index) => {
     invariant(
-      isRecord$3(segment) && segment.rootNote === parsed.roots[index] && segment.frameOffset === expectedOffset && Number.isInteger(segment.frameCount) && segment.frameCount > 0 && Number.isInteger(segment.noteOffFrameOffset) && segment.noteOffFrameOffset > 0 && segment.noteOffFrameOffset < segment.frameCount,
+      isRecord$2(segment) && segment.rootNote === parsed.roots[index] && segment.frameOffset === expectedOffset && Number.isInteger(segment.frameCount) && segment.frameCount > 0 && Number.isInteger(segment.noteOffFrameOffset) && segment.noteOffFrameOffset > 0 && segment.noteOffFrameOffset < segment.frameCount,
       `bounce.v1 segment ${index} is invalid`
     );
     expectedOffset += segment.frameCount;
   });
   invariant(
-    isRecord$3(parsed.capture) && Number.isInteger(parsed.capture.sampleRate) && parsed.capture.sampleRate > 0 && typeof parsed.capture.tempoBpm === "number" && parsed.capture.tempoBpm > 0 && parsed.capture.velocity === 100 && Number.isInteger(parsed.capture.holdFrames) && parsed.capture.holdFrames > 0 && Number.isInteger(parsed.capture.tailCapFrames) && parsed.capture.tailCapFrames > 0,
+    isRecord$2(parsed.capture) && Number.isInteger(parsed.capture.sampleRate) && parsed.capture.sampleRate > 0 && typeof parsed.capture.tempoBpm === "number" && parsed.capture.tempoBpm > 0 && parsed.capture.velocity === 100 && Number.isInteger(parsed.capture.holdFrames) && parsed.capture.holdFrames > 0 && Number.isInteger(parsed.capture.tailCapFrames) && parsed.capture.tailCapFrames > 0,
     "bounce.v1 capture metadata is invalid"
   );
-  invariant(isRecord$3(parsed.revertRef), "bounce.v1 revertRef is invalid");
+  invariant(isRecord$2(parsed.revertRef), "bounce.v1 revertRef is invalid");
   const previousBankDigest = parsed.revertRef.bankDigest;
   invariant(
     previousBankDigest === null || typeof previousBankDigest === "string" && /^[0-9a-f]{64}$/.test(previousBankDigest),
@@ -28120,12 +28267,12 @@ function parseBounceDocument(value) {
 function serializeBounceDocument(document2) {
   return canonicalJsonStringify(parseBounceDocument(document2));
 }
-function isRecord$2(value) {
+function isRecord$1(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function readFullStoredStateValue$1(storedState) {
-  if (!isRecord$2(storedState)) return void 0;
-  const nestedValues = isRecord$2(storedState.values) ? storedState.values : null;
+  if (!isRecord$1(storedState)) return void 0;
+  const nestedValues = isRecord$1(storedState.values) ? storedState.values : null;
   if (nestedValues && Object.hasOwn(nestedValues, BOUNCE_STATE_KEY)) {
     return nestedValues[BOUNCE_STATE_KEY];
   }
@@ -28174,8 +28321,8 @@ function createBouncePresetStoredStateAdapter(patchConnection) {
     }
   };
   const handleStoredStateValue = (message) => {
-    const payload = isRecord$2(message) && isRecord$2(message.event) ? message.event : message;
-    if (!isRecord$2(payload) || payload.key !== BOUNCE_STATE_KEY) return;
+    const payload = isRecord$1(message) && isRecord$1(message.event) ? message.event : message;
+    if (!isRecord$1(payload) || payload.key !== BOUNCE_STATE_KEY) return;
     const isHydration = awaitingKeyHydration;
     awaitingKeyHydration = false;
     acceptIncoming(payload.value, isHydration);
@@ -28982,148 +29129,6 @@ function useSynthInputRouter(keyboardRef, {
     bindArrowTarget,
     bindTextEntryTarget
   }), [activateArrowTarget, beginTextEntry, endTextEntry, bindArrowTarget, bindTextEntryTarget]);
-}
-const ENHANCER_SPECTRUM_PLOT = Object.freeze({
-  width: 760,
-  height: 272,
-  left: 42,
-  right: 42,
-  top: 18,
-  bottom: 28,
-  minimumHz: 20,
-  maximumHz: 2e4,
-  minimumGainDb: 0,
-  maximumGainDb: 12,
-  minimumLevelDbfs: -72,
-  maximumLevelDbfs: 0
-});
-const spectrumPointCount = 241;
-const spectrumAttackMs = 55;
-const spectrumReleaseMs = 190;
-function clamp$4(value, minimum, maximum) {
-  return Math.min(maximum, Math.max(minimum, value));
-}
-function isRecord$1(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function normalizeSpectrumMessage(message) {
-  const payload = isRecord$1(message) && Object.hasOwn(message, "event") ? message.event : message;
-  if (!isRecord$1(payload)) {
-    return null;
-  }
-  const sampleRateHz = payload.sampleRateHz;
-  const magnitudes = payload.magnitudes;
-  if (typeof sampleRateHz !== "number" || !Number.isFinite(sampleRateHz) || sampleRateHz <= 0 || !Array.isArray(magnitudes) || magnitudes.length < 8) {
-    return null;
-  }
-  return {
-    sampleRateHz,
-    magnitudes: magnitudes.map((value) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0)
-  };
-}
-function interpolateLogFrequency(normalized2) {
-  return ENHANCER_SPECTRUM_PLOT.minimumHz * Math.pow(
-    ENHANCER_SPECTRUM_PLOT.maximumHz / ENHANCER_SPECTRUM_PLOT.minimumHz,
-    clamp$4(normalized2, 0, 1)
-  );
-}
-const spectrumRanges = Object.freeze(
-  Array.from({ length: spectrumPointCount }, (_, index) => {
-    const normalized2 = index / (spectrumPointCount - 1);
-    const centerHz = interpolateLogFrequency(normalized2);
-    const previousHz = interpolateLogFrequency(
-      Math.max(0, index - 0.5) / (spectrumPointCount - 1)
-    );
-    const nextHz = interpolateLogFrequency(
-      Math.min(spectrumPointCount - 1, index + 0.5) / (spectrumPointCount - 1)
-    );
-    return {
-      centerHz,
-      lowHz: index === 0 ? ENHANCER_SPECTRUM_PLOT.minimumHz : previousHz,
-      highHz: index === spectrumPointCount - 1 ? ENHANCER_SPECTRUM_PLOT.maximumHz : nextHz
-    };
-  })
-);
-function magnitudeToDbfs(magnitude) {
-  return 20 * Math.log10(Math.max(1e-9, magnitude));
-}
-function sampleFrame(frame) {
-  const binHz = frame.sampleRateHz / (frame.magnitudes.length * 2);
-  const maximumBin = frame.magnitudes.length - 1;
-  return spectrumRanges.map(({ lowHz, highHz }) => {
-    const firstBin = clamp$4(Math.floor(lowHz / binHz), 0, maximumBin);
-    const lastBin = clamp$4(Math.ceil(highHz / binHz), firstBin, maximumBin);
-    let maximumMagnitude = 0;
-    for (let bin = firstBin; bin <= lastBin; bin += 1) {
-      maximumMagnitude = Math.max(maximumMagnitude, frame.magnitudes[bin] ?? 0);
-    }
-    return magnitudeToDbfs(maximumMagnitude);
-  });
-}
-function smoothSpectrum(previous, targetDbfs, timestampMs) {
-  if (previous === null || previous.magnitudesDbfs.length !== targetDbfs.length) {
-    return targetDbfs;
-  }
-  const deltaMs = clamp$4(timestampMs - previous.timestampMs, 0, 1e3);
-  return targetDbfs.map((target, index) => {
-    const prior = previous.magnitudesDbfs[index] ?? target;
-    const timeMs = target > prior ? spectrumAttackMs : spectrumReleaseMs;
-    const coefficient = Math.exp(-deltaMs / timeMs);
-    return target + (prior - target) * coefficient;
-  });
-}
-function findPeakDbfs(magnitudesDbfs) {
-  let peak = ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs;
-  for (const magnitudeDbfs of magnitudesDbfs) {
-    peak = Math.max(peak, magnitudeDbfs);
-  }
-  return peak;
-}
-function enhancerFrequencyX(frequencyHz) {
-  const normalized2 = Math.log(
-    clamp$4(
-      frequencyHz,
-      ENHANCER_SPECTRUM_PLOT.minimumHz,
-      ENHANCER_SPECTRUM_PLOT.maximumHz
-    ) / ENHANCER_SPECTRUM_PLOT.minimumHz
-  ) / Math.log(
-    ENHANCER_SPECTRUM_PLOT.maximumHz / ENHANCER_SPECTRUM_PLOT.minimumHz
-  );
-  return ENHANCER_SPECTRUM_PLOT.left + normalized2 * (ENHANCER_SPECTRUM_PLOT.width - ENHANCER_SPECTRUM_PLOT.left - ENHANCER_SPECTRUM_PLOT.right);
-}
-function enhancerLevelY(levelDbfs) {
-  const normalized2 = (clamp$4(
-    levelDbfs,
-    ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs,
-    ENHANCER_SPECTRUM_PLOT.maximumLevelDbfs
-  ) - ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs) / (ENHANCER_SPECTRUM_PLOT.maximumLevelDbfs - ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs);
-  return ENHANCER_SPECTRUM_PLOT.height - ENHANCER_SPECTRUM_PLOT.bottom - normalized2 * (ENHANCER_SPECTRUM_PLOT.height - ENHANCER_SPECTRUM_PLOT.top - ENHANCER_SPECTRUM_PLOT.bottom);
-}
-function createEnhancerFrequencyPath(yAtFrequency) {
-  return spectrumRanges.map(({ centerHz }, index) => `${index === 0 ? "M" : "L"} ${enhancerFrequencyX(centerHz).toFixed(2)} ` + yAtFrequency(centerHz).toFixed(2)).join(" ");
-}
-function advanceEnhancerSpectrum(message, previous, timestampMs) {
-  const frame = normalizeSpectrumMessage(message);
-  if (frame === null) {
-    return previous;
-  }
-  const magnitudesDbfs = smoothSpectrum(previous, sampleFrame(frame), timestampMs);
-  const path = createEnhancerFrequencyPath((frequencyHz) => {
-    const index = Math.round(
-      Math.log(frequencyHz / ENHANCER_SPECTRUM_PLOT.minimumHz) / Math.log(
-        ENHANCER_SPECTRUM_PLOT.maximumHz / ENHANCER_SPECTRUM_PLOT.minimumHz
-      ) * (spectrumPointCount - 1)
-    );
-    return enhancerLevelY(
-      magnitudesDbfs[index] ?? ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs
-    );
-  });
-  return {
-    path,
-    peakDbfs: findPeakDbfs(magnitudesDbfs),
-    magnitudesDbfs,
-    timestampMs
-  };
 }
 const POLISH_ENHANCER_AMOUNT_ENDPOINT_ID = "polishEnhancerAmount";
 const POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID = "polishCompressionClipAmount";
