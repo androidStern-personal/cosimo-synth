@@ -554,55 +554,57 @@ namespace wt
                 // Demand-driven: capture and analyze only while the scope
                 // view is open, and refill the window from fresh signal when
                 // it reopens. Purely observational — audio is elsewhere.
-                if (! analyzerActive)
+                // Keep one shared advance at the loop tail: an early
+                // advance/continue here breaks full-patch C++ generation.
+                if (analyzerActive)
+                {
+                    pushSample (
+                        previewInputLeft,
+                        previewInputRight,
+                        previewOutputLeft,
+                        previewOutputRight
+                    );
+
+                    framesUntilEmit -= 1;
+
+                    if (warmupFrames >= distortionScopeSampleCount && framesUntilEmit <= 0)
+                    {
+                        let leftRemovedPeak = findRemovedPeak (inputHistoryLeft, outputHistoryLeft);
+                        let rightRemovedPeak = findRemovedPeak (inputHistoryRight, outputHistoryRight);
+                        let useRightChannel = rightRemovedPeak > leftRemovedPeak;
+
+                        DistortionScopeFrame frame;
+                        frame.sampleRateHz = float32 (processor.frequency);
+                        frame.dominantChannel = useRightChannel ? 1 : 0;
+                        frame.inputPeak = 0.0f;
+                        frame.outputPeak = 0.0f;
+                        frame.removedPeak = 0.0f;
+
+                        for (wrap<distortionScopeSampleCount> index)
+                        {
+                            let offset = index;
+                            let inputSample = useRightChannel
+                                ? readHistorySample (inputHistoryRight, offset)
+                                : readHistorySample (inputHistoryLeft, offset);
+                            let outputSample = useRightChannel
+                                ? readHistorySample (outputHistoryRight, offset)
+                                : readHistorySample (outputHistoryLeft, offset);
+                            let removedSample = inputSample - outputSample;
+
+                            frame.inputSamples[index] = inputSample;
+                            frame.outputSamples[index] = outputSample;
+                            frame.inputPeak = std::intrinsics::max (frame.inputPeak, std::intrinsics::abs (inputSample));
+                            frame.outputPeak = std::intrinsics::max (frame.outputPeak, std::intrinsics::abs (outputSample));
+                            frame.removedPeak = std::intrinsics::max (frame.removedPeak, std::intrinsics::abs (removedSample));
+                        }
+
+                        distortionScope <- frame;
+                        framesUntilEmit = hopSize;
+                    }
+                }
+                else
                 {
                     warmupFrames = 0;
-                    framesUntilEmit = hopSize;
-                    advance();
-                    continue;
-                }
-
-                pushSample (
-                    previewInputLeft,
-                    previewInputRight,
-                    previewOutputLeft,
-                    previewOutputRight
-                );
-
-                framesUntilEmit -= 1;
-
-                if (warmupFrames >= distortionScopeSampleCount && framesUntilEmit <= 0)
-                {
-                    let leftRemovedPeak = findRemovedPeak (inputHistoryLeft, outputHistoryLeft);
-                    let rightRemovedPeak = findRemovedPeak (inputHistoryRight, outputHistoryRight);
-                    let useRightChannel = rightRemovedPeak > leftRemovedPeak;
-
-                    DistortionScopeFrame frame;
-                    frame.sampleRateHz = float32 (processor.frequency);
-                    frame.dominantChannel = useRightChannel ? 1 : 0;
-                    frame.inputPeak = 0.0f;
-                    frame.outputPeak = 0.0f;
-                    frame.removedPeak = 0.0f;
-
-                    for (wrap<distortionScopeSampleCount> index)
-                    {
-                        let offset = index;
-                        let inputSample = useRightChannel
-                            ? readHistorySample (inputHistoryRight, offset)
-                            : readHistorySample (inputHistoryLeft, offset);
-                        let outputSample = useRightChannel
-                            ? readHistorySample (outputHistoryRight, offset)
-                            : readHistorySample (outputHistoryLeft, offset);
-                        let removedSample = inputSample - outputSample;
-
-                        frame.inputSamples[index] = inputSample;
-                        frame.outputSamples[index] = outputSample;
-                        frame.inputPeak = std::intrinsics::max (frame.inputPeak, std::intrinsics::abs (inputSample));
-                        frame.outputPeak = std::intrinsics::max (frame.outputPeak, std::intrinsics::abs (outputSample));
-                        frame.removedPeak = std::intrinsics::max (frame.removedPeak, std::intrinsics::abs (removedSample));
-                    }
-
-                    distortionScope <- frame;
                     framesUntilEmit = hopSize;
                 }
 
@@ -766,33 +768,29 @@ namespace wt
                 // Demand-driven like the scope above: bin and emit only
                 // while the history view is open; a reopened view rebuilds
                 // its horizon from fresh signal.
-                if (! analyzerActive)
+                if (analyzerActive)
                 {
-                    if (validBinCount != 0)
+                    pushSample (
+                        previewInputLeft,
+                        previewInputRight,
+                        previewOutputLeft,
+                        previewOutputRight
+                    );
+
+                    framesUntilEmit -= 1;
+
+                    if (validBinCount > 0 && framesUntilEmit <= 0)
                     {
-                        binWriteIndex = 0;
-                        validBinCount = 0;
+                        emitHistoryFrame();
                         framesUntilEmit = emitHopFrames;
-                        resetCurrentBin();
                     }
-
-                    advance();
-                    continue;
                 }
-
-                pushSample (
-                    previewInputLeft,
-                    previewInputRight,
-                    previewOutputLeft,
-                    previewOutputRight
-                );
-
-                framesUntilEmit -= 1;
-
-                if (validBinCount > 0 && framesUntilEmit <= 0)
+                else if (validBinCount != 0)
                 {
-                    emitHistoryFrame();
+                    binWriteIndex = 0;
+                    validBinCount = 0;
                     framesUntilEmit = emitHopFrames;
+                    resetCurrentBin();
                 }
 
                 advance();

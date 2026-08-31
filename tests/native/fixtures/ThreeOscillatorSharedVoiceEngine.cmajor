@@ -14,6 +14,10 @@ processor Core03TableAndControlSchedule
     output value float32 filterCutoffOut;
     output value float32 filterQOut;
     output value float32 filterMixOut;
+    output value float32 ampAttackOut;
+    output value float32 ampDecayOut;
+    output value float32 ampSustainOut;
+    output value float32 ampReleaseOut;
 
     output value float32 aFramePositionOut;
     output value float32 aWarpModeOut;
@@ -141,6 +145,10 @@ processor Core03TableAndControlSchedule
         filterCutoffOut <- 1800.0f;
         filterQOut <- 6.0f;
         filterMixOut <- 1.0f;
+        ampAttackOut <- 0.01f;
+        ampDecayOut <- 0.001f;
+        ampSustainOut <- 1.0f;
+        ampReleaseOut <- 0.2f;
         aFramePositionOut <- 0.20f;
         aWarpModeOut <- 0.0f;
         aWarpAmountOut <- 0.0f;
@@ -263,6 +271,7 @@ processor Core03TableAndControlSchedule
         upload.voiceRouteTargets[3] = cAmpTarget;
         upload.voiceRoutePolarities[3] = wt::modulationPolarityUnipolar;
         upload.voiceRouteAmounts[cAmpCell] = 20.0f;
+
         return upload;
     }
 
@@ -486,6 +495,10 @@ graph ThreeOscillatorSharedVoiceEngine [[ main ]]
         schedule.filterCutoffOut -> engine.filterCutoffIn;
         schedule.filterQOut -> engine.filterQIn;
         schedule.filterMixOut -> engine.filterMixIn;
+        schedule.ampAttackOut -> engine.ampAttackIn;
+        schedule.ampDecayOut -> engine.ampDecayIn;
+        schedule.ampSustainOut -> engine.ampSustainIn;
+        schedule.ampReleaseOut -> engine.ampReleaseIn;
 
         schedule.aFramePositionOut -> engine.oscillatorFramePositionIn[wt::oscillatorA];
         schedule.aWarpModeOut -> engine.oscillatorWarpModeIn[wt::oscillatorA];

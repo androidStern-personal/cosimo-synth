@@ -49,6 +49,10 @@ bool hasPredictedBPhase = false;
 bool sawBWarpAndScan = false;
 float baselineCPhaseIncrement = 0.0f;
 
+constexpr auto retriggerRequestFrame = std::int32_t { 7424 };
+constexpr auto stealFadeFrameCount = std::int32_t { 72 };
+constexpr auto deferredRetriggerFrame = retriggerRequestFrame + stealFadeFrameCount;
+
 float absoluteValue (float value) noexcept
 {
     return value < 0.0f ? -value : value;
@@ -288,9 +292,16 @@ std::int32_t render (FloatSlice packedFloats,
     }
 
     const auto bPhase = floats[phaseOffset + 8];
-    if (frame >= 7424 && frame <= 7426 && hasPredictedBPhase
-        && circularDifference (bPhase, predictedBPhase) > 0.02f)
+    const auto bPhaseDiscontinuity = hasPredictedBPhase
+        && circularDifference (bPhase, predictedBPhase) > 0.02f;
+    if (frame >= retriggerRequestFrame && frame < deferredRetriggerFrame
+        && bPhaseDiscontinuity)
+        fail (120);
+    else if (frame >= deferredRetriggerFrame && frame <= deferredRetriggerFrame + 2
+             && bPhaseDiscontinuity)
+    {
         invariantMask |= retriggerReset;
+    }
 
     if (frame == 19584)
     {
@@ -492,6 +503,8 @@ int main()
     if (result != 424242)
     {
         std::cerr << "FAIL shared voice engine integration: " << result << '\n';
+        std::cerr << "invariant mask: " << fixture_provider::invariantMask
+                  << " expected: " << fixture_provider::expectedInvariantMask << '\n';
         return 1;
     }
 
