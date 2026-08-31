@@ -16308,7 +16308,9 @@ function isOscillatorModulationTargetKind(value) {
 const VOICE_MODULATION_TARGET_IDENTITIES = Object.freeze(
   VOICE_MODULATION_TARGET_KINDS.map((kind, runtimeIndex) => ({ kind, group: "voice", runtimeIndex }))
 );
-const rackModulationParameters = allRackParameterDescriptors().filter((parameter2) => parameter2.modulationTargetIndex !== null);
+const rackModulationParameters = allRackParameterDescriptors().filter(
+  (parameter2) => parameter2.modulationTargetIndex !== null
+);
 const LANE_DEVICE_TYPE_PREFIXES = [
   "globalFilter",
   "distortion",
@@ -16330,18 +16332,17 @@ function maybeLaneBaseKindForRackEndpoint(endpointID) {
   const deviceType = LANE_DEVICE_TYPE_PREFIXES.find((prefix) => endpointID.startsWith(prefix));
   return deviceType === void 0 ? null : `lane.${deviceType}#1.${endpointID}`;
 }
+const rackModulationTargetIdentities = [
+  ...rackModulationParameters.map((parameter2) => ({
+    kind: laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter2)),
+    group: "rack",
+    runtimeIndex: parameter2.modulationTargetIndex
+  })),
+  { kind: "lane.frequencySplit#1.xoverLowHz", group: "rack", runtimeIndex: 37 },
+  { kind: "lane.frequencySplit#1.xoverHighHz", group: "rack", runtimeIndex: 38 }
+];
 const RACK_MODULATION_TARGET_IDENTITIES = Object.freeze(
-  [
-    ...rackModulationParameters.map((parameter2) => ({
-      // SAFETY: The preceding filter proves the authored index is non-null; endpoint IDs
-      // and indexes are both minted only by the rack descriptor catalog.
-      kind: laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter2)),
-      group: "rack",
-      runtimeIndex: parameter2.modulationTargetIndex
-    })),
-    { kind: "lane.frequencySplit#1.xoverLowHz", group: "rack", runtimeIndex: 37 },
-    { kind: "lane.frequencySplit#1.xoverHighHz", group: "rack", runtimeIndex: 38 }
-  ].sort((left, right) => left.runtimeIndex - right.runtimeIndex)
+  rackModulationTargetIdentities.sort((left, right) => left.runtimeIndex - right.runtimeIndex)
 );
 const MODULATION_TARGET_IDENTITIES = Object.freeze([
   ...VOICE_MODULATION_TARGET_IDENTITIES,
@@ -22535,10 +22536,14 @@ function useLaneParameterBinding(descriptor, deviceId) {
     const clamped = Math.min(descriptor.max, Math.max(descriptor.min, numeric));
     return descriptor.choices !== void 0 ? Math.round(clamped) : clamped;
   }, [descriptor.choices, descriptor.initial, descriptor.max, descriptor.min]);
+  const coerceValue = reactExports.useCallback((rawValue) => {
+    const numeric = Number(rawValue);
+    return clampValue(Number.isFinite(numeric) ? numeric : descriptor.initial);
+  }, [clampValue, descriptor.initial]);
   const hostBinding = usePatchParameterBinding({
     endpointID: hostEndpointID,
     initialValue: descriptor.initial,
-    coerce: clampValue,
+    coerce: coerceValue,
     active: isOutputTrim
   });
   const laneValue = clampValue(

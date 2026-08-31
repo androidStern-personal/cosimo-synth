@@ -80,8 +80,7 @@ export function isOscillatorModulationTargetKind(value) {
 }
 /** Voice destinations paired with their canonical runtime indexes. */
 export const VOICE_MODULATION_TARGET_IDENTITIES = Object.freeze(VOICE_MODULATION_TARGET_KINDS.map((kind, runtimeIndex) => ({ kind, group: "voice", runtimeIndex })));
-const rackModulationParameters = allRackParameterDescriptors()
-    .filter((parameter) => parameter.modulationTargetIndex !== null);
+const rackModulationParameters = allRackParameterDescriptors().filter((parameter) => parameter.modulationTargetIndex !== null);
 const LANE_DEVICE_TYPE_PREFIXES = [
     "globalFilter", "distortion", "ott", "chorus", "flanger", "phaser", "delay", "reverb",
 ];
@@ -101,17 +100,17 @@ export function maybeLaneBaseKindForRackEndpoint(endpointID) {
     const deviceType = LANE_DEVICE_TYPE_PREFIXES.find((prefix) => endpointID.startsWith(prefix));
     return deviceType === undefined ? null : `lane.${deviceType}#1.${endpointID}`;
 }
-/** Base-instance lane destinations paired with their descriptor-owned runtime indexes. */
-export const RACK_MODULATION_TARGET_IDENTITIES = Object.freeze([...rackModulationParameters.map((parameter) => ({
-        // SAFETY: The preceding filter proves the authored index is non-null; endpoint IDs
-        // and indexes are both minted only by the rack descriptor catalog.
+const rackModulationTargetIdentities = [
+    ...rackModulationParameters.map((parameter) => ({
         kind: laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
         group: "rack",
         runtimeIndex: parameter.modulationTargetIndex,
     })),
     { kind: "lane.frequencySplit#1.xoverLowHz", group: "rack", runtimeIndex: 37 },
-    { kind: "lane.frequencySplit#1.xoverHighHz", group: "rack", runtimeIndex: 38 }]
-    .sort((left, right) => left.runtimeIndex - right.runtimeIndex));
+    { kind: "lane.frequencySplit#1.xoverHighHz", group: "rack", runtimeIndex: 38 },
+];
+/** Base-instance lane destinations paired with their descriptor-owned runtime indexes. */
+export const RACK_MODULATION_TARGET_IDENTITIES = Object.freeze(rackModulationTargetIdentities.sort((left, right) => left.runtimeIndex - right.runtimeIndex));
 /** Every canonical modulation target, with voice and rack indexes kept in separate runtime groups. */
 export const MODULATION_TARGET_IDENTITIES = Object.freeze([
     ...VOICE_MODULATION_TARGET_IDENTITIES,
