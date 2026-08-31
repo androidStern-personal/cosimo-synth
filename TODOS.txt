@@ -1651,7 +1651,12 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Focused DSP/telemetry tests prove the analyzer taps the pre-Enhancer per-voice signal without altering audio or violating real-time constraints. Browser tests prove known spectrum peaks and the response curve align with the same labeled frequencies, existing gestures still edit the same values, and the compact graph remains legible without covering the Filter or other Voice controls.
     - Report automated visualization and performance evidence separately from physical-phone legibility and listening acceptance.
 
-[ ] T77 — Move Key Track into the parameter menu and replace its button with a yellow note status
+[x] T77 — Move Key Track into the parameter menu and replace its button with a yellow note status
+    Integrated (2026-08-31):
+    - Coordinator-managed implementation task `01a05289-1f49-7e51-b0f0-eb9bcb0c3f44`, branch `codex/t77-key-track-menu-cleanup`, landed through rebased commits `4dbc64fa`, `ca27f1a1`, `a908af57`, `c396d7f4`, `6affe901`, and `0dc45d1e`.
+    - Every eligible Voice, FX, Frequency Split, full Filter, per-voice Enhancer, and iOS control now uses the one shared long-press menu action. The removed button is replaced only while enabled by the exact vendored Material Symbols Rounded `music_note`, embedded in both compiled bundles as a noninteractive yellow status.
+    - Key Track and iPhone suites are 60/60, generated source-map provenance is green, and the full desktop matrix is green for this scope. Its only repeatable failure is the unchanged React Grab test-environment mismatch; one concurrent Polish scroll-position race passed alone. Fresh HMR was verified and stopped, then the final compiled signed VST3 was installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` with executable SHA-256 `c1161e29b57b9d58371ef69083c4bea320b52c276930091913f89f2c044e99cd`.
+    - Obsolete tests that demanded migration of incomplete pre-Key-Track sounds now prove atomic rejection, matching the approved greenfield saved-sound policy. Physical-phone legibility/touch and Ableton interaction remain unclaimed.
     Confirmed problem (2026-08-30):
     - The shared Effects control currently places a full `Key Track` button absolutely in the bottom-right of an eligible knob. A 393x852 production-browser measurement on Chorus Ring Frequency proved that button geometrically overlaps the `28 Hz` readout. Voice, full Filter, per-voice Enhancer, Frequency Split, and iOS surfaces also render separate visible Key Track buttons, so moving only one CSS rule would leave the interaction inconsistent.
     Approved interaction:
