@@ -24,6 +24,7 @@ import {
     selectRackEffect,
     touchPointForModSourcePreviewTarget,
     waitForHarnessSnapshot,
+    waitForReactFrames,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 import { decodePng, pngPixelAt, rgbDistance } from "./helpers/png_pixels.mjs";
 
@@ -5345,49 +5346,65 @@ test("group bypass and dissolve ride the fork menu", async () => {
     }
 });
 
-test("a stored v1 document upgrades in place and persists as lane.v2", async () => {
+test("a pre-T78 v1 document is rejected atomically without writes or upgrade", async () => {
     const page = await openHarnessPage();
 
     try {
         await page.waitForSelector('[data-role="effects-rack-card"]');
+        const visibleLane = () => page.locator(
+            '[data-role="rack-module-list"] .subway-station-row[data-device-id]',
+        ).evaluateAll((elements) => elements.map((element) => ({
+            deviceId: element.getAttribute("data-device-id"),
+            enabled: element.getAttribute("data-enabled"),
+        })));
+        const visibleBefore = await visibleLane();
+        const currentBefore = await getHarnessSnapshot(page);
         const v1 = createDefaultLaneState();
-        const reversed = {
+        const preT78 = {
             ...v1,
             order: [...v1.order].reverse(),
             enabled: { ...v1.enabled, chorus: true },
+            params: Object.fromEntries(Object.entries(v1.params).map(([effectId, params]) => [
+                effectId,
+                Object.fromEntries(Object.entries(params).filter(
+                    ([endpointID]) => !endpointID.endsWith("OutputTrimDb"),
+                )),
+            ])),
         };
+        const serializedPreT78 = serializeLaneState(preT78);
+        assert.equal(
+            Object.values(preT78.params).every((params) => Object.keys(params).every(
+                (endpointID) => !endpointID.endsWith("OutputTrimDb"),
+            )),
+            true,
+        );
+        await clearHarnessDebugLog(page);
         await page.evaluate((serialized) => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("lane.v1", serialized);
-        }, serializeLaneState(reversed));
+        }, serializedPreT78);
 
-        // The map renders the upgraded document: reverb leads the line and
-        // the chorus station is powered.
-        await page.waitForFunction(() => (
-            document.querySelector('[data-role="rack-module-list"]')?.firstElementChild
-                ?.getAttribute("data-role") === "rack-module-reverb"
-            && document.querySelector('[data-role="rack-module-chorus"]')?.getAttribute("data-enabled") === "true"
-        ));
+        // Let any accepted React update and T78's delayed trim persistence
+        // become observable before proving the rejection was all-or-none.
+        await waitForReactFrames(page, 2);
+        await page.waitForTimeout(180);
 
-        // The next persisted write is a lane.v2 document.
-        await page.click('[data-role="rack-station-chorus"]', { button: "right" });
-        await page.waitForSelector('[data-role="rack-enabled-chorus"]');
-        await page.click('[data-role="rack-enabled-chorus"]');
-        const snapshot = await waitForHarnessSnapshot(
-            page,
-            "upgraded doc persisted as v2",
-            (nextSnapshot) => {
-                const rawState = nextSnapshot.storedState["lane.v1"];
-                if (rawState === undefined) {
-                    return false;
-                }
-                const doc = JSON.parse(String(rawState));
-                return doc.version === 2
-                    && doc.chain?.find((node) => node.deviceId === "chorus#1")?.enabled === false;
-            },
+        const snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(await visibleLane(), visibleBefore);
+        assert.deepEqual(snapshot.parameterValues, currentBefore.parameterValues);
+        assert.equal(String(snapshot.storedState["lane.v1"]), serializedPreT78);
+        assert.equal(JSON.parse(String(snapshot.storedState["lane.v1"])).version, 1);
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology"),
+            [],
         );
-        const storedDoc = readStoredLaneDoc(snapshot);
-        assert.equal(storedDoc.format, "cosimo.lane");
-        assert.equal(storedDoc.chain[0].deviceId, "reverb#1");
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => (
+                endpointID === "laneSlotParams"
+                || endpointID === "laneSlotParamValue"
+                || /^lane[A-Za-z]+[1-5]OutputTrimDb$/.test(endpointID)
+            )),
+            [],
+        );
     } finally {
         await page.close();
     }

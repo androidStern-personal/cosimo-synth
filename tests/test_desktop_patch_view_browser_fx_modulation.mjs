@@ -76,6 +76,7 @@ import {
     clickPresetBarAction,
     saveSynthPresetAs,
     waitForPresetBarDirtyState,
+    legacyEightLaneDocJson,
     dragArticulationCardToLane,
     previewArticulationCardDragOver,
     readDesktopRangeSegments,
@@ -3390,25 +3391,30 @@ test("rack no-op release adopts authoritative stored order received during the g
     const page = await openHarnessPage();
 
     try {
+        const authoritativeLane = {
+            ...JSON.parse(legacyEightLaneDocJson()),
+            chain: [
+                "reverb#1",
+                "globalFilter#1",
+                "distortion#1",
+                "ott#1",
+                "chorus#1",
+                "flanger#1",
+                "phaser#1",
+                "delay#1",
+            ].map((deviceId) => ({
+                kind: "device",
+                deviceId,
+                enabled: deviceId === "chorus#1",
+            })),
+        };
+        const authoritativeLaneJson = JSON.stringify(authoritativeLane);
         await clearHarnessDebugLog(page);
         await beginRackReorderWithoutPointerCapture(page, { pointerId: 94 });
         await page.waitForSelector(".subway-station-row.is-reordering");
-        await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("lane.v1", JSON.stringify({
-                ...window.__COSIMO_DESKTOP_HARNESS__.createDefaultLaneState(),
-                order: ["reverb", "filter", "drive", "ott", "chorus", "flanger", "phaser", "delay"],
-                enabled: {
-                    filter: false,
-                    drive: false,
-                    ott: false,
-                    chorus: true,
-                    flanger: false,
-                    phaser: false,
-                    delay: false,
-                    reverb: false,
-                },
-            }));
-        });
+        await page.evaluate((serialized) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("lane.v1", serialized);
+        }, authoritativeLaneJson);
         await page.waitForFunction(() => (
             document.querySelector('[data-role="rack-module-chorus"]')?.getAttribute("data-enabled") === "true"
             && document.querySelector('[data-role="rack-module-list"]')?.firstElementChild
@@ -3422,12 +3428,14 @@ test("rack no-op release adopts authoritative stored order received during the g
 
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
-        // The release was a no-op: nothing was written, so storage still
-        // holds the seeded v1 document verbatim (it upgrades to lane.v2 on
-        // the next real edit).
+        // The release was a no-op: storage keeps the accepted complete
+        // current document verbatim and no compatibility rewrite occurs.
+        assert.equal(String(snapshot.storedState["lane.v1"]), authoritativeLaneJson);
         const storedRack = JSON.parse(String(snapshot.storedState["lane.v1"]));
-        assert.equal(storedRack.order[0], "reverb");
-        assert.equal(storedRack.enabled.chorus, true);
+        assert.equal(storedRack.version, 2);
+        assert.equal(storedRack.chain[0].deviceId, "reverb#1");
+        assert.equal(storedRack.chain.find(({ deviceId }) => deviceId === "chorus#1").enabled, true);
+        assert.equal(storedRack.devices["chorus#1"].params.chorusOutputTrimDb, 0);
     } finally {
         await page.close();
     }

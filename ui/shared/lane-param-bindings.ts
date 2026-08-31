@@ -545,6 +545,10 @@ export function useLaneParameterBinding(
         const clamped = Math.min(descriptor.max, Math.max(descriptor.min, numeric));
         return descriptor.choices !== undefined ? Math.round(clamped) : clamped;
     }, [descriptor.choices, descriptor.initial, descriptor.max, descriptor.min]);
+    const coerceValue = useCallback((rawValue: unknown) => {
+        const numeric = Number(rawValue);
+        return clampValue(Number.isFinite(numeric) ? numeric : descriptor.initial);
+    }, [clampValue, descriptor.initial]);
 
     // Hooks stay unconditional: ordinary Effects Lane parameters keep their
     // record-only path, while T78 Output Trim activates the matching
@@ -552,7 +556,7 @@ export function useLaneParameterBinding(
     const hostBinding = usePatchParameterBinding<number>({
         endpointID: hostEndpointID,
         initialValue: descriptor.initial,
-        coerce: clampValue,
+        coerce: coerceValue,
         active: isOutputTrim,
     });
 

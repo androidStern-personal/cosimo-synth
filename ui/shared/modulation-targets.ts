@@ -1,6 +1,7 @@
 import {
     allRackParameterDescriptors,
     rackModulationIdentityEndpointID,
+    type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 
 /** Stable oscillator identities in runtime order. */
@@ -166,8 +167,13 @@ export const VOICE_MODULATION_TARGET_IDENTITIES: ReadonlyArray<ModulationTargetI
     VOICE_MODULATION_TARGET_KINDS.map((kind, runtimeIndex) => ({ kind, group: "voice" as const, runtimeIndex })),
 );
 
-const rackModulationParameters = allRackParameterDescriptors()
-    .filter((parameter) => parameter.modulationTargetIndex !== null);
+type ModulatedRackParameterDescriptor = RackParameterDescriptor & {
+    readonly modulationTargetIndex: number;
+};
+
+const rackModulationParameters = allRackParameterDescriptors().filter(
+    (parameter): parameter is ModulatedRackParameterDescriptor => parameter.modulationTargetIndex !== null,
+);
 
 const LANE_DEVICE_TYPE_PREFIXES = [
     "globalFilter", "distortion", "ott", "chorus", "flanger", "phaser", "delay", "reverb",
@@ -191,18 +197,19 @@ export function maybeLaneBaseKindForRackEndpoint(endpointID: string): RackModula
     return deviceType === undefined ? null : `lane.${deviceType}#1.${endpointID}`;
 }
 
+const rackModulationTargetIdentities: ModulationTargetIdentity[] = [
+    ...rackModulationParameters.map((parameter): ModulationTargetIdentity => ({
+        kind: laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
+        group: "rack",
+        runtimeIndex: parameter.modulationTargetIndex,
+    })),
+    { kind: "lane.frequencySplit#1.xoverLowHz", group: "rack", runtimeIndex: 37 },
+    { kind: "lane.frequencySplit#1.xoverHighHz", group: "rack", runtimeIndex: 38 },
+];
+
 /** Base-instance lane destinations paired with their descriptor-owned runtime indexes. */
 export const RACK_MODULATION_TARGET_IDENTITIES: ReadonlyArray<ModulationTargetIdentity> = Object.freeze(
-    [...rackModulationParameters.map((parameter) => ({
-        // SAFETY: The preceding filter proves the authored index is non-null; endpoint IDs
-        // and indexes are both minted only by the rack descriptor catalog.
-        kind: laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
-        group: "rack" as const,
-        runtimeIndex: parameter.modulationTargetIndex as number,
-    })),
-    { kind: "lane.frequencySplit#1.xoverLowHz", group: "rack" as const, runtimeIndex: 37 },
-    { kind: "lane.frequencySplit#1.xoverHighHz", group: "rack" as const, runtimeIndex: 38 }]
-        .sort((left, right) => left.runtimeIndex - right.runtimeIndex),
+    rackModulationTargetIdentities.sort((left, right) => left.runtimeIndex - right.runtimeIndex),
 );
 
 /** Every canonical modulation target, with voice and rack indexes kept in separate runtime groups. */
