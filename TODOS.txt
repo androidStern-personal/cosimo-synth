@@ -1640,8 +1640,12 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Source review confirms that the full-screen Polish and Enhancer Lite use one shared frequency geometry/analyzer contract and that no unapproved advanced sound parameter was introduced.
 
 [ ] T76 — Add the aligned live spectrum and frequency units to the per-voice Enhancer
+    Active owner (2026-08-31):
+    - Collaboration task `/root/t76_voice_enhancer_analyzer`, branch `codex/t76-voice-enhancer-analyzer`, worktree `/Users/winterfell/.codex/worktrees/t76full/cosimo-synth`, base `eb7a678894a4687fb7ab6ab9621519955070d3b1`, model `gpt-5.6-sol`, reasoning max, unrestricted filesystem/network access with approval prompts disabled.
+    - Scope: reuse T75's one shared logarithmic analyzer/geometry for the live audio entering the per-voice Enhancer, with deterministic multi-voice display behavior and compact responsive density; preserve all accepted DSP, control, Key Track, modulation, and gesture behavior; add no modes or parameters.
+    - Coordinator-managed by thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b`. This task must not run native/HMR/fixed-port/install/broad gates until the coordinator releases them, and must not merge, rebase, push master, install shared plugins, or deploy.
     Queued dependency (2026-08-30):
-    - Coordinator thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b` will launch T76 only after T75's shared analyzer and frequency-geometry implementation is source-review clean. No T76 implementation owner exists yet; this prevents a competing per-voice renderer from being created in parallel.
+    - Coordinator thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b` queued T76 until T75's shared analyzer and frequency-geometry implementation was source-review clean. That dependency is now satisfied; the sequencing prevented a competing per-voice renderer from being created in parallel.
     - Upgrade the existing per-voice Enhancer on the Voice/oscillator page with the shared Enhancer graph from T75: a real logarithmic frequency X-axis, Hz/kHz units, and a live visualization of the audio entering the per-voice Enhancer behind its response curve.
     - Preserve its approved placement after each voice's filter and before voices are combined, fixed linked Mid/Side processing, and existing Q, Freq-or-Ratio, Amount, optional Key Track, modulation, and direct-manipulation behavior. This is a visualization/telemetry upgrade, not permission to change its sound or add mode switches.
     - The compact graph has less room than Enhancer Lite or full-screen Polish. Reduce tick count, label density, and decoration as needed, but keep the exact shared log scale, units, plot bounds, and curve/analyzer alignment.

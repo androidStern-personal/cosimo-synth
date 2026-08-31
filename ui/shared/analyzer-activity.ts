@@ -1,14 +1,13 @@
 /**
- * Demand-driven analyzer activation. The engine's three diagnostic
- * analyzers — the filter spectrum FFT and the two distortion scopes — only
- * capture and emit while their view is open (the int32 *Activity event
- * inputs on graph WavetableSynth). This module owns the UI half of that
- * contract: a per-connection reference count for each analyzer endpoint,
+ * Demand-driven analyzer activation. Analyzer and read-only visualization
+ * endpoints only capture and emit while a surface observes them (the int32
+ * *Activity event inputs on graph WavetableSynth). This module owns the UI
+ * half of that contract: a per-connection reference count for each endpoint,
  * publishing one activity event on every open/closed transition.
  *
- * usePatchVisualEndpoint calls acquire/release around its endpoint
- * listener, so any component that observes an analyzer endpoint wakes the
- * DSP for exactly as long as it listens, with no per-view wiring.
+ * The ordinary, latest-frame, and folded endpoint hooks call acquire/release
+ * around their listeners, so every observer shares one DSP activity lease and
+ * the final observer closing reliably returns the visualization to dormancy.
  */
 
 import type { PatchConnectionLike } from "./cmajor-react";
@@ -18,6 +17,7 @@ export const ANALYZER_ACTIVITY_ENDPOINT_IDS: Readonly<Record<string, string>> = 
     filterSpectrum: "filterSpectrumActivity",
     distortionScope: "distortionScopeActivity",
     distortionHistory: "distortionHistoryActivity",
+    voiceEnhancerSpectrum: "voiceEnhancerSpectrumActivity",
 };
 
 type AnalyzerCounts = Map<string, number>;

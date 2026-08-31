@@ -316,9 +316,11 @@ export function usePatchEndpoint<TValue = unknown>(
         };
 
         patchConnection.addEndpointListener?.(endpointID, listener);
+        const releaseAnalyzerActivity = acquireAnalyzerActivity(patchConnection, endpointID);
 
         return () => {
             listening = false;
+            releaseAnalyzerActivity?.();
             patchConnection.removeEndpointListener?.(endpointID, listener);
         };
     }, [active, endpointID, patchConnection]);
@@ -516,6 +518,7 @@ export function usePatchFoldedVisualEndpoint<TValue, TMessage = unknown>(
         };
 
         patchConnection.addEndpointListener?.(endpointID, listener);
+        const releaseAnalyzerActivity = acquireAnalyzerActivity(patchConnection, endpointID);
 
         return () => {
             listening = false;
@@ -524,6 +527,7 @@ export function usePatchFoldedVisualEndpoint<TValue, TMessage = unknown>(
                 window.cancelAnimationFrame(animationFrameRef.current);
             }
             animationFrameRef.current = null;
+            releaseAnalyzerActivity?.();
             patchConnection.removeEndpointListener?.(endpointID, listener);
         };
     }, [active, endpointID, patchConnection]);

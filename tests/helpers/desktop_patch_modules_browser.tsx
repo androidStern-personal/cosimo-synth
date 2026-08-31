@@ -1417,6 +1417,58 @@ export async function installPolishTelemetryFoldHarness(target: HTMLElement) {
     await waitForMicrotask();
 }
 
+export async function installFoldedAnalyzerActivityHarness(target: HTMLElement) {
+    const endpointListeners = new Set<(value: unknown) => void>();
+    const sentMessages: Array<{ endpointID: string; value: unknown }> = [];
+    const patchConnection: PatchConnectionLike = {
+        addEndpointListener(endpointID, listener) {
+            if (endpointID === "voiceEnhancerSpectrum") {
+                endpointListeners.add(listener);
+            }
+        },
+        removeEndpointListener(endpointID, listener) {
+            if (endpointID === "voiceEnhancerSpectrum") {
+                endpointListeners.delete(listener);
+            }
+        },
+        sendEventOrValue(endpointID, value) {
+            sentMessages.push({ endpointID, value });
+        },
+    };
+    const mounted = mountHarness(target, (root) => {
+        function Reader() {
+            usePatchEndpoint("voiceEnhancerSpectrum", null);
+            usePatchFoldedVisualEndpoint(
+                "voiceEnhancerSpectrum",
+                0,
+                (current) => current + 1,
+            );
+            return null;
+        }
+
+        root.render(
+            <PatchConnectionProvider patchConnection={patchConnection}>
+                <Reader />
+            </PatchConnectionProvider>,
+        );
+    });
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        getSnapshot() {
+            return {
+                listenerCount: endpointListeners.size,
+                sentMessages: cloneValue(sentMessages),
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
 export async function installModulationRouteAmountBindingHarness(target: HTMLElement) {
     const routeId = "fine-grained-route-amount";
     const initialRoute = createDefaultRoute({

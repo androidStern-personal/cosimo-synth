@@ -38,6 +38,7 @@ import {
     VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID,
     VOICE_ENHANCER_PARAMETER_DESCRIPTORS,
     VOICE_ENHANCER_Q_ENDPOINT_ID,
+    VOICE_ENHANCER_SPECTRUM_ENDPOINT_ID,
 } from "./voice-enhancer";
 import {
     POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,
@@ -1400,6 +1401,11 @@ export class MockPatchConnection implements PatchConnectionLike {
     /** Emit one read-only post-trim Polish meter frame. */
     emitPolishMeter(frame: PolishMeterFrame) {
         this.emitEndpoint(POLISH_METER_ENDPOINT_ID, frame);
+    }
+
+    /** Emit one read-only per-voice Enhancer spectrum/response union frame. */
+    emitVoiceEnhancerTelemetry(frame: unknown) {
+        this.emitEndpoint(VOICE_ENHANCER_SPECTRUM_ENDPOINT_ID, frame);
     }
 
     emitDistortionScope(

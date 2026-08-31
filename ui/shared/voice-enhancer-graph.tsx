@@ -1,18 +1,41 @@
 import {
     useCallback,
     useEffect,
-    useId,
     useMemo,
     useRef,
     type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 
-const VIEWBOX_WIDTH = 800;
-const VIEWBOX_HEIGHT = 320;
-const GRAPH_LEFT = 34;
-const GRAPH_RIGHT = VIEWBOX_WIDTH - 34;
-const GRAPH_TOP = 28;
-const GRAPH_BASELINE = VIEWBOX_HEIGHT - 38;
+import {
+    EnhancerSpectrumGraph,
+    type EnhancerSpectrumCurve,
+    type EnhancerSpectrumMarker,
+} from "./enhancer-spectrum-graph";
+import {
+    ENHANCER_SPECTRUM_PLOT,
+    enhancerBellResponseDb,
+    type EnhancerSpectrumDisplay,
+} from "./enhancer-spectrum";
+import type { VoiceEnhancerResponseDisplay } from "./voice-enhancer";
+
+const GRAPH_RIGHT = ENHANCER_SPECTRUM_PLOT.width - ENHANCER_SPECTRUM_PLOT.right;
+const GRAPH_BASELINE = ENHANCER_SPECTRUM_PLOT.height - ENHANCER_SPECTRUM_PLOT.bottom;
+const PRIMARY_VOICE_CURVE_COLOR = "#a78bfa";
+const VOICE_CURVE_COLORS = Object.freeze([
+    PRIMARY_VOICE_CURVE_COLOR,
+    "#7dd3fc",
+    "#f0abfc",
+    "#67e8f9",
+    "#c4b5fd",
+    "#93c5fd",
+    "#e879f9",
+    "#5eead4",
+]);
+
+function voiceCurveColor(voiceIndex: number): string {
+    return VOICE_CURVE_COLORS[voiceIndex % VOICE_CURVE_COLORS.length]
+        ?? PRIMARY_VOICE_CURVE_COLOR;
+}
 
 function clamp01(value: number): number {
     return Math.min(1, Math.max(0, value));
@@ -22,6 +45,11 @@ type VoiceEnhancerGraphProps = {
     readonly frequencyNormalized: number;
     readonly q: number;
     readonly amount: number;
+    readonly frequencyHz: number | null;
+    readonly frequencyMode: "frequency" | "ratio";
+    readonly spectrum: EnhancerSpectrumDisplay | null;
+    readonly responses: ReadonlyArray<VoiceEnhancerResponseDisplay>;
+    readonly compact?: boolean;
     readonly disabled?: boolean;
     readonly className?: string;
     readonly onGestureStart: () => void;
@@ -38,6 +66,11 @@ export function VoiceEnhancerGraph({
     frequencyNormalized,
     q,
     amount,
+    frequencyHz,
+    frequencyMode,
+    spectrum,
+    responses,
+    compact = false,
     disabled = false,
     className,
     onGestureStart,
@@ -45,7 +78,7 @@ export function VoiceEnhancerGraph({
     onFrequencyNormalizedChange,
     onAmountChange,
 }: VoiceEnhancerGraphProps) {
-    const graphRef = useRef<SVGSVGElement | null>(null);
+    const graphRef = useRef<HTMLDivElement | null>(null);
     const activePointerRef = useRef<number | null>(null);
     const captureWasObservedRef = useRef(false);
     const captureWatchFrameRef = useRef<number | null>(null);
@@ -55,37 +88,61 @@ export function VoiceEnhancerGraph({
     onGestureEndRef.current = onGestureEnd;
     onFrequencyNormalizedChangeRef.current = onFrequencyNormalizedChange;
     onAmountChangeRef.current = onAmountChange;
-    const gradientID = useId();
     const normalizedFrequency = clamp01(frequencyNormalized);
     const normalizedAmount = clamp01(amount);
-    const centerX = GRAPH_LEFT + (normalizedFrequency * (GRAPH_RIGHT - GRAPH_LEFT));
-    const peakY = GRAPH_BASELINE - (normalizedAmount * (GRAPH_BASELINE - GRAPH_TOP));
-    const curvePath = useMemo(() => {
-        const safeQ = Math.min(10, Math.max(0.1, q));
-        const width = Math.max(0.025, 0.22 / Math.sqrt(safeQ));
-        const points = Array.from({ length: 97 }, (_, index) => {
-            const xNormalized = index / 96;
-            const distance = (xNormalized - normalizedFrequency) / width;
-            const bell = Math.exp(-0.5 * distance * distance);
-            const x = GRAPH_LEFT + (xNormalized * (GRAPH_RIGHT - GRAPH_LEFT));
-            const y = GRAPH_BASELINE
-                - (normalizedAmount * bell * (GRAPH_BASELINE - GRAPH_TOP));
-            return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
-        });
-        return points.join(" ");
-    }, [normalizedAmount, normalizedFrequency, q]);
+    const curves = useMemo<ReadonlyArray<EnhancerSpectrumCurve>>(() => {
+        if (responses.length > 0) {
+            return responses.map((response) => ({
+                id: `voice-${response.voiceIndex}`,
+                label: `Voice ${response.voiceIndex + 1}`,
+                color: voiceCurveColor(response.voiceIndex),
+                gainDbAtFrequency: (nextFrequencyHz: number) => enhancerBellResponseDb(
+                    nextFrequencyHz,
+                    response.frequencyHz,
+                    response.q,
+                    response.amount,
+                ),
+            }));
+        }
+
+        return frequencyHz === null ? [] : [{
+            id: "base",
+            label: "Base response",
+            color: PRIMARY_VOICE_CURVE_COLOR,
+            gainDbAtFrequency: (nextFrequencyHz: number) => enhancerBellResponseDb(
+                nextFrequencyHz,
+                frequencyHz,
+                q,
+                amount,
+            ),
+        }];
+    }, [amount, frequencyHz, q, responses]);
+    const markers = useMemo<ReadonlyArray<EnhancerSpectrumMarker>>(() => (
+        frequencyHz === null ? [] : [{
+            id: "base-edit",
+            label: "Editable base frequency and amount",
+            frequencyHz,
+            gainDb: normalizedAmount * 12,
+            color: "#d9ccff",
+            dataRole: "voice-enhancer-graph-handle",
+        }]
+    ), [frequencyHz, normalizedAmount]);
 
     const applyPointer = useCallback((event: Pick<PointerEvent, "clientX" | "clientY">) => {
         const bounds = graphRef.current?.getBoundingClientRect();
         if (!bounds) return;
         if (bounds.width <= 0 || bounds.height <= 0) return;
-        const viewboxX = ((event.clientX - bounds.left) / bounds.width) * VIEWBOX_WIDTH;
-        const viewboxY = ((event.clientY - bounds.top) / bounds.height) * VIEWBOX_HEIGHT;
+        const viewboxX = ((event.clientX - bounds.left) / bounds.width)
+            * ENHANCER_SPECTRUM_PLOT.width;
+        const viewboxY = ((event.clientY - bounds.top) / bounds.height)
+            * ENHANCER_SPECTRUM_PLOT.height;
         onFrequencyNormalizedChangeRef.current(clamp01(
-            (viewboxX - GRAPH_LEFT) / (GRAPH_RIGHT - GRAPH_LEFT),
+            (viewboxX - ENHANCER_SPECTRUM_PLOT.left)
+                / (GRAPH_RIGHT - ENHANCER_SPECTRUM_PLOT.left),
         ));
         onAmountChangeRef.current(clamp01(
-            (GRAPH_BASELINE - viewboxY) / (GRAPH_BASELINE - GRAPH_TOP),
+            (GRAPH_BASELINE - viewboxY)
+                / (GRAPH_BASELINE - ENHANCER_SPECTRUM_PLOT.top),
         ));
     }, []);
 
@@ -158,7 +215,7 @@ export function VoiceEnhancerGraph({
         };
     }, [applyPointer, finishGesture]);
 
-    const handleKeyDown = (event: ReactKeyboardEvent<SVGSVGElement>) => {
+    const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
         if (disabled) return;
         const coarse = event.shiftKey ? 0.05 : 0.01;
         if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
@@ -179,14 +236,14 @@ export function VoiceEnhancerGraph({
     };
 
     return (
-        <svg
+        <div
             ref={graphRef}
-            viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
-            preserveAspectRatio="none"
             data-role="voice-enhancer-graph"
             data-frequency-normalized={normalizedFrequency.toFixed(6)}
             data-amount={normalizedAmount.toFixed(6)}
-            className={className}
+            data-frequency-mode={frequencyMode}
+            data-active-response-count={responses.length}
+            className={`voice-enhancer-graph${compact ? " is-compact" : ""} ${className ?? ""}`.trim()}
             role="slider"
             aria-label="Enhancer Frequency or Ratio and Amount"
             aria-valuemin={0}
@@ -216,58 +273,14 @@ export function VoiceEnhancerGraph({
             onPointerUp={(event) => finishGesture(event.pointerId)}
             onPointerCancel={(event) => finishGesture(event.pointerId)}
         >
-            <defs>
-                <linearGradient id={gradientID} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#a78bfa" stopOpacity="0.42" />
-                    <stop offset="1" stopColor="#a78bfa" stopOpacity="0.02" />
-                </linearGradient>
-            </defs>
-            <rect width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} rx="18" fill="#080d10" />
-            {[0.25, 0.5, 0.75].map((position) => (
-                <line
-                    key={`vertical-${position}`}
-                    x1={GRAPH_LEFT + (position * (GRAPH_RIGHT - GRAPH_LEFT))}
-                    x2={GRAPH_LEFT + (position * (GRAPH_RIGHT - GRAPH_LEFT))}
-                    y1={GRAPH_TOP}
-                    y2={GRAPH_BASELINE}
-                    stroke="rgba(255,255,255,0.055)"
-                    strokeWidth="1"
-                />
-            ))}
-            <line
-                x1={GRAPH_LEFT}
-                x2={GRAPH_RIGHT}
-                y1={GRAPH_BASELINE}
-                y2={GRAPH_BASELINE}
-                stroke="rgba(255,255,255,0.16)"
-                strokeWidth="1.5"
+            <EnhancerSpectrumGraph
+                spectrum={spectrum}
+                curves={curves}
+                markers={markers}
+                ariaLabel="Live audio entering the per-voice Enhancer and its active voice responses"
+                className="voice-enhancer-spectrum"
             />
-            <path
-                d={`${curvePath} L ${GRAPH_RIGHT} ${GRAPH_BASELINE} L ${GRAPH_LEFT} ${GRAPH_BASELINE} Z`}
-                fill={`url(#${gradientID})`}
-            />
-            <path d={curvePath} fill="none" stroke="#a78bfa" strokeWidth="4" />
-            <line
-                x1={centerX}
-                x2={centerX}
-                y1={peakY}
-                y2={GRAPH_BASELINE}
-                stroke="rgba(167,139,250,0.38)"
-                strokeDasharray="5 7"
-                strokeWidth="2"
-            />
-            <circle
-                data-role="voice-enhancer-graph-handle"
-                cx={centerX}
-                cy={peakY}
-                r="9"
-                fill="#d9ccff"
-                stroke="#6d46d8"
-                strokeWidth="4"
-            />
-            <text x={GRAPH_LEFT + 4} y={GRAPH_TOP + 14} fill="rgba(255,255,255,0.46)" fontSize="15">
-                LINKED M/S
-            </text>
-        </svg>
+            <span className="voice-enhancer-graph-topline" aria-hidden="true">LINKED M/S</span>
+        </div>
     );
 }

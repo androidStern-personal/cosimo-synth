@@ -1757,9 +1757,45 @@ test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and
                 .evaluateAll((cells) => cells.map((cell) => cell.getAttribute("data-modulation-target-kind"))),
             ["voiceEnhancerFrequencyOctaves", "voiceEnhancerQ", "voiceEnhancerAmount"],
         );
-        assert.match(await page.locator('[data-role="voice-enhancer-graph"]').textContent(), /LINKED M\/S/);
-
         const graph = page.locator('[data-role="voice-enhancer-graph"]');
+        const sharedSpectrumGraph = graph.locator('[data-role="enhancer-spectrum-graph"]');
+        assert.equal(await sharedSpectrumGraph.count(), 1);
+        assert.equal(
+            await sharedSpectrumGraph.getAttribute("data-frequency-contract"),
+            "shared-log-gain",
+        );
+        assert.match(await sharedSpectrumGraph.textContent(), /20 Hz/);
+        assert.match(await sharedSpectrumGraph.textContent(), /20 kHz/);
+        const analyzerSnapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            analyzerSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "voiceEnhancerSpectrumActivity" && value === 1
+            )),
+            true,
+        );
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitVoiceEnhancerTelemetry({
+                responseCount: 2,
+                voiceIndices: [0, 3],
+                frequenciesHz: [220, 880],
+                qValues: [0.71, 2.5],
+                amounts: [0.4, 0.8],
+            });
+            const magnitudes = new Array(2_048).fill(0);
+            magnitudes[220] = 1;
+            window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitVoiceEnhancerTelemetry({
+                sampleRateHz: 4_096,
+                magnitudes,
+            });
+        });
+        await page.waitForFunction(() => (
+            document.querySelectorAll(
+                '[data-role="voice-enhancer-graph"] [data-role="enhancer-spectrum-curves"] [data-curve-id^="voice-"]',
+            ).length === 2
+            && document.querySelectorAll(
+                '[data-role="voice-enhancer-graph"] [data-role="enhancer-spectrum-incoming"]',
+            ).length === 1
+        ));
         const graphBox = await graph.boundingBox();
         const frequencyKnob = page.locator('[data-role="voice-enhancer-knob-voiceEnhancerFrequency"]');
         assert.ok(graphBox);
@@ -1955,6 +1991,12 @@ test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and
             ["voiceEnhancerFrequency", "voiceEnhancerAmount"],
             "unmount, capture loss, and the later pointer-up must close each gesture once",
         );
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "voiceEnhancerSpectrumActivity" && value === 0
+            )),
+            true,
+        );
     } finally {
         await page.close();
     }
@@ -2036,6 +2078,19 @@ test("the per-voice Enhancer phone controls own reachable touch targets without 
 
             const graph = page.locator('[data-role="voice-enhancer-graph"]');
             const graphHandle = page.locator('[data-role="voice-enhancer-graph-handle"]');
+            await page.waitForFunction(() => {
+                const density = Number(document.querySelector(
+                    '[data-role="voice-enhancer-graph"] [data-role="enhancer-spectrum-graph"]',
+                )?.getAttribute("data-rendered-width-density"));
+                return density >= 4 && density <= 5;
+            });
+            const responsiveDensity = Number(await graph.locator(
+                '[data-role="enhancer-spectrum-graph"]',
+            ).getAttribute("data-rendered-width-density"));
+            assert.ok(
+                responsiveDensity >= 4 && responsiveDensity <= 5,
+                `${viewportLabel} compact frequency label density was ${responsiveDensity}`,
+            );
             const graphBox = await graph.boundingBox();
             const handleBox = await graphHandle.boundingBox();
             assert.ok(graphBox);
@@ -2050,7 +2105,13 @@ test("the per-voice Enhancer phone controls own reachable touch targets without 
             };
             const graphOwnsEditPoints = await graph.evaluate((element, points) => points.map((point) => {
                 const hit = document.elementFromPoint(point.x, point.y);
-                return hit instanceof Node && element.contains(hit);
+                return {
+                    ownsPoint: hit instanceof Node && element.contains(hit),
+                    hitRole: hit instanceof Element
+                        ? hit.getAttribute("data-role") ?? hit.tagName.toLowerCase()
+                        : null,
+                    hitClass: hit instanceof Element ? hit.getAttribute("class") : null,
+                };
             }), [
                 {
                     x: handleBox.x + (handleBox.width / 2),
@@ -2060,9 +2121,9 @@ test("the per-voice Enhancer phone controls own reachable touch targets without 
                 dragEnd,
             ]);
             assert.deepEqual(
-                graphOwnsEditPoints,
+                graphOwnsEditPoints.map(({ ownsPoint }) => ownsPoint),
                 [true, true, true],
-                `${viewportLabel} controls covered the Enhancer handle or ordinary drag path`,
+                `${viewportLabel} controls covered the Enhancer handle or ordinary drag path: ${JSON.stringify({ graphBox, handleBox, hits: graphOwnsEditPoints })}`,
             );
 
             const beforeDrag = await getHarnessSnapshot(page);

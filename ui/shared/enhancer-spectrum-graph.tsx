@@ -32,6 +32,7 @@ export type EnhancerSpectrumMarker = {
     readonly frequencyHz: number;
     readonly gainDb: number;
     readonly color: string;
+    readonly dataRole?: string;
 };
 
 /** Inputs for the single reusable Enhancer spectrum/response renderer. */
@@ -201,7 +202,11 @@ export function EnhancerSpectrumGraph({
                             style={{ "--enhancer-marker-color": marker.color } as CSSProperties}
                         >
                             <path className="enhancer-spectrum-marker-guide" d={`M 0 0 V ${plotBottom - y}`} />
-                            <circle className="enhancer-spectrum-marker" r={5} />
+                            <circle
+                                className="enhancer-spectrum-marker"
+                                data-role={marker.dataRole}
+                                r={5}
+                            />
                             <title>{marker.label}</title>
                         </g>
                     );

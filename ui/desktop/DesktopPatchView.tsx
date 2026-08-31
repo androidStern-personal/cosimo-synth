@@ -33,6 +33,7 @@ import { MobileWorkspaceTabs } from "./mobile-workspace-tabs";
 import {
     PatchConnectionProvider,
     usePatchConnection,
+    usePatchFoldedVisualEndpoint,
     type PatchConnectionLike,
 } from "../shared/cmajor-react";
 import { useBounceInPlace } from "../shared/use-bounce-in-place";
@@ -161,6 +162,9 @@ import {
     VOICE_ENHANCER_Q_TARGET_KIND,
     VOICE_ENHANCER_RATIO_MAX_SEMITONES,
     VOICE_ENHANCER_RATIO_MIN_SEMITONES,
+    VOICE_ENHANCER_SPECTRUM_ENDPOINT_ID,
+    advanceVoiceEnhancerTelemetryDisplay,
+    createVoiceEnhancerTelemetryDisplay,
     denormalizeVoiceEnhancerValue,
     formatVoiceEnhancerRatio,
     normalizeVoiceEnhancerRatio,
@@ -2880,6 +2884,16 @@ function VoiceEnhancerSection({
     compact: boolean;
 }) {
     const keyTrackEnabled = keyTrackEnabledBinding.value >= 0.5;
+    const initialTelemetry = useMemo(createVoiceEnhancerTelemetryDisplay, []);
+    const telemetry = usePatchFoldedVisualEndpoint(
+        VOICE_ENHANCER_SPECTRUM_ENDPOINT_ID,
+        initialTelemetry,
+        (current, message: unknown) => advanceVoiceEnhancerTelemetryDisplay(
+            current,
+            message,
+            globalThis.performance?.now() ?? Date.now(),
+        ),
+    );
     const displayedFrequency = keyTrackEnabled ? keyTrackOffsetSemitones : frequency;
     const displayedFrequencyDescriptor = keyTrackEnabled
         ? VOICE_ENHANCER_RATIO_KNOB_DESCRIPTOR
@@ -2928,6 +2942,11 @@ function VoiceEnhancerSection({
                         frequencyNormalized={frequencyNormalized}
                         q={q.value}
                         amount={amount.value}
+                        frequencyHz={keyTrackEnabled ? null : frequency.value}
+                        frequencyMode={keyTrackEnabled ? "ratio" : "frequency"}
+                        spectrum={telemetry.spectrum}
+                        responses={telemetry.responses}
+                        compact={compact}
                         disabled={!ready}
                         onGestureStart={() => {
                             displayedFrequency.beginGesture();

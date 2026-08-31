@@ -6,11 +6,18 @@
  * UI/state layer owns only these shared settings.
  */
 
+import {
+    advanceEnhancerSpectrum,
+    type EnhancerSpectrumDisplay,
+} from "./enhancer-spectrum";
+
 export const VOICE_ENHANCER_FREQUENCY_ENDPOINT_ID = "voiceEnhancerFrequency";
 export const VOICE_ENHANCER_Q_ENDPOINT_ID = "voiceEnhancerQ";
 export const VOICE_ENHANCER_AMOUNT_ENDPOINT_ID = "voiceEnhancerAmount";
 export const VOICE_ENHANCER_KEY_TRACK_ENABLED_ENDPOINT_ID = "voiceEnhancerKeyTrackEnabled";
 export const VOICE_ENHANCER_KEY_TRACK_OFFSET_ENDPOINT_ID = "voiceEnhancerKeyTrackOffsetSemitones";
+/** Read-only union endpoint for the exact input spectrum and active responses. */
+export const VOICE_ENHANCER_SPECTRUM_ENDPOINT_ID = "voiceEnhancerSpectrum";
 
 export const VOICE_ENHANCER_FREQUENCY_TARGET_KIND = "voiceEnhancerFrequencyOctaves";
 export const VOICE_ENHANCER_Q_TARGET_KIND = "voiceEnhancerQ";
@@ -18,6 +25,122 @@ export const VOICE_ENHANCER_AMOUNT_TARGET_KIND = "voiceEnhancerAmount";
 export const VOICE_ENHANCER_KEY_TRACK_CONTROL_ID = "voice.enhancerFrequency";
 export const VOICE_ENHANCER_RATIO_MIN_SEMITONES = -12;
 export const VOICE_ENHANCER_RATIO_MAX_SEMITONES = 60;
+
+/** One DSP-owned effective response projected for the editor. */
+export type VoiceEnhancerResponseDisplay = {
+    readonly voiceIndex: number;
+    readonly frequencyHz: number;
+    readonly q: number;
+    readonly amount: number;
+};
+
+/** Retained display state folded from the response/spectrum union endpoint. */
+export type VoiceEnhancerTelemetryDisplay = {
+    readonly spectrum: EnhancerSpectrumDisplay | null;
+    readonly responses: ReadonlyArray<VoiceEnhancerResponseDisplay>;
+};
+
+const voiceEnhancerResponseVoiceCapacity = 16;
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function unwrapEvent(value: unknown): unknown {
+    return isRecord(value) && Object.hasOwn(value, "event") ? value.event : value;
+}
+
+/** Decode one DSP-owned active-voice frame without synthesising missing values. */
+function normalizeVoiceEnhancerResponseMessage(
+    value: unknown,
+): ReadonlyArray<VoiceEnhancerResponseDisplay> | null {
+    const candidate = unwrapEvent(value);
+    if (!isRecord(candidate)) {
+        return null;
+    }
+
+    const responseCount = candidate.responseCount;
+    const voiceIndices = candidate.voiceIndices;
+    const frequenciesHz = candidate.frequenciesHz;
+    const qValues = candidate.qValues;
+    const amounts = candidate.amounts;
+    if (typeof responseCount !== "number"
+            || !Number.isInteger(responseCount)
+            || responseCount < 0
+            || responseCount > voiceEnhancerResponseVoiceCapacity
+            || !Array.isArray(voiceIndices)
+            || !Array.isArray(frequenciesHz)
+            || !Array.isArray(qValues)
+            || !Array.isArray(amounts)
+            || voiceIndices.length < responseCount
+            || frequenciesHz.length < responseCount
+            || qValues.length < responseCount
+            || amounts.length < responseCount) {
+        return null;
+    }
+
+    const responses: VoiceEnhancerResponseDisplay[] = [];
+    let previousVoiceIndex = -1;
+    for (let index = 0; index < responseCount; index += 1) {
+        const voiceIndex = voiceIndices[index];
+        const frequencyHz = frequenciesHz[index];
+        const q = qValues[index];
+        const amount = amounts[index];
+        if (typeof voiceIndex !== "number"
+                || !Number.isInteger(voiceIndex)
+                || voiceIndex <= previousVoiceIndex
+                || voiceIndex >= voiceEnhancerResponseVoiceCapacity
+                || typeof frequencyHz !== "number"
+                || !Number.isFinite(frequencyHz)
+                || frequencyHz < VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency.min
+                || typeof q !== "number"
+                || !Number.isFinite(q)
+                || q < VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q.min
+                || q > VOICE_ENHANCER_PARAMETER_DESCRIPTORS.q.max
+                || typeof amount !== "number"
+                || !Number.isFinite(amount)
+                || amount < VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount.min
+                || amount > VOICE_ENHANCER_PARAMETER_DESCRIPTORS.amount.max) {
+            return null;
+        }
+
+        previousVoiceIndex = voiceIndex;
+        responses.push({
+            voiceIndex,
+            frequencyHz,
+            q,
+            amount,
+        });
+    }
+
+    return responses;
+}
+
+/** Create the disconnected state for the response/spectrum union endpoint. */
+export function createVoiceEnhancerTelemetryDisplay(): VoiceEnhancerTelemetryDisplay {
+    return { spectrum: null, responses: [] };
+}
+
+/** Fold alternating analyzer and response events without losing either view. */
+export function advanceVoiceEnhancerTelemetryDisplay(
+    current: VoiceEnhancerTelemetryDisplay,
+    message: unknown | null,
+    timestampMs: number,
+): VoiceEnhancerTelemetryDisplay {
+    if (message === null) {
+        return createVoiceEnhancerTelemetryDisplay();
+    }
+
+    const responses = normalizeVoiceEnhancerResponseMessage(message);
+    if (responses !== null) {
+        return { spectrum: current.spectrum, responses };
+    }
+
+    const spectrum = advanceEnhancerSpectrum(message, current.spectrum, timestampMs);
+    return spectrum === current.spectrum
+        ? current
+        : { spectrum, responses: current.responses };
+}
 
 export type VoiceEnhancerParameterKey = "frequency" | "q" | "amount";
 

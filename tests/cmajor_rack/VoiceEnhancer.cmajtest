@@ -724,3 +724,307 @@ processor VoiceEnhancerStealResetWitness
         }
     }
 }
+
+// The analyzer sees the deterministic sum of every sounding voice at the
+// exact post-Filter/pre-Enhancer seam. Observation is display-only: changing
+// Enhancer Amount cannot change the tap, connecting the tap cannot change
+// audio, and two identical voices contribute exactly twice one voice.
+
+## testProcessor (undefined, { frequency: 600 })
+
+graph VoiceEnhancerInputMonitorContract [[ main ]]
+{
+    output event int32 out;
+
+    node source = VoiceEnhancerInputMonitorSource;
+    node observed = wt::SharedVoiceEngine (1);
+    node reference = wt::SharedVoiceEngine (1);
+    node dryMonitor = wt::SharedVoiceEngine (1);
+    node doubledMonitor = wt::SharedVoiceEngine (2);
+    node witness = VoiceEnhancerInputMonitorWitness;
+
+    connection
+    {
+        source.noteOut -> observed.voiceEventIn[0],
+                          reference.voiceEventIn[0],
+                          dryMonitor.voiceEventIn[0],
+                          doubledMonitor.voiceEventIn[0],
+                          doubledMonitor.voiceEventIn[1];
+        source.attackOut -> observed.ampAttackIn,
+                            reference.ampAttackIn,
+                            dryMonitor.ampAttackIn,
+                            doubledMonitor.ampAttackIn;
+        source.decayOut -> observed.ampDecayIn,
+                           reference.ampDecayIn,
+                           dryMonitor.ampDecayIn,
+                           doubledMonitor.ampDecayIn;
+        source.sustainOut -> observed.ampSustainIn,
+                             reference.ampSustainIn,
+                             dryMonitor.ampSustainIn,
+                             doubledMonitor.ampSustainIn;
+        source.releaseOut -> observed.ampReleaseIn,
+                             reference.ampReleaseIn,
+                             dryMonitor.ampReleaseIn,
+                             doubledMonitor.ampReleaseIn;
+        source.filterModeOut -> observed.filterModeIn,
+                                reference.filterModeIn,
+                                dryMonitor.filterModeIn,
+                                doubledMonitor.filterModeIn;
+        source.frequencyOut -> observed.voiceEnhancerFrequencyIn,
+                               reference.voiceEnhancerFrequencyIn,
+                               dryMonitor.voiceEnhancerFrequencyIn,
+                               doubledMonitor.voiceEnhancerFrequencyIn;
+        source.qOut -> observed.voiceEnhancerQIn,
+                       reference.voiceEnhancerQIn,
+                       dryMonitor.voiceEnhancerQIn,
+                       doubledMonitor.voiceEnhancerQIn;
+        source.wetAmountOut -> observed.voiceEnhancerAmountIn,
+                               reference.voiceEnhancerAmountIn,
+                               doubledMonitor.voiceEnhancerAmountIn;
+        source.dryAmountOut -> dryMonitor.voiceEnhancerAmountIn;
+        source.visualizationEnabledOut -> observed.voiceEnhancerVisualizationEnabledIn,
+                                          dryMonitor.voiceEnhancerVisualizationEnabledIn,
+                                          doubledMonitor.voiceEnhancerVisualizationEnabledIn;
+        observed.out -> witness.observedAudioIn;
+        reference.out -> witness.referenceAudioIn;
+        observed.voiceEnhancerInputMonitor -> witness.observedMonitorIn;
+        dryMonitor.voiceEnhancerInputMonitor -> witness.dryMonitorIn;
+        doubledMonitor.voiceEnhancerInputMonitor -> witness.doubledMonitorIn;
+        witness.out -> out;
+    }
+}
+
+processor VoiceEnhancerInputMonitorSource
+{
+    output event std::notes::NoteOn noteOut;
+    output event int32 visualizationEnabledOut;
+    output value float32 attackOut;
+    output value float32 decayOut;
+    output value float32 sustainOut;
+    output value float32 releaseOut;
+    output value float32 filterModeOut;
+    output value float32 frequencyOut;
+    output value float32 qOut;
+    output value float32 wetAmountOut;
+    output value float32 dryAmountOut;
+
+    std::notes::NoteOn noteOn()
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        note.velocity = 1.0f;
+        return note;
+    }
+
+    void main()
+    {
+        attackOut <- 0.001f;
+        decayOut <- 0.001f;
+        sustainOut <- 1.0f;
+        releaseOut <- 0.02f;
+        filterModeOut <- 0.0f;
+        frequencyOut <- 130.0f;
+        qOut <- 0.71f;
+        wetAmountOut <- 0.9f;
+        dryAmountOut <- 0.0f;
+        visualizationEnabledOut <- 1;
+        advance();
+        noteOut <- noteOn();
+        loop advance();
+    }
+}
+
+processor VoiceEnhancerInputMonitorWitness
+{
+    input stream float32<2> observedAudioIn;
+    input stream float32<2> referenceAudioIn;
+    input stream float32<2> observedMonitorIn;
+    input stream float32<2> dryMonitorIn;
+    input stream float32<2> doubledMonitorIn;
+    output event int32 out;
+
+    bool audioStayedExact = true;
+    bool tapStayedPreEnhancer = true;
+    bool twoVoicesSummedExactly = true;
+    bool sawInput;
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (observedAudioIn[0] != referenceAudioIn[0]
+                || observedAudioIn[1] != referenceAudioIn[1])
+                audioStayedExact = false;
+
+            if (frame >= 12 && frame < 80)
+            {
+                if (observedMonitorIn[0] != dryMonitorIn[0]
+                    || observedMonitorIn[1] != dryMonitorIn[1])
+                    tapStayedPreEnhancer = false;
+                if (doubledMonitorIn[0] != observedMonitorIn[0] * 2.0f
+                    || doubledMonitorIn[1] != observedMonitorIn[1] * 2.0f)
+                    twoVoicesSummedExactly = false;
+                if (std::intrinsics::abs (observedMonitorIn[0]) > 0.1f
+                    || std::intrinsics::abs (observedMonitorIn[1]) > 0.1f)
+                    sawInput = true;
+            }
+
+            if (frame == 80) out <- audioStayedExact ? 1 : 0;
+            if (frame == 81) out <- (tapStayedPreEnhancer && sawInput) ? 1 : 0;
+            if (frame == 82) out <- twoVoicesSummedExactly ? 1 : 0;
+            if (frame == 83) out <- -1;
+            advance();
+        }
+    }
+}
+
+// Response telemetry is display-only and follows the sounding voice set in
+// deterministic voice-index order. Releasing one voice removes only that
+// curve; releasing the last voice publishes an empty frame before observation
+// goes dormant, so the editor cannot retain stale response curves.
+
+## testProcessor (undefined, { frequency: 200 })
+
+graph VoiceEnhancerResponseLifecycleContract [[ main ]]
+{
+    output event int32 out;
+
+    node source = VoiceEnhancerResponseLifecycleSource;
+    node engine = wt::SharedVoiceEngine (2);
+    node witness = VoiceEnhancerResponseLifecycleWitness;
+
+    connection
+    {
+        source.note0Out -> engine.voiceEventIn[0];
+        source.note1Out -> engine.voiceEventIn[1];
+        source.attackOut -> engine.ampAttackIn;
+        source.decayOut -> engine.ampDecayIn;
+        source.sustainOut -> engine.ampSustainIn;
+        source.releaseOut -> engine.ampReleaseIn;
+        source.filterModeOut -> engine.filterModeIn;
+        source.keyTrackEnabledOut -> engine.voiceEnhancerKeyTrackEnabledIn;
+        source.keyTrackOffsetOut -> engine.voiceEnhancerKeyTrackOffsetSemitonesIn;
+        source.qOut -> engine.voiceEnhancerQIn;
+        source.amountOut -> engine.voiceEnhancerAmountIn;
+        source.visualizationEnabledOut -> engine.voiceEnhancerVisualizationEnabledIn;
+        engine.voiceEnhancerResponseOut -> witness.responseIn;
+        witness.out -> out;
+    }
+}
+
+processor VoiceEnhancerResponseLifecycleSource
+{
+    output event (std::notes::NoteOn, std::notes::NoteOff) note0Out;
+    output event (std::notes::NoteOn, std::notes::NoteOff) note1Out;
+    output event int32 visualizationEnabledOut;
+    output value float32 attackOut;
+    output value float32 decayOut;
+    output value float32 sustainOut;
+    output value float32 releaseOut;
+    output value float32 filterModeOut;
+    output value float32 keyTrackEnabledOut;
+    output value float32 keyTrackOffsetOut;
+    output value float32 qOut;
+    output value float32 amountOut;
+
+    std::notes::NoteOn noteOn (float32 pitch)
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = pitch;
+        note.velocity = 1.0f;
+        return note;
+    }
+
+    std::notes::NoteOff noteOff (float32 pitch)
+    {
+        std::notes::NoteOff note;
+        note.channel = 0;
+        note.pitch = pitch;
+        return note;
+    }
+
+    void main()
+    {
+        attackOut <- 0.001f;
+        decayOut <- 0.001f;
+        sustainOut <- 1.0f;
+        releaseOut <- 0.005f;
+        filterModeOut <- 0.0f;
+        keyTrackEnabledOut <- 1.0f;
+        keyTrackOffsetOut <- 0.0f;
+        qOut <- 1.25f;
+        amountOut <- 0.6f;
+        visualizationEnabledOut <- 1;
+
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame == 2) note0Out <- noteOn (24.0f);
+            if (frame == 12) note1Out <- noteOn (36.0f);
+            if (frame == 22) note0Out <- noteOff (24.0f);
+            if (frame == 32) note1Out <- noteOff (36.0f);
+            if (frame == 45) visualizationEnabledOut <- 0;
+            advance();
+        }
+    }
+}
+
+processor VoiceEnhancerResponseLifecycleWitness
+{
+    input event wt::VoiceEnhancerResponseFrame responseIn;
+    output event int32 out;
+
+    int32 renderedFrame;
+    int32 lastResponseFrame = -1;
+    bool sawVoice0;
+    bool sawBothInVoiceIndexOrder;
+    bool removedReleasedVoice0;
+    bool clearedAfterFinalRelease;
+
+    event responseIn (wt::VoiceEnhancerResponseFrame response)
+    {
+        lastResponseFrame = renderedFrame;
+
+        if (response.responseCount == 1
+            && response.voiceIndices[0] == 0)
+            sawVoice0 = true;
+
+        if (response.responseCount == 2
+            && response.voiceIndices[0] == 0
+            && response.voiceIndices[1] == 1
+            && std::intrinsics::abs (
+                response.frequenciesHz[1] - (response.frequenciesHz[0] * 2.0f)) < 0.01f
+            && response.qValues[0] == 1.25f
+            && response.qValues[1] == 1.25f
+            && response.amounts[0] > 0.0f
+            && response.amounts[0] == response.amounts[1])
+            sawBothInVoiceIndexOrder = true;
+
+        if (renderedFrame > 20
+            && response.responseCount == 1
+            && response.voiceIndices[0] == 1)
+            removedReleasedVoice0 = true;
+
+        if (renderedFrame > 30 && response.responseCount == 0)
+            clearedAfterFinalRelease = true;
+    }
+
+    void main()
+    {
+        for (renderedFrame = 0; ; ++renderedFrame)
+        {
+            if (renderedFrame == 65)
+                out <- sawVoice0 ? 1 : 0;
+            if (renderedFrame == 66)
+                out <- sawBothInVoiceIndexOrder ? 1 : 0;
+            if (renderedFrame == 67)
+                out <- (removedReleasedVoice0 && clearedAfterFinalRelease) ? 1 : 0;
+            if (renderedFrame == 68)
+                out <- lastResponseFrame < 50 ? 1 : 0;
+            if (renderedFrame == 69)
+                out <- -1;
+            advance();
+        }
+    }
+}
