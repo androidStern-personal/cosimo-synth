@@ -152,7 +152,7 @@ async function copyRelativeEntries(entries, fromRoot, toRoot, label) {
     }
 }
 
-async function writeRuntimePatchManifest(manifest, plugin, runtimeRoot, patchPath) {
+export function createRuntimePatchManifest(manifest, plugin, { stripDevModule = false } = {}) {
     const runtimeManifest = { ...manifest };
 
     if (plugin.runtimeSources) {
@@ -162,6 +162,17 @@ async function writeRuntimePatchManifest(manifest, plugin, runtimeRoot, patchPat
     if (plugin.workerSource) {
         runtimeManifest.worker = plugin.workerOut ?? "worker.js";
     }
+
+    if (stripDevModule && runtimeManifest.view && typeof runtimeManifest.view === "object") {
+        const { devModule: _devModule, ...runtimeView } = runtimeManifest.view;
+        runtimeManifest.view = runtimeView;
+    }
+
+    return runtimeManifest;
+}
+
+async function writeRuntimePatchManifest(manifest, plugin, runtimeRoot, patchPath, options = {}) {
+    const runtimeManifest = createRuntimePatchManifest(manifest, plugin, options);
 
     await writeFile(
         path.join(runtimeRoot, path.basename(patchPath)),
@@ -264,6 +275,8 @@ export async function buildPlugin(pluginName, { environment = process.env } = {}
     const devModule = normalizeRepoPath(view.devModule, `${pluginName} view.devModule`);
     const sourceEntry = path.join(repoRoot, devModule);
     const sourcemap = shouldEmitEffectRuntimeSourceMaps(pluginName, environment);
+    const stripDevModule = pluginName === "seqfx"
+        && environment[seqFxDistributableRuntimeEnvironmentKey] === "1";
 
     if (view.src !== "view/index.js")
         throw new Error(`${plugin.patch} must set view.src to "view/index.js".`);
@@ -271,7 +284,9 @@ export async function buildPlugin(pluginName, { environment = process.env } = {}
     await rm(runtimeRoot, { recursive: true, force: true });
     await mkdir(runtimeViewRoot, { recursive: true });
 
-    await writeRuntimePatchManifest(manifest, plugin, runtimeRoot, patchPath);
+    await writeRuntimePatchManifest(manifest, plugin, runtimeRoot, patchPath, {
+        stripDevModule,
+    });
     if (plugin.runtimeSources) {
         await copyRuntimeSources(plugin.runtimeSources, runtimeRoot);
     } else {

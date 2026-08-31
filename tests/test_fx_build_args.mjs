@@ -82,6 +82,34 @@ test("SeqFX release runtime source-map suppression is opt-in and leaves local qu
     }), true);
 });
 
+test("SeqFX distributable runtime removes its development module path without mutating the source manifest", async () => {
+    const { buildModule } = await loadBuildModules();
+    const manifest = {
+        source: ["SeqFx.cmajor"],
+        view: {
+            src: "view/index.js",
+            devModule: "/fx/seqfx/view/source.tsx",
+            width: 1120,
+            height: 680,
+        },
+    };
+    const localRuntime = buildModule.createRuntimePatchManifest(manifest, {}, {
+        stripDevModule: false,
+    });
+    const distributableRuntime = buildModule.createRuntimePatchManifest(manifest, {}, {
+        stripDevModule: true,
+    });
+
+    assert.equal(localRuntime.view.devModule, "/fx/seqfx/view/source.tsx");
+    assert.equal("devModule" in distributableRuntime.view, false);
+    assert.deepEqual(distributableRuntime.view, {
+        src: "view/index.js",
+        width: 1120,
+        height: 680,
+    });
+    assert.equal(manifest.view.devModule, "/fx/seqfx/view/source.tsx");
+});
+
 test("the SeqFX production configure explicitly disables microphone permission metadata", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
     const plugin = buildModule.effectPlugins.seqfx;
