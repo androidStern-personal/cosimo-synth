@@ -1639,7 +1639,11 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Browser tests prove the full-screen editor opens/closes cleanly, remains usable with the Mod bar in floating and parked modes, preserves all controls and scroll regions, and never hides critical controls behind fixed chrome.
     - Source review confirms that the full-screen Polish and Enhancer Lite use one shared frequency geometry/analyzer contract and that no unapproved advanced sound parameter was introduced.
 
-[ ] T76 — Add the aligned live spectrum and frequency units to the per-voice Enhancer
+[x] T76 — Add the aligned live spectrum and frequency units to the per-voice Enhancer
+    Integrated (2026-08-31):
+    - Landed after T78 through coordinator merge `fb149589`. The existing per-voice Enhancer now draws the shared 20 Hz–20 kHz response/spectrum geometry from the real pre-Enhancer voice sum, combines active voices deterministically, and starts analysis only while the surface is visible. No sound parameter, mode, host slot, or saved field was added.
+    - Final qualification is 105/105 Cmajor rack tests and 761/761 unit/state tests. The complete desktop run is 325/327: the unchanged React Grab harness mismatch remains, and the concurrent Polish scroll-position race passed immediately alone. Fresh HMR was verified from the exact worktree and stopped; the final compiled, deep-signed VST3 was installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`, executable SHA-256 `27bcd6f84a6cd2e37902e094c5bfd9e7e01b6da3c237fb651857e3568f1c4ad5`, and pluginval strictness 5 returned `SUCCESS`.
+    - Physical-phone legibility and subjective listening remain explicitly unclaimed.
     Active owner (2026-08-31):
     - Collaboration task `/root/t76_voice_enhancer_analyzer`, branch `codex/t76-voice-enhancer-analyzer`, worktree `/Users/winterfell/.codex/worktrees/t76full/cosimo-synth`, base `eb7a678894a4687fb7ab6ab9621519955070d3b1`, model `gpt-5.6-sol`, reasoning max, unrestricted filesystem/network access with approval prompts disabled.
     - Scope: reuse T75's one shared logarithmic analyzer/geometry for the live audio entering the per-voice Enhancer, with deterministic multi-voice display behavior and compact responsive density; preserve all accepted DSP, control, Key Track, modulation, and gesture behavior; add no modes or parameters.
@@ -1680,6 +1684,9 @@ RECOVERED FOLLOW-UP TASKS — AUDITED 2026-08-26
     - Existing Key Track DSP/state/browser suites remain green. Physical phone acceptance checks note legibility and menu reachability separately from automated behavior.
 
 [ ] T78 — Add a modulatable, host-automatable Output Trim to every Effects Lane effect
+    Source integrated; final device acceptance pending (2026-08-31):
+    - Landed through coordinator merge `b707fa33`, immediately below T76. DSP/state/modulation, generated desktop/iOS bundles, 40 real VST3 automation identities, the 156-entry AUv3 simulator inventory, HMR, deep signing, and pluginval strictness 5 are green on the composed stack.
+    - The required real-iPhone 1,484-route performance benchmark remains open because the paired iPhone 14 Pro (`00C7F433-8B6A-5CAC-856F-56D7385E12F9`) is currently unavailable. Do not treat this item as final physical acceptance until that exact benchmark passes; no modulation-engine redesign or requirement waiver has been made.
     Active owner (2026-08-30):
     - Codex task `T78 Per-Effect Output Trim`, thread `01a052ba-1f27-7a40-ac23-203cc89b0f28`, branch `codex/t78-effect-output-trim`, worktree `/Users/winterfell/.codex/worktrees/t78full/cosimo-synth`, base `4638030252c82f0ee3e5174de928a4b5ecd231e4`, model `gpt-5.6-sol`, reasoning `max`, approval policy `never`, sandbox `danger-full-access`, and no active permission profile.
     - This is a coordinator-managed implementation task. Its clean committed handoff goes to `Coordinate Cosimo task integrations`, thread `01a048f2-fc17-7c00-8ad3-859ab5901d4b`; it must not merge or push master, deploy, install shared plugins, or claim host/physical acceptance.
