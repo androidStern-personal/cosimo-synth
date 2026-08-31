@@ -5288,3 +5288,48 @@ test("seqfx_block_duration_is_a_focusable_bounded_keyboard_slider", async () => 
 
     await page.close();
 });
+
+test("seqfx_block_duration_keeps_keyboard_focus_across_bar_boundaries", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 1 step 16", exact: true }).click();
+    const block = page.getByRole("button", { name: "Chain 1 Filter block 16", exact: true });
+    const duration = page.getByRole("slider", {
+        name: "Chain 1 Filter block at step 16 duration",
+        exact: true,
+    });
+
+    await block.focus();
+    await page.keyboard.press("Tab");
+    assert.equal(await duration.evaluate((node) => document.activeElement === node), true);
+
+    await page.keyboard.press("ArrowRight");
+    await page.getByRole("button", { name: "Chain 1 Filter block 16-17", exact: true }).waitFor();
+    assert.equal(await duration.getAttribute("aria-valuenow"), "2");
+    assert.equal(
+        await duration.evaluate((node) => document.activeElement === node),
+        true,
+        "crossing into the second bar must not replace the focused duration control",
+    );
+    await page.keyboard.press("Shift+Tab");
+    assert.equal(
+        await page.getByRole("button", { name: "Chain 1 Filter block 16-17", exact: true })
+            .evaluate((node) => document.activeElement === node),
+        true,
+    );
+    await page.keyboard.press("Tab");
+    assert.equal(
+        await duration.evaluate((node) => document.activeElement === node),
+        true,
+        "the duration slider must remain the block button's next tab stop after crossing a bar",
+    );
+
+    await page.keyboard.press("ArrowRight");
+    await page.getByRole("button", { name: "Chain 1 Filter block 16-18", exact: true }).waitFor();
+    assert.equal(await duration.getAttribute("aria-valuenow"), "3");
+    assert.equal(await duration.evaluate((node) => document.activeElement === node), true);
+
+    await page.close();
+});

@@ -2927,6 +2927,7 @@ export function SeqFxPatchView({
     const [patternPreview, setPatternPreview] = useState<PatternPreview | null>(null);
     const [invalidDropTarget, setInvalidDropTarget] = useState<InvalidDropTarget | null>(null);
     const [showFirstUseHint, setShowFirstUseHint] = useState(true);
+    const [focusedDurationBlock, setFocusedDurationBlock] = useState<{ lane: number; startStep: number } | null>(null);
     const isPromoControlled = Boolean(promoControls);
     const state = isPromoControlled ? promoControls?.state ?? runtimeState : runtimeState;
     const selectedPattern = isPromoControlled ? promoControls?.selectedPattern ?? runtimeSelectedPattern : runtimeSelectedPattern;
@@ -4132,7 +4133,7 @@ export function SeqFxPatchView({
         activateCell(lane, step, event.shiftKey);
     }
 
-    function isKeyboardActivation(event: ReactKeyboardEvent<HTMLDivElement>) {
+    function isKeyboardActivation(event: ReactKeyboardEvent<HTMLElement>) {
         return event.key === "Enter" || event.key === " " || event.key === "Spacebar";
     }
 
@@ -4240,7 +4241,7 @@ export function SeqFxPatchView({
         });
     }
 
-    function handleBlockKeyDown(event: ReactKeyboardEvent<HTMLDivElement>, lane: number, startStep: number, length: number) {
+    function handleBlockKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, lane: number, startStep: number, length: number) {
         if (!isKeyboardActivation(event)) {
             return;
         }
@@ -4811,6 +4812,10 @@ export function SeqFxPatchView({
                                                         "seqfx-block",
                                                         blockIsPreview ? "is-copy-preview" : "",
                                                         selected ? "is-selected" : "",
+                                                        focusedDurationBlock?.lane === lane
+                                                            && focusedDurationBlock.startStep === block.startStep
+                                                            ? "is-duration-focused"
+                                                            : "",
                                                         playheadStep !== null && playheadStep >= block.startStep && playheadStep <= block.endStep ? "is-playhead" : "",
                                                     ].filter(Boolean).join(" ");
                                                     const effectName = SEQFX_EFFECT_TYPE_NAMES[block.effectType] ?? "Effect";
@@ -4845,12 +4850,39 @@ export function SeqFxPatchView({
                                                                     style={segment.style}
                                                                 >
                                                                     {primarySegment ? (
-                                                                        <button
-                                                                            aria-label={ariaLabel}
-                                                                            className="seqfx-block-select-control"
-                                                                            onKeyDown={(event) => handleBlockKeyDown(event, lane, block.startStep, block.length)}
-                                                                            type="button"
-                                                                        />
+                                                                        <>
+                                                                            <button
+                                                                                aria-label={ariaLabel}
+                                                                                className="seqfx-block-select-control"
+                                                                                onKeyDown={(event) => handleBlockKeyDown(event, lane, block.startStep, block.length)}
+                                                                                type="button"
+                                                                            />
+                                                                            <span
+                                                                                aria-label={`${laneName} ${effectName} block at step ${block.startStep + 1} duration`}
+                                                                                aria-orientation="horizontal"
+                                                                                aria-valuemax={maximumLength}
+                                                                                aria-valuemin={1}
+                                                                                aria-valuenow={block.length}
+                                                                                aria-valuetext={`${block.length} ${block.length === 1 ? "step" : "steps"}`}
+                                                                                className="seqfx-block-duration-control"
+                                                                                data-role="seqfx-block-duration-control"
+                                                                                onBlur={() => setFocusedDurationBlock((current) => (
+                                                                                    current?.lane === lane && current.startStep === block.startStep
+                                                                                        ? null
+                                                                                        : current
+                                                                                ))}
+                                                                                onFocus={() => setFocusedDurationBlock({ lane, startStep: block.startStep })}
+                                                                                onKeyDown={(event) => handleResizeKeyDown(
+                                                                                    event,
+                                                                                    lane,
+                                                                                    block.startStep,
+                                                                                    block.length,
+                                                                                    maximumLength,
+                                                                                )}
+                                                                                role="slider"
+                                                                                tabIndex={0}
+                                                                            />
+                                                                        </>
                                                                     ) : null}
                                                                     <span className="seqfx-block-fill">
                                                                         <SeqFxBlockGlyph
@@ -4871,26 +4903,12 @@ export function SeqFxPatchView({
                                                                     </span>
                                                                     {segment.isEndSegment ? (
                                                                         <span
-                                                                            aria-label={`${laneName} ${effectName} block at step ${block.startStep + 1} duration`}
-                                                                            aria-orientation="horizontal"
-                                                                            aria-valuemax={maximumLength}
-                                                                            aria-valuemin={1}
-                                                                            aria-valuenow={block.length}
-                                                                            aria-valuetext={`${block.length} ${block.length === 1 ? "step" : "steps"}`}
+                                                                            aria-hidden="true"
                                                                             className="seqfx-block-resize"
                                                                             data-role="seqfx-block-resize"
                                                                             data-lane={lane}
                                                                             data-start={block.startStep}
-                                                                            onKeyDown={(event) => handleResizeKeyDown(
-                                                                                event,
-                                                                                lane,
-                                                                                block.startStep,
-                                                                                block.length,
-                                                                                maximumLength,
-                                                                            )}
                                                                             onPointerDown={(event) => handleResizePointerDown(event, lane, block.startStep, block.length)}
-                                                                            role="slider"
-                                                                            tabIndex={0}
                                                                         />
                                                                     ) : null}
                                                                 </div>
