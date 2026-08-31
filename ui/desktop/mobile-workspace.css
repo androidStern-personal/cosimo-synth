@@ -13,6 +13,7 @@
 @media (max-width: 639px) {
     .cosimo-surface.is-mobile-shell {
         --compact-shell-row: var(--cosimo-module);
+        --cosimo-surface-inline-padding: var(--cosimo-shell-pad);
         gap: var(--cosimo-space-1);
         padding: var(--cosimo-shell-pad);
         border-radius: var(--cosimo-panel-radius);

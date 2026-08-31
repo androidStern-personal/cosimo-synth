@@ -6584,7 +6584,7 @@ function DesktopPatchViewBody({
         <ParameterHudLayerContext.Provider value={mobileVoiceHudLayer}>
         <ParameterMenuContext.Provider value={openShellParameterMenu}>
         <div
-            className={`cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isCompactViewport ? " is-mobile-shell" : ""}${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`}
+            className={`cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] pb-4 pt-2.5 text-slate-100${isCompactViewport ? " is-mobile-shell" : ""}${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`}
             style={{
                 "--cosimo-keyboard-height-scale": keyboardPresentationPreferences.heightScale,
                 "--cosimo-keyboard-bottom-inset": `${keyboardBottomInset}px`,

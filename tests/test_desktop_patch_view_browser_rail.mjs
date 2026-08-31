@@ -1926,6 +1926,31 @@ test("T79 Developer Settings updates and persists keyboard geometry without remo
 });
 
 test("T79 the adjustable keybed fits edge-to-edge beside narrower octave paddles across layouts", async () => {
+    const assertKeyboardUsesSurfaceWidth = (geometry, layoutName) => {
+        const usableLeft = geometry.surface.left + geometry.surfaceBorderLeft;
+        const usableRight = geometry.surface.right - geometry.surfaceBorderRight;
+        assert.equal(
+            Math.abs(geometry.dock.left - usableLeft) <= 0.5,
+            true,
+            `${layoutName} keyboard dock must reach the surface's usable left edge: ${JSON.stringify(geometry)}`,
+        );
+        assert.equal(
+            Math.abs(geometry.dock.right - usableRight) <= 0.5,
+            true,
+            `${layoutName} keyboard dock must reach the surface's usable right edge: ${JSON.stringify(geometry)}`,
+        );
+        assert.equal(
+            Math.abs(geometry.section.left - usableLeft - geometry.safeAreaLeft) <= 0.5,
+            true,
+            `${layoutName} keyboard may inset from the usable left edge only for safe area: ${JSON.stringify(geometry)}`,
+        );
+        assert.equal(
+            Math.abs(usableRight - geometry.section.right - geometry.safeAreaRight) <= 0.5,
+            true,
+            `${layoutName} keyboard may inset from the usable right edge only for safe area: ${JSON.stringify(geometry)}`,
+        );
+    };
+
     for (const layout of [
         { name: "short phone", width: 320, height: 568, compact: true },
         { name: "tall phone", width: 393, height: 852, compact: true },
@@ -1948,6 +1973,7 @@ test("T79 the adjustable keybed fits edge-to-edge beside narrower octave paddles
             },
         });
         const readGeometry = async () => page.evaluate(() => {
+            const pixels = (value) => Number.parseFloat(value) || 0;
             const rectOf = (element) => {
                 if (!(element instanceof Element)) {
                     return null;
@@ -1972,8 +1998,15 @@ test("T79 the adjustable keybed fits edge-to-edge beside narrower octave paddles
                     naturalCount += 1;
                 }
             }
+            const surface = document.querySelector(".cosimo-surface");
+            const dock = document.querySelector('[data-role="sticky-keyboard"]');
+            const surfaceStyle = surface ? getComputedStyle(surface) : null;
+            const dockStyle = dock ? getComputedStyle(dock) : null;
             return {
-                dock: rectOf(document.querySelector('[data-role="sticky-keyboard"]')),
+                surface: rectOf(surface),
+                surfaceBorderLeft: pixels(surfaceStyle?.borderLeftWidth ?? "0"),
+                surfaceBorderRight: pixels(surfaceStyle?.borderRightWidth ?? "0"),
+                dock: rectOf(dock),
                 section: rectOf(document.querySelector('[data-role="sticky-keyboard"] > section')),
                 paddleRail: rectOf(document.querySelector('[data-role="sticky-keyboard"] .synth-control-rail')),
                 upPaddle: rectOf(document.querySelector('button[aria-label="Shift keyboard up one octave"]')),
@@ -1982,6 +2015,8 @@ test("T79 the adjustable keybed fits edge-to-edge beside narrower octave paddles
                 noteCount,
                 naturalCount,
                 naturalWidth: keyboard && "naturalWidth" in keyboard ? keyboard.naturalWidth : null,
+                safeAreaLeft: pixels(dockStyle?.paddingLeft ?? "0"),
+                safeAreaRight: pixels(dockStyle?.paddingRight ?? "0"),
                 documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
             };
         });
@@ -1989,13 +2024,15 @@ test("T79 the adjustable keybed fits edge-to-edge beside narrower octave paddles
         try {
             let geometry = await readGeometry();
             assert.ok(
-                geometry.dock
+                geometry.surface
+                && geometry.dock
                 && geometry.section
                 && geometry.paddleRail
                 && geometry.upPaddle
                 && geometry.keyShell
                 && geometry.keyRecess,
             );
+            assertKeyboardUsesSurfaceWidth(geometry, layout.name);
             assert.equal(geometry.noteCount, 30);
             assert.equal(geometry.paddleRail.width, layout.compact ? 40 : 44);
             assert.equal(geometry.upPaddle.width, 36);
@@ -2048,6 +2085,7 @@ test("T79 the adjustable keybed fits edge-to-edge beside narrower octave paddles
                     return (naturalWidth * naturalCount) <= recess.getBoundingClientRect().width + 0.5;
                 });
                 geometry = await readGeometry();
+                assertKeyboardUsesSurfaceWidth(geometry, `${layout.name} with safe area`);
                 assert.equal(
                     (geometry.naturalWidth * geometry.naturalCount) <= geometry.keyRecess.width + 0.5,
                     true,
