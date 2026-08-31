@@ -14,7 +14,14 @@ import {
     cutoffsFromCenterRangeOctaves,
     geometricCenterCutoffHz,
 } from "../../../ui/shared/filter-range-editor";
-import { ModBadge, type ModulationDirection } from "../../../ui/shared/editor-tick-slider";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../ui/shared/editor-tick-slider";
+import {
+    parameterEntrySpecForFrequency,
+    parameterEntrySpecForMilliseconds,
+    parameterEntrySpecForScalar,
+    parameterEntrySpecForSeconds,
+    type ParameterEntrySpec,
+} from "../../../ui/shared/parameter-value-entry";
 import {
     EDITOR_PLOT_BOTTOM_PADDING_PX,
     EDITOR_PLOT_TOP_PADDING_PX,
@@ -778,6 +785,128 @@ function paramDefinitionsForEffect(effectType: SeqFxEffectType): ParamDefinition
     }));
 }
 
+function tickCountForParameter(definition: SeqFxParameterDefinition) {
+    if (!definition.integer) {
+        return 16;
+    }
+
+    const valueCount = Math.round((definition.max - definition.min) / definition.step) + 1;
+    return Math.min(31, Math.max(2, valueCount));
+}
+
+function exactEntrySpecForParameter(
+    definition: SeqFxParameterDefinition,
+    value: number,
+): ParameterEntrySpec | null {
+    switch (definition.unit) {
+        case "Hz":
+            return parameterEntrySpecForFrequency({
+                minHz: definition.min,
+                maxHz: definition.max,
+                stepHz: definition.step,
+                allowLogPercent: definition.scale === "log",
+            });
+        case "ms":
+            return parameterEntrySpecForMilliseconds({
+                minMilliseconds: definition.min,
+                maxMilliseconds: definition.max,
+                stepMilliseconds: definition.step,
+                currentMilliseconds: value,
+            });
+        case "s":
+            return parameterEntrySpecForSeconds({
+                minSeconds: definition.min,
+                maxSeconds: definition.max,
+                stepSeconds: definition.step,
+                currentSeconds: value,
+                displayUnit: "s",
+            });
+        case "%":
+            return parameterEntrySpecForScalar({
+                min: definition.min,
+                max: definition.max,
+                step: definition.step,
+                unit: "%",
+                canonicalPerDisplayedUnit: 0.01,
+            });
+        case "cents":
+            return parameterEntrySpecForScalar({ min: definition.min, max: definition.max, step: definition.step, unit: "ct" });
+        case "semitones":
+            return parameterEntrySpecForScalar({ min: definition.min, max: definition.max, step: definition.step, unit: "st" });
+        case "degrees":
+            return parameterEntrySpecForScalar({ min: definition.min, max: definition.max, step: definition.step, unit: "°" });
+        case "dB":
+        case "Q":
+        case "x":
+            return parameterEntrySpecForScalar({
+                min: definition.min,
+                max: definition.max,
+                step: definition.step,
+                unit: definition.unit,
+            });
+        case "":
+        case "bits":
+        default:
+            return null;
+    }
+}
+
+function SeqFxNumericParameterSlider({
+    className = "",
+    controlRole,
+    definition,
+    disabled,
+    label = definition.label,
+    paramIndex,
+    triggerLatched,
+    value,
+    onChange,
+}: {
+    className?: string;
+    controlRole?: string;
+    definition: SeqFxParameterDefinition;
+    disabled: boolean;
+    label?: string;
+    paramIndex: number;
+    triggerLatched: boolean;
+    value: number;
+    onChange: (value: number) => void;
+}) {
+    const inputData = controlRole
+        ? { "data-control": controlRole, "data-param": paramIndex }
+        : { "data-param": paramIndex };
+
+    return (
+        <div
+            className={["seqfx-param-row", className].filter(Boolean).join(" ")}
+            data-param={paramIndex}
+            data-role="seqfx-param-row"
+            data-section={definition.section}
+        >
+            <EditorTickSlider
+                dataRole="seqfx-param-slider"
+                disabled={disabled}
+                discrete={definition.integer}
+                entrySpec={exactEntrySpecForParameter(definition, value)}
+                formatValue={(nextValue) => formatSeqFxParameterValue(definition, nextValue)}
+                inputData={inputData}
+                inputDataRole="seqfx-param"
+                label={label}
+                labelAnnotation={triggerLatched ? "Trigger" : null}
+                max={definition.max}
+                min={definition.min}
+                onChange={onChange}
+                scale={definition.scale}
+                step={definition.step}
+                tickCount={tickCountForParameter(definition)}
+                value={value}
+                valueData={{ "data-param": paramIndex }}
+                valueDataRole="seqfx-param-value"
+            />
+        </div>
+    );
+}
+
 function SeqFxParameterField({
     definition,
     disabled,
@@ -791,7 +920,18 @@ function SeqFxParameterField({
     value: number;
     onChange: (value: number) => void;
 }) {
-    const formattedValue = formatSeqFxParameterValue(definition, value);
+    if (definition.kind !== "select" || definition.options === undefined) {
+        return (
+            <SeqFxNumericParameterSlider
+                definition={definition}
+                disabled={disabled}
+                onChange={onChange}
+                paramIndex={definition.index}
+                triggerLatched={triggerLatched}
+                value={value}
+            />
+        );
+    }
 
     return (
         <label className="seqfx-field" data-section={definition.section}>
@@ -812,26 +952,7 @@ function SeqFxParameterField({
                         <option key={option} value={index}>{option}</option>
                     ))}
                 </select>
-            ) : (
-                <span className="seqfx-field__number">
-                    <input
-                        aria-label={definition.label}
-                        aria-valuetext={formattedValue}
-                        data-role="seqfx-param"
-                        data-param={definition.index}
-                        disabled={disabled}
-                        max={definition.max}
-                        min={definition.min}
-                        onChange={(event) => onChange(Number(event.currentTarget.value))}
-                        step={definition.step}
-                        type="number"
-                        value={formatValue(value)}
-                    />
-                    <output data-param={definition.index} data-role="seqfx-param-value">
-                        {formattedValue}
-                    </output>
-                </span>
-            )}
+            ) : null}
             <small>
                 {disabled
                     ? "Select one cell to edit this trigger."
@@ -2497,6 +2618,13 @@ function TapeStopV2Editor({
     disabled: boolean;
     onParamChange: (paramIndex: number, value: number) => void;
 }) {
+    const tapeStopParameters = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.tapeStop).parameters;
+    const freeStopDefinition = tapeStopParameters[TAPE_STOP_PARAM_FREE_STOP_MS];
+    const freeStartDefinition = tapeStopParameters[TAPE_STOP_PARAM_FREE_START_MS];
+    if (!freeStopDefinition || !freeStartDefinition) {
+        throw new Error("Tape Stop free-duration metadata is incomplete.");
+    }
+
     const stopDivision = Math.round(step.params[TAPE_STOP_PARAM_STOP_DIVISION] ?? 8);
     const curve = clampNumber(step.params[TAPE_STOP_PARAM_CURVE] ?? 0, -1, 1);
     const returnMode = Math.round(step.params[TAPE_STOP_PARAM_RETURN] ?? TAPE_STOP_RETURN_CROSSFADE_TO_LIVE);
@@ -2576,23 +2704,21 @@ function TapeStopV2Editor({
                     <small>{freeTiming ? "Milliseconds stay fixed when tempo changes." : "The duration is latched from tempo at the trigger."}</small>
                 </label>
 
-                <label className="seqfx-tape-v2-control">
-                    <span>Stop Time <em>Trigger</em></span>
-                    {freeTiming ? (
-                        <input
-                            aria-label="Tape Stop free stop time in milliseconds"
-                            data-control="seqfx-tape-stop-time"
-                            data-param={TAPE_STOP_PARAM_FREE_STOP_MS}
-                            data-role="seqfx-param"
-                            disabled={disabled}
-                            max={8_000}
-                            min={20}
-                            onChange={(event) => onParamChange(TAPE_STOP_PARAM_FREE_STOP_MS, Number(event.currentTarget.value))}
-                            step={1}
-                            type="number"
-                            value={Math.round(freeStopMs)}
-                        />
-                    ) : (
+                {freeTiming ? (
+                    <SeqFxNumericParameterSlider
+                        className="seqfx-tape-v2-control"
+                        controlRole="seqfx-tape-stop-time"
+                        definition={freeStopDefinition}
+                        disabled={disabled}
+                        label="Stop Time"
+                        onChange={(value) => onParamChange(TAPE_STOP_PARAM_FREE_STOP_MS, value)}
+                        paramIndex={TAPE_STOP_PARAM_FREE_STOP_MS}
+                        triggerLatched
+                        value={freeStopMs}
+                    />
+                ) : (
+                    <label className="seqfx-tape-v2-control">
+                        <span>Stop Time <em>Trigger</em></span>
                         <select
                             aria-label="Tape Stop synced stop time"
                             data-control="seqfx-tape-stop-time"
@@ -2604,9 +2730,9 @@ function TapeStopV2Editor({
                         >
                             {TAPE_STOP_SYNC_LABELS.map((label, index) => <option key={label} value={index}>{label}</option>)}
                         </select>
-                    )}
-                    <small>How long the captured audio takes to reach a stop.</small>
-                </label>
+                        <small>How long the captured audio takes to reach a stop.</small>
+                    </label>
+                )}
 
                 <label className="seqfx-tape-v2-control seqfx-tape-v2-control--wide">
                     <span>Curve <em>Trigger</em><output>{tapeStopCurveLabel(curve)}</output></span>
@@ -2644,23 +2770,21 @@ function TapeStopV2Editor({
                 </label>
 
                 {spinUp ? (
-                    <label className="seqfx-tape-v2-control">
-                        <span>Start Time <em>Trigger</em></span>
-                        {freeTiming ? (
-                            <input
-                                aria-label="Tape Stop free start time in milliseconds"
-                                data-control="seqfx-tape-start-time"
-                                data-param={TAPE_STOP_PARAM_FREE_START_MS}
-                                data-role="seqfx-param"
-                                disabled={disabled}
-                                max={8_000}
-                                min={20}
-                                onChange={(event) => onParamChange(TAPE_STOP_PARAM_FREE_START_MS, Number(event.currentTarget.value))}
-                                step={1}
-                                type="number"
-                                value={Math.round(freeStartMs)}
-                            />
-                        ) : (
+                    freeTiming ? (
+                        <SeqFxNumericParameterSlider
+                            className="seqfx-tape-v2-control"
+                            controlRole="seqfx-tape-start-time"
+                            definition={freeStartDefinition}
+                            disabled={disabled}
+                            label="Start Time"
+                            onChange={(value) => onParamChange(TAPE_STOP_PARAM_FREE_START_MS, value)}
+                            paramIndex={TAPE_STOP_PARAM_FREE_START_MS}
+                            triggerLatched
+                            value={freeStartMs}
+                        />
+                    ) : (
+                        <label className="seqfx-tape-v2-control">
+                            <span>Start Time <em>Trigger</em></span>
                             <select
                                 aria-label="Tape Stop synced start time"
                                 data-control="seqfx-tape-start-time"
@@ -2672,9 +2796,9 @@ function TapeStopV2Editor({
                             >
                                 {TAPE_STOP_SYNC_LABELS.map((label, index) => <option key={label} value={index}>{label}</option>)}
                             </select>
-                        )}
-                        <small>How long the motor takes to return to normal speed.</small>
-                    </label>
+                            <small>How long the motor takes to return to normal speed.</small>
+                        </label>
+                    )
                 ) : null}
 
                 <label className="seqfx-tape-v2-control seqfx-tape-v2-control--wide">

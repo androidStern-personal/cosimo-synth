@@ -107,6 +107,16 @@ export type SecondsParameterEntrySpecInput = {
     readonly maxSeconds: number;
     readonly stepSeconds: number;
     readonly currentSeconds: number;
+    readonly displayUnit?: "ms" | "s";
+};
+
+/** Source values needed for a millisecond-backed time entry spec. */
+export type MillisecondsParameterEntrySpecInput = {
+    readonly minMilliseconds: number;
+    readonly maxMilliseconds: number;
+    readonly stepMilliseconds: number;
+    readonly currentMilliseconds: number;
+    readonly displayUnit?: "ms" | "s";
 };
 
 /** Source values needed for a frequency entry spec. */
@@ -562,13 +572,31 @@ export function parameterEntrySpecForSeconds({
     maxSeconds,
     stepSeconds,
     currentSeconds,
+    displayUnit,
 }: SecondsParameterEntrySpecInput): ParameterEntrySpec {
     return {
         _tag: "seconds",
         min: minSeconds,
         max: maxSeconds,
         step: stepSeconds,
-        defaultUnit: currentSeconds < 1 ? "ms" : "s",
+        defaultUnit: displayUnit ?? (currentSeconds < 1 ? "ms" : "s"),
+    };
+}
+
+/** Derive a millisecond-backed time spec whose bare-number unit matches the visible readout. */
+export function parameterEntrySpecForMilliseconds({
+    minMilliseconds,
+    maxMilliseconds,
+    stepMilliseconds,
+    currentMilliseconds,
+    displayUnit,
+}: MillisecondsParameterEntrySpecInput): ParameterEntrySpec {
+    return {
+        _tag: "milliseconds",
+        min: minMilliseconds,
+        max: maxMilliseconds,
+        step: stepMilliseconds,
+        defaultUnit: displayUnit ?? (currentMilliseconds < 1_000 ? "ms" : "s"),
     };
 }
 

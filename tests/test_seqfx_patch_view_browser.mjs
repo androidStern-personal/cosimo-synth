@@ -85,6 +85,7 @@ const SEQFX_DEFAULT_EFFECT_NAMES = ["Filter", "Crush", "Tape Stop", "Stutter"];
 let serverProcess;
 let browser;
 const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
+const effectDefinitionsModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-effect-definitions.ts");
 
 async function waitForServer() {
     const startedAt = Date.now();
@@ -369,6 +370,19 @@ async function setRangeInputValue(locator, value) {
         node.dispatchEvent(new Event("input", { bubbles: true }));
         node.dispatchEvent(new Event("change", { bubbles: true }));
     }, value);
+}
+
+async function setPhysicalSliderValue(locator, value) {
+    const mapping = await locator.evaluate((node, nextValue) => {
+        const scale = node.getAttribute("data-scale");
+        const min = Number(node.getAttribute("data-physical-min"));
+        const max = Number(node.getAttribute("data-physical-max"));
+        if (scale !== "log") {
+            return nextValue;
+        }
+        return Math.log(nextValue / min) / Math.log(max / min);
+    }, value);
+    await setRangeInputValue(locator, mapping);
 }
 
 async function pressSliderKey(locator, key) {
@@ -3996,10 +4010,10 @@ test("seqfx_tape_stop_v2_inspector_exposes_established_motor_controls_and_persis
     await page.locator('[data-control="seqfx-tape-return"]').selectOption("1");
     await page.locator('[data-control="seqfx-tape-start-time"]').waitFor();
     await page.locator('[data-control="seqfx-tape-timing"]').selectOption("1");
-    assert.equal(await page.locator('[data-control="seqfx-tape-stop-time"]').getAttribute("type"), "number");
-    assert.equal(await page.locator('[data-control="seqfx-tape-start-time"]').getAttribute("type"), "number");
-    await page.locator('[data-control="seqfx-tape-stop-time"]').fill("1200");
-    await page.locator('[data-control="seqfx-tape-start-time"]').fill("800");
+    assert.equal(await page.locator('[data-control="seqfx-tape-stop-time"]').getAttribute("type"), "range");
+    assert.equal(await page.locator('[data-control="seqfx-tape-start-time"]').getAttribute("type"), "range");
+    await setPhysicalSliderValue(page.locator('[data-control="seqfx-tape-stop-time"]'), 1_200);
+    await setPhysicalSliderValue(page.locator('[data-control="seqfx-tape-start-time"]'), 800);
     await setRangeInputValue(page.locator('[data-control="seqfx-tape-curve"]'), -0.5);
     await setRangeInputValue(page.locator('[data-control="seqfx-tape-character"]'), 0.72);
 
@@ -4090,6 +4104,177 @@ test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_
     await page.close();
 });
 
+test("seqfx numeric inspectors use compact segmented rows while enumerated choices stay selectors", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+
+    for (const effectName of ["Pitch", "Comb", "Ring", "Reverse", "Talk Box", "Vibro", "Flange", "Dirty"]) {
+        const effect = effectDefinitionsModule.SEQFX_EFFECT_DEFINITIONS.find((candidate) => candidate.name === effectName);
+        assert.ok(effect, `expected ${effectName} metadata`);
+
+        await page.getByRole("button", { name: effectName, exact: true }).click();
+        await page.getByRole("button", { name: `Chain 1 ${effectName} block 1`, exact: true }).waitFor();
+        await openSeqFxAdvancedParameters(page);
+
+        for (const [index, definition] of effect.parameters.entries()) {
+            const control = page.locator(`[data-role="seqfx-param"][data-param="${index}"]`);
+            await control.waitFor();
+
+            if (definition.options) {
+                assert.equal(await control.evaluate((element) => element.tagName), "SELECT", `${effectName} ${definition.label} should remain a selector`);
+                continue;
+            }
+
+            assert.equal(await control.getAttribute("type"), "range", `${effectName} ${definition.label} should use a range input`);
+            const row = page.locator(`[data-role="seqfx-param-row"][data-param="${index}"]`);
+            assert.equal(await row.locator(".editor-tick-slider__track").count(), 1, `${effectName} ${definition.label} should use the shared segmented rail`);
+            assert.equal(await row.locator('[data-role="seqfx-param-value"]').count(), 1, `${effectName} ${definition.label} should keep its formatted readout`);
+            assert.equal(await row.locator("small").count(), 0, `${effectName} ${definition.label} should not keep an always-visible help sentence`);
+
+            const geometry = await row.evaluate((element) => {
+                const label = element.querySelector(".editor-tick-slider__label")?.getBoundingClientRect();
+                const track = element.querySelector(".editor-tick-slider__track")?.getBoundingClientRect();
+                const value = element.querySelector('[data-role="seqfx-param-value"]')?.getBoundingClientRect();
+                return {
+                    height: element.getBoundingClientRect().height,
+                    labelCenter: label ? label.top + (label.height / 2) : null,
+                    trackCenter: track ? track.top + (track.height / 2) : null,
+                    valueCenter: value ? value.top + (value.height / 2) : null,
+                };
+            });
+            assert.ok(geometry.height <= 40, `${effectName} ${definition.label} should stay compact`);
+            assertClose(geometry.labelCenter, geometry.trackCenter, 3, `${effectName} ${definition.label} label/rail alignment`);
+            assertClose(geometry.valueCenter, geometry.trackCenter, 3, `${effectName} ${definition.label} value/rail alignment`);
+        }
+    }
+
+    assert.equal(await page.locator('input[type="number"][data-role="seqfx-param"]').count(), 0);
+    await page.close();
+});
+
+test("seqfx segmented sliders preserve proportional continuous fill, whole discrete cells, log travel, and host-owned Space", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Ring", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 Ring block 1", exact: true }).waitFor();
+
+    const frequency = page.locator('[data-role="seqfx-param"][data-param="0"]');
+    await setRangeInputValue(frequency, 0.5);
+    const frequencyMin = Number(await frequency.getAttribute("data-physical-min"));
+    const frequencyMax = Number(await frequency.getAttribute("data-physical-max"));
+    assertClose(Number(await frequency.getAttribute("data-physical-value")), Math.sqrt(frequencyMin * frequencyMax), 0.02, "log midpoint should land at the geometric mean");
+
+    const motion = page.locator('[data-role="seqfx-param"][data-param="2"]');
+    await setPhysicalSliderValue(motion, 0.1);
+    const continuousFills = await page.locator('[data-role="seqfx-param-row"][data-param="2"] [data-role="editor-tick-slider-tick"]').evaluateAll(
+        (ticks) => ticks.map((tick) => Number(tick.getAttribute("data-fill"))),
+    );
+    assert.equal(continuousFills[0], 1);
+    assertClose(continuousFills[1], 0.6, 0.001, "continuous value should partially fill its current cell");
+    assert.equal(continuousFills[2], 0);
+    const stipple = await page.locator('[data-role="seqfx-param-row"][data-param="2"] .editor-tick-slider__tick-fill').first().evaluate(
+        (fill) => getComputedStyle(fill, "::after").backgroundImage,
+    );
+    assert.match(stipple, /radial-gradient/, "active fill should use the effects-grid stipple language");
+
+    const spaceOwnership = await motion.evaluate((input) => {
+        input.focus();
+        const event = new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            code: "Space",
+            key: " ",
+        });
+        input.dispatchEvent(event);
+        return {
+            activeType: document.activeElement instanceof HTMLInputElement ? document.activeElement.type : null,
+            defaultPrevented: event.defaultPrevented,
+        };
+    });
+    assert.deepEqual(spaceOwnership, { activeType: "range", defaultPrevented: false });
+
+    await page.getByRole("button", { name: "Pitch", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 Pitch block 1", exact: true }).waitFor();
+    const pitch = page.locator('[data-role="seqfx-param"][data-param="0"]');
+    await setPhysicalSliderValue(pitch, 0);
+    const discreteFills = await page.locator('[data-role="seqfx-param-row"][data-param="0"] [data-role="editor-tick-slider-tick"]').evaluateAll(
+        (ticks) => ticks.map((tick) => Number(tick.getAttribute("data-fill"))),
+    );
+    assert.ok(discreteFills.every((fill) => fill === 0 || fill === 1), "discrete parameters should never partially fill a cell");
+
+    await page.close();
+});
+
+test("seqfx Tape Stop free durations use the shared log segmented slider without persistent help", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Tape Stop", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 Tape Stop block 1", exact: true }).waitFor();
+    await page.locator('[data-control="seqfx-tape-timing"]').selectOption("1");
+    await page.locator('[data-control="seqfx-tape-return"]').selectOption("1");
+
+    for (const [paramIndex, controlRole] of [[6, "seqfx-tape-stop-time"], [7, "seqfx-tape-start-time"]]) {
+        const control = page.locator(`[data-control="${controlRole}"]`);
+        await control.waitFor();
+        assert.equal(await control.getAttribute("type"), "range");
+        assert.equal(await control.getAttribute("data-scale"), "log");
+        const row = page.locator(`[data-role="seqfx-param-row"][data-param="${paramIndex}"]`);
+        assert.equal(await row.locator(".editor-tick-slider__track").count(), 1);
+        assert.equal(await row.locator("small").count(), 0);
+    }
+
+    assert.equal(await page.locator('.seqfx-tape-v2 input[type="number"]').count(), 0);
+    await page.close();
+});
+
+test("seqfx segmented readouts open temporary unit-aware exact entry and preserve physical values", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Ring", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 Ring block 1", exact: true }).waitFor();
+    assert.equal(await page.locator('.seqfx-inspector input:is([type="number"], [type="text"])').count(), 0);
+
+    const frequencyReadout = page.locator('[data-role="seqfx-param-value"][data-param="0"]');
+    await frequencyReadout.click();
+    const frequencyEntry = page.getByRole("textbox", { name: "Frequency exact value" });
+    await frequencyEntry.fill("2 khz");
+    await frequencyEntry.press("Enter");
+    await frequencyEntry.waitFor({ state: "detached" });
+    assert.equal(await frequencyReadout.textContent(), "2 kHz");
+
+    let snapshot = await getHarnessSnapshot(page);
+    assertClose(patternUploads(snapshot).at(-1).value.params[0][0][0], 2_000, 0.001, "frequency exact entry should commit Hz to SeqFX state");
+
+    await page.getByRole("button", { name: "Tape Stop", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 Tape Stop block 1", exact: true }).waitFor();
+    await page.locator('[data-control="seqfx-tape-timing"]').selectOption("1");
+    const stopReadout = page.locator('[data-role="seqfx-param-row"][data-param="6"] [data-role="seqfx-param-value"]');
+    await stopReadout.click();
+    const stopEntry = page.getByRole("textbox", { name: "Stop Time exact value" });
+    await stopEntry.fill("2 s");
+    await stopEntry.press("Enter");
+    await stopEntry.waitFor({ state: "detached" });
+    assert.equal(await stopReadout.textContent(), "2 s");
+
+    snapshot = await getHarnessSnapshot(page);
+    assertClose(patternUploads(snapshot).at(-1).value.params[0][0][6], 2_000, 0.001, "Tape Stop exact entry should store milliseconds");
+    assert.equal(await page.locator('.seqfx-inspector input:is([type="number"], [type="text"])').count(), 0);
+
+    await page.close();
+});
+
 test("seqfx_ring_inspector_sequences_every_public_control_and_hides_waveform_from_live_modulation", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
@@ -4102,7 +4287,7 @@ test("seqfx_ring_inspector_sequences_every_public_control_and_hides_waveform_fro
     await page.getByRole("button", { name: "Chain 1 Ring block 1", exact: true }).waitFor();
 
     const param = (index) => page.locator(`[data-role="seqfx-param"][data-param="${index}"]`);
-    assert.equal(await param(0).inputValue(), "180");
+    assert.equal(await param(0).getAttribute("data-physical-value"), "180");
     assert.equal(await param(1).locator("option").count(), 4);
     assert.equal(await param(1).inputValue(), "0");
     assert.equal(await page.locator('[data-role="seqfx-param-value"][data-param="0"]').textContent(), "180 Hz");
@@ -4114,13 +4299,13 @@ test("seqfx_ring_inspector_sequences_every_public_control_and_hides_waveform_fro
     assert.equal(await param(6).inputValue(), "0");
     assert.equal(await page.locator('[data-role="seqfx-param-value"][data-param="4"]').textContent(), "8%");
 
-    await param(0).fill("440");
+    await setPhysicalSliderValue(param(0), 440);
     await param(1).selectOption("2");
-    await param(2).fill("0.4");
-    await param(3).fill("3");
-    await param(4).fill("1");
-    await param(5).fill("0.25");
-    await param(6).fill("-0.3");
+    await setPhysicalSliderValue(param(2), 0.4);
+    await setPhysicalSliderValue(param(3), 3);
+    await setPhysicalSliderValue(param(4), 1);
+    await setPhysicalSliderValue(param(5), 0.25);
+    await setPhysicalSliderValue(param(6), -0.3);
 
     let snapshot = await getHarnessSnapshot(page);
     let upload = patternUploads(snapshot).at(-1).value;
@@ -4174,10 +4359,10 @@ test("seqfx_reverse_sequences_a_zero_latency_lookback_with_only_boundary_and_dec
     await openSeqFxAdvancedParameters(page);
 
     await param(0).selectOption("3");
-    await param(1).fill("0.12");
+    await setPhysicalSliderValue(param(1), 0.12);
     await param(2).selectOption("1");
-    await param(3).fill("480");
-    await param(4).fill("0.7");
+    await setPhysicalSliderValue(param(3), 480);
+    await setPhysicalSliderValue(param(4), 0.7);
 
     let snapshot = await getHarnessSnapshot(page);
     let upload = patternUploads(snapshot).at(-1).value;
@@ -4230,14 +4415,14 @@ test("seqfx_comb_sequences_the_selected_vector_dispersive_contract_and_latches_p
     );
     await openSeqFxAdvancedParameters(page);
 
-    await param(0).fill("440");
-    await param(1).fill("2.5");
+    await setPhysicalSliderValue(param(0), 440);
+    await setPhysicalSliderValue(param(1), 2.5);
     await param(2).selectOption("1");
-    await param(3).fill("0.7");
-    await param(4).fill("6000");
-    await param(5).fill("0.4");
-    await param(6).fill("0.3");
-    await param(7).fill("0.8");
+    await setPhysicalSliderValue(param(3), 0.7);
+    await setPhysicalSliderValue(param(4), 6_000);
+    await setPhysicalSliderValue(param(5), 0.4);
+    await setPhysicalSliderValue(param(6), 0.3);
+    await setPhysicalSliderValue(param(7), 0.8);
 
     let snapshot = await getHarnessSnapshot(page);
     let upload = patternUploads(snapshot).at(-1).value;
@@ -4293,10 +4478,10 @@ test("seqfx_vibro_sequences_wet_only_doppler_controls with explicit sync and fre
     );
     await openSeqFxAdvancedParameters(page);
 
-    await param(0).fill("6");
-    await param(1).fill("60");
+    await setPhysicalSliderValue(param(0), 6);
+    await setPhysicalSliderValue(param(1), 60);
     await param(2).selectOption("1");
-    await param(3).fill("150");
+    await setPhysicalSliderValue(param(3), 150);
     await param(4).selectOption("1");
     await param(5).selectOption("4");
 
@@ -4357,11 +4542,11 @@ test("seqfx_flange_sequences_the_short_delay_feedback_contract and latches timin
     );
     await openSeqFxAdvancedParameters(page);
 
-    await param(0).fill("2");
-    await param(1).fill("6");
-    await param(2).fill("3");
-    await param(3).fill("0.75");
-    await param(4).fill("150");
+    await setPhysicalSliderValue(param(0), 2);
+    await setPhysicalSliderValue(param(1), 6);
+    await setPhysicalSliderValue(param(2), 3);
+    await setPhysicalSliderValue(param(3), 0.75);
+    await setPhysicalSliderValue(param(4), 150);
     await param(5).selectOption("1");
     await param(6).selectOption("0");
     await param(7).selectOption("2");
@@ -4410,11 +4595,11 @@ test("seqfx_pitch_sequences_the_complementary_grain_contract_and_sparse_modulati
 
     const param = (index) => page.locator(`[data-role="seqfx-param"][data-param="${index}"]`);
     await openSeqFxAdvancedParameters(page);
-    await param(0).fill("12");
-    await param(1).fill("25");
-    await param(2).fill("64");
-    await param(3).fill("0.4");
-    await param(4).fill("0.8");
+    await setPhysicalSliderValue(param(0), 12);
+    await setPhysicalSliderValue(param(1), 25);
+    await setPhysicalSliderValue(param(2), 64);
+    await setPhysicalSliderValue(param(3), 0.4);
+    await setPhysicalSliderValue(param(4), 0.8);
 
     let snapshot = await getHarnessSnapshot(page);
     let upload = patternUploads(snapshot).at(-1).value;
@@ -4466,11 +4651,11 @@ test("seqfx_talk_box_sequences_documented_vowels_and_exposes_only_continuous_con
 
     await param(0).selectOption("1");
     await param(1).selectOption("4");
-    await param(2).fill("0.5");
-    await param(3).fill("12");
-    await param(4).fill("0.4");
-    await param(5).fill("0.2");
-    await param(6).fill("6");
+    await setPhysicalSliderValue(param(2), 0.5);
+    await setPhysicalSliderValue(param(3), 12);
+    await setPhysicalSliderValue(param(4), 0.4);
+    await setPhysicalSliderValue(param(5), 0.2);
+    await setPhysicalSliderValue(param(6), 6);
 
     let snapshot = await getHarnessSnapshot(page);
     let upload = patternUploads(snapshot).at(-1).value;
@@ -4519,12 +4704,12 @@ test("seqfx_dirty_sequences_oversampled_distortion_controls_and_excludes_charact
     );
     await openSeqFxAdvancedParameters(page);
 
-    await param(0).fill("24");
+    await setPhysicalSliderValue(param(0), 24);
     await param(1).selectOption("2");
-    await param(2).fill("0.35");
-    await param(3).fill("0.8");
-    await param(4).fill("5000");
-    await param(5).fill("-3");
+    await setPhysicalSliderValue(param(2), 0.35);
+    await setPhysicalSliderValue(param(3), 0.8);
+    await setPhysicalSliderValue(param(4), 5_000);
+    await setPhysicalSliderValue(param(5), -3);
 
     let snapshot = await getHarnessSnapshot(page);
     let upload = patternUploads(snapshot).at(-1).value;
