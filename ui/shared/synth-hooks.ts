@@ -298,10 +298,6 @@ const AUTO_PREVIEW_SCHEDULER_CONFIG = {
 } as const;
 /** A preview released in the instant it started still gets a brief audible life. */
 const AUTO_PREVIEW_MIN_NOTE_MS = 250;
-// Frame-exact strikes fire their JS timer this much before the target so the
-// scheduled batch reaches the worklet ahead of the target frame; the worklet
-// then places the events on the exact sample.
-const AUTO_PREVIEW_STRIKE_LEAD_MS = 8;
 const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
 const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
 export { SYNTH_PRESET_EFFECT_ID } from "./effects/synth-preset-identity";
@@ -4243,10 +4239,7 @@ export function useSynthPatchViewModel({
         if (isNoteOn) {
             // The newest note-on anchors every per-voice MSEG loop's phase
             // (T12B): loop-sync boundaries are computed from this moment.
-            // A manual note's engine frame is unknown, so the frame-exact
-            // anchor is invalidated until a scheduled strike reports in.
             lastNoteOnAtRef.current = performance.now();
-            autoPreviewAnchorFrameRef.current = null;
             if (intentional) {
                 lastPlayedNoteRef.current = safeNote;
                 setLastPlayedNote(safeNote);
@@ -4353,16 +4346,6 @@ export function useSynthPatchViewModel({
     const browserAudioAwayRef = useRef(false);
     const msegRatesRef = useRef<[number, number, number]>([1, 1, 1]);
     msegRatesRef.current = [mseg1Rate.value, mseg2Rate.value, mseg3Rate.value];
-    // Frame-exact preview strikes (T12D): the worklet's event scheduler
-    // reports its frame clock and each applied preview event. A strike
-    // quantized to a loop boundary is placed at an exact engine frame
-    // derived from the newest applied preview note-on (the anchor), so
-    // successive strikes sit on the MSEG grid to the sample. Manual notes
-    // have no known frame; they invalidate the anchor and the ms estimate
-    // takes over until the next scheduled strike reports in.
-    const autoPreviewFrameClockRef = useRef<{ frame: number; atMs: number } | null>(null);
-    const autoPreviewAnchorFrameRef = useRef<{ frame: number; ms: number } | null>(null);
-    const autoPreviewInFlightStrikeRef = useRef<{ previousPitches: number[] } | null>(null);
 
     // Dev builds may swap the preview algorithm live from the tuning page;
     // release builds always run the shipped engine.
@@ -4376,22 +4359,6 @@ export function useSynthPatchViewModel({
         const sendRawMidi = (status: number, note: number, velocity: number) => {
             patchConnection.sendMIDIInputEvent?.(MIDI_INPUT_ENDPOINT_ID, buildShortMidi(status, note, velocity));
         };
-        // The web host's worklet exposes a sample-accurate event scheduler
-        // (scheduleCosimoAudioWorkletEvents); other connections (the mock,
-        // scripted replays) fall back to the raw immediate path.
-        const scheduleConnection = patchConnection as {
-            cosimoScheduleEvents?: (events: Array<{
-                atFrame: number;
-                endpointID: string;
-                value: unknown;
-                tag: string;
-            }>) => void;
-            cosimoCancelScheduledEvents?: (tag: string) => void;
-            audioNode?: { port?: MessagePort };
-            audioContext?: { sampleRate?: number };
-        };
-        const canScheduleFrames = typeof scheduleConnection.cosimoScheduleEvents === "function";
-        const scheduleSampleRate = scheduleConnection.audioContext?.sampleRate ?? null;
         const clearOwnedOffTimer = () => {
             if (autoPreviewOffTimerRef.current !== null) {
                 window.clearTimeout(autoPreviewOffTimerRef.current);
@@ -4421,19 +4388,6 @@ export function useSynthPatchViewModel({
             if (pending) {
                 autoPreviewPendingStrikeRef.current = null;
                 window.clearTimeout(pending.timer);
-            }
-            const inFlight = autoPreviewInFlightStrikeRef.current;
-            if (inFlight) {
-                // A strike batch already at the worklet but possibly not yet
-                // applied: cancel what has not landed, then release the
-                // previous group in case its scheduled note-offs were
-                // cancelled with it (offs for never-started notes land on
-                // nothing and are harmless).
-                autoPreviewInFlightStrikeRef.current = null;
-                scheduleConnection.cosimoCancelScheduledEvents?.("auto-preview");
-                for (const pitch of inFlight.previousPitches) {
-                    sendRawMidi(0x80, pitch, 0);
-                }
             }
         };
         autoPreviewClearPendingRef.current = clearPendingStrike;
@@ -4472,52 +4426,14 @@ export function useSynthPatchViewModel({
             }
             return slowestPeriodMs > 0 ? { periodMs: slowestPeriodMs, anchorMs } : null;
         };
-        const strikePreviewNow = (strikeCapMs: number | null, targetFrame: number | null = null) => {
+        const strikePreviewNow = (strikeCapMs: number | null) => {
             const strikeAtMs = performance.now();
             const pitches = previewNoteMemory.rememberedGroup();
-
-            if (!canScheduleFrames) {
-                releaseOwnedGroup();
-                autoPreviewOwnedGroupRef.current = { pitches, startedAt: strikeAtMs };
-                for (const pitch of pitches) {
-                    sendRawMidi(0x90, pitch, 100);
-                }
-                lastNoteOnAtRef.current = strikeAtMs;
-                if (strikeCapMs !== null) {
-                    scheduleOwnedRelease(strikeCapMs);
-                }
-                return;
-            }
-
-            // Frame-exact strike: the old group's note-offs and the new
-            // note-ons share one scheduled batch at the same frame (the
-            // worklet preserves same-frame order), so the whole retrigger
-            // boundary lands on one exact sample. atFrame 0 means "next
-            // opportunity" and matches the raw path's timing.
-            clearOwnedOffTimer();
-            const previousPitches = autoPreviewOwnedGroupRef.current?.pitches ?? [];
+            releaseOwnedGroup();
             autoPreviewOwnedGroupRef.current = { pitches, startedAt: strikeAtMs };
-            const atFrame = targetFrame ?? 0;
-            const events = [];
-            for (const pitch of previousPitches) {
-                events.push({
-                    atFrame,
-                    endpointID: MIDI_INPUT_ENDPOINT_ID,
-                    value: { message: buildShortMidi(0x80, pitch, 0) },
-                    tag: "auto-preview",
-                });
-            }
             for (const pitch of pitches) {
-                events.push({
-                    atFrame,
-                    endpointID: MIDI_INPUT_ENDPOINT_ID,
-                    value: { message: buildShortMidi(0x90, pitch, 100) },
-                    tag: "auto-preview",
-                });
+                sendRawMidi(0x90, pitch, 100);
             }
-            autoPreviewInFlightStrikeRef.current = { previousPitches: [...previousPitches] };
-            autoPreviewAnchorFrameRef.current = null;
-            scheduleConnection.cosimoScheduleEvents?.(events);
             lastNoteOnAtRef.current = strikeAtMs;
             if (strikeCapMs !== null) {
                 scheduleOwnedRelease(strikeCapMs);
@@ -4550,31 +4466,14 @@ export function useSynthPatchViewModel({
                     strikePreviewNow(capMs);
                     return;
                 }
-                // The ms policy above picked WHICH loop boundary; translate
-                // it into an exact engine frame — relative to the newest
-                // applied preview note-on when one is known, else through
-                // the worklet's frame clock. The timer fires a lead early
-                // and the worklet lands the batch on the exact sample; with
-                // no frame reference the raw timing applies as before.
-                let targetFrame: number | null = null;
-                if (canScheduleFrames && scheduleSampleRate) {
-                    const anchor = autoPreviewAnchorFrameRef.current;
-                    const clock = autoPreviewFrameClockRef.current;
-                    if (anchor) {
-                        targetFrame = Math.round(anchor.frame + (((strikeAt - anchor.ms) / 1000) * scheduleSampleRate));
-                    } else if (clock) {
-                        targetFrame = Math.round(clock.frame + (((strikeAt - clock.atMs) / 1000) * scheduleSampleRate));
-                    }
-                }
-                const leadMs = targetFrame !== null ? AUTO_PREVIEW_STRIKE_LEAD_MS : 0;
                 const pending: { timer: number; capMs: number | null } = { timer: 0, capMs };
                 pending.timer = window.setTimeout(() => {
                     if (autoPreviewPendingStrikeRef.current !== pending) {
                         return;
                     }
                     autoPreviewPendingStrikeRef.current = null;
-                    strikePreviewNow(pending.capMs, targetFrame);
-                }, Math.max(0, strikeAt - now - leadMs));
+                    strikePreviewNow(pending.capMs);
+                }, Math.max(0, strikeAt - now));
                 autoPreviewPendingStrikeRef.current = pending;
             },
             endPreview: () => {
@@ -4641,55 +4540,6 @@ export function useSynthPatchViewModel({
                 return source.anchorMs + (cycles * source.periodMs);
             },
         });
-        // The worklet reports its frame clock with every schedule ack and
-        // each applied batch; the newest applied preview note-on becomes the
-        // frame-exact loop anchor (and tightens the ms anchor with it).
-        const audioPort = canScheduleFrames ? scheduleConnection.audioNode?.port : undefined;
-        const handleSchedulerPortMessage = (event: MessageEvent) => {
-            const data = event.data as {
-                type?: string;
-                currentFrame?: number;
-                events?: Array<{
-                    tag?: string | null;
-                    value?: { message?: number };
-                    appliedFrame?: number;
-                }>;
-            };
-            if (!data || !Number.isFinite(data.currentFrame)) {
-                return;
-            }
-            if (data.type === "cosimo-schedule-ack") {
-                autoPreviewFrameClockRef.current = { frame: data.currentFrame as number, atMs: performance.now() };
-                return;
-            }
-            if (data.type !== "cosimo-scheduled-applied") {
-                return;
-            }
-            const receivedAt = performance.now();
-            autoPreviewFrameClockRef.current = { frame: data.currentFrame as number, atMs: receivedAt };
-            let newestOnFrame: number | null = null;
-            for (const applied of data.events ?? []) {
-                if (applied?.tag !== "auto-preview" || !Number.isFinite(applied.appliedFrame)) {
-                    continue;
-                }
-                const message = applied.value?.message;
-                const isNoteOnMessage = typeof message === "number"
-                    && (message & 0xf00000) === 0x900000
-                    && (message & 0xff) > 0;
-                if (isNoteOnMessage) {
-                    newestOnFrame = applied.appliedFrame as number;
-                }
-            }
-            if (newestOnFrame !== null && scheduleSampleRate) {
-                const anchorMs = receivedAt
-                    - ((((data.currentFrame as number) - newestOnFrame) / scheduleSampleRate) * 1000);
-                autoPreviewAnchorFrameRef.current = { frame: newestOnFrame, ms: anchorMs };
-                lastNoteOnAtRef.current = anchorMs;
-                autoPreviewInFlightStrikeRef.current = null;
-            }
-        };
-        audioPort?.addEventListener("message", handleSchedulerPortMessage);
-
         const engine = activePreviewAlgorithm === "shipped"
             ? createShippedEngine()
             : createStrategyEngine();
@@ -4730,7 +4580,6 @@ export function useSynthPatchViewModel({
             window.removeEventListener("focus", handleResume);
             window.removeEventListener(BROWSER_AUDIO_RETURN_EVENT, handleBrowserAudioReturn);
             document.removeEventListener("visibilitychange", handleVisibility);
-            audioPort?.removeEventListener("message", handleSchedulerPortMessage);
             unsubscribe();
             engine.dispose();
             clearPendingStrike();

@@ -16,7 +16,6 @@ import {
     fixCosimoAudioWorkletListenerRemoval,
     instrumentCosimoAudioWorkletSource,
     poolCosimoAudioWorkletEventDelivery,
-    scheduleCosimoAudioWorkletEvents,
 } from "../web/audio-worklet-instrumentation.mjs";
 import {
     installBrowserPatchStatePersistence,
@@ -346,42 +345,6 @@ test("audio-worklet event delivery skips unlistened unpacks and coalesces one po
     assert.throws(
         () => poolCosimoAudioWorkletEventDelivery("unrecognised helper"),
         /Could not pool the generated Cmajor AudioWorklet event delivery/,
-    );
-});
-
-test("audio-worklet scheduler splits blocks at exact frames for scheduled events", () => {
-    const generated = `                const blockSize = 128;
-                const prepareInputFrames = makeInputStreamEndpointHandler (wrapper);
-                const processOutputFrames = makeOutputStreamEndpointHandler (wrapper);
-
-                this.processImpl = (input, output) =>
-                {
-                    prepareInputFrames (input, blockSize);
-                    wrapper.advance (blockSize);
-                    processOutputFrames (output, blockSize);
-                };
-
-                        case "send_gesture_start": break;
-
-    sendMessageToServer (msg)
-    {
-        this.audioNode.port.postMessage ({ type: "patch", payload: msg });
-    }`;
-
-    const scheduled = scheduleCosimoAudioWorkletEvents(generated);
-
-    assert.match(scheduled, /cosimoScheduledEvents/);
-    assert.match(scheduled, /cosimo-schedule-events/);
-    assert.match(scheduled, /cosimo-cancel-scheduled-events/);
-    assert.match(scheduled, /cosimo-scheduled-applied/);
-    assert.match(scheduled, /cosimoScheduleEvents \(events\)/);
-    assert.match(scheduled, /cosimoCancelScheduledEvents \(tag\)/);
-    // The empty-queue fast path must keep the original single advance.
-    assert.match(scheduled, /wrapper\.advance \(blockSize\);/);
-    assert.match(scheduled, /wrapper\.advance \(segmentFrames\);/);
-    assert.throws(
-        () => scheduleCosimoAudioWorkletEvents("unrecognised helper"),
-        /Could not add the Cmajor AudioWorklet event scheduler/,
     );
 });
 

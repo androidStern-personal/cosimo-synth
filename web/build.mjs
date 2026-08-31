@@ -8,7 +8,6 @@ import {
     fixCosimoAudioWorkletListenerRemoval,
     instrumentCosimoAudioWorkletSource,
     poolCosimoAudioWorkletEventDelivery,
-    scheduleCosimoAudioWorkletEvents,
 } from "./audio-worklet-instrumentation.mjs";
 import { copyWebHostAssets } from "./web-host-assets.mjs";
 import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
@@ -93,11 +92,9 @@ async function instrumentAudioWorklet() {
     const source = await fs.readFile(helperPath, "utf8");
     await fs.writeFile(
         helperPath,
-        scheduleCosimoAudioWorkletEvents(
-            poolCosimoAudioWorkletEventDelivery(
-                fixCosimoAudioWorkletListenerRemoval(
-                    adaptCosimoAudioWorkletModuleLoading(instrumentCosimoAudioWorkletSource(source)),
-                ),
+        poolCosimoAudioWorkletEventDelivery(
+            fixCosimoAudioWorkletListenerRemoval(
+                adaptCosimoAudioWorkletModuleLoading(instrumentCosimoAudioWorkletSource(source)),
             ),
         ),
     );
