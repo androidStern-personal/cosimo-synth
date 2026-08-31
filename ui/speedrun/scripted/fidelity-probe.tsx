@@ -3,13 +3,10 @@ import React, { useEffect, useState } from "react";
 import { useDelayRender } from "remotion";
 
 import { DesktopPatchView } from "../../desktop/DesktopPatchView";
+import { LANE_STATE_KEY } from "../../shared/lane-state";
 import {
-    createDefaultLaneState,
-    LANE_STATE_KEY,
-} from "../../shared/lane-state";
-import {
+    createFullDefaultLaneStateV2,
     serializeLaneStateV2,
-    upgradeLaneStateV1,
 } from "../../shared/lane-state-v2";
 import type { MockPatchConnection } from "../../shared/patch-connection-mock";
 import { createDesktopResourceClient } from "../../shared/resource-client";
@@ -302,7 +299,7 @@ export async function configureFidelityKeyboard(
         : NativePianoKeyboard;
     patchConnection.setStoredStateValue(
         LANE_STATE_KEY,
-        serializeLaneStateV2(upgradeLaneStateV1(createDefaultLaneState())),
+        serializeLaneStateV2(createFullDefaultLaneStateV2()),
     );
     patchConnection.setStoredStateValue(
         MODULATION_STATE_KEY,

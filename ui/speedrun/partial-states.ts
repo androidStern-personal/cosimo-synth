@@ -23,7 +23,11 @@ export type CumulativePatchState = {
 };
 
 export function cloneLane(lane: LaneStateV2): LaneStateV2 {
-    return deserializeLaneStateV2(serializeLaneStateV2(lane));
+    const cloned = deserializeLaneStateV2(serializeLaneStateV2(lane));
+    if (cloned === null) {
+        throw new Error("A typed current lane failed its own serialization contract.");
+    }
+    return cloned;
 }
 
 export function cloneModulation(modulation: ModulationState): ModulationState {

@@ -25,11 +25,10 @@ import {
 import {
     EFFECT_ID_TO_LANE_TYPE,
     RACK_EFFECT_ORDER,
-    createDefaultLaneState,
 } from "../../patch_gui/lane-state.js";
 import {
+    createFullDefaultLaneStateV2,
     serializeLaneStateV2,
-    upgradeLaneStateV1,
 } from "../../patch_gui/lane-state-v2.js";
 import {
     getLaneSlotId,
@@ -846,9 +845,9 @@ export async function readDesktopRangeViewport(page) {
     }));
 }
 
-/** The pre-T7 resident-eight document, serialized as stored lane.v2. */
+/** A complete current resident-eight document for legacy-layout scenarios. */
 export function legacyEightLaneDocJson() {
-    return serializeLaneStateV2(upgradeLaneStateV1(createDefaultLaneState()));
+    return serializeLaneStateV2(createFullDefaultLaneStateV2());
 }
 
 export async function openHarnessPage({

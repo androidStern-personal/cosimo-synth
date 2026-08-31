@@ -183,15 +183,13 @@ test("every Effects Lane mix creates and resets at 50% in state and audio-engine
 });
 
 test("lane.v2 default document is the compact starter trio and round-trips", async () => {
-    const laneV1 = await laneV1Promise;
     const laneV2 = await laneV2Promise;
 
     const state = laneV2.createDefaultLaneStateV2();
     assert.equal(state.version, 2);
     // The starter set (M4): drive → delay → reverb, serial, ALL BYPASSED —
     // the out-of-box sound stays the deployed dry voice; the other five
-    // types arrive through the map's add affordances. Stored v1 documents
-    // still upgrade to their own full eight.
+    // types arrive through the map's add affordances.
     assert.deepEqual(
         state.chain.map((node) => ({ kind: node.kind, deviceId: node.deviceId, enabled: node.enabled })),
         [
@@ -204,13 +202,12 @@ test("lane.v2 default document is the compact starter trio and round-trips", asy
         Object.keys(state.devices).sort(),
         ["delay#1", "distortion#1", "reverb#1"],
     );
-    // Params carry over from the v1 defaults verbatim, in wire order (the
-    // byte-stability rule: the records match the legacy upgrade's exactly).
+    // Params come from the complete current resident-eight constructor.
+    const full = laneV2.createFullDefaultLaneStateV2();
     assert.equal(state.devices["delay#1"].params.delayTime,
-                 laneV1.createDefaultLaneState().params.delay.delayTime);
-    const legacy = laneV2.upgradeLaneStateV1(laneV1.createDefaultLaneState());
-    assert.deepEqual(state.devices["distortion#1"], legacy.devices["distortion#1"]);
-    assert.deepEqual(state.devices["reverb#1"], legacy.devices["reverb#1"]);
+                 full.devices["delay#1"].params.delayTime);
+    assert.deepEqual(state.devices["distortion#1"], full.devices["distortion#1"]);
+    assert.deepEqual(state.devices["reverb#1"], full.devices["reverb#1"]);
 
     const reparsed = laneV2.parseLaneStateV2(laneV2.serializeLaneStateV2(state));
     assert.equal(reparsed._tag, "ok");
@@ -252,36 +249,41 @@ test("lane output defaults, strict parsing, editing, and runtime replay keep Mix
     });
 });
 
-test("lane.v2 upgrades any v1 document, preserving order, enables, and params", async () => {
+test("persisted lane intake accepts only complete T78 lane.v2 documents", async () => {
     const laneV1 = await laneV1Promise;
     const laneV2 = await laneV2Promise;
+    const current = laneV2.createDefaultLaneStateV2();
+    const missingTrim = JSON.parse(laneV2.serializeLaneStateV2(current));
+    delete missingTrim.devices["delay#1"].params.delayOutputTrimDb;
 
-    const v1 = laneV1.createDefaultLaneState();
-    const edited = {
-        ...v1,
-        order: [...v1.order].reverse(),
-        enabled: { ...v1.enabled, drive: true, delay: true },
-        params: { ...v1.params, delay: { ...v1.params.delay, delayTime: 125 } },
-    };
-
-    const upgraded = laneV2.upgradeLaneStateV1(edited);
-    assert.equal(upgraded.version, 2);
-    assert.deepEqual(
-        upgraded.chain.map((node) => node.deviceId),
-        ["reverb#1", "delay#1", "phaser#1", "flanger#1",
-         "chorus#1", "ott#1", "distortion#1", "globalFilter#1"],
+    assert.equal(
+        laneV2.deserializeLaneStateV2(laneV1.serializeLaneState(laneV1.createDefaultLaneState())),
+        null,
+        "lane-v1 is an old complete-sound document, not a T78 migration source",
     );
-    assert.equal(upgraded.chain.find((node) => node.deviceId === "delay#1").enabled, true);
-    assert.equal(upgraded.chain.find((node) => node.deviceId === "reverb#1").enabled, false);
-    assert.equal(upgraded.devices["delay#1"].params.delayTime, 125);
+    assert.equal(laneV2.deserializeLaneStateV2(missingTrim), null);
+    assert.equal(laneV2.deserializeLaneStateV2("{"), null);
+    assert.deepEqual(laneV2.deserializeLaneStateV2(undefined), current,
+        "absence still means a genuinely fresh current sound");
+});
 
-    // The deserializer takes v2, upgrades v1, and defaults for corrupt data.
-    const fromV1Json = laneV2.deserializeLaneStateV2(laneV1.serializeLaneState(edited));
-    assert.deepEqual(fromV1Json, upgraded);
-    const fromV2Json = laneV2.deserializeLaneStateV2(laneV2.serializeLaneStateV2(upgraded));
-    assert.deepEqual(fromV2Json, upgraded);
-    assert.deepEqual(laneV2.deserializeLaneStateV2("{"), laneV2.createDefaultLaneStateV2());
-    assert.deepEqual(laneV2.deserializeLaneStateV2(undefined), laneV2.createDefaultLaneStateV2());
+test("the resident-eight constructor authors a complete current document", async () => {
+    const laneV2 = await laneV2Promise;
+    const full = laneV2.createFullDefaultLaneStateV2();
+    assert.equal(full.version, 2);
+    assert.deepEqual(
+        full.chain.map((node) => node.deviceId),
+        ["globalFilter#1", "distortion#1", "ott#1", "chorus#1",
+         "flanger#1", "phaser#1", "delay#1", "reverb#1"],
+    );
+    for (const [deviceId, record] of Object.entries(full.devices)) {
+        const outputTrimEndpointID = `${deviceId.split("#")[0]}OutputTrimDb`;
+        assert.equal(record.params[outputTrimEndpointID], 0, `${deviceId} carries ${outputTrimEndpointID}`);
+    }
+    assert.deepEqual(
+        laneV2.deserializeLaneStateV2(laneV2.serializeLaneStateV2(full)),
+        full,
+    );
 });
 
 test("lane.v2 validates and never coerces", async () => {
@@ -433,16 +435,23 @@ test("instances list in identity order and hold their slot ordinals by number", 
                      { deviceType: "delay", instanceNumber: 2 });
 });
 
-test("the upgraded serial wire adds instance host trims without changing slot records or topology", async () => {
+test("the current serial wire adds instance host trims without changing slot records or topology", async () => {
     const laneV1 = await laneV1Promise;
     const laneV2 = await laneV2Promise;
     const outputTrim = await effectOutputTrimPromise;
 
     const v1 = laneV1.createDefaultLaneState();
     const edited = { ...v1, order: [...v1.order].reverse(), enabled: { ...v1.enabled, ott: true } };
+    const full = laneV2.createFullDefaultLaneStateV2();
+    const current = {
+        ...full,
+        chain: [...full.chain].reverse().map((node) => (
+            node.deviceId === "ott#1" ? { ...node, enabled: true } : node
+        )),
+    };
 
     const v1Events = laneV1.buildLaneRuntimeEvents(edited);
-    const v2Events = laneV2.buildLaneRuntimeEventsV2(laneV2.upgradeLaneStateV1(edited));
+    const v2Events = laneV2.buildLaneRuntimeEventsV2(current);
 
     // v2 adds the whole-lane output-control event and one real host parameter
     // event per resident device. Device records and topology stay identical.

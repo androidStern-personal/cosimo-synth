@@ -310,7 +310,7 @@ test("host automation is reconciled into lane state and every UI projection pres
     assert.equal(hardSilenceBand.fullyClipped, true);
 });
 
-test("one connection-scoped mirror observes all 40 host trims and replacement wins over stale lane echoes", async () => {
+test("same-type replacement suppresses a delayed old host callback until reset acknowledgment", async () => {
     const [mirrorModule, laneState, trim] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/effect-output-trim-host-mirror.ts"),
         loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
@@ -318,6 +318,7 @@ test("one connection-scoped mirror observes all 40 host trims and replacement wi
     ]);
     const listeners = new Map();
     const requested = [];
+    const sent = [];
     const connection = {
         addParameterListener(endpointID, listener) {
             listeners.set(endpointID, listener);
@@ -325,9 +326,14 @@ test("one connection-scoped mirror observes all 40 host trims and replacement wi
         requestParameterValue(endpointID) {
             requested.push(endpointID);
         },
+        sendEventOrValue(endpointID, value) {
+            sent.push({ endpointID, value });
+        },
     };
     let current = laneState.createDefaultLaneStateV2();
+    const acceptedHostValues = [];
     const mirror = new mirrorModule.EffectOutputTrimHostMirror(connection, (endpointID, value) => {
+        acceptedHostValues.push({ endpointID, value });
         current = laneState.synchronizeLaneOutputTrimsFromHostParameters(
             current,
             { [endpointID]: value },
@@ -342,23 +348,103 @@ test("one connection-scoped mirror observes all 40 host trims and replacement wi
     const reset = laneState.replaceLaneDevice(current, "delay#1", "delay");
     assert.equal(reset.devices["delay#1"].params.delayOutputTrimDb, 0);
     mirror.captureLaneState(reset);
-    const staleEcho = laneState.setLaneDeviceParam(
-        reset,
-        "delay#1",
-        "delayOutputTrimDb",
-        -21.5,
-    );
-    assert.equal(
-        mirror.synchronizeLaneState(staleEcho).devices["delay#1"].params.delayOutputTrimDb,
-        0,
-        "replacement's full reset must beat an older stored-state echo",
+    current = reset;
+    laneState.commitLaneStateV2(connection, reset);
+    assert.deepEqual(
+        sent.filter(({ endpointID }) => endpointID === "laneDelay1OutputTrimDb"),
+        [{ endpointID: "laneDelay1OutputTrimDb", value: 0 }],
     );
 
+    acceptedHostValues.length = 0;
+    listeners.get("laneDelay1OutputTrimDb")(-21.5);
+    assert.equal(current.devices["delay#1"].params.delayOutputTrimDb, 0,
+        "the delayed callback from the removed instance must not republish its trim");
+    assert.deepEqual(acceptedHostValues, []);
+
+    listeners.get("laneDelay1OutputTrimDb")(0);
+    assert.deepEqual(acceptedHostValues, [
+        { endpointID: "laneDelay1OutputTrimDb", value: 0 },
+    ], "the reset echo acknowledges and closes the pending write");
+
+    listeners.get("laneDelay1OutputTrimDb")(-7.25);
+    assert.equal(current.devices["delay#1"].params.delayOutputTrimDb, -7.25,
+        "later genuine DAW automation must be accepted after acknowledgment");
+
+    const fractional = laneState.setLaneDeviceParam(
+        current,
+        "delay#1",
+        "delayOutputTrimDb",
+        0.135,
+    );
+    mirror.captureLaneState(fractional);
+    current = fractional;
+    listeners.get("laneDelay1OutputTrimDb")(Math.fround(0.135));
+    listeners.get("laneDelay1OutputTrimDb")(-3.5);
+    assert.equal(current.devices["delay#1"].params.delayOutputTrimDb, -3.5,
+        "a float32-quantized acknowledgment must reopen genuine automation");
+
+    listeners.get("laneReverb1OutputTrimDb")(0);
     listeners.get("laneReverb1OutputTrimDb")(-500);
     assert.equal(
         current.devices["reverb#1"].params.reverbOutputTrimDb,
         trim.EFFECT_OUTPUT_TRIM_SILENCE_DB,
     );
+});
+
+test("cross-type swap suppresses the replacement endpoint's stale callback until reset acknowledgment", async () => {
+    const [mirrorModule, laneState] = await Promise.all([
+        loadUIModule(repoRoot, "ui/shared/effect-output-trim-host-mirror.ts"),
+        loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
+    ]);
+    const listeners = new Map();
+    const sent = [];
+    const connection = {
+        addParameterListener(endpointID, listener) {
+            listeners.set(endpointID, listener);
+        },
+        requestParameterValue() {},
+        sendEventOrValue(endpointID, value) {
+            sent.push({ endpointID, value });
+        },
+    };
+    let current = laneState.createDefaultLaneStateV2();
+    const acceptedHostValues = [];
+    const mirror = new mirrorModule.EffectOutputTrimHostMirror(connection, (endpointID, value) => {
+        acceptedHostValues.push({ endpointID, value });
+        current = laneState.synchronizeLaneOutputTrimsFromHostParameters(
+            current,
+            { [endpointID]: value },
+        );
+    });
+
+    listeners.get("laneFlanger1OutputTrimDb")(-16.5);
+    assert.equal(current.devices["flanger#1"], undefined,
+        "the resident host bank may retain a value while its effect type is absent");
+
+    const swapped = laneState.replaceLaneDevice(current, "delay#1", "flanger");
+    assert.notEqual(swapped, null);
+    assert.equal(swapped.devices["flanger#1"].params.flangerOutputTrimDb, 0);
+    mirror.captureLaneState(swapped);
+    current = swapped;
+    laneState.commitLaneStateV2(connection, swapped);
+    assert.deepEqual(
+        sent.filter(({ endpointID }) => endpointID === "laneFlanger1OutputTrimDb"),
+        [{ endpointID: "laneFlanger1OutputTrimDb", value: 0 }],
+    );
+
+    acceptedHostValues.length = 0;
+    listeners.get("laneFlanger1OutputTrimDb")(-16.5);
+    assert.equal(current.devices["flanger#1"].params.flangerOutputTrimDb, 0);
+    assert.deepEqual(acceptedHostValues, []);
+
+    listeners.get("laneFlanger1OutputTrimDb")(0);
+    assert.deepEqual(acceptedHostValues, [
+        { endpointID: "laneFlanger1OutputTrimDb", value: 0 },
+    ]);
+
+    listeners.get("laneFlanger1OutputTrimDb")(5.75);
+    assert.equal(current.devices["flanger#1"].params.flangerOutputTrimDb, 5.75,
+        "genuine post-acknowledgment automation reaches the replacement instance");
 });
 
 test("live bindings use type-instance host gestures and the iPhone Distortion editor ends with Output Trim", async () => {

@@ -23,7 +23,7 @@ import { LANE_STATE_KEY } from "../lane-state";
 import {
     commitLaneStateV2,
     createDefaultLaneStateV2,
-    parseLaneStateV2Compat,
+    parseLaneStateV2,
     serializeLaneStateV2,
     synchronizeLaneOutputTrimsFromHostParameters,
     type LaneStateV2,
@@ -54,7 +54,7 @@ function readFullStoredStateValue(storedState: unknown, key: string) {
 }
 
 function parseStrictRackState(value: unknown): LaneStateV2 {
-    const outcome = parseLaneStateV2Compat(value);
+    const outcome = parseLaneStateV2(value);
 
     if (outcome._tag === "err") {
         throw new Error(outcome.message);
@@ -245,7 +245,8 @@ function createCanonicalStoredState(currentContract: EffectPluginStateContract) 
         },
         [LANE_STATE_KEY]: {
             // The slot name predates the tree document; the value inside is
-            // self-versioned lane.v2 (the compat parse still reads v1).
+            // self-versioned lane.v2. T78 intentionally offers no lane-v1
+            // or missing-Output-Trim migration path.
             schemaVersion: 2,
             create: () => serializeLaneStateV2(createDefaultLaneStateV2()),
         },

@@ -175,15 +175,21 @@ function getLaneStateStore(connection: PatchConnectionLike): LaneStateStore {
             return;
         }
         if (Reflect.get(message, "key") === LANE_STATE_KEY) {
-            created.hasHydratedStoredState = true;
             const hydrated = deserializeLaneStateV2(Reflect.get(message, "value"));
+            if (hydrated === null) {
+                return;
+            }
+            created.hasHydratedStoredState = true;
             acceptLaneState(created,
                 created.outputTrimHostMirror?.synchronizeLaneState(hydrated) ?? hydrated);
         }
     });
     connection.requestFullStoredState?.((fullState) => {
-        created.hasHydratedStoredState = true;
         const hydrated = deserializeLaneStateV2(readLaneStateFromFullStoredState(fullState));
+        if (hydrated === null) {
+            return;
+        }
+        created.hasHydratedStoredState = true;
         acceptLaneState(created,
             created.outputTrimHostMirror?.synchronizeLaneState(hydrated) ?? hydrated);
     });

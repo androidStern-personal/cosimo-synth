@@ -10,8 +10,7 @@ import {
     startDesktopHarnessServer,
     waitForHarnessReady,
 } from "./helpers/desktop_harness_browser.mjs";
-import { createDefaultLaneState } from "../patch_gui/lane-state.js";
-import { serializeLaneStateV2, upgradeLaneStateV1 } from "../patch_gui/lane-state-v2.js";
+import { createFullDefaultLaneStateV2, serializeLaneStateV2 } from "../patch_gui/lane-state-v2.js";
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -116,7 +115,7 @@ test("pointer and keyboard X/Y gestures reach each tabled pair through the host 
             window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
                 storedState: { "lane.v1": value },
             };
-        }, serializeLaneStateV2(upgradeLaneStateV1(createDefaultLaneState())));
+        }, serializeLaneStateV2(createFullDefaultLaneStateV2()));
         await page.goto(server.baseUrl, { waitUntil: "commit" });
         await waitForHarnessReady(page);
 

@@ -29,6 +29,7 @@ const fixturesPromise = loadUIModule(
 const bridgeFactoryPromise = loadUIModule(repoRoot, "ui/shared/cosimo-bridge-adapter.ts");
 const mockConnectionPromise = loadUIModule(repoRoot, "ui/shared/patch-connection-mock.ts");
 const modulationPromise = loadUIModule(repoRoot, "ui/shared/modulation.ts");
+const laneStateV2Promise = loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
 
 function expectOkValue(result, label) {
     assert.equal(result._tag, "ok", `${label}: ${result._tag === "err" ? result.error.message : ""}`);
@@ -667,6 +668,33 @@ test("bridge rack commands preserve desired state across an older effective read
     assert.equal(storedRack.chain.find((node) => node.deviceId === "delay#1").enabled, true);
     assert.equal(adapter.getSnapshot().patch.effectEnabled.delay, true);
     adapter.dispose();
+});
+
+test("bridge hydration rejects old or incomplete T78 lane state before runtime writes", async () => {
+    const [{ createCosimoBridgeAdapter }, { MockPatchConnection }, laneState] = await Promise.all([
+        bridgeFactoryPromise,
+        mockConnectionPromise,
+        laneStateV2Promise,
+    ]);
+    const current = laneState.createDefaultLaneStateV2();
+    const oldVersion = { ...current, version: 1 };
+    const missingTrim = structuredClone(current);
+    delete missingTrim.devices["delay#1"].params.delayOutputTrimDb;
+
+    for (const invalidLane of [oldVersion, missingTrim]) {
+        const connection = new MockPatchConnection({ name: "T78 lane rejection", version: 1 });
+        connection.setStoredStateValue("lane.v1", JSON.stringify(invalidLane));
+        connection.clearDebugLog();
+        const adapter = createCosimoBridgeAdapter({ connection });
+
+        assert.match(await waitForDetached(adapter), /lane\.v2/i);
+        assert.deepEqual(
+            connection.sentMessages.filter(({ endpointID }) => endpointID.startsWith("lane")),
+            [],
+            "invalid hydration must not publish any lane parameter, record, or topology event",
+        );
+        adapter.dispose();
+    }
 });
 
 test("bridge rejects a duplicate mapping document without migration", async () => {

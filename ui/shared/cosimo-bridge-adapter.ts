@@ -78,7 +78,7 @@ import {
     listLaneChainDeviceIds,
     moveLaneDevice,
     parseLaneInstanceId,
-    parseLaneStateV2Compat,
+    parseLaneStateV2,
     serializeLaneStateV2,
     setLaneDeviceEnabled,
     setLaneDeviceParam,
@@ -477,7 +477,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
         this.runCommand(() => {
             if (message.key === LANE_STATE_KEY) {
-                const parsed = parseLaneStateV2Compat(message.value);
+                const parsed = parseLaneStateV2(message.value);
                 if (parsed._tag === "err") {
                     this.detach(parsed.message);
                     return;
@@ -781,7 +781,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
         const parsedRackState = rawRackState === undefined
             ? { _tag: "ok", value: createInitialLaneState() } as const
-            : parseLaneStateV2Compat(rawRackState);
+            : parseLaneStateV2(rawRackState);
         if (parsedRackState._tag === "err") {
             this.detach(parsedRackState.message);
             return;

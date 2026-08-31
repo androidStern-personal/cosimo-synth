@@ -89,31 +89,30 @@ test("production synth Init options derive canonical documents from the current 
 });
 
 test("the Init-only rack adapter strictly hydrates, applies runtime and stored state, and suppresses its own echo", async () => {
-    const [initState, rack, laneV2] = await Promise.all([
+    const [initState, laneV2] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/effects/synth-init-state.ts"),
-        loadUIModule(repoRoot, "ui/shared/lane-state.ts"),
         loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
     ]);
-    // v1 documents still hydrate — the adapter upgrades them to lane.v2.
+    const full = laneV2.createFullDefaultLaneStateV2();
     const initialRack = {
-        ...rack.createDefaultLaneState(),
-        order: [...rack.createDefaultLaneState().order].reverse(),
-        enabled: { ...rack.createDefaultLaneState().enabled, chorus: true },
+        ...full,
+        chain: [...full.chain].reverse().map((node) => (
+            node.deviceId === "chorus#1" ? { ...node, enabled: true } : node
+        )),
     };
-    const upgradedInitial = laneV2.upgradeLaneStateV1(initialRack);
-    const connection = new RackPatchConnection(rack.serializeLaneState(initialRack));
+    const connection = new RackPatchConnection(laneV2.serializeLaneStateV2(initialRack));
     const adapter = initState.createSynthRackInitStateAdapter(connection);
     let notifications = 0;
     const unsubscribe = adapter.subscribe(() => {
         notifications += 1;
     });
 
-    assert.deepEqual(adapter.capture(), upgradedInitial);
+    assert.deepEqual(adapter.capture(), initialRack);
     assert.deepEqual(adapter.createDefaultValue(), laneV2.createDefaultLaneStateV2());
     assert.deepEqual(adapter.createDefaultValue().output, { mix: 1, bypassed: false });
     assert.deepEqual(
-        adapter.normalizeForTransaction(rack.serializeLaneState(initialRack)),
-        upgradedInitial,
+        adapter.normalizeForTransaction(laneV2.serializeLaneStateV2(initialRack)),
+        initialRack,
     );
 
     const nextRack = laneV2.setLaneOutputBypassed(
@@ -138,9 +137,9 @@ test("the Init-only rack adapter strictly hydrates, applies runtime and stored s
     assert.deepEqual(JSON.parse(connection.storedWrites[0].value), nextRack);
     assert.equal(notifications, 0);
 
-    connection.emitStoredState("lane.v1", rack.serializeLaneState(initialRack));
+    connection.emitStoredState("lane.v1", laneV2.serializeLaneStateV2(initialRack));
     assert.equal(notifications, 1);
-    assert.deepEqual(adapter.capture(), upgradedInitial);
+    assert.deepEqual(adapter.capture(), initialRack);
     unsubscribe();
 });
 
@@ -154,25 +153,45 @@ test("the rack adapter rejects corrupt hydration instead of silently retaining o
     unsubscribe();
 });
 
-test("out-of-order rack installation echoes cannot replace the newest loaded rack or mark it edited", async () => {
-    const [initState, rack, laneV2] = await Promise.all([
+test("rack preset and share intake reject lane-v1 and missing T78 trims before any write", async () => {
+    const [initState, laneV1, laneV2] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/effects/synth-init-state.ts"),
         loadUIModule(repoRoot, "ui/shared/lane-state.ts"),
         loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
     ]);
-    const firstRack = {
-        ...rack.createDefaultLaneState(),
-        enabled: { ...rack.createDefaultLaneState().enabled, delay: true },
-    };
-    const secondRack = {
-        ...rack.createDefaultLaneState(),
-        enabled: { ...rack.createDefaultLaneState().enabled, reverb: true },
-    };
-    const userRack = {
-        ...rack.createDefaultLaneState(),
-        enabled: { ...rack.createDefaultLaneState().enabled, chorus: true },
-    };
-    const connection = new RackPatchConnection(rack.serializeLaneState(rack.createDefaultLaneState()));
+    const current = laneV2.createDefaultLaneStateV2();
+    const connection = new RackPatchConnection(laneV2.serializeLaneStateV2(current));
+    const adapter = initState.createSynthRackInitStateAdapter(connection);
+    const unsubscribe = adapter.subscribe(() => {});
+
+    const laneV1Document = laneV1.serializeLaneState(laneV1.createDefaultLaneState());
+    const missingTrimDocument = JSON.parse(laneV2.serializeLaneStateV2(current));
+    delete missingTrimDocument.devices["delay#1"].params.delayOutputTrimDb;
+
+    for (const rejected of [laneV1Document, missingTrimDocument]) {
+        assert.throws(() => adapter.normalizeForTransaction(rejected), /lane\.v2/i);
+        assert.throws(() => adapter.apply(rejected), /lane\.v2/i);
+        assert.deepEqual(connection.events, [], "rejection must precede every runtime parameter write");
+        assert.deepEqual(connection.storedWrites, [], "rejection must precede every stored-state write");
+        assert.deepEqual(adapter.capture(), current, "rejection must leave the accepted sound untouched");
+    }
+
+    unsubscribe();
+});
+
+test("out-of-order rack installation echoes cannot replace the newest loaded rack or mark it edited", async () => {
+    const [initState, laneV2] = await Promise.all([
+        loadUIModule(repoRoot, "ui/shared/effects/synth-init-state.ts"),
+        loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
+    ]);
+    const base = laneV2.createDefaultLaneStateV2();
+    const firstRack = laneV2.setLaneDeviceEnabled(base, "delay#1", true);
+    const secondRack = laneV2.setLaneDeviceEnabled(base, "reverb#1", true);
+    const userRack = laneV2.setLaneDeviceEnabled(base, "distortion#1", true);
+    assert.notEqual(firstRack, null);
+    assert.notEqual(secondRack, null);
+    assert.notEqual(userRack, null);
+    const connection = new RackPatchConnection(laneV2.serializeLaneStateV2(base));
     connection.deferStoredEchoes = true;
     const adapter = initState.createSynthRackInitStateAdapter(connection);
     let notifications = 0;
@@ -186,11 +205,11 @@ test("out-of-order rack installation echoes cannot replace the newest loaded rac
         connection.emitStoredState(echo.key, echo.value);
     }
     assert.equal(notifications, 0);
-    assert.deepEqual(adapter.capture(), laneV2.upgradeLaneStateV1(secondRack));
+    assert.deepEqual(adapter.capture(), secondRack);
 
-    connection.emitStoredState("lane.v1", rack.serializeLaneState(userRack));
+    connection.emitStoredState("lane.v1", laneV2.serializeLaneStateV2(userRack));
     assert.equal(notifications, 1);
-    assert.deepEqual(adapter.capture(), laneV2.upgradeLaneStateV1(userRack));
+    assert.deepEqual(adapter.capture(), userRack);
     unsubscribe();
 });
 

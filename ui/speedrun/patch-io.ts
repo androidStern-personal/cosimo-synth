@@ -17,7 +17,7 @@ import { buildSynthPresetMigrations } from "../shared/effects/synth-preset-migra
 import { LANE_STATE_KEY } from "../shared/lane-state";
 import {
     createDefaultLaneStateV2,
-    parseLaneStateV2Compat,
+    parseLaneStateV2,
     type LaneStateV2,
 } from "../shared/lane-state-v2";
 import {
@@ -254,7 +254,7 @@ function decodeJSONString(value: unknown): unknown {
 
 function parseLane(value: unknown, defaults: DefaultsSnapshot): LaneStateV2 {
     if (value === undefined) return defaults.lane;
-    const parsed = parseLaneStateV2Compat(value);
+    const parsed = parseLaneStateV2(value);
     if (parsed._tag === "err") {
         throw new PatchIntakeError("InvalidLane", parsed.message);
     }

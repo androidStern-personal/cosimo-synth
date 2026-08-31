@@ -1,9 +1,11 @@
 #include <JuceHeader.h>
 #include <assert.h>
 #include <atomic>
+#include <cmath>
 #include <mutex>
 
 #include "../../../native/ArticulationTriggerConfigState.h"
+#include "../../../native/CompleteSoundState.h"
 
 #define CHOC_ASSERT(x) assert(x)
 #include "cmajor/COM/cmaj_Library.h"
@@ -566,7 +568,7 @@ public:
     void getStateInformation (juce::MemoryBlock& destinationData) override
     {
         auto state = getUpdatedState();
-        state.setProperty (completeSoundVersionID, completeSoundStateVersion, nullptr);
+        state.setProperty (completeSoundVersionID, cosimo::complete_sound::version, nullptr);
         juce::MemoryOutputStream output (destinationData, false);
         state.writeToStream (output);
     }
@@ -575,13 +577,10 @@ public:
     {
         auto restoredState = juce::ValueTree::readFromData (data, static_cast<size_t> (size));
 
-        // Live may send an empty, non-Cmajor, or pre-T74 state chunk when
-        // opening the device. The current sound cut rejects each whole document,
-        // leaving the already-running sound untouched.
-        if (! restoredState.isValid()
-            || ! restoredState.hasType (ids.Cmajor)
-            || static_cast<int> (restoredState.getProperty (completeSoundVersionID, -1))
-                != completeSoundStateVersion)
+        // Live may send an empty, non-Cmajor, or pre-T78 state chunk when
+        // opening the device. Reject the whole document before hashing or
+        // handing any parameter/stored-state value to the patch.
+        if (! isCurrentCompleteSoundState (restoredState))
             return;
 
         choc::hash::xxHash64 hash (1);
@@ -623,8 +622,59 @@ public:
     void refreshExtraComp (juce::Component*) {}
 
 private:
-    static constexpr int completeSoundStateVersion = 2;
     const juce::Identifier completeSoundVersionID { "completeSoundVersion" };
+    const juce::Identifier completeSoundParametersID { "PARAMS" };
+    const juce::Identifier completeSoundParameterID { "PARAM" };
+    const juce::Identifier completeSoundParameterEndpointID { "ID" };
+    const juce::Identifier completeSoundParameterValueID { "V" };
+
+    static bool isFiniteCompleteSoundParameterValue (const juce::var& value)
+    {
+        return (value.isInt() || value.isInt64() || value.isDouble())
+            && std::isfinite (static_cast<double> (value));
+    }
+
+    bool isCurrentCompleteSoundState (const juce::ValueTree& state) const
+    {
+        if (! state.isValid() || ! state.hasType (ids.Cmajor))
+            return false;
+
+        const auto parameters = state.getChildWithName (completeSoundParametersID);
+        if (! parameters.isValid())
+            return false;
+        const auto* version = state.getPropertyPointer (completeSoundVersionID);
+        if (version == nullptr || (! version->isInt() && ! version->isInt64()))
+            return false;
+
+        return cosimo::complete_sound::isCurrentT78CompleteSoundState (
+            static_cast<juce::int64> (*version),
+            [&] (std::string_view expectedEndpointID)
+            {
+                const auto expected = juce::String::fromUTF8 (
+                    expectedEndpointID.data(), static_cast<int> (expectedEndpointID.size()));
+                int matchCount = 0;
+
+                for (const auto& parameter : parameters)
+                {
+                    if (! parameter.hasType (completeSoundParameterID))
+                        continue;
+
+                    const auto* endpointID = parameter.getPropertyPointer (
+                        completeSoundParameterEndpointID);
+                    if (endpointID == nullptr || endpointID->toString() != expected)
+                        continue;
+
+                    ++matchCount;
+                    const auto* value = parameter.getPropertyPointer (
+                        completeSoundParameterValueID);
+                    if (matchCount != 1 || value == nullptr
+                        || ! isFiniteCompleteSoundParameterValue (*value))
+                        return false;
+                }
+
+                return matchCount == 1;
+            });
+    }
 
     void setPendingArticulationTriggerConfig (cosimo::future_daw::ArticulationTriggerConfig config)
     {

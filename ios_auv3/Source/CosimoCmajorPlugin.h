@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "../../native/ArticulationTriggerConfigState.h"
+#include "../../native/CompleteSoundState.h"
 #include "CosimoSharedWavetableLibrary.h"
 #include "cmajor/helpers/cmaj_GeneratedCppEngine.h"
 #include "cmajor/helpers/cmaj_Patch.h"
@@ -675,7 +676,7 @@ public:
         patch->createEngine = [] { return cmaj::createEngineForGeneratedCppProgram<GeneratedPerformerClass>(); };
 
         applyRateAndBlockSize (44100.0, 128);
-        setNewState (createEmptyState());
+        setNewState (createInitialState());
     }
 
     ~GeneratedPlugin() override
@@ -1906,8 +1907,6 @@ private:
         const juce::Identifier completeSoundVersion { "completeSoundVersion" };
     } ids;
 
-    static constexpr int completeSoundStateVersion = 2;
-
     struct NewStateMessage final : public juce::Message
     {
         juce::ValueTree newState;
@@ -1916,16 +1915,73 @@ private:
     juce::ValueTree createEmptyState() const
     {
         juce::ValueTree state (ids.cmajor);
-        state.setProperty (ids.completeSoundVersion, completeSoundStateVersion, nullptr);
+        state.setProperty (ids.completeSoundVersion, cosimo::complete_sound::version, nullptr);
         return state;
+    }
+
+    juce::ValueTree createInitialState() const
+    {
+        auto state = createEmptyState();
+        juce::ValueTree parameters (ids.parameters);
+
+        for (const auto endpointID : cosimo::complete_sound::t78EffectOutputTrimParameterIDs)
+        {
+            parameters.appendChild (juce::ValueTree (
+                ids.parameter,
+                { { ids.id, juce::String::fromUTF8 (
+                        endpointID.data(), static_cast<int> (endpointID.size())) },
+                  { ids.value, 0.0 } }),
+                nullptr);
+        }
+
+        state.appendChild (parameters, nullptr);
+        return state;
+    }
+
+    static bool isFiniteCompleteSoundParameterValue (const juce::var& value)
+    {
+        return (value.isInt() || value.isInt64() || value.isDouble())
+            && std::isfinite (static_cast<double> (value));
     }
 
     bool isCurrentCompleteSoundState (const juce::ValueTree& state) const
     {
-        return state.isValid()
-            && state.hasType (ids.cmajor)
-            && static_cast<int> (state.getProperty (ids.completeSoundVersion, -1))
-                == completeSoundStateVersion;
+        if (! state.isValid() || ! state.hasType (ids.cmajor))
+            return false;
+
+        const auto parameters = state.getChildWithName (ids.parameters);
+        if (! parameters.isValid())
+            return false;
+        const auto* version = state.getPropertyPointer (ids.completeSoundVersion);
+        if (version == nullptr || (! version->isInt() && ! version->isInt64()))
+            return false;
+
+        return cosimo::complete_sound::isCurrentT78CompleteSoundState (
+            static_cast<juce::int64> (*version),
+            [&] (std::string_view expectedEndpointID)
+            {
+                const auto expected = juce::String::fromUTF8 (
+                    expectedEndpointID.data(), static_cast<int> (expectedEndpointID.size()));
+                int matchCount = 0;
+
+                for (const auto& parameter : parameters)
+                {
+                    if (! parameter.hasType (ids.parameter))
+                        continue;
+
+                    const auto* endpointID = parameter.getPropertyPointer (ids.id);
+                    if (endpointID == nullptr || endpointID->toString() != expected)
+                        continue;
+
+                    ++matchCount;
+                    const auto* value = parameter.getPropertyPointer (ids.value);
+                    if (matchCount != 1 || value == nullptr
+                        || ! isFiniteCompleteSoundParameterValue (*value))
+                        return false;
+                }
+
+                return matchCount == 1;
+            });
     }
 
     juce::ValueTree getUpdatedState()

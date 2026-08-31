@@ -17,6 +17,18 @@ type OutputTrimHostConnection = Pick<
     "addParameterListener" | "removeParameterListener" | "requestParameterValue"
 >;
 
+type PendingOutputTrimHostWrite = {
+    readonly generation: number;
+    readonly expectedValue: number;
+};
+
+function hostValuesMatch(left: number, right: number): boolean {
+    // Every resident trim endpoint is Cmajor float32. Compare in that actual
+    // transport domain so a normal decimal UI value can acknowledge after
+    // host quantization without broadening the stale-echo window.
+    return Math.fround(left) === Math.fround(right);
+}
+
 /**
  * One connection-lifetime bridge between T78's real host parameters and the
  * lane document's durable mirrors.
@@ -30,6 +42,8 @@ export class EffectOutputTrimHostMirror {
     readonly #onValue: (endpointID: string, value: number) => void;
     readonly #values: Record<string, number> = {};
     readonly #listeners = new Map<string, (value: unknown) => void>();
+    readonly #pendingWrites = new Map<string, PendingOutputTrimHostWrite>();
+    #captureGeneration = 0;
 
     constructor(
         connection: OutputTrimHostConnection,
@@ -44,6 +58,16 @@ export class EffectOutputTrimHostMirror {
                     return;
                 }
                 const value = effectOutputTrimEffectiveDb(rawValue, 0);
+                const pending = this.#pendingWrites.get(endpointID);
+                if (pending !== undefined) {
+                    if (!hostValuesMatch(value, pending.expectedValue)) {
+                        return;
+                    }
+                    if (this.#pendingWrites.get(endpointID)?.generation !== pending.generation) {
+                        return;
+                    }
+                    this.#pendingWrites.delete(endpointID);
+                }
                 this.#values[endpointID] = value;
                 this.#onValue(endpointID, value);
             };
@@ -55,6 +79,9 @@ export class EffectOutputTrimHostMirror {
 
     /** Seed host authority from an intentional lane commit (including reset). */
     captureLaneState(state: LaneStateV2): void {
+        this.#captureGeneration += 1;
+        const generation = this.#captureGeneration;
+
         for (const device of listLaneDeviceInstancesV2(state)) {
             const parsed = parseLaneInstanceId(device.instanceId);
             if (parsed === null) {
@@ -65,10 +92,27 @@ export class EffectOutputTrimHostMirror {
             if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
                 continue;
             }
-            this.#values[effectOutputTrimHostEndpointID(
+            const hostEndpointID = effectOutputTrimHostEndpointID(
                 parsed.deviceType,
                 parsed.instanceNumber,
-            )] = effectOutputTrimEffectiveDb(rawValue, 0);
+            );
+            const value = effectOutputTrimEffectiveDb(rawValue, 0);
+            const pending = this.#pendingWrites.get(hostEndpointID);
+            const observed = this.#values[hostEndpointID];
+            this.#values[hostEndpointID] = value;
+
+            // A repeated capture keeps the endpoint pending until one echo of
+            // the latest intentional value arrives. Otherwise an optimistic
+            // cache write could make a second generation look acknowledged
+            // before the host has acknowledged either write.
+            if (pending !== undefined
+                    || observed === undefined
+                    || !hostValuesMatch(observed, value)) {
+                this.#pendingWrites.set(hostEndpointID, {
+                    generation,
+                    expectedValue: value,
+                });
+            }
         }
     }
 
@@ -83,5 +127,6 @@ export class EffectOutputTrimHostMirror {
             this.#connection.removeParameterListener?.(endpointID, listener);
         }
         this.#listeners.clear();
+        this.#pendingWrites.clear();
     }
 }

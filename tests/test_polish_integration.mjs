@@ -129,19 +129,17 @@ test("native host state stamps the current complete sound and rejects older chun
     ]);
 
     assert.match(desktopHost, /completeSoundVersionID \{ "completeSoundVersion" \}/);
-    assert.match(desktopHost, /completeSoundStateVersion = 2/);
     assert.match(desktopHost, /auto state = getUpdatedState\(\);/);
-    assert.match(desktopHost, /state\.setProperty \(completeSoundVersionID, completeSoundStateVersion, nullptr\)/);
-    assert.match(desktopHost, /getProperty \(completeSoundVersionID, -1\)[\s\S]*?!= completeSoundStateVersion\)[\s\S]*?return;/);
+    assert.match(desktopHost, /state\.setProperty \(completeSoundVersionID, cosimo::complete_sound::version, nullptr\)/);
+    assert.match(desktopHost, /if \(! isCurrentCompleteSoundState \(restoredState\)\)\s*return;/);
     assert.match(desktopHost, /readParametersFromState \(loadParams, newState\);/);
     assert.ok(
-        desktopHost.indexOf("getProperty (completeSoundVersionID, -1)")
+        desktopHost.indexOf("isCurrentCompleteSoundState (restoredState)")
             < desktopHost.indexOf("lastLoadedStateHash != stateHash"),
     );
 
     assert.match(iosHost, /completeSoundVersion \{ "completeSoundVersion" \}/);
-    assert.match(iosHost, /completeSoundStateVersion = 2/);
-    assert.match(iosHost, /state\.setProperty \(ids\.completeSoundVersion, completeSoundStateVersion, nullptr\)/);
+    assert.match(iosHost, /state\.setProperty \(ids\.completeSoundVersion, cosimo::complete_sound::version, nullptr\)/);
     assert.match(iosHost, /for \(const auto& parameter : patch->getParameterList\(\)\)[\s\S]*?parameter->properties\.endpointID[\s\S]*?parameter->currentValue/);
     assert.match(iosHost, /if \(! isCurrentCompleteSoundState \(restoredState\)\)\s*return;/);
     assert.match(iosHost, /void setNewState \(const juce::ValueTree& newState\)[\s\S]*?if \(! isCurrentCompleteSoundState \(newState\)\)\s*return;/);

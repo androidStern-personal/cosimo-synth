@@ -387,7 +387,7 @@ test("fresh lane devices start Key Track off and Flanger gets its new ordinary b
 
 test("lane Key Track transitions preserve ordinary values and make Delay modes exclusive", async () => {
     const lane = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
-    let state = lane.upgradeLaneStateV1((await loadUIModule(repoRoot, "ui/shared/lane-state.ts")).createDefaultLaneState());
+    let state = lane.createFullDefaultLaneStateV2();
     state = lane.setLaneDeviceParam(state, "delay#1", "delayTime", 777);
     state = lane.setLaneDeviceParam(state, "delay#1", "delayTimeKeyTrackOffsetSemitones", 9.25);
     state = lane.setLaneKeyTrackEnabled(state, "delay#1", "delayTime", true);
