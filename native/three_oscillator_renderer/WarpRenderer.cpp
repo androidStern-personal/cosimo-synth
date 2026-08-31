@@ -1287,7 +1287,8 @@ WarpRendererStateView view (WarpRendererState& state) noexcept
              state.atlasAmountWeights2.data(), state.secondWriteIndices.data(),
              state.atlasFamilyTargets.data(), state.cachedAtlasModes.data(),
              state.atlasLengths.data(), state.atlasAmountBases0.data(),
-             state.atlasAmountBases1.data(), state.atlasAmountBases2.data() };
+             state.atlasAmountBases1.data(), state.atlasAmountBases2.data(),
+             state.noteBatchDrainRemaining.data() };
 }
 
 WarpRendererControlsView view (const WarpRendererControls& controls) noexcept
@@ -1923,9 +1924,9 @@ StereoSample renderWarpedNote (WarpRendererStateView state,
 // of the halfband history still needs before every tap reads exactly zero.
 // A batch with no active note and a drained history is skipped whole - its
 // FIR output over an all-zero history is exactly +0 at any write alignment,
-// so writing 0 directly is bit-identical to convolving. Renderer statics
-// persist per instance, exactly like the packed history they describe.
-static std::array<std::int32_t, logicalNoteCount / batchSize> noteBatchDrainRemaining {};
+// so writing 0 directly is bit-identical to convolving. The counters live in
+// the renderer state beside the history they describe, keeping plug-in
+// instances independent when the host renders them on different threads.
 
 void renderWarpedNotes (WarpRendererStateView state,
                         WarpRendererControlsView controls,
@@ -1961,13 +1962,14 @@ void renderWarpedNotes (WarpRendererStateView state,
     // drains a counter to zero must still push its final zeros and filter
     // them, or the history would keep a nonzero remnant forever.
     std::array<bool, logicalNoteCount / batchSize> processBatch {};
-    for (std::size_t batch = 0; batch < noteBatchDrainRemaining.size(); ++batch)
+    for (std::size_t batch = 0; batch < noteBatchCount; ++batch)
     {
-        processBatch[batch] = batchHasActiveNote[batch] || noteBatchDrainRemaining[batch] > 0;
+        auto& drainRemaining = state.noteBatchDrainRemaining[batch];
+        processBatch[batch] = batchHasActiveNote[batch] || drainRemaining > 0;
         if (batchHasActiveNote[batch])
-            noteBatchDrainRemaining[batch] = static_cast<std::int32_t> (secondHalfbandLength);
-        else if (noteBatchDrainRemaining[batch] > 0)
-            noteBatchDrainRemaining[batch] -= oversampleFactor;
+            drainRemaining = static_cast<std::int32_t> (secondHalfbandLength);
+        else if (drainRemaining > 0)
+            drainRemaining -= oversampleFactor;
     }
 
     auto* history = state.secondHistory;

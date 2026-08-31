@@ -7,6 +7,8 @@
 namespace cosimo::three_osc::bridge
 {
 static_assert (tableChunkCountPerSlot == static_cast<std::int32_t> (tableSlotChunkCount));
+static_assert (noteBatchCount
+               == static_cast<std::int32_t> (::cosimo::three_osc::noteBatchCount));
 
 std::int32_t renderAllChunks (Slice<float> packedFloats,
                               Slice<std::int32_t> packedInts,
@@ -47,7 +49,8 @@ std::int32_t renderAllChunks (Slice<float> packedFloats,
         packedInts.elements + atlasLengthOffset,
         packedInts.elements + atlasAmountBase0Offset,
         packedInts.elements + atlasAmountBase1Offset,
-        packedInts.elements + atlasAmountBase2Offset
+        packedInts.elements + atlasAmountBase2Offset,
+        packedInts.elements + noteBatchDrainRemainingOffset
     };
     const VoiceOscillatorControlsView voiceOscillatorControls {
         packedFloats.elements + basePhaseIncrementOffset,

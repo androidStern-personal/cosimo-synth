@@ -276,7 +276,11 @@ namespace wt
     let rendererUnisonVoicesOffset = rendererUse441FilterOffset + 1;
     let rendererUnisonDetuneModeOffset = rendererUnisonVoicesOffset + rendererVoiceOscillatorCount;
     let rendererUnisonStackModeOffset = rendererUnisonDetuneModeOffset + rendererVoiceOscillatorCount;
-    let rendererPackedIntCount = rendererUnisonStackModeOffset + rendererVoiceOscillatorCount;
+    let rendererNoteBatchCount = 16 / 4;
+    let rendererNoteBatchDrainRemainingOffset
+        = rendererUnisonStackModeOffset + rendererVoiceOscillatorCount;
+    let rendererPackedIntCount
+        = rendererNoteBatchDrainRemainingOffset + rendererNoteBatchCount;
     let maxUnisonVoiceCount = 8;
     let unisonPhaseModeContiguous = 0;
     let unisonPhaseModeReset = 1;
@@ -2846,6 +2850,9 @@ namespace wt
 
             for (int32 index = 0; index < rendererLaneCount; ++index)
                 rendererInts.at (rendererCachedAtlasModeOffset + index) = -1;
+
+            for (int32 index = 0; index < rendererNoteBatchCount; ++index)
+                rendererInts.at (rendererNoteBatchDrainRemainingOffset + index) = 0;
 
             for (int32 index = 0; index < rendererNoteOscillatorModeCount; ++index)
             {

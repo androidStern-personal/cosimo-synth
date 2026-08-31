@@ -36,7 +36,8 @@ static_assert (cosimo::three_osc::bridge::voiceOscillatorCount == 48);
 static_assert (cosimo::three_osc::bridge::noteOutputOffset == 11776);
 static_assert (cosimo::three_osc::bridge::packedFloatCount == 11808);
 static_assert (cosimo::three_osc::bridge::oscillatorSlotOffset == 2080);
-static_assert (cosimo::three_osc::bridge::packedIntCount == 2321);
+static_assert (cosimo::three_osc::bridge::noteBatchDrainRemainingOffset == 2321);
+static_assert (cosimo::three_osc::bridge::packedIntCount == 2325);
 static_assert (cosimo::three_osc::bridge::samplesPerPackedFrameSet
                == static_cast<std::int32_t> (samplesPerSlot));
 static_assert (cosimo::three_osc::bridge::tableSlotSampleCount == 3279616);
@@ -324,6 +325,68 @@ std::int32_t runDynamicDetuneOracle (std::int32_t detuneMilli) noexcept
 alignas (64) std::array<
     std::array<std::int32_t, cosimo::three_osc::bridge::tableChunkSampleCount>,
     cosimo::three_osc::bridge::tablePoolChunkCount> bridgeTableChunks {};
+
+StereoSample renderFirstNoteBatch (WarpRendererState& state,
+                                   const WarpRendererControls& controls,
+                                   const TablePoolLayout& tables) noexcept
+{
+    std::array<StereoSample, logicalNoteCount> outputs {};
+    renderWarpedNotes (view (state), view (controls), view (tables), {}, nullptr,
+                       { nullptr, nullptr, nullptr, nullptr }, outputs);
+    return outputs[0];
+}
+
+bool runNoteBatchDrainIsolationOracle() noexcept
+{
+    TablePoolLayout tables;
+    if (! initialiseTables (tables))
+        return false;
+
+    WarpRendererControls activeControls;
+    initialiseControls (activeControls);
+    auto silentControls = activeControls;
+    silentControls.phaseIncrements.fill (0.0f);
+    silentControls.leftGains.fill (0.0f);
+    silentControls.rightGains.fill (0.0f);
+
+    constexpr auto tailFrames = std::size_t { 32 };
+    std::array<StereoSample, tailFrames> referenceTail {};
+    WarpRendererState referenceState;
+    resetWarpRenderer (referenceState, 0.125f);
+    renderFirstNoteBatch (referenceState, activeControls, tables);
+    for (std::size_t frame = 0; frame < referenceTail.size(); ++frame)
+        referenceTail[frame] = renderFirstNoteBatch (
+            referenceState, silentControls, tables);
+
+    // Drain any process-global implementation before the interleaving half
+    // of this regression. A correct renderer stores this count in the state,
+    // so these calls affect only this disposable state.
+    WarpRendererState disposableState;
+    resetWarpRenderer (disposableState, 0.125f);
+    for (std::size_t frame = 0; frame < secondHalfbandLength; ++frame)
+        renderFirstNoteBatch (disposableState, silentControls, tables);
+
+    std::array<WarpRendererState, 3> interleavedStates;
+    for (auto& state : interleavedStates)
+        resetWarpRenderer (state, 0.125f);
+    renderFirstNoteBatch (interleavedStates[0], activeControls, tables);
+
+    for (std::size_t frame = 0; frame < referenceTail.size(); ++frame)
+    {
+        const auto interleavedTail = renderFirstNoteBatch (
+            interleavedStates[0], silentControls, tables);
+        const auto silentB = renderFirstNoteBatch (
+            interleavedStates[1], silentControls, tables);
+        const auto silentC = renderFirstNoteBatch (
+            interleavedStates[2], silentControls, tables);
+        if (! closeEnough (referenceTail[frame], interleavedTail)
+            || silentB.left != 0.0f || silentB.right != 0.0f
+            || silentC.left != 0.0f || silentC.right != 0.0f)
+            return false;
+    }
+
+    return true;
+}
 
 cosimo::three_osc::bridge::TableChunkSlices bridgeTableChunkSlices() noexcept
 {
@@ -615,7 +678,7 @@ int main()
 {
     const auto fingerprint = three_osc_renderer_oracle();
     if (fingerprint <= 0 || three_osc_dynamic_detune_oracle (250) != 4242
-        || ! runBridgeOracle())
+        || ! runNoteBatchDrainIsolationOracle() || ! runBridgeOracle())
         return 1;
     std::printf ("%d\n", fingerprint);
     return 0;

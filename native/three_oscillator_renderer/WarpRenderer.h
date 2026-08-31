@@ -14,6 +14,7 @@ constexpr std::size_t tableSlotCount = 4;
 constexpr std::size_t tableSlotChunkCount = 4;
 constexpr std::size_t warpFamilyBatchWidth = 4;
 constexpr std::size_t warpFamilyBatchCount = laneCount / warpFamilyBatchWidth;
+constexpr std::size_t noteBatchCount = logicalNoteCount / warpFamilyBatchWidth;
 constexpr std::int32_t sourceValueBits = 18;
 constexpr std::int32_t sourceDerivativeBits = 32 - sourceValueBits;
 constexpr std::int32_t sourceValueMaximum = (1 << (sourceValueBits - 1)) - 1;
@@ -65,6 +66,7 @@ struct WarpRendererStateView
     std::int32_t* atlasAmountBases0 = nullptr;
     std::int32_t* atlasAmountBases1 = nullptr;
     std::int32_t* atlasAmountBases2 = nullptr;
+    std::int32_t* noteBatchDrainRemaining = nullptr;
 };
 
 struct WarpRendererControlsView
@@ -148,6 +150,7 @@ struct alignas (64) WarpRendererState
     std::array<std::int32_t, laneCount> atlasAmountBases0 {};
     std::array<std::int32_t, laneCount> atlasAmountBases1 {};
     std::array<std::int32_t, laneCount> atlasAmountBases2 {};
+    std::array<std::int32_t, noteBatchCount> noteBatchDrainRemaining {};
 };
 
 struct alignas (64) WarpRendererControls

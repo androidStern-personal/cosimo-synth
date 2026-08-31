@@ -180,8 +180,8 @@ export async function createInstalledPerformer(spec) {
 }
 
 /**
- * Renders a frame-indexed score. Score entries run when the render reaches
- * their frame (block-quantized send order is stable and deterministic):
+ * Renders a frame-indexed score. Render blocks split at each score frame, so
+ * entries run exactly at their requested frame in stable source order:
  *   { atFrame, midi: [status, note, velocity] }
  *   { atFrame, parameter: endpointID, value }
  *   { atFrame, event: endpointID, value }  (value may be a factory function)
@@ -190,7 +190,12 @@ export async function createInstalledPerformer(spec) {
  *   interleaved output plus the wall-clock DSP time (excludes setup).
  */
 export function renderScore(performer, score, totalFrames) {
-    const ordered = [...score].sort((left, right) => left.atFrame - right.atFrame);
+    const ordered = score
+        .map((entry, order) => ({ entry, order }))
+        .sort((left, right) => (
+            left.entry.atFrame - right.entry.atFrame || left.order - right.order
+        ))
+        .map(({ entry }) => entry);
     const samples = new Float32Array(totalFrames * 2);
     const left = new Float32Array(DRIVER_BLOCK_FRAMES);
     const right = new Float32Array(DRIVER_BLOCK_FRAMES);
@@ -215,7 +220,14 @@ export function renderScore(performer, score, totalFrames) {
             nextEntry += 1;
         }
 
-        const count = Math.min(DRIVER_BLOCK_FRAMES, totalFrames - rendered);
+        const nextEventFrame = nextEntry < ordered.length
+            ? Math.max(rendered, ordered[nextEntry].atFrame)
+            : totalFrames;
+        const count = Math.min(
+            DRIVER_BLOCK_FRAMES,
+            totalFrames - rendered,
+            nextEventFrame - rendered,
+        );
         performer.advance(count);
         getOutput([left, right], count, 0);
         for (let frame = 0; frame < count; frame += 1) {

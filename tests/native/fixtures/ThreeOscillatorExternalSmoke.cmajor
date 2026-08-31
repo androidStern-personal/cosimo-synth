@@ -63,7 +63,9 @@ namespace CosimoExternalSmoke
     let unisonVoicesOffset = use441FilterOffset + 1;
     let unisonDetuneModeOffset = unisonVoicesOffset + voiceOscillatorCount;
     let unisonStackModeOffset = unisonDetuneModeOffset + voiceOscillatorCount;
-    let packedIntCount = unisonStackModeOffset + voiceOscillatorCount;
+    let noteBatchCount = logicalNoteCount / 4;
+    let noteBatchDrainRemainingOffset = unisonStackModeOffset + voiceOscillatorCount;
+    let packedIntCount = noteBatchDrainRemainingOffset + noteBatchCount;
 
     let sourceValueBits = 18;
     let sourceDerivativeBits = 32 - sourceValueBits;
@@ -178,6 +180,9 @@ namespace CosimoExternalSmoke
 
             for (int32 lane = 0; lane < laneCount; ++lane)
                 packedInts.at (cachedAtlasModeOffset + lane) = -1;
+
+            for (int32 batch = 0; batch < noteBatchCount; ++batch)
+                packedInts.at (noteBatchDrainRemainingOffset + batch) = 0;
 
             for (int32 voiceOscillator = 0;
                  voiceOscillator < voiceOscillatorCount;

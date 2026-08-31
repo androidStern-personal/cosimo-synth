@@ -62,7 +62,11 @@ constexpr std::int32_t use441FilterOffset = oversampleFactorOffset + 1;
 constexpr std::int32_t unisonVoicesOffset = use441FilterOffset + 1;
 constexpr std::int32_t unisonDetuneModeOffset = unisonVoicesOffset + voiceOscillatorCount;
 constexpr std::int32_t unisonStackModeOffset = unisonDetuneModeOffset + voiceOscillatorCount;
-constexpr std::int32_t packedIntCount = unisonStackModeOffset + voiceOscillatorCount;
+constexpr std::int32_t noteBatchCount = 16 / 4;
+constexpr std::int32_t noteBatchDrainRemainingOffset
+    = unisonStackModeOffset + voiceOscillatorCount;
+constexpr std::int32_t packedIntCount
+    = noteBatchDrainRemainingOffset + noteBatchCount;
 
 constexpr std::int32_t samplesPerPackedFrameSet = 12811;
 constexpr std::int32_t maximumFrameCount = 256;
