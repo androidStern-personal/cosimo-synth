@@ -1217,6 +1217,7 @@ test("wavetable picker prewarms the current and adjacent tables without selectin
             [
                 { endpointID: "wavetablePrewarmRequest", value: OSCILLATOR_DEFAULT_WAVETABLE_INDEX },
                 { endpointID: "wavetablePrewarmRequest", value: OSCILLATOR_DEFAULT_WAVETABLE_INDEX - 1 },
+                { endpointID: "wavetablePrewarmRequest", value: OSCILLATOR_DEFAULT_WAVETABLE_INDEX + 1 },
             ],
         );
         assert.deepEqual(
@@ -1224,6 +1225,7 @@ test("wavetable picker prewarms the current and adjacent tables without selectin
             [
                 { endpointID: "wavetablePrewarmNotification", value: OSCILLATOR_DEFAULT_WAVETABLE_INDEX },
                 { endpointID: "wavetablePrewarmNotification", value: OSCILLATOR_DEFAULT_WAVETABLE_INDEX - 1 },
+                { endpointID: "wavetablePrewarmNotification", value: OSCILLATOR_DEFAULT_WAVETABLE_INDEX + 1 },
             ],
         );
         assert.equal(Number(snapshot.parameterValues.oscAWavetableSelect), OSCILLATOR_DEFAULT_WAVETABLE_INDEX);

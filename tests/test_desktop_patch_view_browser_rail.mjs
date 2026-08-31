@@ -5309,7 +5309,7 @@ test("a two-digit exact route badge stays contained at 320px without changing th
     }
 });
 
-test("subway stations select on tap, reorder on drag, and never touch parameters", async () => {
+test("subway stations select on tap, reorder on drag, and never touch sound parameters", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -5327,12 +5327,17 @@ test("subway stations select on tap, reorder on drag, and never touch parameters
         assert.deepEqual(snapshot.sentMessages, [], "Hovering a station must be inert.");
         assert.deepEqual(snapshot.gestureStarts, []);
 
-        // A tap selects the station's editor and sends NOTHING to the DSP:
-        // the map is structure, not a parameter surface.
+        // A tap selects the station's editor without touching sound state.
+        // Closing the prior Distortion editor deliberately parks its two
+        // hidden observational analyzers, so only those lifecycle zeros are
+        // permitted here.
         await station.click();
         await page.waitForSelector('[data-role="rack-editor-reverb"]');
         snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.sentMessages, [], "Selecting a station must not touch the DSP.");
+        assert.deepEqual(snapshot.sentMessages, [
+            { endpointID: "distortionHistoryActivity", value: 0 },
+            { endpointID: "distortionScopeActivity", value: 0 },
+        ]);
         assert.deepEqual(snapshot.gestureStarts, []);
 
         // A drag along the line is a reorder: exactly one topology commit,

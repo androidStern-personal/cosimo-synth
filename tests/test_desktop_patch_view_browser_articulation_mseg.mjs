@@ -4016,6 +4016,12 @@ test("the full-screen Morph knob emphasizes a persistent realized envelope while
         await page.waitForFunction(() => (
             Number(document.querySelector('[data-role="mseg-editor-cell-morph"]')?.getAttribute("aria-valuenow")) > 0.1
         ));
+        await page.waitForFunction(() => {
+            const curve = document.querySelector('[data-role="mseg-editor-surface"] [data-role="mseg-effective-curve"]');
+            if (!(curve instanceof SVGPathElement)) return false;
+            const style = getComputedStyle(curve);
+            return Number(style.opacity) >= 0.95 && Number.parseFloat(style.strokeWidth) >= 3.5;
+        });
 
         const livePresentation = await surface.evaluate((element) => ({
             presentation: element.getAttribute("data-morph-presentation"),
