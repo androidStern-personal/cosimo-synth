@@ -36,6 +36,20 @@ export const SEQFX_INTERACTIVE_TARGET_SELECTOR = [
     "[data-pointer-target='true']",
 ].join(", ");
 
+export const SEQFX_STANDARD_MINIMUM_TARGET_SIZE_PX = 24;
+export const SEQFX_DENSE_GRID_MINIMUM_TARGET_SIZE_PX = 12;
+export const SEQFX_DENSE_GRID_TARGET_ROLES = Object.freeze([
+    "seqfx-cell",
+    "seqfx-block-select-control",
+    "seqfx-block-duration-control",
+]);
+
+export function seqFxMinimumInteractiveTargetSize(dataRole) {
+    return SEQFX_DENSE_GRID_TARGET_ROLES.includes(dataRole)
+        ? SEQFX_DENSE_GRID_MINIMUM_TARGET_SIZE_PX
+        : SEQFX_STANDARD_MINIMUM_TARGET_SIZE_PX;
+}
+
 export function seqFxVisualProofStateKey({ size, effectId, inspectorView }) {
     return `${size}:${effectId}:${inspectorView}`;
 }

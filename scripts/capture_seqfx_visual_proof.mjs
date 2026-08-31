@@ -15,9 +15,12 @@ import {
 } from "./seqfx-proof-provenance.mjs";
 import {
     createSeqFxVisualProofContract,
+    SEQFX_DENSE_GRID_TARGET_ROLES,
     SEQFX_INTERACTIVE_TARGET_SELECTOR,
+    SEQFX_STANDARD_MINIMUM_TARGET_SIZE_PX,
     SEQFX_VISUAL_EFFECTS,
     SEQFX_VISUAL_PROOF_SIZES,
+    seqFxMinimumInteractiveTargetSize,
     validateSeqFxInspectorDepthCoverage,
     validateSeqFxVisualProofCoverage,
 } from "./seqfx-visual-proof-contract.mjs";
@@ -304,6 +307,8 @@ async function measureSurface(page, sizeId, effectId, effectName, inspectorView)
         currentEffectName,
         currentInspectorView,
         interactiveTargetSelector,
+        minimumTargetSizesByRole,
+        standardMinimumTargetSize,
     }) => {
         const host = document.querySelector("cosimo-seqfx-react-view");
         const scope = host?.shadowRoot ?? document;
@@ -353,20 +358,26 @@ async function measureSurface(page, sizeId, effectId, effectName, inspectorView)
             .filter((node) => {
                 const style = getComputedStyle(node);
                 const rect = node.getBoundingClientRect();
+                const minimumTargetSize = minimumTargetSizesByRole[node.getAttribute("data-role")]
+                    ?? standardMinimumTargetSize;
                 return style.display !== "none"
                     && style.visibility !== "hidden"
                     && !node.disabled
                     && rect.width > 0
                     && rect.height > 0
-                    && (rect.width < 24 || rect.height < 24);
+                    && (rect.width < minimumTargetSize || rect.height < minimumTargetSize);
             })
-            .map((node) => ({
-                ariaLabel: node.getAttribute("aria-label"),
-                dataRole: node.getAttribute("data-role"),
-                height: node.getBoundingClientRect().height,
-                tag: node.tagName,
-                width: node.getBoundingClientRect().width,
-            }));
+            .map((node) => {
+                const dataRole = node.getAttribute("data-role");
+                return {
+                    ariaLabel: node.getAttribute("aria-label"),
+                    dataRole,
+                    height: node.getBoundingClientRect().height,
+                    minimumTargetSize: minimumTargetSizesByRole[dataRole] ?? standardMinimumTargetSize,
+                    tag: node.tagName,
+                    width: node.getBoundingClientRect().width,
+                };
+            });
 
         const parseColor = (value) => {
             const match = value.match(/rgba?\(([^)]+)\)/i);
@@ -548,6 +559,13 @@ async function measureSurface(page, sizeId, effectId, effectName, inspectorView)
         currentInspectorView: inspectorView,
         currentSizeId: sizeId,
         interactiveTargetSelector: SEQFX_INTERACTIVE_TARGET_SELECTOR,
+        minimumTargetSizesByRole: Object.fromEntries(
+            SEQFX_DENSE_GRID_TARGET_ROLES.map((dataRole) => [
+                dataRole,
+                seqFxMinimumInteractiveTargetSize(dataRole),
+            ]),
+        ),
+        standardMinimumTargetSize: SEQFX_STANDARD_MINIMUM_TARGET_SIZE_PX,
     });
 }
 
@@ -562,7 +580,7 @@ function assertMeasurement(measurement) {
     if (measurement.lowContrastText.length > 0) failures.push(`${measurement.lowContrastText.length} normal-text contrast failures`);
     if (measurement.motionFailures.length > 0) failures.push(`${measurement.motionFailures.length} reduced-motion failures`);
     if (measurement.ownedOverflow.length > 0) failures.push("inspector child outside owned bounds");
-    if (measurement.undersizedControls.length > 0) failures.push(`${measurement.undersizedControls.length} interactive controls below 24px`);
+    if (measurement.undersizedControls.length > 0) failures.push(`${measurement.undersizedControls.length} interactive controls below their required target size`);
     if (measurement.undersizedFunctionalText.length > 0) failures.push(`${measurement.undersizedFunctionalText.length} functional text items below type floor`);
     if (measurement.advancedDisclosures.some((disclosure) => !disclosure.open)) failures.push("advanced inspector disclosure remained closed");
     if (measurement.inspectorView === "lower"

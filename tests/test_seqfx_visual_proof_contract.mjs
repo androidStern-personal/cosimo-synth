@@ -3,9 +3,13 @@ import assert from "node:assert/strict";
 
 import {
     createSeqFxVisualProofContract,
+    SEQFX_DENSE_GRID_MINIMUM_TARGET_SIZE_PX,
+    SEQFX_DENSE_GRID_TARGET_ROLES,
     SEQFX_INTERACTIVE_TARGET_SELECTOR,
+    SEQFX_STANDARD_MINIMUM_TARGET_SIZE_PX,
     SEQFX_VISUAL_EFFECTS,
     SEQFX_VISUAL_PROOF_SIZES,
+    seqFxMinimumInteractiveTargetSize,
     validateSeqFxInspectorDepthCoverage,
     validateSeqFxVisualProofCoverage,
 } from "../scripts/seqfx-visual-proof-contract.mjs";
@@ -14,6 +18,23 @@ test("SeqFX visual audit includes native, semantic-role, and pointer-only target
     assert.match(SEQFX_INTERACTIVE_TARGET_SELECTOR, /button/u);
     assert.match(SEQFX_INTERACTIVE_TARGET_SELECTOR, /\[role='slider'\]/u);
     assert.match(SEQFX_INTERACTIVE_TARGET_SELECTOR, /\[data-pointer-target='true'\]/u);
+});
+
+test("SeqFX visual audit limits its dense-grid size exception to logical grid ownership", () => {
+    assert.equal(SEQFX_STANDARD_MINIMUM_TARGET_SIZE_PX, 24);
+    assert.equal(SEQFX_DENSE_GRID_MINIMUM_TARGET_SIZE_PX, 12);
+    assert.deepEqual(SEQFX_DENSE_GRID_TARGET_ROLES, [
+        "seqfx-cell",
+        "seqfx-block-select-control",
+        "seqfx-block-duration-control",
+    ]);
+
+    for (const dataRole of SEQFX_DENSE_GRID_TARGET_ROLES) {
+        assert.equal(seqFxMinimumInteractiveTargetSize(dataRole), 12);
+    }
+    assert.equal(seqFxMinimumInteractiveTargetSize("seqfx-block-resize"), 24);
+    assert.equal(seqFxMinimumInteractiveTargetSize("unknown-semantic-control"), 24);
+    assert.equal(seqFxMinimumInteractiveTargetSize(null), 24);
 });
 
 test("SeqFX visual proof contract covers four viewports, twelve effects, two depths, and empty states", () => {

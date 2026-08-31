@@ -4889,6 +4889,7 @@ export function SeqFxPatchView({
                                                                             <button
                                                                                 aria-label={ariaLabel}
                                                                                 className="seqfx-block-select-control"
+                                                                                data-role="seqfx-block-select-control"
                                                                                 onKeyDown={(event) => handleBlockKeyDown(event, lane, block.startStep, block.length)}
                                                                                 type="button"
                                                                             />
