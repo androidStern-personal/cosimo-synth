@@ -29,6 +29,7 @@ endif()
 if(NOT IS_ABSOLUTE "${COSIMO_CMAJ_EXECUTABLE}" OR NOT EXISTS "${COSIMO_CMAJ_EXECUTABLE}")
     message(FATAL_ERROR "COSIMO_CMAJ_EXECUTABLE must name the absolute pinned Cmajor command")
 endif()
+
 file(MAKE_DIRECTORY "${COSIMO_EFFECT_OUTPUT_DIR}")
 
 execute_process(

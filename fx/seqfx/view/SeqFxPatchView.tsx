@@ -98,7 +98,11 @@ type Selection = {
 
 type InspectorMode = "effect" | "mod";
 
-type ResizeGesture = {
+type PointerOwnedGesture = {
+    readonly pointerId: number;
+};
+
+type ResizeGesture = PointerOwnedGesture & {
     mode: "resize";
     lane: number;
     startStep: number;
@@ -106,7 +110,7 @@ type ResizeGesture = {
     previewLength: number | null;
 };
 
-type MoveGesture = {
+type MoveGesture = PointerOwnedGesture & {
     mode: "move";
     lane: number;
     sourceStartStep: number;
@@ -119,7 +123,7 @@ type MoveGesture = {
     previewTargetStartStep: number | null;
 };
 
-type BlockSelectionMoveGesture = {
+type BlockSelectionMoveGesture = PointerOwnedGesture & {
     mode: "selectionMove";
     lane: number;
     blockStartSteps: number[];
@@ -135,7 +139,7 @@ type BlockSelectionMoveGesture = {
     previewMovedStartSteps: number[] | null;
 };
 
-type CopyGesture = {
+type CopyGesture = PointerOwnedGesture & {
     mode: "copy";
     lane: number;
     sourceStartStep: number;
@@ -148,7 +152,7 @@ type CopyGesture = {
     previewTargetStartStep: number | null;
 };
 
-type BlockSelectionCopyGesture = {
+type BlockSelectionCopyGesture = PointerOwnedGesture & {
     mode: "selectionCopy";
     lane: number;
     blockStartSteps: number[];
@@ -3393,7 +3397,7 @@ export function SeqFxPatchView({
 
         const handlePointerMove = (event: globalThis.PointerEvent) => {
             const gesture = gestureRef.current;
-            if (!gesture) {
+            if (!gesture || event.pointerId !== gesture.pointerId) {
                 return;
             }
 
@@ -3646,7 +3650,7 @@ export function SeqFxPatchView({
 
         const stopGesture = (event: globalThis.PointerEvent) => {
             const gesture = gestureRef.current;
-            if (!gesture) {
+            if (!gesture || event.pointerId !== gesture.pointerId) {
                 return;
             }
 
@@ -3812,15 +3816,24 @@ export function SeqFxPatchView({
             setInvalidDropTarget(null);
         };
 
+        const cancelOwnedGesture = (event: globalThis.PointerEvent) => {
+            const gesture = gestureRef.current;
+            if (!gesture || event.pointerId !== gesture.pointerId) {
+                return;
+            }
+
+            cancelGesture();
+        };
+
         window.addEventListener("pointermove", handlePointerMove, { passive: false });
         window.addEventListener("pointerup", stopGesture);
-        window.addEventListener("pointercancel", cancelGesture);
+        window.addEventListener("pointercancel", cancelOwnedGesture);
         window.addEventListener("blur", cancelGesture);
 
         return () => {
             window.removeEventListener("pointermove", handlePointerMove);
             window.removeEventListener("pointerup", stopGesture);
-            window.removeEventListener("pointercancel", cancelGesture);
+            window.removeEventListener("pointercancel", cancelOwnedGesture);
             window.removeEventListener("blur", cancelGesture);
         };
     }, [bridge]);
@@ -4152,6 +4165,10 @@ export function SeqFxPatchView({
         }
 
         event.stopPropagation();
+        if (gestureRef.current) {
+            event.preventDefault();
+            return;
+        }
         const grabOffset = pointerGrabOffset(lane, startStep, length, event.clientX, event.clientY);
         const pattern = stateRef.current.patterns[selectedPatternRef.current];
         const activeBlockStarts = selection?.lane === lane ? selection.blockStartSteps ?? [] : [];
@@ -4174,6 +4191,7 @@ export function SeqFxPatchView({
                 const bounds = selectionAnchorDragBounds(pattern, lane, activeBlockStarts, startStep);
                 beginGesture({
                     mode: "selectionCopy",
+                    pointerId: event.pointerId,
                     lane,
                     blockStartSteps: [...activeBlockStarts],
                     anchorStartStep: startStep,
@@ -4193,6 +4211,7 @@ export function SeqFxPatchView({
             selectBlockRange(lane, startStep, length);
             beginGesture({
                 mode: "copy",
+                pointerId: event.pointerId,
                 lane,
                 sourceStartStep: startStep,
                 length,
@@ -4210,6 +4229,7 @@ export function SeqFxPatchView({
             const bounds = selectionAnchorDragBounds(pattern, lane, activeBlockStarts, startStep);
             beginGesture({
                 mode: "selectionMove",
+                pointerId: event.pointerId,
                 lane,
                 blockStartSteps: [...activeBlockStarts],
                 anchorStartStep: startStep,
@@ -4229,6 +4249,7 @@ export function SeqFxPatchView({
         selectBlockRange(lane, startStep, length);
         beginGesture({
             mode: "move",
+            pointerId: event.pointerId,
             lane,
             sourceStartStep: startStep,
             length,
@@ -4265,7 +4286,17 @@ export function SeqFxPatchView({
     function handleResizePointerDown(event: PointerEvent<HTMLSpanElement>, lane: number, startStep: number, length: number) {
         event.preventDefault();
         event.stopPropagation();
-        beginGesture({ mode: "resize", lane, startStep, length, previewLength: null });
+        if (gestureRef.current) {
+            return;
+        }
+        beginGesture({
+            mode: "resize",
+            pointerId: event.pointerId,
+            lane,
+            startStep,
+            length,
+            previewLength: null,
+        });
     }
 
     function handleResizeKeyDown(
@@ -4905,6 +4936,7 @@ export function SeqFxPatchView({
                                                                         <span
                                                                             aria-hidden="true"
                                                                             className="seqfx-block-resize"
+                                                                            data-pointer-target="true"
                                                                             data-role="seqfx-block-resize"
                                                                             data-lane={lane}
                                                                             data-start={block.startStep}

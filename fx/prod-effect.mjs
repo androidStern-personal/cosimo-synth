@@ -45,13 +45,9 @@ function absoluteReleaseToolOverride(environment, name, fallback) {
     return value;
 }
 
-/**
- * Release callers provide already-attested CMake, cmaj, and Node paths. Ordinary
- * development builds retain their existing PATH-based CMake/cmaj discovery.
- */
+/** Release callers may provide already-attested CMake and Node paths. */
 export function resolveProdBuildToolPaths(environment = process.env, platform = process.platform) {
     return {
-        cmaj: absoluteReleaseToolOverride(environment, "COSIMO_RELEASE_CMAJ", null),
         cmake: absoluteReleaseToolOverride(environment, "COSIMO_RELEASE_CMAKE", "cmake"),
         codesign: platform === "darwin" ? "/usr/bin/codesign" : "codesign",
         grep: platform === "darwin" ? "/usr/bin/grep" : "grep",
@@ -165,6 +161,7 @@ export function createJuceGenerationConfigureArgs({
     juceOutputDirectory,
     pluginTarget,
     cmajExecutable,
+    disableMicrophonePermission = false,
 }) {
     const pinnedExecutable = validatePinnedCmajExecutable(cmajExecutable);
 
@@ -176,10 +173,11 @@ export function createJuceGenerationConfigureArgs({
         `-DCOSIMO_EFFECT_OUTPUT_DIR=${juceOutputDirectory}`,
         `-DCOSIMO_EFFECT_PLUGIN_TARGET=${pluginTarget}`,
         `-DCOSIMO_CMAJ_EXECUTABLE=${pinnedExecutable}`,
+        ...(disableMicrophonePermission ? ["-DCOSIMO_DISABLE_MICROPHONE_PERMISSION=ON"] : []),
     ];
 }
 
-async function preparePinnedCmajExecutable(cmakeJobs, preparedExecutable = null) {
+async function preparePinnedCmajExecutable(toolPaths, cmakeJobs, preparedExecutable = null) {
     if (preparedExecutable !== null) {
         const executable = validatePinnedCmajExecutable(preparedExecutable);
 
@@ -189,8 +187,8 @@ async function preparePinnedCmajExecutable(cmakeJobs, preparedExecutable = null)
         return executable;
     }
 
-    run("cmake", createPinnedCmajConfigureArgs());
-    run("cmake", createCmakeBuildArgs(cmajCommandBuildDirectory, "cmaj", cmakeJobs));
+    run(toolPaths.cmake, createPinnedCmajConfigureArgs());
+    run(toolPaths.cmake, createCmakeBuildArgs(cmajCommandBuildDirectory, "cmaj", cmakeJobs));
 
     if (!await pathExists(pinnedCmajExecutablePath))
         throw new Error(`Pinned Cmajor command was not built: ${pinnedCmajExecutablePath}`);
@@ -247,12 +245,13 @@ async function generateJuceProject(pluginName, plugin, options = {}) {
     });
 
     run(options.toolPaths.cmake, createJuceGenerationConfigureArgs({
-        cmakeSourceDirectory,
+        cmajExecutable: options.cmajExecutable,
         cmakeBuildDirectory: cmakeBuildDir,
-        runtimePatchPath,
+        cmakeSourceDirectory,
+        disableMicrophonePermission: plugin.disableMicrophonePermission,
         juceOutputDirectory: juceOut,
         pluginTarget: plugin.cmakeTarget,
-        cmajExecutable: options.cmajExecutable,
+        runtimePatchPath,
     }));
 
     console.log(`Generated ${pluginName} JUCE plugin project at ${path.relative(repoRoot, juceOut)}`);
@@ -392,26 +391,26 @@ async function runLimited(items, limit, task) {
 
 async function prodBuildAll(pluginNames, options) {
     const toolPaths = options.toolPaths ?? resolveProdBuildToolPaths();
-    const buildOptions = { ...options, toolPaths };
     const { pluginJobs, cmakeJobs } = resolveProdBuildParallelism(pluginNames.length);
     const cmajExecutable = await preparePinnedCmajExecutable(
+        toolPaths,
         cmakeJobs,
         options.cmajExecutable ?? null,
     );
+    const buildOptions = { ...options, toolPaths, cmajExecutable };
 
     if (pluginNames.length === 1) {
-        await prodBuild(pluginNames[0], { ...buildOptions, cmajExecutable, cmakeJobs });
+        await prodBuild(pluginNames[0], { ...buildOptions, cmakeJobs });
         return;
     }
 
     console.log(`Building ${pluginNames.join(", ")} with ${pluginJobs} plugin job(s), ${cmakeJobs} CMake job(s) per plugin.`);
 
     await runLimited(pluginNames, pluginJobs, (pluginName) => runChildProcess(
-        createProdBuildChildArgs(pluginName, { ...buildOptions, cmajExecutable }),
+        createProdBuildChildArgs(pluginName, buildOptions),
         {
             ...process.env,
             COSIMO_CMAKE_JOBS: String(cmakeJobs),
-            ...(toolPaths.cmaj ? { COSIMO_RELEASE_CMAJ: toolPaths.cmaj } : {}),
             ...(path.isAbsolute(toolPaths.cmake) ? { COSIMO_RELEASE_CMAKE: toolPaths.cmake } : {}),
             COSIMO_RELEASE_NODE: toolPaths.node,
         },

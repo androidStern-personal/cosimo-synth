@@ -27,11 +27,6 @@ export const seqFxReleaseSystemCommands = Object.freeze({
 });
 
 const approvedExternalTools = Object.freeze({
-    cmaj: Object.freeze({
-        sha256: "4bfdd75549a6d51578977ee6e2ac55b2ede459a1ccb1055479d3dd0f9e8cdabf",
-        version: "1.0.3066",
-        versionPattern: /Cmajor Version:\s*([^\s]+)/u,
-    }),
     cmake: Object.freeze({
         sha256: "2fb3d19ecda5c45dd35f826af5f241a81c699dccf010f877948b37ca2addb290",
         version: "4.2.3",
@@ -42,6 +37,11 @@ const approvedExternalTools = Object.freeze({
         version: "v22.22.3",
         versionPattern: /^(v[^\s]+)$/mu,
     }),
+});
+
+const pinnedSourceBuiltGenerator = Object.freeze({
+    cmajorCommit: "a97d8846605c433db561d07f23fc9ff372e20ced",
+    chocCommit: "98b52fb54c3b9fec03c0c13218f6557aef33eabe",
 });
 
 const fixedChildPath = "/usr/bin:/bin:/usr/sbin:/sbin";
@@ -193,16 +193,10 @@ async function attestExternalTool(toolName, candidatePath, repositoryRoot, envir
     };
 }
 
-function defaultCmajPath(environment) {
-    if (!environment.HOME || !path.isAbsolute(environment.HOME))
-        throw new Error("COSIMO_RELEASE_CMAJ is required when HOME is unavailable or not absolute.");
-
-    return path.join(environment.HOME, ".local", "bin", "cmaj");
-}
-
 /**
  * Resolve the private release invocation paths and their serializable evidence.
- * The caller may choose CMake/cmaj locations, but never their approvals.
+ * The caller may choose CMake's location, but never its approval. Cmajor is
+ * always built from the repository-pinned source by the production build.
  */
 export async function resolveSeqFxReleaseToolchain({
     environment = process.env,
@@ -212,30 +206,21 @@ export async function resolveSeqFxReleaseToolchain({
         throw new Error("repositoryRoot must be an absolute path.");
 
     const candidates = {
-        cmaj: environment.COSIMO_RELEASE_CMAJ ?? defaultCmajPath(environment),
         cmake: environment.COSIMO_RELEASE_CMAKE ?? "/opt/homebrew/bin/cmake",
         node: process.execPath,
     };
-    const [cmaj, cmake, node] = await Promise.all([
-        attestExternalTool("cmaj", candidates.cmaj, repositoryRoot, environment),
+    const [cmake, node] = await Promise.all([
         attestExternalTool("cmake", candidates.cmake, repositoryRoot, environment),
         attestExternalTool("node", candidates.node, repositoryRoot, environment),
     ]);
     const privateInvocationPaths = deepFreeze({
         ...seqFxReleaseSystemCommands,
-        cmaj: cmaj.executablePath,
         cmake: cmake.executablePath,
         node: node.executablePath,
     });
     const manifestAttestation = deepFreeze({
         schemaVersion: 1,
         externalTools: {
-            cmaj: {
-                provenance: "approved-binary-toolchain",
-                runtimeSourceAttestation: "separate",
-                sha256: cmaj.sha256,
-                version: cmaj.version,
-            },
             cmake: {
                 provenance: "approved-binary-toolchain",
                 sha256: cmake.sha256,
@@ -245,6 +230,13 @@ export async function resolveSeqFxReleaseToolchain({
                 provenance: "approved-binary-toolchain",
                 sha256: node.sha256,
                 version: node.version,
+            },
+        },
+        sourceBuiltTools: {
+            cmaj: {
+                ...pinnedSourceBuiltGenerator,
+                executablePolicy: "absolute-repository-build-output-no-path-fallback",
+                provenance: "repository-pinned-source-build",
             },
         },
         systemCommands: {

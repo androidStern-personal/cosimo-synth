@@ -136,12 +136,6 @@ function releaseToolchainFixture({ nativeBuildCacheVerified = true } = {}) {
     return {
         schemaVersion: 1,
         externalTools: {
-            cmaj: {
-                provenance: "approved-binary-toolchain",
-                runtimeSourceAttestation: "separate",
-                sha256: "4bfdd75549a6d51578977ee6e2ac55b2ede459a1ccb1055479d3dd0f9e8cdabf",
-                version: "1.0.3066",
-            },
             cmake: {
                 provenance: "approved-binary-toolchain",
                 sha256: "2fb3d19ecda5c45dd35f826af5f241a81c699dccf010f877948b37ca2addb290",
@@ -151,6 +145,14 @@ function releaseToolchainFixture({ nativeBuildCacheVerified = true } = {}) {
                 provenance: "approved-binary-toolchain",
                 sha256: "5d9d3872911e2340a43b707962e68143de8a4e8d54628845c0c4f2de1fb7cd5c",
                 version: "v22.22.3",
+            },
+        },
+        sourceBuiltTools: {
+            cmaj: {
+                cmajorCommit: "a97d8846605c433db561d07f23fc9ff372e20ced",
+                chocCommit: "98b52fb54c3b9fec03c0c13218f6557aef33eabe",
+                executablePolicy: "absolute-repository-build-output-no-path-fallback",
+                provenance: "repository-pinned-source-build",
             },
         },
         nativeBuildCacheVerified,
@@ -288,7 +290,7 @@ async function createNativeDependencyCheckoutFixture(context) {
     await writeFile(cmakeCachePath, [
         `CMAKE_HOME_DIRECTORY:INTERNAL=${cmakeHome}`,
         "CMAKE_COMMAND:INTERNAL=/approved/cmake",
-        "COSIMO_CMAJ_EXECUTABLE:FILEPATH=/approved/cmaj",
+        `COSIMO_CMAJ_EXECUTABLE:FILEPATH=${path.join(repositoryRoot, "build", "cmajor_command", "bin", "cmaj")}`,
         `CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR:INTERNAL=${cmajorPath}`,
         `CPM_PACKAGE_cosimo_juce_SOURCE_DIR:INTERNAL=${jucePath}`,
         "",
@@ -393,11 +395,11 @@ test("release config freezes the existing beta identity and current native outpu
             cpmName: "cosimo_cmajor",
             sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",
             repository: "https://github.com/androidStern-personal/cmajor.git",
-            revision: "f1c9a9a8e85dcc82141326a2fc1c5160241f346c",
+            revision: "a97d8846605c433db561d07f23fc9ff372e20ced",
         },
         choc: {
             repository: "https://github.com/androidStern-personal/choc.git",
-            revision: "037e34a2b382175c8bee4be5a0707724130f10e8",
+            revision: "98b52fb54c3b9fec03c0c13218f6557aef33eabe",
             submodulePath: "include/choc",
         },
         juce: {
@@ -747,29 +749,38 @@ test("post-build provenance resolves CMake-selected clean Cmajor, CHOC, and JUCE
     );
 });
 
-test("native build provenance rejects CMake or cmaj execution-path drift", async (context) => {
+test("native build provenance rejects CMake or source-built cmaj execution-path drift", async (context) => {
     const fixture = await createNativeDependencyCheckoutFixture(context);
 
     await assert.doesNotReject(assertNativeBuildUsedReleaseToolchain(
         fixture.config,
-        { cmaj: "/approved/cmaj", cmake: "/approved/cmake" },
+        { cmake: "/approved/cmake" },
         { repositoryRoot: fixture.repositoryRoot },
     ));
     await assert.rejects(
         assertNativeBuildUsedReleaseToolchain(
             fixture.config,
-            { cmaj: "/approved/cmaj", cmake: "/different/cmake" },
+            { cmake: "/different/cmake" },
             { repositoryRoot: fixture.repositoryRoot },
         ),
         /CMake executable drift/u,
     );
+    const cmakeCachePath = path.join(fixture.repositoryRoot, fixture.config.paths.nativeBuildCmakeCache);
+    await writeFile(
+        cmakeCachePath,
+        (await readFile(cmakeCachePath, "utf8")).replace(
+            path.join(fixture.repositoryRoot, "build", "cmajor_command", "bin", "cmaj"),
+            "/different/cmaj",
+        ),
+        "utf8",
+    );
     await assert.rejects(
         assertNativeBuildUsedReleaseToolchain(
             fixture.config,
-            { cmaj: "/different/cmaj", cmake: "/approved/cmake" },
+            { cmake: "/approved/cmake" },
             { repositoryRoot: fixture.repositoryRoot },
         ),
-        /cmaj executable drift/u,
+        /source-built cmaj executable drift/u,
     );
 });
 
@@ -810,8 +821,8 @@ test("tracked third-party notices cover the embedded runtime and artwork", async
         assert.match(notices, new RegExp(`^${component.replaceAll("+", "\\+")}$`, "mu"));
 
     assert.match(notices, /does not grant distribution\s+rights/u);
-    assert.match(notices, /f1c9a9a8e85dcc82141326a2fc1c5160241f346c/u);
-    assert.match(notices, /037e34a2b382175c8bee4be5a0707724130f10e8/u);
+    assert.match(notices, /a97d8846605c433db561d07f23fc9ff372e20ced/u);
+    assert.match(notices, /98b52fb54c3b9fec03c0c13218f6557aef33eabe/u);
     assert.match(notices, /501c07674e1ad693085a7e7c398f205c2677f5da/u);
     assert.match(notices, /320ea19819bf66429fa772d6c04614ae75815895/u);
     assert.match(notices, /Creative Commons Attribution 4\.0 International/u);
@@ -1246,7 +1257,7 @@ test("unsigned manifest is deterministic and never claims host or upload accepta
             ...inputs,
             releaseToolchain: releaseToolchainFixture({ nativeBuildCacheVerified: false }),
         }),
-        /native CMake\/cmaj cache verification/u,
+        /native CMake\/source-built-cmaj cache verification/u,
     );
     assert.throws(
         () => createReleaseManifest({

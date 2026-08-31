@@ -103,6 +103,7 @@ export function SeqFxGlobalControlSurface({
     const loopEndExclusive = Math.min(32, controls.loopStart + controls.loopLength);
     const loopRulerRef = useRef<HTMLDivElement | null>(null);
     const dragEdgeRef = useRef<LoopDragEdge | null>(null);
+    const loopPointerIdRef = useRef<number | null>(null);
     const loopGestureActiveRef = useRef(false);
     const activeGestureEndpointsRef = useRef(new Set<GlobalControlEndpoint>());
     const pointerGestureEndpointsRef = useRef(new Set<GlobalControlEndpoint>());
@@ -132,17 +133,15 @@ export function SeqFxGlobalControlSurface({
     }
 
     useEffect(() => {
-        const endPointerInteraction = () => {
-            if (dragEdgeRef.current !== null) {
-                dragEdgeRef.current = null;
-                endLoopGesture();
-            }
+        const endPointerInteraction = (event: globalThis.PointerEvent) => {
+            endLoopPointerInteraction(event.pointerId);
             for (const endpointID of [...pointerGestureEndpointsRef.current]) {
                 endPointerGesture(endpointID);
             }
         };
         const endAllInteractions = () => {
             dragEdgeRef.current = null;
+            loopPointerIdRef.current = null;
             endLoopGesture();
             for (const endpointID of [...activeGestureEndpointsRef.current]) {
                 endGesture(endpointID);
@@ -170,6 +169,10 @@ export function SeqFxGlobalControlSurface({
     }
 
     function handleLoopPointerDown(event: PointerEvent<HTMLDivElement>) {
+        if (loopPointerIdRef.current !== null) {
+            return;
+        }
+
         if (!(event.target instanceof Element)) {
             return;
         }
@@ -182,20 +185,40 @@ export function SeqFxGlobalControlSurface({
 
         const edge = nearestLoopEdge(step, controls.loopStart, loopEndExclusive);
         dragEdgeRef.current = edge;
+        loopPointerIdRef.current = event.pointerId;
         beginLoopGesture();
-        event.currentTarget.setPointerCapture(event.pointerId);
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+            // Synthetic and capture-loss paths retain window-level owner cleanup.
+        }
         changeLoopEdge(edge, step);
     }
 
     function handleLoopPointerMove(event: PointerEvent<HTMLDivElement>) {
         const edge = dragEdgeRef.current;
         const ruler = loopRulerRef.current;
-        if (!edge || !ruler || event.buttons === 0) {
+        if (
+            !edge
+            || !ruler
+            || event.pointerId !== loopPointerIdRef.current
+            || (event.pointerType === "mouse" && event.buttons === 0)
+        ) {
             return;
         }
 
         const step = nearestLoopStepFromPointer(ruler, event.clientX, event.clientY);
         changeLoopEdge(edge, step);
+    }
+
+    function endLoopPointerInteraction(pointerId: number) {
+        if (loopPointerIdRef.current !== pointerId) {
+            return;
+        }
+
+        loopPointerIdRef.current = null;
+        dragEdgeRef.current = null;
+        endLoopGesture();
     }
 
     function beginGesture(endpointID: GlobalControlEndpoint) {
@@ -410,10 +433,8 @@ export function SeqFxGlobalControlSurface({
                         data-role="seqfx-loop-ruler"
                         onPointerDown={handleLoopPointerDown}
                         onPointerMove={handleLoopPointerMove}
-                        onPointerUp={() => {
-                            dragEdgeRef.current = null;
-                            endLoopGesture();
-                        }}
+                        onPointerUp={(event) => endLoopPointerInteraction(event.pointerId)}
+                        onPointerCancel={(event) => endLoopPointerInteraction(event.pointerId)}
                         ref={loopRulerRef}
                         role="group"
                     >

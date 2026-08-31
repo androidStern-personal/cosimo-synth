@@ -22,6 +22,20 @@ export const SEQFX_VISUAL_PROOF_SIZES = Object.freeze([
 
 export const SEQFX_VISUAL_INSPECTOR_VIEWS = Object.freeze(["top", "lower"]);
 
+export const SEQFX_INTERACTIVE_TARGET_SELECTOR = [
+    "button",
+    "select",
+    "input",
+    "[role='button']",
+    "[role='slider']",
+    "[role='switch']",
+    "[role='checkbox']",
+    "[role='radio']",
+    "[role='tab']",
+    "[role='spinbutton']",
+    "[data-pointer-target='true']",
+].join(", ");
+
 export function seqFxVisualProofStateKey({ size, effectId, inspectorView }) {
     return `${size}:${effectId}:${inspectorView}`;
 }

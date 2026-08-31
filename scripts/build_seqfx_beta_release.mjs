@@ -501,7 +501,7 @@ export async function captureActualNativeDependencyProvenance(
     };
 }
 
-/** Prove the completed native configure used the already-attested CMake/cmaj executables. */
+/** Prove native configure used approved CMake and the repository-built pinned cmaj. */
 export async function assertNativeBuildUsedReleaseToolchain(
     config,
     expectedTools,
@@ -511,6 +511,13 @@ export async function assertNativeBuildUsedReleaseToolchain(
     const cacheSource = await readFile(cachePath, "utf8");
     const observedCmake = requireUniqueCmakeCacheValue(cacheSource, "CMAKE_COMMAND");
     const observedCmaj = requireUniqueCmakeCacheValue(cacheSource, "COSIMO_CMAJ_EXECUTABLE");
+    const expectedCmaj = path.join(
+        repositoryRoot,
+        "build",
+        "cmajor_command",
+        "bin",
+        process.platform === "win32" ? "cmaj.exe" : "cmaj",
+    );
 
     if (observedCmake !== expectedTools.cmake) {
         throw new Error(
@@ -518,11 +525,16 @@ export async function assertNativeBuildUsedReleaseToolchain(
         );
     }
 
-    if (observedCmaj !== expectedTools.cmaj) {
+    if (observedCmaj !== expectedCmaj) {
         throw new Error(
-            `cmaj executable drift: expected ${expectedTools.cmaj}, found ${observedCmaj}.`,
+            `source-built cmaj executable drift: expected ${expectedCmaj}, found ${observedCmaj}.`,
         );
     }
+
+    return {
+        cmakeExecutableVerified: true,
+        sourceBuiltCmajExecutableVerified: true,
+    };
 }
 
 function expectedBuiltVst3Path(plugin) {
@@ -2125,7 +2137,7 @@ function assertReleaseToolchainAttestation(attestation, { requireNativeBuildCach
     if (attestation?.schemaVersion !== 1)
         errors.push("toolchain schema version must be 1");
 
-    for (const toolName of ["cmaj", "cmake", "node"]) {
+    for (const toolName of ["cmake", "node"]) {
         try {
             assertApprovedSeqFxReleaseToolEvidence(toolName, attestation?.externalTools?.[toolName]);
         } catch (error) {
@@ -2133,16 +2145,20 @@ function assertReleaseToolchainAttestation(attestation, { requireNativeBuildCach
         }
     }
 
-    if (attestation?.externalTools?.cmaj?.provenance !== "approved-binary-toolchain")
-        errors.push("cmaj binary provenance is missing");
-
-    if (attestation?.externalTools?.cmaj?.runtimeSourceAttestation !== "separate")
-        errors.push("cmaj binary and runtime-source attestations must remain separate");
-
     for (const toolName of ["cmake", "node"]) {
         if (attestation?.externalTools?.[toolName]?.provenance !== "approved-binary-toolchain")
             errors.push(`${toolName} binary provenance is missing`);
     }
+
+    const sourceBuiltCmaj = attestation?.sourceBuiltTools?.cmaj;
+    if (sourceBuiltCmaj?.cmajorCommit !== seqFxReleaseConfig.nativeDependencies.cmajor.revision)
+        errors.push("source-built cmaj Cmajor revision drifted");
+    if (sourceBuiltCmaj?.chocCommit !== seqFxReleaseConfig.nativeDependencies.choc.revision)
+        errors.push("source-built cmaj CHOC revision drifted");
+    if (sourceBuiltCmaj?.executablePolicy !== "absolute-repository-build-output-no-path-fallback")
+        errors.push("source-built cmaj executable policy is missing");
+    if (sourceBuiltCmaj?.provenance !== "repository-pinned-source-build")
+        errors.push("source-built cmaj provenance is missing");
 
     if (attestation?.systemCommands?.policy !== "macos-absolute-system-command-map-v1")
         errors.push("absolute macOS system-command policy is missing");
@@ -2152,7 +2168,7 @@ function assertReleaseToolchainAttestation(attestation, { requireNativeBuildCach
         errors.push("absolute macOS system-command inventory drifted");
 
     if (requireNativeBuildCache && attestation?.nativeBuildCacheVerified !== true)
-        errors.push("native CMake/cmaj cache verification is missing");
+        errors.push("native CMake/source-built-cmaj cache verification is missing");
 
     if (errors.length > 0) {
         throw new Error([
@@ -2565,7 +2581,6 @@ async function buildReleaseArtifacts({
         "--clean",
     ], {
         env: {
-            COSIMO_RELEASE_CMAJ: toolchain.privateInvocationPaths.cmaj,
             COSIMO_RELEASE_CMAKE: toolchain.privateInvocationPaths.cmake,
             COSIMO_RELEASE_NODE: toolchain.privateInvocationPaths.node,
         },

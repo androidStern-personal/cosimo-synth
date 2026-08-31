@@ -3,11 +3,18 @@ import assert from "node:assert/strict";
 
 import {
     createSeqFxVisualProofContract,
+    SEQFX_INTERACTIVE_TARGET_SELECTOR,
     SEQFX_VISUAL_EFFECTS,
     SEQFX_VISUAL_PROOF_SIZES,
     validateSeqFxInspectorDepthCoverage,
     validateSeqFxVisualProofCoverage,
 } from "../scripts/seqfx-visual-proof-contract.mjs";
+
+test("SeqFX visual audit includes native, semantic-role, and pointer-only targets", () => {
+    assert.match(SEQFX_INTERACTIVE_TARGET_SELECTOR, /button/u);
+    assert.match(SEQFX_INTERACTIVE_TARGET_SELECTOR, /\[role='slider'\]/u);
+    assert.match(SEQFX_INTERACTIVE_TARGET_SELECTOR, /\[data-pointer-target='true'\]/u);
+});
 
 test("SeqFX visual proof contract covers four viewports, twelve effects, two depths, and empty states", () => {
     const contract = createSeqFxVisualProofContract();

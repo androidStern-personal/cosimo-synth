@@ -15,6 +15,7 @@ import {
 } from "./seqfx-proof-provenance.mjs";
 import {
     createSeqFxVisualProofContract,
+    SEQFX_INTERACTIVE_TARGET_SELECTOR,
     SEQFX_VISUAL_EFFECTS,
     SEQFX_VISUAL_PROOF_SIZES,
     validateSeqFxInspectorDepthCoverage,
@@ -297,7 +298,13 @@ async function createContactSheet(browser, screenshotManifest) {
 }
 
 async function measureSurface(page, sizeId, effectId, effectName, inspectorView) {
-    return page.evaluate(({ currentSizeId, currentEffectId, currentEffectName, currentInspectorView }) => {
+    return page.evaluate(({
+        currentSizeId,
+        currentEffectId,
+        currentEffectName,
+        currentInspectorView,
+        interactiveTargetSelector,
+    }) => {
         const host = document.querySelector("cosimo-seqfx-react-view");
         const scope = host?.shadowRoot ?? document;
         const root = scope.querySelector('[data-role="seqfx-root"]');
@@ -342,7 +349,7 @@ async function measureSurface(page, sizeId, effectId, effectName, inspectorView)
         const clippedNames = [...scope.querySelectorAll(".seqfx-effect-picker__name")]
             .filter((node) => node.scrollWidth > node.clientWidth + 1)
             .map((node) => node.textContent?.trim());
-        const undersizedControls = [...root.querySelectorAll("button, select, input")]
+        const undersizedControls = [...root.querySelectorAll(interactiveTargetSelector)]
             .filter((node) => {
                 const style = getComputedStyle(node);
                 const rect = node.getBoundingClientRect();
@@ -463,7 +470,7 @@ async function measureSurface(page, sizeId, effectId, effectName, inspectorView)
                 ? [{ className: node.className, durations }]
                 : [];
         });
-        const interactiveControls = [...inspector.querySelectorAll("button, select, input")]
+        const interactiveControls = [...inspector.querySelectorAll(interactiveTargetSelector)]
             .filter((node) => {
                 const style = getComputedStyle(node);
                 const rect = node.getBoundingClientRect();
@@ -540,6 +547,7 @@ async function measureSurface(page, sizeId, effectId, effectName, inspectorView)
         currentEffectName: effectName,
         currentInspectorView: inspectorView,
         currentSizeId: sizeId,
+        interactiveTargetSelector: SEQFX_INTERACTIVE_TARGET_SELECTOR,
     });
 }
 
@@ -568,7 +576,7 @@ function assertMeasurement(measurement) {
 async function auditInspectorDepth(page, sizeId, effectId, effectName) {
     const advancedDisclosureCount = await revealAdvancedInspectorControls(page);
     return await page.locator('[data-role="seqfx-inspector"]').evaluate(async (inspector, context) => {
-        const controls = [...inspector.querySelectorAll("button, select, input")].filter((node) => {
+        const controls = [...inspector.querySelectorAll(context.interactiveTargetSelector)].filter((node) => {
             const style = getComputedStyle(node);
             const rect = node.getBoundingClientRect();
             return style.display !== "none"
@@ -645,7 +653,13 @@ async function auditInspectorDepth(page, sizeId, effectId, effectName) {
             observations,
             size: context.sizeId,
         };
-    }, { advancedDisclosureCount, effectId, effectName, sizeId });
+    }, {
+        advancedDisclosureCount,
+        effectId,
+        effectName,
+        interactiveTargetSelector: SEQFX_INTERACTIVE_TARGET_SELECTOR,
+        sizeId,
+    });
 }
 
 function assertInspectorDepth(depth) {

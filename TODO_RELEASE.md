@@ -38,9 +38,9 @@ automation or evidence.
 The native dependency contract is also fail-closed:
 
 - Cmajor: `androidStern-personal/cmajor` at
-  `f1c9a9a8e85dcc82141326a2fc1c5160241f346c`
+  `a97d8846605c433db561d07f23fc9ff372e20ced`
 - CHOC: the Cmajor `include/choc` gitlink at
-  `037e34a2b382175c8bee4be5a0707724130f10e8`
+  `98b52fb54c3b9fec03c0c13218f6557aef33eabe`
 - JUCE: `juce-framework/JUCE` at
   `501c07674e1ad693085a7e7c398f205c2677f5da`
 
@@ -51,6 +51,13 @@ build's `CMakeCache.txt`, verifies exact Cmajor/CHOC/JUCE revisions and clean
 checkouts plus their declared repository origins, and records the attestation
 in the release manifest. Absolute machine-local checkout paths are deliberately
 not recorded.
+
+Production builds compile the canonical Cmajor command from those pinned sources
+at `build/cmajor_command/bin/cmaj` and pass that absolute repository build output
+to generation. There is no external Cmajor 1.0.3066 authority,
+`COSIMO_RELEASE_CMAJ` override, or `PATH` fallback. The pinned generator owns the
+declared plugin latency; the release proof checks its creation and reload
+behavior without rewriting generated C++.
 
 ## Product decisions required before public beta
 
@@ -101,11 +108,13 @@ Signed/notarized candidate command, only after the product decisions and Apple
 credential gates below are complete:
 
 ```bash
-COSIMO_DEVELOPER_ID_APPLICATION="Developer ID Application: <name> (<team-id>)" \
-COSIMO_DEVELOPER_ID_INSTALLER="Developer ID Installer: <name> (<team-id>)" \
 COSIMO_NOTARY_PROFILE="<approved-keychain-profile>" \
 npm run seqfx:release:build -- --release
 ```
+
+The approved application and installer identities come from
+`scripts/seqfx-release-config.mjs`; identity environment variables are not a
+release authority.
 
 The command never installs a plugin, starts a DAW, uploads to Patreon, deploys,
 or publishes. Those are separate gates and authorizations.
@@ -152,48 +161,52 @@ download without creating a checksum cycle inside the ZIP.
 
 ## Gate A — clean source and product qualification
 
-- [x] Source review and decision-provenance objection audit are complete.
-- [x] Branch is committed and `git status --short --untracked-files=all` is clean.
-- [x] Release config, patch manifest, and `fx/build-effect.mjs` identity/path
+Evidence previously recorded for commit `56eb5c2f` is historical only. It does
+not qualify the repaired candidate; every source, build, artifact, pluginval,
+install, and Ableton check below must be rerun against the eventual final commit.
+
+- [ ] Source review and decision-provenance objection audit are complete.
+- [ ] Branch is committed and `git status --short --untracked-files=all` is clean.
+- [ ] Release config, patch manifest, and `fx/build-effect.mjs` identity/path
   contract passes.
-- [x] Plan mode records the exact CMake-declared Cmajor and JUCE repositories
+- [ ] Plan mode records the exact CMake-declared Cmajor and JUCE repositories
   and revisions plus the expected Cmajor-pinned CHOC gitlink.
-- [x] Complete focused SeqFX state/runtime/preset/browser suites pass.
-- [x] Production packaged-view suite passes.
-- [x] Complete SeqFX DSP/buffer/interpolation suites pass at the supported sample
+- [ ] Complete focused SeqFX state/runtime/preset/browser suites pass.
+- [ ] Production packaged-view suite passes.
+- [ ] Complete SeqFX DSP/buffer/interpolation suites pass at the supported sample
   rates.
-- [x] Production SeqFX runtime build and Cmajor dry-run pass.
-- [x] Any open listening or host gate is written as open, not inferred from tests.
+- [ ] Production SeqFX runtime build and Cmajor dry-run pass.
+- [ ] Any open listening or host gate is written as open, not inferred from tests.
 
 ## Gate B — native release-candidate VST3
 
-- [x] Run the clean production build through the release builder from the clean
+- [ ] Run the clean production build through the release builder from the clean
   candidate commit.
-- [x] Confirm the exact `_build/plugin/` VST3 path above exists.
-- [x] Confirm `lipo -archs` reports `arm64 x86_64`.
-- [x] Confirm strict code-sign verification passes on the local build signature.
-- [x] Confirm required patched CHOC WebView marker strings exist and retired
+- [ ] Confirm the exact `_build/plugin/` VST3 path above exists.
+- [ ] Confirm `lipo -archs` reports `arm64 x86_64`.
+- [ ] Confirm strict code-sign verification passes on the local build signature.
+- [ ] Confirm required patched CHOC WebView marker strings exist and retired
   keyboard-probe strings do not.
-- [x] Confirm the release manifest records matching declared and actual
+- [ ] Confirm the release manifest records matching declared and actual
   Cmajor/CHOC/JUCE revisions, the Cmajor CHOC gitlink, and `clean: true` for all
   three selected checkouts, with every declared repository origin verified.
-- [x] Inspect `Info.plist` and `moduleinfo.json` for identity, versions, category,
+- [ ] Inspect `Info.plist` and `moduleinfo.json` for identity, versions, category,
   architecture, and any inappropriate generated permissions/usage text.
-- [x] Record VST3 bundle and executable sizes and SHA-256 values.
+- [ ] Record VST3 bundle and executable sizes and SHA-256 values.
 
 ## Gate C — repeatable local packaging
 
-- [x] Run the local builder with `--unsigned --verify-repeatable-packaging` from the same clean
+- [ ] Run the local builder with `--unsigned --verify-repeatable-packaging` from the same clean
   commit.
-- [x] Confirm the repeat report has no differing payload/package/ZIP bytes.
-- [x] Confirm `pkgutil --payload-files` contains exactly the VST3 under
+- [ ] Confirm the repeat report has no differing payload/package/ZIP bytes.
+- [ ] Confirm `pkgutil --payload-files` contains exactly the VST3 under
   `/Library/Audio/Plug-Ins/VST3/` and contains no `._` or `.DS_Store` entries.
-- [x] Confirm `unzip -t` succeeds.
-- [x] Confirm the manifest says `local-ad-hoc-validation`,
+- [ ] Confirm `unzip -t` succeeds.
+- [ ] Confirm the manifest says `local-ad-hoc-validation`,
   `distributionReady: false`, and names every unperformed host/public gate.
-- [x] Confirm the README visibly says the unsigned installer and ad-hoc-signed
+- [ ] Confirm the README visibly says the unsigned installer and ad-hoc-signed
   VST3 are not for Patreon.
-- [x] Confirm `THIRD_PARTY_NOTICES.txt` is present at the ZIP root and inside
+- [ ] Confirm `THIRD_PARTY_NOTICES.txt` is present at the ZIP root and inside
   the staged VST3 resources, and is covered by checksums.
 
 ## Gate D — Apple credentials, signing, and notarization
@@ -220,14 +233,14 @@ credentials in the repo, config, manifest, release notes, or command history.
 
 ## Gate E — packaged binary validation
 
-- [x] Expand the final pkg into a temporary directory.
-- [x] Strictly verify the VST3 signature inside the expanded package.
-- [x] Confirm the packaged binary is universal (`arm64 x86_64`).
-- [x] Run pluginval strictness 5 against the packaged VST3; the ephemeral log
-  reported `SUCCESS` and exit 0 before its private temp directory was removed.
-- [x] Record the separate Steinberg VST3 validator as unperformed because no
+- [ ] Expand the final pkg into a temporary directory.
+- [ ] Strictly verify the VST3 signature inside the expanded package.
+- [ ] Confirm the packaged binary is universal (`arm64 x86_64`).
+- [ ] Run pluginval strictness 5 against the packaged VST3 and record fresh
+  `SUCCESS`/exit-0 evidence; do not reuse the historical `56eb5c2f` log.
+- [ ] Record the separate Steinberg VST3 validator as unperformed because no
   validator path was configured.
-- [x] Confirm all twelve effects and the current state/preset version are present
+- [ ] Confirm all twelve effects and the current state/preset version are present
   in the packaged product, not only source UI.
 
 ## Gate F — controlled install and Ableton acceptance
@@ -237,13 +250,13 @@ Before installation, inspect both locations:
 - `/Library/Audio/Plug-Ins/VST3/CosimoSeqFX.vst3`
 - `~/Library/Audio/Plug-Ins/VST3/CosimoSeqFX.vst3`
 
-- [x] Confirm no other task owns the installed SeqFX path.
-- [x] Recoverably move any stale user-level development copy out of the scan path;
+- [ ] Confirm no other task owns the installed SeqFX path.
+- [ ] Recoverably move any stale user-level development copy out of the scan path;
   do not delete it by default.
-- [x] Install the exact qualified packaged VST3 at the controlled user scan path.
-- [x] Prove Ableton loaded the intended user-path candidate, not the stale system
+- [ ] Install the exact qualified packaged VST3 at the controlled user scan path.
+- [ ] Prove Ableton loaded the intended user-path candidate, not the stale system
   copy: Live mapped exactly one SeqFX executable and its hash matched the package.
-- [x] Insert SeqFX in Ableton and verify disposable-project save, replacement with
+- [ ] Insert SeqFX in Ableton and verify disposable-project save, replacement with
   a new set, reopen, state presence, and exact-binary recall.
 - [ ] Open/resize the custom editor and verify live audio, in-host automation,
   presets, loop/seek, bypass, and multiple-instance interaction. Live 11's canvas

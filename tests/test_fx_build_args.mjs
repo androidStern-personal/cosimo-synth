@@ -68,22 +68,25 @@ test("SeqFX canonical runtime reuse is opt-in and scoped to the aggregate handof
 test("the SeqFX production configure explicitly disables microphone permission metadata", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
     const plugin = buildModule.effectPlugins.seqfx;
+    const cmajExecutable = prodModule.getPinnedCmajExecutablePath();
 
     assert.equal(plugin.disableMicrophonePermission, true);
-    assert.deepEqual(prodModule.createCmakeConfigureArgs({
-        cmajExecutable: "/opt/cosimo/bin/cmaj",
-        cmakeBuildDir: "/tmp/seqfx-build",
+    assert.deepEqual(prodModule.createJuceGenerationConfigureArgs({
+        cmajExecutable,
+        cmakeBuildDirectory: "/tmp/seqfx-build",
         cmakeSourceDirectory: "/repo/tools/effect_plugin_build",
         disableMicrophonePermission: plugin.disableMicrophonePermission,
-        juceOut: "/repo/build/seqfx_juce",
+        juceOutputDirectory: "/repo/build/seqfx_juce",
+        pluginTarget: "CosimoSeqFX",
         runtimePatchPath: "/repo/build/fx/seqfx_runtime/SeqFx.cmajorpatch",
     }), [
         "-S", "/repo/tools/effect_plugin_build",
         "-B", "/tmp/seqfx-build",
         "-DCMAKE_BUILD_TYPE=Release",
-        "-DCOSIMO_CMAJ_EXECUTABLE:FILEPATH=/opt/cosimo/bin/cmaj",
         "-DCOSIMO_EFFECT_PATCH_PATH=/repo/build/fx/seqfx_runtime/SeqFx.cmajorpatch",
         "-DCOSIMO_EFFECT_OUTPUT_DIR=/repo/build/seqfx_juce",
+        "-DCOSIMO_EFFECT_PLUGIN_TARGET=CosimoSeqFX",
+        `-DCOSIMO_CMAJ_EXECUTABLE=${cmajExecutable}`,
         "-DCOSIMO_DISABLE_MICROPHONE_PERMISSION=ON",
     ]);
     const wrapperCmake = await readFile(
@@ -99,13 +102,11 @@ test("the SeqFX production configure explicitly disables microphone permission m
 test("fx_prod_release_tool_overrides are absolute and PATH-independent", async () => {
     const { prodModule } = await loadBuildModules();
     const tools = prodModule.resolveProdBuildToolPaths({
-        COSIMO_RELEASE_CMAJ: "/approved/cmaj",
         COSIMO_RELEASE_CMAKE: "/approved/cmake",
         COSIMO_RELEASE_NODE: "/approved/node",
     }, "darwin");
 
     assert.deepEqual(tools, {
-        cmaj: "/approved/cmaj",
         cmake: "/approved/cmake",
         codesign: "/usr/bin/codesign",
         grep: "/usr/bin/grep",
@@ -114,10 +115,6 @@ test("fx_prod_release_tool_overrides are absolute and PATH-independent", async (
     assert.throws(
         () => prodModule.resolveProdBuildToolPaths({ COSIMO_RELEASE_CMAKE: "cmake" }, "darwin"),
         /COSIMO_RELEASE_CMAKE must be an absolute executable path/u,
-    );
-    assert.throws(
-        () => prodModule.resolveProdBuildToolPaths({ COSIMO_RELEASE_CMAJ: "./cmaj" }, "darwin"),
-        /COSIMO_RELEASE_CMAJ must be an absolute executable path/u,
     );
     assert.throws(
         () => prodModule.resolveProdBuildToolPaths({ COSIMO_RELEASE_NODE: "node" }, "darwin"),
@@ -182,6 +179,7 @@ test("the Enhancer production plugin packages the canonical T26 DSP instead of a
         { repoPath: "cmajor/Enhancer.cmajor", runtimePath: "Enhancer.cmajor" },
         { repoPath: "fx/enhancer/EnhancerPlugin.cmajor", runtimePath: "EnhancerPlugin.cmajor" },
     ]);
+    assert.equal("generatedHostLatencySamples" in buildModule.effectPlugins.enhancer, false);
 });
 
 test("the Enhancer Lite plugin packages its isolated one-band prototype", async () => {
@@ -199,6 +197,7 @@ test("the Enhancer Lite plugin packages its isolated one-band prototype", async 
         },
         { repoPath: "fx/enhancer_lite/EnhancerLitePlugin.cmajor", runtimePath: "EnhancerLitePlugin.cmajor" },
     ]);
+    assert.equal("generatedHostLatencySamples" in buildModule.effectPlugins["enhancer-lite"], false);
     assert.equal(buildModule.effectPlugins["enhancer-lite"].productName, "CosimoEnhancerLite");
     assert.deepEqual(manifest.resources, ["assets/enhancer-lite-wordmark.png"]);
 });
@@ -218,7 +217,7 @@ test("the Enhancer Lite shelf audition target is isolated from production all", 
     assert.equal(manifest.plugin.pluginCode, "CsLS");
 });
 
-test("effect production builds and passes the exact pinned Cmajor command instead of resolving PATH", async () => {
+test("effect production uses the repository-built pinned Cmajor generator without rewriting generated C++", async () => {
     const { prodModule } = await loadBuildModules();
     const expectedExecutable = path.join(
         repoRoot,
@@ -227,7 +226,6 @@ test("effect production builds and passes the exact pinned Cmajor command instea
         "bin",
         process.platform === "win32" ? "cmaj.exe" : "cmaj",
     );
-    const staleSystemExecutable = path.join(os.tmpdir(), "stale-system-cmaj");
     const generationProject = await readFile(
         path.join(repoRoot, "tools/effect_plugin_build/CMakeLists.txt"),
         "utf8",
@@ -258,15 +256,16 @@ test("effect production builds and passes the exact pinned Cmajor command instea
         ],
     );
     assert.throws(
-        () => prodModule.validatePinnedCmajExecutable(staleSystemExecutable),
-        /must be the Cmajor command built from the pinned source/,
+        () => prodModule.validatePinnedCmajExecutable("/tmp/stale-system-cmaj"),
+        /must be the Cmajor command built from the pinned source/u,
     );
-    assert.doesNotMatch(generationProject, /find_program\s*\([^)]*cmaj/s);
-    assert.match(generationProject, /COSIMO_CMAJ_EXECUTABLE/);
-    assert.match(commandProject, /cosimo_add_production_dependencies\(\)/);
-    assert.match(commandProject, /add_subdirectory\s*\(\s*"\$\{COSIMO_CMAJOR_SOURCE_DIR\}"/s);
-    assert.match(commandProject, /set\(WARNINGS_AS_ERRORS ON CACHE BOOL/);
-    assert.doesNotMatch(commandProject, /WARNINGS_AS_ERRORS OFF/);
+    assert.equal("replaceGeneratedPluginLatency" in prodModule, false);
+    assert.doesNotMatch(generationProject, /find_program\s*\([^)]*cmaj/su);
+    assert.match(generationProject, /COSIMO_CMAJ_EXECUTABLE/u);
+    assert.match(commandProject, /cosimo_add_production_dependencies\(\)/u);
+    assert.match(commandProject, /add_subdirectory\s*\(\s*"\$\{COSIMO_CMAJOR_SOURCE_DIR\}"/su);
+    assert.match(commandProject, /set\(WARNINGS_AS_ERRORS ON CACHE BOOL/u);
+    assert.doesNotMatch(commandProject, /WARNINGS_AS_ERRORS OFF/u);
     assert.deepEqual(
         prodModule.createProdBuildChildArgs("enhancer", { cmajExecutable: expectedExecutable }),
         [
@@ -312,13 +311,13 @@ test("generated latency probe resolves the generator-authored factory type exact
         const missingResult = runExtractor(missingSource);
 
         assert.equal(ottResult.status, 0, ottResult.stderr);
-        assert.match(`${ottResult.stdout}${ottResult.stderr}`, /-- OttLab/);
+        assert.match(`${ottResult.stdout}${ottResult.stderr}`, /-- OttLab/u);
         assert.equal(enhancerResult.status, 0, enhancerResult.stderr);
-        assert.match(`${enhancerResult.stdout}${enhancerResult.stderr}`, /-- CosimoEnhancer/);
+        assert.match(`${enhancerResult.stdout}${enhancerResult.stderr}`, /-- CosimoEnhancer/u);
         assert.notEqual(ambiguousResult.status, 0);
-        assert.match(ambiguousResult.stderr, /Expected exactly one.*found 2/s);
+        assert.match(ambiguousResult.stderr, /Expected exactly one.*found 2/su);
         assert.notEqual(missingResult.status, 0);
-        assert.match(missingResult.stderr, /Expected exactly one.*found 0/s);
+        assert.match(missingResult.stderr, /Expected exactly one.*found 0/su);
     } finally {
         await rm(tempRoot, { recursive: true, force: true });
     }

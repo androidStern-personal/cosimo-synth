@@ -191,6 +191,27 @@ async function boundingBoxForCell(page, lane, step) {
     return box;
 }
 
+async function dispatchSyntheticPointer(page, targetSelector, type, init) {
+    return page.evaluate(({ nextTargetSelector, nextType, nextInit }) => {
+        const target = nextTargetSelector === "window"
+            ? window
+            : document.querySelector(nextTargetSelector);
+        if (!target) {
+            throw new Error(`Synthetic pointer target not found: ${nextTargetSelector}`);
+        }
+        return target.dispatchEvent(new PointerEvent(nextType, {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            ...nextInit,
+        }));
+    }, {
+        nextInit: init,
+        nextTargetSelector: targetSelector,
+        nextType: type,
+    });
+}
+
 function blockRoleName(lane, startStep, endStep = startStep) {
     const laneName = SEQFX_LANE_NAMES[lane];
     const effectName = SEQFX_DEFAULT_EFFECT_NAMES[lane];
@@ -1343,6 +1364,81 @@ test("seqfx_loop_ruler_pointer_drag_follows_the_second_visual_row", async () => 
     assert.equal(snapshot.parameters.loopStart, 16, `second-row drag should set loop start to step 17; events: ${JSON.stringify(loopEvents)}`);
     assert.equal(await page.locator('[data-role="seqfx-loop-start"]').inputValue(), "17");
     assert.equal(await page.locator('[data-role="seqfx-loop-end"]').inputValue(), "32");
+
+    await page.close();
+});
+
+test("seqfx_loop_ruler_touch_drag_with_zero_buttons_keeps_owner_through_capture_loss", async () => {
+    const page = await browser.newPage({ viewport: { width: 900, height: 600 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    const step1 = await page.locator('[data-role="seqfx-loop-step"][data-loop-step="0"]').boundingBox();
+    const step5 = await page.locator('[data-role="seqfx-loop-step"][data-loop-step="4"]').boundingBox();
+    const step7 = await page.locator('[data-role="seqfx-loop-step"][data-loop-step="6"]').boundingBox();
+    assert.ok(step1);
+    assert.ok(step5);
+    assert.ok(step7);
+
+    const center = (box) => ({
+        clientX: box.x + (box.width / 2),
+        clientY: box.y + (box.height / 2),
+    });
+    await dispatchSyntheticPointer(
+        page,
+        '[data-role="seqfx-loop-step"][data-loop-step="0"]',
+        "pointerdown",
+        { ...center(step1), buttons: 1, pointerId: 41, pointerType: "touch" },
+    );
+    await dispatchSyntheticPointer(
+        page,
+        '[data-role="seqfx-loop-ruler"]',
+        "lostpointercapture",
+        { ...center(step1), buttons: 0, pointerId: 41, pointerType: "touch" },
+    );
+    await dispatchSyntheticPointer(
+        page,
+        '[data-role="seqfx-loop-ruler"]',
+        "pointermove",
+        { ...center(step5), buttons: 0, pointerId: 41, pointerType: "touch" },
+    );
+    await page.waitForFunction(() => window.__SEQFX_HARNESS__?.getSnapshot().parameters.loopStart === 4);
+
+    await dispatchSyntheticPointer(page, "window", "pointerup", {
+        ...center(step5),
+        buttons: 0,
+        pointerId: 99,
+        pointerType: "touch",
+    });
+    let snapshot = await getHarnessSnapshot(page);
+    assert.deepEqual(snapshot.gestureStarts, ["loopStart", "loopLength"]);
+    assert.deepEqual(snapshot.gestureEnds, [], "an unrelated pointer-up must not end the loop gesture");
+
+    await dispatchSyntheticPointer(
+        page,
+        '[data-role="seqfx-loop-ruler"]',
+        "pointermove",
+        { ...center(step7), buttons: 0, pointerId: 41, pointerType: "touch" },
+    );
+    await page.waitForFunction(() => window.__SEQFX_HARNESS__?.getSnapshot().parameters.loopStart === 6);
+    await dispatchSyntheticPointer(page, "window", "pointercancel", {
+        ...center(step7),
+        buttons: 0,
+        pointerId: 99,
+        pointerType: "touch",
+    });
+    assert.deepEqual((await getHarnessSnapshot(page)).gestureEnds, []);
+
+    await dispatchSyntheticPointer(page, "window", "pointerup", {
+        ...center(step7),
+        buttons: 0,
+        pointerId: 41,
+        pointerType: "touch",
+    });
+    snapshot = await getHarnessSnapshot(page);
+    assert.equal(snapshot.parameters.loopStart, 6);
+    assert.deepEqual(snapshot.gestureEnds, ["loopStart", "loopLength"]);
 
     await page.close();
 });
@@ -3595,6 +3691,33 @@ test("seqfx_right_edge_drag_resizes_a_block_without_retriggering_continuation_st
     await page.close();
 });
 
+test("seqfx_resize_pointer_target_is_24px_without_swallowing_the_shortest_block", async () => {
+    const page = await browser.newPage({ viewport: { width: 720, height: 520 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+
+    const block = await page.getByRole("button", { name: "Chain 1 Filter block 1", exact: true }).boundingBox();
+    const handle = page.locator('[data-role="seqfx-block-resize"][data-lane="0"][data-start="0"]');
+    const handleBox = await handle.boundingBox();
+    assert.ok(block);
+    assert.ok(handleBox);
+    assert.equal(await handle.getAttribute("data-pointer-target"), "true");
+    assert.ok(handleBox.width >= 24, `resize pointer width must be at least 24px, got ${handleBox.width}`);
+    assert.ok(handleBox.height >= 24, `resize pointer height must be at least 24px, got ${handleBox.height}`);
+
+    const overlap = Math.max(
+        0,
+        Math.min(block.x + block.width, handleBox.x + handleBox.width) - Math.max(block.x, handleBox.x),
+    );
+    assert.ok(
+        block.width - overlap >= 4,
+        `resize pointer target swallowed the shortest block (${block.width}px block, ${overlap}px overlap)`,
+    );
+
+    await page.close();
+});
+
 test("seqfx_cross_row_blocks_render_as_one_logical_block_split_across_bar_rows", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
@@ -4484,6 +4607,124 @@ test("seqfx_double_click_deletes_the_clicked_block", async () => {
     assert.equal(deleteUpload.activeSteps[3][4], false);
     assert.equal(deleteUpload.triggerSteps[3][4], false);
     await page.locator('[data-role="seqfx-inspector"]').getByText("Select a cell").waitFor();
+
+    await page.close();
+});
+
+test("seqfx_block_move_copy_and_resize_ignore_non_owner_pointer_move_up_and_cancel", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.getByRole("button", { name: "Chain 1 step 2", exact: true }).click();
+    await resizeBlockToStep(page, 0, 2, 3);
+
+    const center = (box) => ({
+        clientX: box.x + (box.width / 2),
+        clientY: box.y + (box.height / 2),
+    });
+    const blockBodyPoint = (box) => ({
+        clientX: box.x + 2,
+        clientY: box.y + (box.height / 2),
+    });
+    const dispatchForeignSequence = async (targetPoint, pointerId) => {
+        await dispatchSyntheticPointer(page, "window", "pointermove", {
+            ...targetPoint,
+            buttons: 1,
+            pointerId,
+            pointerType: "touch",
+        });
+        await dispatchSyntheticPointer(page, "window", "pointerup", {
+            ...targetPoint,
+            buttons: 0,
+            pointerId,
+            pointerType: "touch",
+        });
+        await dispatchSyntheticPointer(page, "window", "pointercancel", {
+            ...targetPoint,
+            buttons: 0,
+            pointerId,
+            pointerType: "touch",
+        });
+    };
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    let sourceSelector = '[data-role="seqfx-block"][data-lane="0"][data-start="1"]';
+    let sourceBox = await page.locator(sourceSelector).boundingBox();
+    let targetBox = await boundingBoxForCell(page, 0, 4);
+    assert.ok(sourceBox);
+    await page.mouse.move(blockBodyPoint(sourceBox).clientX, blockBodyPoint(sourceBox).clientY);
+    await page.mouse.down();
+    assert.equal(await page.locator('[data-role="seqfx-root"]').evaluate((node) => node.classList.contains("is-dragging")), true);
+    await dispatchForeignSequence(center(targetBox), 202);
+    assert.equal(await page.locator('[data-role="seqfx-root"]').evaluate((node) => node.classList.contains("is-dragging")), true);
+    assert.equal(await page.locator('[data-role="seqfx-block"][data-lane="0"][data-start="4"]').count(), 0);
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 0);
+
+    await page.mouse.move(center(targetBox).clientX, center(targetBox).clientY, { steps: 8 });
+    await page.waitForTimeout(100);
+    assert.equal(
+        await page.locator('[data-role="seqfx-block"][data-lane="0"][data-start="4"]').count(),
+        1,
+        `owner move did not create its preview: ${JSON.stringify(await page.locator('[data-role="seqfx-root"]').evaluate((node) => ({
+            className: node.className,
+            invalidDrops: node.querySelectorAll('[data-role="seqfx-invalid-drop"]').length,
+            previews: [...node.querySelectorAll('[data-role="seqfx-block"]')].map((block) => ({
+                lane: block.getAttribute("data-lane"),
+                start: block.getAttribute("data-start"),
+            })),
+        })))}`,
+    );
+    await dispatchSyntheticPointer(page, "window", "pointercancel", {
+        ...center(targetBox),
+        buttons: 0,
+        pointerId: 202,
+        pointerType: "touch",
+    });
+    assert.equal(await page.locator('[data-role="seqfx-block"][data-start="4"]').count(), 1);
+    await page.mouse.up();
+    await page.getByRole("button", { name: "Chain 1 Filter block 5-6", exact: true }).waitFor();
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 1);
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    sourceSelector = '[data-role="seqfx-block"][data-lane="0"][data-start="4"]';
+    sourceBox = await page.locator(sourceSelector).boundingBox();
+    targetBox = await boundingBoxForCell(page, 3, 7);
+    assert.ok(sourceBox);
+    await page.keyboard.down("Alt");
+    await page.mouse.move(blockBodyPoint(sourceBox).clientX, blockBodyPoint(sourceBox).clientY);
+    await page.mouse.down();
+    await dispatchForeignSequence(center(targetBox), 404);
+    assert.equal(await page.locator('[data-role="seqfx-block"][data-preview="true"][data-lane="3"][data-start="7"]').count(), 0);
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 0);
+    await page.mouse.move(center(targetBox).clientX, center(targetBox).clientY, { steps: 8 });
+    await page.locator('[data-role="seqfx-block"][data-preview="true"][data-lane="3"][data-start="7"]').waitFor();
+    await page.mouse.up();
+    await page.keyboard.up("Alt");
+    await page.getByRole("button", { name: "Chain 4 Filter block 8-9", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Chain 1 Filter block 5-6", exact: true }).waitFor();
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 1);
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    const resizeSelector = '[data-role="seqfx-block-resize"][data-lane="3"][data-start="7"]';
+    sourceBox = await page.locator(resizeSelector).boundingBox();
+    targetBox = await boundingBoxForCell(page, 3, 9);
+    assert.ok(sourceBox);
+    await page.mouse.move(center(sourceBox).clientX, center(sourceBox).clientY);
+    await page.mouse.down();
+    await dispatchForeignSequence(center(targetBox), 606);
+    assert.equal(await page.getByRole("button", { name: "Chain 4 Filter block 8-10", exact: true }).count(), 0);
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 0);
+    await page.mouse.move(center(targetBox).clientX, center(targetBox).clientY, { steps: 8 });
+    await page.getByRole("button", { name: "Chain 4 Filter block 8-10", exact: true }).waitFor();
+    await dispatchSyntheticPointer(page, "window", "pointercancel", {
+        ...center(targetBox),
+        buttons: 0,
+        pointerId: 606,
+        pointerType: "touch",
+    });
+    await page.mouse.up();
+    await page.getByRole("button", { name: "Chain 4 Filter block 8-10", exact: true }).waitFor();
+    assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 1);
 
     await page.close();
 });

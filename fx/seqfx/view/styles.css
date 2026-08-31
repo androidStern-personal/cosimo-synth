@@ -1036,21 +1036,23 @@ select {
 
 .seqfx-block-resize {
     position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
+    top: 50%;
+    right: -16px;
+    bottom: auto;
     z-index: 4;
-    width: 8px;
+    height: max(100%, 24px);
+    width: 24px;
     border-radius: 0 5px 5px 0;
     background: transparent;
     cursor: col-resize;
     touch-action: none;
+    transform: translateY(-50%);
 }
 
 .seqfx-block-resize::after {
     position: absolute;
     top: 5px;
-    right: 2px;
+    right: 14px;
     bottom: 5px;
     width: 2px;
     border-radius: 999px;

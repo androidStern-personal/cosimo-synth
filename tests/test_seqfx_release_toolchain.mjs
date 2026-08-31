@@ -12,7 +12,6 @@ import {
 } from "../scripts/seqfx-release-toolchain.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const currentCmajPath = path.join(process.env.HOME, ".local", "bin", "cmaj");
 const currentCmakePath = "/opt/homebrew/bin/cmake";
 
 test("release system commands are immutable absolute macOS paths", () => {
@@ -41,23 +40,15 @@ test("release toolchain resolves approved binaries while keeping manifest eviden
     const toolchain = await resolveSeqFxReleaseToolchain({
         environment: {
             ...process.env,
-            COSIMO_RELEASE_CMAJ: currentCmajPath,
             COSIMO_RELEASE_CMAKE: currentCmakePath,
         },
         repositoryRoot: repoRoot,
     });
 
     assert.equal(toolchain.privateInvocationPaths.cmake, await realpath(currentCmakePath));
-    assert.equal(toolchain.privateInvocationPaths.cmaj, await realpath(currentCmajPath));
     assert.equal(toolchain.privateInvocationPaths.node, await realpath(process.execPath));
     assert.equal(toolchain.privateInvocationPaths.codesign, "/usr/bin/codesign");
     assert.deepEqual(toolchain.manifestAttestation.externalTools, {
-        cmaj: {
-            provenance: "approved-binary-toolchain",
-            runtimeSourceAttestation: "separate",
-            sha256: "4bfdd75549a6d51578977ee6e2ac55b2ede459a1ccb1055479d3dd0f9e8cdabf",
-            version: "1.0.3066",
-        },
         cmake: {
             provenance: "approved-binary-toolchain",
             sha256: "2fb3d19ecda5c45dd35f826af5f241a81c699dccf010f877948b37ca2addb290",
@@ -68,6 +59,12 @@ test("release toolchain resolves approved binaries while keeping manifest eviden
             sha256: "5d9d3872911e2340a43b707962e68143de8a4e8d54628845c0c4f2de1fb7cd5c",
             version: "v22.22.3",
         },
+    });
+    assert.deepEqual(toolchain.manifestAttestation.sourceBuiltTools.cmaj, {
+        cmajorCommit: "a97d8846605c433db561d07f23fc9ff372e20ced",
+        chocCommit: "98b52fb54c3b9fec03c0c13218f6557aef33eabe",
+        executablePolicy: "absolute-repository-build-output-no-path-fallback",
+        provenance: "repository-pinned-source-build",
     });
     const pendingValues = [toolchain.manifestAttestation];
 
@@ -86,7 +83,7 @@ test("release toolchain ignores poisoned PATH and emits only the allowed child e
     const sentinel = path.join(poisonBin, "invoked.txt");
     context.after(() => rm(poisonBin, { force: true, recursive: true }));
 
-    for (const command of ["cmaj", "cmake", "codesign", "git", "node", "xcrun"]) {
+    for (const command of ["cmake", "codesign", "git", "node", "xcrun"]) {
         const commandPath = path.join(poisonBin, command);
         await writeFile(commandPath, `#!/bin/sh\nprintf '%s\\n' '${command}' >> '${sentinel}'\n`, "utf8");
         await chmod(commandPath, 0o755);
@@ -100,7 +97,6 @@ test("release toolchain ignores poisoned PATH and emits only the allowed child e
         COSIMO_DEVELOPER_ID_INSTALLER: "installer identity",
         COSIMO_NOTARY_PROFILE: "notary profile",
         COSIMO_PLUGIN_JOBS: "2",
-        COSIMO_RELEASE_CMAJ: currentCmajPath,
         COSIMO_RELEASE_CMAKE: currentCmakePath,
         CPM_SOURCE_CACHE: "/tmp/approved-cpm-cache",
         DYLD_INSERT_LIBRARIES: "/tmp/poison.dylib",
@@ -136,12 +132,11 @@ test("release toolchain rejects relative executable overrides", async () => {
         resolveSeqFxReleaseToolchain({
             environment: {
                 ...process.env,
-                COSIMO_RELEASE_CMAJ: "./cmaj",
-                COSIMO_RELEASE_CMAKE: currentCmakePath,
+                COSIMO_RELEASE_CMAKE: "./cmake",
             },
             repositoryRoot: repoRoot,
         }),
-        /cmaj executable path must be absolute/u,
+        /cmake executable path must be absolute/u,
     );
 });
 
@@ -150,7 +145,6 @@ test("release toolchain rejects executables from the repository", async () => {
         resolveSeqFxReleaseToolchain({
             environment: {
                 ...process.env,
-                COSIMO_RELEASE_CMAJ: currentCmajPath,
                 COSIMO_RELEASE_CMAKE: path.join(repoRoot, "scripts", "seqfx-release-toolchain.mjs"),
             },
             repositoryRoot: repoRoot,
@@ -161,34 +155,32 @@ test("release toolchain rejects executables from the repository", async () => {
 
 test("release toolchain rejects executables from any node_modules tree", async (context) => {
     const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-node-modules-"));
-    const executablePath = path.join(fixtureRoot, "node_modules", "bin", "cmaj");
+    const executablePath = path.join(fixtureRoot, "node_modules", "bin", "cmake");
     context.after(() => rm(fixtureRoot, { force: true, recursive: true }));
     await mkdir(path.dirname(executablePath), { recursive: true });
-    await writeFile(executablePath, "#!/bin/sh\nprintf 'Cmajor Version: 1.0.3066\\n'\n", "utf8");
+    await writeFile(executablePath, "#!/bin/sh\nprintf 'cmake version 4.2.3\\n'\n", "utf8");
     await chmod(executablePath, 0o755);
 
     await assert.rejects(
         resolveSeqFxReleaseToolchain({
             environment: {
                 ...process.env,
-                COSIMO_RELEASE_CMAJ: executablePath,
-                COSIMO_RELEASE_CMAJ_SHA256: "caller-controlled",
-                COSIMO_RELEASE_CMAKE: currentCmakePath,
+                COSIMO_RELEASE_CMAKE: executablePath,
             },
             repositoryRoot: repoRoot,
         }),
-        /cmaj executable must be outside node_modules/u,
+        /cmake executable must be outside node_modules/u,
     );
 });
 
 test("release toolchain rejects unapproved bytes without executing them", async (context) => {
     const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-hash-drift-"));
-    const executablePath = path.join(fixtureRoot, "cmaj");
+    const executablePath = path.join(fixtureRoot, "cmake");
     const sentinel = path.join(fixtureRoot, "invoked.txt");
     context.after(() => rm(fixtureRoot, { force: true, recursive: true }));
     await writeFile(
         executablePath,
-        `#!/bin/sh\nprintf 'invoked\\n' > '${sentinel}'\nprintf 'Cmajor Version: 1.0.3066\\n'\n`,
+        `#!/bin/sh\nprintf 'invoked\\n' > '${sentinel}'\nprintf 'cmake version 4.2.3\\n'\n`,
         "utf8",
     );
     await chmod(executablePath, 0o755);
@@ -197,43 +189,40 @@ test("release toolchain rejects unapproved bytes without executing them", async 
         resolveSeqFxReleaseToolchain({
             environment: {
                 ...process.env,
-                COSIMO_RELEASE_CMAJ: executablePath,
-                COSIMO_RELEASE_CMAJ_SHA256: "caller-controlled",
-                COSIMO_RELEASE_CMAKE: currentCmakePath,
+                COSIMO_RELEASE_CMAKE: executablePath,
             },
             repositoryRoot: repoRoot,
         }),
-        /cmaj SHA-256 drift: expected 4bfdd75549a6d51578977ee6e2ac55b2ede459a1ccb1055479d3dd0f9e8cdabf/u,
+        /cmake SHA-256 drift: expected 2fb3d19ecda5c45dd35f826af5f241a81c699dccf010f877948b37ca2addb290/u,
     );
     await assert.rejects(access(sentinel));
 });
 
 test("release toolchain rejects version drift without accepting caller approval overrides", () => {
     assert.throws(
-        () => assertApprovedSeqFxReleaseToolEvidence("cmaj", {
-            sha256: "4bfdd75549a6d51578977ee6e2ac55b2ede459a1ccb1055479d3dd0f9e8cdabf",
-            version: "1.0.9999",
+        () => assertApprovedSeqFxReleaseToolEvidence("cmake", {
+            sha256: "2fb3d19ecda5c45dd35f826af5f241a81c699dccf010f877948b37ca2addb290",
+            version: "4.9.9999",
         }),
-        /cmaj version drift: expected 1\.0\.3066, found 1\.0\.9999/u,
+        /cmake version drift: expected 4\.2\.3, found 4\.9\.9999/u,
     );
 });
 
 test("release toolchain rejects a path that is not executable", async (context) => {
     const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-not-executable-"));
-    const executablePath = path.join(fixtureRoot, "cmaj");
+    const executablePath = path.join(fixtureRoot, "cmake");
     context.after(() => rm(fixtureRoot, { force: true, recursive: true }));
-    await writeFile(executablePath, "Cmajor Version: 1.0.3066\n", "utf8");
+    await writeFile(executablePath, "cmake version 4.2.3\n", "utf8");
     await chmod(executablePath, 0o644);
 
     await assert.rejects(
         resolveSeqFxReleaseToolchain({
             environment: {
                 ...process.env,
-                COSIMO_RELEASE_CMAJ: executablePath,
-                COSIMO_RELEASE_CMAKE: currentCmakePath,
+                COSIMO_RELEASE_CMAKE: executablePath,
             },
             repositoryRoot: repoRoot,
         }),
-        /cmaj path must resolve to an executable file/u,
+        /cmake path must resolve to an executable file/u,
     );
 });
