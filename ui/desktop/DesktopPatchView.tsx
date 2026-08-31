@@ -583,6 +583,7 @@ type VoiceToneSectionProps = FilterSectionProps & {
     voiceEnhancerAmount: PatchControlBinding<number>;
     voiceEnhancerKeyTrackEnabled: PatchControlBinding<number>;
     voiceEnhancerKeyTrackOffsetSemitones: PatchControlBinding<number>;
+    voiceEnhancerVisualizationActive: boolean;
 };
 
 type MsegEditorModalProps = {
@@ -2873,6 +2874,7 @@ function VoiceEnhancerSection({
     routes,
     armedSource,
     compact,
+    visualizationActive,
 }: {
     frequency: PatchControlBinding<number>;
     q: PatchControlBinding<number>;
@@ -2882,6 +2884,7 @@ function VoiceEnhancerSection({
     routes: ModulationRoute[];
     armedSource: MobileModSource;
     compact: boolean;
+    visualizationActive: boolean;
 }) {
     const keyTrackEnabled = keyTrackEnabledBinding.value >= 0.5;
     const initialTelemetry = useMemo(createVoiceEnhancerTelemetryDisplay, []);
@@ -2893,6 +2896,7 @@ function VoiceEnhancerSection({
             message,
             globalThis.performance?.now() ?? Date.now(),
         ),
+        visualizationActive,
     );
     const displayedFrequency = keyTrackEnabled ? keyTrackOffsetSemitones : frequency;
     const displayedFrequencyDescriptor = keyTrackEnabled
@@ -3022,6 +3026,7 @@ function VoiceToneSection(props: VoiceToneSectionProps) {
         voiceEnhancerAmount,
         voiceEnhancerKeyTrackEnabled,
         voiceEnhancerKeyTrackOffsetSemitones,
+        voiceEnhancerVisualizationActive,
         ...filterProps
     } = props;
     if (!filterProps.routes || !filterProps.armedSource) {
@@ -3050,6 +3055,7 @@ function VoiceToneSection(props: VoiceToneSectionProps) {
                     routes={filterProps.routes}
                     armedSource={filterProps.armedSource}
                     compact={compact}
+                    visualizationActive={voiceEnhancerVisualizationActive}
                 />
             )}
             <div
@@ -6251,6 +6257,11 @@ function DesktopPatchViewBody({
         synthView.wavetablePosition,
     ]);
 
+    // Compact workspace panels retain their mounted state while hidden. Keep
+    // the analyzer lease tied to the visible Voice surface, including when the
+    // Polish full-screen editor temporarily obscures the selected panel.
+    const voiceEnhancerVisualizationActive = !polishEditorExpanded
+        && (!isCompactViewport || mobileWorkspaceSection === "voice");
     const voiceWorkspace = (
         <>
         <section
@@ -6383,6 +6394,7 @@ function DesktopPatchViewBody({
                 voiceEnhancerAmount={synthView.voiceEnhancerAmount}
                 voiceEnhancerKeyTrackEnabled={synthView.voiceEnhancerKeyTrackEnabled}
                 voiceEnhancerKeyTrackOffsetSemitones={synthView.voiceEnhancerKeyTrackOffsetSemitones}
+                voiceEnhancerVisualizationActive={voiceEnhancerVisualizationActive}
                 observedFilterState={synthView.observedFilterState}
                 observedFilterSpectrum={synthView.observedFilterSpectrum}
                 resonanceNormalizedFromQ={resonanceNormalizedFromQ}

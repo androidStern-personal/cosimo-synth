@@ -2002,6 +2002,118 @@ test("the per-voice Enhancer reuses the Filter footprint and keeps Frequency and
     }
 });
 
+test("the per-voice Enhancer analyzer follows compact and Polish surface visibility", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const enhancerActivityValues = (snapshot) => snapshot.sentMessages
+        .filter(({ endpointID }) => endpointID === "voiceEnhancerSpectrumActivity")
+        .map(({ value }) => Number(value));
+
+    try {
+        await clearHarnessDebugLog(page);
+        await page.locator('[data-role="voice-tone-stage-enhancer"]').click();
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "visible compact Enhancer analyzer lease",
+            (candidate) => enhancerActivityValues(candidate).length === 1,
+        );
+        assert.deepEqual(enhancerActivityValues(snapshot), [1]);
+        assert.equal(snapshot.endpointListenerCounts.voiceEnhancerSpectrum, 1);
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitVoiceEnhancerTelemetry({
+                responseCount: 1,
+                voiceIndices: [2],
+                frequenciesHz: [440],
+                qValues: [1.25],
+                amounts: [0.8],
+            });
+            const magnitudes = new Array(2_048).fill(0);
+            magnitudes[220] = 1;
+            window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitVoiceEnhancerTelemetry({
+                sampleRateHz: 4_096,
+                magnitudes,
+            });
+        });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="voice-enhancer-graph"]')
+                ?.getAttribute("data-active-response-count") === "1"
+            && document.querySelector(
+                '[data-role="voice-enhancer-graph"] [data-role="enhancer-spectrum-incoming"]',
+            ) !== null
+        ));
+
+        await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "hidden compact Voice analyzer dormancy",
+            (candidate) => enhancerActivityValues(candidate).length === 2
+                && candidate.endpointListenerCounts.voiceEnhancerSpectrum === 0,
+        );
+        assert.deepEqual(enhancerActivityValues(snapshot), [1, 0]);
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitVoiceEnhancerTelemetry({
+                responseCount: 1,
+                voiceIndices: [7],
+                frequenciesHz: [1_760],
+                qValues: [2.5],
+                amounts: [1],
+            });
+        });
+        await page.locator('[data-role="rack-polish-node"]').click();
+        const polishEditor = page.locator('[data-role="rack-editor-polish"]');
+        await polishEditor.waitFor();
+        await polishEditor.locator('[data-role="polish-expand"]').click();
+        const fullScreen = page.locator('[data-role="polish-fullscreen-editor"]');
+        await fullScreen.waitFor();
+
+        await page.locator('[data-role="mobile-workspace-tab-voice"]')
+            .evaluate((element) => element.click());
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-workspace-tab-voice"]')
+                ?.getAttribute("aria-selected") === "true"
+        ));
+        await waitForReactFrames(page, 2);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(
+            enhancerActivityValues(snapshot),
+            [1, 0],
+            "the selected Voice panel must stay dormant while Polish obscures it",
+        );
+        assert.equal(snapshot.endpointListenerCounts.voiceEnhancerSpectrum, 0);
+
+        await fullScreen.locator('[data-role="polish-fullscreen-close"]').click();
+        await fullScreen.waitFor({ state: "detached" });
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "restored compact Enhancer analyzer lease",
+            (candidate) => enhancerActivityValues(candidate).length === 3
+                && candidate.endpointListenerCounts.voiceEnhancerSpectrum === 1,
+        );
+        assert.deepEqual(enhancerActivityValues(snapshot), [1, 0, 1]);
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="voice-enhancer-graph"]')
+                ?.getAttribute("data-active-response-count") === "0"
+        ));
+        assert.equal(
+            await page.locator(
+                '[data-role="voice-enhancer-graph"] [data-role="enhancer-spectrum-incoming"]',
+            ).count(),
+            0,
+        );
+        assert.equal(
+            await page.locator(
+                '[data-role="voice-enhancer-graph"] [data-curve-id^="voice-"]',
+            ).count(),
+            0,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
 test("the per-voice Enhancer phone controls own reachable touch targets without blocking graph edits", async () => {
     const phoneViewports = [
         { width: 320, height: 568 },
