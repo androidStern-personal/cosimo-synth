@@ -1757,7 +1757,7 @@ test("POLISH composes four compact modules, independent bypasses, and the T75 ex
     }
 });
 
-test("the built desktop bundle exposes T74 controls without moving the T73 footer", async () => {
+test("the built desktop bundle exposes T74 controls and restores the T73 footer after the T75 editor", async () => {
     const page = await openBuiltDesktopBundlePage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -1780,6 +1780,18 @@ test("the built desktop bundle exposes T74 controls without moving the T73 foote
                 ?.querySelector('[data-role="polish-expand"]')?.getAttribute("aria-expanded") === "true"
         ));
         assert.equal(await editor.getAttribute("data-expanded"), "true");
+        const fullScreen = page.locator('[data-role="polish-fullscreen-editor"]');
+        await fullScreen.waitFor();
+        assert.equal(await page.locator('[data-role="rack-fixed-footer"]').boundingBox(), null);
+
+        await fullScreen.locator('[data-role="polish-fullscreen-close"]').click();
+        await fullScreen.waitFor({ state: "detached" });
+        await page.waitForFunction(() => (
+            document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="polish-expand"]')?.getAttribute("aria-expanded") === "false"
+        ));
+        assert.equal(await editor.getAttribute("data-expanded"), "false");
+
         const footerAfter = await page.locator('[data-role="rack-fixed-footer"]').boundingBox();
         assert.ok(footerAfter);
         assert.equal(
@@ -1789,13 +1801,6 @@ test("the built desktop bundle exposes T74 controls without moving the T73 foote
                 && Math.abs(footerAfter.height - footerBefore.height) <= 0.5,
             true,
         );
-
-        await expand.click();
-        await page.waitForFunction(() => (
-            document.querySelector("cosimo-desktop-react-view")?.shadowRoot
-                ?.querySelector('[data-role="polish-expand"]')?.getAttribute("aria-expanded") === "false"
-        ));
-        assert.equal(await editor.getAttribute("data-expanded"), "false");
     } finally {
         await page.close();
     }

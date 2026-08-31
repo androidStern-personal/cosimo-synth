@@ -1,6 +1,10 @@
 {
   "format": "cosimo.lane",
   "version": 2,
+  "output": {
+    "mix": 1,
+    "bypassed": false
+  },
   "devices": {
     "distortion#1": {
       "params": {
@@ -10,7 +14,11 @@
         "distortionWet": 0.5,
         "distortionWetHPHz": 40,
         "distortionWetLPHz": 18000,
-        "distortionType": 1
+        "distortionType": 1,
+        "distortionWetHPKeyTrackEnabled": 0,
+        "distortionWetHPKeyTrackOffsetSemitones": 0,
+        "distortionWetLPKeyTrackEnabled": 0,
+        "distortionWetLPKeyTrackOffsetSemitones": 0
       }
     },
     "delay#2": {
@@ -20,7 +28,11 @@
         "delayFilter": 5000,
         "delayMix": 0.42,
         "delayTimeMode": 0,
-        "delayDivision": 8
+        "delayDivision": 8,
+        "delayTimeKeyTrackEnabled": 0,
+        "delayTimeKeyTrackOffsetSemitones": 0,
+        "delayFilterKeyTrackEnabled": 0,
+        "delayFilterKeyTrackOffsetSemitones": 0
       }
     },
     "reverb#1": {
@@ -44,6 +56,10 @@
       "enabled": true,
       "xoverLowHz": 800,
       "xoverHighHz": 2500,
+      "xoverLowKeyTrackEnabled": false,
+      "xoverLowKeyTrackOffsetSemitones": 0,
+      "xoverHighKeyTrackEnabled": false,
+      "xoverHighKeyTrackOffsetSemitones": 0,
       "branches": [
         [
           {

@@ -5,10 +5,12 @@ import path from "node:path";
 import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
+import { createCurrentSpeedrunContext } from "./helpers/speedrun_test_context.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const webRoot = path.join(repoRoot, "build", "web");
 let browser;
+let currentDefaults;
 let server;
 let baseUrl;
 
@@ -46,6 +48,7 @@ async function serve(request, response) {
 }
 
 before(async () => {
+    currentDefaults = (await createCurrentSpeedrunContext()).defaults;
     server = createServer(serve);
     await new Promise((resolve, reject) => {
         server.once("error", reject);
@@ -89,7 +92,7 @@ async function createTestPage() {
 }
 
 async function persistAudibleBounce(page) {
-    return page.evaluate(async () => {
+    return page.evaluate(async (defaults) => {
         const [{ buildBounceBank, encodeBounceBank }, { createBrowserBounceBankStore }, digestModule, documentModule] = await Promise.all([
             import("./bounce/bank-format.mjs"),
             import("./bounce/browser-bank-store.mjs"),
@@ -138,19 +141,33 @@ async function persistAudibleBounce(page) {
                 }),
             },
         });
-        localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
+        const currentState = {
             format: "cosimo.browserPatchState",
             version: 5,
             sound: {
-                parameters: { ampRelease: 0.2, filterMode: 0, sourceMode: 1 },
+                parameters: defaults.parameters,
                 storedState: {
-                    [documentModule.BOUNCE_STATE_KEY]: documentModule.serializeBounceDocument(bounce),
+                    "modulation.v6": defaults.modulation,
+                    "articulations.v4": defaults.articulations,
+                    "bounce.v1": defaults.bounce,
+                    "lane.v1": defaults.lane,
                 },
             },
             auxiliary: {},
-        }));
+        };
+        currentState.sound.parameters = {
+            ...currentState.sound.parameters,
+            ampRelease: 0.2,
+            filterMode: 0,
+            sourceMode: 1,
+        };
+        currentState.sound.storedState = {
+            ...currentState.sound.storedState,
+            [documentModule.BOUNCE_STATE_KEY]: documentModule.serializeBounceDocument(bounce),
+        };
+        localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify(currentState));
         return { digest, persistence };
-    });
+    }, currentDefaults);
 }
 
 test("OPFS bounce survives reload, installs into the live sampler, and plays without re-render", async () => {
@@ -202,7 +219,7 @@ test("OPFS bounce survives reload, installs into the live sampler, and plays wit
 test("missing bank reload exposes a visible typed error and preserves durable sampled intent", async () => {
     const { context, page } = await createTestPage();
     try {
-        await page.evaluate(async () => {
+        await page.evaluate(async (defaults) => {
             const documentModule = await import("./bounce/document.mjs");
             const bounce = documentModule.parseBounceDocument({
                 format: "cosimo.bounce",
@@ -227,18 +244,31 @@ test("missing bank reload exposes a visible typed error and preserves durable sa
                     }),
                 },
             });
-            localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
+            const currentState = {
                 format: "cosimo.browserPatchState",
                 version: 5,
                 sound: {
-                    parameters: { filterMode: 0, sourceMode: 1 },
+                    parameters: defaults.parameters,
                     storedState: {
-                        [documentModule.BOUNCE_STATE_KEY]: documentModule.serializeBounceDocument(bounce),
+                        "modulation.v6": defaults.modulation,
+                        "articulations.v4": defaults.articulations,
+                        "bounce.v1": defaults.bounce,
+                        "lane.v1": defaults.lane,
                     },
                 },
                 auxiliary: {},
-            }));
-        });
+            };
+            currentState.sound.parameters = {
+                ...currentState.sound.parameters,
+                filterMode: 0,
+                sourceMode: 1,
+            };
+            currentState.sound.storedState = {
+                ...currentState.sound.storedState,
+                [documentModule.BOUNCE_STATE_KEY]: documentModule.serializeBounceDocument(bounce),
+            };
+            localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify(currentState));
+        }, currentDefaults);
         await page.reload({ waitUntil: "domcontentloaded" });
         await page.waitForFunction(
             () => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready",
