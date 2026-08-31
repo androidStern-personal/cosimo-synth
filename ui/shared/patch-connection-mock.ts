@@ -2,9 +2,12 @@ import type { PatchConnectionLike } from "./cmajor-react";
 import {
     EFFECT_ID_TO_LANE_TYPE,
     LANE_STATE_KEY,
-    deserializeLaneState,
-    serializeLaneState,
 } from "./lane-state";
+import {
+    deserializeLaneStateV2,
+    parseLaneInstanceId,
+    serializeLaneStateV2,
+} from "./lane-state-v2";
 import { getLaneSlotId, getLaneSlotParamIndex } from "./lane-slot-params";
 import { getRackParameterDescriptor } from "./rack-parameter-descriptors";
 import { createModulationArticulationWorkerService } from "../worker/modulation-articulation-worker-service";
@@ -1190,13 +1193,18 @@ export class MockPatchConnection implements PatchConnectionLike {
     }
 
     getDebugSnapshot() {
-        const laneDocument = deserializeLaneState(this.storedState.get(LANE_STATE_KEY));
+        const laneDocument = deserializeLaneStateV2(this.storedState.get(LANE_STATE_KEY));
         const laneParams: Record<string, number> = {};
-        for (const [effectId, deviceParams] of Object.entries(laneDocument.params)) {
-            const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId as keyof typeof EFFECT_ID_TO_LANE_TYPE];
-            for (const [endpointID, documentValue] of Object.entries(deviceParams)) {
-                const overlayKey = `${getLaneSlotId(deviceType, 0)}:${getLaneSlotParamIndex(deviceType, endpointID)}`;
-                laneParams[endpointID] = this.laneFieldOverlay.get(overlayKey) ?? documentValue;
+        if (laneDocument !== null) {
+            for (const [deviceId, device] of Object.entries(laneDocument.devices)) {
+                const parsedId = parseLaneInstanceId(deviceId);
+                if (parsedId === null) continue;
+                for (const [endpointID, documentValue] of Object.entries(device.params)) {
+                    const slotId = getLaneSlotId(parsedId.deviceType, parsedId.instanceNumber - 1);
+                    const paramIndex = getLaneSlotParamIndex(parsedId.deviceType, endpointID);
+                    const overlayKey = `${slotId}:${paramIndex}`;
+                    laneParams[endpointID] = this.laneFieldOverlay.get(overlayKey) ?? documentValue;
+                }
             }
         }
         return {
@@ -1259,31 +1267,41 @@ export class MockPatchConnection implements PatchConnectionLike {
 
     /**
      * Seed one lane parameter the way the product changes it durably: through
-     * the lane.v1 document. Since the parameter cut, effect parameters have
-     * no host endpoints, so tests simulating external edits write the
-     * document and let the stored-state listener fan out.
+     * the complete lane.v2 document. Since the parameter cut, effect
+     * parameters have no host endpoints, so tests simulating external edits
+     * write the document and let the stored-state listener fan out.
      */
     setLaneParamValue(endpointID: string, value: number) {
         const descriptor = getRackParameterDescriptor(endpointID);
         if (descriptor === null) {
             throw new Error(`Not a lane parameter endpoint: ${endpointID}`);
         }
-        const current = deserializeLaneState(this.storedState.get(LANE_STATE_KEY));
+        const current = deserializeLaneStateV2(this.storedState.get(LANE_STATE_KEY));
+        if (current === null) {
+            throw new Error(`Cannot seed ${endpointID} because ${LANE_STATE_KEY} is invalid.`);
+        }
+        const deviceType = EFFECT_ID_TO_LANE_TYPE[descriptor.effectId];
+        const deviceId = `${deviceType}#1`;
+        const device = current.devices[deviceId];
+        if (device === undefined) {
+            throw new Error(`Cannot seed ${endpointID} because ${deviceId} is not in the lane.`);
+        }
         const next = {
             ...current,
-            params: {
-                ...current.params,
-                [descriptor.effectId]: {
-                    ...current.params[descriptor.effectId],
-                    [endpointID]: value,
+            devices: {
+                ...current.devices,
+                [deviceId]: {
+                    params: {
+                        ...device.params,
+                        [endpointID]: value,
+                    },
                 },
             },
         };
-        const deviceType = EFFECT_ID_TO_LANE_TYPE[descriptor.effectId];
         this.laneFieldOverlay.delete(
             `${getLaneSlotId(deviceType, 0)}:${getLaneSlotParamIndex(deviceType, endpointID)}`,
         );
-        this.setStoredStateValue(LANE_STATE_KEY, serializeLaneState(next));
+        this.setStoredStateValue(LANE_STATE_KEY, serializeLaneStateV2(next));
     }
 
     setParameterValue(endpointID: string, value: unknown, emitEndpoint = false) {

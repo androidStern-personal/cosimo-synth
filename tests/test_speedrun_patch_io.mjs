@@ -69,7 +69,7 @@ test("speedrun defaults are derived from the current generated synth contract", 
     ]);
     const defaults = patchIO.createDefaultsSnapshot(context.options);
 
-    assert.equal(Object.keys(defaults.parameters).length, 115);
+    assert.equal(Object.keys(defaults.parameters).length, 155);
     assert.equal(defaults.parameters.oscAWavetableSelect, 35);
     assert.ok(Math.abs(defaults.parameters.ampAttack - 0.01) < 1e-6);
     assert.ok(Math.abs(defaults.parameters.ampDecay - 0.001) < 1e-6);

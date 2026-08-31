@@ -56,6 +56,66 @@ EXTENSION_BUNDLE_ID = "dev.cosimo.wavetable-synth.wavetable-synthAUv3"
 APP_GROUP_ID = "group.dev.cosimo.wavetable-synth"
 
 
+def _float32(value: float) -> float:
+    return struct.unpack("!f", struct.pack("!f", value))[0]
+
+
+def _benchmark_source_value(route: dict[str, object]) -> float:
+    if route["sourceKind"] == "env" and route["sourceSlot"] == 4:
+        return 1.0
+    if route["sourceKind"] in {"velocity", "pressure", "slide"}:
+        return 100 / 127
+    if route["sourceKind"] == "macro":
+        return 0.75
+    return 0.0
+
+
+def _runtime_polarity_value(source_value: float, polarity: object) -> float:
+    source = _float32(max(0.0, min(1.0, source_value)))
+    if polarity == "bipolar":
+        return _float32(_float32(source * 2.0) - 1.0)
+    return source
+
+
+def _runtime_direct_route_contribution(route: dict[str, object]) -> float:
+    source = _float32(max(0.0, min(1.0, _benchmark_source_value(route))))
+    amount = _float32(float(route["amount"]))
+    scale = _float32(amount * 2.0) if route["polarity"] == "bipolar" else amount
+    bias = _float32(-amount) if route["polarity"] == "bipolar" else 0.0
+    return _float32(_float32(scale * source) + bias)
+
+
+def _runtime_reduced_rack_route_contribution(route: dict[str, object]) -> float:
+    source = _float32(max(0.0, min(1.0, _benchmark_source_value(route))))
+    if route["reducer"] == "mean":
+        source_sum = _float32(0.0)
+        for _voice_index in range(16):
+            source_sum = _float32(source_sum + source)
+        reduced_source = _float32(source_sum * _float32(1.0 / 16.0))
+    else:
+        assert route["reducer"] == "max"
+        reduced_source = source
+
+    polarised_source = _runtime_polarity_value(reduced_source, route["polarity"])
+    gated_source = _float32(polarised_source * _float32(1.0))
+    return _float32(gated_source * _float32(float(route["amount"])))
+
+
+def _runtime_route_group_contribution(
+    path_kind: object,
+    routes: list[dict[str, object]],
+) -> float:
+    contribution = _float32(0.0)
+    for route in routes:
+        route_contribution = (
+            _runtime_reduced_rack_route_contribution(route)
+            if path_kind == "voiceRack"
+            else _runtime_direct_route_contribution(route)
+        )
+        contribution = _float32(contribution + route_contribution)
+    return contribution
+
+
 def _normalise_whitespace(text: str) -> str:
     return " ".join(text.split())
 
@@ -1050,24 +1110,8 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
 
         for key, routes in route_groups.items():
             if all(route["enabled"] for route in routes):
-                def source_value(route: dict[str, object]) -> float:
-                    if route["sourceKind"] == "env" and route["sourceSlot"] == 4:
-                        return 1.0
-                    if route["sourceKind"] in {"velocity", "pressure", "slide"}:
-                        return 100 / 127
-                    if route["sourceKind"] == "macro":
-                        return 0.75
-                    return 0.0
-
-                contribution = math.fsum(
-                    float(route["amount"]) * (
-                        source_value(route)
-                        if route["polarity"] == "unipolar"
-                        else (2 * source_value(route)) - 1
-                    )
-                    for route in routes
-                )
-                assert math.isclose(contribution, 0.0, abs_tol=1e-12), key
+                contribution = _runtime_route_group_contribution(key[0], routes)
+                assert contribution == 0.0, (key, contribution)
 
 
 def test_ios_modulation_benchmark_has_no_post_cut_unavailable_profile_path() -> None:

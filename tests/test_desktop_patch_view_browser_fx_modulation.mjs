@@ -2236,15 +2236,30 @@ test("short-phone rack knobs form a touchable three-column matrix", async () => 
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         const controls = page.locator('[data-role="rack-editor-reverb"] .rack-editor-control');
-        assert.equal(await controls.count(), 4);
+        assert.equal(await controls.count(), 5);
         const boxes = await controls.evaluateAll((elements) => elements.map((element) => {
             const bounds = element.getBoundingClientRect();
-            return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+            const hit = document.elementFromPoint(
+                bounds.left + Math.min(12, bounds.width / 4),
+                bounds.top + (bounds.height / 2),
+            );
+            return {
+                x: bounds.x,
+                y: bounds.y,
+                width: bounds.width,
+                height: bounds.height,
+                ownsInteriorHit: hit !== null && element.contains(hit),
+                hitRole: hit?.closest("[data-role]")?.getAttribute("data-role") ?? null,
+            };
         }));
         assert.equal(Math.abs(boxes[0].y - boxes[1].y) < 1, true);
         assert.equal(Math.abs(boxes[1].y - boxes[2].y) < 1, true);
+        assert.equal(Math.abs(boxes[3].y - boxes[4].y) < 1, true);
         assert.equal(boxes[3].y > boxes[0].y + 40, true);
+        assert.equal(Math.abs(boxes[0].x - boxes[3].x) < 1, true);
+        assert.equal(Math.abs(boxes[1].x - boxes[4].x) < 1, true);
         assert.equal(boxes.every((box) => box.width >= 52 && box.height >= 68), true);
+        assert.equal(boxes.every((box) => box.ownsInteriorHit), true, JSON.stringify(boxes));
     } finally {
         await page.close();
     }
