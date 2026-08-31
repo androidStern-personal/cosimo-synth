@@ -13265,38 +13265,38 @@ const FILTER_CUTOFF_MIN_HZ$1 = 20;
 const FILTER_CUTOFF_MAX_HZ$1 = 2e4;
 const FILTER_Q_MIN$2 = 0.1;
 const FILTER_Q_MAX$2 = 20;
-function clamp$i(value, min, max) {
+function clamp$j(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampFilterCutoffHz$1(value) {
-  return clamp$i(Number(value) || 0, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
+  return clamp$j(Number(value) || 0, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
 }
 function clampFilterQ$1(value) {
-  return clamp$i(Number(value) || 0, FILTER_Q_MIN$2, FILTER_Q_MAX$2);
+  return clamp$j(Number(value) || 0, FILTER_Q_MIN$2, FILTER_Q_MAX$2);
 }
 function clampFilterMode$1(value) {
-  return clamp$i(Math.round(Number(value) || 0), FILTER_MODE_OFF$1, FILTER_MODE_PEAK$1);
+  return clamp$j(Math.round(Number(value) || 0), FILTER_MODE_OFF$1, FILTER_MODE_PEAK$1);
 }
 function clampWarpMode(value) {
-  return clamp$i(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
+  return clamp$j(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
 }
 function clampWarpAmount(value) {
-  return clamp$i(Number(value) || 0, 0, 1);
+  return clamp$j(Number(value) || 0, 0, 1);
 }
 function clampUnisonVoiceCount(value) {
-  return clamp$i(Math.round(Number(value) || 1), 1, UNISON_MAX_VOICES);
+  return clamp$j(Math.round(Number(value) || 1), 1, UNISON_MAX_VOICES);
 }
 function clampUnison01(value) {
-  return clamp$i(Number(value) || 0, 0, 1);
+  return clamp$j(Number(value) || 0, 0, 1);
 }
 function clampUnisonDetuneMode(value) {
-  return clamp$i(Math.round(Number(value) || 0), UNISON_DETUNE_MODE_LINEAR, UNISON_DETUNE_MODE_RANDOM);
+  return clamp$j(Math.round(Number(value) || 0), UNISON_DETUNE_MODE_LINEAR, UNISON_DETUNE_MODE_RANDOM);
 }
 function clampUnisonStackMode(value) {
-  return clamp$i(Math.round(Number(value) || 0), UNISON_STACK_MODE_OFF, UNISON_STACK_MODE_CENTER_TWO_OCTAVES);
+  return clamp$j(Math.round(Number(value) || 0), UNISON_STACK_MODE_OFF, UNISON_STACK_MODE_CENTER_TWO_OCTAVES);
 }
 function clampDisplayPosition(value) {
-  return clamp$i(Number(value) || 0, 0, 1);
+  return clamp$j(Number(value) || 0, 0, 1);
 }
 function mapDisplayDragToPosition(startValue, startClientY, nextClientY, dragSpan) {
   const safeSpan = Math.max(1, Number(dragSpan) || 0);
@@ -13591,7 +13591,7 @@ const MSEG_NOTE_OFF_POLICY_VALUES = /* @__PURE__ */ new Set([
   "immediate",
   "ignore"
 ]);
-function clamp$h(value, min, max) {
+function clamp$i(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function greatestCommonDivisor(left, right) {
@@ -13627,10 +13627,10 @@ function almostEqual(left, right, epsilon = 1e-12) {
   return Math.abs(left - right) <= epsilon;
 }
 function clampCurvePower(value) {
-  return clamp$h(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
+  return clamp$i(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
 }
 function clamp01$7(value) {
-  return clamp$h(Number.isFinite(value) ? value : 0, 0, 1);
+  return clamp$i(Number.isFinite(value) ? value : 0, 0, 1);
 }
 function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
   return {
@@ -13660,7 +13660,7 @@ function createDefaultMsegPlayback() {
 }
 function clampMsegRateSeconds(value) {
   const numericValue = Number(value);
-  return clamp$h(
+  return clamp$i(
     Number.isFinite(numericValue) ? numericValue : 1,
     MSEG_RATE_MIN_SECONDS,
     MSEG_RATE_MAX_SECONDS
@@ -13830,7 +13830,7 @@ function distanceSquaredToLineSegment(targetX, targetY, fromX, fromY, toX, toY) 
     const pointDeltaY2 = targetY - fromY;
     return pointDeltaX2 * pointDeltaX2 + pointDeltaY2 * pointDeltaY2;
   }
-  const projection = clamp$h(
+  const projection = clamp$i(
     ((targetX - fromX) * deltaX + (targetY - fromY) * deltaY) / segmentLengthSquared,
     0,
     1
@@ -14049,9 +14049,9 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   if (width <= 1e-12 || Math.abs(deltaY) <= 1e-12) {
     return 0;
   }
-  const localX = clamp$h(clamp01$7(Number(x)), from.x, to.x);
-  const t = clamp$h((localX - from.x) / width, 1e-4, 1 - 1e-4);
-  const targetCurvedT = clamp$h((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
+  const localX = clamp$i(clamp01$7(Number(x)), from.x, to.x);
+  const t = clamp$i((localX - from.x) / width, 1e-4, 1 - 1e-4);
+  const targetCurvedT = clamp$i((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
   if (!Number.isFinite(targetCurvedT) || almostEqual(targetCurvedT, t, 1e-4)) {
     return 0;
   }
@@ -14059,7 +14059,7 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   let high = MSEG_CURVE_POWER_LIMIT;
   let lowValue = powerScale(t, low);
   let highValue = powerScale(t, high);
-  const target = clamp$h(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
+  const target = clamp$i(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
   const ascending = lowValue <= highValue;
   for (let iteration = 0; iteration < 32; iteration += 1) {
     const middle = (low + high) * 0.5;
@@ -14113,7 +14113,7 @@ function moveMsegPoint(shape, pointIndex, x, y) {
   } else if (pointIndex === points.length - 1) {
     moved.x = 1;
   } else {
-    moved.x = clamp$h(clamp01$7(Number(x)), previousX, nextX);
+    moved.x = clamp$i(clamp01$7(Number(x)), previousX, nextX);
   }
   points[pointIndex] = moved;
   return normalizeMsegShape({
@@ -14203,7 +14203,7 @@ const WARP_MODE_PWM = 2;
 const WARP_MODE_ASYM = 3;
 const WARP_MODE_MIRROR = 4;
 const DEFAULT_WAVETABLE_THEME = createDefaultWavetableTheme();
-function clamp$g(value, min, max) {
+function clamp$h(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function requestNextAnimationFrame(callback) {
@@ -14250,10 +14250,10 @@ function assertFrames(frames) {
   }
 }
 function resolveWarpMode(rawMode) {
-  return clamp$g(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
+  return clamp$h(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
 }
 function isIdentityWarp(warpMode, warpAmount) {
-  const clampedAmount = clamp$g(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$h(Number(warpAmount) || 0, 0, 1);
   if (warpMode <= WARP_MODE_OFF) {
     return true;
   }
@@ -14272,46 +14272,46 @@ function isIdentityWarp(warpMode, warpAmount) {
   return true;
 }
 function curvedWarpRight(phase, amount) {
-  const clampedPhase = clamp$g(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$g(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$h(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$h(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return Math.pow(clampedPhase, exponent);
 }
 function curvedWarpLeft(phase, amount) {
-  const clampedPhase = clamp$g(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$g(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$h(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$h(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return 1 - Math.pow(1 - clampedPhase, exponent);
 }
 function curvedAsymSigned(phase, dial) {
-  const clampedDial = clamp$g(Number(dial) || 0, 0, 1);
+  const clampedDial = clamp$h(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
   const magnitude = Math.abs(signedAmount);
   return signedAmount >= 0 ? curvedWarpRight(phase, magnitude) : curvedWarpLeft(phase, magnitude);
 }
 function linearSkewSigned(phase, dial) {
-  const clampedPhase = clamp$g(Number(phase) || 0, 0, 1);
-  const clampedDial = clamp$g(Number(dial) || 0, 0, 1);
+  const clampedPhase = clamp$h(Number(phase) || 0, 0, 1);
+  const clampedDial = clamp$h(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
-  const split = clamp$g(0.5 + 0.48 * signedAmount, 0.02, 0.98);
+  const split = clamp$h(0.5 + 0.48 * signedAmount, 0.02, 0.98);
   if (clampedPhase < split) {
     return 0.5 * (clampedPhase / split);
   }
   return 0.5 + 0.5 * ((clampedPhase - split) / (1 - split));
 }
 function mirrorBasePhase(phase) {
-  const clampedPhase = clamp$g(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$h(Number(phase) || 0, 0, 1);
   if (clampedPhase < 0.5) {
     return clampedPhase * 2;
   }
   return 2 - 2 * clampedPhase;
 }
 function pwmActivePortion(amount) {
-  const clampedAmount = clamp$g(Number(amount) || 0, 0, 1);
+  const clampedAmount = clamp$h(Number(amount) || 0, 0, 1);
   return 1 - (1 - 0.02) * clampedAmount;
 }
 function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
-  const clampedPhase = clamp$g(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$h(Number(phase) || 0, 0, 1);
   const result = {
     shouldLookup: true,
     phase: clampedPhase
@@ -14319,7 +14319,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   if (warpMode <= WARP_MODE_OFF || clampedPhase >= 1) {
     return result;
   }
-  const clampedAmount = clamp$g(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$h(Number(warpAmount) || 0, 0, 1);
   if (warpMode === WARP_MODE_BEND) {
     const invertedDial = 1 - clampedAmount;
     if (clampedPhase < 0.5) {
@@ -14349,7 +14349,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   return result;
 }
 function sampleDisplayFrame(frame, phase) {
-  const safePhase = clamp$g(Number(phase) || 0, 0, 1);
+  const safePhase = clamp$h(Number(phase) || 0, 0, 1);
   const frameLength = frame.length;
   if (frameLength === 0) {
     return 0;
@@ -14460,17 +14460,17 @@ function createCamera() {
 }
 function createViewportPadding(width, height) {
   return {
-    left: clamp$g(width * 0.06, 22, 48),
-    right: clamp$g(width * 0.06, 22, 48),
-    top: clamp$g(height * 0.1, 20, 56),
-    bottom: clamp$g(height * 0.09, 20, 52)
+    left: clamp$h(width * 0.06, 22, 48),
+    right: clamp$h(width * 0.06, 22, 48),
+    top: clamp$h(height * 0.1, 20, 56),
+    bottom: clamp$h(height * 0.09, 20, 52)
   };
 }
 function createDrawableViewport(width, height, insets = {}) {
-  const left = clamp$g(Number(insets.left) || 0, 0, width - 1);
-  const right = clamp$g(Number(insets.right) || 0, 0, width - left - 1);
-  const top = clamp$g(Number(insets.top) || 0, 0, height - 1);
-  const bottom = clamp$g(Number(insets.bottom) || 0, 0, height - top - 1);
+  const left = clamp$h(Number(insets.left) || 0, 0, width - 1);
+  const right = clamp$h(Number(insets.right) || 0, 0, width - left - 1);
+  const top = clamp$h(Number(insets.top) || 0, 0, height - 1);
+  const bottom = clamp$h(Number(insets.bottom) || 0, 0, height - top - 1);
   return {
     x: left,
     y: top,
@@ -14535,10 +14535,10 @@ function createProjection(points, width, height, drawableInsets = {}) {
   };
 }
 function getSurfacePointCount(width, sampleCount) {
-  return clamp$g(Math.round(width / 10), 64, Math.min(128, sampleCount));
+  return clamp$h(Math.round(width / 10), 64, Math.min(128, sampleCount));
 }
 function getContourPointCount(width, sampleCount) {
-  return clamp$g(Math.round(width / 4), 128, Math.min(256, sampleCount));
+  return clamp$h(Math.round(width / 4), 128, Math.min(256, sampleCount));
 }
 function createObjectPoints(samples, depth) {
   const points = new Array(samples.length);
@@ -14713,8 +14713,8 @@ function createSurfaceBands(projectedFrames) {
       const lightDirection = normaliseVector({ x: -0.2, y: 0.95, z: -0.5 });
       const averageCameraDepth = quad.reduce((total, point) => total + point.cameraDepth, 0) / quad.length;
       const depthNormalized = (frontFrame.depthNormalized + backFrame.depthNormalized) * 0.5;
-      const slopeLight = clamp$g((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
-      const ridgeAmount = clamp$g(
+      const slopeLight = clamp$h((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
+      const ridgeAmount = clamp$h(
         Math.abs(frontFrame.samples[sampleIndex + 1] - frontFrame.samples[sampleIndex]) * 0.95 + Math.abs(backFrame.samples[sampleIndex + 1] - backFrame.samples[sampleIndex]) * 0.95,
         0,
         1
@@ -14739,7 +14739,7 @@ function createSurfaceRibs(projectedFrames) {
   if (sampleCount < 3) {
     return [];
   }
-  const desiredRibCount = clamp$g(Math.round(sampleCount / 10), 8, 14);
+  const desiredRibCount = clamp$h(Math.round(sampleCount / 10), 8, 14);
   const selectedColumns = /* @__PURE__ */ new Set([0, sampleCount - 1]);
   for (let ribIndex = 1; ribIndex < desiredRibCount - 1; ribIndex += 1) {
     selectedColumns.add(
@@ -14782,7 +14782,7 @@ function createInterpolatedSurfaceSlices(sourceFrames, camera, projection) {
   if (frameCount === 0) {
     return [];
   }
-  const sliceCount = clamp$g(frameCount * 3 - 2, 17, 41);
+  const sliceCount = clamp$h(frameCount * 3 - 2, 17, 41);
   const slices = [];
   for (let sliceIndex = 0; sliceIndex < sliceCount; sliceIndex += 1) {
     const framePosition = sliceIndex * (frameCount - 1) / Math.max(1, sliceCount - 1);
@@ -14823,7 +14823,7 @@ function createCurrentSlice(staticScene, frameState) {
   const lowFrame = staticScene.contourFrames[frameState.frameLo];
   const highFrame = staticScene.contourFrames[frameState.frameHi];
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$g(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$h(Number(frameState.warpAmount) || 0, 0, 1);
   const blendedSamples = isIdentityWarp(warpMode, warpAmount) ? buildInterpolatedFrame(lowFrame.samples, highFrame.samples, frameState.frameT) : buildWarpedFrame(lowFrame.samples, highFrame.samples, frameState.frameT, warpMode, warpAmount);
   const depth = getSceneDepth(frameState.frameIndex, staticScene.frameCount);
   const objectPoints = createObjectPoints(blendedSamples, depth);
@@ -14837,8 +14837,8 @@ function createCurrentSlice(staticScene, frameState) {
   const labelAnchor = points[Math.floor(points.length * 0.78)] ?? points[points.length - 1];
   const label = {
     text: buildCurrentSliceLabel(frameState, staticScene.frameCount),
-    x: clamp$g(labelAnchor.x + 14, 18, staticScene.width - 236),
-    y: clamp$g(labelAnchor.y - 18, 24, staticScene.height - 24)
+    x: clamp$h(labelAnchor.x + 14, 18, staticScene.width - 236),
+    y: clamp$h(labelAnchor.y - 18, 24, staticScene.height - 24)
   };
   return {
     frameState,
@@ -14853,7 +14853,7 @@ function createCurrentSlice(staticScene, frameState) {
 }
 function buildCurrentSliceLabel(frameState, frameCount) {
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$g(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$h(Number(frameState.warpAmount) || 0, 0, 1);
   const baseLabel = `Frame ${frameState.frameIndex.toFixed(2)} / ${frameCount - 1}`;
   if (isIdentityWarp(warpMode, warpAmount)) {
     return baseLabel;
@@ -14877,7 +14877,7 @@ function buildCurrentSliceLabel(frameState, frameCount) {
 }
 function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
   const safeFrameCount = Math.max(1, Number(frameCount) || 0);
-  const clampedPosition = clamp$g(Number(position) || 0, 0, 1);
+  const clampedPosition = clamp$h(Number(position) || 0, 0, 1);
   const frameIndex = clampedPosition * (safeFrameCount - 1);
   const frameLo = Math.floor(frameIndex);
   const frameHi = Math.min(frameLo + 1, safeFrameCount - 1);
@@ -14890,7 +14890,7 @@ function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
     frameHi,
     frameT,
     warpMode: resolveWarpMode(warpMode),
-    warpAmount: clamp$g(Number(warpAmount) || 0, 0, 1)
+    warpAmount: clamp$h(Number(warpAmount) || 0, 0, 1)
   };
 }
 function decimateFrame(frame, targetPointCount) {
@@ -15070,7 +15070,7 @@ function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME, opt
     context.restore();
   }
   for (const contour of model.contours) {
-    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$g(contour.colourMix, 0, 0.92));
+    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$h(contour.colourMix, 0, 0.92));
     context.save();
     context.strokeStyle = toRGBA(tintColour(strokeColour, overlayLineTint(contour.frameIndex)), contour.alpha);
     context.lineWidth = contour.lineWidth;
@@ -15155,12 +15155,12 @@ class CanvasWavetableDisplay {
     this.queueRender();
   }
   setPosition(position) {
-    this.position = clamp$g(Number(position) || 0, 0, 1);
+    this.position = clamp$h(Number(position) || 0, 0, 1);
     this.queueRender();
   }
   setWarp(mode, amount) {
     this.warpMode = resolveWarpMode(mode);
-    this.warpAmount = clamp$g(Number(amount) || 0, 0, 1);
+    this.warpAmount = clamp$h(Number(amount) || 0, 0, 1);
     this.queueRender();
   }
   setModulationRange(overlay) {
@@ -15275,26 +15275,26 @@ const FILTER_MODE_HIGHPASS = 2;
 const FILTER_MODE_BANDPASS = 3;
 const FILTER_MODE_NOTCH = 4;
 const FILTER_MODE_PEAK = 5;
-function clamp$f(value, min, max) {
+function clamp$g(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampFilterMode(value) {
-  return clamp$f(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
+  return clamp$g(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
 }
 function clampFilterCutoffHz(value) {
-  return clamp$f(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
+  return clamp$g(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
 }
 function clampFilterQ(value) {
-  return clamp$f(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
+  return clamp$g(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
 }
 function filterCutoffHzToNormalized(value) {
   const clampedHz = clampFilterCutoffHz(value);
   const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
   const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
-  return clamp$f((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
+  return clamp$g((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
 }
 function normalizedToFilterCutoffHz(value) {
-  const normalized2 = clamp$f(Number(value) || 0, 0, 1);
+  const normalized2 = clamp$g(Number(value) || 0, 0, 1);
   const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
   const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
   return Math.exp(minLog + (maxLog - minLog) * normalized2);
@@ -15304,7 +15304,7 @@ function filterQToNormalized(value) {
   return (clampedQ - FILTER_Q_MIN$1) / (FILTER_Q_MAX$1 - FILTER_Q_MIN$1);
 }
 function normalizedToFilterQ(value) {
-  const normalized2 = clamp$f(Number(value) || 0, 0, 1);
+  const normalized2 = clamp$g(Number(value) || 0, 0, 1);
   return FILTER_Q_MIN$1 + (FILTER_Q_MAX$1 - FILTER_Q_MIN$1) * normalized2;
 }
 function complexAdd(left, right) {
@@ -15355,7 +15355,7 @@ function responseGainForFrequency({
   const safeSampleRate = Math.max(1, Number(sampleRate) || 44100);
   const clampedCutoff = clampFilterCutoffHz(Math.min(Number(cutoffHz) || 0, safeSampleRate * 0.48));
   const clampedQ = clampFilterQ(q);
-  const safeFrequency = clamp$f(frequencyHz, 10, safeSampleRate * 0.49);
+  const safeFrequency = clamp$g(frequencyHz, 10, safeSampleRate * 0.49);
   const g = Math.tan(Math.PI * clampedCutoff / safeSampleRate);
   const k = 1 / clampedQ;
   let f0 = 1;
@@ -15463,7 +15463,7 @@ const FILTER_SPECTRUM_PEAK_HOLD_MS = 300;
 const FILTER_SPECTRUM_PEAK_FALL_RATE_DB_PER_SECOND = 24;
 const FILTER_SPECTRUM_FREQUENCY_TICK_VALUES = [20, 50, 100, 200, 500, 1e3, 2e3, 5e3, 1e4, 2e4];
 const FILTER_SPECTRUM_DB_TICK_VALUES = [-18, -36, -54, -72, -90];
-function clamp$e(value, min, max) {
+function clamp$f(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function coerceFiniteNumber$1(value) {
@@ -15471,13 +15471,13 @@ function coerceFiniteNumber$1(value) {
   return Number.isFinite(coerced) ? coerced : null;
 }
 function frequencyHzToNormalized(value) {
-  const clampedHz = clamp$e(value, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
+  const clampedHz = clamp$f(value, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
   const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
   const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
-  return clamp$e((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
+  return clamp$f((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
 }
 function dbToNormalizedY(value) {
-  return clamp$e((value - FILTER_SPECTRUM_MAX_DB) / (FILTER_SPECTRUM_MIN_DB - FILTER_SPECTRUM_MAX_DB), 0, 1);
+  return clamp$f((value - FILTER_SPECTRUM_MAX_DB) / (FILTER_SPECTRUM_MIN_DB - FILTER_SPECTRUM_MAX_DB), 0, 1);
 }
 function formatFrequencyLabel(frequencyHz) {
   if (frequencyHz >= 1e3) {
@@ -15487,7 +15487,7 @@ function formatFrequencyLabel(frequencyHz) {
   return String(Math.round(frequencyHz));
 }
 function magnitudeToDb(magnitude) {
-  return clamp$e(20 * Math.log10(Math.max(1e-9, magnitude)), FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB);
+  return clamp$f(20 * Math.log10(Math.max(1e-9, magnitude)), FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB);
 }
 function findPeakIndex(values) {
   let peakIndex = 0;
@@ -15589,8 +15589,8 @@ function createPlotMetrics(width, height, {
   };
 }
 function createPlotPoint(normalizedX, magnitudeDb, plot) {
-  const x = plot.plotLeft + plot.plotWidth * clamp$e(normalizedX, 0, 1);
-  const normalizedY = clamp$e((clamp$e(magnitudeDb, FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB) - FILTER_SPECTRUM_MIN_DB) / (FILTER_SPECTRUM_MAX_DB - FILTER_SPECTRUM_MIN_DB), 0, 1);
+  const x = plot.plotLeft + plot.plotWidth * clamp$f(normalizedX, 0, 1);
+  const normalizedY = clamp$f((clamp$f(magnitudeDb, FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB) - FILTER_SPECTRUM_MIN_DB) / (FILTER_SPECTRUM_MAX_DB - FILTER_SPECTRUM_MIN_DB), 0, 1);
   const y = plot.plotBottom - plot.plotHeight * normalizedY;
   return { x, y };
 }
@@ -15769,8 +15769,8 @@ function createFilterSpectrumDisplayFrame({
   const maxBinIndex = Math.max(0, sourceBinCount - 1);
   const nyquistHz = Math.max(1, frame.sampleRateHz * 0.5);
   const sampleDisplayRange = (range) => {
-    const startIndex = clamp$e(Math.floor(clamp$e(range.lowHz, 0, nyquistHz) / nyquistHz * maxBinIndex), 0, maxBinIndex);
-    const endIndex = clamp$e(Math.ceil(clamp$e(range.highHz, 0, nyquistHz) / nyquistHz * maxBinIndex), startIndex, maxBinIndex);
+    const startIndex = clamp$f(Math.floor(clamp$f(range.lowHz, 0, nyquistHz) / nyquistHz * maxBinIndex), 0, maxBinIndex);
+    const endIndex = clamp$f(Math.ceil(clamp$f(range.highHz, 0, nyquistHz) / nyquistHz * maxBinIndex), startIndex, maxBinIndex);
     return magnitudeToDb(sampleMagnitudeAtIndexRange(frame.magnitudes, startIndex, endIndex));
   };
   const bandMagnitudesDb = bands.map(sampleDisplayRange);
@@ -15880,6 +15880,80 @@ function uiMediaRequestAnimationFrame(callback) {
 function uiMediaCancelAnimationFrame(handle) {
   window.cancelAnimationFrame(handle);
 }
+const EFFECT_OUTPUT_TRIM_SILENCE_DB = -100;
+const EFFECT_OUTPUT_TRIM_MAX_DB = 35;
+const EFFECT_OUTPUT_TRIM_RESIDENT_INSTANCE_COUNT = 5;
+const IDENTITY_SPECS = [
+  { deviceType: "globalFilter", laneEndpointID: "globalFilterOutputTrimDb", hostStem: "laneGlobalFilter" },
+  { deviceType: "distortion", laneEndpointID: "distortionOutputTrimDb", hostStem: "laneDistortion" },
+  { deviceType: "ott", laneEndpointID: "ottOutputTrimDb", hostStem: "laneOtt" },
+  { deviceType: "chorus", laneEndpointID: "chorusOutputTrimDb", hostStem: "laneChorus" },
+  { deviceType: "flanger", laneEndpointID: "flangerOutputTrimDb", hostStem: "laneFlanger" },
+  { deviceType: "phaser", laneEndpointID: "phaserOutputTrimDb", hostStem: "lanePhaser" },
+  { deviceType: "delay", laneEndpointID: "delayOutputTrimDb", hostStem: "laneDelay" },
+  { deviceType: "reverb", laneEndpointID: "reverbOutputTrimDb", hostStem: "laneReverb" }
+];
+function requireIdentitySpec(deviceType) {
+  const spec = IDENTITY_SPECS.find((candidate) => candidate.deviceType === deviceType);
+  if (spec === void 0) {
+    throw new Error(`Unknown effect Output Trim device type: ${deviceType}`);
+  }
+  return spec;
+}
+function effectOutputTrimLaneEndpointID(deviceType) {
+  return requireIdentitySpec(deviceType).laneEndpointID;
+}
+function effectOutputTrimHostEndpointID(deviceType, instanceNumber) {
+  if (!Number.isInteger(instanceNumber) || instanceNumber < 1 || instanceNumber > EFFECT_OUTPUT_TRIM_RESIDENT_INSTANCE_COUNT) {
+    throw new Error(`Effect Output Trim instance is out of range: ${instanceNumber}`);
+  }
+  return `${requireIdentitySpec(deviceType).hostStem}${instanceNumber}OutputTrimDb`;
+}
+function allEffectOutputTrimHostEndpointIDs() {
+  return IDENTITY_SPECS.flatMap((spec) => Array.from(
+    { length: EFFECT_OUTPUT_TRIM_RESIDENT_INSTANCE_COUNT },
+    (_, index) => effectOutputTrimHostEndpointID(spec.deviceType, index + 1)
+  ));
+}
+function parseEffectOutputTrimHostEndpointID(endpointID) {
+  if (typeof endpointID !== "string") {
+    return null;
+  }
+  for (const spec of IDENTITY_SPECS) {
+    for (let instanceNumber = 1; instanceNumber <= EFFECT_OUTPUT_TRIM_RESIDENT_INSTANCE_COUNT; instanceNumber += 1) {
+      if (endpointID === effectOutputTrimHostEndpointID(spec.deviceType, instanceNumber)) {
+        return {
+          deviceType: spec.deviceType,
+          instanceNumber,
+          laneEndpointID: spec.laneEndpointID
+        };
+      }
+    }
+  }
+  return null;
+}
+function clamp$e(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+function effectOutputTrimEffectiveDb(baseDb, modulationDb) {
+  const clampedBase = clamp$e(baseDb, EFFECT_OUTPUT_TRIM_SILENCE_DB, EFFECT_OUTPUT_TRIM_MAX_DB);
+  if (clampedBase === EFFECT_OUTPUT_TRIM_SILENCE_DB) {
+    return EFFECT_OUTPUT_TRIM_SILENCE_DB;
+  }
+  return clamp$e(
+    clampedBase + modulationDb,
+    EFFECT_OUTPUT_TRIM_SILENCE_DB,
+    EFFECT_OUTPUT_TRIM_MAX_DB
+  );
+}
+function effectOutputTrimNormalizedValue(valueDb) {
+  const ratio = (clamp$e(valueDb, EFFECT_OUTPUT_TRIM_SILENCE_DB, EFFECT_OUTPUT_TRIM_MAX_DB) - EFFECT_OUTPUT_TRIM_SILENCE_DB) / (EFFECT_OUTPUT_TRIM_MAX_DB - EFFECT_OUTPUT_TRIM_SILENCE_DB);
+  return ratio * ratio;
+}
+function effectOutputTrimValueFromNormalized(normalizedValue2) {
+  const ratio = Math.sqrt(clamp$e(normalizedValue2, 0, 1));
+  return EFFECT_OUTPUT_TRIM_SILENCE_DB + ratio * (EFFECT_OUTPUT_TRIM_MAX_DB - EFFECT_OUTPUT_TRIM_SILENCE_DB);
+}
 const choice = (label, value) => ({ label, value });
 function vendoredIconUrl(resolveUrl, fallback) {
   try {
@@ -15938,9 +16012,27 @@ const p = (effectId, endpointID, label, shortLabel, min, max, initial, options =
   quick: options.quick ?? false,
   modulationTargetIndex: options.modulationTargetIndex ?? null,
   modulationApplication: options.modulationApplication ?? (options.modulationTargetIndex === void 0 || options.modulationTargetIndex === null ? null : "linear"),
+  valueKind: options.valueKind,
   modulationIdentityEndpointID: options.modulationIdentityEndpointID,
   modulationDragStyle: options.modulationDragStyle
 });
+function outputTrimParameter(effectId, endpointID, modulationTargetIndex) {
+  return p(
+    effectId,
+    endpointID,
+    "Output Trim",
+    "Trim",
+    EFFECT_OUTPUT_TRIM_SILENCE_DB,
+    EFFECT_OUTPUT_TRIM_MAX_DB,
+    0,
+    {
+      unit: "dB",
+      modulationTargetIndex,
+      modulationApplication: "linear",
+      valueKind: "effect-output-trim-db"
+    }
+  );
+}
 const PHASER_DIVISIONS = ["4/1", "2/1", "1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16"];
 const DELAY_DIVISIONS = ["1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/8.", "1/4T", "1/8", "1/16.", "1/8T", "1/16", "1/16T"];
 const definitions = [
@@ -15956,7 +16048,8 @@ const definitions = [
       p("filter", "globalFilterMode", "Mode", "Mode", 0, 5, 1, { step: 1, choices: ["Off", "Lowpass", "Highpass", "Bandpass", "Notch", "Peak"].map(choice), quick: true }),
       p("filter", "globalFilterCutoff", "Cutoff", "Cut", 20, 2e4, 2e4, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 0, modulationApplication: "octaves" }),
       p("filter", "globalFilterResonance", "Resonance", "Res", 0.1, 20, 0.707107, { scale: "log", modulationTargetIndex: 1, modulationDragStyle: "effective-value" }),
-      p("filter", "globalFilterDrive", "Drive", "Drv", 0, 1, 0, { modulationTargetIndex: 2 })
+      p("filter", "globalFilterDrive", "Drive", "Drv", 0, 1, 0, { modulationTargetIndex: 2 }),
+      outputTrimParameter("filter", "globalFilterOutputTrimDb", 39)
     ]
   },
   {
@@ -15974,7 +16067,8 @@ const definitions = [
       p("drive", "distortionWet", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 5 }),
       p("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4e3, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6, modulationApplication: "octaves" }),
       p("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 2e4, 18e3, { unit: "Hz", scale: "log", modulationTargetIndex: 7, modulationApplication: "octaves" }),
-      p("drive", "distortionType", "Type", "Type", 0, 2, 1, { step: 1, choices: [choice("Symmetric", 0), choice("Asymmetric", 1), choice("Wavefold", 2)] })
+      p("drive", "distortionType", "Type", "Type", 0, 2, 1, { step: 1, choices: [choice("Symmetric", 0), choice("Asymmetric", 1), choice("Wavefold", 2)] }),
+      outputTrimParameter("drive", "distortionOutputTrimDb", 40)
     ]
   },
   {
@@ -15990,7 +16084,8 @@ const definitions = [
       p("ott", "ottAmount", "Amount", "Amt", 0, 100, 100, { unit: "%", quick: true, modulationTargetIndex: 9 }),
       p("ott", "ottTimePercent", "Time", "Time", 10, 1e3, 100, { unit: "%", scale: "log", modulationTargetIndex: 10 }),
       p("ott", "ottBandDrive", "Band Drive", "Drv", 0, 100, 0, { unit: "%", modulationTargetIndex: 11 }),
-      p("ott", "ottEnvelopeMatch", "Envelope Match", "Env", 0, 100, 0, { unit: "%", modulationTargetIndex: 12 })
+      p("ott", "ottEnvelopeMatch", "Envelope Match", "Env", 0, 100, 0, { unit: "%", modulationTargetIndex: 12 }),
+      outputTrimParameter("ott", "ottOutputTrimDb", 41)
     ]
   },
   {
@@ -16014,7 +16109,8 @@ const definitions = [
         modulationTargetIndex: 17,
         modulationApplication: "semitones",
         modulationIdentityEndpointID: "chorusRingFineSemitones"
-      })
+      }),
+      outputTrimParameter("chorus", "chorusOutputTrimDb", 42)
     ]
   },
   {
@@ -16035,7 +16131,8 @@ const definitions = [
         scale: "log",
         modulationTargetIndex: 36,
         modulationApplication: "octaves"
-      })
+      }),
+      outputTrimParameter("flanger", "flangerOutputTrimDb", 43)
     ]
   },
   {
@@ -16054,7 +16151,8 @@ const definitions = [
       p("phaser", "phaserFrequency", "Frequency", "Freq", 60, 8e3, 600, { unit: "Hz", scale: "log", modulationTargetIndex: 24, modulationApplication: "octaves" }),
       p("phaser", "phaserFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 25 }),
       p("phaser", "phaserPhase", "Stereo Phase", "Phase", -180, 180, 90, { unit: "deg", modulationTargetIndex: 26 }),
-      p("phaser", "phaserMix", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 27 })
+      p("phaser", "phaserMix", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 27 }),
+      outputTrimParameter("phaser", "phaserOutputTrimDb", 44)
     ]
   },
   {
@@ -16071,7 +16169,8 @@ const definitions = [
       p("delay", "delayDivision", "Division", "Div", 0, 12, 8, { step: 1, choices: DELAY_DIVISIONS.map(choice) }),
       p("delay", "delayFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0.35, { modulationTargetIndex: 29 }),
       p("delay", "delayFilter", "Filter", "Filt", 200, 18e3, 6e3, { unit: "Hz", scale: "log", modulationTargetIndex: 30, modulationApplication: "octaves" }),
-      p("delay", "delayMix", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 31 })
+      p("delay", "delayMix", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 31 }),
+      outputTrimParameter("delay", "delayOutputTrimDb", 45)
     ]
   },
   {
@@ -16086,7 +16185,8 @@ const definitions = [
       p("reverb", "reverbSize", "Size", "Size", 0, 1, 0.5, { quick: true, modulationTargetIndex: 32 }),
       p("reverb", "reverbDecay", "Decay", "Dcy", 0, 1, 0.4, { quick: true, modulationTargetIndex: 33 }),
       p("reverb", "reverbDamping", "Damping", "Dmp", 0, 1, 0.5, { modulationTargetIndex: 34 }),
-      p("reverb", "reverbMix", "Mix", "Mix", 0, 1, 0.5, { modulationTargetIndex: 35 })
+      p("reverb", "reverbMix", "Mix", "Mix", 0, 1, 0.5, { modulationTargetIndex: 35 }),
+      outputTrimParameter("reverb", "reverbOutputTrimDb", 46)
     ]
   }
 ];
@@ -16117,6 +16217,19 @@ function getRackParameterDescriptorForModulationEndpoint(endpointID) {
   return RACK_PARAMETER_DESCRIPTORS.find(
     (descriptor) => rackModulationIdentityEndpointID(descriptor) === endpointID
   ) ?? null;
+}
+function formatRackParameterValue(descriptor, value) {
+  if (descriptor.choices !== void 0) {
+    return descriptor.choices.find((item) => item.value === Math.round(value))?.label ?? String(Math.round(value));
+  }
+  if (descriptor.unit === "%") return `${Math.round(value)}%`;
+  if (descriptor.unit === "Hz") return value >= 1e3 ? `${(value / 1e3).toFixed(value >= 1e4 ? 1 : 2)}kHz` : `${Math.round(value)}Hz`;
+  if (descriptor.unit === "ms") return `${Math.round(value)}ms`;
+  if (descriptor.valueKind === "effect-output-trim-db" && value <= descriptor.min) return "−∞dB";
+  if (descriptor.unit === "dB") return `${value.toFixed(1)}dB`;
+  if (descriptor.unit === "deg") return `${Math.round(value)}°`;
+  if (descriptor.unit === "st") return `${value >= 0 ? "+" : ""}${value.toFixed(1)}st`;
+  return `${Math.round(value * 100)}%`;
 }
 const OSCILLATOR_IDS = ["A", "B", "C"];
 const OSCILLATOR_MODULATION_PARAMETER_KINDS = [
@@ -16225,10 +16338,10 @@ const RACK_MODULATION_TARGET_IDENTITIES = Object.freeze(
       kind: laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter2)),
       group: "rack",
       runtimeIndex: parameter2.modulationTargetIndex
-    })).sort((left, right) => left.runtimeIndex - right.runtimeIndex),
+    })),
     { kind: "lane.frequencySplit#1.xoverLowHz", group: "rack", runtimeIndex: 37 },
     { kind: "lane.frequencySplit#1.xoverHighHz", group: "rack", runtimeIndex: 38 }
-  ]
+  ].sort((left, right) => left.runtimeIndex - right.runtimeIndex)
 );
 const MODULATION_TARGET_IDENTITIES = Object.freeze([
   ...VOICE_MODULATION_TARGET_IDENTITIES,
@@ -16245,7 +16358,7 @@ const sourceIdentityByAddress = new Map(MODULATION_SOURCE_IDENTITIES.map((identi
 ]));
 const targetIdentityByKind = new Map(MODULATION_TARGET_IDENTITIES.map((identity) => [identity.kind, identity]));
 function assertCanonicalIdentities() {
-  if (MODULATION_SOURCE_COUNT !== 14 || MODULATION_VOICE_TARGET_COUNT$1 !== 59 || MODULATION_RACK_TARGET_COUNT$1 !== 39 || MODULATION_LEGAL_PAIR_COUNT !== 1372) {
+  if (MODULATION_SOURCE_COUNT !== 14 || MODULATION_VOICE_TARGET_COUNT$1 !== 59 || MODULATION_RACK_TARGET_COUNT$1 !== 47 || MODULATION_LEGAL_PAIR_COUNT !== 1484) {
     throw new Error("Unexpected modulation domain size");
   }
   for (const [group, expectedCount] of [["voice", 10], ["macro", 4]]) {
@@ -16254,7 +16367,7 @@ function assertCanonicalIdentities() {
       throw new Error(`Bad modulation ${group} source indexes`);
     }
   }
-  for (const [group, expectedCount] of [["voice", 59], ["rack", 39]]) {
+  for (const [group, expectedCount] of [["voice", 59], ["rack", 47]]) {
     const identities = MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
     if (identities.length !== expectedCount || identities.some((identity, position) => identity.runtimeIndex !== position)) {
       throw new Error(`Bad modulation ${group} target indexes`);
@@ -16301,14 +16414,14 @@ function getVoiceModulationParameterKind(targetKind) {
 const MODULATION_LANE_POOL_SET_COUNT = 4;
 const MODULATION_LANE_POOL_TARGET_COUNT = MODULATION_LANE_POOL_SET_COUNT * MODULATION_RACK_TARGET_COUNT$1;
 const LANE_DEVICE_ENDPOINTS = /* @__PURE__ */ new Map([
-  ["globalFilter", ["globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"]],
-  ["distortion", ["distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"]],
-  ["ott", ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"]],
-  ["chorus", ["chorusMix", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingFineSemitones"]],
-  ["flanger", ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix", "flangerBaseDelayMs"]],
-  ["phaser", ["phaserRate", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix"]],
-  ["delay", ["delayTime", "delayFeedback", "delayFilter", "delayMix"]],
-  ["reverb", ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"]],
+  ["globalFilter", ["globalFilterCutoff", "globalFilterResonance", "globalFilterDrive", "globalFilterOutputTrimDb"]],
+  ["distortion", ["distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz", "distortionOutputTrimDb"]],
+  ["ott", ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch", "ottOutputTrimDb"]],
+  ["chorus", ["chorusMix", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingFineSemitones", "chorusOutputTrimDb"]],
+  ["flanger", ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix", "flangerBaseDelayMs", "flangerOutputTrimDb"]],
+  ["phaser", ["phaserRate", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix", "phaserOutputTrimDb"]],
+  ["delay", ["delayTime", "delayFeedback", "delayFilter", "delayMix", "delayOutputTrimDb"]],
+  ["reverb", ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix", "reverbOutputTrimDb"]],
   ["frequencySplit", ["xoverLowHz", "xoverHighHz"]]
 ]);
 const LANE_KIND_PATTERN = /^lane\.([a-zA-Z]+)#([1-9][0-9]*)\.([A-Za-z0-9]+)$/;
@@ -16881,11 +16994,11 @@ function rackTargetId(parameter2) {
   return `${parameter2.effectId}.${parameter2.endpointID}`;
 }
 function rackNormalizedFromEngine(parameter2, value) {
-  const normalizedValue2 = parameter2.scale === "log" ? Math.log(value / parameter2.min) / Math.log(parameter2.max / parameter2.min) : (value - parameter2.min) / (parameter2.max - parameter2.min);
+  const normalizedValue2 = parameter2.valueKind === "effect-output-trim-db" ? effectOutputTrimNormalizedValue(value) : parameter2.scale === "log" ? Math.log(value / parameter2.min) / Math.log(parameter2.max / parameter2.min) : (value - parameter2.min) / (parameter2.max - parameter2.min);
   return normalized(normalizedValue2, `${parameter2.endpointID} endpoint conversion`);
 }
 function rackEngineFromNormalized(parameter2, value) {
-  return parameter2.scale === "log" ? parameter2.min * (parameter2.max / parameter2.min) ** value : parameter2.min + (parameter2.max - parameter2.min) * value;
+  return parameter2.valueKind === "effect-output-trim-db" ? effectOutputTrimValueFromNormalized(value) : parameter2.scale === "log" ? parameter2.min * (parameter2.max / parameter2.min) ** value : parameter2.min + (parameter2.max - parameter2.min) * value;
 }
 function rackValueFormat(parameter2) {
   if (parameter2.unit === "Hz") {
@@ -20870,7 +20983,7 @@ function DistortionVisualizer({
     /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { "data-role": "distortion-graph-debug", className: "hidden", children: JSON.stringify(debugState) })
   ] });
 }
-const LANE_SLOT_PARAM_COUNT = 12;
+const LANE_SLOT_PARAM_COUNT = 13;
 const LANE_SLOT_ORDINAL_COUNT = 5;
 const LANE_SLOT_TYPE_COUNT = 8;
 const LANE_TYPE_WIRE_IDS = Object.freeze({
@@ -20890,7 +21003,8 @@ const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
     "globalFilterResonance",
     "globalFilterDrive",
     "globalFilterCutoffKeyTrackEnabled",
-    "globalFilterCutoffKeyTrackOffsetSemitones"
+    "globalFilterCutoffKeyTrackOffsetSemitones",
+    effectOutputTrimLaneEndpointID("globalFilter")
   ],
   distortion: [
     "distortionMode",
@@ -20903,9 +21017,17 @@ const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
     "distortionWetHPKeyTrackEnabled",
     "distortionWetHPKeyTrackOffsetSemitones",
     "distortionWetLPKeyTrackEnabled",
-    "distortionWetLPKeyTrackOffsetSemitones"
+    "distortionWetLPKeyTrackOffsetSemitones",
+    effectOutputTrimLaneEndpointID("distortion")
   ],
-  ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
+  ott: [
+    "ottMix",
+    "ottAmount",
+    "ottTimePercent",
+    "ottBandDrive",
+    "ottEnvelopeMatch",
+    effectOutputTrimLaneEndpointID("ott")
+  ],
   chorus: [
     "chorusMix",
     "chorusMotionMode",
@@ -20918,7 +21040,8 @@ const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
     "chorusRingFrequencyHz",
     "chorusRingKeyTrackEnabled",
     "chorusRingKeyTrackOffsetSemitones",
-    "chorusRingLegacyClampEnabled"
+    "chorusRingLegacyClampEnabled",
+    effectOutputTrimLaneEndpointID("chorus")
   ],
   flanger: [
     "flangerRate",
@@ -20927,7 +21050,8 @@ const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
     "flangerMix",
     "flangerBaseDelayMs",
     "flangerBaseDelayKeyTrackEnabled",
-    "flangerBaseDelayKeyTrackOffsetSemitones"
+    "flangerBaseDelayKeyTrackOffsetSemitones",
+    effectOutputTrimLaneEndpointID("flanger")
   ],
   phaser: [
     "phaserRate",
@@ -20939,7 +21063,8 @@ const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
     "phaserPhase",
     "phaserMix",
     "phaserFrequencyKeyTrackEnabled",
-    "phaserFrequencyKeyTrackOffsetSemitones"
+    "phaserFrequencyKeyTrackOffsetSemitones",
+    effectOutputTrimLaneEndpointID("phaser")
   ],
   delay: [
     "delayTime",
@@ -20951,9 +21076,16 @@ const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
     "delayTimeKeyTrackEnabled",
     "delayTimeKeyTrackOffsetSemitones",
     "delayFilterKeyTrackEnabled",
-    "delayFilterKeyTrackOffsetSemitones"
+    "delayFilterKeyTrackOffsetSemitones",
+    effectOutputTrimLaneEndpointID("delay")
   ],
-  reverb: ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"]
+  reverb: [
+    "reverbSize",
+    "reverbDecay",
+    "reverbDamping",
+    "reverbMix",
+    effectOutputTrimLaneEndpointID("reverb")
+  ]
 });
 const LEGACY_LANE_DEVICE_PARAM_ENDPOINTS = Object.freeze({
   globalFilter: ["globalFilterMode", "globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"],
@@ -21022,8 +21154,12 @@ function materializeLaneDeviceParams(deviceType, input) {
     params[endpointID] = fallback;
   }
   const legacyChorusEndpoints = LEGACY_LANE_DEVICE_PARAM_ENDPOINTS.chorus;
+  const currentLegacyChorusEndpoints = [
+    ...legacyChorusEndpoints,
+    effectOutputTrimLaneEndpointID("chorus")
+  ];
   const inputEndpoints = Object.keys(input);
-  const isLegacyChorus = deviceType === "chorus" && inputEndpoints.length === legacyChorusEndpoints.length && inputEndpoints.every((endpointID) => legacyChorusEndpoints.includes(endpointID));
+  const isLegacyChorus = deviceType === "chorus" && inputEndpoints.length === currentLegacyChorusEndpoints.length && inputEndpoints.every((endpointID) => currentLegacyChorusEndpoints.includes(endpointID));
   if (isLegacyChorus) {
     params.chorusRingKeyTrackEnabled = 1;
     params.chorusRingKeyTrackOffsetSemitones = legacyChorusRingOffsetSemitones(
@@ -21117,140 +21253,6 @@ const EFFECT_ID_TO_WIRE_ID = Object.freeze({
 new Map(
   RACK_EFFECT_ORDER.map((effectId) => [EFFECT_ID_TO_WIRE_ID[effectId], effectId])
 );
-function defaultEnabled() {
-  return {
-    filter: false,
-    drive: false,
-    ott: false,
-    chorus: false,
-    flanger: false,
-    phaser: false,
-    delay: false,
-    reverb: false
-  };
-}
-function defaultParams(effectId) {
-  return Object.fromEntries(
-    getRackEffectDescriptor(effectId).parameters.map((descriptor) => [descriptor.endpointID, descriptor.initial])
-  );
-}
-function createDefaultLaneState() {
-  return {
-    format: "cosimo.lane",
-    version: 1,
-    order: [...RACK_EFFECT_ORDER],
-    enabled: defaultEnabled(),
-    params: Object.fromEntries(
-      RACK_EFFECT_ORDER.map((effectId) => [effectId, defaultParams(effectId)])
-    )
-  };
-}
-function parseJsonDocument$1(input) {
-  if (typeof input !== "string") {
-    return { _tag: "json", value: input };
-  }
-  if (input.trim().length === 0) {
-    return { _tag: "err", message: `${LANE_STATE_KEY} must not be empty` };
-  }
-  try {
-    const value = JSON.parse(input);
-    return { _tag: "json", value };
-  } catch (cause) {
-    const detail = cause instanceof Error ? cause.message : String(cause);
-    return { _tag: "err", message: `${LANE_STATE_KEY} is not valid JSON: ${detail}` };
-  }
-}
-function isRecord$5(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function parseEffectId(input) {
-  if (typeof input !== "string") {
-    return null;
-  }
-  return RACK_EFFECT_ORDER.find((candidate) => candidate === input) ?? null;
-}
-function parseLaneState(input) {
-  const document2 = parseJsonDocument$1(input);
-  if (document2._tag === "err") {
-    return document2;
-  }
-  if (!isRecord$5(document2.value)) {
-    return { _tag: "err", message: `${LANE_STATE_KEY} must be an object` };
-  }
-  const allowedKeys = /* @__PURE__ */ new Set(["format", "version", "order", "enabled", "params"]);
-  for (const key of Reflect.ownKeys(document2.value)) {
-    if (typeof key !== "string" || !allowedKeys.has(key)) {
-      return { _tag: "err", message: `${LANE_STATE_KEY} has unexpected field ${String(key)}` };
-    }
-  }
-  if (document2.value.format !== "cosimo.lane" || document2.value.version !== 1) {
-    return { _tag: "err", message: `${LANE_STATE_KEY} must be cosimo.lane version 1` };
-  }
-  if (!Array.isArray(document2.value.order) || document2.value.order.length !== RACK_EFFECT_ORDER.length) {
-    return { _tag: "err", message: `${LANE_STATE_KEY}.order must contain every effect once` };
-  }
-  const order = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const rawEffectId of document2.value.order) {
-    const effectId = parseEffectId(rawEffectId);
-    if (effectId === null || seen.has(effectId)) {
-      return { _tag: "err", message: `${LANE_STATE_KEY}.order is not a complete permutation` };
-    }
-    seen.add(effectId);
-    order.push(effectId);
-  }
-  if (!isRecord$5(document2.value.enabled)) {
-    return { _tag: "err", message: `${LANE_STATE_KEY}.enabled must be an object` };
-  }
-  if (Reflect.ownKeys(document2.value.enabled).length !== RACK_EFFECT_ORDER.length) {
-    return { _tag: "err", message: `${LANE_STATE_KEY}.enabled must contain every effect once` };
-  }
-  const enabled = defaultEnabled();
-  for (const effectId of RACK_EFFECT_ORDER) {
-    const rawEnabled = document2.value.enabled[effectId];
-    if (typeof rawEnabled !== "boolean") {
-      return { _tag: "err", message: `${LANE_STATE_KEY}.enabled.${effectId} must be boolean` };
-    }
-    enabled[effectId] = rawEnabled;
-  }
-  if (!isRecord$5(document2.value.params)) {
-    return { _tag: "err", message: `${LANE_STATE_KEY}.params must be an object` };
-  }
-  if (Reflect.ownKeys(document2.value.params).length !== RACK_EFFECT_ORDER.length) {
-    return { _tag: "err", message: `${LANE_STATE_KEY}.params must contain every effect once` };
-  }
-  const params = {};
-  for (const effectId of RACK_EFFECT_ORDER) {
-    const rawDeviceParams = document2.value.params[effectId];
-    if (!isRecord$5(rawDeviceParams)) {
-      return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId} must be an object` };
-    }
-    const descriptors = getRackEffectDescriptor(effectId).parameters;
-    const currentEndpoints = descriptors.map((descriptor) => descriptor.endpointID);
-    const legacyEndpoints = LEGACY_LANE_DEVICE_PARAM_ENDPOINTS[EFFECT_ID_TO_LANE_TYPE[effectId]];
-    const rawKeys = Reflect.ownKeys(rawDeviceParams);
-    const hasExactShape = (expected) => rawKeys.length === expected.length && rawKeys.every((key) => typeof key === "string" && expected.includes(key));
-    if (!hasExactShape(currentEndpoints) && !hasExactShape(legacyEndpoints)) {
-      return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId} must contain every parameter once` };
-    }
-    const deviceParams = {};
-    for (const endpointID of rawKeys) {
-      if (typeof endpointID !== "string") {
-        return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId} has an invalid parameter key` };
-      }
-      const rawValue = rawDeviceParams[endpointID];
-      if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
-        return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId}.${endpointID} must be a finite number` };
-      }
-      deviceParams[endpointID] = rawValue;
-    }
-    params[effectId] = deviceParams;
-  }
-  return {
-    _tag: "ok",
-    value: { format: "cosimo.lane", version: 1, order, enabled, params }
-  };
-}
 const KEY_TRACK_RANGES = Object.freeze({
   "filter-frequency": Object.freeze({
     center: 0,
@@ -21480,7 +21482,6 @@ function parseDeviceRecord(deviceId, input) {
     return { failure: err(`device ${deviceId} must be { params }`) };
   }
   const endpoints = laneDeviceParamEndpoints(parsedId.deviceType);
-  const legacyEndpoints = LEGACY_LANE_DEVICE_PARAM_ENDPOINTS[parsedId.deviceType];
   const effectId = LANE_TYPE_TO_EFFECT_ID.get(parsedId.deviceType);
   if (effectId === void 0) {
     return { failure: err(`device ${deviceId} has no effect descriptor`) };
@@ -21489,8 +21490,17 @@ function parseDeviceRecord(deviceId, input) {
   const inputParams = input.params;
   const inputKeys = Object.keys(inputParams);
   const hasShape = (expected) => inputKeys.length === expected.length && inputKeys.every((key) => expected.includes(key));
-  const hasValidShape = hasShape(endpoints) || hasShape(legacyEndpoints) || parsedId.deviceType === "chorus" && hasShape(PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS) || hasShape(presentationEndpoints);
-  if (!hasValidShape) {
+  const trimEndpointID = effectOutputTrimLaneEndpointID(parsedId.deviceType);
+  const currentLegacyEndpoints = [
+    ...LEGACY_LANE_DEVICE_PARAM_ENDPOINTS[parsedId.deviceType],
+    trimEndpointID
+  ];
+  const currentPreClampChorusEndpoints = [
+    ...PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS,
+    trimEndpointID
+  ];
+  const hasCurrentShape = inputKeys.includes(trimEndpointID) && (hasShape(endpoints) || hasShape(presentationEndpoints) || hasShape(currentLegacyEndpoints) || parsedId.deviceType === "chorus" && hasShape(currentPreClampChorusEndpoints));
+  if (!hasCurrentShape) {
     return { failure: err(`device ${deviceId} must carry every parameter once`) };
   }
   for (const endpointID of inputKeys) {
@@ -21683,12 +21693,12 @@ function parseLaneStateV2(input) {
   }
   return { _tag: "ok", value: { format: "cosimo.lane", version: 2, output, devices, chain } };
 }
-function upgradeLaneStateV1(state2) {
+function createFullDefaultLaneStateV2() {
   const devices = {};
   for (const effectId of RACK_EFFECT_ORDER) {
     const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
     devices[`${deviceType}#1`] = {
-      params: materializeLaneDeviceParams(deviceType, state2.params[effectId])
+      params: laneDefaultParamsForType(deviceType)
     };
   }
   return {
@@ -21696,21 +21706,21 @@ function upgradeLaneStateV1(state2) {
     version: 2,
     output: createDefaultLaneOutputState(),
     devices,
-    chain: state2.order.map((effectId) => ({
+    chain: RACK_EFFECT_ORDER.map((effectId) => ({
       kind: "device",
       deviceId: `${EFFECT_ID_TO_LANE_TYPE[effectId]}#1`,
-      enabled: state2.enabled[effectId]
+      enabled: false
     }))
   };
 }
 const STARTER_DEVICE_IDS = ["distortion#1", "delay#1", "reverb#1"];
 function createDefaultLaneStateV2() {
-  const legacy = upgradeLaneStateV1(createDefaultLaneState());
+  const full = createFullDefaultLaneStateV2();
   const devices = {};
   for (const deviceId of STARTER_DEVICE_IDS) {
-    const record = legacy.devices[deviceId];
+    const record = full.devices[deviceId];
     if (record === void 0) {
-      throw new Error(`The v1 default is missing starter device ${deviceId}`);
+      throw new Error(`The current default is missing starter device ${deviceId}`);
     }
     devices[deviceId] = record;
   }
@@ -21719,7 +21729,7 @@ function createDefaultLaneStateV2() {
     version: 2,
     output: createDefaultLaneOutputState(),
     devices,
-    chain: legacy.chain.filter((node) => node.kind === "device" && STARTER_DEVICE_IDS.includes(node.deviceId))
+    chain: full.chain.filter((node) => node.kind === "device" && STARTER_DEVICE_IDS.includes(node.deviceId))
   };
 }
 function deserializeLaneStateV2(input) {
@@ -21727,14 +21737,7 @@ function deserializeLaneStateV2(input) {
     return createDefaultLaneStateV2();
   }
   const v2 = parseLaneStateV2(input);
-  if (v2._tag === "ok") {
-    return v2.value;
-  }
-  const v1 = parseLaneState(input);
-  if (v1._tag === "ok") {
-    return upgradeLaneStateV1(v1.value);
-  }
-  return createDefaultLaneStateV2();
+  return v2._tag === "ok" ? v2.value : null;
 }
 function serializeLaneStateV2(state2) {
   return JSON.stringify({
@@ -21815,6 +21818,17 @@ function buildLaneRuntimeEventsV2(state2) {
   }];
   let deliverySerial = 0;
   for (const device of listLaneDeviceInstancesV2(state2)) {
+    const parsedId = parseLaneInstanceId(device.instanceId);
+    if (parsedId === null) {
+      throw new Error(`Invalid lane device identity during replay: ${device.instanceId}`);
+    }
+    events.push({
+      endpointID: effectOutputTrimHostEndpointID(
+        parsedId.deviceType,
+        parsedId.instanceNumber
+      ),
+      value: state2.devices[device.instanceId].params[effectOutputTrimLaneEndpointID(parsedId.deviceType)]
+    });
     deliverySerial += 1;
     events.push({
       endpointID: LANE_SLOT_PARAMS_ENDPOINT_ID,
@@ -21872,6 +21886,33 @@ function setLaneDeviceParam(state2, deviceId, endpointID, value) {
       [deviceId]: { params }
     }
   };
+}
+function synchronizeLaneOutputTrimsFromHostParameters(state2, parameters) {
+  let nextState = state2;
+  for (const [endpointID, rawValue] of Object.entries(parameters)) {
+    const parsed = parseEffectOutputTrimHostEndpointID(endpointID);
+    if (parsed === null || typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+      continue;
+    }
+    const deviceId = `${parsed.deviceType}#${parsed.instanceNumber}`;
+    if (nextState.devices[deviceId] === void 0) {
+      continue;
+    }
+    const value = Math.min(
+      EFFECT_OUTPUT_TRIM_MAX_DB,
+      Math.max(EFFECT_OUTPUT_TRIM_SILENCE_DB, rawValue)
+    );
+    if (Object.is(nextState.devices[deviceId]?.params[parsed.laneEndpointID], value)) {
+      continue;
+    }
+    nextState = setLaneDeviceParam(
+      nextState,
+      deviceId,
+      parsed.laneEndpointID,
+      value
+    ) ?? nextState;
+  }
+  return nextState;
 }
 function setLaneKeyTrackEnabled(state2, deviceId, ordinaryEndpointID, enabled) {
   const endpoints = getLaneKeyTrackEndpoints(ordinaryEndpointID);
@@ -21939,6 +21980,17 @@ function setLaneSplitKeyTrackOffset(state2, groupId, which, offsetSemitones) {
   }
   const offsetKey = which === "low" ? "xoverLowKeyTrackOffsetSemitones" : "xoverHighKeyTrackOffsetSemitones";
   return withChain(state2, state2.chain.map((node) => node.kind === "split" && node.groupId === groupId ? { ...node, [offsetKey]: Math.min(48, Math.max(-48, offsetSemitones)) } : node));
+}
+function laneDefaultParamsForType(deviceType) {
+  const effectId = LANE_TYPE_TO_EFFECT_ID.get(deviceType);
+  if (effectId === void 0) {
+    throw new Error(`Unknown lane device type: ${deviceType}`);
+  }
+  const descriptors = getRackEffectDescriptor(effectId).parameters;
+  return Object.fromEntries(laneDeviceParamEndpoints(deviceType).map((endpointID) => [
+    endpointID,
+    descriptors.find((descriptor) => descriptor.endpointID === endpointID)?.initial ?? 0
+  ]));
 }
 function serializeIdentity(value) {
   return value;
@@ -22088,6 +22140,86 @@ function reconcileLaneSoloAudition(connection, previousLaneState, nextLaneState)
   }
   return store.state;
 }
+function hostValuesMatch(left, right) {
+  return Math.fround(left) === Math.fround(right);
+}
+class EffectOutputTrimHostMirror {
+  #connection;
+  #onValue;
+  #values = {};
+  #listeners = /* @__PURE__ */ new Map();
+  #pendingWrites = /* @__PURE__ */ new Map();
+  #captureGeneration = 0;
+  constructor(connection, onValue) {
+    this.#connection = connection;
+    this.#onValue = onValue;
+    for (const endpointID of allEffectOutputTrimHostEndpointIDs()) {
+      const listener = (rawValue) => {
+        if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+          return;
+        }
+        const value = effectOutputTrimEffectiveDb(rawValue, 0);
+        const pending = this.#pendingWrites.get(endpointID);
+        if (pending !== void 0) {
+          if (!hostValuesMatch(value, pending.expectedValue)) {
+            return;
+          }
+          if (this.#pendingWrites.get(endpointID)?.generation !== pending.generation) {
+            return;
+          }
+          this.#pendingWrites.delete(endpointID);
+        }
+        this.#values[endpointID] = value;
+        this.#onValue(endpointID, value);
+      };
+      this.#listeners.set(endpointID, listener);
+      this.#connection.addParameterListener?.(endpointID, listener);
+      this.#connection.requestParameterValue?.(endpointID);
+    }
+  }
+  /** Seed host authority from an intentional lane commit (including reset). */
+  captureLaneState(state2) {
+    this.#captureGeneration += 1;
+    const generation = this.#captureGeneration;
+    for (const device of listLaneDeviceInstancesV2(state2)) {
+      const parsed = parseLaneInstanceId(device.instanceId);
+      if (parsed === null) {
+        continue;
+      }
+      const laneEndpointID = effectOutputTrimLaneEndpointID(parsed.deviceType);
+      const rawValue = state2.devices[device.instanceId]?.params[laneEndpointID];
+      if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+        continue;
+      }
+      const hostEndpointID = effectOutputTrimHostEndpointID(
+        parsed.deviceType,
+        parsed.instanceNumber
+      );
+      const value = effectOutputTrimEffectiveDb(rawValue, 0);
+      const pending = this.#pendingWrites.get(hostEndpointID);
+      const observed = this.#values[hostEndpointID];
+      this.#values[hostEndpointID] = value;
+      if (pending !== void 0 || observed === void 0 || !hostValuesMatch(observed, value)) {
+        this.#pendingWrites.set(hostEndpointID, {
+          generation,
+          expectedValue: value
+        });
+      }
+    }
+  }
+  /** Reconcile a hydrated/stored lane document against observed host values. */
+  synchronizeLaneState(state2) {
+    return synchronizeLaneOutputTrimsFromHostParameters(state2, this.#values);
+  }
+  /** Optional teardown for connection implementations with shorter lifetimes. */
+  dispose() {
+    for (const [endpointID, listener] of this.#listeners) {
+      this.#connection.removeParameterListener?.(endpointID, listener);
+    }
+    this.#listeners.clear();
+    this.#pendingWrites.clear();
+  }
+}
 const stores = /* @__PURE__ */ new WeakMap();
 function readLaneStateFromFullStoredState(fullState) {
   const values = fullState.values && typeof fullState.values === "object" ? fullState.values : {};
@@ -22105,6 +22237,24 @@ function acceptLaneState(store, nextState) {
     listener();
   }
 }
+function cancelPendingOutputTrimPersist(store) {
+  if (store.outputTrimPersistTimer !== null) {
+    globalThis.clearTimeout(store.outputTrimPersistTimer);
+    store.outputTrimPersistTimer = null;
+  }
+}
+function persistLaneState(store) {
+  cancelPendingOutputTrimPersist(store);
+  store.hasHydratedStoredState = true;
+  store.connection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(store.state));
+}
+function scheduleOutputTrimPersist(store) {
+  cancelPendingOutputTrimPersist(store);
+  store.outputTrimPersistTimer = globalThis.setTimeout(() => {
+    store.outputTrimPersistTimer = null;
+    store.connection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(store.state));
+  }, 120);
+}
 function getLaneStateStore(connection) {
   const key = connection;
   const existing = stores.get(key);
@@ -22117,7 +22267,10 @@ function getLaneStateStore(connection) {
     connection,
     listeners: /* @__PURE__ */ new Set(),
     deliverySerial: 0,
-    serialized: serializeLaneStateV2(initialState)
+    serialized: serializeLaneStateV2(initialState),
+    outputTrimPersistTimer: null,
+    hasHydratedStoredState: false,
+    outputTrimHostMirror: null
   };
   stores.set(key, created);
   connection.addStoredStateValueListener?.((message) => {
@@ -22125,12 +22278,44 @@ function getLaneStateStore(connection) {
       return;
     }
     if (Reflect.get(message, "key") === LANE_STATE_KEY) {
-      acceptLaneState(created, deserializeLaneStateV2(Reflect.get(message, "value")));
+      const hydrated = deserializeLaneStateV2(Reflect.get(message, "value"));
+      if (hydrated === null) {
+        return;
+      }
+      created.hasHydratedStoredState = true;
+      acceptLaneState(
+        created,
+        created.outputTrimHostMirror?.synchronizeLaneState(hydrated) ?? hydrated
+      );
     }
   });
   connection.requestFullStoredState?.((fullState) => {
-    acceptLaneState(created, deserializeLaneStateV2(readLaneStateFromFullStoredState(fullState)));
+    const hydrated = deserializeLaneStateV2(readLaneStateFromFullStoredState(fullState));
+    if (hydrated === null) {
+      return;
+    }
+    created.hasHydratedStoredState = true;
+    acceptLaneState(
+      created,
+      created.outputTrimHostMirror?.synchronizeLaneState(hydrated) ?? hydrated
+    );
   });
+  created.outputTrimHostMirror = new EffectOutputTrimHostMirror(
+    connection,
+    (endpointID, value) => {
+      const nextState = synchronizeLaneOutputTrimsFromHostParameters(
+        created.state,
+        { [endpointID]: value }
+      );
+      if (nextState === created.state) {
+        return;
+      }
+      acceptLaneState(created, nextState);
+      if (created.hasHydratedStoredState) {
+        scheduleOutputTrimPersist(created);
+      }
+    }
+  );
   return created;
 }
 function useLaneStateDoc() {
@@ -22144,9 +22329,10 @@ function useLaneStateDoc() {
     () => store.state
   );
   const commit = reactExports.useCallback((nextState) => {
+    store.outputTrimHostMirror?.captureLaneState(nextState);
     acceptLaneState(store, nextState);
     commitLaneStateV2(patchConnection, nextState);
-    patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(nextState));
+    persistLaneState(store);
   }, [patchConnection, store]);
   const setParamValue = reactExports.useCallback((deviceId, endpointID, value) => {
     const parsedId = parseLaneInstanceId(deviceId);
@@ -22157,6 +22343,9 @@ function useLaneStateDoc() {
     const previousParams = store.state.devices[deviceId]?.params;
     const nextState = setLaneDeviceParam(store.state, deviceId, endpointID, value) ?? store.state;
     const nextParams = nextState.devices[deviceId]?.params;
+    if (endpointID === effectOutputTrimLaneEndpointID(parsedId.deviceType)) {
+      store.outputTrimHostMirror?.captureLaneState(nextState);
+    }
     acceptLaneState(store, nextState);
     const sendField = (nextEndpointID, nextValue) => {
       const nextParamIndex = getLaneSlotParamIndex(parsedId.deviceType, nextEndpointID);
@@ -22287,8 +22476,8 @@ function useLaneStateDoc() {
     patchConnection.sendEventOrValue?.(LANE_OUTPUT_CONTROL_ENDPOINT_ID, next.output);
   }, [patchConnection, store]);
   const persist = reactExports.useCallback(() => {
-    patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(store.state));
-  }, [patchConnection, store]);
+    persistLaneState(store);
+  }, [store]);
   return reactExports.useMemo(() => ({
     laneState,
     commit,
@@ -22335,31 +22524,62 @@ function useLaneParameterBinding(descriptor, deviceId) {
   const patchConnection = usePatchConnection();
   const { laneState, setParamValue, persist } = useLaneStateDoc();
   const boundDeviceId = `${EFFECT_ID_TO_LANE_TYPE[descriptor.effectId]}#1`;
+  const parsedDeviceId = parseLaneInstanceId(boundDeviceId);
+  const isOutputTrim = parsedDeviceId !== null && descriptor.endpointID === effectOutputTrimLaneEndpointID(parsedDeviceId.deviceType);
+  const hostEndpointID = parsedDeviceId === null || !isOutputTrim ? descriptor.endpointID : effectOutputTrimHostEndpointID(
+    parsedDeviceId.deviceType,
+    parsedDeviceId.instanceNumber
+  );
   const clampValue = reactExports.useCallback((value2) => {
     const numeric = Number.isFinite(value2) ? value2 : descriptor.initial;
     const clamped = Math.min(descriptor.max, Math.max(descriptor.min, numeric));
     return descriptor.choices !== void 0 ? Math.round(clamped) : clamped;
   }, [descriptor.choices, descriptor.initial, descriptor.max, descriptor.min]);
-  const value = clampValue(
+  const hostBinding = usePatchParameterBinding({
+    endpointID: hostEndpointID,
+    initialValue: descriptor.initial,
+    coerce: clampValue,
+    active: isOutputTrim
+  });
+  const laneValue = clampValue(
     laneState.devices[boundDeviceId]?.params[descriptor.endpointID] ?? descriptor.initial
   );
+  const value = isOutputTrim && hostBinding.isReady ? hostBinding.value : laneValue;
   const valueRef = { current: value };
   valueRef.current = value;
   const setValue = reactExports.useCallback((nextValue) => {
     const coerced = clampValue(nextValue);
     const changed = !Object.is(coerced, valueRef.current);
+    if (isOutputTrim) {
+      hostBinding.setValue(coerced);
+    }
     setParamValue(boundDeviceId, descriptor.endpointID, coerced);
     reportUserParameterEdit({ endpointID: descriptor.endpointID, changed });
-  }, [boundDeviceId, clampValue, descriptor.endpointID, setParamValue]);
+  }, [
+    boundDeviceId,
+    clampValue,
+    descriptor.endpointID,
+    hostBinding.setValue,
+    isOutputTrim,
+    setParamValue
+  ]);
   const beginGesture = reactExports.useCallback(() => {
-    patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
+    if (isOutputTrim) {
+      hostBinding.beginGesture();
+    } else {
+      patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
+    }
     reportUserGestureStart();
-  }, [descriptor.endpointID, patchConnection]);
+  }, [descriptor.endpointID, hostBinding.beginGesture, isOutputTrim, patchConnection]);
   const endGesture = reactExports.useCallback(() => {
-    patchConnection.sendParameterGestureEnd?.(descriptor.endpointID);
+    if (isOutputTrim) {
+      hostBinding.endGesture();
+    } else {
+      patchConnection.sendParameterGestureEnd?.(descriptor.endpointID);
+    }
     reportUserGestureEnd();
     persist();
-  }, [descriptor.endpointID, patchConnection, persist]);
+  }, [descriptor.endpointID, hostBinding.endGesture, isOutputTrim, patchConnection, persist]);
   const commitValue = reactExports.useCallback((nextValue) => {
     beginGesture();
     setValue(nextValue);
@@ -22368,13 +22588,25 @@ function useLaneParameterBinding(descriptor, deviceId) {
   return reactExports.useMemo(() => ({
     endpointID: descriptor.endpointID,
     value,
-    isReady: true,
+    isReady: isOutputTrim ? hostBinding.isReady : true,
+    hostBaseline: isOutputTrim ? hostBinding.hostBaseline : void 0,
     initialValue: descriptor.initial,
     setValue,
     commitValue,
     beginGesture,
     endGesture
-  }), [descriptor.endpointID, descriptor.initial, value, setValue, commitValue, beginGesture, endGesture]);
+  }), [
+    descriptor.endpointID,
+    descriptor.initial,
+    value,
+    isOutputTrim,
+    hostBinding.hostBaseline,
+    hostBinding.isReady,
+    setValue,
+    commitValue,
+    beginGesture,
+    endGesture
+  ]);
 }
 function useLaneKeyTrackControlBinding(descriptor, deviceId) {
   const patchConnection = usePatchConnection();
@@ -31135,6 +31367,7 @@ function useSynthPatchViewModel({
   const distortionWetHPHz = useLaneParameterBinding(requireLaneParameterDescriptor("distortionWetHPHz"));
   const distortionWetLPHz = useLaneParameterBinding(requireLaneParameterDescriptor("distortionWetLPHz"));
   const distortionType = useLaneParameterBinding(requireLaneParameterDescriptor(DISTORTION_TYPE_ENDPOINT_ID));
+  const distortionOutputTrim = useLaneParameterBinding(requireLaneParameterDescriptor("distortionOutputTrimDb"));
   const chorusMix = useLaneParameterBinding(requireLaneParameterDescriptor("chorusMix"));
   const chorusMotionMode = useLaneParameterBinding(requireLaneParameterDescriptor("chorusMotionMode"));
   const chorusBloomMode = useLaneParameterBinding(requireLaneParameterDescriptor("chorusBloomMode"));
@@ -32611,6 +32844,7 @@ function useSynthPatchViewModel({
     distortionWetHPHz,
     distortionWetLPHz,
     distortionType,
+    distortionOutputTrim,
     chorusMix,
     chorusMotionMode,
     chorusBloomMode,
@@ -32880,12 +33114,18 @@ function clamp$2(value, min, max) {
 }
 function normalizeDisplayedValue(descriptor, value) {
   const clamped = clamp$2(value, descriptor.min, descriptor.max);
+  if (descriptor.valueKind === "effect-output-trim-db") {
+    return effectOutputTrimNormalizedValue(clamped);
+  }
   if (descriptor.scale === "log") {
     return Math.log(clamped / descriptor.min) / Math.log(descriptor.max / descriptor.min);
   }
   return (clamped - descriptor.min) / (descriptor.max - descriptor.min);
 }
 function applyRouteOffset(descriptor, baseValue, offset) {
+  if (descriptor.valueKind === "effect-output-trim-db") {
+    return effectOutputTrimEffectiveDb(baseValue, offset);
+  }
   const rawValue = descriptor.modulationApplication === "octaves" ? baseValue * 2 ** offset : descriptor.modulationApplication === "semitones" ? baseValue * 2 ** (offset / 12) : baseValue + offset;
   return clamp$2(rawValue, descriptor.min, descriptor.max);
 }
@@ -32935,6 +33175,9 @@ function clamp$1(value, min, max) {
 }
 function normalizedValue(descriptor, value) {
   const clamped = clamp$1(value, descriptor.min, descriptor.max);
+  if (descriptor.valueKind === "effect-output-trim-db") {
+    return effectOutputTrimNormalizedValue(clamped);
+  }
   if (descriptor.scale === "log") {
     return Math.log(clamped / descriptor.min) / Math.log(descriptor.max / descriptor.min);
   }
@@ -32942,6 +33185,9 @@ function normalizedValue(descriptor, value) {
 }
 function valueFromNormalized(descriptor, normalized2) {
   const clamped = clamp$1(normalized2, 0, 1);
+  if (descriptor.valueKind === "effect-output-trim-db") {
+    return effectOutputTrimValueFromNormalized(clamped);
+  }
   return descriptor.scale === "log" ? descriptor.min * (descriptor.max / descriptor.min) ** clamped : descriptor.min + clamped * (descriptor.max - descriptor.min);
 }
 function snapParameterValue(descriptor, value, detentStep) {
@@ -33424,6 +33670,7 @@ function requireIOSRackParameterDescriptor(endpointID) {
 }
 const DISTORTION_WET_HP_DESCRIPTOR = requireIOSRackParameterDescriptor("distortionWetHPHz");
 const DISTORTION_WET_LP_DESCRIPTOR = requireIOSRackParameterDescriptor("distortionWetLPHz");
+const DISTORTION_OUTPUT_TRIM_DESCRIPTOR = requireIOSRackParameterDescriptor("distortionOutputTrimDb");
 const IOS_DISTORTION_KEY_TRACK_RANGE = requireKeyTrackRange("filter-frequency");
 const IOS_PERCENT_ENTRY_SPEC = parameterEntrySpecForScalar({
   min: 0,
@@ -34085,6 +34332,7 @@ const IOSDistortionPanel = reactExports.memo(function IOSDistortionPanel2({
   driveValue,
   kneeValue,
   wetValue,
+  outputTrimValue,
   wetHPKeyTrack,
   wetLPKeyTrack,
   historyFrame,
@@ -34093,7 +34341,8 @@ const IOSDistortionPanel = reactExports.memo(function IOSDistortionPanel2({
   onTypeChange,
   onDriveChange,
   onKneeChange,
-  onWetChange
+  onWetChange,
+  onOutputTrimChange
 }) {
   const inputPeak = scopeFrame?.inputPeak ?? 0;
   const outputPeak = scopeFrame?.outputPeak ?? 0;
@@ -34286,7 +34535,39 @@ const IOSDistortionPanel = reactExports.memo(function IOSDistortionPanel2({
               role: "distortion-wet-lp-slider",
               isHighPass: false
             }
-          )
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { display: "grid", gap: "0.32rem" }, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "space-between", gap: "0.75rem" }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "mseg-depth-label", children: "Output Trim" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  style: {
+                    fontFamily: '"SF Mono", Menlo, monospace',
+                    fontSize: "0.72rem",
+                    letterSpacing: "0.08em",
+                    color: "rgba(226,232,240,0.92)"
+                  },
+                  children: formatRackParameterValue(DISTORTION_OUTPUT_TRIM_DESCRIPTOR, outputTrimValue)
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                "data-role": "distortion-output-trim-slider",
+                className: "mseg-rate-slider",
+                type: "range",
+                min: "0",
+                max: "1",
+                step: "0.001",
+                value: effectOutputTrimNormalizedValue(outputTrimValue),
+                onChange: (event) => onOutputTrimChange(
+                  effectOutputTrimValueFromNormalized(Number(event.target.value))
+                )
+              }
+            )
+          ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
@@ -34691,6 +34972,7 @@ function IOSPatchViewBody() {
                 driveValue: synthView.distortionDriveDb.value,
                 kneeValue: synthView.distortionKnee.value,
                 wetValue: synthView.distortionWet.value,
+                outputTrimValue: synthView.distortionOutputTrim.value,
                 wetHPKeyTrack: distortionWetHPKeyTrack,
                 wetLPKeyTrack: distortionWetLPKeyTrack,
                 historyFrame: synthView.observedDistortionHistory,
@@ -34699,7 +34981,8 @@ function IOSPatchViewBody() {
                 onTypeChange: synthView.distortionType.commitValue,
                 onDriveChange: synthView.distortionDriveDb.commitValue,
                 onKneeChange: synthView.distortionKnee.commitValue,
-                onWetChange: synthView.distortionWet.commitValue
+                onWetChange: synthView.distortionWet.commitValue,
+                onOutputTrimChange: synthView.distortionOutputTrim.commitValue
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
