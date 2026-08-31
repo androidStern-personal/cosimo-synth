@@ -9,7 +9,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <cmath>
+#include <cstdlib>
 #include <memory>
 #include <vector>
 
@@ -27,6 +29,14 @@ static NSString * const CosimoHostHarnessErrorDomain = @"CosimoHostHarnessError"
 static NSString * const CosimoPrimaryParameterIdentifier = @"oscAWavetablePosition";
 static NSString * const CosimoTableSelectParameterIdentifier = @"oscAWavetableSelect";
 static const float CosimoStateVerificationTolerance = 0.001f;
+static constexpr double CosimoT78MinimumDb = -100.0;
+static constexpr double CosimoT78MaximumDb = 35.0;
+static constexpr double CosimoT78SpanDb = CosimoT78MaximumDb - CosimoT78MinimumDb;
+static constexpr AUValue CosimoT78DefaultNormalized = 100.0f / 135.0f;
+static const double CosimoT78DefaultTextToleranceDb = 0.5
+    * static_cast<double> (std::nextafter (CosimoT78DefaultNormalized, 1.0f)
+                           - CosimoT78DefaultNormalized)
+    * CosimoT78SpanDb;
 static const NSTimeInterval CosimoStateVerificationTimeoutSeconds = 5.0;
 static const NSTimeInterval CosimoFirstNoteOffSeconds = 1.2;
 static const NSTimeInterval CosimoSecondNoteOnSeconds = 1.8;
@@ -58,6 +68,23 @@ static NSString * const CosimoBenchmarkResultFieldRequestParameter = @"cosimoBen
 static NSString * const CosimoBenchmarkResultFieldResponseParameter = @"cosimoBenchmarkResultFieldResponse";
 static const NSUInteger CosimoBenchmarkInstallFieldCount = 5;
 static const NSUInteger CosimoBenchmarkRenderFieldStart = CosimoBenchmarkInstallFieldCount;
+
+static bool CosimoParseT78NumericText (NSString *value, double& result)
+{
+    NSString *trimmed = [value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    const char *text = trimmed.UTF8String;
+
+    if (text == nullptr || *text == '\0')
+        return false;
+
+    char *end = nullptr;
+    errno = 0;
+    result = std::strtod (text, &end);
+    return errno != ERANGE
+        && end != text
+        && *end == '\0'
+        && std::isfinite (result);
+}
 
 static NSArray<NSString *> *CosimoT78EffectOutputTrimParameterIdentifiers()
 {
@@ -384,7 +411,7 @@ static AudioComponentDescription CosimoComponentDescription()
             | kAudioUnitParameterFlag_CanRamp;
         const AudioUnitParameterOptions flags = matchedParameter.flags;
         AUValue minimumValue = 0.0f;
-        AUValue defaultValue = 100.0f / 135.0f;
+        AUValue defaultValue = CosimoT78DefaultNormalized;
         AUValue maximumValue = 1.0f;
         NSString *minimumText = [matchedParameter stringFromValue:&minimumValue] ?: @"";
         NSString *defaultText = [matchedParameter stringFromValue:&defaultValue] ?: @"";
@@ -400,12 +427,29 @@ static AudioComponentDescription CosimoComponentDescription()
             return;
         }
 
-        if (! [minimumText isEqualToString:@"-100"]
-            || ! [defaultText isEqualToString:@"0"]
-            || ! [maximumText isEqualToString:@"35"])
+        double minimumTextDb = 0.0;
+        double defaultTextDb = 0.0;
+        double maximumTextDb = 0.0;
+        const auto reconstructedDefaultDb = CosimoT78MinimumDb
+            + (CosimoT78SpanDb * static_cast<double> (defaultValue));
+
+        if (! CosimoParseT78NumericText (minimumText, minimumTextDb)
+            || ! CosimoParseT78NumericText (defaultText, defaultTextDb)
+            || ! CosimoParseT78NumericText (maximumText, maximumTextDb)
+            || minimumTextDb != CosimoT78MinimumDb
+            || maximumTextDb != CosimoT78MaximumDb
+            || std::fabs(reconstructedDefaultDb) > CosimoT78DefaultTextToleranceDb
+            || std::fabs(defaultTextDb) > CosimoT78DefaultTextToleranceDb)
         {
             completion (nil, CosimoMakeError (60,
-                                               [NSString stringWithFormat:@"Runtime AU parameter %@ did not map normalized 0, 100/135, and 1 to -100 dB, 0 dB, and +35 dB.", identifier]));
+                                               [NSString stringWithFormat:@"Runtime AU parameter %@ did not map normalized 0, 100/135, and 1 to -100 dB, 0 dB, and +35 dB; minimumNormalized=%.9g minimumText=\"%@\" defaultNormalized=%.9g defaultText=\"%@\" maximumNormalized=%.9g maximumText=\"%@\".",
+                                                                          identifier,
+                                                                          (double) minimumValue,
+                                                                          minimumText,
+                                                                          (double) defaultValue,
+                                                                          defaultText,
+                                                                          (double) maximumValue,
+                                                                          maximumText]));
             return;
         }
 

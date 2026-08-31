@@ -946,6 +946,23 @@ def test_ios_host_smoke_source_qualifies_the_exact_t78_automation_bank() -> None
     assert "stringFromValue:&minimumValue" in harness
     assert "stringFromValue:&defaultValue" in harness
     assert "stringFromValue:&maximumValue" in harness
+    assert "CosimoParseT78NumericText" in harness
+    assert "errno != ERANGE" in harness
+    assert "CosimoT78DefaultTextToleranceDb" in harness
+    assert "std::nextafter (CosimoT78DefaultNormalized, 1.0f)" in harness
+    assert "std::fabs(reconstructedDefaultDb) > CosimoT78DefaultTextToleranceDb" in harness
+    assert "std::fabs(defaultTextDb) > CosimoT78DefaultTextToleranceDb" in harness
+    assert "*end == '\\0'" in harness
+    assert "std::isfinite (result)" in harness
+    assert "minimumNormalized=" in harness
+    assert "minimumText=" in harness
+    assert "maximumNormalized=" in harness
+    assert "maximumText=" in harness
+    assert "defaultNormalized=" in harness
+    assert "defaultText=" in harness
+    assert "minimumText isEqualToString" not in harness
+    assert "defaultText isEqualToString" not in harness
+    assert "maximumText isEqualToString" not in harness
     assert "setParameterWithIdentifier:identifier" in harness
     assert "qualifyT78EffectOutputTrimParametersWithCompletion" in host_controller
     assert 'payload[@"effectOutputTrimParameterSet"]' in host_controller
