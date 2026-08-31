@@ -35,6 +35,22 @@ function createSourceOnlyT78IntakeContext({ patchIO, contractModule, synthIdenti
             { endpointID: "polishEnhancerAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
             { endpointID: "polishCompressionClipAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
             { endpointID: "polishOutputTrimDb", type: "number", min: -24, max: 12, defaultValue: 0 },
+            { endpointID: "polishSafeBassAmount", type: "number", min: 0, max: 1, defaultValue: 0 },
+            ...[
+                "polishSafeBassBypass",
+                "polishEnhancerBypass",
+                "polishCompressionClipBypass",
+                "polishOutputTrimBypass",
+            ].map((endpointID) => ({
+                endpointID,
+                type: "integer",
+                min: 0,
+                max: 1,
+                step: 1,
+                defaultValue: 0,
+                discrete: true,
+                text: "Active|Bypassed",
+            })),
         ],
         storedState: [
             { key: "modulation.v6", schemaVersion: 6, required: true },
