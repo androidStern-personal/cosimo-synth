@@ -133,17 +133,17 @@ phone is measured with the web host's `?perf=1` HUD):
 | transitions                 |  99.2% | 62.5% |
 
 The final moving-master integration rerun used the distinct clean artifacts
-from master `02159e0f` and candidate `3d3fc5d9` on arm64 macOS, Node
+from master `02159e0f` and candidate `a613512c` on arm64 macOS, Node
 22.22.3/V8 12.4, again taking the minimum of three serial reps. Absolute load
 is machine-specific; the paired result is the qualification evidence:
 
 | scenario                    | master | candidate | reduction |
 |-----------------------------|--------|-----------|-----------|
-| init-idle                   |  16.2% |      8.5% |     47.5% |
-| init-poly8                  |  28.8% |     20.1% |     30.2% |
-| shared-patch (dropout repro)|  37.5% |     25.7% |     31.5% |
-| stress 3x8 + 10 FX + 12 rt  |  54.0% |     40.6% |     24.8% |
-| transitions                 |  31.6% |     21.3% |     32.6% |
+| init-idle                   |  15.8% |      8.2% |     48.1% |
+| init-poly8                  |  28.3% |     19.7% |     30.4% |
+| shared-patch (dropout repro)|  35.8% |     24.1% |     32.7% |
+| stress 3x8 + 10 FX + 12 rt  |  52.0% |     39.0% |     25.0% |
+| transitions                 |  30.6% |     20.0% |     34.6% |
 
 The companion five-scenario render comparison authenticated different paths
 and SHA-256 hashes, pinned the same Cmajor/JUCE sources, and found every output
