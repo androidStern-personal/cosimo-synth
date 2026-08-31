@@ -429,6 +429,7 @@ def combine_results(phone_save: dict[str, object], phone_reload: dict[str, objec
             "instantiate": phone_save.get("instantiate", {}),
             "parameters": phone_save.get("parameters", []),
             "parameterSet": phone_save.get("parameterSet", {}),
+            "effectOutputTrimParameterSet": phone_save.get("effectOutputTrimParameterSet", []),
             "tableSelectionSet": phone_save.get("tableSelectionSet", {}),
             "tableSelectionRuntime": phone_save.get("tableSelectionRuntime", {}),
             "audio": phone_save.get("audio", {}),

@@ -8,6 +8,7 @@ import math
 import os
 import platform
 import plistlib
+import re
 import shutil
 import socket
 import struct
@@ -49,11 +50,29 @@ IOS_HOST_SOURCE_RUNTIME = REPO_ROOT / "ui" / "ios" / "runtime-host.js"
 IOS_PATCH_HOST_HTML = REPO_ROOT / "patch_gui" / "index.ios.html"
 IOS_PATCH_HOST_RUNTIME = REPO_ROOT / "patch_gui" / "index.ios-host.js"
 PACKAGE_JSON = REPO_ROOT / "package.json"
+COMPLETE_SOUND_STATE_CONTRACT = REPO_ROOT / "native" / "CompleteSoundState.h"
+EFFECTS_RACK_SOURCE = REPO_ROOT / "cmajor" / "EffectsRack.cmajor"
 
 CONTAINER_BUNDLE_ID = "dev.cosimo.wavetable-synth"
 HOST_BUNDLE_ID = "dev.cosimo.wavetable-synth-host"
 EXTENSION_BUNDLE_ID = "dev.cosimo.wavetable-synth.wavetable-synthAUv3"
 APP_GROUP_ID = "group.dev.cosimo.wavetable-synth"
+
+
+def _t78_effect_output_trim_endpoint_ids() -> list[str]:
+    return re.findall(
+        r'"(lane[A-Za-z]+[1-5]OutputTrimDb)"',
+        COMPLETE_SOUND_STATE_CONTRACT.read_text(encoding="utf-8"),
+    )
+
+
+def _juce_auv3_parameter_address(identifier: str) -> int:
+    result = 0
+
+    for character in identifier:
+        result = ((result * 101) + ord(character)) & ((1 << 64) - 1)
+
+    return result
 
 
 def _float32(value: float) -> float:
@@ -879,6 +898,65 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert "COSIMO_ENABLE_LIVE_REPO_RESOURCES" not in cmake_text
     assert "cmajor_plugin.cpp" not in cmake_text
     assert "cosimo_ios_auv3_generated_plugin" not in cmake_text
+
+
+def test_ios_host_smoke_source_qualifies_the_exact_t78_automation_bank() -> None:
+    endpoint_ids = _t78_effect_output_trim_endpoint_ids()
+    rack_source = EFFECTS_RACK_SOURCE.read_text(encoding="utf-8")
+    display_names = dict(re.findall(
+        r'input value float32 (lane[A-Za-z]+[1-5]OutputTrimDb) \[\[ name: "([^"]+)"',
+        rack_source,
+    ))
+    expected = json.loads(IOS_AUV3_HOST_SNAPSHOT.read_text(encoding="utf-8"))
+    expected_parameters = [
+        {
+            "address": _juce_auv3_parameter_address(identifier),
+            "identifier": identifier,
+            "displayName": display_names[identifier],
+        }
+        for identifier in endpoint_ids
+    ]
+
+    assert len(endpoint_ids) == 40
+    assert len(set(endpoint_ids)) == 40
+    assert expected["t78EffectOutputTrimParameters"] == expected_parameters
+    assert len(expected["parameters"]) == 65
+    assert expected["parameters"][-40:] == expected_parameters
+    assert expected["parameters"][0]["identifier"] == "hostSlot0Guard"
+    assert expected["parameters"][24]["identifier"] == "chorusRingFineSemitones"
+    assert len({parameter["address"] for parameter in expected_parameters}) == 40
+    assert len({parameter["displayName"] for parameter in expected_parameters}) == 40
+
+    harness = IOS_AUV3_HOST_HARNESS.read_text(encoding="utf-8")
+    harness_header = (REPO_ROOT / "ios_auv3" / "Source" / "CosimoAUv3HostHarness.h").read_text(encoding="utf-8")
+    host_controller = IOS_HOST_VIEW_CONTROLLER.read_text(encoding="utf-8")
+    runner = IOS_AUV3_HOST_SMOKE.read_text(encoding="utf-8")
+
+    assert '../../native/CompleteSoundState.h' in harness
+    assert "t78EffectOutputTrimParameterIDs" in harness
+    assert "qualifyT78EffectOutputTrimParametersWithCompletion" in harness_header
+    assert "qualifyT78EffectOutputTrimParametersWithCompletion" in harness
+    assert "NSMutableSet<NSNumber *> *addresses" in harness
+    assert "matchedParameter.minValue != 0.0f" in harness
+    assert "matchedParameter.maxValue != 1.0f" in harness
+    assert "kAudioUnitParameterFlag_IsReadable" in harness
+    assert "kAudioUnitParameterFlag_IsWritable" in harness
+    assert "kAudioUnitParameterFlag_CanRamp" in harness
+    assert "kAudioUnitParameterFlag_NonRealTime" in harness
+    assert "stringFromValue:&minimumValue" in harness
+    assert "stringFromValue:&defaultValue" in harness
+    assert "stringFromValue:&maximumValue" in harness
+    assert "setParameterWithIdentifier:identifier" in harness
+    assert "qualifyT78EffectOutputTrimParametersWithCompletion" in host_controller
+    assert 'payload[@"effectOutputTrimParameterSet"]' in host_controller
+    assert '"effectOutputTrimParameterSet"' in runner
+
+    combined = _load_ios_host_smoke_module().combine_results(
+        {"effectOutputTrimParameterSet": [{"identifier": endpoint_ids[0]}]},
+        {},
+        {},
+    )
+    assert combined["phone"]["effectOutputTrimParameterSet"] == [{"identifier": endpoint_ids[0]}]
 
 
 def test_ios_modulation_benchmark_build_can_be_installed_without_replacing_cosimo() -> None:
@@ -2676,6 +2754,7 @@ def test_ios_host_smoke_discovers_the_extension_and_restores_state_across_relaun
 ) -> None:
     phone = ios_host_smoke_result["phone"]
     parameter_set = phone["parameterSet"]
+    effect_output_trim_parameter_set = phone["effectOutputTrimParameterSet"]
     table_selection_set = phone["tableSelectionSet"]
     state = phone["state"]
     host_page = phone["editor"]["hostPage"]
@@ -2691,6 +2770,12 @@ def test_ios_host_smoke_discovers_the_extension_and_restores_state_across_relaun
     assert parameter_set["identifier"] == "oscAWavetablePosition"
     assert parameter_set["requestedValue"] == pytest.approx(0.625, abs=0.001)
     assert parameter_set["observedValue"] == pytest.approx(0.625, abs=0.001)
+    assert [result["identifier"] for result in effect_output_trim_parameter_set] == _t78_effect_output_trim_endpoint_ids()
+    assert len(effect_output_trim_parameter_set) == 40
+    for index, result in enumerate(effect_output_trim_parameter_set):
+        requested_value = 0.2 + (0.1 * (index % 5))
+        assert result["requestedValue"] == pytest.approx(requested_value, abs=0.001)
+        assert result["observedValue"] == pytest.approx(requested_value, abs=0.001)
     assert table_selection_set["identifier"] == "oscAWavetableSelect"
     assert table_selection_set["requestedValue"] == pytest.approx(5.0, abs=0.001)
     assert table_selection_set["observedValue"] == pytest.approx(5.0, abs=0.001)
@@ -2709,8 +2794,15 @@ def test_ios_host_smoke_freezes_parameter_and_state_shape(
 ) -> None:
     expected = json.loads(IOS_AUV3_HOST_SNAPSHOT.read_text(encoding="utf-8"))
     phone = ios_host_smoke_result["phone"]
+    runtime_parameters = phone["parameters"]
+    runtime_by_identifier = {parameter["identifier"]: parameter for parameter in runtime_parameters}
+    t78_endpoint_ids = _t78_effect_output_trim_endpoint_ids()
+    t78_runtime_parameters = [runtime_by_identifier[identifier] for identifier in t78_endpoint_ids]
 
     assert phone["parameters"] == expected["parameters"]
+    assert t78_runtime_parameters == expected["t78EffectOutputTrimParameters"]
+    assert len({parameter["address"] for parameter in t78_runtime_parameters}) == 40
+    assert len({parameter["displayName"] for parameter in t78_runtime_parameters}) == 40
     assert phone["state"]["savedStateKeys"] == expected["savedStateKeys"]
     assert phone["state"]["savedStateSource"] == expected["savedStateSource"]
 

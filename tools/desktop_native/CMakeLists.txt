@@ -87,3 +87,23 @@ target_link_libraries(CosimoDesktopNative
         juce::juce_audio_utils
         $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
 )
+
+add_executable(cosimo_t78_vst3_automation_probe EXCLUDE_FROM_ALL
+    Source/T78VST3AutomationProbe.cpp
+)
+
+target_compile_features(cosimo_t78_vst3_automation_probe PRIVATE cxx_std_17)
+
+target_compile_definitions(cosimo_t78_vst3_automation_probe PRIVATE
+    JUCE_PLUGINHOST_AU=0
+    JUCE_PLUGINHOST_VST3=1
+    JUCE_USE_CURL=0
+)
+
+target_include_directories(cosimo_t78_vst3_automation_probe PRIVATE
+    "${COSIMO_REPO_ROOT}"
+)
+
+target_link_libraries(cosimo_t78_vst3_automation_probe PRIVATE
+    juce::juce_audio_processors
+)

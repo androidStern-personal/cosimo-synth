@@ -124,6 +124,408 @@
       "address": 8850256332223215657,
       "identifier": "chorusRingFineSemitones",
       "displayName": "Chorus Ring Fine"
+    },
+    {
+      "address": 15400887995157858187,
+      "identifier": "laneGlobalFilter1OutputTrimDb",
+      "displayName": "Global Filter 1 Output Trim"
+    },
+    {
+      "address": 2622533343208504412,
+      "identifier": "laneGlobalFilter2OutputTrimDb",
+      "displayName": "Global Filter 2 Output Trim"
+    },
+    {
+      "address": 8290922764968702253,
+      "identifier": "laneGlobalFilter3OutputTrimDb",
+      "displayName": "Global Filter 3 Output Trim"
+    },
+    {
+      "address": 13959312186728900094,
+      "identifier": "laneGlobalFilter4OutputTrimDb",
+      "displayName": "Global Filter 4 Output Trim"
+    },
+    {
+      "address": 1180957534779546319,
+      "identifier": "laneGlobalFilter5OutputTrimDb",
+      "displayName": "Global Filter 5 Output Trim"
+    },
+    {
+      "address": 8218006057061679807,
+      "identifier": "laneDistortion1OutputTrimDb",
+      "displayName": "Distortion 1 Output Trim"
+    },
+    {
+      "address": 13886395478821877648,
+      "identifier": "laneDistortion2OutputTrimDb",
+      "displayName": "Distortion 2 Output Trim"
+    },
+    {
+      "address": 1108040826872523873,
+      "identifier": "laneDistortion3OutputTrimDb",
+      "displayName": "Distortion 3 Output Trim"
+    },
+    {
+      "address": 6776430248632721714,
+      "identifier": "laneDistortion4OutputTrimDb",
+      "displayName": "Distortion 4 Output Trim"
+    },
+    {
+      "address": 12444819670392919555,
+      "identifier": "laneDistortion5OutputTrimDb",
+      "displayName": "Distortion 5 Output Trim"
+    },
+    {
+      "address": 8404692111889362187,
+      "identifier": "laneOtt1OutputTrimDb",
+      "displayName": "OTT 1 Output Trim"
+    },
+    {
+      "address": 14073081533649560028,
+      "identifier": "laneOtt2OutputTrimDb",
+      "displayName": "OTT 2 Output Trim"
+    },
+    {
+      "address": 1294726881700206253,
+      "identifier": "laneOtt3OutputTrimDb",
+      "displayName": "OTT 3 Output Trim"
+    },
+    {
+      "address": 6963116303460404094,
+      "identifier": "laneOtt4OutputTrimDb",
+      "displayName": "OTT 4 Output Trim"
+    },
+    {
+      "address": 12631505725220601935,
+      "identifier": "laneOtt5OutputTrimDb",
+      "displayName": "OTT 5 Output Trim"
+    },
+    {
+      "address": 7034894642752731816,
+      "identifier": "laneChorus1OutputTrimDb",
+      "displayName": "Chorus 1 Output Trim"
+    },
+    {
+      "address": 12703284064512929657,
+      "identifier": "laneChorus2OutputTrimDb",
+      "displayName": "Chorus 2 Output Trim"
+    },
+    {
+      "address": 18371673486273127498,
+      "identifier": "laneChorus3OutputTrimDb",
+      "displayName": "Chorus 3 Output Trim"
+    },
+    {
+      "address": 5593318834323773723,
+      "identifier": "laneChorus4OutputTrimDb",
+      "displayName": "Chorus 4 Output Trim"
+    },
+    {
+      "address": 11261708256083971564,
+      "identifier": "laneChorus5OutputTrimDb",
+      "displayName": "Chorus 5 Output Trim"
+    },
+    {
+      "address": 509258046572869087,
+      "identifier": "laneFlanger1OutputTrimDb",
+      "displayName": "Flanger 1 Output Trim"
+    },
+    {
+      "address": 6177647468333066928,
+      "identifier": "laneFlanger2OutputTrimDb",
+      "displayName": "Flanger 2 Output Trim"
+    },
+    {
+      "address": 11846036890093264769,
+      "identifier": "laneFlanger3OutputTrimDb",
+      "displayName": "Flanger 3 Output Trim"
+    },
+    {
+      "address": 17514426311853462610,
+      "identifier": "laneFlanger4OutputTrimDb",
+      "displayName": "Flanger 4 Output Trim"
+    },
+    {
+      "address": 4736071659904108835,
+      "identifier": "laneFlanger5OutputTrimDb",
+      "displayName": "Flanger 5 Output Trim"
+    },
+    {
+      "address": 13526742905336248327,
+      "identifier": "lanePhaser1OutputTrimDb",
+      "displayName": "Phaser 1 Output Trim"
+    },
+    {
+      "address": 748388253386894552,
+      "identifier": "lanePhaser2OutputTrimDb",
+      "displayName": "Phaser 2 Output Trim"
+    },
+    {
+      "address": 6416777675147092393,
+      "identifier": "lanePhaser3OutputTrimDb",
+      "displayName": "Phaser 3 Output Trim"
+    },
+    {
+      "address": 12085167096907290234,
+      "identifier": "lanePhaser4OutputTrimDb",
+      "displayName": "Phaser 4 Output Trim"
+    },
+    {
+      "address": 17753556518667488075,
+      "identifier": "lanePhaser5OutputTrimDb",
+      "displayName": "Phaser 5 Output Trim"
+    },
+    {
+      "address": 16947875420353957979,
+      "identifier": "laneDelay1OutputTrimDb",
+      "displayName": "Delay 1 Output Trim"
+    },
+    {
+      "address": 4169520768404604204,
+      "identifier": "laneDelay2OutputTrimDb",
+      "displayName": "Delay 2 Output Trim"
+    },
+    {
+      "address": 9837910190164802045,
+      "identifier": "laneDelay3OutputTrimDb",
+      "displayName": "Delay 3 Output Trim"
+    },
+    {
+      "address": 15506299611924999886,
+      "identifier": "laneDelay4OutputTrimDb",
+      "displayName": "Delay 4 Output Trim"
+    },
+    {
+      "address": 2727944959975646111,
+      "identifier": "laneDelay5OutputTrimDb",
+      "displayName": "Delay 5 Output Trim"
+    },
+    {
+      "address": 11272639510969298158,
+      "identifier": "laneReverb1OutputTrimDb",
+      "displayName": "Reverb 1 Output Trim"
+    },
+    {
+      "address": 16941028932729495999,
+      "identifier": "laneReverb2OutputTrimDb",
+      "displayName": "Reverb 2 Output Trim"
+    },
+    {
+      "address": 4162674280780142224,
+      "identifier": "laneReverb3OutputTrimDb",
+      "displayName": "Reverb 3 Output Trim"
+    },
+    {
+      "address": 9831063702540340065,
+      "identifier": "laneReverb4OutputTrimDb",
+      "displayName": "Reverb 4 Output Trim"
+    },
+    {
+      "address": 15499453124300537906,
+      "identifier": "laneReverb5OutputTrimDb",
+      "displayName": "Reverb 5 Output Trim"
+    }
+  ],
+  "t78EffectOutputTrimParameters": [
+    {
+      "address": 15400887995157858187,
+      "identifier": "laneGlobalFilter1OutputTrimDb",
+      "displayName": "Global Filter 1 Output Trim"
+    },
+    {
+      "address": 2622533343208504412,
+      "identifier": "laneGlobalFilter2OutputTrimDb",
+      "displayName": "Global Filter 2 Output Trim"
+    },
+    {
+      "address": 8290922764968702253,
+      "identifier": "laneGlobalFilter3OutputTrimDb",
+      "displayName": "Global Filter 3 Output Trim"
+    },
+    {
+      "address": 13959312186728900094,
+      "identifier": "laneGlobalFilter4OutputTrimDb",
+      "displayName": "Global Filter 4 Output Trim"
+    },
+    {
+      "address": 1180957534779546319,
+      "identifier": "laneGlobalFilter5OutputTrimDb",
+      "displayName": "Global Filter 5 Output Trim"
+    },
+    {
+      "address": 8218006057061679807,
+      "identifier": "laneDistortion1OutputTrimDb",
+      "displayName": "Distortion 1 Output Trim"
+    },
+    {
+      "address": 13886395478821877648,
+      "identifier": "laneDistortion2OutputTrimDb",
+      "displayName": "Distortion 2 Output Trim"
+    },
+    {
+      "address": 1108040826872523873,
+      "identifier": "laneDistortion3OutputTrimDb",
+      "displayName": "Distortion 3 Output Trim"
+    },
+    {
+      "address": 6776430248632721714,
+      "identifier": "laneDistortion4OutputTrimDb",
+      "displayName": "Distortion 4 Output Trim"
+    },
+    {
+      "address": 12444819670392919555,
+      "identifier": "laneDistortion5OutputTrimDb",
+      "displayName": "Distortion 5 Output Trim"
+    },
+    {
+      "address": 8404692111889362187,
+      "identifier": "laneOtt1OutputTrimDb",
+      "displayName": "OTT 1 Output Trim"
+    },
+    {
+      "address": 14073081533649560028,
+      "identifier": "laneOtt2OutputTrimDb",
+      "displayName": "OTT 2 Output Trim"
+    },
+    {
+      "address": 1294726881700206253,
+      "identifier": "laneOtt3OutputTrimDb",
+      "displayName": "OTT 3 Output Trim"
+    },
+    {
+      "address": 6963116303460404094,
+      "identifier": "laneOtt4OutputTrimDb",
+      "displayName": "OTT 4 Output Trim"
+    },
+    {
+      "address": 12631505725220601935,
+      "identifier": "laneOtt5OutputTrimDb",
+      "displayName": "OTT 5 Output Trim"
+    },
+    {
+      "address": 7034894642752731816,
+      "identifier": "laneChorus1OutputTrimDb",
+      "displayName": "Chorus 1 Output Trim"
+    },
+    {
+      "address": 12703284064512929657,
+      "identifier": "laneChorus2OutputTrimDb",
+      "displayName": "Chorus 2 Output Trim"
+    },
+    {
+      "address": 18371673486273127498,
+      "identifier": "laneChorus3OutputTrimDb",
+      "displayName": "Chorus 3 Output Trim"
+    },
+    {
+      "address": 5593318834323773723,
+      "identifier": "laneChorus4OutputTrimDb",
+      "displayName": "Chorus 4 Output Trim"
+    },
+    {
+      "address": 11261708256083971564,
+      "identifier": "laneChorus5OutputTrimDb",
+      "displayName": "Chorus 5 Output Trim"
+    },
+    {
+      "address": 509258046572869087,
+      "identifier": "laneFlanger1OutputTrimDb",
+      "displayName": "Flanger 1 Output Trim"
+    },
+    {
+      "address": 6177647468333066928,
+      "identifier": "laneFlanger2OutputTrimDb",
+      "displayName": "Flanger 2 Output Trim"
+    },
+    {
+      "address": 11846036890093264769,
+      "identifier": "laneFlanger3OutputTrimDb",
+      "displayName": "Flanger 3 Output Trim"
+    },
+    {
+      "address": 17514426311853462610,
+      "identifier": "laneFlanger4OutputTrimDb",
+      "displayName": "Flanger 4 Output Trim"
+    },
+    {
+      "address": 4736071659904108835,
+      "identifier": "laneFlanger5OutputTrimDb",
+      "displayName": "Flanger 5 Output Trim"
+    },
+    {
+      "address": 13526742905336248327,
+      "identifier": "lanePhaser1OutputTrimDb",
+      "displayName": "Phaser 1 Output Trim"
+    },
+    {
+      "address": 748388253386894552,
+      "identifier": "lanePhaser2OutputTrimDb",
+      "displayName": "Phaser 2 Output Trim"
+    },
+    {
+      "address": 6416777675147092393,
+      "identifier": "lanePhaser3OutputTrimDb",
+      "displayName": "Phaser 3 Output Trim"
+    },
+    {
+      "address": 12085167096907290234,
+      "identifier": "lanePhaser4OutputTrimDb",
+      "displayName": "Phaser 4 Output Trim"
+    },
+    {
+      "address": 17753556518667488075,
+      "identifier": "lanePhaser5OutputTrimDb",
+      "displayName": "Phaser 5 Output Trim"
+    },
+    {
+      "address": 16947875420353957979,
+      "identifier": "laneDelay1OutputTrimDb",
+      "displayName": "Delay 1 Output Trim"
+    },
+    {
+      "address": 4169520768404604204,
+      "identifier": "laneDelay2OutputTrimDb",
+      "displayName": "Delay 2 Output Trim"
+    },
+    {
+      "address": 9837910190164802045,
+      "identifier": "laneDelay3OutputTrimDb",
+      "displayName": "Delay 3 Output Trim"
+    },
+    {
+      "address": 15506299611924999886,
+      "identifier": "laneDelay4OutputTrimDb",
+      "displayName": "Delay 4 Output Trim"
+    },
+    {
+      "address": 2727944959975646111,
+      "identifier": "laneDelay5OutputTrimDb",
+      "displayName": "Delay 5 Output Trim"
+    },
+    {
+      "address": 11272639510969298158,
+      "identifier": "laneReverb1OutputTrimDb",
+      "displayName": "Reverb 1 Output Trim"
+    },
+    {
+      "address": 16941028932729495999,
+      "identifier": "laneReverb2OutputTrimDb",
+      "displayName": "Reverb 2 Output Trim"
+    },
+    {
+      "address": 4162674280780142224,
+      "identifier": "laneReverb3OutputTrimDb",
+      "displayName": "Reverb 3 Output Trim"
+    },
+    {
+      "address": 9831063702540340065,
+      "identifier": "laneReverb4OutputTrimDb",
+      "displayName": "Reverb 4 Output Trim"
+    },
+    {
+      "address": 15499453124300537906,
+      "identifier": "laneReverb5OutputTrimDb",
+      "displayName": "Reverb 5 Output Trim"
     }
   ],
   "savedStateKeys": [

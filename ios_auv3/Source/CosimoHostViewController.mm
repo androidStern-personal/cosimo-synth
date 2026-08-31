@@ -692,6 +692,13 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
 
             payload[@"instantiate"] = instantiateResult;
             payload[@"parameters"] = self.harness.parameterSnapshot ?: @[];
+
+            [self.harness qualifyT78EffectOutputTrimParametersWithCompletion:^(NSDictionary<NSString *,id> * _Nullable qualificationResult, NSError * _Nullable qualificationError)
+            {
+                if ([self handleAutomationError:qualificationError outputName:outputName])
+                    return;
+
+                payload[@"effectOutputTrimParameterSet"] = qualificationResult[@"parameterSet"] ?: @[];
             [self presentEditorOverlay:YES];
 
             [self.harness openEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable editorResult, NSError * _Nullable editorError)
@@ -787,6 +794,7 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
                         }];
                     }];
                 });
+            }];
             }];
         }];
     }];

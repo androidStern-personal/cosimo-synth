@@ -18,6 +18,7 @@ typedef void (^CosimoHostResultBlock)(NSDictionary<NSString *, id> * _Nullable r
 - (void)setParameterWithIdentifier:(NSString *)identifier
                              value:(float)value
                         completion:(CosimoHostResultBlock)completion;
+- (void)qualifyT78EffectOutputTrimParametersWithCompletion:(CosimoHostResultBlock)completion;
 - (void)sendTestNoteWithCompletion:(CosimoHostResultBlock)completion;
 - (void)openEditorWithCompletion:(CosimoHostResultBlock)completion;
 - (void)captureEditorStateWithCompletion:(CosimoHostResultBlock)completion;
