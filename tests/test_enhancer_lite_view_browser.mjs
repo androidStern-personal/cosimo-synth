@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { chromium } from "playwright";
 
-import { startDesktopHarnessServer } from "./helpers/desktop_harness_browser.mjs";
+import { startStaticRepoServer } from "./helpers/desktop_harness_browser.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const sourcePath = path.join(repoRoot, "fx/enhancer_lite/view/source.ts");
@@ -25,7 +25,9 @@ let server;
 let browser;
 
 before(async () => {
-    server = await startDesktopHarnessServer();
+    // Serves /fx TypeScript views bundled on the fly and the prebuilt
+    // /build/fx runtime; run `npm run fx:build -- enhancer-lite` for the latter.
+    server = await startStaticRepoServer({ bundleTypeScript: true });
     browser = await chromium.launch({ headless: true });
 });
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { chromium } from "playwright";
 
-import { startDesktopHarnessServer } from "./helpers/desktop_harness_browser.mjs";
+import { startStaticRepoServer } from "./helpers/desktop_harness_browser.mjs";
 
 let server;
 let browser;
@@ -54,7 +54,9 @@ async function getHarnessSnapshot(page) {
 }
 
 before(async () => {
-    server = await startDesktopHarnessServer();
+    // Bundles /tests/helpers/desktop_patch_modules_browser.tsx on the fly;
+    // no dev server.
+    server = await startStaticRepoServer({ bundleTypeScript: true });
     browser = await chromium.launch({ headless: true });
 });
 

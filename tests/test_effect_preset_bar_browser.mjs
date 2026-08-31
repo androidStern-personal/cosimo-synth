@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { chromium } from "playwright";
 
-import { startDesktopHarnessServer } from "./helpers/desktop_harness_browser.mjs";
+import { startStaticRepoServer } from "./helpers/desktop_harness_browser.mjs";
 
 let server;
 let browser;
@@ -15,7 +15,8 @@ async function openModulePage() {
 }
 
 before(async () => {
-    server = await startDesktopHarnessServer();
+    // Bundles /ui/shared/effects/preset-bar.ts on the fly; no dev server.
+    server = await startStaticRepoServer({ bundleTypeScript: true });
     browser = await chromium.launch({ headless: true });
 });
 

@@ -1,12 +1,15 @@
-import { createServer as createHttpServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { spawn } from "node:child_process";
-import fs from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import { stageCmajorWebRuntime } from "../../ui/vite.shared.mjs";
+import { startStaticWebServer } from "./static_web_server.mjs";
+
+// The traversal guard lives with the shared static server now; re-exported so
+// existing imports (and their unit tests) keep working.
+export { pathStaysWithinRepoRoot, resolveRepoServedPath } from "./static_web_server.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DESKTOP_HARNESS_READINESS_TIMEOUT_MS = 90_000;
@@ -25,12 +28,6 @@ export function desktopHarnessSpawnSpec(port, platform = process.platform) {
     };
 }
 
-export function pathStaysWithinRepoRoot(rootPath, candidatePath) {
-    const repoRelativePath = path.relative(rootPath, candidatePath);
-
-    return !(repoRelativePath.startsWith("..") || path.isAbsolute(repoRelativePath));
-}
-
 async function resolveCmajorApiRoot(rootPath) {
     if (!cmajorApiRootPromise) {
         cmajorApiRootPromise = Promise.resolve(stageCmajorWebRuntime(rootPath, {
@@ -40,25 +37,6 @@ async function resolveCmajorApiRoot(rootPath) {
     }
 
     return cmajorApiRootPromise;
-}
-
-export async function resolveRepoServedPath(rootPath, candidatePath) {
-    const realRootPath = await fs.realpath(rootPath);
-    let resolvedCandidatePath = candidatePath;
-
-    try {
-        resolvedCandidatePath = await fs.realpath(candidatePath);
-    } catch (error) {
-        if (!error || typeof error !== "object" || !("code" in error) || error.code !== "ENOENT") {
-            throw error;
-        }
-    }
-
-    if (!pathStaysWithinRepoRoot(realRootPath, resolvedCandidatePath)) {
-        return null;
-    }
-
-    return candidatePath;
 }
 
 async function nextHarnessPort() {
@@ -84,30 +62,6 @@ async function nextHarnessPort() {
             });
         });
     });
-}
-
-function contentTypeFor(filePath) {
-    if (filePath.endsWith(".js") || filePath.endsWith(".mjs")) {
-        return "text/javascript; charset=utf-8";
-    }
-
-    if (filePath.endsWith(".css")) {
-        return "text/css; charset=utf-8";
-    }
-
-    if (filePath.endsWith(".html")) {
-        return "text/html; charset=utf-8";
-    }
-
-    if (filePath.endsWith(".json") || filePath.endsWith(".cmajorpatch")) {
-        return "application/json; charset=utf-8";
-    }
-
-    if (filePath.endsWith(".wav")) {
-        return "audio/wav";
-    }
-
-    return "application/octet-stream";
 }
 
 async function waitForServer(baseUrl, child) {
@@ -215,61 +169,13 @@ export async function startDesktopHarnessServer() {
     };
 }
 
-export async function startStaticRepoServer() {
-    const port = await nextHarnessPort();
-    const cmajorApiRoot = await resolveCmajorApiRoot(repoRoot);
-
-    const server = createHttpServer(async (request, response) => {
-        try {
-            const requestUrl = new URL(request.url ?? "/", `http://127.0.0.1:${port}`);
-            const decodedPath = decodeURIComponent(requestUrl.pathname);
-            const relativePath = decodedPath === "/" ? "/index.html" : decodedPath;
-            const servingCmajorApi = relativePath === "/cmaj_api" || relativePath.startsWith("/cmaj_api/");
-            const servingRoot = servingCmajorApi ? cmajorApiRoot : repoRoot;
-            const rootRelativePath = servingCmajorApi
-                ? relativePath.replace(/^\/cmaj_api/, "") || "/index.html"
-                : relativePath;
-            const filePath = path.resolve(servingRoot, `.${rootRelativePath}`);
-            const repoServedPath = await resolveRepoServedPath(servingRoot, filePath);
-
-            if (!repoServedPath) {
-                response.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
-                response.end("Forbidden");
-                return;
-            }
-
-            const fileContents = await fs.readFile(repoServedPath);
-            response.writeHead(200, { "content-type": contentTypeFor(repoServedPath) });
-            response.end(fileContents);
-        } catch (error) {
-            const status = error && typeof error === "object" && "code" in error && error.code === "ENOENT"
-                ? 404
-                : 500;
-            response.writeHead(status, { "content-type": "text/plain; charset=utf-8" });
-            response.end(status === 404 ? "Not found" : String(error));
-        }
+export async function startStaticRepoServer(options = {}) {
+    return startStaticWebServer(repoRoot, {
+        // Staged lazily on the first /cmaj_api request, so module-shell suites
+        // that never touch the Cmajor runtime skip the cmake staging entirely.
+        mounts: { "/cmaj_api": () => resolveCmajorApiRoot(repoRoot) },
+        ...options,
     });
-
-    await new Promise((resolve, reject) => {
-        server.once("error", reject);
-        server.listen(port, "127.0.0.1", resolve);
-    });
-
-    return {
-        baseUrl: `http://127.0.0.1:${port}/`,
-        async stop() {
-            await new Promise((resolve, reject) => {
-                server.close((error) => {
-                    if (error) {
-                        reject(error);
-                        return;
-                    }
-
-                    resolve();
-                });
-            });
-        },
-    };
 }
 
 export async function waitForHarnessReady(page) {

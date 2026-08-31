@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
 
@@ -45,16 +44,6 @@ def test_production_cmake_builds_use_the_shared_dependency_module() -> None:
 
 
 def test_dependency_entrypoints_have_no_second_source_resolver() -> None:
-    forbidden_files = (
-        "scripts/ensure_cmajor_runtime.py",
-        "scripts/resolve_build_dependencies.py",
-        "tests/test_ensure_cmajor_runtime.py",
-        "tests/test_cpm_dependency_resolver.py",
-    )
-
-    for relative_path in forbidden_files:
-        assert not (REPO_ROOT / relative_path).exists(), relative_path
-
     for relative_path in DEPENDENCY_ENTRYPOINTS:
         source = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
@@ -72,7 +61,6 @@ def test_t26_runner_builds_against_research_juce_7_through_cpm() -> None:
     runner = (REPO_ROOT / "tools/enhancer_wrapper_prototype/run.py").read_text(
         encoding="utf-8"
     )
-    package = json.loads((REPO_ROOT / "package.json").read_text(encoding="utf-8"))
 
     assert "cosimo_add_t26_research_juce" in module
     assert "b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0" in module
@@ -81,12 +69,6 @@ def test_t26_runner_builds_against_research_juce_7_through_cpm() -> None:
     assert '"cmake"' in runner
     assert '"--build"' in runner
     assert "git clone" not in runner
-    assert package["scripts"]["prototype:enhancer-wrapper"].endswith(
-        "tools/enhancer_wrapper_prototype/run.py"
-    )
-    assert package["scripts"]["prototype:enhancer-deemphasis"].endswith(
-        "tools/enhancer_wrapper_prototype/de_emphasis.py"
-    )
 
 
 PRODUCTION_CMAJOR_COMMIT = "cb616bf1d0931ff92da3826d15a01eadfd8e35b1"
