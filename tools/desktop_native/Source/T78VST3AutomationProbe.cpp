@@ -3,15 +3,19 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include <array>
+#include <cerrno>
 #include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <map>
 #include <memory>
 #include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -20,7 +24,14 @@ namespace
 {
 using HostedParameter = juce::HostedAudioProcessorParameter;
 
+constexpr auto expectedMinimumDb = -100.0;
+constexpr auto expectedMaximumDb = 35.0;
+constexpr auto expectedSpanDb = expectedMaximumDb - expectedMinimumDb;
 constexpr auto expectedDefaultNormalized = 100.0f / 135.0f;
+const auto defaultTextToleranceDb = 0.5
+    * static_cast<double> (std::nextafter (expectedDefaultNormalized, 1.0f)
+                           - expectedDefaultNormalized)
+    * expectedSpanDb;
 
 int fail (std::string_view message)
 {
@@ -51,6 +62,44 @@ bool parseRuntimeParamID (const juce::String& value, uint32_t& result)
     const auto text = value.toStdString();
     const auto parsed = std::from_chars (text.data(), text.data() + text.size(), result);
     return parsed.ec == std::errc() && parsed.ptr == text.data() + text.size();
+}
+
+bool parseNumericText (const juce::String& value, double& result)
+{
+    const auto text = value.trim().toStdString();
+
+    if (text.empty())
+        return false;
+
+    char* end = nullptr;
+    errno = 0;
+    result = std::strtod (text.c_str(), &end);
+    return errno != ERANGE
+        && end == text.c_str() + text.size()
+        && std::isfinite (result);
+}
+
+std::string describeParameterText (HostedParameter& parameter)
+{
+    constexpr auto minimumNormalized = 0.0f;
+    constexpr auto maximumNormalized = 1.0f;
+    const auto defaultNormalized = parameter.getDefaultValue();
+    const auto currentNormalized = parameter.getValue();
+    const auto minimumText = parameter.getText (minimumNormalized, 64).trim().toStdString();
+    const auto maximumText = parameter.getText (maximumNormalized, 64).trim().toStdString();
+    const auto defaultText = parameter.getText (defaultNormalized, 64).trim().toStdString();
+    const auto currentText = parameter.getText (currentNormalized, 64).trim().toStdString();
+    std::ostringstream output;
+    output << std::setprecision (std::numeric_limits<float>::max_digits10)
+           << "minimumNormalized=" << minimumNormalized
+           << " minimumText=" << std::quoted (minimumText)
+           << " maximumNormalized=" << maximumNormalized
+           << " maximumText=" << std::quoted (maximumText)
+           << " defaultNormalized=" << defaultNormalized
+           << " defaultText=" << std::quoted (defaultText)
+           << " currentNormalized=" << currentNormalized
+           << " currentText=" << std::quoted (currentText);
+    return output.str();
 }
 
 std::string expectedTitle (std::string_view endpointID)
@@ -176,13 +225,31 @@ int main (int argc, char** argv)
             return failParameter (endpointID, "reported the wrong VST3 title");
         if (parameter.getLabel() != "dB")
             return failParameter (endpointID, "reported a unit other than dB");
-        if (parameter.getText (0.0f, 64).trim() != "-100"
-            || parameter.getText (1.0f, 64).trim() != "35")
-            return failParameter (endpointID, "did not map its normalized range to -100 dB through +35 dB");
-        if (std::fabs (parameter.getDefaultValue() - expectedDefaultNormalized)
+
+        double minimumTextDb = 0.0;
+        double maximumTextDb = 0.0;
+
+        if (! parseNumericText (parameter.getText (0.0f, 64), minimumTextDb)
+            || ! parseNumericText (parameter.getText (1.0f, 64), maximumTextDb)
+            || minimumTextDb != expectedMinimumDb
+            || maximumTextDb != expectedMaximumDb)
+            return failParameter (endpointID,
+                                  "did not map its normalized range to -100 dB through +35 dB; "
+                                      + describeParameterText (parameter));
+
+        const auto defaultNormalized = parameter.getDefaultValue();
+        const auto reconstructedDefaultDb = expectedMinimumDb
+            + (expectedSpanDb * static_cast<double> (defaultNormalized));
+        double defaultTextDb = 0.0;
+
+        if (std::fabs (defaultNormalized - expectedDefaultNormalized)
                 > std::numeric_limits<float>::epsilon()
-            || parameter.getText (parameter.getDefaultValue(), 64).trim() != "0")
-            return failParameter (endpointID, "did not report 0 dB as its exact default");
+            || ! parseNumericText (parameter.getText (defaultNormalized, 64), defaultTextDb)
+            || std::fabs (reconstructedDefaultDb) > defaultTextToleranceDb
+            || std::fabs (defaultTextDb) > defaultTextToleranceDb)
+            return failParameter (endpointID,
+                                  "did not report 0 dB as its exact default; "
+                                      + describeParameterText (parameter));
         if (parameter.isDiscrete()
             || parameter.getNumSteps() != juce::AudioProcessor::getDefaultNumParameterSteps())
             return failParameter (endpointID, "did not report a continuous VST3 range");
