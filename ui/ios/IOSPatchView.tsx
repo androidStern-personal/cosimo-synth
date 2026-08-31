@@ -78,7 +78,7 @@ import {
     ParameterMenuContext,
     useLongPressParameterMenu,
     useParameterMenu,
-    type ParameterMenuRequest,
+    type ParameterMenuRequestContext,
 } from "../shared/parameter-context-menu";
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import { KeyTrackStatus } from "../shared/key-track-status";
@@ -845,7 +845,7 @@ function IOSDistortionTrackedFrequencyField({
 }) {
     const openParameterMenu = useParameterMenu();
     const targetKind = `lane.distortion#1.${descriptor.endpointID}`;
-    const buildMenuRequest = useCallback((): Omit<ParameterMenuRequest, "clientX" | "clientY"> => ({
+    const buildMenuRequest = useCallback((): ParameterMenuRequestContext => ({
         controlKey: descriptor.endpointID,
         label: keyTrack.enabled ? "Key Track Offset" : descriptor.label,
         targetKind,
