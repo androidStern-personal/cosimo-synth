@@ -2427,6 +2427,13 @@ select {
     grid-column: 1 / -1;
 }
 
+.seqfx-tape-v2-control.seqfx-param-row {
+    display: block;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
 .seqfx-tape-v2-control > span {
     display: flex;
     align-items: center;
@@ -2457,8 +2464,7 @@ select {
     font-weight: 800;
 }
 
-.seqfx-tape-v2-control select,
-.seqfx-tape-v2-control input[type="number"] {
+.seqfx-tape-v2-control select {
     box-sizing: border-box;
     width: 100%;
     min-width: 0;

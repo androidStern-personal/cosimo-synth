@@ -104,6 +104,26 @@ test("envelope bare numbers use the displayed unit without the hidden 10 ms thre
     assert.equal(fiveSeconds.echo.unit, "s");
 });
 
+test("millisecond-backed exact entry accepts seconds while preserving millisecond storage", async () => {
+    const [entries] = await modulesPromise;
+    const spec = entries.parameterEntrySpecForMilliseconds({
+        minMilliseconds: 20,
+        maxMilliseconds: 8_000,
+        stepMilliseconds: 1,
+        currentMilliseconds: 500,
+    });
+
+    const seconds = entries.parseParameterEntry(spec, "2 s");
+    assert.equal(seconds._tag, "accepted");
+    assert.equal(seconds.commit.value, 2_000);
+    assert.equal(seconds.echo.display, "2000 ms");
+
+    const milliseconds = entries.parseParameterEntry(spec, "750");
+    assert.equal(milliseconds._tag, "accepted");
+    assert.equal(milliseconds.commit.value, 750);
+    assert.equal(milliseconds.echo.unit, "ms");
+});
+
 test("exact entry tolerates surrounding whitespace, unit spacing, and thousands commas", async () => {
     const [entries, rackDescriptors] = await modulesPromise;
     const descriptor = rackDescriptors.getRackParameterDescriptor("globalFilterCutoff");
