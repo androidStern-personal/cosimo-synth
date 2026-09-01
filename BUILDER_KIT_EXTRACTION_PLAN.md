@@ -49,7 +49,7 @@ Decisions from Andrew:
   generation, (b) movement on the WebView keyboard/user-files behavior our CHOC
   fork patches. Record findings in `PROGRESS.txt`. Informational only — it tells
   us how much fork diff a future rebase could shed. No upstream PRs.
-- [ ] **1.3 Consolidate the CHOC marker check (wave 2).** The same eight magic strings are
+- [x] **1.3 Consolidate the CHOC marker check — DONE 2026-09-01 (wave 2).** The same eight magic strings are
   checked in five places (`fx/prod-effect.mjs`, `scripts/install_fx_cmajplugin.sh`,
   `scripts/build_cmajplugin_vst3.sh`, `scripts/install_cmajplugin_vst3.sh`,
   `scripts/seqfx-release-config.mjs`) with at least two divergent
@@ -64,7 +64,7 @@ Decisions from Andrew:
 Each task lands with focused tests, per the repo's definition of done. Pure
 JS/TS work; parallelizable across worktrees except where noted.
 
-- [ ] **2.1 One plugin registry.** Plugin discovery becomes manifest-driven:
+- [x] **2.1 One plugin registry — DONE 2026-09-01 (wave 2).** Plugin discovery becomes manifest-driven:
   scan `fx/*/` for `.cmajorpatch` (the dev server in `fx/vite.config.mjs`
   already proves the pattern); per-plugin build settings (cmakeTarget,
   productName, worker config, output dirs — derivable defaults with optional
@@ -80,7 +80,7 @@ JS/TS work; parallelizable across worktrees except where noted.
   make selection explicit. Done when adding a plugin touches zero shared files
   and `npm run fx:build -- all`, `fx:dev`, and `fx:jit:install` all derive from
   the same source of truth.
-- [ ] **2.2 Harden the build scripts.** In `fx/build-effect.mjs`:
+- [x] **2.2 Harden the build scripts — DONE 2026-09-01 (wave 2).** In `fx/build-effect.mjs`:
   `normalizeRepoPath` must reject `..` segments (today a manifest `source` like
   `../../x` writes outside the runtime dir); validate registry-derived paths
   are non-empty and inside `build/` before any `rm -rf`; then delete the
@@ -235,3 +235,29 @@ not this extraction.
     `tests/test_key_track.mjs` (3 subtests fail against current head — product
     question). 27 typecheck errors recorded (bounce/*.mjs missing declarations,
     DesktopPatchView sourceSlot union, sound-share-link lib types).
+
+- **2026-09-01 wave 2** (commit `d67bdc0`; verified green: `npm test` 1097 tests,
+  typecheck unchanged at 27 pre-existing errors, 60/60 effect browser suites,
+  seqfx release drift gate passing; 9 macOS-environment-bound release subtests
+  fail identically at baseline).
+  - 2.1: registry derived by scanning `fx/*/` for every `.cmajorpatch` with
+    optional `<PatchName>.build.json` sidecars (eight added, pinning all current
+    aliases/targets/names); dev server, JIT installer, and both pipelines share
+    the discovery; derived registry proven deep-equal to the old literal.
+    Adversarial review caught and fixed: the enhancer family needed
+    `jitInstallRuntime: true` (their source dirs carry no `view/index.js`);
+    orphan sidecars and `workerOut`-without-`workerSource` now fail discovery
+    closed; sidecar `cmakeTarget`/`productName` are identifier-shaped so no
+    separator can reach install paths or cmake args.
+  - 2.2: escaping manifest entries are auto-flattened with collision checks
+    (replaces the hand-kept `runtimeSources` tables, deleted); output dirs
+    validated inside `build/` before any `rm -rf`; dev-status leaks
+    (repoRoot/pid) now loopback-only; harness handler rejects out-of-repo paths.
+  - stripDevModule: `fx:prod:build` strips `view.devModule` for EVERY plugin;
+    plain `fx:build` keeps it; the seqfx env key now only controls source maps.
+  - 1.3: one CHOC marker implementation (`scripts/check_choc_markers.mjs`)
+    consumed by prod-effect, both seqfx release scripts, and the three shell
+    scripts.
+  - Surface changes to know about: `/__fx-dev-status` names plugins by registry
+    alias (was directory name); `all` builds in stable sorted order; installer
+    `--help` exits 0.

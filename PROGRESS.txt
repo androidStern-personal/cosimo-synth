@@ -1,3 +1,12 @@
+Builder Kit wave 2 integrated — 2026-09-01
+- Branch `claude/builder-kit-extraction-arch-c93byl`, commit `d67bdc0`. Plan tasks 2.1, 2.2, 1.3 complete; details in `BUILDER_KIT_EXTRACTION_PLAN.md` execution log.
+- The effect plugin registry is discovery-driven: `fx/build-effect.mjs` scans `fx/*/` for every `.cmajorpatch`, sidecar `<PatchName>.build.json` overrides derived defaults, and the dev server, `install_fx_cmajplugin.sh`, and both build pipelines consume the same module. Adding a plugin touches zero shared files. All eight targets JIT-install (enhancer family via built runtimes — their source dirs have no `view/index.js`).
+- Manifest source/resources/worker entries escaping a patch directory are flattened into the runtime dir with collision checks; `runtimeSources` sidecar tables are deleted; every registry-derived output dir must resolve inside `build/` before `rm -rf`; sidecar identifiers are shape-validated; orphan sidecars fail discovery.
+- `fx:prod:build` strips `view.devModule` from every production runtime manifest (was seqfx-only behind an env key; the key now only suppresses source maps). Plain `fx:build` keeps devModule for HMR.
+- Exactly one CHOC marker check remains: `scripts/check_choc_markers.mjs` (grep -a -F semantics), used by fx/prod-effect.mjs, build_seqfx_beta_release.mjs, seqfx-release-config.mjs, and the three cmajplugin shell scripts.
+- Known surface changes: `/__fx-dev-status` lists registry aliases as names and one entry per patch (both enhancer_lite manifests); `all` builds stable-sorted; installer `--help` exits 0; dev-status repoRoot/pid are loopback-only.
+- Unverified in this Linux container: cmaj play gates, cmake/JUCE production builds, codesign flows (registry fields consumed by prod-effect proven deep-equal; seqfx release drift gate passes; 9 macOS-bound release subtests fail byte-identically at baseline).
+
 Builder Kit wave 1 cleanup integrated — 2026-08-31
 - Branch `claude/builder-kit-extraction-arch-c93byl` (rebased onto master `b1d5f5b`), commits `27bef91` (plan), `d99490d`, `e3bb13c`. Plan and per-task results: `BUILDER_KIT_EXTRACTION_PLAN.md` execution log.
 - Effect view loader: production path (no `view.devModule`) makes zero network requests and starts no timers, proven by spy tests (12/12); user-facing error views show `error.message` with neutral copy, full chains to console; `effect-dev-tools.js` failures warn instead of rejecting module evaluation.
