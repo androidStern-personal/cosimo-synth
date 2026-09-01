@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "comment": "Feed base URL for the Builder Kit distribution channel. Empty in the Cosimo monorepo (dependencies come from GitHub); the export stamps the customer feed URL here.",
+  "baseUrl": ""
+}

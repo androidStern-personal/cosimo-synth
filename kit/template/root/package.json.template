@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "kit:new": "node kit/scripts/new_plugin.mjs",
+    "kit:doctor": "node kit/scripts/doctor.mjs",
+    "kit:setup": "node kit/scripts/setup.mjs",
     "fx:dev": "vite --config kit/fx/vite.config.mjs",
     "fx:build": "node kit/fx/build-effect.mjs",
     "fx:prod:build": "node kit/fx/prod-effect.mjs build",

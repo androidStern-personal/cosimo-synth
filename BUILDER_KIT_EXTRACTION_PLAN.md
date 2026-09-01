@@ -401,3 +401,91 @@ not this extraction.
     drift.
   - Deferred at Andrew's direction: reviewing the three master-added files now
     auto-included in the export (`kit/tools/effect_plugin_build/`).
+
+
+## Phase 5 — Launch readiness (decided 2026-09-01 with Andrew)
+
+### Decisions (durable)
+
+- **Feed = static R2 bucket, no server.** Under one unguessable path: `kit.git/`,
+  `cmajor.git/`, `choc.git/` as bare repos served by git's dumb-HTTP protocol
+  (`git update-server-info`), plus `tools/` holding the prebuilt `cmaj` and the
+  JIT dev loader `CmajPlugin.vst3` with a manifest of hashes. Privacy is a soft
+  gate (cohort secret in the path, rotated per release); Andrew accepts that
+  downloaded source cannot be revoked. Lineage of record: private GitHub repo
+  `builder-kit-releases`; R2 is the mirror customers read. DNS: move
+  `song-machines.com` to Cloudflare (Andrew) or use the `r2.dev` URL for beta.
+- **Plain CPM stays intact.** The kit's dependency file gets a data-only switch
+  (`kit/cmake/dependency-sources.cmake`): GitHub URLs in this monorepo, feed URLs
+  in a customer export. No custom downloader for source dependencies.
+- **Repo shape: monorepo** (`kit/` + `fx/<plugin>/`). Roadmap §6.2's flat layout
+  is superseded.
+- **Updates are agent-driven via a skill, using merge.** `kit-update` skill:
+  checkpoint, fetch from the feed, inspect local changes, merge the release
+  tag, resolve the obvious, test, build, install on green, ask only when
+  genuinely ambiguous. No `update`/`recover`/`configure` commands.
+- **Minimal command surface.** New: `kit:doctor` (read-only environment and
+  registry report, human + machine-readable) and `kit:setup` (downloads the
+  hash-pinned `cmaj`, shows the JUCE licensing notice and records
+  acknowledgment, `npm install`). Existing `kit:new`, `fx:*`, `test`,
+  `typecheck` stay. `package`/distribution mode is deferred past v1.
+- **Contracts:** `kit/feed.json` (feed base URL; empty in the monorepo, stamped
+  by the export) and `kit/toolchain.json` (pinned `cmaj`/`CmajPlugin` artifacts,
+  hashes, local paths under `build/kit-tools/`, required tool ranges).
+- **`kit/ui` is the component library, not an optional layer.** Enhancer Lite
+  adopts the preset bar and snapshots and becomes the worked example. Library
+  quality (theming, file size, hardcoded element names, `cosimo.*` defaults)
+  is a post-launch workstream.
+- **Clean `fx/enhancer_lite/` instead of an exclude list:** the shelves-audition
+  patch moves to the calibration tools; the rejected wordmark is deleted.
+- **One line in root `AGENTS.md`: anything under `kit/` ships to customers.**
+- **Deferred:** distribution-mode packaging, component-library quality pass,
+  customer-template CI.
+
+### Tasks
+
+Wave A (parallel, disjoint files):
+- [ ] **5.1 Standalone production build.** `kit/fx/prod-effect.mjs` resolves
+  `cmaj` in order: `build/kit-tools/cmaj` matching `kit/toolchain.json`'s hash →
+  the monorepo's `tools/cmajor_command_build` pinned build → a clear error
+  naming `npm run kit:setup`. Add `kit/cmake/dependency-sources.cmake`
+  (data-only URLs, included by `CosimoDependencies.cmake`); the export renders a
+  feed variant from `kit/feed.json`. `export_kit.mjs` also symlinks every
+  `kit/skills/*` into `.agents/skills/`.
+- [ ] **5.2 `kit:release`** (`scripts/release_builder_kit.mjs`, Andrew-side, not
+  exported): export with feed stamping → gates + proof → build `cmaj` and
+  `CmajPlugin.vst3` from the pinned fork (macOS) → hash and record in the staged
+  `kit/toolchain.json` → commit + tag in the lineage clone → bare mirrors of
+  kit/cmajor/choc with `update-server-info` → sync to R2 → upload tools +
+  `manifest.json`. `--dry-run` stops before network and keeps the staging dir.
+  Verifies the mirrored cmajor `.gitmodules` uses a relative CHOC URL.
+- [ ] **5.3 `kit:doctor` + `kit:setup`** (`kit/scripts/doctor.mjs`, `setup.mjs`).
+- [ ] **5.4 Docs, license, notices.** Fix `kit/AGENTS.md` (stale `cmake/` path,
+  desktop/iOS/T26 references), the skill's nonexistent `test:effect-presets`,
+  document `cmaj` acquisition and `npx playwright install`; add
+  `kit/template/root/LICENSE` (permissive, Andrew's locked decision) and
+  `THIRD_PARTY_NOTICES.md` (JUCE per-customer license disclosure + EULA link,
+  Cmajor, CHOC, CPM, JUCE); add the "kit/ ships" line to root `AGENTS.md`.
+- [ ] **5.5 Cleanup + shared-file moves.** Move the audition patch + sidecar out
+  of `fx/enhancer_lite/`; delete the wordmark and its view/manifest/test
+  references; move `ui/shared/enhancer-spectrum.ts` and `ui/vite.shared.mjs`
+  into `kit/` with re-export shims for synth consumers; drop them from the
+  allowlist; add `LICENSE` to required outputs.
+- [ ] **5.6 `kit-update` skill** (`kit/skills/kit-update/`) + root symlink.
+- [ ] **5.7 CI**: one workflow running `npm test` and `kit:export --prove`.
+
+Wave B (sequential, after A):
+- [ ] **5.8 Version, public entry, single plugin config, owner identity.**
+  `kit/kit.json` (kit version + schema versions), `kit/index.ts` public entry,
+  `schemaVersion` on plugin config; merge `<Name>.build.json` + `product.json`
+  into one `plugin.json` per plugin deriving alias/cmakeTarget/productName/
+  pluginCode from the plugin name and a root `product-owner.json` (manufacturer,
+  code, bundle prefix) that the scaffold inherits; `kit:doctor` reports version
+  and schema mismatches.
+- [ ] **5.9 Enhancer Lite adopts the preset bar and snapshots** (worked example).
+
+Andrew-side:
+- [ ] Cmajor fork: `.gitmodules` CHOC URL → relative `../choc.git`.
+- [ ] R2 bucket + API token on the Mac; DNS decision.
+- [ ] Create private `builder-kit-releases` repo.
+- [ ] First real `kit:release` on the Mac; run the customer flow on a clean machine.
