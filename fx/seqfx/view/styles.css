@@ -394,46 +394,6 @@ select {
     font-weight: 700;
 }
 
-.seqfx-first-use {
-    position: absolute;
-    left: 18px;
-    bottom: 18px;
-    z-index: 20;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 8px;
-    max-width: min(620px, calc(100% - 36px));
-    border: 1px solid rgba(242, 209, 107, 0.72);
-    border-radius: 7px;
-    padding: 7px 8px 7px 10px;
-    color: #f7f1e6;
-    background: rgba(16, 25, 35, 0.96);
-    box-shadow: 0 5px 18px rgba(16, 25, 35, 0.28);
-    font-size: 10px;
-    line-height: 1.25;
-    pointer-events: none;
-}
-
-.seqfx-first-use strong {
-    color: #f2d16b;
-    white-space: nowrap;
-}
-
-.seqfx-first-use button {
-    min-width: 48px;
-    min-height: 26px;
-    border: 1px solid rgba(247, 241, 230, 0.46);
-    border-radius: 5px;
-    padding: 3px 7px;
-    color: #101923;
-    background: #b5d99c;
-    font-size: 10px;
-    font-weight: 800;
-    cursor: pointer;
-    pointer-events: auto;
-}
-
 .seqfx-global :is(button, input, select):focus-visible {
     outline: 2px solid #6b5420;
     outline-offset: 2px;
@@ -463,9 +423,14 @@ select {
     container: seqfx-sequencer / inline-size;
     overflow: auto;
     --seqfx-bar-frame-x: 40px;
+    --seqfx-bar-frame-left-clearance: 16px;
     /* Sixteen 24px cells plus twelve 3px gaps and three 9px beat gaps. */
     --seqfx-bar-content-min: 447px;
-    padding: var(--seqfx-grid-shell-padding-top, 24px) var(--seqfx-bar-frame-x) 44px;
+    padding:
+        var(--seqfx-grid-shell-padding-top, 24px)
+        var(--seqfx-bar-frame-x)
+        44px
+        var(--seqfx-bar-frame-left-clearance);
     background: transparent;
     --seqfx-step-columns:
         repeat(3,
@@ -592,30 +557,6 @@ select {
 
 .seqfx-lane-row + .seqfx-lane-row {
     margin-top: 6px;
-}
-
-.seqfx-lane-spacer {
-    display: none;
-}
-
-.seqfx-lane-label {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: -39px;
-    z-index: 3;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    width: 37px;
-    min-height: 28px;
-    color: var(--seqfx-shell-ink-muted);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.015em;
-    line-height: 1;
-    pointer-events: none;
-    white-space: nowrap;
 }
 
 .seqfx-step-track,

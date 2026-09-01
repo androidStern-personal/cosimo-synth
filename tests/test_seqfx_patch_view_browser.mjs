@@ -50,6 +50,7 @@ const SEQFX_SNAPSHOT_BANK_STATE_KEY = "cosimo.effectSnapshotBank.seqfx.v1";
 const SEQFX_NORMAL_GAP_PX = 3;
 const SEQFX_BEAT_GAP_PX = 9;
 const SEQFX_MIN_CELL_SIZE_PX = 24;
+const SEQFX_LEFT_FRAME_CLEARANCE_PX = 16;
 const SEQFX_GRID_STEPS_PER_ROW = 16;
 const SEQFX_EFFECT_TYPES = {
     filter: 1,
@@ -1074,7 +1075,7 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
             inspectorHeading: rectFor(".seqfx-inspector-heading strong"),
             inspectorHeadingFontSize: inspectorHeading ? getComputedStyle(inspectorHeading).fontSize : null,
             inspectorBorderTopStyle: inspectorStyle.borderTopStyle,
-            laneLabelDisplay: getComputedStyle(document.querySelector(".seqfx-lane-label")).display,
+            laneLabelCount: document.querySelectorAll(".seqfx-lane-label").length,
             laneTrack: rectFor(".seqfx-lane-track"),
             lastPatternRight: patternRects.at(-1)?.right ?? null,
             patternButtonCount: patternTops.length,
@@ -1138,7 +1139,9 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
     assert.ok(layout.topbar.height <= 42, `expected compact topbar, got ${layout.topbar.height}px`);
     assert.ok(layout.patterns.left >= layout.title.right, "pattern buttons should sit to the right of the title");
     assert.ok(layout.lastPatternRight <= layout.patterns.right + 1, "all pattern buttons should be visible at 567px");
-    assert.equal(layout.laneLabelDisplay, "flex");
+    assert.equal(layout.laneLabelCount, 0);
+    assertClose(layout.gridPaddingLeft, SEQFX_LEFT_FRAME_CLEARANCE_PX, 0.1, "removed chain-label gutter should leave only frame clearance");
+    assert.ok(layout.gridPaddingLeft < layout.gridPaddingRight, "sequence cells should expand into the removed left label gutter");
     assertClose(layout.laneTrack.left - layout.grid.left, layout.gridPaddingLeft, 1, "grid cells should start after the reserved frame padding");
     assertClose(layout.grid.right - layout.laneTrack.right, layout.gridPaddingRight, 1, "grid cells should end before the reserved frame padding");
     assert.ok(layout.rootScrollWidth <= layout.viewportWidth + 1, `page should not gain horizontal overflow, got ${layout.rootScrollWidth}px for ${layout.viewportWidth}px viewport`);
@@ -1661,20 +1664,40 @@ test("seqfx_internal_transport_parses_explicit_monitor_booleans_and_rejects_malf
     await page.close();
 });
 
-test("seqfx_factory_content_and_first_use_hint_are_discoverable_atomic_and_undoable", async () => {
+test("seqfx_factory_content_is_discoverable_atomic_and_undoable_without_onboarding_persistence", async () => {
     const page = await browser.newPage({ viewport: { width: 1120, height: 680 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
-    const hint = page.locator('[data-role="seqfx-first-use"]');
-    assert.match(await hint.textContent(), /Click a cell/);
-    assert.match(await hint.textContent(), /drag a block edge/);
-    assert.match(await hint.textContent(), /named effect/);
-    assert.match(await hint.textContent(), /open Mod/);
-    await page.locator('[data-role="seqfx-first-use-dismiss"]').click();
+    assert.equal(await page.locator('[data-role="seqfx-first-use"]').count(), 0);
+    assert.equal(await page.locator('[data-role="seqfx-first-use-dismiss"]').count(), 0);
+    assert.equal(await page.getByText("First pattern?", { exact: true }).count(), 0);
+    const openingLayout = await page.evaluate(() => {
+        const globalControls = document.querySelector('[data-role="seqfx-global-controls"]');
+        const workspace = document.querySelector(".seqfx-workspace");
+        const globalBounds = globalControls.getBoundingClientRect();
+        const workspaceBounds = workspace.getBoundingClientRect();
+        const onboardingStorageKeys = [localStorage, sessionStorage].flatMap((storage) => (
+            Array.from({ length: storage.length }, (_unused, index) => storage.key(index))
+        )).filter((key) => key !== null && /(first.?use|onboard|welcome)/iu.test(key));
+        return {
+            expectedGap: parseFloat(getComputedStyle(globalControls).marginBottom),
+            gap: workspaceBounds.top - globalBounds.bottom,
+            onboardingStorageKeys,
+        };
+    });
+    assertClose(openingLayout.gap, openingLayout.expectedGap, 0.1, "banner removal should not leave an extra layout gap");
+    assert.deepEqual(openingLayout.onboardingStorageKeys, [], "opening SeqFX should not create onboarding storage state");
+
     await page.locator('[data-role="seqfx-pattern"][data-pattern="1"]').click();
     await page.locator('[data-role="seqfx-pattern"][data-pattern="0"]').click();
-    assert.equal(await hint.count(), 0, "dismissal should survive state and pattern rerenders while this editor stays open");
+    assert.deepEqual(
+        await page.evaluate(() => [localStorage, sessionStorage].flatMap((storage) => (
+            Array.from({ length: storage.length }, (_unused, index) => storage.key(index))
+        )).filter((key) => key !== null && /(first.?use|onboard|welcome)/iu.test(key))),
+        [],
+        "ordinary rerenders should not recreate onboarding persistence",
+    );
 
     const factoryPattern = page.locator('[data-role="seqfx-factory-pattern"]');
     assert.equal(await factoryPattern.locator("option").count(), 13);
@@ -1810,25 +1833,42 @@ test("seqfx_effect_tab_icons_resolve_registry_fontaudio_masks_in_their_cell_pale
     await page.close();
 });
 
-test("seqfx_named_effect_picker_fixed_tabs_and_visible_chain_labels_remove icon guessing", async () => {
+test("seqfx_named_effect_picker_and_unlabelled_rows_preserve_chain_accessibility_and_interaction", async () => {
     const page = await browser.newPage({ viewport: { width: 1120, height: 680 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
-    const laneLabels = page.locator(".seqfx-lane-label");
-    assert.deepEqual(await laneLabels.evaluateAll((nodes) => nodes.slice(0, 4).map((node) => node.textContent?.trim())), [
-        "Chain 1",
-        "Chain 2",
-        "Chain 3",
-        "Chain 4",
-    ]);
-    assert.equal(await laneLabels.first().evaluate((node) => getComputedStyle(node).display), "flex");
+    assert.equal(await page.locator(".seqfx-lane-label").count(), 0);
+    assert.equal(await page.getByText(/^Chain [1-4]$/u).count(), 0);
+    for (const bar of [0, 1]) {
+        const laneRows = page.locator(`[data-role="seqfx-bar-section"][data-bar="${bar}"] .seqfx-lane-row`);
+        assert.equal(await laneRows.count(), 4, `bar ${bar + 1} should retain four lane rows`);
+        assert.deepEqual(
+            await laneRows.locator('[data-role="seqfx-lane-track"]').evaluateAll((nodes) => (
+                nodes.map((node) => Number(node.getAttribute("data-lane")))
+            )),
+            [0, 1, 2, 3],
+            `bar ${bar + 1} should retain ordered chain identity`,
+        );
+    }
+    const wideGridLayout = await page.evaluate(() => {
+        const grid = document.querySelector(".seqfx-grid-shell");
+        const track = document.querySelector(".seqfx-lane-track");
+        const gridBounds = grid.getBoundingClientRect();
+        const trackBounds = track.getBoundingClientRect();
+        return {
+            leftClearance: trackBounds.left - gridBounds.left,
+            rightClearance: gridBounds.right - trackBounds.right,
+        };
+    });
+    assertClose(wideGridLayout.leftClearance, SEQFX_LEFT_FRAME_CLEARANCE_PX, 1, "wide sequence grid should reclaim the chain-label gutter");
+    assert.ok(wideGridLayout.leftClearance < wideGridLayout.rightClearance);
 
     await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
     const effectOptions = page.locator('[data-role="seqfx-effect-type-option"]');
     assert.equal(await effectOptions.count(), 12);
     assert.deepEqual(
-        await effectOptions.evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim())),
+        await effectOptions.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label"))),
         ["Filter", "Crush", "Tape Stop", "Stutter", "Pitch", "Comb", "Ring", "Reverse", "Talk Box", "Vibro", "Flange", "Dirty"],
     );
     assert.equal(

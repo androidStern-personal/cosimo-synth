@@ -3054,7 +3054,6 @@ export function SeqFxPatchView({
     const [gestureState, setGestureState] = useState<BlockGesture | null>(null);
     const [patternPreview, setPatternPreview] = useState<PatternPreview | null>(null);
     const [invalidDropTarget, setInvalidDropTarget] = useState<InvalidDropTarget | null>(null);
-    const [showFirstUseHint, setShowFirstUseHint] = useState(true);
     const [focusedDurationBlock, setFocusedDurationBlock] = useState<{ lane: number; startStep: number } | null>(null);
     const isPromoControlled = Boolean(promoControls);
     const state = isPromoControlled ? promoControls?.state ?? runtimeState : runtimeState;
@@ -4837,27 +4836,11 @@ export function SeqFxPatchView({
                 }}
             />
 
-            {showFirstUseHint ? (
-                <aside className="seqfx-first-use" data-role="seqfx-first-use" role="status">
-                    <strong>First pattern?</strong>
-                    <span>Click a cell, drag a block edge to resize, choose a named effect, then open Mod. Dismissal lasts while this editor stays open.</span>
-                    <button
-                        aria-label="Dismiss first-use hint"
-                        data-role="seqfx-first-use-dismiss"
-                        onClick={() => setShowFirstUseHint(false)}
-                        type="button"
-                    >
-                        Got it
-                    </button>
-                </aside>
-            ) : null}
-
             <section className="seqfx-workspace" style={SEQFX_WORKSPACE_STYLE}>
                 <div className={gridShellClassName} aria-label="Effect sequence grid">
                     {STEP_BARS.map((barSteps, barIndex) => (
                         <div className="seqfx-bar-section" data-role="seqfx-bar-section" data-bar={barIndex} key={barIndex}>
                             <div className="seqfx-step-header">
-                                <div className="seqfx-lane-spacer" />
                                 <div className="seqfx-step-track">
                                     {barSteps.map((step) => (
                                         <div
@@ -4880,7 +4863,6 @@ export function SeqFxPatchView({
 
                                     return (
                                         <div className="seqfx-lane-row" key={`${barIndex}:${laneName}`}>
-                                            <div className="seqfx-lane-label">{laneName}</div>
                                             <div
                                                 className="seqfx-lane-track"
                                                 data-role="seqfx-lane-track"

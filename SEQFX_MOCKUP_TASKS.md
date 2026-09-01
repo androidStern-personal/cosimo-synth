@@ -229,3 +229,44 @@ The rejected 1000px alternative used a 420px editor floor. Although it avoids te
 
 - Use existing composed browser seams and representative responsive widths. Do not create screenshot farms, duplicate suites, tests about tests, or process-only artifacts.
 - Automated qualification, native/plugin packaging, pluginval, Ableton host behavior, listening approval, and physical-device acceptance remain separate claims. Expensive native, install, and deployment gates wait until the review-clean UI queue is integrated.
+
+## Persistent interface declutter: onboarding banner and chain-label gutter
+
+- Status: Complete
+- Task/thread: Visible implementation task `01a05c76-d755-7a62-8a2d-24b63baa3320`, reporting to coordinator task `01a05c09-ce2d-7120-bc44-cd8102a2f0d7`.
+- Branch/worktree: `codex/seqfx-interface-declutter` at `/Users/winterfell/.codex/worktrees/b782/cosimo-synth`.
+- Base: Reviewed responsive branch `codex/seqfx-responsive-workspace-review` at exact tip `c25fed5a6afb3011a65105a91489fcfd452025d4`.
+- Authorization: Permanently remove the bottom `First pattern?` onboarding banner and its dismissal state/copy/presentation, with no replacement, persistence, first-run variant, or empty gap. Remove the visible `Chain 1` through `Chain 4` row labels from both sequencer bars and reclaim their occupied left gutter so the sequence grid expands into that space.
+- Required preservation: Four-chain data model and order; useful chain-aware accessible names on cells, blocks, duration controls, and inspector selection; pointer, keyboard, drag, resize, selection, and block editing behavior; DSP, saved state, automation, global controls, and responsive round-trip behavior.
+- Explicit non-scope: Responsive breakpoints; effect-picker geometry or the later shared-cell-geometry task; theme; DSP; saved-sound policy; any other mockup item; generated bundles; broad/native/release builds; HMR/fixed-port launch; install; pluginval; Ableton/device acceptance; rebase, merge, push, deploy, or publish; `TODOS.txt` and `PROGRESS.txt`.
+
+### Decisions
+
+1. Preserve `SEQFX_LANE_NAMES` as domain/accessibility vocabulary while removing only its visible row-label projection. Renaming or deleting the chain identities would weaken cell, block, duration, and inspector announcements without changing the four-chain model Andrew explicitly asked to preserve.
+2. Reclaim the label allocation at the existing sequencer-shell layout seam. Retain only the narrower left clearance required for the existing decorative bar frame; that clearance is frame ownership, not an empty label column. Responsive thresholds, rhythmic gutters, cell floors, and frame geometry remain unchanged.
+3. Extend the existing composed SeqFX browser suite rather than adding a parallel suite: remove obsolete banner/dismissal and visible-label assertions, then prove absence/no-gap/no-storage behavior plus four ordered interactive lanes with surviving accessible names at representative wide and narrow widths.
+
+### Decision-provenance objection audit
+
+- `SEQFX_LANE_NAMES` remains production vocabulary even though its standalone row-label elements are gone. Deleting or neutralizing those names was rejected because cells, blocks, duration controls, and the inspector still need useful chain-aware announcements; retaining them does not recreate a visible row label.
+- The old 40px left reserve served both the 37px label and the decorative frame. The sequence now starts after only 16px of frame clearance, while the right frame reserve remains 40px. Leaving 40px would preserve the empty label gutter; using zero would clip the existing frame. This asymmetric shell padding is the smallest layout change that visibly expands the grid without changing frame geometry, rhythmic gutters, cell floors, or responsive thresholds.
+- The first test revision intercepted `Storage.prototype.setItem` and prohibited every write. Coordinator review correctly rejected that as method patching and an overbroad persistence contract. The final test observes only the browser storage namespace for first-use/onboarding/welcome keys before and after representative rerenders, so unrelated legitimate persistence remains allowed.
+- The responsive picker renders full and short copy spans simultaneously, so `textContent` is not its stable naming seam. The existing picker assertion now reads each native button's full `aria-label`, matching the preserved accessibility contract instead of responsive presentation internals.
+- Confidence is high in composed banner absence, ordinary global-to-workspace spacing, visible label/gutter removal, four-row ordering, accessible names, and pointer/keyboard/resize behavior. Native host appearance and physical feel remain deliberately unproven.
+
+### Focused evidence
+
+- Pre-edit boundary: This worktree began detached and clean at the exact reviewed responsive tip `c25fed5a6afb3011a65105a91489fcfd452025d4`, then created the isolated branch `codex/seqfx-interface-declutter` without moving the predecessor worktree's checked-out branch.
+- Failing-before evidence: The three updated composed checks failed against untouched production at the authorized seams: eight `.seqfx-lane-label` elements remained across the two bar sections, one onboarding banner remained, and the narrow sample retained the old 40px left reserve.
+- Passing-after evidence: The final directly affected composed group passed 9/9 through the real SeqFX browser harness: 567px shell/gutter behavior; onboarding absence, ordinary 12px global-to-workspace gap, and no onboarding storage key across rerenders; wide four-row order and chain-aware selection/resize; 1061/1060/1059/420/320 responsive round trip; frame clearance; cell/inspector edits; keyboard block creation; bounded duration keyboard access; and duration focus across bar boundaries.
+- Source/scoped-diff review: No onboarding copy/state/style or visible lane-label/spacer owner remains in `fx/seqfx/view`; `SEQFX_LANE_NAMES` continues to drive accessible names. `git diff --check` passed. The diff from the base contains only this ledger, `SeqFxPatchView.tsx`, `styles.css`, and the existing composed browser suite. `TODOS.txt` and `PROGRESS.txt` are unchanged.
+- Test setup: The focused browser server used an ephemeral loopback port, shared dependencies read-only, and a task-owned writable Vite cache under `/private/tmp`; the server, cache, temporary config, and ignored `node_modules` symlink were all removed before commit.
+- Known failure: `./node_modules/.bin/tsc -p fx/seqfx/tsconfig.json` did not pass on this base because its 19-module project follows imports into existing shared owners and reports eight unrelated errors in effect snapshot/preset optionality, a missing `bounce/document.mjs` declaration, rack descriptor optionality, and sound-share stream/blob types. No diagnostic names the changed SeqFX view, and this task did not widen scope to repair those shared modules.
+
+### Final handoff
+
+- Final implementation commit: This entry's single source/test/ledger commit; its exact hash is reported to the coordinator because a commit cannot embed its own hash.
+- Clean status: Clean after the implementation commit; verified in the coordinator handoff.
+- Exact changed scope: Removed the local first-use state and complete banner JSX/CSS island; removed the step-header spacer and eight visible chain-label elements plus their dead CSS; reduced only the sequencer's left reserve from the combined 40px frame/label gutter to 16px frame clearance; updated existing composed assertions for absence, spacing, storage namespace, gutter geometry, four ordered lane rows, accessible chain identity, and retained interaction. DSP, runtime state, automation, responsive breakpoints, effect-picker geometry, saved-sound policy, generated bundles, and `patch_gui` are unchanged.
+- Generated artifacts: None.
+- Unperformed gates: Broad suite; native/plugin/release builds; generated-bundle rebuild; HMR/fixed-port launch; install; codesign/notarization; pluginval; Ableton/listening/host visual or physical-feel acceptance; physical device; Sites; release; rebase; merge; push; deploy; publication.
