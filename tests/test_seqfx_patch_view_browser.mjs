@@ -2170,6 +2170,15 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
     assert.ok(atBreakpoint.cell.width >= 24, `step target should stay at least 24px, got ${atBreakpoint.cell.width}px`);
     assertClose(atBreakpoint.normalGap, 3, 0.75, "ordinary rhythmic gap at the sequencer floor");
     assertClose(atBreakpoint.beatGap, 9, 0.75, "beat-boundary gap at the sequencer floor");
+    const floorPickerLayout = await page.getByRole("button", { name: "Stutter", exact: true }).evaluate((button) => {
+        const icon = button.querySelector(".seqfx-effect-icon").getBoundingClientRect();
+        const name = button.querySelector(".seqfx-effect-picker__name").getBoundingClientRect();
+        const rect = button.getBoundingClientRect();
+        return { height: rect.height, iconRight: icon.right, nameLeft: name.left, width: rect.width };
+    });
+    assertClose(floorPickerLayout.height, 36, 0.75, "picker height at the 480px inspector floor");
+    assert.ok(floorPickerLayout.width >= 71, `picker width at the inspector floor should remain about 71px, got ${floorPickerLayout.width}px`);
+    assert.ok(floorPickerLayout.nameLeft > floorPickerLayout.iconRight, "1060px picker should keep icon and short label horizontal");
 
     await page.setViewportSize({ width: 1059, height: 820 });
     await settleLayout();
@@ -2181,17 +2190,40 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
 
     await page.setViewportSize({ width: 420, height: 640 });
     await settleLayout();
+    const stackedPickerLayout = await page.getByRole("button", { name: "Stutter", exact: true }).evaluate((button) => {
+        const icon = button.querySelector(".seqfx-effect-icon").getBoundingClientRect();
+        const name = button.querySelector(".seqfx-effect-picker__name").getBoundingClientRect();
+        const rect = button.getBoundingClientRect();
+        return { height: rect.height, iconBottom: icon.bottom, nameTop: name.top };
+    });
+    assertClose(stackedPickerLayout.height, 52, 0.75, "stacked narrow picker height");
+    assert.ok(stackedPickerLayout.nameTop >= stackedPickerLayout.iconBottom, "420px picker should stack its short label below the icon");
+
+    await page.setViewportSize({ width: 320, height: 640 });
+    await settleLayout();
     const filterButton = page.getByRole("button", { name: "Filter", exact: true });
     await filterButton.focus();
     await filterButton.press("Enter");
     await page.locator('[data-role="filter-range-editor"]').waitFor();
+    await settleLayout();
     const graphBox = await page.locator('[data-role="editor-curve-plot-area"]').first().boundingBox();
     assert.ok(graphBox && graphBox.height >= 140, `graph plot should retain at least 140px, got ${graphBox?.height}px`);
+
+    const crusherButton = page.getByRole("button", { name: "Crush", exact: true });
+    await crusherButton.focus();
+    await crusherButton.press("Space");
+    await page.locator('[data-role="seqfx-crusher-editor"]').waitFor();
+    await settleLayout();
+    const crusherGraphBox = await page.locator('[data-role="seqfx-crusher-editor"] [data-role="editor-curve-plot-area"]').boundingBox();
+    assert.ok(crusherGraphBox && crusherGraphBox.height >= 140, `Crusher plot should retain at least 140px, got ${crusherGraphBox?.height}px`);
 
     const stutterButton = page.getByRole("button", { name: "Stutter", exact: true });
     await stutterButton.focus();
     await stutterButton.press("Space");
     await page.locator('[data-role="seqfx-stutter-editor"]').waitFor();
+    await settleLayout();
+    const stutterGraphBox = await page.locator('[data-role="seqfx-stutter-editor"] [data-role="editor-curve-plot-area"]').boundingBox();
+    assert.ok(stutterGraphBox && stutterGraphBox.height >= 140, `Stutter plot should retain at least 140px, got ${stutterGraphBox?.height}px`);
 
     const narrowEffectLayout = await page.evaluate(() => {
         const rect = (node) => {
@@ -2214,6 +2246,10 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
             fullNameDisplays: [...document.querySelectorAll(".seqfx-effect-picker__name--full")].map((node) => getComputedStyle(node).display),
             help: rect(preset.querySelector("small")),
             options: rect(options),
+            pickerClientHeight: options.parentElement.clientHeight,
+            pickerClientWidth: options.parentElement.clientWidth,
+            pickerScrollHeight: options.parentElement.scrollHeight,
+            pickerScrollWidth: options.parentElement.scrollWidth,
             presetLabelBottom: presetLabel.bottom,
             rowCounts: [...rowCounts.values()],
             select: rect(preset.querySelector("select")),
@@ -2229,6 +2265,8 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
         effectDefinitionsModule.SEQFX_EFFECT_TYPE_SHORT_NAMES[index + 1]
     ));
     assert.deepEqual(narrowEffectLayout.rowCounts, [6, 6], "picker should remain exactly 2x6");
+    assert.ok(narrowEffectLayout.pickerScrollWidth > narrowEffectLayout.pickerClientWidth, "exceptionally narrow picker should own its horizontal overflow");
+    assert.ok(narrowEffectLayout.pickerScrollHeight <= narrowEffectLayout.pickerClientHeight + 1, "picker should not become a nested vertical scroller");
     assert.deepEqual(narrowEffectLayout.shortNames.map(({ text }) => text), expectedShortNames);
     assert.ok(narrowEffectLayout.shortNames.every(({ display }) => display !== "none"), "short names should be visible below 520px inspector width");
     assert.ok(narrowEffectLayout.fullNameDisplays.every((display) => display === "none"), "full visible names should yield to unique short names");

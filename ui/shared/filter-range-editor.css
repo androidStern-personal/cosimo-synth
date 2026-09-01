@@ -24,7 +24,7 @@
    top of the plot. The center chip is anchored to the bottom and doesn't
    need any extra top room. */
 .filter-range-editor[data-show-chips="true"][data-has-range="true"] {
-    --editor-top-reserve: 14px;
+    --editor-top-reserve: 34px;
 }
 
 .filter-range-editor__viewport {

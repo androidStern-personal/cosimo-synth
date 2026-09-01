@@ -1632,14 +1632,19 @@ select {
 
 .seqfx-effect-picker {
     min-width: 0;
+    margin: -4px;
+    padding: 4px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
 }
 
 .seqfx-effect-picker__options {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(44px, 1fr));
     align-items: center;
     align-content: start;
-    min-width: 0;
+    /* Six practical columns plus the five existing 5px gutters. */
+    min-width: 289px;
     gap: 5px;
 }
 
@@ -2701,7 +2706,7 @@ select {
     }
 }
 
-@container seqfx-inspector (width < 480px) {
+@container seqfx-inspector (width < 420px) {
     .seqfx-effect-picker__options button {
         grid-template-rows: 24px auto;
         grid-template-columns: minmax(0, 1fr);
