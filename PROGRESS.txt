@@ -1,3 +1,9 @@
+Builder Kit branch integrated current master — 2026-09-01
+- Merged `origin/master` (35 SeqFX commits) into `claude/builder-kit-extraction-arch-c93byl`. Gates green afterwards: `npm test` 1118/0, typecheck at the 27-error baseline, `fx:build -- all` clean, seqfx build provenance 2/2, kit export proof passing (102 files), no `patch_gui` drift.
+- Master's `editorMaxWidth` and `visualReviewAdapter` are now discovery-registry sidecar fields (validated; `fx/seqfx/SeqFx.build.json` carries them). Master's new `effect_plugin_build` files followed the `kit/` rename. `scripts/capture_plugin_visual_review.mjs` imports `kit/fx/build-effect.mjs`.
+- `ui/shared/parameter-value-entry.ts` was split at the kit boundary: the generic spec model, formatting, parsing, and the four unit spec factories moved to `kit/ui/parameter-value-entry.ts`; rack/modulation/key-track/mobile-voice builders (and `millisecondsSpec`/`tempoSyncCompanion`, which take rack descriptors) stay synth-side and re-export the core, so synth consumers are unchanged.
+- Lesson for master-side work: the kit import-boundary tests are what caught this. Any new shared module imported by `kit/ui` must either be generic and live in the kit, or the kit widget must not import it.
+
 Builder Kit Phase 4 export and proof integrated — 2026-09-01
 - Branch `claude/builder-kit-extraction-arch-c93byl`. Plan tasks 4.1-4.3 complete; the extraction plan's engineering scope is closed. Details in `BUILDER_KIT_EXTRACTION_PLAN.md` execution log.
 - `npm run kit:export -- <dir> [--force] [--prove]` produces the 98-file customer starter monorepo from `kit/export-allowlist.json` with fail-closed leak gates (allowlist containment, required outputs, forbidden personal identifiers). `--prove` builds Enhancer Lite in the export, runs kit unit tests there, and simulates the customer kit-update merge. `tests/test_kit_export.mjs` (in `npm test`) keeps the gates honest.

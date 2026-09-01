@@ -375,3 +375,29 @@ not this extraction.
     decide the customer transport (roadmap: authenticated feed, no Git-host
     accounts); publishing = committing export snapshots to that repo, tagged
     per release.
+
+- **2026-09-01 master integration** (merge `origin/master`@35 commits of SeqFX
+  work into the branch; commits `8f6a029` red snapshot → green close-out).
+  - Structural conflicts resolved: master's three new
+    `tools/effect_plugin_build/` files followed the `kit/` rename; master's
+    `editorMaxWidth` + `visualReviewAdapter` became sidecar fields validated by
+    the discovery registry (seqfx sidecar carries them); `capture_plugin_visual_review.mjs`
+    repointed at `kit/fx/build-effect.mjs`; SeqFxPatchView imports resolve to
+    `kit/ui`.
+  - The one genuine boundary violation the merge produced:
+    `ui/shared/parameter-value-entry.ts` (new on master) was imported by two
+    kit-owned widgets. Andrew confirmed the entry model is generic, so the
+    module was SPLIT — generic spec model, formatting, and parsing (plus the
+    four unit spec factories and a local `ParameterEntryChoice`) now live in
+    `kit/ui/parameter-value-entry.ts`; the rack/modulation/key-track/mobile-voice
+    builders stay in `ui/shared/parameter-value-entry.ts`, which imports the
+    core and re-exports it so all ~16 synth consumers are unchanged.
+    `millisecondsSpec`/`tempoSyncCompanion` stayed synth-side (they take rack
+    descriptors).
+  - Post-merge gates: `npm test` 1118/0, typecheck at the 27-error baseline
+    with none in the split modules, `fx:build -- all` clean,
+    `test_seqfx_build_provenance` 2/2 (its earlier failure was collateral from
+    the broken import), export proof passing at 102 files, zero `patch_gui`
+    drift.
+  - Deferred at Andrew's direction: reviewing the three master-added files now
+    auto-included in the export (`kit/tools/effect_plugin_build/`).
