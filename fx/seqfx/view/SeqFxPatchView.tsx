@@ -4749,7 +4749,6 @@ export function SeqFxPatchView({
             <SeqFxGlobalControlSurface
                 controls={globalControls}
                 internalRunning={internalRunning}
-                playheadStep={playheadStep}
                 canUndo={bridge.canUndo()}
                 canRedo={bridge.canRedo()}
                 hasLoopClipboard={runtimeHasLoopClipboard}

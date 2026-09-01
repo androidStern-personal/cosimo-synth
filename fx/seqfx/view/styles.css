@@ -302,7 +302,7 @@ select {
 
 .seqfx-loop {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
     gap: 9px;
     min-width: 0;
@@ -432,69 +432,7 @@ select {
     pointer-events: auto;
 }
 
-.seqfx-loop__scroll {
-    min-width: 0;
-    overflow: visible;
-}
-
-.seqfx-loop__ruler {
-    display: grid;
-    grid-template-columns: repeat(16, minmax(24px, 1fr));
-    gap: 1px;
-    min-width: 0;
-    touch-action: none;
-}
-
-@media (min-width: 1360px) {
-    .seqfx-loop__ruler {
-        grid-template-columns: repeat(32, minmax(24px, 1fr));
-        min-width: 768px;
-    }
-}
-
-.seqfx-loop__ruler button {
-    position: relative;
-    min-width: 24px;
-    height: 24px;
-    border: 0;
-    padding: 0;
-    color: rgba(28, 28, 28, 0.48);
-    background: rgba(222, 216, 204, 0.7);
-    font-size: 10px;
-    font-weight: 700;
-    cursor: ew-resize;
-}
-
-.seqfx-loop__ruler button.is-in-loop {
-    color: #172219;
-    background: rgba(139, 191, 154, 0.62);
-}
-
-.seqfx-loop__ruler button.is-start::before,
-.seqfx-loop__ruler button.is-end::after {
-    position: absolute;
-    top: 2px;
-    bottom: 2px;
-    width: 2px;
-    border-radius: 999px;
-    background: #25362a;
-    content: "";
-}
-
-.seqfx-loop__ruler button.is-start::before {
-    left: 2px;
-}
-
-.seqfx-loop__ruler button.is-end::after {
-    right: 2px;
-}
-
-.seqfx-loop__ruler button.is-playhead {
-    box-shadow: inset 0 -3px 0 #00b3cc;
-}
-
-.seqfx-global :is(button, input, select):focus-visible,
-.seqfx-loop__ruler button:focus-visible {
+.seqfx-global :is(button, input, select):focus-visible {
     outline: 2px solid #6b5420;
     outline-offset: 2px;
 }
@@ -1691,7 +1629,7 @@ select {
 
 .seqfx-effect-picker__options {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     align-items: center;
     align-content: start;
     min-width: 0;

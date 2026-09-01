@@ -18,8 +18,6 @@ type GlobalControlEndpoint =
     | typeof SEQFX_ENDPOINTS.loopStart
     | typeof SEQFX_ENDPOINTS.loopLength;
 
-type LoopDragEdge = "start" | "end";
-
 const CLOCK_OPTIONS = ["Host", "Internal", "Manual"] as const;
 const RATE_OPTIONS = ["1/8", "1/16", "1/32"] as const;
 const MANUAL_BPM_ENTRY_SPEC = parameterEntrySpecForScalar({
@@ -34,44 +32,9 @@ function loopStepEntrySpec(min: number, max: number) {
     return parameterEntrySpecForScalar({ min, max, step: 1, unit: "", digits: 0 });
 }
 
-function clampStep(value: number, min: number, max: number) {
-    return Math.min(max, Math.max(min, Math.round(value)));
-}
-
-function nearestLoopEdge(step: number, loopStart: number, loopEndExclusive: number): LoopDragEdge {
-    return Math.abs(step - loopStart) <= Math.abs(step - (loopEndExclusive - 1)) ? "start" : "end";
-}
-
-function nearestLoopStepFromPointer(ruler: HTMLDivElement, clientX: number, clientY: number) {
-    const exactTarget = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-loop-step]");
-    const exactStep = Number(exactTarget?.dataset.loopStep);
-    if (exactTarget && ruler.contains(exactTarget) && Number.isInteger(exactStep)) {
-        return exactStep;
-    }
-
-    let nearestStep = 0;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-    for (const button of ruler.querySelectorAll<HTMLElement>("[data-loop-step]")) {
-        const step = Number(button.dataset.loopStep);
-        if (!Number.isInteger(step)) {
-            continue;
-        }
-        const rect = button.getBoundingClientRect();
-        const distanceX = Math.max(rect.left - clientX, 0, clientX - rect.right);
-        const distanceY = Math.max(rect.top - clientY, 0, clientY - rect.bottom);
-        const distance = (distanceX * distanceX) + (distanceY * distanceY);
-        if (distance < nearestDistance) {
-            nearestDistance = distance;
-            nearestStep = step;
-        }
-    }
-    return nearestStep;
-}
-
 export function SeqFxGlobalControlSurface({
     controls,
     internalRunning,
-    playheadStep,
     canUndo,
     canRedo,
     hasLoopClipboard,
@@ -93,7 +56,6 @@ export function SeqFxGlobalControlSurface({
 }: {
     controls: SeqFxGlobalControls;
     internalRunning: boolean;
-    playheadStep: number | null;
     canUndo: boolean;
     canRedo: boolean;
     hasLoopClipboard: boolean;
@@ -114,9 +76,6 @@ export function SeqFxGlobalControlSurface({
     onVaryLoop: () => void;
 }) {
     const loopEndExclusive = Math.min(32, controls.loopStart + controls.loopLength);
-    const loopRulerRef = useRef<HTMLDivElement | null>(null);
-    const dragEdgeRef = useRef<LoopDragEdge | null>(null);
-    const loopPointerIdRef = useRef<number | null>(null);
     const loopGestureActiveRef = useRef(false);
     const activeGestureEndpointsRef = useRef(new Set<GlobalControlEndpoint>());
     const pointerGestureOwnersRef = useRef(new Map<GlobalControlEndpoint, number>());
@@ -147,7 +106,6 @@ export function SeqFxGlobalControlSurface({
 
     useEffect(() => {
         const endPointerInteraction = (event: globalThis.PointerEvent) => {
-            endLoopPointerInteraction(event.pointerId);
             for (const [endpointID, pointerId] of [...pointerGestureOwnersRef.current]) {
                 if (pointerId === event.pointerId) {
                     endPointerGesture(endpointID, pointerId);
@@ -155,8 +113,6 @@ export function SeqFxGlobalControlSurface({
             }
         };
         const endAllInteractions = () => {
-            dragEdgeRef.current = null;
-            loopPointerIdRef.current = null;
             endLoopGesture();
             for (const endpointID of [...activeGestureEndpointsRef.current]) {
                 endGesture(endpointID);
@@ -173,68 +129,6 @@ export function SeqFxGlobalControlSurface({
             endAllInteractions();
         };
     }, []);
-
-    function changeLoopEdge(edge: LoopDragEdge, step: number) {
-        if (edge === "start") {
-            onLoopRangeChange(clampStep(step, 0, loopEndExclusive - 1), loopEndExclusive);
-            return;
-        }
-
-        onLoopRangeChange(controls.loopStart, clampStep(step + 1, controls.loopStart + 1, 32));
-    }
-
-    function handleLoopPointerDown(event: PointerEvent<HTMLDivElement>) {
-        if (loopPointerIdRef.current !== null) {
-            return;
-        }
-
-        if (!(event.target instanceof Element)) {
-            return;
-        }
-
-        const target = event.target.closest<HTMLElement>("[data-loop-step]");
-        const step = Number(target?.dataset.loopStep);
-        if (!Number.isInteger(step)) {
-            return;
-        }
-
-        const edge = nearestLoopEdge(step, controls.loopStart, loopEndExclusive);
-        dragEdgeRef.current = edge;
-        loopPointerIdRef.current = event.pointerId;
-        beginLoopGesture();
-        try {
-            event.currentTarget.setPointerCapture(event.pointerId);
-        } catch {
-            // Synthetic and capture-loss paths retain window-level owner cleanup.
-        }
-        changeLoopEdge(edge, step);
-    }
-
-    function handleLoopPointerMove(event: PointerEvent<HTMLDivElement>) {
-        const edge = dragEdgeRef.current;
-        const ruler = loopRulerRef.current;
-        if (
-            !edge
-            || !ruler
-            || event.pointerId !== loopPointerIdRef.current
-            || (event.pointerType === "mouse" && event.buttons === 0)
-        ) {
-            return;
-        }
-
-        const step = nearestLoopStepFromPointer(ruler, event.clientX, event.clientY);
-        changeLoopEdge(edge, step);
-    }
-
-    function endLoopPointerInteraction(pointerId: number) {
-        if (loopPointerIdRef.current !== pointerId) {
-            return;
-        }
-
-        loopPointerIdRef.current = null;
-        dragEdgeRef.current = null;
-        endLoopGesture();
-    }
 
     function beginGesture(endpointID: GlobalControlEndpoint) {
         if (activeGestureEndpointsRef.current.has(endpointID)) {
@@ -474,50 +368,6 @@ export function SeqFxGlobalControlSurface({
                             ))}
                         </select>
                     </label>
-                </div>
-                <div className="seqfx-loop__scroll">
-                    <div
-                        aria-label={`Loop range steps ${controls.loopStart + 1} through ${loopEndExclusive}`}
-                        className="seqfx-loop__ruler"
-                        data-role="seqfx-loop-ruler"
-                        onPointerDown={handleLoopPointerDown}
-                        onPointerMove={handleLoopPointerMove}
-                        onPointerUp={(event) => endLoopPointerInteraction(event.pointerId)}
-                        onPointerCancel={(event) => endLoopPointerInteraction(event.pointerId)}
-                        ref={loopRulerRef}
-                        role="group"
-                    >
-                        {Array.from({ length: 32 }, (_unused, step) => {
-                            const inLoop = step >= controls.loopStart && step < loopEndExclusive;
-                            return (
-                                <button
-                                    aria-current={playheadStep === step ? "step" : undefined}
-                                    aria-label={`Loop step ${step + 1}, ${inLoop ? "inside" : "outside"} range`}
-                                    className={[
-                                        inLoop ? "is-in-loop" : "",
-                                        step === controls.loopStart ? "is-start" : "",
-                                        step === loopEndExclusive - 1 ? "is-end" : "",
-                                        playheadStep === step ? "is-playhead" : "",
-                                    ].filter(Boolean).join(" ")}
-                                    data-in-loop={inLoop}
-                                    data-loop-step={step}
-                                    data-role="seqfx-loop-step"
-                                    key={step}
-                                    onClick={(event) => {
-                                        if (event.detail !== 0) {
-                                            return;
-                                        }
-                                        beginLoopGesture();
-                                        changeLoopEdge(nearestLoopEdge(step, controls.loopStart, loopEndExclusive), step);
-                                        endLoopGesture();
-                                    }}
-                                    type="button"
-                                >
-                                    {step + 1}
-                                </button>
-                            );
-                        })}
-                    </div>
                 </div>
             </div>
         </section>

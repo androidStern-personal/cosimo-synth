@@ -1171,7 +1171,9 @@ test("seqfx_global_surface_wires_host_controls_loop_transport_and_edit_history",
     assert.equal(await clock.isVisible(), true, "clock mode should be visible");
     assert.equal(await rate.isVisible(), true, "rate should be visible");
     assert.equal(await swing.isVisible(), true, "swing should be visible");
-    assert.equal(await page.locator('[data-role="seqfx-loop-ruler"]').isVisible(), true, "loop ruler should be visible");
+    assert.equal(await loopStart.isVisible(), true, "compact loop Start should be visible");
+    assert.equal(await loopEnd.isVisible(), true, "compact loop End should be visible");
+    assert.equal(await page.locator('[data-role="seqfx-loop-ruler"]').count(), 0, "the redundant 32-cell loop ruler should be absent");
     assert.equal(await enabled.getAttribute("aria-checked"), "true");
     assert.equal(await bpm.isDisabled(), true, "host clock should make manual BPM unavailable");
     assert.equal(await transport.isDisabled(), true, "host clock should own transport in Host mode");
@@ -1271,14 +1273,8 @@ test("seqfx_global_surface_wires_host_controls_loop_transport_and_edit_history",
     await redo.click();
     assert.equal(await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).getAttribute("aria-pressed"), "true");
 
-    const loopCells = await page.locator('[data-role="seqfx-loop-step"]').evaluateAll((nodes) => (
-        nodes.map((node) => ({
-            current: node.getAttribute("aria-current"),
-            inLoop: node.getAttribute("data-in-loop"),
-        }))
-    ));
-    assert.equal(loopCells.length, 32);
-    assert.deepEqual(loopCells.map((cell) => cell.inLoop === "true"), Array.from({ length: 32 }, (_unused, index) => index >= 4 && index < 13));
+    assert.equal(await loopStart.inputValue(), "5");
+    assert.equal(await loopEnd.inputValue(), "13");
 
     await page.close();
 });
@@ -1495,180 +1491,113 @@ test("seqfx_inspector_undo_gesture_closes_once_on_blur_and_unmount", async () =>
     await page.close();
 });
 
-test("seqfx_loop_ruler_keeps_first_and_last_steps_visible_and_keyboard_reachable_at_supported_sizes", async () => {
+test("seqfx compact loop Start and End replace the ruler without overflow", async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 800 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
+    const loopStart = page.locator('[data-role="seqfx-loop-start"]');
+    const loopEnd = page.locator('[data-role="seqfx-loop-end"]');
     const supportedSizes = [
-        { id: "minimum", width: 720, height: 520, expectedRows: 2 },
-        { id: "compact", width: 900, height: 600, expectedRows: 2 },
-        { id: "default", width: 1120, height: 680, expectedRows: 2 },
-        { id: "wide", width: 1440, height: 800, expectedRows: 1 },
+        { id: "minimum", width: 720, height: 520 },
+        { id: "compact", width: 900, height: 600 },
+        { id: "default", width: 1120, height: 680 },
+        { id: "wide", width: 1440, height: 800 },
     ];
-    const scroll = page.locator(".seqfx-loop__scroll");
-    const firstStep = page.locator('[data-role="seqfx-loop-step"][data-loop-step="0"]');
-    const lastStep = page.locator('[data-role="seqfx-loop-step"][data-loop-step="31"]');
-    const factoryPattern = page.locator('[data-role="seqfx-factory-pattern"]');
+
+    assert.equal(await page.locator('[data-role="seqfx-loop-ruler"]').count(), 0, "the 32-cell ruler should be removed from the production surface");
+    assert.equal(await page.locator('[data-role="seqfx-loop-step"]').count(), 0, "no redundant loop-step buttons should remain");
+    assert.equal(await loopStart.getAttribute("type"), "range");
+    assert.equal(await loopEnd.getAttribute("type"), "range");
+    assert.deepEqual(
+        [await loopStart.getAttribute("min"), await loopStart.getAttribute("max"), await loopEnd.getAttribute("min"), await loopEnd.getAttribute("max")],
+        ["1", "32", "1", "32"],
+        "Start and End should expose the full initial 1..32 domain",
+    );
 
     for (const size of supportedSizes) {
         await page.setViewportSize({ width: size.width, height: size.height });
-        await scroll.evaluate((node) => {
-            node.scrollLeft = 0;
-        });
-
-        const geometry = await scroll.evaluate((node) => {
-            const buttons = [...node.querySelectorAll('[data-role="seqfx-loop-step"]')];
-            const scrollRect = node.getBoundingClientRect();
-            const buttonRects = buttons.map((button) => button.getBoundingClientRect());
-            const rowCounts = new Map();
-            for (const rect of buttonRects) {
-                const rowTop = Math.round(rect.top * 10) / 10;
-                rowCounts.set(rowTop, (rowCounts.get(rowTop) ?? 0) + 1);
-            }
-
+        const geometry = await page.locator(".seqfx-loop").evaluate((loop) => {
+            const rectFor = (element) => {
+                if (!element) {
+                    return null;
+                }
+                const bounds = element.getBoundingClientRect();
+                return {
+                    bottom: bounds.bottom,
+                    height: bounds.height,
+                    left: bounds.left,
+                    right: bounds.right,
+                    top: bounds.top,
+                    width: bounds.width,
+                };
+            };
+            const meta = loop.querySelector(".seqfx-loop__meta");
+            const start = loop.querySelector('[data-role="seqfx-loop-start-control"]');
+            const end = loop.querySelector('[data-role="seqfx-loop-end-control"]');
             return {
-                buttonCount: buttons.length,
-                clientWidth: node.clientWidth,
-                first: buttonRects[0],
-                last: buttonRects.at(-1),
-                rowCounts: [...rowCounts.values()],
-                scroll: scrollRect,
-                scrollWidth: node.scrollWidth,
+                end: rectFor(end),
+                loop: rectFor(loop),
+                metaClientWidth: meta?.clientWidth ?? 0,
+                metaScrollWidth: meta?.scrollWidth ?? 0,
+                rootScrollWidth: document.documentElement.scrollWidth,
+                start: rectFor(start),
+                viewportWidth: window.innerWidth,
             };
         });
 
-        assert.equal(geometry.buttonCount, 32, `${size.id} loop ruler should expose all 32 step buttons`);
-        assert.deepEqual(
-            geometry.rowCounts,
-            size.expectedRows === 1 ? [32] : [16, 16],
-            `${size.id} loop ruler should use the supported ${size.expectedRows}-row geometry`,
-        );
-        assert.ok(
-            geometry.scrollWidth <= geometry.clientWidth + 1,
-            `${size.id} loop ruler should not require horizontal scrolling (${geometry.scrollWidth}px > ${geometry.clientWidth}px)`,
-        );
-        assert.ok(
-            geometry.first.left >= geometry.scroll.left - 1 && geometry.first.right <= geometry.scroll.right + 1,
-            `${size.id} first loop step should be directly visible`,
-        );
-        assert.ok(
-            geometry.last.left >= geometry.scroll.left - 1 && geometry.last.right <= geometry.scroll.right + 1,
-            `${size.id} last loop step should be directly visible`,
-        );
-        assert.equal(await firstStep.getAttribute("aria-label"), "Loop step 1, inside range");
-        assert.equal(await lastStep.getAttribute("aria-label"), "Loop step 32, inside range");
-
-        await factoryPattern.focus();
-        await page.keyboard.press("Tab");
-        assert.equal(await firstStep.evaluate((node) => document.activeElement === node), true, `${size.id} first loop step should follow the preceding control in keyboard order`);
-        for (let step = 1; step < 32; step += 1) {
-            await page.keyboard.press("Tab");
-        }
-        assert.equal(await lastStep.evaluate((node) => document.activeElement === node), true, `${size.id} last loop step should remain keyboard reachable`);
+        assert.ok(geometry.start && geometry.end, `${size.id} should render both compact loop endpoints`);
+        assertClose(geometry.start.top, geometry.end.top, 1, `${size.id} Start and End header alignment`);
+        assert.ok(geometry.start.right <= geometry.end.left + 1, `${size.id} Start should precede End`);
+        assert.ok(geometry.start.left >= geometry.loop.left - 1 && geometry.end.right <= geometry.loop.right + 1, `${size.id} loop controls should stay inside the header`);
+        assert.ok(geometry.metaScrollWidth <= geometry.metaClientWidth + 1, `${size.id} compact loop header should not clip or scroll`);
+        assert.ok(geometry.rootScrollWidth <= geometry.viewportWidth + 1, `${size.id} compact loop header should not create page overflow`);
     }
 
-    await page.close();
-});
-
-test("seqfx_loop_ruler_pointer_drag_follows_the_second_visual_row", async () => {
-    const page = await browser.newPage({ viewport: { width: 900, height: 600 } });
-    await loadSeqFxHarness(page);
-    await page.locator('[data-role="seqfx-root"]').waitFor();
-
-    const firstStep = page.locator('[data-role="seqfx-loop-step"][data-loop-step="0"]');
-    const step17 = page.locator('[data-role="seqfx-loop-step"][data-loop-step="16"]');
-    const firstBox = await firstStep.boundingBox();
-    const step17Box = await step17.boundingBox();
-    assert.ok(firstBox);
-    assert.ok(step17Box);
-
-    await page.mouse.move(firstBox.x + (firstBox.width / 2), firstBox.y + (firstBox.height / 2));
-    await page.mouse.down();
-    await page.mouse.move(step17Box.x + (step17Box.width / 2), step17Box.y + (step17Box.height / 2), { steps: 8 });
-    await page.mouse.up();
-
-    await page.waitForTimeout(100);
-    const snapshot = await getHarnessSnapshot(page);
-    const loopEvents = snapshot.events.filter(({ endpointID }) => endpointID === "loopStart" || endpointID === "loopLength");
-    assert.equal(snapshot.parameters.loopStart, 16, `second-row drag should set loop start to step 17; events: ${JSON.stringify(loopEvents)}`);
-    assert.equal(await page.locator('[data-role="seqfx-loop-start"]').inputValue(), "17");
-    assert.equal(await page.locator('[data-role="seqfx-loop-end"]').inputValue(), "32");
-
-    await page.close();
-});
-
-test("seqfx_loop_ruler_touch_drag_with_zero_buttons_keeps_owner_through_capture_loss", async () => {
-    const page = await browser.newPage({ viewport: { width: 900, height: 600 } });
-    await loadSeqFxHarness(page);
-    await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    const endBox = await loopEnd.boundingBox();
+    assert.ok(endBox);
+    await page.mouse.move(endBox.x + endBox.width - 2, endBox.y + (endBox.height / 2));
+    await page.mouse.down();
+    await page.mouse.move(endBox.x + (endBox.width / 2), endBox.y + (endBox.height / 2), { steps: 6 });
+    await page.mouse.up();
+    await loopEnd.evaluate((input) => input.blur());
 
-    const step1 = await page.locator('[data-role="seqfx-loop-step"][data-loop-step="0"]').boundingBox();
-    const step5 = await page.locator('[data-role="seqfx-loop-step"][data-loop-step="4"]').boundingBox();
-    const step7 = await page.locator('[data-role="seqfx-loop-step"][data-loop-step="6"]').boundingBox();
-    assert.ok(step1);
-    assert.ok(step5);
-    assert.ok(step7);
-
-    const center = (box) => ({
-        clientX: box.x + (box.width / 2),
-        clientY: box.y + (box.height / 2),
-    });
-    await dispatchSyntheticPointer(
-        page,
-        '[data-role="seqfx-loop-step"][data-loop-step="0"]',
-        "pointerdown",
-        { ...center(step1), buttons: 1, pointerId: 41, pointerType: "touch" },
-    );
-    await dispatchSyntheticPointer(
-        page,
-        '[data-role="seqfx-loop-ruler"]',
-        "lostpointercapture",
-        { ...center(step1), buttons: 0, pointerId: 41, pointerType: "touch" },
-    );
-    await dispatchSyntheticPointer(
-        page,
-        '[data-role="seqfx-loop-ruler"]',
-        "pointermove",
-        { ...center(step5), buttons: 0, pointerId: 41, pointerType: "touch" },
-    );
-    await page.waitForFunction(() => window.__SEQFX_HARNESS__?.getSnapshot().parameters.loopStart === 4);
-
-    await dispatchSyntheticPointer(page, "window", "pointerup", {
-        ...center(step5),
-        buttons: 0,
-        pointerId: 99,
-        pointerType: "touch",
-    });
+    const pointerEnd = Number(await loopEnd.inputValue());
+    assert.ok(Number.isInteger(pointerEnd) && pointerEnd > 1 && pointerEnd < 32, `pointer End should land on a whole step, got ${pointerEnd}`);
     let snapshot = await getHarnessSnapshot(page);
+    assert.equal(snapshot.parameters.loopStart, 0);
+    assert.equal(snapshot.parameters.loopLength, pointerEnd);
     assert.deepEqual(snapshot.gestureStarts, ["loopStart", "loopLength"]);
-    assert.deepEqual(snapshot.gestureEnds, [], "an unrelated pointer-up must not end the loop gesture");
+    assert.deepEqual(snapshot.gestureEnds, snapshot.gestureStarts);
 
-    await dispatchSyntheticPointer(
-        page,
-        '[data-role="seqfx-loop-ruler"]',
-        "pointermove",
-        { ...center(step7), buttons: 0, pointerId: 41, pointerType: "touch" },
-    );
-    await page.waitForFunction(() => window.__SEQFX_HARNESS__?.getSnapshot().parameters.loopStart === 6);
-    await dispatchSyntheticPointer(page, "window", "pointercancel", {
-        ...center(step7),
-        buttons: 0,
-        pointerId: 99,
-        pointerType: "touch",
-    });
-    assert.deepEqual((await getHarnessSnapshot(page)).gestureEnds, []);
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await loopStart.focus();
+    await page.keyboard.press("End");
+    await loopStart.evaluate((input) => input.blur());
+    assert.equal(await loopStart.inputValue(), String(pointerEnd));
+    assert.equal(await loopEnd.inputValue(), String(pointerEnd));
+    await loopEnd.focus();
+    await page.keyboard.press("Home");
+    await loopEnd.evaluate((input) => input.blur());
+    assert.equal(await loopEnd.inputValue(), String(pointerEnd), "End must not cross below Start");
 
-    await dispatchSyntheticPointer(page, "window", "pointerup", {
-        ...center(step7),
-        buttons: 0,
-        pointerId: 41,
-        pointerType: "touch",
-    });
+    await loopStart.focus();
+    await page.keyboard.press("Home");
+    await loopStart.evaluate((input) => input.blur());
+    await loopEnd.focus();
+    await page.keyboard.press("End");
+    await loopEnd.evaluate((input) => input.blur());
+    assert.deepEqual([await loopStart.inputValue(), await loopEnd.inputValue()], ["1", "32"], "keyboard Home/End should retain the full loop domain");
     snapshot = await getHarnessSnapshot(page);
-    assert.equal(snapshot.parameters.loopStart, 6);
-    assert.deepEqual(snapshot.gestureEnds, ["loopStart", "loopLength"]);
+    assert.equal(snapshot.parameters.loopStart, 0);
+    assert.equal(snapshot.parameters.loopLength, 32);
+    assert.deepEqual(snapshot.gestureEnds, snapshot.gestureStarts, "pointer and keyboard endpoint edits should close paired host gestures");
+
+    await page.locator('[data-role="seqfx-loop-start-value"]').click();
+    assert.equal(await page.getByRole("textbox", { name: "Start exact value" }).count(), 1, "exact entry should appear only on request");
+    await page.keyboard.press("Escape");
+    assert.equal(await page.locator('.seqfx-loop input[type="text"]').count(), 0, "exact entry should remain temporary");
 
     await page.close();
 });
@@ -1933,6 +1862,74 @@ test("seqfx_named_effect_picker_fixed_tabs_and_visible_chain_labels_remove icon 
     await resizeBlockToStep(page, 3, 1, 2);
     const blockLabel = page.locator('[data-role="seqfx-block-effect-label"][data-effect="4"]').first();
     assert.equal(await blockLabel.textContent(), "STUT");
+
+    await page.close();
+});
+
+test("seqfx effect picker uses two rows of six without overflow and keeps keyboard selection", async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 800 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
+
+    const picker = page.locator(".seqfx-effect-picker__options");
+    const effectOptions = picker.locator('[data-role="seqfx-effect-type-option"]');
+    const supportedSizes = [
+        { id: "default", width: 1120, height: 680 },
+        { id: "minimum", width: 720, height: 520 },
+        { id: "compact", width: 900, height: 600 },
+        { id: "wide", width: 1440, height: 800 },
+    ];
+
+    assert.equal(await effectOptions.count(), 12);
+    assert.deepEqual(
+        await effectOptions.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label"))),
+        ["Filter", "Crush", "Tape Stop", "Stutter", "Pitch", "Comb", "Ring", "Reverse", "Talk Box", "Vibro", "Flange", "Dirty"],
+        "the compact grid must preserve effect identity and order",
+    );
+
+    for (const size of supportedSizes) {
+        await page.setViewportSize({ width: size.width, height: size.height });
+        const geometry = await picker.evaluate((options) => {
+            const optionRect = options.getBoundingClientRect();
+            const buttons = [...options.querySelectorAll('[data-role="seqfx-effect-type-option"]')];
+            const buttonRects = buttons.map((button) => button.getBoundingClientRect());
+            const rowCounts = new Map();
+            for (const rect of buttonRects) {
+                const rowTop = Math.round(rect.top * 10) / 10;
+                rowCounts.set(rowTop, (rowCounts.get(rowTop) ?? 0) + 1);
+            }
+            return {
+                allInside: buttonRects.every((rect) => rect.left >= optionRect.left - 1 && rect.right <= optionRect.right + 1),
+                clientWidth: options.clientWidth,
+                minimumButtonHeight: Math.min(...buttonRects.map((rect) => rect.height)),
+                minimumButtonWidth: Math.min(...buttonRects.map((rect) => rect.width)),
+                rootScrollWidth: document.documentElement.scrollWidth,
+                rowCounts: [...rowCounts.values()],
+                scrollWidth: options.scrollWidth,
+                viewportWidth: window.innerWidth,
+            };
+        });
+
+        assert.deepEqual(geometry.rowCounts, [6, 6], `${size.id} picker should render exactly two rows of six`);
+        assert.equal(geometry.allInside, true, `${size.id} effect buttons should stay inside the picker`);
+        assert.ok(geometry.minimumButtonHeight >= 36, `${size.id} should preserve the existing 36px effect hit target`);
+        assert.ok(geometry.minimumButtonWidth >= 44, `${size.id} effect buttons should retain a practical pointer hit width`);
+        assert.ok(geometry.scrollWidth <= geometry.clientWidth + 1, `${size.id} picker should not clip or scroll horizontally`);
+        assert.ok(geometry.rootScrollWidth <= geometry.viewportWidth + 1, `${size.id} picker should not create page overflow`);
+    }
+
+    const dirty = page.getByRole("button", { name: "Dirty", exact: true });
+    await dirty.focus();
+    await page.keyboard.press("Enter");
+    assert.equal(await dirty.getAttribute("aria-pressed"), "true", "keyboard activation should select an effect");
+    await page.getByRole("button", { name: "Chain 4 Dirty block 1", exact: true }).waitFor();
+
+    const stutter = page.getByRole("button", { name: "Stutter", exact: true });
+    await stutter.focus();
+    await page.keyboard.press("Space");
+    assert.equal(await stutter.getAttribute("aria-pressed"), "true", "Space should retain native button selection behavior");
+    await page.getByRole("button", { name: "Chain 4 Stutter block 1", exact: true }).waitFor();
 
     await page.close();
 });
