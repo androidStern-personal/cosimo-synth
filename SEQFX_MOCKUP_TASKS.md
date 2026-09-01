@@ -4,7 +4,7 @@ This is the sole task ledger for SeqFX mockup work authorized in the coordinator
 
 ## Compact layout: effect picker and loop range
 
-- Status: Implementation and focused verification complete; awaiting commits
+- Status: Complete
 - Task/agent: `/root/seqfx_mockup_layout`, reporting to coordinator `/root`
 - Branch: `codex/seqfx-mockup-compact-layout`
 - Worktree: `/Users/winterfell/.codex/worktrees/seqfx-mockup-compact-layout/cosimo-synth`
@@ -37,7 +37,8 @@ This is the sole task ledger for SeqFX mockup work authorized in the coordinator
 
 ### Final handoff
 
-- Final commit: Pending.
-- Clean status: Pending commit/closeout.
+- Final implementation commit: `6f4dd089452d2a921058f5c324a6fab003c7ddbb` (`Compact SeqFX picker and loop controls`).
+- Ledger closeout commit: This record's branch-tip commit; its exact hash is reported to the coordinator because a commit cannot embed its own hash.
+- Clean status: Clean after the ledger-only closeout commit; verified in the coordinator handoff.
 - Changed scope: Fixed the production effect picker at six columns; removed only the redundant loop ruler renderer, pointer ownership path, prop, and CSS; retained the existing compact Start/End `EditorTickSlider` controls and runtime bridge; replaced obsolete ruler-specific browser tests with compact endpoint coverage; added the dedicated mockup ledger. `TODOS.txt` and `PROGRESS.txt` remain untouched.
 - Unperformed gates: Native builds, HMR/fixed-port launches, plugin builds/installs, pluginval, Ableton, listening/host acceptance, physical-device, Sites, release, merge, push, deployment, and publication remain unperformed by authorization.
