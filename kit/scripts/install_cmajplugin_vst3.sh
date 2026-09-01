@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 build_dir="${CMAJPLUGIN_BUILD_DIR:-$repo_root/build/cmajplugin_vst3}"
-source "$repo_root/scripts/cmajplugin_paths.sh"
+source "$repo_root/kit/scripts/cmajplugin_paths.sh"
 built_vst3="$(cmajplugin_vst3_bundle_path "$build_dir")"
 built_binary="$built_vst3/Contents/MacOS/CmajPlugin"
 install_dir="$HOME/Library/Audio/Plug-Ins/VST3"
@@ -52,7 +52,7 @@ validate_patched_binary() {
     exit 1
   fi
 
-  if ! node "$repo_root/scripts/check_choc_markers.mjs" "$binary_path"; then
+  if ! node "$repo_root/kit/scripts/check_choc_markers.mjs" "$binary_path"; then
     printf 'CmajPlugin binary failed the patched CHOC WebView marker check: %s\n' "$binary_path" >&2
     printf 'Run npm run cmajplugin:build to rebuild it from the pinned fork.\n' >&2
     exit 1

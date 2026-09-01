@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
 
-import { buildPlugin } from "../fx/build-effect.mjs";
+import { buildPlugin } from "../kit/fx/build-effect.mjs";
 import {
     captureSeqFxProofProvenance,
     compareSeqFxProofProvenance,

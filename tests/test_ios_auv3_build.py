@@ -177,7 +177,7 @@ def _cmajor_web_api_root() -> Path:
         [
             "cmake",
             "-S",
-            str(REPO_ROOT / "tools" / "cmajor_web_runtime"),
+            str(REPO_ROOT / "kit" / "tools" / "cmajor_web_runtime"),
             "-B",
             str(build_dir),
             f"-DCOSIMO_CMAJOR_WEB_RUNTIME_DIR={output_dir}",
@@ -859,7 +859,7 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert "LANGUAGES CXX C OBJC OBJCXX" in cmake
     assert "FORMATS Standalone AUv3" in cmake
     assert "generate_ios_auv3_plugin.sh" in cmake_text
-    assert "cmake/CosimoDependencies.cmake" in cmake_text
+    assert "kit/cmake/CosimoDependencies.cmake" in cmake_text
     assert "cosimo_add_production_dependencies()" in cmake_text
     assert "CosimoPluginMain.cpp" in cmake_text
     assert "CosimoSharedWavetableLibrary.mm" in cmake_text
@@ -1893,7 +1893,7 @@ def test_ios_ui_dev_server_configuration_exists() -> None:
     assert "ui:ios:build" not in package_json["scripts"]
     assert "vite" in package_json["devDependencies"]
     assert "stageCmajorWebRuntime" in shared_vite_helpers
-    assert "tools\", \"cmajor_web_runtime" in shared_vite_helpers
+    assert "kit\", \"tools\", \"cmajor_web_runtime" in shared_vite_helpers
     assert "export function createViteRepoContext" in shared_vite_helpers
     assert "export function serveStaticDirectory" in shared_vite_helpers
     assert "export function serveStaticFile" in shared_vite_helpers

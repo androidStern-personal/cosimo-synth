@@ -22,8 +22,8 @@ import {
     effectPlugins,
     repoRoot,
     seqFxDistributableRuntimeEnvironmentKey,
-} from "../fx/build-effect.mjs";
-import { findChocMarkerViolations } from "./check_choc_markers.mjs";
+} from "../kit/fx/build-effect.mjs";
+import { findChocMarkerViolations } from "../kit/scripts/check_choc_markers.mjs";
 import {
     seqFxArtifactBaseName,
     seqFxReleaseConfig,
@@ -401,7 +401,7 @@ export async function captureActualNativeDependencyProvenance(
 ) {
     const cachePath = path.join(repositoryRoot, config.paths.nativeBuildCmakeCache);
     const cacheSource = await readFile(cachePath, "utf8");
-    const expectedCmakeHome = path.join(repositoryRoot, "tools", "effect_plugin_build");
+    const expectedCmakeHome = path.join(repositoryRoot, "kit", "tools", "effect_plugin_build");
     const actualCmakeHome = requireUniqueCmakeCacheValue(cacheSource, "CMAKE_HOME_DIRECTORY");
 
     if (path.resolve(actualCmakeHome) !== path.resolve(expectedCmakeHome)) {
@@ -599,7 +599,7 @@ export function releaseContractErrors(
     }
 
     if (!plugin) {
-        errors.push(`fx/build-effect.mjs has no ${config.productKey} registry entry.`);
+        errors.push(`kit/fx/build-effect.mjs has no ${config.productKey} registry entry.`);
         return errors;
     }
 
@@ -1035,7 +1035,7 @@ function assertSignedReleasePrerequisites(config, gitState) {
 }
 
 function verifyPatchedWebView(config, binaryPath) {
-    // config.webViewMarkers references the shared scripts/check_choc_markers.mjs
+    // config.webViewMarkers references the shared kit/scripts/check_choc_markers.mjs
     // lists (pinned by test_fx_build_args), so the shared checker IS the
     // config-declared check — one marker-check implementation repo-wide.
     const { missing, forbidden } = findChocMarkerViolations(readFileSync(binaryPath));
@@ -2610,7 +2610,7 @@ async function buildReleaseArtifacts({
     // fx:prod:build always strips view.devModule from the runtime manifest;
     // the distributable key additionally suppresses runtime source maps.
     run(toolchain.privateInvocationPaths.node, [
-        "fx/prod-effect.mjs",
+        "kit/fx/prod-effect.mjs",
         "build",
         config.productKey,
         "--clean",

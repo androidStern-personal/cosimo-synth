@@ -7,7 +7,7 @@ import { inflateSync } from "node:zlib";
 
 import { chromium } from "playwright";
 
-import { buildPlugin, repoRoot } from "../fx/build-effect.mjs";
+import { buildPlugin, repoRoot } from "../kit/fx/build-effect.mjs";
 
 const RUNTIME_LOADER_PATH = "build/fx/seqfx_runtime/view/index.js";
 const RUNTIME_APP_PATH = "build/fx/seqfx_runtime/view/app.js";

@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 project(CosimoT26EnhancerWrapperProbe LANGUAGES CXX OBJCXX)
 
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-include("${COSIMO_REPO_ROOT}/cmake/CosimoDependencies.cmake")
+include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
 cosimo_add_t26_research_juce()
 
 set(COSIMO_T26_PROBE_OUTPUT_DIR "${CMAKE_BINARY_DIR}/direct" CACHE PATH

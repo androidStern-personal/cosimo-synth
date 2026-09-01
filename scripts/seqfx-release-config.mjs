@@ -1,7 +1,7 @@
 import {
     forbiddenChocWebViewMarkers,
     requiredChocWebViewMarkers,
-} from "./check_choc_markers.mjs";
+} from "../kit/scripts/check_choc_markers.mjs";
 
 /**
  * Authoritative release-facing identity and packaging contract for SeqFX.
@@ -60,7 +60,7 @@ export const seqFxReleaseConfig = Object.freeze({
         userInstalledVst3: "~/Library/Audio/Plug-Ins/VST3/CosimoSeqFX.vst3",
     }),
     nativeDependencies: Object.freeze({
-        declarationPath: "cmake/CosimoDependencies.cmake",
+        declarationPath: "kit/cmake/CosimoDependencies.cmake",
         cmajor: Object.freeze({
             cpmName: "cosimo_cmajor",
             sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",

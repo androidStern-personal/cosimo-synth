@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-registry="$repo_root/fx/build-effect.mjs"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+registry="$repo_root/kit/fx/build-effect.mjs"
 vst3_dir="$HOME/Library/Audio/Plug-Ins/VST3"
 vst3_bundle="$vst3_dir/CmajPlugin.vst3"
 vst3_binary="$vst3_bundle/Contents/MacOS/CmajPlugin"
@@ -30,7 +30,7 @@ validate_patched_cmajplugin() {
     exit 1
   fi
 
-  if ! node "$repo_root/scripts/check_choc_markers.mjs" "$vst3_binary"; then
+  if ! node "$repo_root/kit/scripts/check_choc_markers.mjs" "$vst3_binary"; then
     printf 'Installed CmajPlugin.vst3 failed the patched CHOC WebView marker check: %s\n' "$vst3_bundle" >&2
     printf 'Run npm run cmajplugin:build and npm run cmajplugin:install first.\n' >&2
     exit 1

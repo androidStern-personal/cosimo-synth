@@ -10,7 +10,7 @@ import {
 test("aggregate SeqFX runtime regeneration is isolated from the later interactive Vite server", () => {
     assert.deepEqual(createCanonicalRuntimeBuildInvocation("/approved/node"), {
         command: "/approved/node",
-        arguments: ["fx/build-effect.mjs", "seqfx"],
+        arguments: ["kit/fx/build-effect.mjs", "seqfx"],
         environment: {
             SEQFX_CANONICAL_RUNTIME_PREBUILT: "0",
         },

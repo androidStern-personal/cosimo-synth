@@ -9,11 +9,11 @@
  * than strings(1).
  *
  * Callers:
- * - fx/prod-effect.mjs, scripts/build_seqfx_beta_release.mjs, and
+ * - kit/fx/prod-effect.mjs, scripts/build_seqfx_beta_release.mjs, and
  *   scripts/seqfx-release-config.mjs import the lists and check from here.
- * - scripts/install_fx_cmajplugin.sh, scripts/build_cmajplugin_vst3.sh, and
- *   scripts/install_cmajplugin_vst3.sh run
- *   `node scripts/check_choc_markers.mjs <binary>`.
+ * - kit/scripts/install_fx_cmajplugin.sh, kit/scripts/build_cmajplugin_vst3.sh,
+ *   and kit/scripts/install_cmajplugin_vst3.sh run
+ *   `node kit/scripts/check_choc_markers.mjs <binary>`.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -62,7 +62,7 @@ function main() {
     const [, , binaryPath, ...extraArguments] = process.argv;
 
     if (!binaryPath || extraArguments.length > 0) {
-        console.error("Usage: node scripts/check_choc_markers.mjs <binary>");
+        console.error("Usage: node kit/scripts/check_choc_markers.mjs <binary>");
         process.exitCode = 2;
         return;
     }

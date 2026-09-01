@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.16)
 
 project(CosimoEffectPluginBuild LANGUAGES C CXX)
 
-get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-include("${COSIMO_REPO_ROOT}/cmake/CosimoDependencies.cmake")
+get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
 cosimo_add_production_dependencies()
 
 set(COSIMO_EFFECT_PATCH_PATH "" CACHE FILEPATH "Cmajor patch to generate")

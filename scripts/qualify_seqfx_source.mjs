@@ -226,7 +226,7 @@ async function runNodeTests(files, { environment = {}, testNamePattern } = {}) {
 async function runSourceBrowserTests() {
     const { createServer } = await import("vite");
     const viteServer = await createServer({
-        configFile: path.join(repoRoot, "fx/vite.config.mjs"),
+        configFile: path.join(repoRoot, "kit/fx/vite.config.mjs"),
         clearScreen: false,
         logLevel: "warn",
         server: {
@@ -284,7 +284,7 @@ let canonicalRuntimeReuseEnvironment;
 export function createCanonicalRuntimeBuildInvocation(nodeExecutable = process.execPath) {
     return {
         command: nodeExecutable,
-        arguments: ["fx/build-effect.mjs", "seqfx"],
+        arguments: ["kit/fx/build-effect.mjs", "seqfx"],
         environment: {
             [seqFxCanonicalRuntimePrebuiltEnvironmentKey]: "0",
         },

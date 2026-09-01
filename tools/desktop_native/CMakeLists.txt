@@ -6,7 +6,7 @@ project(
     LANGUAGES CXX C)
 
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-include("${COSIMO_REPO_ROOT}/cmake/CosimoDependencies.cmake")
+include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
 cosimo_add_production_dependencies()
 
 if (NOT DEFINED COSIMO_PATCH_PATH OR COSIMO_PATCH_PATH STREQUAL "")

@@ -9,7 +9,7 @@
 #      the Ubuntu multiarch layout; it just needs the packages and the
 #      COSIMO_RENDERER_* variables pointing at them).
 #   3. Git access to the pinned Cmajor fork (androidStern-personal/cmajor)
-#      for the CPM fetch in cmake/CosimoDependencies.cmake. That is a repo
+#      for the CPM fetch in kit/cmake/CosimoDependencies.cmake. That is a repo
 #      permission, not a package: it must be granted to the session (via
 #      Claude's GitHub repo scope / add_repo), so this hook only reports
 #      whether it is reachable rather than trying to install anything.
@@ -97,7 +97,7 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   printf 'export GIT_CONFIG_COUNT=%q\n' "$GIT_CONFIG_COUNT" >> "$CLAUDE_ENV_FILE"
 fi
 
-# CPM in cmake/CosimoDependencies.cmake clones the private Cmajor fork on the
+# CPM in kit/cmake/CosimoDependencies.cmake clones the private Cmajor fork on the
 # first engine build. Report reachability so a session knows up front whether
 # `npm run web:build` can work or the repo still needs to be added to the
 # session's GitHub scope first.

@@ -32,7 +32,7 @@ test("CmajPlugin build and dry-run install share the wrapper artifact path", asy
         ].join("\n"));
 
         const { stdout } = await execFileAsync(
-            path.join(repoRoot, "scripts", "install_cmajplugin_vst3.sh"),
+            path.join(repoRoot, "kit", "scripts", "install_cmajplugin_vst3.sh"),
             ["--dry-run"],
             {
                 cwd: repoRoot,
@@ -47,8 +47,8 @@ test("CmajPlugin build and dry-run install share the wrapper artifact path", asy
         assert.match(stdout, new RegExp(`Validated patched CmajPlugin VST3: ${bundlePath}`));
         assert.match(stdout, /Would install to:/u);
 
-        const buildScript = await readFile(path.join(repoRoot, "scripts", "build_cmajplugin_vst3.sh"), "utf8");
-        const installScript = await readFile(path.join(repoRoot, "scripts", "install_cmajplugin_vst3.sh"), "utf8");
+        const buildScript = await readFile(path.join(repoRoot, "kit", "scripts", "build_cmajplugin_vst3.sh"), "utf8");
+        const installScript = await readFile(path.join(repoRoot, "kit", "scripts", "install_cmajplugin_vst3.sh"), "utf8");
         assert.match(buildScript, /cmajplugin_paths\.sh/u);
         assert.match(installScript, /cmajplugin_paths\.sh/u);
         assert.doesNotMatch(buildScript, /CmajPlugin_artefacts/u);

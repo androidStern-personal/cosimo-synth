@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
-import { effectPlugins, repoRoot } from "../../fx/build-effect.mjs";
+import { effectPlugins, repoRoot } from "../../kit/fx/build-effect.mjs";
 
 const cases = [
     { pluginName: "enhancer", expectedLatency: 60 },
@@ -30,7 +30,7 @@ for (const { pluginName, expectedLatency } of cases) {
     const cmakeBuildDirectory = path.join(repoRoot, plugin.juceOut, "_build");
     const probe = path.join(cmakeBuildDirectory, "latency_probe", "cosimo_generated_latency_probe");
 
-    run(process.execPath, [path.join(repoRoot, "fx/prod-effect.mjs"), "build", pluginName, "--clean"]);
+    run(process.execPath, [path.join(repoRoot, "kit/fx/prod-effect.mjs"), "build", pluginName, "--clean"]);
     run("cmake", [
         "--build", cmakeBuildDirectory,
         "--config", "Release",

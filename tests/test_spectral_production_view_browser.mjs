@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { chromium } from "playwright";
 
-import { buildPlugin } from "../fx/build-effect.mjs";
+import { buildPlugin } from "../kit/fx/build-effect.mjs";
 import { startStaticRepoServer } from "./helpers/desktop_harness_browser.mjs";
 
 const DEFAULT_VIEWPORT = {

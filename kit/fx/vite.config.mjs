@@ -5,11 +5,12 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-import { serveJsonValue } from "../ui/vite.shared.mjs";
+import { serveJsonValue } from "../../ui/vite.shared.mjs";
 import { discoverEffectPlugins } from "./build-effect.mjs";
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(configDir, "..");
+const repoRoot = path.resolve(configDir, "../..");
+const fxRoot = path.join(repoRoot, "fx");
 const devServerStartedAt = new Date().toISOString();
 const pluginDiscoveryTtlMs = 2000;
 
@@ -78,7 +79,7 @@ function serveEffectHarnessHtml() {
                 // The URL shape promises a file under fx/, so contain the
                 // decoded path there too (an encoded ../ segment decodes after
                 // the shape check above).
-                if (harnessPath === null || !harnessPath.startsWith(configDir + path.sep)) {
+                if (harnessPath === null || !harnessPath.startsWith(fxRoot + path.sep)) {
                     response.statusCode = 403;
                     response.end("Forbidden");
                     return;

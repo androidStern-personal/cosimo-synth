@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 build_dir="${1:-$repo_root/build/cmajplugin_vst3}"
-source "$repo_root/scripts/cmajplugin_paths.sh"
+source "$repo_root/kit/scripts/cmajplugin_paths.sh"
 
 validate_patched_binary() {
   local binary_path="$1"
@@ -18,13 +18,13 @@ validate_patched_binary() {
     exit 1
   fi
 
-  if ! node "$repo_root/scripts/check_choc_markers.mjs" "$binary_path"; then
+  if ! node "$repo_root/kit/scripts/check_choc_markers.mjs" "$binary_path"; then
     printf 'Built CmajPlugin binary failed the patched CHOC WebView marker check: %s\n' "$binary_path" >&2
     exit 1
   fi
 }
 
-cmake -S "$repo_root/tools/cmajplugin_build" \
+cmake -S "$repo_root/kit/tools/cmajplugin_build" \
       -B "$build_dir" \
       -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
       -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 \

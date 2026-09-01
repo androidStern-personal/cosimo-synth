@@ -870,7 +870,7 @@ test("desktop and iPhone React UI tooling are wired for Vite dev and build loops
     assert.equal(packageJson.scripts["ui:worker:build"], "vite build --config ui/vite.worker.config.mjs");
     assert.equal(packageJson.scripts["ui:build"], "node ui/build.mjs");
     assert.match(sharedViteHelpers, /stageCmajorWebRuntime/);
-    assert.match(sharedViteHelpers, /tools", "cmajor_web_runtime/);
+    assert.match(sharedViteHelpers, /"kit", "tools", "cmajor_web_runtime/);
     assert.match(sharedViteHelpers, /export function createViteRepoContext/);
     assert.match(sharedViteHelpers, /export function serveStaticDirectory/);
     assert.match(sharedViteHelpers, /export function serveStaticFile/);
@@ -1201,7 +1201,7 @@ test("desktop dev plug-in build enables the webview dev server and regenerates t
     assert.match(buildScript, /CosimoDesktopNative_artefacts\/Release\/VST3\/CosimoDesktopNative\.vst3/);
     assert.match(buildScript, /CosimoDesktopNative_artefacts\/Release\/Standalone\/CosimoDesktopNative\.app/);
     assert.match(buildScript, /rm -rf "\$vst3_bundle"\s+cp -R "\$vst3_built" "\$vst3_bundle"/s);
-    assert.match(buildScript, /tools\/cmajor_runtime_build/);
+    assert.match(buildScript, /kit\/tools\/cmajor_runtime_build/);
     assert.match(buildScript, /--target CmajPerformer/);
     assert.match(buildScript, /cp "\$runtime_dylib" "\$vst3_bundle\/Contents\/Resources\/libCmajPerformer\.dylib"/);
     assert.doesNotMatch(buildScript, /cmajor\.dmg/);

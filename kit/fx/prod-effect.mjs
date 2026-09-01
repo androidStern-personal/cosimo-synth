@@ -222,7 +222,7 @@ async function generateJuceProject(pluginName, plugin, options = {}) {
     const runtimePatchPath = path.join(repoRoot, plugin.runtimeOut, path.basename(plugin.patch));
     const juceOut = resolveBuildOutputRoot(plugin.juceOut, `${pluginName} juceOut`);
     const cmakeBuildDir = path.join(juceOut, "_build");
-    const cmakeSourceDirectory = path.join(repoRoot, "tools", "effect_plugin_build");
+    const cmakeSourceDirectory = path.join(repoRoot, "kit", "tools", "effect_plugin_build");
 
     await prepareJuceProjectOutput(juceOut, {
         clean: options.clean,

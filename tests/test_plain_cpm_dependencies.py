@@ -7,18 +7,18 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PRODUCTION_CMAKE_CALLERS = (
     "ios_auv3/CMakeLists.txt",
+    "kit/tools/cmajor_runtime_build/CMakeLists.txt",
+    "kit/tools/cmajor_web_runtime/CMakeLists.txt",
+    "kit/tools/cmajplugin_build/CMakeLists.txt",
+    "kit/tools/effect_plugin_build/CMakeLists.txt",
     "tests/native/CMakeLists.txt",
     "tools/cmajor_external_codegen/CMakeLists.txt",
     "tools/cmajor_command_build/CMakeLists.txt",
-    "tools/cmajor_runtime_build/CMakeLists.txt",
-    "tools/cmajor_web_runtime/CMakeLists.txt",
-    "tools/cmajplugin_build/CMakeLists.txt",
     "tools/desktop_native/CMakeLists.txt",
-    "tools/effect_plugin_build/CMakeLists.txt",
 )
 DEPENDENCY_ENTRYPOINTS = (
-    "fx/prod-effect.mjs",
-    "scripts/build_cmajplugin_vst3.sh",
+    "kit/fx/prod-effect.mjs",
+    "kit/scripts/build_cmajplugin_vst3.sh",
     "scripts/build_desktop_native.sh",
     "scripts/generate_cmajor_cpp_with_externals.sh",
     "scripts/generate_ios_auv3_xcode_project.sh",
@@ -39,7 +39,7 @@ def test_production_cmake_builds_use_the_shared_dependency_module() -> None:
     for relative_path in PRODUCTION_CMAKE_CALLERS:
         source = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
-        assert "cmake/CosimoDependencies.cmake" in source, relative_path
+        assert "kit/cmake/CosimoDependencies.cmake" in source, relative_path
         assert "cosimo_add_production_dependencies()" in source, relative_path
 
 
@@ -54,7 +54,7 @@ def test_dependency_entrypoints_have_no_second_source_resolver() -> None:
 
 
 def test_t26_runner_builds_against_research_juce_7_through_cpm() -> None:
-    module = (REPO_ROOT / "cmake/CosimoDependencies.cmake").read_text(encoding="utf-8")
+    module = (REPO_ROOT / "kit/cmake/CosimoDependencies.cmake").read_text(encoding="utf-8")
     prototype_cmake = (
         REPO_ROOT / "tools/enhancer_wrapper_prototype/CMakeLists.txt"
     ).read_text(encoding="utf-8")
@@ -64,7 +64,7 @@ def test_t26_runner_builds_against_research_juce_7_through_cpm() -> None:
 
     assert "cosimo_add_t26_research_juce" in module
     assert "b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0" in module
-    assert "cmake/CosimoDependencies.cmake" in prototype_cmake
+    assert "kit/cmake/CosimoDependencies.cmake" in prototype_cmake
     assert "cosimo_add_t26_research_juce()" in prototype_cmake
     assert '"cmake"' in runner
     assert '"--build"' in runner
@@ -84,7 +84,7 @@ def test_plain_cpm_module_resolves_the_production_dependency_graph(tmp_path: Pat
         f"""cmake_minimum_required(VERSION 3.16)
 project(CosimoPlainCpmProbe LANGUAGES NONE)
 
-include(\"{REPO_ROOT / 'cmake' / 'CosimoDependencies.cmake'}\")
+include(\"{REPO_ROOT / 'kit' / 'cmake' / 'CosimoDependencies.cmake'}\")
 cosimo_add_production_dependencies()
 
 foreach(required_path

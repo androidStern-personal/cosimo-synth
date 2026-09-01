@@ -15,7 +15,7 @@ patch_path="$repo_root/WavetableSynth.cmajorpatch"
 runtime_dylib="${COSIMO_CMAJOR_RUNTIME_LIBRARY:-}"
 
 if [[ -z "$runtime_dylib" || ! -f "$runtime_dylib" ]]; then
-    cmake -S "$repo_root/tools/cmajor_runtime_build" -B "$runtime_build_dir" \
+    cmake -S "$repo_root/kit/tools/cmajor_runtime_build" -B "$runtime_build_dir" \
         -DCMAKE_BUILD_TYPE=Release
     cmake --build "$runtime_build_dir" --target CmajPerformer --parallel 4
     runtime_dylib="$runtime_build_dir/lib/libCmajPerformer.dylib"

@@ -66,7 +66,7 @@ async function buildKeyboardProbeApp(devServerOrigin) {
 
     const runtimeBuildDir = path.join(repoRoot, "build", "desktop_native_keyboard_probe_runtime");
     await run("cmake", [
-        "-S", path.join(repoRoot, "tools", "cmajor_runtime_build"),
+        "-S", path.join(repoRoot, "kit", "tools", "cmajor_runtime_build"),
         "-B", runtimeBuildDir,
         "-DCMAKE_BUILD_TYPE=Release",
     ]);

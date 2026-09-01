@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 project(CosimoPinnedCmajorCommand LANGUAGES C CXX)
 
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-include("${COSIMO_REPO_ROOT}/cmake/CosimoDependencies.cmake")
+include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
 cosimo_add_production_dependencies()
 
 set(BUILD_CMAJ ON CACHE BOOL "Build the pinned Cmajor command" FORCE)

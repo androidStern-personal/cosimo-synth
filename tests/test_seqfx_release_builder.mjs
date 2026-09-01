@@ -287,7 +287,7 @@ async function createNativeDependencyCheckoutFixture(context) {
     const cmajorPath = path.join(repositoryRoot, "checkouts", "cmajor");
     const chocSourcePath = path.join(repositoryRoot, "sources", "choc");
     const jucePath = path.join(repositoryRoot, "checkouts", "juce");
-    const cmakeHome = path.join(repositoryRoot, "tools", "effect_plugin_build");
+    const cmakeHome = path.join(repositoryRoot, "kit", "tools", "effect_plugin_build");
     const cmakeCachePath = path.join(repositoryRoot, "build", "seqfx", "CMakeCache.txt");
 
     for (const checkoutPath of [cmajorPath, chocSourcePath, jucePath]) {
@@ -412,7 +412,7 @@ test("release config freezes the existing beta identity and current native outpu
         "build/seqfx_juce/_build/plugin/CosimoSeqFX_artefacts/Release/VST3/CosimoSeqFX.vst3",
     );
     assert.deepEqual(seqFxReleaseConfig.nativeDependencies, {
-        declarationPath: "cmake/CosimoDependencies.cmake",
+        declarationPath: "kit/cmake/CosimoDependencies.cmake",
         cmajor: {
             cpmName: "cosimo_cmajor",
             sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",

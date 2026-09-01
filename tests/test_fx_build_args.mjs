@@ -9,8 +9,8 @@ import { pathToFileURL } from "node:url";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 async function loadBuildModules() {
-    const buildModule = await import(pathToFileURL(path.join(repoRoot, "fx/build-effect.mjs")));
-    const prodModule = await import(pathToFileURL(path.join(repoRoot, "fx/prod-effect.mjs")));
+    const buildModule = await import(pathToFileURL(path.join(repoRoot, "kit/fx/build-effect.mjs")));
+    const prodModule = await import(pathToFileURL(path.join(repoRoot, "kit/fx/prod-effect.mjs")));
     return { buildModule, prodModule };
 }
 
@@ -564,7 +564,7 @@ test("production runtime manifests remove the development module path without mu
 });
 
 test("the CHOC WebView marker check has one implementation shared by node and shell callers", async () => {
-    const markersModule = await import(pathToFileURL(path.join(repoRoot, "scripts/check_choc_markers.mjs")));
+    const markersModule = await import(pathToFileURL(path.join(repoRoot, "kit/scripts/check_choc_markers.mjs")));
     const releaseConfigModule = await import(pathToFileURL(path.join(repoRoot, "scripts/seqfx-release-config.mjs")));
 
     assert.deepEqual(markersModule.requiredChocWebViewMarkers, [
@@ -621,7 +621,7 @@ test("the CHOC WebView marker check has one implementation shared by node and sh
         await writeFile(goodBinary, patchedBinary);
         await writeFile(staleBinary, Buffer.concat([patchedBinary, Buffer.from("cosimo-keyboard-probe-panel")]));
 
-        const cliPath = path.join(repoRoot, "scripts/check_choc_markers.mjs");
+        const cliPath = path.join(repoRoot, "kit/scripts/check_choc_markers.mjs");
         const goodRun = spawnSync(process.execPath, [cliPath, goodBinary], { encoding: "utf8" });
         const staleRun = spawnSync(process.execPath, [cliPath, staleBinary], { encoding: "utf8" });
         const missingRun = spawnSync(process.execPath, [cliPath, path.join(tempRoot, "absent.bin")], { encoding: "utf8" });
@@ -632,7 +632,7 @@ test("the CHOC WebView marker check has one implementation shared by node and sh
         assert.match(staleRun.stderr, /Forbidden marker\(s\): cosimo-keyboard-probe-panel/);
         assert.equal(missingRun.status, 1);
         assert.equal(usageRun.status, 2);
-        assert.match(usageRun.stderr, /Usage: node scripts\/check_choc_markers\.mjs/);
+        assert.match(usageRun.stderr, /Usage: node kit\/scripts\/check_choc_markers\.mjs/);
     } finally {
         await rm(tempRoot, { recursive: true, force: true });
     }
@@ -645,13 +645,13 @@ test("the production configure explicitly disables microphone permission metadat
     assert.deepEqual(prodModule.createJuceGenerationConfigureArgs({
         cmajExecutable,
         cmakeBuildDirectory: "/tmp/seqfx-build",
-        cmakeSourceDirectory: "/repo/tools/effect_plugin_build",
+        cmakeSourceDirectory: "/repo/kit/tools/effect_plugin_build",
         disableMicrophonePermission: true,
         juceOutputDirectory: "/repo/build/seqfx_juce",
         pluginTarget: "CosimoSeqFX",
         runtimePatchPath: "/repo/build/fx/seqfx_runtime/SeqFx.cmajorpatch",
     }), [
-        "-S", "/repo/tools/effect_plugin_build",
+        "-S", "/repo/kit/tools/effect_plugin_build",
         "-B", "/tmp/seqfx-build",
         "-DCMAKE_BUILD_TYPE=Release",
         "-DCOSIMO_EFFECT_PATCH_PATH=/repo/build/fx/seqfx_runtime/SeqFx.cmajorpatch",
@@ -661,7 +661,7 @@ test("the production configure explicitly disables microphone permission metadat
         "-DCOSIMO_DISABLE_MICROPHONE_PERMISSION=ON",
     ]);
     const wrapperCmake = await readFile(
-        path.join(repoRoot, "tools", "effect_plugin_build", "CMakeLists.txt"),
+        path.join(repoRoot, "kit", "tools", "effect_plugin_build", "CMakeLists.txt"),
         "utf8",
     );
     assert.match(wrapperCmake, /set\(COSIMO_CMAJ_EXECUTABLE "" CACHE FILEPATH/u);
@@ -716,7 +716,7 @@ test("effect production uses the repository-built pinned Cmajor generator withou
         process.platform === "win32" ? "cmaj.exe" : "cmaj",
     );
     const generationProject = await readFile(
-        path.join(repoRoot, "tools/effect_plugin_build/CMakeLists.txt"),
+        path.join(repoRoot, "kit/tools/effect_plugin_build/CMakeLists.txt"),
         "utf8",
     );
     const commandProject = await readFile(
@@ -758,7 +758,7 @@ test("effect production uses the repository-built pinned Cmajor generator withou
     assert.deepEqual(
         prodModule.createProdBuildChildArgs("enhancer", { cmajExecutable: expectedExecutable }),
         [
-            path.join(repoRoot, "fx/prod-effect.mjs"),
+            path.join(repoRoot, "kit/fx/prod-effect.mjs"),
             "build",
             "enhancer",
             `--prepared-cmaj-executable=${expectedExecutable}`,
@@ -770,7 +770,7 @@ test("generated latency probe resolves the generator-authored factory type exact
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-generated-plugin-type-"));
     const extractor = path.join(
         repoRoot,
-        "tools/effect_plugin_build/read_generated_plugin_info_class.cmake",
+        "kit/tools/effect_plugin_build/read_generated_plugin_info_class.cmake",
     );
     const runExtractor = (sourcePath) => spawnSync(
         "cmake",
@@ -921,7 +921,7 @@ test("fx_prod_all_child_build_args_keep_single_plugin_builds_import_safe", async
     const args = prodModule.createProdBuildChildArgs("seqfx", { clean: true });
 
     assert.equal(path.isAbsolute(args[0]), true);
-    assert.equal(args[0], path.join(repoRoot, "fx/prod-effect.mjs"));
+    assert.equal(args[0], path.join(repoRoot, "kit/fx/prod-effect.mjs"));
     assert.deepEqual(args.slice(1), ["build", "seqfx", "--clean"]);
 });
 
@@ -953,7 +953,7 @@ test("fx_prod_prepare_discards_a_cmake_tree_owned_by_the_legacy_generated_projec
     const { prodModule } = await loadBuildModules();
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-prod-owner-migration-"));
     const juceOut = path.join(tempRoot, "seqfx_juce");
-    const wrapperSource = path.join(tempRoot, "tools", "effect_plugin_build");
+    const wrapperSource = path.join(tempRoot, "kit", "tools", "effect_plugin_build");
 
     try {
         await mkdir(path.join(juceOut, "_build", "objects"), { recursive: true });
@@ -979,7 +979,7 @@ test("fx_prod_prepare_preserves_a_cmake_tree_owned_by_the_wrapper_project", asyn
     const { prodModule } = await loadBuildModules();
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-prod-owner-match-"));
     const juceOut = path.join(tempRoot, "seqfx_juce");
-    const wrapperSource = path.join(tempRoot, "tools", "effect_plugin_build");
+    const wrapperSource = path.join(tempRoot, "kit", "tools", "effect_plugin_build");
     const cachePath = path.join(juceOut, "_build", "CMakeCache.txt");
     const objectPath = path.join(juceOut, "_build", "objects", "current.o");
 

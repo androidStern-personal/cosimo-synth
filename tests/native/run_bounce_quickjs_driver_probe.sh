@@ -10,11 +10,11 @@ host_os="$(uname -s)"
 
 if [[ -z "$runtime_library" || ! -f "$runtime_library" ]]; then
     if [[ "$host_os" == "Darwin" ]]; then
-        cmake -S "$repo_dir/tools/cmajor_runtime_build" -B "$runtime_build_dir" \
+        cmake -S "$repo_dir/kit/tools/cmajor_runtime_build" -B "$runtime_build_dir" \
             -DCMAKE_BUILD_TYPE=Release
         runtime_library="$runtime_build_dir/lib/libCmajPerformer.dylib"
     else
-        cmake -S "$repo_dir/tools/cmajor_runtime_build" -B "$runtime_build_dir" -G Ninja \
+        cmake -S "$repo_dir/kit/tools/cmajor_runtime_build" -B "$runtime_build_dir" -G Ninja \
             -DCMAKE_BUILD_TYPE=Release
         runtime_library="$runtime_build_dir/lib/libCmajPerformer.so"
     fi

@@ -102,7 +102,7 @@ async function readSourceProvenance(engineRealPath) {
     ]);
     let dependencySource = "";
     try {
-        dependencySource = await readFile(path.join(gitRoot, "cmake", "CosimoDependencies.cmake"), "utf8");
+        dependencySource = await readFile(path.join(gitRoot, "kit", "cmake", "CosimoDependencies.cmake"), "utf8");
     } catch {
         // A comparator can inspect an artifact from outside a Cosimo checkout.
     }

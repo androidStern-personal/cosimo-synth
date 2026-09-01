@@ -6,7 +6,7 @@ import react from "@vitejs/plugin-react";
 import { build } from "vite";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-export const repoRoot = path.resolve(scriptDir, "..");
+export const repoRoot = path.resolve(scriptDir, "../..");
 const defaultFxRoot = path.join(repoRoot, "fx");
 export const seqFxCanonicalRuntimePrebuiltEnvironmentKey = "SEQFX_CANONICAL_RUNTIME_PREBUILT";
 export const seqFxDistributableRuntimeEnvironmentKey = "SEQFX_DISTRIBUTABLE_RUNTIME";
@@ -303,7 +303,7 @@ export function resolvePluginNames(pluginName, createUsage = usage) {
     throw new Error(createUsage());
 }
 
-/** Everything scripts/install_fx_cmajplugin.sh needs to JIT-install one target. */
+/** Everything kit/scripts/install_fx_cmajplugin.sh needs to JIT-install one target. */
 export function createJitInstallPlan(pluginName, plugins = effectPlugins) {
     const plugin = plugins[pluginName];
 

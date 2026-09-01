@@ -8,7 +8,7 @@ export function stageCmajorWebRuntime(workspaceRoot, {
     outputDirectory = null,
     instanceId = null,
 } = {}) {
-    const sourceDirectory = path.join(workspaceRoot, "tools", "cmajor_web_runtime");
+    const sourceDirectory = path.join(workspaceRoot, "kit", "tools", "cmajor_web_runtime");
     const instanceBuildDirectory = instanceId
         ? path.join(buildDirectory, instanceId)
         : buildDirectory;

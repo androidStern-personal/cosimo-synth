@@ -237,7 +237,7 @@ test("the plugin exposes only the requested design surface while remaining isola
 });
 
 test("the generic VST3 install path builds and associates the compiled self-contained lab runtime", async () => {
-    const { createJitInstallPlan } = await import("../fx/build-effect.mjs");
+    const { createJitInstallPlan } = await import("../kit/fx/build-effect.mjs");
     const installPlan = createJitInstallPlan("polish");
     const runtimeManifest = JSON.parse(await fs.readFile(
         path.join(repoRoot, installPlan.runtimePatch),

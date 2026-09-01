@@ -62,7 +62,7 @@ if (NOT EXISTS "${COSIMO_IOS_GENERATOR_SCRIPT}")
     message(FATAL_ERROR "Generator script not found: ${COSIMO_IOS_GENERATOR_SCRIPT}")
 endif()
 
-include("${COSIMO_REPO_ROOT}/cmake/CosimoDependencies.cmake")
+include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
 cosimo_add_production_dependencies()
 
 set(

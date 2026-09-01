@@ -46,7 +46,7 @@ if [[ "$desktop_ui_source_mode" == "dev-server" ]]; then
   fi
 fi
 
-cmake -S "$repo_root/tools/cmajor_runtime_build" \
+cmake -S "$repo_root/kit/tools/cmajor_runtime_build" \
       -B "$runtime_build_dir" \
       -DCMAKE_BUILD_TYPE=Release
 cmake --build "$runtime_build_dir" \
