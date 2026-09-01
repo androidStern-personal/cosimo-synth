@@ -248,7 +248,7 @@ import {
     type SynthPatchViewModel,
 } from "../shared/synth-hooks";
 import { createPresetBar } from "../shared/effects/preset-bar";
-import { createStandaloneEffectPresetController } from "../shared/effects/standalone-effect-presets";
+import { createSynthStandaloneEffectPresetController } from "../shared/effects/synth-standalone-presets";
 import { createSynthPresetInitOptions } from "../shared/effects/synth-init-state";
 import { buildSynthPresetMigrations } from "../shared/effects/synth-preset-migrations";
 import type { EffectStoredStateAdapter } from "../shared/effects/effect-preset-v2";
@@ -2430,7 +2430,7 @@ function SynthPresetBarHost({
     onBounceVideoRef.current = onBounceVideo;
     const wavetableTablesRef = useRef(wavetableTables);
     wavetableTablesRef.current = wavetableTables;
-    const presetController = useMemo(() => createStandaloneEffectPresetController({
+    const presetController = useMemo(() => createSynthStandaloneEffectPresetController({
         effectID: SYNTH_PRESET_EFFECT_ID,
         patchConnection,
         storedStateAdapters,

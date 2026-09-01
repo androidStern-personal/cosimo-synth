@@ -1,5 +1,5 @@
 import type { EffectPresetV2 } from "./effects/effect-preset-v2";
-import { assertNoDuplicateJsonKeys } from "./effects/effect-preset-schema";
+import { assertNoDuplicateJsonKeys } from "./effects/effect-preset-shared";
 
 export const SOUND_SHARE_ENVELOPE_FORMAT = "cosimo.soundShare";
 export const SOUND_SHARE_ENVELOPE_VERSION = 2;

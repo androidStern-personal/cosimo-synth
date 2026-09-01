@@ -7,7 +7,7 @@ import {
 } from "./effect-preset-v2";
 import {
     type EffectPresetActiveMetadata,
-} from "./effect-preset-schema";
+} from "./effect-preset-shared";
 
 export const EFFECT_PRESETS_V2_STATE_KEY = "effects.presets.v2";
 export const EFFECT_PRESET_V2_STATE_KIND = "cosimo.effectPresetState";

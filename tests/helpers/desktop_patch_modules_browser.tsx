@@ -107,7 +107,7 @@ import type {
     EffectPreset,
     EffectPresetDescriptorRegistry,
     EffectPresetValue,
-} from "../../ui/shared/effects/effect-preset-schema";
+} from "../../ui/shared/effects/effect-preset-shared";
 
 type Deferred<TValue> = {
     promise: Promise<TValue>;

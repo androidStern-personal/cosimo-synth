@@ -9,7 +9,7 @@ import {
     type EffectPresetV2,
     type EffectStoredStateAdapter,
 } from "./effect-preset-v2";
-import { assertNoDuplicateJsonKeys } from "./effect-preset-schema";
+import { assertNoDuplicateJsonKeys } from "./effect-preset-shared";
 
 export const EFFECT_SNAPSHOT_KIND = "cosimo.effectSnapshot";
 export const EFFECT_SNAPSHOT_SCHEMA_VERSION = 2;

@@ -33,7 +33,7 @@ import type { EffectPluginStateContract } from "./effect-state-contract";
 import type {
     StandaloneEffectInitOnlyStateAdapter,
     StandaloneEffectPresetSynthOptions,
-} from "./standalone-effect-presets";
+} from "./synth-standalone-presets";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);

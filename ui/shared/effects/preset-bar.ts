@@ -5,6 +5,7 @@ import type {
     StandaloneEffectPresetSourceFilter,
     StandaloneEffectPresetState,
 } from "./standalone-effect-presets";
+import type { SynthStandaloneEffectPresetController } from "./synth-standalone-presets";
 import {
     createSoundShareURL,
     decodeSoundShareFragment,
@@ -1042,7 +1043,7 @@ class PresetBar extends HTMLElement {
     private _unsubscribe: (() => void) | null = null;
     private _state: StandaloneEffectPresetState | null = null;
     private _mutations: ReturnType<StandaloneEffectPresetController["getMutations"]> | null = null;
-    private _synthMutations: ReturnType<StandaloneEffectPresetController["getSynthMutations"]> = null;
+    private _synthMutations: ReturnType<SynthStandaloneEffectPresetController["getSynthMutations"]> | null = null;
 
     private _flyoutOpen = false;
     private _ctxTarget: StandaloneEffectPresetListItem | null = null;
@@ -1125,8 +1126,12 @@ class PresetBar extends HTMLElement {
 
         if (next) {
             this._mutations = next.getMutations();
-            this._synthMutations = typeof next.getSynthMutations === "function"
-                ? next.getSynthMutations()
+            // Synth-capable controllers (the SynthStandaloneEffectPresetController
+            // adapter) additionally expose sound mutations; duck-typed so plugin
+            // controllers need no synth import.
+            const synthCapable = next as Partial<Pick<SynthStandaloneEffectPresetController, "getSynthMutations">>;
+            this._synthMutations = typeof synthCapable.getSynthMutations === "function"
+                ? synthCapable.getSynthMutations()
                 : null;
             this._unsubscribe = next.subscribe((state) => this._onState(state));
             this._onState(next.getState());

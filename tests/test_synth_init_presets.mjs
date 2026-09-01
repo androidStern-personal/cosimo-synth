@@ -379,8 +379,9 @@ async function createSynthFixture({
     status = synthStatus,
     onSoundReplacementApplied,
 } = {}) {
-    const [presets, contractModule, modulation, articulations, rack] = await Promise.all([
+    const [presets, synthPresets, contractModule, modulation, articulations, rack] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/effects/standalone-effect-presets.ts"),
+        loadUIModule(repoRoot, "ui/shared/effects/synth-standalone-presets.ts"),
         loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation.ts"),
         loadUIModule(repoRoot, "ui/shared/articulation-image.ts"),
@@ -476,7 +477,9 @@ async function createSynthFixture({
             ),
         };
     }
-    const controller = new presets.StandaloneEffectPresetController(controllerOptions);
+    const controller = synthEnabled
+        ? new synthPresets.SynthStandaloneEffectPresetController(controllerOptions)
+        : new presets.StandaloneEffectPresetController(controllerOptions);
 
     controller.attach();
     return {

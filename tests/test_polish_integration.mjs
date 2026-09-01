@@ -233,10 +233,19 @@ test("the product UI exposes four compact Polish modules, independent bypasses, 
 });
 
 test("the factory inventory contains no old-format synth sound to retain", async () => {
-    const descriptors = await read("ui/shared/effects/effect-preset-descriptors.ts");
+    const chorusPresets = await read("fx/chorus_lab/view/factory-presets.js");
+    const ottPresets = await read("fx/ott_lab/view/factory-presets.js");
 
-    assert.doesNotMatch(descriptors, /cosimo-synth|wavetable-synth/);
-    assert.match(descriptors, /EFFECT_FACTORY_PRESETS[\s\S]*?chorus:[\s\S]*?ott:/);
+    for (const inventory of [chorusPresets, ottPresets]) {
+        assert.doesNotMatch(inventory, /cosimo-synth|wavetable-synth/);
+    }
+
+    assert.match(chorusPresets, /CHORUS_FACTORY_PRESETS[\s\S]*?chorus:/);
+    assert.match(ottPresets, /OTT_FACTORY_PRESETS[\s\S]*?ott:/);
+
+    // The controller no longer carries a Cosimo default inventory at all.
+    const standalone = await read("ui/shared/effects/standalone-effect-presets.ts");
+    assert.doesNotMatch(standalone, /EFFECT_FACTORY_PRESETS/);
 });
 
 test("the retired memoryless RackOutputStage is absent from production", async () => {

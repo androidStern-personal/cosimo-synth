@@ -5,7 +5,7 @@ import {
     type EffectParameterValue,
     type EffectPluginStateContract,
 } from "./effect-state-contract";
-import { assertNoDuplicateJsonKeys } from "./effect-preset-schema";
+import { assertNoDuplicateJsonKeys } from "./effect-preset-shared";
 
 export const EFFECT_PRESET_V2_KIND = "cosimo.effectPreset";
 export const EFFECT_PRESET_V2_SCHEMA_VERSION = 2;

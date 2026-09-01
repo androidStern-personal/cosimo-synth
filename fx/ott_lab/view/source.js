@@ -1,5 +1,6 @@
 import { createEffectHeader } from "../../../ui/shared/effects/effect-header.ts";
 import { createStandaloneEffectPresetController } from "../../../ui/shared/effects/standalone-effect-presets.ts";
+import { OTT_FACTORY_PRESETS } from "./factory-presets.js";
 import {
   EffectSnapshotBankController,
   createEmptyEffectSnapshotBank,
@@ -30,6 +31,7 @@ class OttLabView extends HTMLElement {
     this.presetController = createStandaloneEffectPresetController({
       effectID: "ott",
       patchConnection,
+      factoryPresets: OTT_FACTORY_PRESETS,
     });
     this.snapshotController = new EffectSnapshotBankController({
       effectID: "ott",

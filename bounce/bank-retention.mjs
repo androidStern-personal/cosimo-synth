@@ -7,6 +7,9 @@ import {
 
 export const BOUNCE_BANK_GC_LOCK_NAME = "cosimo-bounce-bank-gc-v1";
 
+// Mirrors EFFECT_PRESET_V2_STATE_KIND/-_SCHEMA_VERSION in
+// ui/shared/effects/effect-preset-store-v2.ts. Declared locally because the
+// bounce module stays plain .mjs, runnable by bare Node without a TS loader.
 const EFFECT_PRESET_STATE_KIND = "cosimo.effectPresetState";
 const EFFECT_PRESET_STATE_VERSION = 2;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;

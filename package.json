@@ -64,7 +64,7 @@
     "cmajplugin:install": "./scripts/install_cmajplugin_vst3.sh",
     "test:ott:view": "npm run fx:build -- ott && node --test tests/test_ott_lab_view_browser.mjs",
     "test:polish:lab": "npm run fx:build -- polish && node --test tests/test_polish_voicing_lab.mjs tests/test_polish_voicing_lab_view_browser.mjs && cmaj test --singleThread --sessionID=1 tests/cmajor_polish_lab",
-    "test:effect-presets:unit": "node --test tests/test_effect_preset_schema.mjs tests/test_effect_preset_state.mjs tests/test_effect_preset_contract.mjs tests/test_effect_state_contract.mjs tests/test_effect_preset_v2_schema.mjs tests/test_effect_preset_migrations.mjs tests/test_effect_snapshots.mjs tests/test_effect_snapshot_bank.mjs tests/test_seqfx_preset_adapter.mjs tests/test_standalone_effect_presets.mjs",
+    "test:effect-presets:unit": "node --test tests/test_effect_factory_preset_contract.mjs tests/test_effect_state_contract.mjs tests/test_effect_preset_v2_schema.mjs tests/test_effect_preset_migrations.mjs tests/test_effect_snapshots.mjs tests/test_effect_snapshot_bank.mjs tests/test_seqfx_preset_adapter.mjs tests/test_standalone_effect_presets.mjs tests/test_standalone_preset_import_graph.mjs",
     "test:effect-presets:browser": "node --test tests/test_standalone_effect_preset_hook_browser.mjs tests/test_effect_preset_bar_browser.mjs",
     "test:effect-presets": "npm run test:effect-presets:unit && npm run test:effect-presets:browser",
     "test:sound-share": "npm run web:build && node --test tests/test_sound_share_link.mjs tests/test_synth_init_presets.mjs tests/test_effect_preset_bar_browser.mjs tests/test_sound_share_browser.mjs tests/test_sound_share_audio_browser.mjs",
