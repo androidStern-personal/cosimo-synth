@@ -42,3 +42,73 @@ This is the sole task ledger for SeqFX mockup work authorized in the coordinator
 - Clean status: Clean after the ledger-only closeout commit; verified in the coordinator handoff.
 - Changed scope: Fixed the production effect picker at six columns; removed only the redundant loop ruler renderer, pointer ownership path, prop, and CSS; retained the existing compact Start/End `EditorTickSlider` controls and runtime bridge; replaced obsolete ruler-specific browser tests with compact endpoint coverage; added the dedicated mockup ledger. `TODOS.txt` and `PROGRESS.txt` remain untouched.
 - Unperformed gates: Native builds, HMR/fixed-port launches, plugin builds/installs, pluginval, Ableton, listening/host acceptance, physical-device, Sites, release, merge, push, deployment, and publication remain unperformed by authorization.
+
+## Responsive workspace audit: proportional contraction and stacking
+
+- Status: Complete (proposal only; no product, CSS, test, or generated-file changes)
+- Task/agent: `/root/seqfx_mockup_layout`, reporting to coordinator `/root`
+- Branch/worktree: `codex/seqfx-mockup-compact-layout` at `/Users/winterfell/.codex/worktrees/seqfx-mockup-compact-layout/cosimo-synth`
+- Audit start tip: `566025150fd50cfed6bf75eeab63fc5a1e505108`; original branch base: `6064eba67120673a748602d706c46b852c52af69`
+- Authorization: Audit and propose only how the sequencer and effect-editor columns should contract to content-specific usable minima, then stack with the sequencer above the editor.
+- Explicit non-scope: Implementation; product/CSS/test/generated changes; effect/state/DSP/automation changes; `TODOS.txt` or `PROGRESS.txt`; broad/native builds; HMR/fixed ports; installs; pluginval; Ableton/device acceptance; deploy, merge, rebase, or push.
+
+### Measured facts and source ownership
+
+- Production already contains the fixed two-row/six-column effect picker and compact Start/End controls; the removed 32-cell loop ruler is absent. The global controls precede the workspace, so this proposal does not move or redefine them.
+- `.seqfx-workspace` currently owns two equal `minmax(0, 1fr)` columns, an 18px gap, and 18px side margins. Both outer columns therefore contract equally; the perceived asymmetry comes from the sequencer reaching its usable content floor much earlier than the editor. At `max-width: 680px`, production hard-switches to one column.
+- The sequencer reserves 40px on each side, renders 16 steps per bar row, and uses a 12px hard cell minimum with 3px normal and 9px beat gaps. Its shell owns overflow. Lane labels are 37px wide; block-resize handles remain 24px wide and at least 24px high.
+- The editor has 14px internal padding. Its picker is fixed at six equal columns with five 5px gaps and 36px-high buttons. Tabs, factory preset/help, Mix, graphs, segmented sliders, and Mod controls use fluid tracks; shared container seams already reflow Filter readouts at 420px, Tape Stop controls at 350px, and segmented sliders at 280px. The current Mod row has a source-derived technical minimum of about 302px of content (330px including inspector padding).
+- A composed browser probe used the real source harness, the Twelve-effect Tour, selected Stutter content, a Vite-assigned port `0`, and a 900px viewport height. No HMR launcher, fixed port, screenshots, or product files were used. Representative decreasing-width results:
+
+| Plugin width | Current columns | Cell | Picker button | Observation |
+| ---: | ---: | ---: | ---: | --- |
+| 1120px | 533 / 533px | 24.375px | 80 × 36px | Last measured equal split above the proposed 24px cell floor. |
+| 1100px | 523 / 523px | 23.75px | 78.33 × 36px | Sequencer first crosses the practical pointer floor. |
+| 1000px | 473 / 473px | 20.625px | 70 × 36px | Editor still has a 445px Stutter graph and 305.8px Mix track; sequencer is already cramped. |
+| 900px | 423 / 423px | 17.5px | 61.66 × 36px | All 12 full picker names ellipsize, but no outer overflow occurs. |
+| 760px | 353 / 353px | 13.125px | 50 × 36px | A two-step block abbreviation begins clipping. |
+| 720px | 333 / 333px | 12px | 46.66 × 36px | Cell grid is at its hard visual minimum. |
+| 681px | 313.5 / 313.5px | 12px | 43.41 × 36px | Picker also falls below a 44px pointer-width floor. |
+| 680px | stacked, 656px each | 32.0625px | 100.5 × 36px | Abrupt stack restores both panels to comfortable widths. |
+
+- Across the successful samples, the document, inspector, and picker had no horizontal overflow. Compression down to 680px is therefore a usability failure, not a clipping detector failure. Harmless compression includes help-copy wrapping, graph-height clamping, and intentional label abbreviation; failure begins when step/resize targets compete below 24px or picker labels become ambiguous despite technically fitting.
+
+### Provisional recommendation
+
+1. Set the sequencer side-by-side minimum to **528px**. With the existing 80px shell reserve and 63px of rhythmic gaps, this yields `(528 - 80 - 63) / 16 = 24.0625px` cells. Keep 16 steps per row, the 3/9px rhythmic gaps, 40px frame/label reserve, 10px step and lane type, 37px lane labels, and 24px resize targets; do not shrink cells below 24px while side-by-side.
+2. Set the effect-editor side-by-side minimum to **480px**. Its content width is then 452px and each fixed-grid button is about `(452 - 25) / 6 = 71.17px` by 36px. Below roughly 520px, render the existing unique short names (`FLT`, `CRSH`, `TAPE`, `STUT`, and peers) as visible picker copy while retaining full names as accessible names; do not rely on ambiguous `Ta…`-style ellipses or hide effects.
+3. Use **16px** between columns and retain **18px** side margins. Allocate surplus width proportionally with the equivalent of `minmax(528px, 1.1fr) minmax(480px, 1fr)`. This ratio matches the two minima, lets both columns contract, and gives the denser sequencer a modestly larger share without fixing either panel.
+4. Derive the wrap threshold as **1060px**: `18 + 528 + 16 + 480 + 18`. Use the SeqFX host/workspace inline size as the responsive input. Side-by-side is valid at and above 1060px; below 1060px, stack rather than compress either column past its floor.
+
+The rejected 1000px alternative used a 420px editor floor. Although it avoids technical overflow, the measured 423px editor gives only 61.66px picker buttons and ellipsizes all full effect names, making similarly prefixed effects dependent on icons. The rejected equal-column solution would need to wrap near 1110px and wastes 48px on the editor at the threshold. Continuing the current equal split to 680px fails the measured sequencer and picker floors.
+
+### Internal adaptation while shrinking
+
+- Sequencer: let cell and block geometry absorb surplus width down to the 24px floor; preserve the bar count, 16-step row, rhythmic gutters, labels, glyph/waveform content, keyboard focus, drag surface, and resize surface. Keep the existing four-character label for multi-step blocks and one-character treatment for a one-step block rather than reducing type. If a stacked host becomes narrower than 552px overall, keep a 528px sequencer content minimum and let only the grid shell scroll horizontally; do not hide steps or shrink targets further.
+- Picker and tabs: keep exactly 2×6, icon size, DOM order, 36px height, native buttons, full accessible names, and at least 44px width. Use unique short visible names at compact editor widths. Keep Effect/Mod tabs at least 34px high with focus rings inside the panel.
+- Preset/help and parameter rows: reflow the factory-preset label, full-width select, and help copy vertically when the select would otherwise become cramped; wrap help copy rather than ellipsizing it. Preserve value readouts and units. Segmented/range tracks should retain at least 96px of horizontal manipulation space and the existing 24px input-height floor.
+- Graph/editor controls: continue using the existing container-query seams. Keep graph plot areas at least 140px high, reflow Filter readouts rather than overlap them, and collapse Tape Stop cards to one column at their existing content threshold. Labels/chips may reflow but controls and readouts remain present.
+- Mod: at narrow stacked content widths, reflow each target into rows (name and 28px toggle; full-width amount track; destination/readouts) before the current approximately 302px row minimum is reached. Do not truncate the destination into a misleading value or hide a target.
+
+### Stacked behavior and restoration
+
+- Preserve DOM order: sequencer first, effect editor second. Both use the full available workspace width and intrinsic height; the sequencer shows both bars and the editor grows to its selected effect rather than forcing equal panel heights.
+- The SeqFX root owns the single vertical scroll in stacked mode. Remove panel max-height constraints and nested inspector vertical scrolling. The grid shell may own horizontal scrolling only below its 528px content floor; an exceptionally narrow picker may own its own horizontal scroll to preserve six 44px columns, never the whole page.
+- Widening back through 1060px restores the proportional two-column layout without remounting. Pattern/block selection, effect and Mod tab, focusability, Start/End values, parameter values, scrollable content, state, automation, and DSP remain unchanged.
+
+### Observable acceptance criteria
+
+- At **1061px**, panels are side-by-side, both contract, the sequencer is at least 528px, the editor at least 480px, cells are at least 24px, and picker buttons are approximately 71 × 36px or larger.
+- At **1060px**, side margins are 18px, the gap is 16px, and the columns resolve to 528px and 480px with no overlap, clipping, or page-level horizontal scroll.
+- At **1059px**, the sequencer is above the editor; both fill the workspace, use intrinsic height, and a single root vertical scrollbar exposes all content. No control is hidden to make the stack fit.
+- Across a narrow/wide/narrow round trip, all 12 effects remain in 2×6 order with unambiguous visible and full accessible names; keyboard tabbing, Enter/Space activation, slider arrow keys, temporary exact entry, focus rings, pointer gestures, and host gesture boundaries remain intact. Selection, loop range, saved state, automation values, DSP, and transport behavior do not change.
+
+### Confidence, unresolved feel, and handoff
+
+- Confidence is high in current ownership, breakpoint behavior, and measured geometry; medium-high in the 528px sequencer floor; and medium in the 480px editor floor and 1060px wrap because they intentionally include a legibility judgment.
+- The unresolved physical-feel question is whether 24px sequence cells and 71 × 36px picker buttons with short names feel comfortable in the actual resizable Ableton WebView. That requires a later human host pass and is not inferred from browser measurements.
+- Changed scope: this proposal entry in `SEQFX_MOCKUP_TASKS.md` only. `TODOS.txt`, `PROGRESS.txt`, production source, CSS, tests, and generated output remain untouched.
+- Evidence run: read-only source/DOM/CSS inspection and the focused ephemeral composed-browser measurements above. No product test suite was run because no product code changed.
+- Generated artifacts: None.
+- Final commit: This ledger-only commit; its exact hash is reported to the coordinator because a commit cannot embed its own hash.
+- Unperformed gates: implementation, broad/native builds, HMR/fixed-port launches, installs, pluginval, Ableton/physical-feel acceptance, device work, release, merge, rebase, push, deploy, and publication.
