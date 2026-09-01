@@ -337,6 +337,33 @@ The critical DRY requirement is the **resolved** size. Aliasing both surfaces to
 - Focused proof: One narrow test must cover target selection plus the three named dimensions and output files through the real script seam. Avoid broad suites and tests about tests.
 - Integration: After source-first review, repair, clean rebase, and focused qualification, the coordinator may merge and push this tooling to master under Andrew's standing authorization, then run it for SeqFX and report the pushed commit and three PNG paths.
 
+### Implementation ownership and delivered boundary
+
+- Status: Complete after coordinator review, clean rebase, focused qualification, and master integration.
+- Task: `Reusable three-size plugin visual review capture`; implementation task `01a05c8f-9d13-7c21-8c71-ad913a0e128b`; coordinator task `01a05c09-ce2d-7120-bc44-cd8102a2f0d7`.
+- Branch/worktree/original base: `codex/reusable-plugin-visual-capture`; `/Users/winterfell/.codex/worktrees/d1a7/cosimo-synth`; `7485a738ea7baeaf3f69e22d1198027310eac5d8`. The coordinator rebased the clean handoff onto current `origin/master` after the inspector corrections were integrated.
+- Command: `npm run fx:visual-review -- <plugin> [output-directory]`. The default output is `build/plugin_visual_review/<plugin>/wide.png`, `medium.png`, and `narrow.png` at 1440x800, 1060x820, and 420x640 respectively; the command prints those three absolute paths.
+- Support boundary: the existing `effectPlugins` registry owns an optional `visualReviewAdapter`. SeqFX is the only supported target in this delivery. Unknown targets and registered targets without an authored representative adapter fail clearly and list `seqfx` as the supported target. Adding a future target requires an adapter plus one registry property, not copied build, mount, capture, or screenshot logic.
+- Production ownership: the shared command calls `buildPlugin()`, mounts the packaged `view/index.js`, and captures the actual returned production element. The SeqFX adapter supplies only its browser connection and review actions: dismiss first-use guidance when present, create/select Chain 1 step 1 through the real UI, and choose the real Tape Stop option so the picker and inspector are visible.
+
+### Decisions and objection audit
+
+1. Chosen: adapter-gated support rather than claiming every build-registry target. Rejected: a generic connection that left Chorus/OTT/Polish/Spectral without live Cmajor endpoint status or controls. Evidence/tradeoff: those views explicitly consume `utilities.ParameterControls` and `status.details.inputs`; faking or parsing that data would create a second endpoint authority. Severity if reversed: material—captures would be empty shells mislabeled as representative product views.
+2. Chosen: real UI actions against the packaged SeqFX view rather than injecting serialized SeqFX state or carrying SeqFX selectors in the shared command. Rejected: a test-only projection or script-level SeqFX special case. Evidence/tradeoff: the adapter waits for the real Tape Stop block, selected option, effect picker, and inspector before any PNG is accepted. Severity if reversed: material—the tool could drift from actual product behavior and cease to be reusable.
+3. Chosen: Playwright request routing for the packaged runtime, with one owned Chromium process closed in `finally`. Rejected: a Vite daemon, Cmajor server/generated engine, native host, or new screenshot service. Evidence/tradeoff: no temporary server process exists, and browser launch/resource/page/capture errors propagate nonzero. Severity if reversed: moderate-to-material because it expands dependencies and cleanup risk outside the approved low-ceremony tool.
+4. Chosen: the authoritative 420x640 narrow viewport plus an adapter-owned inspector scroll. Rejected: capturing the default top-of-view position, which shows the grid but clips the review subject below the viewport. Evidence/tradeoff: the final narrow PNG visibly contains the selected Tape Stop picker and inspector, while wide/medium retain the workspace plus inspector. Severity if reversed: material to this workflow because the narrow artifact would not review the requested controls.
+5. Chosen: exactly the three PNGs. Rejected: a contact sheet/index because it was not needed to make the command or evidence clearer. Severity if reversed: low, but it would add output beyond the required stable contract.
+
+### Focused evidence and final handoff
+
+- Focused command proof: `node --test tests/test_plugin_visual_review_capture.mjs` -> 1/1 pass. Through the actual CLI it proves unknown-target failure, registered-but-unsupported `chorus` failure, supported-target listing, a real SeqFX production build/mount, exact filenames/path printing, and PNG dimensions 1440x800, 1060x820, and 420x640. Adapter assertions require the selected Tape Stop option, effect picker, and inspector to be visible inside every capture before success.
+- Real capture: `npm run fx:visual-review -- seqfx` succeeded and printed `build/plugin_visual_review/seqfx/wide.png`, `medium.png`, and `narrow.png` as absolute paths. All three were visually inspected: wide/medium show the selected block, grid, picker, and Tape Stop inspector; narrow shows the real picker and inspector after production scrolling.
+- Known environment note: one earlier sandboxed Chromium launch failed at macOS Mach-port registration before the page opened; the focused test and the host-level final command both passed. No product/runtime failure remained.
+- Changed scope: `fx/build-effect.mjs`, `package.json`, `scripts/capture_plugin_visual_review.mjs`, `scripts/visual-review/seqfx.mjs`, `tests/test_plugin_visual_review_capture.mjs`, and this ledger section. `TODOS.txt`, `PROGRESS.txt`, SeqFX product UI/state/DSP, existing proof tooling, generated bundles, and release files are untouched.
+- Generated ignored artifacts: `build/fx/seqfx_runtime/` and `build/plugin_visual_review/seqfx/{wide,medium,narrow}.png`. No tracked generated output or untracked source artifact remains outside the requested files.
+- Final commit: the clean task commit created after this ledger update; its exact hash is reported to the coordinator because a commit cannot embed its own hash.
+- Unperformed gates: broad suites, native/VST3 builds, plugin installation, signing/notarization, pluginval, Ableton/DAW or listening acceptance, physical/device work, release, rebase, merge, push, deployment, and publication.
+
 ## Shared sequencer-cell geometry for the effect picker
 
 - Status: Complete.

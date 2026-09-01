@@ -38,6 +38,7 @@ export const effectPlugins = {
         cmakeTarget: "CosimoSeqFX",
         disableMicrophonePermission: true,
         productName: "CosimoSeqFX",
+        visualReviewAdapter: "scripts/visual-review/seqfx.mjs",
         workerSource: "fx/seqfx/worker/source.ts",
         workerOut: "worker.js",
     },

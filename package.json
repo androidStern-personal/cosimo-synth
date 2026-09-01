@@ -45,6 +45,7 @@
     "synth:desktop:dev": "./scripts/run_desktop_native_dev.sh",
     "fx:dev": "vite --config fx/vite.config.mjs",
     "fx:build": "node fx/build-effect.mjs",
+    "fx:visual-review": "node scripts/capture_plugin_visual_review.mjs",
     "fx:seqfx:visual-proof": "node scripts/capture_seqfx_visual_proof.mjs",
     "seqfx:release:plan": "node scripts/build_seqfx_beta_release.mjs --plan",
     "seqfx:release:build": "node scripts/build_seqfx_beta_release.mjs",
