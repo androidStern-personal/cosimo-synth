@@ -2150,8 +2150,9 @@ test("seqfx effect picker uses two rows of six without overflow and keeps keyboa
     assert.deepEqual(focusedButtonSurface, focusedCellSurface, "focused picker and cell states should share the authoritative surface");
 
     const baseCell = page.locator(
-        '.seqfx-cell:not(.has-frame-corner-tl):not(.has-frame-corner-tr):not(.has-frame-corner-bl):not(.has-frame-corner-br):not(.is-alt-bar):not(.is-covered):not(.is-selected):not(.is-playhead)',
-    ).first();
+        '[data-role="seqfx-cell"][data-lane="1"][data-step="2"]:not(.has-frame-corner-tl):not(.has-frame-corner-tr):not(.has-frame-corner-bl):not(.has-frame-corner-br):not(.is-alt-bar):not(.is-covered):not(.is-selected):not(.is-playhead)',
+    );
+    assert.equal(await baseCell.count(), 1, "hover comparison requires the fixture-owned unselected base cell");
     const baseButton = picker.locator('[data-role="seqfx-effect-type-option"]:not(.is-selected)').first();
     await page.evaluate(() => document.activeElement?.blur());
     await page.waitForTimeout(150);
