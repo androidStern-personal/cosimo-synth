@@ -3078,7 +3078,7 @@ export function SeqFxPatchView({
     const inspectorMode = isPromoControlled ? promoControls?.inspectorMode ?? runtimeInspectorMode : runtimeInspectorMode;
     const cellsPerBeat = useMemo(() => cellsPerBeatForRateIndex(rateIndex), [rateIndex]);
     const gridGeometry = useMemo(() => createGridGeometry(cellsPerBeat), [cellsPerBeat]);
-    const gridShellClassName = `seqfx-grid-shell seqfx-grid--beat-${cellsPerBeat}`;
+    const workspaceClassName = `seqfx-workspace seqfx-grid--beat-${cellsPerBeat}`;
     const laneTrackRefs = useRef(new Map<string, { lane: number; node: HTMLDivElement }>());
     const cellRefs = useRef(new Map<string, HTMLDivElement>());
     const gestureRef = useRef<BlockGesture | null>(null);
@@ -4836,8 +4836,8 @@ export function SeqFxPatchView({
                 }}
             />
 
-            <section className="seqfx-workspace" style={SEQFX_WORKSPACE_STYLE}>
-                <div className={gridShellClassName} aria-label="Effect sequence grid">
+            <section className={workspaceClassName} style={SEQFX_WORKSPACE_STYLE}>
+                <div className="seqfx-grid-shell" aria-label="Effect sequence grid">
                     {STEP_BARS.map((barSteps, barIndex) => (
                         <div className="seqfx-bar-section" data-role="seqfx-bar-section" data-bar={barIndex} key={barIndex}>
                             <div className="seqfx-step-header">
@@ -4882,6 +4882,7 @@ export function SeqFxPatchView({
                                                     const selected = activeSelection?.lane === lane && activeSelection.steps.includes(step);
                                                     const className = [
                                                         "seqfx-cell",
+                                                        "seqfx-cell-surface",
                                                         ...frameCornerClassNames(lane, barIndex, step, step),
                                                         gridGeometry.isAltBar(step) ? "is-alt-bar" : "",
                                                         cell.active ? "is-covered" : "",
@@ -5091,7 +5092,7 @@ export function SeqFxPatchView({
                                             <button
                                                 key={effectType}
                                                 type="button"
-                                                className={selected ? "is-selected" : undefined}
+                                                className={selected ? "seqfx-cell-surface is-selected" : "seqfx-cell-surface"}
                                                 data-effect-type={effectType}
                                                 data-role="seqfx-effect-type-option"
                                                 disabled={selectedBlockStartSteps.length > 1}

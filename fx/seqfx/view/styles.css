@@ -1,3 +1,9 @@
+@property --seqfx-resolved-cell-size {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 24px;
+}
+
 :host {
     display: block;
     width: 100%;
@@ -9,6 +15,25 @@
     --seqfx-step-min: 24px;
     --seqfx-normal-gap: 3px;
     --seqfx-beat-gap: 9px;
+    --seqfx-grid-steps-per-row: 16;
+    --seqfx-workspace-inline-margin: 18px;
+    --seqfx-workspace-gap: 16px;
+    --seqfx-sequencer-column-weight: 11;
+    --seqfx-workspace-column-weight: 21;
+    --seqfx-grid-padding-inline-start: 16px;
+    --seqfx-grid-padding-inline-end: 40px;
+    --seqfx-grid-padding-inline: calc(
+        var(--seqfx-grid-padding-inline-start)
+        + var(--seqfx-grid-padding-inline-end)
+    );
+    --seqfx-bar-content-min: 447px;
+    --seqfx-cell-surface-radius: 3px;
+    --seqfx-cell-surface-bg: rgba(222, 216, 204, 0.62);
+    --seqfx-cell-shadow-raised:
+        1px 1.2px 2.1px rgba(126, 116, 101, 0.3),
+        -1px -1px 1.8px rgba(255, 248, 232, 0.72),
+        inset 0.5px 0.5px 0 rgba(255, 248, 232, 0.44),
+        inset -0.5px -0.5px 0 rgba(126, 116, 101, 0.16);
     --seqfx-shell-border: rgba(28, 28, 28, 0.16);
     --seqfx-shell-border-strong: rgba(28, 28, 28, 0.28);
     --seqfx-shell-panel-bg: rgba(28, 28, 28, 0.035);
@@ -148,7 +173,7 @@ select {
 }
 
 .seqfx-pattern:active,
-.seqfx-cell:active {
+.seqfx-cell-surface:active:not(:disabled) {
     transform: translateY(1px);
 }
 
@@ -400,14 +425,102 @@ select {
 }
 
 .seqfx-workspace {
+    /* Resolve the root-relative length here before the sibling panels establish their own named containers. */
+    --seqfx-normal-gap-count: 12;
+    --seqfx-beat-gap-count: 3;
+    --seqfx-rhythmic-gap-width: calc(
+        (var(--seqfx-normal-gap-count) * var(--seqfx-normal-gap))
+        + (var(--seqfx-beat-gap-count) * var(--seqfx-beat-gap))
+    );
+    --seqfx-sequencer-inline-allocation: calc(
+        (
+            100cqi
+            - (2 * var(--seqfx-workspace-inline-margin))
+            - var(--seqfx-workspace-gap)
+        )
+        * var(--seqfx-sequencer-column-weight)
+        / var(--seqfx-workspace-column-weight)
+    );
+    --seqfx-resolved-cell-size: max(
+        var(--seqfx-step-min),
+        calc(
+            (var(--seqfx-bar-content-min) - var(--seqfx-rhythmic-gap-width))
+            / var(--seqfx-grid-steps-per-row)
+        ),
+        calc(
+            (
+                var(--seqfx-sequencer-inline-allocation)
+                - var(--seqfx-grid-padding-inline)
+                - var(--seqfx-rhythmic-gap-width)
+            )
+            / var(--seqfx-grid-steps-per-row)
+        )
+    );
+    --seqfx-picker-chip-width: calc(
+        (2 * var(--seqfx-resolved-cell-size))
+        + var(--seqfx-normal-gap)
+    );
+    --seqfx-step-columns:
+        repeat(3,
+            var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+            var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+            var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+            var(--seqfx-resolved-cell-size) var(--seqfx-beat-gap)
+        )
+        var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+        var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+        var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+        var(--seqfx-resolved-cell-size);
     display: grid;
-    grid-template-columns: minmax(528px, 1.1fr) minmax(480px, 1fr);
+    grid-template-columns:
+        calc(
+            (var(--seqfx-resolved-cell-size) * var(--seqfx-grid-steps-per-row))
+            + var(--seqfx-grid-padding-inline)
+            + var(--seqfx-rhythmic-gap-width)
+        )
+        minmax(480px, 1fr);
     flex: 1 1 auto;
-    gap: 16px;
+    gap: var(--seqfx-workspace-gap);
     align-items: start;
     min-height: 0;
     overflow: hidden;
-    margin: 0 18px 18px;
+    margin: 0 var(--seqfx-workspace-inline-margin) 18px;
+}
+
+.seqfx-workspace.seqfx-grid--beat-2 {
+    --seqfx-normal-gap-count: 8;
+    --seqfx-beat-gap-count: 7;
+    --seqfx-step-columns:
+        repeat(7,
+            var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+            var(--seqfx-resolved-cell-size) var(--seqfx-beat-gap)
+        )
+        var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+        var(--seqfx-resolved-cell-size);
+}
+
+.seqfx-workspace.seqfx-grid--beat-8 {
+    --seqfx-normal-gap-count: 14;
+    --seqfx-beat-gap-count: 1;
+    --seqfx-step-columns:
+        repeat(1,
+            var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+            var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+            var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+            var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+            var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+            var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+            var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+            var(--seqfx-resolved-cell-size) var(--seqfx-beat-gap)
+        )
+        var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+        var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+        var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+        var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+        var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+        var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+        var(--seqfx-resolved-cell-size) var(--seqfx-normal-gap)
+        var(--seqfx-resolved-cell-size);
 }
 
 .seqfx-grid-shell,
@@ -422,59 +535,14 @@ select {
 .seqfx-grid-shell {
     container: seqfx-sequencer / inline-size;
     overflow: auto;
-    --seqfx-bar-frame-x: 40px;
-    --seqfx-bar-frame-left-clearance: 16px;
-    /* Sixteen 24px cells plus twelve 3px gaps and three 9px beat gaps. */
-    --seqfx-bar-content-min: 447px;
+    --seqfx-bar-frame-x: var(--seqfx-grid-padding-inline-end);
+    --seqfx-bar-frame-left-clearance: var(--seqfx-grid-padding-inline-start);
     padding:
         var(--seqfx-grid-shell-padding-top, 24px)
-        var(--seqfx-bar-frame-x)
+        var(--seqfx-grid-padding-inline-end)
         44px
         var(--seqfx-bar-frame-left-clearance);
     background: transparent;
-    --seqfx-step-columns:
-        repeat(3,
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-beat-gap)
-        )
-        minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-        minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-        minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-        minmax(var(--seqfx-step-min), 1fr);
-}
-
-.seqfx-grid-shell.seqfx-grid--beat-2 {
-    --seqfx-step-columns:
-        repeat(7,
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-beat-gap)
-        )
-        minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-        minmax(var(--seqfx-step-min), 1fr);
-}
-
-.seqfx-grid-shell.seqfx-grid--beat-8 {
-    --seqfx-step-columns:
-        repeat(1,
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-            minmax(var(--seqfx-step-min), 1fr) var(--seqfx-beat-gap)
-        )
-        minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-        minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-        minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-        minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-        minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-        minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-        minmax(var(--seqfx-step-min), 1fr) var(--seqfx-normal-gap)
-        minmax(var(--seqfx-step-min), 1fr);
 }
 
 .seqfx-step-header,
@@ -585,27 +653,32 @@ select {
     font-weight: 700;
 }
 
+.seqfx-cell-surface {
+    border: 0;
+    border-radius: var(--seqfx-cell-surface-radius);
+    color: rgba(28, 28, 28, 0.52);
+    background: var(--seqfx-cell-surface-bg);
+    box-shadow: var(--seqfx-cell-shadow-raised);
+    cursor: pointer;
+    transition:
+        color 120ms ease,
+        background-color 120ms ease,
+        box-shadow 120ms ease,
+        filter 120ms ease,
+        opacity 120ms ease,
+        transform 120ms ease;
+}
+
 .seqfx-cell {
     position: relative;
     --seqfx-frame-cell-bevel: 7px;
-    --seqfx-cell-shadow-raised:
-        1px 1.2px 2.1px rgba(126, 116, 101, 0.3),
-        -1px -1px 1.8px rgba(255, 248, 232, 0.72),
-        inset 0.5px 0.5px 0 rgba(255, 248, 232, 0.44),
-        inset -0.5px -0.5px 0 rgba(126, 116, 101, 0.16);
     display: block;
     width: 100%;
     aspect-ratio: 1;
-    border: 0;
-    border-radius: 3px;
     margin: 0;
     padding: 0;
-    background: rgba(222, 216, 204, 0.62);
-    box-shadow: var(--seqfx-cell-shadow-raised);
-    cursor: pointer;
     touch-action: none;
     user-select: none;
-    transition: background-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
 
 .seqfx-cell.has-frame-corner-tl,
@@ -977,7 +1050,7 @@ select {
     opacity: 1;
 }
 
-.seqfx-cell.is-selected {
+.seqfx-cell-surface.is-selected {
     box-shadow:
         0 0 0 1.5px rgba(28, 28, 28, 0.68),
         var(--seqfx-cell-shadow-raised);
@@ -992,7 +1065,7 @@ select {
         inset 0 -1px 0 rgba(98, 90, 80, 0.16);
 }
 
-.seqfx-cell:focus-visible,
+.seqfx-cell-surface:focus-visible,
 .seqfx-block-select-control:focus-visible,
 .seqfx-block-duration-control:focus-visible,
 .seqfx-block.is-duration-focused {
@@ -1581,30 +1654,27 @@ select {
 
 .seqfx-effect-picker__options {
     display: grid;
-    grid-template-columns: repeat(6, minmax(44px, 1fr));
+    grid-template-columns: repeat(6, var(--seqfx-picker-chip-width));
     align-items: center;
     align-content: start;
-    /* Six practical columns plus the five existing 5px gutters. */
-    min-width: 289px;
+    width: max-content;
+    min-width: 0;
     gap: 5px;
 }
 
 .seqfx-effect-picker__options button {
     --seqfx-effect-icon-active: var(--seqfx-effect-filter);
+    container: seqfx-effect-option / inline-size;
     display: grid;
-    grid-template-columns: 25px minmax(0, 1fr);
+    grid-template-columns: min(24px, calc(var(--seqfx-resolved-cell-size) - 2px)) minmax(0, 1fr);
     align-items: center;
-    gap: 5px;
-    width: 100%;
+    gap: 1.5px;
+    width: var(--seqfx-picker-chip-width);
+    height: var(--seqfx-resolved-cell-size);
     min-width: 0;
-    min-height: 36px;
-    border: 1px solid rgba(126, 116, 101, 0.22);
-    border-radius: 6px;
-    padding: 4px 6px;
-    color: rgba(28, 28, 28, 0.52);
-    background: rgba(255, 248, 232, 0.22);
-    cursor: pointer;
-    transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease, filter 140ms ease, opacity 140ms ease, transform 140ms ease;
+    min-height: 0;
+    overflow: hidden;
+    padding: 1px;
 }
 
 .seqfx-effect-picker__options button[data-effect-type="1"] {
@@ -1657,18 +1727,7 @@ select {
 
 .seqfx-effect-picker__options button:hover,
 .seqfx-effect-picker__options button:focus-visible {
-    border-color: color-mix(in srgb, var(--seqfx-effect-icon-active) 62%, rgba(126, 116, 101, 0.22));
     color: var(--seqfx-effect-icon-active);
-    background: rgba(255, 248, 232, 0.44);
-}
-
-.seqfx-effect-picker__options button:focus-visible {
-    outline: 1px solid rgba(242, 209, 107, 0.75);
-    outline-offset: 3px;
-}
-
-.seqfx-effect-picker__options button:active:not(:disabled) {
-    transform: translateY(1px);
 }
 
 .seqfx-reverse-source-note {
@@ -1687,16 +1746,14 @@ select {
 }
 
 .seqfx-effect-picker__options button.is-selected {
-    border-color: color-mix(in srgb, var(--seqfx-effect-icon-active) 72%, #1c1c1c);
     color: var(--seqfx-effect-icon-active);
-    background: rgba(255, 248, 232, 0.62);
 }
 
 .seqfx-effect-picker__options .seqfx-effect-icon {
     display: block;
     flex: 0 0 auto;
-    width: 24px;
-    height: 24px;
+    width: min(24px, calc(var(--seqfx-resolved-cell-size) - 2px));
+    height: min(24px, calc(var(--seqfx-resolved-cell-size) - 2px));
     background-color: currentColor;
     -webkit-mask: var(--seqfx-effect-icon-mask) center / contain no-repeat;
     mask: var(--seqfx-effect-icon-mask) center / contain no-repeat;
@@ -1706,7 +1763,7 @@ select {
     min-width: 0;
     overflow: hidden;
     color: var(--seqfx-shell-ink);
-    font-size: 10px;
+    font-size: clamp(8px, calc(var(--seqfx-resolved-cell-size) / 3), 10px);
     font-weight: 750;
     line-height: 1.05;
     text-align: left;
@@ -1720,6 +1777,16 @@ select {
 
 .seqfx-effect-picker__name--short {
     display: none;
+}
+
+@container seqfx-effect-option (width < 79px) {
+    .seqfx-effect-picker__name--full {
+        display: none;
+    }
+
+    .seqfx-effect-picker__name--short {
+        display: inline;
+    }
 }
 
 .seqfx-inspector-tabs {
@@ -2628,14 +2695,6 @@ select {
 }
 
 @container seqfx-inspector (width < 520px) {
-    .seqfx-effect-picker__name--full {
-        display: none;
-    }
-
-    .seqfx-effect-picker__name--short {
-        display: inline;
-    }
-
     .seqfx-factory-preset {
         grid-template-columns: minmax(0, 1fr);
         align-items: start;
@@ -2648,18 +2707,9 @@ select {
 }
 
 @container seqfx-inspector (width < 420px) {
-    .seqfx-effect-picker__options button {
-        grid-template-rows: 24px auto;
-        grid-template-columns: minmax(0, 1fr);
-        justify-items: center;
-        gap: 2px;
-        min-height: 52px;
-        padding: 4px;
-    }
-
     .seqfx-effect-picker__name {
         width: 100%;
-        text-align: center;
+        text-align: left;
     }
 }
 
@@ -2792,6 +2842,10 @@ select {
 
 @container seqfx-root (width < 1060px) {
     .seqfx-workspace {
+        --seqfx-sequencer-inline-allocation: calc(
+            100cqi
+            - (2 * var(--seqfx-workspace-inline-margin))
+        );
         grid-template-columns: minmax(0, 1fr);
         flex: 0 0 auto;
         min-height: auto;

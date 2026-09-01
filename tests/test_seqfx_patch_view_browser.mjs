@@ -1912,13 +1912,16 @@ test("seqfx effect picker uses two rows of six without overflow and keeps keyboa
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
 
+    const settleLayout = () => page.evaluate(() => new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+    }));
+
     const picker = page.locator(".seqfx-effect-picker__options");
     const effectOptions = picker.locator('[data-role="seqfx-effect-type-option"]');
     const supportedSizes = [
-        { id: "default", width: 1120, height: 680 },
-        { id: "minimum", width: 720, height: 520 },
-        { id: "compact", width: 900, height: 600 },
-        { id: "wide", width: 1440, height: 800 },
+        { id: "wide", width: 1280, height: 820 },
+        { id: "side-by-side floor", width: 1060, height: 820 },
+        { id: "narrow stack", width: 320, height: 640 },
     ];
 
     assert.equal(await effectOptions.count(), 12);
@@ -1930,10 +1933,40 @@ test("seqfx effect picker uses two rows of six without overflow and keeps keyboa
 
     for (const size of supportedSizes) {
         await page.setViewportSize({ width: size.width, height: size.height });
+        await settleLayout();
         const geometry = await picker.evaluate((options) => {
+            const surface = (node) => {
+                const style = getComputedStyle(node);
+                return {
+                    backgroundColor: style.backgroundColor,
+                    borderBottomStyle: style.borderBottomStyle,
+                    borderBottomWidth: style.borderBottomWidth,
+                    borderLeftStyle: style.borderLeftStyle,
+                    borderLeftWidth: style.borderLeftWidth,
+                    borderRadius: style.borderRadius,
+                    borderRightStyle: style.borderRightStyle,
+                    borderRightWidth: style.borderRightWidth,
+                    borderTopStyle: style.borderTopStyle,
+                    borderTopWidth: style.borderTopWidth,
+                    boxShadow: style.boxShadow,
+                };
+            };
             const optionRect = options.getBoundingClientRect();
             const buttons = [...options.querySelectorAll('[data-role="seqfx-effect-type-option"]')];
             const buttonRects = buttons.map((button) => button.getBoundingClientRect());
+            const selectedButton = options.querySelector('[data-role="seqfx-effect-type-option"].is-selected');
+            const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
+            const nextCell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="1"]');
+            const baseCell = document.querySelector(
+                '.seqfx-cell:not(.has-frame-corner-tl):not(.has-frame-corner-tr):not(.has-frame-corner-bl):not(.has-frame-corner-br):not(.is-alt-bar):not(.is-covered):not(.is-selected):not(.is-playhead)',
+            );
+            const baseButton = options.querySelector('[data-role="seqfx-effect-type-option"]:not(.is-selected)');
+            if (!selectedButton || !cell || !nextCell || !baseCell || !baseButton) {
+                throw new Error("Missing picker/cell geometry contract nodes");
+            }
+            const selectedButtonRect = selectedButton.getBoundingClientRect();
+            const cellRect = cell.getBoundingClientRect();
+            const nextCellRect = nextCell.getBoundingClientRect();
             const rowCounts = new Map();
             for (const rect of buttonRects) {
                 const rowTop = Math.round(rect.top * 10) / 10;
@@ -1941,9 +1974,34 @@ test("seqfx effect picker uses two rows of six without overflow and keeps keyboa
             }
             return {
                 allInside: buttonRects.every((rect) => rect.left >= optionRect.left - 1 && rect.right <= optionRect.right + 1),
+                baseButtonSurface: surface(baseButton),
+                baseCellSurface: surface(baseCell),
+                buttonHeight: selectedButtonRect.height,
+                buttonWidth: selectedButtonRect.width,
+                cellHeight: cellRect.height,
+                cellWidth: cellRect.width,
                 clientWidth: options.clientWidth,
-                minimumButtonHeight: Math.min(...buttonRects.map((rect) => rect.height)),
-                minimumButtonWidth: Math.min(...buttonRects.map((rect) => rect.width)),
+                hiddenOrClippedContent: buttons.flatMap((button) => {
+                    const buttonRect = button.getBoundingClientRect();
+                    const icon = button.querySelector('.seqfx-effect-icon')?.getBoundingClientRect();
+                    const nameNode = button.querySelector('.seqfx-effect-picker__name');
+                    const name = nameNode?.getBoundingClientRect();
+                    const visible = icon !== undefined && name !== undefined && nameNode !== null
+                        && icon.width > 0 && icon.height > 0
+                        && icon.left >= buttonRect.left - 1 && icon.right <= buttonRect.right + 1
+                        && name.width > 0 && name.height > 0
+                        && name.left >= buttonRect.left - 1 && name.right <= buttonRect.right + 1
+                        && nameNode.scrollWidth <= nameNode.clientWidth + 1;
+                    return visible ? [] : [{
+                        label: button.getAttribute('aria-label'),
+                        nameClientWidth: nameNode?.clientWidth ?? 0,
+                        nameScrollWidth: nameNode?.scrollWidth ?? 0,
+                    }];
+                }),
+                normalGap: nextCellRect.left - cellRect.right,
+                pickerClientWidth: options.parentElement.clientWidth,
+                pickerScrollWidth: options.parentElement.scrollWidth,
+                resolvedCellSize: Number.parseFloat(getComputedStyle(options).getPropertyValue('--seqfx-resolved-cell-size')),
                 rootScrollWidth: document.documentElement.scrollWidth,
                 rowCounts: [...rowCounts.values()],
                 scrollWidth: options.scrollWidth,
@@ -1953,12 +2011,85 @@ test("seqfx effect picker uses two rows of six without overflow and keeps keyboa
 
         assert.deepEqual(geometry.rowCounts, [6, 6], `${size.id} picker should render exactly two rows of six`);
         assert.equal(geometry.allInside, true, `${size.id} effect buttons should stay inside the picker`);
-        assert.ok(geometry.minimumButtonHeight >= 36, `${size.id} should preserve the existing 36px effect hit target`);
-        assert.ok(geometry.minimumButtonWidth >= 44, `${size.id} effect buttons should retain a practical pointer hit width`);
+        assert.deepEqual(geometry.hiddenOrClippedContent, [], `${size.id} should preserve every option's visible icon and name`);
+        assertClose(geometry.cellHeight, geometry.cellWidth, 0.75, `${size.id} sequencer cell should remain square`);
+        assertClose(geometry.resolvedCellSize, geometry.cellWidth, 0.75, `${size.id} root cell-size authority`);
+        assertClose(geometry.buttonHeight, geometry.cellHeight, 0.75, `${size.id} picker height should equal sequencer-cell height`);
+        assertClose(
+            geometry.buttonWidth,
+            (2 * geometry.cellWidth) + geometry.normalGap,
+            0.75,
+            `${size.id} picker width should equal two cells plus the ordinary gap`,
+        );
+        assert.deepEqual(geometry.baseButtonSurface, geometry.baseCellSurface, `${size.id} picker and cell should share the base surface contract`);
         assert.ok(geometry.scrollWidth <= geometry.clientWidth + 1, `${size.id} picker should not clip or scroll horizontally`);
         assert.ok(geometry.rootScrollWidth <= geometry.viewportWidth + 1, `${size.id} picker should not create page overflow`);
+        if (size.id === "narrow stack") {
+            assert.ok(geometry.pickerScrollWidth > geometry.pickerClientWidth, "narrow picker should retain its owned horizontal scroll");
+        } else {
+            assert.ok(geometry.pickerScrollWidth <= geometry.pickerClientWidth + 1, `${size.id} picker should fit without scrolling`);
+        }
     }
 
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await settleLayout();
+    await page.getByRole("button", { name: "Chain 1 step 2", exact: true }).click();
+    const selectedCell = page.locator('[data-role="seqfx-cell"][data-lane="0"][data-step="1"]');
+    const selectedEffect = picker.locator('[data-role="seqfx-effect-type-option"].is-selected');
+    const selectedSurface = async (locator) => locator.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return {
+            backgroundColor: style.backgroundColor,
+            borderRadius: style.borderRadius,
+            boxShadow: style.boxShadow,
+        };
+    });
+    assert.deepEqual(
+        await selectedSurface(selectedEffect),
+        await selectedSurface(selectedCell),
+        "selected picker and cell states should share the authoritative surface",
+    );
+
+    const focusedSurface = async (previousLocator, locator) => {
+        await previousLocator.focus();
+        await previousLocator.press("Tab");
+        assert.equal(await locator.evaluate((node) => node === document.activeElement), true, "Tab should reach the expected cell surface");
+        return locator.evaluate((node) => {
+            const style = getComputedStyle(node);
+            return {
+                boxShadow: style.boxShadow,
+                outlineColor: style.outlineColor,
+                outlineOffset: style.outlineOffset,
+                outlineStyle: style.outlineStyle,
+                outlineWidth: style.outlineWidth,
+            };
+        });
+    };
+    const focusedCellSurface = await focusedSurface(
+        page.locator('[data-role="seqfx-cell"][data-lane="0"][data-step="1"]'),
+        page.locator('[data-role="seqfx-cell"][data-lane="0"][data-step="2"]'),
+    );
+    const focusedButtonSurface = await focusedSurface(
+        page.getByRole("button", { name: "Filter", exact: true }),
+        page.getByRole("button", { name: "Crush", exact: true }),
+    );
+    assert.deepEqual(focusedButtonSurface, focusedCellSurface, "focused picker and cell states should share the authoritative surface");
+
+    const baseCell = page.locator(
+        '.seqfx-cell:not(.has-frame-corner-tl):not(.has-frame-corner-tr):not(.has-frame-corner-bl):not(.has-frame-corner-br):not(.is-alt-bar):not(.is-covered):not(.is-selected):not(.is-playhead)',
+    ).first();
+    const baseButton = picker.locator('[data-role="seqfx-effect-type-option"]:not(.is-selected)').first();
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.waitForTimeout(150);
+    await baseCell.hover();
+    await page.waitForTimeout(150);
+    const hoveredCellSurface = await selectedSurface(baseCell);
+    await baseButton.hover();
+    await page.waitForTimeout(150);
+    const hoveredButtonSurface = await selectedSurface(baseButton);
+    assert.deepEqual(hoveredButtonSurface, hoveredCellSurface, "hovered picker and cell states should keep the same surface contract");
+
+    await page.getByRole("button", { name: "Chain 4 Stutter block 1", exact: true }).click();
     const dirty = page.getByRole("button", { name: "Dirty", exact: true });
     await dirty.focus();
     await page.keyboard.press("Enter");
@@ -2216,8 +2347,13 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
         const rect = button.getBoundingClientRect();
         return { height: rect.height, iconRight: icon.right, nameLeft: name.left, width: rect.width };
     });
-    assertClose(floorPickerLayout.height, 36, 0.75, "picker height at the 480px inspector floor");
-    assert.ok(floorPickerLayout.width >= 71, `picker width at the inspector floor should remain about 71px, got ${floorPickerLayout.width}px`);
+    assertClose(floorPickerLayout.height, atBreakpoint.cell.height, 0.75, "picker height at the 480px inspector floor");
+    assertClose(
+        floorPickerLayout.width,
+        (2 * atBreakpoint.cell.width) + atBreakpoint.normalGap,
+        0.75,
+        "picker width at the inspector floor",
+    );
     assert.ok(floorPickerLayout.nameLeft > floorPickerLayout.iconRight, "1060px picker should keep icon and short label horizontal");
 
     await page.setViewportSize({ width: 1059, height: 820 });
@@ -2230,14 +2366,21 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
 
     await page.setViewportSize({ width: 420, height: 640 });
     await settleLayout();
+    const narrowStack = await measureWorkspace();
     const stackedPickerLayout = await page.getByRole("button", { name: "Stutter", exact: true }).evaluate((button) => {
         const icon = button.querySelector(".seqfx-effect-icon").getBoundingClientRect();
         const name = button.querySelector(".seqfx-effect-picker__name").getBoundingClientRect();
         const rect = button.getBoundingClientRect();
-        return { height: rect.height, iconBottom: icon.bottom, nameTop: name.top };
+        return { height: rect.height, iconRight: icon.right, nameLeft: name.left, width: rect.width };
     });
-    assertClose(stackedPickerLayout.height, 52, 0.75, "stacked narrow picker height");
-    assert.ok(stackedPickerLayout.nameTop >= stackedPickerLayout.iconBottom, "420px picker should stack its short label below the icon");
+    assertClose(stackedPickerLayout.height, narrowStack.cell.height, 0.75, "stacked narrow picker height");
+    assertClose(
+        stackedPickerLayout.width,
+        (2 * narrowStack.cell.width) + narrowStack.normalGap,
+        0.75,
+        "stacked narrow picker width",
+    );
+    assert.ok(stackedPickerLayout.nameLeft > stackedPickerLayout.iconRight, "420px picker should keep its icon and short label visible");
 
     await page.setViewportSize({ width: 320, height: 640 });
     await settleLayout();
@@ -2311,7 +2454,7 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
     assert.ok(narrowEffectLayout.shortNames.every(({ display }) => display !== "none"), "short names should be visible below 520px inspector width");
     assert.ok(narrowEffectLayout.fullNameDisplays.every((display) => display === "none"), "full visible names should yield to unique short names");
     for (const button of narrowEffectLayout.buttonRects) {
-        assert.ok(button.width >= 44 && button.height >= 36, `picker target should remain practical, got ${button.width}x${button.height}px`);
+        assert.ok(button.width > 0 && button.height > 0, `picker target should remain visible, got ${button.width}x${button.height}px`);
         assert.ok(button.left >= narrowEffectLayout.options.left - 1 && button.right <= narrowEffectLayout.options.right + 1, "picker target should stay inside its grid");
     }
     assert.ok(narrowEffectLayout.select.top > narrowEffectLayout.presetLabelBottom, "preset select should reflow below its label");
@@ -4304,14 +4447,19 @@ test("seqfx_inspector_effect_selector_persists_selected_effect_type_and_uploads_
     assert.equal(await effectPicker.getByRole("button", { name: "Crush", exact: true }).getAttribute("aria-pressed"), "true");
 
     const tapeStopButton = effectPicker.getByRole("button", { name: "Tape Stop", exact: true });
-    const buttonChrome = await tapeStopButton.evaluate((button) => {
-        const styles = getComputedStyle(button);
+    const surfaceChrome = (locator) => locator.evaluate((node) => {
+        const styles = getComputedStyle(node);
         return {
             backgroundColor: styles.backgroundColor,
+            borderRadius: styles.borderRadius,
             borderTopStyle: styles.borderTopStyle,
+            boxShadow: styles.boxShadow,
         };
     });
-    assert.deepEqual(buttonChrome, { backgroundColor: "rgba(255, 248, 232, 0.22)", borderTopStyle: "solid" });
+    const baseCell = page.locator(
+        '.seqfx-cell:not(.has-frame-corner-tl):not(.has-frame-corner-tr):not(.has-frame-corner-bl):not(.has-frame-corner-br):not(.is-alt-bar):not(.is-covered):not(.is-selected):not(.is-playhead)',
+    ).first();
+    assert.deepEqual(await surfaceChrome(tapeStopButton), await surfaceChrome(baseCell));
     await tapeStopButton.click();
     assert.equal(await tapeStopButton.getAttribute("aria-pressed"), "true");
 
