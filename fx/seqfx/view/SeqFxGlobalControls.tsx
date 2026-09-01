@@ -27,7 +27,7 @@ function CompactIntegerInput({
     max,
     min,
     onBlur,
-    onChange,
+    onCommit,
     onFocus,
     value,
 }: {
@@ -36,7 +36,7 @@ function CompactIntegerInput({
     max: number;
     min: number;
     onBlur: () => void;
-    onChange: (value: number) => void;
+    onCommit: (value: number) => void;
     onFocus: () => void;
     value: number;
 }) {
@@ -58,24 +58,17 @@ function CompactIntegerInput({
                 max={max}
                 min={min}
                 onBlur={() => {
+                    if (draft !== null && draft !== "") {
+                        const parsed = Number(draft);
+                        if (Number.isFinite(parsed)) {
+                            onCommit(clampInteger(parsed, min, max));
+                        }
+                    }
                     setDraft(null);
                     onBlur();
                 }}
                 onChange={(event) => {
-                    const nextDraft = event.currentTarget.value;
-                    setDraft(nextDraft);
-                    if (nextDraft === "") {
-                        return;
-                    }
-
-                    const parsed = Number(nextDraft);
-                    if (!Number.isFinite(parsed)) {
-                        return;
-                    }
-
-                    const normalized = clampInteger(parsed, min, max);
-                    setDraft(String(normalized));
-                    onChange(normalized);
+                    setDraft(event.currentTarget.value);
                 }}
                 onFocus={() => {
                     setDraft(String(value));
@@ -93,13 +86,13 @@ function CompactIntegerInput({
 function CompactBpmInput({
     disabled,
     onBlur,
-    onChange,
+    onCommit,
     onFocus,
     value,
 }: {
     disabled: boolean;
     onBlur: () => void;
-    onChange: (value: number) => void;
+    onCommit: (value: number) => void;
     onFocus: () => void;
     value: number;
 }) {
@@ -120,24 +113,17 @@ function CompactBpmInput({
                 max={300}
                 min={20}
                 onBlur={() => {
+                    if (draft !== null && draft !== "") {
+                        const parsed = Number(draft);
+                        if (Number.isFinite(parsed)) {
+                            onCommit(Math.min(300, Math.max(20, Math.round(parsed * 10) / 10)));
+                        }
+                    }
                     setDraft(null);
                     onBlur();
                 }}
                 onChange={(event) => {
-                    const nextDraft = event.currentTarget.value;
-                    setDraft(nextDraft);
-                    if (nextDraft === "") {
-                        return;
-                    }
-
-                    const parsed = Number(nextDraft);
-                    if (!Number.isFinite(parsed)) {
-                        return;
-                    }
-
-                    const normalized = Math.min(300, Math.max(20, Math.round(parsed * 10) / 10));
-                    setDraft(String(normalized));
-                    onChange(normalized);
+                    setDraft(event.currentTarget.value);
                 }}
                 onFocus={() => {
                     setDraft(String(value));
@@ -359,7 +345,7 @@ export function SeqFxGlobalControlSurface({
                     max={32}
                     min={1}
                     onBlur={endLoopGesture}
-                    onChange={(value) => onLoopRangeChange(Math.min(value, loopEndExclusive) - 1, loopEndExclusive)}
+                    onCommit={(value) => onLoopRangeChange(Math.min(value, loopEndExclusive) - 1, loopEndExclusive)}
                     onFocus={beginLoopGesture}
                     value={controls.loopStart + 1}
                 />
@@ -369,7 +355,7 @@ export function SeqFxGlobalControlSurface({
                     max={32}
                     min={1}
                     onBlur={endLoopGesture}
-                    onChange={(value) => onLoopRangeChange(controls.loopStart, Math.max(value, controls.loopStart + 1))}
+                    onCommit={(value) => onLoopRangeChange(controls.loopStart, Math.max(value, controls.loopStart + 1))}
                     onFocus={beginLoopGesture}
                     value={loopEndExclusive}
                 />
@@ -406,7 +392,7 @@ export function SeqFxGlobalControlSurface({
                 <CompactBpmInput
                     disabled={!manualTempoAvailable}
                     onBlur={() => endGesture(SEQFX_ENDPOINTS.manualBpm)}
-                    onChange={(value) => onGlobalControl(SEQFX_ENDPOINTS.manualBpm, value)}
+                    onCommit={(value) => onGlobalControl(SEQFX_ENDPOINTS.manualBpm, value)}
                     onFocus={() => beginGesture(SEQFX_ENDPOINTS.manualBpm)}
                     value={controls.manualBpm}
                 />

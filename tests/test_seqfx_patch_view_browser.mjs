@@ -1238,13 +1238,36 @@ test("seqfx consolidated top controls preserve global loop transport and history
     assert.equal(await enabled.getAttribute("aria-checked"), "false");
     await mix.fill("0.37");
     await clock.selectOption("1");
-    await bpm.fill("134");
+    await bpm.selectText();
+    await bpm.pressSequentially("134");
+    assert.equal(await bpm.inputValue(), "134", "BPM should preserve a multi-digit draft until commit");
+    assert.deepEqual(
+        (await getHarnessSnapshot(page)).events.filter(({ endpointID }) => endpointID === "manualBpm"),
+        [],
+        "BPM typing should not emit transient digit writes",
+    );
     await bpm.press("Enter");
     await rate.selectOption("2");
     await swing.fill("0.2");
-    await loopStart.fill("5");
+    await loopStart.selectText();
+    await loopStart.pressSequentially("5");
+    assert.deepEqual(
+        (await getHarnessSnapshot(page)).events.filter(({ endpointID }) => endpointID === "loopStart" || endpointID === "loopLength"),
+        [],
+        "Start typing should not emit a partial loop range",
+    );
     await loopStart.press("Enter");
-    await loopStop.fill("13");
+    await loopStop.selectText();
+    await loopStop.pressSequentially("13");
+    assert.equal(await loopStop.inputValue(), "13", "Stop should preserve a multi-digit draft until commit");
+    assert.deepEqual(
+        (await getHarnessSnapshot(page)).events.filter(({ endpointID }) => endpointID === "loopStart" || endpointID === "loopLength"),
+        [
+            { endpointID: "loopStart", value: 4 },
+            { endpointID: "loopLength", value: 28 },
+        ],
+        "Stop typing should not add transient loop writes after the Start commit",
+    );
     await loopStop.press("Enter");
     await transport.click();
     await reset.click();
@@ -4932,12 +4955,28 @@ test("seqfx loop bounds use compact validated cell inputs with exact host gestur
 
     await bpm.evaluate((input) => input.blur());
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
-    await bpm.fill("134.5");
+    await bpm.selectText();
+    await bpm.pressSequentially("134.5");
+    assert.equal(await bpm.inputValue(), "134.5");
+    assert.deepEqual((await getHarnessSnapshot(page)).events, [], "BPM draft digits should stay local until Enter");
     await bpm.press("Enter");
 
-    await loopStart.fill("5");
+    await loopStart.selectText();
+    await loopStart.pressSequentially("5");
+    assert.deepEqual(
+        (await getHarnessSnapshot(page)).events.map(({ endpointID, value }) => ({ endpointID, value })),
+        [{ endpointID: "manualBpm", value: 134.5 }],
+        "Start draft digits should not write before Enter",
+    );
     await loopStart.press("Enter");
-    await loopStop.fill("13");
+    await loopStop.selectText();
+    await loopStop.pressSequentially("13");
+    assert.equal(await loopStop.inputValue(), "13");
+    assert.deepEqual((await getHarnessSnapshot(page)).events.map(({ endpointID, value }) => ({ endpointID, value })), [
+        { endpointID: "manualBpm", value: 134.5 },
+        { endpointID: "loopStart", value: 4 },
+        { endpointID: "loopLength", value: 28 },
+    ], "Stop draft digits should not add transient loop writes before Enter");
     await loopStop.press("Enter");
 
     let snapshot = await getHarnessSnapshot(page);
@@ -4957,6 +4996,19 @@ test("seqfx loop bounds use compact validated cell inputs with exact host gestur
     ]);
     assert.deepEqual(snapshot.gestureEnds, snapshot.gestureStarts);
     assert.equal(await page.locator('.seqfx-global input[type="text"]').count(), 0, "global numeric fields should stay native number inputs");
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await bpm.selectText();
+    await bpm.press("Backspace");
+    await bpm.evaluate((input) => input.blur());
+    assert.equal(await bpm.inputValue(), "134.5", "an empty BPM draft should revert to the authoritative value");
+    await loopStop.selectText();
+    await loopStop.press("Backspace");
+    await loopStop.evaluate((input) => input.blur());
+    assert.equal(await loopStop.inputValue(), "13", "an empty Stop draft should revert to the authoritative value");
+    snapshot = await getHarnessSnapshot(page);
+    assert.deepEqual(snapshot.events, [], "empty native-number drafts should not emit host writes");
+    assert.deepEqual(snapshot.storedStateWrites, [], "empty native-number drafts should not write saved state");
 
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
     await loopStart.fill("20");
