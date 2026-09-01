@@ -79,7 +79,14 @@ async function installConnection(page, manifest) {
 }
 
 async function prepare(page) {
-    await page.locator('[data-role="seqfx-root"]').waitFor();
+    const root = page.locator('[data-role="seqfx-root"]');
+    const runtimeFailure = page.locator("cosimo-seqfx-react-view pre");
+    await page.locator('[data-role="seqfx-root"], cosimo-seqfx-react-view pre').waitFor();
+    if (await runtimeFailure.isVisible()) {
+        const message = (await runtimeFailure.textContent())?.trim() || "Unknown production render failure.";
+        throw new Error(`SeqFX packaged view error: ${message}`);
+    }
+    await root.waitFor();
     const dismiss = page.locator('[data-role="seqfx-first-use-dismiss"]');
     if (await dismiss.isVisible())
         await dismiss.click();
