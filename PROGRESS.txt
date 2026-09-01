@@ -1,3 +1,11 @@
+Builder Kit wave 3 preset sweep integrated — 2026-09-01
+- Branch `claude/builder-kit-extraction-arch-c93byl`, commits `d49a571`..`78634db`. Plan task 2.4 complete; Phase 2 of the extraction plan is closed. Details in `BUILDER_KIT_EXTRACTION_PLAN.md` execution log.
+- Dead v1 preset system deleted; chorus/OTT factory presets are plugin-owned; `standalone-effect-presets.ts` and `preset-bar.ts` are generic cores with synth adapters (`synth-standalone-presets.ts`, `synth-preset-bar.ts`); import-graph tests enforce the boundary; wire formats/storage keys byte-identical to baseline; element names/prefixes configurable with unchanged defaults.
+- Preset-bar extensibility is subclass + overridable presentation hooks (the synth is the reference consumer); Andrew accepted the mechanism as long as the bar is extensible — document the hooks in the kit docs task.
+- Visible change accepted: plugin preset bars no longer render the permanently-disabled synth Share button.
+- Outstanding machine-bound follow-up: regenerate `patch_gui/desktop/app.js` (`node ui/build.mjs --desktop`) and run `test:desktop:ui` + sound-share/bounce-ui browser suites on a machine with private-fork access; the bundle was already stale at wave start (master `5237e30` changed sources without regenerating) — audit that drift too. Three bounce integration tests need `build/web` artifacts (fork/cmaj-bound).
+- Process gotcha recorded: workflow agents must never use `git stash`/`checkout`/`reset` for baseline comparisons — an interrupted stash cycle nearly lost this wave; use `git show <rev>:<path>` into scratch space instead.
+
 Builder Kit wave 2 integrated — 2026-09-01
 - Branch `claude/builder-kit-extraction-arch-c93byl`, commit `d67bdc0`. Plan tasks 2.1, 2.2, 1.3 complete; details in `BUILDER_KIT_EXTRACTION_PLAN.md` execution log.
 - The effect plugin registry is discovery-driven: `fx/build-effect.mjs` scans `fx/*/` for every `.cmajorpatch`, sidecar `<PatchName>.build.json` overrides derived defaults, and the dev server, `install_fx_cmajplugin.sh`, and both build pipelines consume the same module. Adding a plugin touches zero shared files. All eight targets JIT-install (enhancer family via built runtimes — their source dirs have no `view/index.js`).

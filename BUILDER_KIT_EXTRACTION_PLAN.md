@@ -98,7 +98,7 @@ JS/TS work; parallelizable across worktrees except where noted.
   outputs (dev keeps it; remove the seqfx-only env special case). Dev-server
   loading becomes an explicit opt-in. Add tests for the prod path, the
   fallback, and both error views (currently 3 tests cover ~10 branches).
-- [ ] **2.4 Preset system sweep.** Delete dead v1: `effect-preset-store.ts`,
+- [x] **2.4 Preset system sweep — DONE 2026-09-01 (wave 3).** Delete dead v1: `effect-preset-store.ts`,
   `use-effect-presets.ts`, `effect-preset-descriptors.ts`, the ~440 unreachable
   lines of `effect-preset-schema.ts` (salvage the shared types +
   `assertNoDuplicateJsonKeys` into a live module), and their tests
@@ -261,3 +261,38 @@ not this extraction.
   - Surface changes to know about: `/__fx-dev-status` names plugins by registry
     alias (was directory name); `all` builds in stable sorted order; installer
     `--help` exits 0.
+
+- **2026-09-01 wave 3** (commits `d49a571`..`78634db`; verified green: `npm test`
+  1095/0 with one intentional skip, typecheck pinned at the 27-error baseline,
+  65/65 focused preset/snapshot suites, targeted synth gate 14/14, seqfx 80/81
+  with only the known Linux font-metric failure, `fx:build all` clean, diff maps
+  1:1 to stage reports, wire formats byte-identical to baseline).
+  - Dead v1 preset system deleted (~3,000 lines incl. tests of dead code); live
+    v1 symbols salvaged into `effect-preset-shared.ts` (audit missed one
+    consumer: `sound-share-envelope.ts`). Chorus/OTT factory presets moved
+    verbatim into `fx/{chorus_lab,ott_lab}/view/factory-presets.js`; the
+    controller's factory default is now empty.
+  - `standalone-effect-presets.ts` split: generic core + `synth-standalone-presets.ts`
+    (sound transactions, bounce, share, wavetable validation, sourceMode check).
+    `preset-bar.ts` split: generic bar + `synth-preset-bar.ts` subclass (Polish
+    meter, share, bounce, compact shell). Extensibility mechanism = subclass +
+    overridable presentation hooks — Andrew approved the mechanism-agnostic
+    requirement ("just that it is extensible"); hooks must be documented in 3.3.
+  - Import-graph tests keep both generic cores free of synth/bounce/share
+    imports; element names and storage prefixes configurable, defaults
+    unchanged; helpers deduped (`effect-utils.ts`, `effect-toast.ts`, one
+    stored-state envelope unwrap). Registration guards added (foreign-class tag
+    collisions throw).
+  - Visible change (plan-sanctioned, owner-accepted): plugin preset bars render
+    5 action buttons instead of 6 — the permanently-disabled Share button is
+    synth-only now.
+  - MUST RUN ON A FORK-CAPABLE MACHINE before calling the wave fully closed:
+    `node ui/build.mjs --desktop` (patch_gui/desktop/app.js is stale — it was
+    already stale at wave start from master commit 5237e30), then
+    `npm run test:desktop:ui` plus the sound-share/bounce-ui browser suites.
+    This container cannot clone the private cmajor fork (add_repo approval
+    pending), so the desktop vite shards were replaced by the targeted 14/14
+    synth gate.
+  - Process note: an interrupted agent git-stash cycle nearly lost the wave;
+    work was recovered from stash@{0} and agents are now forbidden from
+    stash/checkout/reset — baselines are read via `git show` instead.
