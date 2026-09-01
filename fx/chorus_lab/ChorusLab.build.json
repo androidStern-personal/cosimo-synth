@@ -1,0 +1,7 @@
+{
+  "alias": "chorus",
+  "runtimeOut": "build/fx/chorus_lab_runtime",
+  "juceOut": "build/chorus_lab_juce",
+  "cmakeTarget": "ChorusLab",
+  "productName": "ChorusLab"
+}

@@ -5,70 +5,54 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+import { serveJsonValue } from "../ui/vite.shared.mjs";
+import { discoverEffectPlugins } from "./build-effect.mjs";
+
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(configDir, "..");
-const fxRoot = path.join(repoRoot, "fx");
 const devServerStartedAt = new Date().toISOString();
+const pluginDiscoveryTtlMs = 2000;
 
-function discoverEffectPlugins() {
-    if (!fs.existsSync(fxRoot)) {
-        return [];
+let cachedPluginDescriptions = null;
+let cachedPluginDescriptionsAt = 0;
+
+// Discovery reads every fx/*/ directory; a short TTL keeps status requests
+// cheap while still picking up newly added plugins within a couple of seconds.
+function describeEffectPlugins(now = Date.now()) {
+    if (cachedPluginDescriptions === null || now - cachedPluginDescriptionsAt >= pluginDiscoveryTtlMs) {
+        cachedPluginDescriptions = Object.entries(discoverEffectPlugins()).map(([name, plugin]) => ({
+            name,
+            patch: `/${plugin.patch}`,
+            sourceModule: plugin.devModule,
+        }));
+        cachedPluginDescriptionsAt = now;
     }
 
-    return fs.readdirSync(fxRoot, { withFileTypes: true })
-        .filter(entry => entry.isDirectory())
-        .map(entry => {
-            const pluginRoot = path.join(fxRoot, entry.name);
-            const patchFile = fs.readdirSync(pluginRoot)
-                .find(fileName => fileName.endsWith(".cmajorpatch"));
+    return cachedPluginDescriptions;
+}
 
-            if (!patchFile) {
-                return undefined;
-            }
+function isLoopbackRequest(request) {
+    const remoteAddress = request.socket?.remoteAddress ?? "";
 
-            const patchPath = path.join(pluginRoot, patchFile);
-            let manifest = {};
-
-            try {
-                manifest = JSON.parse(fs.readFileSync(patchPath, "utf8"));
-            } catch {
-                manifest = {};
-            }
-
-            return {
-                name: entry.name,
-                patch: `/fx/${entry.name}/${patchFile}`,
-                sourceModule: manifest.view?.devModule,
-            };
-        })
-        .filter(Boolean);
+    return remoteAddress === "127.0.0.1"
+        || remoteAddress === "::1"
+        || remoteAddress === "::ffff:127.0.0.1";
 }
 
 function serveEffectDevStatus() {
-    return {
-        name: "fx-dev-status",
-        configureServer(server) {
-            server.middlewares.use((request, response, next) => {
-                const requestPath = (request.url ?? "").split("?")[0];
-
-                if (requestPath !== "/__fx-dev-status") {
-                    next();
-                    return;
-                }
-
-                response.statusCode = 200;
-                response.setHeader("Access-Control-Allow-Origin", "*");
-                response.setHeader("Content-Type", "application/json; charset=utf-8");
-                response.end(JSON.stringify({
-                    kind: "fx-vite-dev-server",
-                    repoRoot,
-                    pid: process.pid,
-                    startedAt: devServerStartedAt,
-                    plugins: discoverEffectPlugins(),
-                }));
-            });
-        },
-    };
+    return serveJsonValue({
+        urlPath: "/__fx-dev-status",
+        valueFactory: ({ request }) => ({
+            kind: "fx-vite-dev-server",
+            startedAt: devServerStartedAt,
+            plugins: describeEffectPlugins(),
+            // The loader's probe needs only kind + plugins. The checkout path
+            // and pid identify this server to same-machine tooling (worktree
+            // disambiguation) and stay off the wire for other hosts, since the
+            // dev server listens on all interfaces.
+            ...(isLoopbackRequest(request) ? { repoRoot, pid: process.pid } : {}),
+        }),
+    });
 }
 
 function serveEffectHarnessHtml() {
@@ -83,7 +67,22 @@ function serveEffectHarnessHtml() {
                     return;
                 }
 
-                const harnessPath = path.join(repoRoot, requestPath.slice(1));
+                let harnessPath;
+
+                try {
+                    harnessPath = path.resolve(repoRoot, decodeURIComponent(requestPath).slice(1));
+                } catch {
+                    harnessPath = null;
+                }
+
+                // The URL shape promises a file under fx/, so contain the
+                // decoded path there too (an encoded ../ segment decodes after
+                // the shape check above).
+                if (harnessPath === null || !harnessPath.startsWith(configDir + path.sep)) {
+                    response.statusCode = 403;
+                    response.end("Forbidden");
+                    return;
+                }
 
                 if (!fs.existsSync(harnessPath)) {
                     next();

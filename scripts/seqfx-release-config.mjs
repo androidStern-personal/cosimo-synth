@@ -1,3 +1,8 @@
+import {
+    forbiddenChocWebViewMarkers,
+    requiredChocWebViewMarkers,
+} from "./check_choc_markers.mjs";
+
 /**
  * Authoritative release-facing identity and packaging contract for SeqFX.
  *
@@ -99,18 +104,8 @@ export const seqFxReleaseConfig = Object.freeze({
         }),
     }),
     webViewMarkers: Object.freeze({
-        required: Object.freeze([
-            "chocHostKeyboard",
-            "__chocHostKeyboardBridgeInstalled",
-            "__chocUserFiles",
-            "chocUserFiles",
-        ]),
-        forbidden: Object.freeze([
-            "cosimoKeyboard",
-            "cosimoKeyboardProbe",
-            "cosimo-keyboard-probe-panel",
-            "forwarded-buffered-flags-changed",
-        ]),
+        required: requiredChocWebViewMarkers,
+        forbidden: forbiddenChocWebViewMarkers,
     }),
 });
 

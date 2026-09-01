@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import {
     access,
     chmod,
@@ -22,6 +23,7 @@ import {
     repoRoot,
     seqFxDistributableRuntimeEnvironmentKey,
 } from "../fx/build-effect.mjs";
+import { findChocMarkerViolations } from "./check_choc_markers.mjs";
 import {
     seqFxArtifactBaseName,
     seqFxReleaseConfig,
@@ -1032,21 +1034,11 @@ function assertSignedReleasePrerequisites(config, gitState) {
     };
 }
 
-function binaryContainsString(binaryPath, marker) {
-    const result = runAllowFailure("grep", ["-a", "-F", "-q", marker, binaryPath]);
-
-    if (result.status === 0)
-        return true;
-
-    if (result.status === 1)
-        return false;
-
-    throw new Error(combinedProcessOutput(result) || `grep failed while checking ${binaryPath}`);
-}
-
 function verifyPatchedWebView(config, binaryPath) {
-    const missing = config.webViewMarkers.required.filter((marker) => !binaryContainsString(binaryPath, marker));
-    const forbidden = config.webViewMarkers.forbidden.filter((marker) => binaryContainsString(binaryPath, marker));
+    // config.webViewMarkers references the shared scripts/check_choc_markers.mjs
+    // lists (pinned by test_fx_build_args), so the shared checker IS the
+    // config-declared check — one marker-check implementation repo-wide.
+    const { missing, forbidden } = findChocMarkerViolations(readFileSync(binaryPath));
 
     if (missing.length > 0)
         throw new Error(`VST3 binary is missing patched CHOC marker(s): ${missing.join(", ")}`);
@@ -2615,6 +2607,8 @@ async function buildReleaseArtifacts({
         ? assertSignedReleasePrerequisites(config, gitState)
         : null;
 
+    // fx:prod:build always strips view.devModule from the runtime manifest;
+    // the distributable key additionally suppresses runtime source maps.
     run(toolchain.privateInvocationPaths.node, [
         "fx/prod-effect.mjs",
         "build",

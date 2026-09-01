@@ -1,0 +1,8 @@
+{
+  "alias": "enhancer",
+  "runtimeOut": "build/fx/enhancer_runtime",
+  "juceOut": "build/enhancer_juce",
+  "cmakeTarget": "CosimoEnhancer",
+  "productName": "CosimoEnhancer",
+  "jitInstallRuntime": true
+}

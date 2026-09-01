@@ -1,0 +1,9 @@
+{
+  "alias": "enhancer-lite-shelves-audition",
+  "runtimeOut": "build/fx/enhancer_lite_shelves_audition_runtime",
+  "juceOut": "build/enhancer_lite_shelves_audition_juce",
+  "cmakeTarget": "CosimoEnhancerLiteShelvesAudition",
+  "productName": "CosimoEnhancerLiteShelvesAudition",
+  "includeInAll": false,
+  "jitInstallRuntime": true
+}

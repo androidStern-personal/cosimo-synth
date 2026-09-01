@@ -7,28 +7,19 @@ source "$repo_root/scripts/cmajplugin_paths.sh"
 
 validate_patched_binary() {
   local binary_path="$1"
-  local binary_strings
 
   if [[ ! -f "$binary_path" ]]; then
     printf 'CmajPlugin binary not found: %s\n' "$binary_path" >&2
     exit 1
   fi
 
-  binary_strings="$(strings "$binary_path")"
-
-  if [[ "$binary_strings" != *chocHostKeyboard* \
-      || "$binary_strings" != *__chocHostKeyboardBridgeInstalled* \
-      || "$binary_strings" != *__chocUserFiles* \
-      || "$binary_strings" != *chocUserFiles* ]]; then
-    printf 'CmajPlugin binary was not built with the required patched CHOC WebView features: %s\n' "$binary_path" >&2
+  if ! command -v node >/dev/null 2>&1; then
+    printf 'node was not found on PATH (required for the CHOC marker check).\n' >&2
     exit 1
   fi
 
-  if [[ "$binary_strings" == *cosimoKeyboard* \
-      || "$binary_strings" == *cosimoKeyboardProbe* \
-      || "$binary_strings" == *cosimo-keyboard-probe-panel* \
-      || "$binary_strings" == *forwarded-buffered-flags-changed* ]]; then
-    printf 'CmajPlugin binary still contains old keyboard probe markers: %s\n' "$binary_path" >&2
+  if ! node "$repo_root/scripts/check_choc_markers.mjs" "$binary_path"; then
+    printf 'Built CmajPlugin binary failed the patched CHOC WebView marker check: %s\n' "$binary_path" >&2
     exit 1
   fi
 }

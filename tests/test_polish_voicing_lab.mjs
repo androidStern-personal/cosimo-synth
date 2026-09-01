@@ -237,16 +237,16 @@ test("the plugin exposes only the requested design surface while remaining isola
 });
 
 test("the generic VST3 install path builds and associates the compiled self-contained lab runtime", async () => {
-    const buildSource = await fs.readFile(path.join(repoRoot, "fx/build-effect.mjs"), "utf8");
-    const installer = await fs.readFile(path.join(repoRoot, "scripts/install_fx_cmajplugin.sh"), "utf8");
+    const { createJitInstallPlan } = await import("../fx/build-effect.mjs");
+    const installPlan = createJitInstallPlan("polish");
     const runtimeManifest = JSON.parse(await fs.readFile(
-        path.join(repoRoot, "build/fx/polish_lab_runtime/PolishVoicingLab.cmajorpatch"),
+        path.join(repoRoot, installPlan.runtimePatch),
         "utf8",
     ));
 
-    assert.match(buildSource, /polish:\s*\{/);
-    assert.match(installer, /polish\)\s*\n\s*patch_rel="fx\/polish_lab\/PolishVoicingLab\.cmajorpatch"/);
-    assert.match(installer, /build\/fx\/polish_lab_runtime\/PolishVoicingLab\.cmajorpatch/);
+    assert.equal(installPlan.patch, "fx/polish_lab/PolishVoicingLab.cmajorpatch");
+    assert.equal(installPlan.jitInstallRuntime, true, "fx:jit:install must associate the built runtime, not the source patch");
+    assert.equal(installPlan.runtimePatch, "build/fx/polish_lab_runtime/PolishVoicingLab.cmajorpatch");
     assert.equal(runtimeManifest.view.src, "view/index.js");
-    await fs.access(path.join(repoRoot, "build/fx/polish_lab_runtime/view/app.js"));
+    await fs.access(path.join(repoRoot, path.dirname(installPlan.runtimePatch), "view/app.js"));
 });

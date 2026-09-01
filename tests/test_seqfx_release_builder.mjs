@@ -184,7 +184,6 @@ function releaseToolchainFixture({ nativeBuildCacheVerified = true } = {}) {
                 "codesign",
                 "ditto",
                 "git",
-                "grep",
                 "lipo",
                 "mkbom",
                 "pkgutil",

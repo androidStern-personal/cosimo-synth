@@ -2,48 +2,37 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+registry="$repo_root/fx/build-effect.mjs"
 vst3_dir="$HOME/Library/Audio/Plug-Ins/VST3"
 vst3_bundle="$vst3_dir/CmajPlugin.vst3"
 vst3_binary="$vst3_bundle/Contents/MacOS/CmajPlugin"
 patch_json="$vst3_dir/CmajPlugin.json"
 
-usage() {
-  cat <<'USAGE'
-Usage: npm run fx:jit:install -- <plugin> [--dry-run]
+if ! command -v node >/dev/null 2>&1; then
+  printf 'node was not found on PATH.\n' >&2
+  exit 1
+fi
 
-Available plugins:
-  chorus
-  ott
-  polish
-  seqfx
-  spectral
-USAGE
+usage() {
+  printf 'Usage: npm run fx:jit:install -- <plugin> [--dry-run]\n\nAvailable plugins:\n'
+  node "$registry" --targets | while IFS= read -r target_name; do
+    printf '  %s\n' "$target_name"
+  done
+}
+
+jit_plan_field() {
+  printf '%s' "$jit_plan" | node -pe 'JSON.parse(require("node:fs").readFileSync(0, "utf8"))[process.argv[1]]' "$1"
 }
 
 validate_patched_cmajplugin() {
-  local binary_strings
-
   if [[ ! -f "$vst3_binary" ]]; then
     printf 'CmajPlugin binary not found: %s\n' "$vst3_binary" >&2
     exit 1
   fi
 
-  binary_strings="$(strings "$vst3_binary")"
-
-  if [[ "$binary_strings" != *chocHostKeyboard* \
-      || "$binary_strings" != *__chocHostKeyboardBridgeInstalled* \
-      || "$binary_strings" != *__chocUserFiles* \
-      || "$binary_strings" != *chocUserFiles* ]]; then
-    printf 'Installed CmajPlugin.vst3 was not built with the required patched CHOC WebView features: %s\n' "$vst3_bundle" >&2
+  if ! node "$repo_root/scripts/check_choc_markers.mjs" "$vst3_binary"; then
+    printf 'Installed CmajPlugin.vst3 failed the patched CHOC WebView marker check: %s\n' "$vst3_bundle" >&2
     printf 'Run npm run cmajplugin:build and npm run cmajplugin:install first.\n' >&2
-    exit 1
-  fi
-
-  if [[ "$binary_strings" == *cosimoKeyboard* \
-      || "$binary_strings" == *cosimoKeyboardProbe* \
-      || "$binary_strings" == *cosimo-keyboard-probe-panel* \
-      || "$binary_strings" == *forwarded-buffered-flags-changed* ]]; then
-    printf 'Installed CmajPlugin.vst3 still contains old keyboard probe markers: %s\n' "$vst3_bundle" >&2
     exit 1
   fi
 
@@ -57,6 +46,11 @@ plugin="${1:-}"
 if [[ -z "$plugin" ]]; then
   usage >&2
   exit 1
+fi
+
+if [[ "$plugin" == "--help" || "$plugin" == "-h" ]]; then
+  usage
+  exit 0
 fi
 
 shift
@@ -81,38 +75,23 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-case "$plugin" in
-  chorus)
-    patch_rel="fx/chorus_lab/ChorusLab.cmajorpatch"
-    ;;
-  ott)
-    patch_rel="fx/ott_lab/OttLab.cmajorpatch"
-    ;;
-  polish)
-    patch_rel="fx/polish_lab/PolishVoicingLab.cmajorpatch"
-    ;;
-  seqfx)
-    patch_rel="fx/seqfx/SeqFx.cmajorpatch"
-    ;;
-  spectral)
-    patch_rel="fx/spectral_chord_resonator/SpectralChordResonator.cmajorpatch"
-    ;;
-  *)
-    printf 'Unknown effect plugin: %s\n\n' "$plugin" >&2
-    usage >&2
-    exit 1
-    ;;
-esac
+# Keep the registry's own diagnostics: an unknown plugin name and a genuine
+# discovery failure (e.g. a malformed sidecar) print different errors.
+jit_plan_errors="$(mktemp "${TMPDIR:-/tmp}/cosimo-jit-plan.XXXXXX")"
+if ! jit_plan="$(node "$registry" --jit-plan "$plugin" 2>"$jit_plan_errors")"; then
+  cat "$jit_plan_errors" >&2
+  rm -f "$jit_plan_errors"
+  exit 1
+fi
+rm -f "$jit_plan_errors"
 
+patch_rel="$(jit_plan_field patch)"
+runtime_patch_rel="$(jit_plan_field runtimePatch)"
+requires_runtime_build="$(jit_plan_field jitInstallRuntime)"
 patch_path="$repo_root/$patch_rel"
 
 if ! command -v cmaj >/dev/null 2>&1; then
   printf 'cmaj was not found on PATH.\n' >&2
-  exit 1
-fi
-
-if ! command -v node >/dev/null 2>&1; then
-  printf 'node was not found on PATH.\n' >&2
   exit 1
 fi
 
@@ -147,15 +126,10 @@ if [[ ! -f "$repo_root/$dev_module_rel" ]]; then
   exit 1
 fi
 
-if [[ "$plugin" == "seqfx" || "$plugin" == "polish" ]]; then
-  node "$repo_root/fx/build-effect.mjs" "$plugin" >/dev/null
+if [[ "$requires_runtime_build" == "true" ]]; then
+  node "$registry" "$plugin" >/dev/null
 
-  if [[ "$plugin" == "seqfx" ]]; then
-    patch_rel="build/fx/seqfx_runtime/SeqFx.cmajorpatch"
-  else
-    patch_rel="build/fx/polish_lab_runtime/PolishVoicingLab.cmajorpatch"
-  fi
-
+  patch_rel="$runtime_patch_rel"
   patch_path="$repo_root/$patch_rel"
 
   if [[ ! -f "$patch_path" ]]; then
@@ -177,7 +151,7 @@ if [[ "$dry_run" == true ]]; then
 fi
 
 mkdir -p "$vst3_dir"
-printf '{\n  "location": "%s"\n}\n' "$patch_path" > "$patch_json"
+node -e 'const fs = require("node:fs"); fs.writeFileSync(process.argv[2], JSON.stringify({ location: process.argv[1] }, null, 2) + "\n");' "$patch_path" "$patch_json"
 
 printf 'Validated patch: %s\n' "$patch_path"
 printf 'Validated patched installed VST3: %s\n' "$vst3_bundle"

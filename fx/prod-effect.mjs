@@ -5,26 +5,16 @@ import { fileURLToPath } from "node:url";
 import os from "node:os";
 
 import {
+    availableEffectPluginNamesLine,
     buildPlugin,
-    effectPluginNames,
-    effectPluginTargetNames,
     effectPlugins,
     repoRoot,
+    resolveBuildOutputRoot,
+    resolvePluginNames,
 } from "./build-effect.mjs";
+import { assertPatchedChocWebViewBinary } from "../scripts/check_choc_markers.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
-const patchedWebViewRequiredStrings = [
-    "chocHostKeyboard",
-    "__chocHostKeyboardBridgeInstalled",
-    "__chocUserFiles",
-    "chocUserFiles",
-];
-const keyboardBridgeForbiddenStrings = [
-    "cosimoKeyboard",
-    "cosimoKeyboardProbe",
-    "cosimo-keyboard-probe-panel",
-    "forwarded-buffered-flags-changed",
-];
 const cmajCommandBuildSourceDirectory = path.join(repoRoot, "tools", "cmajor_command_build");
 const cmajCommandBuildDirectory = path.join(repoRoot, "build", "cmajor_command");
 const pinnedCmajExecutablePath = path.join(
@@ -50,13 +40,8 @@ export function resolveProdBuildToolPaths(environment = process.env, platform = 
     return {
         cmake: absoluteReleaseToolOverride(environment, "COSIMO_RELEASE_CMAKE", "cmake"),
         codesign: platform === "darwin" ? "/usr/bin/codesign" : "codesign",
-        grep: platform === "darwin" ? "/usr/bin/grep" : "grep",
         node: absoluteReleaseToolOverride(environment, "COSIMO_RELEASE_NODE", process.execPath),
     };
-}
-
-function availablePluginNames() {
-    return ["all", ...effectPluginTargetNames()].join(", ");
 }
 
 function usage() {
@@ -65,7 +50,7 @@ function usage() {
         "  npm run fx:prod:build -- <plugin> [--clean]",
         "  npm run fx:prod:install -- <plugin> [--dry-run]",
         "",
-        `Available plugins: ${availablePluginNames()}`,
+        `Available plugins: ${availableEffectPluginNamesLine()}`,
         "",
         "Notes:",
         "  fx:prod:build creates a dedicated plugin bundle under build/.",
@@ -235,7 +220,7 @@ export async function prepareJuceProjectOutput(juceOut, {
 
 async function generateJuceProject(pluginName, plugin, options = {}) {
     const runtimePatchPath = path.join(repoRoot, plugin.runtimeOut, path.basename(plugin.patch));
-    const juceOut = path.join(repoRoot, plugin.juceOut);
+    const juceOut = resolveBuildOutputRoot(plugin.juceOut, `${pluginName} juceOut`);
     const cmakeBuildDir = path.join(juceOut, "_build");
     const cmakeSourceDirectory = path.join(repoRoot, "tools", "effect_plugin_build");
 
@@ -297,7 +282,7 @@ async function buildJuceProject(pluginName, plugin, options = {}) {
         verifyVST3Bundle(builtVST3, options.toolPaths);
     }
 
-    verifyPatchedWebView(getBuiltVST3BinaryPath(plugin), options.toolPaths);
+    verifyPatchedWebView(getBuiltVST3BinaryPath(plugin));
 
     console.log(`Built ${pluginName} dedicated plugin project at ${path.relative(repoRoot, cmakeBuildDir)}`);
 }
@@ -308,7 +293,9 @@ async function prodBuild(pluginName, options = {}) {
     if (!plugin)
         throw new Error(usage());
 
-    await buildPlugin(pluginName);
+    // Production bundles must ship no dev-server module path; plain fx:build
+    // keeps view.devModule for the JIT-install/dev-server loop.
+    await buildPlugin(pluginName, { stripDevModule: true });
     await generateJuceProject(pluginName, plugin, options);
     await buildJuceProject(pluginName, plugin, options);
 
@@ -316,13 +303,7 @@ async function prodBuild(pluginName, options = {}) {
 }
 
 export function resolveProdPluginNames(pluginName) {
-    if (pluginName === "all")
-        return effectPluginNames();
-
-    if (effectPlugins[pluginName])
-        return [pluginName];
-
-    throw new Error(usage());
+    return resolvePluginNames(pluginName, usage);
 }
 
 export function createProdBuildChildArgs(pluginName, options = {}) {
@@ -443,47 +424,8 @@ function verifyVST3Bundle(vst3Path, toolPaths) {
     run(toolPaths.codesign, ["--verify", "--deep", "--strict", "--verbose=4", vst3Path], { capture: true });
 }
 
-function verifyPatchedWebView(binaryPath, toolPaths) {
-    const missingStrings = patchedWebViewRequiredStrings.filter(
-        (marker) => !binaryContainsString(binaryPath, marker, toolPaths),
-    );
-    const presentForbiddenStrings = keyboardBridgeForbiddenStrings.filter(
-        (marker) => binaryContainsString(binaryPath, marker, toolPaths),
-    );
-
-    if (missingStrings.length > 0) {
-        throw new Error(
-            [
-                `VST3 binary was not built with the required patched CHOC WebView features: ${binaryPath}`,
-                `Missing marker(s): ${missingStrings.join(", ")}`,
-            ].join("\n"),
-        );
-    }
-
-    if (presentForbiddenStrings.length > 0) {
-        throw new Error(
-            [
-                `VST3 binary still contains old keyboard probe marker(s): ${binaryPath}`,
-                `Forbidden marker(s): ${presentForbiddenStrings.join(", ")}`,
-            ].join("\n"),
-        );
-    }
-}
-
-function binaryContainsString(binaryPath, marker, toolPaths) {
-    const result = spawnSync(toolPaths.grep, ["-a", "-F", "-q", marker, binaryPath], {
-        cwd: repoRoot,
-        stdio: ["ignore", "ignore", "pipe"],
-        encoding: "utf8",
-    });
-
-    if (result.status === 0)
-        return true;
-
-    if (result.status === 1)
-        return false;
-
-    throw new Error(result.stderr?.trim() || `grep failed while checking ${binaryPath}`);
+function verifyPatchedWebView(binaryPath) {
+    assertPatchedChocWebViewBinary(binaryPath);
 }
 
 async function installVST3(pluginName, plugin, options) {
@@ -499,7 +441,7 @@ async function installVST3(pluginName, plugin, options) {
     if (!await pathExists(builtVST3Binary))
         throw new Error(`Built VST3 binary not found: ${builtVST3Binary}`);
 
-    verifyPatchedWebView(builtVST3Binary, options.toolPaths);
+    verifyPatchedWebView(builtVST3Binary);
 
     if (options.dryRun) {
         console.log(`Would install ${pluginName} VST3 from: ${builtVST3}`);
@@ -512,7 +454,7 @@ async function installVST3(pluginName, plugin, options) {
     await cp(builtVST3, installedVST3, { recursive: true });
     signVST3Bundle(installedVST3, options.toolPaths);
     verifyVST3Bundle(installedVST3, options.toolPaths);
-    verifyPatchedWebView(installedVST3Binary, options.toolPaths);
+    verifyPatchedWebView(installedVST3Binary);
 
     console.log(`Installed ${pluginName} VST3: ${installedVST3}`);
 }

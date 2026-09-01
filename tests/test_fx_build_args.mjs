@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -14,38 +14,422 @@ async function loadBuildModules() {
     return { buildModule, prodModule };
 }
 
-test("fx_build_all_expands_to_every_known_effect_plugin_in_manifest_order", async () => {
-    const { buildModule, prodModule } = await loadBuildModules();
-    const expectedPluginNames = [
-        "ott",
-        "chorus",
-        "polish",
-        "seqfx",
-        "spectral",
-        "enhancer",
-        "enhancer-lite",
-    ];
+async function withFixtureFxRoot(run) {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-fx-discovery-"));
+    const fxRoot = path.join(tempRoot, "fx");
 
-    assert.deepEqual(buildModule.effectPluginNames(), expectedPluginNames);
-    assert.deepEqual(buildModule.resolvePluginNames("all"), expectedPluginNames);
-    assert.deepEqual(prodModule.resolveProdPluginNames("all"), expectedPluginNames);
+    try {
+        await mkdir(fxRoot, { recursive: true });
+        return await run(fxRoot);
+    } finally {
+        await rm(tempRoot, { recursive: true, force: true });
+    }
+}
+
+async function writeFixturePlugin(fxRoot, directoryName, patchFileName, manifest, sidecar) {
+    const directoryPath = path.join(fxRoot, directoryName);
+
+    await mkdir(directoryPath, { recursive: true });
+    await writeFile(
+        path.join(directoryPath, patchFileName),
+        typeof manifest === "string" ? manifest : `${JSON.stringify(manifest, null, 2)}\n`,
+        "utf8",
+    );
+
+    if (sidecar !== undefined) {
+        await writeFile(
+            path.join(directoryPath, patchFileName.replace(/\.cmajorpatch$/, ".build.json")),
+            typeof sidecar === "string" ? sidecar : `${JSON.stringify(sidecar, null, 2)}\n`,
+            "utf8",
+        );
+    }
+}
+
+test("fx_build_all_expands_to_the_discovered_registry_for_both_pipelines", async () => {
+    const { buildModule, prodModule } = await loadBuildModules();
+    const allNames = buildModule.resolvePluginNames("all");
+    const targetNames = buildModule.effectPluginTargetNames();
+
+    assert.ok(allNames.length > 0);
+    assert.deepEqual(allNames, buildModule.effectPluginNames());
+    assert.deepEqual(prodModule.resolveProdPluginNames("all"), allNames);
+
+    for (const pluginName of allNames) {
+        assert.ok(targetNames.includes(pluginName));
+        assert.notEqual(buildModule.effectPlugins[pluginName].includeInAll, false);
+    }
+
+    for (const pluginName of targetNames) {
+        if (!allNames.includes(pluginName))
+            assert.equal(buildModule.effectPlugins[pluginName].includeInAll, false);
+    }
 });
 
 test("fx_build_single_plugin_still_resolves_to_only_that_plugin", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
 
-    assert.deepEqual(buildModule.resolvePluginNames("seqfx"), ["seqfx"]);
-    assert.deepEqual(prodModule.resolveProdPluginNames("chorus"), ["chorus"]);
-    assert.deepEqual(buildModule.resolvePluginNames("enhancer"), ["enhancer"]);
-    assert.deepEqual(buildModule.resolvePluginNames("enhancer-lite"), ["enhancer-lite"]);
-    assert.deepEqual(
-        buildModule.resolvePluginNames("enhancer-lite-shelves-audition"),
-        ["enhancer-lite-shelves-audition"],
+    for (const pluginName of buildModule.effectPluginTargetNames()) {
+        assert.deepEqual(buildModule.resolvePluginNames(pluginName), [pluginName]);
+        assert.deepEqual(prodModule.resolveProdPluginNames(pluginName), [pluginName]);
+    }
+});
+
+test("every discovered target points at real patch and worker files", async () => {
+    const { buildModule } = await loadBuildModules();
+    const outputDirectories = new Set();
+
+    for (const pluginName of buildModule.effectPluginTargetNames()) {
+        const plugin = buildModule.effectPlugins[pluginName];
+
+        assert.match(plugin.patch, /^fx\/[^/]+\/[^/]+\.cmajorpatch$/, pluginName);
+        await access(path.join(repoRoot, plugin.patch));
+
+        for (const outputDirectory of [plugin.runtimeOut, plugin.juceOut]) {
+            assert.match(outputDirectory, /^build\/.+/, pluginName);
+            assert.ok(!outputDirectories.has(outputDirectory), `${pluginName} reuses ${outputDirectory}`);
+            outputDirectories.add(outputDirectory);
+        }
+
+        if (plugin.workerSource)
+            await access(path.join(repoRoot, plugin.workerSource));
+    }
+});
+
+test("every manifest entry of every discovered target resolves to a real file inside its runtime plan", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    for (const pluginName of buildModule.effectPluginTargetNames()) {
+        const plugin = buildModule.effectPlugins[pluginName];
+        const patchRoot = path.join(repoRoot, path.dirname(plugin.patch));
+        let manifest;
+
+        try {
+            manifest = JSON.parse(await readFile(path.join(repoRoot, plugin.patch), "utf8"));
+        } catch {
+            continue; // Discovery tolerates in-progress manifests; the build reports the parse error.
+        }
+
+        const entryPlans = buildModule.planRuntimePatchEntries(manifest, {
+            reservedTargets: [path.basename(plugin.patch)],
+        });
+
+        for (const entries of Object.values(entryPlans)) {
+            for (const { from, to } of entries) {
+                await access(path.join(patchRoot, from));
+                assert.equal(to.startsWith("../"), false, `${pluginName} runtime target escapes: ${to}`);
+                assert.equal(path.posix.normalize(to), to, `${pluginName} runtime target is not normalized: ${to}`);
+            }
+        }
+    }
+});
+
+test("discovery derives a complete build target from a bare patch directory", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "tremolo_lab", "TremoloLab.cmajorpatch", {
+            name: "Tremolo Lab",
+            view: { src: "view/index.js", devModule: "/fx/tremolo_lab/view/source.ts" },
+        });
+
+        const plugins = buildModule.discoverEffectPlugins({ fxRoot });
+
+        assert.deepEqual(plugins, {
+            "tremolo-lab": {
+                patch: "fx/tremolo_lab/TremoloLab.cmajorpatch",
+                runtimeOut: "build/fx/tremolo_lab_runtime",
+                juceOut: "build/tremolo_lab_juce",
+                cmakeTarget: "TremoloLab",
+                productName: "TremoloLab",
+                devModule: "/fx/tremolo_lab/view/source.ts",
+                jitInstallRuntime: false,
+            },
+        });
+    });
+});
+
+test("sidecar build settings override every derived default", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(
+            fxRoot,
+            "tremolo_lab",
+            "TremoloLab.cmajorpatch",
+            { name: "Tremolo Lab" },
+            {
+                alias: "trem",
+                runtimeOut: "build/fx/custom_runtime",
+                juceOut: "build/custom_juce",
+                cmakeTarget: "CustomTarget",
+                productName: "CustomProduct",
+                disableMicrophonePermission: true,
+                includeInAll: false,
+                workerSource: "fx/tremolo_lab/worker/source.ts",
+                workerOut: "custom-worker.js",
+            },
+        );
+
+        const plugins = buildModule.discoverEffectPlugins({ fxRoot });
+
+        assert.deepEqual(Object.keys(plugins), ["trem"]);
+        assert.deepEqual(plugins.trem, {
+            patch: "fx/tremolo_lab/TremoloLab.cmajorpatch",
+            runtimeOut: "build/fx/custom_runtime",
+            juceOut: "build/custom_juce",
+            cmakeTarget: "CustomTarget",
+            productName: "CustomProduct",
+            disableMicrophonePermission: true,
+            workerSource: "fx/tremolo_lab/worker/source.ts",
+            workerOut: "custom-worker.js",
+            includeInAll: false,
+            jitInstallRuntime: true,
+        });
+    });
+});
+
+test("discovery refuses output directories that leave build/", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "escape_lab", "Escape.cmajorpatch", { name: "Escape" }, {
+            runtimeOut: "build/../pwned",
+        });
+
+        assert.throws(
+            () => buildModule.discoverEffectPlugins({ fxRoot }),
+            /invalid "runtimeOut" value/,
+        );
+
+        await writeFixturePlugin(fxRoot, "escape_lab", "Escape.cmajorpatch", { name: "Escape" }, {
+            juceOut: "/tmp/absolute",
+        });
+
+        assert.throws(
+            () => buildModule.discoverEffectPlugins({ fxRoot }),
+            /invalid "juceOut" value/,
+        );
+    });
+});
+
+test("build output roots resolve strictly inside build/ before anything is deleted", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    assert.equal(
+        buildModule.resolveBuildOutputRoot("build/fx/enhancer_runtime", "enhancer runtimeOut"),
+        path.join(repoRoot, "build", "fx", "enhancer_runtime"),
     );
-    assert.deepEqual(
-        prodModule.resolveProdPluginNames("enhancer-lite-shelves-audition"),
-        ["enhancer-lite-shelves-audition"],
+
+    for (const badValue of ["", "build", "build/", "build/..", "build/../pwned", "ui/shared", "/tmp/x", "../build/x"]) {
+        assert.throws(
+            () => buildModule.resolveBuildOutputRoot(badValue, "test label"),
+            /test label must/,
+            `expected rejection for ${JSON.stringify(badValue)}`,
+        );
+    }
+});
+
+test("a directory holding several patches enumerates all of them in stable sorted order", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "duo_lab", "Zeta.cmajorpatch", { name: "Zeta" }, { alias: "zeta" });
+        await writeFixturePlugin(fxRoot, "duo_lab", "Alpha.cmajorpatch", { name: "Alpha" }, { alias: "alpha" });
+        await writeFixturePlugin(fxRoot, "another_lab", "Solo.cmajorpatch", { name: "Solo" });
+
+        const plugins = buildModule.discoverEffectPlugins({ fxRoot });
+
+        assert.deepEqual(Object.keys(plugins), ["another-lab", "alpha", "zeta"]);
+        assert.equal(plugins.alpha.patch, "fx/duo_lab/Alpha.cmajorpatch");
+        assert.equal(plugins.zeta.patch, "fx/duo_lab/Zeta.cmajorpatch");
+    });
+});
+
+test("duplicate aliases fail discovery naming both claiming patches", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "duo_lab", "First.cmajorpatch", { name: "First" });
+        await writeFixturePlugin(fxRoot, "duo_lab", "Second.cmajorpatch", { name: "Second" });
+
+        assert.throws(
+            () => buildModule.discoverEffectPlugins({ fxRoot }),
+            /alias "duo-lab" is claimed by both fx\/duo_lab\/First\.cmajorpatch and fx\/duo_lab\/Second\.cmajorpatch/,
+        );
+    });
+});
+
+test("removing a plugin directory removes its build target", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "keep_lab", "Keep.cmajorpatch", { name: "Keep" });
+        await writeFixturePlugin(fxRoot, "drop_lab", "Drop.cmajorpatch", { name: "Drop" });
+
+        assert.deepEqual(Object.keys(buildModule.discoverEffectPlugins({ fxRoot })), ["drop-lab", "keep-lab"]);
+
+        await rm(path.join(fxRoot, "drop_lab"), { recursive: true, force: true });
+
+        assert.deepEqual(Object.keys(buildModule.discoverEffectPlugins({ fxRoot })), ["keep-lab"]);
+    });
+});
+
+test("a malformed sidecar fails discovery loudly while a malformed manifest degrades to derived names", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "broken_lab", "Broken.cmajorpatch", { name: "Broken" }, "{ not json");
+        assert.throws(
+            () => buildModule.discoverEffectPlugins({ fxRoot }),
+            /Broken\.build\.json/,
+        );
+
+        await writeFixturePlugin(fxRoot, "broken_lab", "Broken.cmajorpatch", { name: "Broken" }, { cmaketarget: "Typo" });
+        assert.throws(
+            () => buildModule.discoverEffectPlugins({ fxRoot }),
+            /unknown key "cmaketarget"/,
+        );
+
+        await rm(path.join(fxRoot, "broken_lab"), { recursive: true, force: true });
+        await writeFixturePlugin(fxRoot, "wip_lab", "WorkInProgress.cmajorpatch", "{ not json either");
+
+        const plugins = buildModule.discoverEffectPlugins({ fxRoot });
+
+        assert.equal(plugins["wip-lab"].cmakeTarget, "WorkInProgress");
+        assert.equal(plugins["wip-lab"].productName, "WorkInProgress");
+    });
+});
+
+test("an orphan sidecar fails discovery instead of being silently ignored", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "typo_lab", "TypoLab.cmajorpatch", { name: "Typo Lab" });
+        await writeFile(
+            path.join(fxRoot, "typo_lab", "Typolab.build.json"),
+            `${JSON.stringify({ cmakeTarget: "NeverApplied" }, null, 2)}\n`,
+            "utf8",
+        );
+
+        assert.throws(
+            () => buildModule.discoverEffectPlugins({ fxRoot }),
+            /Typolab\.build\.json matches no \.cmajorpatch/,
+        );
+    });
+});
+
+test("a sidecar workerOut without workerSource fails discovery instead of being dropped", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "half_lab", "Half.cmajorpatch", { name: "Half" }, {
+            workerOut: "worker.js",
+        });
+
+        assert.throws(
+            () => buildModule.discoverEffectPlugins({ fxRoot }),
+            /sets "workerOut" without "workerSource"/,
+        );
+    });
+});
+
+test("sidecar build identifiers and worker paths must be separator-free or repo-contained", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    const badSidecars = [
+        [{ cmakeTarget: "../Escape" }, /invalid "cmakeTarget" value/],
+        [{ productName: "Evil/../../Product" }, /invalid "productName" value/],
+        [{ productName: ".." }, /invalid "productName" value/],
+        [
+            { workerSource: "../outside/worker.ts", workerOut: "worker.js" },
+            /invalid "workerSource" value/,
+        ],
+        [
+            { workerSource: "fx/bad_lab/worker/source.ts", workerOut: "../escape.js" },
+            /invalid "workerOut" value/,
+        ],
+    ];
+
+    for (const [sidecar, expectedError] of badSidecars) {
+        await withFixtureFxRoot(async (fxRoot) => {
+            await writeFixturePlugin(fxRoot, "bad_lab", "Bad.cmajorpatch", { name: "Bad" }, sidecar);
+            assert.throws(
+                () => buildModule.discoverEffectPlugins({ fxRoot }),
+                expectedError,
+                JSON.stringify(sidecar),
+            );
+        });
+    }
+});
+
+test("jit install plans pair each target with its runtime patch and build requirement", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "plain_lab", "Plain.cmajorpatch", { name: "Plain" });
+        await writeFixturePlugin(fxRoot, "worker_lab", "Worker.cmajorpatch", { name: "Worker" }, {
+            workerSource: "fx/worker_lab/worker/source.ts",
+        });
+        await writeFixturePlugin(fxRoot, "pinned_lab", "Pinned.cmajorpatch", { name: "Pinned" }, {
+            jitInstallRuntime: true,
+        });
+
+        const plugins = buildModule.discoverEffectPlugins({ fxRoot });
+
+        assert.deepEqual(buildModule.createJitInstallPlan("plain-lab", plugins), {
+            name: "plain-lab",
+            patch: "fx/plain_lab/Plain.cmajorpatch",
+            runtimePatch: "build/fx/plain_lab_runtime/Plain.cmajorpatch",
+            jitInstallRuntime: false,
+        });
+        assert.equal(buildModule.createJitInstallPlan("worker-lab", plugins).jitInstallRuntime, true);
+        assert.equal(buildModule.createJitInstallPlan("pinned-lab", plugins).jitInstallRuntime, true);
+        assert.throws(
+            () => buildModule.createJitInstallPlan("missing-lab", plugins),
+            /Unknown effect plugin: "missing-lab"\. Available plugins: pinned-lab, plain-lab, worker-lab\./,
+        );
+    });
+});
+
+test("every jit install plan points at a patch whose declared view entry will exist", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    for (const pluginName of buildModule.effectPluginTargetNames()) {
+        const plan = buildModule.createJitInstallPlan(pluginName);
+
+        // Source-patch installs need the checked-in view/index.js loader next
+        // to the patch; runtime installs get one copied in by the build. A
+        // target with neither would install a patch whose view.src does not
+        // exist (no UI). Fix: add the loader link, or set jitInstallRuntime.
+        if (!plan.jitInstallRuntime)
+            await access(path.join(repoRoot, path.dirname(plan.patch), "view", "index.js"));
+    }
+
+    // The enhancer family has no checked-in loader link, so their JIT installs
+    // must build and point at the runtime patch (the 2.1 "JIT-installable" win).
+    for (const pluginName of ["enhancer", "enhancer-lite", "enhancer-lite-shelves-audition"])
+        assert.equal(buildModule.createJitInstallPlan(pluginName).jitInstallRuntime, true, pluginName);
+});
+
+test("the shelves audition target is discovered but stays out of the `all` build set", async () => {
+    const { buildModule, prodModule } = await loadBuildModules();
+    const allNames = buildModule.resolvePluginNames("all");
+
+    assert.ok(buildModule.effectPluginTargetNames().includes("enhancer-lite-shelves-audition"));
+    assert.equal(allNames.includes("enhancer-lite-shelves-audition"), false);
+    assert.equal(prodModule.resolveProdPluginNames("all").includes("enhancer-lite-shelves-audition"), false);
+    assert.ok(allNames.includes("enhancer-lite"));
+    assert.ok(allNames.includes("enhancer"));
+});
+
+test("the enhancer target builds from the canonical T26 DSP source, not a copy", async () => {
+    const { buildModule } = await loadBuildModules();
+    const manifest = JSON.parse(
+        await readFile(path.join(repoRoot, buildModule.effectPlugins.enhancer.patch), "utf8"),
     );
+
+    assert.ok(manifest.source.includes("../../cmajor/Enhancer.cmajor"));
+    await access(path.join(repoRoot, "cmajor", "Enhancer.cmajor"));
 });
 
 test("SeqFX canonical runtime reuse is opt-in and scoped to the aggregate handoff", async () => {
@@ -63,6 +447,14 @@ test("SeqFX canonical runtime reuse is opt-in and scoped to the aggregate handof
     assert.equal(buildModule.shouldReuseSeqFxCanonicalRuntime("spectral", {
         [environmentKey]: "1",
     }), false);
+    // A prod build strips view.devModule, so it may never trust a prebuilt
+    // (unstripped) canonical runtime — it must rebuild.
+    assert.equal(buildModule.shouldReuseSeqFxCanonicalRuntime("seqfx", {
+        [environmentKey]: "1",
+    }, { stripDevModule: true }), false);
+    assert.equal(buildModule.shouldReuseSeqFxCanonicalRuntime("seqfx", {
+        [environmentKey]: "1",
+    }, { stripDevModule: false }), true);
 });
 
 test("SeqFX release runtime source-map suppression is opt-in and leaves local qualification maps enabled", async () => {
@@ -82,7 +474,65 @@ test("SeqFX release runtime source-map suppression is opt-in and leaves local qu
     }), true);
 });
 
-test("SeqFX distributable runtime removes its development module path without mutating the source manifest", async () => {
+test("manifest entries that escape the patch directory are flattened into the runtime directory and rewritten", async () => {
+    const { buildModule } = await loadBuildModules();
+    const manifest = {
+        source: [
+            "../../cmajor/Enhancer.cmajor",
+            "EnhancerPlugin.cmajor",
+        ],
+        resources: ["assets/wordmark.png"],
+        view: { src: "view/index.js" },
+    };
+    const entryPlans = buildModule.planRuntimePatchEntries(manifest);
+
+    assert.deepEqual(entryPlans.source, [
+        { entry: "../../cmajor/Enhancer.cmajor", from: "../../cmajor/Enhancer.cmajor", to: "Enhancer.cmajor", escaped: true },
+        { entry: "EnhancerPlugin.cmajor", from: "EnhancerPlugin.cmajor", to: "EnhancerPlugin.cmajor", escaped: false },
+    ]);
+    assert.deepEqual(entryPlans.resources, [
+        { entry: "assets/wordmark.png", from: "assets/wordmark.png", to: "assets/wordmark.png", escaped: false },
+    ]);
+
+    const runtimeManifest = buildModule.createRuntimePatchManifest(manifest, {});
+
+    assert.deepEqual(runtimeManifest.source, ["Enhancer.cmajor", "EnhancerPlugin.cmajor"]);
+    assert.deepEqual(runtimeManifest.resources, ["assets/wordmark.png"]);
+    assert.deepEqual(manifest.source, ["../../cmajor/Enhancer.cmajor", "EnhancerPlugin.cmajor"]);
+
+    const singleStringManifest = { source: "../shared/Solo.cmajor" };
+    assert.equal(buildModule.createRuntimePatchManifest(singleStringManifest, {}).source, "Solo.cmajor");
+});
+
+test("flattened runtime targets are collision-checked against each other and the runtime manifest", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    assert.throws(
+        () => buildModule.planRuntimePatchEntries({
+            source: ["../a/Shared.cmajor", "../b/Shared.cmajor"],
+        }),
+        /"\.\.\/b\/Shared\.cmajor" maps to runtime path "Shared\.cmajor", which is already used by source entry "\.\.\/a\/Shared\.cmajor"/,
+    );
+    assert.throws(
+        () => buildModule.planRuntimePatchEntries({
+            source: ["Local.cmajor", "../other/Local.cmajor"],
+        }),
+        /already used by source entry "Local\.cmajor"/,
+    );
+    assert.throws(
+        () => buildModule.planRuntimePatchEntries(
+            { source: ["../elsewhere/Tremolo.cmajorpatch"] },
+            { reservedTargets: ["Tremolo.cmajorpatch"] },
+        ),
+        /already used by the runtime patch manifest/,
+    );
+    assert.throws(
+        () => buildModule.planRuntimePatchEntries({ source: [".."] }),
+        /does not name a file/,
+    );
+});
+
+test("production runtime manifests remove the development module path without mutating the source manifest", async () => {
     const { buildModule } = await loadBuildModules();
     const manifest = {
         source: ["SeqFx.cmajor"],
@@ -100,6 +550,9 @@ test("SeqFX distributable runtime removes its development module path without mu
         stripDevModule: true,
     });
 
+    // The dev/JIT pipeline (fx:build) keeps the dev module by default; only
+    // production packaging opts into stripping it.
+    assert.equal(buildModule.createRuntimePatchManifest(manifest, {}).view.devModule, "/fx/seqfx/view/source.tsx");
     assert.equal(localRuntime.view.devModule, "/fx/seqfx/view/source.tsx");
     assert.equal("devModule" in distributableRuntime.view, false);
     assert.deepEqual(distributableRuntime.view, {
@@ -110,17 +563,90 @@ test("SeqFX distributable runtime removes its development module path without mu
     assert.equal(manifest.view.devModule, "/fx/seqfx/view/source.tsx");
 });
 
-test("the SeqFX production configure explicitly disables microphone permission metadata", async () => {
-    const { buildModule, prodModule } = await loadBuildModules();
-    const plugin = buildModule.effectPlugins.seqfx;
+test("the CHOC WebView marker check has one implementation shared by node and shell callers", async () => {
+    const markersModule = await import(pathToFileURL(path.join(repoRoot, "scripts/check_choc_markers.mjs")));
+    const releaseConfigModule = await import(pathToFileURL(path.join(repoRoot, "scripts/seqfx-release-config.mjs")));
+
+    assert.deepEqual(markersModule.requiredChocWebViewMarkers, [
+        "chocHostKeyboard",
+        "__chocHostKeyboardBridgeInstalled",
+        "__chocUserFiles",
+        "chocUserFiles",
+    ]);
+    assert.deepEqual(markersModule.forbiddenChocWebViewMarkers, [
+        "cosimoKeyboard",
+        "cosimoKeyboardProbe",
+        "cosimo-keyboard-probe-panel",
+        "forwarded-buffered-flags-changed",
+    ]);
+    assert.equal(
+        releaseConfigModule.seqFxReleaseConfig.webViewMarkers.required,
+        markersModule.requiredChocWebViewMarkers,
+        "the release config must reference the shared list, not a copy",
+    );
+    assert.equal(
+        releaseConfigModule.seqFxReleaseConfig.webViewMarkers.forbidden,
+        markersModule.forbiddenChocWebViewMarkers,
+    );
+
+    // The release builder must consume the shared checker too — not keep a
+    // parallel grep-based implementation of the same probe.
+    const releaseBuilderSource = await readFile(
+        path.join(repoRoot, "scripts/build_seqfx_beta_release.mjs"),
+        "utf8",
+    );
+    assert.match(releaseBuilderSource, /findChocMarkerViolations/);
+    assert.doesNotMatch(releaseBuilderSource, /"grep"/);
+
+    // Byte-level substring semantics (grep -a -F), stricter than strings(1):
+    // markers embedded between non-printable bytes must still be found.
+    const patchedBinary = Buffer.concat(markersModule.requiredChocWebViewMarkers.flatMap(
+        (marker) => [Buffer.from([0, 1, 2]), Buffer.from(marker)],
+    ));
+    assert.deepEqual(markersModule.findChocMarkerViolations(patchedBinary), { missing: [], forbidden: [] });
+    assert.deepEqual(
+        markersModule.findChocMarkerViolations(Buffer.from("chocHostKeyboard\x00cosimoKeyboardProbe")),
+        {
+            missing: ["__chocHostKeyboardBridgeInstalled", "__chocUserFiles", "chocUserFiles"],
+            forbidden: ["cosimoKeyboard", "cosimoKeyboardProbe"],
+        },
+    );
+
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-choc-markers-"));
+
+    try {
+        const goodBinary = path.join(tempRoot, "good.bin");
+        const staleBinary = path.join(tempRoot, "stale.bin");
+
+        await writeFile(goodBinary, patchedBinary);
+        await writeFile(staleBinary, Buffer.concat([patchedBinary, Buffer.from("cosimo-keyboard-probe-panel")]));
+
+        const cliPath = path.join(repoRoot, "scripts/check_choc_markers.mjs");
+        const goodRun = spawnSync(process.execPath, [cliPath, goodBinary], { encoding: "utf8" });
+        const staleRun = spawnSync(process.execPath, [cliPath, staleBinary], { encoding: "utf8" });
+        const missingRun = spawnSync(process.execPath, [cliPath, path.join(tempRoot, "absent.bin")], { encoding: "utf8" });
+        const usageRun = spawnSync(process.execPath, [cliPath], { encoding: "utf8" });
+
+        assert.equal(goodRun.status, 0, goodRun.stderr);
+        assert.equal(staleRun.status, 1);
+        assert.match(staleRun.stderr, /Forbidden marker\(s\): cosimo-keyboard-probe-panel/);
+        assert.equal(missingRun.status, 1);
+        assert.equal(usageRun.status, 2);
+        assert.match(usageRun.stderr, /Usage: node scripts\/check_choc_markers\.mjs/);
+    } finally {
+        await rm(tempRoot, { recursive: true, force: true });
+    }
+});
+
+test("the production configure explicitly disables microphone permission metadata when a target opts in", async () => {
+    const { prodModule } = await loadBuildModules();
     const cmajExecutable = prodModule.getPinnedCmajExecutablePath();
 
-    assert.equal(plugin.disableMicrophonePermission, true);
     assert.deepEqual(prodModule.createJuceGenerationConfigureArgs({
         cmajExecutable,
         cmakeBuildDirectory: "/tmp/seqfx-build",
         cmakeSourceDirectory: "/repo/tools/effect_plugin_build",
-        disableMicrophonePermission: plugin.disableMicrophonePermission,
+        disableMicrophonePermission: true,
         juceOutputDirectory: "/repo/build/seqfx_juce",
         pluginTarget: "CosimoSeqFX",
         runtimePatchPath: "/repo/build/fx/seqfx_runtime/SeqFx.cmajorpatch",
@@ -156,7 +682,6 @@ test("fx_prod_release_tool_overrides are absolute and PATH-independent", async (
     assert.deepEqual(tools, {
         cmake: "/approved/cmake",
         codesign: "/usr/bin/codesign",
-        grep: "/usr/bin/grep",
         node: "/approved/node",
     });
     assert.throws(
@@ -169,57 +694,16 @@ test("fx_prod_release_tool_overrides are absolute and PATH-independent", async (
     );
 });
 
-test("fx_build_unknown_plugin_reports_all_as_an_available_target", async () => {
+test("fx_build_unknown_plugin_reports_all_and_every_discovered_target", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
+    const expectedNames = ["all", ...buildModule.effectPluginTargetNames()].join(", ");
 
-    const expectedMessage = /Available plugins: all, ott, chorus, polish, seqfx, spectral, enhancer, enhancer-lite, enhancer-lite-shelves-audition/;
-    assert.throws(() => buildModule.resolvePluginNames("wat"), expectedMessage);
-    assert.throws(() => prodModule.resolveProdPluginNames("wat"), expectedMessage);
-});
-
-test("the Enhancer production plugin packages the canonical T26 DSP instead of a copy", async () => {
-    const { buildModule } = await loadBuildModules();
-
-    assert.deepEqual(buildModule.effectPlugins.enhancer.runtimeSources, [
-        { repoPath: "cmajor/Enhancer.cmajor", runtimePath: "Enhancer.cmajor" },
-        { repoPath: "fx/enhancer/EnhancerPlugin.cmajor", runtimePath: "EnhancerPlugin.cmajor" },
-    ]);
-    assert.equal("generatedHostLatencySamples" in buildModule.effectPlugins.enhancer, false);
-});
-
-test("the Enhancer Lite plugin packages its isolated one-band prototype", async () => {
-    const { buildModule } = await loadBuildModules();
-    const manifest = JSON.parse(await readFile(
-        path.join(repoRoot, "fx/enhancer_lite/EnhancerLite.cmajorpatch"),
-        "utf8",
-    ));
-
-    assert.deepEqual(buildModule.effectPlugins["enhancer-lite"].runtimeSources, [
-        { repoPath: "fx/enhancer_lite/EnhancerLite.cmajor", runtimePath: "EnhancerLite.cmajor" },
-        {
-            repoPath: "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
-            runtimePath: "EnhancerLiteSpectrumAnalyzer.cmajor",
-        },
-        { repoPath: "fx/enhancer_lite/EnhancerLitePlugin.cmajor", runtimePath: "EnhancerLitePlugin.cmajor" },
-    ]);
-    assert.equal("generatedHostLatencySamples" in buildModule.effectPlugins["enhancer-lite"], false);
-    assert.equal(buildModule.effectPlugins["enhancer-lite"].productName, "CosimoEnhancerLite");
-    assert.deepEqual(manifest.resources, ["assets/enhancer-lite-wordmark.png"]);
-});
-
-test("the Enhancer Lite shelf audition target is isolated from production all", async () => {
-    const { buildModule } = await loadBuildModules();
-    const audition = buildModule.effectPlugins["enhancer-lite-shelves-audition"];
-    const manifest = JSON.parse(await readFile(
-        path.join(repoRoot, audition.patch),
-        "utf8",
-    ));
-
-    assert.equal(audition.includeInAll, false);
-    assert.ok(!buildModule.effectPluginNames().includes("enhancer-lite-shelves-audition"));
-    assert.equal(audition.productName, "CosimoEnhancerLiteShelvesAudition");
-    assert.equal(manifest.ID, "dev.cosimo.enhancer-lite-shelves-audition");
-    assert.equal(manifest.plugin.pluginCode, "CsLS");
+    for (const resolve of [buildModule.resolvePluginNames, prodModule.resolveProdPluginNames]) {
+        assert.throws(() => resolve("wat"), (error) => {
+            assert.ok(error.message.includes(`Available plugins: ${expectedNames}`));
+            return true;
+        });
+    }
 });
 
 test("effect production uses the repository-built pinned Cmajor generator without rewriting generated C++", async () => {

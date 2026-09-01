@@ -20,7 +20,6 @@ test("release system commands are immutable absolute macOS paths", () => {
         codesign: "/usr/bin/codesign",
         ditto: "/usr/bin/ditto",
         git: "/usr/bin/git",
-        grep: "/usr/bin/grep",
         lipo: "/usr/bin/lipo",
         mkbom: "/usr/bin/mkbom",
         pkgutil: "/usr/sbin/pkgutil",
