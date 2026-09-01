@@ -270,3 +270,58 @@ The rejected 1000px alternative used a 420px editor floor. Although it avoids te
 - Exact changed scope: Removed the local first-use state and complete banner JSX/CSS island; removed the step-header spacer and eight visible chain-label elements plus their dead CSS; reduced only the sequencer's left reserve from the combined 40px frame/label gutter to 16px frame clearance; updated existing composed assertions for absence, spacing, storage namespace, gutter geometry, four ordered lane rows, accessible chain identity, and retained interaction. DSP, runtime state, automation, responsive breakpoints, effect-picker geometry, saved-sound policy, generated bundles, and `patch_gui` are unchanged.
 - Generated artifacts: None.
 - Unperformed gates: Broad suite; native/plugin/release builds; generated-bundle rebuild; HMR/fixed-port launch; install; codesign/notarization; pluginval; Ableton/listening/host visual or physical-feel acceptance; physical device; Sites; release; rebase; merge; push; deploy; publication.
+
+## Element-size standardization audit
+
+- Status: Complete (proposal only; no production source, CSS, generated bundle, test, or snapshot changes)
+- Task/thread: SeqFX element-size standardization audit, thread `01a05c67-c5f3-7460-a9f6-1c03d05d0fef`, reporting to coordinator `01a05c09-ce2d-7120-bc44-cd8102a2f0d7`
+- Branch/worktree: `codex/seqfx-element-size-audit` at `/Users/winterfell/.codex/worktrees/ca60/cosimo-synth`
+- Base: `23d76e3a314ea240acdd1ea435886b3379ee79bc` (`codex/seqfx-mockup-compact-layout` at audit start)
+- Authorization: Audit repeated SeqFX dimensions by role and recommend a lean standardization seam, specifically deciding the relationship between sequence cells and the fixed 2x6 effect-picker chips. `TODOS.txt` and `PROGRESS.txt` remain outside scope.
+
+### Measured role inventory
+
+The composed measurements used the real source harness with the Twelve-effect Tour loaded, Stutter selected, and a Mod-panel pass. Counts are for that representative state. The 1440px comfortable, exact 1060px side-by-side-floor, and 420px narrow widths used an OS-assigned localhost port with HMR disabled.
+
+| Role | Current CSS/composed size and frequency | Standardize? Smallest useful token or ratio | Rationale and intentional exceptions |
+| --- | --- | --- | --- |
+| Sequencer cells and block lanes | 128 cells and eight lane rows. Cells/row height are 36.5px at 1440, 24.06px at 1060, and 24px at 420; blocks inherit that height. Twelve resize surfaces are 24px wide while their visible grip is a 2px line; block fill is inset 1px inside the full block hit surface. | Yes: `--seqfx-size-compact: 24px` owns the cell floor, range hit floor, and resize surface. Cells remain fluid above the floor. | Literal 36px cells at the side-by-side floor would push the sequencer requirement to about 719px and destroy the approved density. Multi-cell blocks remain width-content-driven. |
+| Effect-picker chips, icons, and padding | Twelve chips in 2x6. At 1440 each is about 101.3x36px with a 24px icon, 5px gap, and 4x6px padding. At 1060 they are 71.2x52px; at 420 they are 55.2x52px with icon over short name and 4px padding. Visible box and native-button hit box are identical. | Yes: ordinary chips use `--seqfx-size-standard: 36px`, a **1.5x** relationship to the 24px cell floor. The 52px two-line chip remains a content-driven narrow exception, not another general control token. | Equality at 1440 is incidental: the cell is fluid while the chip is role-sized. The current `<480px` inspector-content query activates 52px chips already in the 480px outer inspector because its query box is the 452px content box. A future pass should move only the icon-over-label seam to about `<420px` content width; keep short names below 520px. Then the 1060 floor is 24px cells versus 36px chips, while genuinely narrow 356px content still uses 52px. |
+| Effect tab and Mod toggle | One of each, both 34px high with 6px radius; the Mod badge is a passive 18x18px box. | Fold the 34px one-off into `--seqfx-size-standard: 36px`; keep the 18px badge intrinsic. | Tabs carry labels, focus rings, and the Mod thumbnail, so they belong with standard inspector rows rather than 28px utilities. The passive badge is not a hit target. |
+| Primary and secondary actions | Twelve 28px pattern buttons; five 28px On/transport/edit buttons; five 24px loop actions; one 34px full-width Delete action. | `--seqfx-size-utility: 28px` for patterns/transport, compact 24px for dense loop micro-actions, standard 36px for the full-width inspector action. | The three levels are deliberate hierarchy. The Delete action's 34px is the same near-duplicate as the tabs and should join 36px; do not inflate every loop action to 36px. |
+| Selects and temporary text entry | Four visible selects: Clock/Rate and effect preset are 28px, factory-pattern is 24px. The temporary Start exact-entry input measured 38x28px. | Utility 28px for ordinary fields and exact entry; compact 24px only for the dense factory-pattern row. | Width remains content/fluid. Temporary exact entry should retain its lifecycle and must not become a persistent numeric row. |
+| Segmented and ordinary sliders | Five visible segmented controls: visual rails/ticks are 18px, transparent range hit boxes are 24px or 28px, global wrappers are 22px, and inspector rows are 36px. The two global ranges and Block Mix range have 24px hit boxes; Block Mix's material row is 36px. | Compact 24px is the minimum interactive range height; standard 36px owns inspector rows. Keep the 18px segmented rail as visual ink inside the hit target. | Do not force the rail itself to 24/36px. Stutter's 28px morph track and 14x26px thumb are bespoke editor geometry, not general control heights. |
+| Preset/help cards | One factory-preset card is 61.3px at 1440 and 79.8px after its vertical reflow; the Stutter help card is 41.7px at 1440 and 56.5px at 420. | No fixed-height token; standardize their child controls only. | These are content containers whose copy must wrap. Their height change is intentional and should not be suppressed to meet a box scale. |
+| Graph floors | One Stutter viewport measures 354px at 1440, 280px at 1060, and 232px at 420. CSS owns a 140–300px plot clamp plus 54px of top/bottom reserves. | No control token. Preserve the 140px plot floor and reserves at the editor component seam. | Graph height is data-legibility geometry, not a button/cell relationship. Other effect graphs may keep their component-specific floors. |
+| Tags and badges | One 18px Mod badge, one 19.5px passive `TRIGGER` pill, and one 24px interactive Gate tag in the selected state. | Interactive tags use compact 24px; passive badges/pills remain intrinsic 18–20px. | Equalizing passive status ink with hit targets would add empty bulk without improving interaction. |
+| Header, transport, and material rhythm | Topbar is a 41px wrapper around 28px pattern controls. Inspector shell uses 14px padding, 10px gap, and 8px radius; repeated inspector rows/islands use 6px radius; dense cells use 3px. Global padding is 8/10/9px. Frequent local gaps/padding are even 4/6/8/10/12/14px values. | Add only `--seqfx-material-radius: 6px` for the repeated inspector-control/island seam. Keep 3px dense-cell and 8px shell radii as hierarchy exceptions; do not launch a new spacing system. | Wrapper/card height remains intrinsic. The spacing rhythm already follows 2px increments and communicates nesting; tokenizing every gap would exceed this task's useful scope. |
+
+### Recommendation and future seams
+
+Use four local tokens on the SeqFX `:host`/root, not a cross-product design system:
+
+- `--seqfx-size-compact: 24px`
+- `--seqfx-size-utility: 28px`
+- `--seqfx-size-standard: 36px`
+- `--seqfx-material-radius: 6px`
+
+Map them in `fx/seqfx/view/styles.css`: point existing `--seqfx-step-min` and the resize/range floors at compact; map pattern/global/select utilities to utility; map picker buttons, Effect/Mod tabs, inspector `EditorTickSlider`/Mix rows, and Delete to standard; map the existing inspector material selector and picker/tab controls to the material radius. Keep `ui/shared/editor-tick-slider.css` responsible for the 18px visual rail and 22px track, with SeqFX providing only its row/hit-height context. No React/state/component change is required for this sizing proposal.
+
+Specifically, **cells and picker chips should remain distinct and share a 1x/1.5x floor relationship**. A wide fluid cell may visually meet the 36px chip, but that is not a promise of equality. Keep the 52px picker only when the fixed six-column chip is genuinely too narrow for a horizontal 24px icon plus unique short label; the current early content-box activation is the first future CSS seam to reassess.
+
+### Decision-provenance objection audit
+
+1. Literal equality was rejected in both directions: 36px minimum cells materially harm sequencer density and breakpoint economics, while 24px chips cannot carry icon plus label. The selected 24/36 relationship preserves both roles.
+2. Removing the 52px chip entirely was rejected because a 55px-wide narrow chip cannot fit a 24px icon, gap, label, and padding horizontally. Moving its activation later preserves the rich fallback without paying its vertical cost at the 1060px side-by-side floor.
+3. A global spacing/radius/token project was rejected. The evidence supports four local tokens and a few explicit content-driven exceptions; graph/card/mod-row dimensions belong to their components.
+4. Standardizing 34px tabs/Delete to 36px is the most discretionary recommendation. It removes a 2px near-duplicate and aligns the inspector's major rows, but a later visual pass may retain 34px if the hierarchy feels better in Ableton.
+
+### Confidence, unresolved feel, and final handoff
+
+- Confidence: High in source ownership, current CSS/composed dimensions, visible-versus-hit distinctions, and rejecting equality; medium-high in the 24/36 scale; medium in delaying the 52px picker transition to 420px content width and folding 34px into 36px because those require human density judgment.
+- Unresolved human-feel questions: whether 24px cells versus 36px chips feel balanced at the resizable Ableton floor; whether 71px-wide horizontal short-name chips feel preferable to the current 52px two-line chips; whether 36px tabs/Delete feel too heavy; and whether 24px loop micro-actions remain comfortable in host use.
+- Evidence inspected: the supplied reference image; `fx/seqfx/view/styles.css`, `SeqFxPatchView.tsx`, `SeqFxGlobalControls.tsx`, `stutter-envelope-editor.css`, and `ui/shared/editor-tick-slider.css`; composed 1440/1060/420px source-harness states including Effect and Mod. No product test suite was run because no product code changed.
+- Changed scope: this proposal entry in `SEQFX_MOCKUP_TASKS.md` only. `TODOS.txt`, `PROGRESS.txt`, production source/CSS, tests, snapshots, and generated output remain untouched.
+- Generated artifacts: None. The ignored dependency symlink and `/tmp` transform cache used for read-only composition are removed before commit.
+- Final commit: This ledger-only commit; its exact hash is reported to the coordinator because a commit cannot embed its own hash.
+- Unperformed gates: implementation, product tests/broad suite, screenshots, native/plugin builds, HMR/fixed-port launch, installs, pluginval, Ableton/host physical-feel or listening acceptance, device work, release, merge, rebase, push, deploy, and publication.
