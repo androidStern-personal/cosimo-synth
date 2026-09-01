@@ -379,3 +379,47 @@ The critical DRY requirement is the **resolved** size. Aliasing both surfaces to
 - Generated artifacts: None.
 - Clean status: Clean after the ledger-only closeout commit; verified in the coordinator handoff.
 - Unperformed gates: Full/broad SeqFX suite; generated-bundle rebuild; native/plugin/release build; signing/notarization; HMR/fixed-port launch; install; pluginval; Ableton/listening/host visual or physical-feel acceptance; physical device; Sites; release; rebase; merge; push; deploy; publication.
+
+## Effect inspector corrections: Tape Stop, modulation parity, and preset placement
+
+- Status: Complete.
+- Task/thread: Visible implementation task `01a05c9c-8da5-7561-a7e5-0767a57a3a8f`, reporting to coordinator task `01a05c09-ce2d-7120-bc44-cd8102a2f0d7`.
+- Branch/worktree: `codex/seqfx-effect-inspector-corrections` at `/Users/winterfell/.codex/worktrees/0501/cosimo-synth`.
+- Base: Freshly fetched `origin/master` at `d15e37aa00f2fd18d0295ff2f94f974068581db4`. The delegated expected hash `d15e37aa82fe2aa6e876dfbb65901202cb01d280` did not exist after fetch; `HEAD`, `origin/master`, and `FETCH_HEAD` all agreed on the recorded base.
+- Authorization: Keep Tape Stop Start/Stop free-time labels, Trigger chips, segmented sliders, and values present without overlap; make every rendered parameter modulation affordance match production `auxEligible` metadata; remove the preset card/label/copy and move the unchanged native preset select into the inspector heading.
+- Explicit non-scope: Effect metadata changes; DSP/runtime/state/automation/schema or saved-sound changes; custom-editor replacement; theme/mockup colors; workspace/picker/loop/onboarding/chain-label behavior; generated bundles; broad/native/release gates; HMR or product launch; install; pluginval; Ableton/device work; rebase, merge, push, deploy, or publish; `TODOS.txt` and `PROGRESS.txt`.
+
+### Decisions
+
+1. Route ordinary parameter modulation through the existing `SeqFxParameterField` -> `SeqFxNumericParameterSlider` -> `EditorTickSlider` production seam. The field now supplies the current Aux destination, monitor phase, and toggle only when the real `SeqFxParameterDefinition.auxEligible` value is true and the selected block is Aux-editable. Changing metadata, duplicating per-effect lists, or adding UI-only eligibility flags was rejected.
+2. Preserve Crusher and Stutter's existing custom modulation controls and Filter's range editor. Filter alone receives a compact metadata-derived Cutoff/Resonance M row because both parameters are eligible but the bespoke range surface did not expose both toggles. Flattening any custom editor into generic rows was rejected because it would change established editing behavior.
+3. Give Tape Stop free Start Time and Stop Time one stable two-line internal row: label plus Trigger and value on the first line, full-width segmented track on the second. A width-specific hide, truncation, or many breakpoint overrides was rejected; the stable row costs a small amount of vertical space but removes competition with the old fixed 54px label column at every supported width.
+4. Keep the existing native preset `<select>`, controller, matching logic, and `applyBlockPreset` write path. Only its presentation owner changes: the heading now owns a summary flex group plus the bare select, placing them side by side when they fit and wrapping the select below the complete summary at narrow width. Replacing the control, abbreviating the summary, or retaining a label/help/card island was rejected.
+
+### Decision-provenance objection audit
+
+- Filter gains a small Cutoff/Resonance M row above the unchanged graph. This adds inspector height, but it is the least invasive way to satisfy complete metadata parity while retaining the range editor's center/range/resonance gestures; replacing or modifying the shared Filter editor would broaden the task and risk other surfaces.
+- Tape Stop free-duration rows use the two-line internal grid even at wide width. Restricting the repair to one breakpoint would leave the same fixed-column collision vulnerable to font metrics and intermediate host widths; the composed checks show the new form remains compact and non-overlapping at 1280, exact 1060, 420, and 320px.
+- The preset select still has normal native-control styling and a raised control shadow; "bare" means there is no surrounding Effect Preset card, visible label, description, or card spacing. Removing the select's own affordance styling was rejected as an unrelated theme change.
+- The 320px heading intentionally wraps its select below the intact selection summary. The approved contract explicitly permits an internal narrow wrap, and clipping, ellipsis, or obscuring the chain/effect/cell identity was rejected.
+- Browser proof establishes DOM geometry, accessibility, metadata parity, parameter/state writes, and resize silence in Chromium. It does not establish native WKWebView rendering, Ableton focus/host behavior, listening approval, or physical feel.
+
+### Focused evidence
+
+- Source ownership: `fx/seqfx/view/SeqFxPatchView.tsx` owns all three behavioral seams; `fx/seqfx/view/styles.css` owns their responsive layout. Crusher and Stutter custom editors were inspected and left behaviorally unchanged. `seqfx-effect-definitions.ts`, DSP, runtime bridge, state, automation, and generated output were not edited.
+- Modulation parity: The strengthened existing composed browser suite selects all twelve production effects, opens advanced controls where present, and compares the complete rendered M-affordance label set to each effect definition's live `auxEligible` set. Vibro Rate and Depth toggle on through the effect view while base values and stored modulation destinations remain unchanged; Filter, Crusher, Stutter, and every generic effect are included, and ineligible parameters are absent.
+- Tape Stop geometry: The composed real-editor check switches to Free plus Spin Up, then proves Start Time and Stop Time retain their label, Trigger chip, segmented range, and value without pairwise overlap or row/page overflow at 1280px, exact 1060px side-by-side, 420px stacked, and 320px narrow. Resizing emits no host events or saved-state writes.
+- Preset behavior: The composed check proves the old card class, visible label, and description are absent; the same native select is inside the heading, focusable with unclaimed native keyboard events, writes the selected preset's exact mix/parameters, remains contained beside or below the full summary, preserves selection/state through the 320px wrap, and creates no page overflow or resize-driven writes.
+- Regression group: 23/23 directly affected composed browser checks passed, covering topbar/header decoration, fixed 2x6 picker, responsive 1061/1060/1059/420/320 round trip, Filter/Crusher/Stutter Aux behavior and v7 storage, responsive Mod containment, Tape Stop V2 persistence and shared segmented controls, and Ring/Reverse/Comb/Vibro/Flange/Pitch/Talk Box/Dirty parameter and modulation contracts. The three new focused checks also passed 3/3 on the final source.
+- Static/source review: Canonical `node fx/seqfx/check-types.mjs` passed all 19 production modules. `git diff --check` passed before the implementation commit. Source search finds the removed preset card/copy identifiers only in assertions proving absence. The implementation commit changes only `SeqFxPatchView.tsx`, `styles.css`, and the existing composed browser suite; `TODOS.txt`, `PROGRESS.txt`, metadata, DSP/runtime/state/automation, generated bundles, and `patch_gui` are unchanged.
+- Test setup: The existing composed suite used its own loopback test server and the already-installed shared dependency tree; no dependency installation or product HMR launch occurred. The ignored temporary `node_modules` symlink was removed after qualification, and the suite cleaned up its server.
+- Known failures: None in the authorized focused evidence.
+
+### Final handoff
+
+- Implementation commit: `b6e88c3bdc677b3c825b07dc97cd4e168d2b758e` (`Correct SeqFX inspector controls`).
+- Ledger closeout commit: This record's branch-tip commit; its exact hash is reported to the coordinator because a commit cannot embed its own hash.
+- Exact changed scope: Metadata-driven modulation hooks for ordinary parameter rows; compact Filter Cutoff/Resonance M toggles while retaining the range editor; stable two-line Tape Stop free Start/Stop rows; native preset select moved into a responsive heading summary/select layout; removal of the old preset card/label/copy CSS and JSX; strengthened existing composed browser assertions; this ledger entry.
+- Generated artifacts: None.
+- Clean status: Clean after the ledger-only closeout commit; verified in the coordinator handoff.
+- Unperformed gates: Full/broad SeqFX suite; production/generated-bundle rebuild; native/plugin/release build; signing/notarization; HMR/fixed-port product launch; install; pluginval; Ableton/listening/host visual, focus, or physical-feel acceptance; physical device; Sites; release; rebase; merge; push; deploy; publication.
