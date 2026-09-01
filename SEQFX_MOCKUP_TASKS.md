@@ -543,3 +543,38 @@ The critical DRY requirement is the **resolved** size. Aliasing both surfaces to
 - Plugin qualification: pluginval strictness 5 returned `SUCCESS` on that exact built bundle across cold/warm open, editor, processing, state, automation, stereo buses, 44.1/48/96 kHz, and 64/128/256/512/1024-frame blocks. The optional separate VST3 SDK validator remained skipped because no validator path is configured.
 - Installed result: `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoSeqFX.vst3` is deep/strict-code-sign valid, universal, and its executable SHA-256 `d103b0fa885474757d2f6972d21a986d4a9a864eba38c5375c924a37cdfeb104` exactly matches the pluginval-tested build. The previous user copy is recoverable at `/Users/winterfell/Library/Audio/Plug-Ins/CosimoSeqFX Backups/2026-09-01-before-compact-controls-37f469a2/CosimoSeqFX.vst3`.
 - Claim boundary: Automated browser behavior, strict typing, native compilation and resize-limit ownership, pluginval, and installed-byte identity passed. No fresh Ableton load/interaction, host visual/focus behavior, listening approval, physical-device acceptance, signed/notarized release packaging, deployment, or publication is claimed.
+
+## Throwaway selected-effect card workshop
+
+- Status: Product contract approved for a browser-only prototype in an isolated worktree. This is not authorization to replace the production inspector or implement all twelve effect cards.
+- Question: Can the approved compact selected-effect card work inside the real SeqFX composition, at real inspector dimensions, with real selection/state/parameter behavior?
+- Production authority: Use the existing `npm run fx:dev` harness, which mounts the real `SeqFxPatchView`, worker service, patch-connection behavior, production styles, responsive workspace, sequencer, and selected-cell state. Do not reconstruct the plugin, fork `SeqFxPatchView`, build a parallel demo page, or copy production components into a fake shell.
+- Prototype seam: Change only the selected-effect inspector presentation at the existing `seqfx-inspector` render seam. The prototype card receives the real inspected cell/effect, effect definitions, current values, mix, modulation state, and existing mutation callbacks. Sequencer selection and parameter edits must continue through the real application state path.
+- Toggle: Put a tiny floating `Current / Card` switch over the upper-left corner of the plugin viewport. It takes no layout space, stays clickable/tappable and keyboard accessible, and may visually recede until hover/focus. Do not use a URL switch. State is in-memory only and defaults to `Current` on reload.
+- Isolation: Keep prototype source conspicuously named and adjacent to `fx/seqfx/view`. Keep it on a throwaway prototype branch; do not merge the branch wholesale into production. The current inspector must remain the untouched default when the switch is `Current`.
+- One-command review: `npm run fx:dev`, then open the existing SeqFX harness. No second application or re-created host shell.
+- Initial card scope: Build the shared narrow card shell and the Filter card only. This proves the seam, sizing, and interaction model before Andrew decides the other effects one at a time. When Card mode is active for another selected effect, show a plain `Not prototyped yet` state inside the same card area or fall back to Current; do not invent its final card.
+
+### Locked Filter-card behavior
+
+- Card width is approximately one beat / four sequencer cells, using the actual inspector column rather than a separately tuned screenshot width.
+- Header: selected chain/cell range at left, clickable `FILTER` title and chevron to change effect, and a compact extra-controls menu at right.
+- Main graphic: compact filter-response graph. Drag X for Cutoff and Y for Resonance. A small `M` control enables/disables modulation for the primary controls; when active, the graph exposes the existing base/live/destination relationship through handles rather than creating a second modulation model.
+- Lower-left: the real Aux modulation shape graphic. Drag X for Shape and Y for Curve. The displayed rhythmic value (for example `1/16`) is clickable to choose a different time.
+- Lower-right: Mix knob and current percentage.
+- Secondary Filter controls live behind the extra-controls menu. Do not add persistent rows merely to make the prototype easier.
+- The effect title changes the selected effect through the existing effect mutation path. The menu, graph, modulation affordance, Aux editor, and Mix must not maintain parallel state.
+
+### Visual primary sources
+
+- Approved in-context layout and proportions: `/Users/winterfell/.codex/generated_images/01a03885-0e68-7411-8b3f-f69ae41b6d89/exec-f2aa7339-5b6f-4a4d-b853-a868e5ee2497.png`.
+- Approved isolated Filter-card direction: `/Users/winterfell/.codex/generated_images/01a03885-0e68-7411-8b3f-f69ae41b6d89/exec-70af59b8-f42f-4ade-9661-cb2b94aded43.png`.
+- Palette reference only, not branding or artwork to copy: `/var/folders/jk/kstgbf411xd0zk52p9ytvwmw0000gp/T/codex-clipboard-3e2e1c92-8a25-475a-b595-8639cf95b742.png`.
+- Rejected width/layout direction: `/Users/winterfell/.codex/generated_images/01a03885-0e68-7411-8b3f-f69ae41b6d89/exec-1cc7ded5-188a-430c-aaaa-89c01a9fba66.png` is too wide and its preset strip is misplaced. Do not regress toward it.
+- Discussion-only effect-card renders, not implementation authority: Crush `exec-a556e2ff-252a-41b2-8092-d7eb2ead052e.png`; Tape Stop `exec-0df3ccb9-cbae-4074-8dd0-e8bb6cff9777.png`; Stutter `exec-e8e1cf5f-d391-44db-91fc-a4510eaed2c8.png`; Pitch `exec-4cdec7c1-eac6-42c1-891a-9af1fc399eca.png`; Comb `exec-b85b52b8-8e11-4dfd-947c-3b314325bc1d.png`; Ring `exec-83094574-5d37-45c5-b3f4-104892ca461a.png`; Reverse `exec-0eec7a37-7ceb-4fb1-8041-adf1924fd8ff.png`; Talk Box `exec-17a3af3a-ad21-4f6f-9f25-23828066f1ed.png`; Vibro `exec-eb0d4557-218f-4b4b-9b5e-d0fb7c8f4119.png`; Flange `exec-23454d35-bbae-4c60-8ebf-398b08a41f15.png`; Dirty `exec-96bc249d-6642-41cf-875a-3e8cb1649792.png`. All live in the same generated-images directory as the Filter render.
+
+### Prototype handoff boundary
+
+- Review source and the real render seam before running anything broad. Use only focused harness interaction/geometry checks needed to prove the toggle, default-current preservation, selected-effect/state continuity, real Filter parameter writes, and no layout displacement from the floating switch.
+- Do not edit `TODOS.txt`, `PROGRESS.txt`, DSP, effect metadata, stored-state schema, worker/runtime behavior, generated `patch_gui`, native wrappers, or release tooling. Do not run native builds, plugin installs, pluginval, Ableton, Sites deployment, release, or publication.
+- Before handoff, use decision-provenance to report any choice that changes the approved card, interaction ownership, or prototype isolation. Commit a clean throwaway-branch checkpoint and report it to Bob, coordinator thread `01a05c09-ce2d-7120-bc44-cd8102a2f0d7`. Bob owns review and must not merge the prototype branch wholesale into master.
