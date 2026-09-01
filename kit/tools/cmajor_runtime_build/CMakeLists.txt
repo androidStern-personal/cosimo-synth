@@ -4,7 +4,7 @@ project(CosimoCmajorRuntimeBuild LANGUAGES C CXX)
 
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
-cosimo_add_production_dependencies()
+cosimo_add_cmajor_toolchain_dependencies()
 
 set(BUILD_CMAJ OFF)
 set(BUILD_CMAJ_LIB ON)

@@ -300,7 +300,8 @@ async function createNativeDependencyCheckoutFixture(context) {
     await writeFile(path.join(cmajorPath, "cmajor.txt"), "fixture Cmajor\n", "utf8");
     git(cmajorPath, [
         "-c", "protocol.file.allow=always",
-        "submodule", "add", chocSourcePath, "include/choc",
+        // Relative, like the real fork's ../choc.git: resolved against the Cmajor URL.
+        "submodule", "add", "../../sources/choc", "include/choc",
     ]);
     const cmajorRevision = commitFixture(cmajorPath, "fixture Cmajor");
     git(cmajorPath, ["remote", "add", "origin", cmajorPath]);

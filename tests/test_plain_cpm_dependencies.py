@@ -5,16 +5,20 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# Builds that consume Cmajor headers + CHOC only (plugin and app builds).
 PRODUCTION_CMAKE_CALLERS = (
     "ios_auv3/CMakeLists.txt",
-    "kit/tools/cmajor_runtime_build/CMakeLists.txt",
     "kit/tools/cmajor_web_runtime/CMakeLists.txt",
-    "kit/tools/cmajplugin_build/CMakeLists.txt",
     "kit/tools/effect_plugin_build/CMakeLists.txt",
     "tests/native/CMakeLists.txt",
+    "tools/desktop_native/CMakeLists.txt",
+)
+# Builds of the Cmajor tools themselves (need the fork's LLVM/boost submodules).
+TOOLCHAIN_CMAKE_CALLERS = (
+    "kit/tools/cmajor_runtime_build/CMakeLists.txt",
+    "kit/tools/cmajplugin_build/CMakeLists.txt",
     "tools/cmajor_external_codegen/CMakeLists.txt",
     "tools/cmajor_command_build/CMakeLists.txt",
-    "tools/desktop_native/CMakeLists.txt",
 )
 DEPENDENCY_ENTRYPOINTS = (
     "kit/cmake/CosimoDependencies.cmake",
@@ -43,6 +47,36 @@ def test_production_cmake_builds_use_the_shared_dependency_module() -> None:
 
         assert "kit/cmake/CosimoDependencies.cmake" in source, relative_path
         assert "cosimo_add_production_dependencies()" in source, relative_path
+        assert "cosimo_add_cmajor_toolchain_dependencies()" not in source, relative_path
+
+    for relative_path in TOOLCHAIN_CMAKE_CALLERS:
+        source = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+
+        assert "kit/cmake/CosimoDependencies.cmake" in source, relative_path
+        assert "cosimo_add_cmajor_toolchain_dependencies()" in source, relative_path
+        assert "cosimo_add_production_dependencies()" not in source, relative_path
+
+
+def _cpm_package_block(module: str, name: str) -> str:
+    start = module.index(f"NAME {name}\n")
+    return module[start : module.index(")", start)]
+
+
+def test_plugin_builds_fetch_only_the_choc_submodule_and_tool_builds_the_full_fork() -> None:
+    module = (REPO_ROOT / "kit/cmake/CosimoDependencies.cmake").read_text(encoding="utf-8")
+    production = _cpm_package_block(module, "cosimo_cmajor")
+    toolchain = _cpm_package_block(module, "cosimo_cmajor_toolchain")
+
+    # Customers have no GitHub SSH access: the plugin package must never pull
+    # the fork's LLVM/boost/clap submodules, only CHOC.
+    assert 'GIT_SUBMODULES "include/choc"' in production
+    assert "GIT_SUBMODULES " not in toolchain.replace("GIT_SUBMODULES_RECURSE", "")
+    assert "GIT_SUBMODULES_RECURSE TRUE" in production
+    assert "GIT_SUBMODULES_RECURSE TRUE" in toolchain
+    # One pin for both packages.
+    assert f'set(COSIMO_CMAJOR_PINNED_COMMIT "{PRODUCTION_CMAJOR_COMMIT}")' in module
+    assert 'GIT_TAG "${COSIMO_CMAJOR_PINNED_COMMIT}"' in production
+    assert 'GIT_TAG "${COSIMO_CMAJOR_PINNED_COMMIT}"' in toolchain
 
 
 def test_dependency_entrypoints_have_no_second_source_resolver() -> None:

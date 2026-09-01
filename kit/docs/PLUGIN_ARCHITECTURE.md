@@ -323,8 +323,11 @@ still supports dev-server loading.
    (`cmakeTarget`), with parallelism controlled by `COSIMO_PLUGIN_JOBS` /
    `COSIMO_CMAKE_JOBS` for `all` builds. JUCE and the pinned Cmajor sources
    are fetched by plain CPM from the URLs in
-   `kit/cmake/dependency-sources.cmake`; the licensing obligations of the
-   linked JUCE framework are the plugin owner's (`THIRD_PARTY_NOTICES.md`).
+   `kit/cmake/dependency-sources.cmake`. The plugin package
+   (`cosimo_add_production_dependencies`) checks out the Cmajor headers plus
+   the CHOC submodule only; the fork's LLVM, boost, and clap submodules are
+   never fetched for a plugin build. The licensing obligations of the linked
+   JUCE framework are the plugin owner's (`THIRD_PARTY_NOTICES.md`).
 4. Verifies the built binary contains the patched CHOC WebView markers
    (`kit/scripts/check_choc_markers.mjs` is the single implementation of that
    check, shared by every caller).
@@ -335,10 +338,12 @@ write `CmajPlugin.json`, and does not touch AU plugins.
 
 ## JIT Install (Development In A Host)
 
-`npm run cmajplugin:build` / `npm run cmajplugin:install` build and install the
-patched generic `CmajPlugin.vst3` from the same pinned Cmajor source used by
-production builds (`npm run kit:setup` also downloads the prebuilt, hash-pinned
-copy into `build/kit-tools/`). `npm run fx:jit:install -- <alias>` then writes the VST3
+`npm run kit:setup` downloads the prebuilt, hash-pinned generic
+`CmajPlugin.vst3` into `build/kit-tools/`. `npm run cmajplugin:build` /
+`npm run cmajplugin:install` build and install it from source instead
+(`cosimo_add_cmajor_toolchain_dependencies`: the full Cmajor fork checkout with
+its LLVM, boost, and clap submodules from their upstream GitHub SSH URLs, so
+this is a maintainer path that needs GitHub SSH access). `npm run fx:jit:install -- <alias>` then writes the VST3
 `CmajPlugin.json` pointing the generic plugin at one target:
 
 - at the source patch by default, or

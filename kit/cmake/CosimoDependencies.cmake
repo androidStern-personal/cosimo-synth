@@ -15,16 +15,11 @@ include("${CMAKE_CURRENT_LIST_DIR}/CPM.cmake")
 # Source URLs only (GitHub in the monorepo, feed mirror in a customer export).
 include("${CMAKE_CURRENT_LIST_DIR}/dependency-sources.cmake")
 
-function(cosimo_add_production_dependencies)
-    CPMAddPackage(
-        NAME cosimo_cmajor
-        GIT_REPOSITORY "${COSIMO_CMAJOR_GIT_URL}"
-        GIT_TAG "04ee24df55c4a3ba9f67d498a70c19de1aa1ad79"
-        GIT_SHALLOW FALSE
-        GIT_SUBMODULES_RECURSE TRUE
-        DOWNLOAD_ONLY YES
-    )
+# The pinned Cmajor fork commit. Both packages below pin the same commit; they
+# differ only in how much of the fork's submodule tree they check out.
+set(COSIMO_CMAJOR_PINNED_COMMIT "04ee24df55c4a3ba9f67d498a70c19de1aa1ad79")
 
+function(cosimo_add_juce_dependency)
     CPMAddPackage(
         NAME cosimo_juce
         GIT_REPOSITORY "${COSIMO_JUCE_GIT_URL}"
@@ -32,10 +27,48 @@ function(cosimo_add_production_dependencies)
         GIT_SHALLOW FALSE
         DOWNLOAD_ONLY YES
     )
+    set(COSIMO_JUCE_SOURCE_DIR "${cosimo_juce_SOURCE_DIR}" PARENT_SCOPE)
+endfunction()
+
+# Plugin builds: the Cmajor headers plus the CHOC submodule, nothing else. The
+# fork's other submodules (LLVM, boost, clap) are only needed to build the
+# Cmajor tools themselves and come from upstream SSH URLs, so a plugin build
+# must never ask for them: a customer machine has the prebuilt tools from
+# `npm run kit:setup` and no GitHub SSH access.
+function(cosimo_add_production_dependencies)
+    CPMAddPackage(
+        NAME cosimo_cmajor
+        GIT_REPOSITORY "${COSIMO_CMAJOR_GIT_URL}"
+        GIT_TAG "${COSIMO_CMAJOR_PINNED_COMMIT}"
+        GIT_SHALLOW FALSE
+        GIT_SUBMODULES "include/choc"
+        GIT_SUBMODULES_RECURSE TRUE
+        DOWNLOAD_ONLY YES
+    )
+    cosimo_add_juce_dependency()
 
     set(COSIMO_CMAJOR_SOURCE_DIR "${cosimo_cmajor_SOURCE_DIR}" PARENT_SCOPE)
     set(COSIMO_CHOC_SOURCE_DIR "${cosimo_cmajor_SOURCE_DIR}/include/choc" PARENT_SCOPE)
-    set(COSIMO_JUCE_SOURCE_DIR "${cosimo_juce_SOURCE_DIR}" PARENT_SCOPE)
+    set(COSIMO_JUCE_SOURCE_DIR "${COSIMO_JUCE_SOURCE_DIR}" PARENT_SCOPE)
+endfunction()
+
+# Tool builds (the `cmaj` command, the Cmajor library, CmajPlugin.vst3): the
+# full fork checkout with every submodule. Maintainer-side; needs GitHub SSH
+# access for the upstream submodules. Same pin as the production package.
+function(cosimo_add_cmajor_toolchain_dependencies)
+    CPMAddPackage(
+        NAME cosimo_cmajor_toolchain
+        GIT_REPOSITORY "${COSIMO_CMAJOR_GIT_URL}"
+        GIT_TAG "${COSIMO_CMAJOR_PINNED_COMMIT}"
+        GIT_SHALLOW FALSE
+        GIT_SUBMODULES_RECURSE TRUE
+        DOWNLOAD_ONLY YES
+    )
+    cosimo_add_juce_dependency()
+
+    set(COSIMO_CMAJOR_SOURCE_DIR "${cosimo_cmajor_toolchain_SOURCE_DIR}" PARENT_SCOPE)
+    set(COSIMO_CHOC_SOURCE_DIR "${cosimo_cmajor_toolchain_SOURCE_DIR}/include/choc" PARENT_SCOPE)
+    set(COSIMO_JUCE_SOURCE_DIR "${COSIMO_JUCE_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 
 function(cosimo_add_t26_research_juce)

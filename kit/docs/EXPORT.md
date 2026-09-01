@@ -33,7 +33,8 @@ Two committed contracts describe where a customer machine fetches things:
 When the effective base URL is non-empty (stamped or already present in
 `kit/feed.json`), the exported `kit/cmake/dependency-sources.cmake` is rendered
 so the Cmajor fork resolves from `<baseUrl>/cmajor.git` (CHOC follows as its
-submodule); JUCE keeps its official URL. `CosimoDependencies.cmake` includes
+`include/choc` submodule through the fork's relative `../choc.git` URL; plugin
+builds check out no other submodule); JUCE keeps its official URL. `CosimoDependencies.cmake` includes
 that data-only file and keeps every commit pin, so plain CPM does the fetching
 in both the monorepo and the customer tree. Without a feed URL the export is
 byte-identical to the monorepo's seam (GitHub origins). The manifest records

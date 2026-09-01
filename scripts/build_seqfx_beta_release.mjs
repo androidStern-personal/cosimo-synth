@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import {
     access,
     chmod,
@@ -244,7 +244,48 @@ function cpmPackageBlocks(cmakeSource) {
         .map((match) => match[1]);
 }
 
-function declaredCpmPackage(cmakeSource, expected, label) {
+/** `set(NAME "value")` declarations in a CMake source (the data-only seam files). */
+function cmakeSetVariables(cmakeSource) {
+    const variables = new Map();
+
+    for (const match of cmakeSource.matchAll(/^\s*set\(\s*([A-Za-z_][A-Za-z0-9_]*)\s+"([^"]*)"\s*\)/gmu))
+        variables.set(match[1], match[2]);
+
+    return variables;
+}
+
+/** Substitute `${NAME}` references from the declared variables; an unknown variable fails closed. */
+function resolveCmakeValue(value, variables, label) {
+    return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/gu, (_, name) => {
+        if (!variables.has(name))
+            throw new Error(`${label} references an undefined CMake variable ${name}.`);
+
+        return variables.get(name);
+    });
+}
+
+/** Resolve a submodule URL the way git does: relative to the superproject URL. */
+function resolveRelativeGitUrl(superprojectUrl, relativeUrl) {
+    if (!/^\.\.?\//u.test(relativeUrl))
+        return relativeUrl;
+
+    const base = superprojectUrl.replace(/\/+$/u, "").split("/");
+
+    for (const part of relativeUrl.split("/")) {
+        if (part === "..") {
+            if (base.length <= 1)
+                throw new Error(`Cannot resolve ${relativeUrl} against ${superprojectUrl}.`);
+
+            base.pop();
+        } else if (part !== "." && part !== "") {
+            base.push(part);
+        }
+    }
+
+    return base.join("/");
+}
+
+function declaredCpmPackage(cmakeSource, expected, label, variables = new Map()) {
     const matches = cpmPackageBlocks(cmakeSource).filter((block) => {
         try {
             return requireUniqueCmakeField(block, "NAME", label) === expected.cpmName;
@@ -259,18 +300,26 @@ function declaredCpmPackage(cmakeSource, expected, label) {
         );
     }
 
-    const repository = requireUniqueCmakeField(matches[0], "GIT_REPOSITORY", label);
-    const revision = requireUniqueCmakeField(matches[0], "GIT_TAG", label);
-
-    if (repository !== expected.repository) {
-        throw new Error(
-            `${label} repository drift: expected ${expected.repository}, found ${repository}.`,
-        );
-    }
+    // GIT_TAG / GIT_REPOSITORY may be literals or `${VARIABLE}` references to
+    // the data-only declarations (COSIMO_CMAJOR_PINNED_COMMIT in the module,
+    // the source URLs in dependency-sources.cmake).
+    const revision = resolveCmakeValue(requireUniqueCmakeField(matches[0], "GIT_TAG", label), variables, label);
 
     if (revision !== expected.revision) {
         throw new Error(
             `${label} revision drift: expected ${expected.revision}, found ${revision}.`,
+        );
+    }
+
+    const repository = resolveCmakeValue(
+        requireUniqueCmakeField(matches[0], "GIT_REPOSITORY", label),
+        variables,
+        label,
+    );
+
+    if (repository !== expected.repository) {
+        throw new Error(
+            `${label} repository drift: expected ${expected.repository}, found ${repository}.`,
         );
     }
 
@@ -288,6 +337,15 @@ export async function readDeclaredNativeDependencyProvenance(
 ) {
     const declarationPath = config.nativeDependencies.declarationPath;
     const cmakeSource = await readFile(path.join(repositoryRoot, declarationPath), "utf8");
+    const variables = cmakeSetVariables(cmakeSource);
+    const sourcesPath = path.join(repositoryRoot, path.dirname(declarationPath), "dependency-sources.cmake");
+
+    if (existsSync(sourcesPath)) {
+        for (const [name, value] of cmakeSetVariables(await readFile(sourcesPath, "utf8"))) {
+            if (!variables.has(name))
+                variables.set(name, value);
+        }
+    }
 
     return {
         schemaVersion: 1,
@@ -296,6 +354,7 @@ export async function readDeclaredNativeDependencyProvenance(
             cmakeSource,
             config.nativeDependencies.cmajor,
             "Cmajor production dependency",
+            variables,
         ),
         choc: {
             repository: config.nativeDependencies.choc.repository,
@@ -307,6 +366,7 @@ export async function readDeclaredNativeDependencyProvenance(
             cmakeSource,
             config.nativeDependencies.juce,
             "JUCE production dependency",
+            variables,
         ),
     };
 }
@@ -468,7 +528,14 @@ export async function captureActualNativeDependencyProvenance(
         config.nativeDependencies.choc.submodulePath,
     );
 
-    if (chocDeclaration.url !== config.nativeDependencies.choc.repository) {
+    // The fork declares CHOC with a relative URL (../choc.git) so feed mirrors
+    // stay self-contained; resolve it against the Cmajor URL the way git does.
+    const chocRepository = resolveRelativeGitUrl(
+        config.nativeDependencies.cmajor.repository,
+        chocDeclaration.url,
+    );
+
+    if (chocRepository !== config.nativeDependencies.choc.repository) {
         throw new Error(
             `Cmajor CHOC repository drift: expected ${config.nativeDependencies.choc.repository}, found ${chocDeclaration.url}.`,
         );
@@ -492,7 +559,7 @@ export async function captureActualNativeDependencyProvenance(
             sourceDirectoryCacheKey: config.nativeDependencies.cmajor.sourceDirectoryCacheKey,
         },
         choc: {
-            repository: chocDeclaration.url,
+            repository: chocRepository,
             declaredRevision: config.nativeDependencies.choc.revision,
             ...choc,
             gitlinkRevision: gitlinkMatch[1],

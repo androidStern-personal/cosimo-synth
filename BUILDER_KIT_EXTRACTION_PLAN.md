@@ -485,7 +485,8 @@ Wave B (sequential, after A):
 - [x] **5.9 Enhancer Lite adopts the preset bar and snapshots** (worked example).
 
 Andrew-side:
-- [ ] Cmajor fork: `.gitmodules` CHOC URL → relative `../choc.git`.
+- [x] Cmajor fork: `.gitmodules` CHOC URL → relative `../choc.git` (Andrew's
+  `feed-relative-choc` branch, commit `04ee24d`; the monorepo pin moved to it).
 - [ ] R2 bucket + API token on the Mac; DNS decision.
 - [ ] Create private `builder-kit-releases` repo.
 - [ ] First real `kit:release` on the Mac; run the customer flow on a clean machine.
@@ -546,3 +547,33 @@ Andrew-side:
   load the React-bearing index under node); the tracked desktop bundle drift
   (`test_patch_view_layout`) and the `build/web` suites remain Mac-side; root
   `product-owner.json` `supportUrl` is a guess (`https://song-machines.com`).
+
+#### Follow-up (2026-09-02): pin move, submodule scope, first real CPM proof
+
+- The Cmajor pin is now `04ee24df55c4a3ba9f67d498a70c19de1aa1ad79` (Andrew's
+  `feed-relative-choc` commit: the only change from `cb616bf` is the CHOC
+  submodule URL `../choc.git`). Moved in `kit/cmake/CosimoDependencies.cmake`
+  (`COSIMO_CMAJOR_PINNED_COMMIT`), `kit/toolchain.json`, the SeqFX release
+  config/toolchain and their tests, `legal/seqfx/THIRD_PARTY_NOTICES.txt`.
+- Customer builds must never pull the fork's LLVM/boost/clap submodules (they
+  come from upstream GitHub SSH URLs, and the old declaration fetched every
+  submodule). `cosimo_add_production_dependencies` now checks out
+  `GIT_SUBMODULES "include/choc"` only; the new
+  `cosimo_add_cmajor_toolchain_dependencies` (package `cosimo_cmajor_toolchain`,
+  same pin, all submodules) serves the four tool builds: `tools/cmajor_command_build`,
+  `kit/tools/cmajor_runtime_build`, `kit/tools/cmajplugin_build`,
+  `tools/cmajor_external_codegen`. `tests/test_plain_cpm_dependencies.py`
+  pins the split.
+- Proven for real, in the container, with the forks attached to the session:
+  `test_plain_cpm_module_resolves_the_production_dependency_graph` passes in
+  47 s — plain CPM fetched the fork at the new pin, CHOC through the relative
+  URL, and JUCE, and nothing else.
+- Regression from 5.1 fixed: the SeqFX release planner
+  (`scripts/build_seqfx_beta_release.mjs`) read `GIT_REPOSITORY`/`GIT_TAG`
+  literally and failed on the `${COSIMO_CMAJOR_GIT_URL}` /
+  `${COSIMO_CMAJOR_PINNED_COMMIT}` references; it now resolves `set(...)`
+  variables from the module and `dependency-sources.cmake`, and resolves a
+  relative CHOC submodule URL against the Cmajor URL (fixture updated to use a
+  relative URL). `kit:release`'s pin reader learned the variable too. The
+  remaining SeqFX release-test failures in the container are the macOS-only
+  ones (codesign, homebrew cmake, approved binaries).
