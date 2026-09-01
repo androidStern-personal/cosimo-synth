@@ -155,3 +155,44 @@ The rejected 1000px alternative used a 420px editor floor. Although it avoids te
 - Changed scope: Content-informed workspace columns and exact container-query stack boundary; named root/panel containers; sequencer cell/track floor; compact visible effect-name adaptation; preset, segmented-slider, and Mod-row reflows; stacked scroll ownership; focused composed browser coverage and directly affected responsive assertions. No behavior, state, automation, DSP, transport, loop, effect order, or global-control logic changed.
 - Generated artifacts: None. No tracked UI bundle or `patch_gui` output was rebuilt or edited.
 - Unperformed gates: Broad suite, native/plugin builds, HMR/fixed-port launch, install, pluginval, Ableton/host physical-feel acceptance, physical device, Sites, release, merge, rebase, push, deploy, and publication.
+
+## Responsive workspace ownership review and narrow-width repair
+
+- Status: Complete
+- Task/thread: Visible implementation ownership review in `01a05c67-c2f3-7a63-bf43-5f4fd51f824e`, reporting to coordinator task `01a05c09-ce2d-7120-bc44-cd8102a2f0d7`.
+- Branch/worktree: `codex/seqfx-responsive-workspace-review` at `/Users/winterfell/.codex/worktrees/3a82/cosimo-synth`.
+- Starting handoff: Exact preliminary branch tip `23d76e3a314ea240acdd1ea435886b3379ee79bc` from `codex/seqfx-mockup-compact-layout`; responsive implementation start `df569d28871e5de5fe86842a9b82a8fca8053f89`; original branch base `6064eba67120673a748602d706c46b852c52af69`.
+- Branch ownership decision: The preliminary branch was still checked out in its original worker worktree. This isolated task began detached at its exact handoff commit and created `codex/seqfx-responsive-workspace-review` for repairs rather than moving that other worktree's checked-out branch ref.
+- Authorization and non-scope: Independently review the complete responsive source/test/ledger diff, repair evidenced defects only, and preserve the compact Start/End and fixed 2x6 picker behavior. Native/plugin builds, installs, HMR/fixed ports, pluginval, Ableton/device acceptance, broad suites, integration, rebase, merge, push, deploy, publication, `TODOS.txt`, and `PROGRESS.txt` remained outside this task.
+
+### Review findings and repairs
+
+1. The composed 420px sample masked a graph-floor defect. At a 320px host width, the Filter plot measured 121px because CSS reserved 14px above the plot while the shared geometry subtracted 34px. Crusher and Stutter had the same 20px shared-top-padding omission. The CSS owners now reserve the full 34px, and the real Filter, Crusher, and Stutter plot areas each retain at least 140px.
+2. At the same 320px width, fixed six-column picker buttons shrank to 38.5x52px. The picker now preserves six 44px columns plus the five existing gutters and owns only the resulting horizontal overflow; its focus-ring breathing room stays inside the inspector, and it does not become a vertical scroll owner.
+3. At the exact 1060px side-by-side floor, the inspector's 480px outer width produces a 452px container-query content box. The preliminary `<480px` rule therefore stacked picker icons above labels and raised the buttons to 52px even though the accepted floor geometry is approximately 71x36px. The vertical picker presentation now begins below 420px of inspector content; 1060px keeps horizontal 36px chips, while a 420px stacked host uses the 52px fallback.
+4. No further defect survived source tracing and focused reproduction. The workspace still uses CSS container queries only, preserves component identity and focus across resize, keeps the exact 1060px boundary and 528/480px floors, wraps preset/slider/Mod content without hiding controls, and leaves state, automation, DSP, transport, loop, and global-control logic unchanged.
+
+### Decision-provenance objection audit
+
+- The Filter reserve was repaired in `ui/shared/filter-range-editor.css`, its actual owning seam, instead of adding a SeqFX-only override that would leave the shared CSS/geometry invariant contradictory. The existing compact shared Filter browser contract remained green.
+- Exceptionally narrow picker width is handled with local horizontal scrolling. Shrinking below 44px, changing the authorized 2x6 arrangement, or hiding copy were rejected because each would violate a preserved interaction or accessibility contract.
+- The icon-over-label picker breakpoint is based on inspector content width, so its threshold is 420px rather than the 480px outer panel floor. This preserves the accepted compact 71x36px side-by-side geometry without using JavaScript or a viewport media query.
+- The 140px floor was applied to the primary editable Filter, Crusher, and Stutter plot areas. Existing small informational previews and the Tape Stop trajectory overview were not reclassified as manipulation surfaces or enlarged as part of this focused responsive repair.
+- Confidence is high in the browser-composed geometry, overflow ownership, keyboard activation, DOM identity, and no-write resize behavior. Physical feel in the actual Ableton WebView remains deliberately unproven.
+
+### Focused evidence
+
+- Before repair, the existing responsive round trip passed 1/1 at its 420px sample. Strengthening that same composed case to 320px failed first with a 121px Filter plot and then, after the graph repair, with 38.5px picker columns. Coordinator review additionally identified the 52px picker height at the exact 1060px floor. These were the three confirmed repair targets.
+- Final directly affected composed group passed 5/5: fixed 2x6 picker order/keyboard selection; responsive 1061/1060/1059/420/320px round trip with 36px horizontal picker chips at 1060 and the 52px stacked fallback at 420; rate-driven rhythmic grid geometry; side-by-side inspector/grid alignment; and responsive Mod containment.
+- Graph-adjacent behavior passed 4/4: the shared compact Filter chip contract plus SeqFX Crusher parameter writes, Stutter parameter writes, and Stutter live-edit/persistence boundaries.
+- Strict SeqFX TypeScript passed all 19 production modules. `git diff --check` passed. The temporary ignored `node_modules` symlink used existing dependencies and was removed before commit.
+- Known failures: None in the focused evidence. No broad qualification claim is made.
+
+### Final handoff
+
+- Repair commit: `75e595d8` (`Harden SeqFX narrow responsive layout`).
+- Ledger closeout commit: This record's branch-tip commit; its exact hash is reported to the coordinator because a commit cannot embed its own hash.
+- Exact changed scope after the preliminary handoff: SeqFX picker overflow/minimum-column and vertical-presentation breakpoint CSS; Filter, Crusher, and Stutter plot-reserve CSS; the existing composed responsive test strengthened at 1060/420/320px; this ledger entry. `TODOS.txt`, `PROGRESS.txt`, DSP/state/automation/runtime code, generated UI bundles, and `patch_gui` are unchanged.
+- Generated artifacts: None.
+- Clean status: Clean after the ledger-only closeout commit; verified in the coordinator handoff.
+- Unperformed gates: Broad suite; native/plugin/release builds; generated-bundle rebuild; HMR/fixed-port launch; install; codesign/notarization; pluginval; Ableton/listening/host physical-feel acceptance; physical device; Sites; release; merge; rebase; push; deploy; publication.
