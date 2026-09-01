@@ -336,3 +336,46 @@ The critical DRY requirement is the **resolved** size. Aliasing both surfaces to
 - Explicit non-scope: New framework, daemon, screenshot farm, duplicate build system, DAW automation, native-host dependency, plugin installation, Ableton, deployment, publication, release, or changes to product behavior.
 - Focused proof: One narrow test must cover target selection plus the three named dimensions and output files through the real script seam. Avoid broad suites and tests about tests.
 - Integration: After source-first review, repair, clean rebase, and focused qualification, the coordinator may merge and push this tooling to master under Andrew's standing authorization, then run it for SeqFX and report the pushed commit and three PNG paths.
+
+## Shared sequencer-cell geometry for the effect picker
+
+- Status: Complete.
+- Task/thread: Visible implementation task `01a05c85-0f96-72e3-b1e3-13821469651c`, reporting to coordinator task `01a05c09-ce2d-7120-bc44-cd8102a2f0d7`.
+- Branch/worktree: `codex/seqfx-shared-cell-geometry` at `/Users/winterfell/.codex/worktrees/02de/cosimo-synth`.
+- Base: Exact integrated declutter tip `cfe759b6346daebc734f209927ac31a7b9904452`.
+- Authorization: Make every effect-picker chip consume the live sequencer-cell height and exact two-cell-plus-ordinary-gap width, and share the cell border, radius, background, shadow, and interaction surface while preserving the fixed 2x6 native-button picker and its behavior.
+- Explicit non-scope: Tape Stop layout; modulation-toggle metadata; preset-header work; breakpoints; theme; DSP; state/schema/saved-sound policy; onboarding/chain-label work; generated bundles; broad/native/release gates; HMR/fixed-port launch; install; pluginval; Ableton/device work; integration, rebase, merge, push, deploy, publish; `TODOS.txt` and `PROGRESS.txt`.
+
+### Decisions
+
+1. Resolve one typed `--seqfx-resolved-cell-size` at the root-owned workspace from the named root container, then inherit its computed length into both sibling panels. The sequencer tracks, workspace allocation, picker height, and `cell + ordinary gap + cell` picker width all consume that value. An untyped root-relative custom property was rejected because it would re-resolve container units inside the inspector's nearer container; JavaScript measurement and parallel formulas remained forbidden.
+2. Move the existing rate geometry class from the sequencer shell to the workspace owner. That lets the same CSS authority account for the real 2/4/8-cells-per-beat rhythmic-gap topology before it sizes both consumers; the underlying rate, state, and grid-placement logic remain unchanged.
+3. Add `seqfx-cell-surface` to the existing cell and native picker button instead of creating a component wrapper or wider design-system abstraction. The shared selector owns the zero border, 3px radius, cell background, raised shadow, selected shadow, focus, hover surface, active displacement, and transitions. Effect identity color remains on the icon/text, not on parallel border or background chrome.
+4. Keep the options grid at its content width with the existing 5px inter-chip gutters, so each chip remains mathematically exact instead of stretching to fill the inspector. A per-chip container query switches between the already-existing full and unique short visible names only when that actual two-cell control cannot contain the full copy; full accessible names stay on each button at every size.
+
+### Decision-provenance objection audit
+
+- The registered typed custom property and CSS typed arithmetic are deliberate: they freeze the root-relative result before inheritance crosses into the independently named sequencer and inspector containers. Duplicating the calculation on both panels, measuring the sequencer in JavaScript, or letting an untyped `cqi` token re-resolve under the inspector were rejected because each can drift. The composed equality checks prove the resolved production behavior in Chromium; native WKWebView acceptance remains unperformed.
+- Picker surfaces no longer use effect-colored hover/selected borders or their former cream background variants. Keeping those would violate the approved exact cell-surface contract. Effect colors remain visible through the existing icons, and selected/focused state uses the same shadow/focus treatment as a sequencer cell.
+- Exact live cell height supersedes the old independent 36px/52px picker-height floors. At the narrow content floor this can make a chip 24px high; this is a direct consequence of the approved equality requirement, not an unrelated hit-target reduction. Icons scale only as needed to stay inside the cell-height control, while existing unique short labels preserve visible identity.
+- Fixed-width chips leave unused inspector width rather than stretching. Distributing that surplus into the controls was rejected because it would make their width cease to be exactly two live cells plus the ordinary gap. The picker retains its prior 5px inter-chip spacing and owns horizontal scrolling only where the exact 2x6 content cannot fit.
+- The full/short visible-name switch now follows each chip's actual 79px content threshold rather than the inspector's old broad-width breakpoint. This is the smallest content-preserving adaptation to the new live geometry; all twelve full names remain unchanged in `aria-label`. Human visual preference and Ableton physical feel remain unproven.
+
+### Focused evidence
+
+- Pre-edit boundary: The isolated worktree was clean and detached at exact base `cfe759b6346daebc734f209927ac31a7b9904452`; branch `codex/seqfx-shared-cell-geometry` was created without moving another worktree's ref.
+- Failing-before evidence: The strengthened existing picker test failed against untouched production before reaching later assertions: the new root sizing property was absent (`NaN`) while the representative 1280px sequencer cell was 32.75px. The old picker also retained its independent 36px/52px height and parallel border/background surface.
+- Passing-after evidence: The directly affected composed browser group passed 6/6: chain-aware picker accessibility/interaction; exact picker geometry and shared surface; responsive resize/state round trip; rate-driven rhythmic geometry; responsive Mod containment; and effect selection persistence/pattern upload. The geometry check covers 1280px wide, the exact 1060px side-by-side floor, and a 320px narrow stack, proving chip height equals cell height, chip width equals two cells plus the measured ordinary gap, all visible option content fits, base/selected/focus/hover surfaces match, the order remains 2x6, Enter/Space selection survives, narrow scrolling stays picker-local, and no page overflow appears.
+- Resize preservation: The existing 1061/1060/1059/420/320 round trip still proves panel stacking/scroll ownership, focus and component identity, selected effect and Mod state, and byte-for-byte equality of harness events, stored-state writes, and stored state across the resize.
+- Static/source review: Canonical `node fx/seqfx/check-types.mjs` passed all 19 production modules. `git diff --check` passed. The implementation commit changes only `SeqFxPatchView.tsx`, `styles.css`, and the existing composed browser suite; `TODOS.txt`, `PROGRESS.txt`, DSP/runtime/state/automation code, generated bundles, and `patch_gui` are unchanged.
+- Test setup: Focused browser checks used a task-owned loopback port, the existing dependency tree read-only, and a writable Vite cache under `/private/tmp`; the server, temporary config/cache, and ignored `node_modules` symlink were removed before closeout.
+- Known failures: None in the authorized focused evidence.
+
+### Final handoff
+
+- Implementation commit: `cb090c64` (`Share SeqFX picker cell geometry`).
+- Ledger closeout commit: This record's branch-tip commit; its exact hash is reported to the coordinator because a commit cannot embed its own hash.
+- Exact changed scope: Root/workspace-owned typed cell-size and rhythmic-gap authority; sequencer tracks and workspace allocation consuming that authority; shared cell-surface class on existing cells and native picker buttons; exact two-cell picker dimensions and per-chip visible-name fit; strengthened existing composed geometry/surface/behavior/resize assertions; this ledger entry.
+- Generated artifacts: None.
+- Clean status: Clean after the ledger-only closeout commit; verified in the coordinator handoff.
+- Unperformed gates: Full/broad SeqFX suite; generated-bundle rebuild; native/plugin/release build; signing/notarization; HMR/fixed-port launch; install; pluginval; Ableton/listening/host visual or physical-feel acceptance; physical device; Sites; release; rebase; merge; push; deploy; publication.
