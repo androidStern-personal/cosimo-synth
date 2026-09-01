@@ -38,7 +38,7 @@ automation or evidence.
 The native dependency contract is also fail-closed:
 
 - Cmajor: `androidStern-personal/cmajor` at
-  `cb616bf1d0931ff92da3826d15a01eadfd8e35b1`
+  `04ee24df55c4a3ba9f67d498a70c19de1aa1ad79`
 - CHOC: the Cmajor `include/choc` gitlink at
   `98b52fb54c3b9fec03c0c13218f6557aef33eabe`
 - JUCE: `juce-framework/JUCE` at

@@ -73,7 +73,7 @@ def test_t26_runner_builds_against_research_juce_7_through_cpm() -> None:
     assert "git clone" not in runner
 
 
-PRODUCTION_CMAJOR_COMMIT = "cb616bf1d0931ff92da3826d15a01eadfd8e35b1"
+PRODUCTION_CMAJOR_COMMIT = "04ee24df55c4a3ba9f67d498a70c19de1aa1ad79"
 PRODUCTION_CHOC_COMMIT = "98b52fb54c3b9fec03c0c13218f6557aef33eabe"
 PRODUCTION_JUCE_COMMIT = "501c07674e1ad693085a7e7c398f205c2677f5da"
 

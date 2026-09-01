@@ -16,7 +16,7 @@ must not be stored in this repository or release package.
 
 Cmajor
 Source: https://github.com/androidStern-personal/cmajor
-Pinned commit: cb616bf1d0931ff92da3826d15a01eadfd8e35b1
+Pinned commit: 04ee24df55c4a3ba9f67d498a70c19de1aa1ad79
 License identifier: GPL-3.0-or-later OR LicenseRef-Cmajor-Commercial
 
 # Cmajor license

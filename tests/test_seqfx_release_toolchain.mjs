@@ -60,7 +60,7 @@ test("release toolchain resolves approved binaries while keeping manifest eviden
         },
     });
     assert.deepEqual(toolchain.manifestAttestation.sourceBuiltTools.cmaj, {
-        cmajorCommit: "cb616bf1d0931ff92da3826d15a01eadfd8e35b1",
+        cmajorCommit: "04ee24df55c4a3ba9f67d498a70c19de1aa1ad79",
         chocCommit: "98b52fb54c3b9fec03c0c13218f6557aef33eabe",
         executablePolicy: "absolute-repository-build-output-no-path-fallback",
         provenance: "repository-pinned-source-build",

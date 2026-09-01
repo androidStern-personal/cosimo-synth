@@ -19,7 +19,7 @@ function(cosimo_add_production_dependencies)
     CPMAddPackage(
         NAME cosimo_cmajor
         GIT_REPOSITORY "${COSIMO_CMAJOR_GIT_URL}"
-        GIT_TAG "cb616bf1d0931ff92da3826d15a01eadfd8e35b1"
+        GIT_TAG "04ee24df55c4a3ba9f67d498a70c19de1aa1ad79"
         GIT_SHALLOW FALSE
         GIT_SUBMODULES_RECURSE TRUE
         DOWNLOAD_ONLY YES
