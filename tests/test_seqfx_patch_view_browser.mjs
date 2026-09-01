@@ -1151,7 +1151,7 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
     await page.close();
 });
 
-test("seqfx_global_surface_wires_host_controls_loop_transport_and_edit_history", async () => {
+test("seqfx consolidated top controls preserve global loop transport and history semantics", async () => {
     const page = await browser.newPage({ viewport: { width: 1120, height: 680 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
@@ -1163,25 +1163,67 @@ test("seqfx_global_surface_wires_host_controls_loop_transport_and_edit_history",
     const rate = page.locator('[data-role="seqfx-rate"]');
     const swing = page.locator('[data-role="seqfx-swing"]');
     const loopStart = page.locator('[data-role="seqfx-loop-start"]');
-    const loopEnd = page.locator('[data-role="seqfx-loop-end"]');
+    const loopStop = page.locator('[data-role="seqfx-loop-stop"]');
     const transport = page.locator('[data-role="seqfx-internal-transport"]');
     const reset = page.locator('[data-role="seqfx-reset"]');
     const undo = page.locator('[data-role="seqfx-undo"]');
     const redo = page.locator('[data-role="seqfx-redo"]');
 
-    assert.equal(await enabled.isVisible(), true, "SeqFX On should be visible");
+    assert.equal(await enabled.isVisible(), true, "the header sigil should expose the sole SeqFX bypass switch");
+    assert.equal(await page.locator('[data-role="seqfx-enabled"]').count(), 1, "there should be only one global bypass control");
+    assert.equal(await enabled.getAttribute("aria-label"), "Bypass SeqFX");
+    assert.equal(await enabled.getAttribute("aria-checked"), "true");
+    assert.equal(await page.getByText(/SeqFX (?:On|Off)/u).count(), 0, "the consolidated row should not repeat bypass text");
     assert.equal(await mix.isVisible(), true, "global mix should be visible");
     assert.equal(await clock.isVisible(), true, "clock mode should be visible");
     assert.equal(await rate.isVisible(), true, "rate should be visible");
     assert.equal(await swing.isVisible(), true, "swing should be visible");
     assert.equal(await loopStart.isVisible(), true, "compact loop Start should be visible");
-    assert.equal(await loopEnd.isVisible(), true, "compact loop End should be visible");
+    assert.equal(await loopStop.isVisible(), true, "compact loop Stop should be visible");
     assert.equal(await page.locator('[data-role="seqfx-loop-ruler"]').count(), 0, "the redundant 32-cell loop ruler should be absent");
-    assert.equal(await enabled.getAttribute("aria-checked"), "true");
+    assert.equal(await mix.getAttribute("type"), "range", "the Mix knob should retain a semantic range input");
+    assert.equal(await swing.getAttribute("type"), "range", "the Swing knob should retain a semantic range input");
+    assert.equal(await page.locator('[data-control="seqfx-global-mix-knob"] [data-role="parameter-knob-artwork"]').count(), 1);
+    assert.equal(await page.locator('[data-control="seqfx-swing-knob"] [data-role="parameter-knob-artwork"]').count(), 1);
+    assert.equal(await bpm.getAttribute("type"), "number", "BPM should be a compact native number input");
+    assert.deepEqual(
+        [await bpm.getAttribute("min"), await bpm.getAttribute("max"), await bpm.getAttribute("step")],
+        ["20", "300", "0.1"],
+        "BPM should preserve its legal range and precision",
+    );
+    assert.equal(await page.locator('[data-role="seqfx-manual-bpm-control"] .editor-tick-slider').count(), 0, "BPM should not render a segmented row");
     assert.equal(await bpm.isDisabled(), true, "host clock should make manual BPM unavailable");
     assert.equal(await transport.isDisabled(), true, "host clock should own transport in Host mode");
     assert.equal(await undo.isDisabled(), true);
     assert.equal(await redo.isDisabled(), true);
+
+    const actionGroup = page.locator('[data-role="seqfx-transport-history-actions"]');
+    assert.equal(await actionGroup.locator("button").count(), 4, "transport and history should share one joined icon group");
+    for (const [control, label] of [
+        [transport, "Play internal clock"],
+        [reset, "Reset internal clock"],
+        [undo, "Undo edit"],
+        [redo, "Redo edit"],
+    ]) {
+        assert.equal(await control.getAttribute("aria-label"), label);
+        assert.doesNotMatch((await control.textContent()) ?? "", /Play|Stop|Reset|Undo|Redo/u, `${label} should not have a persistent text label`);
+        assert.ok((await control.getAttribute("title"))?.length > 0, `${label} should retain a tooltip`);
+    }
+
+    const consolidatedLayout = await page.locator('[data-role="seqfx-global-controls"]').evaluate((surface) => {
+        const controls = surface.querySelector(".seqfx-global__controls");
+        const children = [...controls.children].map((child) => child.getBoundingClientRect());
+        const bounds = surface.getBoundingClientRect();
+        return {
+            bounds: { height: bounds.height, left: bounds.left, right: bounds.right },
+            childBounds: children.map((child) => ({ bottom: child.bottom, left: child.left, right: child.right, top: child.top })),
+            scrollWidth: controls.scrollWidth,
+            clientWidth: controls.clientWidth,
+        };
+    });
+    assert.ok(consolidatedLayout.bounds.height <= 58, `the normal top controls should remain one compact row, got ${consolidatedLayout.bounds.height}px`);
+    assert.ok(consolidatedLayout.scrollWidth <= consolidatedLayout.clientWidth + 1, "the normal consolidated row should not clip or scroll");
+    assert.ok(consolidatedLayout.childBounds.every((child) => child.left >= consolidatedLayout.bounds.left - 1 && child.right <= consolidatedLayout.bounds.right + 1));
 
     const rateBounds = await rate.boundingBox();
     assert.ok(rateBounds, "sequence rate should have measurable browser geometry");
@@ -1192,13 +1234,18 @@ test("seqfx_global_surface_wires_host_controls_loop_transport_and_edit_history",
 
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
     await enabled.click();
+    assert.equal(await enabled.getAttribute("aria-label"), "Enable SeqFX");
+    assert.equal(await enabled.getAttribute("aria-checked"), "false");
     await mix.fill("0.37");
     await clock.selectOption("1");
     await bpm.fill("134");
+    await bpm.press("Enter");
     await rate.selectOption("2");
     await swing.fill("0.2");
     await loopStart.fill("5");
-    await loopEnd.fill("13");
+    await loopStart.press("Enter");
+    await loopStop.fill("13");
+    await loopStop.press("Enter");
     await transport.click();
     await reset.click();
 
@@ -1234,6 +1281,8 @@ test("seqfx_global_surface_wires_host_controls_loop_transport_and_edit_history",
         [...snapshot.gestureStarts].sort(),
         "each combined global edit should close exactly one matching host gesture",
     );
+    assert.equal(await page.locator('[data-role="seqfx-global-mix-value"]').textContent(), "37%");
+    assert.equal(await page.locator('[data-role="seqfx-swing-value"]').textContent(), "20%");
 
     for (const [endpointID, slider] of [["globalMix", mix], ["swing", swing]]) {
         await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
@@ -1277,7 +1326,7 @@ test("seqfx_global_surface_wires_host_controls_loop_transport_and_edit_history",
     assert.equal(await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).getAttribute("aria-pressed"), "true");
 
     assert.equal(await loopStart.inputValue(), "5");
-    assert.equal(await loopEnd.inputValue(), "13");
+    assert.equal(await loopStop.inputValue(), "13");
 
     await page.close();
 });
@@ -1494,33 +1543,35 @@ test("seqfx_inspector_undo_gesture_closes_once_on_blur_and_unmount", async () =>
     await page.close();
 });
 
-test("seqfx compact loop Start and End replace the ruler without overflow", async () => {
+test("seqfx consolidated loop inputs stay compact without narrow-editor overflow", async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 800 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
     const loopStart = page.locator('[data-role="seqfx-loop-start"]');
-    const loopEnd = page.locator('[data-role="seqfx-loop-end"]');
+    const loopStop = page.locator('[data-role="seqfx-loop-stop"]');
     const supportedSizes = [
         { id: "minimum", width: 720, height: 520 },
         { id: "compact", width: 900, height: 600 },
         { id: "default", width: 1120, height: 680 },
         { id: "wide", width: 1440, height: 800 },
     ];
+    const fixedGridWidths = new Map();
 
     assert.equal(await page.locator('[data-role="seqfx-loop-ruler"]').count(), 0, "the 32-cell ruler should be removed from the production surface");
     assert.equal(await page.locator('[data-role="seqfx-loop-step"]').count(), 0, "no redundant loop-step buttons should remain");
-    assert.equal(await loopStart.getAttribute("type"), "range");
-    assert.equal(await loopEnd.getAttribute("type"), "range");
+    assert.equal(await loopStart.getAttribute("type"), "number");
+    assert.equal(await loopStop.getAttribute("type"), "number");
     assert.deepEqual(
-        [await loopStart.getAttribute("min"), await loopStart.getAttribute("max"), await loopEnd.getAttribute("min"), await loopEnd.getAttribute("max")],
+        [await loopStart.getAttribute("min"), await loopStart.getAttribute("max"), await loopStop.getAttribute("min"), await loopStop.getAttribute("max")],
         ["1", "32", "1", "32"],
-        "Start and End should expose the full initial 1..32 domain",
+        "Start and Stop should expose the full 1..32 cell domain",
     );
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
 
     for (const size of supportedSizes) {
         await page.setViewportSize({ width: size.width, height: size.height });
-        const geometry = await page.locator(".seqfx-loop").evaluate((loop) => {
+        const geometry = await page.locator('[data-role="seqfx-global-controls"]').evaluate((surface) => {
             const rectFor = (element) => {
                 if (!element) {
                     return null;
@@ -1535,72 +1586,41 @@ test("seqfx compact loop Start and End replace the ruler without overflow", asyn
                     width: bounds.width,
                 };
             };
-            const meta = loop.querySelector(".seqfx-loop__meta");
-            const start = loop.querySelector('[data-role="seqfx-loop-start-control"]');
-            const end = loop.querySelector('[data-role="seqfx-loop-end-control"]');
+            const controls = surface.querySelector(".seqfx-global__controls");
+            const start = surface.querySelector('[data-role="seqfx-loop-start"]')?.closest("label");
+            const stop = surface.querySelector('[data-role="seqfx-loop-stop"]')?.closest("label");
+            const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]')?.getBoundingClientRect();
+            const nextCell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="1"]')?.getBoundingClientRect();
+            const pickerChip = document.querySelector('[data-role="seqfx-effect-type-option"]')?.getBoundingClientRect();
             return {
-                end: rectFor(end),
-                loop: rectFor(loop),
-                metaClientWidth: meta?.clientWidth ?? 0,
-                metaScrollWidth: meta?.scrollWidth ?? 0,
+                cellWidth: cell?.width ?? 0,
+                controlsClientWidth: controls?.clientWidth ?? 0,
+                controlsScrollWidth: controls?.scrollWidth ?? 0,
+                normalGap: cell && nextCell ? nextCell.left - cell.right : 0,
+                pickerChipWidth: pickerChip?.width ?? 0,
                 rootScrollWidth: document.documentElement.scrollWidth,
                 start: rectFor(start),
+                stop: rectFor(stop),
+                surface: rectFor(surface),
                 viewportWidth: window.innerWidth,
             };
         });
+        fixedGridWidths.set(size.id, geometry.cellWidth);
 
-        assert.ok(geometry.start && geometry.end, `${size.id} should render both compact loop endpoints`);
-        assertClose(geometry.start.top, geometry.end.top, 1, `${size.id} Start and End header alignment`);
-        assert.ok(geometry.start.right <= geometry.end.left + 1, `${size.id} Start should precede End`);
-        assert.ok(geometry.start.left >= geometry.loop.left - 1 && geometry.end.right <= geometry.loop.right + 1, `${size.id} loop controls should stay inside the header`);
-        assert.ok(geometry.metaScrollWidth <= geometry.metaClientWidth + 1, `${size.id} compact loop header should not clip or scroll`);
-        assert.ok(geometry.rootScrollWidth <= geometry.viewportWidth + 1, `${size.id} compact loop header should not create page overflow`);
+        assert.ok(geometry.start && geometry.stop, `${size.id} should render both compact loop inputs`);
+        assertClose(geometry.start.top, geometry.stop.top, 1, `${size.id} Start and Stop alignment`);
+        assert.ok(geometry.start.right <= geometry.stop.left + 1, `${size.id} Start should precede Stop`);
+        assert.ok(geometry.start.left >= geometry.surface.left - 1 && geometry.stop.right <= geometry.surface.right + 1, `${size.id} loop inputs should stay inside the consolidated row`);
+        assert.ok(geometry.controlsScrollWidth <= geometry.controlsClientWidth + 1, `${size.id} consolidated controls should not clip or scroll`);
+        assert.ok(geometry.rootScrollWidth <= geometry.viewportWidth + 1, `${size.id} controls should not create page overflow`);
+        assertClose(
+            geometry.pickerChipWidth,
+            (2 * geometry.cellWidth) + geometry.normalGap,
+            0.75,
+            `${size.id} picker chip should remain exactly two cells plus the ordinary gap`,
+        );
     }
-
-    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
-    const endBox = await loopEnd.boundingBox();
-    assert.ok(endBox);
-    await page.mouse.move(endBox.x + endBox.width - 2, endBox.y + (endBox.height / 2));
-    await page.mouse.down();
-    await page.mouse.move(endBox.x + (endBox.width / 2), endBox.y + (endBox.height / 2), { steps: 6 });
-    await page.mouse.up();
-    await loopEnd.evaluate((input) => input.blur());
-
-    const pointerEnd = Number(await loopEnd.inputValue());
-    assert.ok(Number.isInteger(pointerEnd) && pointerEnd > 1 && pointerEnd < 32, `pointer End should land on a whole step, got ${pointerEnd}`);
-    let snapshot = await getHarnessSnapshot(page);
-    assert.equal(snapshot.parameters.loopStart, 0);
-    assert.equal(snapshot.parameters.loopLength, pointerEnd);
-    assert.deepEqual(snapshot.gestureStarts, ["loopStart", "loopLength"]);
-    assert.deepEqual(snapshot.gestureEnds, snapshot.gestureStarts);
-
-    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
-    await loopStart.focus();
-    await page.keyboard.press("End");
-    await loopStart.evaluate((input) => input.blur());
-    assert.equal(await loopStart.inputValue(), String(pointerEnd));
-    assert.equal(await loopEnd.inputValue(), String(pointerEnd));
-    await loopEnd.focus();
-    await page.keyboard.press("Home");
-    await loopEnd.evaluate((input) => input.blur());
-    assert.equal(await loopEnd.inputValue(), String(pointerEnd), "End must not cross below Start");
-
-    await loopStart.focus();
-    await page.keyboard.press("Home");
-    await loopStart.evaluate((input) => input.blur());
-    await loopEnd.focus();
-    await page.keyboard.press("End");
-    await loopEnd.evaluate((input) => input.blur());
-    assert.deepEqual([await loopStart.inputValue(), await loopEnd.inputValue()], ["1", "32"], "keyboard Home/End should retain the full loop domain");
-    snapshot = await getHarnessSnapshot(page);
-    assert.equal(snapshot.parameters.loopStart, 0);
-    assert.equal(snapshot.parameters.loopLength, 32);
-    assert.deepEqual(snapshot.gestureEnds, snapshot.gestureStarts, "pointer and keyboard endpoint edits should close paired host gestures");
-
-    await page.locator('[data-role="seqfx-loop-start-value"]').click();
-    assert.equal(await page.getByRole("textbox", { name: "Start exact value" }).count(), 1, "exact entry should appear only on request");
-    await page.keyboard.press("Escape");
-    assert.equal(await page.locator('.seqfx-loop input[type="text"]').count(), 0, "exact entry should remain temporary");
+    assertClose(fixedGridWidths.get("wide"), fixedGridWidths.get("default"), 0.1, "cell geometry should stop growing at the natural 1120px editor width");
 
     await page.close();
 });
@@ -1699,16 +1719,36 @@ test("seqfx_factory_content_is_discoverable_atomic_and_undoable_without_onboardi
         "ordinary rerenders should not recreate onboarding persistence",
     );
 
-    const factoryPattern = page.locator('[data-role="seqfx-factory-pattern"]');
-    assert.equal(await factoryPattern.locator("option").count(), 13);
+    const patternMenu = page.locator('[data-role="seqfx-pattern-menu"]');
+    assert.equal(await page.locator('[data-role="seqfx-factory-pattern"]').count(), 0, "the persistent Factory row should be gone");
+    assert.equal(await patternMenu.locator("summary").textContent(), "Pattern");
+    await patternMenu.locator("summary").click();
+    assert.deepEqual(
+        await patternMenu.locator('button').evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim())),
+        ["Init current pattern", "Clear loop", "Copy loop", "Paste loop", "Vary loop"],
+    );
+    assert.equal(await page.getByRole("button", { name: "Paste loop", exact: true }).isDisabled(), true);
+    const templateSelect = page.locator('[data-role="seqfx-template-select"]');
+    assert.equal(await templateSelect.locator("option").count(), 13, "Pattern should expose a placeholder plus the 12 built-in templates");
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
-    await factoryPattern.selectOption("twelve-effect-tour");
+    await templateSelect.selectOption("twelve-effect-tour");
     await page.getByRole("button", { name: "Chain 1 Filter block 1-2", exact: true }).waitFor();
+    assert.equal(await page.locator('[data-role="seqfx-pattern"][data-pattern="0"]').getAttribute("aria-pressed"), "true", "template loading should target only the selected slot");
     const loadedEffects = new Set(await page.locator('[data-role="seqfx-block"]').evaluateAll((nodes) => (
         nodes.map((node) => Number(node.getAttribute("data-effect")))
     )));
     assert.deepEqual([...loadedEffects].sort((left, right) => left - right), Array.from({ length: 12 }, (_unused, index) => index + 1));
     assert.equal(patternUploads(await getHarnessSnapshot(page)).length, 1, "factory pattern should upload once after its atomic stored-state commit");
+    await page.locator('[data-role="seqfx-undo"]').click();
+    assert.equal(await page.locator('[data-role="seqfx-block"]').count(), 0, "one Undo should remove the complete template operation");
+    await page.locator('[data-role="seqfx-redo"]').click();
+    await page.getByRole("button", { name: "Chain 1 Filter block 1-2", exact: true }).waitFor();
+
+    await patternMenu.locator("summary").click();
+    await page.getByRole("button", { name: "Copy loop", exact: true }).click();
+    await patternMenu.locator("summary").click();
+    assert.equal(await page.getByRole("button", { name: "Paste loop", exact: true }).isEnabled(), true, "copying the selected slot's loop should enable Paste");
+    await patternMenu.locator("summary").click();
 
     await page.getByRole("button", { name: "Chain 1 Filter block 1-2", exact: true }).click();
     const effectPreset = page.locator('[data-role="seqfx-factory-effect-preset"]');
@@ -1733,7 +1773,8 @@ test("seqfx_factory_content_is_discoverable_atomic_and_undoable_without_onboardi
     const beforeGeometry = beforeVariation.patterns[0].lanes.map((lane) => (
         lane.steps.map((step) => step.trigger ? step.effectType : 0)
     ));
-    await page.locator('[data-role="seqfx-vary-loop"]').click();
+    await patternMenu.locator("summary").click();
+    await page.getByRole("button", { name: "Vary loop", exact: true }).click();
     snapshot = await getHarnessSnapshot(page);
     storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
     assert.deepEqual(storedState.patterns[0].lanes.map((lane) => lane.steps.map((step) => step.trigger ? step.effectType : 0)), beforeGeometry);
@@ -1919,10 +1960,12 @@ test("seqfx effect picker uses two rows of six without overflow and keeps keyboa
     const picker = page.locator(".seqfx-effect-picker__options");
     const effectOptions = picker.locator('[data-role="seqfx-effect-type-option"]');
     const supportedSizes = [
-        { id: "wide", width: 1280, height: 820 },
+        { id: "above native ceiling", width: 1440, height: 820 },
+        { id: "native ceiling", width: 1120, height: 820 },
         { id: "side-by-side floor", width: 1060, height: 820 },
         { id: "narrow stack", width: 320, height: 640 },
     ];
+    const sizeMeasurements = new Map();
 
     assert.equal(await effectOptions.count(), 12);
     assert.deepEqual(
@@ -2008,6 +2051,7 @@ test("seqfx effect picker uses two rows of six without overflow and keeps keyboa
                 viewportWidth: window.innerWidth,
             };
         });
+        sizeMeasurements.set(size.id, geometry);
 
         assert.deepEqual(geometry.rowCounts, [6, 6], `${size.id} picker should render exactly two rows of six`);
         assert.equal(geometry.allInside, true, `${size.id} effect buttons should stay inside the picker`);
@@ -2031,7 +2075,14 @@ test("seqfx effect picker uses two rows of six without overflow and keeps keyboa
         }
     }
 
-    await page.setViewportSize({ width: 1280, height: 820 });
+    assertClose(
+        sizeMeasurements.get("above native ceiling").cellWidth,
+        sizeMeasurements.get("native ceiling").cellWidth,
+        0.1,
+        "browser surplus above 1120px should not inflate the fixed sequencer-cell geometry",
+    );
+
+    await page.setViewportSize({ width: 1120, height: 820 });
     await settleLayout();
     await page.getByRole("button", { name: "Chain 1 step 2", exact: true }).click();
     const selectedCell = page.locator('[data-role="seqfx-cell"][data-lane="0"][data-step="1"]');
@@ -4833,24 +4884,34 @@ test("seqfx segmented sliders preserve proportional continuous fill, whole discr
     await page.close();
 });
 
-test("seqfx global numeric controls use compact segmented ranges with host-owned Space", async () => {
+test("seqfx loop bounds use compact validated cell inputs with exact host gestures", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
-    assert.equal(await page.locator('.seqfx-root input[type="number"]').count(), 0);
-
     const bpm = page.locator('[data-role="seqfx-manual-bpm"]');
-    const loopStart = page.locator('[data-role="seqfx-loop-start"]');
-    const loopEnd = page.locator('[data-role="seqfx-loop-end"]');
-    for (const [label, control, rowRole] of [
-        ["Manual BPM", bpm, "seqfx-manual-bpm-control"],
-        ["Loop start", loopStart, "seqfx-loop-start-control"],
-        ["Loop end", loopEnd, "seqfx-loop-end-control"],
+    assert.equal(await bpm.getAttribute("type"), "number", "Manual BPM should use a native number input");
+    assert.deepEqual(
+        [await bpm.getAttribute("min"), await bpm.getAttribute("max"), await bpm.getAttribute("step")],
+        ["20", "300", "0.1"],
+    );
+    assert.equal(await page.locator('[data-role="seqfx-manual-bpm-control"] .editor-tick-slider__track').count(), 0);
+
+    const loop = page.locator('[data-role="seqfx-global-controls"]');
+    const loopStart = loop.getByRole("spinbutton", { name: "Start", exact: true });
+    const loopStop = loop.getByRole("spinbutton", { name: "Stop", exact: true });
+    for (const [label, control, role] of [
+        ["Start", loopStart, "seqfx-loop-start"],
+        ["Stop", loopStop, "seqfx-loop-stop"],
     ]) {
-        assert.equal(await control.getAttribute("type"), "range", `${label} should use a range input`);
-        assert.equal(await page.locator(`[data-role="${rowRole}"] .editor-tick-slider__track`).count(), 1);
+        assert.equal(await control.getAttribute("data-role"), role);
+        assert.equal(await control.getAttribute("type"), "number", `${label} should use a native number input`);
+        assert.equal(await control.getAttribute("min"), "1", `${label} should expose the first visible cell`);
+        assert.equal(await control.getAttribute("max"), "32", `${label} should expose the last visible cell`);
+        assert.equal(await control.getAttribute("step"), "1", `${label} should accept whole cells only`);
     }
+    assert.equal(await loop.locator(".editor-tick-slider").count(), 0, "loop bounds should not render segmented controls");
+    assert.equal(await loop.locator('[data-role="seqfx-loop-start-control"], [data-role="seqfx-loop-end-control"]').count(), 0);
 
     await page.locator('[data-role="seqfx-clock-mode"]').selectOption("1");
     const spaceOwnership = await bpm.evaluate((input) => {
@@ -4867,29 +4928,19 @@ test("seqfx global numeric controls use compact segmented ranges with host-owned
             defaultPrevented: event.defaultPrevented,
         };
     });
-    assert.deepEqual(spaceOwnership, { activeType: "range", defaultPrevented: false });
+    assert.deepEqual(spaceOwnership, { activeType: "number", defaultPrevented: false });
 
     await bpm.evaluate((input) => input.blur());
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
-    await page.locator('[data-role="seqfx-manual-bpm-value"]').click();
-    const bpmEntry = page.getByRole("textbox", { name: "BPM exact value" });
-    await bpmEntry.fill("134.5 bpm");
-    await bpmEntry.press("Enter");
-    await bpmEntry.waitFor({ state: "detached" });
+    await bpm.fill("134.5");
+    await bpm.press("Enter");
 
-    await page.locator('[data-role="seqfx-loop-start-value"]').click();
-    const loopStartEntry = page.getByRole("textbox", { name: "Start exact value" });
-    await loopStartEntry.fill("5");
-    await loopStartEntry.press("Enter");
-    await loopStartEntry.waitFor({ state: "detached" });
+    await loopStart.fill("5");
+    await loopStart.press("Enter");
+    await loopStop.fill("13");
+    await loopStop.press("Enter");
 
-    await page.locator('[data-role="seqfx-loop-end-value"]').click();
-    const loopEndEntry = page.getByRole("textbox", { name: "End exact value" });
-    await loopEndEntry.fill("13");
-    await loopEndEntry.press("Enter");
-    await loopEndEntry.waitFor({ state: "detached" });
-
-    const snapshot = await getHarnessSnapshot(page);
+    let snapshot = await getHarnessSnapshot(page);
     assert.deepEqual(snapshot.events.map(({ endpointID, value }) => ({ endpointID, value })), [
         { endpointID: "manualBpm", value: 134.5 },
         { endpointID: "loopStart", value: 4 },
@@ -4905,12 +4956,63 @@ test("seqfx global numeric controls use compact segmented ranges with host-owned
         "loopLength",
     ]);
     assert.deepEqual(snapshot.gestureEnds, snapshot.gestureStarts);
-    assert.equal(await page.locator('.seqfx-global input[type="text"]').count(), 0, "exact editors should remain temporary");
+    assert.equal(await page.locator('.seqfx-global input[type="text"]').count(), 0, "global numeric fields should stay native number inputs");
 
-    const discreteFills = await page.locator('[data-role="seqfx-loop-start-control"] [data-role="editor-tick-slider-tick"]').evaluateAll(
-        (ticks) => ticks.map((tick) => Number(tick.getAttribute("data-fill"))),
-    );
-    assert.ok(discreteFills.every((fill) => fill === 0 || fill === 1), "loop boundaries should fill whole cells only");
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await loopStart.fill("20");
+    await loopStart.press("Enter");
+    assert.equal(await loopStart.inputValue(), "13", "Start should clamp to Stop when an edit crosses it");
+    await loopStop.fill("2");
+    await loopStop.press("Enter");
+    assert.equal(await loopStop.inputValue(), "13", "Stop should clamp to Start when an edit crosses it");
+    await loopStart.fill("-4");
+    await loopStart.press("Enter");
+    assert.equal(await loopStart.inputValue(), "1", "Start should clamp to the visible cell floor");
+    await loopStop.fill("99");
+    await loopStop.press("Enter");
+    assert.equal(await loopStop.inputValue(), "32", "Stop should clamp to the visible cell ceiling");
+
+    snapshot = await getHarnessSnapshot(page);
+    assert.deepEqual(snapshot.events.map(({ endpointID, value }) => ({ endpointID, value })), [
+        { endpointID: "loopStart", value: 12 },
+        { endpointID: "loopLength", value: 1 },
+        { endpointID: "loopStart", value: 12 },
+        { endpointID: "loopLength", value: 1 },
+        { endpointID: "loopStart", value: 0 },
+        { endpointID: "loopLength", value: 13 },
+        { endpointID: "loopStart", value: 0 },
+        { endpointID: "loopLength", value: 32 },
+    ]);
+    assert.deepEqual(snapshot.gestureStarts, [
+        "loopStart", "loopLength",
+        "loopStart", "loopLength",
+        "loopStart", "loopLength",
+        "loopStart", "loopLength",
+    ]);
+    assert.deepEqual(snapshot.gestureEnds, snapshot.gestureStarts);
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    const stopHandle = await loopStop.elementHandle();
+    assert.ok(stopHandle);
+    await loopStop.focus();
+    for (const viewport of [
+        { width: 1060, height: 820 },
+        { width: 420, height: 640 },
+        { width: 1120, height: 680 },
+    ]) {
+        await page.setViewportSize(viewport);
+        assert.equal(await loopStop.inputValue(), "32", `Stop should survive resize to ${viewport.width}px`);
+        assert.equal(await loopStart.inputValue(), "1", `Start should survive resize to ${viewport.width}px`);
+        assert.equal(
+            await page.evaluate((node) => node === document.querySelector('[data-role="seqfx-loop-stop"]'), stopHandle),
+            true,
+            `Stop should not remount at ${viewport.width}px`,
+        );
+        assert.equal(await loopStop.evaluate((node) => document.activeElement === node), true, `Stop focus should survive ${viewport.width}px`);
+    }
+    snapshot = await getHarnessSnapshot(page);
+    assert.deepEqual(snapshot.events, [], "resizing a focused loop input should not emit host writes");
+    assert.deepEqual(snapshot.storedStateWrites, [], "resizing a focused loop input should not write saved state");
 
     await page.close();
 });

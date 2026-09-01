@@ -37,6 +37,7 @@ export const effectPlugins = {
         juceOut: "build/seqfx_juce",
         cmakeTarget: "CosimoSeqFX",
         disableMicrophonePermission: true,
+        editorMaxWidth: 1120,
         productName: "CosimoSeqFX",
         visualReviewAdapter: "scripts/visual-review/seqfx.mjs",
         workerSource: "fx/seqfx/worker/source.ts",

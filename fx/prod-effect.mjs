@@ -162,8 +162,12 @@ export function createJuceGenerationConfigureArgs({
     pluginTarget,
     cmajExecutable,
     disableMicrophonePermission = false,
+    editorMaxWidth = null,
 }) {
     const pinnedExecutable = validatePinnedCmajExecutable(cmajExecutable);
+
+    if (editorMaxWidth !== null && (!Number.isInteger(editorMaxWidth) || editorMaxWidth < 250))
+        throw new Error("editorMaxWidth must be an integer of at least 250.");
 
     return [
         "-S", cmakeSourceDirectory,
@@ -174,6 +178,7 @@ export function createJuceGenerationConfigureArgs({
         `-DCOSIMO_EFFECT_PLUGIN_TARGET=${pluginTarget}`,
         `-DCOSIMO_CMAJ_EXECUTABLE=${pinnedExecutable}`,
         ...(disableMicrophonePermission ? ["-DCOSIMO_DISABLE_MICROPHONE_PERMISSION=ON"] : []),
+        ...(editorMaxWidth === null ? [] : [`-DCOSIMO_EFFECT_EDITOR_MAX_WIDTH=${editorMaxWidth}`]),
     ];
 }
 
@@ -249,6 +254,7 @@ async function generateJuceProject(pluginName, plugin, options = {}) {
         cmakeBuildDirectory: cmakeBuildDir,
         cmakeSourceDirectory,
         disableMicrophonePermission: plugin.disableMicrophonePermission,
+        editorMaxWidth: plugin.editorMaxWidth,
         juceOutputDirectory: juceOut,
         pluginTarget: plugin.cmakeTarget,
         runtimePatchPath,

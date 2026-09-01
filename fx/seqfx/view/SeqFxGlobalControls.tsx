@@ -1,15 +1,12 @@
-import { useEffect, useRef, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
-import { EditorTickSlider } from "../../../ui/shared/editor-tick-slider";
-import { parameterEntrySpecForScalar } from "../../../ui/shared/parameter-value-entry";
-import { SEQFX_FACTORY_PATTERNS } from "./seqfx-factory-content";
+import { ParameterKnobArtwork } from "../../../ui/shared/parameter-knob-artwork";
 import {
     SEQFX_ENDPOINTS,
     type SeqFxGlobalControls,
 } from "./seqfx-runtime-bridge";
 
 type GlobalControlEndpoint =
-    | typeof SEQFX_ENDPOINTS.enabled
     | typeof SEQFX_ENDPOINTS.globalMix
     | typeof SEQFX_ENDPOINTS.clockMode
     | typeof SEQFX_ENDPOINTS.manualBpm
@@ -20,16 +17,211 @@ type GlobalControlEndpoint =
 
 const CLOCK_OPTIONS = ["Host", "Internal", "Manual"] as const;
 const RATE_OPTIONS = ["1/8", "1/16", "1/32"] as const;
-const MANUAL_BPM_ENTRY_SPEC = parameterEntrySpecForScalar({
-    min: 20,
-    max: 300,
-    step: 0.1,
-    unit: "BPM",
-    digits: 1,
-});
+function clampInteger(value: number, min: number, max: number) {
+    return Math.min(max, Math.max(min, Math.round(value)));
+}
 
-function loopStepEntrySpec(min: number, max: number) {
-    return parameterEntrySpecForScalar({ min, max, step: 1, unit: "", digits: 0 });
+function CompactIntegerInput({
+    dataRole,
+    label,
+    max,
+    min,
+    onBlur,
+    onChange,
+    onFocus,
+    value,
+}: {
+    dataRole: string;
+    label: string;
+    max: number;
+    min: number;
+    onBlur: () => void;
+    onChange: (value: number) => void;
+    onFocus: () => void;
+    value: number;
+}) {
+    const [draft, setDraft] = useState<string | null>(null);
+
+    function commitKeyboardEdit(event: KeyboardEvent<HTMLInputElement>) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+        }
+    }
+
+    return (
+        <label className="seqfx-loop__bound">
+            <span>{label}</span>
+            <input
+                data-role={dataRole}
+                inputMode="numeric"
+                max={max}
+                min={min}
+                onBlur={() => {
+                    setDraft(null);
+                    onBlur();
+                }}
+                onChange={(event) => {
+                    const nextDraft = event.currentTarget.value;
+                    setDraft(nextDraft);
+                    if (nextDraft === "") {
+                        return;
+                    }
+
+                    const parsed = Number(nextDraft);
+                    if (!Number.isFinite(parsed)) {
+                        return;
+                    }
+
+                    const normalized = clampInteger(parsed, min, max);
+                    setDraft(String(normalized));
+                    onChange(normalized);
+                }}
+                onFocus={() => {
+                    setDraft(String(value));
+                    onFocus();
+                }}
+                onKeyDown={commitKeyboardEdit}
+                step={1}
+                type="number"
+                value={draft ?? String(value)}
+            />
+        </label>
+    );
+}
+
+function CompactBpmInput({
+    disabled,
+    onBlur,
+    onChange,
+    onFocus,
+    value,
+}: {
+    disabled: boolean;
+    onBlur: () => void;
+    onChange: (value: number) => void;
+    onFocus: () => void;
+    value: number;
+}) {
+    const [draft, setDraft] = useState<string | null>(null);
+
+    return (
+        <label
+            className="seqfx-global__number"
+            data-role="seqfx-manual-bpm-control"
+            title={disabled ? "The host supplies tempo in Host mode." : "Manual tempo"}
+        >
+            <span>BPM</span>
+            <input
+                aria-label="BPM"
+                data-role="seqfx-manual-bpm"
+                disabled={disabled}
+                inputMode="decimal"
+                max={300}
+                min={20}
+                onBlur={() => {
+                    setDraft(null);
+                    onBlur();
+                }}
+                onChange={(event) => {
+                    const nextDraft = event.currentTarget.value;
+                    setDraft(nextDraft);
+                    if (nextDraft === "") {
+                        return;
+                    }
+
+                    const parsed = Number(nextDraft);
+                    if (!Number.isFinite(parsed)) {
+                        return;
+                    }
+
+                    const normalized = Math.min(300, Math.max(20, Math.round(parsed * 10) / 10));
+                    setDraft(String(normalized));
+                    onChange(normalized);
+                }}
+                onFocus={() => {
+                    setDraft(String(value));
+                    onFocus();
+                }}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        event.currentTarget.blur();
+                    }
+                }}
+                step={0.1}
+                type="number"
+                value={draft ?? String(value)}
+            />
+        </label>
+    );
+}
+
+function CompactKnob({
+    dataControl,
+    dataRole,
+    label,
+    max,
+    min,
+    onBlur,
+    onChange,
+    onLostPointerCapture,
+    onPointerCancel,
+    onPointerDown,
+    onPointerUp,
+    outputDataRole,
+    step,
+    value,
+}: {
+    dataControl: string;
+    dataRole: string;
+    label: string;
+    max: number;
+    min: number;
+    onBlur: () => void;
+    onChange: (value: number) => void;
+    onLostPointerCapture: (event: PointerEvent<HTMLInputElement>) => void;
+    onPointerCancel: (event: PointerEvent<HTMLInputElement>) => void;
+    onPointerDown: (event: PointerEvent<HTMLInputElement>) => void;
+    onPointerUp: (event: PointerEvent<HTMLInputElement>) => void;
+    outputDataRole: string;
+    step: number;
+    value: number;
+}) {
+    const normalized = (value - min) / (max - min);
+
+    return (
+        <label className="seqfx-global__knob-field" data-control={dataControl}>
+            <span>{label}</span>
+            <span className="seqfx-global__knob">
+                <ParameterKnobArtwork
+                    baseNormalized={normalized}
+                    baseOriginNormalized={0}
+                    className="seqfx-global__knob-art"
+                    emphasis="none"
+                    modRing={{ kind: "hidden" }}
+                    ownerAccent="#6f9c7d"
+                    sourceAccent="#6f9c7d"
+                />
+                <input
+                    aria-label={label}
+                    data-role={dataRole}
+                    max={max}
+                    min={min}
+                    onBlur={onBlur}
+                    onChange={(event) => onChange(Number(event.currentTarget.value))}
+                    onLostPointerCapture={onLostPointerCapture}
+                    onPointerCancel={onPointerCancel}
+                    onPointerDown={onPointerDown}
+                    onPointerUp={onPointerUp}
+                    step={step}
+                    type="range"
+                    value={value}
+                />
+            </span>
+            <output data-role={outputDataRole}>{Math.round(value * 100)}%</output>
+        </label>
+    );
 }
 
 export function SeqFxGlobalControlSurface({
@@ -37,7 +229,6 @@ export function SeqFxGlobalControlSurface({
     internalRunning,
     canUndo,
     canRedo,
-    hasLoopClipboard,
     onGlobalControl,
     onGlobalControlCommit,
     onGlobalGestureStart,
@@ -47,18 +238,11 @@ export function SeqFxGlobalControlSurface({
     onReset,
     onUndo,
     onRedo,
-    onInitPattern,
-    onClearLoop,
-    onCopyLoop,
-    onPasteLoop,
-    onLoadFactoryPattern,
-    onVaryLoop,
 }: {
     controls: SeqFxGlobalControls;
     internalRunning: boolean;
     canUndo: boolean;
     canRedo: boolean;
-    hasLoopClipboard: boolean;
     onGlobalControl: (endpointID: GlobalControlEndpoint, value: number) => void;
     onGlobalControlCommit: (endpointID: GlobalControlEndpoint, value: number) => void;
     onGlobalGestureStart: (endpointID: GlobalControlEndpoint) => void;
@@ -68,12 +252,6 @@ export function SeqFxGlobalControlSurface({
     onReset: () => void;
     onUndo: () => void;
     onRedo: () => void;
-    onInitPattern: () => void;
-    onClearLoop: () => void;
-    onCopyLoop: () => void;
-    onPasteLoop: () => void;
-    onLoadFactoryPattern: (patternId: string) => void;
-    onVaryLoop: () => void;
 }) {
     const loopEndExclusive = Math.min(32, controls.loopStart + controls.loopLength);
     const loopGestureActiveRef = useRef(false);
@@ -175,37 +353,43 @@ export function SeqFxGlobalControlSurface({
     return (
         <section className="seqfx-global" data-role="seqfx-global-controls" aria-label="SeqFX global controls">
             <div className="seqfx-global__controls">
-                <button
-                    aria-checked={controls.enabled}
-                    className={controls.enabled ? "seqfx-global__on is-on" : "seqfx-global__on"}
-                    data-role="seqfx-enabled"
-                    onClick={() => onGlobalControlCommit(SEQFX_ENDPOINTS.enabled, controls.enabled ? 0 : 1)}
-                    role="switch"
-                    type="button"
-                >
-                    <span aria-hidden="true" />
-                    SeqFX {controls.enabled ? "On" : "Off"}
-                </button>
+                <CompactIntegerInput
+                    dataRole="seqfx-loop-start"
+                    label="Start"
+                    max={32}
+                    min={1}
+                    onBlur={endLoopGesture}
+                    onChange={(value) => onLoopRangeChange(Math.min(value, loopEndExclusive) - 1, loopEndExclusive)}
+                    onFocus={beginLoopGesture}
+                    value={controls.loopStart + 1}
+                />
+                <CompactIntegerInput
+                    dataRole="seqfx-loop-stop"
+                    label="Stop"
+                    max={32}
+                    min={1}
+                    onBlur={endLoopGesture}
+                    onChange={(value) => onLoopRangeChange(controls.loopStart, Math.max(value, controls.loopStart + 1))}
+                    onFocus={beginLoopGesture}
+                    value={loopEndExclusive}
+                />
 
-                <label className="seqfx-global__field seqfx-global__field--mix">
-                    <span>Mix</span>
-                    <input
-                        aria-label="SeqFX global mix"
-                        data-role="seqfx-global-mix"
-                        max="1"
-                        min="0"
-                        onBlur={() => endPointerGesture(SEQFX_ENDPOINTS.globalMix)}
-                        onChange={(event) => onGlobalControl(SEQFX_ENDPOINTS.globalMix, Number(event.currentTarget.value))}
-                        onLostPointerCapture={(event) => endPointerGesture(SEQFX_ENDPOINTS.globalMix, event.pointerId)}
-                        onPointerCancel={(event) => endPointerGesture(SEQFX_ENDPOINTS.globalMix, event.pointerId)}
-                        onPointerDown={(event) => beginPointerGesture(SEQFX_ENDPOINTS.globalMix, event)}
-                        onPointerUp={(event) => endPointerGesture(SEQFX_ENDPOINTS.globalMix, event.pointerId)}
-                        step="0.01"
-                        type="range"
-                        value={controls.globalMix}
-                    />
-                    <output>{Math.round(controls.globalMix * 100)}%</output>
-                </label>
+                <CompactKnob
+                    dataControl="seqfx-global-mix-knob"
+                    dataRole="seqfx-global-mix"
+                    label="Mix"
+                    max={1}
+                    min={0}
+                    onBlur={() => endPointerGesture(SEQFX_ENDPOINTS.globalMix)}
+                    onChange={(value) => onGlobalControl(SEQFX_ENDPOINTS.globalMix, value)}
+                    onLostPointerCapture={(event) => endPointerGesture(SEQFX_ENDPOINTS.globalMix, event.pointerId)}
+                    onPointerCancel={(event) => endPointerGesture(SEQFX_ENDPOINTS.globalMix, event.pointerId)}
+                    onPointerDown={(event) => beginPointerGesture(SEQFX_ENDPOINTS.globalMix, event)}
+                    onPointerUp={(event) => endPointerGesture(SEQFX_ENDPOINTS.globalMix, event.pointerId)}
+                    outputDataRole="seqfx-global-mix-value"
+                    step={0.01}
+                    value={controls.globalMix}
+                />
 
                 <label className="seqfx-global__field">
                     <span>Clock</span>
@@ -219,28 +403,13 @@ export function SeqFxGlobalControlSurface({
                     </select>
                 </label>
 
-                <div
-                    className="seqfx-global__segmented seqfx-global__segmented--bpm"
-                    title={manualTempoAvailable ? "Manual tempo" : "The host supplies tempo in Host mode."}
-                >
-                    <EditorTickSlider
-                        dataRole="seqfx-manual-bpm-control"
-                        disabled={!manualTempoAvailable}
-                        entrySpec={MANUAL_BPM_ENTRY_SPEC}
-                        formatValue={(value) => `${Number(value.toFixed(1))} BPM`}
-                        inputDataRole="seqfx-manual-bpm"
-                        label="BPM"
-                        max={300}
-                        min={20}
-                        onChange={(value) => onGlobalControl(SEQFX_ENDPOINTS.manualBpm, value)}
-                        onGestureEnd={() => endGesture(SEQFX_ENDPOINTS.manualBpm)}
-                        onGestureStart={() => beginGesture(SEQFX_ENDPOINTS.manualBpm)}
-                        step={0.1}
-                        tickCount={12}
-                        value={controls.manualBpm}
-                        valueDataRole="seqfx-manual-bpm-value"
-                    />
-                </div>
+                <CompactBpmInput
+                    disabled={!manualTempoAvailable}
+                    onBlur={() => endGesture(SEQFX_ENDPOINTS.manualBpm)}
+                    onChange={(value) => onGlobalControl(SEQFX_ENDPOINTS.manualBpm, value)}
+                    onFocus={() => beginGesture(SEQFX_ENDPOINTS.manualBpm)}
+                    value={controls.manualBpm}
+                />
 
                 <label className="seqfx-global__field">
                     <span>Rate</span>
@@ -254,27 +423,29 @@ export function SeqFxGlobalControlSurface({
                     </select>
                 </label>
 
-                <label className="seqfx-global__field seqfx-global__field--swing">
-                    <span>Swing</span>
-                    <input
-                        aria-label="Swing"
-                        data-role="seqfx-swing"
-                        max="0.45"
-                        min="0"
-                        onBlur={() => endPointerGesture(SEQFX_ENDPOINTS.swing)}
-                        onChange={(event) => onGlobalControl(SEQFX_ENDPOINTS.swing, Number(event.currentTarget.value))}
-                        onLostPointerCapture={(event) => endPointerGesture(SEQFX_ENDPOINTS.swing, event.pointerId)}
-                        onPointerCancel={(event) => endPointerGesture(SEQFX_ENDPOINTS.swing, event.pointerId)}
-                        onPointerDown={(event) => beginPointerGesture(SEQFX_ENDPOINTS.swing, event)}
-                        onPointerUp={(event) => endPointerGesture(SEQFX_ENDPOINTS.swing, event.pointerId)}
-                        step="0.01"
-                        type="range"
-                        value={controls.swing}
-                    />
-                    <output>{Math.round(controls.swing * 100)}%</output>
-                </label>
+                <CompactKnob
+                    dataControl="seqfx-swing-knob"
+                    dataRole="seqfx-swing"
+                    label="Swing"
+                    max={0.45}
+                    min={0}
+                    onBlur={() => endPointerGesture(SEQFX_ENDPOINTS.swing)}
+                    onChange={(value) => onGlobalControl(SEQFX_ENDPOINTS.swing, value)}
+                    onLostPointerCapture={(event) => endPointerGesture(SEQFX_ENDPOINTS.swing, event.pointerId)}
+                    onPointerCancel={(event) => endPointerGesture(SEQFX_ENDPOINTS.swing, event.pointerId)}
+                    onPointerDown={(event) => beginPointerGesture(SEQFX_ENDPOINTS.swing, event)}
+                    onPointerUp={(event) => endPointerGesture(SEQFX_ENDPOINTS.swing, event.pointerId)}
+                    outputDataRole="seqfx-swing-value"
+                    step={0.01}
+                    value={controls.swing}
+                />
 
-                <div className="seqfx-global__actions" role="group" aria-label="Transport and edit actions">
+                <div
+                    className="seqfx-global__actions"
+                    data-role="seqfx-transport-history-actions"
+                    role="group"
+                    aria-label="Transport and edit actions"
+                >
                     <button
                         aria-label={internalRunning ? "Stop internal clock" : "Play internal clock"}
                         className={internalRunning && clockOwnsTransport ? "is-active" : undefined}
@@ -284,90 +455,11 @@ export function SeqFxGlobalControlSurface({
                         title={clockOwnsTransport ? "Start or stop the internal clock." : "Choose Internal clock to control transport here."}
                         type="button"
                     >
-                        {internalRunning && clockOwnsTransport ? "Stop" : "Play"}
+                        <span aria-hidden="true">{internalRunning && clockOwnsTransport ? "■" : "▶"}</span>
                     </button>
-                    <button data-role="seqfx-reset" onClick={onReset} type="button">Reset</button>
-                    <button aria-label="Undo edit" data-role="seqfx-undo" disabled={!canUndo} onClick={onUndo} type="button">Undo</button>
-                    <button aria-label="Redo edit" data-role="seqfx-redo" disabled={!canRedo} onClick={onRedo} type="button">Redo</button>
-                </div>
-            </div>
-
-            <div className="seqfx-loop">
-                <div className="seqfx-loop__meta">
-                    <strong>Loop</strong>
-                    <div className="seqfx-loop__segmented">
-                        <EditorTickSlider
-                            dataRole="seqfx-loop-start-control"
-                            discrete
-                            entrySpec={loopStepEntrySpec(1, loopEndExclusive)}
-                            formatValue={(value) => String(Math.round(value))}
-                            inputDataRole="seqfx-loop-start"
-                            label="Start"
-                            max={loopEndExclusive}
-                            min={1}
-                            onChange={(value) => onLoopRangeChange(value - 1, loopEndExclusive)}
-                            onGestureEnd={endLoopGesture}
-                            onGestureStart={beginLoopGesture}
-                            step={1}
-                            tickCount={Math.min(16, loopEndExclusive)}
-                            value={controls.loopStart + 1}
-                            valueDataRole="seqfx-loop-start-value"
-                        />
-                    </div>
-                    <div className="seqfx-loop__segmented">
-                        <EditorTickSlider
-                            dataRole="seqfx-loop-end-control"
-                            discrete
-                            entrySpec={loopStepEntrySpec(controls.loopStart + 1, 32)}
-                            formatValue={(value) => String(Math.round(value))}
-                            inputDataRole="seqfx-loop-end"
-                            label="End"
-                            max={32}
-                            min={controls.loopStart + 1}
-                            onChange={(value) => onLoopRangeChange(controls.loopStart, value)}
-                            onGestureEnd={endLoopGesture}
-                            onGestureStart={beginLoopGesture}
-                            step={1}
-                            tickCount={Math.min(16, 32 - controls.loopStart)}
-                            value={loopEndExclusive}
-                            valueDataRole="seqfx-loop-end-value"
-                        />
-                    </div>
-                    <output>{controls.loopLength} steps</output>
-                    <div className="seqfx-loop__actions" role="group" aria-label="Loop edit actions">
-                        <button data-role="seqfx-init-pattern" onClick={onInitPattern} title="Clear this pattern. Undo restores it." type="button">Init</button>
-                        <button data-role="seqfx-clear-loop" onClick={onClearLoop} title="Clear blocks touching the loop. Undo restores them." type="button">Clear</button>
-                        <button data-role="seqfx-copy-loop" onClick={onCopyLoop} type="button">Copy</button>
-                        <button data-role="seqfx-paste-loop" disabled={!hasLoopClipboard} onClick={onPasteLoop} type="button">Paste</button>
-                        <button
-                            data-role="seqfx-vary-loop"
-                            onClick={onVaryLoop}
-                            title="Vary only the blocks touching this loop, using qualified factory-preset values. Undo restores them."
-                            type="button"
-                        >
-                            Vary
-                        </button>
-                    </div>
-                    <label className="seqfx-loop__factory">
-                        <span>Factory</span>
-                        <select
-                            aria-label="Load factory pattern"
-                            data-role="seqfx-factory-pattern"
-                            defaultValue=""
-                            onChange={(event) => {
-                                if (event.currentTarget.value) {
-                                    onLoadFactoryPattern(event.currentTarget.value);
-                                    event.currentTarget.value = "";
-                                }
-                            }}
-                            title="Replace the current pattern. Undo restores it."
-                        >
-                            <option value="">Load pattern…</option>
-                            {SEQFX_FACTORY_PATTERNS.map((pattern) => (
-                                <option key={pattern.id} value={pattern.id}>{pattern.category} · {pattern.name}</option>
-                            ))}
-                        </select>
-                    </label>
+                    <button aria-label="Reset internal clock" data-role="seqfx-reset" onClick={onReset} title="Reset internal clock." type="button"><span aria-hidden="true">↺</span></button>
+                    <button aria-label="Undo edit" data-role="seqfx-undo" disabled={!canUndo} onClick={onUndo} title="Undo last pattern edit." type="button"><span aria-hidden="true">↶</span></button>
+                    <button aria-label="Redo edit" data-role="seqfx-redo" disabled={!canRedo} onClick={onRedo} title="Redo last pattern edit." type="button"><span aria-hidden="true">↷</span></button>
                 </div>
             </div>
         </section>

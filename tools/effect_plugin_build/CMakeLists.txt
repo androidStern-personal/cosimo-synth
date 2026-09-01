@@ -9,6 +9,7 @@ cosimo_add_production_dependencies()
 set(COSIMO_EFFECT_PATCH_PATH "" CACHE FILEPATH "Cmajor patch to generate")
 set(COSIMO_EFFECT_OUTPUT_DIR "" CACHE PATH "Generated JUCE project directory")
 set(COSIMO_EFFECT_PLUGIN_TARGET "" CACHE STRING "Generated JUCE shared-code target")
+set(COSIMO_EFFECT_EDITOR_MAX_WIDTH "" CACHE STRING "Optional maximum generated editor width")
 set(COSIMO_CMAJ_EXECUTABLE "" CACHE FILEPATH "Pinned Cmajor command executable")
 option(COSIMO_DISABLE_MICROPHONE_PERMISSION
     "Disable microphone permission metadata in the generated plugin project"
@@ -57,6 +58,27 @@ if(NOT generate_result EQUAL 0)
 endif()
 
 message(STATUS "${generate_output}${generate_error}")
+
+if(NOT COSIMO_EFFECT_EDITOR_MAX_WIDTH STREQUAL "")
+    configure_file(
+        "${CMAKE_CURRENT_LIST_DIR}/CosimoBoundedGeneratedPlugin.h"
+        "${COSIMO_EFFECT_OUTPUT_DIR}/CosimoBoundedGeneratedPlugin.h"
+        COPYONLY)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}"
+            "-DCOSIMO_GENERATED_PLUGIN_SOURCE=${COSIMO_EFFECT_OUTPUT_DIR}/cmajor_plugin.cpp"
+            "-DCOSIMO_GENERATED_PLUGIN_EDITOR_MAX_WIDTH=${COSIMO_EFFECT_EDITOR_MAX_WIDTH}"
+            -P "${CMAKE_CURRENT_LIST_DIR}/apply_generated_editor_width_ceiling.cmake"
+        RESULT_VARIABLE editor_width_result
+        OUTPUT_VARIABLE editor_width_output
+        ERROR_VARIABLE editor_width_error)
+    if(NOT editor_width_result EQUAL 0)
+        message(FATAL_ERROR
+            "Applying generated editor width ceiling failed:\n"
+            "${editor_width_output}${editor_width_error}")
+    endif()
+endif()
+
 add_subdirectory("${COSIMO_EFFECT_OUTPUT_DIR}" plugin)
 
 if(NOT TARGET "${COSIMO_EFFECT_PLUGIN_TARGET}")

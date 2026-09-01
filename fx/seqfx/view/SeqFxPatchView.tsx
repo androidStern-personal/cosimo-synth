@@ -86,6 +86,7 @@ import {
     createSeqFxPresetMigrations,
     createSeqFxSnapshotMigrations,
 } from "./seqfx-preset-migrations";
+import { SEQFX_FACTORY_PATTERNS } from "./seqfx-factory-content";
 import {
     SEQFX_ENDPOINTS,
     SeqFxRuntimeBridge,
@@ -247,28 +248,98 @@ function defaultEffectTypeForChain(chain: number) {
     return EFFECT_OPTIONS[Math.min(EFFECT_OPTIONS.length - 1, Math.max(0, chain))] ?? SEQFX_EFFECT_TYPES.filter;
 }
 
-function SeqFxTitleSigil() {
+function SeqFxTitleSigil({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
     return (
-        <svg
-            aria-hidden="true"
-            className="seqfx-title__sigil"
-            data-role="seqfx-title-sigil"
-            focusable="false"
-            viewBox="0 0 24 24"
+        <button
+            aria-checked={enabled}
+            aria-label={enabled ? "Bypass SeqFX" : "Enable SeqFX"}
+            className={enabled ? "seqfx-title__bypass is-enabled" : "seqfx-title__bypass"}
+            data-role="seqfx-enabled"
+            onClick={onToggle}
+            role="switch"
+            title={enabled ? "Bypass SeqFX" : "Enable SeqFX"}
+            type="button"
         >
-            <g fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2">
-                <path d="M3.5 18 L3.5 14" />
-                <path d="M9 18 L9 9" />
-                <path d="M14.5 18 L14.5 6" />
-                <path d="M20 18 L20 11" />
-            </g>
-            <g fill="currentColor">
-                <circle cx="3.5" cy="14" r="1.5" />
-                <circle cx="9" cy="9" r="1.5" />
-                <circle cx="14.5" cy="6" r="1.5" />
-                <circle cx="20" cy="11" r="1.5" />
-            </g>
-        </svg>
+            <svg
+                aria-hidden="true"
+                className="seqfx-title__sigil"
+                data-role="seqfx-title-sigil"
+                focusable="false"
+                viewBox="0 0 24 24"
+            >
+                <g fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2">
+                    <path d="M3.5 18 L3.5 14" />
+                    <path d="M9 18 L9 9" />
+                    <path d="M14.5 18 L14.5 6" />
+                    <path d="M20 18 L20 11" />
+                </g>
+                <g fill="currentColor">
+                    <circle cx="3.5" cy="14" r="1.5" />
+                    <circle cx="9" cy="9" r="1.5" />
+                    <circle cx="14.5" cy="6" r="1.5" />
+                    <circle cx="20" cy="11" r="1.5" />
+                </g>
+            </svg>
+        </button>
+    );
+}
+
+function SeqFxPatternMenu({
+    canPaste,
+    onClearLoop,
+    onCopyLoop,
+    onInitPattern,
+    onLoadTemplate,
+    onPasteLoop,
+    onVaryLoop,
+}: {
+    canPaste: boolean;
+    onClearLoop: () => void;
+    onCopyLoop: () => void;
+    onInitPattern: () => void;
+    onLoadTemplate: (patternId: string) => void;
+    onPasteLoop: () => void;
+    onVaryLoop: () => void;
+}) {
+    const detailsRef = useRef<HTMLDetailsElement>(null);
+    const closeMenu = () => detailsRef.current?.removeAttribute("open");
+    const runAndClose = (operation: () => void) => {
+        operation();
+        closeMenu();
+    };
+
+    return (
+        <details className="seqfx-pattern-menu" data-role="seqfx-pattern-menu" ref={detailsRef}>
+            <summary title="Pattern actions">Pattern</summary>
+            <div className="seqfx-pattern-menu__panel" role="group" aria-label="Pattern actions">
+                <button onClick={() => runAndClose(onInitPattern)} type="button">Init current pattern</button>
+                <button onClick={() => runAndClose(onClearLoop)} type="button">Clear loop</button>
+                <button onClick={() => runAndClose(onCopyLoop)} type="button">Copy loop</button>
+                <button disabled={!canPaste} onClick={() => runAndClose(onPasteLoop)} type="button">Paste loop</button>
+                <button onClick={() => runAndClose(onVaryLoop)} type="button">Vary loop</button>
+                <label>
+                    <span>Load Template…</span>
+                    <select
+                        aria-label="Load Template"
+                        data-role="seqfx-template-select"
+                        defaultValue=""
+                        onChange={(event) => {
+                            const patternId = event.currentTarget.value;
+                            if (patternId !== "") {
+                                onLoadTemplate(patternId);
+                                event.currentTarget.value = "";
+                                closeMenu();
+                            }
+                        }}
+                    >
+                        <option value="">Choose…</option>
+                        {SEQFX_FACTORY_PATTERNS.map((pattern) => (
+                            <option key={pattern.id} value={pattern.id}>{pattern.name}</option>
+                        ))}
+                    </select>
+                </label>
+            </div>
+        </details>
     );
 }
 
@@ -4786,7 +4857,14 @@ export function SeqFxPatchView({
 
             <section className="seqfx-topbar" aria-label="SeqFX pattern controls">
                 <div className="seqfx-title">
-                    <SeqFxTitleSigil />
+                    <SeqFxTitleSigil
+                        enabled={globalControls.enabled}
+                        onToggle={() => {
+                            if (!isPromoControlled) {
+                                bridge.commitGlobalControl(SEQFX_ENDPOINTS.enabled, globalControls.enabled ? 0 : 1);
+                            }
+                        }}
+                    />
                     <h1>SeqFX</h1>
                 </div>
                 <div className="seqfx-patterns" role="group" aria-label="Patterns">
@@ -4804,6 +4882,40 @@ export function SeqFxPatchView({
                         </button>
                     ))}
                 </div>
+                <SeqFxPatternMenu
+                    canPaste={runtimeHasLoopClipboard}
+                    onClearLoop={() => {
+                        if (!isPromoControlled) {
+                            bridge.clearLoop();
+                        }
+                    }}
+                    onCopyLoop={() => {
+                        if (!isPromoControlled) {
+                            bridge.copyLoop();
+                            setHasLoopClipboard(bridge.canPasteLoop());
+                        }
+                    }}
+                    onInitPattern={() => {
+                        if (!isPromoControlled) {
+                            bridge.initPattern();
+                        }
+                    }}
+                    onLoadTemplate={(patternId) => {
+                        if (!isPromoControlled) {
+                            bridge.loadFactoryPattern(patternId);
+                        }
+                    }}
+                    onPasteLoop={() => {
+                        if (!isPromoControlled) {
+                            bridge.pasteLoop();
+                        }
+                    }}
+                    onVaryLoop={() => {
+                        if (!isPromoControlled) {
+                            bridge.varyLoop();
+                        }
+                    }}
+                />
             </section>
 
             <SeqFxGlobalControlSurface
@@ -4811,7 +4923,6 @@ export function SeqFxPatchView({
                 internalRunning={internalRunning}
                 canUndo={bridge.canUndo()}
                 canRedo={bridge.canRedo()}
-                hasLoopClipboard={runtimeHasLoopClipboard}
                 onGlobalControl={(endpointID, value) => {
                     if (!isPromoControlled) {
                         bridge.setGlobalControl(endpointID, value);
@@ -4862,37 +4973,6 @@ export function SeqFxPatchView({
                 onRedo={() => {
                     if (!isPromoControlled) {
                         bridge.redo();
-                    }
-                }}
-                onInitPattern={() => {
-                    if (!isPromoControlled) {
-                        bridge.initPattern();
-                    }
-                }}
-                onClearLoop={() => {
-                    if (!isPromoControlled) {
-                        bridge.clearLoop();
-                    }
-                }}
-                onCopyLoop={() => {
-                    if (!isPromoControlled) {
-                        bridge.copyLoop();
-                        setHasLoopClipboard(bridge.canPasteLoop());
-                    }
-                }}
-                onPasteLoop={() => {
-                    if (!isPromoControlled) {
-                        bridge.pasteLoop();
-                    }
-                }}
-                onLoadFactoryPattern={(patternId) => {
-                    if (!isPromoControlled) {
-                        bridge.loadFactoryPattern(patternId);
-                    }
-                }}
-                onVaryLoop={() => {
-                    if (!isPromoControlled) {
-                        bridge.varyLoop();
                     }
                 }}
             />

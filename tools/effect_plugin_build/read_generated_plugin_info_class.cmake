@@ -4,7 +4,7 @@ function(cosimo_read_generated_plugin_info_class output_variable generated_sourc
     endif()
 
     file(STRINGS "${generated_source}" _cosimo_generated_plugin_factory_lines
-        REGEX "^[ \t]*using Plugin = cmaj::plugin::GeneratedPlugin<::[A-Za-z_][A-Za-z0-9_]*>;[ \t]*$")
+        REGEX "^[ \t]*using Plugin = (cmaj::plugin::GeneratedPlugin|cosimo::BoundedGeneratedPlugin)<::[A-Za-z_][A-Za-z0-9_]*(, [0-9]+)?>;[ \t]*$")
     list(LENGTH _cosimo_generated_plugin_factory_lines _cosimo_generated_plugin_factory_count)
 
     if(NOT _cosimo_generated_plugin_factory_count EQUAL 1)
@@ -15,8 +15,8 @@ function(cosimo_read_generated_plugin_info_class output_variable generated_sourc
 
     list(GET _cosimo_generated_plugin_factory_lines 0 _cosimo_generated_plugin_factory_line)
     string(REGEX REPLACE
-        "^[ \t]*using Plugin = cmaj::plugin::GeneratedPlugin<::([A-Za-z_][A-Za-z0-9_]*)>;[ \t]*$"
-        "\\1"
+        "^[ \t]*using Plugin = (cmaj::plugin::GeneratedPlugin|cosimo::BoundedGeneratedPlugin)<::([A-Za-z_][A-Za-z0-9_]*)(, [0-9]+)?>;[ \t]*$"
+        "\\2"
         _cosimo_generated_plugin_info_class
         "${_cosimo_generated_plugin_factory_line}")
     set(${output_variable} "${_cosimo_generated_plugin_info_class}" PARENT_SCOPE)
