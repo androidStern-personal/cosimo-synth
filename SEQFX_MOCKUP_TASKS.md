@@ -201,7 +201,7 @@ The rejected 1000px alternative used a 420px editor floor. Although it avoids te
 
 - Status: Approved and coordinator-owned. This entry is the durable product authority for the work below; implementation remains isolated from the coordinator thread.
 - Coordinator: Task `01a05c09-ce2d-7120-bc44-cd8102a2f0d7`.
-- Execution contract: Visible isolated Codex tasks use `gpt-5.6-sol` at `xhigh`, return clean committed handoffs, and do not merge, push master, install, deploy, or publish. The coordinator owns source review, focused qualification, repair requests, rebase, and serialized integration.
+- Execution contract: Visible isolated Codex tasks use `gpt-5.6-sol` at `max`, return clean committed handoffs, and do not merge, push master, install, deploy, or publish. The coordinator owns source review, focused qualification, repair requests, rebase, and serialized integration.
 - Saved-sound policy: No backward-compatibility or migration work is authorized; the existing greenfield policy remains unchanged.
 
 ### Persistent declutter
