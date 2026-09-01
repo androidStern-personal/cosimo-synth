@@ -101,12 +101,29 @@ class EffectHeader extends HTMLElement {
 
 export function defineEffectHeaderElement(options: EffectHeaderElementOptions = {}): void {
     const elementName = options.elementName ?? DEFAULT_EFFECT_HEADER_ELEMENT_NAME;
-    if (window.customElements.get(elementName)) {
+    const presetBarElementName = options.presetBarElementName ?? DEFAULT_PRESET_BAR_ELEMENT_NAME;
+    const snapshotBarElementName = options.snapshotBarElementName ?? DEFAULT_SNAPSHOT_BAR_ELEMENT_NAME;
+    const registered = window.customElements.get(elementName);
+
+    if (registered) {
+        // Registration is first-wins and cannot be replaced, so a repeat call
+        // that asks for different bar names would otherwise be silently
+        // ignored. Fail loudly instead of handing back the first
+        // registration's bars.
+        if (registered !== EffectHeader && !(registered.prototype instanceof EffectHeader)) {
+            throw new Error(`"${elementName}" is already registered to a non-EffectHeader element; pass a different elementName.`);
+        }
+
+        const registeredHeader = registered as typeof EffectHeader;
+
+        if (registeredHeader.presetBarElementName !== presetBarElementName
+            || registeredHeader.snapshotBarElementName !== snapshotBarElementName) {
+            throw new Error(`"${elementName}" is already registered with preset bar "${registeredHeader.presetBarElementName}" and snapshot bar "${registeredHeader.snapshotBarElementName}"; pass a different elementName to use other bar names.`);
+        }
+
         return;
     }
 
-    const presetBarElementName = options.presetBarElementName ?? DEFAULT_PRESET_BAR_ELEMENT_NAME;
-    const snapshotBarElementName = options.snapshotBarElementName ?? DEFAULT_SNAPSHOT_BAR_ELEMENT_NAME;
     const headerClass = presetBarElementName === DEFAULT_PRESET_BAR_ELEMENT_NAME
         && snapshotBarElementName === DEFAULT_SNAPSHOT_BAR_ELEMENT_NAME
         ? EffectHeader

@@ -828,9 +828,21 @@ export class SynthPresetBar extends PresetBar {
 // the synth page carries the synth surface while plugin pages stay generic.
 
 export function defineSynthPresetBarElement(elementName: string = DEFAULT_PRESET_BAR_ELEMENT_NAME): void {
-    if (!window.customElements.get(elementName)) {
-        window.customElements.define(elementName, SynthPresetBar);
+    const registered = window.customElements.get(elementName);
+
+    if (registered) {
+        // Registration is first-wins and cannot be replaced: if anything else
+        // (including the generic PresetBar) claimed this tag first,
+        // createSynthPresetBar would silently hand back an element without the
+        // synth surface. Fail loudly instead.
+        if (registered !== SynthPresetBar && !(registered.prototype instanceof SynthPresetBar)) {
+            throw new Error(`"${elementName}" is already registered to a non-SynthPresetBar element; register the synth bar first or pass a different elementName.`);
+        }
+
+        return;
     }
+
+    window.customElements.define(elementName, SynthPresetBar);
 }
 
 export function createSynthPresetBar(elementName: string = DEFAULT_PRESET_BAR_ELEMENT_NAME): SynthPresetBar {

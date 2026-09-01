@@ -1429,9 +1429,20 @@ export class PresetBar extends HTMLElement {
 // ── Public API ───────────────────────────────────────────
 
 export function definePresetBarElement(elementName: string = DEFAULT_PRESET_BAR_ELEMENT_NAME): void {
-    if (!window.customElements.get(elementName)) {
-        window.customElements.define(elementName, PresetBar);
+    const registered = window.customElements.get(elementName);
+
+    if (registered) {
+        // A PresetBar subclass (the synth's extension) registering first is
+        // the intended composition; anything else under this tag would make
+        // createPresetBar hand back a foreign element.
+        if (registered !== PresetBar && !(registered.prototype instanceof PresetBar)) {
+            throw new Error(`"${elementName}" is already registered to a non-PresetBar element; pass a different elementName.`);
+        }
+
+        return;
     }
+
+    window.customElements.define(elementName, PresetBar);
 }
 
 export function createPresetBar(elementName: string = DEFAULT_PRESET_BAR_ELEMENT_NAME): PresetBar {

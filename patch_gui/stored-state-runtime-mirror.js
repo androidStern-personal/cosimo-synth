@@ -12,6 +12,10 @@ function isPlainRecord(value) {
  * The canonical unwrap of one key from a CHOC `requestFullStoredState`
  * envelope: the nested `values` record wins over the top level, and `found`
  * distinguishes an absent key from a stored null/undefined value.
+ *
+ * Intentionally stricter than the mirror's pre-consolidation private helper:
+ * an array-shaped envelope (or `values`) is rejected as not-found instead of
+ * being probed for own keys. Real CHOC envelopes are always plain objects.
  */
 export function getFullStoredStateValue(storedState, key) {
     if (!isPlainRecord(storedState)) {

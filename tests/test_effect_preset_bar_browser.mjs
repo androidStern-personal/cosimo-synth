@@ -195,6 +195,107 @@ test("the synth preset bar extension keeps the full action row including the sha
     }
 });
 
+test("preset bar registrations fail loudly when a tag is already taken by a different class", async () => {
+    const page = await openModulePage();
+
+    try {
+        const result = await page.evaluate(async () => {
+            const { createPresetBar, definePresetBarElement } = await import("/ui/shared/effects/preset-bar.ts");
+            const { createSynthPresetBar, defineSynthPresetBarElement } = await import("/ui/shared/effects/synth-preset-bar.ts");
+            const thrownMessage = (callback) => {
+                try {
+                    callback();
+                    return null;
+                } catch (error) {
+                    return error instanceof Error ? error.message : String(error);
+                }
+            };
+
+            // A foreign element already owning the tag must be rejected by
+            // both registration paths.
+            customElements.define("test-foreign-bar", class extends HTMLElement {});
+
+            // The latent first-wins incident: the generic bar claiming the tag
+            // first must make the synth registration loud, not silently hand
+            // back a bar without the synth surface.
+            definePresetBarElement("test-generic-first-bar");
+
+            // Re-registering the same class under the same tag stays a no-op.
+            const genericRedefineMessage = thrownMessage(() => definePresetBarElement("test-generic-first-bar"));
+            createSynthPresetBar("test-synth-bar");
+            const synthRedefineMessage = thrownMessage(() => defineSynthPresetBarElement("test-synth-bar"));
+
+            return {
+                genericOverForeignMessage: thrownMessage(() => definePresetBarElement("test-foreign-bar")),
+                synthOverForeignMessage: thrownMessage(() => defineSynthPresetBarElement("test-foreign-bar")),
+                synthOverGenericMessage: thrownMessage(() => defineSynthPresetBarElement("test-generic-first-bar")),
+                genericRedefineMessage,
+                synthRedefineMessage,
+                genericTagName: createPresetBar("test-generic-first-bar").tagName,
+            };
+        });
+
+        assert.match(result.genericOverForeignMessage ?? "", /"test-foreign-bar" is already registered to a non-PresetBar element/);
+        assert.match(result.synthOverForeignMessage ?? "", /"test-foreign-bar" is already registered to a non-SynthPresetBar element/);
+        assert.match(result.synthOverGenericMessage ?? "", /"test-generic-first-bar" is already registered to a non-SynthPresetBar element/);
+        assert.equal(result.genericRedefineMessage, null);
+        assert.equal(result.synthRedefineMessage, null);
+        assert.equal(result.genericTagName, "TEST-GENERIC-FIRST-BAR");
+    } finally {
+        await page.close();
+    }
+});
+
+test("effect header re-registration with different bar names fails loudly", async () => {
+    const page = await openModulePage();
+
+    try {
+        const result = await page.evaluate(async () => {
+            const { createEffectHeader, defineEffectHeaderElement } = await import("/ui/shared/effects/effect-header.ts");
+            const thrownMessage = (callback) => {
+                try {
+                    callback();
+                    return null;
+                } catch (error) {
+                    return error instanceof Error ? error.message : String(error);
+                }
+            };
+
+            customElements.define("test-foreign-header", class extends HTMLElement {});
+            defineEffectHeaderElement({
+                elementName: "test-header",
+                presetBarElementName: "test-header-preset-bar",
+                snapshotBarElementName: "test-header-snapshot-bar",
+            });
+
+            return {
+                foreignMessage: thrownMessage(() => defineEffectHeaderElement({ elementName: "test-foreign-header" })),
+                sameOptionsMessage: thrownMessage(() => defineEffectHeaderElement({
+                    elementName: "test-header",
+                    presetBarElementName: "test-header-preset-bar",
+                    snapshotBarElementName: "test-header-snapshot-bar",
+                })),
+                differentBarMessage: thrownMessage(() => defineEffectHeaderElement({
+                    elementName: "test-header",
+                    presetBarElementName: "test-other-preset-bar",
+                })),
+                headerTagName: createEffectHeader({
+                    elementName: "test-header",
+                    presetBarElementName: "test-header-preset-bar",
+                    snapshotBarElementName: "test-header-snapshot-bar",
+                }).tagName,
+            };
+        });
+
+        assert.match(result.foreignMessage ?? "", /"test-foreign-header" is already registered to a non-EffectHeader element/);
+        assert.equal(result.sameOptionsMessage, null);
+        assert.match(result.differentBarMessage ?? "", /"test-header" is already registered with preset bar "test-header-preset-bar" and snapshot bar "test-header-snapshot-bar"/);
+        assert.equal(result.headerTagName, "TEST-HEADER");
+    } finally {
+        await page.close();
+    }
+});
+
 test("preset bar shows no passive success and one controller error toast per failed action", async () => {
     const page = await openModulePage();
 
