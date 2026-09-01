@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-import { serveJsonValue } from "../../ui/vite.shared.mjs";
+import { serveJsonValue } from "./vite.shared.mjs";
 import { discoverEffectPlugins } from "./build-effect.mjs";
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));

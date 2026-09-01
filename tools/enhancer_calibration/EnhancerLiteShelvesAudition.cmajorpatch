@@ -1,0 +1,19 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.enhancer-lite-shelves-audition",
+  "version": "0.2.0",
+  "name": "Cosimo Enhancer Lite Shelves Audition",
+  "description": "Calibration audition of the Enhancer Lite Low, Bell, and High shelf modes with Stereo and Mid/Side routing. Loads with cmaj against the fx/enhancer_lite sources; not a Builder Kit build target.",
+  "category": "effect",
+  "manufacturer": "Cosimo",
+  "plugin": {
+    "pluginCode": "CsLS",
+    "manufacturerCode": "Cosi"
+  },
+  "isInstrument": false,
+  "source": [
+    "../../fx/enhancer_lite/EnhancerLite.cmajor",
+    "../../cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
+    "../../fx/enhancer_lite/EnhancerLitePlugin.cmajor"
+  ]
+}

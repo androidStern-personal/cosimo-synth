@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "alias": "enhancer-lite",
+  "cmakeTarget": "CosimoEnhancerLite",
+  "productName": "CosimoEnhancerLite",
+  "product": {
+    "productName": "Cosimo Enhancer Lite",
+    "manufacturerName": "Cosimo",
+    "bundleIdentifier": "dev.cosimo.enhancer-lite",
+    "pluginCode": "CsEL",
+    "manufacturerCode": "Cosi",
+    "version": "0.1.0"
+  },
+  "runtimeOut": "build/fx/enhancer_lite_runtime",
+  "juceOut": "build/enhancer_lite_juce",
+  "jitInstallRuntime": true
+}

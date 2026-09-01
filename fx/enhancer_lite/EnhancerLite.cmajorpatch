@@ -14,12 +14,9 @@
     "src": "view/index.js",
     "devModule": "/fx/enhancer_lite/view/source.ts",
     "width": 820,
-    "height": 520,
+    "height": 560,
     "resizable": true
   },
-  "resources": [
-    "assets/enhancer-lite-wordmark.png"
-  ],
   "isInstrument": false,
   "source": [
     "EnhancerLite.cmajor",

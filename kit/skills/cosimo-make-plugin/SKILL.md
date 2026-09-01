@@ -18,8 +18,27 @@ plugin list, the change is wrong — read
 1. `kit/AGENTS.md` for the plugin-repo conventions and definition of done.
 2. `kit/docs/PLUGIN_ARCHITECTURE.md` for discovery, the loader, runtime
    layout, and build pipeline details.
-3. The plugin's own directory: patch manifest, `<PatchName>.build.json`
-   sidecar, `product.json`, `view/`.
+3. The plugin's own directory: patch manifest, `<PatchName>.plugin.json`
+   config, `view/`; and the repository-root `product-owner.json` its identity
+   derives from.
+
+## Environment Check
+
+Before the first build on a machine (or when a build fails to find `cmaj`):
+
+```bash
+npm run kit:doctor        # read-only report: tools, feed, registry, node_modules
+npm run kit:setup -- --accept-juce-terms   # pinned cmaj + CmajPlugin.vst3, npm install
+npx playwright install chromium            # once, before npm run test:browser
+```
+
+`kit:doctor` never writes (`--json`, `--strict`, `--offline` available).
+`kit:setup` is idempotent: it downloads the hash-pinned tools named in
+`kit/toolchain.json` from the feed in `kit/feed.json` into `build/kit-tools/`,
+records the JUCE notice acknowledgment once, and runs `npm install` when
+`node_modules` is missing (`--dry-run` plans without writing). Never install
+or point the build at a different `cmaj`; the pin must match the Cmajor
+source commit and the generic `CmajPlugin.vst3`.
 
 ## Create A Plugin
 
@@ -41,22 +60,29 @@ node kit/fx/build-effect.mjs --targets
 
 ## Per-Plugin Config
 
-Two files beside the patch, both optional-field and fail-closed:
+One file beside the patch, `<PatchName>.plugin.json`, optional-field and
+fail-closed:
 
-- `<PatchName>.build.json` — build sidecar: `alias`, `cmakeTarget`,
-  `productName`, `runtimeOut`, `juceOut`, `workerSource`/`workerOut`,
+- `"schemaVersion": 1` is required (a version newer than `kit/kit.json`
+  supports fails discovery naming the fix: update the kit).
+- Build settings: `alias`, `cmakeTarget`, `productName` (the install filename,
+  `<productName>.vst3`), `runtimeOut`, `juceOut`, `workerSource`/`workerOut`,
   `includeInAll`, `disableMicrophonePermission`, `jitInstallRuntime`. Only set
   fields whose derived defaults are not right; a malformed, unknown-key, or
-  orphan sidecar fails discovery loudly.
-- `product.json` — the plugin's identity: product/manufacturer names, bundle
-  id, 4-char plugin/manufacturer codes, version, install filename
-  (`outputFileName`), optional support URL and wordmark/accent tokens. When
-  present it is authoritative: the patch manifest must agree (drift fails
-  discovery), the sidecar must not also set `productName`, and codes/bundle
-  ids are collision-checked across every discovered plugin. When absent, the
-  patch manifest is authoritative — nothing changes. A multi-patch directory
-  binds the file with its `patch` key. Never hard-code identity values in
-  build scripts or shared files.
+  orphan config fails discovery loudly.
+- `product` — the plugin's identity: `productName`, `manufacturerName`,
+  `bundleIdentifier`, 4-char `pluginCode`/`manufacturerCode`, `version`,
+  optional `supportUrl` and wordmark/accent tokens. Every omitted key derives
+  from the plugin name, the patch manifest, and the repository-root
+  `product-owner.json` (`manufacturer`, `manufacturerCode`,
+  `bundleIdentifierPrefix`, optional `pluginCodePrefix`/`supportUrl`). When
+  the object is present (even empty) it is authoritative: the patch manifest
+  must agree (drift fails discovery) and codes/bundle ids are
+  collision-checked across every discovered plugin. When absent, the patch
+  manifest is authoritative — nothing changes. Never hard-code identity
+  values in build scripts or shared files.
+
+`kit/docs/PLUGIN_ARCHITECTURE.md` lists every derivation.
 
 ## Dev Loop
 
@@ -80,11 +106,14 @@ npm run fx:build -- <alias>   # self-contained runtime folder under build/fx/
 - Kit contract tests live in `kit/tests/` (loader, preset/snapshot systems,
   state contract, import graphs). Plugin-specific tests live in the repo's
   `tests/` directory, named `test_<plugin>_*.mjs`, run with `node --test`.
+- `npm test` runs the kit contract tests plus every plugin unit test; run it
+  whenever a plugin touches preset, snapshot, or stored-state code, since the
+  shared preset/snapshot suites are part of it. A single focused file runs
+  with `node --test tests/test_<plugin>_state.mjs`.
 - Browser view tests build the runtime first, then drive the packaged view
-  over the static test server, e.g.
-  `npm run fx:build -- ott && node --test tests/test_ott_lab_view_browser.mjs`.
-- Shared preset/snapshot behavior is covered by `npm run test:effect-presets`;
-  run it whenever a plugin touches preset, snapshot, or stored-state code.
+  with Playwright over the static test server:
+  `npm run fx:build -- <alias> && npm run test:browser`. They need
+  `npx playwright install chromium` once per machine.
 - Never weaken a failing assertion; strengthen or repoint it.
 
 ## JIT Install (Iterate Inside A DAW)
@@ -94,6 +123,10 @@ npm run cmajplugin:build     # patched generic CmajPlugin.vst3 from the pinned f
 npm run cmajplugin:install   # install + sign-verify + CHOC marker check
 npm run fx:jit:install -- <alias>   # point the generic plugin at this plugin
 ```
+
+`kit:setup` also downloads the prebuilt pinned `CmajPlugin.vst3` into
+`build/kit-tools/`; `cmajplugin:build` is the from-source route when the
+prebuilt one is not wanted.
 
 `fx:jit:install` writes only the VST3 `CmajPlugin.json`. Targets with
 `jitInstallRuntime` (worker plugins, or plugins whose source directory has no
@@ -109,8 +142,12 @@ npm run fx:prod:install -- <alias>   # copy the built VST3 into the user plugin 
 ```
 
 `fx:prod:build` builds the runtime with `view.devModule` stripped, generates
-the JUCE project from the runtime patch with the pinned `cmaj`, builds the
-`cmakeTarget`, and verifies the patched CHOC WebView markers.
+the JUCE project from the runtime patch with the pinned `cmaj`
+(`build/kit-tools/cmaj` from `kit:setup`, hash-checked against
+`kit/toolchain.json`; a missing or mismatched tool fails with an error naming
+`npm run kit:setup`), builds the `cmakeTarget`, and verifies the patched CHOC
+WebView markers. The native build links JUCE: see `THIRD_PARTY_NOTICES.md`
+for the per-product JUCE license requirement.
 `fx:prod:install` copies an already-built `<productName>.vst3`; it never
 builds, never writes `CmajPlugin.json`, and never touches AU plugins. For
 release-grade artifacts, follow `kit/docs/RELEASE_VERIFICATION.md`.
@@ -140,7 +177,16 @@ The kit UI is extended by subclassing, not by editing kit modules:
   class. Element names (and the snapshot bank's stored-state key) are
   parameters with `cosimo-*` defaults; the `"cosimo.*"` wire-format kinds are
   shared exported constants.
-- Worked example — how the Cosimo synth extends the kit:
+- Worked example — adopting the header as-is: `fx/enhancer_lite/view/source.ts`
+  builds `createStandaloneEffectPresetController` (with the plugin-owned
+  inventory in `view/factory-presets.js`) and `EffectSnapshotBankController`,
+  hands both to `createEffectHeader()`, mounts the header above its own
+  surface, and attaches/detaches them in `connectedCallback` /
+  `disconnectedCallback`. Copy that wiring for a new plugin; the contract test
+  `kit/tests/test_effect_factory_preset_contract.mjs` checks the inventory
+  (every preset stores the complete, non-hidden parameter set).
+- Worked example — how the Cosimo synth extends the kit (these files live in
+  the Cosimo monorepo, not in the kit; read them as a pattern):
   `SynthStandaloneEffectPresetController`
   (`ui/shared/effects/synth-standalone-presets.ts`) subclasses the controller
   to add its unnamed working sound, bounce/share transactions, and wavetable

@@ -17,6 +17,8 @@ PRODUCTION_CMAKE_CALLERS = (
     "tools/desktop_native/CMakeLists.txt",
 )
 DEPENDENCY_ENTRYPOINTS = (
+    "kit/cmake/CosimoDependencies.cmake",
+    "kit/cmake/dependency-sources.cmake",
     "kit/fx/prod-effect.mjs",
     "kit/scripts/build_cmajplugin_vst3.sh",
     "scripts/build_desktop_native.sh",

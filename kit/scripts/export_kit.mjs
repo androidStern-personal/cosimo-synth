@@ -7,7 +7,12 @@
 // kit unit tests inside the exported tree (node_modules symlinked from this
 // repo), plus a git merge simulation of the customer update flow.
 //
-// Usage: node kit/scripts/export_kit.mjs <outputDir> [--force] [--prove]
+// Feed stamping: when kit/feed.json carries a non-empty baseUrl, or
+// --feed-url=<url> is passed (which is stamped into the exported
+// kit/feed.json), the exported kit/cmake/dependency-sources.cmake points the
+// Cmajor fork at <baseUrl>/cmajor.git. JUCE keeps its official URL.
+//
+// Usage: node kit/scripts/export_kit.mjs <outputDir> [--force] [--prove] [--feed-url=<url>]
 
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -116,16 +121,76 @@ async function materializeRootTemplate(outputRoot, allowlist) {
         }
     }
 
-    // Root skill discovery: committed-style relative symlink into kit/.
+    // Root skill discovery: one committed-style relative symlink into kit/ for
+    // every skill directory the export carries.
     await fs.mkdir(path.join(outputRoot, ".agents/skills"), { recursive: true });
-    const linkPath = path.join(outputRoot, ".agents/skills/cosimo-make-plugin");
-    await fs.symlink("../../kit/skills/cosimo-make-plugin", linkPath);
-    written.push(".agents/skills/cosimo-make-plugin");
+    for (const skillName of await listExportedSkillNames(outputRoot)) {
+        const linkPath = path.join(outputRoot, ".agents/skills", skillName);
+        await fs.symlink(`../../kit/skills/${skillName}`, linkPath);
+        written.push(`.agents/skills/${skillName}`);
+    }
 
     return written;
 }
 
-export async function exportKit(outputDir, { force = false } = {}) {
+export async function listExportedSkillNames(outputRoot) {
+    const entries = await fs.readdir(path.join(outputRoot, "kit/skills"), { withFileTypes: true });
+    return entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort();
+}
+
+const cmajorGitUrlLine = /^set\(COSIMO_CMAJOR_GIT_URL "[^"\n]*"\)$/mu;
+
+export function normalizeFeedBaseUrl(feedUrl) {
+    if (typeof feedUrl !== "string" || feedUrl.trim() === "") {
+        return "";
+    }
+    let parsed;
+    try {
+        parsed = new URL(feedUrl.trim());
+    } catch {
+        throw new Error(`Feed URL must be an absolute http(s) URL, got: ${feedUrl}`);
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+        throw new Error(`Feed URL must be an absolute http(s) URL, got: ${feedUrl}`);
+    }
+    return parsed.toString().replace(/\/+$/u, "");
+}
+
+/** Rewrites the Cmajor fork URL in dependency-sources.cmake to the feed mirror; JUCE stays official. */
+export function renderDependencySources(source, feedBaseUrl) {
+    const matches = source.match(new RegExp(cmajorGitUrlLine.source, "gmu")) ?? [];
+    if (matches.length !== 1) {
+        throw new Error(`dependency-sources.cmake must set COSIMO_CMAJOR_GIT_URL exactly once, found ${matches.length}.`);
+    }
+    return source.replace(cmajorGitUrlLine, `set(COSIMO_CMAJOR_GIT_URL "${feedBaseUrl}/cmajor.git")`);
+}
+
+async function stampFeed(outputRoot, feedUrl) {
+    const feedPath = path.join(outputRoot, "kit/feed.json");
+    const feed = JSON.parse(await fs.readFile(feedPath, "utf8"));
+    const feedBaseUrl = feedUrl === null ? normalizeFeedBaseUrl(feed.baseUrl) : normalizeFeedBaseUrl(feedUrl);
+
+    if (feedUrl !== null) {
+        if (feedBaseUrl === "") {
+            throw new Error("--feed-url must not be empty.");
+        }
+        feed.baseUrl = feedBaseUrl;
+        await fs.writeFile(feedPath, `${JSON.stringify(feed, null, 2)}\n`);
+    }
+    if (feedBaseUrl === "") {
+        return "";
+    }
+
+    const sourcesPath = path.join(outputRoot, "kit/cmake/dependency-sources.cmake");
+    const rendered = renderDependencySources(await fs.readFile(sourcesPath, "utf8"), feedBaseUrl);
+    await fs.writeFile(sourcesPath, rendered);
+    return feedBaseUrl;
+}
+
+export async function exportKit(outputDir, { force = false, feedUrl = null } = {}) {
     const allowlist = await readAllowlist();
     const outputRoot = path.resolve(outputDir);
 
@@ -157,6 +222,7 @@ export async function exportKit(outputDir, { force = false } = {}) {
     }
 
     const templateFiles = await materializeRootTemplate(outputRoot, allowlist);
+    const feedBaseUrl = await stampFeed(outputRoot, feedUrl);
 
     // Gates.
     const missing = allowlist.requiredOutputs.filter((relative) => !existsSync(path.join(outputRoot, relative)));
@@ -177,10 +243,10 @@ export async function exportKit(outputDir, { force = false } = {}) {
     const fileCount = (await listFilesRecursive(outputRoot)).length;
     await fs.writeFile(
         path.join(outputRoot, "EXPORT_MANIFEST.json"),
-        `${JSON.stringify({ sourceCommit, fileCount, allowlist: "kit/export-allowlist.json" }, null, 2)}\n`,
+        `${JSON.stringify({ sourceCommit, fileCount, feedBaseUrl, allowlist: "kit/export-allowlist.json" }, null, 2)}\n`,
     );
 
-    return { outputRoot, fileCount, sourceCommit };
+    return { outputRoot, fileCount, sourceCommit, feedBaseUrl };
 }
 
 function run(command, args, cwd) {
@@ -231,15 +297,23 @@ export async function proveExport(outputRoot) {
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
     const args = process.argv.slice(2);
-    const flags = new Set(args.filter((arg) => arg.startsWith("--")));
+    const feedUrlArgs = args.filter((arg) => arg.startsWith("--feed-url="));
+    const flags = new Set(args.filter((arg) => arg.startsWith("--") && !arg.startsWith("--feed-url=")));
     const positional = args.filter((arg) => !arg.startsWith("--"));
-    if (positional.length !== 1) {
-        console.error("Usage: node kit/scripts/export_kit.mjs <outputDir> [--force] [--prove]");
+    const unknownFlags = [...flags].filter((flag) => !["--force", "--prove"].includes(flag));
+    if (positional.length !== 1 || feedUrlArgs.length > 1 || unknownFlags.length) {
+        console.error("Usage: node kit/scripts/export_kit.mjs <outputDir> [--force] [--prove] [--feed-url=<url>]");
         process.exit(1);
     }
     try {
-        const { outputRoot, fileCount, sourceCommit } = await exportKit(positional[0], { force: flags.has("--force") });
+        const { outputRoot, fileCount, sourceCommit, feedBaseUrl } = await exportKit(positional[0], {
+            force: flags.has("--force"),
+            feedUrl: feedUrlArgs.length ? feedUrlArgs[0].slice("--feed-url=".length) : null,
+        });
         console.log(`Exported ${fileCount} files from ${sourceCommit.slice(0, 9)} to ${outputRoot}`);
+        if (feedBaseUrl) {
+            console.log(`Feed stamped: ${feedBaseUrl} (kit/feed.json, kit/cmake/dependency-sources.cmake)`);
+        }
         if (flags.has("--prove")) {
             await proveExport(outputRoot);
             console.log("Standalone proof passed: enhancer-lite build, kit unit tests, update-flow merge.");

@@ -36,14 +36,38 @@ after(async () => {
     await server?.stop();
 });
 
-async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts") {
+// The parameter surface a Cmajor host reports in its status: the eight sound
+// endpoints plus the hidden analyzer enable, mirroring EnhancerLitePlugin.cmajor.
+const hostStatusInputs = [
+    { endpointID: "freqHzIn", purpose: "parameter", annotation: { name: "Frequency", group: "Band", min: 20, max: 20000, init: 130, unit: "Hz" } },
+    { endpointID: "qIn", purpose: "parameter", annotation: { name: "Q", group: "Band", min: 0.1, max: 10, init: 0.71 } },
+    { endpointID: "modeIn", purpose: "parameter", annotation: { name: "Routing", group: "Band", min: 0, max: 1, init: 0, discrete: true, step: 1, text: "Stereo|Mid/Side" } },
+    { endpointID: "midAmountIn", purpose: "parameter", annotation: { name: "Amount / Mid", group: "Band", min: 0, max: 1, init: 0 } },
+    { endpointID: "sideAmountIn", purpose: "parameter", annotation: { name: "Side", group: "Band", min: 0, max: 1, init: 0 } },
+    { endpointID: "curveIn", purpose: "parameter", annotation: { name: "Character", group: "Band", min: 0, max: 1, init: 1, discrete: true, step: 1, text: "Tube|Solid" } },
+    { endpointID: "saturationModeIn", purpose: "parameter", annotation: { name: "Intensity", group: "Band", min: 0, max: 1, init: 0, discrete: true, step: 1, text: "Subtle|Medium" } },
+    { endpointID: "shapeIn", purpose: "parameter", annotation: { name: "Shape", group: "Band", min: 0, max: 2, init: 1, discrete: true, step: 1, text: "Low|Bell|High" } },
+    { endpointID: "analyzerEnabledIn", purpose: "parameter", annotation: { name: "Analyzer Enable", hidden: true } },
+];
+
+/**
+ * Mount the view against a mock patch connection. The default mock is the
+ * bare parameter/endpoint surface the gesture tests need; `host: true` adds
+ * the status report and stored state a real Cmajor host provides, which the
+ * kit's preset bar and snapshot bank read.
+ */
+async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts", { host = false } = {}) {
     const page = await browser.newPage({ viewport: { width: 900, height: 620 } });
     await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).toString());
-    await page.evaluate(async ({ values, sourceModulePath }) => {
+    await page.evaluate(async ({ values, sourceModulePath, statusInputs, withHost }) => {
         const parameterValues = new Map(Object.entries(values));
         const listeners = new Map();
         const endpointListeners = new Map();
+        const statusListeners = new Set();
+        const storedStateListeners = new Set();
+        const storedState = new Map();
         const sent = [];
+        const storedWrites = [];
 
         const emit = (endpointID, value) => {
             parameterValues.set(endpointID, value);
@@ -53,6 +77,10 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts")
         const emitEndpoint = (endpointID, value) => {
             for (const listener of endpointListeners.get(endpointID) ?? [])
                 listener(value);
+        };
+        const emitStoredStateValue = (key, value) => {
+            for (const listener of storedStateListeners)
+                listener({ key, value });
         };
 
         const patchConnection = {
@@ -81,17 +109,53 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts")
             },
         };
 
+        if (withHost) {
+            Object.assign(patchConnection, {
+                addStatusListener(listener) {
+                    statusListeners.add(listener);
+                },
+                removeStatusListener(listener) {
+                    statusListeners.delete(listener);
+                },
+                requestStatusUpdate() {
+                    queueMicrotask(() => {
+                        const status = { details: { inputs: structuredClone(statusInputs) } };
+                        for (const listener of statusListeners)
+                            listener(status);
+                    });
+                },
+                addStoredStateValueListener(listener) {
+                    storedStateListeners.add(listener);
+                },
+                removeStoredStateValueListener(listener) {
+                    storedStateListeners.delete(listener);
+                },
+                requestFullStoredState(callback) {
+                    queueMicrotask(() => callback(Object.fromEntries(storedState)));
+                },
+                requestStoredStateValue(key) {
+                    queueMicrotask(() => emitStoredStateValue(key, storedState.get(key)));
+                },
+                sendStoredStateValue(key, value) {
+                    storedState.set(key, value);
+                    storedWrites.push({ key, value });
+                    emitStoredStateValue(key, value);
+                },
+            });
+        }
+
         const module = await import(sourceModulePath);
         document.querySelector("#mount").replaceChildren(module.default(patchConnection));
         window.__ENHANCER_LITE_TEST__ = {
             emit,
             emitEndpoint,
             sent,
+            storedWrites,
             clearSent: () => sent.splice(0),
             endpointListenerCount: (endpointID) => endpointListeners.get(endpointID)?.size ?? 0,
             disconnect: () => document.querySelector("#mount").replaceChildren(),
         };
-    }, { values: initialValues, sourceModulePath: modulePath });
+    }, { values: initialValues, sourceModulePath: modulePath, statusInputs: hostStatusInputs, withHost: host });
     await page.locator("cosimo-enhancer-lite-view").waitFor();
     return page;
 }
@@ -399,7 +463,7 @@ test("every shape shares frequency, amount, and Shift-drag Q with no slider fall
     const page = await openEnhancerLite();
 
     try {
-        assert.equal(await shadow(page, "input[type='range']").count(), 0);
+        assert.equal(await shadow(page, ".shell input[type='range']").count(), 0);
         const primaryHandle = shadow(page, "[data-response-role='primary-handle']");
 
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearSent());
@@ -845,7 +909,6 @@ test("input and output spectra share the bell's frequency grid and aligned dB ro
                 window.__ENHANCER_LITE_TEST__.emit("sideAmountIn", 0.55);
                 window.scrollTo(0, 0);
             });
-            await shadow(page, "img.wordmark").evaluate((image) => image.decode());
             await page.waitForTimeout(100);
             await page.screenshot({
                 path: process.env.ENHANCER_LITE_SCREENSHOT_PATH,
@@ -970,9 +1033,10 @@ test("the editor enables live analysis only while its view is connected", async 
     }
 });
 
-test("the generated white wordmark replaces the plain-text product heading", async () => {
+test("the product heading is plain text and no wordmark asset ships", async () => {
     const source = await readFile(sourcePath, "utf8");
-    assert.doesNotMatch(source, /<h1>Enhancer Lite<\/h1>/);
+    assert.doesNotMatch(source, /wordmark/i);
+    assert.match(source, /<h1>Enhancer Lite<\/h1>/);
 
     for (const modulePath of [
         "/fx/enhancer_lite/view/source.ts",
@@ -980,25 +1044,9 @@ test("the generated white wordmark replaces the plain-text product heading", asy
     ]) {
         const page = await openEnhancerLite(modulePath);
         try {
-            const wordmark = shadow(page, "img.wordmark");
-            await wordmark.evaluate((image) => image.decode());
-            const rendered = await wordmark.evaluate((image) => ({
-                alt: image.alt,
-                complete: image.complete,
-                naturalWidth: image.naturalWidth,
-                naturalHeight: image.naturalHeight,
-                sourcePath: new URL(image.currentSrc).pathname,
-            }));
-            assert.deepEqual(rendered, {
-                alt: "Enhancer Lite",
-                complete: true,
-                naturalWidth: 1024,
-                naturalHeight: 78,
-                sourcePath: modulePath.startsWith("/build/")
-                    ? "/build/fx/enhancer_lite_runtime/assets/enhancer-lite-wordmark.png"
-                    : "/fx/enhancer_lite/assets/enhancer-lite-wordmark.png",
-            });
-            assert.equal(await shadow(page, "h1").textContent(), "");
+            assert.equal(await shadow(page, ".shell h1").textContent(), "Enhancer Lite");
+            assert.equal(await shadow(page, ".shell h1 img").count(), 0);
+            assert.equal(await shadow(page, ".shell img").count(), 0, "the view loads no image assets");
         } finally {
             await page.close();
         }
@@ -1076,7 +1124,7 @@ test("the compiled VST view preserves the same gesture surface and eight static 
 
     try {
         assert.equal(await shadow(page, ".response-panel").count(), 1);
-        assert.equal(await shadow(page, "input").count(), 0);
+        assert.equal(await shadow(page, ".shell input").count(), 0);
         assert.equal(await shadow(page, "[data-readout-control]").count(), 4);
         assert.deepEqual(await shadow(page, ".shell").evaluate((shell) => {
             const root = shell.getRootNode();
@@ -1121,6 +1169,149 @@ test("the compiled VST view preserves the same gesture surface and eight static 
         assert.ok(Math.abs(finalValues.midAmountIn - 0.3) < 1e-6);
         assert.ok(Math.abs(finalValues.sideAmountIn - 0.6) < 1e-6);
         assert.ok(Math.abs(finalValues.qIn - 1) < 1e-6);
+    } finally {
+        await page.close();
+    }
+});
+
+test("the kit effect header mounts above the Lite surface in source and compiled views", async () => {
+    for (const modulePath of [
+        "/fx/enhancer_lite/view/source.ts",
+        "/build/fx/enhancer_lite_runtime/view/app.js",
+    ]) {
+        const page = await openEnhancerLite(modulePath);
+        try {
+            const header = shadow(page, "cosimo-effect-header");
+            assert.equal(await header.count(), 1);
+            const layout = await header.evaluate((element) => {
+                const shell = element.nextElementSibling;
+                const headerBounds = element.getBoundingClientRect();
+                const shellBounds = shell.getBoundingClientRect();
+                return {
+                    precedesShell: shell.classList.contains("shell"),
+                    headerHeight: headerBounds.height,
+                    shellStartsBelowHeader: shellBounds.top >= headerBounds.bottom,
+                    hostHeight: element.getRootNode().host.getBoundingClientRect().height,
+                };
+            });
+            assert.equal(layout.precedesShell, true, modulePath);
+            assert.equal(layout.shellStartsBelowHeader, true, modulePath);
+            assert.ok(layout.headerHeight >= 30 && layout.headerHeight <= 60, `${modulePath}: ${layout.headerHeight}`);
+            assert.ok(layout.hostHeight >= 520 + layout.headerHeight, `${modulePath}: ${layout.hostHeight}`);
+            assert.equal(await shadow(page, "cosimo-preset-bar >> [data-el='preset-name']").textContent(), "No Preset");
+            assert.equal(await shadow(page, "cosimo-snapshot-bar >> [data-slot]").count(), 7);
+            assert.equal(await shadow(page, "cosimo-preset-bar >> [data-preset-key]").count(), 0);
+
+            // The Lite surface underneath is untouched: same controls, the
+            // analyzer switched on first, nothing else written at mount.
+            assert.equal(await shadow(page, ".shell [data-readout-control]").count(), 4);
+            assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent), [
+                { endpointID: "analyzerEnabledIn", value: 1 },
+            ]);
+        } finally {
+            await page.close();
+        }
+    }
+});
+
+test("factory presets recall a complete Lite sound through the shared preset bar", async () => {
+    const page = await openEnhancerLite("/fx/enhancer_lite/view/source.ts", { host: true });
+
+    try {
+        await shadow(page, "cosimo-preset-bar >> [data-action='toggle-flyout']").click();
+        const factoryItems = shadow(page, "cosimo-preset-bar >> [data-preset-key][data-source='factory']");
+        await factoryItems.first().waitFor();
+        assert.deepEqual(
+            await factoryItems.locator(".item-name").allTextContents(),
+            ["Sub Weight", "Vocal Presence", "Air Lift", "Wide Shimmer"],
+        );
+        assert.equal(await shadow(page, "cosimo-preset-bar >> [data-preset-key][data-source='user']").count(), 0);
+
+        await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearSent());
+        await shadow(page, "cosimo-preset-bar >> [data-preset-key='factory:enhancer-lite.vocal-presence']").click();
+        await shadow(page, "cosimo-preset-bar >> [data-el='preset-name']").filter({ hasText: "Vocal Presence" }).waitFor();
+
+        const sent = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent);
+        assert.deepEqual(
+            Object.fromEntries(sent.map(({ endpointID, value }) => [endpointID, value])),
+            {
+                freqHzIn: 3200,
+                qIn: 1.1,
+                modeIn: 0,
+                midAmountIn: 0.3,
+                sideAmountIn: 0,
+                curveIn: 1,
+                saturationModeIn: 0,
+                shapeIn: 1,
+            },
+        );
+        assert.equal(sent.some(({ endpointID }) => endpointID === "analyzerEnabledIn"), false);
+        assert.equal(await shadow(page, "[data-readout='frequency']").textContent(), "3.20 kHz");
+        assert.equal(await shadow(page, "[data-readout='q']").textContent(), "1.10");
+        assert.equal(await shadow(page, "[data-readout='primary']").textContent(), "+3.6 dB");
+        assert.equal(await shadow(page, "[data-shape='bell']").getAttribute("aria-pressed"), "true");
+        assert.equal(await shadow(page, "[data-curve='solid']").getAttribute("aria-pressed"), "true");
+        assert.equal(await shadow(page, "cosimo-preset-bar >> [data-el='dirty-dot'].visible").count(), 0);
+
+        // Editing the surface marks the active preset dirty, and the active
+        // preset lives in host stored state like every kit plugin's.
+        await shadow(page, "[data-shape='high']").click();
+        await shadow(page, "cosimo-preset-bar >> [data-el='dirty-dot'].visible").waitFor();
+        const storedKeys = await page.evaluate(() => (
+            window.__ENHANCER_LITE_TEST__.storedWrites.map(({ key }) => key)
+        ));
+        assert.ok(storedKeys.includes("effects.presets.v2"), JSON.stringify(storedKeys));
+    } finally {
+        await page.close();
+    }
+});
+
+test("A-G snapshots capture and recall the Lite sound through the shared snapshot bar", async () => {
+    const page = await openEnhancerLite("/fx/enhancer_lite/view/source.ts", { host: true });
+
+    try {
+        // Selecting an empty slot captures the current sound; the active slot
+        // then follows every edit, so A and B start identical and B diverges.
+        await page.evaluate(() => {
+            window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000);
+            window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 0.5);
+        });
+        await shadow(page, "cosimo-snapshot-bar >> [data-slot='A']").click();
+        await shadow(page, "cosimo-snapshot-bar >> [data-slot='A'].has-snapshot.is-active").waitFor();
+        await shadow(page, "cosimo-snapshot-bar >> [data-slot='B']").click();
+        await shadow(page, "cosimo-snapshot-bar >> [data-slot='B'].has-snapshot.is-active").waitFor();
+
+        await shadow(page, "[data-shape='high']").click();
+        await page.evaluate(() => window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 5000));
+
+        const recallSlot = async (slotID) => {
+            await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearSent());
+            await shadow(page, `cosimo-snapshot-bar >> [data-slot='${slotID}']`).click();
+            await shadow(page, `cosimo-snapshot-bar >> [data-slot='${slotID}'].is-active`).waitFor();
+            return Object.fromEntries(
+                (await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent))
+                    .map(({ endpointID, value }) => [endpointID, value]),
+            );
+        };
+
+        const recalledA = await recallSlot("A");
+        assert.equal(recalledA.freqHzIn, 1000);
+        assert.equal(recalledA.shapeIn, 1);
+        assert.equal(recalledA.midAmountIn, 0.5);
+        assert.equal(Object.hasOwn(recalledA, "analyzerEnabledIn"), false);
+        assert.equal(await shadow(page, "[data-readout='frequency']").textContent(), "1.00 kHz");
+        assert.equal(await shadow(page, "[data-shape='bell']").getAttribute("aria-pressed"), "true");
+
+        const recalledB = await recallSlot("B");
+        assert.equal(recalledB.freqHzIn, 5000);
+        assert.equal(recalledB.shapeIn, 2);
+        assert.equal(await shadow(page, "[data-readout='frequency']").textContent(), "5.00 kHz");
+        assert.equal(await shadow(page, "[data-shape='high']").getAttribute("aria-pressed"), "true");
+
+        const storedKeys = await page.evaluate(() => (
+            window.__ENHANCER_LITE_TEST__.storedWrites.map(({ key }) => key)
+        ));
+        assert.ok(storedKeys.some((key) => key.includes("enhancer-lite")), JSON.stringify(storedKeys));
     } finally {
         await page.close();
     }

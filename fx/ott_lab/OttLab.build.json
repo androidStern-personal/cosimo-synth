@@ -1,7 +1,0 @@
-{
-  "alias": "ott",
-  "runtimeOut": "build/fx/ott_lab_runtime",
-  "juceOut": "build/ott_lab_juce",
-  "cmakeTarget": "OTTLab",
-  "productName": "OTTLab"
-}

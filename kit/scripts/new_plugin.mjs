@@ -3,44 +3,49 @@
  * `npm run kit:new -- <name>` — scaffold a new effect plugin under fx/<name>/.
  *
  * The scaffold writes a minimal working plugin (stereo gain example): the
- * patch manifest, its DSP source, the `<PatchName>.build.json` sidecar, the
- * `product.json` identity file, a `view/index.js` symlink to the shared kit
- * loader, an editable `view/source.ts` wired to the createPatchView
- * convention, and a starter node test under tests/. Discovery is scan-driven,
- * so no shared file is edited; the new plugin is a build target immediately.
+ * patch manifest, its DSP source, the single `<PatchName>.plugin.json` config
+ * (build settings plus the `product` identity object), a `view/index.js`
+ * symlink to the shared kit loader, an editable `view/source.ts` wired to the
+ * createPatchView convention, and a starter node test under tests/. Discovery
+ * is scan-driven, so no shared file is edited; the new plugin is a build
+ * target immediately.
  *
- * Names, aliases, and derived identity are refused when they collide with an
- * existing plugin directory, registry alias, bundle identifier, or 4-char
- * pluginCode (`collectEffectIdentityClaims` covers product.json-driven and
- * manifest-only plugins alike).
+ * Every identity value derives from the plugin name and the repository's
+ * `product-owner.json` (manufacturer, manufacturerCode, bundleIdentifierPrefix,
+ * optional pluginCodePrefix): display name, patch base name, alias, pluginCode,
+ * and bundle identifier. Names, aliases, and derived identity are refused when
+ * they collide with an existing plugin directory, registry alias, bundle
+ * identifier, or 4-char pluginCode (`collectEffectIdentityClaims` covers
+ * config-driven and manifest-only plugins alike).
  */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { collectEffectIdentityClaims, discoverEffectPlugins } from "../fx/build-effect.mjs";
+import {
+    collectEffectIdentityClaims,
+    derivePluginBaseName,
+    derivePluginCode,
+    derivePluginDisplayName,
+    discoverEffectPlugins,
+    ownerPluginCodePrefix,
+    pluginConfigSuffix,
+    productOwnerFileName,
+    productOwnerPath,
+    readProductOwner,
+    supportedPluginSchemaVersion,
+} from "../fx/build-effect.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const defaultFxRoot = path.join(repoRoot, "fx");
 const defaultTestsRoot = path.join(repoRoot, "tests");
 const kitLoaderSymlinkTarget = "../../../kit/ui/effects/effect-view-loader.js";
+const starterVersion = "0.1.0";
 
 export function usage() {
     return "Usage: npm run kit:new -- <name>\n\n"
         + "The name becomes the fx/ directory: lowercase letters and digits, with\n"
         + "`_` or `-` separating words (e.g. demo_verb).";
-}
-
-function capitalize(segment) {
-    return segment[0].toUpperCase() + segment.slice(1);
-}
-
-function derivePluginCode(segments) {
-    const letters = segments.length >= 2
-        ? [segments[0][0].toUpperCase(), segments[1][0].toUpperCase()]
-        : [segments[0][0].toUpperCase(), segments[0][1]];
-
-    return `Cs${letters.join("")}`;
 }
 
 export function parsePluginName(rawName) {
@@ -57,19 +62,45 @@ export function parsePluginName(rawName) {
     if (alias === "all")
         throw new Error('"all" is the reserved build-every-plugin CLI name; pick another plugin name.');
 
+    const directoryName = segments.join("_");
+
     return {
-        directoryName: segments.join("_"),
+        directoryName,
         alias,
-        patchBaseName: segments.map(capitalize).join(""),
-        displayName: segments.map(capitalize).join(" "),
-        pluginCode: derivePluginCode(segments),
-        bundleIdentifier: `dev.cosimo.${alias}`,
+        patchBaseName: derivePluginBaseName(directoryName),
+        displayName: derivePluginDisplayName(directoryName),
+    };
+}
+
+/** The identity the owner file and the plugin name determine together. */
+export function deriveOwnedIdentity(names, owner) {
+    const pluginCode = derivePluginCode(names.directoryName, ownerPluginCodePrefix(owner));
+
+    if (pluginCode === null)
+        throw new Error(`Plugin name ${JSON.stringify(names.directoryName)} is too short to derive a 4-char pluginCode.\n\n${usage()}`);
+
+    return {
+        pluginCode,
+        bundleIdentifier: `${owner.bundleIdentifierPrefix}.${names.alias}`,
+        manufacturer: owner.manufacturer,
+        manufacturerCode: owner.manufacturerCode,
     };
 }
 
 /** Everything the scaffold would write, with every collision refusal up front. */
 export function planPluginScaffold(rawName, { fxRoot = defaultFxRoot, testsRoot = defaultTestsRoot } = {}) {
     const names = parsePluginName(rawName);
+    const root = path.dirname(fxRoot);
+    const ownerFile = readProductOwner(root);
+
+    if (ownerFile === null) {
+        throw new Error(
+            `Refusing to scaffold: ${productOwnerPath(root)} is missing. `
+            + `kit:new derives the manufacturer, codes, and bundle identifier from ${productOwnerFileName}.`,
+        );
+    }
+
+    const identity = deriveOwnedIdentity(names, ownerFile.owner);
     const pluginDirectory = path.join(fxRoot, names.directoryName);
     const starterTestPath = path.join(testsRoot, `test_${names.directoryName}_state.mjs`);
 
@@ -83,38 +114,38 @@ export function planPluginScaffold(rawName, { fxRoot = defaultFxRoot, testsRoot 
 
     const claims = collectEffectIdentityClaims({ fxRoot });
 
-    if (claims.pluginCodes.has(names.pluginCode)) {
+    if (claims.pluginCodes.has(identity.pluginCode)) {
         throw new Error(
-            `Refusing to scaffold: derived pluginCode "${names.pluginCode}" is already claimed by `
-            + `${claims.pluginCodes.get(names.pluginCode)}. Pick a name with different initials.`,
+            `Refusing to scaffold: derived pluginCode "${identity.pluginCode}" is already claimed by `
+            + `${claims.pluginCodes.get(identity.pluginCode)}. Pick a name with different initials.`,
         );
     }
 
-    if (claims.bundleIdentifiers.has(names.bundleIdentifier)) {
+    if (claims.bundleIdentifiers.has(identity.bundleIdentifier)) {
         throw new Error(
-            `Refusing to scaffold: bundle identifier "${names.bundleIdentifier}" is already claimed by `
-            + `${claims.bundleIdentifiers.get(names.bundleIdentifier)}.`,
+            `Refusing to scaffold: bundle identifier "${identity.bundleIdentifier}" is already claimed by `
+            + `${claims.bundleIdentifiers.get(identity.bundleIdentifier)}.`,
         );
     }
 
     if (fs.existsSync(starterTestPath))
         throw new Error(`Refusing to scaffold: ${starterTestPath} already exists.`);
 
-    return { ...names, pluginDirectory, starterTestPath };
+    return { ...names, ...identity, pluginDirectory, starterTestPath };
 }
 
 function createPatchManifest(plan) {
     return {
         CmajorVersion: 1,
         ID: plan.bundleIdentifier,
-        version: "0.1.0",
+        version: starterVersion,
         name: plan.displayName,
         description: `${plan.displayName} starter effect (stereo gain). Replace with real DSP.`,
         category: "effect",
-        manufacturer: "Cosimo",
+        manufacturer: plan.manufacturer,
         plugin: {
             pluginCode: plan.pluginCode,
-            manufacturerCode: "Cosi",
+            manufacturerCode: plan.manufacturerCode,
         },
         isInstrument: false,
         source: [`${plan.patchBaseName}.cmajor`],
@@ -128,31 +159,29 @@ function createPatchManifest(plan) {
     };
 }
 
-function createBuildSidecar(plan) {
+function createPluginConfig(plan) {
     return {
+        schemaVersion: supportedPluginSchemaVersion,
         alias: plan.alias,
+        cmakeTarget: plan.patchBaseName,
+        productName: plan.patchBaseName,
+        product: {
+            productName: plan.displayName,
+            manufacturerName: plan.manufacturer,
+            bundleIdentifier: plan.bundleIdentifier,
+            pluginCode: plan.pluginCode,
+            manufacturerCode: plan.manufacturerCode,
+            version: starterVersion,
+        },
         runtimeOut: `build/fx/${plan.directoryName}_runtime`,
         juceOut: `build/${plan.directoryName}_juce`,
-        cmakeTarget: plan.patchBaseName,
-    };
-}
-
-function createProductIdentity(plan) {
-    return {
-        productName: plan.displayName,
-        manufacturerName: "Cosimo",
-        bundleIdentifier: plan.bundleIdentifier,
-        pluginCode: plan.pluginCode,
-        manufacturerCode: "Cosi",
-        version: "0.1.0",
-        outputFileName: plan.patchBaseName,
     };
 }
 
 function createDspSource(plan) {
     return `// ${plan.displayName} — scaffolded stereo gain example. Replace this processor
-// with real DSP; the manifest, build sidecar, and product.json beside it stay
-// the build contract.
+// with real DSP; the manifest and the ${plan.patchBaseName}${pluginConfigSuffix} config beside it
+// stay the build contract.
 processor ${plan.patchBaseName}  [[ main ]]
 {
     input stream float32<2> audioIn [[ name: "Input" ]];
@@ -175,7 +204,8 @@ processor ${plan.patchBaseName}  [[ main ]]
 function createViewSource(plan) {
     return `// ${plan.displayName} view. Served editable by \`npm run fx:dev\` (the manifest's
 // view.devModule) and bundled to view/app.js by \`npm run fx:build -- ${plan.alias}\`;
-// view/index.js stays the shared kit loader.
+// view/index.js stays the shared kit loader. Shared kit modules are imported
+// from "../../../kit/index" (the supported public entry).
 type ParameterListener = ((value: number) => void) & { endpointID?: string };
 
 type PatchConnection = {
@@ -265,7 +295,7 @@ class ${plan.patchBaseName}View extends HTMLElement {
 }
 
 export default function createPatchView(patchConnection: PatchConnection): HTMLElement {
-    const elementName = "cosimo-${plan.alias}-view";
+    const elementName = "${plan.alias}-view";
 
     if (!window.customElements.get(elementName))
         window.customElements.define(elementName, ${plan.patchBaseName}View);
@@ -298,9 +328,9 @@ test("${plan.directoryName} is discovered with its product identity", async () =
     assert.deepEqual(plugin.identity, {
         ID: "${plan.bundleIdentifier}",
         name: "${plan.displayName}",
-        manufacturer: "Cosimo",
-        version: "0.1.0",
-        plugin: { pluginCode: "${plan.pluginCode}", manufacturerCode: "Cosi" },
+        manufacturer: ${JSON.stringify(plan.manufacturer)},
+        version: "${starterVersion}",
+        plugin: { pluginCode: "${plan.pluginCode}", manufacturerCode: "${plan.manufacturerCode}" },
     });
 });
 
@@ -331,8 +361,8 @@ export function nextSteps(plan) {
         `  npm run fx:build -- ${plan.alias}    # self-contained runtime under build/fx/${plan.directoryName}_runtime`,
         `  node --test tests/test_${plan.directoryName}_state.mjs`,
         "",
-        `Identity lives in fx/${plan.directoryName}/product.json (keep the patch manifest in agreement);`,
-        `build overrides live in fx/${plan.directoryName}/${plan.patchBaseName}.build.json.`,
+        `Build settings and identity live in fx/${plan.directoryName}/${plan.patchBaseName}${pluginConfigSuffix}`,
+        "(keep the patch manifest in agreement with its \"product\" object).",
     ].join("\n");
 }
 
@@ -345,8 +375,7 @@ export function scaffoldPlugin(rawName, options = {}) {
 
     fs.mkdirSync(viewDirectory, { recursive: true });
     writeJson(path.join(plan.pluginDirectory, `${plan.patchBaseName}.cmajorpatch`), createPatchManifest(plan));
-    writeJson(path.join(plan.pluginDirectory, `${plan.patchBaseName}.build.json`), createBuildSidecar(plan));
-    writeJson(path.join(plan.pluginDirectory, "product.json"), createProductIdentity(plan));
+    writeJson(path.join(plan.pluginDirectory, `${plan.patchBaseName}${pluginConfigSuffix}`), createPluginConfig(plan));
     fs.writeFileSync(path.join(plan.pluginDirectory, `${plan.patchBaseName}.cmajor`), createDspSource(plan), "utf8");
     fs.writeFileSync(path.join(viewDirectory, "source.ts"), createViewSource(plan), "utf8");
     fs.symlinkSync(kitLoaderSymlinkTarget, path.join(viewDirectory, "index.js"));

@@ -7,8 +7,6 @@
   ],
   "files": [
     "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
-    "ui/shared/enhancer-spectrum.ts",
-    "ui/vite.shared.mjs",
     "tests/test_enhancer_lite_state.mjs",
     "tests/test_enhancer_lite_view_browser.mjs"
   ],
@@ -18,11 +16,17 @@
     "kit/cmake/CosimoDependencies.cmake",
     "kit/docs/PLUGIN_ARCHITECTURE.md",
     "kit/skills/cosimo-make-plugin/SKILL.md",
+    "kit/skills/kit-update/SKILL.md",
+    "kit/kit.json",
+    "kit/index.ts",
     "fx/enhancer_lite/EnhancerLite.cmajorpatch",
     "fx/enhancer_lite/EnhancerLite.cmajor",
     "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
     "package.json",
     "AGENTS.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "product-owner.json",
     "tsconfig.json",
     ".gitignore"
   ],

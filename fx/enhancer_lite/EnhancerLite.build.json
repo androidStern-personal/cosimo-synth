@@ -1,7 +1,0 @@
-{
-  "alias": "enhancer-lite",
-  "runtimeOut": "build/fx/enhancer_lite_runtime",
-  "juceOut": "build/enhancer_lite_juce",
-  "cmakeTarget": "CosimoEnhancerLite",
-  "jitInstallRuntime": true
-}

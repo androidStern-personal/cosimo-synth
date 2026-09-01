@@ -12,11 +12,13 @@ if(NOT DEFINED CPM_SOURCE_CACHE OR CPM_SOURCE_CACHE STREQUAL "")
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/CPM.cmake")
+# Source URLs only (GitHub in the monorepo, feed mirror in a customer export).
+include("${CMAKE_CURRENT_LIST_DIR}/dependency-sources.cmake")
 
 function(cosimo_add_production_dependencies)
     CPMAddPackage(
         NAME cosimo_cmajor
-        GIT_REPOSITORY "https://github.com/androidStern-personal/cmajor.git"
+        GIT_REPOSITORY "${COSIMO_CMAJOR_GIT_URL}"
         GIT_TAG "cb616bf1d0931ff92da3826d15a01eadfd8e35b1"
         GIT_SHALLOW FALSE
         GIT_SUBMODULES_RECURSE TRUE
@@ -25,7 +27,7 @@ function(cosimo_add_production_dependencies)
 
     CPMAddPackage(
         NAME cosimo_juce
-        GIT_REPOSITORY "https://github.com/juce-framework/JUCE.git"
+        GIT_REPOSITORY "${COSIMO_JUCE_GIT_URL}"
         GIT_TAG "501c07674e1ad693085a7e7c398f205c2677f5da"
         GIT_SHALLOW FALSE
         DOWNLOAD_ONLY YES
@@ -39,7 +41,7 @@ endfunction()
 function(cosimo_add_t26_research_juce)
     CPMAddPackage(
         NAME cosimo_t26_juce
-        GIT_REPOSITORY "https://github.com/juce-framework/JUCE.git"
+        GIT_REPOSITORY "${COSIMO_JUCE_GIT_URL}"
         GIT_TAG "b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0"
         GIT_SHALLOW FALSE
         DOWNLOAD_ONLY YES

@@ -9,5 +9,5 @@
     "allowJs": false,
     "skipLibCheck": true
   },
-  "include": ["fx/**/*.ts", "fx/**/*.tsx", "kit/ui/**/*.ts", "kit/ui/**/*.tsx"]
+  "include": ["fx/**/*.ts", "fx/**/*.tsx", "kit/index.ts", "kit/ui/**/*.ts", "kit/ui/**/*.tsx"]
 }

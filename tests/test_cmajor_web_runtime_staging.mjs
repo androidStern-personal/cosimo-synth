@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const stagingModule = path.join(repoRoot, "ui", "vite.shared.mjs");
+const stagingModule = path.join(repoRoot, "kit", "fx", "vite.shared.mjs");
 
 const childSource = String.raw`
 import { existsSync } from "node:fs";

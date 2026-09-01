@@ -8,7 +8,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const spectrumModulePromise = loadUIModule(
     repoRoot,
-    "ui/shared/enhancer-spectrum.ts",
+    "kit/ui/enhancer-spectrum.ts",
 );
 
 function parsePathPoints(pathValue) {

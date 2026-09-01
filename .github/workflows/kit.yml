@@ -1,0 +1,58 @@
+name: kit
+
+on:
+  push:
+    branches:
+      - master
+      - "claude/**"
+      - "codex/**"
+  pull_request:
+    branches:
+      - master
+      - "claude/**"
+      - "codex/**"
+
+jobs:
+  kit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # `tsc --noEmit` currently reports 27 pre-existing errors on master, so a
+      # plain `npm run typecheck` would always fail. Until they are cleared, fail
+      # only when the count grows past that baseline. Lower TS_ERROR_BASELINE as
+      # errors are fixed; it must never go up.
+      - name: Typecheck (regression gate against baseline)
+        env:
+          TS_ERROR_BASELINE: 27
+        run: |
+          set +e
+          output=$(npm run typecheck 2>&1)
+          status=$?
+          set -e
+          count=$(printf '%s\n' "$output" | grep -c 'error TS' || true)
+          printf '%s\n' "$output" | grep 'error TS' || true
+          echo "tsc errors: $count (baseline $TS_ERROR_BASELINE)"
+          if [ "$status" -ne 0 ] && [ "$count" -eq 0 ]; then
+            echo "typecheck failed without reporting TS errors:"
+            printf '%s\n' "$output" | tail -n 30
+            exit 1
+          fi
+          test "$count" -le "$TS_ERROR_BASELINE"
+
+      - name: Test
+        run: npm test
+
+      # Exports the customer kit and proves it standalone (Enhancer Lite build,
+      # kit unit tests, update-flow merge). The proof symlinks this checkout's
+      # node_modules into the export and sets its own git identity there.
+      - name: Export kit and prove it
+        run: node kit/scripts/export_kit.mjs /tmp/kit-export --force --prove

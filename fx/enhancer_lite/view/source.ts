@@ -15,7 +15,7 @@ import {
     enhancerGainY as enhancerLiteGainY,
     formatEnhancerFrequencyTick,
     type EnhancerSpectrumDisplay as EnhancerLiteSpectrumDisplay,
-} from "../../../ui/shared/enhancer-spectrum";
+} from "../../../kit/index";
 import {
     ENHANCER_LITE_ANALYZER_ENDPOINTS,
     ENHANCER_LITE_DB_ROWS,
@@ -27,18 +27,34 @@ import {
     enhancerLiteFrequencyFromHorizontalPixels,
     enhancerLiteQFromUpwardPixels,
 } from "./gesture-policy";
+import {
+    EffectSnapshotBankController,
+    createEffectHeader,
+    createStandaloneEffectPresetController,
+    type PatchConnectionLike,
+    type StandaloneEffectPresetController,
+} from "../../../kit/index";
+import { ENHANCER_LITE_FACTORY_PRESETS } from "./factory-presets.js";
 
-type ParameterListener = ((value: number) => void) & { endpointID?: string };
+type ParameterListener = ((value: unknown) => void) & { endpointID?: string };
 type EndpointListener = (message: unknown) => void;
 
-type EnhancerLitePatchConnection = {
-    addParameterListener(endpointID: string, listener: ParameterListener): void;
-    removeParameterListener(endpointID: string, listener: ParameterListener): void;
-    requestParameterValue(endpointID: string): void;
-    addEndpointListener(endpointID: string, listener: EndpointListener): void;
-    removeEndpointListener(endpointID: string, listener: EndpointListener): void;
-    sendEventOrValue(endpointID: string, value: number, rampFrames?: number): void;
-};
+/**
+ * The kit's patch-connection shape, with the members this view calls itself
+ * made required. The preset and snapshot controllers take the same object.
+ */
+type EnhancerLitePatchConnection = PatchConnectionLike & Required<Pick<
+    PatchConnectionLike,
+    | "addParameterListener"
+    | "removeParameterListener"
+    | "requestParameterValue"
+    | "addEndpointListener"
+    | "removeEndpointListener"
+    | "sendEventOrValue"
+>>;
+
+/** Identity for presets, snapshots, and their stored-state keys. */
+const effectID = "enhancer-lite";
 
 type NumericDescriptor = Extract<EnhancerLiteSettingDescriptor, { readonly kind: "number" }>;
 type ResponseRole = "primary" | "side";
@@ -113,12 +129,6 @@ const modeEndpointID = "modeIn";
 const curveEndpointID = "curveIn";
 const saturationModeEndpointID = "saturationModeIn";
 const shapeEndpointID = "shapeIn";
-// Keep the URL runtime-relative so both the source harness and packaged patch use the manifest resource.
-const wordmarkURL = new URL(
-    ["..", "assets", "enhancer-lite-wordmark.png"].join("/"),
-    import.meta.url,
-).href;
-
 const endpointInitialValues = new Map<string, number>([
     [frequencyControl.dspEndpointID, frequencyControl.initial],
     [qControl.dspEndpointID, qControl.initial],
@@ -229,6 +239,12 @@ class EnhancerLiteView extends HTMLElement {
     readonly parameterListeners: Array<{ readonly endpointID: string; readonly listener: ParameterListener }> = [];
     readonly endpointListeners: Array<{ readonly endpointID: string; readonly listener: EndpointListener }> = [];
     readonly spectrumDisplays = new Map<SpectrumRole, EnhancerLiteSpectrumDisplay>();
+    // The kit's preset bar and A-G snapshots, mounted as one header above the
+    // Lite surface. Both controllers address the eight sound endpoints the
+    // patch exposes as parameters; the hidden analyzer endpoints stay out.
+    readonly presetController: StandaloneEffectPresetController;
+    readonly snapshotController: EffectSnapshotBankController;
+    readonly effectHeader: ReturnType<typeof createEffectHeader>;
     hasAttached = false;
     drag: ResponseDrag | undefined;
     readoutDrag: ReadoutDrag | undefined;
@@ -237,8 +253,21 @@ class EnhancerLiteView extends HTMLElement {
     constructor(patchConnection: EnhancerLitePatchConnection) {
         super();
         this.patchConnection = patchConnection;
+        this.presetController = createStandaloneEffectPresetController({
+            effectID,
+            patchConnection,
+            factoryPresets: ENHANCER_LITE_FACTORY_PRESETS,
+        });
+        this.snapshotController = new EffectSnapshotBankController({
+            effectID,
+            patchConnection,
+        });
+        this.effectHeader = createEffectHeader();
+        this.effectHeader.presetController = this.presetController;
+        this.effectHeader.snapshotController = this.snapshotController;
         this.root = this.attachShadow({ mode: "open" });
         this.root.innerHTML = this.getMarkup();
+        this.requireElement<HTMLElement>(".shell").before(this.effectHeader);
         this.bindControls();
         this.renderAll();
     }
@@ -250,7 +279,7 @@ class EnhancerLiteView extends HTMLElement {
         this.hasAttached = true;
         for (const endpointID of endpointInitialValues.keys()) {
             const listener: ParameterListener = (value) => {
-                if (!Number.isFinite(value))
+                if (typeof value !== "number" || !Number.isFinite(value))
                     return;
 
                 this.values.set(endpointID, value);
@@ -279,9 +308,20 @@ class EnhancerLiteView extends HTMLElement {
         });
         this.frequencyTickResizeObserver.observe(responsePlot);
         this.renderFrequencyTickDensity();
+
+        // The header drops its bar bindings whenever it leaves the document,
+        // so rebind before the controllers come back to life.
+        this.effectHeader.presetController = this.presetController;
+        this.effectHeader.snapshotController = this.snapshotController;
+        this.snapshotController.attach();
+        this.presetController.attach();
     }
 
     disconnectedCallback(): void {
+        this.snapshotController.detach();
+        this.presetController.detach();
+        this.effectHeader.presetController = null;
+        this.effectHeader.snapshotController = null;
         this.endReadoutDrag();
         this.endResponseDrag();
         this.patchConnection.sendEventOrValue(
@@ -884,9 +924,11 @@ class EnhancerLiteView extends HTMLElement {
         return `
             <style>
                 :host {
+                    /* The kit header's accent token, set to Lite's primary neon. */
+                    --knob-track-value-color: #00f0ff;
                     display: block;
                     width: 820px;
-                    min-height: 520px;
+                    min-height: 560px;
                     color: #f4fbff;
                     background: #000000;
                     font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
@@ -896,8 +938,7 @@ class EnhancerLiteView extends HTMLElement {
                 button { font: inherit; }
                 .shell { min-height: 520px; padding: 20px; background: #000000; }
                 .topline { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 14px; }
-                h1 { margin: 0; line-height: 0; }
-                .wordmark { display: block; width: 300px; max-width: 70vw; height: auto; }
+                h1 { margin: 0; color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; line-height: 1; }
                 .tag { margin-top: 7px; color: #00f0ff; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; }
                 .engine-label { color: #b7ff27; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
                 .response-panel { border: 1px solid #123b43; border-radius: 12px; padding: 12px 12px 5px; background: #000000; box-shadow: 0 0 22px rgba(0,240,255,0.08); }
@@ -971,7 +1012,7 @@ class EnhancerLiteView extends HTMLElement {
             <main class="shell">
                 <header class="topline">
                     <div>
-                        <h1><img class="wordmark" src="${wordmarkURL}" alt="Enhancer Lite" draggable="false"></h1>
+                        <h1>Enhancer Lite</h1>
                         <div class="tag">ONE BAND // STEREO + M/S</div>
                     </div>
                     <div class="engine-label">4X IIR // FAST CURVE</div>

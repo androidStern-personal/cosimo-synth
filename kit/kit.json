@@ -1,0 +1,8 @@
+{
+  "version": "0.1.0",
+  "schemaVersions": {
+    "plugin": 1,
+    "toolchain": 1,
+    "feed": 1
+  }
+}

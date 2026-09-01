@@ -1,8 +1,9 @@
 {
+  "schemaVersion": 1,
   "alias": "enhancer",
-  "runtimeOut": "build/fx/enhancer_runtime",
-  "juceOut": "build/enhancer_juce",
   "cmakeTarget": "CosimoEnhancer",
   "productName": "CosimoEnhancer",
+  "runtimeOut": "build/fx/enhancer_runtime",
+  "juceOut": "build/enhancer_juce",
   "jitInstallRuntime": true
 }

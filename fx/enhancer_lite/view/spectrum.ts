@@ -7,7 +7,7 @@ import {
     enhancerGainY,
     enhancerLevelY,
     type EnhancerSpectrumDisplay,
-} from "../../../ui/shared/enhancer-spectrum";
+} from "../../../kit/index";
 
 /** Endpoint IDs for the editor-only Enhancer Lite analyser. */
 export const ENHANCER_LITE_ANALYZER_ENDPOINTS = Object.freeze({

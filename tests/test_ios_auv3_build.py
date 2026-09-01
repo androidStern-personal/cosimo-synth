@@ -880,6 +880,7 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert '${COSIMO_REPO_ROOT}/package.json' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/build.mjs' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/vite.shared.mjs' in cmake_text
+    assert '${COSIMO_REPO_ROOT}/kit/fx/vite.shared.mjs' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/vite.worker.config.mjs' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ios_auv3/vite.config.mjs' in cmake_text
     assert "copy_directory" in cmake_text
@@ -1879,7 +1880,7 @@ def test_repo_owned_patch_shell_keeps_the_bridge_entrypoints_the_ui_depends_on()
 
 def test_ios_ui_dev_server_configuration_exists() -> None:
     package_json = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))
-    shared_vite_helpers = (REPO_ROOT / "ui" / "vite.shared.mjs").read_text(encoding="utf-8")
+    shared_vite_helpers = (REPO_ROOT / "kit" / "fx" / "vite.shared.mjs").read_text(encoding="utf-8")
     vite_config = IOS_VITE_CONFIG.read_text(encoding="utf-8")
 
     assert package_json["scripts"]["ios:ui:dev"] == "vite --config ios_auv3/vite.config.mjs"

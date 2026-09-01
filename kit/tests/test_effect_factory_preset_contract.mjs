@@ -79,10 +79,47 @@ async function discoverFactoryPresetInventories() {
     return inventories;
 }
 
+/**
+ * The [start, end) source span of the body of the `[[ main ]]` processor or
+ * graph, or null when the file declares none. A plugin's inner processors
+ * may re-declare annotated endpoints (Enhancer Lite's bus does); only the
+ * main graph's declarations describe the host-facing parameter surface.
+ */
+function mainProcessorBodySpan(source) {
+    const mainMatch = source.match(/\b(?:graph|processor)\s+[A-Za-z_][A-Za-z0-9_]*\s*(?:\([^)]*\))?\s*\[\[\s*main\s*\]\]/);
+
+    if (!mainMatch) {
+        return null;
+    }
+
+    const start = source.indexOf("{", mainMatch.index + mainMatch[0].length);
+
+    if (start === -1) {
+        return null;
+    }
+
+    let depth = 0;
+
+    for (let index = start; index < source.length; index += 1) {
+        if (source[index] === "{") {
+            depth += 1;
+        } else if (source[index] === "}") {
+            depth -= 1;
+
+            if (depth === 0) {
+                return [start, index];
+            }
+        }
+    }
+
+    return null;
+}
+
 async function readCmajorEndpointSurface(pluginDirectory) {
     const pluginRoot = path.join(repoRoot, "fx", pluginDirectory);
     const endpointIDs = new Set();
     const valueEndpointDeclarations = new Map();
+    const eventEndpointDeclarations = new Map();
 
     for (const entry of await fs.readdir(pluginRoot)) {
         if (!entry.endsWith(".cmajor")) {
@@ -90,6 +127,8 @@ async function readCmajorEndpointSurface(pluginDirectory) {
         }
 
         const source = await fs.readFile(path.join(pluginRoot, entry), "utf8");
+        const mainSpan = mainProcessorBodySpan(source);
+        const inMainProcessor = (index) => mainSpan !== null && index > mainSpan[0] && index < mainSpan[1];
 
         for (const match of source.matchAll(/\binput\s+value\s+(bool|float32|float64|int32|int64)\s+([A-Za-z_][A-Za-z0-9_]*)\s+\[\[([^\]]*)\]\]/g)) {
             const endpointID = match[2];
@@ -98,8 +137,18 @@ async function readCmajorEndpointSurface(pluginDirectory) {
             declarations.push({
                 declaredType: match[1],
                 annotationText: match[3],
+                inMainProcessor: inMainProcessor(match.index),
             });
             valueEndpointDeclarations.set(endpointID, declarations);
+        }
+
+        // Annotated event inputs (a hidden analyzer enable, say) are parameters
+        // to the host too; they are tracked only for the hidden-endpoint check.
+        for (const match of source.matchAll(/\binput\s+event\s+[A-Za-z_][A-Za-z0-9_:<>]*\s+([A-Za-z_][A-Za-z0-9_]*)\s+\[\[([^\]]*)\]\]/g)) {
+            const endpointID = match[1];
+            const declarations = eventEndpointDeclarations.get(endpointID) ?? [];
+            declarations.push({ annotationText: match[2] });
+            eventEndpointDeclarations.set(endpointID, declarations);
         }
 
         // Endpoints a graph re-exports from a child processor.
@@ -108,20 +157,32 @@ async function readCmajorEndpointSurface(pluginDirectory) {
         }
     }
 
-    return { endpointIDs, valueEndpointDeclarations };
+    return { endpointIDs, valueEndpointDeclarations, eventEndpointDeclarations };
 }
 
 async function readHiddenCmajorEndpointIDs(pluginDirectory) {
-    const { valueEndpointDeclarations } = await readCmajorEndpointSurface(pluginDirectory);
+    const { valueEndpointDeclarations, eventEndpointDeclarations } = await readCmajorEndpointSurface(pluginDirectory);
     const hidden = new Set();
 
-    for (const [endpointID, declarations] of valueEndpointDeclarations) {
+    for (const [endpointID, declarations] of [...valueEndpointDeclarations, ...eventEndpointDeclarations]) {
         if (declarations.some((declaration) => /hidden\s*:\s*true/.test(declaration.annotationText))) {
             hidden.add(endpointID);
         }
     }
 
     return hidden;
+}
+
+/**
+ * The one declaration that describes an endpoint's host-facing contract:
+ * the `[[ main ]]` processor's when it declares the endpoint, else the only
+ * declaration in the plugin. Anything else is ambiguous and fails.
+ */
+function contractDeclarationFor(pluginDirectory, endpointID, declarations) {
+    const mainDeclarations = declarations.filter((declaration) => declaration.inMainProcessor);
+    const candidates = mainDeclarations.length > 0 ? mainDeclarations : declarations;
+    assert.equal(candidates.length, 1, `fx/${pluginDirectory} must declare "${endpointID}" as exactly one annotated value endpoint${mainDeclarations.length > 0 ? " in its [[ main ]] processor" : ""} (found ${candidates.length})`);
+    return candidates[0];
 }
 
 function readAnnotationNumber(annotationText, key) {
@@ -299,8 +360,7 @@ test("factory_presets_store_the_complete_addressable_set_and_round_trip_v2_norma
 
         const parameters = addressableEndpointIDs.map((endpointID) => {
             const declarations = valueEndpointDeclarations.get(endpointID) ?? [];
-            assert.equal(declarations.length, 1, `fx/${pluginDirectory} must declare "${endpointID}" as exactly one annotated value endpoint (found ${declarations.length})`);
-            return annotationToParameterContract(endpointID, declarations[0]);
+            return annotationToParameterContract(endpointID, contractDeclarationFor(pluginDirectory, endpointID, declarations));
         });
         const contract = buildCanonicalPluginStateContract({ effectID, parameters });
 

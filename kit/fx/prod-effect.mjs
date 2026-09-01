@@ -1,4 +1,6 @@
 import { access, cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { createReadStream, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -15,6 +17,7 @@ import {
 import { assertPatchedChocWebViewBinary } from "../scripts/check_choc_markers.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
+const toolchainManifestPath = path.join(repoRoot, "kit", "toolchain.json");
 const cmajCommandBuildSourceDirectory = path.join(repoRoot, "tools", "cmajor_command_build");
 const cmajCommandBuildDirectory = path.join(repoRoot, "build", "cmajor_command");
 const pinnedCmajExecutablePath = path.join(
@@ -22,6 +25,45 @@ const pinnedCmajExecutablePath = path.join(
     "bin",
     process.platform === "win32" ? "cmaj.exe" : "cmaj",
 );
+
+/**
+ * kit/toolchain.json pins the downloaded cmaj (artifact hash + local path).
+ * Absent or unreadable means "no downloaded tool", never a crash: the
+ * monorepo still builds cmaj from source without it.
+ */
+export function readToolchainManifest(manifestPath = toolchainManifestPath) {
+    try {
+        return JSON.parse(readFileSync(manifestPath, "utf8"));
+    } catch (error) {
+        if (error && typeof error === "object" && error.code === "ENOENT")
+            return null;
+
+        throw new Error(`Could not read ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
+const toolchainManifest = readToolchainManifest();
+
+/** The hash-pinned cmaj that `npm run kit:setup` downloads (kit/toolchain.json cmaj.localPath). */
+export function getDownloadedCmajExecutablePath(toolchain = toolchainManifest) {
+    const localPath = toolchain?.cmaj?.localPath;
+
+    if (typeof localPath !== "string" || localPath === "")
+        return null;
+
+    return path.resolve(repoRoot, localPath);
+}
+
+const downloadedCmajExecutablePath = getDownloadedCmajExecutablePath();
+
+async function sha256File(filePath) {
+    const hash = createHash("sha256");
+
+    for await (const chunk of createReadStream(filePath))
+        hash.update(chunk);
+
+    return hash.digest("hex");
+}
 
 function absoluteReleaseToolOverride(environment, name, fallback) {
     const value = environment[name];
@@ -56,6 +98,8 @@ function usage() {
         "  fx:prod:build creates a dedicated plugin bundle under build/.",
         "  fx:prod:install copies an already-built dedicated VST3 bundle.",
         "  fx:prod:install does not write CmajPlugin.json and does not touch AU plugins.",
+        "  cmaj comes from build/kit-tools/cmaj (hash-pinned by kit/toolchain.json, npm run kit:setup)",
+        "  or, in the Cosimo monorepo, from the pinned source build under build/cmajor_command.",
         "  COSIMO_PLUGIN_JOBS controls parallel plugin builds for 'all' (default: 3).",
         "  COSIMO_CMAKE_JOBS controls CMake --parallel jobs per plugin (default: CPU budget / plugin jobs).",
     ].join("\n");
@@ -117,18 +161,79 @@ async function pathExists(nextPath) {
     }
 }
 
+/** The cmaj built from the monorepo's pinned fork (tools/cmajor_command_build). */
 export function getPinnedCmajExecutablePath() {
     return pinnedCmajExecutablePath;
 }
 
+/** Every path a production build may use as its Cmajor command: pinned source build, hash-pinned download. */
+export function getAcceptedCmajExecutablePaths() {
+    return downloadedCmajExecutablePath === null
+        ? [pinnedCmajExecutablePath]
+        : [pinnedCmajExecutablePath, downloadedCmajExecutablePath];
+}
+
 export function validatePinnedCmajExecutable(candidate) {
-    if (typeof candidate !== "string" || path.resolve(candidate) !== pinnedCmajExecutablePath) {
+    const accepted = getAcceptedCmajExecutablePaths();
+    const match = typeof candidate === "string"
+        ? accepted.find((acceptedPath) => acceptedPath === path.resolve(candidate))
+        : undefined;
+
+    if (match === undefined) {
         throw new Error(
-            `COSIMO_CMAJ_EXECUTABLE must be the Cmajor command built from the pinned source: ${pinnedCmajExecutablePath}`,
+            "COSIMO_CMAJ_EXECUTABLE must be the Cmajor command built from the pinned source "
+            + "or the hash-pinned download from npm run kit:setup: "
+            + accepted.join(" or "),
         );
     }
 
-    return pinnedCmajExecutablePath;
+    return match;
+}
+
+/**
+ * Picks the Cmajor command for a production build, in order:
+ *   1. the downloaded cmaj at kit/toolchain.json cmaj.localPath, when the
+ *      manifest carries a non-empty cmaj.sha256 and the file matches it
+ *      (a mismatch fails closed rather than silently falling through);
+ *   2. the monorepo's pinned source build (tools/cmajor_command_build);
+ *   3. otherwise a clear error naming `npm run kit:setup`.
+ * Paths are injectable so the policy is unit-testable without a real cmaj.
+ */
+export async function resolvePinnedCmajSource({
+    toolchain = toolchainManifest,
+    downloadedExecutable = getDownloadedCmajExecutablePath(toolchain),
+    sourceProjectDirectory = cmajCommandBuildSourceDirectory,
+} = {}) {
+    const expectedSha256 = typeof toolchain?.cmaj?.sha256 === "string" ? toolchain.cmaj.sha256.trim().toLowerCase() : "";
+
+    if (downloadedExecutable !== null && expectedSha256 !== "" && await pathExists(downloadedExecutable)) {
+        const actualSha256 = await sha256File(downloadedExecutable);
+
+        if (actualSha256 !== expectedSha256) {
+            throw new Error(
+                `${downloadedExecutable} does not match kit/toolchain.json `
+                + `(expected sha256 ${expectedSha256}, found ${actualSha256}). `
+                + "Run npm run kit:setup to download the pinned Cmajor command again.",
+            );
+        }
+
+        return { kind: "downloaded", executable: downloadedExecutable, sha256: actualSha256 };
+    }
+
+    if (await pathExists(path.join(sourceProjectDirectory, "CMakeLists.txt")))
+        return { kind: "source", executable: pinnedCmajExecutablePath };
+
+    const downloadedHint = downloadedExecutable === null
+        ? "kit/toolchain.json names no downloaded cmaj"
+        : expectedSha256 === ""
+            ? `kit/toolchain.json carries no cmaj.sha256, so ${downloadedExecutable} cannot be trusted`
+            : `${downloadedExecutable} is missing`;
+
+    throw new Error(
+        `No pinned Cmajor command is available: ${downloadedHint}, and there is no `
+        + `${path.relative(repoRoot, sourceProjectDirectory)} source project to build one from. `
+        + "Run npm run kit:setup to download the hash-pinned cmaj.",
+    );
 }
 
 export function createPinnedCmajConfigureArgs() {
@@ -176,6 +281,13 @@ async function preparePinnedCmajExecutable(toolPaths, cmakeJobs, preparedExecuta
             throw new Error(`Pinned Cmajor command not found: ${executable}`);
 
         return executable;
+    }
+
+    const source = await resolvePinnedCmajSource();
+
+    if (source.kind === "downloaded") {
+        console.log(`Using the hash-pinned Cmajor command at ${path.relative(repoRoot, source.executable)}`);
+        return source.executable;
     }
 
     run(toolPaths.cmake, createPinnedCmajConfigureArgs());

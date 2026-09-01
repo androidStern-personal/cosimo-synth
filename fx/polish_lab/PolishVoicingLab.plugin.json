@@ -1,8 +1,9 @@
 {
+  "schemaVersion": 1,
   "alias": "polish",
-  "runtimeOut": "build/fx/polish_lab_runtime",
-  "juceOut": "build/polish_lab_juce",
   "cmakeTarget": "PolishVoicingLab",
   "productName": "PolishVoicingLab",
+  "runtimeOut": "build/fx/polish_lab_runtime",
+  "juceOut": "build/polish_lab_juce",
   "jitInstallRuntime": true
 }

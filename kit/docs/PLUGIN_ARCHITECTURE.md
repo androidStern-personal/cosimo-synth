@@ -22,11 +22,17 @@ and loader.
   `fx/ott_lab`.
 - A **patch manifest** is the `.cmajorpatch` JSON file naming the DSP source and
   UI entry.
-- A **build sidecar** is an optional `<PatchName>.build.json` next to the patch
-  holding per-plugin build settings.
-- A **product identity file** is an optional `product.json` next to the patch
-  holding the plugin's customer-facing identity (names, bundle identifier,
-  4-char codes, version, install filename).
+- A **plugin config** is the optional `<PatchName>.plugin.json` next to the
+  patch holding every per-plugin setting: build settings and, in its `product`
+  object, the plugin's customer-facing identity (names, bundle identifier,
+  4-char codes, version).
+- The **product owner file** is the repository-root `product-owner.json`
+  (manufacturer, manufacturer code, bundle-identifier prefix) every plugin's
+  identity derives from.
+- The **kit manifest** is `kit/kit.json`: the kit version and the config
+  schema versions this kit reads.
+- The **public entry** is `kit/index.ts`, the one module plugin code imports
+  kit components from.
 - The **shared view loader** is `kit/ui/effects/effect-view-loader.js`, the one
   module every plugin uses as its view entry.
 - A **runtime folder** is a generated self-contained copy of a plugin under
@@ -35,9 +41,12 @@ and loader.
 ## Source Tree Shape
 
 ```text
+product-owner.json         (repository root: manufacturer, codes, bundle prefix)
+kit/kit.json               (kit version + supported config schema versions)
+kit/index.ts               (public import surface)
 fx/ott_lab/
   OttLab.cmajorpatch
-  OttLab.build.json        (optional sidecar)
+  OttLab.plugin.json       (optional plugin config)
   OttLab.cmajor
   view/
     index.js -> ../../../kit/ui/effects/effect-view-loader.js
@@ -72,28 +81,47 @@ files (a directory may hold several; all are enumerated, sorted). The dev
 server, both build pipelines, the JIT installer, and the tests all consume this
 one discovery.
 
-Per-patch settings come from the optional sidecar `<PatchName>.build.json`.
-Absent fields fall back to derivations:
+Per-patch settings come from the optional plugin config
+`<PatchName>.plugin.json` (the patch file name with `.cmajorpatch` replaced by
+`.plugin.json`):
+
+```json
+{
+  "schemaVersion": 1,
+  "alias": "ott",
+  "cmakeTarget": "OTTLab",
+  "productName": "OTTLab",
+  "product": { "...": "identity, see below" },
+  "runtimeOut": "build/fx/ott_lab_runtime",
+  "juceOut": "build/ott_lab_juce"
+}
+```
+
+`schemaVersion` is required and must not exceed `schemaVersions.plugin` in
+`kit/kit.json`; a config written for a newer kit fails discovery naming the
+fix (update the kit) instead of tripping over keys this kit does not know.
+Every other field is optional and falls back to a derivation:
 
 - `alias` (registry key and CLI name): the directory name lowercased with runs
   of non-alphanumerics collapsed to `-`. A directory holding more than one
-  patch must disambiguate with sidecar aliases; duplicate aliases fail
+  patch must disambiguate with explicit aliases; duplicate aliases fail
   discovery.
-- `cmakeTarget` / `productName`: the manifest `name` (falling back to the patch
-  file base name) with non-alphanumerics removed, e.g. "OTT Lab" -> `OTTLab`.
-  Sidecar overrides must stay identifier-shaped — they become cmake arguments
-  and install/remove paths.
+- `cmakeTarget` / `productName` (the install filename, `<productName>.vst3`):
+  the manifest `name` (falling back to the patch file base name) with
+  non-alphanumerics removed, e.g. "OTT Lab" -> `OTTLab`. Overrides must stay
+  identifier-shaped — they become cmake arguments and install/remove paths.
 - `runtimeOut` / `juceOut`: `build/fx/<alias>_runtime` and `build/<alias>_juce`
   (alias `-` mapped to `_`). Overrides must resolve strictly inside `build/`;
   they are deleted before builds.
 - `jitInstallRuntime`: defaults to true when the plugin has a worker bundle.
 
-Sidecar-only fields: `workerSource`/`workerOut` (repo-relative worker entry and
+Config-only fields: `workerSource`/`workerOut` (repo-relative worker entry and
 its bundled file name), `includeInAll` (false excludes the target from the
-`all` build set), and `disableMicrophonePermission`.
+`all` build set), `editorMaxWidth`, `visualReviewAdapter`, and
+`disableMicrophonePermission`.
 
-Configuration fails closed: a malformed or unknown-key sidecar, an orphan
-sidecar whose name matches no patch, or a duplicate alias aborts discovery with
+Configuration fails closed: a malformed or unknown-key config, an orphan
+config whose name matches no patch, or a duplicate alias aborts discovery with
 an error instead of being silently ignored. A malformed patch manifest does not
 abort discovery (derivations fall back to the file name and the build reports
 the parse error later), matching the dev server's tolerance for in-progress
@@ -102,40 +130,97 @@ patches.
 `node kit/fx/build-effect.mjs --targets` prints the discovered aliases;
 `--jit-plan <alias>` prints the JIT install plan for one target.
 
-## Product Identity (`product.json`)
+**Legacy two-file configs.** The previous scheme — a `<PatchName>.build.json`
+build sidecar plus a directory-level `product.json` (with `patch` and
+`outputFileName` keys) — is still read for one release so checkouts that
+have not migrated keep building; `npm run kit:doctor` warns about every such
+file. A patch may not mix the schemes: a `.plugin.json` beside a `.build.json`
+or a `product.json` bound to the same patch fails discovery.
 
-A plugin's customer-facing identity may live in a `product.json` beside its
-patch. Required keys: `productName`, `manufacturerName`, `bundleIdentifier`
+## Product Identity (the `product` object)
+
+A plugin's customer-facing identity lives in the config's `product` object.
+Keys: `productName` (display name), `manufacturerName`, `bundleIdentifier`
 (reverse-DNS, e.g. `dev.cosimo.enhancer-lite`), `pluginCode` and
 `manufacturerCode` (exactly 4 alphanumerics with at least one uppercase
-letter), `version` (semantic), and `outputFileName` (the install filename —
-`<outputFileName>.vst3`). Optional keys: `supportUrl` (http/https),
+letter), `version` (semantic), and the optional `supportUrl` (http/https),
 `wordmark` (a plugin-directory-relative file that must exist), and
-`accentColor` (`#RRGGBB`). A directory holding several patches must set the
-optional `patch` key to the `.cmajorpatch` the identity belongs to.
+`accentColor` (`#RRGGBB`). The install filename is the top-level
+`productName`, not part of the object.
 
 **Presence makes it authoritative; absence keeps the manifest authoritative.**
-When `product.json` exists, discovery derives the manifest-facing identity
-from it (`plugin.identity`: `ID`, `name`, `manufacturer`, `version`,
-`plugin.pluginCode`/`manufacturerCode`), requires the source patch manifest
-to agree (drift fails discovery — the source patch is what dev and JIT hosts
-load, so a divergent manifest would ship two identities), writes that
-identity into the generated runtime manifest, and owns the install filename —
-a build sidecar that also sets `productName` fails discovery, so identity is
-never duplicated across files. A plugin without `product.json` changes in no
-way: its patch manifest remains the only identity authority.
+When the `product` object exists — even empty — discovery fills every
+omitted key from the plugin name, the patch manifest, and the repository's
+`product-owner.json`:
 
-Identity validation fails closed like the sidecars: a malformed or
-unknown-key file, a bad code/bundle-id/version shape, a missing wordmark
-file, or an unbound/ambiguous `patch` key aborts discovery. Bundle
-identifiers and plugin codes are collision-checked across **all** discovered
-plugins — product.json-driven and manifest-only alike — and duplicates fail
-discovery naming both claiming patches.
+| key | derived from |
+| --- | --- |
+| `productName` | manifest `name`, else the directory name as words ("demo_verb" -> "Demo Verb") |
+| `manufacturerName` | `product-owner.json` `manufacturer` |
+| `manufacturerCode` | `product-owner.json` `manufacturerCode` |
+| `bundleIdentifier` | `product-owner.json` `bundleIdentifierPrefix` + `.` + alias |
+| `pluginCode` | owner `pluginCodePrefix` (default: first two characters of `manufacturerCode`) + the initials of the first two name words, e.g. `Cs` + `demo_verb` -> `CsDV` |
+| `version` | manifest `version`, else `0.1.0` |
+| `supportUrl` | `product-owner.json` `supportUrl` when set |
+
+A derivation that needs the owner file fails discovery when the file is
+absent, naming the key to set explicitly. The resolved identity is validated
+like explicit values, then discovery derives the manifest-facing identity
+(`plugin.identity`: `ID`, `name`, `manufacturer`, `version`,
+`plugin.pluginCode`/`manufacturerCode`), requires the source patch manifest to
+agree (drift fails discovery — the source patch is what dev and JIT hosts load,
+so a divergent manifest would ship two identities), and writes that identity
+into the generated runtime manifest. A plugin without a `product` object
+changes in no way: its patch manifest remains the only identity authority.
+
+Identity validation fails closed like the build fields: a bad
+code/bundle-id/version shape, an unknown key, or a missing wordmark file
+aborts discovery. Bundle identifiers and plugin codes are collision-checked
+across **all** discovered plugins — config-driven and manifest-only alike —
+and duplicates fail discovery naming both claiming patches.
 
 Of the shipped plugins, only `fx/enhancer_lite/` (the customer-facing
-product) carries a `product.json`; its values mirror the patch manifest, so
+product) carries a `product` object; its values mirror the patch manifest, so
 builds are byte-identical with or without it. The other plugins stay
 manifest-only until they need customer-facing identity.
+
+## Product Owner (`product-owner.json`)
+
+The repository root holds one `product-owner.json`:
+
+```json
+{
+  "manufacturer": "Your Company",
+  "manufacturerCode": "Yoco",
+  "bundleIdentifierPrefix": "com.example",
+  "supportUrl": "https://example.com/support"
+}
+```
+
+`manufacturer`, `manufacturerCode` (4-char code), and `bundleIdentifierPrefix`
+(reverse-DNS prefix) are required; `supportUrl` and `pluginCodePrefix` (two
+characters) are optional. `kit:new` and the identity derivations above read
+it; nothing else does. The kit template ships the placeholder shown here, and
+`npm run kit:doctor` warns while the placeholder values are still in place.
+A malformed owner file fails discovery; an absent one only matters when a
+derivation needs it.
+
+## Kit Version And Public Entry
+
+`kit/kit.json` records the kit version and the schema versions of the files
+the kit reads (`plugin` for `<Name>.plugin.json`, `toolchain` for
+`kit/toolchain.json`, `feed` for `kit/feed.json`). `npm run kit:doctor`
+prints the version and flags any plugin config whose `schemaVersion` is newer
+than the kit supports.
+
+`kit/index.ts` is the supported import surface: plugin code imports the effect
+core (presets, preset bar, snapshots and snapshot bar, effect header, state
+contract, stored-state runtime mirror, patch worker services) and the
+primitives (React patch-connection bindings, editor tokens and surfaces,
+curve geometry, filter range editor, parameter value entry, the spectrum
+display) from `kit/index` only — `import { createPresetBar } from
+"../../../kit/index"` from a plugin view. Deep paths under `kit/ui/` are
+implementation layout and may move with any kit update.
 
 ## Development Flow
 
@@ -225,13 +310,21 @@ still supports dev-server loading.
 
 `npm run fx:prod:build -- <alias>` then:
 
-1. Builds (or reuses) the pinned `cmaj` executable from the fork pinned in
-   `kit/cmake/CosimoDependencies.cmake`.
+1. Resolves the pinned `cmaj` executable: `build/kit-tools/cmaj` when it
+   matches the SHA-256 in `kit/toolchain.json` (`npm run kit:setup` downloads
+   it from the feed named in `kit/feed.json`); a checkout carrying the Cmajor
+   command-tool source may fall back to its own pinned build; otherwise the
+   build stops with an error naming `npm run kit:setup`. The tool, the Cmajor
+   source commit in `kit/cmake/CosimoDependencies.cmake`, and the generic
+   `CmajPlugin.vst3` are pinned together.
 2. Runs `cmaj generate --target=juce` against the **generated runtime patch**
    (never the source patch) into `<juceOut>`, via `kit/tools/effect_plugin_build`.
 3. Configures and builds the generated JUCE project with CMake
    (`cmakeTarget`), with parallelism controlled by `COSIMO_PLUGIN_JOBS` /
-   `COSIMO_CMAKE_JOBS` for `all` builds.
+   `COSIMO_CMAKE_JOBS` for `all` builds. JUCE and the pinned Cmajor sources
+   are fetched by plain CPM from the URLs in
+   `kit/cmake/dependency-sources.cmake`; the licensing obligations of the
+   linked JUCE framework are the plugin owner's (`THIRD_PARTY_NOTICES.md`).
 4. Verifies the built binary contains the patched CHOC WebView markers
    (`kit/scripts/check_choc_markers.mjs` is the single implementation of that
    check, shared by every caller).
@@ -244,7 +337,8 @@ write `CmajPlugin.json`, and does not touch AU plugins.
 
 `npm run cmajplugin:build` / `npm run cmajplugin:install` build and install the
 patched generic `CmajPlugin.vst3` from the same pinned Cmajor source used by
-production builds. `npm run fx:jit:install -- <alias>` then writes the VST3
+production builds (`npm run kit:setup` also downloads the prebuilt, hash-pinned
+copy into `build/kit-tools/`). `npm run fx:jit:install -- <alias>` then writes the VST3
 `CmajPlugin.json` pointing the generic plugin at one target:
 
 - at the source patch by default, or
@@ -300,22 +394,25 @@ npm run kit:new -- <name>
 The name is the `fx/` directory: lowercase letters and digits with `_` or `-`
 separating words (`demo_verb`). The scaffold generates a minimal **working**
 plugin — a stereo-gain `.cmajorpatch` + `.cmajor` example, the
-`<PatchName>.build.json` sidecar, the `product.json` identity file (derived
-`Cs..` pluginCode and `dev.cosimo.<alias>` bundle identifier), the
+`<PatchName>.plugin.json` config with its `product` object, the
 `view/index.js` symlink to the shared loader, an editable `view/source.ts`
 wired to the `createPatchView` convention, and a starter test at
 `tests/test_<name>_state.mjs` — then prints the next steps (`fx:dev`,
-`fx:build -- <alias>`, the starter test). It refuses names whose directory,
-alias, derived pluginCode, or bundle identifier collides with any existing
-plugin. Because the registry is discovery-driven, no shared file changes;
-`fx:dev`, `fx:build`, `fx:prod:build`, and `fx:jit:install` all see the new
-plugin immediately.
+`fx:build -- <alias>`, the starter test). Every identity value derives from
+the plugin name and `product-owner.json` (display name, patch base name,
+alias, pluginCode, bundle identifier, manufacturer and its code); the
+scaffold carries no manufacturer of its own and refuses to run without the
+owner file. It refuses names whose directory, alias, derived pluginCode, or
+bundle identifier collides with any existing plugin. Because the registry is
+discovery-driven, no shared file changes; `fx:dev`, `fx:build`,
+`fx:prod:build`, and `fx:jit:install` all see the new plugin immediately.
 
 Manual equivalent: create the directory with a `.cmajorpatch` whose `view.src`
 is `view/index.js`, symlink `view/index.js` to
 `../../../kit/ui/effects/effect-view-loader.js`, set `view.devModule`, add a
-sidecar only when a derivation needs overriding, and add `product.json` only
-when the plugin needs customer-facing identity.
+`<PatchName>.plugin.json` (with `"schemaVersion": 1`) only when a derivation
+needs overriding, and give it a `product` object only when the plugin needs
+customer-facing identity.
 
 A plugin must never add its own build script, dev server, or committed UI
 bundle — the shared pipeline owns those behaviors.

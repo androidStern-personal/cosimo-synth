@@ -445,47 +445,104 @@ not this extraction.
 ### Tasks
 
 Wave A (parallel, disjoint files):
-- [ ] **5.1 Standalone production build.** `kit/fx/prod-effect.mjs` resolves
+- [x] **5.1 Standalone production build.** `kit/fx/prod-effect.mjs` resolves
   `cmaj` in order: `build/kit-tools/cmaj` matching `kit/toolchain.json`'s hash →
   the monorepo's `tools/cmajor_command_build` pinned build → a clear error
   naming `npm run kit:setup`. Add `kit/cmake/dependency-sources.cmake`
   (data-only URLs, included by `CosimoDependencies.cmake`); the export renders a
   feed variant from `kit/feed.json`. `export_kit.mjs` also symlinks every
   `kit/skills/*` into `.agents/skills/`.
-- [ ] **5.2 `kit:release`** (`scripts/release_builder_kit.mjs`, Andrew-side, not
+- [x] **5.2 `kit:release`** (`scripts/release_builder_kit.mjs`, Andrew-side, not
   exported): export with feed stamping → gates + proof → build `cmaj` and
   `CmajPlugin.vst3` from the pinned fork (macOS) → hash and record in the staged
   `kit/toolchain.json` → commit + tag in the lineage clone → bare mirrors of
   kit/cmajor/choc with `update-server-info` → sync to R2 → upload tools +
   `manifest.json`. `--dry-run` stops before network and keeps the staging dir.
   Verifies the mirrored cmajor `.gitmodules` uses a relative CHOC URL.
-- [ ] **5.3 `kit:doctor` + `kit:setup`** (`kit/scripts/doctor.mjs`, `setup.mjs`).
-- [ ] **5.4 Docs, license, notices.** Fix `kit/AGENTS.md` (stale `cmake/` path,
+- [x] **5.3 `kit:doctor` + `kit:setup`** (`kit/scripts/doctor.mjs`, `setup.mjs`).
+- [x] **5.4 Docs, license, notices.** Fix `kit/AGENTS.md` (stale `cmake/` path,
   desktop/iOS/T26 references), the skill's nonexistent `test:effect-presets`,
   document `cmaj` acquisition and `npx playwright install`; add
   `kit/template/root/LICENSE` (permissive, Andrew's locked decision) and
   `THIRD_PARTY_NOTICES.md` (JUCE per-customer license disclosure + EULA link,
   Cmajor, CHOC, CPM, JUCE); add the "kit/ ships" line to root `AGENTS.md`.
-- [ ] **5.5 Cleanup + shared-file moves.** Move the audition patch + sidecar out
+- [x] **5.5 Cleanup + shared-file moves.** Move the audition patch + sidecar out
   of `fx/enhancer_lite/`; delete the wordmark and its view/manifest/test
   references; move `ui/shared/enhancer-spectrum.ts` and `ui/vite.shared.mjs`
   into `kit/` with re-export shims for synth consumers; drop them from the
   allowlist; add `LICENSE` to required outputs.
-- [ ] **5.6 `kit-update` skill** (`kit/skills/kit-update/`) + root symlink.
-- [ ] **5.7 CI**: one workflow running `npm test` and `kit:export --prove`.
+- [x] **5.6 `kit-update` skill** (`kit/skills/kit-update/`) + root symlink.
+- [x] **5.7 CI**: one workflow running `npm test` and `kit:export --prove`.
 
 Wave B (sequential, after A):
-- [ ] **5.8 Version, public entry, single plugin config, owner identity.**
+- [x] **5.8 Version, public entry, single plugin config, owner identity.**
   `kit/kit.json` (kit version + schema versions), `kit/index.ts` public entry,
   `schemaVersion` on plugin config; merge `<Name>.build.json` + `product.json`
   into one `plugin.json` per plugin deriving alias/cmakeTarget/productName/
   pluginCode from the plugin name and a root `product-owner.json` (manufacturer,
   code, bundle prefix) that the scaffold inherits; `kit:doctor` reports version
   and schema mismatches.
-- [ ] **5.9 Enhancer Lite adopts the preset bar and snapshots** (worked example).
+- [x] **5.9 Enhancer Lite adopts the preset bar and snapshots** (worked example).
 
 Andrew-side:
 - [ ] Cmajor fork: `.gitmodules` CHOC URL → relative `../choc.git`.
 - [ ] R2 bucket + API token on the Mac; DNS decision.
 - [ ] Create private `builder-kit-releases` repo.
 - [ ] First real `kit:release` on the Mac; run the customer flow on a clean machine.
+
+### Execution log — Phase 5 (2026-09-01)
+
+- Ran as workflow `builder-kit-phase-5` (seven parallel Wave A lanes, two
+  sequential Wave B tasks, one verify agent). 5.3 died mid-task on a transient
+  model error after its files landed (the verify agent reconciled its one
+  failing test); 5.5 never started and was finished inline.
+- **5.1** `resolvePinnedCmajSource` in `kit/fx/prod-effect.mjs`: hash-matched
+  `build/kit-tools/cmaj` → monorepo `tools/cmajor_command_build` → error naming
+  `npm run kit:setup`. `kit/cmake/dependency-sources.cmake` is the data-only URL
+  seam; `export_kit.mjs --feed-url=` stamps `kit/feed.json` and renders the
+  feed `cmajor.git` URL; every `kit/skills/*` gets a root symlink.
+- **5.2** `scripts/release_builder_kit.mjs` (`npm run kit:release`): export +
+  stamp → gates + proof → macOS `cmaj`/`CmajPlugin.vst3` builds hashed into the
+  staged `kit/toolchain.json` → lineage commit/tag/push → bare mirrors with
+  `update-server-info` and a relative-CHOC-URL gate → rclone to R2 +
+  `manifest.json`. `--dry-run --skip-tools` exits 0 here; nine unit tests.
+- **5.3** `kit/scripts/doctor.mjs` (`--json/--strict/--offline`: tools,
+  registry, kit version, schema versions, owner placeholder), `setup.mjs` (JUCE
+  notice + acknowledgment, hash-pinned downloads, `npm install`),
+  `toolchain.mjs`; `tests/test_kit_doctor_setup.mjs`.
+- **5.4** `kit/AGENTS.md` rewritten for any kit-based repo (stale paths and
+  desktop/iOS/T26 references gone, environment setup documented); skill fixed;
+  `kit/template/root/LICENSE` (MIT with plain-language preamble) and
+  `THIRD_PARTY_NOTICES.md`; root `AGENTS.md` carries the "kit/ ships" line.
+- **5.5** Shelves audition → `tools/enhancer_calibration/EnhancerLiteShelvesAudition.cmajorpatch`
+  (sources point back at `fx/enhancer_lite/`; loadable with `cmaj`, no longer a
+  registry target). Wordmark deleted; the view heading is text again.
+  `ui/shared/enhancer-spectrum.ts` → `kit/ui/enhancer-spectrum.ts` and
+  `ui/vite.shared.mjs` → `kit/fx/vite.shared.mjs`, kit re-export shims left for
+  synth consumers (`ui/build.mjs` follows shims, so `patch_gui/` is unchanged).
+  The allowlist `files` list is down to the analyzer and two Lite tests; the
+  export no longer contains a `ui/` directory.
+- **5.6** `kit/skills/kit-update/SKILL.md` + `.agents/skills/kit-update`.
+- **5.7** `.github/workflows/kit.yml`: `npm ci`, typecheck regression gate
+  (baseline 27, may only decrease), `npm test`, `kit:export --prove`.
+- **5.8** `kit/kit.json` (0.1.0; plugin/toolchain/feed schema 1) and
+  `kit/index.ts` (typechecked public entry). One `<Name>.plugin.json` per plugin
+  with `schemaVersion` and a `product` object (legacy pair still accepted,
+  mixing refused, newer schema fails closed). Root `product-owner.json`
+  (Cosimo) with a template placeholder; `kit:new` derives all identity from the
+  plugin name + owner file and contains no Cosimo literals; doctor reports it all.
+- **5.9** Enhancer Lite mounts the kit effect header (preset bar with four
+  factory presets, A–G snapshots) above its shell, imported from `kit/index`;
+  three new browser tests; the factory-preset contract lets the `[[ main ]]`
+  processor win on duplicate annotated endpoints.
+- Gates at close: `npm test` 1131/0; typecheck 27 (baseline); `fx:build -- all`
+  clean; `kit:export --prove` 117 files; Lite browser + state 33/33;
+  `kit:release --dry-run` exit 0; `kit:doctor --json` exit 0.
+- Known limits: the cmaj download path, macOS tool builds, mirrors, rclone,
+  and the relative-CHOC gate only run for real on Andrew's Mac;
+  `kit/toolchain.json` hashes stay empty until the first real release, so
+  `kit:setup` refuses downloads until then; every plugin's `factory-presets.js`
+  still deep-imports `effect-preset-shared` (plain-JS inventory that cannot
+  load the React-bearing index under node); the tracked desktop bundle drift
+  (`test_patch_view_layout`) and the `build/web` suites remain Mac-side; root
+  `product-owner.json` `supportUrl` is a guess (`https://song-machines.com`).

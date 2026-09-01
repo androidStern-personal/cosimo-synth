@@ -846,7 +846,7 @@ test("all continuous MSEG and envelope controls are public host parameters", asy
 
 test("desktop and iPhone React UI tooling are wired for Vite dev and build loops", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
-    const sharedViteHelpers = await fs.readFile(path.join(repoRoot, "ui", "vite.shared.mjs"), "utf8");
+    const sharedViteHelpers = await fs.readFile(path.join(repoRoot, "kit", "fx", "vite.shared.mjs"), "utf8");
     const viteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.desktop.config.mjs"), "utf8");
     const iosViteConfig = await fs.readFile(path.join(repoRoot, "ios_auv3", "vite.config.mjs"), "utf8");
     const workerViteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.worker.config.mjs"), "utf8");

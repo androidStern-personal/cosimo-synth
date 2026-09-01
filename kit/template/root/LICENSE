@@ -1,0 +1,49 @@
+Builder Kit License
+
+Preamble (plain-language summary; the MIT License below is the operative text)
+
+The Builder Kit is sold to you so you can build products with it. Buyers of the
+kit may use, copy, modify, publish, redistribute, sublicense, and sell the kit
+and anything derived from it, including the plugins you build, in source or
+binary form, closed or open, for any purpose. No royalty, attribution beyond
+the notice below, or notification is required.
+
+Third-party components are not covered by this license and keep their own
+terms. See THIRD_PARTY_NOTICES.md. In particular, JUCE requires its own
+license for each closed-source product you release, and that license is not
+included with the kit.
+
+------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) Cosimo
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+Scope
+
+This license covers the Cosimo-authored code and documentation in this
+repository: everything under kit/, the starter plugin and tests, and the root
+files generated from the kit template. Code you add is yours. Third-party
+software the build downloads or links (JUCE, Cmajor, CHOC, CPM.cmake, and the
+npm packages named in package.json) is licensed by its own authors under the
+terms listed in THIRD_PARTY_NOTICES.md and in each package.

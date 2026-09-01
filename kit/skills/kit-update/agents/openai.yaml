@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kit Update"
+  short_description: "Merge a newer Builder Kit release into this repo, verify, and install"
+  default_prompt: "Use $kit-update to bring this repo up to the latest Builder Kit release."

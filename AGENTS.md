@@ -4,6 +4,7 @@
 
 - Read `kit/AGENTS.md` fully before any plugin work. It owns the generic plugin-repo conventions: isolated-worktree and CPM dependency rules, the canonical fx build/dev/install commands, plugin architecture pointers, and the definition of done for plugin changes.
 - The effect-plugin architecture reference is `kit/docs/PLUGIN_ARCHITECTURE.md`; the product-neutral release verification checklist is `kit/docs/RELEASE_VERIFICATION.md`.
+- Anything under `kit/` ships to Builder Kit customers; keep Cosimo-specific and private material out of it.
 - Everything below is Cosimo-specific: this machine, this synth product, and its releases.
 
 ## Icons

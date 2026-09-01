@@ -143,6 +143,7 @@ add_custom_command(
         "${COSIMO_REPO_ROOT}/assets/factory-bank-catalog.json"
         "${COSIMO_REPO_ROOT}/ui/build.mjs"
         "${COSIMO_REPO_ROOT}/ui/vite.shared.mjs"
+        "${COSIMO_REPO_ROOT}/kit/fx/vite.shared.mjs"
         "${COSIMO_REPO_ROOT}/ui/vite.worker.config.mjs"
         "${COSIMO_REPO_ROOT}/ios_auv3/vite.config.mjs"
         ${COSIMO_FACTORY_SOURCE_FILES}

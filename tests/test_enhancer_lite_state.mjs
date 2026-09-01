@@ -105,6 +105,46 @@ test("Enhancer Lite rejects partial, extra, non-finite, and out-of-range state",
     }
 });
 
+test("Enhancer Lite factory presets store exactly the eight saved sound controls", async () => {
+    const enhancer = await loadEnhancerLiteState();
+    const { ENHANCER_LITE_FACTORY_PRESETS } = await loadUIModule(
+        repoRoot,
+        "fx/enhancer_lite/view/factory-presets.js",
+    );
+    const presets = ENHANCER_LITE_FACTORY_PRESETS["enhancer-lite"];
+    const addressableEndpointIDs = enhancer.ENHANCER_LITE_SETTING_DESCRIPTORS
+        .map(({ dspEndpointID }) => dspEndpointID)
+        .sort();
+
+    assert.deepEqual(Object.keys(ENHANCER_LITE_FACTORY_PRESETS), ["enhancer-lite"]);
+    assert.ok(presets.length >= 3 && presets.length <= 4, `${presets.length} factory presets`);
+    assert.equal(new Set(presets.map(({ label }) => label)).size, presets.length);
+    assert.equal(new Set(presets.map(({ presetID }) => presetID)).size, presets.length);
+
+    for (const preset of presets) {
+        assert.equal(preset.effectID, "enhancer-lite");
+        assert.match(preset.presetID, /^enhancer-lite\.[a-z0-9-]+$/);
+        assert.deepEqual(Object.keys(preset.values).sort(), addressableEndpointIDs);
+        assert.equal(Object.hasOwn(preset.values, "analyzerEnabledIn"), false);
+
+        // Every preset is a valid saved Lite state and round-trips through the
+        // same endpoint projection the host-state document uses.
+        const parsed = enhancer.parseEnhancerLiteState({
+            ...enhancer.createDefaultEnhancerLiteState(),
+            freqHz: preset.values.freqHzIn,
+            q: preset.values.qIn,
+            mode: preset.values.modeIn === 1 ? "mid-side" : "stereo",
+            midAmount: preset.values.midAmountIn,
+            sideAmount: preset.values.sideAmountIn,
+            curve: preset.values.curveIn === 1 ? "solid" : "tube",
+            saturationMode: preset.values.saturationModeIn === 1 ? "medium" : "subtle",
+            shape: ["low", "bell", "high"][preset.values.shapeIn],
+        });
+        assert.equal(parsed._tag, "ok", `${preset.presetID}: ${parsed.message}`);
+        assert.deepEqual(enhancer.toEnhancerLiteDspSettings(parsed.value), preset.values);
+    }
+});
+
 test("the isolated Lite DSP keeps the accepted laws while removing de-emphasis", async () => {
     const source = await fs.readFile(
         path.join(repoRoot, "fx/enhancer_lite/EnhancerLite.cmajor"),
