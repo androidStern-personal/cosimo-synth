@@ -324,3 +324,15 @@ The critical DRY requirement is the **resolved** size. Aliasing both surfaces to
 - Generated artifacts: None.
 - Final commit: This ledger-only revision commit; its exact hash is reported to the coordinator because a commit cannot embed its own hash.
 - Unperformed gates: implementation, product tests/broad suite, screenshots, native/plugin builds, HMR/fixed-port launch, installs, pluginval, Ableton/host physical-feel or listening acceptance, device work, release, merge, rebase, push, deploy, and publication.
+
+## Reusable three-size plugin visual review capture
+
+- Status: Approved and queued as an independent tooling task.
+- Coordinator: Task `01a05c09-ce2d-7120-bc44-cd8102a2f0d7`; implementation must use a visible isolated Codex task with `gpt-5.6-sol` at `xhigh` and return a clean committed handoff.
+- Authorization: Add one short, low-ceremony command/script that takes a plugin target parameter. A single invocation must use the repository's existing plugin registry/build and representative production browser-view seams to build the current target UI, open it, and capture exactly three deterministic PNGs: wide, medium, and narrow.
+- Reuse contract: It must work for SeqFX immediately and for other registered repository plugins without editing the script or hard-coding SeqFX. Provide sensible default viewport dimensions, stable filenames/output location, and a concise optional output-directory override.
+- Runtime contract: Reject an unknown plugin and report build/launch/capture failures clearly. Own and clean up every temporary server or process the command starts, including failure paths.
+- Inspection output: Print the exact three PNG paths. Add one contact sheet or tiny HTML index only if it is essentially free and does not expand the workflow materially; the three screenshots remain the required artifact.
+- Explicit non-scope: New framework, daemon, screenshot farm, duplicate build system, DAW automation, native-host dependency, plugin installation, Ableton, deployment, publication, release, or changes to product behavior.
+- Focused proof: One narrow test must cover target selection plus the three named dimensions and output files through the real script seam. Avoid broad suites and tests about tests.
+- Integration: After source-first review, repair, clean rebase, and focused qualification, the coordinator may merge and push this tooling to master under Andrew's standing authorization, then run it for SeqFX and report the pushed commit and three PNG paths.
