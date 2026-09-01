@@ -1,22 +1,25 @@
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 
 import { chromium } from "playwright";
 
-import { startStaticRepoServer } from "./helpers/desktop_harness_browser.mjs";
+import { startStaticWebServer } from "./helpers/static_web_server.mjs";
+
+const repoRoot = path.resolve(import.meta.dirname, "../..");
 
 let server;
 let browser;
 
 async function openModulePage() {
     const page = await browser.newPage();
-    await page.goto(new URL("tests/helpers/module_test_shell.html", server.baseUrl).toString(), { waitUntil: "load" });
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).toString(), { waitUntil: "load" });
     return page;
 }
 
 before(async () => {
-    // Bundles /ui/shared/effects/preset-bar.ts on the fly; no dev server.
-    server = await startStaticRepoServer({ bundleTypeScript: true });
+    // Bundles /kit/ui/effects/preset-bar.ts on the fly; no dev server.
+    server = await startStaticWebServer(repoRoot, { bundleTypeScript: true });
     browser = await chromium.launch({ headless: true });
 });
 
@@ -30,7 +33,7 @@ test("preset bar action buttons are compact icon buttons with accessible labels"
 
     try {
         const details = await page.evaluate(async () => {
-            const { createPresetBar } = await import("/ui/shared/effects/preset-bar.ts");
+            const { createPresetBar } = await import("/kit/ui/effects/preset-bar.ts");
             const mountPoint = document.getElementById("mount");
 
             if (!(mountPoint instanceof HTMLElement)) {
@@ -200,7 +203,7 @@ test("preset bar registrations fail loudly when a tag is already taken by a diff
 
     try {
         const result = await page.evaluate(async () => {
-            const { createPresetBar, definePresetBarElement } = await import("/ui/shared/effects/preset-bar.ts");
+            const { createPresetBar, definePresetBarElement } = await import("/kit/ui/effects/preset-bar.ts");
             const { createSynthPresetBar, defineSynthPresetBarElement } = await import("/ui/shared/effects/synth-preset-bar.ts");
             const thrownMessage = (callback) => {
                 try {
@@ -251,7 +254,7 @@ test("effect header re-registration with different bar names fails loudly", asyn
 
     try {
         const result = await page.evaluate(async () => {
-            const { createEffectHeader, defineEffectHeaderElement } = await import("/ui/shared/effects/effect-header.ts");
+            const { createEffectHeader, defineEffectHeaderElement } = await import("/kit/ui/effects/effect-header.ts");
             const thrownMessage = (callback) => {
                 try {
                     callback();
@@ -301,7 +304,7 @@ test("preset bar shows no passive success and one controller error toast per fai
 
     try {
         const result = await page.evaluate(async () => {
-            const { createPresetBar } = await import("/ui/shared/effects/preset-bar.ts");
+            const { createPresetBar } = await import("/kit/ui/effects/preset-bar.ts");
             const mountPoint = document.getElementById("mount");
 
             if (!(mountPoint instanceof HTMLElement)) {

@@ -9,6 +9,7 @@ const execFileAsync = promisify(execFile);
 export const SEQFX_PROVENANCE_SOURCE_PATHS = Object.freeze([
     "fx/seqfx",
     "kit/fx/build-effect.mjs",
+    "kit/ui",
     "package.json",
     "package-lock.json",
     "scripts/capture_seqfx_visual_proof.mjs",

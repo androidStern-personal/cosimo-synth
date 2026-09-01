@@ -1,5 +1,5 @@
-import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
-import type { EffectStoredStateAdapter } from "../../../ui/shared/effects/effect-preset-v2";
+import type { PatchConnectionLike } from "../../../kit/ui/cmajor-react";
+import type { EffectStoredStateAdapter } from "../../../kit/ui/effects/effect-preset-v2";
 import {
     SEQFX_STATE_KEY,
     SEQFX_STATE_VERSION,

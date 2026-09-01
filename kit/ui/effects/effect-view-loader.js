@@ -3,7 +3,7 @@ export const DEFAULT_EFFECT_PRODUCTION_MODULE = "./app.js";
 export const DEFAULT_EFFECT_DEV_STATUS_TIMEOUT_MS = 500;
 export const EFFECT_DEV_STATUS_PATH = "/__fx-dev-status";
 export const EFFECT_DEV_STATUS_KIND = "fx-vite-dev-server";
-export const EFFECT_DEV_TOOLS_MODULE_PATH = "/ui/shared/effects/effect-dev-tools.js";
+export const EFFECT_DEV_TOOLS_MODULE_PATH = "/kit/ui/effects/effect-dev-tools.js";
 
 function normalizeOrigin(origin) {
     const value = typeof origin === "string" ? origin.trim() : "";

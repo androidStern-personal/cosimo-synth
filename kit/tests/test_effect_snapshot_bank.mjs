@@ -4,11 +4,11 @@ import path from "node:path";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
+const repoRoot = path.resolve(import.meta.dirname, "../..");
 
 async function loadSnapshotBankModule() {
-    const bankModule = await loadUIModule(repoRoot, "ui/shared/effects/effect-snapshot-bank.ts");
-    const contractModule = await loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts");
+    const bankModule = await loadUIModule(repoRoot, "kit/ui/effects/effect-snapshot-bank.ts");
+    const contractModule = await loadUIModule(repoRoot, "kit/ui/effects/effect-state-contract.ts");
     return { ...bankModule, ...contractModule };
 }
 
@@ -37,10 +37,10 @@ async function createSnapshot({
     storedState = {},
     label = "",
 } = {}) {
-    const { buildPluginStateContract, captureEffectSnapshot } = await loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts")
+    const { buildPluginStateContract, captureEffectSnapshot } = await loadUIModule(repoRoot, "kit/ui/effects/effect-state-contract.ts")
         .then(async (contractModule) => ({
             ...contractModule,
-            ...(await loadUIModule(repoRoot, "ui/shared/effects/effect-snapshots.ts")),
+            ...(await loadUIModule(repoRoot, "kit/ui/effects/effect-snapshots.ts")),
         }));
     const contract = buildPluginStateContract({
         effectID,
@@ -526,7 +526,7 @@ test("snapshot_bank_reattaches_parameter_listeners_after_detach_with_same_status
 });
 
 test("snapshot_bank_writes_applied_preset_into_active_slot", async () => {
-    const { buildPluginStateContract } = await loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts");
+    const { buildPluginStateContract } = await loadUIModule(repoRoot, "kit/ui/effects/effect-state-contract.ts");
     const contract = buildPluginStateContract({ effectID: "unit", status });
     const { controller } = await createController();
 

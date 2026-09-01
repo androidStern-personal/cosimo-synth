@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Cosimo Module Test Shell</title>
+    </head>
+    <body style="margin:0;background:#02040b;">
+        <div id="mount" style="width:720px;height:420px;padding:24px;"></div>
+        <script>
+            // Optional query parameters override the defaults above, e.g.
+            // module_test_shell.html?width=900&height=620&padding=0&background=%23000000
+            // Bare numbers are pixel sizes; anything else is used as raw CSS.
+            (() => {
+                const parameters = new URLSearchParams(window.location.search);
+                const cssSize = (value) => (/^\d+(?:\.\d+)?$/.test(value) ? `${value}px` : value);
+                const background = parameters.get("background");
+                const mount = document.getElementById("mount");
+
+                if (background !== null) document.body.style.background = background;
+
+                for (const property of ["width", "height", "padding"]) {
+                    const value = parameters.get(property);
+                    if (value !== null) mount.style[property] = cssSize(value);
+                }
+            })();
+        </script>
+    </body>
+</html>

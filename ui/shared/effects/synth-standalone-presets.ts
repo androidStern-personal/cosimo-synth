@@ -20,7 +20,7 @@ import {
     clonePluginStateContract,
     type EffectParameterValue,
     type EffectPluginStateContract,
-} from "./effect-state-contract";
+} from "../../../kit/ui/effects/effect-state-contract";
 import {
     cloneEffectPresetV2,
     EFFECT_PRESET_V2_KIND,
@@ -28,8 +28,8 @@ import {
     type EffectPresetV2,
     type EffectStoredStateAdapter,
     type EffectStoredStateContext,
-} from "./effect-preset-v2";
-import { createActivePresetMetadataFromPresetV2 } from "./effect-preset-store-v2";
+} from "../../../kit/ui/effects/effect-preset-v2";
+import { createActivePresetMetadataFromPresetV2 } from "../../../kit/ui/effects/effect-preset-store-v2";
 import {
     defaultParameterValues,
     ensureParameterWriter,
@@ -43,7 +43,7 @@ import {
     type StandaloneEffectPendingSoundReplacement,
     type StandaloneEffectPresetControllerOptions,
     type StandaloneEffectPresetMutationResult,
-} from "./standalone-effect-presets";
+} from "../../../kit/ui/effects/standalone-effect-presets";
 
 /** One sound-owned document absent from the ordinary preset contract but required by Init. */
 export type StandaloneEffectInitOnlyStateAdapter = {

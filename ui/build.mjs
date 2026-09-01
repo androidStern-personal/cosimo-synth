@@ -39,17 +39,51 @@ async function copyTextFileIfChanged(sourceRelativePath, outputRelativePath) {
     await writeTextFileIfChanged(outputFile, sourceText);
 }
 
+const kitReExportShimPattern = /^\/\/ kit re-export shim[^\n]*\nexport \* from ["']([^"']+)["'];\n$/;
+
+/**
+ * A module relocated into kit/ leaves a one-line re-export shim at its old
+ * ui/shared path so synth import specifiers keep resolving. The generated
+ * patch_gui modules must keep carrying the real implementation (and stay
+ * byte-identical to what the pre-move source transpiled to), so transpile the
+ * kit module the shim forwards to instead of the shim itself.
+ */
+async function readTranspiledModuleSource(sourceFile) {
+    const sourceText = await fs.readFile(sourceFile, "utf8");
+    const shimMatch = kitReExportShimPattern.exec(sourceText);
+
+    if (!shimMatch) {
+        return { moduleFile: sourceFile, moduleText: sourceText };
+    }
+
+    const shimTargetBase = path.resolve(path.dirname(sourceFile), shimMatch[1]);
+
+    for (const extension of [".ts", ".tsx"]) {
+        const moduleFile = `${shimTargetBase}${extension}`;
+
+        try {
+            return { moduleFile, moduleText: await fs.readFile(moduleFile, "utf8") };
+        } catch (error) {
+            if (error?.code !== "ENOENT") {
+                throw error;
+            }
+        }
+    }
+
+    throw new Error(`Kit re-export shim ${sourceFile} forwards to a missing module: ${shimMatch[1]}`);
+}
+
 async function emitGeneratedPatchGuiModule(sourceRelativePath, outputRelativePath) {
     const sourceFile = path.join(repoRoot, sourceRelativePath);
     const outputFile = path.join(repoRoot, outputRelativePath);
-    const sourceText = await fs.readFile(sourceFile, "utf8");
+    const { moduleFile, moduleText: sourceText } = await readTranspiledModuleSource(sourceFile);
     const transpiled = typescript.transpileModule(sourceText, {
         compilerOptions: {
             target: typescript.ScriptTarget.ES2022,
             module: typescript.ModuleKind.ESNext,
             newLine: typescript.NewLineKind.LineFeed,
         },
-        fileName: sourceFile,
+        fileName: moduleFile,
         reportDiagnostics: true,
     });
 

@@ -13,14 +13,14 @@ import {
     EDITOR_VALUE_HANDLE_HALO_RADIUS_PX,
     EDITOR_VALUE_HANDLE_RADIUS_PX,
     useEditorSurfaceSize,
-} from "../../../ui/shared/editor-tokens";
+} from "../../../kit/ui/editor-tokens";
 import {
     adaptiveSampleEditorCurve,
     createEditorCurvePlotRect,
     editorCurveFillPathToBaseline,
     polylineToSvgPath,
     type EditorCurvePlotRect,
-} from "../../../ui/shared/editor-curve-geometry";
+} from "../../../kit/ui/editor-curve-geometry";
 import {
     EditorCurveAxis,
     EditorCurveFill,
@@ -30,8 +30,8 @@ import {
     EditorCurvePath,
     EditorCurvePlotArea,
     EditorCurveSurface,
-} from "../../../ui/shared/editor-curve-surface";
-import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../ui/shared/editor-tick-slider";
+} from "../../../kit/ui/editor-curve-surface";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../kit/ui/editor-tick-slider";
 import {
     STUTTER_DEFAULT_GATE,
     STUTTER_DEFAULT_SHAPE,

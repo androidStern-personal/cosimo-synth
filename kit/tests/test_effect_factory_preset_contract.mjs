@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
+const repoRoot = path.resolve(import.meta.dirname, "../..");
 const cmajorIdentifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 // Endpoints that exist on an effect surface but must never be stored in or
@@ -251,17 +251,17 @@ test("synth_embedded_factory_preset_endpoints_match_the_lane_layout", async () =
 
 test("factory_presets_store_the_complete_addressable_set_and_round_trip_v2_normalization", async () => {
     const inventories = await discoverFactoryPresetInventories();
-    const { buildCanonicalPluginStateContract, clonePluginStateContract } = await loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts");
+    const { buildCanonicalPluginStateContract, clonePluginStateContract } = await loadUIModule(repoRoot, "kit/ui/effects/effect-state-contract.ts");
     const {
         EFFECT_PRESET_V2_KIND,
         EFFECT_PRESET_V2_SCHEMA_VERSION,
         normalizeEffectPresetV2,
-    } = await loadUIModule(repoRoot, "ui/shared/effects/effect-preset-v2.ts");
+    } = await loadUIModule(repoRoot, "kit/ui/effects/effect-preset-v2.ts");
     const {
         EFFECT_PRESET_KIND,
         EFFECT_PRESET_SCHEMA_VERSION,
-    } = await loadUIModule(repoRoot, "ui/shared/effects/effect-preset-shared.ts");
-    const { defaultParameterValues } = await loadUIModule(repoRoot, "ui/shared/effects/standalone-effect-presets.ts");
+    } = await loadUIModule(repoRoot, "kit/ui/effects/effect-preset-shared.ts");
+    const { defaultParameterValues } = await loadUIModule(repoRoot, "kit/ui/effects/standalone-effect-presets.ts");
 
     for (const { pluginDirectory, modulePath, effectID, presets } of inventories) {
         const { valueEndpointDeclarations } = await readCmajorEndpointSurface(pluginDirectory);

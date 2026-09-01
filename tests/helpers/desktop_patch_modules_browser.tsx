@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import desktopCssText from "../../ui/desktop/styles.css?inline";
-import editorTokensCssText from "../../ui/shared/editor-tokens.css?inline";
-import editorCurveSurfaceCssText from "../../ui/shared/editor-curve-surface.css?inline";
-import filterRangeEditorCssText from "../../ui/shared/filter-range-editor.css?inline";
+import editorTokensCssText from "../../kit/ui/editor-tokens.css?inline";
+import editorCurveSurfaceCssText from "../../kit/ui/editor-curve-surface.css?inline";
+import filterRangeEditorCssText from "../../kit/ui/filter-range-editor.css?inline";
 import {
     PatchConnectionProvider,
     usePatchEndpoint,
@@ -12,7 +12,7 @@ import {
     usePatchVisualEndpoint,
     type PatchConnectionLike,
 } from "../../ui/shared/cmajor-react";
-import { acquireAnalyzerActivity } from "../../ui/shared/analyzer-activity";
+import { acquireAnalyzerActivity } from "../../kit/ui/analyzer-activity";
 import {
     advancePolishTelemetryDisplay,
     createPolishTelemetryDisplay,
@@ -49,7 +49,7 @@ import {
     cutoffsFromCenterRangeOctaves,
     geometricCenterCutoffHz,
     modulationOctavesFromCutoffRange,
-} from "../../ui/shared/filter-range-editor";
+} from "../../kit/ui/filter-range-editor";
 import {
     useFactoryBankCatalog,
     useFactoryTableFrames,
@@ -91,7 +91,7 @@ import {
     serializeModulationState,
     type ModulationRouteUpdate,
 } from "../../ui/shared/modulation";
-import { useStandaloneEffectPresets } from "../../ui/shared/effects/use-standalone-effect-presets";
+import { useStandaloneEffectPresets } from "../../kit/ui/effects/use-standalone-effect-presets";
 import {
     buildCanonicalPluginStateContract,
     buildPluginStateContract,

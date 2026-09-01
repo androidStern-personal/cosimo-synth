@@ -3,7 +3,7 @@
  * Init derives current defaults here; it never reads a hidden preset record.
  */
 
-import type { PatchConnectionLike } from "../cmajor-react";
+import type { PatchConnectionLike } from "../../../kit/ui/cmajor-react";
 import {
     BOUNCE_DOCUMENT_VERSION,
     BOUNCE_STATE_KEY,
@@ -28,10 +28,10 @@ import {
     synchronizeLaneOutputTrimsFromHostParameters,
     type LaneStateV2,
 } from "../lane-state-v2";
-import type { EffectStoredStateAdapter } from "./effect-preset-v2";
-import type { EffectPluginStateContract } from "./effect-state-contract";
-import { isPlainObject } from "./effect-utils";
-import { getFullStoredStateValue } from "../stored-state-runtime-mirror";
+import type { EffectStoredStateAdapter } from "../../../kit/ui/effects/effect-preset-v2";
+import type { EffectPluginStateContract } from "../../../kit/ui/effects/effect-state-contract";
+import { isPlainObject } from "../../../kit/ui/effects/effect-utils";
+import { getFullStoredStateValue } from "../../../kit/ui/stored-state-runtime-mirror";
 import type {
     StandaloneEffectInitOnlyStateAdapter,
     StandaloneEffectPresetSynthOptions,

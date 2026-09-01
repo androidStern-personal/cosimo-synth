@@ -4,11 +4,11 @@ import path from "node:path";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
+const repoRoot = path.resolve(import.meta.dirname, "../..");
 
 async function loadModules() {
-    const contractModule = await loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts");
-    const presetModule = await loadUIModule(repoRoot, "ui/shared/effects/effect-preset-v2.ts");
+    const contractModule = await loadUIModule(repoRoot, "kit/ui/effects/effect-state-contract.ts");
+    const presetModule = await loadUIModule(repoRoot, "kit/ui/effects/effect-preset-v2.ts");
     return { ...contractModule, ...presetModule };
 }
 

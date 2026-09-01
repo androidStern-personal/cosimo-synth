@@ -7,7 +7,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 async function loadStandaloneModule() {
-    return await loadUIModule(repoRoot, "ui/shared/effects/standalone-effect-presets.ts");
+    return await loadUIModule(repoRoot, "kit/ui/effects/standalone-effect-presets.ts");
 }
 
 async function loadContractModule() {

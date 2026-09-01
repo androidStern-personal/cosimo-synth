@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
+const repoRoot = path.resolve(import.meta.dirname, "../..");
 
-const GENERIC_ENTRY = "ui/shared/effects/standalone-effect-presets.ts";
+const GENERIC_ENTRY = "kit/ui/effects/standalone-effect-presets.ts";
 const SYNTH_ADAPTER = "ui/shared/effects/synth-standalone-presets.ts";
 
 // Builder-kit boundary: the generic preset controller must never reach synth,
@@ -39,7 +39,7 @@ async function resolveRelativeImport(fromRelativePath, specifier) {
     const baseDirectory = path.posix.dirname(fromRelativePath);
     const joined = path.posix.normalize(path.posix.join(baseDirectory, specifier));
 
-    for (const candidate of [joined, `${joined}.ts`, `${joined}.tsx`, `${joined}/index.ts`]) {
+    for (const candidate of [joined, `${joined}.ts`, `${joined}.tsx`, `${joined}.js`, `${joined}.mjs`, `${joined}/index.ts`]) {
         try {
             const stats = await fs.stat(path.join(repoRoot, candidate));
 
@@ -136,8 +136,8 @@ test("the synth adapter owns the bounce, sound-share, and wavetable imports the 
 // Task 2.4 preset-bar split: the generic header/bar elements must stay free of
 // polish, sound-share, bounce, and synth modules; the synth's registered
 // preset-bar extension owns that surface.
-const GENERIC_HEADER_ENTRY = "ui/shared/effects/effect-header.ts";
-const GENERIC_BAR = "ui/shared/effects/preset-bar.ts";
+const GENERIC_HEADER_ENTRY = "kit/ui/effects/effect-header.ts";
+const GENERIC_BAR = "kit/ui/effects/preset-bar.ts";
 const SYNTH_BAR = "ui/shared/effects/synth-preset-bar.ts";
 
 const BAR_FORBIDDEN_SPECIFIER_PATTERNS = [
@@ -153,7 +153,7 @@ test("the generic effect header and preset bar import graph reaches no polish, s
         "expected the header walk to traverse the generic preset bar",
     );
     assert.ok(
-        graph.has("ui/shared/effects/snapshot-bar.ts"),
+        graph.has("kit/ui/effects/snapshot-bar.ts"),
         "expected the header walk to traverse the snapshot bar",
     );
 
@@ -199,8 +199,8 @@ test("the synth preset-bar extension owns the polish, sound-share, and bounce su
         "synth bar must import the sound-share envelope type",
     );
     assert.ok(
-        specifiers.some((specifier) => specifier.endsWith("./preset-bar")),
-        "synth bar must extend the generic preset bar",
+        specifiers.some((specifier) => specifier.endsWith("kit/ui/effects/preset-bar")),
+        "synth bar must extend the generic preset bar from kit/",
     );
 
     // The synth's events and shell stay synth-owned…
@@ -213,4 +213,67 @@ test("the synth preset-bar extension owns the polish, sound-share, and bounce su
 
     const genericBarSource = await fs.readFile(path.join(repoRoot, GENERIC_BAR), "utf8");
     assert.match(genericBarSource, /DEFAULT_PRESET_BAR_ELEMENT_NAME = "cosimo-preset-bar"/);
+});
+
+// Task 3.1 kit boundary, made directional: no module under kit/ui or kit/fx
+// may import synth-shared code (ui/shared outside kit), bounce code, or a
+// specific fx plugin directory. Synth surfaces keep importing kit through the
+// ui/shared re-export shims; the reverse direction is forbidden.
+const KIT_MODULE_ROOTS = ["kit/ui", "kit/fx"];
+const KIT_SOURCE_MODULE_PATTERN = /\.(?:ts|tsx|js|mjs)$/;
+
+const KIT_FORBIDDEN_IMPORT_TARGETS = [
+    { name: "synth ui/shared", pattern: /^ui\/shared\// },
+    { name: "bounce", pattern: /^bounce\// },
+    { name: "fx plugin", pattern: /^fx\// },
+];
+
+async function listKitSourceModules() {
+    const modulePaths = [];
+
+    for (const root of KIT_MODULE_ROOTS) {
+        const entries = await fs.readdir(path.join(repoRoot, root), { recursive: true, withFileTypes: true });
+
+        for (const entry of entries) {
+            if (!entry.isFile() || !KIT_SOURCE_MODULE_PATTERN.test(entry.name)) {
+                continue;
+            }
+
+            const parentRelativePath = path.relative(repoRoot, entry.parentPath).replaceAll(path.sep, "/");
+            modulePaths.push(path.posix.join(parentRelativePath, entry.name));
+        }
+    }
+
+    return modulePaths.sort();
+}
+
+test("kit modules never import ui/shared, bounce, or fx plugin code", async () => {
+    const modulePaths = await listKitSourceModules();
+
+    assert.ok(
+        modulePaths.length >= 25,
+        `expected the kit module walk to cover the relocated UI kit (found ${modulePaths.length})`,
+    );
+    assert.ok(modulePaths.includes("kit/ui/cmajor-react.ts"), "expected the walk to include kit/ui/cmajor-react.ts");
+    assert.ok(modulePaths.includes("kit/fx/build-effect.mjs"), "expected the walk to include kit/fx/build-effect.mjs");
+
+    for (const modulePath of modulePaths) {
+        const source = await fs.readFile(path.join(repoRoot, modulePath), "utf8");
+
+        for (const specifier of importSpecifiers(source)) {
+            if (!specifier.startsWith(".")) {
+                continue; // Bare specifiers (react, node builtins) are not repo modules.
+            }
+
+            const resolved = await resolveRelativeImport(modulePath, specifier);
+
+            for (const { name, pattern } of KIT_FORBIDDEN_IMPORT_TARGETS) {
+                assert.doesNotMatch(
+                    resolved,
+                    pattern,
+                    `${modulePath} imports "${specifier}" (${name}) across the kit boundary`,
+                );
+            }
+        }
+    }
 });

@@ -23,7 +23,7 @@ async function loadFilterResponseModule() {
 }
 
 async function loadFilterRangeEditorModule() {
-    return await loadUIModule(repoRoot, "ui/shared/filter-range-editor.tsx");
+    return await loadUIModule(repoRoot, "kit/ui/filter-range-editor.tsx");
 }
 
 async function loadFilterSpectrumModule() {

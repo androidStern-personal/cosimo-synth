@@ -1,8 +1,8 @@
 import React, { useMemo } from "react";
 import { interpolate } from "remotion";
-import "../../../../ui/shared/editor-tokens.css";
-import "../../../../ui/shared/editor-tick-slider.css";
-import "../../../../ui/shared/filter-range-editor.css";
+import "../../../../kit/ui/editor-tokens.css";
+import "../../../../kit/ui/editor-tick-slider.css";
+import "../../../../kit/ui/filter-range-editor.css";
 import "../../../../fx/seqfx/view/crusher-editor.css";
 import "../../../../fx/seqfx/view/stutter-envelope-editor.css";
 import "../../../../fx/seqfx/view/styles.css";
@@ -11,7 +11,7 @@ import {
   SeqFxPatchView,
   type SeqFxPromoControls,
 } from "../../../../fx/seqfx/view/SeqFxPatchView";
-import type { PatchConnectionLike } from "../../../../ui/shared/cmajor-react";
+import type { PatchConnectionLike } from "../../../../kit/ui/cmajor-react";
 import {
   SEQFX_EFFECT_TYPES,
   SEQFX_STATE_KEY,

@@ -1,5 +1,5 @@
-import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
-import { createStoredStateRuntimeMirror } from "../../../ui/shared/stored-state-runtime-mirror";
+import type { PatchConnectionLike } from "../../../kit/ui/cmajor-react";
+import { createStoredStateRuntimeMirror } from "../../../kit/ui/stored-state-runtime-mirror";
 import {
     SPECTRAL_PARTIAL_STATE_KEY,
     buildPartialShapeUpload,

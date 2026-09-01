@@ -37,7 +37,7 @@ async function loadModules() {
     const migrationModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-preset-migrations.ts");
     const contractModule = await loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts");
     const presetModule = await loadUIModule(repoRoot, "ui/shared/effects/effect-preset-v2.ts");
-    const snapshotModule = await loadUIModule(repoRoot, "ui/shared/effects/effect-snapshots.ts");
+    const snapshotModule = await loadUIModule(repoRoot, "kit/ui/effects/effect-snapshots.ts");
 
     return {
         ...stateModule,

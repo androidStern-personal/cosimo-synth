@@ -5,7 +5,7 @@ import {
     canLoadEffectDevServer,
     createEffectPatchView,
     EFFECT_DEV_STATUS_PATH,
-} from "../ui/shared/effects/effect-view-loader.js";
+} from "../ui/effects/effect-view-loader.js";
 
 const originalFetch = globalThis.fetch;
 const originalSetTimeout = globalThis.setTimeout;

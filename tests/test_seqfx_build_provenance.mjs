@@ -22,7 +22,7 @@ const artifactContracts = [
         expectedOwnedSources: [
             "fx/seqfx/worker/source.ts",
             "fx/seqfx/worker/seqfx-worker-service.ts",
-            "ui/shared/patch-worker-services.ts",
+            "kit/ui/patch-worker-services.ts",
         ],
         requiresDependencySources: false,
     },
@@ -91,7 +91,7 @@ test("SeqFX packaged patch inputs and loader are byte-exact copies of current so
     }
 
     const [loaderSource, packagedLoader] = await Promise.all([
-        readFile(path.join(repoRoot, "ui", "shared", "effects", "effect-view-loader.js")),
+        readFile(path.join(repoRoot, "kit", "ui", "effects", "effect-view-loader.js")),
         readFile(path.join(runtimeRoot, "view", "index.js")),
     ]);
     assert.equal(

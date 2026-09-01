@@ -5,10 +5,10 @@ import path from "node:path";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
+const repoRoot = path.resolve(import.meta.dirname, "../..");
 
 async function loadContractModule() {
-    return await loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts");
+    return await loadUIModule(repoRoot, "kit/ui/effects/effect-state-contract.ts");
 }
 
 function parameter(endpointID, annotation = {}) {

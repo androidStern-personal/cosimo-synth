@@ -1,16 +1,19 @@
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 
 import { chromium } from "playwright";
 
-import { startStaticRepoServer } from "./helpers/desktop_harness_browser.mjs";
+import { startStaticWebServer } from "./helpers/static_web_server.mjs";
+
+const repoRoot = path.resolve(import.meta.dirname, "../..");
 
 let server;
 let browser;
 
 async function openModulePage() {
     const page = await browser.newPage();
-    await page.goto(new URL("tests/helpers/module_test_shell.html", server.baseUrl).toString(), { waitUntil: "load" });
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).toString(), { waitUntil: "load" });
     return page;
 }
 
@@ -56,7 +59,7 @@ async function getHarnessSnapshot(page) {
 before(async () => {
     // Bundles /tests/helpers/desktop_patch_modules_browser.tsx on the fly;
     // no dev server.
-    server = await startStaticRepoServer({ bundleTypeScript: true });
+    server = await startStaticWebServer(repoRoot, { bundleTypeScript: true });
     browser = await chromium.launch({ headless: true });
 });
 

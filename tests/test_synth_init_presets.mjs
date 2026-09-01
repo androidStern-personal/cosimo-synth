@@ -380,7 +380,7 @@ async function createSynthFixture({
     onSoundReplacementApplied,
 } = {}) {
     const [presets, synthPresets, contractModule, modulation, articulations, rack] = await Promise.all([
-        loadUIModule(repoRoot, "ui/shared/effects/standalone-effect-presets.ts"),
+        loadUIModule(repoRoot, "kit/ui/effects/standalone-effect-presets.ts"),
         loadUIModule(repoRoot, "ui/shared/effects/synth-standalone-presets.ts"),
         loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation.ts"),

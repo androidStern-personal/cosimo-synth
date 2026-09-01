@@ -1,7 +1,7 @@
 import {
   EFFECT_PRESET_KIND,
   EFFECT_PRESET_SCHEMA_VERSION,
-} from "../../../ui/shared/effects/effect-preset-shared.ts";
+} from "../../../kit/ui/effects/effect-preset-shared.ts";
 
 // OTT Lab's factory preset inventory, passed explicitly to
 // createStandaloneEffectPresetController. Preset IDs and value keys are wire

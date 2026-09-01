@@ -1,15 +1,15 @@
 import { Component, createElement, type ErrorInfo } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
-import editorTokensCssText from "../../../ui/shared/editor-tokens.css?inline";
-import editorCurveSurfaceCssText from "../../../ui/shared/editor-curve-surface.css?inline";
-import editorTickSliderCssText from "../../../ui/shared/editor-tick-slider.css?inline";
-import filterRangeEditorCssText from "../../../ui/shared/filter-range-editor.css?inline";
+import editorTokensCssText from "../../../kit/ui/editor-tokens.css?inline";
+import editorCurveSurfaceCssText from "../../../kit/ui/editor-curve-surface.css?inline";
+import editorTickSliderCssText from "../../../kit/ui/editor-tick-slider.css?inline";
+import filterRangeEditorCssText from "../../../kit/ui/filter-range-editor.css?inline";
 import crusherEditorCssText from "./crusher-editor.css?inline";
 import stutterEnvelopeEditorCssText from "./stutter-envelope-editor.css?inline";
 import seqFxCssText from "./styles.css?inline";
 import { SeqFxPatchView } from "./SeqFxPatchView";
-import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
+import type { PatchConnectionLike } from "../../../kit/ui/cmajor-react";
 
 const cssText = [
     editorTokensCssText,

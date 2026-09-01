@@ -183,7 +183,7 @@ test("the product UI exposes four compact Polish modules, independent bypasses, 
         read("ui/desktop/effects-rack-workspace.tsx"),
         read("ui/desktop/subway-map-column.tsx"),
         read("ui/shared/effects/synth-preset-bar.ts"),
-        read("ui/shared/effects/preset-bar.ts"),
+        read("kit/ui/effects/preset-bar.ts"),
         read("ui/shared/modulation-targets.ts"),
     ]);
 
@@ -251,7 +251,7 @@ test("the factory inventory contains no old-format synth sound to retain", async
     assert.match(ottPresets, /OTT_FACTORY_PRESETS[\s\S]*?ott:/);
 
     // The controller no longer carries a Cosimo default inventory at all.
-    const standalone = await read("ui/shared/effects/standalone-effect-presets.ts");
+    const standalone = await read("kit/ui/effects/standalone-effect-presets.ts");
     assert.doesNotMatch(standalone, /EFFECT_FACTORY_PRESETS/);
 });
 

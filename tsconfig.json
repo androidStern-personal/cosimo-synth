@@ -16,6 +16,8 @@
   "include": [
     "fx/**/*.ts",
     "fx/**/*.tsx",
+    "kit/ui/**/*.ts",
+    "kit/ui/**/*.tsx",
     "ui/**/*.d.ts",
     "ui/**/*.ts",
     "ui/**/*.tsx"

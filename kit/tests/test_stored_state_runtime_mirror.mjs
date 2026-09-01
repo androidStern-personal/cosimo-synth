@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 
 import {
     createStoredStateRuntimeMirror,
-} from "../patch_gui/stored-state-runtime-mirror.js";
+} from "../../patch_gui/stored-state-runtime-mirror.js";
 import {
     createPatchWorkerServiceHost,
-} from "../patch_gui/patch-worker-services.js";
+} from "../../patch_gui/patch-worker-services.js";
 
 class FakePatchConnection {
     constructor(storedState = {}) {

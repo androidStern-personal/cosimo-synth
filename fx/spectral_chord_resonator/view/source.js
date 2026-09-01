@@ -1,6 +1,6 @@
-import { createEffectHeader } from "../../../ui/shared/effects/effect-header.ts";
-import { EffectSnapshotBankController } from "../../../ui/shared/effects/effect-snapshot-bank.ts";
-import { createStandaloneEffectPresetController } from "../../../ui/shared/effects/standalone-effect-presets.ts";
+import { createEffectHeader } from "../../../kit/ui/effects/effect-header.ts";
+import { EffectSnapshotBankController } from "../../../kit/ui/effects/effect-snapshot-bank.ts";
+import { createStandaloneEffectPresetController } from "../../../kit/ui/effects/standalone-effect-presets.ts";
 import {
   SPECTRAL_PARTIAL_PRESETS,
   applySpectralPartialPreset,

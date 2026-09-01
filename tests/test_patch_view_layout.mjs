@@ -243,7 +243,7 @@ test("generated desktop and iPhone UI artifacts carry the exact T74/T75 source c
                 "ui/desktop/effects-rack-workspace.tsx",
                 "ui/desktop/DesktopPatchView.tsx",
                 "ui/desktop/polish-fullscreen-editor.tsx",
-                "ui/shared/cmajor-react.ts",
+                { mapSource: "ui/shared/cmajor-react.ts", contentPath: "kit/ui/cmajor-react.ts" },
                 "ui/shared/enhancer-spectrum.ts",
                 "ui/shared/enhancer-spectrum-graph.tsx",
                 "ui/shared/polish-telemetry.ts",
@@ -262,7 +262,7 @@ test("generated desktop and iPhone UI artifacts carry the exact T74/T75 source c
                 "sampleRateHz",
             ],
             sourcePaths: [
-                "ui/shared/cmajor-react.ts",
+                { mapSource: "ui/shared/cmajor-react.ts", contentPath: "kit/ui/cmajor-react.ts" },
                 "ui/shared/enhancer-spectrum.ts",
                 "ui/shared/polish-telemetry.ts",
                 "ui/shared/synth-hooks.ts",
@@ -285,12 +285,17 @@ test("generated desktop and iPhone UI artifacts carry the exact T74/T75 source c
             );
         }
         for (const sourcePath of contract.sourcePaths) {
-            const sourceIndex = sourceMap.sources.findIndex((source) => source.endsWith(sourcePath));
-            assert.notEqual(sourceIndex, -1, `${contract.label} map is missing ${sourcePath}`);
+            // A string entry lives at the mapped path; a module moved into kit/
+            // keeps its pre-move mapSource until the bundle is regenerated while
+            // its content lives at contentPath (the old path is a re-export shim).
+            const mapSource = typeof sourcePath === "string" ? sourcePath : sourcePath.mapSource;
+            const contentPath = typeof sourcePath === "string" ? sourcePath : sourcePath.contentPath;
+            const sourceIndex = sourceMap.sources.findIndex((source) => source.endsWith(mapSource));
+            assert.notEqual(sourceIndex, -1, `${contract.label} map is missing ${mapSource}`);
             assert.equal(
                 sourceMap.sourcesContent[sourceIndex],
-                await fs.readFile(path.join(repoRoot, sourcePath), "utf8"),
-                `${contract.label} sourcesContent drifted from ${sourcePath}`,
+                await fs.readFile(path.join(repoRoot, contentPath), "utf8"),
+                `${contract.label} sourcesContent drifted from ${contentPath}`,
             );
         }
     }
@@ -993,11 +998,11 @@ test("desktop and shared effect dev entries load React Grab only in interactive 
         "utf8",
     );
     const effectDevTools = await fs.readFile(
-        path.join(repoRoot, "ui", "shared", "effects", "effect-dev-tools.js"),
+        path.join(repoRoot, "kit", "ui", "effects", "effect-dev-tools.js"),
         "utf8",
     );
     const effectViewLoader = await fs.readFile(
-        path.join(repoRoot, "ui", "shared", "effects", "effect-view-loader.js"),
+        path.join(repoRoot, "kit", "ui", "effects", "effect-view-loader.js"),
         "utf8",
     );
 
@@ -1009,7 +1014,7 @@ test("desktop and shared effect dev entries load React Grab only in interactive 
     assert.match(effectDevTools, /if \(import\.meta\.env\.DEV && navigator\.webdriver !== true\) \{/);
     assert.match(effectDevTools, /await import\("react-grab"\);/);
     assert.match(effectDevTools, /await import\("@react-grab\/mcp\/client"\);/);
-    assert.match(effectViewLoader, /EFFECT_DEV_TOOLS_MODULE_PATH = "\/ui\/shared\/effects\/effect-dev-tools\.js"/);
+    assert.match(effectViewLoader, /EFFECT_DEV_TOOLS_MODULE_PATH = "\/kit\/ui\/effects\/effect-dev-tools\.js"/);
     assert.match(effectViewLoader, /await loadEffectDevTools\(devOrigin\);/);
 });
 

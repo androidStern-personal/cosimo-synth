@@ -1,5 +1,5 @@
-import type { EffectPluginStateContract } from "./effect-state-contract";
-import type { EffectPresetMigration } from "./effect-preset-v2";
+import type { EffectPluginStateContract } from "../../../kit/ui/effects/effect-state-contract";
+import type { EffectPresetMigration } from "../../../kit/ui/effects/effect-preset-v2";
 import {
     POLISH_COMPRESSION_CLIP_BYPASS_ENDPOINT_ID,
     POLISH_COMPRESSION_CLIP_AMOUNT_ENDPOINT_ID,

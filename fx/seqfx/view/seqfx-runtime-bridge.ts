@@ -1,4 +1,4 @@
-import type { PatchConnectionLike } from "../../../ui/shared/cmajor-react";
+import type { PatchConnectionLike } from "../../../kit/ui/cmajor-react";
 import {
     SEQFX_STATE_UPDATE_INTENT_KEY,
     serializeSeqFxStateUpdateIntent,
