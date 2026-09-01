@@ -1,9 +1,10 @@
 import type { EffectSnapshotBankController } from "./effect-snapshot-bank";
-import { createPresetBar } from "./preset-bar";
+import { createPresetBar, DEFAULT_PRESET_BAR_ELEMENT_NAME } from "./preset-bar";
 import type { StandaloneEffectPresetController } from "./standalone-effect-presets";
-import { createSnapshotBar } from "./snapshot-bar";
+import { createSnapshotBar, DEFAULT_SNAPSHOT_BAR_ELEMENT_NAME } from "./snapshot-bar";
 
-const EFFECT_HEADER_CSS = /* css */ `
+function effectHeaderCSS(presetBarElementName: string, snapshotBarElementName: string): string {
+    return /* css */ `
   :host {
     display: block;
     position: relative;
@@ -18,11 +19,11 @@ const EFFECT_HEADER_CSS = /* css */ `
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
-  cosimo-preset-bar {
+  ${presetBarElementName} {
     min-width: 0;
   }
 
-  cosimo-snapshot-bar {
+  ${snapshotBarElementName} {
     min-width: 420px;
   }
 
@@ -31,26 +32,44 @@ const EFFECT_HEADER_CSS = /* css */ `
       grid-template-columns: 1fr;
     }
 
-    cosimo-snapshot-bar {
+    ${snapshotBarElementName} {
       min-width: 0;
     }
   }
 `;
+}
 
-const ELEMENT_NAME = "cosimo-effect-header";
+/** The historical registration name; pass another name to the factories to change it. */
+export const DEFAULT_EFFECT_HEADER_ELEMENT_NAME = "cosimo-effect-header";
+
+export type EffectHeaderElementOptions = {
+    /** Registration name for the header itself. */
+    elementName?: string;
+    /** Registration name the header uses for its embedded preset bar. */
+    presetBarElementName?: string;
+    /** Registration name the header uses for its embedded snapshot bar. */
+    snapshotBarElementName?: string;
+};
 
 class EffectHeader extends HTMLElement {
-    private readonly presetBar = createPresetBar();
-    private readonly snapshotBar = createSnapshotBar();
+    /** Child element names the constructor reads; configured registrations subclass with overrides. */
+    static readonly presetBarElementName: string = DEFAULT_PRESET_BAR_ELEMENT_NAME;
+    static readonly snapshotBarElementName: string = DEFAULT_SNAPSHOT_BAR_ELEMENT_NAME;
+
+    private readonly presetBar: ReturnType<typeof createPresetBar>;
+    private readonly snapshotBar: ReturnType<typeof createSnapshotBar>;
     private _presetController: StandaloneEffectPresetController | null = null;
     private _snapshotController: EffectSnapshotBankController | null = null;
 
     constructor() {
         super();
+        const { presetBarElementName, snapshotBarElementName } = this.constructor as typeof EffectHeader;
+        this.presetBar = createPresetBar(presetBarElementName);
+        this.snapshotBar = createSnapshotBar(snapshotBarElementName);
         const shadow = this.attachShadow({ mode: "open" });
         const style = document.createElement("style");
         const frame = document.createElement("div");
-        style.textContent = EFFECT_HEADER_CSS;
+        style.textContent = effectHeaderCSS(presetBarElementName, snapshotBarElementName);
         frame.className = "effect-header";
         frame.append(this.presetBar, this.snapshotBar);
         shadow.replaceChildren(style, frame);
@@ -80,13 +99,26 @@ class EffectHeader extends HTMLElement {
     }
 }
 
-export function defineEffectHeaderElement(): void {
-    if (!window.customElements.get(ELEMENT_NAME)) {
-        window.customElements.define(ELEMENT_NAME, EffectHeader);
+export function defineEffectHeaderElement(options: EffectHeaderElementOptions = {}): void {
+    const elementName = options.elementName ?? DEFAULT_EFFECT_HEADER_ELEMENT_NAME;
+    if (window.customElements.get(elementName)) {
+        return;
     }
+
+    const presetBarElementName = options.presetBarElementName ?? DEFAULT_PRESET_BAR_ELEMENT_NAME;
+    const snapshotBarElementName = options.snapshotBarElementName ?? DEFAULT_SNAPSHOT_BAR_ELEMENT_NAME;
+    const headerClass = presetBarElementName === DEFAULT_PRESET_BAR_ELEMENT_NAME
+        && snapshotBarElementName === DEFAULT_SNAPSHOT_BAR_ELEMENT_NAME
+        ? EffectHeader
+        : class extends EffectHeader {
+            static override readonly presetBarElementName = presetBarElementName;
+            static override readonly snapshotBarElementName = snapshotBarElementName;
+        };
+    window.customElements.define(elementName, headerClass);
 }
 
-export function createEffectHeader(): EffectHeader {
-    defineEffectHeaderElement();
-    return document.createElement(ELEMENT_NAME) as EffectHeader;
+export function createEffectHeader(options: EffectHeaderElementOptions = {}): EffectHeader {
+    defineEffectHeaderElement(options);
+    const elementName = options.elementName ?? DEFAULT_EFFECT_HEADER_ELEMENT_NAME;
+    return document.createElement(elementName) as EffectHeader;
 }

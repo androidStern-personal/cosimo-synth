@@ -45,7 +45,7 @@ test("preset bar action buttons are compact icon buttons with accessible labels"
                 throw new Error("Preset bar shadow root is missing.");
             }
 
-            return ["save", "save-as", "revert", "copy", "paste", "share"].map((action) => {
+            const buttons = ["save", "save-as", "revert", "copy", "paste"].map((action) => {
                 const button = shadow.querySelector(`button[data-action="${action}"]`);
 
                 if (!(button instanceof HTMLButtonElement)) {
@@ -64,9 +64,25 @@ test("preset bar action buttons are compact icon buttons with accessible labels"
                     width: getComputedStyle(button).width,
                 };
             });
+
+            return {
+                buttons,
+                // The synth-only surface (share links, bounce, compact shell,
+                // Polish meter) lives in the synth's registered extension, not
+                // in the generic bar.
+                synthSurface: [
+                    '[data-action="share"]',
+                    "[data-synth-bounce]",
+                    '[data-el="shell-menu"]',
+                    '[data-el="polish-meter"]',
+                    '[data-el="share-dialog"]',
+                    '[data-el="shared-load-dialog"]',
+                ].filter((selector) => shadow.querySelector(selector) !== null),
+            };
         });
 
-        assert.deepEqual(details, [
+        assert.deepEqual(details.synthSurface, []);
+        assert.deepEqual(details.buttons, [
             {
                 action: "save",
                 ariaLabel: "Save preset",
@@ -112,16 +128,68 @@ test("preset bar action buttons are compact icon buttons with accessible labels"
                 svgHidden: "true",
                 width: "32px",
             },
-            {
-                action: "share",
-                ariaLabel: "Share sound link",
-                title: "Share sound link",
-                visibleText: "",
-                svgClass: "lucide lucide-link-2",
-                svgHidden: "true",
-                width: "32px",
-            },
         ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("the synth preset bar extension keeps the full action row including the share link", async () => {
+    const page = await openModulePage();
+
+    try {
+        const details = await page.evaluate(async () => {
+            const { createSynthPresetBar } = await import("/ui/shared/effects/synth-preset-bar.ts");
+            const mountPoint = document.getElementById("mount");
+
+            if (!(mountPoint instanceof HTMLElement)) {
+                throw new Error("Module test mount point is missing.");
+            }
+
+            const presetBar = createSynthPresetBar();
+            mountPoint.append(presetBar);
+
+            const shadow = presetBar.shadowRoot;
+            if (!shadow) {
+                throw new Error("Preset bar shadow root is missing.");
+            }
+
+            const actionGroup = shadow.querySelector(".action-group");
+            if (!actionGroup) {
+                throw new Error("Preset action group is missing.");
+            }
+
+            const share = actionGroup.querySelector('button[data-action="share"]');
+            if (!(share instanceof HTMLButtonElement)) {
+                throw new Error("Share action button is missing.");
+            }
+            const svg = share.querySelector("svg");
+
+            return {
+                actionOrder: Array.from(actionGroup.querySelectorAll("button[data-action]"))
+                    .map((button) => button.dataset.action),
+                share: {
+                    ariaLabel: share.getAttribute("aria-label"),
+                    title: share.getAttribute("title"),
+                    visibleText: share.textContent?.trim() ?? "",
+                    svgClass: svg?.getAttribute("class") ?? null,
+                    svgHidden: svg?.getAttribute("aria-hidden") ?? null,
+                    width: getComputedStyle(share).width,
+                    disabled: share.disabled,
+                },
+            };
+        });
+
+        assert.deepEqual(details.actionOrder, ["save", "save-as", "revert", "copy", "paste", "share"]);
+        assert.deepEqual(details.share, {
+            ariaLabel: "Share sound link",
+            title: "Share sound link",
+            visibleText: "",
+            svgClass: "lucide lucide-link-2",
+            svgHidden: "true",
+            width: "32px",
+            disabled: true,
+        });
     } finally {
         await page.close();
     }

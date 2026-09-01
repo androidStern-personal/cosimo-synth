@@ -179,9 +179,10 @@ test("every non-host complete-sound transport hard-cuts to the Polish version", 
 });
 
 test("the product UI exposes four compact Polish modules, independent bypasses, and an expansion handoff", async () => {
-    const [workspace, subway, meter, modulationTargets] = await Promise.all([
+    const [workspace, subway, meter, genericBar, modulationTargets] = await Promise.all([
         read("ui/desktop/effects-rack-workspace.tsx"),
         read("ui/desktop/subway-map-column.tsx"),
+        read("ui/shared/effects/synth-preset-bar.ts"),
         read("ui/shared/effects/preset-bar.ts"),
         read("ui/shared/modulation-targets.ts"),
     ]);
@@ -225,11 +226,17 @@ test("the product UI exposes four compact Polish modules, independent bypasses, 
     );
     assert.doesNotMatch(fixedNode, /draggable|onContextMenu|onPointerDown|bypass|power/i);
 
+    // The Polish meter and the ADR-026 compact shell live in the synth-owned
+    // preset-bar extension; the generic bar carries neither.
     assert.match(meter, /height: var\(--compact-shell-row, 40px\)/);
     assert.match(meter, /width: 92px/);
     assert.match(meter, /font-variant-numeric: tabular-nums/);
     assert.ok(meter.indexOf('data-el="shell-back"') < meter.indexOf('data-el="polish-meter"'));
-    assert.ok(meter.indexOf('data-el="polish-meter"') < meter.indexOf('data-el="preset-name"'));
+    // The shell cluster (Back, then meter) is prepended into .preset-bar, so it
+    // renders ahead of the generic bar's centered preset name.
+    assert.match(meter, /bar\.prepend\(htmlFragment\(SYNTH_SHELL_CLUSTER_HTML\)\)/);
+    assert.match(genericBar, /data-el="preset-name"/);
+    assert.doesNotMatch(genericBar, /polish|shell-back|compact-synth/);
 });
 
 test("the factory inventory contains no old-format synth sound to retain", async () => {

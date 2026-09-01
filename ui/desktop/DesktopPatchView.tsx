@@ -247,7 +247,7 @@ import {
     type SynthCallbackControlReadiness,
     type SynthPatchViewModel,
 } from "../shared/synth-hooks";
-import { createPresetBar } from "../shared/effects/preset-bar";
+import { createSynthPresetBar } from "../shared/effects/synth-preset-bar";
 import { createSynthStandaloneEffectPresetController } from "../shared/effects/synth-standalone-presets";
 import { createSynthPresetInitOptions } from "../shared/effects/synth-init-state";
 import { buildSynthPresetMigrations } from "../shared/effects/synth-preset-migrations";
@@ -2417,7 +2417,7 @@ function SynthPresetBarHost({
 }) {
     const patchConnection = usePatchConnection();
     const hostRef = useRef<HTMLDivElement | null>(null);
-    const presetBarRef = useRef<ReturnType<typeof createPresetBar> | null>(null);
+    const presetBarRef = useRef<ReturnType<typeof createSynthPresetBar> | null>(null);
     const onShellBackRef = useRef(onShellBack);
     onShellBackRef.current = onShellBack;
     const onOpenPerfTuningRef = useRef(onOpenPerfTuning);
@@ -2452,7 +2452,7 @@ function SynthPresetBarHost({
             return;
         }
 
-        const presetBar = createPresetBar();
+        const presetBar = createSynthPresetBar();
         presetBar.controller = presetController;
         const handleShellBack = () => onShellBackRef.current?.();
         const handleBounceAudio = () => {

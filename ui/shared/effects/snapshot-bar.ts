@@ -212,7 +212,8 @@ const SNAPSHOT_BAR_HTML = /* html */ `
   </div>
 `;
 
-const ELEMENT_NAME = "cosimo-snapshot-bar";
+/** The historical registration name; pass another name to the factories to change it. */
+export const DEFAULT_SNAPSHOT_BAR_ELEMENT_NAME = "cosimo-snapshot-bar";
 
 class SnapshotBar extends HTMLElement {
     private _controller: EffectSnapshotBankController | null = null;
@@ -527,13 +528,13 @@ class SnapshotBar extends HTMLElement {
     }
 }
 
-export function defineSnapshotBarElement(): void {
-    if (!window.customElements.get(ELEMENT_NAME)) {
-        window.customElements.define(ELEMENT_NAME, SnapshotBar);
+export function defineSnapshotBarElement(elementName: string = DEFAULT_SNAPSHOT_BAR_ELEMENT_NAME): void {
+    if (!window.customElements.get(elementName)) {
+        window.customElements.define(elementName, SnapshotBar);
     }
 }
 
-export function createSnapshotBar(): SnapshotBar {
-    defineSnapshotBarElement();
-    return document.createElement(ELEMENT_NAME) as SnapshotBar;
+export function createSnapshotBar(elementName: string = DEFAULT_SNAPSHOT_BAR_ELEMENT_NAME): SnapshotBar {
+    defineSnapshotBarElement(elementName);
+    return document.createElement(elementName) as SnapshotBar;
 }

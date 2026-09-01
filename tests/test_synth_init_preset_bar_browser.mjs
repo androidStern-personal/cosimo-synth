@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { chromium } from "playwright";
 
-import { startDesktopHarnessServer } from "./helpers/desktop_harness_browser.mjs";
+import { startStaticRepoServer } from "./helpers/desktop_harness_browser.mjs";
 
 let server;
 let browser;
@@ -15,7 +15,8 @@ async function openModulePage() {
 }
 
 before(async () => {
-    server = await startDesktopHarnessServer();
+    // Bundles /ui/shared/effects/synth-preset-bar.ts on the fly; no dev server.
+    server = await startStaticRepoServer({ bundleTypeScript: true });
     browser = await chromium.launch({ headless: true });
 });
 
@@ -29,7 +30,7 @@ test("compact synth preset bars expose one Init command without adding an Init p
 
     try {
         const result = await page.evaluate(async () => {
-            const { createPresetBar } = await import("/ui/shared/effects/preset-bar.ts");
+            const { createSynthPresetBar: createPresetBar } = await import("/ui/shared/effects/synth-preset-bar.ts");
             const mountPoint = document.getElementById("mount");
 
             if (!(mountPoint instanceof HTMLElement)) {
@@ -104,7 +105,7 @@ test("synth preset dropdowns own Bounce Audio and current-patch Bounce Video", a
 
     try {
         const result = await page.evaluate(async () => {
-            const { createPresetBar } = await import("/ui/shared/effects/preset-bar.ts");
+            const { createSynthPresetBar: createPresetBar } = await import("/ui/shared/effects/synth-preset-bar.ts");
             const mountPoint = document.getElementById("mount");
             if (!(mountPoint instanceof HTMLElement)) throw new Error("Module test mount point is missing.");
 
@@ -195,7 +196,7 @@ test("the Init guard dialog exposes exactly three actions and reuses Save As", a
 
     try {
         const result = await page.evaluate(async () => {
-            const { createPresetBar } = await import("/ui/shared/effects/preset-bar.ts");
+            const { createSynthPresetBar: createPresetBar } = await import("/ui/shared/effects/synth-preset-bar.ts");
             const mountPoint = document.getElementById("mount");
             if (!(mountPoint instanceof HTMLElement)) {
                 throw new Error("Module test mount point is missing.");
@@ -352,7 +353,7 @@ test("the Bounce entry reuses the dirty dialog with Bounce-specific actions", as
 
     try {
         const result = await page.evaluate(async () => {
-            const { createPresetBar } = await import("/ui/shared/effects/preset-bar.ts");
+            const { createSynthPresetBar: createPresetBar } = await import("/ui/shared/effects/synth-preset-bar.ts");
             const mountPoint = document.getElementById("mount");
             if (!(mountPoint instanceof HTMLElement)) throw new Error("Module test mount point is missing.");
 
@@ -418,7 +419,7 @@ test("Save on a dirty unnamed INIT sound uses the existing Save As flow", async 
 
     try {
         const result = await page.evaluate(async () => {
-            const { createPresetBar } = await import("/ui/shared/effects/preset-bar.ts");
+            const { createSynthPresetBar: createPresetBar } = await import("/ui/shared/effects/synth-preset-bar.ts");
             const mountPoint = document.getElementById("mount");
             if (!(mountPoint instanceof HTMLElement)) throw new Error("Module test mount point is missing.");
             const calls = [];
@@ -477,7 +478,7 @@ test("Previous, Next, browser selection, and paste share the dirty guard while c
 
     try {
         const result = await page.evaluate(async () => {
-            const { createPresetBar } = await import("/ui/shared/effects/preset-bar.ts");
+            const { createSynthPresetBar: createPresetBar } = await import("/ui/shared/effects/synth-preset-bar.ts");
             const mountPoint = document.getElementById("mount");
             if (!(mountPoint instanceof HTMLElement)) throw new Error("Module test mount point is missing.");
 
@@ -594,6 +595,50 @@ test("Previous, Next, browser selection, and paste share the dirty guard while c
             "apply:user:two", "cancel",
             "paste", "cancel",
         ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("the synth bar registers under the shared tag and orders Back, Polish meter, then the preset name", async () => {
+    const page = await openModulePage();
+
+    try {
+        const result = await page.evaluate(async () => {
+            const { createSynthPresetBar } = await import("/ui/shared/effects/synth-preset-bar.ts");
+            const mountPoint = document.getElementById("mount");
+            if (!(mountPoint instanceof HTMLElement)) throw new Error("Module test mount point is missing.");
+
+            const presetBar = createSynthPresetBar();
+            mountPoint.append(presetBar);
+            const shadow = presetBar.shadowRoot;
+            if (!shadow) throw new Error("Preset bar shadow root is missing.");
+
+            const positionOrdered = (first, second) => {
+                const a = shadow.querySelector(`[data-el="${first}"]`);
+                const b = shadow.querySelector(`[data-el="${second}"]`);
+                if (!(a instanceof HTMLElement) || !(b instanceof HTMLElement)) {
+                    throw new Error(`Missing ${first} or ${second}.`);
+                }
+                return Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+            };
+
+            return {
+                elementTag: presetBar.tagName.toLowerCase(),
+                registeredHere: window.customElements.get("cosimo-preset-bar") !== undefined,
+                backBeforeMeter: positionOrdered("shell-back", "polish-meter"),
+                meterBeforeName: positionOrdered("polish-meter", "preset-name"),
+                shareButtonPresent: shadow.querySelector('[data-action="share"][data-el="btn-share"]') !== null,
+                shellMenuPresent: shadow.querySelector('[data-el="shell-menu"]') !== null,
+            };
+        });
+
+        assert.equal(result.elementTag, "cosimo-preset-bar");
+        assert.equal(result.registeredHere, true);
+        assert.equal(result.backBeforeMeter, true);
+        assert.equal(result.meterBeforeName, true);
+        assert.equal(result.shareButtonPresent, true);
+        assert.equal(result.shellMenuPresent, true);
     } finally {
         await page.close();
     }

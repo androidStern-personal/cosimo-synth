@@ -1267,29 +1267,32 @@ export class PresetBar extends HTMLElement {
                 break;
         }
 
-        this._els["sound-replacement-dialog"].hidden = true;
-        this._els["shared-load-dialog"].hidden = true;
-        this._els["share-dialog"].hidden = true;
-        this._els["save-dialog"].hidden = false;
-        this._els["dialog-overlay"].classList.add("open");
+        this._showDialog("save-dialog");
         setTimeout(() => { inputEl.focus(); inputEl.select(); }, 30);
     }
 
-    private _closeDialog(cancelPendingSoundReplacement = true) {
-        if (cancelPendingSoundReplacement && this._sharedLoadConfirmationOpen) {
-            this._pendingSharedEnvelope = null;
-            this._sharedLoadConfirmationOpen = false;
+    /** Reveal one overlay dialog by data-el name, hiding every other dialog. */
+    protected _showDialog(dialogName: string) {
+        for (const dialog of this._els["dialog-overlay"].querySelectorAll<HTMLElement>(".dialog")) {
+            dialog.hidden = dialog !== this._els[dialogName];
         }
-        if (cancelPendingSoundReplacement && this._dialogContinuesSoundReplacement) {
-            this._synthMutations?.cancelSoundReplacement();
-            if (this._sharedSoundReplacementPending) {
-                this._pendingSharedEnvelope = null;
-                this._sharedSoundReplacementPending = false;
-            }
+        this._els["dialog-overlay"].classList.add("open");
+    }
+
+    protected _closeDialog(cancelPendingSoundReplacement = true) {
+        if (cancelPendingSoundReplacement) {
+            this._handleDialogDismissal();
         }
 
         this._dialogContinuesSoundReplacement = false;
         this._els["dialog-overlay"].classList.remove("open");
+    }
+
+    /** Cancellation side effects of dismissing a dialog rather than confirming it. */
+    protected _handleDialogDismissal() {
+        if (this._dialogContinuesSoundReplacement) {
+            this._synthMutations?.cancelSoundReplacement();
+        }
     }
 
     private _confirmDialog() {
@@ -1336,25 +1339,21 @@ export class PresetBar extends HTMLElement {
 
     private _onState(state: StandaloneEffectPresetState) {
         this._state = state;
-        this._syncInitMenuRow();
-        this._syncSynthBounceActions();
+        this._syncExtensionSurfaces(state);
         this._updateBar(state);
         if (this._flyoutOpen) this._renderFlyoutList();
 
-        if (state.ready && !this._shareFragmentChecked) {
-            this._shareFragmentChecked = true;
-            void this._detectSharedSoundFragment();
-        }
+        this._afterStateRender(state);
 
         // Controller state is the sole presentation channel for controller errors.
         // clearLastError makes a later identical failure a new visible occurrence.
         if (state.lastError) {
-            showToast(this._els["toast-host"], state.lastError, "error");
+            this._showToast(state.lastError, "error");
             this._mutations?.clearLastError();
         }
     }
 
-    private _updateBar(state: StandaloneEffectPresetState) {
+    protected _updateBar(state: StandaloneEffectPresetState) {
         // Preset name
         this._els["preset-name"].textContent = state.activeLabel || "No Preset";
 
@@ -1366,14 +1365,9 @@ export class PresetBar extends HTMLElement {
         this._els["source-tag"].textContent = activeItem?.source ?? "";
 
         // Action buttons
-        const canSave = state.dirty && (activeItem?.canOverwrite === true || (state.supportsInit && !state.activePreset));
+        const canSave = this._canSaveActiveState(state);
         (this._els["btn-save"] as HTMLButtonElement).disabled = !canSave;
         (this._els["btn-revert"] as HTMLButtonElement).disabled = !state.dirty;
-        (this._els["menu-save"] as HTMLButtonElement).disabled = !canSave;
-        (this._els["menu-revert"] as HTMLButtonElement).disabled = !state.dirty;
-        const canShare = state.ready && state.supportsInit && this._canUseSoundLinks();
-        (this._els["btn-share"] as HTMLButtonElement).disabled = !canShare;
-        (this._els["menu-share"] as HTMLButtonElement).disabled = !canShare;
 
         // Sync filter pill active state
         for (const pill of this.shadowRoot!.querySelectorAll<HTMLElement>(".filter-pill")) {
@@ -1381,13 +1375,9 @@ export class PresetBar extends HTMLElement {
         }
     }
 
-    private _canUseSoundLinks() {
-        try {
-            const protocol = new URL(globalThis.location.href).protocol;
-            return protocol === "http:" || protocol === "https:";
-        } catch {
-            return false;
-        }
+    protected _canSaveActiveState(state: StandaloneEffectPresetState): boolean {
+        const activeItem = state.presets.find((p) => p.isActive);
+        return state.dirty && (activeItem?.canOverwrite === true || (state.supportsInit && !state.activePreset));
     }
 
     private _renderFlyoutList() {
@@ -1437,17 +1427,43 @@ export class PresetBar extends HTMLElement {
             ${showCtx ? `<button class="item-ctx">&#8943;</button>` : ""}
         </div>`;
     }
+
+    // ── Toasts ───────────────────────────────────────────
+
+    protected _showToast(message: string, tone: "success" | "warn" | "error") {
+        const el = document.createElement("div");
+        el.className = `cpb-toast ${tone}`;
+        el.textContent = message;
+        this._els["toast-host"].appendChild(el);
+        setTimeout(() => { el.style.opacity = "0"; el.style.transition = "opacity 250ms"; }, 2200);
+        setTimeout(() => el.remove(), 2500);
+    }
+
+    protected _handleMutationResult<T>(
+        result: StandaloneEffectPresetMutationResult<T>,
+        successMessage?: string,
+    ): boolean {
+        if (result.ok) {
+            this._showToast(successMessage ?? result.message, "success");
+            return true;
+        }
+
+        // Controller failures are presented from StandaloneEffectPresetState.lastError.
+        // Keeping that as the sole error channel also covers asynchronous bridge errors
+        // without duplicating the returned mutation result.
+        return false;
+    }
 }
 
 // ── Public API ───────────────────────────────────────────
 
-export function definePresetBarElement(): void {
-    if (!window.customElements.get(ELEMENT_NAME)) {
-        window.customElements.define(ELEMENT_NAME, PresetBar);
+export function definePresetBarElement(elementName: string = DEFAULT_PRESET_BAR_ELEMENT_NAME): void {
+    if (!window.customElements.get(elementName)) {
+        window.customElements.define(elementName, PresetBar);
     }
 }
 
-export function createPresetBar(): PresetBar {
-    definePresetBarElement();
-    return document.createElement(ELEMENT_NAME) as PresetBar;
+export function createPresetBar(elementName: string = DEFAULT_PRESET_BAR_ELEMENT_NAME): PresetBar {
+    definePresetBarElement(elementName);
+    return document.createElement(elementName) as PresetBar;
 }

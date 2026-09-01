@@ -132,3 +132,85 @@ test("the synth adapter owns the bounce, sound-share, and wavetable imports the 
     const genericSource = await fs.readFile(path.join(repoRoot, GENERIC_ENTRY), "utf8");
     assert.doesNotMatch(genericSource, /"cosimo\./, "the generic core must not mint cosimo-prefixed ids");
 });
+
+// Task 2.4 preset-bar split: the generic header/bar elements must stay free of
+// polish, sound-share, bounce, and synth modules; the synth's registered
+// preset-bar extension owns that surface.
+const GENERIC_HEADER_ENTRY = "ui/shared/effects/effect-header.ts";
+const GENERIC_BAR = "ui/shared/effects/preset-bar.ts";
+const SYNTH_BAR = "ui/shared/effects/synth-preset-bar.ts";
+
+const BAR_FORBIDDEN_SPECIFIER_PATTERNS = [
+    ...FORBIDDEN_SPECIFIER_PATTERNS,
+    { name: "polish", pattern: /polish/i },
+];
+
+test("the generic effect header and preset bar import graph reaches no polish, synth, bounce, share, or wavetable module", async () => {
+    const graph = await collectImportGraph(GENERIC_HEADER_ENTRY);
+
+    assert.ok(
+        graph.has(GENERIC_BAR),
+        "expected the header walk to traverse the generic preset bar",
+    );
+    assert.ok(
+        graph.has("ui/shared/effects/snapshot-bar.ts"),
+        "expected the header walk to traverse the snapshot bar",
+    );
+
+    for (const [modulePath, specifiers] of graph) {
+        for (const { name, pattern } of BAR_FORBIDDEN_SPECIFIER_PATTERNS) {
+            assert.doesNotMatch(
+                modulePath,
+                pattern,
+                `${modulePath} is a ${name} module but is reachable from ${GENERIC_HEADER_ENTRY}`,
+            );
+
+            for (const specifier of specifiers) {
+                assert.doesNotMatch(
+                    specifier,
+                    pattern,
+                    `${modulePath} imports "${specifier}" (${name}) inside the generic bar import graph`,
+                );
+            }
+        }
+    }
+
+    // The synth-only presentation must not leak back into the generic bar.
+    const genericBarSource = await fs.readFile(path.join(repoRoot, GENERIC_BAR), "utf8");
+    assert.doesNotMatch(genericBarSource, /cosimo-bounce-audio|cosimo-bounce-video|cosimo-shell-back|cosimo-open-perf-tuning/);
+    assert.doesNotMatch(genericBarSource, /polish-meter|shell-menu|compact-synth|share-dialog|shared-load-dialog/);
+    assert.doesNotMatch(genericBarSource, /location\.hash/);
+});
+
+test("the synth preset-bar extension owns the polish, sound-share, and bounce surface the generic bar shed", async () => {
+    const source = await fs.readFile(path.join(repoRoot, SYNTH_BAR), "utf8");
+    const specifiers = importSpecifiers(source);
+
+    assert.ok(
+        specifiers.some((specifier) => specifier.endsWith("/polish")),
+        "synth bar must import the polish meter helpers",
+    );
+    assert.ok(
+        specifiers.some((specifier) => specifier.endsWith("sound-share-link")),
+        "synth bar must import the sound-share link helpers",
+    );
+    assert.ok(
+        specifiers.some((specifier) => specifier.endsWith("sound-share-envelope")),
+        "synth bar must import the sound-share envelope type",
+    );
+    assert.ok(
+        specifiers.some((specifier) => specifier.endsWith("./preset-bar")),
+        "synth bar must extend the generic preset bar",
+    );
+
+    // The synth's events and shell stay synth-owned…
+    assert.match(source, /cosimo-bounce-audio/);
+    assert.match(source, /cosimo-bounce-video/);
+    assert.match(source, /cosimo-shell-back/);
+    assert.match(source, /cosimo-open-perf-tuning/);
+    // …and it registers under the same configurable tag the generic bar defaults to.
+    assert.match(source, /DEFAULT_PRESET_BAR_ELEMENT_NAME/);
+
+    const genericBarSource = await fs.readFile(path.join(repoRoot, GENERIC_BAR), "utf8");
+    assert.match(genericBarSource, /DEFAULT_PRESET_BAR_ELEMENT_NAME = "cosimo-preset-bar"/);
+});
