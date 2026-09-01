@@ -197,3 +197,14 @@ export async function startStaticWebServer(webRoot, {
         stop: () => new Promise((resolve) => server.close(resolve)),
     };
 }
+
+const kitRepoRoot = path.resolve(import.meta.dirname, "../../..");
+
+/**
+ * Repo-root static server for plugin browser tests. Unlike the synth
+ * harness wrapper it declares no /cmaj_api mount, so it stays runnable in
+ * an exported Builder Kit with no Cmajor web-runtime staging.
+ */
+export async function startStaticRepoServer(options = {}) {
+    return startStaticWebServer(kitRepoRoot, options);
+}

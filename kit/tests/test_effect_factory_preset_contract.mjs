@@ -74,7 +74,8 @@ async function discoverFactoryPresetInventories() {
         }
     }
 
-    assert.equal(inventories.length > 0, true, "no fx/*/view/factory-presets.js inventories were discovered");
+    // An exported kit may ship plugins with no factory-preset inventories at
+    // all; in the monorepo chorus/ott guarantee a non-empty discovery.
     return inventories;
 }
 
@@ -165,6 +166,15 @@ function annotationToParameterContract(endpointID, { declaredType, annotationTex
 
     return parameter;
 }
+
+test("monorepo_ships_factory_preset_inventories", async (t) => {
+    if (!existsSync(path.join(repoRoot, "cmajor/WavetableSynth.cmajor"))) {
+        t.skip("exported kit: no inventory guarantee");
+        return;
+    }
+    const inventories = await discoverFactoryPresetInventories();
+    assert.equal(inventories.length > 0, true, "no fx/*/view/factory-presets.js inventories were discovered");
+});
 
 test("factory_preset_endpoint_ids_are_cmajor_identifiers_and_globally_unique_across_effects", async () => {
     const inventories = await discoverFactoryPresetInventories();

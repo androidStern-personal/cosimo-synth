@@ -181,17 +181,17 @@ Sequential, after Phase 2 lands.
 
 ## Phase 4 — Export and proof
 
-- [ ] **4.1 Export job.** Allowlist export of `kit/` + root shims to the
+- [x] **4.1 Export job — DONE 2026-09-01 (tool + gates; publishing destination pending).** Allowlist export of `kit/` + root shims to the
   private `builder-kit` repo (filter, no rewriting), preserving per-path
   history. Leak gates that fail the export: any path outside the allowlist;
   forbidden strings (personal email, team id, device ids, `/Users/` paths);
   banned content classes (reference_labs, experiments, TODOS/PROGRESS,
   planning docs, Spectre material, factory assets).
-- [ ] **4.2 Standalone proof.** CI job (or scripted check) that builds the
+- [x] **4.2 Standalone proof — DONE 2026-09-01 (in-container).** CI job (or scripted check) that builds the
   exported kit + a fresh Enhancer Lite import alone in a clean container:
   manifest discovery, `fx:build`, unit/browser tests; on a Mac runner also
   `fx:prod:build`. This is the permanent boundary gate.
-- [ ] **4.3 Customer starter.** Assemble kit export + Enhancer Lite + docs
+- [x] **4.3 Customer starter — DONE 2026-09-01 (assembly + update-flow simulation).** Assemble kit export + Enhancer Lite + docs
   into the first customer repo; prove the "update my kit" merge flow against
   a starter with local plugin edits (clean merge, conflicting merge stops
   safely per the roadmap's locked update contract).
@@ -349,3 +349,29 @@ not this extraction.
   - Final gates inline: `npm test` 1111/0 (exit 0), typecheck 27-error
     baseline, `fx:build -- all` green, scaffold round-trip green including the
     pluginCode collision refusal firing correctly.
+
+- **2026-09-01 Phase 4 close-out** (inline, post-workflow; `npm test` 1114/0,
+  typecheck at the 27-error baseline).
+  - `kit/scripts/export_kit.mjs` + `kit/export-allowlist.json`: allowlist
+    export producing the customer starter monorepo (98 files) with fail-closed
+    gates — missing allowlisted path, any stray output, missing required
+    output, or a forbidden identifier in any text file all abort. Root
+    materialized from `kit/template/root` (package.json pins tool versions
+    read live from the monorepo; `.agents/skills` symlink created).
+    `tests/test_kit_export.mjs` guards the gates; `kit/docs/EXPORT.md`
+    documents the flow. `npm run kit:export` / `test:kit:export` wired.
+  - `--prove` runs the standalone proof: Enhancer Lite builds inside the
+    export, kit unit tests pass there, and the customer update flow is
+    simulated (starter commit → customer plugin edit → kit-update merge, both
+    survive). Proof passing as of `2a16327`.
+  - The proof caught and fixed real export couplings the audits missed:
+    `source.ts` imports `ui/shared/enhancer-spectrum.ts` (now allowlisted —
+    self-contained spectrum math the synth also uses); the synth-riddled
+    `patch_connection_mock.ts` browser entry moved OUT of `kit/` back to
+    `tests/helpers/`; enhancer-lite tests now import kit helpers directly and
+    self-skip their synth cross-checks outside the monorepo (as do the kit
+    contract/import-graph tests for monorepo-only subtests).
+  - Still Andrew-side: create the private `builder-kit` distribution repo and
+    decide the customer transport (roadmap: authenticated feed, no Git-host
+    accounts); publishing = committing export snapshots to that repo, tagged
+    per release.

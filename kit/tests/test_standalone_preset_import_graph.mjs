@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
@@ -106,7 +107,11 @@ test("the generic standalone preset controller's import graph reaches no synth, 
     }
 });
 
-test("the synth adapter owns the bounce, sound-share, and wavetable imports the generic core shed", async () => {
+test("the synth adapter owns the bounce, sound-share, and wavetable imports the generic core shed", async (t) => {
+    if (!existsSync(path.join(repoRoot, "ui/shared/effects/synth-standalone-presets.ts"))) {
+        t.skip("monorepo-only source absent (exported kit)");
+        return;
+    }
     const source = await fs.readFile(path.join(repoRoot, SYNTH_ADAPTER), "utf8");
     const specifiers = importSpecifiers(source);
 
@@ -182,7 +187,11 @@ test("the generic effect header and preset bar import graph reaches no polish, s
     assert.doesNotMatch(genericBarSource, /location\.hash/);
 });
 
-test("the synth preset-bar extension owns the polish, sound-share, and bounce surface the generic bar shed", async () => {
+test("the synth preset-bar extension owns the polish, sound-share, and bounce surface the generic bar shed", async (t) => {
+    if (!existsSync(path.join(repoRoot, "ui/shared/effects/synth-preset-bar.ts"))) {
+        t.skip("monorepo-only source absent (exported kit)");
+        return;
+    }
     const source = await fs.readFile(path.join(repoRoot, SYNTH_BAR), "utf8");
     const specifiers = importSpecifiers(source);
 

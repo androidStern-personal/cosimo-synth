@@ -1,0 +1,60 @@
+{
+  "comment": "Authoritative allowlist for the Builder Kit export (plan 4.1). Trees are copied recursively; files individually. Everything else in the monorepo is excluded by construction. kit/template/root is not copied in place \u2014 it is materialized at the export root.",
+  "trees": [
+    "kit",
+    "fx/enhancer_lite",
+    "tests/cmajor_enhancer_lite"
+  ],
+  "files": [
+    "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
+    "ui/shared/enhancer-spectrum.ts",
+    "ui/vite.shared.mjs",
+    "tests/test_enhancer_lite_state.mjs",
+    "tests/test_enhancer_lite_view_browser.mjs"
+  ],
+  "requiredOutputs": [
+    "kit/AGENTS.md",
+    "kit/fx/build-effect.mjs",
+    "kit/cmake/CosimoDependencies.cmake",
+    "kit/docs/PLUGIN_ARCHITECTURE.md",
+    "kit/skills/cosimo-make-plugin/SKILL.md",
+    "fx/enhancer_lite/EnhancerLite.cmajorpatch",
+    "fx/enhancer_lite/EnhancerLite.cmajor",
+    "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
+    "package.json",
+    "AGENTS.md",
+    "tsconfig.json",
+    ".gitignore"
+  ],
+  "forbiddenStrings": [
+    "winterfell",
+    "JUFVT28775",
+    "28VA33X8SY",
+    "andrewstern@cox.net",
+    "andrew.martin.stern",
+    "00008120-000139383644C01E",
+    "00C7F433-8B6A-5CAC-856F-56D7385E12F9",
+    "patreon",
+    "Patreon"
+  ],
+  "forbiddenStringBinaryExtensions": [
+    ".png",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".otf",
+    ".wav",
+    ".zip"
+  ],
+  "templateDevDependencyNames": [
+    "typescript",
+    "vite",
+    "@vitejs/plugin-react",
+    "react",
+    "@types/react",
+    "playwright"
+  ],
+  "templateExplicitDevDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -117,12 +118,19 @@ test("the isolated Lite DSP keeps the accepted laws while removing de-emphasis",
         path.join(repoRoot, "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor"),
         "utf8",
     );
-    const desktopManifest = JSON.parse(await fs.readFile(
-        path.join(repoRoot, "WavetableSynth.cmajorpatch"),
-        "utf8",
-    ));
-    const synth = await fs.readFile(path.join(repoRoot, "cmajor/WavetableSynth.cmajor"), "utf8");
-    const rack = await fs.readFile(path.join(repoRoot, "cmajor/EffectsRack.cmajor"), "utf8");
+    // Synth non-coupling checks only run in the monorepo; an exported Builder
+    // Kit ships no synth sources.
+    const synthManifestPath = path.join(repoRoot, "WavetableSynth.cmajorpatch");
+    const inMonorepo = existsSync(synthManifestPath);
+    const desktopManifest = inMonorepo
+        ? JSON.parse(await fs.readFile(synthManifestPath, "utf8"))
+        : { source: [] };
+    const synth = inMonorepo
+        ? await fs.readFile(path.join(repoRoot, "cmajor/WavetableSynth.cmajor"), "utf8")
+        : "";
+    const rack = inMonorepo
+        ? await fs.readFile(path.join(repoRoot, "cmajor/EffectsRack.cmajor"), "utf8")
+        : "";
 
     assert.match(source, /let enhancerLiteOversampleFactor = 4;/);
     assert.match(source, /struct EnhancerLiteIirUpsampler4x/);

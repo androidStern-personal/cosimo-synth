@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { chromium } from "playwright";
 
-import { startStaticRepoServer } from "./helpers/desktop_harness_browser.mjs";
+import { startStaticRepoServer } from "../kit/tests/helpers/static_web_server.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const sourcePath = path.join(repoRoot, "fx/enhancer_lite/view/source.ts");
@@ -38,7 +38,7 @@ after(async () => {
 
 async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts") {
     const page = await browser.newPage({ viewport: { width: 900, height: 620 } });
-    await page.goto(new URL("tests/helpers/module_test_shell.html", server.baseUrl).toString());
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).toString());
     await page.evaluate(async ({ values, sourceModulePath }) => {
         const parameterValues = new Map(Object.entries(values));
         const listeners = new Map();

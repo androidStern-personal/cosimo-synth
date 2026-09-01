@@ -80,7 +80,11 @@ test("exports_visible_parameter_contract_from_cmajor_status_and_excludes_hidden_
     assert.match(contract.hash, /^sha256:[0-9a-f]{64}$/);
 });
 
-test("ott_runtime_contract_matches_all_visible_OttLab_cmajor_parameters", async () => {
+test("ott_runtime_contract_matches_all_visible_OttLab_cmajor_parameters", async (t) => {
+    if (!fs.existsSync(path.join(repoRoot, "fx/ott_lab/OttLab.cmajor"))) {
+        t.skip("monorepo-only source absent (exported kit)");
+        return;
+    }
     const {
         buildPluginStateContract,
     } = await loadContractModule();
@@ -106,7 +110,11 @@ test("ott_runtime_contract_matches_all_visible_OttLab_cmajor_parameters", async 
     assert.equal(contract.parameters.some((param) => param.endpointID === "hostSlot0Guard"), false);
 });
 
-test("seqfx_runtime_contract_contains_parameters_but_not_matrix_cells", async () => {
+test("seqfx_runtime_contract_contains_parameters_but_not_matrix_cells", async (t) => {
+    if (!fs.existsSync(path.join(repoRoot, "fx/seqfx/SeqFx.cmajor"))) {
+        t.skip("monorepo-only source absent (exported kit)");
+        return;
+    }
     const {
         buildPluginStateContract,
     } = await loadContractModule();
