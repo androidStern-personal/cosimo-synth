@@ -1,12 +1,14 @@
 # Cosimo Synth Notes
 
+## Builder Kit
+
+- Read `kit/AGENTS.md` fully before any plugin work. It owns the generic plugin-repo conventions: isolated-worktree and CPM dependency rules, the canonical fx build/dev/install commands, plugin architecture pointers, and the definition of done for plugin changes.
+- The effect-plugin architecture reference is `kit/docs/PLUGIN_ARCHITECTURE.md`; the product-neutral release verification checklist is `kit/docs/RELEASE_VERIFICATION.md`.
+- Everything below is Cosimo-specific: this machine, this synth product, and its releases.
+
 ## Icons
 
 - Audio/instrument icons come from fontaudio (https://github.com/fefanto/fontaudio) — decided 2026-07-18. Do not hand-draw or generate instrument glyphs (envelopes, waveforms, filters, modulation, keyboard); use fontaudio's. Generic UI verbs (add, close, carets) may keep the existing generic icon set of the surface you are in. No npm package exists: vendor the webfont/SVG assets. Icons are CC BY 4.0 (attribution goes in CREDITS.md), fonts OFL 1.1, code MIT. Pragmatic choice, upgradeable later — keep icon rendering behind each surface's identity component so a future swap is cheap.
-
-## Isolated Worktrees
-
-- CMake dependency callers include `cmake/CosimoDependencies.cmake` and share the ordinary user-level CPM source cache across worktrees. Do not link dependency trees or provision a worktree-specific Cmajor checkout.
 
 ## Codex Task Integration
 
@@ -107,7 +109,7 @@
 - The official generic VST3 loader `CmajPlugin.vst3` did not reproduce that crash with the same OTT lab patch, but it does not contain the patched CHOC keyboard bridge. For fast Ableton lab testing, use the repo-built patched generic VST3 from `npm run cmajplugin:build` and `npm run cmajplugin:install`, then point it at one effect with `npm run fx:jit:install -- ott` or `npm run fx:jit:install -- chorus`.
 - Do not install or recommend the official generic AU loader `~/Library/Audio/Plug-Ins/Components/CmajPlugin.component` for Ableton WebView knob testing unless the task is specifically to reproduce the AU crash.
 - `scripts/install_fx_cmajplugin.sh` validates migrated effect patches such as OTT Lab and Chorus Lab, verifies that the installed generic `CmajPlugin.vst3` contains the patched CHOC keyboard bridge, and writes only the VST3 `CmajPlugin.json`. It does not install `CmajPlugin.vst3` and does not touch any AU loader.
-- `cmake/CosimoDependencies.cmake` is the sole source-dependency seam for effect production builds, the desktop native wrapper, iOS AUv3, web/codegen builds, and the repo-built generic `CmajPlugin.vst3`. Plain CPM retrieves the exact private Cmajor commit recursively; that repository's private CHOC gitlink is the only CHOC version authority. The same module retrieves the exact production JUCE commit, while T26 explicitly selects its research-only JUCE 7.0.1 commit through a separate function in that module. All Cmajor/CHOC fixes are ordinary commits in those private repositories; do not patch or replace downloaded sources.
+- The installer script above now lives at `kit/scripts/install_fx_cmajplugin.sh` (`npm run fx:jit:install`); the dependency-seam and CPM rules live in `kit/AGENTS.md`.
 
 ## Spectral Chord Resonator I/O
 

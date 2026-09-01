@@ -1,1 +1,1 @@
-../../../ui/shared/effects/effect-view-loader.js
+../../../kit/ui/effects/effect-view-loader.js

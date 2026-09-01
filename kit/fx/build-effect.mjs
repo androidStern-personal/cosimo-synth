@@ -49,6 +49,20 @@ export const seqFxDistributableRuntimeEnvironmentKey = "SEQFX_DISTRIBUTABLE_RUNT
  * the runtime output directory under their base names, and the runtime
  * manifest is rewritten to match, so nothing is ever written outside the
  * runtime directory. See planRuntimePatchEntries.
+ *
+ * Product identity lives in an optional `product.json` beside the patch
+ * (product/manufacturer names, bundle identifier, 4-char plugin/manufacturer
+ * codes, semantic version, output filename, optional support URL and
+ * wordmark/accent tokens). When present it is authoritative: discovery
+ * validates it (fail closed, like the sidecars), derives the manifest-facing
+ * identity (`plugin.identity`), requires the patch manifest to agree, owns the
+ * install filename (`outputFileName` — a sidecar that also sets `productName`
+ * fails discovery), and the build writes the identity into the runtime patch
+ * manifest. Absent `product.json`, the patch manifest is authoritative for
+ * identity, unchanged. A directory holding several patches must bind the file
+ * with its `patch` key. Bundle identifiers and plugin codes are
+ * collision-checked across ALL discovered plugins (product.json-driven or
+ * manifest-only); duplicates fail discovery naming both claiming patches.
  */
 const sidecarKeyValidators = {
     alias: (value) => typeof value === "string" && /^[a-z0-9][a-z0-9-]*$/.test(value) && value !== "all",
@@ -115,6 +129,183 @@ export function resolveBuildOutputRoot(value, label) {
     return resolved;
 }
 
+export const productIdentityFileName = "product.json";
+
+/** 4-char AU/VST identity codes: alphanumeric with at least one uppercase letter (all-lowercase codes are reserved). */
+function isFourCharCode(value) {
+    return isNonEmptyString(value) && /^[A-Za-z0-9]{4}$/.test(value) && /[A-Z]/.test(value);
+}
+
+/** Reverse-DNS bundle identifier, e.g. "dev.cosimo.enhancer-lite". */
+function isBundleIdentifier(value) {
+    return isNonEmptyString(value) && /^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z][A-Za-z0-9-]*)+$/.test(value);
+}
+
+function isSemanticVersion(value) {
+    return isNonEmptyString(value) && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(value);
+}
+
+function isHttpUrl(value) {
+    if (!isNonEmptyString(value))
+        return false;
+
+    let parsed;
+
+    try {
+        parsed = new URL(value);
+    } catch {
+        return false;
+    }
+
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+}
+
+function isCssHexColor(value) {
+    return isNonEmptyString(value) && /^#[0-9a-fA-F]{6}$/.test(value);
+}
+
+/** Wordmarks are read relative to the plugin directory and must not escape it. */
+function isPluginRelativeFilePath(value) {
+    if (!isNonEmptyString(value) || path.isAbsolute(value))
+        return false;
+
+    const normalized = path.posix.normalize(value);
+
+    return normalized !== "." && normalized !== ".." && !normalized.startsWith("../");
+}
+
+const productKeyValidators = {
+    patch: (value) => isPlainFileName(value) && value.endsWith(".cmajorpatch"),
+    productName: isNonEmptyString,
+    manufacturerName: isNonEmptyString,
+    bundleIdentifier: isBundleIdentifier,
+    pluginCode: isFourCharCode,
+    manufacturerCode: isFourCharCode,
+    version: isSemanticVersion,
+    outputFileName: isBuildIdentifier,
+    supportUrl: isHttpUrl,
+    wordmark: isPluginRelativeFilePath,
+    accentColor: isCssHexColor,
+};
+
+const requiredProductKeys = [
+    "productName",
+    "manufacturerName",
+    "bundleIdentifier",
+    "pluginCode",
+    "manufacturerCode",
+    "version",
+    "outputFileName",
+];
+
+/**
+ * Read and validate a directory's optional `product.json`, resolving which
+ * patch it identifies. Returns null when the file is absent; every defect
+ * fails discovery closed, like the build sidecars.
+ */
+function readProductIdentityConfig(directoryPath, patchFileNames) {
+    const productPath = path.join(directoryPath, productIdentityFileName);
+
+    if (!fs.existsSync(productPath))
+        return null;
+
+    let product;
+
+    try {
+        product = JSON.parse(fs.readFileSync(productPath, "utf8"));
+    } catch (error) {
+        throw new Error(`Could not parse ${productPath}: ${error.message}`);
+    }
+
+    if (product === null || typeof product !== "object" || Array.isArray(product))
+        throw new Error(`${productPath} must contain a JSON object.`);
+
+    for (const [key, value] of Object.entries(product)) {
+        const validate = productKeyValidators[key];
+
+        if (!validate) {
+            throw new Error(
+                `${productPath} has unknown key "${key}". Known keys: ${Object.keys(productKeyValidators).join(", ")}.`,
+            );
+        }
+
+        if (!validate(value))
+            throw new Error(`${productPath} has an invalid "${key}" value.`);
+    }
+
+    for (const key of requiredProductKeys) {
+        if (product[key] === undefined)
+            throw new Error(`${productPath} is missing required key "${key}".`);
+    }
+
+    if (product.wordmark !== undefined && !fs.existsSync(path.join(directoryPath, product.wordmark)))
+        throw new Error(`${productPath} names a wordmark file that does not exist: ${JSON.stringify(product.wordmark)}.`);
+
+    let boundPatchFileName;
+
+    if (product.patch !== undefined) {
+        if (!patchFileNames.includes(product.patch)) {
+            throw new Error(
+                `${productPath} binds to ${JSON.stringify(product.patch)}, which matches no .cmajorpatch in its directory.`,
+            );
+        }
+
+        boundPatchFileName = product.patch;
+    } else if (patchFileNames.length === 1) {
+        boundPatchFileName = patchFileNames[0];
+    } else {
+        throw new Error(
+            `${productPath} is ambiguous: its directory holds ${patchFileNames.length} patches. `
+            + 'Set its "patch" key to the .cmajorpatch this identity belongs to.',
+        );
+    }
+
+    const { patch: _boundPatch, ...identityConfig } = product;
+
+    return { productPath, boundPatchFileName, product: identityConfig };
+}
+
+/** The manifest-facing identity a validated product.json drives. */
+export function deriveProductIdentity(product) {
+    return {
+        ID: product.bundleIdentifier,
+        name: product.productName,
+        manufacturer: product.manufacturerName,
+        version: product.version,
+        plugin: {
+            pluginCode: product.pluginCode,
+            manufacturerCode: product.manufacturerCode,
+        },
+    };
+}
+
+function collectProductIdentityMismatches(manifest, identity) {
+    const facets = [
+        ["ID", manifest?.ID, identity.ID],
+        ["name", manifest?.name, identity.name],
+        ["manufacturer", manifest?.manufacturer, identity.manufacturer],
+        ["version", manifest?.version, identity.version],
+        ["plugin.pluginCode", manifest?.plugin?.pluginCode, identity.plugin.pluginCode],
+        ["plugin.manufacturerCode", manifest?.plugin?.manufacturerCode, identity.plugin.manufacturerCode],
+    ];
+
+    return facets
+        .filter(([, manifestValue, productValue]) => manifestValue !== productValue)
+        .map(([facet, manifestValue, productValue]) =>
+            `${facet} (manifest ${JSON.stringify(manifestValue)}, product.json ${JSON.stringify(productValue)})`);
+}
+
+/** The identity values one discovered patch claims for cross-plugin collision checks. */
+function readManifestIdentityClaims(manifest, identity) {
+    if (identity)
+        return { bundleIdentifier: identity.ID, pluginCode: identity.plugin.pluginCode };
+
+    return {
+        bundleIdentifier: isNonEmptyString(manifest?.ID) ? manifest.ID : undefined,
+        pluginCode: isNonEmptyString(manifest?.plugin?.pluginCode) ? manifest.plugin.pluginCode : undefined,
+    };
+}
+
 function deriveAlias(directoryName) {
     return directoryName
         .toLowerCase()
@@ -130,11 +321,12 @@ function deriveBuildIdentifier(manifest, patchFileName) {
     return source.replace(/[^A-Za-z0-9]+/g, "");
 }
 
+/** Null means the manifest did not parse; derivations then fall back to the patch file name. */
 function readManifestForDiscovery(patchPath) {
     try {
         return JSON.parse(fs.readFileSync(patchPath, "utf8"));
     } catch {
-        return {};
+        return null;
     }
 }
 
@@ -172,11 +364,20 @@ function readBuildSidecar(sidecarPath) {
     return sidecar;
 }
 
-function createDiscoveredPlugin({ patch, manifest, sidecar, directoryName, patchFileName }) {
+function createDiscoveredPlugin({ patch, manifest, sidecar, directoryName, patchFileName, productConfig }) {
     const alias = sidecar.alias ?? deriveAlias(directoryName);
 
     if (!sidecarKeyValidators.alias(alias))
         throw new Error(`Could not derive a usable plugin alias for ${patch}.`);
+
+    const product = productConfig?.boundPatchFileName === patchFileName ? productConfig : null;
+
+    if (product && sidecar.productName !== undefined) {
+        throw new Error(
+            `${product.productPath} owns the install filename for ${patch} (its "outputFileName"); `
+            + 'remove "productName" from the build sidecar.',
+        );
+    }
 
     const outputStem = alias.replaceAll("-", "_");
     const buildIdentifier = deriveBuildIdentifier(manifest, patchFileName);
@@ -185,11 +386,32 @@ function createDiscoveredPlugin({ patch, manifest, sidecar, directoryName, patch
         runtimeOut: sidecar.runtimeOut ?? `build/fx/${outputStem}_runtime`,
         juceOut: sidecar.juceOut ?? `build/${outputStem}_juce`,
         cmakeTarget: sidecar.cmakeTarget ?? buildIdentifier,
-        productName: sidecar.productName ?? buildIdentifier,
+        productName: product ? product.product.outputFileName : (sidecar.productName ?? buildIdentifier),
     };
 
     if (!isBuildIdentifier(plugin.cmakeTarget) || !isBuildIdentifier(plugin.productName))
         throw new Error(`Could not derive a build identifier for ${patch}; set cmakeTarget/productName in its sidecar.`);
+
+    if (product) {
+        plugin.product = product.product;
+        plugin.identity = deriveProductIdentity(product.product);
+
+        // The source patch is what dev servers and JIT installs load, so a
+        // manifest that disagrees with the authoritative product.json would
+        // ship one identity in development and another in production. Fail
+        // closed instead (a manifest that does not parse is reported by the
+        // build itself later).
+        if (manifest !== null) {
+            const mismatches = collectProductIdentityMismatches(manifest, plugin.identity);
+
+            if (mismatches.length > 0) {
+                throw new Error(
+                    `${product.productPath} is authoritative for ${patch} but disagrees with its manifest: `
+                    + `${mismatches.join("; ")}. Update the patch manifest to match product.json.`,
+                );
+            }
+        }
+    }
 
     if (sidecar.disableMicrophonePermission === true)
         plugin.disableMicrophonePermission = true;
@@ -214,6 +436,8 @@ export function discoverEffectPlugins({ fxRoot = defaultFxRoot } = {}) {
     const registryRoot = path.dirname(fxRoot);
     const plugins = {};
     const patchesByAlias = new Map();
+    const patchesByBundleIdentifier = new Map();
+    const patchesByPluginCode = new Map();
 
     if (!fs.existsSync(fxRoot))
         return plugins;
@@ -231,6 +455,7 @@ export function discoverEffectPlugins({ fxRoot = defaultFxRoot } = {}) {
         const patchFileNames = fileNames
             .filter((fileName) => fileName.endsWith(".cmajorpatch"))
             .sort();
+        const productConfig = readProductIdentityConfig(directoryPath, patchFileNames);
         const claimedSidecarNames = new Set(
             patchFileNames.map((fileName) => fileName.replace(/\.cmajorpatch$/, ".build.json")),
         );
@@ -250,12 +475,14 @@ export function discoverEffectPlugins({ fxRoot = defaultFxRoot } = {}) {
             const patchPath = path.join(directoryPath, patchFileName);
             const sidecarPath = patchPath.replace(/\.cmajorpatch$/, ".build.json");
             const patch = path.relative(registryRoot, patchPath).split(path.sep).join("/");
+            const manifest = readManifestForDiscovery(patchPath);
             const { alias, plugin } = createDiscoveredPlugin({
                 patch,
-                manifest: readManifestForDiscovery(patchPath),
+                manifest,
                 sidecar: readBuildSidecar(sidecarPath),
                 directoryName,
                 patchFileName,
+                productConfig,
             });
 
             if (patchesByAlias.has(alias)) {
@@ -265,12 +492,59 @@ export function discoverEffectPlugins({ fxRoot = defaultFxRoot } = {}) {
                 );
             }
 
+            const claims = readManifestIdentityClaims(manifest, plugin.identity);
+
+            for (const [claimKey, claimedPatches, description] of [
+                ["bundleIdentifier", patchesByBundleIdentifier, "bundle identifier"],
+                ["pluginCode", patchesByPluginCode, "pluginCode"],
+            ]) {
+                const claim = claims[claimKey];
+
+                if (claim === undefined)
+                    continue;
+
+                if (claimedPatches.has(claim)) {
+                    throw new Error(
+                        `Effect plugin ${description} ${JSON.stringify(claim)} is claimed by both `
+                        + `${claimedPatches.get(claim)} and ${patch}. `
+                        + "Give each plugin a unique identity (product.json, or the patch manifest when no product.json exists).",
+                    );
+                }
+
+                claimedPatches.set(claim, patch);
+            }
+
             patchesByAlias.set(alias, patch);
             plugins[alias] = plugin;
         }
     }
 
     return plugins;
+}
+
+/**
+ * The bundle identifiers and plugin codes every discovered plugin claims,
+ * mapped to the claiming patch. Product.json identities and manifest-only
+ * identities both count — this is what scaffolding checks new identity
+ * candidates against.
+ */
+export function collectEffectIdentityClaims({ fxRoot = defaultFxRoot } = {}) {
+    const registryRoot = path.dirname(fxRoot);
+    const bundleIdentifiers = new Map();
+    const pluginCodes = new Map();
+
+    for (const plugin of Object.values(discoverEffectPlugins({ fxRoot }))) {
+        const manifest = readManifestForDiscovery(path.join(registryRoot, plugin.patch));
+        const claims = readManifestIdentityClaims(manifest, plugin.identity);
+
+        if (claims.bundleIdentifier !== undefined)
+            bundleIdentifiers.set(claims.bundleIdentifier, plugin.patch);
+
+        if (claims.pluginCode !== undefined)
+            pluginCodes.set(claims.pluginCode, plugin.patch);
+    }
+
+    return { bundleIdentifiers, pluginCodes };
 }
 
 export const effectPlugins = discoverEffectPlugins();
@@ -420,6 +694,17 @@ export function createRuntimePatchManifest(manifest, plugin, { stripDevModule = 
 
         const rewritten = entryPlans[key].map(({ entry, to, escaped }) => (escaped ? to : entry));
         runtimeManifest[key] = Array.isArray(manifest[key]) ? rewritten : rewritten[0];
+    }
+
+    if (plugin.identity) {
+        // product.json is authoritative for identity; discovery already
+        // requires the source manifest to agree, so this is a no-op rewrite
+        // that keeps the authority direction explicit in the build.
+        runtimeManifest.ID = plugin.identity.ID;
+        runtimeManifest.name = plugin.identity.name;
+        runtimeManifest.manufacturer = plugin.identity.manufacturer;
+        runtimeManifest.version = plugin.identity.version;
+        runtimeManifest.plugin = { ...runtimeManifest.plugin, ...plugin.identity.plugin };
     }
 
     if (plugin.workerSource) {

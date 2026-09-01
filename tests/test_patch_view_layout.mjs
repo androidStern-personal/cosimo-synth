@@ -243,7 +243,7 @@ test("generated desktop and iPhone UI artifacts carry the exact T74/T75 source c
                 "ui/desktop/effects-rack-workspace.tsx",
                 "ui/desktop/DesktopPatchView.tsx",
                 "ui/desktop/polish-fullscreen-editor.tsx",
-                { mapSource: "ui/shared/cmajor-react.ts", contentPath: "kit/ui/cmajor-react.ts" },
+                "kit/ui/cmajor-react.ts",
                 "ui/shared/enhancer-spectrum.ts",
                 "ui/shared/enhancer-spectrum-graph.tsx",
                 "ui/shared/polish-telemetry.ts",
@@ -262,7 +262,7 @@ test("generated desktop and iPhone UI artifacts carry the exact T74/T75 source c
                 "sampleRateHz",
             ],
             sourcePaths: [
-                { mapSource: "ui/shared/cmajor-react.ts", contentPath: "kit/ui/cmajor-react.ts" },
+                "kit/ui/cmajor-react.ts",
                 "ui/shared/enhancer-spectrum.ts",
                 "ui/shared/polish-telemetry.ts",
                 "ui/shared/synth-hooks.ts",
@@ -285,17 +285,12 @@ test("generated desktop and iPhone UI artifacts carry the exact T74/T75 source c
             );
         }
         for (const sourcePath of contract.sourcePaths) {
-            // A string entry lives at the mapped path; a module moved into kit/
-            // keeps its pre-move mapSource until the bundle is regenerated while
-            // its content lives at contentPath (the old path is a re-export shim).
-            const mapSource = typeof sourcePath === "string" ? sourcePath : sourcePath.mapSource;
-            const contentPath = typeof sourcePath === "string" ? sourcePath : sourcePath.contentPath;
-            const sourceIndex = sourceMap.sources.findIndex((source) => source.endsWith(mapSource));
-            assert.notEqual(sourceIndex, -1, `${contract.label} map is missing ${mapSource}`);
+            const sourceIndex = sourceMap.sources.findIndex((source) => source.endsWith(sourcePath));
+            assert.notEqual(sourceIndex, -1, `${contract.label} map is missing ${sourcePath}`);
             assert.equal(
                 sourceMap.sourcesContent[sourceIndex],
-                await fs.readFile(path.join(repoRoot, contentPath), "utf8"),
-                `${contract.label} sourcesContent drifted from ${contentPath}`,
+                await fs.readFile(path.join(repoRoot, sourcePath), "utf8"),
+                `${contract.label} sourcesContent drifted from ${sourcePath}`,
             );
         }
     }

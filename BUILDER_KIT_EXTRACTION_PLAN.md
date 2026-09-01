@@ -163,7 +163,7 @@ Sequential, after Phase 2 lands.
   commands, synth specifics) stay in root `AGENTS.md`, which starts with
   "Read `kit/AGENTS.md` fully." Scrub personal identifiers (email, team id,
   device ids, `/Users/winterfell` paths) from everything under `kit/`.
-- [ ] **3.2 Scaffold.** `npm run kit:new -- <name>` generates
+- [x] **3.2 Scaffold — DONE 2026-09-01 (wave 4 stage D).** `npm run kit:new -- <name>` generates
   `fx/<name>/` with manifest, view stub wired to the loader, `product.json`,
   and a starter test. Registry is manifest-driven (2.1) so no other edits.
 - [ ] **3.3 Kit docs and skills.** Rewrite `FX_PLUGIN_UI_ARCHITECTURE.md` as
@@ -174,7 +174,7 @@ Sequential, after Phase 2 lands.
   checklist as a product-neutral doc; remove the personal signing identity,
   machine paths, and Patreon specifics from anything kit-side (the SeqFX
   release flow itself stays Cosimo-private).
-- [ ] **3.4 `product.json` identity.** Per-plugin identity file driving
+- [x] **3.4 `product.json` identity — DONE 2026-09-01 (wave 4 stage D).** Per-plugin identity file driving
   product/manufacturer names, bundle id, 4-char codes, version, install
   filenames; validation + collision checks per the roadmap's locked BK-13
   contract.
@@ -296,3 +296,33 @@ not this extraction.
   - Process note: an interrupted agent git-stash cycle nearly lost the wave;
     work was recovered from stash@{0} and agents are now forbidden from
     stash/checkout/reset — baselines are read via `git show` instead.
+
+- **2026-09-01 wave 4, stage D (3.2 + 3.4)** — scaffold command and
+  `product.json` identity. (Stages A–C — the kit/ moves, shims, docs, and
+  skills — are summarized in their WIP commits pending the wave-4 closing
+  entry.)
+  - 3.4: optional per-plugin `product.json` beside the patch (names, bundle
+    identifier, 4-char codes, semantic version, `outputFileName`, optional
+    supportUrl/wordmark/accentColor; `patch` binder for multi-patch
+    directories). Discovery validates it fail-closed (shape checks; wordmark
+    existence; manifest drift; sidecar `productName` conflict) and derives the
+    manifest-facing identity that the build writes into runtime manifests.
+    Bundle ids and pluginCodes are collision-checked across ALL discovered
+    plugins (manifest-only ones included); duplicates fail discovery naming
+    both patches. Only `fx/enhancer_lite/` carries one (values mirror its
+    manifest; sidecar `productName` moved into it); the enhancer-lite runtime
+    output is proven byte-identical to the pre-change build. Absence of
+    `product.json` = the patch manifest stays authoritative (documented in
+    `kit/docs/PLUGIN_ARCHITECTURE.md`).
+  - 3.2: `npm run kit:new -- <name>` (`kit/scripts/new_plugin.mjs`) scaffolds
+    a working stereo-gain plugin: patch manifest + `.cmajor` example, build
+    sidecar, `product.json`, `view/index.js` symlink to the kit loader,
+    `createPatchView` TS view stub, starter test
+    `tests/test_<name>_state.mjs`, then prints next steps. Refuses colliding
+    directories/aliases/pluginCodes/bundle ids
+    (`collectEffectIdentityClaims`). Smoke-proven end to end: scaffold
+    `demo_verb`, `fx:build -- demo-verb`, starter test 2/2, full removal,
+    `fx:build -- all` clean, typecheck still at the 27-error baseline.
+  - Gates: `node --test tests/test_fx_build_args.mjs` 48/48 (new product.json
+    validation/collision/scaffold coverage), `npm test` green, typecheck 27
+    pre-existing errors, enhancer-lite runtime hashes unchanged.

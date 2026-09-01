@@ -45,6 +45,7 @@
     "test:bounce:native": "npm run test:bounce:native:driver && npm run test:bounce:native:store && npm run test:bounce:native:generated && npm run test:bounce:native:quickjs",
     "synth:desktop:build": "./scripts/build_desktop_native.sh",
     "synth:desktop:dev": "./scripts/run_desktop_native_dev.sh",
+    "kit:new": "node kit/scripts/new_plugin.mjs",
     "fx:dev": "vite --config kit/fx/vite.config.mjs",
     "fx:build": "node kit/fx/build-effect.mjs",
     "fx:seqfx:visual-proof": "node scripts/capture_seqfx_visual_proof.mjs",

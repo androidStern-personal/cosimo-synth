@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -43,6 +43,45 @@ async function writeFixturePlugin(fxRoot, directoryName, patchFileName, manifest
             "utf8",
         );
     }
+}
+
+async function loadScaffoldModule() {
+    return import(pathToFileURL(path.join(repoRoot, "kit/scripts/new_plugin.mjs")));
+}
+
+async function writeFixtureProduct(fxRoot, directoryName, product) {
+    const directoryPath = path.join(fxRoot, directoryName);
+
+    await mkdir(directoryPath, { recursive: true });
+    await writeFile(
+        path.join(directoryPath, "product.json"),
+        typeof product === "string" ? product : `${JSON.stringify(product, null, 2)}\n`,
+        "utf8",
+    );
+}
+
+function createFixtureProduct(overrides = {}) {
+    return {
+        productName: "Tremolo Lab",
+        manufacturerName: "Cosimo",
+        bundleIdentifier: "dev.cosimo.tremolo-lab",
+        pluginCode: "CsTL",
+        manufacturerCode: "Cosi",
+        version: "0.1.0",
+        outputFileName: "TremoloLab",
+        ...overrides,
+    };
+}
+
+function createFixtureIdentityManifest() {
+    return {
+        ID: "dev.cosimo.tremolo-lab",
+        version: "0.1.0",
+        name: "Tremolo Lab",
+        manufacturer: "Cosimo",
+        plugin: { pluginCode: "CsTL", manufacturerCode: "Cosi" },
+        view: { src: "view/index.js" },
+    };
 }
 
 test("fx_build_all_expands_to_the_discovered_registry_for_both_pipelines", async () => {
@@ -360,6 +399,330 @@ test("sidecar build identifiers and worker paths must be separator-free or repo-
             );
         });
     }
+});
+
+test("product.json identity is read at discovery and derives the manifest-facing identity", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "tremolo_lab", "TremoloLab.cmajorpatch", createFixtureIdentityManifest());
+        await writeFixtureProduct(fxRoot, "tremolo_lab", createFixtureProduct({
+            supportUrl: "https://example.com/support",
+            accentColor: "#f0b867",
+        }));
+
+        const plugins = buildModule.discoverEffectPlugins({ fxRoot });
+        const plugin = plugins["tremolo-lab"];
+
+        // outputFileName owns the install filename when product.json exists.
+        assert.equal(plugin.productName, "TremoloLab");
+        assert.deepEqual(plugin.identity, {
+            ID: "dev.cosimo.tremolo-lab",
+            name: "Tremolo Lab",
+            manufacturer: "Cosimo",
+            version: "0.1.0",
+            plugin: { pluginCode: "CsTL", manufacturerCode: "Cosi" },
+        });
+        assert.deepEqual(plugin.identity, buildModule.deriveProductIdentity(plugin.product));
+        assert.equal(plugin.product.supportUrl, "https://example.com/support");
+        assert.equal(plugin.product.accentColor, "#f0b867");
+
+        // The build writes the derived identity into the runtime manifest
+        // without disturbing key order or any other manifest content.
+        const runtimeManifest = buildModule.createRuntimePatchManifest(createFixtureIdentityManifest(), plugin);
+
+        assert.deepEqual(runtimeManifest, createFixtureIdentityManifest());
+        assert.deepEqual(Object.keys(runtimeManifest), Object.keys(createFixtureIdentityManifest()));
+    });
+});
+
+test("product.json shape defects fail discovery closed like the build sidecars", async () => {
+    const { buildModule } = await loadBuildModules();
+    const badProducts = [
+        ["{ not json", /Could not parse .*product\.json/],
+        [createFixtureProduct({ pluginCode: "toolong" }), /invalid "pluginCode" value/],
+        [createFixtureProduct({ pluginCode: "abc" }), /invalid "pluginCode" value/],
+        [createFixtureProduct({ pluginCode: "cstl" }), /invalid "pluginCode" value/],
+        [createFixtureProduct({ manufacturerCode: "Co/i" }), /invalid "manufacturerCode" value/],
+        [createFixtureProduct({ bundleIdentifier: "no-dots" }), /invalid "bundleIdentifier" value/],
+        [createFixtureProduct({ version: "1.0" }), /invalid "version" value/],
+        [createFixtureProduct({ outputFileName: "../Escape" }), /invalid "outputFileName" value/],
+        [createFixtureProduct({ supportUrl: "not a url" }), /invalid "supportUrl" value/],
+        [createFixtureProduct({ accentColor: "orange" }), /invalid "accentColor" value/],
+        [createFixtureProduct({ productCode: "CsTL" }), /unknown key "productCode"/],
+        [createFixtureProduct({ outputFileName: undefined }), /missing required key "outputFileName"/],
+        [createFixtureProduct({ wordmark: "assets/absent.png" }), /wordmark file that does not exist/],
+        [createFixtureProduct({ patch: "Renamed.cmajorpatch" }), /matches no \.cmajorpatch/],
+    ];
+
+    for (const [product, expectedError] of badProducts) {
+        await withFixtureFxRoot(async (fxRoot) => {
+            await writeFixturePlugin(fxRoot, "tremolo_lab", "TremoloLab.cmajorpatch", createFixtureIdentityManifest());
+            await writeFixtureProduct(fxRoot, "tremolo_lab", product);
+            assert.throws(
+                () => buildModule.discoverEffectPlugins({ fxRoot }),
+                expectedError,
+                typeof product === "string" ? product : JSON.stringify(product),
+            );
+        });
+    }
+});
+
+test("product.json is authoritative: manifest drift and duplicated filename authority fail discovery", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(
+            fxRoot,
+            "tremolo_lab",
+            "TremoloLab.cmajorpatch",
+            { ...createFixtureIdentityManifest(), version: "0.2.0" },
+        );
+        await writeFixtureProduct(fxRoot, "tremolo_lab", createFixtureProduct());
+
+        assert.throws(
+            () => buildModule.discoverEffectPlugins({ fxRoot }),
+            /product\.json is authoritative .* disagrees with its manifest: version \(manifest "0\.2\.0", product\.json "0\.1\.0"\)/,
+        );
+
+        await writeFixturePlugin(
+            fxRoot,
+            "tremolo_lab",
+            "TremoloLab.cmajorpatch",
+            createFixtureIdentityManifest(),
+            { productName: "TremoloLab" },
+        );
+
+        assert.throws(
+            () => buildModule.discoverEffectPlugins({ fxRoot }),
+            /product\.json owns the install filename .* remove "productName" from the build sidecar/,
+        );
+    });
+});
+
+test("a product.json in a directory holding several patches must bind to one of them", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "duo_lab", "Alpha.cmajorpatch", { name: "Alpha" }, { alias: "alpha" });
+        await writeFixturePlugin(fxRoot, "duo_lab", "Tremolo.cmajorpatch", createFixtureIdentityManifest(), { alias: "trem" });
+        await writeFixtureProduct(fxRoot, "duo_lab", createFixtureProduct());
+
+        assert.throws(
+            () => buildModule.discoverEffectPlugins({ fxRoot }),
+            /product\.json is ambiguous: its directory holds 2 patches/,
+        );
+
+        await writeFixtureProduct(fxRoot, "duo_lab", createFixtureProduct({ patch: "Tremolo.cmajorpatch" }));
+
+        const plugins = buildModule.discoverEffectPlugins({ fxRoot });
+
+        assert.equal(plugins.alpha.identity, undefined, "the unbound patch keeps manifest-only identity");
+        assert.equal(plugins.trem.identity.ID, "dev.cosimo.tremolo-lab");
+        assert.equal(plugins.trem.productName, "TremoloLab");
+    });
+});
+
+test("duplicate plugin codes and bundle identifiers fail discovery naming both claiming patches", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    // Manifest-only identities collide with each other...
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "first_lab", "First.cmajorpatch", {
+            name: "First",
+            ID: "dev.cosimo.first-lab",
+            plugin: { pluginCode: "CsDu", manufacturerCode: "Cosi" },
+        });
+        await writeFixturePlugin(fxRoot, "second_lab", "Second.cmajorpatch", {
+            name: "Second",
+            ID: "dev.cosimo.second-lab",
+            plugin: { pluginCode: "CsDu", manufacturerCode: "Cosi" },
+        });
+
+        assert.throws(
+            () => buildModule.discoverEffectPlugins({ fxRoot }),
+            /pluginCode "CsDu" is claimed by both fx\/first_lab\/First\.cmajorpatch and fx\/second_lab\/Second\.cmajorpatch/,
+        );
+    });
+
+    // ...and with product.json-driven identities.
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "tremolo_lab", "TremoloLab.cmajorpatch", createFixtureIdentityManifest());
+        await writeFixtureProduct(fxRoot, "tremolo_lab", createFixtureProduct());
+        await writeFixturePlugin(fxRoot, "squatter_lab", "Squatter.cmajorpatch", {
+            name: "Squatter",
+            ID: "dev.cosimo.tremolo-lab",
+            plugin: { pluginCode: "CsSq", manufacturerCode: "Cosi" },
+        });
+
+        assert.throws(
+            () => buildModule.discoverEffectPlugins({ fxRoot }),
+            /bundle identifier "dev\.cosimo\.tremolo-lab" is claimed by both fx\/squatter_lab\/Squatter\.cmajorpatch and fx\/tremolo_lab\/TremoloLab\.cmajorpatch/,
+        );
+    });
+});
+
+test("enhancer_lite ships the only checked-in product.json and it is a no-op against its manifest", async () => {
+    const { buildModule } = await loadBuildModules();
+    const plugin = buildModule.effectPlugins["enhancer-lite"];
+
+    assert.deepEqual(plugin.identity, {
+        ID: "dev.cosimo.enhancer-lite",
+        name: "Cosimo Enhancer Lite",
+        manufacturer: "Cosimo",
+        version: "0.1.0",
+        plugin: { pluginCode: "CsEL", manufacturerCode: "Cosi" },
+    });
+    assert.equal(plugin.productName, "CosimoEnhancerLite");
+    assert.equal(plugin.product.outputFileName, "CosimoEnhancerLite");
+    assert.equal(plugin.product.wordmark, "assets/enhancer-lite-wordmark.png");
+
+    // Every other plugin keeps manifest-only identity (no product.json means
+    // the patch manifest is authoritative).
+    for (const [pluginName, other] of Object.entries(buildModule.effectPlugins)) {
+        if (pluginName !== "enhancer-lite") {
+            assert.equal(other.identity, undefined, pluginName);
+            assert.equal(other.product, undefined, pluginName);
+        }
+    }
+
+    // Identity claims cover all discovered plugins, product.json or not, and
+    // are collision-free across the shipped set.
+    const claims = buildModule.collectEffectIdentityClaims();
+    const targetCount = buildModule.effectPluginTargetNames().length;
+
+    assert.equal(claims.pluginCodes.size, targetCount);
+    assert.equal(claims.bundleIdentifiers.size, targetCount);
+    assert.equal(claims.pluginCodes.get("CsEL"), "fx/enhancer_lite/EnhancerLite.cmajorpatch");
+    assert.equal(claims.bundleIdentifiers.get("dev.cosimo.enhancer-lite"), "fx/enhancer_lite/EnhancerLite.cmajorpatch");
+
+    // The runtime manifest the build writes must be identical to the source
+    // manifest apart from the established escaped-source flattening — the
+    // product.json identity rewrite may never change shipped bytes.
+    const sourceManifest = JSON.parse(await readFile(path.join(repoRoot, plugin.patch), "utf8"));
+    const runtimeManifest = buildModule.createRuntimePatchManifest(sourceManifest, plugin);
+    const { source: rewrittenSource, ...runtimeRest } = runtimeManifest;
+    const { source: originalSource, ...sourceRest } = sourceManifest;
+
+    assert.deepEqual(runtimeRest, sourceRest);
+    assert.deepEqual(Object.keys(runtimeManifest), Object.keys(sourceManifest));
+});
+
+test("kit:new scaffolds a plugin discovery registers, and identity validation guards the result", async () => {
+    const scaffoldModule = await loadScaffoldModule();
+    const { buildModule } = await loadBuildModules();
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-kit-new-"));
+    const fxRoot = path.join(tempRoot, "fx");
+    const testsRoot = path.join(tempRoot, "tests");
+
+    try {
+        // The loader symlink target must resolve inside the simulated repo.
+        await mkdir(path.join(tempRoot, "kit/ui/effects"), { recursive: true });
+        await writeFile(path.join(tempRoot, "kit/ui/effects/effect-view-loader.js"), "export default () => {};\n", "utf8");
+        await mkdir(fxRoot, { recursive: true });
+
+        const plan = scaffoldModule.scaffoldPlugin("demo_verb", { fxRoot, testsRoot });
+
+        assert.equal(plan.alias, "demo-verb");
+        assert.equal(plan.pluginCode, "CsDV");
+
+        const plugin = buildModule.discoverEffectPlugins({ fxRoot })["demo-verb"];
+
+        assert.equal(plugin.patch, "fx/demo_verb/DemoVerb.cmajorpatch");
+        assert.equal(plugin.productName, "DemoVerb");
+        assert.equal(plugin.cmakeTarget, "DemoVerb");
+        assert.equal(plugin.devModule, "/fx/demo_verb/view/source.ts");
+        assert.deepEqual(plugin.identity, {
+            ID: "dev.cosimo.demo-verb",
+            name: "Demo Verb",
+            manufacturer: "Cosimo",
+            version: "0.1.0",
+            plugin: { pluginCode: "CsDV", manufacturerCode: "Cosi" },
+        });
+
+        // The view entry is the shared kit loader, linked like chorus/ott.
+        assert.equal(
+            await realpath(path.join(fxRoot, "demo_verb/view/index.js")),
+            await realpath(path.join(tempRoot, "kit/ui/effects/effect-view-loader.js")),
+        );
+
+        // The starter test and view stub follow the kit conventions.
+        const starterTest = await readFile(plan.starterTestPath, "utf8");
+        const viewSource = await readFile(path.join(fxRoot, "demo_verb/view/source.ts"), "utf8");
+
+        assert.equal(plan.starterTestPath, path.join(testsRoot, "test_demo_verb_state.mjs"));
+        assert.match(starterTest, /effectPlugins\["demo-verb"\]/);
+        assert.match(viewSource, /export default function createPatchView/);
+        await access(path.join(fxRoot, "demo_verb/DemoVerb.cmajor"));
+
+        // Identity validation catches a later duplicate pluginCode.
+        await writeFixturePlugin(fxRoot, "dup_lab", "DupLab.cmajorpatch", {
+            name: "Dup Lab",
+            ID: "dev.cosimo.dup-lab",
+            plugin: { pluginCode: "CsDV", manufacturerCode: "Cosi" },
+        });
+        assert.throws(
+            () => buildModule.discoverEffectPlugins({ fxRoot }),
+            /pluginCode "CsDV" is claimed by both fx\/demo_verb\/DemoVerb\.cmajorpatch and fx\/dup_lab\/DupLab\.cmajorpatch/,
+        );
+        await rm(path.join(fxRoot, "dup_lab"), { recursive: true, force: true });
+
+        // kit:new refuses colliding directories, aliases, codes, and ids.
+        assert.throws(
+            () => scaffoldModule.planPluginScaffold("demo_verb", { fxRoot, testsRoot }),
+            /fx\/demo_verb already exists/,
+        );
+        assert.throws(
+            () => scaffoldModule.planPluginScaffold("demo-verb", { fxRoot, testsRoot }),
+            /fx\/demo_verb already exists/,
+        );
+
+        await writeFixturePlugin(fxRoot, "other_lab", "OtherLab.cmajorpatch", { name: "Other Lab" }, { alias: "spare-verb" });
+        assert.throws(
+            () => scaffoldModule.planPluginScaffold("spare_verb", { fxRoot, testsRoot }),
+            /alias "spare-verb" is already claimed by fx\/other_lab\/OtherLab\.cmajorpatch/,
+        );
+        await rm(path.join(fxRoot, "other_lab"), { recursive: true, force: true });
+
+        await writeFixturePlugin(fxRoot, "noise_lab", "NoiseLab.cmajorpatch", {
+            name: "Noise Lab",
+            ID: "dev.cosimo.noise-verb",
+            plugin: { pluginCode: "CsNV", manufacturerCode: "Cosi" },
+        });
+        assert.throws(
+            () => scaffoldModule.planPluginScaffold("noise_verb", { fxRoot, testsRoot }),
+            /pluginCode "CsNV" is already claimed by fx\/noise_lab\/NoiseLab\.cmajorpatch/,
+        );
+        await rm(path.join(fxRoot, "noise_lab"), { recursive: true, force: true });
+
+        await writeFixturePlugin(fxRoot, "squat_lab", "SquatLab.cmajorpatch", {
+            name: "Squat Lab",
+            ID: "dev.cosimo.quiet-verb",
+        });
+        assert.throws(
+            () => scaffoldModule.planPluginScaffold("quiet_verb", { fxRoot, testsRoot }),
+            /bundle identifier "dev\.cosimo\.quiet-verb" is already claimed by fx\/squat_lab\/SquatLab\.cmajorpatch/,
+        );
+
+        // Name hygiene: reserved and malformed names are refused up front.
+        assert.throws(() => scaffoldModule.parsePluginName("all"), /reserved/);
+        assert.throws(() => scaffoldModule.parsePluginName("Bad Name"), /Invalid plugin name/);
+        assert.throws(() => scaffoldModule.parsePluginName("9lives"), /Invalid plugin name/);
+        assert.throws(() => scaffoldModule.parsePluginName("x"), /too short/);
+    } finally {
+        await rm(tempRoot, { recursive: true, force: true });
+    }
+});
+
+test("kit:new CLI prints usage and fails on missing or extra arguments", () => {
+    const cliPath = path.join(repoRoot, "kit/scripts/new_plugin.mjs");
+    const noArguments = spawnSync(process.execPath, [cliPath], { encoding: "utf8" });
+    const extraArguments = spawnSync(process.execPath, [cliPath, "demo_verb", "extra"], { encoding: "utf8" });
+
+    assert.equal(noArguments.status, 1);
+    assert.match(noArguments.stderr, /Usage: npm run kit:new -- <name>/);
+    assert.equal(extraArguments.status, 1);
+    assert.match(extraArguments.stderr, /Usage: npm run kit:new -- <name>/);
 });
 
 test("jit install plans pair each target with its runtime patch and build requirement", async () => {

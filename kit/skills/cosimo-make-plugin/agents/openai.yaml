@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cosimo Make Plugin"
+  short_description: "Create, build, test, and install Builder Kit effect plugins"
+  default_prompt: "Use $cosimo-make-plugin to create and iterate on a Builder Kit effect plugin."
