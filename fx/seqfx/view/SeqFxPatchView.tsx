@@ -5119,7 +5119,12 @@ export function SeqFxPatchView({
                                             >
                                                 <SeqFxEffectIcon effectType={effectType} />
                                                 <span className="seqfx-effect-picker__name">
-                                                    {SEQFX_EFFECT_TYPE_NAMES[effectType]}
+                                                    <span className="seqfx-effect-picker__name--full">
+                                                        {SEQFX_EFFECT_TYPE_NAMES[effectType]}
+                                                    </span>
+                                                    <span aria-hidden="true" className="seqfx-effect-picker__name--short">
+                                                        {SEQFX_EFFECT_TYPE_SHORT_NAMES[effectType]}
+                                                    </span>
                                                 </span>
                                             </button>
                                         );

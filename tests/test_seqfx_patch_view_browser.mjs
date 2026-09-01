@@ -49,7 +49,7 @@ const SEQFX_STATE_KEY = "seqfx.v7";
 const SEQFX_SNAPSHOT_BANK_STATE_KEY = "cosimo.effectSnapshotBank.seqfx.v1";
 const SEQFX_NORMAL_GAP_PX = 3;
 const SEQFX_BEAT_GAP_PX = 9;
-const SEQFX_MIN_CELL_SIZE_PX = 12;
+const SEQFX_MIN_CELL_SIZE_PX = 24;
 const SEQFX_GRID_STEPS_PER_ROW = 16;
 const SEQFX_EFFECT_TYPES = {
     filter: 1,
@@ -2088,54 +2088,207 @@ test("seqfx_renders_mix_row_glyph_and_delete_block_glyph_with_compact_layout", a
     await page.close();
 });
 
-test("seqfx_grid_resizes_with_css_after_viewport_round_trip", async () => {
-    const page = await browser.newPage({ viewport: { width: 720, height: 776 } });
+test("seqfx responsive workspace contracts, stacks, reflows, and preserves state across resize", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
-    const measureGrid = () => page.evaluate(() => {
-        const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
-        const laneTrack = document.querySelector(".seqfx-lane-track");
-        const stepTrack = document.querySelector(".seqfx-step-track");
-        const shell = document.querySelector(".seqfx-grid-shell");
-        const cellRect = cell.getBoundingClientRect();
-        const laneRect = laneTrack.getBoundingClientRect();
+    await page.getByRole("button", { name: "Chain 4 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 4 Stutter block 1", exact: true }).waitFor();
 
+    const settleLayout = () => page.evaluate(() => new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+    }));
+    const measureWorkspace = () => page.evaluate(() => {
+        const rectFor = (selector) => {
+            const node = document.querySelector(selector);
+            if (!node) throw new Error(`Missing responsive-layout node: ${selector}`);
+            const rect = node.getBoundingClientRect();
+            return {
+                bottom: rect.bottom,
+                height: rect.height,
+                left: rect.left,
+                right: rect.right,
+                top: rect.top,
+                width: rect.width,
+            };
+        };
+
+        const root = document.querySelector('[data-role="seqfx-root"]');
+        const shell = document.querySelector(".seqfx-grid-shell");
+        const inspector = document.querySelector('[data-role="seqfx-inspector"]');
+        const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
+        const step2 = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="1"]').getBoundingClientRect();
+        const step4 = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="3"]').getBoundingClientRect();
+        const step5 = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="4"]').getBoundingClientRect();
+        const cellRect = cell.getBoundingClientRect();
         return {
-            cellWidth: cellRect.width,
-            laneTrackDisplay: getComputedStyle(laneTrack).display,
-            laneTrackInlineStyle: laneTrack.getAttribute("style") ?? "",
-            laneTrackWidth: laneRect.width,
+            beatGap: step5.left - step4.right,
+            cell: rectFor('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]'),
+            gridShell: rectFor(".seqfx-grid-shell"),
+            inspector: rectFor('[data-role="seqfx-inspector"]'),
+            root: rectFor('[data-role="seqfx-root"]'),
+            rootClientHeight: root.clientHeight,
+            rootClientWidth: root.clientWidth,
+            rootOverflowY: getComputedStyle(root).overflowY,
+            rootScrollHeight: root.scrollHeight,
+            rootScrollWidth: root.scrollWidth,
+            shellClientHeight: shell.clientHeight,
             shellClientWidth: shell.clientWidth,
+            shellScrollHeight: shell.scrollHeight,
             shellScrollWidth: shell.scrollWidth,
-            stepTrackDisplay: getComputedStyle(stepTrack).display,
-            stepTrackInlineStyle: stepTrack.getAttribute("style") ?? "",
+            inspectorClientHeight: inspector.clientHeight,
+            inspectorClientWidth: inspector.clientWidth,
+            inspectorOverflowY: getComputedStyle(inspector).overflowY,
+            inspectorScrollHeight: inspector.scrollHeight,
+            inspectorScrollWidth: inspector.scrollWidth,
+            normalGap: step2.left - cellRect.right,
+            workspace: rectFor(".seqfx-workspace"),
+            viewportWidth: window.innerWidth,
+            cellAriaLabel: cell.getAttribute("aria-label"),
         };
     });
 
-    const initial = await measureGrid();
-    await page.setViewportSize({ width: 1120, height: 776 });
-    await page.waitForFunction((initialCellWidth) => {
-        const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
-        return cell && cell.getBoundingClientRect().width > initialCellWidth + 4;
-    }, initial.cellWidth);
-    const grown = await measureGrid();
+    const wide = await measureWorkspace();
+    await page.setViewportSize({ width: 1061, height: 820 });
+    await settleLayout();
+    const justAbove = await measureWorkspace();
+    assert.ok(justAbove.gridShell.width < wide.gridShell.width, "sequencer should contract as the host narrows");
+    assert.ok(justAbove.inspector.width < wide.inspector.width, "inspector should contract as the host narrows");
+    assert.ok(justAbove.gridShell.width >= 528, `sequencer should retain its 528px floor, got ${justAbove.gridShell.width}px`);
+    assert.ok(justAbove.inspector.width >= 480, `inspector should retain its 480px floor, got ${justAbove.inspector.width}px`);
+    assert.ok(justAbove.gridShell.right < justAbove.inspector.left, "1061px should remain side-by-side");
 
-    await page.setViewportSize({ width: 720, height: 776 });
-    await page.waitForFunction((initialCellWidth) => {
-        const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
-        return cell && Math.abs(cell.getBoundingClientRect().width - initialCellWidth) <= 1;
-    }, initial.cellWidth);
-    const shrunk = await measureGrid();
+    await page.setViewportSize({ width: 1060, height: 820 });
+    await settleLayout();
+    const atBreakpoint = await measureWorkspace();
+    assertClose(atBreakpoint.workspace.left, 18, 0.75, "workspace left margin at 1060px");
+    assertClose(atBreakpoint.viewportWidth - atBreakpoint.workspace.right, 18, 0.75, "workspace right margin at 1060px");
+    assertClose(atBreakpoint.gridShell.width, 528, 0.75, "sequencer width at 1060px");
+    assertClose(atBreakpoint.inspector.width, 480, 0.75, "inspector width at 1060px");
+    assertClose(atBreakpoint.inspector.left - atBreakpoint.gridShell.right, 16, 0.75, "workspace gap at 1060px");
+    assert.ok(atBreakpoint.cell.width >= 24, `step target should stay at least 24px, got ${atBreakpoint.cell.width}px`);
+    assertClose(atBreakpoint.normalGap, 3, 0.75, "ordinary rhythmic gap at the sequencer floor");
+    assertClose(atBreakpoint.beatGap, 9, 0.75, "beat-boundary gap at the sequencer floor");
 
-    assert.equal(initial.laneTrackDisplay, "grid");
-    assert.equal(initial.stepTrackDisplay, "grid");
-    assert.equal(initial.laneTrackInlineStyle.includes("min-width"), false);
-    assert.equal(initial.stepTrackInlineStyle.includes("min-width"), false);
-    assert.ok(grown.cellWidth > initial.cellWidth + 4, "grid cells should grow with the viewport");
-    assertClose(shrunk.cellWidth, initial.cellWidth, 1, "grid cells should shrink back after viewport round trip");
-    assertClose(shrunk.laneTrackWidth, initial.laneTrackWidth, 1, "track width should shrink back after viewport round trip");
-    assert.ok(shrunk.shellScrollWidth <= shrunk.shellClientWidth + 1, "grid should not keep stale expanded scroll width");
+    await page.setViewportSize({ width: 1059, height: 820 });
+    await settleLayout();
+    const justBelow = await measureWorkspace();
+    assertClose(justBelow.gridShell.width, justBelow.workspace.width, 0.75, "stacked sequencer should fill the workspace");
+    assertClose(justBelow.inspector.width, justBelow.workspace.width, 0.75, "stacked inspector should fill the workspace");
+    assert.ok(justBelow.inspector.top > justBelow.gridShell.bottom, "1059px should stack the inspector below the sequencer");
+    assertClose(justBelow.inspector.top - justBelow.gridShell.bottom, 16, 0.75, "stacked panel gap");
+
+    await page.setViewportSize({ width: 420, height: 640 });
+    await settleLayout();
+    const filterButton = page.getByRole("button", { name: "Filter", exact: true });
+    await filterButton.focus();
+    await filterButton.press("Enter");
+    await page.locator('[data-role="filter-range-editor"]').waitFor();
+    const graphBox = await page.locator('[data-role="editor-curve-plot-area"]').first().boundingBox();
+    assert.ok(graphBox && graphBox.height >= 140, `graph plot should retain at least 140px, got ${graphBox?.height}px`);
+
+    const stutterButton = page.getByRole("button", { name: "Stutter", exact: true });
+    await stutterButton.focus();
+    await stutterButton.press("Space");
+    await page.locator('[data-role="seqfx-stutter-editor"]').waitFor();
+
+    const narrowEffectLayout = await page.evaluate(() => {
+        const rect = (node) => {
+            const box = node.getBoundingClientRect();
+            return { bottom: box.bottom, height: box.height, left: box.left, right: box.right, top: box.top, width: box.width };
+        };
+        const options = document.querySelector(".seqfx-effect-picker__options");
+        const buttons = [...options.querySelectorAll("button")];
+        const preset = document.querySelector(".seqfx-factory-preset");
+        const presetLabelRange = document.createRange();
+        presetLabelRange.selectNode(preset.firstChild);
+        const presetLabel = presetLabelRange.getBoundingClientRect();
+        const rowCounts = new Map();
+        for (const button of buttons) {
+            const key = Math.round(button.getBoundingClientRect().top);
+            rowCounts.set(key, (rowCounts.get(key) ?? 0) + 1);
+        }
+        return {
+            buttonRects: buttons.map(rect),
+            fullNameDisplays: [...document.querySelectorAll(".seqfx-effect-picker__name--full")].map((node) => getComputedStyle(node).display),
+            help: rect(preset.querySelector("small")),
+            options: rect(options),
+            presetLabelBottom: presetLabel.bottom,
+            rowCounts: [...rowCounts.values()],
+            select: rect(preset.querySelector("select")),
+            shortNames: [...document.querySelectorAll(".seqfx-effect-picker__name--short")].map((node) => ({
+                display: getComputedStyle(node).display,
+                text: node.textContent.trim(),
+            })),
+            sliderTrackWidths: [...document.querySelectorAll(".seqfx-inspector .editor-tick-slider__track")]
+                .map((node) => node.getBoundingClientRect().width),
+        };
+    });
+    const expectedShortNames = Array.from({ length: 12 }, (_unused, index) => (
+        effectDefinitionsModule.SEQFX_EFFECT_TYPE_SHORT_NAMES[index + 1]
+    ));
+    assert.deepEqual(narrowEffectLayout.rowCounts, [6, 6], "picker should remain exactly 2x6");
+    assert.deepEqual(narrowEffectLayout.shortNames.map(({ text }) => text), expectedShortNames);
+    assert.ok(narrowEffectLayout.shortNames.every(({ display }) => display !== "none"), "short names should be visible below 520px inspector width");
+    assert.ok(narrowEffectLayout.fullNameDisplays.every((display) => display === "none"), "full visible names should yield to unique short names");
+    for (const button of narrowEffectLayout.buttonRects) {
+        assert.ok(button.width >= 44 && button.height >= 36, `picker target should remain practical, got ${button.width}x${button.height}px`);
+        assert.ok(button.left >= narrowEffectLayout.options.left - 1 && button.right <= narrowEffectLayout.options.right + 1, "picker target should stay inside its grid");
+    }
+    assert.ok(narrowEffectLayout.select.top > narrowEffectLayout.presetLabelBottom, "preset select should reflow below its label");
+    assert.ok(narrowEffectLayout.help.top > narrowEffectLayout.select.bottom, "preset help should remain visible below the select");
+    assert.ok(narrowEffectLayout.sliderTrackWidths.length > 0, "selected effect should expose manipulation tracks");
+    assert.ok(narrowEffectLayout.sliderTrackWidths.every((width) => width >= 96), `slider tracks should retain 96px, got ${narrowEffectLayout.sliderTrackWidths}`);
+
+    const modToggle = await openSeqFxModView(page);
+    await toggleSeqFxModTarget(page, 0);
+    await modToggle.focus();
+    const modToggleHandle = await modToggle.elementHandle();
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    const stateBeforeResize = await getHarnessSnapshot(page);
+    const narrow = await measureWorkspace();
+    const narrowModLayout = await page.locator('[data-role="seqfx-mod-target-row"][data-param="0"]').evaluate((row) => {
+        const rect = (selector) => {
+            const box = row.querySelector(selector).getBoundingClientRect();
+            return { bottom: box.bottom, left: box.left, right: box.right, top: box.top, width: box.width };
+        };
+        return {
+            amount: rect(".seqfx-mod-target-row__amount-control"),
+            destination: rect(".seqfx-mod-target-row__destination"),
+            name: rect(".seqfx-mod-target-row__name"),
+            rowClientWidth: row.clientWidth,
+            rowScrollWidth: row.scrollWidth,
+            toggle: rect(".seqfx-mod-target-row__toggle"),
+            value: rect(".seqfx-mod-target-row__amount-value"),
+        };
+    });
+    assert.ok(narrow.rootScrollHeight > narrow.rootClientHeight, "narrow stack should flow through the root vertical scroller");
+    assert.equal(narrow.rootOverflowY, "auto");
+    assert.equal(narrow.inspectorOverflowY, "visible");
+    assert.ok(narrow.inspectorScrollHeight <= narrow.inspectorClientHeight + 1, "inspector should not own a nested vertical scroll");
+    assert.ok(narrow.inspectorScrollWidth <= narrow.inspectorClientWidth + 1, "inspector should not clip horizontally");
+    assert.ok(narrow.shellScrollWidth > narrow.shellClientWidth, "only the narrow grid shell should preserve the sequencer floor with horizontal scroll");
+    assert.ok(narrow.shellScrollHeight <= narrow.shellClientHeight + 1, "grid shell should not become a nested vertical scroller");
+    assert.ok(narrow.rootScrollWidth <= narrow.rootClientWidth + 1, "root should not gain horizontal overflow");
+    assert.equal(narrow.cellAriaLabel, "Chain 1 step 1", "step identity should remain intact at the content floor");
+    assert.ok(narrowModLayout.amount.top > narrowModLayout.toggle.bottom, "Mod amount should reflow below name/toggle/readout");
+    assert.ok(narrowModLayout.destination.top >= narrowModLayout.amount.bottom, "Mod destination should reflow below its amount track");
+    assert.ok(narrowModLayout.amount.width >= 96, `Mod amount track should retain 96px, got ${narrowModLayout.amount.width}px`);
+    assert.ok(narrowModLayout.rowScrollWidth <= narrowModLayout.rowClientWidth + 1, "Mod target row should not clip or overlap");
+
+    await page.setViewportSize({ width: 1061, height: 820 });
+    await settleLayout();
+    const restored = await measureWorkspace();
+    const stateAfterResize = await getHarnessSnapshot(page);
+    assert.ok(restored.gridShell.right < restored.inspector.left, "widening should restore side-by-side columns");
+    assert.equal(await page.evaluate((node) => node === document.querySelector('[data-role="seqfx-mod-toggle"]'), modToggleHandle), true, "resize should not remount the inspector control");
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("data-role")), "seqfx-mod-toggle", "focused control should survive resize");
+    assert.equal(await modToggle.getAttribute("aria-selected"), "true", "Mod tab selection should survive resize");
+    assert.equal(await stutterButton.getAttribute("aria-pressed"), "true", "effect selection should survive resize");
+    assert.deepEqual(stateAfterResize.events, stateBeforeResize.events, "resize should not emit host events");
+    assert.deepEqual(stateAfterResize.storedStateWrites, stateBeforeResize.storedStateWrites, "resize should not write saved state");
+    assert.deepEqual(stateAfterResize.storedState, stateBeforeResize.storedState, "resize should preserve saved state");
 
     await page.close();
 });
@@ -2437,7 +2590,7 @@ test("seqfx_inspector_top_edge_aligns_with_the_grid_plate_top_edge", async () =>
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.getByRole("button", { name: "Chain 2 step 1", exact: true }).click();
 
-    for (const width of [900, 1280]) {
+    for (const width of [1060, 1280]) {
         await page.setViewportSize({ width, height: 820 });
         await page.waitForFunction(() => {
             const frame = document.querySelector('[data-role="seqfx-bar-frame"][data-bar="0"]');
@@ -3142,8 +3295,8 @@ test("seqfx_mod_panel_uses_responsive_inspector_width_without_overflowing", asyn
 
     const layout = await measureLayout();
 
-    assert.ok(layout.inspector.width >= 520, `50/50 inspector should be materially wider than the old 300px column, got ${layout.inspector.width}px`);
-    assertClose(layout.inspector.width, layout.gridShell.width, 1, "grid and inspector should split the workspace evenly above the breakpoint");
+    assert.ok(layout.inspector.width >= 480, `inspector should stay above its content floor, got ${layout.inspector.width}px`);
+    assert.ok(layout.gridShell.width > layout.inspector.width, "the proportional side-by-side allocation should favor the sequencer");
     assert.ok(layout.modToggle.left >= layout.effectPicker.left, "mod button should stay inside the effect header");
     assert.ok(layout.modToggle.right <= layout.effectPicker.right + 1, `mod button overflowed effect header: ${layout.modToggle.right} > ${layout.effectPicker.right}`);
     assert.equal(layout.modToggleBackgroundColor, "rgb(139, 191, 154)");
@@ -3161,8 +3314,8 @@ test("seqfx_mod_panel_uses_responsive_inspector_width_without_overflowing", asyn
 
     await page.setViewportSize({ width: 900, height: 820 });
     const nearBreakpointLayout = await measureLayout();
-    assert.ok(nearBreakpointLayout.inspector.width >= 420, `near-breakpoint 50/50 inspector should stay wide, got ${nearBreakpointLayout.inspector.width}px`);
-    assertClose(nearBreakpointLayout.inspector.width, nearBreakpointLayout.gridShell.width, 1, "near-breakpoint grid and inspector should still split evenly");
+    assert.ok(nearBreakpointLayout.inspector.width >= 420, `stacked inspector should stay wide, got ${nearBreakpointLayout.inspector.width}px`);
+    assertClose(nearBreakpointLayout.inspector.width, nearBreakpointLayout.gridShell.width, 1, "stacked panels should fill the same workspace width");
     assert.ok(
         nearBreakpointLayout.auxSource.right <= nearBreakpointLayout.inspector.right + 1,
         `near-breakpoint aux source overflowed inspector: ${nearBreakpointLayout.auxSource.right} > ${nearBreakpointLayout.inspector.right}`,

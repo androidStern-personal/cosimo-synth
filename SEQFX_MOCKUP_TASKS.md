@@ -112,3 +112,46 @@ The rejected 1000px alternative used a 420px editor floor. Although it avoids te
 - Generated artifacts: None.
 - Final commit: This ledger-only commit; its exact hash is reported to the coordinator because a commit cannot embed its own hash.
 - Unperformed gates: implementation, broad/native builds, HMR/fixed-port launches, installs, pluginval, Ableton/physical-feel acceptance, device work, release, merge, rebase, push, deploy, and publication.
+
+## Content-aware responsive workspace
+
+- Status: Complete
+- Task/agent: `/root/seqfx_mockup_layout`, reporting to coordinator `/root`
+- Branch/worktree: `codex/seqfx-mockup-compact-layout` at `/Users/winterfell/.codex/worktrees/seqfx-mockup-compact-layout/cosimo-synth`
+- Start tip: `df569d28871e5de5fe86842a9b82a8fca8053f89`; original branch base and merge-base: `6064eba67120673a748602d706c46b852c52af69`
+- Authorization: Implement the approved content-aware responsive workspace in production: make the SeqFX root, sequencer, and inspector own inline-size responsiveness; use `minmax(528px, 1.1fr) minmax(480px, 1fr)` columns with a 16px gap and 18px side margins; remain side-by-side at 1060px and stack sequencer-first below it without remounting; preserve the sequencer's 24px practical content floor with grid-shell-only horizontal scrolling in exceptionally narrow stacks; adapt the fixed 2x6 picker, preset/help, slider/graph seams, and dense Mod rows to their actual inspector width; and give stacked mode intrinsic panel heights with one root vertical scroll owner.
+- Required preservation: All 16 steps and rhythmic gutters; labels, glyphs, waveforms, drag/resize and pointer/keyboard surfaces; effect order, full accessible names, fixed 2x6 geometry, help and every Mod control/readout; selection, Effect/Mod tab, focus, loop values, parameters, state, automation, DSP, transport, and widening round-trip behavior.
+- Explicit non-scope: Dark theme/colors; visual redesign; a broad responsive framework/design system; JavaScript resize observation/window sizing; transform scaling; global font or hit-target shrinking; hidden controls; effect-specific breakpoint proliferation; DSP, state, schema, migration, effect-order, or global-control changes; backwards compatibility; any other mockup item; generated-bundle rebuilds; broad/native builds; HMR/fixed ports; installs; pluginval; Ableton/device acceptance; Sites, release, merge, rebase, push, deploy, or publication; `TODOS.txt` and `PROGRESS.txt`.
+- Intended focused evidence: Extend the existing real composed SeqFX browser seam with one responsive round trip covering 1061/1060/1059 and one genuinely narrow stacked width, proving content-informed contraction, exact stack boundary, short-name and internal reflows, scroll ownership, practical targets, no clipping/overlap, and preserved focus/interaction/state. Run only that seam plus the narrow strict SeqFX TypeScript and directly affected contract checks after source/scoped-diff review.
+
+### Decisions and tradeoffs
+
+1. Keep responsive ownership entirely in CSS at the existing production seams: name the root, sequencer shell, and inspector as inline-size containers; use the root query for the single workspace transition and inspector queries for local content reflow. No component is remounted and no JavaScript observes the window or panel size.
+2. Express the sequencer floor twice for its two responsibilities: `24px` is the minimum cell/target size, while `447px` is the default 16-cell track floor after preserving twelve 3px gaps and three 9px beat gaps. The shell's existing 40px side reserves bring the default panel requirement to 527px, fitting the authorized 528px column. When a rate produces more beat gutters, the grid shell may need a small horizontal scroll at the exact column floor; preserving cell and rhythmic-gutter contracts wins over shrinking either.
+3. Keep the picker as one ordered set of twelve native buttons with unchanged full `aria-label` values. Each button now carries full and existing unique short visible-name spans; inspector CSS switches copy below 520px and places icon above the short name below 480px while retaining 2x6 geometry and practical targets.
+4. Reflow only existing groups: the preset label/select/help becomes vertical below 520px; dense Mod rows use named grid areas below 420px; shared segmented-slider tracks have a 96px minimum and gain a two-line fallback only below 280px; existing graph/editor container seams continue to own their plot and effect-specific geometry.
+5. Keep the root as the stacked vertical scroll owner at every width, but side-by-side content remains height-bounded so the root does not acquire extra overflow. Below 1060px the workspace and panels become intrinsic-height, inspector overflow becomes visible, DOM order remains sequencer then inspector, and only the grid shell contains horizontal overflow below its content floor.
+
+### Decision-provenance objection audit
+
+- A media query or JavaScript resize path was rejected because it would respond to the global viewport rather than the actual embedded SeqFX/panel inline size. Named container seams directly encode the product ownership and preserve component identity through resize.
+- Hiding effect copy, help, Mod destinations, or targets was rejected. Unique short names, vertical preset flow, multi-line Mod rows, and the existing shared editor reflows preserve all behavior and accessible names.
+- Lowering the cell floor or rhythmic gaps was rejected. The narrow shell scroll is localized and observable, while smaller pointer/drag/resize geometry would silently degrade the sequencer's core interaction.
+- Confidence is high in the CSS ownership, exact 1060px transition, measured geometry, scroll containment, and resize identity/state preservation. The remaining physical-feel question is whether 24px cells and roughly 71x36px compact picker buttons feel comfortable in the resizable Ableton WebView; that host pass was explicitly not performed.
+
+### Focused evidence
+
+- Pre-edit boundary: exact worktree, branch, clean start tip `df569d28871e5de5fe86842a9b82a8fca8053f89`, origin/master, and merge-base `6064eba67120673a748602d706c46b852c52af69` verified before changes.
+- Failing-before evidence: The new composed responsive test failed against untouched production at 1061px because the old equal split gave the sequencer 503.5px instead of the required 528px floor.
+- Passing-after evidence: The real composed responsive round trip passed at 1061/1060/1059/420px, including exact 528/480px columns, 18px margins, 16px gap, 24px cells with 3/9px rhythmic gutters, sequencer-first stacking, fixed 2x6 short-name picker, vertical preset/help, 140px graph floor, 96px slider and Mod tracks, root/grid scroll ownership, no inspector/root horizontal clipping, keyboard activation, unchanged element identity/focus, and no resize-driven host events or state writes.
+- Directly affected composed contracts passed 3/3: fixed 2x6 picker order/keyboard selection, side-by-side inspector/grid-plate alignment, and responsive Mod panel containment. The rate-driven rhythmic-grid reflow contract passed 1/1. Strict SeqFX TypeScript passed all 19 production modules.
+- Source and scoped diff were reviewed before green proof and again after the final test edit. Only this ledger, the production SeqFX view/style owners, and the existing composed browser suite changed; `TODOS.txt` and `PROGRESS.txt` are unchanged. Known failures: None.
+- Test setup: an ignored worktree-local `node_modules` symlink reused the primary checkout's existing dependency tree without installation and was removed before commit. Every browser run used a Vite-assigned ephemeral port, not HMR or a fixed port.
+
+### Final handoff
+
+- Final implementation commit: This entry's single source/test/ledger commit; its exact hash is reported to the coordinator because a commit cannot embed its own hash.
+- Clean status: Clean after the implementation commit; verified in the coordinator handoff.
+- Changed scope: Content-informed workspace columns and exact container-query stack boundary; named root/panel containers; sequencer cell/track floor; compact visible effect-name adaptation; preset, segmented-slider, and Mod-row reflows; stacked scroll ownership; focused composed browser coverage and directly affected responsive assertions. No behavior, state, automation, DSP, transport, loop, effect order, or global-control logic changed.
+- Generated artifacts: None. No tracked UI bundle or `patch_gui` output was rebuilt or edited.
+- Unperformed gates: Broad suite, native/plugin builds, HMR/fixed-port launch, install, pluginval, Ableton/host physical-feel acceptance, physical device, Sites, release, merge, rebase, push, deploy, and publication.
