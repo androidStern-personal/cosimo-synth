@@ -2415,10 +2415,9 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
         };
         const options = document.querySelector(".seqfx-effect-picker__options");
         const buttons = [...options.querySelectorAll("button")];
-        const preset = document.querySelector(".seqfx-factory-preset");
-        const presetLabelRange = document.createRange();
-        presetLabelRange.selectNode(preset.firstChild);
-        const presetLabel = presetLabelRange.getBoundingClientRect();
+        const heading = document.querySelector(".seqfx-inspector-heading");
+        const headingSummary = document.querySelector(".seqfx-inspector-heading__summary");
+        const preset = document.querySelector('[data-role="seqfx-factory-effect-preset"]');
         const rowCounts = new Map();
         for (const button of buttons) {
             const key = Math.round(button.getBoundingClientRect().top);
@@ -2427,15 +2426,15 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
         return {
             buttonRects: buttons.map(rect),
             fullNameDisplays: [...document.querySelectorAll(".seqfx-effect-picker__name--full")].map((node) => getComputedStyle(node).display),
-            help: rect(preset.querySelector("small")),
+            heading: rect(heading),
+            headingSummary: rect(headingSummary),
             options: rect(options),
             pickerClientHeight: options.parentElement.clientHeight,
             pickerClientWidth: options.parentElement.clientWidth,
             pickerScrollHeight: options.parentElement.scrollHeight,
             pickerScrollWidth: options.parentElement.scrollWidth,
-            presetLabelBottom: presetLabel.bottom,
+            preset: rect(preset),
             rowCounts: [...rowCounts.values()],
-            select: rect(preset.querySelector("select")),
             shortNames: [...document.querySelectorAll(".seqfx-effect-picker__name--short")].map((node) => ({
                 display: getComputedStyle(node).display,
                 text: node.textContent.trim(),
@@ -2457,8 +2456,10 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
         assert.ok(button.width > 0 && button.height > 0, `picker target should remain visible, got ${button.width}x${button.height}px`);
         assert.ok(button.left >= narrowEffectLayout.options.left - 1 && button.right <= narrowEffectLayout.options.right + 1, "picker target should stay inside its grid");
     }
-    assert.ok(narrowEffectLayout.select.top > narrowEffectLayout.presetLabelBottom, "preset select should reflow below its label");
-    assert.ok(narrowEffectLayout.help.top > narrowEffectLayout.select.bottom, "preset help should remain visible below the select");
+    assert.ok(narrowEffectLayout.preset.left >= narrowEffectLayout.heading.left - 1, "bare preset select should stay inside the heading at narrow width");
+    assert.ok(narrowEffectLayout.preset.right <= narrowEffectLayout.heading.right + 1, "bare preset select should not clip past the heading");
+    assert.ok(narrowEffectLayout.preset.top >= narrowEffectLayout.headingSummary.bottom - 1, "narrow heading may wrap the preset below the complete summary without overlap");
+    assert.ok(narrowEffectLayout.preset.bottom <= narrowEffectLayout.heading.bottom + 1, "wrapped preset select should remain owned by the heading");
     assert.ok(narrowEffectLayout.sliderTrackWidths.length > 0, "selected effect should expose manipulation tracks");
     assert.ok(narrowEffectLayout.sliderTrackWidths.every((width) => width >= 96), `slider tracks should retain 96px, got ${narrowEffectLayout.sliderTrackWidths}`);
 
@@ -2511,6 +2512,251 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
     assert.deepEqual(stateAfterResize.storedStateWrites, stateBeforeResize.storedStateWrites, "resize should not write saved state");
     assert.deepEqual(stateAfterResize.storedState, stateBeforeResize.storedState, "resize should preserve saved state");
 
+    await page.close();
+});
+
+test("seqfx Tape Stop free-time rows keep labels triggers segmented tracks and values clear at representative widths", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+    await page.getByRole("button", { name: "Tape Stop", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 Tape Stop block 1", exact: true }).waitFor();
+    await page.locator('[data-control="seqfx-tape-timing"]').selectOption("1");
+    await page.locator('[data-control="seqfx-tape-return"]').selectOption("1");
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+
+    const sizes = [
+        { id: "representative wide", width: 1280, height: 820, stacked: false },
+        { id: "side-by-side floor", width: 1060, height: 820, stacked: false },
+        { id: "stacked", width: 420, height: 640, stacked: true },
+        { id: "narrow", width: 320, height: 640, stacked: true },
+    ];
+
+    for (const size of sizes) {
+        await page.setViewportSize({ width: size.width, height: size.height });
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const geometry = await page.evaluate(() => {
+            const box = (node) => {
+                const rect = node.getBoundingClientRect();
+                return {
+                    bottom: rect.bottom,
+                    height: rect.height,
+                    left: rect.left,
+                    right: rect.right,
+                    top: rect.top,
+                    width: rect.width,
+                };
+            };
+            const rows = ["seqfx-tape-stop-time", "seqfx-tape-start-time"].map((controlRole) => {
+                const input = document.querySelector(`[data-control="${controlRole}"]`);
+                const row = input?.closest('[data-role="seqfx-param-row"]');
+                const label = row?.querySelector(".editor-tick-slider__label");
+                const trigger = row?.querySelector(".editor-tick-slider__annotation");
+                const track = row?.querySelector(".editor-tick-slider__track");
+                const value = row?.querySelector('[data-role="seqfx-param-value"]');
+                if (!input || !row || !label || !trigger || !track || !value) {
+                    throw new Error(`Missing complete Tape Stop row for ${controlRole}`);
+                }
+                return {
+                    controlRole,
+                    inputType: input.getAttribute("type"),
+                    label: box(label),
+                    labelText: label.textContent?.replace(/\s+/g, " ").trim() ?? "",
+                    row: box(row),
+                    rowClientWidth: row.clientWidth,
+                    rowScrollWidth: row.scrollWidth,
+                    track: box(track),
+                    trigger: box(trigger),
+                    value: box(value),
+                    valueText: value.textContent?.trim() ?? "",
+                };
+            });
+            const root = document.querySelector('[data-role="seqfx-root"]');
+            const grid = document.querySelector(".seqfx-grid-shell");
+            const inspector = document.querySelector('[data-role="seqfx-inspector"]');
+            return {
+                grid: box(grid),
+                inspector: box(inspector),
+                rootClientWidth: root.clientWidth,
+                rootScrollWidth: root.scrollWidth,
+                rows,
+            };
+        });
+
+        if (size.stacked) {
+            assert.ok(geometry.inspector.top > geometry.grid.bottom, `${size.id} workspace should stack the inspector below the grid`);
+        } else {
+            assert.ok(geometry.inspector.left > geometry.grid.right, `${size.id} workspace should keep the inspector beside the grid`);
+        }
+        assert.ok(geometry.rootScrollWidth <= geometry.rootClientWidth + 1, `${size.id} Tape Stop inspector should not create page overflow`);
+
+        for (const row of geometry.rows) {
+            const rectanglesOverlap = (first, second) => (
+                first.left < second.right - 0.5
+                && first.right > second.left + 0.5
+                && first.top < second.bottom - 0.5
+                && first.bottom > second.top + 0.5
+            );
+            assert.equal(row.inputType, "range", `${size.id} ${row.controlRole} should keep its segmented range input`);
+            assert.match(row.labelText, /^(Start|Stop) Time\s*Trigger$/, `${size.id} ${row.controlRole} should keep its label and Trigger annotation`);
+            assert.ok(row.valueText.length > 0, `${size.id} ${row.controlRole} should keep its visible value`);
+            assert.ok(row.track.width > 0 && row.track.height > 0, `${size.id} ${row.controlRole} should keep a measurable segmented track`);
+            assert.ok(row.trigger.width > 0 && row.trigger.height > 0, `${size.id} ${row.controlRole} should keep a visible Trigger chip`);
+            assert.ok(row.rowScrollWidth <= row.rowClientWidth + 1, `${size.id} ${row.controlRole} should not overflow its row`);
+            assert.ok(row.label.left >= row.row.left - 1 && row.label.right <= row.row.right + 1, `${size.id} ${row.controlRole} label should stay in its row`);
+            assert.ok(row.track.left >= row.row.left - 1 && row.track.right <= row.row.right + 1, `${size.id} ${row.controlRole} track should stay in its row`);
+            assert.ok(row.value.left >= row.row.left - 1 && row.value.right <= row.row.right + 1, `${size.id} ${row.controlRole} value should stay in its row`);
+            assert.equal(rectanglesOverlap(row.label, row.track), false, `${size.id} ${row.controlRole} label must not overlap the segmented track`);
+            assert.equal(rectanglesOverlap(row.value, row.track), false, `${size.id} ${row.controlRole} value must not overlap the segmented track`);
+            assert.equal(rectanglesOverlap(row.label, row.value), false, `${size.id} ${row.controlRole} label must not overlap the value`);
+        }
+    }
+
+    const resizeSnapshot = await getHarnessSnapshot(page);
+    assert.deepEqual(resizeSnapshot.events, [], "Tape Stop resizing should not emit host writes");
+    assert.deepEqual(resizeSnapshot.storedStateWrites, [], "Tape Stop resizing should not persist state");
+    await page.close();
+});
+
+test("seqfx effect controls expose modulation affordances exactly for aux-eligible metadata", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+
+    for (const effectType of effectDefinitionsModule.SEQFX_SELECTABLE_EFFECT_IDS) {
+        const definition = effectDefinitionsModule.getSeqFxEffectDefinition(effectType);
+        await page.locator(`[data-role="seqfx-effect-type-option"][data-effect-type="${effectType}"]`).click();
+        await page.getByRole("button", { name: `Chain 1 ${definition.name} block 1`, exact: true }).waitFor();
+        const advanced = page.locator('[data-role="seqfx-advanced-parameters"]');
+        if (await advanced.count()) {
+            await openSeqFxAdvancedParameters(page);
+        }
+
+        const renderedLabels = await page.locator([
+            "button.editor-tick-slider__label--toggle",
+            'button[data-role="seqfx-crusher-drive-db-mod-toggle"]',
+            'button[data-role="seqfx-stutter-gate-mod-toggle"]',
+            'button[data-role="seqfx-stutter-shape-mod-toggle"]',
+            'button[data-role="seqfx-filter-param-mod-toggle"]',
+        ].join(", ")).evaluateAll((buttons) => buttons.map((button) => (
+            button.querySelector("span")?.textContent?.trim() ?? ""
+        )).sort());
+        const eligibleLabels = definition.parameters
+            .filter((parameter) => parameter.auxEligible)
+            .map((parameter) => parameter.label)
+            .sort();
+        assert.deepEqual(
+            renderedLabels,
+            eligibleLabels,
+            `${definition.name} effect controls should mirror auxEligible metadata exactly`,
+        );
+    }
+
+    await page.getByRole("button", { name: "Vibro", exact: true }).click();
+    await page.getByRole("button", { name: "Chain 1 Vibro block 1", exact: true }).waitFor();
+    const rateToggle = page.locator('[data-role="seqfx-param-row"][data-param="0"] .editor-tick-slider__label--toggle');
+    const depthToggle = page.locator('[data-role="seqfx-param-row"][data-param="1"] .editor-tick-slider__label--toggle');
+    assert.equal(await rateToggle.getAttribute("aria-pressed"), "false");
+    assert.equal(await depthToggle.getAttribute("aria-pressed"), "false");
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    await rateToggle.click();
+    await depthToggle.click();
+    assert.equal(await rateToggle.getAttribute("aria-pressed"), "true");
+    assert.equal(await depthToggle.getAttribute("aria-pressed"), "true");
+
+    const snapshot = await getHarnessSnapshot(page);
+    const upload = patternUploads(snapshot).at(-1).value;
+    const vibro = effectDefinitionsModule.getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.vibro);
+    assert.deepEqual(upload.params[0][0].slice(0, vibro.parameters.length), vibro.parameters.map((parameter) => parameter.defaultValue));
+    assert.equal(upload.auxEnabled[0][0][0], true);
+    assert.equal(upload.auxEnabled[0][0][1], true);
+    assertClose(upload.auxEnd[0][0][0], vibro.parameters[0].defaultValue, 0.000001, "Vibro Rate toggle should preserve its modulation destination");
+    assertClose(upload.auxEnd[0][0][1], vibro.parameters[1].defaultValue, 0.000001, "Vibro Depth toggle should preserve its modulation destination");
+    await page.close();
+});
+
+test("seqfx bare preset select belongs to the inspector heading and stays keyboard-usable across wrapping", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+
+    const preset = page.locator('[data-role="seqfx-factory-effect-preset"]');
+    const heading = page.locator(".seqfx-inspector-heading");
+    assert.equal(await heading.locator('[data-role="seqfx-factory-effect-preset"]').count(), 1);
+    assert.equal(await page.locator(".seqfx-factory-preset").count(), 0, "the old preset card owner should be absent");
+    assert.equal(await page.getByText("Effect preset", { exact: true }).count(), 0, "the visible preset label should be absent");
+    assert.equal(await page.locator('[data-role="seqfx-factory-effect-preset-description"]').count(), 0, "the preset description should be absent");
+
+    const assertHeadingLayout = async (id) => {
+        const layout = await heading.evaluate((node) => {
+            const rect = (target) => {
+                const bounds = target.getBoundingClientRect();
+                return { bottom: bounds.bottom, left: bounds.left, right: bounds.right, top: bounds.top };
+            };
+            const summary = node.querySelector(".seqfx-inspector-heading__summary");
+            const select = node.querySelector('[data-role="seqfx-factory-effect-preset"]');
+            const inspector = node.closest('[data-role="seqfx-inspector"]');
+            const root = document.querySelector('[data-role="seqfx-root"]');
+            return {
+                heading: rect(node),
+                inspector: rect(inspector),
+                preset: rect(select),
+                rootClientWidth: root.clientWidth,
+                rootScrollWidth: root.scrollWidth,
+                summary: rect(summary),
+            };
+        });
+        const verticallyOverlaps = layout.summary.top < layout.preset.bottom - 0.5
+            && layout.summary.bottom > layout.preset.top + 0.5;
+        const clearPlacement = verticallyOverlaps
+            ? layout.preset.left >= layout.summary.right - 0.5
+            : layout.preset.top >= layout.summary.bottom - 0.5;
+        assert.equal(clearPlacement, true, `${id} preset should sit beside or cleanly below the complete summary`);
+        assert.ok(layout.preset.left >= layout.heading.left - 1 && layout.preset.right <= layout.heading.right + 1, `${id} preset should stay inside the heading`);
+        assert.ok(layout.heading.left >= layout.inspector.left - 1 && layout.heading.right <= layout.inspector.right + 1, `${id} heading should stay inside the inspector`);
+        assert.ok(layout.rootScrollWidth <= layout.rootClientWidth + 1, `${id} header preset should not create page overflow`);
+    };
+
+    await assertHeadingLayout("wide");
+    await preset.focus();
+    assert.equal(await preset.evaluate((node) => document.activeElement === node), true, "preset select should take keyboard focus");
+    const keyboardOwnership = await preset.evaluate((node) => {
+        const event = new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            code: "ArrowDown",
+            key: "ArrowDown",
+        });
+        node.dispatchEvent(event);
+        return {
+            defaultPrevented: event.defaultPrevented,
+            tagName: node.tagName,
+        };
+    });
+    assert.deepEqual(keyboardOwnership, { defaultPrevented: false, tagName: "SELECT" }, "preset should keep native select keyboard ownership");
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    const firstFilterPreset = effectDefinitionsModule.getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.filter).factoryPresets[0];
+    await preset.selectOption(firstFilterPreset.id);
+    const snapshotAfterKeyboard = await getHarnessSnapshot(page);
+    const upload = patternUploads(snapshotAfterKeyboard).at(-1).value;
+    assert.equal(await preset.inputValue(), firstFilterPreset.id);
+    assertClose(upload.mix[0][0], firstFilterPreset.mix, 0.000001, "keyboard preset choice should write its mix");
+    assert.deepEqual(upload.params[0][0].slice(0, firstFilterPreset.params.length), [...firstFilterPreset.params]);
+
+    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    const stateBeforeResize = await getHarnessSnapshot(page);
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await assertHeadingLayout("narrow");
+    const stateAfterResize = await getHarnessSnapshot(page);
+    assert.equal(await preset.inputValue(), firstFilterPreset.id, "selected preset should survive header wrapping");
+    assert.deepEqual(stateAfterResize.events, stateBeforeResize.events, "header wrapping should not emit host writes");
+    assert.deepEqual(stateAfterResize.storedStateWrites, stateBeforeResize.storedStateWrites, "header wrapping should not write saved state");
+    assert.deepEqual(stateAfterResize.storedState, stateBeforeResize.storedState, "header wrapping should preserve saved state");
     await page.close();
 });
 

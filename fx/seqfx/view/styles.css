@@ -1161,13 +1161,41 @@ select {
 .seqfx-inspector-heading {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    min-width: 0;
+}
+
+.seqfx-inspector-heading__summary {
+    display: flex;
+    flex: 1 1 180px;
+    align-items: center;
     gap: 8px;
+    min-width: 0;
 }
 
 .seqfx-inspector-heading strong {
+    min-width: 0;
     color: var(--seqfx-shell-ink);
     font-size: 13px;
     line-height: 1.2;
+}
+
+.seqfx-inspector-heading__preset {
+    flex: 0 1 170px;
+    box-sizing: border-box;
+    width: clamp(120px, 34%, 170px);
+    min-width: 120px;
+    min-height: 28px;
+    border: 1px solid var(--seqfx-shell-border);
+    border-radius: 5px;
+    padding: 3px 24px 3px 6px;
+    color: var(--seqfx-shell-ink);
+    background: rgba(255, 255, 255, 0.42);
+    font-family: var(--editor-label-font);
+    font-size: 10px;
+    font-weight: 700;
+    box-shadow: var(--seqfx-material-shadow-raised);
 }
 
 .seqfx-inspector-heading__bullet {
@@ -1287,6 +1315,39 @@ select {
     font-size: 10px;
     font-style: normal;
     letter-spacing: 0;
+}
+
+.seqfx-filter-param-mod-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+}
+
+.seqfx-filter-param-mod-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 28px;
+    border: 0;
+    border-radius: 6px;
+    padding: 4px 7px;
+    color: var(--editor-surface-ink-muted);
+    background: rgba(28, 28, 28, 0.04);
+    font-family: var(--editor-label-font);
+    font-size: var(--editor-label-size-sm);
+    font-weight: var(--editor-label-weight);
+    letter-spacing: var(--editor-label-letter-spacing);
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.seqfx-filter-param-mod-toggle:hover,
+.seqfx-filter-param-mod-toggle:focus-visible {
+    color: var(--editor-surface-ink);
+    background: rgba(28, 28, 28, 0.08);
+    outline: 2px solid var(--editor-accent-start);
+    outline-offset: 1px;
 }
 
 .seqfx-field input,
@@ -1827,45 +1888,6 @@ select {
     border-color: rgba(87, 127, 98, 0.72);
     color: var(--editor-surface-ink);
     background: #8bbf9a;
-}
-
-.seqfx-factory-preset {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: 5px 8px;
-    min-width: 0;
-    border-radius: 6px;
-    padding: 7px 9px;
-    color: var(--seqfx-shell-ink-muted);
-    background: rgba(222, 216, 204, 0.48);
-    box-shadow: var(--seqfx-material-shadow-raised);
-    font-size: 10px;
-    font-weight: 800;
-    text-transform: uppercase;
-}
-
-.seqfx-factory-preset select {
-    width: 100%;
-    min-width: 0;
-    min-height: 28px;
-    border: 1px solid var(--seqfx-shell-border);
-    border-radius: 5px;
-    padding: 3px 6px;
-    color: var(--seqfx-shell-ink);
-    background: rgba(255, 255, 255, 0.42);
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: none;
-}
-
-.seqfx-factory-preset small {
-    grid-column: 1 / -1;
-    color: var(--seqfx-shell-ink-muted);
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 1.3;
-    text-transform: none;
 }
 
 .seqfx-mod-toggle {
@@ -2436,6 +2458,28 @@ select {
     box-shadow: none;
 }
 
+.seqfx-tape-v2-control.seqfx-param-row .editor-tick-slider {
+    grid-template-columns: minmax(0, 1fr) minmax(58px, auto);
+    grid-template-areas:
+        "label value"
+        "track track";
+    row-gap: 6px;
+}
+
+.seqfx-tape-v2-control.seqfx-param-row .editor-tick-slider__label {
+    grid-area: label;
+    width: max-content;
+    max-width: 100%;
+}
+
+.seqfx-tape-v2-control.seqfx-param-row .editor-tick-slider__track {
+    grid-area: track;
+}
+
+.seqfx-tape-v2-control.seqfx-param-row :is(.editor-tick-slider__value, .editor-tick-slider__exact-entry) {
+    grid-area: value;
+}
+
 .seqfx-tape-v2-control > span {
     display: flex;
     align-items: center;
@@ -2692,18 +2736,6 @@ select {
     box-shadow:
         0 0 0 2px var(--seqfx-focus-ring-light),
         0 0 0 4px var(--seqfx-focus-ring-dark);
-}
-
-@container seqfx-inspector (width < 520px) {
-    .seqfx-factory-preset {
-        grid-template-columns: minmax(0, 1fr);
-        align-items: start;
-    }
-
-    .seqfx-factory-preset select,
-    .seqfx-factory-preset small {
-        grid-column: 1;
-    }
 }
 
 @container seqfx-inspector (width < 420px) {

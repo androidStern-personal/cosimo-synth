@@ -858,6 +858,9 @@ function SeqFxNumericParameterSlider({
     disabled,
     label = definition.label,
     paramIndex,
+    modulation,
+    modulationPhase,
+    onModulationToggle,
     triggerLatched,
     value,
     onChange,
@@ -868,6 +871,9 @@ function SeqFxNumericParameterSlider({
     disabled: boolean;
     label?: string;
     paramIndex: number;
+    modulation: AuxModulatedParam | null;
+    modulationPhase: number;
+    onModulationToggle: (() => void) | null;
     triggerLatched: boolean;
     value: number;
     onChange: (value: number) => void;
@@ -895,7 +901,12 @@ function SeqFxNumericParameterSlider({
                 labelAnnotation={triggerLatched ? "Trigger" : null}
                 max={definition.max}
                 min={definition.min}
+                modulation={modulation ? {
+                    ...modulation,
+                    phase: modulationPhase,
+                } : null}
                 onChange={onChange}
+                onModulationToggle={onModulationToggle}
                 scale={definition.scale}
                 step={definition.step}
                 tickCount={tickCountForParameter(definition)}
@@ -912,20 +923,29 @@ function SeqFxParameterField({
     disabled,
     triggerLatched,
     value,
+    modulation,
+    modulationPhase,
     onChange,
+    onModulationToggle,
 }: {
     definition: ParamDefinition;
     disabled: boolean;
     triggerLatched: boolean;
     value: number;
+    modulation: AuxModulatedParam | null;
+    modulationPhase: number;
     onChange: (value: number) => void;
+    onModulationToggle: (() => void) | null;
 }) {
     if (definition.kind !== "select" || definition.options === undefined) {
         return (
             <SeqFxNumericParameterSlider
                 definition={definition}
                 disabled={disabled}
+                modulation={modulation}
+                modulationPhase={modulationPhase}
                 onChange={onChange}
+                onModulationToggle={onModulationToggle}
                 paramIndex={definition.index}
                 triggerLatched={triggerLatched}
                 value={value}
@@ -959,6 +979,37 @@ function SeqFxParameterField({
                     : definition.hint ?? formatSeqFxParameterRange(definition)}
             </small>
         </label>
+    );
+}
+
+function SeqFxFilterParamModulationToggle({
+    definition,
+    modulation,
+    value,
+    onToggle,
+}: {
+    definition: ParamDefinition;
+    modulation: AuxModulatedParam | null;
+    value: number;
+    onToggle: () => void;
+}) {
+    const direction = modulation
+        ? modulationDirectionForValues(value, modulation.end)
+        : "both";
+
+    return (
+        <button
+            aria-label={`Modulate ${definition.label}`}
+            aria-pressed={modulation !== null}
+            className="seqfx-filter-param-mod-toggle"
+            data-param={definition.index}
+            data-role="seqfx-filter-param-mod-toggle"
+            onClick={onToggle}
+            type="button"
+        >
+            <span>{definition.label}</span>
+            <ModBadge isOn={modulation !== null} direction={direction} />
+        </button>
     );
 }
 
@@ -2711,7 +2762,10 @@ function TapeStopV2Editor({
                         definition={freeStopDefinition}
                         disabled={disabled}
                         label="Stop Time"
+                        modulation={null}
+                        modulationPhase={0}
                         onChange={(value) => onParamChange(TAPE_STOP_PARAM_FREE_STOP_MS, value)}
+                        onModulationToggle={null}
                         paramIndex={TAPE_STOP_PARAM_FREE_STOP_MS}
                         triggerLatched
                         value={freeStopMs}
@@ -2777,7 +2831,10 @@ function TapeStopV2Editor({
                             definition={freeStartDefinition}
                             disabled={disabled}
                             label="Start Time"
+                            modulation={null}
+                            modulationPhase={0}
                             onChange={(value) => onParamChange(TAPE_STOP_PARAM_FREE_START_MS, value)}
+                            onModulationToggle={null}
                             paramIndex={TAPE_STOP_PARAM_FREE_START_MS}
                             triggerLatched
                             value={freeStartMs}
@@ -4546,13 +4603,17 @@ export function SeqFxPatchView({
         const triggerLatched = isSeqFxTriggerLatchedParamForEffect(inspectedEffectType, definition.index);
         const disabled = triggerLatched && !selectedBlockGroup && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1;
         const value = inspectedCell?.params[definition.index] ?? definition.defaultValue;
+        const canToggleModulation = definition.auxEligible && auxEditable;
 
         return (
             <SeqFxParameterField
                 definition={definition}
                 disabled={disabled}
                 key={definition.index}
+                modulation={canToggleModulation ? auxTarget(definition.index) : null}
+                modulationPhase={inspectedAuxAmount}
                 onChange={(nextValue) => setParam(definition.index, nextValue)}
+                onModulationToggle={canToggleModulation ? () => toggleAuxTarget(definition.index) : null}
                 triggerLatched={triggerLatched}
                 value={value}
             />
@@ -5073,9 +5134,26 @@ export function SeqFxPatchView({
                     onPointerDownCapture={handleInspectorPointerDownCapture}
                 >
                     <div className="seqfx-inspector-heading">
-                        <span aria-hidden="true" className="seqfx-inspector-heading__bullet" data-role="seqfx-inspector-bullet" />
-                        <strong>{getSelectionLabel(activeSelection, inspectedCell?.active ? inspectedEffectType : null)}</strong>
-                        <span aria-hidden="true" className="seqfx-inspector-heading__rule" data-role="seqfx-inspector-rule" />
+                        <span className="seqfx-inspector-heading__summary">
+                            <span aria-hidden="true" className="seqfx-inspector-heading__bullet" data-role="seqfx-inspector-bullet" />
+                            <strong>{getSelectionLabel(activeSelection, inspectedCell?.active ? inspectedEffectType : null)}</strong>
+                            <span aria-hidden="true" className="seqfx-inspector-heading__rule" data-role="seqfx-inspector-rule" />
+                        </span>
+                        {inspectedCell?.active && inspectedLane !== null ? (
+                            <select
+                                aria-label={`${SEQFX_EFFECT_TYPE_NAMES[inspectedEffectType]} factory preset`}
+                                className="seqfx-inspector-heading__preset"
+                                data-role="seqfx-factory-effect-preset"
+                                disabled={!inspectedBlock || selectedBlockStartSteps.length > 1}
+                                onChange={(event) => applyFactoryPreset(event.currentTarget.value)}
+                                value={matchingFactoryPreset?.id ?? ""}
+                            >
+                                <option value="">Custom</option>
+                                {inspectedEffectDefinition.factoryPresets.map((preset) => (
+                                    <option key={preset.id} value={preset.id}>{preset.name}</option>
+                                ))}
+                            </select>
+                        ) : null}
                     </div>
                     {!inspectedCell?.active || inspectedLane === null ? (
                         <p className="seqfx-empty" data-role="seqfx-empty">
@@ -5135,24 +5213,6 @@ export function SeqFxPatchView({
                                     />
                                 ) : null}
                             </div>
-                            <label className="seqfx-factory-preset">
-                                <span>Effect preset</span>
-                                <select
-                                    aria-label={`${SEQFX_EFFECT_TYPE_NAMES[inspectedEffectType]} factory preset`}
-                                    data-role="seqfx-factory-effect-preset"
-                                    disabled={!inspectedBlock || selectedBlockStartSteps.length > 1}
-                                    onChange={(event) => applyFactoryPreset(event.currentTarget.value)}
-                                    value={matchingFactoryPreset?.id ?? ""}
-                                >
-                                    <option value="">Custom</option>
-                                    {inspectedEffectDefinition.factoryPresets.map((preset) => (
-                                        <option key={preset.id} value={preset.id}>{preset.name}</option>
-                                    ))}
-                                </select>
-                                <small data-role="seqfx-factory-effect-preset-description">
-                                    {matchingFactoryPreset?.description ?? `Three level-conscious ${SEQFX_EFFECT_TYPE_NAMES[inspectedEffectType]} starting points.`}
-                                </small>
-                            </label>
                             <SeqFxMixRow
                                 value={inspectedCell.mix}
                                 onChange={inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? setStutterMix : setMix}
@@ -5172,6 +5232,24 @@ export function SeqFxPatchView({
                                 <>
                                     {inspectedEffectType === SEQFX_EFFECT_TYPES.filter ? (
                                         <SeqFxBespokeEditor parameterId="mode" parameterLabel="Mode">
+                                            {auxEditable ? (
+                                                <div
+                                                    aria-label="Filter modulation targets"
+                                                    className="seqfx-filter-param-mod-toggles"
+                                                    data-role="seqfx-filter-param-mod-toggles"
+                                                    role="group"
+                                                >
+                                                    {inspectedAuxParamDefinitions.map((definition) => (
+                                                        <SeqFxFilterParamModulationToggle
+                                                            definition={definition}
+                                                            key={definition.index}
+                                                            modulation={auxTarget(definition.index)}
+                                                            onToggle={() => toggleAuxTarget(definition.index)}
+                                                            value={inspectedCell.params[definition.index] ?? definition.defaultValue}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            ) : null}
                                             <FilterRangeEditor
                                                 ariaLabel="SeqFX filter range editor"
                                                 modeOptions={SEQFX_FILTER_MODE_OPTIONS}
