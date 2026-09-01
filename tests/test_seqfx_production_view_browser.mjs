@@ -25,6 +25,21 @@ let staticServer;
 let staticServerOrigin;
 let runtimeBuilt = false;
 
+async function setPhysicalSliderValue(locator, value) {
+    await locator.evaluate((node, nextValue) => {
+        const scale = node.getAttribute("data-scale");
+        const min = Number(node.getAttribute("data-physical-min"));
+        const max = Number(node.getAttribute("data-physical-max"));
+        const inputValue = scale === "log"
+            ? Math.log(nextValue / min) / Math.log(max / min)
+            : nextValue;
+        const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+        valueSetter?.call(node, String(inputValue));
+        node.dispatchEvent(new Event("input", { bubbles: true }));
+        node.dispatchEvent(new Event("change", { bubbles: true }));
+    }, value);
+}
+
 function contentTypeForPath(filePath) {
     if (filePath.endsWith(".js")) {
         return "text/javascript";
@@ -879,8 +894,8 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
         await page.getByRole("button", { name: "Pitch", exact: true }).click();
         await page.getByRole("button", { name: "Chain 4 Pitch block 1", exact: true }).waitFor();
         assert.equal(await page.locator('[data-role="seqfx-param"]').count(), 5);
-        await page.locator('[data-role="seqfx-param"][data-param="0"]').fill("12");
-        await page.locator('[data-role="seqfx-param"][data-param="2"]').fill("64");
+        await setPhysicalSliderValue(page.locator('[data-role="seqfx-param"][data-param="0"]'), 12);
+        await setPhysicalSliderValue(page.locator('[data-role="seqfx-param"][data-param="2"]'), 64);
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="pitch"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="pitch"] [data-role="seqfx-block-glyph-secondary-line"]').getAttribute("d"));
         await page.locator('[data-role="seqfx-mod-toggle"]').click();
@@ -906,7 +921,7 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
         assert.match(await page.locator('[data-role="seqfx-reverse-source-note"]').textContent(), /adds no lookahead latency/);
         await page.locator('[data-role="seqfx-param"][data-param="2"]').selectOption("1");
         await openSeqFxAdvancedParameters(page);
-        await page.locator('[data-role="seqfx-param"][data-param="3"]').fill("480");
+        await setPhysicalSliderValue(page.locator('[data-role="seqfx-param"][data-param="3"]'), 480);
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="reverse"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="reverse"] [data-role="seqfx-block-glyph-secondary-line"]').getAttribute("d"));
         const reverseInspectorBounds = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => ({
@@ -927,7 +942,7 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
             await page.locator('[data-role="seqfx-param"][data-param="0"] option').evaluateAll((options) => options.map((option) => option.textContent)),
             ["A", "E", "I", "O", "U"],
         );
-        await page.locator('[data-role="seqfx-param"][data-param="2"]').fill("0.5");
+        await setPhysicalSliderValue(page.locator('[data-role="seqfx-param"][data-param="2"]'), 0.5);
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="talk-box"] [data-role="seqfx-block-glyph-ink"]').getAttribute("d"));
         const talkBoxInspectorBounds = await page.locator('[data-role="seqfx-inspector"]').evaluate((node) => ({
             clientWidth: node.clientWidth,
@@ -947,7 +962,7 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
             await page.locator('[data-role="seqfx-param"][data-param="4"] option').evaluateAll((options) => options.map((option) => option.textContent)),
             ["Sync", "Free"],
         );
-        await page.locator('[data-role="seqfx-param"][data-param="0"]').fill("6");
+        await setPhysicalSliderValue(page.locator('[data-role="seqfx-param"][data-param="0"]'), 6);
         await page.locator('[data-role="seqfx-param"][data-param="4"]').selectOption("1");
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="vibro"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="vibro"] [data-role="seqfx-block-glyph-secondary-line"]').getAttribute("d"));
@@ -975,8 +990,8 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
             await page.locator('[data-role="seqfx-param"][data-param="6"] option').evaluateAll((options) => options.map((option) => option.textContent)),
             ["Sync", "Free"],
         );
-        await page.locator('[data-role="seqfx-param"][data-param="0"]').fill("2");
-        await page.locator('[data-role="seqfx-param"][data-param="3"]').fill("0.75");
+        await setPhysicalSliderValue(page.locator('[data-role="seqfx-param"][data-param="0"]'), 2);
+        await setPhysicalSliderValue(page.locator('[data-role="seqfx-param"][data-param="3"]'), 0.75);
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="flange"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="flange"] [data-role="seqfx-block-glyph-secondary-line"]').getAttribute("d"));
         await page.locator('[data-role="seqfx-mod-toggle"]').click();
@@ -998,7 +1013,7 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
             await page.locator('[data-role="seqfx-param"][data-param="1"] option').evaluateAll((options) => options.map((option) => option.textContent)),
             ["Soft", "Hard", "Fold", "Bias"],
         );
-        await page.locator('[data-role="seqfx-param"][data-param="0"]').fill("24");
+        await setPhysicalSliderValue(page.locator('[data-role="seqfx-param"][data-param="0"]'), 24);
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="dirty"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
         await page.locator('[data-role="seqfx-mod-toggle"]').click();
         assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 5);
@@ -1017,7 +1032,7 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
             await page.locator('[data-role="seqfx-param"][data-param="2"] option').evaluateAll((options) => options.map((option) => option.textContent)),
             ["Positive", "Negative"],
         );
-        await page.locator('[data-role="seqfx-param"][data-param="0"]').fill("440");
+        await setPhysicalSliderValue(page.locator('[data-role="seqfx-param"][data-param="0"]'), 440);
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="comb"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
         await page.locator('[data-role="seqfx-mod-toggle"]').click();
         assert.equal(await page.locator('[data-role="seqfx-mod-target-row"]').count(), 7);

@@ -1,10 +1,12 @@
 {
-  "alias": "seqfx",
-  "runtimeOut": "build/fx/seqfx_runtime",
-  "juceOut": "build/seqfx_juce",
-  "cmakeTarget": "CosimoSeqFX",
-  "productName": "CosimoSeqFX",
-  "disableMicrophonePermission": true,
-  "workerSource": "fx/seqfx/worker/source.ts",
-  "workerOut": "worker.js"
+    "alias": "seqfx",
+    "runtimeOut": "build/fx/seqfx_runtime",
+    "juceOut": "build/seqfx_juce",
+    "cmakeTarget": "CosimoSeqFX",
+    "productName": "CosimoSeqFX",
+    "disableMicrophonePermission": true,
+    "workerSource": "fx/seqfx/worker/source.ts",
+    "workerOut": "worker.js",
+    "editorMaxWidth": 1120,
+    "visualReviewAdapter": "scripts/visual-review/seqfx.mjs"
 }

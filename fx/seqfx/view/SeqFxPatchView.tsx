@@ -14,7 +14,14 @@ import {
     cutoffsFromCenterRangeOctaves,
     geometricCenterCutoffHz,
 } from "../../../kit/ui/filter-range-editor";
-import { ModBadge, type ModulationDirection } from "../../../kit/ui/editor-tick-slider";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../kit/ui/editor-tick-slider";
+import {
+    parameterEntrySpecForFrequency,
+    parameterEntrySpecForMilliseconds,
+    parameterEntrySpecForScalar,
+    parameterEntrySpecForSeconds,
+    type ParameterEntrySpec,
+} from "../../../ui/shared/parameter-value-entry";
 import {
     EDITOR_PLOT_BOTTOM_PADDING_PX,
     EDITOR_PLOT_TOP_PADDING_PX,
@@ -79,6 +86,7 @@ import {
     createSeqFxPresetMigrations,
     createSeqFxSnapshotMigrations,
 } from "./seqfx-preset-migrations";
+import { SEQFX_FACTORY_PATTERNS } from "./seqfx-factory-content";
 import {
     SEQFX_ENDPOINTS,
     SeqFxRuntimeBridge,
@@ -240,28 +248,98 @@ function defaultEffectTypeForChain(chain: number) {
     return EFFECT_OPTIONS[Math.min(EFFECT_OPTIONS.length - 1, Math.max(0, chain))] ?? SEQFX_EFFECT_TYPES.filter;
 }
 
-function SeqFxTitleSigil() {
+function SeqFxTitleSigil({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
     return (
-        <svg
-            aria-hidden="true"
-            className="seqfx-title__sigil"
-            data-role="seqfx-title-sigil"
-            focusable="false"
-            viewBox="0 0 24 24"
+        <button
+            aria-checked={enabled}
+            aria-label={enabled ? "Bypass SeqFX" : "Enable SeqFX"}
+            className={enabled ? "seqfx-title__bypass is-enabled" : "seqfx-title__bypass"}
+            data-role="seqfx-enabled"
+            onClick={onToggle}
+            role="switch"
+            title={enabled ? "Bypass SeqFX" : "Enable SeqFX"}
+            type="button"
         >
-            <g fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2">
-                <path d="M3.5 18 L3.5 14" />
-                <path d="M9 18 L9 9" />
-                <path d="M14.5 18 L14.5 6" />
-                <path d="M20 18 L20 11" />
-            </g>
-            <g fill="currentColor">
-                <circle cx="3.5" cy="14" r="1.5" />
-                <circle cx="9" cy="9" r="1.5" />
-                <circle cx="14.5" cy="6" r="1.5" />
-                <circle cx="20" cy="11" r="1.5" />
-            </g>
-        </svg>
+            <svg
+                aria-hidden="true"
+                className="seqfx-title__sigil"
+                data-role="seqfx-title-sigil"
+                focusable="false"
+                viewBox="0 0 24 24"
+            >
+                <g fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2">
+                    <path d="M3.5 18 L3.5 14" />
+                    <path d="M9 18 L9 9" />
+                    <path d="M14.5 18 L14.5 6" />
+                    <path d="M20 18 L20 11" />
+                </g>
+                <g fill="currentColor">
+                    <circle cx="3.5" cy="14" r="1.5" />
+                    <circle cx="9" cy="9" r="1.5" />
+                    <circle cx="14.5" cy="6" r="1.5" />
+                    <circle cx="20" cy="11" r="1.5" />
+                </g>
+            </svg>
+        </button>
+    );
+}
+
+function SeqFxPatternMenu({
+    canPaste,
+    onClearLoop,
+    onCopyLoop,
+    onInitPattern,
+    onLoadTemplate,
+    onPasteLoop,
+    onVaryLoop,
+}: {
+    canPaste: boolean;
+    onClearLoop: () => void;
+    onCopyLoop: () => void;
+    onInitPattern: () => void;
+    onLoadTemplate: (patternId: string) => void;
+    onPasteLoop: () => void;
+    onVaryLoop: () => void;
+}) {
+    const detailsRef = useRef<HTMLDetailsElement>(null);
+    const closeMenu = () => detailsRef.current?.removeAttribute("open");
+    const runAndClose = (operation: () => void) => {
+        operation();
+        closeMenu();
+    };
+
+    return (
+        <details className="seqfx-pattern-menu" data-role="seqfx-pattern-menu" ref={detailsRef}>
+            <summary title="Pattern actions">Pattern</summary>
+            <div className="seqfx-pattern-menu__panel" role="group" aria-label="Pattern actions">
+                <button onClick={() => runAndClose(onInitPattern)} type="button">Init current pattern</button>
+                <button onClick={() => runAndClose(onClearLoop)} type="button">Clear loop</button>
+                <button onClick={() => runAndClose(onCopyLoop)} type="button">Copy loop</button>
+                <button disabled={!canPaste} onClick={() => runAndClose(onPasteLoop)} type="button">Paste loop</button>
+                <button onClick={() => runAndClose(onVaryLoop)} type="button">Vary loop</button>
+                <label>
+                    <span>Load Template…</span>
+                    <select
+                        aria-label="Load Template"
+                        data-role="seqfx-template-select"
+                        defaultValue=""
+                        onChange={(event) => {
+                            const patternId = event.currentTarget.value;
+                            if (patternId !== "") {
+                                onLoadTemplate(patternId);
+                                event.currentTarget.value = "";
+                                closeMenu();
+                            }
+                        }}
+                    >
+                        <option value="">Choose…</option>
+                        {SEQFX_FACTORY_PATTERNS.map((pattern) => (
+                            <option key={pattern.id} value={pattern.id}>{pattern.name}</option>
+                        ))}
+                    </select>
+                </label>
+            </div>
+        </details>
     );
 }
 
@@ -778,20 +856,173 @@ function paramDefinitionsForEffect(effectType: SeqFxEffectType): ParamDefinition
     }));
 }
 
+function tickCountForParameter(definition: SeqFxParameterDefinition) {
+    if (!definition.integer) {
+        return 16;
+    }
+
+    const valueCount = Math.round((definition.max - definition.min) / definition.step) + 1;
+    return Math.min(31, Math.max(2, valueCount));
+}
+
+function exactEntrySpecForParameter(
+    definition: SeqFxParameterDefinition,
+    value: number,
+): ParameterEntrySpec | null {
+    switch (definition.unit) {
+        case "Hz":
+            return parameterEntrySpecForFrequency({
+                minHz: definition.min,
+                maxHz: definition.max,
+                stepHz: definition.step,
+                allowLogPercent: definition.scale === "log",
+            });
+        case "ms":
+            return parameterEntrySpecForMilliseconds({
+                minMilliseconds: definition.min,
+                maxMilliseconds: definition.max,
+                stepMilliseconds: definition.step,
+                currentMilliseconds: value,
+            });
+        case "s":
+            return parameterEntrySpecForSeconds({
+                minSeconds: definition.min,
+                maxSeconds: definition.max,
+                stepSeconds: definition.step,
+                currentSeconds: value,
+                displayUnit: "s",
+            });
+        case "%":
+            return parameterEntrySpecForScalar({
+                min: definition.min,
+                max: definition.max,
+                step: definition.step,
+                unit: "%",
+                canonicalPerDisplayedUnit: 0.01,
+            });
+        case "cents":
+            return parameterEntrySpecForScalar({ min: definition.min, max: definition.max, step: definition.step, unit: "ct" });
+        case "semitones":
+            return parameterEntrySpecForScalar({ min: definition.min, max: definition.max, step: definition.step, unit: "st" });
+        case "degrees":
+            return parameterEntrySpecForScalar({ min: definition.min, max: definition.max, step: definition.step, unit: "°" });
+        case "dB":
+        case "Q":
+        case "x":
+            return parameterEntrySpecForScalar({
+                min: definition.min,
+                max: definition.max,
+                step: definition.step,
+                unit: definition.unit,
+            });
+        case "":
+        case "bits":
+        default:
+            return null;
+    }
+}
+
+function SeqFxNumericParameterSlider({
+    className = "",
+    controlRole,
+    definition,
+    disabled,
+    label = definition.label,
+    paramIndex,
+    modulation,
+    modulationPhase,
+    onModulationToggle,
+    triggerLatched,
+    value,
+    onChange,
+}: {
+    className?: string;
+    controlRole?: string;
+    definition: SeqFxParameterDefinition;
+    disabled: boolean;
+    label?: string;
+    paramIndex: number;
+    modulation: AuxModulatedParam | null;
+    modulationPhase: number;
+    onModulationToggle: (() => void) | null;
+    triggerLatched: boolean;
+    value: number;
+    onChange: (value: number) => void;
+}) {
+    const inputData = controlRole
+        ? { "data-control": controlRole, "data-param": paramIndex }
+        : { "data-param": paramIndex };
+
+    return (
+        <div
+            className={["seqfx-param-row", className].filter(Boolean).join(" ")}
+            data-param={paramIndex}
+            data-role="seqfx-param-row"
+            data-section={definition.section}
+        >
+            <EditorTickSlider
+                dataRole="seqfx-param-slider"
+                disabled={disabled}
+                discrete={definition.integer}
+                entrySpec={exactEntrySpecForParameter(definition, value)}
+                formatValue={(nextValue) => formatSeqFxParameterValue(definition, nextValue)}
+                inputData={inputData}
+                inputDataRole="seqfx-param"
+                label={label}
+                labelAnnotation={triggerLatched ? "Trigger" : null}
+                max={definition.max}
+                min={definition.min}
+                modulation={modulation ? {
+                    ...modulation,
+                    phase: modulationPhase,
+                } : null}
+                onChange={onChange}
+                onModulationToggle={onModulationToggle}
+                scale={definition.scale}
+                step={definition.step}
+                tickCount={tickCountForParameter(definition)}
+                value={value}
+                valueData={{ "data-param": paramIndex }}
+                valueDataRole="seqfx-param-value"
+            />
+        </div>
+    );
+}
+
 function SeqFxParameterField({
     definition,
     disabled,
     triggerLatched,
     value,
+    modulation,
+    modulationPhase,
     onChange,
+    onModulationToggle,
 }: {
     definition: ParamDefinition;
     disabled: boolean;
     triggerLatched: boolean;
     value: number;
+    modulation: AuxModulatedParam | null;
+    modulationPhase: number;
     onChange: (value: number) => void;
+    onModulationToggle: (() => void) | null;
 }) {
-    const formattedValue = formatSeqFxParameterValue(definition, value);
+    if (definition.kind !== "select" || definition.options === undefined) {
+        return (
+            <SeqFxNumericParameterSlider
+                definition={definition}
+                disabled={disabled}
+                modulation={modulation}
+                modulationPhase={modulationPhase}
+                onChange={onChange}
+                onModulationToggle={onModulationToggle}
+                paramIndex={definition.index}
+                triggerLatched={triggerLatched}
+                value={value}
+            />
+        );
+    }
 
     return (
         <label className="seqfx-field" data-section={definition.section}>
@@ -812,32 +1043,44 @@ function SeqFxParameterField({
                         <option key={option} value={index}>{option}</option>
                     ))}
                 </select>
-            ) : (
-                <span className="seqfx-field__number">
-                    <input
-                        aria-label={definition.label}
-                        aria-valuetext={formattedValue}
-                        data-role="seqfx-param"
-                        data-param={definition.index}
-                        disabled={disabled}
-                        max={definition.max}
-                        min={definition.min}
-                        onChange={(event) => onChange(Number(event.currentTarget.value))}
-                        step={definition.step}
-                        type="number"
-                        value={formatValue(value)}
-                    />
-                    <output data-param={definition.index} data-role="seqfx-param-value">
-                        {formattedValue}
-                    </output>
-                </span>
-            )}
+            ) : null}
             <small>
                 {disabled
                     ? "Select one cell to edit this trigger."
                     : definition.hint ?? formatSeqFxParameterRange(definition)}
             </small>
         </label>
+    );
+}
+
+function SeqFxFilterParamModulationToggle({
+    definition,
+    modulation,
+    value,
+    onToggle,
+}: {
+    definition: ParamDefinition;
+    modulation: AuxModulatedParam | null;
+    value: number;
+    onToggle: () => void;
+}) {
+    const direction = modulation
+        ? modulationDirectionForValues(value, modulation.end)
+        : "both";
+
+    return (
+        <button
+            aria-label={`Modulate ${definition.label}`}
+            aria-pressed={modulation !== null}
+            className="seqfx-filter-param-mod-toggle"
+            data-param={definition.index}
+            data-role="seqfx-filter-param-mod-toggle"
+            onClick={onToggle}
+            type="button"
+        >
+            <span>{definition.label}</span>
+            <ModBadge isOn={modulation !== null} direction={direction} />
+        </button>
     );
 }
 
@@ -2497,6 +2740,13 @@ function TapeStopV2Editor({
     disabled: boolean;
     onParamChange: (paramIndex: number, value: number) => void;
 }) {
+    const tapeStopParameters = getSeqFxEffectDefinition(SEQFX_EFFECT_TYPES.tapeStop).parameters;
+    const freeStopDefinition = tapeStopParameters[TAPE_STOP_PARAM_FREE_STOP_MS];
+    const freeStartDefinition = tapeStopParameters[TAPE_STOP_PARAM_FREE_START_MS];
+    if (!freeStopDefinition || !freeStartDefinition) {
+        throw new Error("Tape Stop free-duration metadata is incomplete.");
+    }
+
     const stopDivision = Math.round(step.params[TAPE_STOP_PARAM_STOP_DIVISION] ?? 8);
     const curve = clampNumber(step.params[TAPE_STOP_PARAM_CURVE] ?? 0, -1, 1);
     const returnMode = Math.round(step.params[TAPE_STOP_PARAM_RETURN] ?? TAPE_STOP_RETURN_CROSSFADE_TO_LIVE);
@@ -2576,23 +2826,24 @@ function TapeStopV2Editor({
                     <small>{freeTiming ? "Milliseconds stay fixed when tempo changes." : "The duration is latched from tempo at the trigger."}</small>
                 </label>
 
-                <label className="seqfx-tape-v2-control">
-                    <span>Stop Time <em>Trigger</em></span>
-                    {freeTiming ? (
-                        <input
-                            aria-label="Tape Stop free stop time in milliseconds"
-                            data-control="seqfx-tape-stop-time"
-                            data-param={TAPE_STOP_PARAM_FREE_STOP_MS}
-                            data-role="seqfx-param"
-                            disabled={disabled}
-                            max={8_000}
-                            min={20}
-                            onChange={(event) => onParamChange(TAPE_STOP_PARAM_FREE_STOP_MS, Number(event.currentTarget.value))}
-                            step={1}
-                            type="number"
-                            value={Math.round(freeStopMs)}
-                        />
-                    ) : (
+                {freeTiming ? (
+                    <SeqFxNumericParameterSlider
+                        className="seqfx-tape-v2-control"
+                        controlRole="seqfx-tape-stop-time"
+                        definition={freeStopDefinition}
+                        disabled={disabled}
+                        label="Stop Time"
+                        modulation={null}
+                        modulationPhase={0}
+                        onChange={(value) => onParamChange(TAPE_STOP_PARAM_FREE_STOP_MS, value)}
+                        onModulationToggle={null}
+                        paramIndex={TAPE_STOP_PARAM_FREE_STOP_MS}
+                        triggerLatched
+                        value={freeStopMs}
+                    />
+                ) : (
+                    <label className="seqfx-tape-v2-control">
+                        <span>Stop Time <em>Trigger</em></span>
                         <select
                             aria-label="Tape Stop synced stop time"
                             data-control="seqfx-tape-stop-time"
@@ -2604,9 +2855,9 @@ function TapeStopV2Editor({
                         >
                             {TAPE_STOP_SYNC_LABELS.map((label, index) => <option key={label} value={index}>{label}</option>)}
                         </select>
-                    )}
-                    <small>How long the captured audio takes to reach a stop.</small>
-                </label>
+                        <small>How long the captured audio takes to reach a stop.</small>
+                    </label>
+                )}
 
                 <label className="seqfx-tape-v2-control seqfx-tape-v2-control--wide">
                     <span>Curve <em>Trigger</em><output>{tapeStopCurveLabel(curve)}</output></span>
@@ -2644,23 +2895,24 @@ function TapeStopV2Editor({
                 </label>
 
                 {spinUp ? (
-                    <label className="seqfx-tape-v2-control">
-                        <span>Start Time <em>Trigger</em></span>
-                        {freeTiming ? (
-                            <input
-                                aria-label="Tape Stop free start time in milliseconds"
-                                data-control="seqfx-tape-start-time"
-                                data-param={TAPE_STOP_PARAM_FREE_START_MS}
-                                data-role="seqfx-param"
-                                disabled={disabled}
-                                max={8_000}
-                                min={20}
-                                onChange={(event) => onParamChange(TAPE_STOP_PARAM_FREE_START_MS, Number(event.currentTarget.value))}
-                                step={1}
-                                type="number"
-                                value={Math.round(freeStartMs)}
-                            />
-                        ) : (
+                    freeTiming ? (
+                        <SeqFxNumericParameterSlider
+                            className="seqfx-tape-v2-control"
+                            controlRole="seqfx-tape-start-time"
+                            definition={freeStartDefinition}
+                            disabled={disabled}
+                            label="Start Time"
+                            modulation={null}
+                            modulationPhase={0}
+                            onChange={(value) => onParamChange(TAPE_STOP_PARAM_FREE_START_MS, value)}
+                            onModulationToggle={null}
+                            paramIndex={TAPE_STOP_PARAM_FREE_START_MS}
+                            triggerLatched
+                            value={freeStartMs}
+                        />
+                    ) : (
+                        <label className="seqfx-tape-v2-control">
+                            <span>Start Time <em>Trigger</em></span>
                             <select
                                 aria-label="Tape Stop synced start time"
                                 data-control="seqfx-tape-start-time"
@@ -2672,9 +2924,9 @@ function TapeStopV2Editor({
                             >
                                 {TAPE_STOP_SYNC_LABELS.map((label, index) => <option key={label} value={index}>{label}</option>)}
                             </select>
-                        )}
-                        <small>How long the motor takes to return to normal speed.</small>
-                    </label>
+                            <small>How long the motor takes to return to normal speed.</small>
+                        </label>
+                    )
                 ) : null}
 
                 <label className="seqfx-tape-v2-control seqfx-tape-v2-control--wide">
@@ -2930,7 +3182,6 @@ export function SeqFxPatchView({
     const [gestureState, setGestureState] = useState<BlockGesture | null>(null);
     const [patternPreview, setPatternPreview] = useState<PatternPreview | null>(null);
     const [invalidDropTarget, setInvalidDropTarget] = useState<InvalidDropTarget | null>(null);
-    const [showFirstUseHint, setShowFirstUseHint] = useState(true);
     const [focusedDurationBlock, setFocusedDurationBlock] = useState<{ lane: number; startStep: number } | null>(null);
     const isPromoControlled = Boolean(promoControls);
     const state = isPromoControlled ? promoControls?.state ?? runtimeState : runtimeState;
@@ -2955,7 +3206,7 @@ export function SeqFxPatchView({
     const inspectorMode = isPromoControlled ? promoControls?.inspectorMode ?? runtimeInspectorMode : runtimeInspectorMode;
     const cellsPerBeat = useMemo(() => cellsPerBeatForRateIndex(rateIndex), [rateIndex]);
     const gridGeometry = useMemo(() => createGridGeometry(cellsPerBeat), [cellsPerBeat]);
-    const gridShellClassName = `seqfx-grid-shell seqfx-grid--beat-${cellsPerBeat}`;
+    const workspaceClassName = `seqfx-workspace seqfx-grid--beat-${cellsPerBeat}`;
     const laneTrackRefs = useRef(new Map<string, { lane: number; node: HTMLDivElement }>());
     const cellRefs = useRef(new Map<string, HTMLDivElement>());
     const gestureRef = useRef<BlockGesture | null>(null);
@@ -4423,13 +4674,17 @@ export function SeqFxPatchView({
         const triggerLatched = isSeqFxTriggerLatchedParamForEffect(inspectedEffectType, definition.index);
         const disabled = triggerLatched && !selectedBlockGroup && !selectedWholeBlock && (activeSelection?.steps.length ?? 0) > 1;
         const value = inspectedCell?.params[definition.index] ?? definition.defaultValue;
+        const canToggleModulation = definition.auxEligible && auxEditable;
 
         return (
             <SeqFxParameterField
                 definition={definition}
                 disabled={disabled}
                 key={definition.index}
+                modulation={canToggleModulation ? auxTarget(definition.index) : null}
+                modulationPhase={inspectedAuxAmount}
                 onChange={(nextValue) => setParam(definition.index, nextValue)}
+                onModulationToggle={canToggleModulation ? () => toggleAuxTarget(definition.index) : null}
                 triggerLatched={triggerLatched}
                 value={value}
             />
@@ -4602,7 +4857,14 @@ export function SeqFxPatchView({
 
             <section className="seqfx-topbar" aria-label="SeqFX pattern controls">
                 <div className="seqfx-title">
-                    <SeqFxTitleSigil />
+                    <SeqFxTitleSigil
+                        enabled={globalControls.enabled}
+                        onToggle={() => {
+                            if (!isPromoControlled) {
+                                bridge.commitGlobalControl(SEQFX_ENDPOINTS.enabled, globalControls.enabled ? 0 : 1);
+                            }
+                        }}
+                    />
                     <h1>SeqFX</h1>
                 </div>
                 <div className="seqfx-patterns" role="group" aria-label="Patterns">
@@ -4620,15 +4882,47 @@ export function SeqFxPatchView({
                         </button>
                     ))}
                 </div>
+                <SeqFxPatternMenu
+                    canPaste={runtimeHasLoopClipboard}
+                    onClearLoop={() => {
+                        if (!isPromoControlled) {
+                            bridge.clearLoop();
+                        }
+                    }}
+                    onCopyLoop={() => {
+                        if (!isPromoControlled) {
+                            bridge.copyLoop();
+                            setHasLoopClipboard(bridge.canPasteLoop());
+                        }
+                    }}
+                    onInitPattern={() => {
+                        if (!isPromoControlled) {
+                            bridge.initPattern();
+                        }
+                    }}
+                    onLoadTemplate={(patternId) => {
+                        if (!isPromoControlled) {
+                            bridge.loadFactoryPattern(patternId);
+                        }
+                    }}
+                    onPasteLoop={() => {
+                        if (!isPromoControlled) {
+                            bridge.pasteLoop();
+                        }
+                    }}
+                    onVaryLoop={() => {
+                        if (!isPromoControlled) {
+                            bridge.varyLoop();
+                        }
+                    }}
+                />
             </section>
 
             <SeqFxGlobalControlSurface
                 controls={globalControls}
                 internalRunning={internalRunning}
-                playheadStep={playheadStep}
                 canUndo={bridge.canUndo()}
                 canRedo={bridge.canRedo()}
-                hasLoopClipboard={runtimeHasLoopClipboard}
                 onGlobalControl={(endpointID, value) => {
                     if (!isPromoControlled) {
                         bridge.setGlobalControl(endpointID, value);
@@ -4681,60 +4975,13 @@ export function SeqFxPatchView({
                         bridge.redo();
                     }
                 }}
-                onInitPattern={() => {
-                    if (!isPromoControlled) {
-                        bridge.initPattern();
-                    }
-                }}
-                onClearLoop={() => {
-                    if (!isPromoControlled) {
-                        bridge.clearLoop();
-                    }
-                }}
-                onCopyLoop={() => {
-                    if (!isPromoControlled) {
-                        bridge.copyLoop();
-                        setHasLoopClipboard(bridge.canPasteLoop());
-                    }
-                }}
-                onPasteLoop={() => {
-                    if (!isPromoControlled) {
-                        bridge.pasteLoop();
-                    }
-                }}
-                onLoadFactoryPattern={(patternId) => {
-                    if (!isPromoControlled) {
-                        bridge.loadFactoryPattern(patternId);
-                    }
-                }}
-                onVaryLoop={() => {
-                    if (!isPromoControlled) {
-                        bridge.varyLoop();
-                    }
-                }}
             />
 
-            {showFirstUseHint ? (
-                <aside className="seqfx-first-use" data-role="seqfx-first-use" role="status">
-                    <strong>First pattern?</strong>
-                    <span>Click a cell, drag a block edge to resize, choose a named effect, then open Mod. Dismissal lasts while this editor stays open.</span>
-                    <button
-                        aria-label="Dismiss first-use hint"
-                        data-role="seqfx-first-use-dismiss"
-                        onClick={() => setShowFirstUseHint(false)}
-                        type="button"
-                    >
-                        Got it
-                    </button>
-                </aside>
-            ) : null}
-
-            <section className="seqfx-workspace" style={SEQFX_WORKSPACE_STYLE}>
-                <div className={gridShellClassName} aria-label="Effect sequence grid">
+            <section className={workspaceClassName} style={SEQFX_WORKSPACE_STYLE}>
+                <div className="seqfx-grid-shell" aria-label="Effect sequence grid">
                     {STEP_BARS.map((barSteps, barIndex) => (
                         <div className="seqfx-bar-section" data-role="seqfx-bar-section" data-bar={barIndex} key={barIndex}>
                             <div className="seqfx-step-header">
-                                <div className="seqfx-lane-spacer" />
                                 <div className="seqfx-step-track">
                                     {barSteps.map((step) => (
                                         <div
@@ -4757,7 +5004,6 @@ export function SeqFxPatchView({
 
                                     return (
                                         <div className="seqfx-lane-row" key={`${barIndex}:${laneName}`}>
-                                            <div className="seqfx-lane-label">{laneName}</div>
                                             <div
                                                 className="seqfx-lane-track"
                                                 data-role="seqfx-lane-track"
@@ -4777,6 +5023,7 @@ export function SeqFxPatchView({
                                                     const selected = activeSelection?.lane === lane && activeSelection.steps.includes(step);
                                                     const className = [
                                                         "seqfx-cell",
+                                                        "seqfx-cell-surface",
                                                         ...frameCornerClassNames(lane, barIndex, step, step),
                                                         gridGeometry.isAltBar(step) ? "is-alt-bar" : "",
                                                         cell.active ? "is-covered" : "",
@@ -4967,9 +5214,26 @@ export function SeqFxPatchView({
                     onPointerDownCapture={handleInspectorPointerDownCapture}
                 >
                     <div className="seqfx-inspector-heading">
-                        <span aria-hidden="true" className="seqfx-inspector-heading__bullet" data-role="seqfx-inspector-bullet" />
-                        <strong>{getSelectionLabel(activeSelection, inspectedCell?.active ? inspectedEffectType : null)}</strong>
-                        <span aria-hidden="true" className="seqfx-inspector-heading__rule" data-role="seqfx-inspector-rule" />
+                        <span className="seqfx-inspector-heading__summary">
+                            <span aria-hidden="true" className="seqfx-inspector-heading__bullet" data-role="seqfx-inspector-bullet" />
+                            <strong>{getSelectionLabel(activeSelection, inspectedCell?.active ? inspectedEffectType : null)}</strong>
+                            <span aria-hidden="true" className="seqfx-inspector-heading__rule" data-role="seqfx-inspector-rule" />
+                        </span>
+                        {inspectedCell?.active && inspectedLane !== null ? (
+                            <select
+                                aria-label={`${SEQFX_EFFECT_TYPE_NAMES[inspectedEffectType]} factory preset`}
+                                className="seqfx-inspector-heading__preset"
+                                data-role="seqfx-factory-effect-preset"
+                                disabled={!inspectedBlock || selectedBlockStartSteps.length > 1}
+                                onChange={(event) => applyFactoryPreset(event.currentTarget.value)}
+                                value={matchingFactoryPreset?.id ?? ""}
+                            >
+                                <option value="">Custom</option>
+                                {inspectedEffectDefinition.factoryPresets.map((preset) => (
+                                    <option key={preset.id} value={preset.id}>{preset.name}</option>
+                                ))}
+                            </select>
+                        ) : null}
                     </div>
                     {!inspectedCell?.active || inspectedLane === null ? (
                         <p className="seqfx-empty" data-role="seqfx-empty">
@@ -4986,7 +5250,7 @@ export function SeqFxPatchView({
                                             <button
                                                 key={effectType}
                                                 type="button"
-                                                className={selected ? "is-selected" : undefined}
+                                                className={selected ? "seqfx-cell-surface is-selected" : "seqfx-cell-surface"}
                                                 data-effect-type={effectType}
                                                 data-role="seqfx-effect-type-option"
                                                 disabled={selectedBlockStartSteps.length > 1}
@@ -4996,7 +5260,12 @@ export function SeqFxPatchView({
                                             >
                                                 <SeqFxEffectIcon effectType={effectType} />
                                                 <span className="seqfx-effect-picker__name">
-                                                    {SEQFX_EFFECT_TYPE_NAMES[effectType]}
+                                                    <span className="seqfx-effect-picker__name--full">
+                                                        {SEQFX_EFFECT_TYPE_NAMES[effectType]}
+                                                    </span>
+                                                    <span aria-hidden="true" className="seqfx-effect-picker__name--short">
+                                                        {SEQFX_EFFECT_TYPE_SHORT_NAMES[effectType]}
+                                                    </span>
                                                 </span>
                                             </button>
                                         );
@@ -5024,24 +5293,6 @@ export function SeqFxPatchView({
                                     />
                                 ) : null}
                             </div>
-                            <label className="seqfx-factory-preset">
-                                <span>Effect preset</span>
-                                <select
-                                    aria-label={`${SEQFX_EFFECT_TYPE_NAMES[inspectedEffectType]} factory preset`}
-                                    data-role="seqfx-factory-effect-preset"
-                                    disabled={!inspectedBlock || selectedBlockStartSteps.length > 1}
-                                    onChange={(event) => applyFactoryPreset(event.currentTarget.value)}
-                                    value={matchingFactoryPreset?.id ?? ""}
-                                >
-                                    <option value="">Custom</option>
-                                    {inspectedEffectDefinition.factoryPresets.map((preset) => (
-                                        <option key={preset.id} value={preset.id}>{preset.name}</option>
-                                    ))}
-                                </select>
-                                <small data-role="seqfx-factory-effect-preset-description">
-                                    {matchingFactoryPreset?.description ?? `Three level-conscious ${SEQFX_EFFECT_TYPE_NAMES[inspectedEffectType]} starting points.`}
-                                </small>
-                            </label>
                             <SeqFxMixRow
                                 value={inspectedCell.mix}
                                 onChange={inspectedEffectType === SEQFX_EFFECT_TYPES.stutter ? setStutterMix : setMix}
@@ -5061,6 +5312,24 @@ export function SeqFxPatchView({
                                 <>
                                     {inspectedEffectType === SEQFX_EFFECT_TYPES.filter ? (
                                         <SeqFxBespokeEditor parameterId="mode" parameterLabel="Mode">
+                                            {auxEditable ? (
+                                                <div
+                                                    aria-label="Filter modulation targets"
+                                                    className="seqfx-filter-param-mod-toggles"
+                                                    data-role="seqfx-filter-param-mod-toggles"
+                                                    role="group"
+                                                >
+                                                    {inspectedAuxParamDefinitions.map((definition) => (
+                                                        <SeqFxFilterParamModulationToggle
+                                                            definition={definition}
+                                                            key={definition.index}
+                                                            modulation={auxTarget(definition.index)}
+                                                            onToggle={() => toggleAuxTarget(definition.index)}
+                                                            value={inspectedCell.params[definition.index] ?? definition.defaultValue}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            ) : null}
                                             <FilterRangeEditor
                                                 ariaLabel="SeqFX filter range editor"
                                                 modeOptions={SEQFX_FILTER_MODE_OPTIONS}

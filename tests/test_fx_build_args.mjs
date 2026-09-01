@@ -1002,9 +1002,12 @@ test("the CHOC WebView marker check has one implementation shared by node and sh
 });
 
 test("the production configure explicitly disables microphone permission metadata when a target opts in", async () => {
-    const { prodModule } = await loadBuildModules();
+    const { prodModule, buildModule } = await loadBuildModules();
     const cmajExecutable = prodModule.getPinnedCmajExecutablePath();
+    const plugin = buildModule.effectPlugins.seqfx;
 
+    assert.equal(plugin.disableMicrophonePermission, true);
+    assert.equal(plugin.editorMaxWidth, 1120);
     assert.deepEqual(prodModule.createJuceGenerationConfigureArgs({
         cmajExecutable,
         cmakeBuildDirectory: "/tmp/seqfx-build",
@@ -1013,6 +1016,7 @@ test("the production configure explicitly disables microphone permission metadat
         juceOutputDirectory: "/repo/build/seqfx_juce",
         pluginTarget: "CosimoSeqFX",
         runtimePatchPath: "/repo/build/fx/seqfx_runtime/SeqFx.cmajorpatch",
+        editorMaxWidth: plugin.editorMaxWidth,
     }), [
         "-S", "/repo/kit/tools/effect_plugin_build",
         "-B", "/tmp/seqfx-build",
@@ -1022,6 +1026,7 @@ test("the production configure explicitly disables microphone permission metadat
         "-DCOSIMO_EFFECT_PLUGIN_TARGET=CosimoSeqFX",
         `-DCOSIMO_CMAJ_EXECUTABLE=${cmajExecutable}`,
         "-DCOSIMO_DISABLE_MICROPHONE_PERMISSION=ON",
+        "-DCOSIMO_EFFECT_EDITOR_MAX_WIDTH=1120",
     ]);
     const wrapperCmake = await readFile(
         path.join(repoRoot, "kit", "tools", "effect_plugin_build", "CMakeLists.txt"),
@@ -1033,6 +1038,85 @@ test("the production configure explicitly disables microphone permission metadat
     assert.match(wrapperCmake, /--juceMicrophonePermissionEnabled=false/u);
     assert.doesNotMatch(wrapperCmake, /SeqFxGeneratedPluginMetadata/u);
     assert.doesNotMatch(wrapperCmake, /cosimo_disable_generated_microphone_permission/u);
+});
+
+test("SeqFX editor width ceiling is product-scoped exact and fail-closed", async () => {
+    const { buildModule, prodModule } = await loadBuildModules();
+    const transform = path.join(
+        repoRoot,
+        "kit/tools/effect_plugin_build/apply_generated_editor_width_ceiling.cmake",
+    );
+    const extractor = path.join(
+        repoRoot,
+        "kit/tools/effect_plugin_build/read_generated_plugin_info_class.cmake",
+    );
+    const wrapper = await readFile(
+        path.join(repoRoot, "kit/tools/effect_plugin_build/CosimoBoundedGeneratedPlugin.h"),
+        "utf8",
+    );
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-editor-width-"));
+    const runTransform = (sourcePath) => spawnSync(
+        "cmake",
+        [
+            `-DCOSIMO_GENERATED_PLUGIN_SOURCE=${sourcePath}`,
+            "-DCOSIMO_GENERATED_PLUGIN_EDITOR_MAX_WIDTH=1120",
+            "-P", transform,
+        ],
+        { cwd: repoRoot, encoding: "utf8" },
+    );
+
+    try {
+        const generatedSource = path.join(tempRoot, "cmajor_plugin.cpp");
+        const driftedSource = path.join(tempRoot, "drifted.cpp");
+        await writeFile(generatedSource, [
+            '#include "cmajor/helpers/cmaj_JUCEPlugin.h"',
+            "juce::AudioProcessor* createPluginFilter()",
+            "{",
+            "    using Plugin = cmaj::plugin::GeneratedPlugin<::SeqFx>;",
+            "}",
+            "",
+        ].join("\n"));
+        await writeFile(driftedSource, "using Plugin = cmaj::plugin::GeneratedPlugin<::SeqFx>;\n");
+
+        const transformed = runTransform(generatedSource);
+        const rejectedDrift = runTransform(driftedSource);
+        assert.equal(transformed.status, 0, transformed.stderr);
+        assert.match(await readFile(generatedSource, "utf8"), /#include "CosimoBoundedGeneratedPlugin\.h"/u);
+        assert.match(await readFile(generatedSource, "utf8"), /using Plugin = cosimo::BoundedGeneratedPlugin<::SeqFx, 1120>;/u);
+        assert.notEqual(rejectedDrift.status, 0);
+        assert.match(rejectedDrift.stderr, /Expected exactly one Cmajor JUCE helper include.*found 0/su);
+
+        const extracted = spawnSync(
+            "cmake",
+            [`-DCOSIMO_GENERATED_PLUGIN_SOURCE=${generatedSource}`, "-P", extractor],
+            { cwd: repoRoot, encoding: "utf8" },
+        );
+        assert.equal(extracted.status, 0, extracted.stderr);
+        assert.match(`${extracted.stdout}${extracted.stderr}`, /-- SeqFx/u);
+    } finally {
+        await rm(tempRoot, { recursive: true, force: true });
+    }
+
+    assert.match(wrapper, /Base::createEditor\(\)/u);
+    assert.match(wrapper, /setResizeLimits \(250, 160, maxEditorWidth, 32768\)/u);
+    assert.doesNotMatch(wrapper, /struct Editor/u, "the product seam should not copy the Cmajor editor implementation");
+    assert.equal(buildModule.effectPlugins.seqfx.editorMaxWidth, 1120);
+    for (const [pluginName, plugin] of Object.entries(buildModule.effectPlugins)) {
+        if (pluginName !== "seqfx")
+            assert.equal("editorMaxWidth" in plugin, false, `${pluginName} should retain stock Cmajor editor limits`);
+    }
+    assert.throws(
+        () => prodModule.createJuceGenerationConfigureArgs({
+            cmajExecutable: prodModule.getPinnedCmajExecutablePath(),
+            cmakeBuildDirectory: "/tmp/build",
+            cmakeSourceDirectory: "/tmp/source",
+            editorMaxWidth: 249,
+            juceOutputDirectory: "/tmp/juce",
+            pluginTarget: "CosimoSeqFX",
+            runtimePatchPath: "/tmp/SeqFx.cmajorpatch",
+        }),
+        /editorMaxWidth must be an integer of at least 250/u,
+    );
 });
 
 test("fx_prod_release_tool_overrides are absolute and PATH-independent", async () => {
@@ -1069,7 +1153,7 @@ test("fx_build_unknown_plugin_reports_all_and_every_discovered_target", async ()
     }
 });
 
-test("effect production uses the repository-built pinned Cmajor generator without rewriting generated C++", async () => {
+test("effect production uses the repository-built pinned Cmajor generator without runtime tool lookup", async () => {
     const { prodModule } = await loadBuildModules();
     const expectedExecutable = path.join(
         repoRoot,

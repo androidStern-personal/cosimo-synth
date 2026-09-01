@@ -762,6 +762,7 @@ export function StutterEnvelopeEditor({
                 <EditorTickSlider
                     accent="start"
                     dataRole="seqfx-stutter-slices-slider"
+                    discrete
                     formatValue={(value) => String(Math.round(value))}
                     inputDataRole="seqfx-stutter-slices"
                     label="Slices"

@@ -72,6 +72,8 @@ const sidecarKeyValidators = {
     juceOut: isRepoRelativeBuildPath,
     workerSource: isRepoRelativeSourcePath,
     workerOut: isPlainFileName,
+    editorMaxWidth: (value) => Number.isInteger(value) && value >= 250,
+    visualReviewAdapter: isRepoRelativeSourcePath,
     includeInAll: (value) => typeof value === "boolean",
     disableMicrophonePermission: (value) => typeof value === "boolean",
     jitInstallRuntime: (value) => typeof value === "boolean",
@@ -415,6 +417,12 @@ function createDiscoveredPlugin({ patch, manifest, sidecar, directoryName, patch
 
     if (sidecar.disableMicrophonePermission === true)
         plugin.disableMicrophonePermission = true;
+
+    if (sidecar.editorMaxWidth !== undefined)
+        plugin.editorMaxWidth = sidecar.editorMaxWidth;
+
+    if (sidecar.visualReviewAdapter !== undefined)
+        plugin.visualReviewAdapter = sidecar.visualReviewAdapter;
 
     if (sidecar.workerSource) {
         plugin.workerSource = sidecar.workerSource;

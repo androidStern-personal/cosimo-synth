@@ -23,9 +23,9 @@
     /* Matches the shared plot-bottom geometry token — axis labels
        + gate handle + halo all live within this strip below the plot floor. */
     --editor-bottom-reserve: 40px;
-    /* Matches STUTTER_GATE_CHIP_TOP_RESERVE_PX — gate chip caps the gate line
-       at the top of the plot, matching the filter's range-handle chip pattern. */
-    --editor-top-reserve: 14px;
+    /* Matches the 20px shared plot padding plus
+       STUTTER_GATE_CHIP_TOP_RESERVE_PX. */
+    --editor-top-reserve: 34px;
 }
 
 .seqfx-stutter-editor__canvas-wrap {

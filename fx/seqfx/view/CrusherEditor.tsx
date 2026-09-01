@@ -324,6 +324,7 @@ export function CrusherEditor({
                 <EditorTickSlider
                     accent="start"
                     dataRole="seqfx-crusher-bits-slider"
+                    discrete
                     formatValue={(nextValue) => String(Math.round(nextValue))}
                     inputDataRole="seqfx-crusher-bits"
                     label="Bits"

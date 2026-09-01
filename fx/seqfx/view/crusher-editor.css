@@ -11,7 +11,8 @@
     background: var(--editor-surface-bg);
     overflow: hidden;
     --editor-bottom-reserve: 40px;
-    --editor-top-reserve: 14px;
+    /* 20px plot padding plus the 14px capture-marker reserve. */
+    --editor-top-reserve: 34px;
 }
 
 .seqfx-crusher-editor__viewport {
