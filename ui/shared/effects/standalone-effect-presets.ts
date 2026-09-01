@@ -25,6 +25,9 @@ import {
     EffectPresetRuntimeBridgeV2,
     type EffectPresetStateV2,
 } from "./effect-preset-store-v2";
+import { errorFromUnknown } from "./effect-utils";
+
+export { errorFromUnknown };
 
 export type StandaloneEffectPresetSource = "factory" | "user";
 export type StandaloneEffectPresetSourceFilter = "all" | StandaloneEffectPresetSource;
@@ -166,10 +169,6 @@ const defaultFilter: StandaloneEffectPresetFilter = {
     query: "",
     source: "all",
 };
-
-export function errorFromUnknown(error: unknown) {
-    return error instanceof Error ? error : new Error(String(error));
-}
 
 function defaultCreatePresetID({
     effectID,

@@ -5,6 +5,7 @@ import type {
     StandaloneEffectPresetSourceFilter,
     StandaloneEffectPresetState,
 } from "./standalone-effect-presets";
+import { effectToastCSS, showEffectToast } from "./effect-toast";
 
 // ── Types ────────────────────────────────────────────────
 
@@ -618,37 +619,7 @@ const PRESET_BAR_CSS = /* css */ `
   .dialog-actions button.primary:hover { background: rgba(143,240,164,0.26); }
 
   /* ── Toast ──────────────────────────────────────────── */
-  .cpb-toast-host {
-    position: fixed;
-    top: 16px;
-    right: 16px;
-    z-index: 400;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    pointer-events: none;
-  }
-
-  .cpb-toast {
-    padding: 8px 14px;
-    border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.08);
-    background: rgba(14,18,16,0.95);
-    backdrop-filter: blur(12px);
-    font-size: 11px;
-    color: rgba(239,247,238,0.8);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    animation: cpb-toast-in 160ms ease forwards;
-    font-family: inherit;
-  }
-  .cpb-toast.success { color: var(--knob-track-value-color, #8ff0a4); border-color: rgba(143,240,164,0.15); }
-  .cpb-toast.warn { color: #ffe884; border-color: rgba(255,232,132,0.15); }
-  .cpb-toast.error { color: #ff9a7d; border-color: rgba(255,154,125,0.15); }
-
-  @keyframes cpb-toast-in {
-    from { opacity: 0; transform: translateY(-6px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
+${effectToastCSS("cpb")}
 `;
 
 // ── HTML ─────────────────────────────────────────────────
@@ -1431,12 +1402,12 @@ export class PresetBar extends HTMLElement {
     // ── Toasts ───────────────────────────────────────────
 
     protected _showToast(message: string, tone: "success" | "warn" | "error") {
-        const el = document.createElement("div");
-        el.className = `cpb-toast ${tone}`;
-        el.textContent = message;
-        this._els["toast-host"].appendChild(el);
-        setTimeout(() => { el.style.opacity = "0"; el.style.transition = "opacity 250ms"; }, 2200);
-        setTimeout(() => el.remove(), 2500);
+        showEffectToast({
+            host: this._els["toast-host"],
+            message,
+            tone,
+            classPrefix: "cpb",
+        });
     }
 
     protected _handleMutationResult<T>(

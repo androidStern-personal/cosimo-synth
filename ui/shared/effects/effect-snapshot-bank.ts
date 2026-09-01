@@ -21,6 +21,7 @@ import {
     type EffectSnapshot,
     type EffectSnapshotMigration,
 } from "./effect-snapshots";
+import { errorFromUnknown, isPlainObject, requireString } from "./effect-utils";
 
 export const EFFECT_SNAPSHOT_BANK_KIND = "cosimo.effectSnapshotBank";
 export const EFFECT_SNAPSHOT_BANK_SCHEMA_VERSION = 1;
@@ -80,10 +81,6 @@ type StoredStateMessage = {
 
 type SnapshotBankListener = (state: EffectSnapshotBankState) => void;
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function cloneSnapshot(snapshot: EffectSnapshot): EffectSnapshot {
     return {
         kind: snapshot.kind,
@@ -116,20 +113,8 @@ function cloneCurrentValues(values: Map<string, EffectParameterValue>) {
     return Object.fromEntries(values.entries());
 }
 
-function errorFromUnknown(error: unknown) {
-    return error instanceof Error ? error : new Error(String(error));
-}
-
 function storedStateToken(value: unknown) {
     return typeof value === "string" ? value : JSON.stringify(value);
-}
-
-function requireString(value: unknown, label: string) {
-    if (typeof value !== "string" || value.trim().length === 0) {
-        throw new Error(`${label} must be a non-empty string.`);
-    }
-
-    return value.trim();
 }
 
 function createSlots(slotIDs: readonly string[]) {

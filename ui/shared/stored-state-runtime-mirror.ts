@@ -44,32 +44,44 @@ function hasOwnValue(record: Record<string, unknown>, key: string) {
     return Object.prototype.hasOwnProperty.call(record, key);
 }
 
-function getFullStoredStateValue(storedState: unknown, key: string) {
-    const fullState = storedState && typeof storedState === "object"
-        ? storedState as Record<string, unknown>
-        : {};
-    const values = fullState.values && typeof fullState.values === "object"
-        ? fullState.values as Record<string, unknown>
-        : {};
+// Kept local (not imported from ui/shared/effects/effect-utils) so this module
+// stays dependency-free for the standalone patch_gui transpile in ui/build.mjs.
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
-    if (hasOwnValue(values, key)) {
+export type FullStoredStateLookup = {
+    found: boolean;
+    value?: unknown;
+};
+
+/**
+ * The canonical unwrap of one key from a CHOC `requestFullStoredState`
+ * envelope: the nested `values` record wins over the top level, and `found`
+ * distinguishes an absent key from a stored null/undefined value.
+ */
+export function getFullStoredStateValue(storedState: unknown, key: string): FullStoredStateLookup {
+    if (!isPlainRecord(storedState)) {
+        return { found: false };
+    }
+
+    const values = isPlainRecord(storedState.values) ? storedState.values : undefined;
+
+    if (values && hasOwnValue(values, key)) {
         return {
             found: true,
             value: values[key],
         };
     }
 
-    if (hasOwnValue(fullState, key)) {
+    if (hasOwnValue(storedState, key)) {
         return {
             found: true,
-            value: fullState[key],
+            value: storedState[key],
         };
     }
 
-    return {
-        found: false,
-        value: undefined,
-    };
+    return { found: false };
 }
 
 function toStableToken(value: unknown) {

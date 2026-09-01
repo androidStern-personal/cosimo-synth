@@ -6,6 +6,7 @@ import {
     type EffectPluginStateContract,
 } from "./effect-state-contract";
 import { assertNoDuplicateJsonKeys } from "./effect-preset-shared";
+import { isPlainObject, requireString } from "./effect-utils";
 
 export const EFFECT_PRESET_V2_KIND = "cosimo.effectPreset";
 export const EFFECT_PRESET_V2_SCHEMA_VERSION = 2;
@@ -60,18 +61,6 @@ type ApplyOptions = NormalizeOptions & {
     };
 };
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function requireString(value: unknown, fieldName: string) {
-    if (typeof value !== "string" || value.trim().length === 0) {
-        throw new Error(`Effect preset ${fieldName} must be a non-empty string.`);
-    }
-
-    return value.trim();
-}
-
 function clonePreset(preset: EffectPresetV2): EffectPresetV2 {
     return {
         kind: EFFECT_PRESET_V2_KIND,
@@ -113,9 +102,9 @@ function parsePresetShape(payload: unknown): EffectPresetV2 {
     return {
         kind: EFFECT_PRESET_V2_KIND,
         version: EFFECT_PRESET_V2_SCHEMA_VERSION,
-        effectID: requireString(payload.effectID, "effectID"),
-        presetID: requireString(payload.presetID, "presetID"),
-        label: requireString(payload.label, "label"),
+        effectID: requireString(payload.effectID, "Effect preset effectID"),
+        presetID: requireString(payload.presetID, "Effect preset presetID"),
+        label: requireString(payload.label, "Effect preset label"),
         contract: payload.contract as EffectPluginStateContract,
         parameters: { ...payload.parameters } as Record<string, EffectParameterValue>,
         storedState: { ...payload.storedState },

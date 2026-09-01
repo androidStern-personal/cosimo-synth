@@ -30,28 +30,12 @@ import {
 } from "../lane-state-v2";
 import type { EffectStoredStateAdapter } from "./effect-preset-v2";
 import type { EffectPluginStateContract } from "./effect-state-contract";
+import { isPlainObject } from "./effect-utils";
+import { getFullStoredStateValue } from "../stored-state-runtime-mirror";
 import type {
     StandaloneEffectInitOnlyStateAdapter,
     StandaloneEffectPresetSynthOptions,
 } from "./synth-standalone-presets";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readFullStoredStateValue(storedState: unknown, key: string) {
-    if (!isRecord(storedState)) {
-        return undefined;
-    }
-
-    const nestedValues = isRecord(storedState.values) ? storedState.values : null;
-
-    if (nestedValues && Object.hasOwn(nestedValues, key)) {
-        return nestedValues[key];
-    }
-
-    return Object.hasOwn(storedState, key) ? storedState[key] : undefined;
-}
 
 function parseStrictRackState(value: unknown): LaneStateV2 {
     const outcome = parseLaneStateV2(value);
@@ -120,7 +104,7 @@ export function createSynthRackInitStateAdapter(
     };
 
     const handleStoredStateValue = (message: unknown) => {
-        if (!isRecord(message) || message.key !== LANE_STATE_KEY) {
+        if (!isPlainObject(message) || message.key !== LANE_STATE_KEY) {
             return;
         }
 
@@ -139,7 +123,7 @@ export function createSynthRackInitStateAdapter(
 
         if (typeof patchConnection.requestFullStoredState === "function") {
             patchConnection.requestFullStoredState((storedState) => {
-                acceptIncoming(readFullStoredStateValue(storedState, LANE_STATE_KEY), true);
+                acceptIncoming(getFullStoredStateValue(storedState, LANE_STATE_KEY).value, true);
             });
             return;
         }

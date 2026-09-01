@@ -3,29 +3,34 @@ export const STORED_STATE_RUNTIME_SEND_TIMEOUT_MS = 2_000;
 function hasOwnValue(record, key) {
     return Object.prototype.hasOwnProperty.call(record, key);
 }
-function getFullStoredStateValue(storedState, key) {
-    const fullState = storedState && typeof storedState === "object"
-        ? storedState
-        : {};
-    const values = fullState.values && typeof fullState.values === "object"
-        ? fullState.values
-        : {};
-    if (hasOwnValue(values, key)) {
+// Kept local (not imported from ui/shared/effects/effect-utils) so this module
+// stays dependency-free for the standalone patch_gui transpile in ui/build.mjs.
+function isPlainRecord(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+/**
+ * The canonical unwrap of one key from a CHOC `requestFullStoredState`
+ * envelope: the nested `values` record wins over the top level, and `found`
+ * distinguishes an absent key from a stored null/undefined value.
+ */
+export function getFullStoredStateValue(storedState, key) {
+    if (!isPlainRecord(storedState)) {
+        return { found: false };
+    }
+    const values = isPlainRecord(storedState.values) ? storedState.values : undefined;
+    if (values && hasOwnValue(values, key)) {
         return {
             found: true,
             value: values[key],
         };
     }
-    if (hasOwnValue(fullState, key)) {
+    if (hasOwnValue(storedState, key)) {
         return {
             found: true,
-            value: fullState[key],
+            value: storedState[key],
         };
     }
-    return {
-        found: false,
-        value: undefined,
-    };
+    return { found: false };
 }
 function toStableToken(value) {
     try {
@@ -40,6 +45,7 @@ export class StoredStateRuntimeMirror {
     options;
     parameterEndpointIDs;
     runtimeEndpointDependencies;
+    stateKeys;
     parameterValues = new Map();
     parameterListeners = new Map();
     runtimeEndpointValues = new Map();
@@ -53,9 +59,12 @@ export class StoredStateRuntimeMirror {
     lastAppliedToken = null;
     lastAppliedRuntimeEndpointsToken = null;
     lastAppliedSnapshot = null;
+    pendingStateKeyIndex = null;
+    activeStateKeyIndex = null;
     constructor(connection, options) {
         this.connection = connection;
         this.options = options;
+        this.stateKeys = [...new Set([options.stateKey, ...(options.fallbackStateKeys ?? [])])];
         this.parameterEndpointIDs = [...new Set(options.parameterEndpointIDs ?? [])];
         this.runtimeEndpointDependencies = dedupeRuntimeEndpointDependencies(options.runtimeEndpointDependencies ?? []);
         this.handleStoredStateValue = this.handleStoredStateValue.bind(this);
@@ -65,6 +74,8 @@ export class StoredStateRuntimeMirror {
             return;
         }
         this.started = true;
+        this.pendingStateKeyIndex = null;
+        this.activeStateKeyIndex = null;
         this.connection.addStoredStateValueListener?.(this.handleStoredStateValue);
         for (const endpointID of this.parameterEndpointIDs) {
             this.connection.addParameterListener?.(endpointID, this.getParameterListener(endpointID));
@@ -102,19 +113,23 @@ export class StoredStateRuntimeMirror {
     requestStoredState() {
         if (typeof this.connection.requestFullStoredState === "function") {
             this.connection.requestFullStoredState((storedState) => {
-                const storedValue = getFullStoredStateValue(storedState, this.options.stateKey);
-                if (storedValue.found) {
-                    this.applyStoredValue(storedValue.value);
-                    return;
+                for (let keyIndex = 0; keyIndex < this.stateKeys.length; keyIndex += 1) {
+                    const storedValue = getFullStoredStateValue(storedState, this.stateKeys[keyIndex]);
+                    if (storedValue.found && storedValue.value != null) {
+                        this.activeStateKeyIndex = keyIndex;
+                        this.applyStoredValue(storedValue.value);
+                        return;
+                    }
                 }
                 if (this.options.applyDefaultRuntimeStateWhenMissing) {
+                    this.activeStateKeyIndex = null;
                     this.applyStoredValue(undefined);
                 }
             });
             return;
         }
         if (typeof this.connection.requestStoredStateValue === "function") {
-            this.connection.requestStoredStateValue(this.options.stateKey);
+            this.requestStateKeyAtIndex(0);
             return;
         }
         if (this.options.applyDefaultRuntimeStateWhenMissing) {
@@ -126,13 +141,41 @@ export class StoredStateRuntimeMirror {
             return;
         }
         const nextMessage = message;
-        if (nextMessage.key !== this.options.stateKey) {
+        if (typeof nextMessage.key !== "string") {
             return;
         }
-        if (nextMessage.value === undefined && !this.options.applyDefaultRuntimeStateWhenMissing) {
+        const keyIndex = this.stateKeys.indexOf(nextMessage.key);
+        if (keyIndex < 0) {
             return;
         }
+        const isPendingResponse = this.pendingStateKeyIndex === keyIndex;
+        if (isPendingResponse) {
+            this.pendingStateKeyIndex = null;
+        }
+        if (nextMessage.value == null && isPendingResponse && keyIndex + 1 < this.stateKeys.length) {
+            this.activeStateKeyIndex = null;
+            this.requestStateKeyAtIndex(keyIndex + 1);
+            return;
+        }
+        if (nextMessage.value == null && !this.options.applyDefaultRuntimeStateWhenMissing) {
+            return;
+        }
+        if (this.activeStateKeyIndex !== null && keyIndex > this.activeStateKeyIndex) {
+            return;
+        }
+        this.activeStateKeyIndex = nextMessage.value == null ? null : keyIndex;
         this.applyStoredValue(nextMessage.value);
+    }
+    requestStateKeyAtIndex(keyIndex) {
+        if (keyIndex >= this.stateKeys.length) {
+            if (this.options.applyDefaultRuntimeStateWhenMissing) {
+                this.activeStateKeyIndex = null;
+                this.applyStoredValue(undefined);
+            }
+            return;
+        }
+        this.pendingStateKeyIndex = keyIndex;
+        this.connection.requestStoredStateValue?.(this.stateKeys[keyIndex]);
     }
     getParameterListener(endpointID) {
         const existingListener = this.parameterListeners.get(endpointID);

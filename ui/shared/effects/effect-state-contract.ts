@@ -1,3 +1,5 @@
+import { isPlainObject } from "./effect-utils";
+
 export type EffectParameterValue = number | boolean;
 
 export type EffectParameterContract = {
@@ -33,10 +35,6 @@ export type StoredStateContractSource = EffectStoredStateContract | {
 };
 
 const cmajorEndpointIdentifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function finiteNumber(value: unknown): number | undefined {
     if (typeof value !== "number" || !Number.isFinite(value)) {

@@ -8,6 +8,8 @@ import {
 import {
     type EffectPresetActiveMetadata,
 } from "./effect-preset-shared";
+import { errorFromUnknown, isPlainObject, requireString } from "./effect-utils";
+import { getFullStoredStateValue } from "../stored-state-runtime-mirror";
 
 export const EFFECT_PRESETS_V2_STATE_KEY = "effects.presets.v2";
 export const EFFECT_PRESET_V2_STATE_KIND = "cosimo.effectPresetState";
@@ -25,11 +27,6 @@ type StoredStateMessage = {
     value?: unknown;
 };
 
-type FullStoredStateLookup = {
-    found: boolean;
-    value?: unknown;
-};
-
 type ChocUserFiles = {
     list: (scope: string) => Promise<string[]>;
     read: (scope: string, fileName: string) => Promise<string>;
@@ -39,18 +36,6 @@ type ChocUserFiles = {
 
 type EffectPresetStateV2Listener = (state: EffectPresetStateV2) => void;
 type EffectPresetStateV2ErrorListener = (error: Error) => void;
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function requireString(value: unknown, fieldName: string) {
-    if (typeof value !== "string" || value.trim().length === 0) {
-        throw new Error(`${fieldName} must be a non-empty string.`);
-    }
-
-    return value.trim();
-}
 
 function requireBoolean(value: unknown, fieldName: string) {
     if (typeof value !== "boolean") {
@@ -134,38 +119,6 @@ function cloneState(state: EffectPresetStateV2): EffectPresetStateV2 {
 
 function storedStateEchoToken(value: unknown) {
     return typeof value === "string" ? value : JSON.stringify(value);
-}
-
-function hasOwnValue(record: Record<string, unknown> | undefined, key: string) {
-    return !!record && Object.prototype.hasOwnProperty.call(record, key);
-}
-
-function getFullStoredStateValue(storedState: unknown, key: string): FullStoredStateLookup {
-    if (!isPlainObject(storedState)) {
-        return { found: false };
-    }
-
-    const values = isPlainObject(storedState.values) ? storedState.values : undefined;
-
-    if (values && hasOwnValue(values, key)) {
-        return {
-            found: true,
-            value: values[key],
-        };
-    }
-
-    if (hasOwnValue(storedState, key)) {
-        return {
-            found: true,
-            value: storedState[key],
-        };
-    }
-
-    return { found: false };
-}
-
-function errorFromUnknown(error: unknown) {
-    return error instanceof Error ? error : new Error(String(error));
 }
 
 function replacePresetInBank(bank: EffectPresetV2[], preset: EffectPresetV2) {

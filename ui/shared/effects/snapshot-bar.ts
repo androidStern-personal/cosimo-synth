@@ -2,6 +2,7 @@ import type {
     EffectSnapshotBankController,
     EffectSnapshotBankState,
 } from "./effect-snapshot-bank";
+import { effectToastCSS, showEffectToast } from "./effect-toast";
 
 type SnapshotBankMutations = ReturnType<EffectSnapshotBankController["getMutations"]>;
 
@@ -106,44 +107,7 @@ const SNAPSHOT_BAR_CSS = /* css */ `
     white-space: nowrap;
   }
 
-  .snapshot-toast-host {
-    position: fixed;
-    top: 16px;
-    right: 16px;
-    z-index: 400;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    pointer-events: none;
-  }
-
-  .snapshot-toast {
-    padding: 8px 14px;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(14, 18, 16, 0.95);
-    backdrop-filter: blur(12px);
-    font-size: 11px;
-    color: rgba(239, 247, 238, 0.8);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    animation: snapshot-toast-in 160ms ease forwards;
-    font-family: inherit;
-  }
-
-  .snapshot-toast.success {
-    color: var(--knob-track-value-color, #8ff0a4);
-    border-color: rgba(143, 240, 164, 0.15);
-  }
-
-  .snapshot-toast.error {
-    color: #ff9a7d;
-    border-color: rgba(255, 154, 125, 0.15);
-  }
-
-  @keyframes snapshot-toast-in {
-    from { opacity: 0; transform: translateY(-6px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
+${effectToastCSS("snapshot")}
 
   .snapshot-paste {
     position: absolute;
@@ -507,17 +471,13 @@ class SnapshotBar extends HTMLElement {
     }
 
     private _showToast(message: string, tone: "success" | "error") {
-        const toastHost = this._els["toast-host"];
-        const toast = document.createElement("div");
-        toast.className = `snapshot-toast ${tone}`;
-        toast.dataset.snapshotToast = "";
-        toast.textContent = message;
-        toastHost.appendChild(toast);
-        window.setTimeout(() => {
-            toast.style.opacity = "0";
-            toast.style.transition = "opacity 250ms";
-        }, 2200);
-        window.setTimeout(() => toast.remove(), 2500);
+        showEffectToast({
+            host: this._els["toast-host"],
+            message,
+            tone,
+            classPrefix: "snapshot",
+            datasetFlag: "snapshotToast",
+        });
     }
 
     private _clearMessageTimer() {
