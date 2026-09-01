@@ -149,7 +149,7 @@ JS/TS work; parallelizable across worktrees except where noted.
 
 Sequential, after Phase 2 lands.
 
-- [ ] **3.1 The move.** Create `kit/` and move the curated survivors:
+- [x] **3.1 The move — DONE 2026-09-01 (wave 4 stages A-C).** Create `kit/` and move the curated survivors:
   `fx/*.mjs` pipeline + registry config, `cmake/CosimoDependencies.cmake` +
   `CPM.cmake`, `tools/{effect_plugin_build,cmajplugin_build,cmajor_runtime_build,cmajor_web_runtime}`,
   the generic `ui/shared/effects/` core + generic editor primitives
@@ -166,7 +166,7 @@ Sequential, after Phase 2 lands.
 - [x] **3.2 Scaffold — DONE 2026-09-01 (wave 4 stage D).** `npm run kit:new -- <name>` generates
   `fx/<name>/` with manifest, view stub wired to the loader, `product.json`,
   and a starter test. Registry is manifest-driven (2.1) so no other edits.
-- [ ] **3.3 Kit docs and skills.** Rewrite `FX_PLUGIN_UI_ARCHITECTURE.md` as
+- [x] **3.3 Kit docs and skills — DONE 2026-09-01 (wave 4 stage C).** Rewrite `FX_PLUGIN_UI_ARCHITECTURE.md` as
   `kit/docs/` matching post-cleanup reality (audit found it ~75% accurate:
   wrong loader algorithm, 3-of-8 plugin coverage, undocumented worker/registry
   fields). Author kit skills: create/build/test/install/package a plugin.
@@ -324,5 +324,28 @@ not this extraction.
     `demo_verb`, `fx:build -- demo-verb`, starter test 2/2, full removal,
     `fx:build -- all` clean, typecheck still at the 27-error baseline.
   - Gates: `node --test tests/test_fx_build_args.mjs` 48/48 (new product.json
-    validation/collision/scaffold coverage), `npm test` green, typecheck 27
-    pre-existing errors, enhancer-lite runtime hashes unchanged.
+    validation/collision/scaffold coverage), `npm test` 1111 pass / 0 fail /
+    1 intentional corpus skip, typecheck at the 27-error baseline,
+    enhancer-lite runtime sha256 byte-identical to the pre-change build.
+
+- **2026-09-01 wave 4 close-out** (adversarial review + inline fixes; final
+  gates run inline after two workflow agents hit a usage-credit failure).
+  - Review: 1 wrong-behavior + 7 debt findings. Fixed inline: (a) iOS
+    `COSIMO_REACT_UI_FILES` glob now watches `kit/ui/*` so kit edits retrigger
+    the iOS UI build; (b) the kit factory-preset contract test self-skips its
+    synth lane cross-check when `ui/shared/lane-slot-params.ts` is absent
+    (exported kit).
+  - DECIDED (was open from wave 1): `cmajor/EnhancerLiteSpectrumAnalyzer.cmajor`
+    stays shared in the monorepo (synth uses it); the Phase-4 export allowlist
+    must include it alongside `fx/enhancer_lite/` — it is generic DSP with no
+    private material. Also feeding 4.1: the allowlist needs
+    `ui/vite.shared.mjs` (kit/fx dev server imports it) and
+    `ui/shared/patch-connection-mock.ts` (kit test helper re-exports it).
+  - Deferred debt (recorded, not blocking): duplicate path phrasing in the two
+    AGENTS files; scaffold defaults mint dev.cosimo/Cosimo identity (product
+    review before customer launch — the roadmap's configure step forces
+    replacement for distributables anyway); stale desktop/iOS bundles remain a
+    fork-capable-machine task (test_patch_view_layout subtests 2/3/15/20/24).
+  - Final gates inline: `npm test` 1111/0 (exit 0), typecheck 27-error
+    baseline, `fx:build -- all` green, scaffold round-trip green including the
+    pluginCode collision refusal firing correctly.

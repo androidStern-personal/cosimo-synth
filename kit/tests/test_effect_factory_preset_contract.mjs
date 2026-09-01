@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
@@ -221,7 +222,14 @@ test("factory_preset_value_keys_exist_as_endpoints_on_the_plugin_cmajor_surface"
     }
 });
 
-test("synth_embedded_factory_preset_endpoints_match_the_lane_layout", async () => {
+test("synth_embedded_factory_preset_endpoints_match_the_lane_layout", async (t) => {
+    // Monorepo-only cross-check: the synth's lane layout module does not ship
+    // in an exported Builder Kit, so this subtest self-skips when it is absent.
+    const laneSlotParamsPath = path.join(repoRoot, "ui/shared/lane-slot-params.ts");
+    if (!existsSync(laneSlotParamsPath)) {
+        t.skip("ui/shared/lane-slot-params.ts absent (exported kit)");
+        return;
+    }
     const inventories = await discoverFactoryPresetInventories();
     const { laneDeviceParamEndpoints } = await loadUIModule(repoRoot, "ui/shared/lane-slot-params.ts");
     const coveredEffectIDs = new Set();

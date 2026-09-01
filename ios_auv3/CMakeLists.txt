@@ -89,6 +89,7 @@ file(
     CONFIGURE_DEPENDS
     "${COSIMO_REPO_ROOT}/ui/ios/*"
     "${COSIMO_REPO_ROOT}/ui/shared/*"
+    "${COSIMO_REPO_ROOT}/kit/ui/*"
 )
 file(
     GLOB_RECURSE COSIMO_WORKER_UI_FILES
