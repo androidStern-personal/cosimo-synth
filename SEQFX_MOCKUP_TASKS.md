@@ -196,3 +196,36 @@ The rejected 1000px alternative used a 420px editor floor. Although it avoids te
 - Generated artifacts: None.
 - Clean status: Clean after the ledger-only closeout commit; verified in the coordinator handoff.
 - Unperformed gates: Broad suite; native/plugin/release builds; generated-bundle rebuild; HMR/fixed-port launch; install; codesign/notarization; pluginval; Ableton/listening/host physical-feel acceptance; physical device; Sites; release; merge; rebase; push; deploy; publication.
+
+## Approved interface queue — 2026-09-01
+
+- Status: Approved and coordinator-owned. This entry is the durable product authority for the work below; implementation remains isolated from the coordinator thread.
+- Coordinator: Task `01a05c09-ce2d-7120-bc44-cd8102a2f0d7`.
+- Execution contract: Visible isolated Codex tasks use `gpt-5.6-sol` at `xhigh`, return clean committed handoffs, and do not merge, push master, install, deploy, or publish. The coordinator owns source review, focused qualification, repair requests, rebase, and serialized integration.
+- Saved-sound policy: No backward-compatibility or migration work is authorized; the existing greenfield policy remains unchanged.
+
+### Persistent declutter
+
+- Permanently remove the bottom `First pattern?` / `Got it` onboarding banner. Remove its copy, presentation, dismissal state, and any narrowly owned persistence path, with no replacement, first-run variant, empty gap, or persistence write.
+- Remove the visible `Chain 1` through `Chain 4` row labels from every sequencer section and reclaim the entire label gutter. Preserve the four-chain data model and order, useful chain-aware accessible names, editing and interaction behavior, DSP, state, and automation.
+- Active implementation task: `Remove SeqFX welcome and chain labels`, thread `01a05c76-d755-7a62-8a2d-24b63baa3320`, branch `codex/seqfx-interface-declutter`, worktree `/Users/winterfell/.codex/worktrees/b782/cosimo-synth`, based on reviewed responsive tip `c25fed5a6afb3011a65105a91489fcfd452025d4`.
+
+### Shared sequencer-cell geometry for the effect picker
+
+- Each effect-picker chip must use the sequencer cell's exact visual/CSS system: height, border, radius, background, interaction states, and skeuomorphic shadow.
+- Each chip is a true two-cell-wide control with live width `cell + ordinary adjacent-cell gap + cell`. It must follow the resolved sequencer cell size as the plugin resizes, through one shared CSS variable/primitive rather than JavaScript measurement or duplicated formulas/constants.
+- Preserve the fixed 2x6 picker, all twelve identities and order, native-button behavior, visible content, and full accessible names.
+- Implementation is queued as a separate visible task after the overlapping declutter branch is integrated.
+
+### Effect inspector corrections
+
+- Tape Stop: Start Time and Stop Time must each lay out their label, `Trigger` control, segmented slider, and value without overlap at every supported width.
+- Modulation affordances: Vibro Rate and Depth are modulatable and must show the `M` toggle. Audit every parameter across every SeqFX effect against the real modulation metadata; every modulatable parameter must expose the toggle, and non-modulatable parameters must not gain one.
+- Presets: Remove the Effect Preset card/container, `EFFECT PRESET` label, explanatory copy, and extra spacing. Keep only the preset dropdown.
+- Move the bare preset dropdown into the top effect header on the same row as the current chain/effect/selected-cell summary. It must remain usable and responsive without crowding, clipping, or obscuring that summary.
+- These inspector changes may share one implementation task only where source inspection confirms a coherent owner and independently visible acceptance for Tape Stop layout, modulation metadata parity, and preset-header placement. They must not be grouped with the effect-picker cell-geometry task.
+
+### Qualification boundaries
+
+- Use existing composed browser seams and representative responsive widths. Do not create screenshot farms, duplicate suites, tests about tests, or process-only artifacts.
+- Automated qualification, native/plugin packaging, pluginval, Ableton host behavior, listening approval, and physical-device acceptance remain separate claims. Expensive native, install, and deployment gates wait until the review-clean UI queue is integrated.
