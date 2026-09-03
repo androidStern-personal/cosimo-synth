@@ -5,14 +5,16 @@
 // output file falls outside the allowlist, or if a forbidden string appears
 // in any text output. With --prove it also builds Enhancer Lite and runs the
 // kit unit tests inside the exported tree (node_modules symlinked from this
-// repo), plus a git merge simulation of the customer update flow.
+// repo), plus a git merge simulation of the customer update flow. The proof
+// deliberately invokes the exported package's canonical typecheck and test
+// scripts rather than maintaining a second, narrower test list here.
 //
 // Feed stamping: when kit/feed.json carries a non-empty baseUrl, or
-// --feed-url=<url> is passed (which is stamped into the exported
-// kit/feed.json), the exported kit/cmake/dependency-sources.cmake points the
+// a redacted feed value is supplied programmatically by the maintainer-only
+// release command, the exported kit/cmake/dependency-sources.cmake points the
 // Cmajor fork at <baseUrl>/cmajor.git. JUCE keeps its official URL.
 //
-// Usage: node kit/scripts/export_kit.mjs <outputDir> [--force] [--prove] [--feed-url=<url>]
+// Usage: node kit/scripts/export_kit.mjs <outputDir> [--force] [--prove]
 
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -21,7 +23,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const allowlistPath = path.join(repoRoot, "kit/export-allowlist.json");
+const allowlistPath = path.join(repoRoot, "scripts/builder-kit-export-policy.json");
 
 export async function readAllowlist() {
     return JSON.parse(await fs.readFile(allowlistPath, "utf8"));
@@ -52,10 +54,6 @@ export async function scanForForbiddenStrings(outputRoot, allowlist) {
     const violations = [];
 
     for (const filePath of await listFilesRecursive(outputRoot)) {
-        // The allowlist itself defines the forbidden terms.
-        if (path.relative(outputRoot, filePath) === "kit/export-allowlist.json") {
-            continue;
-        }
         if (binaryExtensions.has(path.extname(filePath))) {
             continue;
         }
@@ -64,9 +62,9 @@ export async function scanForForbiddenStrings(outputRoot, allowlist) {
             continue;
         }
         const text = await fs.readFile(filePath, "utf8").catch(() => "");
-        for (const needle of allowlist.forbiddenStrings) {
+        for (const [index, needle] of allowlist.forbiddenStrings.entries()) {
             if (text.includes(needle)) {
-                violations.push({ file: path.relative(outputRoot, filePath), needle });
+                violations.push({ file: path.relative(outputRoot, filePath), ruleId: `forbidden-string-${index + 1}` });
             }
         }
     }
@@ -151,10 +149,10 @@ export function normalizeFeedBaseUrl(feedUrl) {
     try {
         parsed = new URL(feedUrl.trim());
     } catch {
-        throw new Error(`Feed URL must be an absolute http(s) URL, got: ${feedUrl}`);
+        throw new Error("Feed URL must be an absolute http(s) URL.");
     }
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-        throw new Error(`Feed URL must be an absolute http(s) URL, got: ${feedUrl}`);
+        throw new Error("Feed URL must be an absolute http(s) URL.");
     }
     return parsed.toString().replace(/\/+$/u, "");
 }
@@ -175,7 +173,7 @@ async function stampFeed(outputRoot, feedUrl) {
 
     if (feedUrl !== null) {
         if (feedBaseUrl === "") {
-            throw new Error("--feed-url must not be empty.");
+            throw new Error("The programmatic release feed value must not be empty.");
         }
         feed.baseUrl = feedBaseUrl;
         await fs.writeFile(feedPath, `${JSON.stringify(feed, null, 2)}\n`);
@@ -235,7 +233,7 @@ export async function exportKit(outputDir, { force = false, feedUrl = null } = {
     }
     const violations = await scanForForbiddenStrings(outputRoot, allowlist);
     if (violations.length) {
-        const lines = violations.map(({ file, needle }) => `${file}: ${needle}`);
+        const lines = violations.map(({ file, ruleId }) => `${file}: ${ruleId}`);
         throw new Error(`Export gate failed — forbidden strings present:\n  ${lines.join("\n  ")}`);
     }
 
@@ -243,38 +241,24 @@ export async function exportKit(outputDir, { force = false, feedUrl = null } = {
     const fileCount = (await listFilesRecursive(outputRoot)).length;
     await fs.writeFile(
         path.join(outputRoot, "EXPORT_MANIFEST.json"),
-        `${JSON.stringify({ sourceCommit, fileCount, feedBaseUrl, allowlist: "kit/export-allowlist.json" }, null, 2)}\n`,
+        `${JSON.stringify({ sourceCommit, fileCount, feedConfigured: feedBaseUrl !== "" }, null, 2)}\n`,
     );
 
-    return { outputRoot, fileCount, sourceCommit, feedBaseUrl };
+    return { outputRoot, fileCount, sourceCommit, feedConfigured: feedBaseUrl !== "" };
 }
 
 function run(command, args, cwd) {
     execFileSync(command, args, { cwd, stdio: "pipe", encoding: "utf8" });
 }
 
-export async function proveExport(outputRoot) {
-    // The container shortcut: reuse the monorepo's installed dependencies. A
-    // real customer machine runs `npm install` instead.
-    const nodeModules = path.join(outputRoot, "node_modules");
-    if (!existsSync(nodeModules)) {
-        await fs.symlink(path.join(repoRoot, "node_modules"), nodeModules);
-    }
+export const canonicalProofCommands = Object.freeze([
+    Object.freeze(["npm", Object.freeze(["run", "typecheck"])]),
+    Object.freeze(["npm", Object.freeze(["test"])]),
+    Object.freeze(["node", Object.freeze(["kit/fx/build-effect.mjs", "enhancer-lite"])]),
+]);
 
-    run("node", ["kit/fx/build-effect.mjs", "enhancer-lite"], outputRoot);
-    run("node", [
-        "--test",
-        "kit/tests/test_effect_state_contract.mjs",
-        "kit/tests/test_effect_snapshots.mjs",
-        "kit/tests/test_effect_view_loader.mjs",
-        "kit/tests/test_effect_factory_preset_contract.mjs",
-        "kit/tests/test_standalone_preset_import_graph.mjs",
-        "tests/test_enhancer_lite_state.mjs",
-    ], outputRoot);
-
-    // Customer update-flow simulation: a starter repo takes a local plugin
-    // edit, then merges a kit update; both survive without conflict.
-    const git = (...args) => run("git", ["-C", outputRoot, ...args]);
+async function proveUpdateMerge(outputRoot, runCommand) {
+    const git = (...args) => runCommand("git", ["-C", outputRoot, ...args], outputRoot);
     git("init", "--quiet", "--initial-branch=main");
     git("config", "user.email", "proof@example.invalid");
     git("config", "user.name", "Export Proof");
@@ -294,29 +278,44 @@ export async function proveExport(outputRoot) {
     }
 }
 
+export async function proveExport(outputRoot, {
+    runCommand = run,
+    proveUpdateFlow = proveUpdateMerge,
+} = {}) {
+    // The container shortcut: reuse the monorepo's installed dependencies. A
+    // real customer machine runs `npm install` instead.
+    const nodeModules = path.join(outputRoot, "node_modules");
+    if (!existsSync(nodeModules)) {
+        await fs.symlink(path.join(repoRoot, "node_modules"), nodeModules);
+    }
+
+    for (const [command, args] of canonicalProofCommands) {
+        runCommand(command, [...args], outputRoot);
+    }
+    await proveUpdateFlow(outputRoot, runCommand);
+}
+
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
     const args = process.argv.slice(2);
-    const feedUrlArgs = args.filter((arg) => arg.startsWith("--feed-url="));
-    const flags = new Set(args.filter((arg) => arg.startsWith("--") && !arg.startsWith("--feed-url=")));
+    const flags = new Set(args.filter((arg) => arg.startsWith("--")));
     const positional = args.filter((arg) => !arg.startsWith("--"));
     const unknownFlags = [...flags].filter((flag) => !["--force", "--prove"].includes(flag));
-    if (positional.length !== 1 || feedUrlArgs.length > 1 || unknownFlags.length) {
-        console.error("Usage: node kit/scripts/export_kit.mjs <outputDir> [--force] [--prove] [--feed-url=<url>]");
+    if (positional.length !== 1 || unknownFlags.length) {
+        console.error("Usage: node kit/scripts/export_kit.mjs <outputDir> [--force] [--prove]");
         process.exit(1);
     }
     try {
-        const { outputRoot, fileCount, sourceCommit, feedBaseUrl } = await exportKit(positional[0], {
+        const { outputRoot, fileCount, sourceCommit, feedConfigured } = await exportKit(positional[0], {
             force: flags.has("--force"),
-            feedUrl: feedUrlArgs.length ? feedUrlArgs[0].slice("--feed-url=".length) : null,
         });
         console.log(`Exported ${fileCount} files from ${sourceCommit.slice(0, 9)} to ${outputRoot}`);
-        if (feedBaseUrl) {
-            console.log(`Feed stamped: ${feedBaseUrl} (kit/feed.json, kit/cmake/dependency-sources.cmake)`);
+        if (feedConfigured) {
+            console.log("Feed configuration is present in the exported customer contracts.");
         }
         if (flags.has("--prove")) {
             await proveExport(outputRoot);
-            console.log("Standalone proof passed: enhancer-lite build, kit unit tests, update-flow merge.");
+            console.log("Standalone proof passed: canonical typecheck/test, enhancer-lite build, update-flow merge.");
         }
     } catch (error) {
         console.error(error.message);

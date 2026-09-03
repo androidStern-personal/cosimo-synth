@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:units:orphans && npm run test:effect-presets:unit && npm run test:enhancer:state && npm run test:enhancer-lite:state && npm run test:bounce:bank && npm run test:speedrun:unit && npm run test:speedrun:midi && npm run test:kit:export",
+    "test": "npm run test:units:orphans && npm run test:effect-presets:unit && npm run test:enhancer:state && npm run test:enhancer-lite:state && npm run test:bounce:bank && npm run test:speedrun:unit && npm run test:speedrun:midi && npm run test:kit:release-contracts && npm run test:kit:export",
     "assets:core-shapes": "uv run python scripts/generate_core_shapes_wavetable.py",
     "assets:mod-sources": "node scripts/generate_modulation_source_icons.mjs",
     "prototype:parameter-colors": "vite --config ui/desktop/parameter-color-prototype/vite.config.mjs",
@@ -134,6 +134,7 @@
     "test:video-bounce:scripted-hardening": "npm run web:build && npm run speedrun:scripted:harness:build && node --test tests/test_video_bounce_scripted_hardening_browser.mjs",
     "test:speedrun:hardening": "npm run web:build && node --test tests/test_speedrun_hardening.mjs",
     "test:kit:export": "node --test tests/test_kit_export.mjs",
+    "test:kit:release-contracts": "node --test tests/test_kit_doctor_setup.mjs tests/test_release_builder_kit.mjs kit/tests/test_kit_update_fetch.mjs",
     "kit:export": "node kit/scripts/export_kit.mjs",
     "fx:visual-review": "node scripts/capture_plugin_visual_review.mjs",
     "kit:doctor": "node kit/scripts/doctor.mjs",

@@ -12,6 +12,7 @@ import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { redact } from "./redacted.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -86,14 +87,21 @@ export function readToolchain(filePath = toolchainPath()) {
     return toolchain;
 }
 
-/** Read kit/feed.json; returns the trimmed base URL without a trailing slash ("" when unset). */
+/** Read kit/feed.json; returns a structurally redacted base URL (wrapping "" when unset). */
 export function readFeedBaseUrl(filePath = feedPath()) {
-    const feed = readJsonFile(filePath);
+    let feed;
+    try {
+        feed = readJsonFile(filePath);
+    } catch {
+        // JSON.parse diagnostics may quote source text. The feed can contain a
+        // capability-bearing URL, so this boundary must replace them entirely.
+        throw new Error(`Could not read or parse ${filePath}.`);
+    }
 
     if (!isPlainObject(feed))
         throw new Error(`${filePath} must contain a JSON object.`);
 
-    return normalizeBaseUrl(feed.baseUrl, filePath);
+    return redact(normalizeBaseUrl(feed.baseUrl, filePath));
 }
 
 export function normalizeBaseUrl(value, label = "feed baseUrl") {
@@ -113,11 +121,11 @@ export function normalizeBaseUrl(value, label = "feed baseUrl") {
     try {
         parsed = new URL(trimmed);
     } catch {
-        throw new Error(`${label} must be an absolute http(s) URL, got: ${value}`);
+        throw new Error(`${label} must be an absolute http(s) URL.`);
     }
 
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:")
-        throw new Error(`${label} must be an absolute http(s) URL, got: ${value}`);
+        throw new Error(`${label} must be an absolute http(s) URL.`);
 
     return trimmed.replace(/\/+$/, "");
 }

@@ -16,40 +16,40 @@ description: Use when a Builder Kit customer repo should take a newer kit releas
 - Ask the user only when a conflict is genuinely mixed. Everything else is
   mechanical: do it and report it.
 
-## 1. Checkpoint
+## 1. Establish A Safe Starting Point
 
 1. `git status --porcelain` and `git branch --show-current`. Refuse to start
    from a detached HEAD or with `.git/MERGE_HEAD` / `.git/REBASE_HEAD` present —
    tell the user to finish or abandon that operation first.
-2. If the tree is dirty, commit it: `git add -A && git commit -m "Checkpoint
-   before kit update <YYYY-MM-DD>"`. Tell the user this happened.
-3. `git branch update-checkpoint-<YYYY-MM-DD>` at HEAD (suffix `-<HHMM>` if the
+2. If the tree is dirty, stop. Do not stage, stash, or commit it on the user's
+   behalf. Ask them to commit or remove the changes, then rerun the update.
+3. From a clean tree, create `git branch update-checkpoint-<YYYY-MM-DD>` at HEAD (suffix `-<HHMM>` if the
    name exists). This is the return point; name it in the final report.
 
 ## 2. Fetch The Feed
 
-1. Read `baseUrl` from `kit/feed.json`. Empty means this checkout has no feed
-   (it is the kit monorepo or an unstamped export) — stop and say so.
-2. Ensure a remote named `kit` points at `<baseUrl>/kit.git`:
-   `git remote get-url kit` → add with `git remote add kit <baseUrl>/kit.git`
-   if missing, `git remote set-url kit ...` if it differs.
-3. `git fetch kit --tags`. The feed is static dumb-HTTP git; a 404 means the
-   feed URL is wrong or the cohort path has rotated — report, do not retry
-   with a guessed URL.
-4. List releases: `git tag --list 'v*' --sort=-v:refname`.
+1. Run `node kit/scripts/fetch_kit_releases.mjs`. It reads `kit/feed.json`
+   internally, passes the capability-bearing URL to git through a temporary
+   config environment, and fetches only release tags into
+   `refs/kit/releases/v*`. It neither creates a remote nor writes the URL to
+   repository config or argv. Empty feed or a failed fetch is terminal: do
+   not guess or print a replacement URL.
+2. The command prints the available release tag names. Product tags in
+   `refs/tags/v*` are independent and must never be treated as kit releases.
 
 ## 3. Inspect Local State
 
-1. Last kit tag already merged:
-   `git tag --list 'v*' --merged HEAD --sort=-v:refname | head -1`. If none,
+1. Last kit release already merged:
+   `git for-each-ref --merged HEAD --sort=-version:refname --format='%(refname:strip=3)' refs/kit/releases | head -1`. If none,
    the repo has no kit lineage (a merge would have no common ancestor) — stop
    and ask the user how the repo was created.
 2. Target tag: the newest listed unless the user named one. If the last tag is
    the target, report "already up to date" and stop.
-3. What the update brings: `git log --oneline <last>..<target>` and
-   `git diff --stat <last> <target>`.
+3. Convert both names to their full refs (`refs/kit/releases/<tag>`). What the
+   update brings: `git log --oneline <last-ref>..<target-ref>` and
+   `git diff --stat <last-ref> <target-ref>`.
 4. What the customer changed since the last tag, so it is carried forward
-   knowingly: `git diff --stat <last> HEAD`. Note every kit-owned path in that
+   knowingly: `git diff --stat <last-ref> HEAD`. Note every kit-owned path in that
    list (anything under `kit/`, `.agents/skills/`, `cmajor/`, `ui/`, or root
    `package.json`, `tsconfig.json`, `.gitignore`, `AGENTS.md`, `LICENSE`,
    `THIRD_PARTY_NOTICES.md`) — those are the only places a conflict can occur.
@@ -58,7 +58,7 @@ description: Use when a Builder Kit customer repo should take a newer kit releas
 ## 4. Merge
 
 ```bash
-git merge --no-ff -m "Update Builder Kit to <target>" <target>
+git merge --no-ff -m "Update Builder Kit to <target>" refs/kit/releases/<target>
 ```
 
 If it completes, go to step 6. If it stops on conflicts, list them with

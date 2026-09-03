@@ -1,5 +1,5 @@
-import type { PatchConnectionLike } from "../../../kit/ui/cmajor-react";
-import { createStoredStateRuntimeMirror } from "../../../kit/ui/stored-state-runtime-mirror";
+import type { PatchConnectionLike } from "../../../kit/index";
+import { createStoredStateRuntimeMirror } from "../../../kit/index";
 import {
     SEQFX_STATE_UPDATE_INTENT_KEY,
     parseSeqFxStateUpdateIntent,

@@ -1,14 +1,13 @@
-import { createEffectHeader } from "../../../kit/ui/effects/effect-header.ts";
-import { createStandaloneEffectPresetController } from "../../../kit/ui/effects/standalone-effect-presets.ts";
+import { createEffectHeader, createStandaloneEffectPresetController } from "../../../kit/index.ts";
 import { OTT_FACTORY_PRESETS } from "./factory-presets.js";
 import {
   EffectSnapshotBankController,
   createEmptyEffectSnapshotBank,
-} from "../../../kit/ui/effects/effect-snapshot-bank.ts";
+} from "../../../kit/index.ts";
 import {
   EFFECT_SNAPSHOT_KIND,
   EFFECT_SNAPSHOT_SCHEMA_VERSION,
-} from "../../../kit/ui/effects/effect-snapshots.ts";
+} from "../../../kit/index.ts";
 
 const SNAPSHOT_SLOT_IDS = ["A", "B", "C", "D", "E", "F", "G"];
 const SNAPSHOT_STORAGE_KEY = "cosimo.ottLab.snapshotSlots.v2";

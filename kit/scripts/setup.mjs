@@ -37,6 +37,7 @@ import {
     writeJuceAcknowledgment,
     writeReceipt,
 } from "./toolchain.mjs";
+import { ensureRedacted, redact, reveal } from "./redacted.mjs";
 
 export function parseSetupArguments(argv) {
     const options = { acceptJuceTerms: false, dryRun: false, force: false };
@@ -45,7 +46,7 @@ export function parseSetupArguments(argv) {
         if (argument === "--accept-juce-terms") options.acceptJuceTerms = true;
         else if (argument === "--dry-run") options.dryRun = true;
         else if (argument === "--force") options.force = true;
-        else throw new Error(`Unknown argument ${JSON.stringify(argument)}. Usage: kit:setup [--accept-juce-terms] [--dry-run] [--force]`);
+        else throw new Error("Unknown kit:setup argument. Usage: kit:setup [--accept-juce-terms] [--dry-run] [--force]");
     }
 
     return options;
@@ -65,7 +66,7 @@ export async function planSetup({ root = repoRoot, force = false, acceptJuceTerm
 
     for (const key of toolKeys) {
         const inspection = await inspectTool(toolchain, key, { root });
-        const step = { key, inspection, url: null, action: null, reason: null };
+        const step = { key, inspection, request: null, action: null, reason: null };
 
         if (inspection.status === "current" && !force) {
             step.action = "skip";
@@ -74,13 +75,13 @@ export async function planSetup({ root = repoRoot, force = false, acceptJuceTerm
             step.action = "refuse-unpinned";
             step.reason = `kit/toolchain.json carries no sha256 for ${key}; refusing to download an unverifiable artifact. `
                 + "Pins are written by kit:release, so an unpinned toolchain means an unreleased kit checkout.";
-        } else if (baseUrl === "") {
+        } else if (reveal(baseUrl) === "") {
             step.action = "refuse-no-feed";
             step.reason = "kit/feed.json baseUrl is empty, so there is nowhere to download from. "
                 + "The export stamps the feed URL; in the Cosimo monorepo cmaj is built from source instead.";
         } else {
             step.action = "download";
-            step.url = artifactUrl(baseUrl, inspection.artifact);
+            step.request = redact(artifactUrl(reveal(baseUrl), inspection.artifact));
             step.reason = inspection.status === "missing"
                 ? "missing"
                 : force ? "--force" : `present but ${inspection.status}`;
@@ -91,7 +92,7 @@ export async function planSetup({ root = repoRoot, force = false, acceptJuceTerm
 
     return {
         root,
-        baseUrl,
+        feedConfigured: reveal(baseUrl) !== "",
         juce: {
             acknowledged: acknowledgment !== null,
             acknowledgedAt: acknowledgment?.acknowledgedAt ?? null,
@@ -121,7 +122,7 @@ export function formatSetupPlan(plan) {
                 lines.push(`${step.key}: skip, ${step.reason} at ${target}`);
                 break;
             case "download":
-                lines.push(`${step.key}: download ${step.url} (${step.reason}), verify sha256 ${step.inspection.pin}, extract to ${target}`);
+                lines.push(`${step.key}: download ${step.inspection.artifact} from the configured feed (${step.reason}), verify sha256 ${step.inspection.pin}, extract to ${target}`);
                 break;
             default:
                 lines.push(`${step.key}: REFUSE - ${step.reason}`);
@@ -133,25 +134,31 @@ export function formatSetupPlan(plan) {
     return lines.join("\n");
 }
 
-async function fetchBytes(url, fetchImpl) {
-    const response = await fetchImpl(url, { redirect: "follow" });
+async function fetchBytes(request, artifact, fetchImpl) {
+    let response;
+    try {
+        response = await fetchImpl(reveal(request), { redirect: "follow" });
+    } catch {
+        throw new Error(`Download failed for ${artifact}: feed request failed.`);
+    }
 
     if (!response.ok)
-        throw new Error(`Download failed: ${url} responded HTTP ${response.status}.`);
+        throw new Error(`Download failed for ${artifact}: feed responded HTTP ${response.status}.`);
 
     return Buffer.from(await response.arrayBuffer());
 }
 
 /** Download one archive and verify it against the pin before anything is written next to the tools. */
-export async function downloadVerifiedArtifact(url, pin, { fetchImpl = globalThis.fetch, log = () => {} } = {}) {
-    log(`Downloading ${url}`);
+export async function downloadVerifiedArtifact(requestInput, pin, { artifact = "tool artifact", fetchImpl = globalThis.fetch, log = () => {} } = {}) {
+    const request = ensureRedacted(requestInput);
+    log(`Downloading ${artifact} from the configured feed.`);
 
-    const bytes = await fetchBytes(url, fetchImpl);
+    const bytes = await fetchBytes(request, artifact, fetchImpl);
     const actual = sha256Bytes(bytes);
 
     if (actual !== pin) {
         throw new Error(
-            `sha256 mismatch for ${url}: kit/toolchain.json pins ${pin}, the download hashed to ${actual}. `
+            `sha256 mismatch for ${artifact}: kit/toolchain.json pins ${pin}, the download hashed to ${actual}. `
             + "Nothing was installed. The feed may be serving a different release than this kit checkout expects.",
         );
     }
@@ -297,7 +304,11 @@ export async function runSetup({
             continue;
         }
 
-        const bytes = await downloadVerifiedArtifact(step.url, step.inspection.pin, { fetchImpl, log });
+        const bytes = await downloadVerifiedArtifact(step.request, step.inspection.pin, {
+            artifact: step.inspection.artifact,
+            fetchImpl,
+            log,
+        });
 
         await installArtifact({
             key: step.key,

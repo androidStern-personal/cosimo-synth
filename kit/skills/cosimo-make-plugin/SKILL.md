@@ -119,14 +119,15 @@ npm run fx:build -- <alias>   # self-contained runtime folder under build/fx/
 ## JIT Install (Iterate Inside A DAW)
 
 ```bash
-npm run cmajplugin:build     # patched generic CmajPlugin.vst3 from the pinned fork
-npm run cmajplugin:install   # install + sign-verify + CHOC marker check
+npm run kit:setup            # downloads the pinned generic CmajPlugin.vst3
+npm run cmajplugin:install   # install setup artifact + sign-verify + marker check
 npm run fx:jit:install -- <alias>   # point the generic plugin at this plugin
 ```
 
 `kit:setup` also downloads the prebuilt pinned `CmajPlugin.vst3` into
-`build/kit-tools/`; `cmajplugin:build` is the from-source route when the
-prebuilt one is not wanted.
+`build/kit-tools/`. Maintainers can explicitly use the source route with
+`npm run cmajplugin:build` followed by
+`npm run cmajplugin:install -- --from-source`.
 
 `fx:jit:install` writes only the VST3 `CmajPlugin.json`. Targets with
 `jitInstallRuntime` (worker plugins, or plugins whose source directory has no

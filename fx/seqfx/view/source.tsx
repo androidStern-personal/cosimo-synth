@@ -9,7 +9,7 @@ import crusherEditorCssText from "./crusher-editor.css?inline";
 import stutterEnvelopeEditorCssText from "./stutter-envelope-editor.css?inline";
 import seqFxCssText from "./styles.css?inline";
 import { SeqFxPatchView } from "./SeqFxPatchView";
-import type { PatchConnectionLike } from "../../../kit/ui/cmajor-react";
+import type { PatchConnectionLike } from "../../../kit/index";
 
 const cssText = [
     editorTokensCssText,

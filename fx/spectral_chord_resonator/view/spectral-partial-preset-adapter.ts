@@ -1,5 +1,4 @@
-import type { PatchConnectionLike } from "../../../kit/ui/cmajor-react";
-import type { EffectStoredStateAdapter } from "../../../kit/ui/effects/effect-preset-v2";
+import type { PatchConnectionLike, EffectStoredStateAdapter } from "../../../kit/index";
 import {
     SPECTRAL_PARTIAL_SCHEMA_VERSION,
     SPECTRAL_PARTIAL_STATE_KEY,

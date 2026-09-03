@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-build_dir="${1:-$repo_root/build/cmajplugin_vst3}"
+build_dir="${1:-$repo_root/build/cmajplugin-source}"
 source "$repo_root/kit/scripts/cmajplugin_paths.sh"
 
 validate_patched_binary() {

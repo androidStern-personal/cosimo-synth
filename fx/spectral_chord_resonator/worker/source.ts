@@ -1,5 +1,5 @@
-import type { PatchConnectionLike } from "../../../kit/ui/cmajor-react";
-import { startPatchWorkerServices } from "../../../kit/ui/patch-worker-services";
+import type { PatchConnectionLike } from "../../../kit/index";
+import { startPatchWorkerServices } from "../../../kit/index";
 import { createSpectralWorkerService } from "./spectral-worker-service";
 
 export default async function runSpectralWorker(connection: PatchConnectionLike) {

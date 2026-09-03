@@ -32,7 +32,7 @@ validate_patched_cmajplugin() {
 
   if ! node "$repo_root/kit/scripts/check_choc_markers.mjs" "$vst3_binary"; then
     printf 'Installed CmajPlugin.vst3 failed the patched CHOC WebView marker check: %s\n' "$vst3_bundle" >&2
-    printf 'Run npm run cmajplugin:build and npm run cmajplugin:install first.\n' >&2
+    printf 'Run npm run kit:setup and npm run cmajplugin:install first (or use the explicit --from-source install path).\n' >&2
     exit 1
   fi
 

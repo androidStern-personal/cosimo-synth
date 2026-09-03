@@ -3,12 +3,19 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { exportKit } from "../kit/scripts/export_kit.mjs";
 import { collectDoctorReport, formatDoctorReport, parseDoctorArguments } from "../kit/scripts/doctor.mjs";
-import { downloadVerifiedArtifact, installArtifact, planSetup, runSetup } from "../kit/scripts/setup.mjs";
+import {
+    downloadVerifiedArtifact,
+    formatSetupPlan,
+    installArtifact,
+    planSetup,
+    runSetup,
+} from "../kit/scripts/setup.mjs";
 import {
     inspectTool,
     normalizePin,
@@ -95,7 +102,7 @@ test("doctor_human_output_ends_with_a_json_block_and_strict_only_changes_the_exi
     const strict = spawnSync(process.execPath, [doctorCli, "--json", "--offline", "--strict"], { encoding: "utf8", cwd: repoRoot });
     assert.equal(strict.status, report.ok ? 0 : 1);
 
-    assert.throws(() => parseDoctorArguments(["--bogus"]), /Unknown argument/u);
+    assert.throws(() => parseDoctorArguments(["--bogus"]), /Unknown.*argument/u);
 });
 
 test("doctor_reports_missing_contracts_and_tools_without_throwing", async () => {
@@ -123,21 +130,55 @@ test("doctor_reports_missing_contracts_and_tools_without_throwing", async () => 
     });
 });
 
-test("doctor_feed_check_uses_a_head_request_and_reports_unreachable_feeds", async () => {
+test("doctor probes a required feed object, rejects denied access, and redacts diagnostics", async () => {
+    const capability = "SENTINEL-CAPABILITY-DOCTOR-DO-NOT-LOG";
     await withFixtureRoot(async (root) => {
         const calls = [];
-        const reachable = await collectDoctorReport({
+        const healthy = await collectDoctorReport({
             root,
-            fetchImpl: async (url, init) => { calls.push([url, init.method]); return { status: 403 }; },
+            fetchImpl: async (url, init) => { calls.push([url, init.method]); return { ok: true, status: 200 }; },
         });
-        assert.deepEqual(calls, [["https://feed.example/kit-abc/", "HEAD"]]);
-        assert.equal(reachable.feed.reachable, true);
-        assert.equal(reachable.feed.status, 403);
+        assert.deepEqual(calls, [[`https://feed.example/${capability}/kit.git/HEAD`, "HEAD"]]);
+        assert.equal(healthy.feed.reachable, true);
+        assert.equal(healthy.feed.status, 200);
+        assert.equal(JSON.stringify(healthy).includes(capability), false);
+        assert.equal(formatDoctorReport(healthy).includes(capability), false);
 
-        const down = await collectDoctorReport({ root, fetchImpl: async () => { throw new Error("ENOTFOUND"); } });
+        const denied = await collectDoctorReport({
+            root,
+            fetchImpl: async () => ({ ok: false, status: 403 }),
+        });
+        assert.equal(denied.feed.reachable, false);
+        assert.equal(denied.feed.status, 403);
+        assert.equal(denied.ok, false);
+        assert.ok(denied.problems.some((problem) => problem.includes("HTTP 403")));
+        assert.equal(JSON.stringify(denied).includes(capability), false);
+        assert.equal(formatDoctorReport(denied).includes(capability), false);
+
+        const down = await collectDoctorReport({
+            root,
+            fetchImpl: async () => { throw new Error(`request failed for ${capability}`); },
+        });
         assert.equal(down.feed.reachable, false);
         assert.ok(down.problems.some((problem) => problem.includes("not reachable")));
-    }, { baseUrl: "https://feed.example/kit-abc/" });
+        assert.equal(JSON.stringify(down).includes(capability), false);
+        assert.equal(formatDoctorReport(down).includes(capability), false);
+    }, { baseUrl: `https://feed.example/${capability}/` });
+});
+
+test("malformed feed JSON cannot disclose its source text through parser diagnostics", async () => {
+    const capability = "SENTINEL-CAPABILITY-MALFORMED-FEED-DO-NOT-LOG";
+    await withFixtureRoot(async (root) => {
+        await writeFile(path.join(root, "kit/feed.json"), `{"baseUrl":"https://feed.example/${capability}" trailing}`);
+        const report = await collectDoctorReport({ root, offline: true });
+        assert.equal(report.ok, false);
+        assert.match(report.contracts.error, /Could not read or parse/u);
+        assert.equal(JSON.stringify(report).includes(capability), false);
+        await assert.rejects(planSetup({ root }), (error) => {
+            assert.equal(error.message.includes(capability), false);
+            return true;
+        });
+    });
 });
 
 test("setup_refuses_to_download_when_the_hash_pin_is_empty", async () => {
@@ -166,6 +207,75 @@ test("setup_refuses_to_download_when_the_hash_pin_is_empty", async () => {
     assert.match(setupCliRun.stdout, /juce\.com\/legal\/juce-9-licence/u);
     assert.match(setupCliRun.stdout, /cmaj: REFUSE - kit\/toolchain\.json carries no sha256/u);
     assert.match(setupCliRun.stdout, /Dry run: nothing was written/u);
+});
+
+test("setup diagnostics never disclose the feed capability", async () => {
+    const capability = "SENTINEL-CAPABILITY-SETUP-DO-NOT-LOG";
+    const cmajBytes = Buffer.from("#!/bin/sh\necho current cmaj\n");
+    const pluginPin = "c".repeat(64);
+
+    await withFixtureRoot(async (root) => {
+        const cmajPath = path.join(root, "build/kit-tools/cmaj");
+        const pluginPath = path.join(root, "build/kit-tools/CmajPlugin.vst3");
+        await mkdir(path.dirname(cmajPath), { recursive: true });
+        await writeFile(cmajPath, cmajBytes);
+        await mkdir(path.join(pluginPath, "Contents"), { recursive: true });
+        await writeFile(`${pluginPath}.receipt.json`, JSON.stringify({ artifactSha256: pluginPin }));
+
+        const plan = await planSetup({ root, force: true, acceptJuceTerms: true });
+        assert.equal(formatSetupPlan(plan).includes(capability), false);
+        assert.equal(JSON.stringify(plan).includes(capability), false);
+
+        const dryRunLog = [];
+        const dryRun = await runSetup({
+            root,
+            dryRun: true,
+            force: true,
+            acceptJuceTerms: true,
+            log: (line) => dryRunLog.push(line),
+        });
+        assert.equal(dryRunLog.join("\n").includes(capability), false);
+        assert.equal(JSON.stringify(dryRun).includes(capability), false);
+
+        const successLog = [];
+        const success = await runSetup({
+            root,
+            acceptJuceTerms: true,
+            log: (line) => successLog.push(line),
+        });
+        assert.equal(successLog.join("\n").includes(capability), false);
+        assert.equal(JSON.stringify(success).includes(capability), false);
+
+        const downloadLog = [];
+        const downloadUrl = `https://feed.example/${capability}/tools/cmaj.tar.gz`;
+        let failure;
+        try {
+            await downloadVerifiedArtifact(downloadUrl, "f".repeat(64), {
+                log: (line) => downloadLog.push(line),
+                fetchImpl: async () => ({ ok: false, status: 403 }),
+            });
+        } catch (error) {
+            failure = error;
+        }
+        assert.ok(failure instanceof Error);
+        assert.equal(failure.message.includes(capability), false);
+        assert.equal(downloadLog.join("\n").includes(capability), false);
+
+        let mismatch;
+        try {
+            await downloadVerifiedArtifact(downloadUrl, "e".repeat(64), {
+                fetchImpl: async () => ({ ok: true, status: 200, arrayBuffer: async () => cmajBytes }),
+            });
+        } catch (error) {
+            mismatch = error;
+        }
+        assert.ok(mismatch instanceof Error);
+        assert.equal(mismatch.message.includes(capability), false);
+    }, {
+        baseUrl: `https://feed.example/${capability}`,
+        cmajSha256: sha256(cmajBytes),
+        cmajPluginSha256: pluginPin,
+    });
 });
 
 test("setup_skips_a_local_tool_that_already_matches_its_pin", async () => {
@@ -203,7 +313,8 @@ test("setup_skips_a_local_tool_that_already_matches_its_pin", async () => {
         await writeFile(`${pluginPath}.receipt.json`, JSON.stringify({ artifactSha256: "d".repeat(64) }));
         const stalePlan = await planSetup({ root });
         assert.deepEqual(stalePlan.tools.map((step) => step.action), ["skip", "download"]);
-        assert.equal(stalePlan.tools[1].url, "https://feed.example/kit/tools/CmajPlugin-test.zip");
+        assert.equal(String(stalePlan.tools[1].request), "[REDACTED]");
+        assert.equal(JSON.stringify(stalePlan).includes("https://feed.example/kit"), false);
         const forcedPlan = await planSetup({ root, force: true });
         assert.deepEqual(forcedPlan.tools.map((step) => step.action), ["download", "download"]);
     }, { cmajSha256: sha256(cmajBytes), cmajPluginSha256: pluginArtifactSha256, baseUrl: "https://feed.example/kit/" });
@@ -273,6 +384,105 @@ test("setup_verifies_the_download_hash_and_installs_from_the_archive", async () 
         await installArtifact({ key: "cmaj", artifact: "tools/other.tar.gz", bytes: archiveBytes, pin, localPath: renamedTarget, platform: "linux" });
         assert.equal(await readFile(renamedTarget, "utf8"), "#!/bin/sh\necho cmaj from archive\n");
         assert.equal(JSON.parse(await readFile(`${renamedTarget}.receipt.json`, "utf8")).artifactSha256, pin);
+    } finally {
+        await rm(scratch, { recursive: true, force: true });
+    }
+});
+
+test("fresh exported customers can setup and default-install the prebuilt plugin while old-tag tools remain usable", async () => {
+    const scratch = await mkdtemp(path.join(os.tmpdir(), "kit-setup-exported-"));
+    const objectStore = path.join(scratch, "objects");
+    const capability = "SENTINEL-CAPABILITY-EXPORTED-SETUP-DO-NOT-LOG";
+    try {
+        const archiveSource = path.join(scratch, "archive-source");
+        const pluginBundle = path.join(archiveSource, "CmajPlugin.vst3");
+        await mkdir(path.join(pluginBundle, "Contents/MacOS"), { recursive: true });
+        await writeFile(path.join(pluginBundle, "Contents/MacOS/CmajPlugin"), [
+            "chocHostKeyboard",
+            "__chocHostKeyboardBridgeInstalled",
+            "__chocUserFiles",
+            "chocUserFiles",
+        ].join("\n"));
+        await writeFile(path.join(archiveSource, "cmaj"), "#!/bin/sh\necho cmaj\n");
+        const cmajArchive = path.join(scratch, "cmaj-macos-arm64.tar.gz");
+        const pluginArchive = path.join(scratch, "CmajPlugin-macos-arm64.zip");
+        assert.equal(spawnSync("tar", ["-czf", cmajArchive, "-C", archiveSource, "cmaj"]).status, 0);
+        assert.equal(spawnSync("zip", ["-r", "-q", pluginArchive, "CmajPlugin.vst3"], { cwd: archiveSource }).status, 0);
+        const cmajBytes = await readFile(cmajArchive);
+        const pluginBytes = await readFile(pluginArchive);
+
+        for (const version of ["v0.1.0", "v0.1.1"]) {
+            const versionRoot = path.join(objectStore, "tools", version);
+            await mkdir(versionRoot, { recursive: true });
+            await writeFile(path.join(versionRoot, path.basename(cmajArchive)), cmajBytes);
+            await writeFile(path.join(versionRoot, path.basename(pluginArchive)), pluginBytes);
+        }
+
+        const setupCustomer = async (version) => {
+            const root = path.join(scratch, `customer-${version}`);
+            await exportKit(root);
+            await mkdir(path.join(root, "node_modules"));
+            await writeFile(path.join(root, "kit/feed.json"), JSON.stringify({
+                schemaVersion: 1,
+                baseUrl: `https://feed.example.invalid/${capability}`,
+            }));
+            const toolchainPath = path.join(root, "kit/toolchain.json");
+            const toolchain = JSON.parse(await readFile(toolchainPath, "utf8"));
+            toolchain.cmaj.artifact = `tools/${version}/${path.basename(cmajArchive)}`;
+            toolchain.cmaj.sha256 = sha256(cmajBytes);
+            toolchain.cmajPlugin.artifact = `tools/${version}/${path.basename(pluginArchive)}`;
+            toolchain.cmajPlugin.sha256 = sha256(pluginBytes);
+            await writeFile(toolchainPath, `${JSON.stringify(toolchain, null, 2)}\n`);
+
+            const requests = [];
+            const logs = [];
+            await runSetup({
+                root,
+                acceptJuceTerms: true,
+                platform: "linux",
+                log: (line) => logs.push(line),
+                fetchImpl: async (url) => {
+                    requests.push(url);
+                    const marker = url.indexOf("/tools/");
+                    const bytes = await readFile(path.join(objectStore, url.slice(marker + 1)));
+                    return { ok: true, status: 200, arrayBuffer: async () => bytes };
+                },
+            });
+            assert.equal(logs.join("\n").includes(capability), false);
+            return { root, requests };
+        };
+
+        const current = await setupCustomer("v0.1.1");
+        const installHome = path.join(scratch, "install-home");
+        const fakeBin = path.join(scratch, "fake-bin");
+        await mkdir(installHome);
+        await mkdir(fakeBin);
+        const fakeCodesign = path.join(fakeBin, "codesign");
+        await writeFile(fakeCodesign, "#!/bin/sh\nexit 0\n");
+        await chmod(fakeCodesign, 0o755);
+        const install = spawnSync(
+            path.join(current.root, "kit/scripts/install_cmajplugin_vst3.sh"),
+            [],
+            {
+                cwd: current.root,
+                env: { ...process.env, HOME: installHome, PATH: `${fakeBin}:${process.env.PATH}` },
+                encoding: "utf8",
+            },
+        );
+        assert.equal(install.status, 0, install.stderr);
+        assert.match(install.stdout, /Installed patched CmajPlugin VST3:/u);
+        const installedBinary = path.join(installHome, "Library/Audio/Plug-Ins/VST3/CmajPlugin.vst3/Contents/MacOS/CmajPlugin");
+        assert.deepEqual(
+            await readFile(installedBinary),
+            await readFile(path.join(current.root, "build/kit-tools/CmajPlugin.vst3/Contents/MacOS/CmajPlugin")),
+            "installer copied the verified setup artifact into the isolated fake HOME",
+        );
+        assert.equal(`${install.stdout}${install.stderr}`.includes(capability), false);
+
+        const old = await setupCustomer("v0.1.0");
+        assert.equal(old.requests.every((url) => url.includes("/tools/v0.1.0/")), true);
+        assert.equal(existsSync(path.join(objectStore, "tools/v0.1.1/CmajPlugin-macos-arm64.zip")), true, "new release objects coexist");
+        assert.equal(existsSync(path.join(old.root, "build/kit-tools/CmajPlugin.vst3")), true, "old tag still sets up");
     } finally {
         await rm(scratch, { recursive: true, force: true });
     }

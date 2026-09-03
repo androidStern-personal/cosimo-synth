@@ -5,25 +5,25 @@ import {
     type PointerEvent as ReactPointerEvent,
 } from "react";
 
-import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../kit/ui/editor-tick-slider";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../kit/index";
 import {
     EDITOR_PLOT_BOTTOM_PADDING_PX,
     EDITOR_PLOT_TOP_PADDING_PX,
     useEditorSurfaceSize,
-} from "../../../kit/ui/editor-tokens";
+} from "../../../kit/index";
 import {
     createEditorCurvePlotRect,
     editorCurveFillPathToBaseline,
     polylineToSvgPath,
     type EditorCurvePlotRect,
-} from "../../../kit/ui/editor-curve-geometry";
+} from "../../../kit/index";
 import {
     EditorCurveAxis,
     EditorCurveFill,
     EditorCurvePath,
     EditorCurvePlotArea,
     EditorCurveSurface,
-} from "../../../kit/ui/editor-curve-surface";
+} from "../../../kit/index";
 import {
     CRUSHER_BITS_MAX,
     CRUSHER_BITS_MIN,

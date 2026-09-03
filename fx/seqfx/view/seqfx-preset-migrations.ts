@@ -2,15 +2,15 @@ import {
     buildCanonicalPluginStateContract,
     clonePluginStateContract,
     type EffectPluginStateContract,
-} from "../../../kit/ui/effects/effect-state-contract";
+} from "../../../kit/index";
 import type {
     EffectPresetMigration,
     EffectPresetV2,
-} from "../../../kit/ui/effects/effect-preset-v2";
+} from "../../../kit/index";
 import type {
     EffectSnapshot,
     EffectSnapshotMigration,
-} from "../../../kit/ui/effects/effect-snapshots";
+} from "../../../kit/index";
 import {
     SEQFX_LEGACY_STATE_KEY,
     SEQFX_LEGACY_STATE_VERSION,

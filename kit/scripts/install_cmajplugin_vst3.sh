@@ -2,28 +2,30 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-build_dir="${CMAJPLUGIN_BUILD_DIR:-$repo_root/build/cmajplugin_vst3}"
 source "$repo_root/kit/scripts/cmajplugin_paths.sh"
-built_vst3="$(cmajplugin_vst3_bundle_path "$build_dir")"
-built_binary="$built_vst3/Contents/MacOS/CmajPlugin"
 install_dir="$HOME/Library/Audio/Plug-Ins/VST3"
 installed_vst3="$install_dir/CmajPlugin.vst3"
 installed_binary="$installed_vst3/Contents/MacOS/CmajPlugin"
 
 usage() {
   cat <<'USAGE'
-Usage: npm run cmajplugin:install -- [--dry-run]
+Usage: npm run cmajplugin:install -- [--dry-run] [--from-source]
 
-Installs the already-built patched generic CmajPlugin.vst3.
+By default installs the pinned CmajPlugin.vst3 downloaded by kit:setup.
+--from-source installs the explicit cmajplugin:build output instead.
 It does not build and does not write CmajPlugin.json.
 USAGE
 }
 
 dry_run=false
+from_source=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run)
       dry_run=true
+      ;;
+    --from-source)
+      from_source=true
       ;;
     --help|-h)
       usage
@@ -38,6 +40,16 @@ while [[ $# -gt 0 ]]; do
 
   shift
 done
+
+if [[ "$from_source" == true ]]; then
+  build_dir="${CMAJPLUGIN_BUILD_DIR:-$repo_root/build/cmajplugin-source}"
+  built_vst3="$(cmajplugin_vst3_bundle_path "$build_dir")"
+  remediation='Run npm run cmajplugin:build first.'
+else
+  built_vst3="$(node "$repo_root/kit/scripts/require_tool.mjs" cmajPlugin "$repo_root")" || exit 1
+  remediation='Run npm run kit:setup first.'
+fi
+built_binary="$built_vst3/Contents/MacOS/CmajPlugin"
 
 validate_patched_binary() {
   local binary_path="$1"
@@ -54,14 +66,14 @@ validate_patched_binary() {
 
   if ! node "$repo_root/kit/scripts/check_choc_markers.mjs" "$binary_path"; then
     printf 'CmajPlugin binary failed the patched CHOC WebView marker check: %s\n' "$binary_path" >&2
-    printf 'Run npm run cmajplugin:build to rebuild it from the pinned fork.\n' >&2
+    printf '%s\n' "$remediation" >&2
     exit 1
   fi
 }
 
 if [[ ! -d "$built_vst3" ]]; then
   printf 'Built CmajPlugin VST3 not found: %s\n' "$built_vst3" >&2
-  printf 'Run npm run cmajplugin:build first.\n' >&2
+  printf '%s\n' "$remediation" >&2
   exit 1
 fi
 

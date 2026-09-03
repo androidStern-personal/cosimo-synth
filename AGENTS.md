@@ -5,6 +5,7 @@
 - Read `kit/AGENTS.md` fully before any plugin work. It owns the generic plugin-repo conventions: isolated-worktree and CPM dependency rules, the canonical fx build/dev/install commands, plugin architecture pointers, and the definition of done for plugin changes.
 - The effect-plugin architecture reference is `kit/docs/PLUGIN_ARCHITECTURE.md`; the product-neutral release verification checklist is `kit/docs/RELEASE_VERIFICATION.md`.
 - Anything under `kit/` ships to Builder Kit customers; keep Cosimo-specific and private material out of it.
+- In isolated worktrees, keep dependency downloads in the shared user CPM cache configured by `kit/cmake/CosimoDependencies.cmake`; never link or copy another worktree's dependency tree into the current checkout.
 - Everything below is Cosimo-specific: this machine, this synth product, and its releases.
 
 ## Icons
@@ -107,7 +108,7 @@
 ## Desktop CmajPlugin Ableton Parameter Safety
 
 - In Ableton Live 11.3.43 on macOS 26.2, turning a WebView knob in the official generic AU loader `CmajPlugin.component` can crash in `JuceAU::audioProcessorParameterChanged -> sendValueChangedMessageToListeners -> PatchParameter::setValue`. This is a host parameter-notification crash, not a DSP crash.
-- The official generic VST3 loader `CmajPlugin.vst3` did not reproduce that crash with the same OTT lab patch, but it does not contain the patched CHOC keyboard bridge. For fast Ableton lab testing, use the repo-built patched generic VST3 from `npm run cmajplugin:build` and `npm run cmajplugin:install`, then point it at one effect with `npm run fx:jit:install -- ott` or `npm run fx:jit:install -- chorus`.
+- The official generic VST3 loader `CmajPlugin.vst3` did not reproduce that crash with the same OTT lab patch, but it does not contain the patched CHOC keyboard bridge. For fast Ableton lab testing, use the setup-pinned loader from `npm run kit:setup` and `npm run cmajplugin:install`, or explicitly build from source with `npm run cmajplugin:build` and `npm run cmajplugin:install -- --from-source`; then point it at one effect with `npm run fx:jit:install -- ott` or `npm run fx:jit:install -- chorus`.
 - Do not install or recommend the official generic AU loader `~/Library/Audio/Plug-Ins/Components/CmajPlugin.component` for Ableton WebView knob testing unless the task is specifically to reproduce the AU crash.
 - `scripts/install_fx_cmajplugin.sh` validates migrated effect patches such as OTT Lab and Chorus Lab, verifies that the installed generic `CmajPlugin.vst3` contains the patched CHOC keyboard bridge, and writes only the VST3 `CmajPlugin.json`. It does not install `CmajPlugin.vst3` and does not touch any AU loader.
 - The installer script above now lives at `kit/scripts/install_fx_cmajplugin.sh` (`npm run fx:jit:install`); the dependency-seam and CPM rules live in `kit/AGENTS.md`.

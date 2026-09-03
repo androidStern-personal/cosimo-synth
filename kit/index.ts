@@ -15,6 +15,7 @@ export * from "./ui/effects/standalone-effect-presets";
 export * from "./ui/effects/preset-bar";
 export * from "./ui/effects/snapshot-bar";
 export * from "./ui/effects/effect-header";
+export * from "./ui/effects/effect-preset-shared";
 export * from "./ui/effects/effect-preset-v2";
 export * from "./ui/effects/effect-snapshots";
 export * from "./ui/effects/effect-snapshot-bank";

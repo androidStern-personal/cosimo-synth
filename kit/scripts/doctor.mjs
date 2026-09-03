@@ -30,6 +30,7 @@ import {
     toolchainPath,
     toolKeys,
 } from "./toolchain.mjs";
+import { redact, reveal } from "./redacted.mjs";
 
 const feedTimeoutMs = 8000;
 
@@ -40,7 +41,7 @@ export function parseDoctorArguments(argv) {
         if (argument === "--json") options.json = true;
         else if (argument === "--strict") options.strict = true;
         else if (argument === "--offline") options.offline = true;
-        else throw new Error(`Unknown argument ${JSON.stringify(argument)}. Usage: kit:doctor [--json] [--strict] [--offline]`);
+        else throw new Error("Unknown kit:doctor argument. Usage: kit:doctor [--json] [--strict] [--offline]");
     }
 
     return options;
@@ -103,17 +104,30 @@ function xcodeCommandLineTools(platform = process.platform, required) {
 }
 
 async function checkFeed(baseUrl, { offline, fetchImpl = globalThis.fetch }) {
-    if (baseUrl === "")
-        return { baseUrl, checked: false, reachable: null, status: null, error: null, reason: "kit/feed.json baseUrl is empty" };
+    if (reveal(baseUrl) === "")
+        return { configured: false, checked: false, reachable: null, status: null, error: null, reason: "kit/feed.json baseUrl is empty" };
 
     if (offline)
-        return { baseUrl, checked: false, reachable: null, status: null, error: null, reason: "--offline" };
+        return { configured: true, checked: false, reachable: null, status: null, error: null, reason: "--offline" };
 
     try {
-        const response = await fetchImpl(`${baseUrl}/`, { method: "HEAD", signal: AbortSignal.timeout(feedTimeoutMs), redirect: "follow" });
-        return { baseUrl, checked: true, reachable: true, status: response.status, error: null, reason: null };
-    } catch (error) {
-        return { baseUrl, checked: true, reachable: false, status: null, error: error instanceof Error ? error.message : String(error), reason: null };
+        const response = await fetchImpl(`${reveal(baseUrl)}/kit.git/HEAD`, {
+            method: "HEAD",
+            signal: AbortSignal.timeout(feedTimeoutMs),
+            redirect: "follow",
+        });
+        const status = Number.isInteger(response.status) ? response.status : null;
+        const reachable = response.ok === true || (response.ok === undefined && status !== null && status >= 200 && status < 300);
+        return {
+            configured: true,
+            checked: true,
+            reachable,
+            status,
+            error: reachable ? null : status === null ? "unexpected response" : `HTTP ${status}`,
+            reason: null,
+        };
+    } catch {
+        return { configured: true, checked: true, reachable: false, status: null, error: "request failed", reason: null };
     }
 }
 
@@ -314,7 +328,7 @@ export async function collectDoctorReport({ root = repoRoot, offline = false, fe
     };
 
     let toolchain = null;
-    let baseUrl = "";
+    let baseUrl = redact("");
 
     report.kit = { ...checkKitManifest(root), productOwner: checkProductOwner(root) };
 
@@ -396,7 +410,7 @@ export async function collectDoctorReport({ root = repoRoot, offline = false, fe
     report.feed = await checkFeed(baseUrl, { offline, fetchImpl });
 
     if (report.feed.checked && !report.feed.reachable)
-        problems.push(`Feed ${baseUrl} is not reachable: ${report.feed.error}`);
+        problems.push(`Feed is not reachable: ${report.feed.error}.`);
 
     report.registry = await checkRegistry(root, report.kit.schemaVersions?.plugin ?? null);
 
@@ -509,9 +523,9 @@ export function formatDoctorReport(report) {
     if (!feed.checked)
         lines.push(statusLine(null, `feed: not checked (${feed.reason})`));
     else if (feed.reachable)
-        lines.push(statusLine(true, `feed ${feed.baseUrl}: reachable (HTTP ${feed.status})`));
+        lines.push(statusLine(true, `feed: required object reachable (HTTP ${feed.status})`));
     else
-        lines.push(statusLine(false, `feed ${feed.baseUrl}: unreachable (${feed.error})`));
+        lines.push(statusLine(false, `feed: required object unavailable (${feed.error})`));
 
     if (report.registry.ok) {
         lines.push(statusLine(true, `plugin registry: ${report.registry.targets.length} target(s)`));

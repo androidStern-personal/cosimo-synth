@@ -1,12 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 
-import {
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
+
+const repoRoot = path.resolve(import.meta.dirname, "../..");
+const {
     createStoredStateRuntimeMirror,
-} from "../../patch_gui/stored-state-runtime-mirror.js";
-import {
+} = await loadUIModule(repoRoot, "kit/ui/stored-state-runtime-mirror.ts");
+const {
     createPatchWorkerServiceHost,
-} from "../../patch_gui/patch-worker-services.js";
+} = await loadUIModule(repoRoot, "kit/ui/patch-worker-services.ts");
 
 class FakePatchConnection {
     constructor(storedState = {}) {

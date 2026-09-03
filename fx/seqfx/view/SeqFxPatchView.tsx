@@ -1,9 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 
-import type { PatchConnectionLike } from "../../../kit/ui/cmajor-react";
-import { createEffectHeader } from "../../../kit/ui/effects/effect-header";
-import { EffectSnapshotBankController } from "../../../kit/ui/effects/effect-snapshot-bank";
-import { createStandaloneEffectPresetController } from "../../../kit/ui/effects/standalone-effect-presets";
+import type { PatchConnectionLike } from "../../../kit/index";
+import { createEffectHeader, EffectSnapshotBankController, createStandaloneEffectPresetController } from "../../../kit/index";
 import {
     FilterRangeEditor,
     type FilterRangeEndpoints,
@@ -13,8 +11,8 @@ import {
     cutoffRangeOctaves,
     cutoffsFromCenterRangeOctaves,
     geometricCenterCutoffHz,
-} from "../../../kit/ui/filter-range-editor";
-import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../kit/ui/editor-tick-slider";
+} from "../../../kit/index";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../kit/index";
 import {
     parameterEntrySpecForFrequency,
     parameterEntrySpecForMilliseconds,
@@ -27,7 +25,7 @@ import {
     EDITOR_PLOT_TOP_PADDING_PX,
     EDITOR_RANGE_HANDLE_RADIUS_PX,
     useEditorSurfaceSize,
-} from "../../../kit/ui/editor-tokens";
+} from "../../../kit/index";
 import {
     adaptiveSampleEditorCurve,
     createEditorCurvePlotRect,
@@ -35,7 +33,7 @@ import {
     normalizedCurvePointToPlotPoint,
     polylineToSvgPath,
     type EditorCurvePlotRect,
-} from "../../../kit/ui/editor-curve-geometry";
+} from "../../../kit/index";
 import {
     EditorCurveAxis,
     EditorCurveFill,
@@ -43,7 +41,7 @@ import {
     EditorCurvePath,
     EditorCurvePlotArea,
     EditorCurveSurface,
-} from "../../../kit/ui/editor-curve-surface";
+} from "../../../kit/index";
 import { AuxSource, auxSourceMonitorPoint, buildAuxSourcePreviewPath } from "./AuxSource";
 import { CrusherEditor, type CrusherModulation } from "./CrusherEditor";
 import { SeqFxGlobalControlSurface } from "./SeqFxGlobalControls";

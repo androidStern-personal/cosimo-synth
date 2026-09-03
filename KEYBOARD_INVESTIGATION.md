@@ -96,10 +96,10 @@ That script does not install `CmajPlugin.vst3`, does not download the Cmajor
 DMG, and does not touch AU plugins. It now requires the installed generic VST3
 to already be signed and built with the patched CHOC keyboard bridge.
 
-Build and install the patched generic VST3 separately:
+Set up and install the pinned patched generic VST3 separately:
 
 ```text
-npm run cmajplugin:build
+npm run kit:setup
 npm run cmajplugin:install
 ```
 
@@ -136,7 +136,7 @@ In this repo, use:
 
 ```text
 npm run cmajplugin:build
-npm run cmajplugin:install
+npm run cmajplugin:install -- --from-source
 ```
 
 `npm run cmajplugin:build` configures the repo's CMake wrapper, which includes
@@ -146,10 +146,10 @@ target, and verifies that the built binary contains the bridge strings.
 The built VST3 is expected under:
 
 ```text
-build/cmajplugin_vst3/cmajplugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3
+build/cmajplugin-source/cmajplugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3
 ```
 
-`npm run cmajplugin:install` copies that already-built VST3 into:
+`npm run cmajplugin:install -- --from-source` copies that already-built VST3 into:
 
 ```text
 ~/Library/Audio/Plug-Ins/VST3/CmajPlugin.vst3

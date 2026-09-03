@@ -1,4 +1,4 @@
-import type { PatchConnectionLike } from "../../../kit/ui/cmajor-react";
+import type { PatchConnectionLike } from "../../../kit/index";
 import {
     SPECTRAL_PARTIAL_STATE_KEY,
     buildPartialShapeUpload,

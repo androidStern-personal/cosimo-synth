@@ -29,11 +29,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Setup and release safety contracts
+        run: npm run test:kit:release-contracts
+
       - name: Test
         run: npm test
 
-      # Exports the customer kit and proves it standalone (Enhancer Lite build,
-      # kit unit tests, update-flow merge). The proof symlinks this checkout's
+      # Exports the customer kit and proves its canonical typecheck/test scripts,
+      # Enhancer Lite build, and update-flow merge. The proof symlinks this checkout's
       # node_modules into the export and sets its own git identity there.
       - name: Export kit and prove it
         run: node kit/scripts/export_kit.mjs /tmp/kit-export --force --prove

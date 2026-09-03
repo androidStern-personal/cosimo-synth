@@ -3,7 +3,7 @@
 //
 //   1. export the kit to a staging dir with the feed URL stamped in
 //      kit/feed.json, run the export gates, and prove a second copy
-//      (proveExport: Enhancer Lite build, kit unit tests, update-flow merge);
+//      (proveExport: canonical typecheck/test, Enhancer Lite build, update-flow merge);
 //   2. on macOS build the pinned `cmaj` and the JIT dev loader
 //      `CmajPlugin.vst3`, archive them, hash them, and record the hashes in
 //      the staged kit/toolchain.json;
@@ -13,11 +13,12 @@
 //      at the pinned commits, `git update-server-info` them for dumb-HTTP
 //      serving, and verify the Cmajor mirror's .gitmodules points at CHOC
 //      with a relative URL (so customers never leave the feed);
-//   5. rclone-sync mirrors + tools + manifest.json to the R2 prefix.
+//   5. copy mirrors + versioned tools + manifest.json to the object prefix,
+//      then verify the copy without deleting older release objects.
 //
 // Usage:
-//   node scripts/release_builder_kit.mjs --version <semver> --feed-url <base incl. secret>
-//       --lineage <path to builder-kit-releases clone> --r2 <rclone remote:bucket/prefix>
+//   node scripts/release_builder_kit.mjs --version <semver> --source-sha <40-hex>
+//       --lineage <path to builder-kit-releases clone> --destination-config <json>
 //       [--dry-run] [--skip-tools] [--tools-dir <dir>] [--staging <dir>]
 //       [--cmajor-source <url|path>] [--choc-source <url|path>]
 //
@@ -35,22 +36,25 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { exportKit as defaultExportKit, proveExport as defaultProveExport } from "../kit/scripts/export_kit.mjs";
+import { ensureRedacted, redact, reveal } from "../kit/scripts/redacted.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 export const usage = [
-    "Usage: node scripts/release_builder_kit.mjs --version <semver> --feed-url <base incl. secret>",
-    "         --lineage <builder-kit-releases clone> --r2 <rclone remote:bucket/prefix>",
+    "Usage: node scripts/release_builder_kit.mjs --version <semver> --source-sha <40-hex>",
+    "         --lineage <builder-kit-releases clone> --destination-config <json>",
     "         [--dry-run] [--skip-tools] [--tools-dir <dir>] [--staging <dir>]",
     "         [--cmajor-source <url|path>] [--choc-source <url|path>]",
     "",
     "  --dry-run       local steps only (no push, no rclone, no tool builds off macOS); prints the staging layout",
-    "                  (--r2 none is accepted in a dry run: no sync target)",
+    "                  (destination capability is still read from macOS Keychain)",
     "  --skip-tools    do not build cmaj/CmajPlugin.vst3; a real release then needs --tools-dir with the archives",
     "  --tools-dir     directory holding prebuilt tool archives named as in kit/toolchain.json",
     "  --staging       staging directory (default: a fresh dir under the OS temp dir); must be outside the monorepo",
     "  --cmajor-source / --choc-source",
     "                  override where the cmajor/choc mirrors are cloned from (default: the pinned fork URLs)",
+    "  --destination-config",
+    "                  JSON containing non-secret feedOrigin and rcloneRoot; the cohort capability comes from Keychain",
 ].join("\n");
 
 const semverPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
@@ -62,9 +66,9 @@ const shaPattern = /^[0-9a-f]{40}$/;
 export function parseArgs(argv) {
     const options = {
         version: null,
-        feedUrl: null,
+        sourceSha: null,
         lineage: null,
-        r2: null,
+        destinationConfig: null,
         dryRun: false,
         skipTools: false,
         toolsDir: null,
@@ -74,9 +78,9 @@ export function parseArgs(argv) {
     };
     const valueFlags = {
         "--version": "version",
-        "--feed-url": "feedUrl",
+        "--source-sha": "sourceSha",
         "--lineage": "lineage",
-        "--r2": "r2",
+        "--destination-config": "destinationConfig",
         "--tools-dir": "toolsDir",
         "--staging": "staging",
         "--cmajor-source": "cmajorSource",
@@ -97,32 +101,26 @@ export function parseArgs(argv) {
             options[valueFlags[arg]] = value;
             index += 1;
         } else {
-            throw new Error(`Unknown argument: ${arg}\n${usage}`);
+            throw new Error(`Unknown release argument.\n${usage}`);
         }
     }
 
     if (!options.version || !semverPattern.test(options.version)) {
-        throw new Error(`--version must be a semver like 1.2.0 (got ${options.version ?? "nothing"}).\n${usage}`);
+        throw new Error(`--version must be a semver like 1.2.0.\n${usage}`);
     }
-    if (!options.feedUrl || !/^https?:\/\/[^/]+\/.+/.test(options.feedUrl)) {
-        throw new Error(`--feed-url must be an absolute http(s) URL with a path (the cohort secret).\n${usage}`);
+    if (!options.sourceSha || !shaPattern.test(options.sourceSha)) {
+        throw new Error(`--source-sha must be a full 40-hex commit.\n${usage}`);
     }
-    options.feedUrl = options.feedUrl.replace(/\/+$/, "");
-    if (options.r2 === "none") options.r2 = null; // explicit "no R2 target" for a dry run
+    if (!options.destinationConfig) {
+        throw new Error(`--destination-config is required.\n${usage}`);
+    }
     if (!options.dryRun) {
         if (!options.lineage) throw new Error(`--lineage is required for a real release.\n${usage}`);
-        if (!options.r2) throw new Error(`--r2 is required for a real release.\n${usage}`);
         if (options.skipTools && !options.toolsDir) {
             throw new Error("--skip-tools on a real release needs --tools-dir with the prebuilt archives.");
         }
     }
-    if (options.r2) {
-        options.r2 = options.r2.replace(/\/+$/, "");
-        if (!/^[^:/\s]+:[^\s]+$/.test(options.r2)) {
-            throw new Error(`--r2 must look like remote:bucket/prefix (got ${options.r2}).`);
-        }
-    }
-    for (const key of ["lineage", "toolsDir", "staging"]) {
+    for (const key of ["lineage", "toolsDir", "staging", "destinationConfig"]) {
         if (options[key]) options[key] = path.resolve(options[key]);
     }
     if (options.staging && (options.staging === repoRoot || options.staging.startsWith(repoRoot + path.sep))) {
@@ -133,28 +131,103 @@ export function parseArgs(argv) {
 
 /** The feed URL and the R2 prefix must end in the same cohort segment. */
 export function assertFeedMatchesPrefix(feedUrl, r2) {
-    const feedTail = feedUrl.replace(/\/+$/, "").split("/").pop();
-    const prefixTail = r2.replace(/\/+$/, "").split("/").pop();
+    const feedTail = reveal(ensureRedacted(feedUrl)).replace(/\/+$/, "").split("/").pop();
+    const prefixTail = reveal(ensureRedacted(r2)).replace(/\/+$/, "").split("/").pop();
     if (feedTail !== prefixTail) {
-        throw new Error(
-            `--feed-url ends in "${feedTail}" but --r2 ends in "${prefixTail}"; customers read <feed-url>/kit.git, so both must name the same cohort path.`,
-        );
+        throw new Error("Release feed and object destination do not name the same cohort path.");
     }
+}
+
+export const defaultKeychainService = "builder-kit-feed-cohort";
+
+export function readCapabilityFromKeychain({
+    service = defaultKeychainService,
+    execute = execFileSync,
+} = {}) {
+    try {
+        const value = redact(execute("security", ["find-generic-password", "-s", service, "-w"], {
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "pipe"],
+        }).trim());
+        if (!/^[A-Za-z0-9._~-]+$/u.test(reveal(value))) throw new Error("invalid capability");
+        return value;
+    } catch {
+        throw new Error("Could not read the Builder Kit release capability from macOS Keychain.");
+    }
+}
+
+export async function readDestinationConfig(filePath) {
+    let config;
+    try {
+        config = JSON.parse(await fs.readFile(filePath, "utf8"));
+    } catch {
+        throw new Error("Could not read the Builder Kit release destination configuration.");
+    }
+    if (!config || typeof config !== "object" || Array.isArray(config)) {
+        throw new Error("Release destination configuration must be a JSON object.");
+    }
+    let origin;
+    try {
+        origin = new URL(config.feedOrigin);
+    } catch {
+        throw new Error("Release destination feedOrigin must be an absolute HTTPS URL.");
+    }
+    if (origin.protocol !== "https:") {
+        throw new Error("Release destination feedOrigin must be an absolute HTTPS URL.");
+    }
+    if (typeof config.rcloneRoot !== "string" || !/^[^:/\s]+:[^\s]+$/u.test(config.rcloneRoot)) {
+        throw new Error("Release destination rcloneRoot must name a configured rclone path.");
+    }
+    return {
+        feedOrigin: redact(origin.toString().replace(/\/+$/u, "")),
+        rcloneRoot: redact(config.rcloneRoot.replace(/\/+$/u, "")),
+        keychainService: typeof config.keychainService === "string" && config.keychainService !== ""
+            ? config.keychainService
+            : defaultKeychainService,
+    };
+}
+
+export function createReleaseDestination(config, capabilityInput) {
+    const capability = reveal(ensureRedacted(capabilityInput));
+    if (!/^[A-Za-z0-9._~-]+$/u.test(capability)) {
+        throw new Error("The Keychain release capability is malformed.");
+    }
+    const feedOrigin = reveal(ensureRedacted(config.feedOrigin));
+    const rcloneRoot = reveal(ensureRedacted(config.rcloneRoot));
+    const feedUrl = redact(`${feedOrigin}/${capability}`);
+    const r2Target = redact(`${rcloneRoot}/${capability}`);
+    assertFeedMatchesPrefix(feedUrl, r2Target);
+    return Object.freeze({ feedUrl, r2Target });
 }
 
 // ---------------------------------------------------------------------------
 // Small helpers
 
-export function runCommand(command, args, { cwd = repoRoot, env = process.env } = {}) {
+export function runCommand(command, args, { cwd = repoRoot, env = process.env, label = command } = {}) {
     try {
         return execFileSync(command, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
-    } catch (error) {
-        const output = [error.stdout, error.stderr].filter(Boolean).join("\n").trim();
-        throw new Error(`${command} ${args.join(" ")} failed in ${cwd}${output ? `:\n${output}` : "."}`);
+    } catch {
+        throw new Error(`${label} failed.`);
     }
 }
 
 const git = (cwd, ...args) => runCommand("git", args, { cwd }).trim();
+
+export function readSourceState(root = repoRoot) {
+    return {
+        sha: git(root, "rev-parse", "HEAD"),
+        status: git(root, "status", "--porcelain=v1", "--untracked-files=all"),
+    };
+}
+
+export function assertSourceState(expectedSha, state) {
+    if (state.sha !== expectedSha) {
+        throw new Error(`Release source HEAD ${state.sha} does not match --source-sha ${expectedSha}.`);
+    }
+    if (state.status !== "") {
+        throw new Error("Release source is not clean, including untracked files.");
+    }
+}
 
 export function sha256File(filePath) {
     return new Promise((resolve, reject) => {
@@ -216,7 +289,7 @@ export function resolveRelativeGitUrl(superprojectUrl, relativeUrl) {
     const parts = relativeUrl.split("/");
     for (const part of parts) {
         if (part === "..") {
-            if (base.length <= 1) throw new Error(`Cannot resolve ${relativeUrl} against ${superprojectUrl}.`);
+            if (base.length <= 1) throw new Error("Could not resolve the relative repository URL.");
             base.pop();
         } else if (part !== "." && part !== "") {
             base.push(part);
@@ -300,11 +373,49 @@ export function assertCommitPresent(mirror, commit, label) {
 // ---------------------------------------------------------------------------
 // Lineage commit
 
+async function treeDigest(root, { skipGit = false } = {}) {
+    const hash = createHash("sha256");
+    const visit = async (directory, relativeRoot = "") => {
+        const entries = (await fs.readdir(directory, { withFileTypes: true }))
+            .filter((entry) => !(skipGit && relativeRoot === "" && entry.name === ".git"))
+            .sort((left, right) => left.name.localeCompare(right.name));
+        for (const entry of entries) {
+            const relative = path.posix.join(relativeRoot, entry.name);
+            const target = path.join(directory, entry.name);
+            if (entry.isDirectory()) {
+                await visit(target, relative);
+            } else if (entry.isSymbolicLink()) {
+                hash.update(`symlink\0${relative}\0${await fs.readlink(target)}\0`);
+            } else {
+                const executable = ((await fs.stat(target)).mode & 0o111) === 0 ? "plain" : "executable";
+                hash.update(`file\0${relative}\0${executable}\0`);
+                hash.update(await fs.readFile(target));
+                hash.update("\0");
+            }
+        }
+    };
+    await visit(root);
+    return hash.digest("hex");
+}
+
+function readReleaseTagCreatedAt(lineageDir, tag) {
+    const tagRef = `refs/tags/${tag}`;
+    if (git(lineageDir, "cat-file", "-t", tagRef) !== "tag") {
+        throw new Error(`Release tag ${tag} must be an annotated tag.`);
+    }
+    const taggerDate = git(lineageDir, "for-each-ref", "--format=%(taggerdate:iso-strict)", tagRef);
+    const createdAt = new Date(taggerDate);
+    if (Number.isNaN(createdAt.getTime())) {
+        throw new Error(`Release tag ${tag} has no valid tagger date.`);
+    }
+    return createdAt.toISOString();
+}
+
 /** Replace the lineage clone's working tree with the export and commit + tag it. */
 export async function commitRelease(lineageDir, exportRoot, version) {
     const tag = `v${version}`;
     if (!existsSync(path.join(lineageDir, ".git"))) throw new Error(`${lineageDir} is not a git clone.`);
-    if (git(lineageDir, "status", "--porcelain")) throw new Error(`Lineage clone ${lineageDir} has uncommitted changes.`);
+    if (git(lineageDir, "status", "--porcelain=v1", "--untracked-files=all")) throw new Error(`Lineage clone ${lineageDir} has uncommitted changes.`);
     // symbolic-ref (not rev-parse) so a freshly created lineage repo with no
     // commits yet (unborn HEAD, the first release) still names its branch.
     let branch;
@@ -313,7 +424,25 @@ export async function commitRelease(lineageDir, exportRoot, version) {
     } catch {
         throw new Error(`Lineage clone ${lineageDir} is on a detached HEAD.`);
     }
-    if (git(lineageDir, "tag", "--list", tag)) throw new Error(`Tag ${tag} already exists in ${lineageDir}.`);
+    const existingTag = git(lineageDir, "tag", "--list", tag);
+    if (existingTag) {
+        const taggedCommit = git(lineageDir, "rev-list", "-n", "1", tag);
+        const headCommit = git(lineageDir, "rev-parse", "HEAD");
+        const [lineageDigest, exportDigest] = await Promise.all([
+            treeDigest(lineageDir, { skipGit: true }),
+            treeDigest(exportRoot),
+        ]);
+        if (taggedCommit !== headCommit || lineageDigest !== exportDigest) {
+            throw new Error(`Tag ${tag} already exists but does not identify this exact exported release.`);
+        }
+        return {
+            commit: taggedCommit,
+            tag,
+            branch,
+            createdAt: readReleaseTagCreatedAt(lineageDir, tag),
+            reused: true,
+        };
+    }
 
     for (const entry of await fs.readdir(lineageDir)) {
         if (entry !== ".git") await fs.rm(path.join(lineageDir, entry), { recursive: true, force: true });
@@ -325,7 +454,56 @@ export async function commitRelease(lineageDir, exportRoot, version) {
     }
     git(lineageDir, "commit", "--quiet", "-m", `Builder Kit ${version}`);
     git(lineageDir, "tag", "-a", tag, "-m", `Builder Kit ${version}`);
-    return { commit: git(lineageDir, "rev-parse", "HEAD"), tag, branch };
+    return {
+        commit: git(lineageDir, "rev-parse", "HEAD"),
+        tag,
+        branch,
+        createdAt: readReleaseTagCreatedAt(lineageDir, tag),
+        reused: false,
+    };
+}
+
+function parseRemoteRefs(output) {
+    const refs = new Map();
+    for (const line of output.split(/\r?\n/u)) {
+        const match = line.match(/^([0-9a-f]{40})\s+(.+)$/u);
+        if (match) refs.set(match[2], match[1]);
+    }
+    return refs;
+}
+
+export function inspectRemoteRelease(lineageDir, lineage) {
+    const branchRef = `refs/heads/${lineage.branch}`;
+    const tagRef = `refs/tags/${lineage.tag}`;
+    const refs = parseRemoteRefs(git(lineageDir, "ls-remote", "origin", branchRef, tagRef, `${tagRef}^{}`));
+    const tagObject = refs.get(tagRef) ?? null;
+    const tagCommit = refs.get(`${tagRef}^{}`) ?? tagObject;
+    return { branchCommit: refs.get(branchRef) ?? null, tagObject, tagCommit };
+}
+
+export function pushReleaseAtomically(lineageDir, lineage) {
+    const localTagObject = git(lineageDir, "rev-parse", `refs/tags/${lineage.tag}`);
+    const before = inspectRemoteRelease(lineageDir, lineage);
+    if (before.tagObject !== null) {
+        if (before.tagObject !== localTagObject || before.tagCommit !== lineage.commit || before.branchCommit !== lineage.commit) {
+            throw new Error(`Remote tag ${lineage.tag} already exists with different release state.`);
+        }
+        return { reused: true };
+    }
+    git(
+        lineageDir,
+        "push",
+        "--atomic",
+        "--quiet",
+        "origin",
+        `${lineage.commit}:refs/heads/${lineage.branch}`,
+        `refs/tags/${lineage.tag}:refs/tags/${lineage.tag}`,
+    );
+    const after = inspectRemoteRelease(lineageDir, lineage);
+    if (after.branchCommit !== lineage.commit || after.tagObject !== localTagObject || after.tagCommit !== lineage.commit) {
+        throw new Error("Atomic lineage push did not publish the exact branch and tag commit.");
+    }
+    return { reused: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -333,6 +511,17 @@ export async function commitRelease(lineageDir, exportRoot, version) {
 
 export function toolArchiveName(toolchain, key) {
     return path.posix.basename(toolchain[key].artifact);
+}
+
+export function assertVersionedToolArtifacts(toolchain, version) {
+    const prefix = `tools/v${version}/`;
+    for (const key of ["cmaj", "cmajPlugin"]) {
+        const artifact = toolchain[key]?.artifact;
+        if (typeof artifact !== "string" || !artifact.startsWith(prefix)
+            || path.posix.normalize(artifact) !== artifact || artifact === prefix) {
+            throw new Error(`${key} artifact must stay inside the current release's ${prefix} directory.`);
+        }
+    }
 }
 
 /** Archive the built cmaj binary and CmajPlugin.vst3 bundle as the toolchain names them. */
@@ -378,7 +567,7 @@ export async function buildToolArtifacts({ toolsDir, toolchain, log }) {
     runCommand("cmake", ["--build", cmajBuildDir, "--config", "Release", "--target", "cmaj", "--parallel", jobs]);
     const cmajBinary = path.join(cmajBuildDir, "bin/cmaj");
 
-    const pluginBuildDir = path.join(repoRoot, "build/cmajplugin_vst3");
+    const pluginBuildDir = path.join(repoRoot, "build/cmajplugin-source");
     log(`Building CmajPlugin.vst3 in ${pluginBuildDir}`);
     runCommand("bash", [path.join(repoRoot, "kit/scripts/build_cmajplugin_vst3.sh"), pluginBuildDir]);
     const vst3Bundle = path.join(pluginBuildDir, "cmajplugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3");
@@ -434,7 +623,7 @@ export async function describeLayout(stagingRoot) {
     for (const entry of (await fs.readdir(stagingRoot, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
         const full = path.join(stagingRoot, entry.name);
         if (entry.name === "feed" && entry.isDirectory()) {
-            lines.push("  feed/                      (rclone sync source → <r2 prefix>)");
+            lines.push("  feed/                      (additive object-copy source)");
             for (const item of (await fs.readdir(feedRoot, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
                 const itemPath = path.join(feedRoot, item.name);
                 if (item.name.endsWith(".git")) {
@@ -462,15 +651,26 @@ export async function describeLayout(stagingRoot) {
 // ---------------------------------------------------------------------------
 // Orchestration
 
-async function stampFeed(exportRoot, feedUrl, log) {
+async function stampFeed(exportRoot, feedUrlInput, log) {
+    const feedUrl = reveal(ensureRedacted(feedUrlInput));
     const feedPath = path.join(exportRoot, "kit/feed.json");
     const feed = await readJson(feedPath);
-    const previous = feed.baseUrl;
-    if (previous !== feedUrl) {
+    if (feed.baseUrl !== feedUrl) {
         feed.baseUrl = feedUrl;
         await writeJson(feedPath, feed);
-        log(`Stamped ${feedUrl} into kit/feed.json (exportKit left it as "${previous}").`);
+        log("Stamped the configured feed into kit/feed.json.");
     }
+}
+
+export function publishReleaseObjects(feedRoot, destination, { run = runCommand } = {}) {
+    const alias = "builderkitrelease:";
+    const env = {
+        ...process.env,
+        RCLONE_CONFIG_BUILDERKITRELEASE_TYPE: "alias",
+        RCLONE_CONFIG_BUILDERKITRELEASE_REMOTE: reveal(destination.r2Target),
+    };
+    run("rclone", ["copy", "--transfers", "8", feedRoot, alias], { env, label: "object copy" });
+    run("rclone", ["check", "--one-way", feedRoot, alias], { env, label: "object verification" });
 }
 
 export async function runRelease(options, {
@@ -478,17 +678,26 @@ export async function runRelease(options, {
     log = console.log,
     exportKit = defaultExportKit,
     proveExport = defaultProveExport,
-    now = () => new Date(),
+    destination,
+    getSourceState = () => readSourceState(),
+    checkPublisher = () => runCommand("rclone", ["version"]),
+    pushRelease = pushReleaseAtomically,
+    publishObjects = publishReleaseObjects,
 } = {}) {
-    const { version, feedUrl, dryRun, skipTools } = options;
+    const { version, sourceSha, dryRun, skipTools } = options;
     const dry = (message) => log(`[dry-run] ${message}`);
+    if (!destination?.feedUrl || !destination?.r2Target) {
+        throw new Error("A redacted release destination is required.");
+    }
+    const feedUrl = ensureRedacted(destination.feedUrl);
 
     // Preflight.
-    if (options.r2) assertFeedMatchesPrefix(feedUrl, options.r2);
+    assertFeedMatchesPrefix(feedUrl, destination.r2Target);
+    assertSourceState(sourceSha, await getSourceState());
     if (!dryRun && platform !== "darwin" && !skipTools) {
         throw new Error("A real release builds cmaj and CmajPlugin.vst3, which needs macOS. Use --dry-run here, or --skip-tools with --tools-dir.");
     }
-    if (!dryRun) runCommand("rclone", ["version"]);
+    if (!dryRun) checkPublisher();
     if (options.lineage && !existsSync(path.join(options.lineage, ".git"))) {
         throw new Error(`--lineage ${options.lineage} is not a git clone.`);
     }
@@ -506,23 +715,32 @@ export async function runRelease(options, {
     log(`Staging in ${stagingRoot}`);
 
     // 1. Export + gates, then prove a separate copy (the proof dirties its tree).
-    const exported = await exportKit(exportRoot, { force: true, feedUrl });
+    const exported = await exportKit(exportRoot, { force: true, feedUrl: reveal(feedUrl) });
     await stampFeed(exportRoot, feedUrl, log);
+    if (exported.sourceCommit !== sourceSha) {
+        throw new Error(`Export source commit ${exported.sourceCommit} does not match --source-sha ${sourceSha}.`);
+    }
+    const kitManifest = await readJson(path.join(exportRoot, "kit/kit.json"));
+    if (kitManifest.version !== version) {
+        throw new Error(`Requested release version ${version} does not match exported kit/kit.json version ${kitManifest.version}.`);
+    }
     log(`Exported ${exported.fileCount} files from ${exported.sourceCommit.slice(0, 9)}`);
-    await exportKit(proofRoot, { force: true, feedUrl });
+    await exportKit(proofRoot, { force: true, feedUrl: reveal(feedUrl) });
     await stampFeed(proofRoot, feedUrl, () => {});
     await proveExport(proofRoot);
-    log("Export proof passed (enhancer-lite build, kit unit tests, update-flow merge).");
+    log("Export proof passed (canonical typecheck/test, enhancer-lite build, update-flow merge).");
+    assertSourceState(sourceSha, await getSourceState());
 
     // The pin comes from the exported kit (what customers receive is what we
     // mirror). The export points COSIMO_CMAJOR_GIT_URL at the feed's own
     // cmajor.git, so the mirror's source is the upstream fork the monorepo
     // declares.
     const cmajor = await readCmajorPin(path.join(exportRoot, "kit"));
-    if (cmajor.url === `${feedUrl}/cmajor.git`) {
+    if (cmajor.url === `${reveal(feedUrl)}/cmajor.git`) {
         cmajor.url = (await readCmajorPin()).url;
     }
     const toolchain = await readJson(path.join(exportRoot, "kit/toolchain.json"));
+    assertVersionedToolArtifacts(toolchain, version);
     if (toolchain.cmaj.forkCommit !== cmajor.commit) {
         throw new Error(`kit/toolchain.json cmaj.forkCommit ${toolchain.cmaj.forkCommit} != CosimoDependencies.cmake pin ${cmajor.commit}.`);
     }
@@ -534,7 +752,10 @@ export async function runRelease(options, {
             hashes = await hashToolArchives(options.toolsDir, toolchain);
             await fs.mkdir(toolsDir, { recursive: true });
             for (const key of Object.keys(hashes)) {
-                await fs.cp(hashes[key].file, path.join(toolsDir, path.basename(hashes[key].file)));
+                const target = path.join(toolsDir, path.basename(hashes[key].file));
+                if (path.resolve(hashes[key].file) !== path.resolve(target)) {
+                    await fs.cp(hashes[key].file, target);
+                }
             }
             log(`Reusing prebuilt tool archives from ${options.toolsDir}: ${Object.keys(hashes).join(", ") || "none"}`);
         } else {
@@ -567,11 +788,13 @@ export async function runRelease(options, {
         }
     }
     const lineage = await commitRelease(lineageDir, exportRoot, version);
-    log(`Committed ${lineage.commit.slice(0, 9)} and tagged ${lineage.tag} on ${lineage.branch} in ${lineageDir}`);
+    log(`${lineage.reused ? "Reused" : "Committed"} ${lineage.commit.slice(0, 9)} and tag ${lineage.tag} on ${lineage.branch}.`);
     if (dryRun) {
-        dry(`Would push ${lineage.branch} and ${lineage.tag} to the lineage origin.`);
+        dry(`Would atomically push ${lineage.branch} and ${lineage.tag} to the lineage origin.`);
     } else {
-        git(lineageDir, "push", "--quiet", "origin", lineage.branch, lineage.tag);
+        assertSourceState(sourceSha, await getSourceState());
+        const pushed = pushRelease(lineageDir, lineage);
+        log(`${pushed.reused ? "Verified existing" : "Published"} lineage branch and tag atomically.`);
     }
 
     // 4. Bare mirrors.
@@ -584,7 +807,7 @@ export async function runRelease(options, {
     const cmajorMirror = path.join(feedRoot, "cmajor.git");
     let choc = { commit: null, submoduleUrl: null };
     if (dryRun && !isLocalSource(cmajorSource)) {
-        dry(`Would mirror cmajor.git from ${cmajorSource} at ${cmajor.commit} and verify its relative CHOC submodule URL.`);
+        dry(`Would mirror cmajor.git at ${cmajor.commit} and verify its relative CHOC submodule URL.`);
         dry("Would mirror choc.git from the URL that the cmajor .gitmodules resolves to.");
     } else {
         createBareMirror(cmajorSource, cmajorMirror);
@@ -595,7 +818,7 @@ export async function runRelease(options, {
         const chocSource = options.chocSource ?? resolveRelativeGitUrl(cmajorSource, submodule.url);
         const chocMirror = path.join(feedRoot, "choc.git");
         if (dryRun && !isLocalSource(chocSource)) {
-            dry(`Would mirror choc.git from ${chocSource} at ${submodule.chocCommit}.`);
+            dry(`Would mirror choc.git at ${submodule.chocCommit}.`);
         } else {
             createBareMirror(chocSource, chocMirror);
             assertCommitPresent(chocMirror, submodule.chocCommit, "choc");
@@ -612,8 +835,8 @@ export async function runRelease(options, {
     }
     const manifest = renderManifest({
         version,
-        createdAt: now().toISOString(),
-        sourceCommit: exported.sourceCommit,
+        createdAt: lineage.createdAt,
+        sourceCommit: sourceSha,
         exportFileCount: exported.fileCount,
         lineage,
         cmajor,
@@ -623,16 +846,16 @@ export async function runRelease(options, {
     });
     await writeJson(path.join(feedRoot, "manifest.json"), manifest);
 
-    // 6. Sync.
-    const rcloneArgs = ["sync", "--transfers", "8", feedRoot, options.r2 ?? "<remote:bucket/prefix>"];
+    // 6. Publish additively, preserving every older versioned object.
     if (dryRun) {
-        dry(`Would run: rclone ${rcloneArgs.join(" ")}`);
+        dry("Would copy the feed additively and verify every staged object (older objects are never deleted).");
         log(await describeLayout(stagingRoot));
         log(`Dry run complete; staging kept at ${stagingRoot}`);
     } else {
-        runCommand("rclone", rcloneArgs);
-        log(`Synced ${feedRoot} to ${options.r2}`);
-        log(`Released Builder Kit ${version} (${lineage.tag}) at ${feedUrl}; staging kept at ${stagingRoot}`);
+        assertSourceState(sourceSha, await getSourceState());
+        await publishObjects(feedRoot, destination);
+        log("Copied and verified the release objects without deleting older versions.");
+        log(`Released Builder Kit ${version} (${lineage.tag}); staging kept at ${stagingRoot}`);
     }
 
     return { stagingRoot, exportRoot, feedRoot, lineage, lineageDir, manifest, hashes };
@@ -641,7 +864,11 @@ export async function runRelease(options, {
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
     try {
-        await runRelease(parseArgs(process.argv.slice(2)));
+        const options = parseArgs(process.argv.slice(2));
+        const config = await readDestinationConfig(options.destinationConfig);
+        const capability = readCapabilityFromKeychain({ service: config.keychainService });
+        const destination = createReleaseDestination(config, capability);
+        await runRelease(options, { destination });
     } catch (error) {
         console.error(error.message);
         process.exit(1);

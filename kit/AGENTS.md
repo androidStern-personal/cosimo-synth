@@ -23,7 +23,7 @@ Generic conventions for any plugin monorepo built on the Builder Kit under `kit/
 - `npm run fx:build -- <alias>` (or `-- all`) builds a plugin's self-contained runtime folder under `build/fx/`.
 - `npm run fx:prod:build -- <alias>` builds the dedicated native plugin bundle under `build/`. It strips `view.devModule` from the runtime patch manifest for every plugin, so release builds contain zero dev-server behavior.
 - `npm run fx:prod:install -- <alias>` copies an already-built dedicated VST3 bundle into the user plugin folder. It does not build, does not write `CmajPlugin.json`, and does not touch AU plugins.
-- `npm run cmajplugin:build` and `npm run cmajplugin:install` build and install the patched generic `CmajPlugin.vst3` used for JIT development; the installer verifies the signature and the patched CHOC keyboard bridge markers.
+- `npm run cmajplugin:install` installs the pinned, setup-downloaded generic `CmajPlugin.vst3` used for JIT development and verifies the patched CHOC keyboard bridge markers. `npm run cmajplugin:build` plus `npm run cmajplugin:install -- --from-source` is the explicit maintainer fallback.
 - `npm run fx:jit:install -- <alias>` points the installed generic `CmajPlugin.vst3` at one plugin's patch for fast in-host iteration. It validates the patch and the installed generic plugin first, writes only the VST3 `CmajPlugin.json`, and never overwrites `CmajPlugin.vst3` or any AU loader.
 - `npm test` runs the kit contract tests plus every plugin unit test; `npm run test:browser` runs the Playwright view tests against built runtimes (`fx:build` the plugin first); `npm run typecheck` runs `tsc --noEmit`.
 - Plugin aliases come from discovery; `node kit/fx/build-effect.mjs --targets` lists them.

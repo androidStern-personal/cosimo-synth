@@ -828,6 +828,7 @@ test("kit/index.ts is the public entry and re-exports every supported kit module
         "./ui/effects/preset-bar",
         "./ui/effects/snapshot-bar",
         "./ui/effects/effect-header",
+        "./ui/effects/effect-preset-shared",
         "./ui/effects/effect-preset-v2",
         "./ui/effects/effect-snapshots",
         "./ui/effects/effect-snapshot-bank",

@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
-test("CmajPlugin build and dry-run install share the wrapper artifact path", async () => {
+test("CmajPlugin explicit source build and dry-run install share the wrapper artifact path", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-cmajplugin-path-"));
     const buildDirectory = path.join(tempRoot, "build");
     const bundlePath = path.join(
@@ -33,7 +33,7 @@ test("CmajPlugin build and dry-run install share the wrapper artifact path", asy
 
         const { stdout } = await execFileAsync(
             path.join(repoRoot, "kit", "scripts", "install_cmajplugin_vst3.sh"),
-            ["--dry-run"],
+            ["--dry-run", "--from-source"],
             {
                 cwd: repoRoot,
                 env: {
@@ -53,6 +53,8 @@ test("CmajPlugin build and dry-run install share the wrapper artifact path", asy
         assert.match(installScript, /cmajplugin_paths\.sh/u);
         assert.doesNotMatch(buildScript, /CmajPlugin_artefacts/u);
         assert.doesNotMatch(installScript, /CmajPlugin_artefacts/u);
+        assert.match(installScript, /require_tool\.mjs.*cmajPlugin/u);
+        assert.match(installScript, /--from-source/u);
     } finally {
         await rm(tempRoot, { recursive: true, force: true });
     }

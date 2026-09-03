@@ -339,8 +339,9 @@ write `CmajPlugin.json`, and does not touch AU plugins.
 ## JIT Install (Development In A Host)
 
 `npm run kit:setup` downloads the prebuilt, hash-pinned generic
-`CmajPlugin.vst3` into `build/kit-tools/`. `npm run cmajplugin:build` /
-`npm run cmajplugin:install` build and install it from source instead
+`CmajPlugin.vst3` into `build/kit-tools/`. `npm run cmajplugin:install`
+installs that pinned setup artifact by default. `npm run cmajplugin:build`
+followed by `npm run cmajplugin:install -- --from-source` is the explicit source route
 (`cosimo_add_cmajor_toolchain_dependencies`: the full Cmajor fork checkout with
 its LLVM, boost, and clap submodules from their upstream GitHub SSH URLs, so
 this is a maintainer path that needs GitHub SSH access). `npm run fx:jit:install -- <alias>` then writes the VST3
