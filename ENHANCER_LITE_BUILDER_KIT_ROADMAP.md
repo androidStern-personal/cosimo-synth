@@ -1,6 +1,6 @@
 # Enhancer Lite Builder Kit — Product, GTM, and Release Roadmap
 
-Status: **private Builder Kit feed v0.1.0 published; v0.1.1 repair-to-green and clean-customer proof remain open; customer launch gates unresolved**
+Status: **Builder Kit source integrated on master with zero TypeScript diagnostics and green CI; private v0.1.1 publication and clean-customer proof remain open**
 
 Last updated: 2026-09-03
 
@@ -8,9 +8,13 @@ Planning origin branch: `codex/enhancer-lite-builder-kit-roadmap-cpm`
 
 Roadmap reconciliation base: `511afc65896aa5b7ec809a46c822ab81b71b5694`
 
+Integrated source: `origin/master@b40b52aa3236774dc3d6cd4bdbc1fe804d39c26c`
+
+Dedicated reconciliation branch: `codex/builder-kit-roadmap-cleanup-20260903`; this older planning lineage is not merged into source master.
+
 Historical integration baseline at roadmap creation: `origin/master@e3b832ebe8010a40a40e86780bd549467ed744d1`
 
-Dependency-migration authority: `BUILDER_KIT_CPM_DEPENDENCY_MIGRATION.md`. The plain-CPM correction is implemented and qualified on master: one small CMake module uses ordinary CPM calls and its ordinary shared source cache for the exact private Cmajor/CHOC and official JUCE pins. The rejected custom resolver, locks, repair, credential filtering, receipts, and read-only enforcement are gone. Cmajor CLI delivery remains a separate Builder Kit task.
+Dependency-migration authority: `BUILDER_KIT_CPM_DEPENDENCY_MIGRATION.md`. The plain-CPM correction is implemented and qualified on master: one small CMake module uses ordinary CPM calls and its ordinary shared source cache for the exact private Cmajor/CHOC and official JUCE pins. The rejected custom source resolver, locks, repair, credential filtering, source receipts, and read-only enforcement are gone. Customer Cmajor command delivery is now implemented through `kit:setup`; its archive and installed-payload verification is separate from that source-dependency policy. Clean-customer qualification remains open.
 
 Historical DSP checkpoint: `codex/t26-spectre-wrapper-prototype@2a652a4035519be1fbe12de9a8c6487ed736e3c5`
 
@@ -25,19 +29,21 @@ This is the authoritative current completion ledger wherever the older gate tabl
 Completed and verified:
 
 - The customer-rights policy remains locked: buyers may use, copy, modify, publish, redistribute, sublicense, and sell Cosimo-authored kit source and derivatives. Cosimo imposes no proprietary restriction on that code. A buyer releasing a closed-source JUCE plug-in must obtain their own JUCE license; the Builder Kit purchase does not include it.
-- The private R2 bucket `builder-kit-feed` exists. A live bucket-scoped size check on September 3 returned 78 objects totaling 169,550,604 bytes. The bucket-scoped credential does not grant account-wide bucket listing, so `rclone lsd r2:` returning `AccessDenied` is not evidence that this bucket is absent.
-- The private lineage repository `androidStern-personal/builder-kit-releases` exists. Its remote `master` and peeled `v0.1.0` tag both resolve to lineage commit `9eaa543531bb1e2acebd5ff393f363943481a2ef`.
+- The private R2 bucket `builder-kit-feed` was verified earlier on September 3: the bucket-scoped check returned 78 objects totaling 169,550,604 bytes. The bucket-scoped credential does not grant account-wide bucket listing, so `rclone lsd r2:` returning `AccessDenied` is not evidence that this bucket is absent. No live R2/feed check was repeated during the later publication freeze.
+- The private lineage repository `androidStern-personal/builder-kit-releases` exists. The earlier verified remote `master` and peeled `v0.1.0` tag both resolved to lineage commit `9eaa543531bb1e2acebd5ff393f363943481a2ef`; this integration run did not mutate that lineage.
 - Builder Kit `v0.1.0` publication is complete. Release-time proof recorded source `cc4eea779248d01f9a28fcce2a0e7c67b887b752`, the `kit.git`, `cmajor.git`, and `choc.git` mirrors, a live HTTP-200 manifest, matching archive hashes, 117 exported files, and the 78 R2 objects above. Its root `LICENSE` and `THIRD_PARTY_NOTICES.md` encode the locked broad Cosimo rights and the buyer-held JUCE requirement.
+- The reviewed Builder Kit source was fast-forwarded from `16fe62111d48019871d4a30d8a23426b9a71fad0` to remote master `b40b52aa3236774dc3d6cd4bdbc1fe804d39c26c`. The coordinator's clean worktree performed the push; the dirty primary checkout, its local master ref, and the user-owned SeqFX workshop were not moved or edited.
+- Exact-source local qualification passed: direct `npm run typecheck` with zero diagnostics; `npm test` with 1,181 passed, zero failed, and one existing missing local Spectre shelf corpus skip; a 121-file committed customer export with canonical typecheck/test, Enhancer Lite build, and update-merge proof; and all seven effect-runtime builds. The previous `32aa72c7`/27-diagnostic/red-CI checkpoint is superseded. Master [CI run 33797774462](https://github.com/androidStern-personal/cosimo-synth/actions/runs/33797774462) completed successfully on the exact integrated source, including direct typecheck, setup/release safety contracts, the full tests, and customer-export proof.
+- Independent review closed exact-commit export contamination, partial-publication ordering, inconsistent archive/payload tool identity, unverified JIT command selection, download-body secret diagnostics, and generated-plugin test omission. The final discovery rule excludes only `_browser.mjs`, so valid names such as `browser_gain` retain unit coverage. Retained Git packs preserve old source pins; publication remains serialized and cleanup separately authorized. Local payload receipts detect drift, not an adversary rewriting both receipt and payload.
 
 Still open:
 
-- `v0.1.1` is unpublished; the private lineage remote has no `v0.1.1` tag at this checkpoint.
-- Repair-to-green is open. The current extraction branch head is `32aa72c7d76fe1dbefc518cff5a903607f93c697`; its latest Builder Kit workflow, GitHub Actions run `33576976122`, is red on a stale dependency-helper assertion, and the workflow still tolerates a 27-diagnostic TypeScript baseline. The failed run did not reach export proof.
+- Private `v0.1.1` publication remains open; no v0.1.1 tag, Keychain mutation, R2 publication, or old-prefix deletion occurred in this integration run. Publication is frozen pending Andrew's answer about whether anyone outside his own agents received the exposed v0.1.0 feed link. Rotation must either retire the old link after verification or retain it temporarily with an explicit customer migration path; retaining an unchanged old feed alone does not deliver v0.1.1 updates.
 - Clean-customer proof is open. `v0.1.0` feed publication does not prove setup, build, install, update, recovery, AU/Logic, supported-host, signing/notarization, or clean-machine success for a real customer, and it is not public-launch authorization.
 
-Portless is approved only as optional infrastructure on Andrew's personal machine. It is not a repository dependency, product dependency, customer prerequisite, or release gate. It was not on `PATH`, installed, or proven at this checkpoint; installation and validation remain separate work.
+Portless 0.15.6 is installed and was proven as personal-only infrastructure; the version and default Node 22.16.0 were rechecked after source integration. Portless alone uses its separate Node 24 runtime. It is not a repository dependency, product dependency, customer prerequisite, or release gate; no repository script, Node pin, engine requirement, or configuration was added for it.
 
-Bookkeeping exception: `TODOS.txt` is intentionally untouched because its authoritative primary-checkout copy contains user-owned changes. This roadmap and branch-local `PROGRESS.txt` are the durable record for this reconciliation. No master mutation, push, merge, deployment, publication, installation, or external contact is authorized by this checkpoint.
+Bookkeeping exception: `TODOS.txt` is intentionally untouched because its authoritative primary-checkout copy contains user-owned changes. This roadmap and branch-local `PROGRESS.txt` record the separately authorized source integration and roadmap reconciliation; the stale planning lineage is not merged into master. The remaining private release and VirtualBuddy proof are separate gates. No public launch, DNS/Sites/Vercel changes, or outreach is authorized by this checkpoint.
 
 ## 1. Executive decision
 
