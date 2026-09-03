@@ -10,7 +10,7 @@ async function discover(directory) {
     for (const entry of await fs.readdir(path.join(root, directory), { withFileTypes: true })) {
         const relative = path.join(directory, entry.name);
         if (entry.isDirectory()) await discover(relative);
-        else if (entry.isFile() && /^test_.+\.mjs$/u.test(entry.name) && !entry.name.includes("_browser"))
+        else if (entry.isFile() && /^test_.+\.mjs$/u.test(entry.name) && !entry.name.endsWith("_browser.mjs"))
             tests.push(relative);
     }
 }
