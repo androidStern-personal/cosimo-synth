@@ -26,27 +26,8 @@ jobs:
       - name: Install
         run: npm ci
 
-      # `tsc --noEmit` currently reports 27 pre-existing errors on master, so a
-      # plain `npm run typecheck` would always fail. Until they are cleared, fail
-      # only when the count grows past that baseline. Lower TS_ERROR_BASELINE as
-      # errors are fixed; it must never go up.
-      - name: Typecheck (regression gate against baseline)
-        env:
-          TS_ERROR_BASELINE: 27
-        run: |
-          set +e
-          output=$(npm run typecheck 2>&1)
-          status=$?
-          set -e
-          count=$(printf '%s\n' "$output" | grep -c 'error TS' || true)
-          printf '%s\n' "$output" | grep 'error TS' || true
-          echo "tsc errors: $count (baseline $TS_ERROR_BASELINE)"
-          if [ "$status" -ne 0 ] && [ "$count" -eq 0 ]; then
-            echo "typecheck failed without reporting TS errors:"
-            printf '%s\n' "$output" | tail -n 30
-            exit 1
-          fi
-          test "$count" -le "$TS_ERROR_BASELINE"
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Test
         run: npm test

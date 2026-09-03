@@ -1494,7 +1494,10 @@ test("effect production uses the repository-built pinned Cmajor generator withou
     assert.equal("replaceGeneratedPluginLatency" in prodModule, false);
     assert.doesNotMatch(generationProject, /find_program\s*\([^)]*cmaj/su);
     assert.match(generationProject, /COSIMO_CMAJ_EXECUTABLE/u);
-    assert.match(commandProject, /cosimo_add_production_dependencies\(\)/u);
+    assert.match(generationProject, /cosimo_add_production_dependencies\(\)/u);
+    assert.doesNotMatch(generationProject, /cosimo_add_cmajor_toolchain_dependencies\(\)/u);
+    assert.match(commandProject, /cosimo_add_cmajor_toolchain_dependencies\(\)/u);
+    assert.doesNotMatch(commandProject, /cosimo_add_production_dependencies\(\)/u);
     assert.match(commandProject, /add_subdirectory\s*\(\s*"\$\{COSIMO_CMAJOR_SOURCE_DIR\}"/su);
     assert.match(commandProject, /set\(WARNINGS_AS_ERRORS ON CACHE BOOL/u);
     assert.doesNotMatch(commandProject, /WARNINGS_AS_ERRORS OFF/u);

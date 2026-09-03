@@ -386,17 +386,17 @@ export async function createProductBounceCaptureSnapshot({
     const sourceDocument = sourceMode === 1
         ? readBounceDocumentFromPatch(patchDocument)
         : null;
-    if (sourceMode === 1 && sourceDocument === null) {
-        throw new Error("Recursive Bounce requires the current bounce.v1 reference");
-    }
-    if (sourceMode === 1 && sourceBank === null) {
-        throw new Error("Recursive Bounce requires the current sampled bank");
-    }
 
     let sourceSetupEvents: SetupEvent[];
     if (sourceMode === 1) {
-        assertRecursiveBankMatchesDocument(sourceBank!, sourceDocument!);
-        sourceSetupEvents = recursiveBankSetupEvents(sourceBank!, sourceDocument!.generation);
+        if (sourceDocument === null) {
+            throw new Error("Recursive Bounce requires the current bounce.v1 reference");
+        }
+        if (sourceBank === null) {
+            throw new Error("Recursive Bounce requires the current sampled bank");
+        }
+        assertRecursiveBankMatchesDocument(sourceBank, sourceDocument);
+        sourceSetupEvents = recursiveBankSetupEvents(sourceBank, sourceDocument.generation);
         onProgress?.({ completedUnits: 1, totalUnits: 1, tableIndex: -1 });
     } else {
         const tableIndices = OSCILLATOR_TABLE_ENDPOINTS.map((endpointID) => {

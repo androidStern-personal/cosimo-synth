@@ -41,7 +41,7 @@ function bytesToBase64URL(bytes: Uint8Array) {
     return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
 }
 
-function base64URLToBytes(encoded: string): SoundShareResult<Uint8Array> {
+function base64URLToBytes(encoded: string): SoundShareResult<Uint8Array<ArrayBuffer>> {
     if (encoded.length === 0 || !BASE64URL_PATTERN.test(encoded) || encoded.length % 4 === 1) {
         return errorResult(new SoundShareError("InvalidFragment", "Shared sound link payload is not valid base64url."));
     }
@@ -64,15 +64,15 @@ function base64URLToBytes(encoded: string): SoundShareResult<Uint8Array> {
 }
 
 async function readStreamBytes(
-    stream: ReadableStream<Uint8Array>,
+    stream: ReadableStream<Uint8Array<ArrayBuffer>>,
     maximumBytes: number,
     failure: {
         readonly tag: Extract<SoundShareErrorTag, "CompressionFailed" | "DecompressionFailed">;
         readonly fallbackMessage: string;
     },
-): Promise<SoundShareResult<Uint8Array>> {
+): Promise<SoundShareResult<Uint8Array<ArrayBuffer>>> {
     const reader = stream.getReader();
-    const chunks: Uint8Array[] = [];
+    const chunks: Array<Uint8Array<ArrayBuffer>> = [];
     let total = 0;
     try {
         while (true) {
@@ -109,7 +109,9 @@ async function readStreamBytes(
     return { ok: true, value: bytes };
 }
 
-function compressionStream(kind: "compress" | "decompress"): SoundShareResult<TransformStream<Uint8Array, Uint8Array>> {
+function compressionStream(
+    kind: "compress" | "decompress",
+): SoundShareResult<CompressionStream | DecompressionStream> {
     const StreamConstructor = kind === "compress"
         ? globalThis.CompressionStream
         : globalThis.DecompressionStream;

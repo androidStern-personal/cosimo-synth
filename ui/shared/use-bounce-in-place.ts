@@ -175,7 +175,7 @@ function assertCapture(capture: {
     bytes: Uint8Array;
     bank: BounceBankView;
 }) {
-    const decoded = decodeBounceBank(capture.bytes) as BounceBankView;
+    const decoded = decodeBounceBank(capture.bytes);
     if (decoded.sampleRate !== capture.bank.sampleRate
         || decoded.totalFrameCount !== capture.bank.totalFrameCount
         || decoded.roots.length !== capture.bank.roots.length) {
@@ -236,19 +236,15 @@ export function useBounceInPlace() {
     }, [connection]);
 
     const coordinator = useMemo(() => new BounceTransitionCoordinator({
-        capture: (request: Record<string, unknown>) => captureBounceBank({
+        capture: (request) => captureBounceBank({
             ...request,
             workerURL: new URL("patch_gui/bounce-render-worker.js", getDefaultPatchRootUrl()),
             engineModuleURL: new URL("cmaj_Cosimo_Synth.offline.js", getDefaultPatchRootUrl()),
         }),
-        persistBank: (capture: { digest: string; bytes: Uint8Array }) => (
+        persistBank: (capture) => (
             store.put(capture.digest, capture.bytes)
         ),
-        stageBankInstall: async (bank: BounceBankView, options: {
-            generation: number;
-            signal?: AbortSignal;
-            onProgress?: (progress: unknown) => void;
-        }) => {
+        stageBankInstall: async (bank, options) => {
             const engineStatus = await requestBounceEngineStatus(connection, {
                 signal: options.signal,
             });
@@ -259,9 +255,9 @@ export function useBounceInPlace() {
                 onProgress: options.onProgress,
             });
         },
-        verifyCapture: (capture: { bytes: Uint8Array; bank: BounceBankView }) => assertCapture(capture),
+        verifyCapture: (capture) => assertCapture(capture),
         applyPatchDocument,
-        readBankByDigest: async (digest: string) => {
+        readBankByDigest: async (digest) => {
             const bytes = await store.get(digest);
             return bytes === null ? null : decodeBounceBank(bytes);
         },
@@ -335,7 +331,7 @@ export function useBounceInPlace() {
                     `Bounce bank ${document.digest.slice(0, 12)}… is missing. Revert or restore its bank file.`,
                 );
             }
-            const bank = decodeBounceBank(bytes) as BounceBankView;
+            const bank = decodeBounceBank(bytes);
             if (!matchesBounceDocument(bank, document)) {
                 throw new Error("The persisted Bounce bank does not match its patch reference.");
             }
@@ -427,6 +423,7 @@ export function useBounceInPlace() {
             ]);
             const previousBounceDocument = readBounceDocumentFromPatch(patchDocument);
             const recursive = Math.round(Number(patchDocument.parameters.sourceMode) || 0) === 1;
+            let recursiveRoots: ReadonlyArray<number> | null = null;
             let sourceBank: BounceBankView | null = null;
             if (recursive) {
                 if (previousBounceDocument === null) {
@@ -441,7 +438,8 @@ export function useBounceInPlace() {
                 if (sourceBytes.byteLength !== previousBounceDocument.bankByteLength) {
                     throw new Error("Recursive Bounce bank byte length does not match bounce.v1");
                 }
-                sourceBank = decodeBounceBank(sourceBytes) as BounceBankView;
+                recursiveRoots = previousBounceDocument.roots;
+                sourceBank = decodeBounceBank(sourceBytes);
             }
             const recipe = await createProductBounceCaptureSnapshot({
                 patchDocument,
@@ -454,8 +452,8 @@ export function useBounceInPlace() {
             });
             const testConfig = readTestConfig();
             const planOptions = {
-                ...(recursive
-                    ? { roots: [...previousBounceDocument!.roots] }
+                ...(recursiveRoots !== null
+                    ? { roots: [...recursiveRoots] }
                     : (testConfig.roots ? { roots: testConfig.roots } : {})),
                 ...(testConfig.holdSeconds ? { holdSeconds: testConfig.holdSeconds } : {}),
                 ...(testConfig.tailCapSeconds ? { tailCapSeconds: testConfig.tailCapSeconds } : {}),
@@ -471,11 +469,7 @@ export function useBounceInPlace() {
                     signal: abortController.signal,
                 },
             });
-            const metrics = result.capture.metrics as ReadonlyArray<{
-                rootNote: number;
-                realtimeMultiplier: number | null;
-                elapsedMilliseconds: number;
-            }>;
+            const metrics = result.capture.metrics;
             console.info("[bounce] capture completed (absolute VM timing is advisory)", {
                 roots: result.capture.plan.roots.length,
                 sampleRate: result.capture.plan.snapshot.sampleRate,
@@ -487,11 +481,7 @@ export function useBounceInPlace() {
                 sourceGeneration: recipe.snapshot.sourceGeneration,
                 digest: result.capture.digest,
                 roots: [...result.capture.plan.roots],
-                wasmMemoryPages: metrics.map((entry) => (
-                    Number.isFinite((entry as { wasmMemoryPages?: number }).wasmMemoryPages)
-                        ? (entry as { wasmMemoryPages: number }).wasmMemoryPages
-                        : null
-                )),
+                wasmMemoryPages: metrics.map((entry) => entry.wasmMemoryPages),
             });
             setState((current) => ({
                 ...current,

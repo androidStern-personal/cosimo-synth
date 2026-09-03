@@ -81,7 +81,9 @@ export class BounceTransitionCoordinator {
 
     subscribe(listener) {
         this.#listeners.add(listener);
-        return () => this.#listeners.delete(listener);
+        return () => {
+            this.#listeners.delete(listener);
+        };
     }
 
     #setPhase(phase, detail = {}) {

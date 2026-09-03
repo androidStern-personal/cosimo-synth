@@ -5300,6 +5300,14 @@ function ContextualArticulationToolbar({
 }
 
 type MobileModSource = Pick<RackModulationSource, "sourceKind" | "sourceSlot">;
+type MsegSourceSlot = 1 | 2 | 3;
+
+function msegSourceSlotFromIndex(slotIndex: number): MsegSourceSlot {
+    if (slotIndex === 0) return 1;
+    if (slotIndex === 1) return 2;
+    if (slotIndex === 2) return 3;
+    throw new RangeError(`Unknown MSEG slot index: ${slotIndex}`);
+}
 
 type MobileWorkspaceSection = WorkspaceTabId;
 
@@ -5383,7 +5391,7 @@ function DesktopPatchViewBody({
         selectedSource: { sourceKind: "mseg", sourceSlot: 1 },
     });
     const [globalModDragSource, setGlobalModDragSource] = useState<GlobalModRailState["selectedSource"] | null>(null);
-    const [openMsegEditorTargetSlot, setOpenMsegEditorTargetSlot] = useState<number | null>(null);
+    const [openMsegEditorTargetSourceSlot, setOpenMsegEditorTargetSourceSlot] = useState<MsegSourceSlot | null>(null);
     const activeMsegRouteSource = globalModDragSource ?? globalModRailState.selectedSource;
     const activeMsegRouteSourceIdentity = useMemo(() => {
         const source = findRackModulationSource(
@@ -5659,7 +5667,7 @@ function DesktopPatchViewBody({
         serial: number;
     } | null>(null);
     const handleArmModSource = useCallback((source: GlobalModRailState["selectedSource"]) => {
-        setOpenMsegEditorTargetSlot(null);
+        setOpenMsegEditorTargetSourceSlot(null);
         setGlobalModRailState((current) => ({ ...current, selectedSource: source }));
         setArmModSourceSignal((previous) => ({ source, serial: (previous?.serial ?? 0) + 1 }));
     }, []);
@@ -6113,7 +6121,7 @@ function DesktopPatchViewBody({
         onRemoveRoute: synthView.handleRemoveRoute,
     });
     const handleMobileModSourceTap = useCallback((source: MobileModSource) => {
-        setOpenMsegEditorTargetSlot(null);
+        setOpenMsegEditorTargetSourceSlot(null);
         if (mobileWorkspaceSection === "mod") {
             setWorkspaceShell((current) => (
                 openDeepLink(current, {
@@ -6147,21 +6155,21 @@ function DesktopPatchViewBody({
     ]);
     const handleGlobalModSourceDrop = useCallback((source: GlobalModRailState["selectedSource"]) => {
         if (mobileWorkspaceSection === "mod" && synthView.msegEditor.isOpen) {
-            setOpenMsegEditorTargetSlot(synthView.selectedMsegSlot);
+            setOpenMsegEditorTargetSourceSlot(msegSourceSlotFromIndex(synthView.selectedMsegSlot));
         }
         setGlobalModRailState((current) => ({ ...current, selectedSource: source }));
     }, [mobileWorkspaceSection, synthView.msegEditor.isOpen, synthView.selectedMsegSlot]);
     const handleGlobalModSourceSelect = useCallback((source: GlobalModRailState["selectedSource"]) => {
-        setOpenMsegEditorTargetSlot(null);
+        setOpenMsegEditorTargetSourceSlot(null);
         setGlobalModRailState((current) => ({ ...current, selectedSource: source }));
     }, []);
     const closeMsegEditor = useCallback(() => {
-        setOpenMsegEditorTargetSlot(null);
+        setOpenMsegEditorTargetSourceSlot(null);
         synthView.msegEditor.closeEditor();
     }, [synthView.msegEditor.closeEditor]);
     useEffect(() => {
         if (!synthView.msegEditor.isOpen) {
-            setOpenMsegEditorTargetSlot(null);
+            setOpenMsegEditorTargetSourceSlot(null);
         }
     }, [synthView.msegEditor.isOpen]);
     const closeQuickEditor = useCallback(() => setQuickEditorSource(null), []);
@@ -6446,9 +6454,9 @@ function DesktopPatchViewBody({
                             // clear that pin and retain the existing behavior;
                             // hidden Mod pages still suspend this sync.
                             armedSource={mobileWorkspaceSection === "mod"
-                                ? openMsegEditorTargetSlot === null
+                                ? openMsegEditorTargetSourceSlot === null
                                     ? globalModRailState.selectedSource
-                                    : { sourceKind: "mseg", sourceSlot: openMsegEditorTargetSlot + 1 }
+                                    : { sourceKind: "mseg", sourceSlot: openMsegEditorTargetSourceSlot }
                                 : null}
                             onArmSource={isCompactViewport ? handleArmModSource : undefined}
                             selectedMsegSlot={synthView.selectedMsegSlot}
