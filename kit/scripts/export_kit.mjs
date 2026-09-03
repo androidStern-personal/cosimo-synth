@@ -19,14 +19,15 @@
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const allowlistPath = path.join(repoRoot, "scripts/builder-kit-export-policy.json");
+const allowlistRelativePath = "scripts/builder-kit-export-policy.json";
 
-export async function readAllowlist() {
-    return JSON.parse(await fs.readFile(allowlistPath, "utf8"));
+export async function readAllowlist({ sourceCommit = "HEAD" } = {}) {
+    return JSON.parse(execFileSync("git", ["-C", repoRoot, "show", `${sourceCommit}:${allowlistRelativePath}`], { encoding: "utf8" }));
 }
 
 async function copyTree(fromRoot, toRoot) {
@@ -88,11 +89,11 @@ export async function verifyOutputWithinAllowlist(outputRoot, allowlist, templat
     return strays;
 }
 
-async function materializeRootTemplate(outputRoot, allowlist) {
-    const templateRoot = path.join(repoRoot, "kit/template/root");
+async function materializeRootTemplate(outputRoot, allowlist, sourceRoot) {
+    const templateRoot = path.join(sourceRoot, "kit/template/root");
     const written = [];
 
-    const rootPackage = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
+    const rootPackage = JSON.parse(await fs.readFile(path.join(sourceRoot, "package.json"), "utf8"));
     const devDependencies = { ...allowlist.templateExplicitDevDependencies };
     for (const name of allowlist.templateDevDependencyNames) {
         const version = rootPackage.devDependencies?.[name] ?? rootPackage.dependencies?.[name];
@@ -188,8 +189,35 @@ async function stampFeed(outputRoot, feedUrl) {
     return feedBaseUrl;
 }
 
-export async function exportKit(outputDir, { force = false, feedUrl = null } = {}) {
-    const allowlist = await readAllowlist();
+async function copyCommittedSource(outputRoot, allowlist, sourceCommit) {
+    const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "kit-committed-source-"));
+    const sourceRoot = path.join(scratch, "tree");
+    try {
+        await fs.mkdir(sourceRoot);
+        const archive = path.join(scratch, "source.tar");
+        const paths = [...new Set([...allowlist.trees, ...allowlist.files, "kit/template/root", "package.json"])];
+        execFileSync("git", ["-C", repoRoot, "archive", "--format=tar", `--output=${archive}`, sourceCommit, "--", ...paths], { stdio: "pipe" });
+        execFileSync("tar", ["-xf", archive, "-C", sourceRoot], { stdio: "pipe" });
+        for (const tree of allowlist.trees) {
+            await copyTree(path.join(sourceRoot, tree), path.join(outputRoot, tree));
+        }
+        for (const file of allowlist.files) {
+            await fs.mkdir(path.dirname(path.join(outputRoot, file)), { recursive: true });
+            await fs.cp(path.join(sourceRoot, file), path.join(outputRoot, file));
+        }
+        return await materializeRootTemplate(outputRoot, allowlist, sourceRoot);
+    } finally {
+        await fs.rm(scratch, { recursive: true, force: true });
+    }
+}
+
+/** Export committed source only; feed stamping and root templating are explicit derived output. */
+export async function exportKit(outputDir, { force = false, feedUrl = null, sourceCommit: requestedCommit = null } = {}) {
+    if (requestedCommit !== null && !/^[0-9a-f]{40}$/u.test(requestedCommit)) {
+        throw new Error("Export sourceCommit must be a full commit SHA.");
+    }
+    const sourceCommit = execFileSync("git", ["-C", repoRoot, "rev-parse", "--verify", `${requestedCommit ?? "HEAD"}^{commit}`], { encoding: "utf8" }).trim();
+    const allowlist = await readAllowlist({ sourceCommit });
     const outputRoot = path.resolve(outputDir);
 
     if (!outputRoot.startsWith(path.sep) || outputRoot === repoRoot || outputRoot.startsWith(repoRoot + path.sep)) {
@@ -203,23 +231,7 @@ export async function exportKit(outputDir, { force = false, feedUrl = null } = {
     }
     await fs.mkdir(outputRoot, { recursive: true });
 
-    for (const tree of allowlist.trees) {
-        const from = path.join(repoRoot, tree);
-        if (!existsSync(from)) {
-            throw new Error(`Allowlisted tree is missing from the monorepo: ${tree}`);
-        }
-        await copyTree(from, path.join(outputRoot, tree));
-    }
-    for (const file of allowlist.files) {
-        const from = path.join(repoRoot, file);
-        if (!existsSync(from)) {
-            throw new Error(`Allowlisted file is missing from the monorepo: ${file}`);
-        }
-        await fs.mkdir(path.dirname(path.join(outputRoot, file)), { recursive: true });
-        await fs.cp(from, path.join(outputRoot, file));
-    }
-
-    const templateFiles = await materializeRootTemplate(outputRoot, allowlist);
+    const templateFiles = await copyCommittedSource(outputRoot, allowlist, sourceCommit);
     const feedBaseUrl = await stampFeed(outputRoot, feedUrl);
 
     // Gates.
@@ -237,7 +249,6 @@ export async function exportKit(outputDir, { force = false, feedUrl = null } = {
         throw new Error(`Export gate failed — forbidden strings present:\n  ${lines.join("\n  ")}`);
     }
 
-    const sourceCommit = execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
     const fileCount = (await listFilesRecursive(outputRoot)).length;
     await fs.writeFile(
         path.join(outputRoot, "EXPORT_MANIFEST.json"),

@@ -1,6 +1,5 @@
 import { access, cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
-import { createReadStream, readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -15,6 +14,8 @@ import {
     resolvePluginNames,
 } from "./build-effect.mjs";
 import { assertPatchedChocWebViewBinary } from "../scripts/check_choc_markers.mjs";
+import { inspectTool, normalizePin } from "../scripts/toolchain.mjs";
+import { requireCurrentTool } from "../scripts/require_tool.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const toolchainManifestPath = path.join(repoRoot, "kit", "toolchain.json");
@@ -55,15 +56,6 @@ export function getDownloadedCmajExecutablePath(toolchain = toolchainManifest) {
 }
 
 const downloadedCmajExecutablePath = getDownloadedCmajExecutablePath();
-
-async function sha256File(filePath) {
-    const hash = createHash("sha256");
-
-    for await (const chunk of createReadStream(filePath))
-        hash.update(chunk);
-
-    return hash.digest("hex");
-}
 
 function absoluteReleaseToolOverride(environment, name, fallback) {
     const value = environment[name];
@@ -193,7 +185,7 @@ export function validatePinnedCmajExecutable(candidate) {
 /**
  * Picks the Cmajor command for a production build, in order:
  *   1. the downloaded cmaj at kit/toolchain.json cmaj.localPath, when the
- *      manifest carries a non-empty cmaj.sha256 and the file matches it
+ *      verified archive receipt and installed payload match the manifest
  *      (a mismatch fails closed rather than silently falling through);
  *   2. the monorepo's pinned source build (tools/cmajor_command_build);
  *   3. otherwise a clear error naming `npm run kit:setup`.
@@ -204,20 +196,20 @@ export async function resolvePinnedCmajSource({
     downloadedExecutable = getDownloadedCmajExecutablePath(toolchain),
     sourceProjectDirectory = cmajCommandBuildSourceDirectory,
 } = {}) {
-    const expectedSha256 = typeof toolchain?.cmaj?.sha256 === "string" ? toolchain.cmaj.sha256.trim().toLowerCase() : "";
+    const expectedSha256 = normalizePin(toolchain?.cmaj?.sha256);
 
     if (downloadedExecutable !== null && expectedSha256 !== "" && await pathExists(downloadedExecutable)) {
-        const actualSha256 = await sha256File(downloadedExecutable);
+        const inspection = await inspectTool(toolchain, "cmaj", { localPath: downloadedExecutable });
 
-        if (actualSha256 !== expectedSha256) {
+        if (inspection.status !== "current") {
             throw new Error(
                 `${downloadedExecutable} does not match kit/toolchain.json `
-                + `(expected sha256 ${expectedSha256}, found ${actualSha256}). `
+                + "and its verified installed payload. "
                 + "Run npm run kit:setup to download the pinned Cmajor command again.",
             );
         }
 
-        return { kind: "downloaded", executable: downloadedExecutable, sha256: actualSha256 };
+        return { kind: "downloaded", executable: downloadedExecutable, sha256: inspection.pin };
     }
 
     if (await pathExists(path.join(sourceProjectDirectory, "CMakeLists.txt")))
@@ -276,6 +268,8 @@ export function createJuceGenerationConfigureArgs({
 async function preparePinnedCmajExecutable(toolPaths, cmakeJobs, preparedExecutable = null) {
     if (preparedExecutable !== null) {
         const executable = validatePinnedCmajExecutable(preparedExecutable);
+        if (executable === downloadedCmajExecutablePath)
+            await requireCurrentTool("cmaj");
 
         if (!await pathExists(executable))
             throw new Error(`Pinned Cmajor command not found: ${executable}`);

@@ -56,6 +56,23 @@ async function withFixtureRoot(run, { cmajSha256 = "", cmajPluginSha256 = "", ba
 
 const silentLog = () => {};
 
+// Produce real archive receipts for tests starting with an installed tool.
+async function installFixtureTool(root, key) {
+    const contractPath = path.join(root, "kit/toolchain.json");
+    const toolchain = readToolchain(contractPath);
+    const tool = toolchain[key];
+    const localPath = path.join(root, tool.localPath);
+    const archivePath = path.join(root, key === "cmaj" ? "fixture.tar.gz" : "fixture.zip");
+    const packed = key === "cmaj"
+        ? spawnSync("tar", ["-czf", archivePath, "-C", path.dirname(localPath), path.basename(localPath)], { encoding: "utf8" })
+        : spawnSync("zip", ["-r", "-q", archivePath, path.basename(localPath)], { cwd: path.dirname(localPath), encoding: "utf8" });
+    assert.equal(packed.status, 0, packed.stderr);
+    const bytes = await readFile(archivePath);
+    tool.sha256 = sha256(bytes);
+    await writeFile(contractPath, JSON.stringify(toolchain));
+    await installArtifact({ key, artifact: tool.artifact, bytes, pin: tool.sha256, localPath, platform: "linux" });
+}
+
 test("doctor_json_report_has_the_documented_shape_for_this_repo", () => {
     const run = spawnSync(process.execPath, [doctorCli, "--json", "--offline"], { encoding: "utf8", cwd: repoRoot });
 
@@ -220,7 +237,8 @@ test("setup diagnostics never disclose the feed capability", async () => {
         await mkdir(path.dirname(cmajPath), { recursive: true });
         await writeFile(cmajPath, cmajBytes);
         await mkdir(path.join(pluginPath, "Contents"), { recursive: true });
-        await writeFile(`${pluginPath}.receipt.json`, JSON.stringify({ artifactSha256: pluginPin }));
+        await installFixtureTool(root, "cmaj");
+        await installFixtureTool(root, "cmajPlugin");
 
         const plan = await planSetup({ root, force: true, acceptJuceTerms: true });
         assert.equal(formatSetupPlan(plan).includes(capability), false);
@@ -278,28 +296,45 @@ test("setup diagnostics never disclose the feed capability", async () => {
     });
 });
 
+test("download body-stream failures cannot disclose a feed capability", async () => {
+    const sentinel = "SYNTHETIC-BODY-STREAM-CAPABILITY";
+    const logs = [];
+    await assert.rejects(downloadVerifiedArtifact(`https://feed.example/${sentinel}/tool.zip`, "a".repeat(64), {
+        log: (line) => logs.push(line),
+        fetchImpl: async () => ({
+            ok: true,
+            arrayBuffer: async () => { throw new Error(`stream failed at ${sentinel}`); },
+        }),
+    }), (error) => {
+        assert.equal(error.message.includes(sentinel), false);
+        assert.match(error.message, /body.*failed/u);
+        return true;
+    });
+    assert.equal(logs.join("\n").includes(sentinel), false);
+});
+
 test("setup_skips_a_local_tool_that_already_matches_its_pin", async () => {
     const cmajBytes = Buffer.from("#!/bin/sh\necho fake cmaj\n");
     const pluginArtifactSha256 = "c".repeat(64);
 
     await withFixtureRoot(async (root) => {
-        const toolchain = readToolchain(path.join(root, "kit/toolchain.json"));
         const cmajPath = path.join(root, "build/kit-tools/cmaj");
         const pluginPath = path.join(root, "build/kit-tools/CmajPlugin.vst3");
 
-        // cmaj: the local file's own sha256 equals the pin.
+        // Both installed payloads come from archives pinned by the contract.
         await mkdir(path.dirname(cmajPath), { recursive: true });
         await writeFile(cmajPath, cmajBytes);
-        // CmajPlugin.vst3: a directory bundle, recognised through its install receipt.
         await mkdir(path.join(pluginPath, "Contents"), { recursive: true });
-        await writeFile(`${pluginPath}.receipt.json`, JSON.stringify({ key: "cmajPlugin", artifactSha256: pluginArtifactSha256 }));
+        await installFixtureTool(root, "cmaj");
+        await installFixtureTool(root, "cmajPlugin");
+        const toolchain = readToolchain(path.join(root, "kit/toolchain.json"));
 
         const cmaj = await inspectTool(toolchain, "cmaj", { root });
         assert.equal(cmaj.status, "current");
-        assert.equal(cmaj.matchedBy, "file-sha256");
+        assert.equal(cmaj.matchedBy, "archive-and-payload");
         const plugin = await inspectTool(toolchain, "cmajPlugin", { root });
         assert.equal(plugin.status, "current");
-        assert.equal(plugin.matchedBy, "receipt");
+        assert.equal(plugin.matchedBy, "archive-and-payload");
         assert.equal(plugin.kind, "directory");
 
         let fetched = false;
@@ -344,7 +379,7 @@ test("setup_verifies_the_download_hash_and_installs_from_the_archive", async () 
             // so only cmaj is downloaded; an unpinned tool would refuse the whole run.
             const pluginPath = path.join(root, "build/kit-tools/CmajPlugin.vst3");
             await mkdir(path.join(pluginPath, "Contents"), { recursive: true });
-            await writeFile(`${pluginPath}.receipt.json`, JSON.stringify({ key: "cmajPlugin", artifactSha256: pluginPin }));
+            await installFixtureTool(root, "cmajPlugin");
 
             const requested = [];
             const result = await runSetup({
@@ -371,7 +406,7 @@ test("setup_verifies_the_download_hash_and_installs_from_the_archive", async () 
             const toolchain = readToolchain(path.join(root, "kit/toolchain.json"));
             const inspection = await inspectTool(toolchain, "cmaj", { root });
             assert.equal(inspection.status, "current");
-            assert.equal(inspection.matchedBy, "receipt");
+            assert.equal(inspection.matchedBy, "archive-and-payload");
 
             // Second run: idempotent, no network.
             const again = await runSetup({ root, log: silentLog, fetchImpl: async () => { throw new Error("must not fetch"); } });
@@ -496,7 +531,8 @@ test("juce_acknowledgment_round_trips_and_gates_setup", async () => {
         // Both tools already current, so an accepting run has nothing to download.
         await mkdir(path.join(root, "build/kit-tools/CmajPlugin.vst3"), { recursive: true });
         await writeFile(path.join(root, "build/kit-tools/cmaj"), cmajBytes);
-        await writeFile(path.join(root, "build/kit-tools/CmajPlugin.vst3.receipt.json"), JSON.stringify({ artifactSha256: pluginArtifactSha256 }));
+        await installFixtureTool(root, "cmaj");
+        await installFixtureTool(root, "cmajPlugin");
 
         assert.equal(readJuceAcknowledgment(root), null);
 

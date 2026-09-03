@@ -4,6 +4,8 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 import {
     canonicalProofCommands,
@@ -17,6 +19,62 @@ import {
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const officialJuceLine = 'set(COSIMO_JUCE_GIT_URL "https://github.com/juce-framework/JUCE.git")';
+
+test("export payload and templates come only from the asserted commit, never ignored or live bytes", async () => {
+    const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "kit-export-provenance-"));
+    const sourceRoot = path.join(scratch, "source");
+    const output = path.join(scratch, "customer");
+    const sentinel = "SYNTHETIC-IGNORED-EXPORT-BYTES";
+    const files = {
+        ".gitignore": ".DS_Store\n",
+        "package.json": JSON.stringify({ devDependencies: { fixture: "1.0.0" } }),
+        "scripts/builder-kit-export-policy.json": JSON.stringify({
+            trees: ["kit"], files: [], requiredOutputs: ["package.json", "kit/fixture.txt"],
+            forbiddenStrings: [], templateExplicitDevDependencies: {}, templateDevDependencyNames: ["fixture"],
+        }),
+        "kit/fixture.txt": "committed payload\n",
+        "kit/feed.json": '{"baseUrl":""}',
+        "kit/cmake/dependency-sources.cmake": 'set(COSIMO_CMAJOR_GIT_URL "https://source.example/cmajor.git")\n',
+        "kit/skills/example/SKILL.md": "fixture skill\n",
+        "kit/template/root/package.json.template": '{"devDependencies":"__DEV_DEPENDENCIES__"}',
+        "kit/template/root/README.md": "committed template\n",
+    };
+    const git = (...args) => execFileSync("git", ["-C", sourceRoot, ...args], {
+        encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid", GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid" },
+    }).trim();
+    try {
+        for (const [relative, bytes] of Object.entries(files)) {
+            await fs.mkdir(path.dirname(path.join(sourceRoot, relative)), { recursive: true });
+            await fs.writeFile(path.join(sourceRoot, relative), bytes);
+        }
+        await fs.mkdir(path.join(sourceRoot, "kit/scripts"));
+        await fs.copyFile(path.join(repoRoot, "kit/scripts/export_kit.mjs"), path.join(sourceRoot, "kit/scripts/export_kit.mjs"));
+        git("init", "--quiet");
+        git("add", ".");
+        git("commit", "--quiet", "-m", "source fixture");
+        const sourceCommit = git("rev-parse", "HEAD");
+        await fs.writeFile(path.join(sourceRoot, "kit/fixture.txt"), "newer committed payload\n");
+        git("commit", "--quiet", "-am", "advance HEAD beyond asserted export source");
+        assert.notEqual(git("rev-parse", "HEAD"), sourceCommit);
+        await fs.writeFile(path.join(sourceRoot, "kit/.DS_Store"), sentinel);
+        assert.equal(git("status", "--porcelain=v1", "--untracked-files=all"), "", "ignored content is invisible to the release clean-tree check");
+        await fs.writeFile(path.join(sourceRoot, "kit/fixture.txt"), sentinel);
+        await fs.writeFile(path.join(sourceRoot, "kit/template/root/README.md"), sentinel);
+        await fs.writeFile(path.join(sourceRoot, "package.json"), JSON.stringify({ devDependencies: { fixture: "9.9.9" } }));
+        await fs.writeFile(path.join(sourceRoot, "scripts/builder-kit-export-policy.json"), "invalid live policy must not be read");
+        const exporter = await import(pathToFileURL(path.join(sourceRoot, "kit/scripts/export_kit.mjs")).href);
+        const result = await exporter.exportKit(output, { sourceCommit, feedUrl: "https://feed.example/SYNTHETIC-COHORT" });
+        assert.equal(existsSync(path.join(output, "kit/.DS_Store")), false);
+        assert.equal(await fs.readFile(path.join(output, "kit/fixture.txt"), "utf8"), "committed payload\n");
+        assert.equal(await fs.readFile(path.join(output, "README.md"), "utf8"), "committed template\n");
+        assert.equal(JSON.parse(await fs.readFile(path.join(output, "package.json"), "utf8")).devDependencies.fixture, "1.0.0");
+        assert.equal(result.sourceCommit, sourceCommit);
+        assert.equal(result.feedConfigured, true);
+    } finally {
+        await fs.rm(scratch, { recursive: true, force: true });
+    }
+});
 
 async function monorepoSkillNames() {
     const entries = await fs.readdir(path.join(repoRoot, "kit/skills"), { withFileTypes: true });

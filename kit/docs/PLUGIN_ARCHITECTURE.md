@@ -355,6 +355,10 @@ this is a maintainer path that needs GitHub SSH access). `npm run fx:jit:install
 The installer validates the patch and verifies the installed generic plugin is
 signed and carries the patched CHOC keyboard bridge. It never overwrites
 `CmajPlugin.vst3` and never touches AU loaders.
+Patch validation uses setup's archive-and-payload-verified `cmaj`; no global
+command is required or accepted. A maintainer can explicitly pass `--from-source`
+only when the repo contains `tools/cmajor_command_build` and its executable at
+`build/cmajor_command/bin/cmaj`.
 
 ## Shared UI Kit
 

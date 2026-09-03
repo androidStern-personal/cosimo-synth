@@ -14,7 +14,7 @@
     "cmajplugin:build": "./kit/scripts/build_cmajplugin_vst3.sh",
     "cmajplugin:install": "./kit/scripts/install_cmajplugin_vst3.sh",
     "typecheck": "tsc --noEmit",
-    "test": "node --test kit/tests/test_effect_state_contract.mjs kit/tests/test_effect_snapshots.mjs kit/tests/test_effect_snapshot_bank.mjs kit/tests/test_effect_preset_migrations.mjs kit/tests/test_effect_preset_v2_schema.mjs kit/tests/test_effect_factory_preset_contract.mjs kit/tests/test_effect_view_loader.mjs kit/tests/test_stored_state_runtime_mirror.mjs kit/tests/test_standalone_preset_import_graph.mjs kit/tests/test_kit_update_fetch.mjs tests/test_enhancer_lite_state.mjs",
+    "test": "node kit/scripts/test_unit.mjs",
     "test:browser": "node --test tests/test_enhancer_lite_view_browser.mjs"
   },
   "devDependencies": "__DEV_DEPENDENCIES__"

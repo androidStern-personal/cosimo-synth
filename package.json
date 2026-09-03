@@ -134,7 +134,7 @@
     "test:video-bounce:scripted-hardening": "npm run web:build && npm run speedrun:scripted:harness:build && node --test tests/test_video_bounce_scripted_hardening_browser.mjs",
     "test:speedrun:hardening": "npm run web:build && node --test tests/test_speedrun_hardening.mjs",
     "test:kit:export": "node --test tests/test_kit_export.mjs",
-    "test:kit:release-contracts": "node --test tests/test_kit_doctor_setup.mjs tests/test_release_builder_kit.mjs kit/tests/test_kit_update_fetch.mjs",
+    "test:kit:release-contracts": "node --test tests/test_kit_doctor_setup.mjs tests/test_kit_tool_integrity.mjs tests/test_kit_customer_tests.mjs tests/test_kit_publication_order.mjs tests/test_release_builder_kit.mjs kit/tests/test_kit_update_fetch.mjs",
     "kit:export": "node kit/scripts/export_kit.mjs",
     "fx:visual-review": "node scripts/capture_plugin_visual_review.mjs",
     "kit:doctor": "node kit/scripts/doctor.mjs",

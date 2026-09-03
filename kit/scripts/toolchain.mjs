@@ -8,8 +8,8 @@
 // kit:setup installs through it.
 
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { createReadStream, existsSync, readFileSync } from "node:fs";
+import { lstat, mkdir, readdir, readlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { redact } from "./redacted.mjs";
@@ -163,6 +163,30 @@ export function sha256Bytes(bytes) {
     return createHash("sha256").update(bytes).digest("hex");
 }
 
+/** Hash installed bytes, names, modes and link targets without following links. */
+export async function hashInstalledPayload(localPath) {
+    const hash = createHash("sha256").update("kit-payload-v1\n");
+    async function visit(absolutePath, relativePath) {
+        const stat = await lstat(absolutePath);
+        let record;
+        if (stat.isSymbolicLink())
+            record = [relativePath, "symlink", await readlink(absolutePath)];
+        else if (stat.isFile())
+            record = [relativePath, "file", stat.mode & 0o7777, await sha256File(absolutePath)];
+        else if (stat.isDirectory())
+            record = [relativePath, "directory", stat.mode & 0o7777];
+        else
+            throw new Error("Unsupported entry in installed tool payload.");
+        hash.update(`${JSON.stringify(record)}\n`);
+        if (stat.isDirectory()) {
+            for (const name of (await readdir(absolutePath)).sort())
+                await visit(path.join(absolutePath, name), relativePath ? `${relativePath}/${name}` : name);
+        }
+    }
+    await visit(localPath, "");
+    return hash.digest("hex");
+}
+
 export function receiptPath(localPath) {
     return `${localPath}.receipt.json`;
 }
@@ -179,7 +203,7 @@ function readReceipt(filePath) {
     }
 }
 
-/** Record which verified artifact produced a local tool, so a directory bundle can be checked without re-downloading. */
+/** Store setup's verified archive identity and installed-payload digest. */
 export async function writeReceipt(localPath, receipt) {
     await mkdir(path.dirname(localPath), { recursive: true });
     await writeFile(receiptPath(localPath), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
@@ -188,14 +212,13 @@ export async function writeReceipt(localPath, receipt) {
 /**
  * Inspect one pinned tool on disk. status:
  *   "missing"  - nothing at localPath
- *   "current"  - present and matches the pin (the file's own sha256, or the
- *                install receipt's artifact sha256, equals toolchain sha256)
- *   "stale"    - present but neither check matches the pin
+ *   "current"  - verified archive identity AND its installed payload match
+ *   "stale"    - missing/old receipt or changed archive identity/payload
  *   "unpinned" - present, but the toolchain carries no sha256 to check against
  */
-export async function inspectTool(toolchain, key, { root = repoRoot } = {}) {
+export async function inspectTool(toolchain, key, { root = repoRoot, localPath: installedPath } = {}) {
     const tool = toolchain[key];
-    const localPath = path.resolve(root, tool.localPath);
+    const localPath = installedPath ?? path.resolve(root, tool.localPath);
     const pin = normalizePin(tool.sha256);
     const result = {
         key,
@@ -205,7 +228,7 @@ export async function inspectTool(toolchain, key, { root = repoRoot } = {}) {
         pin,
         present: existsSync(localPath),
         kind: null,
-        fileSha256: null,
+        payloadSha256: null,
         receipt: readReceipt(receiptPath(localPath)),
         status: "missing",
         matchedBy: null,
@@ -214,36 +237,32 @@ export async function inspectTool(toolchain, key, { root = repoRoot } = {}) {
     if (!result.present)
         return result;
 
-    const stat = statSync(localPath);
+    const stat = await lstat(localPath);
     result.kind = stat.isDirectory() ? "directory" : "file";
-
-    if (result.kind === "file")
-        result.fileSha256 = await sha256File(localPath);
 
     if (pin === "") {
         result.status = "unpinned";
         return result;
     }
 
-    if (result.fileSha256 === pin) {
+    result.status = "stale";
+    const receipt = result.receipt;
+    if (receipt?.schemaVersion !== 2 || receipt.key !== key || receipt.artifact !== tool.artifact
+        || receipt.artifactSha256 !== pin || !/^[0-9a-f]{64}$/.test(receipt.payloadSha256 ?? "")
+        || (key === "cmaj" ? !stat.isFile() : !stat.isDirectory()))
+        return result;
+
+    try {
+        result.payloadSha256 = await hashInstalledPayload(localPath);
+    } catch {
+        return result;
+    }
+    if (result.payloadSha256 === receipt.payloadSha256) {
         result.status = "current";
-        result.matchedBy = "file-sha256";
-    } else if (normalizeReceiptHash(result.receipt) === pin) {
-        result.status = "current";
-        result.matchedBy = "receipt";
-    } else {
-        result.status = "stale";
+        result.matchedBy = "archive-and-payload";
     }
 
     return result;
-}
-
-function normalizeReceiptHash(receipt) {
-    try {
-        return normalizePin(receipt?.artifactSha256);
-    } catch {
-        return "";
-    }
 }
 
 // ---------------------------------------------------------------------------

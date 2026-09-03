@@ -13,8 +13,8 @@
 //      at the pinned commits, `git update-server-info` them for dumb-HTTP
 //      serving, and verify the Cmajor mirror's .gitmodules points at CHOC
 //      with a relative URL (so customers never leave the feed);
-//   5. copy mirrors + versioned tools + manifest.json to the object prefix,
-//      then verify the copy without deleting older release objects.
+//   5. upload and verify immutable objects/tools, then cumulative pack discovery,
+//      then refs, then manifest.json. Never delete older release objects.
 //
 // Usage:
 //   node scripts/release_builder_kit.mjs --version <semver> --source-sha <40-hex>
@@ -662,15 +662,76 @@ async function stampFeed(exportRoot, feedUrlInput, log) {
     }
 }
 
-export function publishReleaseObjects(feedRoot, destination, { run = runCommand } = {}) {
+function parsePackList(text) {
+    const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+    if (lines.some((line) => !/^P pack-[0-9a-f]{40}\.pack$/u.test(line)))
+        throw new Error("Invalid Git pack discovery metadata; publication refused.");
+    return lines;
+}
+
+/** Serialized per feed: immutable payloads first; discovery, refs, manifest last. */
+export async function publishReleaseObjects(feedRoot, destination, { run = runCommand } = {}) {
     const alias = "builderkitrelease:";
     const env = {
         ...process.env,
         RCLONE_CONFIG_BUILDERKITRELEASE_TYPE: "alias",
         RCLONE_CONFIG_BUILDERKITRELEASE_REMOTE: reveal(destination.r2Target),
     };
-    run("rclone", ["copy", "--transfers", "8", feedRoot, alias], { env, label: "object copy" });
-    run("rclone", ["check", "--one-way", feedRoot, alias], { env, label: "object verification" });
+    const staging = await fs.mkdtemp(path.join(os.tmpdir(), "kit-publication-"));
+    const phases = { objects: "immutable objects", packs: "pack discovery", refs: "Git refs", manifest: "manifest" };
+    const packLists = [];
+    try {
+        for (const phase of Object.keys(phases)) await fs.mkdir(path.join(staging, phase));
+        async function stage(directory = "") {
+            for (const entry of await fs.readdir(path.join(feedRoot, directory), { withFileTypes: true })) {
+                const relative = path.posix.join(directory, entry.name);
+                if (entry.isDirectory()) { await stage(relative); continue; }
+                let phase;
+                if (/^(?:kit|cmajor|choc)\.git\/objects\/(?:[0-9a-f]{2}\/[0-9a-f]{38}|pack\/pack-[0-9a-f]{40}\.(?:pack|idx|rev|bitmap))$/u.test(relative)
+                    || /^tools\/v[^/]+\/[^/]+$/u.test(relative)) phase = "objects";
+                else if (/^(?:kit|cmajor|choc)\.git\/objects\/info\/packs$/u.test(relative)) {
+                    phase = "packs";
+                    packLists.push(relative);
+                } else if (/^(?:kit|cmajor|choc)\.git\/(?:HEAD|packed-refs|info\/refs|refs\/.+)$/u.test(relative)) phase = "refs";
+                else if (relative === "manifest.json") phase = "manifest";
+                else continue; // Bare-repo config, hooks and logs are not HTTP client objects.
+                if (!entry.isFile()) throw new Error("Publication payload must contain regular files.");
+                const target = path.join(staging, phase, relative);
+                await fs.mkdir(path.dirname(target), { recursive: true });
+                await fs.copyFile(path.join(feedRoot, relative), target);
+            }
+        }
+        await stage();
+        if (!existsSync(path.join(staging, "manifest/manifest.json")) || !packLists.includes("kit.git/objects/info/packs"))
+            throw new Error("Publication needs a release manifest and kit Git mirror.");
+
+        const previousLists = new Set((await run("rclone", ["lsf", alias, "--recursive", "--files-only", "--include", "*.git/objects/info/packs"], { env, label: "pack discovery listing" })).split("\n").filter(Boolean));
+        for (const relative of packLists) {
+            const next = parsePackList(await fs.readFile(path.join(staging, "packs", relative), "utf8"));
+            for (const line of next) {
+                for (const extension of ["pack", "idx"]) {
+                    const pack = line.slice(2).replace(/\.pack$/u, `.${extension}`);
+                    if (!existsSync(path.join(staging, "objects", path.dirname(path.dirname(relative)), "pack", pack)))
+                        throw new Error("Git pack discovery names a missing payload; publication refused.");
+                }
+            }
+            const previous = previousLists.has(relative)
+                ? parsePackList(await run("rclone", ["cat", `${alias}${relative}`], { env, label: "previous pack discovery read" }))
+                : [];
+            // Old pins may be unreachable from today's fork refs. Keep their
+            // pack discovery as well as the bytes, including across repacking.
+            const combined = [...new Set([...previous, ...next])].sort();
+            await fs.writeFile(path.join(staging, "packs", relative), `${combined.join("\n")}\n\n`);
+        }
+        for (const [phase, label] of Object.entries(phases)) {
+            const source = path.join(staging, phase);
+            const copyFlags = phase === "objects" ? ["--immutable", "--checksum"] : ["--ignore-times"];
+            await run("rclone", ["copy", ...copyFlags, "--transfers", "8", source, alias], { env, label: `${label} copy` });
+            await run("rclone", ["check", "--download", "--one-way", source, alias], { env, label: `${label} verification` });
+        }
+    } finally {
+        await fs.rm(staging, { recursive: true, force: true });
+    }
 }
 
 export async function runRelease(options, {
@@ -715,7 +776,7 @@ export async function runRelease(options, {
     log(`Staging in ${stagingRoot}`);
 
     // 1. Export + gates, then prove a separate copy (the proof dirties its tree).
-    const exported = await exportKit(exportRoot, { force: true, feedUrl: reveal(feedUrl) });
+    const exported = await exportKit(exportRoot, { force: true, feedUrl: reveal(feedUrl), sourceCommit: sourceSha });
     await stampFeed(exportRoot, feedUrl, log);
     if (exported.sourceCommit !== sourceSha) {
         throw new Error(`Export source commit ${exported.sourceCommit} does not match --source-sha ${sourceSha}.`);
@@ -725,7 +786,7 @@ export async function runRelease(options, {
         throw new Error(`Requested release version ${version} does not match exported kit/kit.json version ${kitManifest.version}.`);
     }
     log(`Exported ${exported.fileCount} files from ${exported.sourceCommit.slice(0, 9)}`);
-    await exportKit(proofRoot, { force: true, feedUrl: reveal(feedUrl) });
+    await exportKit(proofRoot, { force: true, feedUrl: reveal(feedUrl), sourceCommit: sourceSha });
     await stampFeed(proofRoot, feedUrl, () => {});
     await proveExport(proofRoot);
     log("Export proof passed (canonical typecheck/test, enhancer-lite build, update-flow merge).");

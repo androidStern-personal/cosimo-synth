@@ -8,6 +8,11 @@ Lite plugin, its tests, the shared analyzer it needs
 AGENTS.md, tsconfig, .gitignore). Every directory under `kit/skills/` gets a
 relative `.agents/skills/<name>` symlink at the root for agent skill discovery.
 
+All payload, template, dependency-version, and export-policy inputs come from
+one Git commit (HEAD by default; the release command passes its asserted source
+SHA). Ignored, untracked, and modified working-tree bytes are not export inputs.
+Feed stamping and root templating remain explicit derived output.
+
 The maintainer-only export policy outside `kit/` is the single wall between customer content and
 everything else in this monorepo. The export fails closed when: an allowlisted
 path is missing, any output file falls outside the allowlist, a required output
@@ -19,6 +24,9 @@ keeps the gates honest.
 and `npm test`, builds Enhancer Lite, and simulates the customer update flow (starter commit →
 local plugin edit → kit-update merge; both must survive). On a customer
 machine `npm install` replaces the proof's node_modules symlink shortcut.
+Customer `npm test` discovers `test_*.mjs` under `kit/tests/` and `tests/`
+recursively, excluding `_browser` tests; scaffolded plugin tests participate
+without editing a shared list.
 
 ## Feed stamping
 
@@ -41,8 +49,13 @@ byte-identical to the monorepo's seam (GitHub origins). The export manifest
 records only whether a feed was configured, never its capability-bearing URL.
 
 `kit/fx/prod-effect.mjs` picks the Cmajor command the same way on both sides:
-`build/kit-tools/cmaj` when it matches the hash in `kit/toolchain.json`
-(`npm run kit:setup` downloads it), else the monorepo's pinned source build
+`build/kit-tools/cmaj` when its archive receipt matches `kit/toolchain.json`
+and its installed payload still matches that receipt (`npm run kit:setup`
+verifies the archive and records the payload digest). Archive hashes are not
+executable hashes. The shared verifier includes file bytes, names, permissions,
+and symlink targets for both tools. Altered payloads and old hash-only receipts
+require setup again, never a silent source fallback. Without a pinned download,
+the monorepo may use its pinned source build
 (`tools/cmajor_command_build`, absent from exports), else a clear error naming
 `npm run kit:setup`.
 
@@ -81,7 +94,8 @@ Steps, in order; every step fails closed:
 
 1. **Source + export gates.** The command verifies HEAD is the exact
    `--source-sha` and that tracked and untracked state is clean, then
-   `exportKit(staging/export, { feedUrl })` stamps the feed
+   `exportKit(staging/export, { feedUrl, sourceCommit: sourceSha })` exports
+   committed inputs only and stamps the feed
    URL into `kit/feed.json` and renders `kit/cmake/dependency-sources.cmake`,
    then the allowlist, stray-file, and forbidden-string gates run. A second
    export in `staging/proof` runs `proveExport` (canonical typecheck/test,
@@ -121,9 +135,15 @@ Steps, in order; every step fails closed:
    `staging/feed/tools/v<version>/` and
    `staging/feed/manifest.json` records version, tag, monorepo source commit,
    lineage commit, cmajor/choc commits, and tool hashes (no fork URLs). Then
-   rclone copies the staged tree and verifies it with `check --one-way`.
-   Publishing never deletes old release objects, so older tagged checkouts
-   retain their pinned tools.
+   publication proceeds in separately verified phases: immutable Git objects
+   and versioned tools (`copy --immutable --checksum`), cumulative pack
+   discovery, Git refs, then the manifest last. Each phase is checked with
+   `check --download --one-way` before the next begins. Bare-repo config,
+   hooks, and logs are not published. Existing pack-list entries are retained
+   alongside new packs, so old source pins remain discoverable even when no
+   current fork ref reaches them. Publishing never deletes old release objects
+   or overwrites versioned tool bytes. Serialize publishers per feed; retention
+   cleanup is a separate operation.
 
 Resulting feed layout under the cohort prefix:
 
@@ -148,3 +168,5 @@ have done. The staging dir is kept in every mode (default: a fresh
 source/version checks, relative submodule URL resolution, toolchain and
 manifest rendering, atomic/ref-idempotent publication, interruption retries,
 mirror creation, and a full Linux dry run against local fork repos.
+`tests/test_kit_publication_order.mjs` injects failures into every publication
+phase and verifies old/new tags and old source pins with cold dumb-HTTP clients.

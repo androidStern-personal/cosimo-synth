@@ -166,6 +166,9 @@ test("canonical kit CI runs doctor, setup, updater, and release contracts", asyn
     assert.match(contracts, /test_kit_doctor_setup\.mjs/u);
     assert.match(contracts, /test_release_builder_kit\.mjs/u);
     assert.match(contracts, /test_kit_update_fetch\.mjs/u);
+    assert.match(contracts, /test_kit_tool_integrity\.mjs/u);
+    assert.match(contracts, /test_kit_customer_tests\.mjs/u);
+    assert.match(contracts, /test_kit_publication_order\.mjs/u);
     const workflow = await fs.readFile(path.join(repoRoot, ".github/workflows/kit.yml"), "utf8");
     assert.match(workflow, /run: npm run test:kit:release-contracts/u);
 });
@@ -191,12 +194,23 @@ test("release capability stays out of argv, JSON, logs, and subprocess failures"
     }
 
     const calls = [];
-    publishReleaseObjects("/tmp/feed", destination, {
-        run: (command, args, options) => calls.push({ command, args, env: options.env }),
-    });
+    const publishFixture = await makeScratch("kit-redacted-publish-");
+    try {
+        const source = path.join(publishFixture, "source");
+        const feed = path.join(publishFixture, "feed");
+        await initRepo(source, { "fixture.txt": "fixture" });
+        await fs.mkdir(feed);
+        createBareMirror(source, path.join(feed, "kit.git"));
+        await fs.writeFile(path.join(feed, "manifest.json"), "{}");
+        await publishReleaseObjects(feed, destination, {
+            run: (command, args, options) => { calls.push({ command, args, env: options.env }); return ""; },
+        });
+    } finally {
+        await fs.rm(publishFixture, { recursive: true, force: true });
+    }
     assert.equal(JSON.stringify(calls.map(({ command, args }) => ({ command, args }))).includes(sentinel), false);
     assert.equal(calls.every((call) => call.env.RCLONE_CONFIG_BUILDERKITRELEASE_REMOTE.includes(sentinel)), true);
-    assert.deepEqual(calls.map((call) => call.args[0]), ["copy", "check"]);
+    assert.deepEqual(calls.map((call) => call.args[0]), ["lsf", "copy", "check", "copy", "check", "copy", "check", "copy", "check"]);
     assert.equal(calls.some((call) => call.args.includes("sync")), false);
 
     let failure;

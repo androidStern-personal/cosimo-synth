@@ -23,10 +23,12 @@ import { fileURLToPath } from "node:url";
 import {
     artifactUrl,
     feedPath,
+    hashInstalledPayload,
     inspectTool,
     juceAcknowledgmentPath,
     juceNoticeLines,
     kitToolsDir,
+    normalizePin,
     readFeedBaseUrl,
     readJuceAcknowledgment,
     readToolchain,
@@ -145,7 +147,11 @@ async function fetchBytes(request, artifact, fetchImpl) {
     if (!response.ok)
         throw new Error(`Download failed for ${artifact}: feed responded HTTP ${response.status}.`);
 
-    return Buffer.from(await response.arrayBuffer());
+    try {
+        return Buffer.from(await response.arrayBuffer());
+    } catch {
+        throw new Error(`Download failed for ${artifact}: response body read failed.`);
+    }
 }
 
 /** Download one archive and verify it against the pin before anything is written next to the tools. */
@@ -198,6 +204,9 @@ function extractArchive(archivePath, stagingDir, platform = process.platform) {
  * the receipt that lets kit:doctor and the next kit:setup recognise it.
  */
 export async function installArtifact({ key, artifact, bytes, pin, localPath, platform = process.platform, now = new Date() }) {
+    const archiveSha256 = normalizePin(pin);
+    if (archiveSha256 === "" || sha256Bytes(bytes) !== archiveSha256)
+        throw new Error(`sha256 mismatch for ${artifact}; nothing was installed.`);
     const toolsDir = path.dirname(localPath);
     const stagingDir = path.join(toolsDir, `.staging-${key}`);
     const archivePath = path.join(toolsDir, `.download-${path.posix.basename(artifact)}`);
@@ -229,9 +238,11 @@ export async function installArtifact({ key, artifact, bytes, pin, localPath, pl
             await chmod(localPath, 0o755);
 
         await writeReceipt(localPath, {
+            schemaVersion: 2,
             key,
             artifact,
-            artifactSha256: pin,
+            artifactSha256: archiveSha256,
+            payloadSha256: await hashInstalledPayload(localPath),
             installedAt: now.toISOString(),
         });
     } finally {

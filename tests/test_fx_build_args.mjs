@@ -1516,6 +1516,7 @@ test("effect production uses the repository-built pinned Cmajor generator withou
 test("effect production resolves cmaj: hash-pinned download, then monorepo source build, then kit:setup guidance", async () => {
     const { prodModule } = await loadBuildModules();
     const { createHash } = await import("node:crypto");
+    const { installArtifact } = await import("../kit/scripts/setup.mjs");
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-prod-cmaj-source-"));
 
     try {
@@ -1523,15 +1524,21 @@ test("effect production resolves cmaj: hash-pinned download, then monorepo sourc
         const sourceProjectDirectory = path.join(tempRoot, "cmajor_command_build");
         const emptyProjectDirectory = path.join(tempRoot, "no-such-project");
         const binary = "#!/bin/sh\necho fake cmaj\n";
-        const sha256 = createHash("sha256").update(binary).digest("hex");
-        const toolchainFor = (hash) => ({ cmaj: { sha256: hash, localPath: "build/kit-tools/cmaj" } });
+        const artifact = "tools/cmaj-test.tar.gz";
+        const toolchainFor = (hash) => ({ cmaj: { artifact, sha256: hash, localPath: "build/kit-tools/cmaj" } });
 
         await mkdir(path.dirname(downloadedExecutable), { recursive: true });
         await writeFile(downloadedExecutable, binary);
+        const archivePath = path.join(tempRoot, "cmaj.tar.gz");
+        const packed = spawnSync("tar", ["-czf", archivePath, "-C", path.dirname(downloadedExecutable), "cmaj"], { encoding: "utf8" });
+        assert.equal(packed.status, 0, packed.stderr);
+        const bytes = await readFile(archivePath);
+        const sha256 = createHash("sha256").update(bytes).digest("hex");
+        await installArtifact({ key: "cmaj", artifact, bytes, pin: sha256, localPath: downloadedExecutable, platform: "linux" });
         await mkdir(sourceProjectDirectory, { recursive: true });
         await writeFile(path.join(sourceProjectDirectory, "CMakeLists.txt"), "project(Fake)\n");
 
-        // (a) the download wins when its hash matches kit/toolchain.json.
+        // (a) the verified archive and unchanged installed payload win.
         assert.deepEqual(await prodModule.resolvePinnedCmajSource({
             toolchain: toolchainFor(sha256),
             downloadedExecutable,

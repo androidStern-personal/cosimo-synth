@@ -14,7 +14,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 usage() {
-  printf 'Usage: npm run fx:jit:install -- <plugin> [--dry-run]\n\nAvailable plugins:\n'
+  printf 'Usage: npm run fx:jit:install -- <plugin> [--dry-run] [--from-source]\n\nAvailable plugins:\n'
   node "$registry" --targets | while IFS= read -r target_name; do
     printf '  %s\n' "$target_name"
   done
@@ -56,10 +56,14 @@ fi
 shift
 
 dry_run=false
+from_source=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run)
       dry_run=true
+      ;;
+    --from-source)
+      from_source=true
       ;;
     --help|-h)
       usage
@@ -90,9 +94,16 @@ runtime_patch_rel="$(jit_plan_field runtimePatch)"
 requires_runtime_build="$(jit_plan_field jitInstallRuntime)"
 patch_path="$repo_root/$patch_rel"
 
-if ! command -v cmaj >/dev/null 2>&1; then
-  printf 'cmaj was not found on PATH.\n' >&2
-  exit 1
+if [[ "$from_source" == true ]]; then
+  # Maintainers may explicitly use this repo's pinned Cmajor source build.
+  # Never select an arbitrary global executable or silently fall back to it.
+  cmaj_executable="$repo_root/build/cmajor_command/bin/cmaj"
+  if [[ ! -f "$repo_root/tools/cmajor_command_build/CMakeLists.txt" || ! -x "$cmaj_executable" ]]; then
+    printf 'The explicit pinned source command is unavailable. Build this repo\x27s tools/cmajor_command_build project first.\n' >&2
+    exit 1
+  fi
+else
+  cmaj_executable="$(node "$repo_root/kit/scripts/require_tool.mjs" cmaj "$repo_root")" || exit 1
 fi
 
 if [[ ! -f "$patch_path" ]]; then
@@ -138,7 +149,7 @@ if [[ "$requires_runtime_build" == "true" ]]; then
   fi
 fi
 
-cmaj play --dry-run --stop-on-error "$patch_path" >/dev/null
+"$cmaj_executable" play --dry-run --stop-on-error "$patch_path" >/dev/null
 
 if [[ "$dry_run" == true ]]; then
   printf 'Validated patch: %s\n' "$patch_path"
