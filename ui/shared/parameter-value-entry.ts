@@ -425,4 +425,3 @@ export function parameterEntrySpecForMobileVoiceControl(
     }
     throw new Error(`Mobile Voice control "${controlID}" has no exact-entry format.`);
 }
-
