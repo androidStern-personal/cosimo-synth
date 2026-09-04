@@ -31,10 +31,33 @@ import {
     EffectSnapshotBankController,
     createEffectHeader,
     createStandaloneEffectPresetController,
+    type EffectParameterContract,
     type PatchConnectionLike,
     type StandaloneEffectPresetController,
 } from "../../../kit/index";
 import { ENHANCER_LITE_FACTORY_PRESETS } from "./factory-presets.js";
+
+/** Silent browser preview uses the same parameter definitions as this view. */
+export const browserPreviewParameters = ENHANCER_LITE_SETTING_DESCRIPTORS.map((descriptor) => (
+    descriptor.kind === "number"
+        ? {
+            endpointID: descriptor.dspEndpointID,
+            type: "number" as const,
+            min: descriptor.min,
+            max: descriptor.max,
+            defaultValue: descriptor.initial,
+        }
+        : {
+            endpointID: descriptor.dspEndpointID,
+            type: "integer" as const,
+            min: 0,
+            max: descriptor.choices.length - 1,
+            defaultValue: descriptor.choices.findIndex((choice) => choice === descriptor.initial),
+            discrete: true,
+            step: 1,
+            text: descriptor.choices.join("|"),
+        }
+)) satisfies EffectParameterContract[];
 
 type ParameterListener = ((value: unknown) => void) & { endpointID?: string };
 type EndpointListener = (message: unknown) => void;

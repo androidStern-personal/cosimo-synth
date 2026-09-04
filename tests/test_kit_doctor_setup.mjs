@@ -536,11 +536,20 @@ test("juce_acknowledgment_round_trips_and_gates_setup", async () => {
 
         assert.equal(readJuceAcknowledgment(root), null);
 
-        await assert.rejects(runSetup({ root, log: silentLog }), /--accept-juce-terms/u);
+        const instructions = [
+            "Read the JUCE licensing notice above. If you agree, run this command from your Builder Kit project folder:",
+            "npm run kit:setup -- --accept-juce-terms",
+        ].join("\n");
+        const planBeforeConsent = await planSetup({ root });
+        assert.equal(formatSetupPlan(planBeforeConsent).split("\n").slice(0, 2).join("\n"), instructions);
+        await assert.rejects(runSetup({ root, log: silentLog }), { message: instructions });
         assert.equal(readJuceAcknowledgment(root), null);
 
-        const dry = await runSetup({ root, dryRun: true, log: silentLog });
+        const preview = [];
+        const dry = await runSetup({ root, dryRun: true, log: (line) => preview.push(line) });
         assert.equal(dry.dryRun, true);
+        assert.ok(preview.join("\n").includes(`\n${instructions}\n`), "preview includes the complete standalone copy-paste command");
+        assert.ok(preview.join("\n").indexOf("JUCE licensing notice") < preview.join("\n").indexOf(instructions));
         assert.equal(readJuceAcknowledgment(root), null, "dry runs never record acknowledgment");
 
         const now = new Date("2026-09-01T12:00:00.000Z");

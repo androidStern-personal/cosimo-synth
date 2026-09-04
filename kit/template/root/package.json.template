@@ -15,7 +15,7 @@
     "cmajplugin:install": "./kit/scripts/install_cmajplugin_vst3.sh",
     "typecheck": "tsc --noEmit",
     "test": "node kit/scripts/test_unit.mjs",
-    "test:browser": "node --test tests/test_enhancer_lite_view_browser.mjs"
+    "test:browser": "node --test kit/tests/test_effect_browser_preview_browser.mjs tests/test_enhancer_lite_view_browser.mjs"
   },
   "devDependencies": "__DEV_DEPENDENCIES__"
 }

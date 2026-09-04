@@ -183,7 +183,7 @@ test("export_produces_a_gated_starter_tree_with_no_private_material", async () =
         assert.equal(fileCount > 50, true);
         assert.equal(feedConfigured, false);
 
-        for (const required of ["kit/AGENTS.md", "kit/fx/build-effect.mjs", "fx/enhancer_lite/EnhancerLite.cmajorpatch", "package.json", "EXPORT_MANIFEST.json"]) {
+        for (const required of ["kit/AGENTS.md", "kit/fx/build-effect.mjs", "fx/enhancer_lite/EnhancerLite.cmajorpatch", "package.json", "README.md", "EXPORT_MANIFEST.json"]) {
             assert.equal(existsSync(path.join(outputRoot, required)), true, `missing ${required}`);
         }
         for (const forbidden of ["TODOS.txt", "PROGRESS.txt", "reference_labs", "experiments", "cmajor/WavetableSynth.cmajor", "ui/desktop", "fx/seqfx", "AGENTS.md.orig", "kit/export-allowlist.json", "scripts/builder-kit-export-policy.json"]) {
@@ -206,6 +206,14 @@ test("export_produces_a_gated_starter_tree_with_no_private_material", async () =
             assert.equal(existsSync(path.join(outputRoot, ".agents/skills", skillName, "SKILL.md")), true, `${skillName} link is dangling`);
         }
         JSON.parse(await fs.readFile(path.join(outputRoot, "package.json"), "utf8"));
+        const firstUse = await fs.readFile(path.join(outputRoot, "README.md"), "utf8");
+        assert.match(firstUse, /^> Build and install the included plugin so I can try it in my DAW\.$/mu);
+        assert.match(firstUse, /If you already have another request, start with that instead\./u);
+        assert.match(firstUse, /npm run fx:prod:build -- enhancer-lite\nnpm run fx:prod:install -- enhancer-lite/u);
+        assert.match(firstUse, /Do not copy or rename it, create a new plugin or test,/u);
+        assert.match(firstUse, /Build\/install success is not a listening or DAW-acceptance result\./u);
+        assert.match(firstUse, /actual plugin name to find in the\nDAW and the exact installed location/u);
+        assert.match(firstUse, /http:\/\/127\.0\.0\.1:5175\/fx\/enhancer_lite\/view\/harness\.html/u);
 
         // No feed: the dependency seam and feed.json are byte-identical to the monorepo's.
         for (const relative of ["kit/cmake/dependency-sources.cmake", "kit/feed.json"]) {

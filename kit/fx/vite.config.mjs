@@ -11,6 +11,7 @@ import { discoverEffectPlugins } from "./build-effect.mjs";
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(configDir, "../..");
 const fxRoot = path.join(repoRoot, "fx");
+const sharedHarnessPath = path.join(configDir, "browser-preview.html");
 const devServerStartedAt = new Date().toISOString();
 const pluginDiscoveryTtlMs = 2000;
 
@@ -85,13 +86,34 @@ function serveEffectHarnessHtml() {
                     return;
                 }
 
-                if (!fs.existsSync(harnessPath)) {
-                    next();
-                    return;
-                }
-
                 try {
-                    const source = fs.readFileSync(harnessPath, "utf8");
+                    let source;
+                    if (fs.existsSync(harnessPath)) {
+                        if (!fs.realpathSync(harnessPath).startsWith(fs.realpathSync(fxRoot) + path.sep)) {
+                            response.statusCode = 403;
+                            response.end("Forbidden");
+                            return;
+                        }
+                        source = fs.readFileSync(harnessPath, "utf8");
+                    } else {
+                        const pluginDirectory = path.dirname(path.dirname(harnessPath));
+                        const plugins = describeEffectPlugins().filter((plugin) => (
+                            path.dirname(path.resolve(repoRoot, plugin.patch.slice(1))) === pluginDirectory
+                        ));
+                        if (plugins.length === 0) {
+                            next();
+                            return;
+                        }
+                        if (plugins.length !== 1) {
+                            response.statusCode = 409;
+                            response.end("This folder has multiple patches. Provide a custom view/harness.html to choose one.");
+                            return;
+                        }
+                        source = fs.readFileSync(sharedHarnessPath, "utf8").replace(
+                            "__FX_PREVIEW_PATCH__",
+                            () => JSON.stringify(plugins[0].patch).replaceAll("<", "\\u003c"),
+                        );
+                    }
                     const html = await server.transformIndexHtml(request.url ?? requestPath, source);
 
                     response.statusCode = 200;
