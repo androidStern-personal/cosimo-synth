@@ -529,6 +529,10 @@ test("the exact CHOC router reaches the native forward/discard seam from package
                 delete element.__stopSpace;
             });
             assertDiscardedPair(messages, " ", "event-did-not-reach-window-bubble");
+            await page.waitForTimeout(20);
+            assert.equal(keyboardMessages(await page.evaluate(() => (
+                structuredClone(window.__CHOC_HOST_KEYBOARD_MESSAGES__)
+            ))).length, 2);
         });
 
         const clockMode = page.locator('[data-role="seqfx-clock-mode"]');
@@ -566,6 +570,100 @@ test("the exact CHOC router reaches the native forward/discard seam from package
                     { action: "discardBufferedEvent", eventType: "keyup", reason: "plugin-modifier-shortcut" },
                 ],
             );
+        });
+
+        await t.test("a stopped musical-typing keyup still releases a forwarded key after focus moves to text", async () => {
+            await range.focus();
+            await clearRouterMessages(page);
+            await page.keyboard.down("a");
+            const keydownMessages = keyboardMessages(await readRouterMessages(page, 1));
+            assert.deepEqual(
+                keydownMessages.map(({ action, eventType, key, reason }) => ({ action, eventType, key, reason })),
+                [{
+                    action: "forwardBufferedEventToHost",
+                    eventType: "keydown",
+                    key: "a",
+                    reason: "ableton-musical-typing-key",
+                }],
+            );
+
+            const saveAs = page.locator('cosimo-effect-header [data-action="save-as"]');
+            await saveAs.click();
+            const input = page.locator('cosimo-effect-header [data-el="dialog-input"]');
+            await input.waitFor();
+            await input.focus();
+            await input.evaluate((element) => {
+                element.addEventListener("keyup", (event) => {
+                    if (event.key === "a") event.stopPropagation();
+                }, { once: true });
+            });
+            await clearRouterMessages(page);
+            await page.keyboard.up("a");
+            try {
+                const keyupMessages = keyboardMessages(await readRouterMessages(page, 1));
+                assert.deepEqual(
+                    keyupMessages.map(({ action, eventType, key, reason }) => ({ action, eventType, key, reason })),
+                    [{
+                        action: "forwardBufferedEventToHost",
+                        eventType: "keyup",
+                        key: "a",
+                        reason: "matching-forwarded-keyup",
+                    }],
+                );
+                await page.waitForTimeout(20);
+                assert.equal(keyboardMessages(await page.evaluate(() => (
+                    structuredClone(window.__CHOC_HOST_KEYBOARD_MESSAGES__)
+                ))).length, 1);
+            } finally {
+                await page.locator('cosimo-effect-header [data-action="dialog-cancel"]').click();
+            }
+        });
+
+        await t.test("a stopped numeric Space keyup still releases its forwarded key after focus moves to text", async () => {
+            await loopStart.focus();
+            await clearRouterMessages(page);
+            await page.keyboard.down("Space");
+            const keydownMessages = keyboardMessages(await readRouterMessages(page, 1));
+            assert.deepEqual(
+                keydownMessages.map(({ action, eventType, key, reason }) => ({ action, eventType, key, reason })),
+                [{
+                    action: "forwardBufferedEventToHost",
+                    eventType: "keydown",
+                    key: " ",
+                    reason: "spacebar-transport",
+                }],
+            );
+
+            const saveAs = page.locator('cosimo-effect-header [data-action="save-as"]');
+            await saveAs.click();
+            const input = page.locator('cosimo-effect-header [data-el="dialog-input"]');
+            await input.waitFor();
+            await input.focus();
+            await input.evaluate((element) => {
+                element.addEventListener("keyup", (event) => {
+                    if (event.key === " ") event.stopPropagation();
+                }, { once: true });
+            });
+            await clearRouterMessages(page);
+            await page.keyboard.up("Space");
+            try {
+                const keyupMessages = keyboardMessages(await readRouterMessages(page, 1));
+                assert.deepEqual(
+                    keyupMessages.map(({ action, eventType, key, reason }) => ({ action, eventType, key, reason })),
+                    [{
+                        action: "forwardBufferedEventToHost",
+                        eventType: "keyup",
+                        key: " ",
+                        reason: "matching-forwarded-keyup",
+                    }],
+                );
+                await page.waitForTimeout(20);
+                assert.equal(keyboardMessages(await page.evaluate(() => (
+                    structuredClone(window.__CHOC_HOST_KEYBOARD_MESSAGES__)
+                ))).length, 1);
+            } finally {
+                await page.locator('cosimo-effect-header [data-action="dialog-cancel"]').click();
+            }
         });
 
         const saveAs = page.locator('cosimo-effect-header [data-action="save-as"]');
