@@ -85,6 +85,12 @@ if(NOT TARGET "${COSIMO_EFFECT_PLUGIN_TARGET}")
     message(FATAL_ERROR "Generated JUCE target not found: ${COSIMO_EFFECT_PLUGIN_TARGET}")
 endif()
 
+if(APPLE)
+    include("${CMAKE_CURRENT_LIST_DIR}/add_vst3_identity_probe.cmake")
+    kit_add_vst3_identity_probe("${COSIMO_JUCE_SOURCE_DIR}")
+    add_dependencies("${COSIMO_EFFECT_PLUGIN_TARGET}_VST3" kit_vst3_identity_probe)
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/read_generated_plugin_info_class.cmake")
 cosimo_read_generated_plugin_info_class(
     _cosimo_generated_plugin_info_class

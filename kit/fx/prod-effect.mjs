@@ -1,4 +1,4 @@
-import { access, cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -16,6 +16,7 @@ import {
 import { assertPatchedChocWebViewBinary } from "../scripts/check_choc_markers.mjs";
 import { inspectTool, normalizePin } from "../scripts/toolchain.mjs";
 import { requireCurrentTool } from "../scripts/require_tool.mjs";
+import { formatVST3InstallFailure, installVST3Bundle } from "../scripts/install_vst3.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const toolchainManifestPath = path.join(repoRoot, "kit", "toolchain.json");
@@ -543,33 +544,20 @@ function verifyPatchedWebView(binaryPath) {
 
 async function installVST3(pluginName, plugin, options) {
     const builtVST3 = getBuiltVST3Path(plugin);
-    const builtVST3Binary = getBuiltVST3BinaryPath(plugin);
     const installDir = path.join(process.env.HOME, "Library/Audio/Plug-Ins/VST3");
     const installedVST3 = path.join(installDir, `${plugin.productName}.vst3`);
-    const installedVST3Binary = path.join(installedVST3, "Contents", "MacOS", plugin.productName);
-
-    if (!await pathExists(builtVST3))
-        throw new Error(`Built VST3 bundle not found: ${builtVST3}`);
-
-    if (!await pathExists(builtVST3Binary))
-        throw new Error(`Built VST3 binary not found: ${builtVST3Binary}`);
-
-    verifyPatchedWebView(builtVST3Binary);
-
-    if (options.dryRun) {
-        console.log(`Would install ${pluginName} VST3 from: ${builtVST3}`);
-        console.log(`Would install ${pluginName} VST3 to: ${installedVST3}`);
-        return;
-    }
-
-    await mkdir(installDir, { recursive: true });
-    await rm(installedVST3, { recursive: true, force: true });
-    await cp(builtVST3, installedVST3, { recursive: true });
-    signVST3Bundle(installedVST3, options.toolPaths);
-    verifyVST3Bundle(installedVST3, options.toolPaths);
-    verifyPatchedWebView(installedVST3Binary);
-
-    console.log(`Installed ${pluginName} VST3: ${installedVST3}`);
+    const identityProbe = path.join(repoRoot, plugin.juceOut, "_build", "identity_probe", "kit_vst3_identity_probe");
+    if (!await pathExists(identityProbe))
+        throw new Error(`The build-produced VST3 identity probe is missing. Run npm run fx:prod:build -- ${pluginName} before installing.`);
+    const result = await installVST3Bundle({
+        candidate: builtVST3, destination: installedVST3, identityProbe,
+        dryRun: options.dryRun, codesign: options.toolPaths.codesign,
+    });
+    if (result.status === "failed")
+        throw new Error(formatVST3InstallFailure(result.error));
+    console.log(`${result.status === "dry-run" ? "Would install" : "Installed"} ${result.identity.displayName} VST3: ${installedVST3}`);
+    if (result.recoveryDirectory)
+        console.log(`Installation verified; retained cleanup files at: ${result.recoveryDirectory}`);
 }
 
 export function parseArgs(argv) {

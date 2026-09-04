@@ -348,9 +348,29 @@ still supports dev-server loading.
    (`kit/scripts/check_choc_markers.mjs` is the single implementation of that
    check, shared by every caller).
 
-`npm run fx:prod:install -- <alias>` copies the already-built
-`<productName>.vst3` into the user VST3 folder. It does not build, does not
-write `CmajPlugin.json`, and does not touch AU plugins.
+`npm run fx:prod:install -- <alias>` installs the already-built, signed
+`<productName>.vst3` into the user VST3 folder. It compares the candidate's
+bundle identifier and actual binary VST3 processor class identifier against
+any existing bundle before replacement. A filename match alone is not enough.
+Conflicting or unreadable identity stops the install without replacing the
+existing plugin. The build also produces the small identity probe used by this
+check; an older build without it must be rebuilt before installation.
+
+The installer stages and validates the copy before promotion, preserves its
+signature, and retains the old version outside the VST3 scan directory until
+post-install checks pass. Failure restores the prior version when safe; if
+recovery or cleanup cannot finish, the command reports the retained directory
+and a later install will not discard it. Success reports the factory's display
+name and the exact installed path. `--dry-run` verifies identities without
+writing installation files. Installation does not build, write
+`CmajPlugin.json`, or touch AU plugins. See the
+[native installation decision](decisions/native-vst3-installation.md) for the
+failure and recovery boundaries.
+
+The explicit macOS installer-fixture gate is `npm run test:kit:native-install`
+in customer repositories. It compiles tiny native test bundles in temporary
+directories and is separate from `npm test`; prerequisites and the direct
+command are listed in the decision record above.
 
 ## JIT Install (Development In A Host)
 
