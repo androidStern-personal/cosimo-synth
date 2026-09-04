@@ -1,4 +1,19 @@
 COSIMO SYNTH — PRODUCT WORKSTREAM TODO
+
+SEPTEMBER 4, 2026 — APPROVED BUILD RELIABILITY AND AGENTS CLEANUP
+
+- Authority: Andrew / Woods, planning commit e6e529994adf04d5fa9d9aba37000cc5f6515071 on codex/builder-kit-roadmap-cleanup-20260903; approved tickets copied exactly into BUILDER_KIT_BUILD_AND_GUIDANCE_CLEANUP.md in this source branch. Do not merge the historical planning branch into source master.
+- Coordinator: Bob, task 01a06ded-e922-7b60-83a7-44332a0e3fee; verified gpt-6-astra / xhigh; branch codex/bk-24-build-guidance-integration; worktree /Users/winterfell/.codex/worktrees/c57c/cosimo-synth; fetched source baseline 7341f963. Committed queue: docs/BK24_INTEGRATION.md. This queue does not reassign older unrelated work.
+- [x] BK-24A: Rebuilds apply changed/removed configuration, without stale CMake cache values.
+- [x] BK-24B: Preserve unchanged generated sources and prove correct incremental DSP/UI/config rebuilds.
+- [x] BK-24C: Add and run a scoped real-Mac exported-kit native build-loop gate after the build fixes.
+- [x] BK-24D: Delete the generated-C++ width hack. Use a small clean supported alternative or drop the width requirement; Andrew approves either, never another patch.
+- [x] BK-24E: Strip root/kit AGENTS.md to essential universal guidance. Account for every rule: retained, obsolete with evidence, enforced at source with proof, or moved to selectively referenced guidance. Preserve host/worktree/install knowledge; no mandatory giant replacement file.
+- Workers (SOL/xhigh), reporting to Bob task 01a06ded-e922-7b60-83a7-44332a0e3fee: A/B/D agent /root/build, codex/bk-24-build-reliability, /Users/winterfell/.codex/worktrees/bk24-build/cosimo-synth; E agent /root/guidance, codex/bk-24-guidance, /Users/winterfell/.codex/worktrees/bk24-guidance/cosimo-synth; C agent /root/native, codex/bk-24-native-gate, /Users/winterfell/.codex/worktrees/bk24-native/cosimo-synth. All based on bec24a08/source7341f963. Reviewed A/B/D ef2fa4d7, E 07bdc29c, C d557d1a6 composed and qualified at e13fa1f27. All worker handoffs clean; exact evidence in docs/BK24_INTEGRATION.md.
+- Delivery: source review, focused repairs, then composed qualification, coordinator-only master integration and push. No installed-plugin replacement, DAW/device manipulation, public publication, global-instruction changes, or unrelated architectural rewrite.
+- Qualification: candidate e13fa1f27dcb8129d9561205187306583c8082a3; 133 contracts, source TypeScript, exported canonical proof and all 9 real Mac phases passed. Unchanged native compile/link zero; final incremental/clean runtime, generated files, binary and full bundle exact. Native report SHA256 b4448c84ef90eb48b24c14701ad414999eb62816fb1465fc0d21de01b22bf0ed. Hosted native CI pending runner; no installs/host/device/publication.
+- Product decisions: optional width cap removed as authorized; source/tool pins and responsive/min-size source unchanged. Woods approved conditional guidance and final proof labels; 98 rules accounted for, root/kit 24,490 to 5,075 bytes. Source push follows the final internal evidence/tracker commit.
+
 Updated: 2026-08-25
 Source: 2026-08-18 spoken workstream inventory, accepted ADR-024/feature spec, 2026-08-25 follow-up inventory, and current repository evidence.
 Roadmap: `OPEN_WORK_ROADMAP.md`

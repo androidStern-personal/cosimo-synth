@@ -1,9 +1,10 @@
 # BK-24C exported-customer Mac native qualification
 
-Status: source gate authored on `codex/bk-24-native-gate` from
+Status: **locally qualified** on exact composed source `e13fa1f27dcb8129d9561205187306583c8082a3`; all nine phases passed. Hosted native CI remains pending.
+
+Authoring provenance: source gate authored on `codex/bk-24-native-gate` from
 `bec24a085bb08dbc9ef5a6e6c1255d0f6c09c1d4` / source baseline
-`7341f96372e4561b5e02a5a7f870fdc3b8d64909`. The real native run waits for
-the reviewed BK-24A/B/D composition and the coordinator's native-build slot.
+`7341f96372e4561b5e02a5a7f870fdc3b8d64909`. The real native run subsequently used the reviewed BK-24A/B/D/E composition and the coordinator's sole native-build slot.
 No plugin was installed and no DAW, device, customer checkout, feed, or
 release was changed during authoring.
 
@@ -69,10 +70,7 @@ source push.
 Read-only preflight on September 4, 2026 found no configured repository Actions
 secrets and no self-hosted runner. The local macOS Keychain service
 `builder-kit-feed-cohort` and `rclone` configuration are present; the Keychain
-value was never read into output. No reusable non-secret destination JSON was
-found in the searched source, Documents, `.config`, or `.codex` locations, so
-the coordinator must supply or create that non-secret file in owned temporary
-space before the authorized local run. Hosted native CI remains pending; no
+value was never read into output. The authoring search found no reusable non-secret destination JSON in source, Documents, `.config`, or `.codex`; the prior coordinator subsequently supplied the existing private release configuration. The local run reused it read-only without creating new release configuration or secrets. Hosted native CI remains pending; no
 runner was purchased and no secret or publication infrastructure was added.
 
 ## Focused proof
@@ -87,7 +85,7 @@ node --test tests/test_builder_kit_native_qualification.mjs
 passes 5/5. It covers exact CLI authority, secret redaction, published/candidate
 tool compatibility including conflicting nonempty pins, compile/link trace
 classification, and the narrow Mach-O comparison. `node --check` and
-`git diff --check` also pass. Native build evidence is intentionally pending.
+`git diff --check` also pass. Composed coordinator qualification subsequently passed 133 contract tests, source typecheck and the canonical exported proof.
 
 ## Material decisions and objection audit
 
@@ -119,3 +117,13 @@ This gate proves build and packaged-plugin behavior. It does not prove
 Developer ID signing, notarization, Gatekeeper, installation, pluginval,
 Ableton/Logic discovery, listening, audio behavior, or physical-device
 acceptance.
+
+## Actual native result — September 4, 2026
+
+Exact source `e13fa1f27dcb8129d9561205187306583c8082a3`; worker branch `codex/bk-24-native-gate`, worktree `/Users/winterfell/.codex/worktrees/bk24-native/cosimo-synth`, clean at completion. Existing exported setup and strict doctor passed, followed by fresh, unchanged, DSP edit, UI edit, configuration disabled, configuration reset, missing-output recovery, isolated product and clean-equivalence phases.
+
+Unchanged native rebuild: zero compile/link events and no generated/object content or timestamp changes. DSP/UI edits each compiled one changed generated object and reached the dedicated VST3. Removing the microphone setting restored TRUE after FALSE in the same build tree. Missing output recovered exactly. The isolated product had distinct bundle/processor identities and output paths and did not change or touch the main product. Every artifact passed compiled-mode, factory-identity, patched-CHOC and ad-hoc-signature checks.
+
+Clean rebuild matched incremental runtime, generated files, binary and whole bundle **exactly**. No normalization fallback was used. Final binary SHA-256: `ac47b6df7eab3b9a409c6ec03fc318c4f83edb96f02c81a76da07aa381131a83`.
+
+Safe mode-600 report: `/Users/winterfell/.codex/visualizations/2026/09/04/01a06ded-e922-7b60-83a7-44332a0e3fee/bk24-native-report.json`, SHA-256 `b4448c84ef90eb48b24c14701ad414999eb62816fb1465fc0d21de01b22bf0ed`. It records exact archive hashes and matching source/toolchain Cmajor `04ee24df55c4a3ba9f67d498a70c19de1aa1ad79`. URL/capability/config-path scan passed; successful scratch was removed. Native slot released. No install, DAW/device/HMR or publication occurred.
