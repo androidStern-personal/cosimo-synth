@@ -167,7 +167,7 @@ Evidence previously recorded for commit `56eb5c2f` is historical only. It does
 not qualify the repaired candidate; every source, build, artifact, pluginval,
 install, and Ableton check below must be rerun against the eventual final commit.
 
-- [ ] Source review and decision-provenance objection audit are complete.
+- [ ] Source review is complete.
 - [ ] Branch is committed and `git status --short --untracked-files=all` is clean.
 - [ ] Release config, patch manifest, and `fx/build-effect.mjs` identity/path
   contract passes.

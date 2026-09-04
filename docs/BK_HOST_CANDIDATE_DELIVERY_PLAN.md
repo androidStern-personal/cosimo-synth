@@ -29,9 +29,9 @@ The final Cmajor source pin comes from
 `https://github.com/androidStern-personal/cmajor.git`; its relative
 `../choc.git` submodule resolves to
 `https://github.com/androidStern-personal/choc.git`. At the current source pin,
-`04ee24df55c4a3ba9f67d498a70c19de1aa1ad79`, the cached immutable tree has the
+`7820a453f25e1b6eaf898d0bb2feb7e4ce01c207`, the cached immutable tree has the
 required relative CHOC URL and gitlink
-`98b52fb54c3b9fec03c0c13218f6557aef33eabe`. Candidate preparation must repeat
+`11f7dc63d7cb78f6dbaa559fe09ade8e941c0188`. Candidate preparation must repeat
 those checks against the final pins. It must not infer provenance from a cached
 repository remote.
 
