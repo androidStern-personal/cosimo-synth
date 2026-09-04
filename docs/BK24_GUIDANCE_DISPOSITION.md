@@ -32,7 +32,7 @@ The commands and results in this section are the only tests executed for BK-24E.
 - Static checks passed: Markdown-link resolution across the nine routed guidance files; every documented `npm run` command resolved in the source or exported package scripts; ordered disposition IDs R01-R68 and K01-K30; protected-file exclusion; `git diff --check`; and zero product/private identifiers in changed exported instruction files.
 - No native build, install, HMR server, DAW, device, release, publication, or broad suite was run by BK-24E.
 
-Composed worker evidence, reviewed as an integration dependency and not executed in this branch: BK-24A/B/D commit `165fa0f7` reports `node --test tests/test_fx_build_args.mjs` with 57 passed and 0 failed. The coordinator must verify that commit and evidence when composing branches.
+Composed worker evidence, reviewed as an integration dependency and not executed by BK-24E: rebased BK-24A/B/D commit `ef2fa4d7` (integrated by `8d9e2878`) reports `node --test tests/test_fx_build_args.mjs` with 57 passed and 0 failed. The coordinator owns final composed verification.
 
 ## Root rule inventory
 
@@ -151,7 +151,7 @@ Original line numbers refer to the 50-line baseline `kit/AGENTS.md`. Most rules 
 - `kit/template/root/AGENTS.md` no longer orders a full mandatory read. It sends plug-in tasks to the short kit index and retains the installer-owned local runtime activation boundary.
 - `kit/template/root/README.md` remains the first-use contract: unchanged Enhancer Lite, typecheck/test/build/install order, optional browser preview, occupied-port safety, and separate DAW/listening acceptance.
 - `kit/skills/cosimo-make-plugin/SKILL.md` remains the detailed task-triggered workflow. Its specificity is appropriate because it loads only for plug-in work.
-- `kit/docs/PLUGIN_ARCHITECTURE.md` is updated for the composed BK-24A/B/D result in `165fa0f7`: no `editorMaxWidth` field or generated-source width splice, and native generation stages then content-syncs durable output. Equal files keep timestamps; stale/missing files converge to current inputs. Framework/source changes remain CMake/compiler dependencies.
+- `kit/docs/PLUGIN_ARCHITECTURE.md` is updated for the composed BK-24A/B/D result in `ef2fa4d7` / integration `8d9e2878`: no `editorMaxWidth` field or generated-source width splice, and native generation stages then content-syncs durable output. Equal files keep timestamps; stale/missing files converge to current inputs. Framework/source changes remain CMake/compiler dependencies.
 - `kit/docs/HOST_COMPATIBILITY.md` is exported and product-neutral. It carries the unresolved generic AU crash and VST3/JIT install safety without private Cosimo or machine data.
 - The maintainer-only BK-24C Mac native qualification harness is not a customer command and does not appear in exported guidance. It exports committed source into owned scratch and invokes existing customer setup/build commands; it does not install a plug-in or run a DAW.
 
@@ -177,7 +177,7 @@ The personal `/Users/winterfell/.codex/AGENTS.md` was read but not edited.
 5. Spectral full held-chord restoration on Mono-to-Poly and compiled host parameter/slot-zero compatibility are not proven. DSP and `hostSlot0Guard` were not changed.
 6. The fontaudio rule is not universal source enforcement while literal synth instrument paths remain.
 7. The live tracker linker does not lock concurrent writes or authorize integration. Shared ports/build outputs/installs likewise have no repository lease mechanism.
-8. BK-24A/B/D commit `165fa0f7` and the maintainer Mac gate are composed integration dependencies. This guidance records the approved width removal and incremental/config-reset behavior; the coordinator must review it against their final commits and test evidence before integration.
+8. BK-24A/B/D commit `ef2fa4d7` is now composed through `8d9e2878`; the maintainer Mac gate remains a separate integration dependency. This guidance records the approved width removal and incremental/config-reset behavior; the coordinator must review it against final native-gate evidence before integration.
 
 ## Material decisions and objection audit
 
