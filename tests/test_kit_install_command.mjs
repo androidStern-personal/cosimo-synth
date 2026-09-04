@@ -144,8 +144,10 @@ async function fixture() {
     }));
     await fs.writeFile(path.join(lineage, "fixture-postinstall.mjs"), [
         "import fs from 'node:fs';",
+        "import { execFileSync } from 'node:child_process';",
         "const state = '.builder-kit-install';",
         "fs.appendFileSync(state + '/npm-attempts', 'attempt\\n');",
+        "fs.appendFileSync(state + '/npm-cache-observed', execFileSync('npm', ['config', 'get', 'cache'], { encoding: 'utf8' }));",
         "if (process.env.BUILDER_KIT_FIXTURE_FAIL_NPM === '1' && !fs.existsSync(state + '/npm-failed-once')) { fs.writeFileSync(state + '/npm-failed-once', 'failed'); process.exit(23); }",
     ].join("\n"));
     const toolchain = JSON.parse(await fs.readFile(path.join(lineage, "kit/toolchain.json"), "utf8"));
@@ -167,9 +169,11 @@ async function fixture() {
     await fs.writeFile(path.join(feed, bootstrap.value.artifact), bootstrap.value.script);
     const arbitraryStart = path.join(scratch, "not-a-repository");
     const fixtureProfile = path.join(scratch, "curl-profile");
+    const externalCache = path.join(scratch, "external-npm-cache");
     const profileHashes = await shellProfileHashes();
     await fs.mkdir(arbitraryStart); await fs.mkdir(fixtureProfile);
-    const environment = { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", HOME: process.env.HOME, CURL_HOME: fixtureProfile, TMPDIR: os.tmpdir(), npm_config_userconfig: "/dev/null", npm_config_audit: "false", npm_config_fund: "false", npm_config_update_notifier: "false" };
+    await fs.mkdir(externalCache); await fs.writeFile(path.join(externalCache, "sentinel.txt"), "preserve external cache");
+    const environment = { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", HOME: process.env.HOME, CURL_HOME: fixtureProfile, TMPDIR: os.tmpdir(), npm_config_userconfig: "/dev/null", npm_config_audit: "false", npm_config_fund: "false", npm_config_update_notifier: "false", NPM_CONFIG_CACHE: externalCache, NpM_cOnFiG_cAcHe: externalCache, npm_config_cache: externalCache };
     const command = async (projectDir, changes = {}) => {
         const result = await renderInstallation({ manifest, feedOrigin: origin, capability: redact(fixtureAccess), projectDir, runtimes, ...changes });
         assert.equal(result.ok, true);
@@ -182,7 +186,7 @@ async function fixture() {
             resolve({ status: error ? error.code : 0, output });
         });
     });
-    return { scratch, feed, fixtureProfile, profileHashes, origin, manifest, runtimes, requests, faults, command, run, close: async () => {
+    return { scratch, feed, fixtureProfile, externalCache, profileHashes, origin, manifest, runtimes, requests, faults, command, run, close: async () => {
         server.closeAllConnections(); await new Promise((resolve) => server.close(resolve));
         await fs.rm(scratch, { recursive: true, force: true });
     } };
@@ -287,13 +291,32 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
             assert.equal((await fs.readFile(path.join(project, ".builder-kit-install/npm-attempts"), "utf8")).split("\n").filter(Boolean).length, 2);
         });
         await t.test("fresh shell activates project-local Node/npm/CMake without shell profile edits", async () => {
-            const result = await f.run(`cd -- ${quoted(project)} && ! command -v node && ! command -v cmake && . .builder-kit-install/env.sh && node --version && npm --version && cmake --version && command -v node && command -v cmake`);
+            const result = await f.run(`cd -- ${quoted(project)} && ! command -v node && ! command -v cmake && . .builder-kit-install/env.sh && node --version && npm --version && cmake --version && command -v node && command -v cmake && npm config get cache`);
             assert.equal(result.status, 0, result.output);
             assert.match(result.output, /\.builder-kit-install\/runtime\/node-fixture\/bin\/node/u);
             assert.match(result.output, /\.builder-kit-install\/runtime\/cmake-fixture\/bin\/cmake/u);
+            assert.ok(result.output.endsWith(`${project}/.builder-kit-install/npm-cache\n`), result.output);
             assert.deepEqual(await shellProfileHashes(), f.profileHashes);
             assert.equal(existsSync(path.join(project, ".builder-kit-install/npm-cache/_cacache")), true);
             assert.match(await fs.readFile(path.join(project, "AGENTS.md"), "utf8"), /builder-kit-install-runtime-v1/u);
+        });
+        await t.test("inherited cache case variants cannot redirect installer npm or its lifecycle children", async () => {
+            const expected = await fs.realpath(path.join(project, ".builder-kit-install/npm-cache"));
+            const observed = () => fs.readFile(path.join(project, ".builder-kit-install/npm-cache-observed"), "utf8");
+            assert.deepEqual((await observed()).trim().split("\n"), [expected, expected]);
+            assert.deepEqual(await fs.readdir(f.externalCache), ["sentinel.txt"]);
+            // Reintroduce conflicting overrides after shell activation to
+            // independently exercise complete_install's npm process boundary.
+            await fs.unlink(path.join(project, ".builder-kit-install/npm-ready"));
+            const result = await f.run(`cd -- ${quoted(project)} && . .builder-kit-install/env.sh && NPM_CONFIG_CACHE=${quoted(f.externalCache)} NpM_cOnFiG_cAcHe=${quoted(f.externalCache)} npm_config_cache=${quoted(f.externalCache)} node kit/scripts/complete_install.mjs --accept-juce-terms`, {
+                BUILDER_KIT_EXPECTED_FEED: `${f.origin}/${fixtureAccess}`,
+                BUILDER_KIT_EXPECTED_CMAJ_SHA256: f.manifest.tools.cmaj.sha256,
+                BUILDER_KIT_EXPECTED_PLUGIN_SHA256: f.manifest.tools.cmajPlugin.sha256,
+            });
+            assert.equal(result.status, 0, result.output);
+            assert.deepEqual((await observed()).trim().split("\n"), [expected, expected, expected]);
+            assert.deepEqual(await fs.readdir(f.externalCache), ["sentinel.txt"]);
+            assert.equal(await fs.readFile(path.join(f.externalCache, "sentinel.txt"), "utf8"), "preserve external cache");
         });
         await t.test("inherited Git tracing and curl config cannot log delivery credentials", async () => {
             const traceFile = path.join(f.scratch, "git-credential-trace");
