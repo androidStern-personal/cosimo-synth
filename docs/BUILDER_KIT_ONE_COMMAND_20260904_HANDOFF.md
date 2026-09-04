@@ -1,5 +1,15 @@
 # Builder Kit one-command installation — September 4, 2026
 
+## Superseded customer command
+
+Andrew rejected this release's giant inline launcher after its technical tests
+passed. The immutable v0.1.2 release and evidence below remain valid history,
+but its private command file must not be delivered again. The approved short
+replacement is published and live-tested; use
+[the short-command handoff](BUILDER_KIT_SHORT_COMMAND_20260904_HANDOFF.md)
+and its new private delivery path. The replacement reuses the exact private
+v0.1.2 installer and kit without a new kit release.
+
 ## Outcome and authority
 
 BK-21B is implemented, independently reviewed and published as **v0.1.2**.
