@@ -7,7 +7,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { execFile, execFileSync } from "node:child_process";
-import { renderBootstrap, renderInstallation, installationRuntimes } from "../scripts/builder-kit-install.mjs";
+import { renderBootstrap, renderInstallation, installationRuntimes, publicInstallationUrl } from "../scripts/builder-kit-install.mjs";
 import { prepareInstallation } from "../scripts/prepare_builder_kit_install.mjs";
 import { createBareMirror } from "../scripts/release_builder_kit.mjs";
 import { redact, reveal } from "../kit/scripts/redacted.mjs";
@@ -28,8 +28,18 @@ const gitEnv = { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, env: gitEnv, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const manifestFor = (commit = "a".repeat(40)) => ({ schemaVersion: 1, version: "1.0.0", tag: "v1.0.0", kit: { repo: "kit.git", tag: "v1.0.0", commit }, tools: { cmaj: { sha256: "b".repeat(64) }, cmajPlugin: { sha256: "c".repeat(64) } } });
 
-test("delivery parsing rejects unpinned releases, unsafe origins and incomplete destinations without revealing credentials", async () => {
-    const options = { manifest: manifestFor(), feedOrigin: "https://downloads.example.invalid", capability: redact(fixtureAccess), projectDir: "/Users/customer/Builder Kit" };
+test("public entry preserves the existing v0.1.2 private installer render", async () => {
+    const manifest = manifestFor();
+    manifest.version = "0.1.2"; manifest.tag = "v0.1.2"; manifest.kit.tag = "v0.1.2";
+    const result = await renderBootstrap({ manifest, feedOrigin: "https://downloads.example.invalid" });
+    assert.equal(result.ok, true);
+    // Captured by rendering these synthetic pins with the unchanged template
+    // and original renderer at 4793cee50c9574239412a722e204473f7c59b717.
+    assert.equal(result.value.sha256, "fc7fa69992c85fa0c46ad2755da85ec166267f8ef56ca57fded20d9813fa8f33");
+});
+
+test("delivery parsing enforces the approved short shape and rejects unpinned or unsafe inputs without revealing credentials", async () => {
+    const options = { manifest: manifestFor(), feedOrigin: "https://downloads.example.invalid", capability: redact(fixtureAccess) };
     const bootstrap = await renderBootstrap(options);
     assert.equal(bootstrap.ok, true);
     options.manifest.installation = { artifact: bootstrap.value.artifact, sha256: bootstrap.value.sha256 };
@@ -41,6 +51,10 @@ test("delivery parsing rejects unpinned releases, unsafe origins and incomplete 
         { feedOrigin: "http://downloads.example.invalid" },
         { installerOrigin: "http://192.168.1.2:8000" },
         { installerOrigin: "https://user:password@example.invalid" },
+        { publicBootstrapUrl: "http://192.168.1.2:8000/install.sh" },
+        { publicBootstrapUrl: "https://user:password@example.invalid/install.sh" },
+        { publicBootstrapUrl: "https://other.example.invalid/install.sh" },
+        { publicBootstrapUrl: "http://127.0.0.1:8000/install.sh?inline=commands" },
         { kitOrigin: "file:///tmp/feed" }, { projectDir: "/" }, { projectDir: "relative" }, { projectDir: "/tmp/line\nbreak" },
         { capability: redact("bad\ncredential") },
     ]) {
@@ -51,15 +65,27 @@ test("delivery parsing rejects unpinned releases, unsafe origins and incomplete 
     const result = await renderInstallation(options);
     assert.equal(result.ok, true);
     assert.equal(result.value.script.includes(fixtureAccess), false);
+    assert.equal(result.value.publicBootstrap.script.includes(fixtureAccess), false);
     assert.equal(JSON.stringify(result).includes(fixtureAccess), false);
-    assert.equal(reveal(result.value.command).split("\n").length, 1);
-    assert.match(reveal(result.value.command), /^export BUILDER_KIT_ACCESS=/u);
-    assert.match(reveal(result.value.command), /--accept-juce-terms/u);
+    assert.equal(reveal(result.value.command), `export BUILDER_KIT_ACCESS='${fixtureAccess}'; curl -fsSL ${publicInstallationUrl} | bash`);
+    assert.doesNotMatch(reveal(result.value.command), /bash -c|mktemp|printf|mkdir|sha256|accept-juce|BUILDER_KIT_PROJECT_DIR/u);
+    assert.match(result.value.publicBootstrap.script, /--accept-juce-terms/u);
+    assert.ok(result.value.publicBootstrap.script.includes('${BUILDER_KIT_PROJECT_DIR-${HOME}/src/builder-kit-1.0.0}'));
+    assert.equal(sha256(result.value.publicBootstrap.script), result.value.publicBootstrap.sha256);
+    assert.equal(result.value.publicBootstrap.url, publicInstallationUrl);
+    assert.equal(execFileSync("/bin/bash", ["-n"], { input: result.value.publicBootstrap.script, encoding: "utf8" }), "");
     assert.match(reveal(result.value.delivery), /JUCE licensing notice/u);
     assert.match(reveal(result.value.delivery), /does not grant a JUCE license/u);
     assert.equal(sha256(result.value.script), result.value.sha256);
     const syntax = execFileSync("/bin/bash", ["-n"], { input: result.value.script, encoding: "utf8" });
     assert.equal(syntax, "");
+    const secretOrigin = { ...options, feedOrigin: `${options.feedOrigin}/${fixtureAccess}` };
+    const secretBootstrap = await renderBootstrap(secretOrigin);
+    secretOrigin.manifest = { ...options.manifest, installation: { artifact: secretBootstrap.value.artifact, sha256: secretBootstrap.value.sha256 } };
+    const refused = await renderInstallation(secretOrigin);
+    assert.equal(refused.ok, false);
+    assert.equal(refused.error.code, "bootstrap-must-not-contain-capability");
+    assert.equal(JSON.stringify(refused).includes(fixtureAccess), false);
 });
 
 async function archive(directory, name, files) {
@@ -79,15 +105,15 @@ async function archive(directory, name, files) {
 // and doctor. Tiny runtime archives forward to the test runner's Node/npm;
 // they test bootstrap ordering, not cold official-runtime qualification.
 async function fixture() {
-    const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "kit-install-command-"));
+    const scratch = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "kit-install-command-")));
     const feed = path.join(scratch, "feed");
     await fs.mkdir(feed);
     const requests = [];
-    const faults = { installer: "none", denyPath: "" };
+    const faults = { installer: "none", public: "none", denyPath: "" };
     const server = http.createServer(async (request, response) => {
         const url = new URL(request.url, "http://localhost");
         requests.push(url.pathname);
-        if (!url.pathname.startsWith(`/${fixtureAccess}/`) && !url.pathname.startsWith("/runtimes/")) {
+        if (url.pathname !== "/install.sh" && !url.pathname.startsWith(`/${fixtureAccess}/`) && !url.pathname.startsWith("/runtimes/")) {
             response.writeHead(403); response.end(); return;
         }
         if (faults.denyPath && url.pathname.includes(faults.denyPath)) { response.writeHead(503); response.end(); return; }
@@ -96,6 +122,10 @@ async function fixture() {
             const file = path.resolve(feed, `.${relative}`);
             if (!file.startsWith(`${feed}/`)) throw new Error();
             let body = await fs.readFile(file);
+            if (relative === "/install.sh") {
+                if (faults.public === "http") { response.writeHead(503); response.end(); return; }
+                if (faults.public === "truncated") body = body.subarray(0, body.length / 2);
+            }
             if (relative.startsWith("/installers/")) {
                 if (faults.installer === "http") { response.writeHead(401); response.end(); return; }
                 if (faults.installer === "truncated") body = body.subarray(0, body.length / 2);
@@ -167,6 +197,11 @@ async function fixture() {
     manifest.installation = { artifact: bootstrap.value.artifact, sha256: bootstrap.value.sha256 };
     await fs.mkdir(path.join(feed, "installers"));
     await fs.writeFile(path.join(feed, bootstrap.value.artifact), bootstrap.value.script);
+    const publicBootstrapUrl = `${origin}/install.sh`;
+    const rendered = await renderInstallation({ manifest, feedOrigin: origin, capability: redact(fixtureAccess), runtimes, publicBootstrapUrl });
+    assert.equal(rendered.ok, true);
+    assert.equal(rendered.value.publicBootstrap.script.includes(fixtureAccess), false);
+    await fs.writeFile(path.join(feed, "install.sh"), rendered.value.publicBootstrap.script);
     const arbitraryStart = path.join(scratch, "not-a-repository");
     const fixtureProfile = path.join(scratch, "curl-profile");
     const externalCache = path.join(scratch, "external-npm-cache");
@@ -175,18 +210,21 @@ async function fixture() {
     await fs.mkdir(externalCache); await fs.writeFile(path.join(externalCache, "sentinel.txt"), "preserve external cache");
     const environment = { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", HOME: process.env.HOME, CURL_HOME: fixtureProfile, TMPDIR: os.tmpdir(), npm_config_userconfig: "/dev/null", npm_config_audit: "false", npm_config_fund: "false", npm_config_update_notifier: "false", NPM_CONFIG_CACHE: externalCache, NpM_cOnFiG_cAcHe: externalCache, npm_config_cache: externalCache };
     const command = async (projectDir, changes = {}) => {
-        const result = await renderInstallation({ manifest, feedOrigin: origin, capability: redact(fixtureAccess), projectDir, runtimes, ...changes });
+        assert.equal(typeof projectDir, "string", "the real-shell fixture must explicitly select its owned destination");
+        const result = await renderInstallation({ manifest, feedOrigin: origin, capability: redact(fixtureAccess), publicBootstrapUrl, runtimes, ...changes });
         assert.equal(result.ok, true);
-        return reveal(result.value.command);
+        return { line: reveal(result.value.command), projectDir };
     };
-    const run = (line, extraEnv = {}) => new Promise((resolve) => {
-        execFile("/bin/bash", ["-c", line], { cwd: arbitraryStart, env: { ...environment, ...extraEnv }, timeout: 180000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+    const run = (command, extraEnv = {}) => new Promise((resolve) => {
+        const line = typeof command === "string" ? command : command.line;
+        const destination = typeof command === "string" ? {} : { BUILDER_KIT_PROJECT_DIR: command.projectDir };
+        execFile("/bin/bash", ["-c", line], { cwd: arbitraryStart, env: { ...environment, ...destination, ...extraEnv }, timeout: 180000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
             const output = `${stdout}${stderr}`;
             assert.equal(output.includes(fixtureAccess), false, "credentials cannot enter subprocess diagnostics");
             resolve({ status: error ? error.code : 0, output });
         });
     });
-    return { scratch, feed, fixtureProfile, externalCache, profileHashes, origin, manifest, runtimes, requests, faults, command, run, close: async () => {
+    return { scratch, feed, fixtureProfile, externalCache, profileHashes, origin, publicBootstrapUrl, manifest, runtimes, requests, faults, command, run, close: async () => {
         server.closeAllConnections(); await new Promise((resolve) => server.close(resolve));
         await fs.rm(scratch, { recursive: true, force: true });
     } };
@@ -197,6 +235,43 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
 }, async (t) => {
     const f = await fixture();
     try {
+        await t.test("public bootstrap is fetchable without a key and the exact short command has no destination program", async () => {
+            const response = await fetch(f.publicBootstrapUrl);
+            assert.equal(response.status, 200);
+            assert.equal((await response.text()).includes(fixtureAccess), false);
+            const first = await f.command(path.join(f.scratch, "first"));
+            const other = await f.command(path.join(f.scratch, "different"));
+            assert.equal(first.line, other.line);
+            assert.equal(first.line, `export BUILDER_KIT_ACCESS='${fixtureAccess}'; curl -fsSL ${f.publicBootstrapUrl} | bash`);
+        });
+        await t.test("public HTTP failure is visible under ordinary pipeline status and a truncated body cannot start installation", async () => {
+            for (const fault of ["http", "truncated"]) {
+                f.faults.public = fault;
+                const root = path.join(f.scratch, `public-${fault}`);
+                const before = f.requests.filter(url => url.includes("/installers/")).length;
+                const result = await f.run(await f.command(root));
+                assert.doesNotMatch(result.output, /is ready/u);
+                assert.equal(existsSync(root), false);
+                assert.equal(f.requests.filter(url => url.includes("/installers/")).length, before);
+                if (fault === "http") { assert.equal(result.status, 0); assert.match(result.output, /curl: \(22\)/u); }
+                else assert.notEqual(result.status, 0);
+            }
+            f.faults.public = "none";
+        });
+        await t.test("linked and non-normalized destination paths are refused before any customer write", async () => {
+            const outside = path.join(f.scratch, "outside-destination");
+            await fs.mkdir(outside); await fs.writeFile(path.join(outside, "sentinel.txt"), "preserve");
+            const linked = path.join(f.scratch, "linked-destination");
+            await fs.symlink(outside, linked);
+            for (const destination of [linked, `${linked}/child`, "relative", "/", process.env.HOME, `${outside}/../other`, `${outside}//child`, `${outside}/child/`, `${outside}/line\nbreak`]) {
+                const result = await f.run(await f.command(destination));
+                assert.notEqual(result.status, 0, result.output);
+                assert.doesNotMatch(result.output, /is ready/u);
+            }
+            assert.deepEqual(await fs.readdir(outside), ["sentinel.txt"]);
+            assert.equal(await fs.readFile(path.join(outside, "sentinel.txt"), "utf8"), "preserve");
+            assert.equal(await fs.readlink(linked), outside);
+        });
         for (const fault of ["http", "truncated", "complete-body-failed-transfer"]) {
             await t.test(`installer ${fault} never executes even a complete expected payload`, async () => {
                 f.faults.installer = fault;
@@ -204,7 +279,7 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
                 const result = await f.run(await f.command(root));
                 assert.notEqual(result.status, 0, result.output);
                 assert.doesNotMatch(result.output, /is ready/u);
-                assert.deepEqual(await fs.readdir(root), []);
+                assert.equal(existsSync(root), false);
             });
         }
         f.faults.installer = "none";
@@ -212,7 +287,7 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
             const invalid = path.join(f.scratch, "invalid-access");
             const denied = await f.run(await f.command(invalid, { capability: redact("invalid-access") }));
             assert.notEqual(denied.status, 0);
-            assert.deepEqual(await fs.readdir(invalid), []);
+            assert.equal(existsSync(invalid), false);
             const occupied = path.join(f.scratch, "occupied");
             await fs.mkdir(occupied); await fs.writeFile(path.join(occupied, "precious.txt"), "preserve me");
             const result = await f.run(await f.command(occupied));
@@ -332,7 +407,7 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
             assert.match(result.output, /Release download failed/u);
             assert.ok(f.requests.filter((url) => url.includes("/kit.git/")).length > before, "credential-bearing Git HTTP fetch must actually be exercised");
             assert.equal(existsSync(traceFile), false);
-            assert.equal(existsSync(curlTrace), false);
+            assert.equal((await fs.readFile(curlTrace, "utf8")).includes(fixtureAccess), false, "ordinary public curl may honor curlrc, but its trace must contain no private credential");
             assert.equal((await fs.readFile(path.join(root, ".git/config"), "utf8")).includes(fixtureAccess), false);
             assert.equal(existsSync(path.join(root, ".git/FETCH_HEAD")), false);
         });
@@ -421,10 +496,18 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
         });
         await t.test("delivery files are private, exact and not overwritten", async () => {
             const outputDir = path.join(f.scratch, "private-delivery");
-            const options = { manifest: f.manifest, destinationConfig: { feedOrigin: redact(f.origin) }, capability: redact(fixtureAccess), projectDir: project, outputDir, runtimes: f.runtimes };
+            const options = { manifest: f.manifest, destinationConfig: { feedOrigin: redact(f.origin) }, capability: redact(fixtureAccess), outputDir, runtimes: f.runtimes, publicBootstrapUrl: f.publicBootstrapUrl };
+            for (const obsolete of [{ projectDir: project }, { installerOrigin: f.origin }]) {
+                const refused = await prepareInstallation({ ...options, ...obsolete });
+                assert.equal(refused.ok, false);
+                assert.equal(refused.error.code, "obsolete-inline-delivery-option");
+                assert.equal(existsSync(outputDir), false);
+            }
             const result = await prepareInstallation(options);
             assert.equal(result.ok, true);
-            assert.equal(await fs.readFile(path.join(outputDir, "command.sh"), "utf8"), `${line}\n`);
+            assert.equal(await fs.readFile(path.join(outputDir, "command.sh"), "utf8"), `${line.line}\n`);
+            assert.equal(await fs.readFile(path.join(outputDir, "public/install.sh"), "utf8"), result.value.publicBootstrap.script);
+            assert.equal(result.value.publicBootstrap.script.includes(fixtureAccess), false);
             assert.equal((await fs.stat(outputDir)).mode & 0o777, 0o700);
             for (const name of ["command.sh", "delivery.txt"]) assert.equal((await fs.stat(path.join(outputDir, name))).mode & 0o777, 0o600);
             assert.equal((await prepareInstallation(options)).ok, false);

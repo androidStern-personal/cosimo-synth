@@ -24,30 +24,35 @@ async function outsideGit(outputDir) {
     }
 }
 
-export async function prepareInstallation({ manifest, destinationConfig, capability, projectDir, outputDir, installerOrigin, kitOrigin, runtimes }) {
+export async function prepareInstallation(options) {
+    if (!options || typeof options !== "object") return { ok: false, error: { code: "invalid-delivery-options" } };
+    if ("projectDir" in options || "installerOrigin" in options) return { ok: false, error: { code: "obsolete-inline-delivery-option" } };
+    const { manifest, destinationConfig, capability, outputDir, publicBootstrapUrl, kitOrigin, runtimes } = options;
     const rendered = await renderInstallation({
-        manifest, feedOrigin: reveal(destinationConfig.feedOrigin), capability, projectDir, installerOrigin, kitOrigin, runtimes,
+        manifest, feedOrigin: reveal(destinationConfig.feedOrigin), capability, publicBootstrapUrl, kitOrigin, runtimes,
     });
     if (!rendered.ok) return rendered;
     try {
         if (!await outsideGit(outputDir)) return { ok: false, error: { code: "private-delivery-must-be-outside-git" } };
         // A fresh private output folder avoids overwriting another delivery.
         await mkdir(outputDir, { mode: 0o700 });
-        const { artifact, script, command, delivery, sha256 } = rendered.value;
+        const { artifact, script, command, delivery, sha256, publicBootstrap } = rendered.value;
         await mkdir(path.join(outputDir, "feed/installers"), { recursive: true, mode: 0o700 });
         await writeFile(path.join(outputDir, "feed", artifact), script, { mode: 0o600, flag: "wx" });
+        await mkdir(path.join(outputDir, "public"), { mode: 0o700 });
+        await writeFile(path.join(outputDir, "public/install.sh"), publicBootstrap.script, { mode: 0o600, flag: "wx" });
         await writeFile(path.join(outputDir, "command.sh"), `${reveal(command)}\n`, { mode: 0o600, flag: "wx" });
         await writeFile(path.join(outputDir, "delivery.txt"), reveal(delivery), { mode: 0o600, flag: "wx" });
-        return { ok: true, value: { outputDir, artifact, sha256 } };
+        return { ok: true, value: { outputDir, artifact, sha256, publicBootstrap } };
     } catch { return { ok: false, error: { code: "delivery-output-failed" } }; }
 }
 
-const usage = "Usage: node scripts/prepare_builder_kit_install.mjs --manifest <release manifest> --destination-config <non-secret config> --project-dir <absolute customer folder> --output-dir <new private folder> [--installer-origin <HTTPS or loopback origin>] [--kit-origin <HTTPS or loopback origin>]";
+const usage = "Usage: node scripts/prepare_builder_kit_install.mjs --manifest <release manifest> --destination-config <non-secret config> --output-dir <new private folder> [--public-bootstrap-url <loopback test URL>] [--kit-origin <HTTPS or loopback origin>]";
 async function main() {
     const options = {};
     const flags = new Map([
-        ["--manifest", "manifest"], ["--destination-config", "destinationConfig"], ["--project-dir", "projectDir"],
-        ["--output-dir", "outputDir"], ["--installer-origin", "installerOrigin"], ["--kit-origin", "kitOrigin"],
+        ["--manifest", "manifest"], ["--destination-config", "destinationConfig"],
+        ["--output-dir", "outputDir"], ["--public-bootstrap-url", "publicBootstrapUrl"], ["--kit-origin", "kitOrigin"],
     ]);
     const args = process.argv.slice(2);
     for (let index = 0; index < args.length; index += 2) {
@@ -55,7 +60,7 @@ async function main() {
         if (!key || options[key] !== undefined || !args[index + 1] || args[index + 1].startsWith("--")) throw new Error(usage);
         options[key] = args[index + 1];
     }
-    if (!["manifest", "destinationConfig", "projectDir", "outputDir"].every((key) => options[key])) throw new Error(usage);
+    if (!["manifest", "destinationConfig", "outputDir"].every((key) => options[key])) throw new Error(usage);
     const destinationConfig = await readDestinationConfig(options.destinationConfig);
     const capability = readCapabilityFromKeychain({ service: destinationConfig.keychainService });
     createReleaseDestination(destinationConfig, capability);
@@ -64,6 +69,8 @@ async function main() {
     if (!result.ok) throw new Error(`Delivery preparation failed: ${result.error.code}.`);
     console.log(`Private customer delivery written to ${result.value.outputDir}`);
     console.log(`Installer SHA-256: ${result.value.sha256}`);
+    console.log(`Public bootstrap SHA-256: ${result.value.publicBootstrap.sha256}`);
+    console.log("Current delivery instructions: docs/BUILDER_KIT_DELIVERY.md");
     console.log("No installer or release was published. Deliver command.sh or delivery.txt privately; never commit or log their contents.");
 }
 

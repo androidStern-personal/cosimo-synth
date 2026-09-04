@@ -1,0 +1,53 @@
+#!/bin/bash
+# Public, credential-free entry point. HTTPS is the trust boundary for this
+# script; the existing private installer is verified before it is executed.
+# Keep all executable work inside this complete definition so a truncated
+# function body cannot perform a partial installation when piped into Bash.
+builder_kit_install() (
+    set +x
+    set -euo pipefail
+    umask 077
+    fail() { printf 'Builder Kit: %s\n' "$1" >&2; exit 1; }
+
+    [[ "${BUILDER_KIT_ACCESS:-}" =~ ^[A-Za-z0-9._~-]+$ ]] \
+        || fail 'The supplied access key is missing or invalid. Use your complete installation command.'
+    [[ "${HOME:-}" = /* ]] || fail 'Your home directory is unavailable; no project was created.'
+    local project="${BUILDER_KIT_PROJECT_DIR-${HOME}/src/@@DEFAULT_DIRECTORY@@}"
+    [[ "$project" = /* && "$project" != / && "$project" != "$HOME" && "$project" != */ \
+        && "$project" != *//* && "$project" != *$'\n'* && "$project" != *$'\r'* ]] \
+        || fail 'The project destination must be a normalized absolute project folder.'
+
+    # Inspect every existing component before mkdir can follow a link. The
+    # immutable installer remains responsible for occupied-folder ownership.
+    local remaining="${project#/}" current='' component
+    while [[ -n "$remaining" ]]; do
+        component="${remaining%%/*}"
+        [[ "$component" != . && "$component" != .. ]] \
+            || fail 'The project destination must not contain dot path components.'
+        current="$current/$component"
+        [[ ! -L "$current" ]] || fail 'The project destination contains a linked path; it was not changed.'
+        [[ ! -e "$current" || -d "$current" ]] || fail 'The project destination contains a non-directory path; it was not changed.'
+        if [[ "$remaining" = */* ]]; then remaining="${remaining#*/}"; else remaining=''; fi
+    done
+
+    local temporary
+    temporary=$(mktemp -d -t builder-kit-entry) || fail 'A private temporary download folder could not be created.'
+    trap 'rm -f -- "$temporary/installer.sh"; rmdir -- "$temporary"' EXIT
+    printf 'url = "%s/%s/%s"\n' @@FEED_ORIGIN@@ "$BUILDER_KIT_ACCESS" @@INSTALLER_ARTIFACT@@ \
+        | curl --disable --fail --silent --location --proto @@PROTOCOLS@@ --proto-redir @@PROTOCOLS@@ \
+            --config - --output "$temporary/installer.sh" \
+        || fail 'Installer download failed; nothing was installed.'
+    local downloaded
+    downloaded=$(shasum -a 256 "$temporary/installer.sh") \
+        || fail 'Installer verification could not finish; nothing was installed.'
+    [[ "${downloaded%% *}" = @@INSTALLER_SHA256@@ ]] \
+        || fail 'Installer verification failed; nothing was installed.'
+
+    mkdir -p -- "$project" || fail 'The project folder could not be created.'
+    cd -- "$project" || fail 'The project folder could not be opened.'
+    [[ "$(pwd -P)" = "$project" ]] || fail 'The project destination changed or became linked; installation stopped.'
+    # Executing the supplied line after agreeing to its accompanying notice is
+    # the customer's acknowledgment. No Apple/system agreement is accepted here.
+    /bin/bash "$temporary/installer.sh" --accept-juce-terms
+)
+builder_kit_install

@@ -2,7 +2,6 @@
 // payload; they never need this module, Keychain, or a source checkout.
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { ensureRedacted, redact, reveal } from "../kit/scripts/redacted.mjs";
 import { juceNoticeLines } from "../kit/scripts/toolchain.mjs";
 
@@ -32,6 +31,7 @@ const commitPattern = /^[a-f0-9]{40}$/u;
 const safePath = /^[A-Za-z0-9_-][A-Za-z0-9._/-]*$/u;
 const failure = (code) => ({ ok: false, error: { code } });
 const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
+export const publicInstallationUrl = "https://pub-2bb7a8a7b9b44ed3b975f3f0a6bcc756.r2.dev/install.sh";
 
 function parseOrigin(input) {
     try {
@@ -96,21 +96,27 @@ export async function renderBootstrap({ manifest, feedOrigin, kitOrigin = feedOr
     return { ok: true, value: { script, sha256, artifact: `installers/${sha256}.sh`, release } };
 }
 
-// The success trailer is emitted only after curl succeeds, even when curl
-// received a complete-looking body before reporting a transport error. The
-// receiver buffers the entire transfer and verifies its pinned hash before
-// executing any downloaded code. pipefail covers both sides independently.
-const receiver = [
-    "set -eu",
-    'download=$(mktemp -t builder-kit-download)',
-    'trap \'rm -f -- "$download" "$download.sh"\' EXIT',
-    'cat > "$download"',
-    '[ "$(tail -n 1 "$download")" = BUILDER_KIT_TRANSFER_COMPLETE ] || { printf "%s\\n" "Installer download failed; nothing was installed." >&2; exit 1; }',
-    'sed \'$d\' "$download" > "$download.sh"',
-    'digest=$(shasum -a 256 "$download.sh")',
-    '[ "${digest%% *}" = "$1" ] || { printf "%s\\n" "Installer verification failed; nothing was installed." >&2; exit 1; }',
-    '/bin/bash "$download.sh" --accept-juce-terms',
-].join("; ");
+async function renderPublicEntry(bootstrap, feedOrigin, publicBootstrapUrl = publicInstallationUrl) {
+    const feed = parseOrigin(feedOrigin);
+    let url;
+    try {
+        url = new URL(publicBootstrapUrl);
+        const loopback = url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname);
+        if (!parseOrigin(publicBootstrapUrl) || url.pathname !== "/install.sh"
+            || (publicBootstrapUrl !== publicInstallationUrl && !loopback)) return failure("invalid-public-bootstrap-url");
+    } catch { return failure("invalid-public-bootstrap-url"); }
+    if (!feed) return failure("invalid-origin");
+    let template;
+    try { template = await readFile(new URL("./templates/builder-kit-public-install.sh.template", import.meta.url), "utf8"); }
+    catch { return failure("public-bootstrap-template-unavailable"); }
+    const values = {
+        FEED_ORIGIN: quote(feed.value), PROTOCOLS: quote(feed.protocols),
+        INSTALLER_ARTIFACT: quote(bootstrap.artifact), INSTALLER_SHA256: quote(bootstrap.sha256),
+        DEFAULT_DIRECTORY: `builder-kit-${bootstrap.release.tag.slice(1)}`,
+    };
+    const script = template.replace(/@@([A-Z0-9_]+)@@/gu, (_, key) => values[key]);
+    return { ok: true, value: { script, sha256: createHash("sha256").update(script).digest("hex"), url: url.href } };
+}
 
 /** The only secret-bearing outputs are wrapped until written to private delivery files. */
 export async function renderInstallation(options) {
@@ -118,29 +124,29 @@ export async function renderInstallation(options) {
     try { capability = ensureRedacted(options.capability); }
     catch { return failure("invalid-capability"); }
     if (!/^[A-Za-z0-9._~-]+$/u.test(reveal(capability))) return failure("invalid-capability");
-    if (typeof options.projectDir !== "string" || !path.isAbsolute(options.projectDir)
-        || path.parse(options.projectDir).root === path.resolve(options.projectDir)
-        || /[\r\n\0]/u.test(options.projectDir)) return failure("invalid-project-directory");
+    if ("projectDir" in options || "installerOrigin" in options) return failure("obsolete-inline-delivery-option");
     const bootstrap = await renderBootstrap(options);
     if (!bootstrap.ok) return bootstrap;
     if (!options.manifest.installation
         || options.manifest.installation.sha256 !== bootstrap.value.sha256 || options.manifest.installation.artifact !== bootstrap.value.artifact)
         return failure("installer-does-not-match-release-manifest");
-    const origin = parseOrigin(options.installerOrigin ?? options.feedOrigin);
-    if (!origin) return failure("invalid-installer-origin");
-    const { artifact, sha256 } = bootstrap.value;
-    const downloader = `set -euo pipefail; (printf 'url = "%s"\\n' ${quote(`${origin.value}/`)}"$BUILDER_KIT_ACCESS"${quote(`/${artifact}`)} | curl --disable --fail --silent --location --proto ${origin.protocols} --proto-redir ${origin.protocols} --config - && printf '%s\\n' BUILDER_KIT_TRANSFER_COMPLETE) | /bin/bash -c ${quote(receiver)} _ ${quote(sha256)}`;
-    const command = redact(`export BUILDER_KIT_ACCESS=${quote(reveal(capability))}; mkdir -p -- ${quote(options.projectDir)} && cd -- ${quote(options.projectDir)} && /bin/bash -c ${quote(downloader)}`);
+    const publicEntry = await renderPublicEntry(bootstrap.value, options.feedOrigin, options.publicBootstrapUrl);
+    if (!publicEntry.ok) return publicEntry;
+    const publicBootstrap = publicEntry.value;
+    if ([bootstrap.value.script, publicBootstrap.script, publicBootstrap.url].some(value => value.includes(reveal(capability))))
+        return failure("bootstrap-must-not-contain-capability");
+    const command = redact(`export BUILDER_KIT_ACCESS=${quote(reveal(capability))}; curl -fsSL ${publicBootstrap.url} | bash`);
     const delivery = redact([
         "Builder Kit installation — macOS 15 or newer, Apple silicon",
         "Apple Command Line Tools must already be installed and their agreements accepted by you.",
         "Node and CMake are downloaded into this project; your shell profiles and system runtimes are unchanged.",
+        `The project folder is ~/src/builder-kit-${bootstrap.value.release.tag.slice(1)}.`,
         "", ...juceNoticeLines(), "",
         "If you agree to the notice above, copy the entire line below into Terminal and press Enter.",
-        "The --accept-juce-terms option records your explicit acknowledgment. Setup does not grant a JUCE license.",
+        "Running this command after agreeing explicitly acknowledges the JUCE terms; the hosted installer records that acknowledgment. Setup does not grant a JUCE license.",
         "Keep this personalized command private: it contains your access credential.",
         "", reveal(command), "",
         "On success, open the printed project folder in Codex. No plugin is built or installed.",
     ].join("\n"));
-    return { ok: true, value: { ...bootstrap.value, command, delivery } };
+    return { ok: true, value: { ...bootstrap.value, publicBootstrap, command, delivery } };
 }
