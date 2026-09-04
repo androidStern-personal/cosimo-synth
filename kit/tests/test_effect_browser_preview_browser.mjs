@@ -44,7 +44,12 @@ before(async () => {
         logLevel: "error",
         server: { host: "127.0.0.1", port: 0, open: false },
     });
-    await server.listen();
+    // Vite's listen helper treats port 0 as its default port. Bind its public
+    // Node HTTP server directly so the OS assigns a truly ephemeral port.
+    await new Promise((resolve, reject) => {
+        server.httpServer.once("error", reject);
+        server.httpServer.listen(0, "127.0.0.1", resolve);
+    });
     origin = `http://127.0.0.1:${server.httpServer.address().port}`;
 });
 
