@@ -1,7 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { access, mkdtemp, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+    access,
+    lstat,
+    mkdtemp,
+    mkdir,
+    readdir,
+    readFile,
+    readlink,
+    realpath,
+    rm,
+    stat,
+    symlink,
+    utimes,
+    writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -1304,7 +1318,6 @@ test("the production configure explicitly disables microphone permission metadat
     const plugin = buildModule.effectPlugins.seqfx;
 
     assert.equal(plugin.disableMicrophonePermission, true);
-    assert.equal(plugin.editorMaxWidth, 1120);
     assert.deepEqual(prodModule.createJuceGenerationConfigureArgs({
         cmajExecutable,
         cmakeBuildDirectory: "/tmp/seqfx-build",
@@ -1313,7 +1326,6 @@ test("the production configure explicitly disables microphone permission metadat
         juceOutputDirectory: "/repo/build/seqfx_juce",
         pluginTarget: "CosimoSeqFX",
         runtimePatchPath: "/repo/build/fx/seqfx_runtime/SeqFx.cmajorpatch",
-        editorMaxWidth: plugin.editorMaxWidth,
     }), [
         "-S", "/repo/kit/tools/effect_plugin_build",
         "-B", "/tmp/seqfx-build",
@@ -1323,7 +1335,6 @@ test("the production configure explicitly disables microphone permission metadat
         "-DCOSIMO_EFFECT_PLUGIN_TARGET=CosimoSeqFX",
         `-DCOSIMO_CMAJ_EXECUTABLE=${cmajExecutable}`,
         "-DCOSIMO_DISABLE_MICROPHONE_PERMISSION=ON",
-        "-DCOSIMO_EFFECT_EDITOR_MAX_WIDTH=1120",
     ]);
     const wrapperCmake = await readFile(
         path.join(repoRoot, "kit", "tools", "effect_plugin_build", "CMakeLists.txt"),
@@ -1337,30 +1348,77 @@ test("the production configure explicitly disables microphone permission metadat
     assert.doesNotMatch(wrapperCmake, /cosimo_disable_generated_microphone_permission/u);
 });
 
-test("SeqFX editor width ceiling is product-scoped exact and fail-closed", async () => {
+test("the production configure resets disabled and removed options without disturbing user cache values", async () => {
+    const { prodModule } = await loadBuildModules();
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-config-reset-"));
+    const sourceDirectory = path.join(tempRoot, "source");
+    const buildDirectory = path.join(tempRoot, "build");
+    const common = {
+        cmajExecutable: prodModule.getPinnedCmajExecutablePath(),
+        cmakeBuildDirectory: buildDirectory,
+        cmakeSourceDirectory: sourceDirectory,
+        juceOutputDirectory: path.join(tempRoot, "juce"),
+        pluginTarget: "FixturePlugin",
+        runtimePatchPath: path.join(tempRoot, "Fixture.cmajorpatch"),
+    };
+
+    try {
+        await mkdir(sourceDirectory, { recursive: true });
+        await writeFile(path.join(sourceDirectory, "CMakeLists.txt"), [
+            "cmake_minimum_required(VERSION 3.28)",
+            "project(ConfigurationReset NONE)",
+            "option(COSIMO_DISABLE_MICROPHONE_PERMISSION \"fixture\" OFF)",
+            "set(UNRELATED_USER_SETTING \"default\" CACHE STRING \"fixture\")",
+            "file(WRITE \"${CMAKE_BINARY_DIR}/microphone.txt\" \"${COSIMO_DISABLE_MICROPHONE_PERMISSION}\\n\")",
+            "file(WRITE \"${CMAKE_BINARY_DIR}/user-setting.txt\" \"${UNRELATED_USER_SETTING}\\n\")",
+            "",
+        ].join("\n"));
+
+        const enabled = spawnSync("cmake", [
+            ...prodModule.createJuceGenerationConfigureArgs({
+                ...common,
+                disableMicrophonePermission: true,
+            }),
+            "-DUNRELATED_USER_SETTING=customer",
+        ], { encoding: "utf8" });
+        assert.equal(enabled.status, 0, enabled.stderr);
+        assert.equal(await readFile(path.join(buildDirectory, "microphone.txt"), "utf8"), "ON\n");
+        assert.equal(await readFile(path.join(buildDirectory, "user-setting.txt"), "utf8"), "customer\n");
+
+        const disabled = spawnSync("cmake", prodModule.createJuceGenerationConfigureArgs({
+            ...common,
+            disableMicrophonePermission: false,
+        }), { encoding: "utf8" });
+        assert.equal(disabled.status, 0, disabled.stderr);
+        assert.equal(await readFile(path.join(buildDirectory, "microphone.txt"), "utf8"), "OFF\n");
+        assert.equal(await readFile(path.join(buildDirectory, "user-setting.txt"), "utf8"), "customer\n");
+
+        const reenabled = spawnSync("cmake", prodModule.createJuceGenerationConfigureArgs({
+            ...common,
+            disableMicrophonePermission: true,
+        }), { encoding: "utf8" });
+        assert.equal(reenabled.status, 0, reenabled.stderr);
+        assert.equal(await readFile(path.join(buildDirectory, "microphone.txt"), "utf8"), "ON\n");
+
+        const removed = spawnSync("cmake", prodModule.createJuceGenerationConfigureArgs(common), {
+            encoding: "utf8",
+        });
+        assert.equal(removed.status, 0, removed.stderr);
+        assert.equal(await readFile(path.join(buildDirectory, "microphone.txt"), "utf8"), "OFF\n");
+        assert.equal(await readFile(path.join(buildDirectory, "user-setting.txt"), "utf8"), "customer\n");
+    } finally {
+        await rm(tempRoot, { recursive: true, force: true });
+    }
+});
+
+test("SeqFX uses ordinary supported resizing without a generated editor-width patch", async () => {
     const { buildModule, prodModule } = await loadBuildModules();
-    const transform = path.join(
-        repoRoot,
-        "kit/tools/effect_plugin_build/apply_generated_editor_width_ceiling.cmake",
-    );
+    const seqFx = buildModule.effectPlugins.seqfx;
     const extractor = path.join(
         repoRoot,
         "kit/tools/effect_plugin_build/read_generated_plugin_info_class.cmake",
     );
-    const wrapper = await readFile(
-        path.join(repoRoot, "kit/tools/effect_plugin_build/CosimoBoundedGeneratedPlugin.h"),
-        "utf8",
-    );
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-editor-width-"));
-    const runTransform = (sourcePath) => spawnSync(
-        "cmake",
-        [
-            `-DCOSIMO_GENERATED_PLUGIN_SOURCE=${sourcePath}`,
-            "-DCOSIMO_GENERATED_PLUGIN_EDITOR_MAX_WIDTH=1120",
-            "-P", transform,
-        ],
-        { cwd: repoRoot, encoding: "utf8" },
-    );
 
     try {
         const generatedSource = path.join(tempRoot, "cmajor_plugin.cpp");
@@ -1373,15 +1431,7 @@ test("SeqFX editor width ceiling is product-scoped exact and fail-closed", async
             "}",
             "",
         ].join("\n"));
-        await writeFile(driftedSource, "using Plugin = cmaj::plugin::GeneratedPlugin<::SeqFx>;\n");
-
-        const transformed = runTransform(generatedSource);
-        const rejectedDrift = runTransform(driftedSource);
-        assert.equal(transformed.status, 0, transformed.stderr);
-        assert.match(await readFile(generatedSource, "utf8"), /#include "CosimoBoundedGeneratedPlugin\.h"/u);
-        assert.match(await readFile(generatedSource, "utf8"), /using Plugin = cosimo::BoundedGeneratedPlugin<::SeqFx, 1120>;/u);
-        assert.notEqual(rejectedDrift.status, 0);
-        assert.match(rejectedDrift.stderr, /Expected exactly one Cmajor JUCE helper include.*found 0/su);
+        await writeFile(driftedSource, "using Plugin = UnexpectedGeneratedPlugin<::SeqFx>;\n");
 
         const extracted = spawnSync(
             "cmake",
@@ -1390,30 +1440,45 @@ test("SeqFX editor width ceiling is product-scoped exact and fail-closed", async
         );
         assert.equal(extracted.status, 0, extracted.stderr);
         assert.match(`${extracted.stdout}${extracted.stderr}`, /-- SeqFx/u);
+
+        const rejectedDrift = spawnSync(
+            "cmake",
+            [`-DCOSIMO_GENERATED_PLUGIN_SOURCE=${driftedSource}`, "-P", extractor],
+            { cwd: repoRoot, encoding: "utf8" },
+        );
+        assert.notEqual(rejectedDrift.status, 0);
+        assert.match(rejectedDrift.stderr, /Expected exactly one generated JUCE factory type.*found 0/su);
     } finally {
         await rm(tempRoot, { recursive: true, force: true });
     }
 
-    assert.match(wrapper, /Base::createEditor\(\)/u);
-    assert.match(wrapper, /setResizeLimits \(250, 160, maxEditorWidth, 32768\)/u);
-    assert.doesNotMatch(wrapper, /struct Editor/u, "the product seam should not copy the Cmajor editor implementation");
-    assert.equal(buildModule.effectPlugins.seqfx.editorMaxWidth, 1120);
-    for (const [pluginName, plugin] of Object.entries(buildModule.effectPlugins)) {
-        if (pluginName !== "seqfx")
-            assert.equal("editorMaxWidth" in plugin, false, `${pluginName} should retain stock Cmajor editor limits`);
-    }
-    assert.throws(
-        () => prodModule.createJuceGenerationConfigureArgs({
-            cmajExecutable: prodModule.getPinnedCmajExecutablePath(),
-            cmakeBuildDirectory: "/tmp/build",
-            cmakeSourceDirectory: "/tmp/source",
-            editorMaxWidth: 249,
-            juceOutputDirectory: "/tmp/juce",
-            pluginTarget: "CosimoSeqFX",
-            runtimePatchPath: "/tmp/SeqFx.cmajorpatch",
-        }),
-        /editorMaxWidth must be an integer of at least 250/u,
+    assert.equal("editorMaxWidth" in seqFx, false);
+    assert.equal(JSON.parse(await readFile(path.join(repoRoot, seqFx.patch), "utf8")).view.resizable, true);
+    await assert.rejects(
+        access(path.join(repoRoot, "kit/tools/effect_plugin_build/CosimoBoundedGeneratedPlugin.h")),
+        { code: "ENOENT" },
     );
+    await assert.rejects(
+        access(path.join(repoRoot, "kit/tools/effect_plugin_build/apply_generated_editor_width_ceiling.cmake")),
+        { code: "ENOENT" },
+    );
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "width_lab", "WidthLab.cmajorpatch", { name: "Width Lab" }, {
+            editorMaxWidth: 1120,
+        });
+        assert.throws(() => buildModule.discoverEffectPlugins({ fxRoot }), /unknown key "editorMaxWidth"/u);
+    });
+
+    const configureArgs = prodModule.createJuceGenerationConfigureArgs({
+        cmajExecutable: prodModule.getPinnedCmajExecutablePath(),
+        cmakeBuildDirectory: "/tmp/build",
+        cmakeSourceDirectory: "/tmp/source",
+        juceOutputDirectory: "/tmp/juce",
+        pluginTarget: "CosimoSeqFX",
+        runtimePatchPath: "/tmp/SeqFx.cmajorpatch",
+    });
+    assert.equal(configureArgs.some((argument) => argument.includes("EDITOR_MAX_WIDTH")), false);
 });
 
 test("fx_prod_release_tool_overrides are absolute and PATH-independent", async () => {
@@ -1486,6 +1551,7 @@ test("effect production uses the repository-built pinned Cmajor generator withou
             "-DCOSIMO_EFFECT_OUTPUT_DIR=/tmp/effect-juce",
             "-DCOSIMO_EFFECT_PLUGIN_TARGET=CosimoEnhancer",
             `-DCOSIMO_CMAJ_EXECUTABLE=${expectedExecutable}`,
+            "-DCOSIMO_DISABLE_MICROPHONE_PERMISSION=OFF",
         ],
     );
     assert.throws(
@@ -1762,7 +1828,7 @@ test("fx_prod_all_child_build_args_keep_single_plugin_builds_import_safe", async
     assert.deepEqual(args.slice(1), ["build", "seqfx", "--clean"]);
 });
 
-test("fx_prod_prepare_preserves_cmake_build_tree_but_removes_stale_generated_files", async () => {
+test("fx_prod_prepare preserves the CMake build tree and durable generated files", async () => {
     const { prodModule } = await loadBuildModules();
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-prod-prepare-"));
     const juceOut = path.join(tempRoot, "seqfx_juce");
@@ -1778,9 +1844,9 @@ test("fx_prod_prepare_preserves_cmake_build_tree_but_removes_stale_generated_fil
         await prodModule.prepareJuceProjectOutput(juceOut);
 
         assert.equal(await readFile(path.join(juceOut, "_build", "objects", "cmajor_plugin.o"), "utf8"), "compiled object");
-        await assert.rejects(readFile(path.join(juceOut, "CMakeLists.txt"), "utf8"), { code: "ENOENT" });
-        await assert.rejects(readFile(path.join(juceOut, "cmajor_plugin.cpp"), "utf8"), { code: "ENOENT" });
-        await assert.rejects(readFile(path.join(juceOut, "stale-dir", "old.cpp"), "utf8"), { code: "ENOENT" });
+        assert.equal(await readFile(path.join(juceOut, "CMakeLists.txt"), "utf8"), "old generated cmake");
+        assert.equal(await readFile(path.join(juceOut, "cmajor_plugin.cpp"), "utf8"), "old generated source");
+        assert.equal(await readFile(path.join(juceOut, "stale-dir", "old.cpp"), "utf8"), "stale source");
     } finally {
         await rm(tempRoot, { recursive: true, force: true });
     }
@@ -1833,7 +1899,7 @@ test("fx_prod_prepare_preserves_a_cmake_tree_owned_by_the_wrapper_project", asyn
 
         assert.equal(await readFile(cachePath, "utf8"), `CMAKE_HOME_DIRECTORY:INTERNAL=${wrapperSource}\n`);
         assert.equal(await readFile(objectPath, "utf8"), "current object");
-        await assert.rejects(readFile(path.join(juceOut, "cmajor_plugin.cpp"), "utf8"), { code: "ENOENT" });
+        assert.equal(await readFile(path.join(juceOut, "cmajor_plugin.cpp"), "utf8"), "stale generated source");
     } finally {
         await rm(tempRoot, { recursive: true, force: true });
     }
@@ -1858,4 +1924,114 @@ test("fx_prod_prepare_clean_removes_the_cmake_build_tree", async () => {
     } finally {
         await rm(tempRoot, { recursive: true, force: true });
     }
+});
+
+test("generated project synchronization preserves equal files and reconciles the complete staged tree", async () => {
+    const syncScript = path.join(
+        repoRoot,
+        "kit/tools/effect_plugin_build/sync_generated_project.cmake",
+    );
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "cosimo-generated-sync-"));
+    const source = path.join(tempRoot, "stage");
+    const destination = path.join(tempRoot, "durable");
+    const stableTimestamp = new Date("2025-01-02T03:04:05.000Z");
+    const runSync = (sourceDirectory = source, destinationDirectory = destination) => spawnSync("cmake", [
+        `-DCOSIMO_GENERATED_PROJECT_SOURCE=${sourceDirectory}`,
+        `-DCOSIMO_GENERATED_PROJECT_DESTINATION=${destinationDirectory}`,
+        "-P", syncScript,
+    ], { cwd: repoRoot, encoding: "utf8" });
+
+    try {
+        await mkdir(path.join(source, "nested"), { recursive: true });
+        await mkdir(path.join(destination, "_build", "objects"), { recursive: true });
+        await mkdir(path.join(destination, "stale-directory"), { recursive: true });
+        await mkdir(path.join(destination, "file-shape"), { recursive: true });
+        await writeFile(path.join(source, "stable.cpp"), "same bytes\n");
+        await writeFile(path.join(destination, "stable.cpp"), "same bytes\n");
+        await utimes(path.join(destination, "stable.cpp"), stableTimestamp, stableTimestamp);
+        await writeFile(path.join(source, "changed.h"), "new bytes\n");
+        await writeFile(path.join(destination, "changed.h"), "old bytes\n");
+        await writeFile(path.join(source, "missing.cpp"), "recovered\n");
+        await writeFile(path.join(source, ".metadata"), "hidden\n");
+        await writeFile(path.join(source, "file-shape"), "now a file\n");
+        await writeFile(path.join(source, "nested", "now-directory.txt"), "directory child\n");
+        await writeFile(path.join(destination, "nested"), "was a file\n");
+        await writeFile(path.join(destination, "stale.txt"), "stale\n");
+        await writeFile(path.join(destination, "stale-directory", "old.cpp"), "stale\n");
+        await writeFile(path.join(destination, "_build", "objects", "plugin.o"), "object\n");
+        await symlink("stable.cpp", path.join(source, "generated-link"));
+        await writeFile(path.join(destination, "generated-link"), "was a file\n");
+        await symlink("changed.h", path.join(destination, "link-to-file"));
+        await writeFile(path.join(source, "link-to-file"), "now a file\n");
+
+        const first = runSync();
+        assert.equal(first.status, 0, first.stderr);
+        assert.equal((await stat(path.join(destination, "stable.cpp"))).mtimeMs, stableTimestamp.getTime());
+        assert.equal(await readFile(path.join(destination, "changed.h"), "utf8"), "new bytes\n");
+        assert.equal(await readFile(path.join(destination, "missing.cpp"), "utf8"), "recovered\n");
+        assert.equal(await readFile(path.join(destination, ".metadata"), "utf8"), "hidden\n");
+        assert.equal(await readFile(path.join(destination, "file-shape"), "utf8"), "now a file\n");
+        assert.equal(await readFile(path.join(destination, "nested", "now-directory.txt"), "utf8"), "directory child\n");
+        assert.equal((await lstat(path.join(destination, "generated-link"))).isSymbolicLink(), true);
+        assert.equal(await readlink(path.join(destination, "generated-link")), "stable.cpp");
+        assert.equal((await lstat(path.join(destination, "link-to-file"))).isFile(), true);
+        await assert.rejects(access(path.join(destination, "stale.txt")), { code: "ENOENT" });
+        await assert.rejects(access(path.join(destination, "stale-directory")), { code: "ENOENT" });
+        assert.equal(await readFile(path.join(destination, "_build", "objects", "plugin.o"), "utf8"), "object\n");
+
+        const changedTime = (await stat(path.join(destination, "changed.h"))).mtimeMs;
+        const recoveredTime = (await stat(path.join(destination, "missing.cpp"))).mtimeMs;
+        const second = runSync();
+        assert.equal(second.status, 0, second.stderr);
+        assert.equal((await stat(path.join(destination, "changed.h"))).mtimeMs, changedTime);
+        assert.equal((await stat(path.join(destination, "missing.cpp"))).mtimeMs, recoveredTime);
+
+        const cleanDestination = path.join(tempRoot, "clean");
+        const clean = runSync(source, cleanDestination);
+        assert.equal(clean.status, 0, clean.stderr);
+        assert.deepEqual(
+            (await readdir(destination)).filter((entry) => entry !== "_build").sort(),
+            (await readdir(cleanDestination)).sort(),
+        );
+        for (const relative of [
+            ".metadata",
+            "changed.h",
+            "file-shape",
+            "link-to-file",
+            "missing.cpp",
+            "nested/now-directory.txt",
+            "stable.cpp",
+        ]) {
+            assert.deepEqual(
+                await readFile(path.join(destination, relative)),
+                await readFile(path.join(cleanDestination, relative)),
+            );
+        }
+        assert.equal(
+            await readlink(path.join(destination, "generated-link")),
+            await readlink(path.join(cleanDestination, "generated-link")),
+        );
+
+        const leakingSource = path.join(tempRoot, "leaking-stage");
+        await mkdir(leakingSource);
+        await writeFile(path.join(leakingSource, "cmajor_plugin.cpp"), `const char* bad = ${JSON.stringify(leakingSource)};\n`);
+        const leak = runSync(leakingSource);
+        assert.notEqual(leak.status, 0);
+        assert.match(leak.stderr, /contains its staging directory path/u);
+    } finally {
+        await rm(tempRoot, { recursive: true, force: true });
+    }
+});
+
+test("the wrapper generates into a fresh stage before synchronizing the durable project", async () => {
+    const wrapperCmake = await readFile(
+        path.join(repoRoot, "kit/tools/effect_plugin_build/CMakeLists.txt"),
+        "utf8",
+    );
+
+    assert.match(wrapperCmake, /sync_generated_project\.cmake/u);
+    assert.match(wrapperCmake, /--output=\$\{_cosimo_generated_project_stage\}/u);
+    assert.match(wrapperCmake, /cosimo_sync_generated_project/u);
+    assert.match(wrapperCmake, /file\(REMOVE_RECURSE "\$\{_cosimo_generated_project_stage\}"\)/u);
+    assert.doesNotMatch(wrapperCmake, /--output=\$\{COSIMO_EFFECT_OUTPUT_DIR\}/u);
 });

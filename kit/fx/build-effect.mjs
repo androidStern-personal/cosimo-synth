@@ -25,7 +25,7 @@ export const seqFxDistributableRuntimeEnvironmentKey = "SEQFX_DISTRIBUTABLE_RUNT
  *     "alias", "cmakeTarget", "productName",
  *     "product": { ...identity... },  // optional; presence makes identity authoritative
  *     "runtimeOut", "juceOut", "workerSource", "workerOut", "includeInAll",
- *     "jitInstallRuntime", "editorMaxWidth", "visualReviewAdapter",
+ *     "jitInstallRuntime", "visualReviewAdapter",
  *     "disableMicrophonePermission"
  *   }
  *
@@ -46,7 +46,7 @@ export const seqFxDistributableRuntimeEnvironmentKey = "SEQFX_DISTRIBUTABLE_RUNT
  *
  * Config-only fields: workerSource/workerOut (repo-relative worker entry and
  * its bundled file name), includeInAll (false excludes the target from the
- * `all` build set), editorMaxWidth, visualReviewAdapter, and
+ * `all` build set), visualReviewAdapter, and
  * disableMicrophonePermission. A malformed or unknown-key config fails
  * discovery, and so does an orphan config (a `*.plugin.json` whose name
  * matches no `.cmajorpatch` in its directory — typically a renamed patch or a
@@ -92,7 +92,6 @@ const sidecarKeyValidators = {
     juceOut: isRepoRelativeBuildPath,
     workerSource: isRepoRelativeSourcePath,
     workerOut: isPlainFileName,
-    editorMaxWidth: (value) => Number.isInteger(value) && value >= 250,
     visualReviewAdapter: isRepoRelativeSourcePath,
     includeInAll: (value) => typeof value === "boolean",
     disableMicrophonePermission: (value) => typeof value === "boolean",
@@ -741,9 +740,6 @@ function createDiscoveredPlugin({ patch, manifest, config, directoryName, patchF
 
     if (build.disableMicrophonePermission === true)
         plugin.disableMicrophonePermission = true;
-
-    if (build.editorMaxWidth !== undefined)
-        plugin.editorMaxWidth = build.editorMaxWidth;
 
     if (build.visualReviewAdapter !== undefined)
         plugin.visualReviewAdapter = build.visualReviewAdapter;

@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { access, mkdir, readFile, rm } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -245,13 +245,9 @@ export function createJuceGenerationConfigureArgs({
     pluginTarget,
     cmajExecutable,
     disableMicrophonePermission = false,
-    editorMaxWidth = null,
 }) {
 
     const pinnedExecutable = validatePinnedCmajExecutable(cmajExecutable);
-
-    if (editorMaxWidth !== null && (!Number.isInteger(editorMaxWidth) || editorMaxWidth < 250))
-        throw new Error("editorMaxWidth must be an integer of at least 250.");
 
     return [
         "-S", cmakeSourceDirectory,
@@ -261,8 +257,7 @@ export function createJuceGenerationConfigureArgs({
         `-DCOSIMO_EFFECT_OUTPUT_DIR=${juceOutputDirectory}`,
         `-DCOSIMO_EFFECT_PLUGIN_TARGET=${pluginTarget}`,
         `-DCOSIMO_CMAJ_EXECUTABLE=${pinnedExecutable}`,
-        ...(disableMicrophonePermission ? ["-DCOSIMO_DISABLE_MICROPHONE_PERMISSION=ON"] : []),
-        ...(editorMaxWidth === null ? [] : [`-DCOSIMO_EFFECT_EDITOR_MAX_WIDTH=${editorMaxWidth}`]),
+        `-DCOSIMO_DISABLE_MICROPHONE_PERMISSION=${disableMicrophonePermission ? "ON" : "OFF"}`,
     ];
 }
 
@@ -322,13 +317,6 @@ export async function prepareJuceProjectOutput(juceOut, {
                 throw error;
         }
     }
-
-    for (const entry of await readdir(juceOut, { withFileTypes: true })) {
-        if (entry.name === "_build")
-            continue;
-
-        await rm(path.join(juceOut, entry.name), { recursive: true, force: true });
-    }
 }
 
 async function generateJuceProject(pluginName, plugin, options = {}) {
@@ -347,7 +335,6 @@ async function generateJuceProject(pluginName, plugin, options = {}) {
         cmakeBuildDirectory: cmakeBuildDir,
         cmakeSourceDirectory,
         disableMicrophonePermission: plugin.disableMicrophonePermission,
-        editorMaxWidth: plugin.editorMaxWidth,
         juceOutputDirectory: juceOut,
         pluginTarget: plugin.cmakeTarget,
         runtimePatchPath,
