@@ -37,9 +37,19 @@ async function verifyScaffoldedUnitTestDiscovery(pluginName) {
         const directBrowser = spawnSync(process.execPath, ["--test", browserTest], { cwd: root, encoding: "utf8", env });
         assert.equal(directBrowser.status, 1);
         assert.match(directBrowser.stdout + directBrowser.stderr, /BROWSER-TEST-MUST-STAY-SEPARATE/u);
+        const nativeTest = "kit/tests/fixture_native.test.mjs";
+        await fs.writeFile(path.join(root, nativeTest), [
+            'import assert from "node:assert/strict";',
+            'import test from "node:test";',
+            'test("native-test exclusion probe", () => assert.fail("NATIVE-TEST-MUST-STAY-SEPARATE"));',
+        ].join("\n"));
+        const directNative = spawnSync(process.execPath, ["--test", nativeTest], { cwd: root, encoding: "utf8", env });
+        assert.equal(directNative.status, 1);
+        assert.match(directNative.stdout + directNative.stderr, /NATIVE-TEST-MUST-STAY-SEPARATE/u);
         const valid = run("test");
         assert.equal(valid.status, 0, valid.stdout + valid.stderr);
         assert.doesNotMatch(valid.stdout + valid.stderr, /BROWSER-TEST-MUST-STAY-SEPARATE/u);
+        assert.doesNotMatch(valid.stdout + valid.stderr, /NATIVE-TEST-MUST-STAY-SEPARATE/u);
         await fs.appendFile(path.join(root, unitTest), '\ntest("generated plugin failure probe", () => assert.fail("GENERATED-PLUGIN-TEST-FAILURE"));\n');
         const directUnit = spawnSync(process.execPath, ["--test", unitTest], { cwd: root, encoding: "utf8", env });
         assert.equal(directUnit.status, 1);
@@ -48,11 +58,12 @@ async function verifyScaffoldedUnitTestDiscovery(pluginName) {
         assert.notEqual(failing.status, 0, `canonical npm test must execute newly generated tests\n${failing.stdout}${failing.stderr}`);
         assert.match(failing.stdout + failing.stderr, /GENERATED-PLUGIN-TEST-FAILURE/u);
         assert.doesNotMatch(failing.stdout + failing.stderr, /BROWSER-TEST-MUST-STAY-SEPARATE/u);
+        assert.doesNotMatch(failing.stdout + failing.stderr, /NATIVE-TEST-MUST-STAY-SEPARATE/u);
     } finally {
         await fs.rm(scratch, { recursive: true, force: true });
     }
 }
 
 for (const pluginName of ["fixture_gain", "browser_gain"]) {
-    test(`canonical customer npm test discovers ${pluginName} unit tests but excludes browser-test files`, () => verifyScaffoldedUnitTestDiscovery(pluginName));
+    test(`canonical customer npm test discovers ${pluginName} unit tests but excludes browser and native gates`, () => verifyScaffoldedUnitTestDiscovery(pluginName));
 }
