@@ -21,6 +21,7 @@ export function useStandaloneEffectPresets(
     const {
         descriptorRegistry,
         factoryPresets,
+        legacyFileStorePluginID,
         storedStateAdapters,
         presetMigrations,
         createPresetID,
@@ -33,6 +34,7 @@ export function useStandaloneEffectPresets(
         patchConnection,
         descriptorRegistry,
         factoryPresets,
+        legacyFileStorePluginID,
         storedStateAdapters,
         presetMigrations,
         createPresetID,
@@ -43,6 +45,7 @@ export function useStandaloneEffectPresets(
         descriptorRegistry,
         effectID,
         factoryPresets,
+        legacyFileStorePluginID,
         storedStateAdapters,
         presetMigrations,
         patchConnection,

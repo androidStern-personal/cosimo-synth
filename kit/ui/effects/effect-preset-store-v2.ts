@@ -10,6 +10,7 @@ import {
 } from "./effect-preset-shared";
 import { errorFromUnknown, isPlainObject, requireString } from "./effect-utils";
 import { getFullStoredStateValue } from "../stored-state-runtime-mirror";
+import { sha256 } from "../sha256";
 
 export const EFFECT_PRESETS_V2_STATE_KEY = "effects.presets.v2";
 export const EFFECT_PRESET_V2_STATE_KIND = "cosimo.effectPresetState";
@@ -35,7 +36,42 @@ type ChocUserFiles = {
 };
 
 type EffectPresetStateV2Listener = (state: EffectPresetStateV2) => void;
-type EffectPresetStateV2ErrorListener = (error: Error) => void;
+type EffectPresetStateV2ErrorListener = (error: Error | null) => void;
+
+type PresetFileStoreOptions = {
+    readonly fileStoreEffectID?: string;
+    readonly legacyFileStorePluginID?: string;
+};
+
+type PresetFileStoreIdentity = {
+    readonly pluginID: string;
+    readonly scope: string;
+};
+
+type PresetFileStoreResolution =
+    | { readonly ok: true; readonly value: PresetFileStoreIdentity }
+    | { readonly ok: false; readonly error: Error };
+
+function parsePresetFileStoreIdentity(
+    manifest: unknown,
+    effectID: string,
+    legacyPluginID: string | undefined,
+): PresetFileStoreResolution {
+    if (!isPlainObject(manifest)
+        || typeof manifest.ID !== "string"
+        || manifest.ID.length === 0
+        || manifest.ID.trim() !== manifest.ID
+        || /[\u0000-\u001f\u007f]/.test(manifest.ID)) {
+        return { ok: false, error: new Error("Saved presets are unavailable: the plugin manifest must provide a permanent ID.") };
+    }
+
+    // Keep sound contracts independent of product identity. Fixed lowercase
+    // hashes also avoid CHOC's filename truncation and case-insensitive disks.
+    const scope = manifest.ID === legacyPluginID
+        ? effectID
+        : `plugin-${sha256(JSON.stringify([manifest.ID, effectID]))}`;
+    return { ok: true, value: { pluginID: manifest.ID, scope } };
+}
 
 function requireBoolean(value: unknown, fieldName: string) {
     if (typeof value !== "boolean") {
@@ -245,12 +281,17 @@ export class EffectPresetRuntimeBridgeV2 {
     private readonly pendingStoredStateEchoes = new Map<string, number>();
     private readonly handleStoredStateValueBound: (message: unknown) => void;
     private readonly userFiles: ChocUserFiles | null;
+    private fileStoreIdentity: PresetFileStoreIdentity | null = null;
+    private fileStoreLoadState: "pending" | "loading" | "ready" | "failed" = "pending";
+    private fileStoreError: Error | null = null;
+    private fileStoreLoadGeneration = 0;
+    private readonly handleStatusBound = () => { void this.loadUserPresetFiles(); };
     private localRevision = 0;
     private pendingStoredStateValueRevision: number | null = null;
 
     constructor(
         private readonly patchConnection: PatchConnectionLike,
-        private readonly options: { fileStoreEffectID?: string } = {},
+        private readonly options: PresetFileStoreOptions = {},
     ) {
         this.state = createDefaultEffectPresetStateV2();
         this.handleStoredStateValueBound = this.handleStoredStateValue.bind(this);
@@ -263,7 +304,9 @@ export class EffectPresetRuntimeBridgeV2 {
         }
 
         this.attached = true;
+        this.fileStoreLoadState = "pending";
         this.patchConnection.addStoredStateValueListener?.(this.handleStoredStateValueBound);
+        this.patchConnection.addStatusListener?.(this.handleStatusBound);
     }
 
     detach() {
@@ -272,7 +315,9 @@ export class EffectPresetRuntimeBridgeV2 {
         }
 
         this.attached = false;
+        this.fileStoreLoadGeneration += 1;
         this.patchConnection.removeStoredStateValueListener?.(this.handleStoredStateValueBound);
+        this.patchConnection.removeStatusListener?.(this.handleStatusBound);
     }
 
     requestBootState() {
@@ -336,6 +381,7 @@ export class EffectPresetRuntimeBridgeV2 {
 
     saveUserPreset(preset: EffectPresetV2, options: { activate?: boolean } = {}) {
         const normalizedPreset = normalizePresetShape(preset);
+        this.requireUserPresetFileStore(normalizedPreset.effectID);
         const currentBank = this.state.userPresets[normalizedPreset.effectID] ?? [];
         const nextActivePresetByEffect = options.activate
             ? {
@@ -363,6 +409,7 @@ export class EffectPresetRuntimeBridgeV2 {
         presets: EffectPresetV2[],
         activePresetMetadata?: EffectPresetActiveMetadata | null,
     ) {
+        this.requireUserPresetFileStore(effectID);
         const activePresetByEffect = { ...this.state.activePresetByEffect };
 
         if (activePresetMetadata === null) {
@@ -401,6 +448,9 @@ export class EffectPresetRuntimeBridgeV2 {
     }
 
     replaceState(state: EffectPresetStateV2) {
+        for (const effectID of Object.keys(state.userPresets)) {
+            this.requireUserPresetFileStore(effectID);
+        }
         const nextState = this.commitState(state);
 
         for (const [effectID, presets] of Object.entries(nextState.userPresets)) {
@@ -458,10 +508,45 @@ export class EffectPresetRuntimeBridgeV2 {
         }
     }
 
-    private notifyError(error: Error) {
+    private notifyError(error: Error | null) {
         for (const listener of this.errorListeners) {
             listener(error);
         }
+    }
+
+    private resolveFileStore(effectID: string): PresetFileStoreResolution {
+        const result = parsePresetFileStoreIdentity(
+            this.patchConnection.manifest,
+            effectID,
+            this.options.legacyFileStorePluginID,
+        );
+        if (!result.ok) {
+            return result;
+        }
+        if (this.fileStoreIdentity && this.fileStoreIdentity.pluginID !== result.value.pluginID) {
+            return { ok: false, error: new Error("Saved presets are unavailable: the plugin identity changed. Reopen the plugin view.") };
+        }
+        return result;
+    }
+
+    private requireUserPresetFileStore(effectID: string) {
+        if (!this.userFiles || effectID !== this.options.fileStoreEffectID) {
+            return;
+        }
+        const resolution = this.resolveFileStore(effectID);
+        // Compatibility boundary: the existing synchronous bridge API throws;
+        // the controller translates this into its public mutation failure result.
+        if (!resolution.ok) {
+            throw resolution.error;
+        }
+        if (this.fileStoreLoadState !== "ready") {
+            throw this.fileStoreError ?? new Error("Saved presets are still loading. Try again once loading completes.");
+        }
+    }
+
+    private reportFileStoreError(error: Error) {
+        this.fileStoreError = error;
+        this.notifyError(error);
     }
 
     private commitState(nextState: EffectPresetStateV2) {
@@ -491,17 +576,29 @@ export class EffectPresetRuntimeBridgeV2 {
     }
 
     private async loadUserPresetFiles() {
-        if (!this.userFiles || !this.options.fileStoreEffectID) {
+        if (!this.userFiles || !this.options.fileStoreEffectID
+            || this.fileStoreLoadState === "loading" || this.fileStoreLoadState === "ready") {
             return;
         }
 
+        const effectID = this.options.fileStoreEffectID;
+        const resolution = this.resolveFileStore(effectID);
+        if (!resolution.ok) {
+            this.fileStoreLoadState = "failed";
+            this.reportFileStoreError(resolution.error);
+            return;
+        }
+        this.fileStoreIdentity = resolution.value;
+        this.fileStoreLoadState = "loading";
+        const { scope } = resolution.value;
+        const generation = this.fileStoreLoadGeneration;
+
         try {
-            const effectID = this.options.fileStoreEffectID;
-            const fileNames = (await this.userFiles.list(effectID)).filter((fileName) => fileName.endsWith(".json"));
+            const fileNames = (await this.userFiles.list(scope)).filter((fileName) => fileName.endsWith(".json"));
             const presets: EffectPresetV2[] = [];
 
             for (const fileName of fileNames) {
-                const preset = normalizePresetShape(JSON.parse(await this.userFiles.read(effectID, fileName)));
+                const preset = normalizePresetShape(JSON.parse(await this.userFiles.read(scope, fileName)));
 
                 if (preset.effectID !== effectID) {
                     throw new Error(`Preset file "${fileName}" contains effect "${preset.effectID}" instead of "${effectID}".`);
@@ -510,6 +607,20 @@ export class EffectPresetRuntimeBridgeV2 {
                 presets.push(preset);
             }
 
+            if (generation !== this.fileStoreLoadGeneration) {
+                return;
+            }
+            const currentResolution = this.resolveFileStore(effectID);
+            if (!currentResolution.ok) {
+                this.fileStoreLoadState = "failed";
+                this.reportFileStoreError(currentResolution.error);
+                return;
+            }
+            this.fileStoreLoadState = "ready";
+            if (this.fileStoreError) {
+                this.fileStoreError = null;
+                this.notifyError(null);
+            }
             this.setState({
                 ...this.state,
                 userPresets: {
@@ -518,44 +629,43 @@ export class EffectPresetRuntimeBridgeV2 {
                 },
             });
         } catch (error) {
-            this.notifyError(errorFromUnknown(error));
+            if (generation === this.fileStoreLoadGeneration) {
+                this.fileStoreLoadState = "failed";
+                this.reportFileStoreError(errorFromUnknown(error));
+            }
         }
     }
 
     private writeUserPresetFile(preset: EffectPresetV2) {
-        if (!this.userFiles || !this.options.fileStoreEffectID || preset.effectID !== this.options.fileStoreEffectID) {
+        if (!this.userFiles || !this.fileStoreIdentity || preset.effectID !== this.options.fileStoreEffectID) {
             return;
         }
 
         void this.userFiles
-            .write(preset.effectID, userPresetFileName(preset.presetID), JSON.stringify(normalizePresetShape(preset), null, 2))
+            .write(this.fileStoreIdentity.scope, userPresetFileName(preset.presetID), JSON.stringify(normalizePresetShape(preset), null, 2))
             .catch((error: unknown) => this.notifyError(errorFromUnknown(error)));
     }
 
     private syncUserPresetFilesForEffect(effectID: string, presets: EffectPresetV2[]) {
-        if (!this.userFiles || effectID !== this.options.fileStoreEffectID) {
+        if (!this.userFiles || !this.fileStoreIdentity || effectID !== this.options.fileStoreEffectID) {
             return;
         }
 
-        void this.syncUserPresetFilesForEffectAsync(effectID, presets)
+        void this.syncUserPresetFilesForEffectAsync(this.userFiles, this.fileStoreIdentity.scope, presets)
             .catch((error: unknown) => this.notifyError(errorFromUnknown(error)));
     }
 
-    private async syncUserPresetFilesForEffectAsync(effectID: string, presets: EffectPresetV2[]) {
-        if (!this.userFiles) {
-            return;
-        }
-
+    private async syncUserPresetFilesForEffectAsync(userFiles: ChocUserFiles, scope: string, presets: EffectPresetV2[]) {
         const nextFileNames = new Set(presets.map((preset) => userPresetFileName(preset.presetID)));
-        const existingFileNames = (await this.userFiles.list(effectID)).filter((fileName) => fileName.endsWith(".json"));
+        const existingFileNames = (await userFiles.list(scope)).filter((fileName) => fileName.endsWith(".json"));
 
         await Promise.all(presets.map((preset) => (
-            this.userFiles!.write(effectID, userPresetFileName(preset.presetID), JSON.stringify(normalizePresetShape(preset), null, 2))
+            userFiles.write(scope, userPresetFileName(preset.presetID), JSON.stringify(normalizePresetShape(preset), null, 2))
         )));
 
         await Promise.all(existingFileNames
             .filter((fileName) => !nextFileNames.has(fileName))
-            .map((fileName) => this.userFiles!.delete(effectID, fileName)));
+            .map((fileName) => userFiles.delete(scope, fileName)));
     }
 
     private rememberPendingStoredStateEcho(value: unknown) {

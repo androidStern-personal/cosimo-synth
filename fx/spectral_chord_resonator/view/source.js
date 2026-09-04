@@ -44,6 +44,7 @@ class SpectralChordResonatorView extends HTMLElement {
     });
     this.presetController = createStandaloneEffectPresetController({
       effectID: "spectral-chord-resonator",
+      legacyFileStorePluginID: "dev.cosimo.spectral-chord-resonator",
       patchConnection,
       storedStateAdapters: [this.partialStateAdapter],
     });
