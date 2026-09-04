@@ -50,19 +50,22 @@ git -C <private-candidate-root>/sources/cmajor.git cat-file -e <final-cmajor-sha
 git -C <private-candidate-root>/sources/choc.git cat-file -e <final-choc-sha>^{commit}
 ```
 
-The existing command shape is:
+After placing the reviewed temporary adapter in the mode-700 private candidate
+root, its invocation is:
 
 ```text
-CPM_SOURCE_CACHE=<private-candidate-root>/cpm-source-cache \
-node scripts/release_builder_kit.mjs \
-  --version <version-read-from-final-source-kit/kit.json> \
+node <private-candidate-root>/candidate_delivery_adapter.mjs \
+  --repo <absolute-final-integrated-checkout> \
   --source-sha <final-integrated-40-hex-sha> \
-  --destination-config /private/tmp/builder-kit-private-release.B1ZMfJ/destination.json \
-  --dry-run \
-  --staging <private-candidate-root>/release-stage \
   --cmajor-source <private-candidate-root>/sources/cmajor.git \
   --choc-source <private-candidate-root>/sources/choc.git
 ```
+
+The adapter reads the version from `kit/kit.json` at the requested commit,
+sets a fresh candidate-only `CPM_SOURCE_CACHE`, and supplies the exact
+`--dry-run` release arguments programmatically. The required
+`--destination-config` parser slot receives a nonexistent private placeholder;
+`runRelease` does not read it when the caller injects `destination`.
 
 Do not add `--skip-tools` when either fork pin changed. The default macOS path
 builds both archives from the final pin, checks the patched CHOC marker in the
@@ -75,7 +78,8 @@ coordinator's serialized native slot.
 
 The public production bootstrap cannot select an unpublished candidate: its
 bytes pin the published private installer. The CLI form of
-`prepare_builder_kit_install.mjs` also reads the configured HTTPS feed origin.
+`prepare_builder_kit_install.mjs` also reads the configured HTTPS feed origin
+and production Keychain capability.
 Its `--public-bootstrap-url` changes only the first curl URL, so that flag alone
 would still fetch the private installer and tools from the production feed.
 
@@ -91,10 +95,11 @@ The existing programmatic boundaries do support a fully local candidate:
 Use one temporary, uncommitted Node adapter outside Git to compose those APIs.
 It must perform this literal sequence:
 
-1. Parse the existing destination configuration only through
-   `readDestinationConfig`, then read the capability through
-   `readCapabilityFromKeychain`. Keep both wrapped by the existing redaction
-   type and never print them.
+1. Generate a fresh 32-byte base64url test capability with
+   `crypto.randomBytes`, immediately wrap it with the existing `redact` helper,
+   and never print or persist it except through `prepareInstallation`'s
+   mode-600 private delivery files. Do not read the production destination
+   configuration or Keychain.
 2. Bind an HTTP server to `127.0.0.1` on an OS-selected port before rendering
    the candidate. Do not use LAN, wildcard, Tailscale, Funnel, ngrok, request
    logging, directory listings, redirects, or a non-loopback listener.
@@ -122,12 +127,12 @@ handler and all paths remain private temporary code; `refuse` throws if any
 network mutation callback is unexpectedly reached.
 
 ```js
-const config = await readDestinationConfig(destinationConfigPath);
-const capability = readCapabilityFromKeychain({ service: config.keychainService });
+const redactedCapability = redact(randomBytes(32).toString("base64url"));
+const capability = reveal(redactedCapability);
 const origin = `http://127.0.0.1:${server.address().port}`;
 const localDestination = Object.freeze({
-    feedUrl: redact(`${origin}/${reveal(capability)}`),
-    r2Target: redact(`candidate:unused/${reveal(capability)}`),
+    feedUrl: redact(`${origin}/${capability}`),
+    r2Target: redact(`candidate:unused/${capability}`),
 });
 const staged = await runRelease(parseArgs(releaseArguments), {
     destination: localDestination,
@@ -138,15 +143,15 @@ const staged = await runRelease(parseArgs(releaseArguments), {
 const prepared = await prepareInstallation({
     manifest: staged.manifest,
     destinationConfig: { feedOrigin: redact(origin) },
-    capability,
+    capability: redactedCapability,
     outputDir: privateDeliveryDirectory,
     publicBootstrapUrl: `${origin}/install.sh`,
 });
 if (!prepared.ok) throw new Error(prepared.error.code);
 ```
 
-The adapter is temporary orchestration around existing repository APIs, not release
-infrastructure. Keep it and all generated delivery files outside Git. Retain
+The adapter is temporary orchestration around existing repository APIs, not
+release infrastructure. Keep it and all generated delivery files outside Git. Retain
 the process only for the coordinated Woods run, then stop it without touching
 the production feed or public bootstrap.
 
@@ -199,6 +204,7 @@ is the one external prerequisite. No private feed upload is required.
 
 Publication remains a separate action: do not omit `--dry-run`, pass a real
 lineage clone, call `publishReleaseObjects`, upload a new public `install.sh`,
-or change the customer update channel. The existing destination configuration
-is read-only, and its values, capability, populated command, and private URLs
-must remain out of ordinary output and committed evidence.
+or change the customer update channel. The existing production destination
+configuration and Keychain capability are not inputs to this candidate. The
+ephemeral capability, populated command, and private URLs must remain out of
+ordinary output and committed evidence.
