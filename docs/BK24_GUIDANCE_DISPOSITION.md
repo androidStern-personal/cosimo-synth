@@ -6,7 +6,7 @@ The disposition terms are:
 
 - **Keep**: still a minimum universal boundary in the relevant `AGENTS.md`.
 - **Relocate**: still current or unresolved, now in a focused reference loaded only for that work.
-- **Enforced**: the prose can leave universal instructions because current source plus a focused behavioral/structural test owns it. The focused reference may still explain the contract.
+- **Enforced**: the behavior is owned by source and a relevant behavioral test executed against the candidate. Source inspection or structural/string checks alone count only as a partial guard; safety guidance remains conditional until behavioral proof exists.
 - **Retire**: obsolete history, duplicated navigation, or machine-specific receipt; current truth is derived elsewhere.
 - **Duplicate**: already owned by the personal overlay and not repeated as repository policy unless the repository adds a distinct constraint.
 
@@ -100,7 +100,7 @@ Original line numbers refer to the 123-line baseline file.
 | R58 / 110 | Recorded generic AU knob crash and stack. | **Relocate known failure** | Exported product-neutral `kit/docs/HOST_COMPATIBILITY.md`; historical evidence is explicitly not current-health proof. Provenance: `da6c8786`. |
 | R59 / 111 | Use setup-pinned VST3 or explicit source fallback for JIT. | **Relocate** | Kit index and host compatibility guide; setup/install payload verification is tested. Provenance updated in `d2afd23e`. |
 | R60 / 112 | Do not install/recommend official generic AU except reproduction. | **Relocate unchanged** | Host compatibility guide. Supported installers target VST3 and do not alter AU state. |
-| R61 / 113 | JIT installer validates patch/loader and writes only VST3 JSON. | **Enforced + relocate** | `kit/scripts/install_fx_cmajplugin.sh`, installer/path tests, and host compatibility guide. Marker validation is not keyboard behavior proof. |
+| R61 / 113 | JIT installer validates patch/loader and writes only VST3 JSON. | **Relocate; inspected source guard** | `kit/scripts/install_fx_cmajplugin.sh` and host compatibility guide encode the boundary, but no behavioral JIT-association/AU-nonmutation fixture ran in BK-24E. Generic-loader dry-run/path coverage and marker validation do not prove this install behavior or keyboard semantics. |
 | R62 / 114 | Installer moved to kit; dependencies are in kit instructions. | **Retire migration notice** | Current package commands and conditional indexes point directly to final paths. |
 | R63 / 118 | Spectral has one stereo `audioIn` named Input. | **Relocate; partial enforcement** | `fx/spectral_chord_resonator/README.md`, DSP declaration, and audio probes. Compiled endpoint inventory still needs an exact contract. Provenance: `de7ce33f`. |
 | R64 / 119 | MIDI controls notes/bend/voices; no public audio sidechain. | **Relocate** | Spectral README and DSP routing. Existing generic multibus tests do not prove this product endpoint policy. |
@@ -141,8 +141,8 @@ Original line numbers refer to the 50-line baseline `kit/AGENTS.md`. Most rules 
 | K24 / 44 | Every plug-in change has focused tests named in handoff. | **Keep** | Kit universal test boundary. Test selection remains human/task judgment. |
 | K25 / 45 | Never weaken assertions; repoint with equal/stronger check. | **Keep** | Kit universal test boundary. This is review policy, not automatically enforceable. |
 | K26 / 46 | Never commit generated UI beside source; output goes under build. | **Keep** | Kit universal authored/generated boundary; ignore rules and build tests support it. |
-| K27 / 47 | New plug-in touches no shared registry; discovery/config are local. | **Keep concise + enforced** | Kit universal discovery rule; scaffold/discovery tests reject collisions and avoid a central list. |
-| K28 / 48 | Invalid/orphan/new-schema/duplicate/identity-defective config fails closed. | **Keep concise + enforced** | Kit universal fail-closed rule; detailed cases live in architecture and discovery/config tests. |
+| K27 / 47 | New plug-in touches no shared registry; discovery/config are local. | **Keep concise; source/test guard** | Kit universal discovery rule; scaffold/discovery tests reject collisions and avoid a central list. Those focused tests were inspected, not run in BK-24E. |
+| K28 / 48 | Invalid/orphan/new-schema/duplicate/identity-defective config fails closed. | **Keep concise; source/test guard** | Kit universal fail-closed rule; detailed cases live in architecture and discovery/config tests. The composed A/B/D worker ran its focused config/build suite; BK-24E did not re-run it. |
 | K29 / 49 | Kit stays generic/replaceable; product extension seams/root ownership. | **Keep** | Kit universal boundary and export/import-graph tests. Review still guards semantic confidentiality. |
 | K30 / 50 | Pre-kit moves require one-line re-export shim; preserve generated module names/content. | **Relocate** | `PLUGIN_ARCHITECTURE.md` compatibility-move section. This applies only when moving a kit module, not routine plug-in work. Existing import-graph tests cover current shims but not every future move. |
 
