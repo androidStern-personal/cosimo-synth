@@ -226,8 +226,12 @@ async function clearRouterMessages(page) {
     await page.evaluate(() => window.__CHOC_HOST_KEYBOARD_MESSAGES__.splice(0));
 }
 
-async function readRouterMessages(page) {
-    await page.waitForFunction(() => window.__CHOC_HOST_KEYBOARD_MESSAGES__.length > 0);
+async function readRouterMessages(page, expectedKeyboardMessageCount = 2) {
+    await page.waitForFunction((expectedCount) => (
+        window.__CHOC_HOST_KEYBOARD_MESSAGES__.filter(({ action }) => (
+            action === "forwardBufferedEventToHost" || action === "discardBufferedEvent"
+        )).length >= expectedCount
+    ), expectedKeyboardMessageCount);
     return page.evaluate(() => structuredClone(window.__CHOC_HOST_KEYBOARD_MESSAGES__));
 }
 
@@ -329,7 +333,14 @@ test("the exact CHOC router reaches the native forward/discard seam from package
         const reset = page.locator('[data-role="seqfx-reset"]');
 
         await t.test("non-text button forwards Space down and matching up", async () => {
+            await reset.evaluate((element) => {
+                window.__SEQFX_RESET_SPACE_CLICK_COUNT__ = 0;
+                element.addEventListener("click", () => {
+                    window.__SEQFX_RESET_SPACE_CLICK_COUNT__ += 1;
+                }, { once: true });
+            });
             assertForwardedPair(await pressAndRead(page, reset), " ", "spacebar-transport");
+            assert.equal(await page.evaluate(() => window.__SEQFX_RESET_SPACE_CLICK_COUNT__), 0);
         });
 
         const range = page.locator('input[type="range"][data-role="seqfx-global-mix"]');
@@ -360,7 +371,7 @@ test("the exact CHOC router reaches the native forward/discard seam from package
             await page.keyboard.down("Space");
             await page.keyboard.down("Space");
             await page.keyboard.up("Space");
-            const messages = keyboardMessages(await readRouterMessages(page));
+            const messages = keyboardMessages(await readRouterMessages(page, 3));
             assert.deepEqual(
                 messages.map(({ action, eventType, repeat, reason }) => ({ action, eventType, repeat, reason })),
                 [
@@ -388,7 +399,7 @@ test("the exact CHOC router reaches the native forward/discard seam from package
             await page.keyboard.down("Space");
             await page.keyboard.down("Space");
             await page.keyboard.up("Space");
-            const messages = keyboardMessages(await readRouterMessages(page));
+            const messages = keyboardMessages(await readRouterMessages(page, 3));
             assert.deepEqual(
                 messages.map(({ action, eventType, repeat, reason }) => ({ action, eventType, repeat, reason })),
                 [
@@ -401,6 +412,48 @@ test("the exact CHOC router reaches the native forward/discard seam from package
             assert.equal(await loopStart.evaluate((element) => element.getRootNode().activeElement === element), true);
         });
 
+        await t.test("matching Space keyup forwards after focus moves away from the number field", async () => {
+            await loopStart.focus();
+            const valueBefore = await loopStart.inputValue();
+            await clearRouterMessages(page);
+            await page.keyboard.down("Space");
+            await reset.focus();
+            assert.equal(await reset.evaluate((element) => element.getRootNode().activeElement === element), true);
+            await page.keyboard.up("Space");
+            assertForwardedPair(await readRouterMessages(page), " ", "spacebar-transport");
+            assert.equal(await loopStart.inputValue(), valueBefore);
+        });
+
+        await t.test("a nested keyboard dispatch cannot consume the outer event finalizer", async () => {
+            await loopStart.focus();
+            await clearRouterMessages(page);
+            await loopStart.evaluate((element) => {
+                element.addEventListener("keydown", (event) => {
+                    if (event.key !== " ") return;
+                    for (const type of ["keydown", "keyup"]) {
+                        element.dispatchEvent(new KeyboardEvent(type, {
+                            bubbles: true,
+                            cancelable: true,
+                            code: "KeyX",
+                            composed: true,
+                            key: "x",
+                        }));
+                    }
+                }, { once: true });
+            });
+            await page.keyboard.press("Space");
+            const messages = keyboardMessages(await readRouterMessages(page, 4));
+            assert.deepEqual(
+                messages.map(({ action, eventType, key, reason }) => ({ action, eventType, key, reason })),
+                [
+                    { action: "discardBufferedEvent", eventType: "keydown", key: "x", reason: "text-entry-active" },
+                    { action: "discardBufferedEvent", eventType: "keyup", key: "x", reason: "text-entry-active" },
+                    { action: "forwardBufferedEventToHost", eventType: "keydown", key: " ", reason: "spacebar-transport" },
+                    { action: "forwardBufferedEventToHost", eventType: "keyup", key: " ", reason: "matching-forwarded-keyup" },
+                ],
+            );
+        });
+
         await t.test("numeric editing keys remain inside the focused number field", async () => {
             await loopStart.focus();
             const valueBefore = await loopStart.inputValue();
@@ -409,25 +462,73 @@ test("the exact CHOC router reaches the native forward/discard seam from package
             assert.equal(await loopStart.evaluate((element) => element.getRootNode().activeElement === element), true);
         });
 
-        await t.test("a number field can still claim Space with preventDefault", async () => {
+        await t.test("a modifier chord does not take the numeric Space exception", async () => {
+            await loopStart.focus();
+            await clearRouterMessages(page);
+            await page.keyboard.down("Control");
+            await page.keyboard.press("Space");
+            await page.keyboard.up("Control");
+            const spaceMessages = keyboardMessages(await readRouterMessages(page, 4))
+                .filter(({ key }) => key === " ");
+            assertDiscardedPair(spaceMessages, " ", "text-entry-active");
+        });
+
+        await t.test("composing Space does not take the numeric exception", async () => {
             await loopStart.focus();
             await clearRouterMessages(page);
             await loopStart.evaluate((element) => {
-                const claimSpace = (event) => {
-                    if (event.key === " ") event.preventDefault();
-                };
                 for (const type of ["keydown", "keyup"]) {
-                    element.addEventListener(type, claimSpace, { once: true });
                     element.dispatchEvent(new KeyboardEvent(type, {
                         bubbles: true,
                         cancelable: true,
                         code: "Space",
                         composed: true,
+                        isComposing: true,
                         key: " ",
                     }));
                 }
             });
-            assertDiscardedPair(await readRouterMessages(page), " ", "plugin-prevented-default");
+            assertDiscardedPair(await readRouterMessages(page), " ", "text-entry-active");
+        });
+
+        await t.test("a number field can still claim Space with preventDefault", async () => {
+            await loopStart.focus();
+            await loopStart.evaluate((element) => {
+                element.__claimSpaceCount = 0;
+                element.__claimSpace = (event) => {
+                    if (event.key === " ") event.preventDefault();
+                    element.__claimSpaceCount += 1;
+                };
+                element.addEventListener("keydown", element.__claimSpace);
+                element.addEventListener("keyup", element.__claimSpace);
+            });
+            const messages = await pressFocusedAndRead(page);
+            assert.equal(await loopStart.evaluate((element) => element.__claimSpaceCount), 2);
+            await loopStart.evaluate((element) => {
+                element.removeEventListener("keydown", element.__claimSpace);
+                element.removeEventListener("keyup", element.__claimSpace);
+                delete element.__claimSpace;
+                delete element.__claimSpaceCount;
+            });
+            assertDiscardedPair(messages, " ", "plugin-prevented-default");
+        });
+
+        await t.test("stopped propagation fails closed in the next task", async () => {
+            await loopStart.focus();
+            await loopStart.evaluate((element) => {
+                element.__stopSpace = (event) => {
+                    if (event.key === " ") event.stopPropagation();
+                };
+                element.addEventListener("keydown", element.__stopSpace);
+                element.addEventListener("keyup", element.__stopSpace);
+            });
+            const messages = await pressFocusedAndRead(page);
+            await loopStart.evaluate((element) => {
+                element.removeEventListener("keydown", element.__stopSpace);
+                element.removeEventListener("keyup", element.__stopSpace);
+                delete element.__stopSpace;
+            });
+            assertDiscardedPair(messages, " ", "event-did-not-reach-window-bubble");
         });
 
         const clockMode = page.locator('[data-role="seqfx-clock-mode"]');
@@ -451,26 +552,8 @@ test("the exact CHOC router reaches the native forward/discard seam from package
             const step = page.getByRole("button", { name: "Chain 1 step 1", exact: true });
             await step.click();
             await page.locator('[data-role="seqfx-cell"][data-lane="0"][data-step="0"].is-selected').waitFor();
-            await clearRouterMessages(page);
-            await step.evaluate((element) => {
-                element.dispatchEvent(new KeyboardEvent("keydown", {
-                    bubbles: true,
-                    cancelable: true,
-                    code: "KeyC",
-                    composed: true,
-                    key: "c",
-                    metaKey: true,
-                }));
-                element.dispatchEvent(new KeyboardEvent("keyup", {
-                    bubbles: true,
-                    cancelable: true,
-                    code: "KeyC",
-                    composed: true,
-                    key: "c",
-                    metaKey: true,
-                }));
-            });
-            const shortcutMessages = keyboardMessages(await readRouterMessages(page))
+            await step.focus();
+            const shortcutMessages = keyboardMessages(await pressFocusedAndRead(page, "Meta+c"))
                 .filter(({ key }) => key.toLowerCase() === "c");
             assert.deepEqual(
                 shortcutMessages.map(({ action, eventType, reason }) => ({
