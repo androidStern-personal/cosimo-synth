@@ -215,6 +215,21 @@ test("export_produces_a_gated_starter_tree_with_no_private_material", async () =
         assert.match(firstUse, /actual plugin name to find in the\nDAW and the exact installed location/u);
         assert.match(firstUse, /http:\/\/127\.0\.0\.1:5175\/fx\/enhancer_lite\/view\/harness\.html/u);
 
+        // A cold reader gets a short conditional index whose exported links resolve.
+        const rootGuidance = await fs.readFile(path.join(outputRoot, "AGENTS.md"), "utf8");
+        const kitGuidancePath = path.join(outputRoot, "kit/AGENTS.md");
+        const kitGuidance = await fs.readFile(kitGuidancePath, "utf8");
+        assert.match(rootGuidance, /follow only the references\nthat match the task/u);
+        assert.doesNotMatch(rootGuidance, /read `kit\/AGENTS\.md` fully/iu);
+        for (const requiredRoute of ["PLUGIN_ARCHITECTURE.md", "RELEASE_VERIFICATION.md", "HOST_COMPATIBILITY.md", "EXPORT.md", "cosimo-make-plugin/SKILL.md"]) {
+            assert.equal(kitGuidance.includes(requiredRoute), true, `missing guidance route ${requiredRoute}`);
+        }
+        for (const match of kitGuidance.matchAll(/\]\(([^)]+)\)/gu)) {
+            const target = match[1];
+            if (/^(?:https?:|#)/u.test(target)) continue;
+            assert.equal(existsSync(path.resolve(path.dirname(kitGuidancePath), target)), true, `dangling kit guidance link ${target}`);
+        }
+
         // No feed: the dependency seam and feed.json are byte-identical to the monorepo's.
         for (const relative of ["kit/cmake/dependency-sources.cmake", "kit/feed.json"]) {
             assert.equal(

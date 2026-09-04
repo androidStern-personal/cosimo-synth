@@ -1,8 +1,8 @@
 # Plugin Monorepo Notes
 
-Read `kit/AGENTS.md` fully before any plugin work. It defines the build
-commands, worktree and dependency rules, plugin conventions, and the
-definition of done for this repository.
+For plug-in work, start with `kit/AGENTS.md` and follow only the references
+that match the task. It defines the universal source, dependency, generated
+artifact, test, and install boundaries for this repository.
 
 `README.md` contains the recommended first-use request and its build/install flow.
 
