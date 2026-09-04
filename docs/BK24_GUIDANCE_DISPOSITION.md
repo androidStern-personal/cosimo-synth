@@ -32,7 +32,7 @@ The commands and results in this section are the only tests executed for BK-24E.
 - Static checks passed: Markdown-link resolution across the nine routed guidance files; every documented `npm run` command resolved in the source or exported package scripts; ordered disposition IDs R01-R68 and K01-K30; protected-file exclusion; `git diff --check`; and zero product/private identifiers in changed exported instruction files.
 - No native build, install, HMR server, DAW, device, release, publication, or broad suite was run by BK-24E.
 
-Composed worker evidence, reviewed as an integration dependency and not executed in this branch: BK-24A/B/D commit `165fa0f7` reports `node --test tests/test_fx_build_args.mjs` with 57 passed and 0 failed. The coordinator must verify that commit and evidence when composing branches.
+Composed worker evidence, reviewed as an integration dependency and not executed by BK-24E: rebased BK-24A/B/D commit `ef2fa4d7` (integrated by `8d9e2878`) reports `node --test tests/test_fx_build_args.mjs` with 57 passed and 0 failed. The coordinator owns final composed verification.
 
 ## Root rule inventory
 
@@ -125,13 +125,13 @@ Original line numbers refer to the 50-line baseline `kit/AGENTS.md`. Most rules 
 | K08 / 16 | Archive hash differs from extracted payload digest; shared verifier repairs stale receipts. | **Relocate** | `kit/docs/EXPORT.md`, setup/doctor implementation, and tool-integrity tests. This implementation explanation need not load for every plug-in edit. |
 | K09 / 17 | Production uses setup-pinned `cmaj`; source fallback is explicit; pins agree. | **Keep universal + relocate detail** | Kit pinned-toolchain boundary and `PLUGIN_ARCHITECTURE.md`; source/tool integrity tests reject stale payloads and silent fallback. |
 | K10 / 18 | Playwright Chromium install is separate from npm install. | **Relocate conditional command** | Kit tests row names `npx playwright install chromium` only for browser work. |
-| K11 / 22 | `kit:new` scaffold contents, collision refusal, discovery, no shared edit. | **Relocate with enforcement** | Make-plugin skill and architecture; scaffold/discovery tests own collisions and generated shape. |
+| K11 / 22 | `kit:new` scaffold contents, collision refusal, discovery, no shared edit. | **Relocate; inspected source/test guard** | Make-plugin skill and architecture describe the workflow; scaffold/discovery tests encode collisions and generated shape but were inspected, not executed by BK-24E. |
 | K12 / 23 | One shared effect Vite server on port 5175; no per-plugin server. | **Keep conditional** | Kit browser row preserves the fixed shared port and never-stop-other-worktree rule. `PLUGIN_ARCHITECTURE.md` owns loader/repository identity checks. |
 | K13 / 24 | `fx:build` creates self-contained runtime under `build/fx`. | **Relocate navigation** | Kit command table and architecture; build tests inspect runtime closure. |
-| K14 / 25 | `fx:prod:build` creates dedicated native bundle and strips `devModule`. | **Relocate with enforcement** | Kit command table and architecture; production build tests assert compiled-mode/no-JIT packaging. |
+| K14 / 25 | `fx:prod:build` creates dedicated native bundle and strips `devModule`. | **Relocate; inspected source/test guard** | Kit command table and architecture retain the contract; production build tests encode compiled-mode/no-JIT packaging but no native production build ran in BK-24E. |
 | K15 / 26 | `fx:prod:install` only installs an already-built VST3, never JSON/AU/build. | **Keep install boundary + relocate detail** | Kit universal install rule/table, architecture, native-install decision/tests. |
 | K16 / 27 | Install pinned generic VST3; explicit source-build fallback; bridge markers. | **Relocate** | `kit/docs/HOST_COMPATIBILITY.md` and setup/install tests. Marker evidence is accurately limited. |
-| K17 / 28 | JIT association validates patch/loader, writes only VST3 JSON, optional source cmaj. | **Relocate with enforcement** | Host compatibility guide and installer tests; no AU/loader mutation. |
+| K17 / 28 | JIT association validates patch/loader, writes only VST3 JSON, optional source cmaj. | **Relocate; inspected source guard** | Host compatibility guide and installer source encode the boundary, but BK-24E ran no behavioral JIT association or AU/loader non-mutation fixture. |
 | K18 / 29 | Customer test discovery; browser build prerequisite; typecheck meaning. | **Keep concise + relocate detail** | Kit tests row and exported package runner. `tests/test_kit_export.mjs` proves customer canonical gates. |
 | K19 / 30 | Discovery command lists aliases. | **Keep concise** | Closing kit line; source discovery implements it. |
 | K20 / 34 | CPM cache is shared; no linked trees/worktree Cmajor checkout. | **Keep universal** | Pinned dependency boundary plus closing worktree note; dependency tests cover single seam/pins. |
@@ -151,7 +151,7 @@ Original line numbers refer to the 50-line baseline `kit/AGENTS.md`. Most rules 
 - `kit/template/root/AGENTS.md` no longer orders a full mandatory read. It sends plug-in tasks to the short kit index and retains the installer-owned local runtime activation boundary.
 - `kit/template/root/README.md` remains the first-use contract: unchanged Enhancer Lite, typecheck/test/build/install order, optional browser preview, occupied-port safety, and separate DAW/listening acceptance.
 - `kit/skills/cosimo-make-plugin/SKILL.md` remains the detailed task-triggered workflow. Its specificity is appropriate because it loads only for plug-in work.
-- `kit/docs/PLUGIN_ARCHITECTURE.md` is updated for the composed BK-24A/B/D result in `165fa0f7`: no `editorMaxWidth` field or generated-source width splice, and native generation stages then content-syncs durable output. Equal files keep timestamps; stale/missing files converge to current inputs. Framework/source changes remain CMake/compiler dependencies.
+- `kit/docs/PLUGIN_ARCHITECTURE.md` is updated for the composed BK-24A/B/D result in `ef2fa4d7` / integration `8d9e2878`: no `editorMaxWidth` field or generated-source width splice, and native generation stages then content-syncs durable output. Equal files keep timestamps; stale/missing files converge to current inputs. Framework/source changes remain CMake/compiler dependencies.
 - `kit/docs/HOST_COMPATIBILITY.md` is exported and product-neutral. It carries the unresolved generic AU crash and VST3/JIT install safety without private Cosimo or machine data.
 - The maintainer-only BK-24C Mac native qualification harness is not a customer command and does not appear in exported guidance. It exports committed source into owned scratch and invokes existing customer setup/build commands; it does not install a plug-in or run a DAW.
 
@@ -177,7 +177,7 @@ The personal `/Users/winterfell/.codex/AGENTS.md` was read but not edited.
 5. Spectral full held-chord restoration on Mono-to-Poly and compiled host parameter/slot-zero compatibility are not proven. DSP and `hostSlot0Guard` were not changed.
 6. The fontaudio rule is not universal source enforcement while literal synth instrument paths remain.
 7. The live tracker linker does not lock concurrent writes or authorize integration. Shared ports/build outputs/installs likewise have no repository lease mechanism.
-8. BK-24A/B/D commit `165fa0f7` and the maintainer Mac gate are composed integration dependencies. This guidance records the approved width removal and incremental/config-reset behavior; the coordinator must review it against their final commits and test evidence before integration.
+8. BK-24A/B/D commit `ef2fa4d7` is now composed through `8d9e2878`; the maintainer Mac gate remains a separate integration dependency. This guidance records the approved width removal and incremental/config-reset behavior; the coordinator must review it against final native-gate evidence before integration.
 
 ## Material decisions and objection audit
 
