@@ -10,11 +10,13 @@ Integration: `codex/bk-24-build-guidance-integration`, `/Users/winterfell/.codex
 
 | Tickets | Owner | Scope | Status |
 | --- | --- | --- | --- |
-| BK-24A/B/D | SOL/xhigh build worker | Build driver, generation, width setting removal or supported alternative, focused regression proof | Pending dispatch |
-| BK-24E | SOL/xhigh guidance worker | Root/kit minimal conditional instructions, per-rule disposition, reference validation | Pending dispatch |
-| BK-24C | SOL/xhigh native-gate worker | Exported-kit Mac qualification path and scoped workflow | Pending dispatch; native execution waits for reviewed A/B/D |
+| BK-24A/B/D | `/root/build`, `codex/bk-24-build-reliability`, `/Users/winterfell/.codex/worktrees/bk24-build/cosimo-synth` (SOL/xhigh) | Build driver, generation, width setting removal or supported alternative, focused regression proof | Implementing |
+| BK-24E | `/root/guidance`, `codex/bk-24-guidance`, `/Users/winterfell/.codex/worktrees/bk24-guidance/cosimo-synth` (SOL/xhigh) | Root/kit minimal conditional instructions, per-rule disposition, reference validation | Implementing |
+| BK-24C | `/root/native`, `codex/bk-24-native-gate`, `/Users/winterfell/.codex/worktrees/bk24-native/cosimo-synth` (SOL/xhigh) | Exported-kit Mac qualification path and scoped workflow | Authoring; native execution waits for reviewed A/B/D |
 
 The shared driver and wrapper have one worker owner. Guidance inventory and native-gate authoring can proceed independently. Coordinator owns serial rebases and source review, then composed focused checks, one native gate, final integration and source master push. Workers never merge/push master or claim native/HMR/install slots. No installed products, DAWs/devices, public publication, feed releases, customer playground, protected checkpoints, other workshops or servers are changed.
+
+Previous coordinator `01a06784-1cfc-7f43-be19-5c93ade6f53a` confirmed no active or planned shared native/master work; new operations will serialize through this queue. Unrelated holds remain with that coordinator.
 
 ## Decisions and review
 
