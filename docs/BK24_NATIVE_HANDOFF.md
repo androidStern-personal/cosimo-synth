@@ -100,9 +100,10 @@ classification, and the narrow Mach-O comparison. `node --check` and
    accepts published hashes only after exact version/artifact/Cmajor agreement.
    Hard-coded capabilities, raw credential environment variables, and copied
    tools were rejected.
-3. The unchanged assertion uses generated, object, binary timestamps and the
-   captured CMake trace, so the unconditional post-build ad-hoc signing step
-   cannot be mistaken for compilation or relinking.
+3. The unchanged assertion uses generated and object timestamps plus the
+   captured CMake compile/link trace. It records the binary timestamp but does
+   not assert it, because the unconditional post-build ad-hoc signing step may
+   touch the bundle without compiling or relinking it.
 4. Clean equivalence starts with exact bytes. The narrow Mach-O/signature
    fallback preserves useful proof if two native links differ only in UUID or
    signature metadata, while reporting that exact binary equality failed. It
