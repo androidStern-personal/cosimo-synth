@@ -1,5 +1,9 @@
 # Builder Kit
 
+Install using the personalized one-line command supplied with your delivery;
+read its JUCE notice before running it. When it reports success, open the printed
+project folder in Codex. No plugin has been built or installed yet.
+
 After setup, a good first request for your coding agent is:
 
 > Build and install the included plugin so I can try it in my DAW.
