@@ -272,6 +272,7 @@ async function createPresetController({
 
     return new StandaloneEffectPresetController({
         effectID: "ott",
+        legacyFileStorePluginID: "dev.cosimo.ott-lab",
         patchConnection,
         factoryPresets: factoryPresetRegistry,
         storedStateAdapters,
@@ -288,6 +289,7 @@ class FakeStandalonePatchConnection {
         parameterValues = {},
         canPersistState = true,
     } = {}) {
+        this.manifest = { ID: "dev.cosimo.ott-lab" };
         this.status = status;
         this.storedState = { ...storedState };
         this.parameterValues = { ...parameterValues };
@@ -759,6 +761,7 @@ test("standalone controller writes user presets to CHOC files and keeps Cmajor s
         });
 
         controller.attach();
+        await flushMicrotasks();
         patchConnection.storedWrites = [];
 
         const result = controller.saveCurrentAsNewPreset("File Write");

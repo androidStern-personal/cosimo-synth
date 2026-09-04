@@ -105,6 +105,13 @@ export type StandaloneEffectPresetControllerOptions = {
     effectID: string;
     patchConnection: PatchConnectionLike;
     /**
+     * Original manifest ID that owned this effect's pre-identity file folder.
+     * Only that exact plugin keeps the legacy folder; reused views automatically
+     * get identity-scoped storage. Omit for new plugins. Never derive from the
+     * current manifest: this is historical ownership, not a storage override.
+     */
+    legacyFileStorePluginID?: string;
+    /**
      * Factory preset inventories keyed by effectID. Each plugin owns and
      * passes its own inventory; omitting this means the effect ships no
      * factory presets.
@@ -321,7 +328,7 @@ export class StandaloneEffectPresetController {
     private readonly parameterListenerCleanups: Array<() => void> = [];
     protected readonly storedStateListenerCleanups: Array<() => void> = [];
     private readonly handleBridgeStateBound: (state: EffectPresetStateV2) => void;
-    private readonly handleBridgeErrorBound: (error: Error) => void;
+    private readonly handleBridgeErrorBound: (error: Error | null) => void;
     private readonly handleStatusBound: (status: unknown) => void;
 
     protected bridgeState: EffectPresetStateV2;
@@ -346,6 +353,7 @@ export class StandaloneEffectPresetController {
         this.writeClipboardText = options.writeClipboardText;
         this.bridge = new EffectPresetRuntimeBridgeV2(options.patchConnection, {
             fileStoreEffectID: options.effectID,
+            legacyFileStorePluginID: options.legacyFileStorePluginID,
         });
         this.bridgeState = this.bridge.getState();
         this.handleBridgeStateBound = this.handleBridgeState.bind(this);
@@ -741,8 +749,8 @@ export class StandaloneEffectPresetController {
         this.notify();
     }
 
-    private handleBridgeError(error: Error) {
-        this.lastError = error.message;
+    private handleBridgeError(error: Error | null) {
+        this.lastError = error?.message ?? null;
         this.notify();
     }
 

@@ -53,7 +53,7 @@ type EnhancerLitePatchConnection = PatchConnectionLike & Required<Pick<
     | "sendEventOrValue"
 >>;
 
-/** Identity for presets, snapshots, and their stored-state keys. */
+/** Sound/state contract key; saved-preset folders use the live plugin identity. */
 const effectID = "enhancer-lite";
 
 type NumericDescriptor = Extract<EnhancerLiteSettingDescriptor, { readonly kind: "number" }>;
@@ -255,6 +255,7 @@ class EnhancerLiteView extends HTMLElement {
         this.patchConnection = patchConnection;
         this.presetController = createStandaloneEffectPresetController({
             effectID,
+            legacyFileStorePluginID: "dev.cosimo.enhancer-lite",
             patchConnection,
             factoryPresets: ENHANCER_LITE_FACTORY_PRESETS,
         });

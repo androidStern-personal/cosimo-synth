@@ -12,6 +12,7 @@ class ChorusLabView extends HTMLElement {
     this.startupSeedToken = 0;
     this.presetController = createStandaloneEffectPresetController({
       effectID: "chorus",
+      legacyFileStorePluginID: "dev.cosimo.chorus-lab",
       patchConnection,
       factoryPresets: CHORUS_FACTORY_PRESETS,
     });

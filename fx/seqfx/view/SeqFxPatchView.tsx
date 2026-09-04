@@ -3100,6 +3100,7 @@ function SeqFxPresetBarHost({
     }), [bridge, patchConnection]);
     const presetController = useMemo(() => createStandaloneEffectPresetController({
         effectID: "seqfx",
+        legacyFileStorePluginID: "dev.cosimo.seqfx",
         patchConnection,
         storedStateAdapters: [storedStateAdapter],
         presetMigrations: createSeqFxPresetMigrations,

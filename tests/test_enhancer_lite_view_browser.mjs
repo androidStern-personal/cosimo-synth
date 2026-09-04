@@ -6,6 +6,7 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 import { startStaticRepoServer } from "../kit/tests/helpers/static_web_server.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const sourcePath = path.join(repoRoot, "fx/enhancer_lite/view/source.ts");
@@ -56,10 +57,36 @@ const hostStatusInputs = [
  * the status report and stored state a real Cmajor host provides, which the
  * kit's preset bar and snapshot bank read.
  */
-async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts", { host = false } = {}) {
+async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts", { host = false, manifest, userFileFixture, pauseFileLoads = false } = {}) {
     const page = await browser.newPage({ viewport: { width: 900, height: 620 } });
     await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).toString());
-    await page.evaluate(async ({ values, sourceModulePath, statusInputs, withHost }) => {
+    await page.evaluate(async ({ values, sourceModulePath, statusInputs, withHost, manifest, userFileFixture, pauseFileLoads }) => {
+        if (userFileFixture) {
+            const files = new Map(Object.entries(userFileFixture));
+            const calls = [];
+            let releaseLoads;
+            const fileLoadGate = pauseFileLoads ? new Promise((resolve) => { releaseLoads = resolve; }) : Promise.resolve();
+            window.__PRESET_FILES_TEST__ = { files, calls, releaseLoads };
+            window.chocUserFiles = {
+                async list(scope) {
+                    calls.push({ operation: "list", scope });
+                    await fileLoadGate;
+                    return [...files.keys()].filter((key) => key.startsWith(`${scope}/`)).map((key) => key.slice(scope.length + 1));
+                },
+                async read(scope, fileName) {
+                    calls.push({ operation: "read", scope });
+                    return files.get(`${scope}/${fileName}`);
+                },
+                async write(scope, fileName, contents) {
+                    calls.push({ operation: "write", scope });
+                    files.set(`${scope}/${fileName}`, contents);
+                },
+                async delete(scope, fileName) {
+                    calls.push({ operation: "delete", scope });
+                    files.delete(`${scope}/${fileName}`);
+                },
+            };
+        }
         const parameterValues = new Map(Object.entries(values));
         const listeners = new Map();
         const endpointListeners = new Map();
@@ -84,6 +111,7 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
         };
 
         const patchConnection = {
+            manifest,
             addParameterListener(endpointID, listener) {
                 const endpointListeners = listeners.get(endpointID) ?? new Set();
                 endpointListeners.add(listener);
@@ -155,7 +183,7 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
             endpointListenerCount: (endpointID) => endpointListeners.get(endpointID)?.size ?? 0,
             disconnect: () => document.querySelector("#mount").replaceChildren(),
         };
-    }, { values: initialValues, sourceModulePath: modulePath, statusInputs: hostStatusInputs, withHost: host });
+    }, { values: initialValues, sourceModulePath: modulePath, statusInputs: hostStatusInputs, withHost: host, manifest, userFileFixture, pauseFileLoads });
     await page.locator("cosimo-enhancer-lite-view").waitFor();
     return page;
 }
@@ -1261,6 +1289,90 @@ test("factory presets recall a complete Lite sound through the shared preset bar
             window.__ENHANCER_LITE_TEST__.storedWrites.map(({ key }) => key)
         ));
         assert.ok(storedKeys.includes("effects.presets.v2"), JSON.stringify(storedKeys));
+    } finally {
+        await page.close();
+    }
+});
+
+async function legacyLitePresetFixture() {
+    const originalManifest = JSON.parse(await readFile(path.join(repoRoot, "fx/enhancer_lite/EnhancerLite.cmajorpatch"), "utf8"));
+    const { buildPluginStateContract } = await loadUIModule(repoRoot, "kit/ui/effects/effect-state-contract.ts");
+    const legacy = {
+        kind: "cosimo.effectPreset", version: 2, effectID: "enhancer-lite",
+        presetID: "user.legacy", label: "Before identity separation",
+        contract: buildPluginStateContract({ effectID: "enhancer-lite", status: { details: { inputs: hostStatusInputs } } }),
+        parameters: { ...initialValues, freqHzIn: 440 }, storedState: {},
+    };
+    const legacyPath = "enhancer-lite/user.legacy.json";
+    const legacyBytes = JSON.stringify(legacy, null, 4);
+    return { originalManifest, legacy, legacyPath, legacyBytes };
+}
+
+test("one unchanged Lite UI isolates native presets by identity and retains original and upgraded banks", async () => {
+    const sourceModule = "/fx/enhancer_lite/view/source.ts";
+    const { originalManifest, legacy, legacyPath, legacyBytes } = await legacyLitePresetFixture();
+    let files = { [legacyPath]: legacyBytes };
+    const allCalls = [];
+    const cases = [
+        { ID: "com.example.derived-a", expected: [], save: "A only" },
+        { ID: "com.example.derived-b", expected: [], save: "B only" },
+        { ID: originalManifest.ID, expected: [legacy.label] },
+        { ID: "com.example.derived-a", version: "2.0.0", name: "Renamed A", expected: ["A only"] },
+    ];
+    for (const scenario of cases) {
+        const page = await openEnhancerLite(sourceModule, {
+            host: true,
+            manifest: { ...originalManifest, ID: scenario.ID, version: scenario.version ?? "0.1.0", name: scenario.name ?? "Same UI" },
+            userFileFixture: files,
+        });
+        try {
+            await page.waitForFunction(() => document.querySelector("cosimo-enhancer-lite-view").presetController.getState().missingCurrentValueEndpointIDs.length === 0);
+            await shadow(page, "cosimo-preset-bar >> [data-action='toggle-flyout']").click();
+            assert.deepEqual(await shadow(page, "cosimo-preset-bar >> [data-source='user'] .item-name").allTextContents(), scenario.expected);
+            if (scenario.save) {
+                const result = await page.evaluate((label) => document.querySelector("cosimo-enhancer-lite-view").presetController.saveCurrentAsNewPreset(label), scenario.save);
+                assert.equal(result.ok, true);
+                await page.waitForFunction((label) => [...window.__PRESET_FILES_TEST__.files.values()].some((value) => JSON.parse(value).label === label), scenario.save);
+            }
+            if (scenario.ID === originalManifest.ID) {
+                await shadow(page, "cosimo-preset-bar >> [data-preset-key='user:user.legacy']").click();
+                assert.equal(await shadow(page, "[data-readout='frequency']").textContent(), "440 Hz");
+            }
+            const savedFiles = await page.evaluate(() => ({ files: Object.fromEntries(window.__PRESET_FILES_TEST__.files), calls: window.__PRESET_FILES_TEST__.calls }));
+            files = savedFiles.files;
+            allCalls.push(...savedFiles.calls);
+            if (scenario.ID !== originalManifest.ID) assert.ok(savedFiles.calls.every(({ scope }) => scope !== "enhancer-lite"));
+            else assert.ok(savedFiles.calls.every(({ operation, scope }) => scope === "enhancer-lite" && ["list", "read"].includes(operation)));
+        } finally {
+            await page.close();
+        }
+    }
+    assert.equal(files[legacyPath], legacyBytes);
+    assert.equal(Object.keys(files).length, 3, "only the original file and the two newly saved derivative files exist");
+    assert.equal(allCalls.some(({ operation }) => operation === "delete"), false);
+});
+
+test("Lite shows a loading refusal in the preset UI and allows retry with the old bank intact", async () => {
+    const { originalManifest, legacyPath, legacyBytes } = await legacyLitePresetFixture();
+    const page = await openEnhancerLite("/fx/enhancer_lite/view/source.ts", {
+        host: true, manifest: originalManifest, userFileFixture: { [legacyPath]: legacyBytes }, pauseFileLoads: true,
+    });
+    try {
+        await shadow(page, "cosimo-preset-bar >> [data-action='save-as']").click();
+        await shadow(page, "cosimo-preset-bar >> [data-el='dialog-input']").fill("New preset");
+        await shadow(page, "cosimo-preset-bar >> [data-action='dialog-confirm']").click();
+        const errorToast = shadow(page, "cosimo-preset-bar >> .cpb-toast.error");
+        await errorToast.waitFor();
+        assert.match(await errorToast.textContent(), /still loading/);
+        assert.deepEqual(await page.evaluate(() => window.__PRESET_FILES_TEST__.calls.map(({ operation }) => operation)), ["list"]);
+        await page.evaluate(() => window.__PRESET_FILES_TEST__.releaseLoads());
+        await page.waitForFunction(() => document.querySelector("cosimo-enhancer-lite-view").presetController.getState().userPresets.length === 1);
+        await shadow(page, "cosimo-preset-bar >> [data-action='save-as']").click();
+        await shadow(page, "cosimo-preset-bar >> [data-el='dialog-input']").fill("New preset");
+        await shadow(page, "cosimo-preset-bar >> [data-action='dialog-confirm']").click();
+        await page.waitForFunction(() => window.__PRESET_FILES_TEST__.files.size === 2);
+        assert.equal(await page.evaluate((key) => window.__PRESET_FILES_TEST__.files.get(key), legacyPath), legacyBytes);
+        assert.equal(await page.evaluate(() => window.__PRESET_FILES_TEST__.calls.some(({ operation }) => operation === "delete")), false);
     } finally {
         await page.close();
     }

@@ -29,6 +29,7 @@ class OttLabView extends HTMLElement {
     this.snapshotStore = loadSnapshotStore();
     this.presetController = createStandaloneEffectPresetController({
       effectID: "ott",
+      legacyFileStorePluginID: "dev.cosimo.ott-lab",
       patchConnection,
       factoryPresets: OTT_FACTORY_PRESETS,
     });

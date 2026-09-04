@@ -2432,6 +2432,7 @@ function SynthPresetBarHost({
     wavetableTablesRef.current = wavetableTables;
     const presetController = useMemo(() => createSynthStandaloneEffectPresetController({
         effectID: SYNTH_PRESET_EFFECT_ID,
+        legacyFileStorePluginID: "dev.cosimo.wavetable-synth",
         patchConnection,
         storedStateAdapters,
         presetMigrations: buildSynthPresetMigrations,
