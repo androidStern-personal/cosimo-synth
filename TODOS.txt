@@ -5,7 +5,7 @@ Roadmap: `OPEN_WORK_ROADMAP.md`
 
 BUILDER KIT CUSTOMER EXPERIENCE — APPROVED 2026-09-04
 
-[>] BK-CX — Implement the approved customer-experience cleanup; BK-22A remains investigation-only.
+[?] BK-CX — Independent customer-experience fixes integrated; naming authority and the dependent final first-use proof remain open.
     - Product authority: Woods, planning commit 29b3961889911b49c90323c8dbe0523fb4963865, September 4 section and exact ticket rows in ENHANCER_LITE_BUILDER_KIT_ROADMAP.md. Do not merge the historical planning branch.
     - Integration coordinator: Bob, task 01a06784-1cfc-7f43-be19-5c93ade6f53a; branch codex/builder-kit-cx-integration-20260904; worktree /Users/winterfell/.codex/worktrees/77d5/cosimo-synth; starting source master b40b52aa3236774dc3d6cd4bdbc1fe804d39c26c.
     - BK-13A owner: same task, agent /root/presets; branch codex/bk-13a-preset-identity; worktree /private/tmp/builder-kit-cx.pTfNiS/presets. Shared permanent-identity preset isolation and narrowly scoped legacy preservation.
@@ -15,6 +15,13 @@ BUILDER KIT CUSTOMER EXPERIENCE — APPROVED 2026-09-04
     - Queue: independent source/focused tests first; source review and repair before broad gates; serialize native/install/fixed-port/master operations. Bob alone rebases, integrates and pushes reviewed master. Owner handoffs must be committed and clean.
     - Protected: dirty primary checkout and its TODOS.txt, customer playground, live Ableton set, installed plugins, unrelated worktrees/servers. No feed release/public deploy, private-feed logging work, cache/storage cleanup or broader old-roadmap work.
     - Coordinator ledger: /private/tmp/builder-kit-cx.pTfNiS/COORDINATION.md. Final customer-export proof, actual host acceptance and source integration are separate gates.
+    - Reviewed source c3bdffdf5b848ce64945907b23beb18bd8d26d17 is integrated and pushed to master at be56996dff4edf9851d28c18892feb5ece5cb84c (remote ref verified). Clean owner commits: presets bec03451; entry 2fb989b7; installer 01024754. Detailed scope, objection audit, artifact hashes and boundaries: docs/BUILDER_KIT_CX_20260904_HANDOFF.md.
+    - [x] BK-13A, BK-21A, BK-22B and BK-22C: implemented, reviewed and integrated. Root npm test 1,198 passed/one optional local-corpus skip/zero failures; typecheck zero diagnostics; Lite source/compiled/preview browser 34/34; preset browser 7/7; actual native installer cases 34/34.
+    - [x] Actual isolated customer artifact qualification: own setup/dependencies, doctor, typecheck, customer units 101 passed/six monorepo-only skips, browser 34/34, dedicated VST3 build, signed binary-authoritative identities, whole tested UI embedded byte-for-byte, and production API dry-run/first-install/same-ID update. pluginval strictness 5 passed with GUI tests disabled. All original regular export files stayed unchanged. This is not CLI-default-path, cold-customer, DAW, GUI, keyboard or listening acceptance.
+    - [?] BK-13B: held. Unpushed Cmajor e588619 introduces quote-compilation and semicolon-truncation regressions; original compact-name baseline built. No JUCE fork/new delivery seam, changed validation contract, alternate implementation or pin change is authorized. Product decision remains with Woods/Andrew.
+    - [ ] BK-40A final proof: concise guidance is integrated, but exact cold-customer prompt/build/install proof still depends on BK-13B. Do not count the older VM qualification or this maintainer API proof as completion.
+    - [x] BK-22A bounded investigation delivered; exact live target/focus/reproducer, root cause and regression boundary are unconfirmed. Next step requires an authorized isolated host observation; no source repair was made.
+    - Separate finding, no implementation authority: all five tracked synth generated bundles have pre-existing source drift. Woods explicitly kept them unchanged; baseline/candidate evidence is retained. Customer-specific UI was rebuilt and qualified independently. No feed release, live install, VM rerun, unrelated history removal or public deployment occurred.
 
 HOW WE WILL USE THIS FILE
 
