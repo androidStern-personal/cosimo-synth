@@ -295,7 +295,7 @@ test("toolchain_and_manifest_render_release_hashes", async () => {
     assert.equal(manifest.kit.commit, "d".repeat(40));
     assert.equal(manifest.cmajor.commit, toolchain.cmaj.forkCommit);
     assert.equal(manifest.choc.submoduleUrl, "../choc.git");
-    assert.equal(manifest.tools.cmaj.artifact, "tools/v0.1.1/cmaj-macos-arm64.tar.gz");
+    assert.equal(manifest.tools.cmaj.artifact, toolchain.cmaj.artifact);
     assert.equal(manifest.tools.cmaj.forkCommit, toolchain.cmaj.forkCommit);
     assert.equal(manifest.tools.cmajPlugin.sha256, "2".repeat(64));
     assert.equal(JSON.stringify(manifest).includes("github.com"), false, "manifest must not carry fork source URLs");
