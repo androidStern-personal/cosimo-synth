@@ -5,6 +5,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "npm run test:units:orphans && npm run test:effect-presets:unit && npm run test:enhancer:state && npm run test:enhancer-lite:state && npm run test:bounce:bank && npm run test:speedrun:unit && npm run test:speedrun:midi && npm run test:kit:release-contracts && npm run test:kit:export",
+    "test:host-keyboard-router": "node tests/tools/qualify_host_keyboard_router.mjs",
     "assets:core-shapes": "uv run python scripts/generate_core_shapes_wavetable.py",
     "assets:mod-sources": "node scripts/generate_modulation_source_icons.mjs",
     "prototype:parameter-colors": "vite --config ui/desktop/parameter-color-prototype/vite.config.mjs",
