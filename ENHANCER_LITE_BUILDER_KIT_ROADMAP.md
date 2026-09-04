@@ -1,5 +1,9 @@
 # Enhancer Lite Builder Kit — Product, GTM, and Release Roadmap
 
+## September 4, 2026 — approved build and agent-guidance cleanup
+
+Andrew authorized BK-24A–E in [BUILDER_KIT_BUILD_AND_GUIDANCE_CLEANUP.md](BUILDER_KIT_BUILD_AND_GUIDANCE_CLEANUP.md): deterministic configuration resets, incremental native builds, real Mac build-loop qualification, removal of the generated editor-width hack (clean supported alternative or drop the limit), and minimal AGENTS.md with preserved, selectively referenced knowledge. A new Bob on GPT-6 Astra/xhigh coordinates reviewed implementation and master integration. This is a source-cleanup authorization, not public release or permission to disturb installed plugins. Older roadmap status below remains historical where superseded by later execution records.
+
 Status: **Builder Kit source integrated on master with zero TypeScript diagnostics and green CI; private v0.1.1 publication and clean-customer proof remain open**
 
 Last updated: 2026-09-03
