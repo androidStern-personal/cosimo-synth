@@ -5,7 +5,11 @@ Roadmap: `OPEN_WORK_ROADMAP.md`
 
 BUILDER KIT CUSTOMER EXPERIENCE — APPROVED 2026-09-04
 
-[x] BK-21B — One prefilled copy-paste installation command implemented, reviewed, published as v0.1.2 and verified against the live download.
+[>] BK-21B — REOPENED: v0.1.2 technical publication/proof passed, but Andrew rejected the giant pasted shell line. Correct the customer entry point to the approved genuinely short command.
+    - Current authority: corrected BK-21B contract at planning commit 04a53377, ENHANCER_LITE_BUILDER_KIT_ROADMAP.md. Bob owns engineering/review/integration/scoped publication; Woods owns literal-command product review. Do not merge the historical planning branch.
+    - Corrective owner: same coordinator task, agent /root/entry, branch codex/bk-21b-short-public-entry, worktree /private/tmp/bk21b-short.QYUb2v/entry, base4793cee5. /root/native owns independent source review; /root/presets proof review. Woods approved the complete dummy-key literal using the existing public R2 origin's /install.sh; retain export BUILDER_KIT_ACCESS='…'; curl -fsSL <approved public URL>/install.sh | bash exactly. Source review/focused checks, publication and live proof are now in progress.
+    - Active queue: literal command approved by Woods; implement/review the smallest public secret-free bootstrap reusing the verified private installer; run focused failure/preservation tests; publish and prove live delivery in a fresh private host folder; deliver the actual short private line. Existing v0.1.2 is immutable historical evidence, not product acceptance.
+    - Required pasted shape: only an exported prefilled access key plus curl -fsSL <short public HTTPS bootstrap URL> | bash. Put destination, verification, temporary files and setup inside hosted code; no inline launcher/checksum/escaping wrapper, questionnaire or extra setup commands. Licensing disclosure stays beside the line. Naming/Spacebar remain separate.
     - Product authority: Woods/Andrew, section "September 4, 2026 approved one-command installation — BK-21B" at planning commit c1adaf268cebc74e865ff259751f04217b3b52f0. Do not merge the historical planning branch.
     - Integration coordinator: Bob, task 01a06784-1cfc-7f43-be19-5c93ade6f53a; branch codex/builder-kit-cx-integration-20260904; worktree /Users/winterfell/.codex/worktrees/77d5/cosimo-synth.
     - Implementation owner: same task, agent /root/entry; branch codex/bk-21b-one-command; worktree /private/tmp/bk21b.B2H5ZG/entry; starting source master 16f206d24cda68415ebfeffc28a13f4a0981c9ef.
