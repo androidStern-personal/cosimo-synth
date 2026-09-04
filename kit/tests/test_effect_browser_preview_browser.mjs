@@ -16,6 +16,8 @@ let browser;
 let origin;
 
 before(async () => {
+    // Fail before starting Vite if this npm install needs a browser download.
+    browser = await chromium.launch({ headless: true });
     // Only shipped project inputs are used. This suite also runs unchanged
     // inside an export with its own npm install and no monorepo access.
     fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "kit-browser-preview-"));
@@ -44,13 +46,12 @@ before(async () => {
     });
     await server.listen();
     origin = `http://127.0.0.1:${server.httpServer.address().port}`;
-    browser = await chromium.launch({ headless: true });
 });
 
 after(async () => {
     await browser?.close();
     await server?.close();
-    if (fixtureRoot) await fs.rm(fixtureRoot, { recursive: true, force: true });
+    if (fixtureRoot) await fs.rm(fixtureRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 });
 
 async function openPreview(directory) {
