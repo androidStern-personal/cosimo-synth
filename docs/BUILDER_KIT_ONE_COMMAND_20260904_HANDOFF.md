@@ -2,10 +2,14 @@
 
 ## Outcome and authority
 
-BK-21B source is implemented, independently reviewed and qualified with the
-exact rendered command in an isolated supported Mac environment. It is not a
-published customer delivery. The live v0.1.1 manifest has no installer entry;
-publishing a new release remains a separate authorization.
+BK-21B is implemented, independently reviewed and published as **v0.1.2**.
+The actual published installation command and safe rerun passed in an approved
+fresh private folder on the host Mac. Earlier unpublished installer qualification
+passed separately in a supported Mac VM copy. These are distinct proofs; neither
+establishes a final live-VM or pristine-operating-system installation.
+
+The publication addendum below records the separately authorized release,
+exact source and live evidence. The original qualification record is retained.
 
 Andrew's approved contract is the BK-21B section at planning commit
 `c1adaf268cebc74e865ff259751f04217b3b52f0`. That historical planning branch was
@@ -44,7 +48,7 @@ No dependency pin, lockfile, DSP, example, plugin identity, UI bundle, native
 build/install implementation or CI workflow was changed. Coordinator tracker
 and handoff edits are separate from the customer payload.
 
-## Final verification
+## Initial implementation verification
 
 - Owner focused installation/publication/release run: **37 passed, zero failed
   or skipped**, 14.822 seconds.
@@ -138,7 +142,7 @@ Coordinator judgments after independent review:
 - **Accepted, release consequence:** delivery must match exact manifest installer
   metadata. Older published releases cannot silently claim this new flow.
 
-## Evidence and remaining boundary
+## Initial qualification evidence and boundary
 
 Durable private qualification root:
 `/Users/winterfell/Library/Application Support/BuilderKitReleases/BK21B-20260904-qx24mS`.
@@ -148,8 +152,74 @@ under `final-private/`. Never place populated command files in source Git or
 public evidence. The existing capability-bearing private feed/export format is
 unchanged, not a newly claimed credential-storage migration.
 
-No new feed release/public deployment, live plugin install, plugin build,
-browser/DAW launch, listening, naming repair or Spacebar repair was performed.
+The initial qualification did not publish a release. Publication was subsequently
+authorized and completed as recorded below. Plugin build/install, browser/DAW
+launch, listening, naming repair and Spacebar repair were not part of this work.
 The held naming work and subsequent first-plugin proof remain separate.
-Next product action for this installer is authorization of a new release,
-followed by preparation and private delivery of the actual published command.
+
+## Authorized v0.1.2 publication and live proof
+
+- Exact released source: `b48a09575477b67e391e6b17476c04ddd90ad08d`.
+- Customer lineage commit: `5d19dfe2aabeeb77a63e83470b8115dbf08c823a`.
+- Annotated `v0.1.2` tag: `0a82af2d55c29a3548bf4729521f3fb1d2829e7d`.
+- Installer SHA-256:
+  `0a6e159cec49ad298f7cb07af84cbc02d9b93c17ba0a4053ee0a5a70ecd1f30a`.
+- Source differs from qualified base `1c6511b9bfa575100daecda65c30aa680feba19b`
+  only in `kit/kit.json` version, two `kit/toolchain.json` artifact prefixes,
+  and the stale strict expected-path assertion in `tests/test_release_builder_kit.mjs`.
+  Three files, four insertions/four deletions; all other bytes match.
+- Final release contracts: **67/67**; export checks: **7/7**, zero skips/failures.
+  [GitHub run 33882904203](https://github.com/androidStern-personal/cosimo-synth/actions/runs/33882904203)
+  succeeded for the exact released source. Independent source review is clear.
+- Canonical 140-file customer export passed typecheck, customer tests, example
+  UI build and update-flow merge. Canonical additive publication and live byte
+  checks passed. Existing v0.1.1 tag/commit and both tool archives were preserved;
+  all compiler/dependency/runtime pins and tool bytes/hashes remain unchanged.
+
+Woods authorized a fresh private host destination after the VirtualBuddy chooser
+prevented final live VM execution. No app was force-quit, VM configuration changed,
+or exclusive desktop access assumed. Both VM copies and original projects were
+preserved. The final live proof ran on macOS 26.6.2 arm64, with pre-existing Apple
+developer tools, system-only customer PATH, fresh project-local runtimes/cache
+and no hidden maintainer setup or private Git credentials.
+
+Independent review confirmed **126 recorded outcomes**: 121 passing assertions,
+four completed command runs and one expected HTTP-denial observation. Installation
+passed in 27 seconds; rerunning the same command passed in 3 seconds and preserved
+tracked, untracked and ignored customer work, Git HEAD/index/status. Invalid
+access and an unrelated occupied folder exited 1 safely. Fresh-shell checks
+verified Node 22.23.2, CMake 4.3.4, both published tools current by archive and
+payload, the live feed, the populated owned cache and empty inherited cache.
+There were no failed assertions. The expected product-owner placeholder warning
+remains; no first-plugin or Ableton acceptance is implied.
+
+The normal unchanged generator prepared Andrew's private command for
+`/Users/winterfell/src/builder-kit-0.1.2`; that directory was not created.
+The tested line used `/private/tmp/bk21b.B2H5ZG/live-host-proof/projects/success`
+instead. Exactly two destination occurrences differ; replacing them makes the
+command bytes equal. Credential, live download, installer hash and JUCE
+acknowledgment are otherwise identical. Do not describe the full destination
+text as byte-identical or the host proof as a final live VM/pristine-OS proof.
+
+Private release root:
+`/Users/winterfell/Library/Application Support/BuilderKitReleases/v0.1.2-20260904-86xvBV`.
+`customer-delivery/delivery.txt` is the ready-filled user delivery;
+`customer-delivery/command.sh` contains the line. Both are mode 0600 under a
+mode-0700 directory, outside Git. `RELEASE_REPORT.md`, `host-preparation.json`
+and `host-evidence/` retain the release identities, command hashes, redacted
+results/logs and proof boundary. No populated command belongs in Git.
+
+Publication decision audit:
+
+- **Accepted, low:** publish a new immutable version and reuse exact verified
+  tool archive bytes, instead of replacing v0.1.1 or rebuilding pinned tools.
+- **Accepted, low:** compare the release test's expected artifact to the supplied
+  toolchain path; retaining the old literal would reject an authorized version
+  bump. Strict forwarding, version and path-traversal checks remain in place.
+- **Accepted by Woods, explicit evidence limit:** test actual published delivery
+  in a fresh private host folder after the VM UI blocked. This resolves the
+  live-download check but does not replace clean-VM or first-plugin acceptance.
+
+This documentation-only follow-up does not change the published source or payload.
+No marketing/site deployment, installed-plugin change, global-runtime change,
+naming repair or Spacebar repair was performed during publication.
