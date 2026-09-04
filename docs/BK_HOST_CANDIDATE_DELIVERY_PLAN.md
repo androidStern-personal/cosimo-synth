@@ -97,9 +97,12 @@ It must perform this literal sequence:
 
 1. Generate a fresh 32-byte base64url test capability with
    `crypto.randomBytes`, immediately wrap it with the existing `redact` helper,
-   and never print or persist it except through `prepareInstallation`'s
-   mode-600 private delivery files. Do not read the production destination
-   configuration or Keychain.
+   and never print it. `runRelease` necessarily stamps its capability-bearing
+   loopback feed URL into the private candidate's export, proof, throwaway
+   lineage, and feed metadata; `prepareInstallation` also writes it into the
+   mode-600 private delivery files. All such bytes stay inside the mode-700
+   candidate tree and never enter a real repository commit or ordinary output.
+   Do not read the production destination configuration or Keychain.
 2. Bind an HTTP server to `127.0.0.1` on an OS-selected port before rendering
    the candidate. Do not use LAN, wildcard, Tailscale, Funnel, ngrok, request
    logging, directory listings, redirects, or a non-loopback listener.
@@ -175,8 +178,10 @@ candidate identity.
 Before handoff, verify without exposing private values:
 
 - source HEAD equals the requested SHA and its full status is empty;
-- both fresh source mirrors contain the final Cmajor and discovered CHOC
-  commits, with Cmajor still using the relative CHOC submodule URL;
+- the adapter re-reads the Cmajor pin from the exact exported source, derives
+  the CHOC gitlink and relative URL from the staged Cmajor mirror, requires
+  those identities to match the manifest and toolchain, and confirms both
+  staged mirrors contain the exact commits;
 - `release-stage/feed/manifest.json` names the final source SHA and local
   lineage commit;
 - the two staged archive digests equal the manifest and exported toolchain;
