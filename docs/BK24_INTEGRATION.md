@@ -21,9 +21,12 @@ Previous coordinator `01a06784-1cfc-7f43-be19-5c93ade6f53a` confirmed no active 
 ## Decisions and review
 
 - Work allocation: A/B/D have one owner because configuration reset, generation preservation and width removal overlap the same files. Independent C/E work stays parallel; native execution follows reviewed composition.
-- Width requirement: approved choice is a small supported mechanism or removal. Consumer generated-source edits and disproportionate toolchain work are excluded. Final decision and evidence pending.
+- Width decision: REMOVE the optional cap. Coordinator independently verified the current CPM Cmajor source is exact pin `04ee24df55c4a3ba9f67d498a70c19de1aa1ad79`; `include/cmajor/helpers/cmaj_JUCEPlugin.h:970` fixes stock bounds at 250x160 through 32768x32768 and the JUCE generator has no width option. Alternative fork/tool delivery would be disproportionate for this optional rule. Severity: LOW, explicitly authorized product tradeoff; responsive/min-size source must remain unchanged. Tool/source pins stay unchanged.
+- Incremental approach under implementation: generate on every configure into scratch, then synchronize changed bytes and remove stale generated outputs while preserving `_build`. This avoids a second input cache/invalidation system. Generator invocation remains; no native timing claim until actual qualification.
 - Guidance: relocation is distinct from source enforcement; untested protections remain selectively discoverable. Final per-rule disposition and Woods product review pending.
 
 ## Evidence and handoff
+
+Baseline instruction size: root `AGENTS.md` 123 lines / 15,775 bytes; `kit/AGENTS.md` 50 lines / 8,715 bytes (173 / 24,490 combined). Final size and rule disposition pending.
 
 Pending worker commits, independent source reviews, focused red-before regression results, native build-loop evidence, final objection severity assessment, exact changed scope and integration SHA. Host listening, physical-device acceptance, installs and publication are outside this queue.
