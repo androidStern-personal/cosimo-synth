@@ -5,6 +5,14 @@ Roadmap: `OPEN_WORK_ROADMAP.md`
 
 BUILDER KIT CUSTOMER EXPERIENCE — APPROVED 2026-09-04
 
+[>] BK-21B — One prefilled copy-paste installation command; implementation and clean-customer verification in progress.
+    - Product authority: Woods/Andrew, section "September 4, 2026 approved one-command installation — BK-21B" at planning commit c1adaf268cebc74e865ff259751f04217b3b52f0. Do not merge the historical planning branch.
+    - Integration coordinator: Bob, task 01a06784-1cfc-7f43-be19-5c93ade6f53a; branch codex/builder-kit-cx-integration-20260904; worktree /Users/winterfell/.codex/worktrees/77d5/cosimo-synth.
+    - Implementation owner: same task, agent /root/entry; branch codex/bk-21b-one-command; worktree /private/tmp/bk21b.B2H5ZG/entry; starting source master 16f206d24cda68415ebfeffc28a13f4a0981c9ef.
+    - Scope: prefilled credential/destination/installer line, existing verified delivery and setup, explicit JUCE disclosure/acknowledgment, automatic final checks, failure propagation, safe reruns and unrelated-folder preservation. No plugin build/install or example changes.
+    - Queue: implement plus focused tests; independent source/credential/file-safety review and repairs; exact emitted command in a clean supported customer environment; coordinator integration/push. Naming and Spacebar are independent holds, not installer blockers.
+    - Protected: existing customer work and VM evidence, dirty primary checkout, installed plugins, other worktrees/servers. No new feed publication, public deployment, global runtime changes or silent OS-license acceptance.
+
 [?] BK-CX — Independent customer-experience fixes integrated; naming authority and the dependent final first-use proof remain open.
     - Product authority: Woods, planning commit 29b3961889911b49c90323c8dbe0523fb4963865, September 4 section and exact ticket rows in ENHANCER_LITE_BUILDER_KIT_ROADMAP.md. Do not merge the historical planning branch.
     - Integration coordinator: Bob, task 01a06784-1cfc-7f43-be19-5c93ade6f53a; branch codex/builder-kit-cx-integration-20260904; worktree /Users/winterfell/.codex/worktrees/77d5/cosimo-synth; starting source master b40b52aa3236774dc3d6cd4bdbc1fe804d39c26c.
