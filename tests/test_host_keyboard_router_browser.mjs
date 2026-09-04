@@ -1,0 +1,461 @@
+import assert from "node:assert/strict";
+import test, { after, before } from "node:test";
+
+import { chromium } from "playwright";
+
+import { buildPlugin } from "../kit/fx/build-effect.mjs";
+import { startStaticRepoServer } from "../kit/tests/helpers/static_web_server.mjs";
+import { readChocHostKeyboardRouter } from "./helpers/choc_host_keyboard_router.mjs";
+
+const chocSourceRoot = process.env.COSIMO_CHOC_SOURCE_ROOT;
+const shouldRun = typeof chocSourceRoot === "string" && chocSourceRoot.length > 0;
+
+let browser;
+let router;
+let server;
+
+before(async () => {
+    if (!shouldRun) {
+        return;
+    }
+
+    ({ router } = await readChocHostKeyboardRouter(chocSourceRoot));
+    await buildPlugin("enhancer-lite");
+    await buildPlugin("seqfx");
+    server = await startStaticRepoServer();
+    browser = await chromium.launch({ headless: true });
+});
+
+after(async () => {
+    await browser?.close();
+    await server?.stop();
+});
+
+function patchConnectionSource() {
+    return `
+        class HostKeyboardSeqFxPatchConnection {
+            constructor() {
+                this.manifest = { view: { src: "view/index.js", width: 1120, height: 680 } };
+                this.storedState = {};
+                this.parameters = {
+                    enabled: 1,
+                    globalMix: 1,
+                    patternSelect: 0,
+                    clockMode: 0,
+                    manualBpm: 120,
+                    rate: 1,
+                    swing: 0,
+                    loopStart: 0,
+                    loopLength: 32,
+                };
+                this.status = { details: { inputs: [] } };
+                this.statusListeners = new Set();
+                this.storedStateListeners = new Set();
+                this.parameterListeners = new Map();
+                this.endpointListeners = new Map();
+            }
+
+            addStatusListener(listener) { this.statusListeners.add(listener); }
+            removeStatusListener(listener) { this.statusListeners.delete(listener); }
+            requestStatusUpdate() {
+                for (const listener of this.statusListeners) listener(this.status);
+            }
+
+            addStoredStateValueListener(listener) { this.storedStateListeners.add(listener); }
+            removeStoredStateValueListener(listener) { this.storedStateListeners.delete(listener); }
+            requestFullStoredState(callback) {
+                callback({ parameters: { ...this.parameters }, values: { ...this.storedState } });
+            }
+            requestStoredStateValue(key) {
+                for (const listener of this.storedStateListeners) {
+                    listener({ key, value: this.storedState[key] });
+                }
+            }
+            sendStoredStateValue(key, value) {
+                this.storedState[key] = value;
+                for (const listener of this.storedStateListeners) listener({ key, value });
+            }
+
+            addParameterListener(endpointID, listener) {
+                const listeners = this.parameterListeners.get(endpointID) ?? new Set();
+                listeners.add(listener);
+                this.parameterListeners.set(endpointID, listeners);
+            }
+            removeParameterListener(endpointID, listener) {
+                this.parameterListeners.get(endpointID)?.delete(listener);
+            }
+            requestParameterValue(endpointID) {
+                for (const listener of this.parameterListeners.get(endpointID) ?? []) {
+                    listener(this.parameters[endpointID] ?? 0);
+                }
+            }
+            sendEventOrValue(endpointID, value) {
+                this.parameters[endpointID] = value;
+                for (const listener of this.parameterListeners.get(endpointID) ?? []) listener(value);
+            }
+
+            addEndpointListener(endpointID, listener) {
+                const listeners = this.endpointListeners.get(endpointID) ?? new Set();
+                listeners.add(listener);
+                this.endpointListeners.set(endpointID, listeners);
+            }
+            removeEndpointListener(endpointID, listener) {
+                this.endpointListeners.get(endpointID)?.delete(listener);
+            }
+        }
+    `;
+}
+
+async function addRouterInitScript(page) {
+    await page.addInitScript({
+        content: `
+            window.__CHOC_HOST_KEYBOARD_MESSAGES__ = [];
+            Object.defineProperty(window, "webkit", {
+                configurable: true,
+                value: {
+                    messageHandlers: {
+                        chocHostKeyboard: {
+                            postMessage(message) {
+                                window.__CHOC_HOST_KEYBOARD_MESSAGES__.push(JSON.parse(message));
+                            },
+                        },
+                    },
+                },
+            });
+            ${router}
+        `,
+    });
+}
+
+async function openPackagedSeqFx() {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await addRouterInitScript(page);
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).toString());
+    await page.evaluate(async (connectionClassSource) => {
+        // eslint-disable-next-line no-new-func
+        const defineConnection = new Function(`${connectionClassSource}; return HostKeyboardSeqFxPatchConnection;`);
+        const Connection = defineConnection();
+        const module = await import("/build/fx/seqfx_runtime/view/app.js");
+        const view = await module.default(new Connection());
+        document.querySelector("#mount").replaceChildren(view);
+    }, patchConnectionSource());
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    await page.waitForFunction(() => (
+        window.__CHOC_HOST_KEYBOARD_MESSAGES__?.some(({ action }) => action === "installed")
+    ));
+    return page;
+}
+
+async function openPackagedEnhancerLite() {
+    const page = await browser.newPage({ viewport: { width: 900, height: 620 } });
+    await addRouterInitScript(page);
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).toString());
+    await page.evaluate(async () => {
+        const parameterValues = new Map(Object.entries({
+            freqHzIn: 130,
+            qIn: 0.71,
+            modeIn: 0,
+            midAmountIn: 0,
+            sideAmountIn: 0,
+            curveIn: 1,
+            saturationModeIn: 0,
+            shapeIn: 1,
+            analyzerEnabledIn: 0,
+        }));
+        const parameterListeners = new Map();
+        const endpointListeners = new Map();
+        const statusListeners = new Set();
+        const storedStateListeners = new Set();
+        const storedState = new Map();
+        const patchConnection = {
+            manifest: { name: "Cosimo Enhancer Lite" },
+            addParameterListener(endpointID, listener) {
+                const listeners = parameterListeners.get(endpointID) ?? new Set();
+                listeners.add(listener);
+                parameterListeners.set(endpointID, listeners);
+            },
+            removeParameterListener(endpointID, listener) {
+                parameterListeners.get(endpointID)?.delete(listener);
+            },
+            requestParameterValue(endpointID) {
+                for (const listener of parameterListeners.get(endpointID) ?? []) {
+                    listener(parameterValues.get(endpointID));
+                }
+            },
+            sendEventOrValue(endpointID, value) {
+                parameterValues.set(endpointID, value);
+                for (const listener of parameterListeners.get(endpointID) ?? []) listener(value);
+            },
+            addEndpointListener(endpointID, listener) {
+                const listeners = endpointListeners.get(endpointID) ?? new Set();
+                listeners.add(listener);
+                endpointListeners.set(endpointID, listeners);
+            },
+            removeEndpointListener(endpointID, listener) {
+                endpointListeners.get(endpointID)?.delete(listener);
+            },
+            addStatusListener(listener) { statusListeners.add(listener); },
+            removeStatusListener(listener) { statusListeners.delete(listener); },
+            requestStatusUpdate() {
+                for (const listener of statusListeners) {
+                    listener({ details: { inputs: [] } });
+                }
+            },
+            addStoredStateValueListener(listener) { storedStateListeners.add(listener); },
+            removeStoredStateValueListener(listener) { storedStateListeners.delete(listener); },
+            requestFullStoredState(callback) { callback(Object.fromEntries(storedState)); },
+            requestStoredStateValue(key) {
+                for (const listener of storedStateListeners) listener({ key, value: storedState.get(key) });
+            },
+            sendStoredStateValue(key, value) {
+                storedState.set(key, value);
+                for (const listener of storedStateListeners) listener({ key, value });
+            },
+        };
+        const module = await import("/build/fx/enhancer_lite_runtime/view/app.js");
+        document.querySelector("#mount").replaceChildren(await module.default(patchConnection));
+    });
+    await page.locator("cosimo-enhancer-lite-view").waitFor();
+    await page.waitForFunction(() => (
+        window.__CHOC_HOST_KEYBOARD_MESSAGES__?.some(({ action }) => action === "installed")
+    ));
+    return page;
+}
+
+async function clearRouterMessages(page) {
+    await page.evaluate(() => window.__CHOC_HOST_KEYBOARD_MESSAGES__.splice(0));
+}
+
+async function readRouterMessages(page) {
+    await page.waitForFunction(() => window.__CHOC_HOST_KEYBOARD_MESSAGES__.length > 0);
+    return page.evaluate(() => structuredClone(window.__CHOC_HOST_KEYBOARD_MESSAGES__));
+}
+
+async function pressAndRead(page, locator, key = "Space") {
+    await locator.focus();
+    await clearRouterMessages(page);
+    await locator.press(key);
+    return readRouterMessages(page);
+}
+
+async function pressFocusedAndRead(page, key = "Space") {
+    await clearRouterMessages(page);
+    await page.keyboard.press(key);
+    return readRouterMessages(page);
+}
+
+function keyboardMessages(messages) {
+    return messages.filter(({ action }) => (
+        action === "forwardBufferedEventToHost" || action === "discardBufferedEvent"
+    ));
+}
+
+function assertForwardedPair(messages, key, keydownReason) {
+    assert.deepEqual(
+        keyboardMessages(messages).map(({ action, eventType, key: payloadKey, repeat, reason }) => ({
+            action,
+            eventType,
+            key: payloadKey,
+            repeat,
+            reason,
+        })),
+        [
+            {
+                action: "forwardBufferedEventToHost",
+                eventType: "keydown",
+                key,
+                repeat: false,
+                reason: keydownReason,
+            },
+            {
+                action: "forwardBufferedEventToHost",
+                eventType: "keyup",
+                key,
+                repeat: false,
+                reason: "matching-forwarded-keyup",
+            },
+        ],
+    );
+}
+
+function assertDiscardedPair(messages, key, reason) {
+    assert.deepEqual(
+        keyboardMessages(messages).map(({ action, eventType, key: payloadKey, reason: payloadReason }) => ({
+            action,
+            eventType,
+            key: payloadKey,
+            reason: payloadReason,
+        })),
+        [
+            { action: "discardBufferedEvent", eventType: "keydown", key, reason },
+            { action: "discardBufferedEvent", eventType: "keyup", key, reason },
+        ],
+    );
+}
+
+test("the exact CHOC router reaches the native seam from the packaged Enhancer Lite target", {
+    skip: shouldRun ? false : "Set COSIMO_CHOC_SOURCE_ROOT to the exact CHOC checkout under qualification.",
+}, async (t) => {
+    const page = await openPackagedEnhancerLite();
+
+    try {
+        const frequency = page.locator('[data-readout-control="frequency"]');
+        await t.test("non-text slider role forwards Space down and matching up", async () => {
+            assertForwardedPair(await pressAndRead(page, frequency), " ", "spacebar-transport");
+        });
+
+        const saveAs = page.locator('cosimo-effect-header [data-action="save-as"]');
+        await saveAs.click();
+        const presetName = page.locator('cosimo-effect-header [data-el="dialog-input"]');
+        await presetName.waitFor();
+        await t.test("real preset-name text entry discards Space inside the plugin", async () => {
+            await page.waitForTimeout(50);
+            await presetName.fill("Customer");
+            await presetName.evaluate((input) => input.setSelectionRange(input.value.length, input.value.length));
+            assertDiscardedPair(await pressFocusedAndRead(page), " ", "text-entry-active");
+            assert.equal(await presetName.inputValue(), "Customer ");
+        });
+    } finally {
+        await page.close();
+    }
+});
+
+test("the exact CHOC router reaches the native forward/discard seam from packaged SeqFX controls", {
+    skip: shouldRun ? false : "Set COSIMO_CHOC_SOURCE_ROOT to the exact CHOC checkout under qualification.",
+}, async (t) => {
+    const page = await openPackagedSeqFx();
+
+    try {
+        const reset = page.locator('[data-role="seqfx-reset"]');
+
+        await t.test("non-text button forwards Space down and matching up", async () => {
+            assertForwardedPair(await pressAndRead(page, reset), " ", "spacebar-transport");
+        });
+
+        const range = page.locator('input[type="range"][data-role="seqfx-global-mix"]');
+        await range.waitFor();
+        await t.test("range control forwards Space down and matching up", async () => {
+            assertForwardedPair(await pressAndRead(page, range), " ", "spacebar-transport");
+        });
+
+        await t.test("an active range drag still forwards the original Space pair", async () => {
+            const bounds = await range.boundingBox();
+            assert.ok(bounds);
+            await range.focus();
+            await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+            await page.mouse.down();
+            try {
+                await page.mouse.move(bounds.x + bounds.width * 0.75, bounds.y + bounds.height / 2);
+                await clearRouterMessages(page);
+                await page.keyboard.press("Space");
+                assertForwardedPair(await readRouterMessages(page), " ", "spacebar-transport");
+            } finally {
+                await page.mouse.up();
+            }
+        });
+
+        await t.test("repeated Space keydowns retain repeat and one matching keyup", async () => {
+            await range.focus();
+            await clearRouterMessages(page);
+            await page.keyboard.down("Space");
+            await page.keyboard.down("Space");
+            await page.keyboard.up("Space");
+            const messages = keyboardMessages(await readRouterMessages(page));
+            assert.deepEqual(
+                messages.map(({ action, eventType, repeat, reason }) => ({ action, eventType, repeat, reason })),
+                [
+                    { action: "forwardBufferedEventToHost", eventType: "keydown", repeat: false, reason: "spacebar-transport" },
+                    { action: "forwardBufferedEventToHost", eventType: "keydown", repeat: true, reason: "spacebar-transport" },
+                    { action: "forwardBufferedEventToHost", eventType: "keyup", repeat: false, reason: "matching-forwarded-keyup" },
+                ],
+            );
+        });
+
+        const clockMode = page.locator('[data-role="seqfx-clock-mode"]');
+        await clockMode.selectOption("1");
+        const bpm = page.locator('[data-role="seqfx-manual-bpm"]');
+        await bpm.waitFor();
+        await t.test("numeric input reaches the seam with its current text-entry classification", async () => {
+            assertDiscardedPair(await pressAndRead(page, bpm), " ", "text-entry-active");
+        });
+
+        await t.test("a focused select menu keeps Space inside the plugin", async () => {
+            assertDiscardedPair(await pressAndRead(page, clockMode), " ", "text-entry-active");
+        });
+
+        await t.test("pointer-used select menu releases focus before the next Space pair", async () => {
+            await clockMode.focus();
+            await clockMode.dispatchEvent("pointerdown");
+            await clockMode.selectOption("0");
+            await page.waitForFunction(() => (
+                document.querySelector("cosimo-seqfx-react-view")?.shadowRoot?.activeElement === null
+            ));
+            await clearRouterMessages(page);
+            await page.keyboard.press("Space");
+            assertForwardedPair(await readRouterMessages(page), " ", "spacebar-transport");
+        });
+
+        await t.test("an actual plugin-owned shortcut is discarded after preventDefault", async () => {
+            const step = page.getByRole("button", { name: "Chain 1 step 1", exact: true });
+            await step.click();
+            await page.locator('[data-role="seqfx-cell"][data-lane="0"][data-step="0"].is-selected').waitFor();
+            await clearRouterMessages(page);
+            await step.evaluate((element) => {
+                element.dispatchEvent(new KeyboardEvent("keydown", {
+                    bubbles: true,
+                    cancelable: true,
+                    code: "KeyC",
+                    composed: true,
+                    key: "c",
+                    metaKey: true,
+                }));
+                element.dispatchEvent(new KeyboardEvent("keyup", {
+                    bubbles: true,
+                    cancelable: true,
+                    code: "KeyC",
+                    composed: true,
+                    key: "c",
+                    metaKey: true,
+                }));
+            });
+            const shortcutMessages = keyboardMessages(await readRouterMessages(page))
+                .filter(({ key }) => key.toLowerCase() === "c");
+            assert.deepEqual(
+                shortcutMessages.map(({ action, eventType, reason }) => ({
+                    action,
+                    eventType,
+                    reason,
+                })),
+                [
+                    { action: "discardBufferedEvent", eventType: "keydown", reason: "plugin-prevented-default" },
+                    { action: "discardBufferedEvent", eventType: "keyup", reason: "plugin-modifier-shortcut" },
+                ],
+            );
+        });
+
+        const saveAs = page.locator('cosimo-effect-header [data-action="save-as"]');
+        await saveAs.click();
+        const presetName = page.locator('cosimo-effect-header [data-el="dialog-input"]');
+        await presetName.waitFor();
+        await t.test("genuine nested-shadow text entry keeps typed Space inside the plugin", async () => {
+            const shadowDepth = await presetName.evaluate((element) => {
+                let depth = 0;
+                let current = element;
+                while (current) {
+                    const root = current.getRootNode();
+                    if (!(root instanceof ShadowRoot)) break;
+                    depth += 1;
+                    current = root.host;
+                }
+                return depth;
+            });
+            assert.equal(shadowDepth >= 2, true);
+            await presetName.fill("My");
+            await presetName.evaluate((input) => input.setSelectionRange(input.value.length, input.value.length));
+            assertDiscardedPair(await pressFocusedAndRead(page), " ", "text-entry-active");
+            assert.equal(await presetName.inputValue(), "My ");
+        });
+    } finally {
+        await page.close();
+    }
+});
