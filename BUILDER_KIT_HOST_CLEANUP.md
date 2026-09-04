@@ -4,6 +4,10 @@ Authority: Andrew, Woods thread 01a03885-0e68-7411-8b3f-f69ae41b6d89, 2026-09-04
 Coordinator: Bob — Build reliability and AGENTS cleanup, thread 01a06ded-e922-7b60-83a7-44332a0e3fee.
 Final independent customer acceptance: Woods, after both fixes land.
 
+## September 5 scope amendment — Andrew via Woods
+
+Andrew explicitly rejected a JUCE fork and further Unicode work. Do not create a JUCE fork, modify JUCE source, pins or delivery, or continue refining/testing the Unicode proposal. Preserve the existing evidence as historical. Unicode is outside this queue and is not a blocker; do not reopen that decision. The naming deliverable is the configured readable name, such as `Cosimo Enhancer Lite`, instead of the internal space-free build identifier, with stable identities and no unrelated expansion. This amendment supersedes the original Unicode acceptance item and any pending fork recommendation below. Finish real Ableton Spacebar qualification, review/integration and the matching existing private candidate path for Woods's full customer test.
+
 ## Assignment and changed authority
 
 Andrew authorized Bob to coordinate the Spacebar and plugin-name work through review and integration, then Woods to conduct the complete customer experience and report the results. BK-22A is now authorized for reproduction, diagnosis, and an evidence-led shared-framework fix; BK-13B is authorized for a regression-free owning-layer naming fix. This supersedes the former investigation-only / routine-repair holds for these two items, not unrelated product decisions.
@@ -26,7 +30,7 @@ Provide a focused regression that actually observes the forwarding decision/nati
 
 Show the configured human-readable name in the DAW, for example Cosimo Enhancer Lite, while keeping internal build identifiers and filenames separate where necessary. Preserve stable bundle/processor/plugin identities, host state and presets, DSP, parameters, and branding.
 
-Do not ship the previous partial fix. Read /private/tmp/builder-kit-cx.pTfNiS/BK-13B-NAME-BOUNDARY.md; its isolated candidate e588619 fixes spaces but breaks quotes and truncates semicolons. Use actual current source and generated output to establish the owning boundary. Test representative spaces, apostrophes, quotes, semicolons, backslashes, Unicode, and interpolation-looking text as supported by the baseline; preserve literal data rather than executing/interpolating it. Do not silently narrow the accepted naming contract to avoid fixing escaping.
+Do not ship the previous partial fix. Read /private/tmp/builder-kit-cx.pTfNiS/BK-13B-NAME-BOUNDARY.md; its isolated candidate e588619 fixes spaces but breaks quotes and truncates semicolons. Use actual current source and generated output to establish the owning boundary. Test representative spaces, apostrophes, quotes, semicolons, backslashes, and interpolation-looking text as supported by the baseline; preserve literal data rather than executing/interpolating it. Unicode is excluded by Andrew's explicit September 5 amendment. Do not silently narrow the remaining accepted naming contract to avoid fixing escaping.
 
 The fix must be in the responsible reusable generator/framework/CMake layer, not a post-generation regex/header splice or customer instruction workaround. Ordinary fixes in our existing Cmajor/CHOC repositories and matching Cosimo/kit pins/tool artifacts are in scope where required. Do not patch shared CPM cache sources. A new third-party fork or new dependency-delivery architecture remains a consequential expansion: present a concrete recommendation if genuinely necessary, not a unilateral addition.
 
@@ -54,4 +58,3 @@ Final handoff must include:
 Send the terminal handoff to Woods 01a03885-0e68-7411-8b3f-f69ae41b6d89. Explicitly tell Woods the fixes have landed and the candidate is ready for his complete customer experience. Woods will run the short-install, unchanged-example build/install, DAW name/Spacebar/use, and relevant saved-state/update/recovery journey in an isolated customer environment, record every intervention and deficiency, and report honestly to Andrew. Do not make Andrew repeat the long setup instructions or perform the acceptance himself.
 
 No automatic release scheduling or customer publication is authorized by this assignment. No polling automation is needed: notify Woods on terminal completion or a genuine decision.
-
