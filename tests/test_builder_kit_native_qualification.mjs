@@ -57,35 +57,39 @@ test("published tool pins compose only when release artifacts and Cmajor source 
         },
     };
 
-    const composed = toolchainWithPublishedPins(candidate, manifest, "0.1.2");
+    const composed = toolchainWithPublishedPins(candidate, manifest, "0.1.2", candidate.cmaj.forkCommit);
     assert.equal(composed.cmaj.sha256, "1".repeat(64));
     assert.equal(composed.cmajPlugin.sha256, "2".repeat(64));
     assert.equal(candidate.cmaj.sha256, "", "candidate source object stays unchanged");
 
     assert.throws(
-        () => toolchainWithPublishedPins(candidate, { ...manifest, version: "0.1.1" }, "0.1.2"),
+        () => toolchainWithPublishedPins(candidate, { ...manifest, version: "0.1.1" }, "0.1.2", candidate.cmaj.forkCommit),
         /version/u,
     );
     assert.throws(
         () => toolchainWithPublishedPins(candidate, {
             ...manifest,
             tools: { ...manifest.tools, cmaj: { ...manifest.tools.cmaj, artifact: "tools/other/cmaj.tar.gz" } },
-        }, "0.1.2"),
+        }, "0.1.2", candidate.cmaj.forkCommit),
         /artifact/u,
     );
     assert.throws(
         () => toolchainWithPublishedPins({
             ...candidate,
             cmaj: { ...candidate.cmaj, sha256: "9".repeat(64) },
-        }, manifest, "0.1.2"),
+        }, manifest, "0.1.2", candidate.cmaj.forkCommit),
         /Candidate.*sha256/u,
     );
     assert.throws(
         () => toolchainWithPublishedPins({
             ...candidate,
             cmaj: { ...candidate.cmaj, sha256: "malformed-nonempty-pin" },
-        }, manifest, "0.1.2"),
+        }, manifest, "0.1.2", candidate.cmaj.forkCommit),
         /Candidate.*sha256/u,
+    );
+    assert.throws(
+        () => toolchainWithPublishedPins(candidate, manifest, "0.1.2", "c".repeat(40)),
+        /Exported Cmajor source pin/u,
     );
 });
 

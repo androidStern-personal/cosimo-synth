@@ -97,7 +97,9 @@ classification, and the narrow Mach-O comparison. `node --check` and
    harness still proves the real exported commands and artifacts.
 2. The source checkout intentionally has blank unreleased archive hashes. The
    harness reuses the existing release destination and Keychain readers, and
-   accepts published hashes only after exact version/artifact/Cmajor agreement.
+accepts published hashes only after exact version/artifact agreement and exact
+agreement between the exported CMake source pin, toolchain fork pin, and
+published Cmajor commit.
    Hard-coded capabilities, raw credential environment variables, and copied
    tools were rejected.
 3. The unchanged assertion uses generated and object timestamps plus the

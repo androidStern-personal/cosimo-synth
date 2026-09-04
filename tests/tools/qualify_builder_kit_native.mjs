@@ -26,6 +26,7 @@ import { reveal } from "../../kit/scripts/redacted.mjs";
 import {
     createReleaseDestination,
     readCapabilityFromKeychain,
+    readCmajorPin,
     readDestinationConfig,
 } from "../../scripts/release_builder_kit.mjs";
 
@@ -80,9 +81,11 @@ export function redactText(value, secrets) {
     return result;
 }
 
-export function toolchainWithPublishedPins(candidate, manifest, kitVersion) {
+export function toolchainWithPublishedPins(candidate, manifest, kitVersion, cmajorSourceCommit) {
     if (manifest?.version !== kitVersion)
         throw new Error(`Published feed version ${manifest?.version ?? "<missing>"} does not match candidate kit version ${kitVersion}.`);
+    if (cmajorSourceCommit !== candidate?.cmaj?.forkCommit)
+        throw new Error("Exported Cmajor source pin does not match the candidate toolchain fork commit.");
     if (manifest?.cmajor?.commit !== candidate?.cmaj?.forkCommit
             || manifest?.tools?.cmaj?.forkCommit !== candidate?.cmaj?.forkCommit)
         throw new Error("Published Cmajor source does not match the candidate toolchain fork commit.");
@@ -457,11 +460,13 @@ async function runQualification(options) {
         const exportResult = await exportKit(exportRoot, { feedUrl, sourceCommit: options.sourceSha });
         const kit = JSON.parse(await readFile(path.join(exportRoot, "kit/kit.json"), "utf8"));
         const candidateToolchain = JSON.parse(await readFile(path.join(exportRoot, "kit/toolchain.json"), "utf8"));
-        const pinnedToolchain = toolchainWithPublishedPins(candidateToolchain, publishedManifest, kit.version);
+        const cmajorSource = await readCmajorPin(path.join(exportRoot, "kit"));
+        const pinnedToolchain = toolchainWithPublishedPins(candidateToolchain, publishedManifest, kit.version, cmajorSource.commit);
         await writeFile(path.join(exportRoot, "kit/toolchain.json"), `${JSON.stringify(pinnedToolchain, null, 2)}\n`);
         report.export = { feedConfigured: exportResult.feedConfigured, fileCount: exportResult.fileCount, kitVersion: kit.version };
         report.toolchain = {
-            cmajorCommit: pinnedToolchain.cmaj.forkCommit,
+            cmajorSourceCommit: cmajorSource.commit,
+            cmajorToolchainCommit: pinnedToolchain.cmaj.forkCommit,
             cmaj: { artifact: pinnedToolchain.cmaj.artifact, sha256: pinnedToolchain.cmaj.sha256 },
             cmajPlugin: { artifact: pinnedToolchain.cmajPlugin.artifact, sha256: pinnedToolchain.cmajPlugin.sha256 },
             publishedPinsComposed: true,
