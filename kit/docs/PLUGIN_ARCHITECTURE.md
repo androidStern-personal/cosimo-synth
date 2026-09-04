@@ -235,6 +235,22 @@ plugin UIs on port 5175. It also serves:
 - `/fx/<dir>/view/harness.html`: a plugin's browser harness page, with the
   decoded path contained to `fx/` before any file is read.
 
+When a plugin has no custom `view/harness.html`, this path serves the shared,
+silent UI preview. It imports the manifest's real `view.devModule` factory and
+passes the actual manifest identity with page-local parameter and stored-state
+bindings. The view exports a declarative `browserPreviewParameters` array in
+the existing `EffectParameterContract` shape, derived from its own parameter
+definitions (see the included example and `kit:new` starter). This is only
+metadata; it starts no development behavior in the production plugin.
+Custom harness pages retain their existing behavior. Folders with more than
+one patch need a custom harness to choose which patch to show.
+
+The shared preview has no audio engine, DAW connection, or live analyzer
+audio. Its state is independent for each page and resets on reload; it never
+writes native user presets. Open it only when requested, using the server's
+printed origin plus the path above. A browser preview is not a prerequisite
+for building or installing a plugin, and a busy port must not be taken over.
+
 The in-host loading chain is:
 
 ```text

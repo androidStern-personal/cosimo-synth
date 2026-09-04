@@ -41,6 +41,11 @@ import {
 } from "./toolchain.mjs";
 import { ensureRedacted, redact, reveal } from "./redacted.mjs";
 
+const juceAcknowledgmentInstructions = [
+    "Read the JUCE licensing notice above. If you agree, run this command from your Builder Kit project folder:",
+    "npm run kit:setup -- --accept-juce-terms",
+].join("\n");
+
 export function parseSetupArguments(argv) {
     const options = { acceptJuceTerms: false, dryRun: false, force: false };
 
@@ -114,7 +119,7 @@ export function formatSetupPlan(plan) {
     else if (plan.juce.willAcknowledge)
         lines.push(`JUCE terms: will record acknowledgment in ${path.relative(plan.root, plan.juce.path)}`);
     else
-        lines.push("JUCE terms: not acknowledged; pass --accept-juce-terms to continue");
+        lines.push(juceAcknowledgmentInstructions);
 
     for (const step of plan.tools) {
         const target = path.relative(plan.root, step.inspection.localPath);
@@ -288,10 +293,7 @@ export async function runSetup({
     }
 
     if (!plan.juce.acknowledged && !plan.juce.willAcknowledge) {
-        throw new Error(
-            "kit:setup needs your acknowledgment of the JUCE licensing notice above. "
-            + "Re-run with --accept-juce-terms (recorded once in build/kit-tools/juce-terms-acknowledged.json).",
-        );
+        throw new Error(juceAcknowledgmentInstructions);
     }
 
     const refusals = plan.tools.filter((step) => step.action.startsWith("refuse"));

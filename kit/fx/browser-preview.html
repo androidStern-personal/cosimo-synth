@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Plugin UI preview</title>
+        <style>
+            body { margin: 0; padding: 20px; background: #17191b; color: #e8e9e9; font: 14px/1.5 system-ui, sans-serif; }
+            aside { max-width: 820px; margin-bottom: 20px; }
+            h1 { margin: 0 0 8px; font-size: 20px; }
+            p { margin: 6px 0; }
+            #plugin-preview { width: fit-content; max-width: 100%; }
+            #preview-error { color: #ffd1d1; white-space: pre-wrap; }
+        </style>
+    </head>
+    <body>
+        <aside>
+            <h1 id="preview-title">Plugin UI preview</h1>
+            <p>Real plugin interface. No audio engine, DAW connection, or live analyzer audio.</p>
+            <p>Preview state lasts only until this page reloads and does not change your DAW presets. Use the installed plugin in your DAW to hear it.</p>
+        </aside>
+        <main id="plugin-preview"></main>
+        <p id="preview-error" role="alert" hidden></p>
+        <script id="preview-patch" type="application/json">__FX_PREVIEW_PATCH__</script>
+        <script type="module" src="/kit/ui/effects/browser-preview.ts"></script>
+    </body>
+</html>

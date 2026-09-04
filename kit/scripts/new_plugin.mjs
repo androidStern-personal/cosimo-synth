@@ -206,6 +206,8 @@ function createViewSource(plan) {
 // view.devModule) and bundled to view/app.js by \`npm run fx:build -- ${plan.alias}\`;
 // view/index.js stays the shared kit loader. Shared kit modules are imported
 // from "../../../kit/index" (the supported public entry).
+import type { EffectParameterContract } from "../../../kit/index";
+
 type ParameterListener = ((value: number) => void) & { endpointID?: string };
 
 type PatchConnection = {
@@ -218,6 +220,16 @@ type PatchConnection = {
 const GAIN_ENDPOINT = "gainDb";
 const GAIN_MIN_DB = -24;
 const GAIN_MAX_DB = 24;
+const GAIN_INITIAL_DB = 0;
+
+/** Silent browser preview uses the same gain definitions as this view. */
+export const browserPreviewParameters = [{
+    endpointID: GAIN_ENDPOINT,
+    type: "number" as const,
+    min: GAIN_MIN_DB,
+    max: GAIN_MAX_DB,
+    defaultValue: GAIN_INITIAL_DB,
+}] satisfies EffectParameterContract[];
 
 class ${plan.patchBaseName}View extends HTMLElement {
     private readonly gainListener: ParameterListener;
@@ -288,7 +300,7 @@ class ${plan.patchBaseName}View extends HTMLElement {
             </style>
             <h1>${plan.displayName}</h1>
             <label for="gain">Gain</label>
-            <input id="gain" type="range" min="\${GAIN_MIN_DB}" max="\${GAIN_MAX_DB}" step="0.1" value="0" />
+            <input id="gain" type="range" min="\${GAIN_MIN_DB}" max="\${GAIN_MAX_DB}" step="0.1" value="\${GAIN_INITIAL_DB}" />
             <div data-readout>+0.0 dB</div>
         \`;
     }
