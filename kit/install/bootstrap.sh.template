@@ -164,6 +164,11 @@ environment_file=$(mktemp "$state/.env-XXXXXX")
 cat > "$environment_file" <<'BUILDER_KIT_ENV'
 # Installer-owned project runtime. Source this file from the project root.
 export PATH="$PWD/.builder-kit-install/runtime/"@@NODE_DIRECTORY@@"/"@@NODE_BIN@@":$PWD/.builder-kit-install/runtime/"@@CMAKE_DIRECTORY@@"/"@@CMAKE_BIN@@":$PATH"
+# npm treats these environment keys case-insensitively; keep one owned value.
+for kit_npm_cache_key in $(/usr/bin/env | /usr/bin/awk -F= 'tolower($1) == "npm_config_cache" { print $1 }'); do
+    unset "$kit_npm_cache_key"
+done
+unset kit_npm_cache_key
 export npm_config_cache="$PWD/.builder-kit-install/npm-cache"
 BUILDER_KIT_ENV
 mv -f "$environment_file" "$state/env.sh"
