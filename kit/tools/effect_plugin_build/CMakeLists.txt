@@ -4,12 +4,12 @@ project(CosimoEffectPluginBuild LANGUAGES C CXX)
 
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/sync_generated_project.cmake")
 cosimo_add_production_dependencies()
 
 set(COSIMO_EFFECT_PATCH_PATH "" CACHE FILEPATH "Cmajor patch to generate")
 set(COSIMO_EFFECT_OUTPUT_DIR "" CACHE PATH "Generated JUCE project directory")
 set(COSIMO_EFFECT_PLUGIN_TARGET "" CACHE STRING "Generated JUCE shared-code target")
-set(COSIMO_EFFECT_EDITOR_MAX_WIDTH "" CACHE STRING "Optional maximum generated editor width")
 set(COSIMO_CMAJ_EXECUTABLE "" CACHE FILEPATH "Pinned Cmajor command executable")
 option(COSIMO_DISABLE_MICROPHONE_PERMISSION
     "Disable microphone permission metadata in the generated plugin project"
@@ -31,13 +31,15 @@ if(NOT IS_ABSOLUTE "${COSIMO_CMAJ_EXECUTABLE}" OR NOT EXISTS "${COSIMO_CMAJ_EXEC
     message(FATAL_ERROR "COSIMO_CMAJ_EXECUTABLE must name the absolute pinned Cmajor command")
 endif()
 
-file(MAKE_DIRECTORY "${COSIMO_EFFECT_OUTPUT_DIR}")
+set(_cosimo_generated_project_stage "${CMAKE_BINARY_DIR}/generated-project-stage")
+file(REMOVE_RECURSE "${_cosimo_generated_project_stage}")
+file(MAKE_DIRECTORY "${_cosimo_generated_project_stage}")
 
 set(_cosimo_cmaj_generate_arguments
     generate
     --target=juce
     "${COSIMO_EFFECT_PATCH_PATH}"
-    "--output=${COSIMO_EFFECT_OUTPUT_DIR}"
+    "--output=${_cosimo_generated_project_stage}"
     "--jucePath=${COSIMO_JUCE_SOURCE_DIR}"
     "--cmajorIncludePath=${COSIMO_CMAJOR_SOURCE_DIR}/include")
 if(COSIMO_DISABLE_MICROPHONE_PERMISSION)
@@ -59,25 +61,11 @@ endif()
 
 message(STATUS "${generate_output}${generate_error}")
 
-if(NOT COSIMO_EFFECT_EDITOR_MAX_WIDTH STREQUAL "")
-    configure_file(
-        "${CMAKE_CURRENT_LIST_DIR}/CosimoBoundedGeneratedPlugin.h"
-        "${COSIMO_EFFECT_OUTPUT_DIR}/CosimoBoundedGeneratedPlugin.h"
-        COPYONLY)
-    execute_process(
-        COMMAND "${CMAKE_COMMAND}"
-            "-DCOSIMO_GENERATED_PLUGIN_SOURCE=${COSIMO_EFFECT_OUTPUT_DIR}/cmajor_plugin.cpp"
-            "-DCOSIMO_GENERATED_PLUGIN_EDITOR_MAX_WIDTH=${COSIMO_EFFECT_EDITOR_MAX_WIDTH}"
-            -P "${CMAKE_CURRENT_LIST_DIR}/apply_generated_editor_width_ceiling.cmake"
-        RESULT_VARIABLE editor_width_result
-        OUTPUT_VARIABLE editor_width_output
-        ERROR_VARIABLE editor_width_error)
-    if(NOT editor_width_result EQUAL 0)
-        message(FATAL_ERROR
-            "Applying generated editor width ceiling failed:\n"
-            "${editor_width_output}${editor_width_error}")
-    endif()
-endif()
+cosimo_sync_generated_project(
+    "${_cosimo_generated_project_stage}"
+    "${COSIMO_EFFECT_OUTPUT_DIR}")
+file(REMOVE_RECURSE "${_cosimo_generated_project_stage}")
+unset(_cosimo_generated_project_stage)
 
 add_subdirectory("${COSIMO_EFFECT_OUTPUT_DIR}" plugin)
 

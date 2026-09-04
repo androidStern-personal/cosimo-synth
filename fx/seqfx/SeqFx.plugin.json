@@ -8,6 +8,5 @@
   "disableMicrophonePermission": true,
   "workerSource": "fx/seqfx/worker/source.ts",
   "workerOut": "worker.js",
-  "editorMaxWidth": 1120,
   "visualReviewAdapter": "scripts/visual-review/seqfx.mjs"
 }
