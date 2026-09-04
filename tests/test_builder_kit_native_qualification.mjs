@@ -80,6 +80,13 @@ test("published tool pins compose only when release artifacts and Cmajor source 
         }, manifest, "0.1.2"),
         /Candidate.*sha256/u,
     );
+    assert.throws(
+        () => toolchainWithPublishedPins({
+            ...candidate,
+            cmaj: { ...candidate.cmaj, sha256: "malformed-nonempty-pin" },
+        }, manifest, "0.1.2"),
+        /Candidate.*sha256/u,
+    );
 });
 
 test("native trace summary distinguishes compilation and linking from configure and signing", () => {
