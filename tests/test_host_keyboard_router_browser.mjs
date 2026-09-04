@@ -371,14 +371,66 @@ test("the exact CHOC router reaches the native forward/discard seam from package
             );
         });
 
-        const clockMode = page.locator('[data-role="seqfx-clock-mode"]');
-        await clockMode.selectOption("1");
-        const bpm = page.locator('[data-role="seqfx-manual-bpm"]');
-        await bpm.waitFor();
-        await t.test("numeric input reaches the seam with its current text-entry classification", async () => {
-            assertDiscardedPair(await pressAndRead(page, bpm), " ", "text-entry-active");
+        const loopStart = page.locator('[data-role="seqfx-loop-start"]');
+        await loopStart.waitFor();
+        await t.test("unclaimed Space from the real loop-start number field forwards without editing or blurring", async () => {
+            await loopStart.focus();
+            const valueBefore = await loopStart.inputValue();
+            assertForwardedPair(await pressFocusedAndRead(page), " ", "spacebar-transport");
+            assert.equal(await loopStart.inputValue(), valueBefore);
+            assert.equal(await loopStart.evaluate((element) => element.getRootNode().activeElement === element), true);
         });
 
+        await t.test("repeated Space keydowns from the number field retain repeat and one matching keyup", async () => {
+            await loopStart.focus();
+            const valueBefore = await loopStart.inputValue();
+            await clearRouterMessages(page);
+            await page.keyboard.down("Space");
+            await page.keyboard.down("Space");
+            await page.keyboard.up("Space");
+            const messages = keyboardMessages(await readRouterMessages(page));
+            assert.deepEqual(
+                messages.map(({ action, eventType, repeat, reason }) => ({ action, eventType, repeat, reason })),
+                [
+                    { action: "forwardBufferedEventToHost", eventType: "keydown", repeat: false, reason: "spacebar-transport" },
+                    { action: "forwardBufferedEventToHost", eventType: "keydown", repeat: true, reason: "spacebar-transport" },
+                    { action: "forwardBufferedEventToHost", eventType: "keyup", repeat: false, reason: "matching-forwarded-keyup" },
+                ],
+            );
+            assert.equal(await loopStart.inputValue(), valueBefore);
+            assert.equal(await loopStart.evaluate((element) => element.getRootNode().activeElement === element), true);
+        });
+
+        await t.test("numeric editing keys remain inside the focused number field", async () => {
+            await loopStart.focus();
+            const valueBefore = await loopStart.inputValue();
+            assertDiscardedPair(await pressFocusedAndRead(page, "ArrowUp"), "ArrowUp", "text-entry-active");
+            assert.notEqual(await loopStart.inputValue(), valueBefore);
+            assert.equal(await loopStart.evaluate((element) => element.getRootNode().activeElement === element), true);
+        });
+
+        await t.test("a number field can still claim Space with preventDefault", async () => {
+            await loopStart.focus();
+            await clearRouterMessages(page);
+            await loopStart.evaluate((element) => {
+                const claimSpace = (event) => {
+                    if (event.key === " ") event.preventDefault();
+                };
+                for (const type of ["keydown", "keyup"]) {
+                    element.addEventListener(type, claimSpace, { once: true });
+                    element.dispatchEvent(new KeyboardEvent(type, {
+                        bubbles: true,
+                        cancelable: true,
+                        code: "Space",
+                        composed: true,
+                        key: " ",
+                    }));
+                }
+            });
+            assertDiscardedPair(await readRouterMessages(page), " ", "plugin-prevented-default");
+        });
+
+        const clockMode = page.locator('[data-role="seqfx-clock-mode"]');
         await t.test("a focused select menu keeps Space inside the plugin", async () => {
             assertDiscardedPair(await pressAndRead(page, clockMode), " ", "text-entry-active");
         });
