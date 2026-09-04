@@ -36,7 +36,7 @@ Verify the generated plugin's actual factory/display metadata and real Ableton-d
 
 The two investigations may run in parallel, but coordinate any shared generator/CHOC/toolchain changes and use one composed final dependency pin. Keep native builds, generated outputs, plugin installation, host input, master mutations and candidate packaging serialized. Observe other worktrees/servers and do not kill or seize their processes/ports.
 
-Read source and review the full scoped diff before broad tests. During repairs, run targeted tests. After source review is clean, run the complete relevant composed qualification once. Use decision-provenance before handoff and independently review assumptions Andrew may object to. Distinguish actual host observations from tests/markers/source inspection.
+Read source and review the full scoped diff before broad tests. During repairs, run targeted tests. After source review is clean, run the complete relevant composed qualification once. Independently review assumptions Andrew may object to. Distinguish actual host observations from tests/markers/source inspection.
 
 Preserve BK-24 build correctness and minimal AGENTS work. Do not reintroduce the width cap or generated-code patches. Automated release infrastructure, GitHub/VM runner setup, general AGENTS redesign, unrelated UI/DSP work, dynamic-data research, and the rest of the launch roadmap are outside this queue. In particular, the other dynamic-data implementation is not input to these fixes.
 

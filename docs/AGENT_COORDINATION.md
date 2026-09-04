@@ -20,7 +20,7 @@ Independent source work may run in parallel. Serialize mutations to `master`, sh
 
 ## Worker handoff
 
-A completed worker handoff names the task and coordinator, branch and worktree, base and final commit, clean/dirty state, exact changed scope, focused commands and results, known failures, generated artifacts, and unperformed host/device acceptance. It also surfaces material choices through the `decision-provenance` skill: the chosen behavior, credible alternative, decisive evidence or tradeoff, and remaining uncertainty.
+A completed worker handoff names the task and coordinator, branch and worktree, base and final commit, clean/dirty state, exact changed scope, focused commands and results, known failures, generated artifacts, and unperformed host/device acceptance.
 
 Call a branch ready only when its scoped work is committed and its worktree is clean. The coordinator independently reviews the final diff, decisions, scope, and evidence against the current integration base. It rebases and integrates one branch at a time, then records the merge result and tells the owning task.
 
