@@ -39,8 +39,8 @@ const approvedExternalTools = Object.freeze({
 });
 
 const pinnedSourceBuiltGenerator = Object.freeze({
-    cmajorCommit: "04ee24df55c4a3ba9f67d498a70c19de1aa1ad79",
-    chocCommit: "98b52fb54c3b9fec03c0c13218f6557aef33eabe",
+    cmajorCommit: "7820a453f25e1b6eaf898d0bb2feb7e4ce01c207",
+    chocCommit: "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
 });
 
 const fixedChildPath = "/usr/bin:/bin:/usr/sbin:/sbin";

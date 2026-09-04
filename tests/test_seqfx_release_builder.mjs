@@ -172,8 +172,8 @@ function releaseToolchainFixture({ nativeBuildCacheVerified = true } = {}) {
         },
         sourceBuiltTools: {
             cmaj: {
-                cmajorCommit: "04ee24df55c4a3ba9f67d498a70c19de1aa1ad79",
-                chocCommit: "98b52fb54c3b9fec03c0c13218f6557aef33eabe",
+                cmajorCommit: "7820a453f25e1b6eaf898d0bb2feb7e4ce01c207",
+                chocCommit: "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
                 executablePolicy: "absolute-repository-build-output-no-path-fallback",
                 provenance: "repository-pinned-source-build",
             },
@@ -418,11 +418,11 @@ test("release config freezes the existing beta identity and current native outpu
             cpmName: "cosimo_cmajor",
             sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",
             repository: "https://github.com/androidStern-personal/cmajor.git",
-            revision: "04ee24df55c4a3ba9f67d498a70c19de1aa1ad79",
+            revision: "7820a453f25e1b6eaf898d0bb2feb7e4ce01c207",
         },
         choc: {
             repository: "https://github.com/androidStern-personal/choc.git",
-            revision: "98b52fb54c3b9fec03c0c13218f6557aef33eabe",
+            revision: "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
             submodulePath: "include/choc",
         },
         juce: {
@@ -844,8 +844,8 @@ test("tracked third-party notices cover the embedded runtime and artwork", async
         assert.match(notices, new RegExp(`^${component.replaceAll("+", "\\+")}$`, "mu"));
 
     assert.match(notices, /does not grant distribution\s+rights/u);
-    assert.match(notices, /04ee24df55c4a3ba9f67d498a70c19de1aa1ad79/u);
-    assert.match(notices, /98b52fb54c3b9fec03c0c13218f6557aef33eabe/u);
+    assert.match(notices, /7820a453f25e1b6eaf898d0bb2feb7e4ce01c207/u);
+    assert.match(notices, /11f7dc63d7cb78f6dbaa559fe09ade8e941c0188/u);
     assert.match(notices, /501c07674e1ad693085a7e7c398f205c2677f5da/u);
     assert.match(notices, /320ea19819bf66429fa772d6c04614ae75815895/u);
     assert.match(notices, /Creative Commons Attribution 4\.0 International/u);

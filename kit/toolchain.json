@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "comment": "Pinned external tools for customer machines. Artifact paths are relative to kit/feed.json baseUrl. Hashes are written by kit:release.",
   "cmaj": {
-    "forkCommit": "04ee24df55c4a3ba9f67d498a70c19de1aa1ad79",
+    "forkCommit": "7820a453f25e1b6eaf898d0bb2feb7e4ce01c207",
     "artifact": "tools/v0.1.2/cmaj-macos-arm64.tar.gz",
     "sha256": "",
     "localPath": "build/kit-tools/cmaj"
