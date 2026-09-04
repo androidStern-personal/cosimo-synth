@@ -1,0 +1,121 @@
+name: kit native qualification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+      - "claude/**"
+      - "codex/**"
+    paths:
+      - ".github/workflows/kit-native.yml"
+      - "kit/cmake/**"
+      - "kit/fx/**"
+      - "kit/index.ts"
+      - "kit/kit.json"
+      - "kit/scripts/**"
+      - "kit/template/root/**"
+      - "kit/toolchain.json"
+      - "kit/tools/effect_plugin_build/**"
+      - "kit/ui/**"
+      - "fx/enhancer_lite/**"
+      - "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor"
+      - "package.json"
+      - "package-lock.json"
+      - "product-owner.json"
+      - "scripts/builder-kit-export-policy.json"
+      - "scripts/release_builder_kit.mjs"
+      - "tests/test_builder_kit_native_qualification.mjs"
+      - "tests/tools/qualify_builder_kit_native.mjs"
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/kit-native.yml"
+      - "kit/cmake/**"
+      - "kit/fx/**"
+      - "kit/index.ts"
+      - "kit/kit.json"
+      - "kit/scripts/**"
+      - "kit/template/root/**"
+      - "kit/toolchain.json"
+      - "kit/tools/effect_plugin_build/**"
+      - "kit/ui/**"
+      - "fx/enhancer_lite/**"
+      - "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor"
+      - "package.json"
+      - "package-lock.json"
+      - "product-owner.json"
+      - "scripts/builder-kit-export-policy.json"
+      - "scripts/release_builder_kit.mjs"
+      - "tests/test_builder_kit_native_qualification.mjs"
+      - "tests/tools/qualify_builder_kit_native.mjs"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kit-native-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    name: Native gate contract (fast)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Native, build-driver, setup, and export contracts
+        run: |
+          node --test \
+            tests/test_builder_kit_native_qualification.mjs \
+            tests/test_fx_build_args.mjs \
+            tests/test_kit_doctor_setup.mjs \
+            tests/test_kit_export.mjs \
+            tests/test_kit_tool_integrity.mjs
+
+  native:
+    name: Exported kit on Apple silicon
+    needs: contract
+    if: ${{ github.event_name != 'pull_request' && vars.BUILDER_KIT_NATIVE_ENABLED == 'true' }}
+    runs-on:
+      - self-hosted
+      - macOS
+      - ARM64
+      - builder-kit-native
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Qualify the exported customer build loop
+        env:
+          DESTINATION_CONFIG: ${{ vars.BUILDER_KIT_NATIVE_DESTINATION_CONFIG }}
+          REPORT_PATH: ${{ runner.temp }}/bk24-native-report.json
+        run: |
+          if [[ -z "$DESTINATION_CONFIG" || "$DESTINATION_CONFIG" != /* ]]; then
+            echo "BUILDER_KIT_NATIVE_DESTINATION_CONFIG must name an existing absolute non-secret config on the runner." >&2
+            exit 1
+          fi
+          node tests/tools/qualify_builder_kit_native.mjs \
+            --source-sha "$GITHUB_SHA" \
+            --destination-config "$DESTINATION_CONFIG" \
+            --report "$REPORT_PATH"
+          echo "Exported-customer Mac native qualification passed. The safe local report remains at $REPORT_PATH." >> "$GITHUB_STEP_SUMMARY"
+
+  native-pending:
+    name: Native gate pending runner configuration
+    needs: contract
+    if: ${{ github.event_name != 'pull_request' && vars.BUILDER_KIT_NATIVE_ENABLED != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "No native build ran." >> "$GITHUB_STEP_SUMMARY"
+          echo "BK-24C needs an approved Apple-silicon self-hosted runner with the existing Builder Kit Keychain capability, the builder-kit-native label, and an absolute BUILDER_KIT_NATIVE_DESTINATION_CONFIG repository variable." >> "$GITHUB_STEP_SUMMARY"
