@@ -3,6 +3,19 @@ Updated: 2026-08-25
 Source: 2026-08-18 spoken workstream inventory, accepted ADR-024/feature spec, 2026-08-25 follow-up inventory, and current repository evidence.
 Roadmap: `OPEN_WORK_ROADMAP.md`
 
+BUILDER KIT CUSTOMER EXPERIENCE — APPROVED 2026-09-04
+
+[>] BK-CX — Implement the approved customer-experience cleanup; BK-22A remains investigation-only.
+    - Product authority: Woods, planning commit 29b3961889911b49c90323c8dbe0523fb4963865, September 4 section and exact ticket rows in ENHANCER_LITE_BUILDER_KIT_ROADMAP.md. Do not merge the historical planning branch.
+    - Integration coordinator: Bob, task 01a06784-1cfc-7f43-be19-5c93ade6f53a; branch codex/builder-kit-cx-integration-20260904; worktree /Users/winterfell/.codex/worktrees/77d5/cosimo-synth; starting source master b40b52aa3236774dc3d6cd4bdbc1fe804d39c26c.
+    - BK-13A owner: same task, agent /root/presets; branch codex/bk-13a-preset-identity; worktree /private/tmp/builder-kit-cx.pTfNiS/presets. Shared permanent-identity preset isolation and narrowly scoped legacy preservation.
+    - BK-13B/BK-22B owner: same task, agent /root/native; branch codex/bk-native-identity-install; worktree /private/tmp/builder-kit-cx.pTfNiS/native. Human-readable host names without identity drift; identity-safe recoverable installation using isolated fixtures.
+    - BK-21A/BK-22C/BK-40A owner: same task, agent /root/entry; branch codex/bk-customer-entry-flow; worktree /private/tmp/builder-kit-cx.pTfNiS/entry. Explicit JUCE command, opt-in real browser UI, concise unchanged-example first-use flow; final composed proof waits for related fixes.
+    - BK-22A owner: Bob /root, same coordinator task/worktree. Read-only installed-artifact/source/focus evidence and regression/proof plan; no repair authorized.
+    - Queue: independent source/focused tests first; source review and repair before broad gates; serialize native/install/fixed-port/master operations. Bob alone rebases, integrates and pushes reviewed master. Owner handoffs must be committed and clean.
+    - Protected: dirty primary checkout and its TODOS.txt, customer playground, live Ableton set, installed plugins, unrelated worktrees/servers. No feed release/public deploy, private-feed logging work, cache/storage cleanup or broader old-roadmap work.
+    - Coordinator ledger: /private/tmp/builder-kit-cx.pTfNiS/COORDINATION.md. Final customer-export proof, actual host acceptance and source integration are separate gates.
+
 HOW WE WILL USE THIS FILE
 
 - Work from top to bottom unless a dependency or new product decision changes the order.
