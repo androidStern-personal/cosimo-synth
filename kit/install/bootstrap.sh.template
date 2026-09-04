@@ -1,0 +1,177 @@
+#!/bin/bash
+# Rendered for one exact release. Contains no customer credential.
+set +x
+set -euo pipefail
+umask 077
+for trace_setting in ${!GIT_TRACE@}; do unset "$trace_setting"; done
+unset GIT_CURL_VERBOSE
+
+fail() { printf '%s\n' "$1" >&2; exit 1; }
+progress() { printf 'Builder Kit: %s\n' "$1"; }
+
+[[ "$#" = 1 && "$1" = --accept-juce-terms ]] || fail 'Explicit --accept-juce-terms acknowledgment is required.'
+[[ "${BUILDER_KIT_ACCESS:-}" =~ ^[A-Za-z0-9._~-]+$ ]] || fail 'Builder Kit access credential is missing or invalid.'
+[[ "$(uname -s)" = Darwin && "$(uname -m)" = arm64 ]] || fail 'Builder Kit requires macOS 15 or newer on Apple silicon.'
+os_version=$(sw_vers -productVersion)
+[[ "${os_version%%.*}" -ge 15 ]] || fail 'Builder Kit requires macOS 15 or newer.'
+xcode-select -p >/dev/null 2>&1 && xcrun clang --version >/dev/null 2>&1 && git --version >/dev/null 2>&1 \
+    || fail 'Apple Command Line Tools must be installed and their agreements accepted by you. This installer cannot accept Apple agreements.'
+
+release_tag=@@RELEASE_TAG@@
+release_commit=@@RELEASE_COMMIT@@
+feed_origin=@@FEED_ORIGIN@@
+kit_origin=@@KIT_ORIGIN@@
+project=$(pwd -P)
+[[ "$project" != / && "$project" != "$HOME" ]] || fail 'Choose a dedicated Builder Kit project folder, not your home or filesystem root.'
+state="$project/.builder-kit-install"
+receipt="builder-kit-install-v1 $release_commit"
+
+# Claim only an empty directory. An existing .git directory alone is never
+# permission to write into another project. The receipt is local retry state.
+if [[ ! -e "$state" && ! -L "$state" ]]; then
+    [[ -z "$(find . -mindepth 1 -maxdepth 1 -print -quit)" ]] || fail 'Destination is occupied by unrelated files; nothing was changed.'
+    mkdir "$state" || fail 'Could not claim the empty destination.'
+    printf '%s\n' "$receipt" > "$state/receipt"
+else
+    [[ -d "$state" && ! -L "$state" && -f "$state/receipt" && ! -L "$state/receipt" ]] \
+        || fail 'Destination is not a recognized Builder Kit installation; nothing was changed.'
+    [[ "$(cat "$state/receipt")" = "$receipt" ]] \
+        || fail 'Destination belongs to a different installation; use its kit-update workflow.'
+fi
+# These paths are installer-owned control state, never indirections into a
+# customer's other files. Refuse questionable entries without replacing them.
+for file in env.sh npm-ready checkout-ready; do
+    [[ ! -L "$state/$file" && ( ! -e "$state/$file" || -f "$state/$file" ) ]] \
+        || fail 'An installer control file is linked or has an unexpected type; nothing was overwritten.'
+done
+for directory in runtime npm-cache; do
+    [[ ! -L "$state/$directory" && ( ! -e "$state/$directory" || -d "$state/$directory" ) ]] \
+        || fail 'An installer directory is linked or has an unexpected type; nothing was overwritten.'
+done
+if [[ -d "$state/npm-cache" && -n "$(find "$state/npm-cache" -type l -print -quit)" ]]; then
+    fail 'The installer npm cache contains a linked path; nothing was overwritten.'
+fi
+mkdir "$state/lock" 2>/dev/null || fail 'This installation is already running, or an interrupted lock remains. Inspect .builder-kit-install/lock before retrying.'
+temporary=''
+environment_file=''
+cleanup() {
+    if [[ -n "$temporary" && "$temporary" = "$state"/.runtime-* ]]; then rm -rf -- "$temporary"; fi
+    if [[ -n "$environment_file" && "$environment_file" = "$state"/.env-* ]]; then rm -f -- "$environment_file"; fi
+    rmdir "$state/lock"
+}
+trap cleanup EXIT
+
+# No credential helper, private Git login, persistent secret remote or hooks.
+export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+export GIT_ASKPASS=/usr/bin/false SSH_ASKPASS=/usr/bin/false
+unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+export GIT_CONFIG_COUNT=3
+export GIT_CONFIG_KEY_0=remote.builder-kit-bootstrap.url
+export GIT_CONFIG_VALUE_0="$kit_origin/$BUILDER_KIT_ACCESS/kit.git"
+export GIT_CONFIG_KEY_1=credential.helper GIT_CONFIG_VALUE_1=''
+export GIT_CONFIG_KEY_2=transfer.fsckObjects GIT_CONFIG_VALUE_2=true
+export GIT_ALLOW_PROTOCOL=@@GIT_PROTOCOL@@
+
+if [[ ! -e .git && ! -L .git ]]; then
+    git init --quiet --template= --initial-branch=customer >/dev/null 2>&1 || fail 'Could not initialize the customer repository.'
+    mkdir -p .git/info
+    printf '%s\n' '/.builder-kit-install/' >> .git/info/exclude
+fi
+[[ -d .git && ! -L .git ]] || fail 'Expected a local customer repository; no checkout was performed.'
+[[ "$(git rev-parse --show-toplevel 2>/dev/null)" = "$project" ]] || fail 'Repository does not belong to this project folder.'
+if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+    [[ ! -e "$state/checkout-ready" && "$(git symbolic-ref --quiet --short HEAD)" = customer \
+        && -z "$(git for-each-ref --format='%(refname)' refs/heads)" ]] \
+        || fail 'Existing customer Git history is unborn or unexpected; it was not changed.'
+    progress 'downloading the pinned release'
+    git fetch --quiet --no-tags --no-write-fetch-head builder-kit-bootstrap \
+        "refs/tags/$release_tag:refs/kit/releases/$release_tag" >/dev/null 2>&1 \
+        || fail 'Release download failed. Check your access and connection, then retry the supplied command.'
+    [[ "$(git rev-parse "refs/kit/releases/$release_tag^{commit}" 2>/dev/null)" = "$release_commit" ]] \
+        || fail 'Downloaded release does not match the supplied release pin; nothing was checked out.'
+    git switch --quiet --create customer "refs/kit/releases/$release_tag" >/dev/null 2>&1 \
+        || fail 'Release checkout could not finish safely; existing files were not overwritten.'
+    printf '%s\n' "$release_commit" > "$state/checkout-ready"
+else
+    git merge-base --is-ancestor "$release_commit" HEAD >/dev/null 2>&1 \
+        || fail 'Existing customer history does not contain this release; nothing was checked out.'
+    progress 'preserving the existing customer checkout'
+fi
+unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0 GIT_CONFIG_KEY_1 GIT_CONFIG_VALUE_1 GIT_CONFIG_KEY_2 GIT_CONFIG_VALUE_2
+unset GIT_ALLOW_PROTOCOL
+
+[[ -f kit/scripts/complete_install.mjs ]] && grep -Fq '<!-- builder-kit-install-runtime-v1 -->' AGENTS.md \
+    || fail 'This release does not include one-command runtime activation. Preparation is incomplete; request a current delivery command.'
+git diff --quiet "$release_commit" -- kit \
+    || fail 'Kit implementation files differ from this delivery pin. Your changes were preserved; request the matching delivery or inspect the changed kit files.'
+
+mkdir -p "$state/runtime" "$state/npm-cache"
+# macOS supplies Perl/Digest::SHA (also used by shasum). This pre-Node digest
+# covers names, modes, file bytes and symlink targets, not merely --version.
+runtime_digest() {
+    /usr/bin/perl -MDigest::SHA -MFile::Find -e '
+        use strict; use warnings;
+        my $root = shift; my @paths;
+        find({ no_chdir => 1, wanted => sub { push @paths, $File::Find::name } }, $root);
+        my $hash = Digest::SHA->new(256);
+        for my $file (sort @paths) {
+            my $name = substr($file, length($root));
+            next if $name eq "/.archive-sha256" || $name eq "/.payload-sha256";
+            my @info = lstat($file); die "Unreadable runtime" unless @info;
+            $hash->add($name, "\0", sprintf("%o", $info[2] & 07777), "\0");
+            if (-l _) { $hash->add("link\0", readlink($file), "\0"); }
+            elsif (-d _) { $hash->add("directory\0"); }
+            elsif (-f _) { open my $input, "<", $file or die "Unreadable runtime"; binmode $input; my $bytes = Digest::SHA->new(256); $bytes->addfile($input); $hash->add("file\0", $bytes->hexdigest, "\0"); close $input; }
+            else { die "Unsupported runtime entry"; }
+        }
+        print $hash->hexdigest;
+    ' "$1" 2>/dev/null
+}
+install_runtime() {
+    local directory="$1" bin="$2" executable="$3" version="$4" url="$5" pin="$6" protocols="$7"
+    local target="$state/runtime/$directory"
+    if [[ -d "$target" && ! -L "$target" && -f "$target/.archive-sha256" && ! -L "$target/.archive-sha256" \
+        && -f "$target/.payload-sha256" && ! -L "$target/.payload-sha256" && "$(cat "$target/.archive-sha256")" = "$pin" \
+        && "$(runtime_digest "$target")" = "$(cat "$target/.payload-sha256")" \
+        && -x "$target/$bin/$executable" && "$("$target/$bin/$executable" --version | head -n 1)" = "$version" ]]; then
+        progress "$executable runtime already present"
+        return
+    fi
+    [[ ! -e "$target" && ! -L "$target" ]] || fail 'A local runtime is incomplete or modified. Inspect .builder-kit-install/runtime; it was not overwritten.'
+    progress "downloading and verifying $executable"
+    temporary=$(mktemp -d "$state/.runtime-XXXXXX")
+    printf 'url = "%s"\n' "$url" | curl --disable --fail --silent --location --proto "$protocols" --proto-redir "$protocols" --config - --output "$temporary/archive.tar.gz" \
+        || fail 'Runtime download failed. Retry the supplied command when the connection is available.'
+    local digest
+    digest=$(shasum -a 256 "$temporary/archive.tar.gz")
+    [[ "${digest%% *}" = "$pin" ]] || fail 'Runtime archive verification failed; it was not installed.'
+    tar -xzf "$temporary/archive.tar.gz" -C "$temporary" >/dev/null 2>&1 || fail 'Runtime archive could not be extracted.'
+    [[ -d "$temporary/$directory" && ! -L "$temporary/$directory" && -x "$temporary/$directory/$bin/$executable" ]] \
+        || fail 'Runtime archive has an unexpected layout.'
+    [[ "$("$temporary/$directory/$bin/$executable" --version | head -n 1)" = "$version" ]] || fail 'Runtime version verification failed.'
+    printf '%s\n' "$pin" > "$temporary/$directory/.archive-sha256"
+    runtime_digest "$temporary/$directory" > "$temporary/$directory/.payload-sha256" || fail 'Runtime payload could not be verified.'
+    mv "$temporary/$directory" "$target"
+    rm -rf -- "$temporary"
+    temporary=''
+}
+install_runtime @@NODE_DIRECTORY@@ @@NODE_BIN@@ @@NODE_EXECUTABLE@@ @@NODE_VERSION@@ @@NODE_URL@@ @@NODE_SHA256@@ @@NODE_PROTOCOLS@@
+install_runtime @@CMAKE_DIRECTORY@@ @@CMAKE_BIN@@ @@CMAKE_EXECUTABLE@@ @@CMAKE_VERSION@@ @@CMAKE_URL@@ @@CMAKE_SHA256@@ @@CMAKE_PROTOCOLS@@
+
+# Source from the project root, including after opening it in a fresh Codex
+# shell. No shell startup files or machine-wide tool defaults are modified.
+environment_file=$(mktemp "$state/.env-XXXXXX")
+cat > "$environment_file" <<'BUILDER_KIT_ENV'
+# Installer-owned project runtime. Source this file from the project root.
+export PATH="$PWD/.builder-kit-install/runtime/"@@NODE_DIRECTORY@@"/"@@NODE_BIN@@":$PWD/.builder-kit-install/runtime/"@@CMAKE_DIRECTORY@@"/"@@CMAKE_BIN@@":$PATH"
+export npm_config_cache="$PWD/.builder-kit-install/npm-cache"
+BUILDER_KIT_ENV
+mv -f "$environment_file" "$state/env.sh"
+environment_file=''
+. "$state/env.sh"
+export BUILDER_KIT_EXPECTED_FEED="$feed_origin/$BUILDER_KIT_ACCESS"
+export BUILDER_KIT_EXPECTED_CMAJ_SHA256=@@CMAJ_SHA256@@
+export BUILDER_KIT_EXPECTED_PLUGIN_SHA256=@@PLUGIN_SHA256@@
+progress 'running kit setup and final checks'
+node kit/scripts/complete_install.mjs --accept-juce-terms
+printf '\nBuilder Kit is ready. Open this folder in Codex:\n%s\n' "$project"

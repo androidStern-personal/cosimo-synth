@@ -37,6 +37,7 @@ import { fileURLToPath } from "node:url";
 
 import { exportKit as defaultExportKit, proveExport as defaultProveExport } from "../kit/scripts/export_kit.mjs";
 import { ensureRedacted, redact, reveal } from "../kit/scripts/redacted.mjs";
+import { renderBootstrap } from "./builder-kit-install.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -688,7 +689,8 @@ export async function publishReleaseObjects(feedRoot, destination, { run = runCo
                 if (entry.isDirectory()) { await stage(relative); continue; }
                 let phase;
                 if (/^(?:kit|cmajor|choc)\.git\/objects\/(?:[0-9a-f]{2}\/[0-9a-f]{38}|pack\/pack-[0-9a-f]{40}\.(?:pack|idx|rev|bitmap))$/u.test(relative)
-                    || /^tools\/v[^/]+\/[^/]+$/u.test(relative)) phase = "objects";
+                    || /^tools\/v[^/]+\/[^/]+$/u.test(relative)
+                    || /^installers\/[a-f0-9]{64}\.sh$/u.test(relative)) phase = "objects";
                 else if (/^(?:kit|cmajor|choc)\.git\/objects\/info\/packs$/u.test(relative)) {
                     phase = "packs";
                     packLists.push(relative);
@@ -696,6 +698,8 @@ export async function publishReleaseObjects(feedRoot, destination, { run = runCo
                 else if (relative === "manifest.json") phase = "manifest";
                 else continue; // Bare-repo config, hooks and logs are not HTTP client objects.
                 if (!entry.isFile()) throw new Error("Publication payload must contain regular files.");
+                if (relative.startsWith("installers/") && await sha256File(path.join(feedRoot, relative)) !== path.basename(relative, ".sh"))
+                    throw new Error("Installer content does not match its immutable filename; publication refused.");
                 const target = path.join(staging, phase, relative);
                 await fs.mkdir(path.dirname(target), { recursive: true });
                 await fs.copyFile(path.join(feedRoot, relative), target);
@@ -905,6 +909,17 @@ export async function runRelease(options, {
         toolchain,
         hashes,
     });
+    if (missingTools.length === 0) {
+        // The installer pins the completed lineage commit and tools. Its
+        // content hash goes in the later manifest, never back into that commit.
+        const origin = new URL(reveal(feedUrl));
+        origin.pathname = origin.pathname.replace(/\/+$/u, "").split("/").slice(0, -1).join("/");
+        const installer = await renderBootstrap({ manifest, feedOrigin: origin.href.replace(/\/+$/u, "") });
+        if (!installer.ok) throw new Error(`Could not render release installer: ${installer.error.code}.`);
+        await fs.mkdir(path.join(feedRoot, "installers"), { recursive: true });
+        await fs.writeFile(path.join(feedRoot, installer.value.artifact), installer.value.script);
+        manifest.installation = { artifact: installer.value.artifact, sha256: installer.value.sha256 };
+    }
     await writeJson(path.join(feedRoot, "manifest.json"), manifest);
 
     // 6. Publish additively, preserving every older versioned object.

@@ -23,6 +23,7 @@ import {
     readDestinationConfig,
     readCmajorPin,
     renderManifest,
+    sha256File,
     renderToolchain,
     repoRoot,
     resolveRelativeGitUrl,
@@ -549,6 +550,12 @@ test("release resumes before push, after push, and after a partial additive obje
         assert.equal(await fs.readFile(path.join(objectStore, "tools/v0.1.0/old-tool.zip"), "utf8"), "old release\n");
         assert.equal(existsSync(path.join(objectStore, "tools/v1.2.3/cmaj-macos-arm64.tar.gz")), true);
         assert.equal(existsSync(path.join(objectStore, "tools/v1.2.3/CmajPlugin-macos-arm64.zip")), true);
+        const delivered = JSON.parse(interruptedManifest);
+        assert.match(delivered.installation.artifact, /^installers\/[0-9a-f]{64}\.sh$/u);
+        assert.equal(await sha256File(path.join(objectStore, delivered.installation.artifact)), delivered.installation.sha256);
+        const installer = await fs.readFile(path.join(objectStore, delivered.installation.artifact), "utf8");
+        assert.ok(installer.includes(delivered.kit.commit));
+        assert.ok(installer.includes(delivered.tools.cmaj.sha256));
     } finally {
         await fs.rm(scratch, { recursive: true, force: true });
     }

@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import os from "node:os";
 import path from "node:path";
 import http from "node:http";
+import { createHash } from "node:crypto";
 import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import { createBareMirror, publishReleaseObjects } from "../scripts/release_builder_kit.mjs";
@@ -104,7 +105,12 @@ test("interrupted publication and repacking preserve cold old-tag clients and ad
         for (const [root, version] of [[oldFeed, "0.1.0"], [newFeed, "0.1.1"]]) {
             await fs.mkdir(path.join(root, `tools/v${version}`), { recursive: true });
             await fs.writeFile(path.join(root, `tools/v${version}/cmaj.tar.gz`), `tool ${version}`);
-            await fs.writeFile(path.join(root, "manifest.json"), JSON.stringify({ version }));
+            const installer = `#!/bin/bash\nprintf 'Installer ${version}\\n'\n`;
+            const sha256 = createHash("sha256").update(installer).digest("hex");
+            const artifact = `installers/${sha256}.sh`;
+            await fs.mkdir(path.join(root, "installers"));
+            await fs.writeFile(path.join(root, artifact), installer);
+            await fs.writeFile(path.join(root, "manifest.json"), JSON.stringify({ version, installation: { artifact, sha256 } }));
         }
         let servedRoot;
         server = http.createServer(async (request, response) => {
@@ -154,4 +160,17 @@ test("interrupted publication and repacking preserve cold old-tag clients and ad
         if (server) await new Promise((resolve) => server.close(resolve));
         await fs.rm(scratch, { recursive: true, force: true });
     }
+});
+
+test("installer publication rejects bytes that do not match their immutable address before network writes", async () => {
+    const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "kit-installer-publication-"));
+    try {
+        await fs.mkdir(path.join(scratch, "installers"));
+        await fs.writeFile(path.join(scratch, `installers/${"a".repeat(64)}.sh`), "different bytes");
+        const calls = [];
+        await assert.rejects(publishReleaseObjects(scratch, { r2Target: redact("fixture:feed") }, {
+            run: (...args) => { calls.push(args); return ""; },
+        }), /Installer content does not match its immutable filename/u);
+        assert.equal(calls.length, 0);
+    } finally { await fs.rm(scratch, { recursive: true, force: true }); }
 });

@@ -70,6 +70,66 @@ repo from that lineage, so `git merge <kit release tag>` (driven by the
 `kit-update` skill) delivers updates; their plugins live in `fx/<their plugin>/`,
 which kit commits never touch.
 
+## Customer installation delivery
+
+Initial delivery is one personalized shell line, accompanied by the JUCE
+licensing notice. The customer copies it into Terminal and presses Enter; the
+access credential, project destination, download address, and explicit
+`--accept-juce-terms` acknowledgment are already populated. Do not send a
+placeholder recipe, ask an agent to choose a folder, or require separate Git,
+setup, doctor, or consent commands.
+
+The supported prerequisite is macOS 15 or newer on Apple silicon, with Apple
+Command Line Tools already installed and their agreements accepted by the
+customer. The installer does not accept OS agreements, use sudo, or install a
+package manager. It downloads pinned official Node and CMake archives into
+`.builder-kit-install/runtime/`, verifies their SHA-256 before extraction,
+and uses a project-local npm cache. No shell profile or system runtime changes.
+The root agent instruction activates `.builder-kit-install/env.sh` from the
+project root in each new shell before canonical npm/build commands.
+
+The installer verifies the complete downloaded script against the supplied
+SHA-256 before execution, fetches the exact release tag with an ephemeral Git
+remote, checks its commit, and runs the existing archive/payload-verified setup
+and strict environment checks. A completed npm-install receipt distinguishes
+successful dependency installation from a partial `node_modules` directory.
+Success names the exact folder to open in Codex. Installation does not build or
+install a plugin, change the included example, or launch a browser or DAW.
+
+An unrelated occupied destination is refused. Repeating the same delivery
+command resumes an installer-owned destination, skips completed tools, and
+preserves customer commits, dirty source and untracked files. It does not reset
+the branch or update to another release. An interrupted lock or altered runtime
+is reported for inspection, not automatically deleted or overwritten.
+
+Maintainers prepare delivery from an exact release manifest using:
+
+```text
+node scripts/prepare_builder_kit_install.mjs --manifest <release manifest> --destination-config <non-secret destination JSON> --project-dir <absolute customer folder> --output-dir <new private output folder>
+```
+
+This uses the existing Keychain capability and release destination parser.
+`command.sh` contains the exact one-liner and `delivery.txt` includes the
+licensing disclosure; both are private mode-600 files in a mode-700 directory.
+The output directory must be outside Git. Never commit, log, or attach their
+populated contents to test evidence.
+`feed/installers/<sha256>.sh` is credential-free, release-pinned delivery
+payload. The release command stages it after lineage/tool pins are final,
+records its hash in `manifest.json`, and includes it in the existing verified
+immutable-object publication phase. Preparation does not publish it:
+publication remains a separately authorized release operation. Render delivery
+from the matching release source; mismatched installer/manifest hashes refuse.
+The customer never needs these maintainer files.
+
+For unpublished qualification, `--installer-origin` and `--kit-origin` may
+select an HTTPS or explicit loopback HTTP origin. Other plain HTTP origins are
+rejected. This allows an exact candidate installer and Git mirror to be served
+inside a disposable guest while tool downloads retain the real stamped feed
+and runtime archives retain official URLs. Qualify the composed release with
+the activation instruction; an older release without it is not a completed
+one-command delivery. Do not confuse fixture proof with a published release or
+DAW acceptance.
+
 ## Releasing
 
 `scripts/release_builder_kit.mjs` (`npm run kit:release`) is the kit
