@@ -3,6 +3,7 @@
   "alias": "enhancer-lite",
   "cmakeTarget": "EnhanceThat",
   "productName": "EnhanceThat",
+  "previousProductName": "CosimoEnhancerLite",
   "product": {
     "productName": "Enhance That",
     "manufacturerName": "Cosimo",
