@@ -5,8 +5,9 @@ separate `Enhance That macOS 15 Clean Customer` VM. VirtualBuddy displayed
 “Your macOS Virtual Machine is Ready!” and persisted `installFinished=true`.
 The subsequent allocated first boot reached Setup Assistant's Language screen
 with English selected. Its software-license notice is the current checkpoint;
-L3 stopped before advancing. The guest is running and normal GUI Pause is
-available; the first-boot resource slot has not yet been released.
+L3 stopped before advancing, then used normal GUI Pause under Bob's explicit
+allocation. The paused view is confirmed; the UI/native CPU lease is released.
+The VM backend remains present and retains memory.
 Guest OS readback, account creation and product/kit/host qualification remain
 pending. The earlier base-restoration slot was released before first boot.
 
@@ -159,25 +160,42 @@ arrow (there is no separate Agree/Disagree button):
 
 > By using this software, you agree to the terms of the software license agreement for the software. You can view the terms of the software license agreement at https://www.apple.com/legal/sla/
 
-L3 stopped there and reported the exact notice to Bob. Normal VirtualBuddy
-Pause is visibly enabled. The guest remains running pending disposition;
-availability of Pause does not prove it was used. Guest `sw_vers` is unavailable
-at this checkpoint and has not been substituted with restore-image metadata.
+L3 stopped there and reported the exact notice to Bob. The unlabeled
+right-facing arrow is the page's visible forward control; it was not activated.
+Its subsequent behavior and legal effect have not been tested or inferred.
+The displayed official license URL is [Apple Software License Agreements](https://www.apple.com/legal/sla/).
+Guest `sw_vers` is unavailable at this checkpoint and has not been substituted
+with restore-image metadata.
 No account, credentials, permissions, tools, kit, plugin or DAW were provisioned.
 
-The separate five-second first-boot monitor PID79442 remains active; the owned
-VZ backend is PID79640. Private evidence is
-`macos15-first-boot-20260905/language-license-checkpoint.json` and
-`samples.jsonl`; actual guest screens are in the task's native CUA transcript.
-Both old VM Config hashes and boot-disk mtimes were rechecked unchanged.
+Bob then explicitly allocated normal Pause for this new VM only. Clicking the
+host Pause button produced the blurred paused view with central circular Play
+and toolbar Play controls. No shutdown, reboot, resume or saved-state action
+was used. Backend PID79640 remains present (sampled CPU 0.0%, RSS 9,474,256 KiB,
+about 9.04 GiB); this is not a claim that the process or memory was released.
+The UI/native CPU lease was released after this paused-state confirmation.
+
+The separate five-second first-boot monitor PID79442 recorded a post-pause
+sample, stopped normally through its stop-file, and exited 0. It recorded
+67 samples over 336.779 seconds with no alerts: minimum host free space
+26.046 GiB, peak allocated owned files 18.747 GiB, and final free/owned
+26.050/18.744 GiB. These are sampled observations, not continuous peak bounds.
+Private transport PID77849 remains alive under its separate instruction.
+
+Private evidence is `macos15-first-boot-20260905/FINAL_FIRST_BOOT_REPORT.json`,
+`pause-confirmed.json`, `language-license-checkpoint.json`, monitor result and
+samples. Before/after guest screenshots and AX are retained in the task's
+native CUA transcript. Both old VM Config hashes and boot-disk mtimes were
+rechecked unchanged; the new saved Config hash also remains unchanged.
 
 ## Scheduled continuation
 
 The completed base run used the initial 30-minute observation allocation and
 finished inside its first four minutes of monitoring. That allocation is now
-released. The separate first-boot allocation is held at the actual license
-notice above. Further Setup Assistant, guest `sw_vers` readback and customer
-tools require that checkpoint's disposition and appropriate resource allocation.
+released. The separate first-boot UI/native CPU lease is also released, with
+the guest paused at the actual license notice above. Bob is routing its
+disposition through Woods. Further Setup Assistant, guest `sw_vers` readback
+and customer tools require that disposition and appropriate resource allocation.
 Do not treat elapsed time or the 8 GiB space alert as an automatic kill rule.
 
 Cancellation has a concrete limitation: VirtualBuddy 2.1's backend cancels its
