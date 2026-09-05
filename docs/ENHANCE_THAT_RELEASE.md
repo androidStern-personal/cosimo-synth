@@ -20,7 +20,7 @@ Read-only observations on September 5, 2026:
 | Signing access | One Developer ID Application identity and one Developer ID Installer identity; existing notary profile reads two Accepted submissions | Availability only, not a signature or notarization for Enhance That |
 | Local host | Apple Silicon macOS `26.6.2` (`25G83`); Ableton Live `11.3.43`; GarageBand `10.4.14` | Installed application metadata; no host launched or tested by L3 |
 | Existing guests | Two installed VirtualBuddy guests both originate from macOS `26.6.2` (`25G83`); VirtualBuddy `2.1` | Guest cleanliness, host suitability and current running OS remain to be checked in an allocated slot |
-| macOS 15 | No macOS 15 guest/restore image found in VirtualBuddy, Downloads, Documents or Desktop inventory | Retained-scope gap, not deferred or passed |
+| macOS 15 | Apple 15.6.1 restore image downloaded and hashed after authorized cleanup; separate guest not yet created | See `ENHANCE_THAT_MACOS15.md`; retained qualification remains open |
 
 The live manifest SHA-256 was
 `71c6adbc305a49ccdd0c6cc14575a7f370fab3b0f269f13ccabaa9857da63301`.
@@ -98,11 +98,35 @@ inputs before deciding the final embedded dependency list.
    after changes. Keep the candidate unpublished until Andrew approves the
    exact publication and claims through the assigned operator.
 
-The SeqFX release builder contains reusable packaging/verification primitives,
-but its executable entry point is bound to SeqFX identity, distribution and
-source-map policy. It is not an Enhance That build command. Final Enhance That
-packaging needs its own scoped entry point; this preparation does not claim
-that entry point or final signed artifacts already exist.
+`scripts/build_enhance_that_release.mjs` is the scoped Enhance That entry point.
+It reuses the existing signing, notarization and deterministic archive helpers;
+the SeqFX command itself remains bound to SeqFX. Read-only inspection is:
+
+```sh
+node scripts/build_enhance_that_release.mjs --plan
+```
+
+Once the composed source is reviewed, notices are committed, Bob allocates the
+native/package slot, and AU has an explicit recorded defer decision, use
+`--unsigned --verify-repeatable-packaging --au-deferred '<recorded decision>'`
+for two assemblies of one fresh native build, then `--release` with the same AU
+decision and the existing notary profile. Set `COSIMO_CMAKE_JOBS` to the allocated
+job count. This VST3 entry point cannot include AU; an AU-included decision needs
+its own reviewed packaging extension before execution.
+
+The versioned `release/enhance-that/<kit-version>/{unsigned,release}` directory
+must be absent; existing candidates and linked output ancestors are refused.
+The package version follows the kit release while the embedded plugin retains
+its declared plugin version. The builder checks its own generated static DSP,
+native archive/link inputs, copied and extracted plugin identities, source-map
+absence, signatures, universal architectures, payload and preinstall bytes.
+It creates an unpublished candidate and never installs or publishes it.
+
+Source/workflow tests pass, including real temporary filesystem recovery with
+scripted signature adapters. Native build, real signing/notary, installer
+execution and extracted-plugin validation have not run for this entry point.
+The required tracked `legal/enhance-that/THIRD_PARTY_NOTICES.txt` still needs to
+be prepared from the actual dependency inventory; its absence blocks execution.
 
 The L1 build from `954207e4` still embeds UI source maps. Commit `5d0a84d1`
 adds generic `FX_DISTRIBUTABLE_RUNTIME=1` support while preserving normal builds
@@ -148,8 +172,18 @@ verify the replacement, and roll back to the original path on failure. Reject
 different identities and ambiguous duplicates. Test first install, same-path
 update, renamed-path update, interrupted promotion, rollback, and cross-root
 duplicates. Preserve a recoverable old bundle. Bob allocated the generic source
-files to L3; native/install slots remain separately allocated. The package's
-cross-root behavior is still unimplemented and unqualified.
+files to L3; native/install slots remain separately allocated.
+
+The package preinstall now checks the system root and every enumerated local
+account home. It refuses any legacy filename or user-level new copy, reporting
+the exact path without removing it. An existing new system copy must have the
+same Apple signing team, bundle identifier and sealed processor CID; the script
+does not load an old plugin's executable as root. It retains and verifies that
+copy outside the scan root before allowing the package engine to replace it.
+Recovery is manual using the retained `RECOVERY.txt`; package failure does not
+claim automatic rollback. Alternate volumes, linked system ancestors and an
+unsigned candidate replacing an existing system plugin are refused. Real
+package first-install/update/failure execution remains unqualified.
 
 ## Qualification matrix and smallest remaining environment decision
 
@@ -177,11 +211,11 @@ macOS 15/26 clean-environment, automation or listening completion.
 The concrete parameter states, host-gesture recording, disk-project recall and
 audio comparison procedure are in `docs/ENHANCE_THAT_HOST_QUALIFICATION.md`.
 
-The smallest macOS 15 decision is access to an existing Apple Silicon Mac or
-safe disposable VM running 15 with a suitable host, or authorization to prepare
-a separate guest if an available compatible restore image can be established.
-Do not reset an OS, buy a machine/host, create paid infrastructure, or relabel
-the missing platform as deferred. Route this retained gap through Bob/Woods.
+The macOS 15 image download is complete. `ENHANCE_THAT_MACOS15.md` records its
+hash, remaining 44 GiB storage reservation, supported-hardware preflight and
+separate clean-customer guest plan. Provisioning and guest builds await Bob's
+slot after audio capture and the queued L2 native build. Existing guests remain
+unchanged. Do not relabel the missing platform qualification as deferred.
 
 ## Evidence tooling
 

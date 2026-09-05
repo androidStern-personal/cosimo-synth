@@ -1130,7 +1130,7 @@ function binaryArchitectures(config, binaryPath) {
     return observed;
 }
 
-function parseJsonWithTrailingCommas(source, label) {
+export function parseJsonWithTrailingCommas(source, label) {
     let normalized = "";
     let escaped = false;
     let inString = false;
@@ -1576,7 +1576,7 @@ export async function normalizePayloadModes(config, rootPath) {
     await assertPayloadModes(config, rootPath);
 }
 
-async function normalizeTreeTimestamps(rootPath, sourceDateEpoch) {
+export async function normalizeTreeTimestamps(rootPath, sourceDateEpoch) {
     const timestamp = new Date(sourceDateEpoch * 1000);
     const entries = [];
 
@@ -1780,15 +1780,16 @@ export async function deterministicCpioPayload(rootPath, sourceDateEpoch) {
     });
 }
 
-export function renderPackageInfo(config, payloadEntries) {
+export function renderPackageInfo(config, payloadEntries, { preinstall = false, packageVersion = config.identity.pluginVersion } = {}) {
     const installKBytes = Math.ceil(payloadEntries.reduce((sum, entry) => sum + entry.size, 0) / 1024);
     const numberOfFiles = payloadEntries.length + 1;
     const bundleRelativePath = `./Library/Audio/Plug-Ins/VST3/${config.identity.bundleName}.vst3`;
 
     return [
         '<?xml version="1.0" encoding="utf-8"?>',
-        `<pkg-info overwrite-permissions="true" relocatable="false" identifier="${xmlEscape(config.identity.installerIdentifier)}" postinstall-action="none" version="${xmlEscape(config.identity.pluginVersion)}" format-version="2" generator-version="cosimo-release-builder-v2" install-location="/" auth="root">`,
+        `<pkg-info overwrite-permissions="true" relocatable="false" identifier="${xmlEscape(config.identity.installerIdentifier)}" postinstall-action="none" version="${xmlEscape(packageVersion)}" format-version="2" generator-version="cosimo-release-builder-v2" install-location="/" auth="root">`,
         `    <payload numberOfFiles="${numberOfFiles}" installKBytes="${installKBytes}"/>`,
+        ...(preinstall ? ['    <scripts><preinstall file="./preinstall"/></scripts>'] : []),
         `    <bundle path="${xmlEscape(bundleRelativePath)}" id="${xmlEscape(config.identity.patchId)}" CFBundleShortVersionString="${xmlEscape(config.identity.pluginVersion)}" CFBundleVersion="${xmlEscape(config.identity.pluginVersion)}"/>`,
         "    <bundle-version>",
         `        <bundle id="${xmlEscape(config.identity.patchId)}"/>`,
@@ -1805,7 +1806,7 @@ export function renderPackageInfo(config, payloadEntries) {
     ].join("\n");
 }
 
-async function buildUnsignedFlatPackage(config, stagingRoot, packagePath, workRoot, sourceDateEpoch) {
+export async function buildUnsignedFlatPackage(config, stagingRoot, packagePath, workRoot, sourceDateEpoch, { scriptsRoot = null, packageVersion = config.identity.pluginVersion } = {}) {
     const packageRoot = path.join(workRoot, "flat-package");
     const payloadPath = path.join(packageRoot, "Payload");
     const bomPath = path.join(packageRoot, "Bom");
@@ -1814,15 +1815,23 @@ async function buildUnsignedFlatPackage(config, stagingRoot, packagePath, workRo
 
     await rm(packageRoot, { recursive: true, force: true });
     await mkdir(packageRoot, { recursive: true });
-    await writeFile(packageInfoPath, renderPackageInfo(config, payloadEntries), "utf8");
+    await writeFile(packageInfoPath, renderPackageInfo(config, payloadEntries, { preinstall: scriptsRoot !== null, packageVersion }), "utf8");
     await normalizeTreeTimestamps(stagingRoot, sourceDateEpoch);
     await writeFile(payloadPath, await deterministicCpioPayload(stagingRoot, sourceDateEpoch));
+    if (scriptsRoot !== null) {
+        const scriptEntries = await readdir(scriptsRoot);
+        if (scriptEntries.length !== 1 || scriptEntries[0] !== "preinstall"
+            || !(await lstat(path.join(scriptsRoot, "preinstall"))).isFile())
+            throw new Error("Package scripts must contain only the regular preinstall file.");
+        await normalizeTreeTimestamps(scriptsRoot, sourceDateEpoch);
+        await writeFile(path.join(packageRoot, "Scripts"), await deterministicCpioPayload(scriptsRoot, sourceDateEpoch));
+    }
     run("mkbom", [stagingRoot, bomPath], {
         capture: true,
         env: { COPYFILE_DISABLE: "1", SOURCE_DATE_EPOCH: String(sourceDateEpoch) },
     });
     await normalizeTreeTimestamps(packageRoot, sourceDateEpoch);
-    run("xar", deterministicFlatPackageXarArgs(packagePath), {
+    run("xar", deterministicFlatPackageXarArgs(packagePath, { scripts: scriptsRoot !== null }), {
         capture: true,
         cwd: packageRoot,
         env: { COPYFILE_DISABLE: "1", SOURCE_DATE_EPOCH: String(sourceDateEpoch) },
@@ -1834,7 +1843,7 @@ async function buildUnsignedFlatPackage(config, stagingRoot, packagePath, workRo
     run("xar", ["-tf", packagePath], { capture: true });
 }
 
-export function deterministicFlatPackageXarArgs(packagePath) {
+export function deterministicFlatPackageXarArgs(packagePath, { scripts = false } = {}) {
     return [
         "--compression",
         "none",
@@ -1844,6 +1853,7 @@ export function deterministicFlatPackageXarArgs(packagePath) {
         "Bom",
         "Payload",
         "PackageInfo",
+        ...(scripts ? ["Scripts"] : []),
     ];
 }
 
@@ -1976,7 +1986,7 @@ function verifyPackagePayload(config, packagePath, { signed }) {
     return payloadFiles;
 }
 
-function signStagedVst3(vst3Path, approvedIdentity) {
+export function signStagedVst3(vst3Path, approvedIdentity) {
     run("codesign", [
         "--force",
         "--deep",
@@ -2021,7 +2031,7 @@ function removeLocalBuildSignature(vst3Path) {
     run("codesign", ["--remove-signature", vst3Path], { capture: true });
 }
 
-function signInstaller(unsignedPackagePath, signedPackagePath, approvedIdentity) {
+export function signInstaller(unsignedPackagePath, signedPackagePath, approvedIdentity) {
     run("productsign", [
         "--sign",
         approvedIdentity.sha1Fingerprint,
@@ -2033,7 +2043,7 @@ function signInstaller(unsignedPackagePath, signedPackagePath, approvedIdentity)
     return parseInstallerSigningEvidence(combinedProcessOutput(verification), approvedIdentity);
 }
 
-function notarizeStapleAndAssess(packagePath) {
+export function notarizeStapleAndAssess(packagePath) {
     const profile = process.env.COSIMO_NOTARY_PROFILE;
     const { stdout } = run("xcrun", [
         "notarytool",
@@ -2384,7 +2394,7 @@ async function writeChecksums(checksumsPath, entries) {
     await writeFile(checksumsPath, `${lines.join("\n")}\n`, "utf8");
 }
 
-async function createDeterministicZip(zipRootParent, zipFolderName, zipPath, sourceDateEpoch) {
+export async function createDeterministicZip(zipRootParent, zipFolderName, zipPath, sourceDateEpoch) {
     const zipFolder = path.join(zipRootParent, zipFolderName);
     const filePaths = [];
 
