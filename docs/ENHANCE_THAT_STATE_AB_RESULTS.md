@@ -20,6 +20,9 @@ the original failed VST3 remains preserved and unchanged.
 - Both console executables are Mach-O arm64. The local machine reported
   macOS `26.6.2`, arm64. This is one existing development machine, not clean
   macOS 15/26 customer qualification.
+- Exact audio profile: compiled one-control gain, **44.1 kHz / 128-frame blocks**,
+  constant stereo input, gain 0.25 versus 0.75, tolerance 1e-6 after one delivery
+  block. No audio device was opened.
 
 Bob explicitly allocated this single A/B after L2's independent source PASS.
 The exact frozen Node 22 supervisor ran once, from 10:36:36 to 10:38:22 UTC,
@@ -41,6 +44,12 @@ The baseline's 31 FAIL lines exactly matched the frozen classifier. Both builds
 produced the same harmless ranlib warnings for empty JUCE ARA/LV2 object files.
 There was no build error, crash, signal, timeout, resource stop or residual
 process-group cleanup.
+
+L2 independently passed the completed evidence, including the same ordered 104
+assertion labels, all input/tool hashes, actual distinct header dependencies and
+process release. Its report is
+`/Users/winterfell/.codex/visualizations/2026/09/05/01a07068-737c-7fe3-ae4d-cf4937edce81/enhance-l2/reviews/l1-state-gain-ab-2fc4c2dc.md`,
+SHA-256 `8191d6074c77c0639a1066b63b778a68efb3bd86ff03dde14689b6af6475029c`.
 
 ## What the real runtime established
 
@@ -114,3 +123,6 @@ host fixture, original product VST3 state/validator checks, shared JIT behavior
 before a global pin advance, and editor/AU/DAW/install/listening/release acceptance.
 No product target, JIT or compiler build, pin/feed/receipt mutation, installation,
 editor, DAW, audio device or clipboard work occurred in this A/B.
+The [repaired-product qualification proposal](ENHANCE_THAT_PRODUCT_QUALIFICATION_PLAN.md)
+now records the isolated build, candidate pin review, product audio boundary and
+separate JIT/global-pin prerequisites. It has no native allocation.

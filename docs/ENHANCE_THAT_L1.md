@@ -253,3 +253,8 @@ A/B](ENHANCE_THAT_STATE_AB_RESULTS.md): exactly 31 predicted baseline failures,
 104/104 corrected assertions, identical generated C++. The slot is released;
 product retry remains separately routed. The failed binary and original evidence
 are preserved.
+
+The [repaired-product qualification proposal](ENHANCE_THAT_PRODUCT_QUALIFICATION_PLAN.md)
+prepares an isolated diagnostic VST3, exact fixture pin review, product audio
+boundary and separate JIT/global-toolchain work. Its scripts are prepared only;
+no product-native allocation or pin advance is implied.
