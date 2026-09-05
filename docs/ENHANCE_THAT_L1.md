@@ -106,6 +106,12 @@ No AU support claim is established yet. The historical generic-AU notification
 crash in `kit/docs/HOST_COMPATIBILITY.md` is not evidence that this compiled
 candidate fails, nor that it is fixed.
 
+The [bounded native proof proposal](ENHANCE_THAT_NATIVE_PROOF_PLAN.md) records
+the actual generated AU target, exact command/output, registration identity
+constraint, available free validators, separate slot needs and stop conditions.
+It also outlines exact-binary VST3 automation/state and editor-notification
+checks without a live DAW. It is a proposal, not executed qualification.
+
 The reviewed candidate's VST3 build and binary identity checks passed. Still
 needed: enumerate all eight parameters through a native host, exercise
 continuous/discrete automation and state restoration, and settle the AU outcome with a bounded
