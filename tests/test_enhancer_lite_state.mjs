@@ -210,7 +210,7 @@ test("the isolated Lite DSP keeps the accepted laws while removing de-emphasis",
     ]) {
         const declaration = graph.split("\n").find((line) => line.includes(` ${endpointID} `));
         assert.ok(declaration, `missing ${endpointID}`);
-        assert.match(declaration, /automatable: false/);
+        assert.match(declaration, /automatable: true/);
         assert.match(declaration, /rampFrames: 0/);
         assert.match(smoothingSection, new RegExp(`\\b${endpointID}\\b`));
     }

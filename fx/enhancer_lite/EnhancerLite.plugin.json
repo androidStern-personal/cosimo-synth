@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "alias": "enhancer-lite",
-  "cmakeTarget": "CosimoEnhancerLite",
-  "productName": "CosimoEnhancerLite",
+  "cmakeTarget": "EnhanceThat",
+  "productName": "EnhanceThat",
   "product": {
-    "productName": "Cosimo Enhancer Lite",
+    "productName": "Enhance That",
     "manufacturerName": "Cosimo",
     "bundleIdentifier": "dev.cosimo.enhancer-lite",
     "pluginCode": "CsEL",

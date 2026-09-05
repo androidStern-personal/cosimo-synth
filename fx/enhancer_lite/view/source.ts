@@ -90,6 +90,7 @@ type NumberControl = NumericDescriptor & {
 };
 
 type ResponseDrag = {
+    readonly gestureEndpointIDs: Set<string>;
     readonly pointerID: number;
     readonly role: ResponseRole;
     readonly originClientX: number;
@@ -101,6 +102,7 @@ type ResponseDrag = {
 };
 
 type ReadoutDrag = {
+    readonly gestureEndpointIDs: Set<string>;
     readonly pointerID: number;
     readonly role: ReadoutRole;
     readonly originClientX: number;
@@ -432,14 +434,33 @@ class EnhancerLiteView extends HTMLElement {
         );
     }
 
-    sendValue(endpointID: string, value: number): void {
+    sendValue(endpointID: string, value: number, gestureEndpointIDs?: Set<string>): void {
         const previous = this.values.get(endpointID);
         if (previous !== undefined && Math.abs(previous - value) <= 1e-9)
             return;
 
         this.values.set(endpointID, value);
         this.renderEndpoint(endpointID);
-        this.patchConnection.sendEventOrValue(endpointID, value, 0);
+        // A pointer gesture may edit frequency, amount and Q. Begin each
+        // endpoint only when it changes, and keep it touched until release.
+        // Buttons and keyboard steps own one complete gesture per edit.
+        if (!gestureEndpointIDs?.has(endpointID)) {
+            gestureEndpointIDs?.add(endpointID);
+            this.patchConnection.sendParameterGestureStart?.(endpointID);
+        }
+        try {
+            this.patchConnection.sendEventOrValue(endpointID, value, 0);
+        } finally {
+            if (!gestureEndpointIDs)
+                this.patchConnection.sendParameterGestureEnd?.(endpointID);
+        }
+    }
+
+    endParameterGestures(gestureEndpointIDs: Set<string>): void {
+        const endpointIDs = [...gestureEndpointIDs];
+        gestureEndpointIDs.clear();
+        for (const endpointID of endpointIDs)
+            this.patchConnection.sendParameterGestureEnd?.(endpointID);
     }
 
     beginReadoutDrag(event: PointerEvent, role: ReadoutRole): void {
@@ -459,6 +480,7 @@ class EnhancerLiteView extends HTMLElement {
         event.currentTarget.setPointerCapture(event.pointerId);
         event.currentTarget.toggleAttribute("data-dragging", true);
         this.readoutDrag = {
+            gestureEndpointIDs: new Set(),
             pointerID: event.pointerId,
             role,
             originClientX: event.clientX,
@@ -489,6 +511,7 @@ class EnhancerLiteView extends HTMLElement {
                     frequencyControl.min,
                     frequencyControl.max,
                 ),
+                drag.gestureEndpointIDs,
             );
             return;
         }
@@ -504,6 +527,7 @@ class EnhancerLiteView extends HTMLElement {
                     qControl.min,
                     qControl.max,
                 ),
+                drag.gestureEndpointIDs,
             );
             return;
         }
@@ -521,6 +545,7 @@ class EnhancerLiteView extends HTMLElement {
                 amountControl.min,
                 amountControl.max,
             ),
+            drag.gestureEndpointIDs,
         );
     }
 
@@ -530,6 +555,7 @@ class EnhancerLiteView extends HTMLElement {
             return;
 
         this.readoutDrag = undefined;
+        this.endParameterGestures(drag.gestureEndpointIDs);
         drag.captureTarget.toggleAttribute("data-dragging", false);
         if (releaseCapture && drag.captureTarget.hasPointerCapture(drag.pointerID))
             drag.captureTarget.releasePointerCapture(drag.pointerID);
@@ -601,6 +627,7 @@ class EnhancerLiteView extends HTMLElement {
         event.currentTarget.toggleAttribute("data-dragging", true);
         const amountControl = role === "side" ? sideAmountControl : midAmountControl;
         this.drag = {
+            gestureEndpointIDs: new Set(),
             pointerID: event.pointerId,
             role,
             originClientX: event.clientX,
@@ -629,6 +656,7 @@ class EnhancerLiteView extends HTMLElement {
                     qControl.min,
                     qControl.max,
                 ),
+                drag.gestureEndpointIDs,
             );
             return;
         }
@@ -652,10 +680,12 @@ class EnhancerLiteView extends HTMLElement {
         this.sendValue(
             frequencyControl.dspEndpointID,
             clamp(frequencyHz, frequencyControl.min, frequencyControl.max),
+            drag.gestureEndpointIDs,
         );
         this.sendValue(
             amountControl.dspEndpointID,
             clamp(amount, amountControl.min, amountControl.max),
+            drag.gestureEndpointIDs,
         );
     }
 
@@ -665,6 +695,7 @@ class EnhancerLiteView extends HTMLElement {
             return;
 
         this.drag = undefined;
+        this.endParameterGestures(drag.gestureEndpointIDs);
         drag.captureTarget.toggleAttribute("data-dragging", false);
         if (releaseCapture && drag.captureTarget.hasPointerCapture(drag.pointerID))
             drag.captureTarget.releasePointerCapture(drag.pointerID);
@@ -913,7 +944,7 @@ class EnhancerLiteView extends HTMLElement {
                     <text class="axis-label level" data-level-dbfs="${levelDbfs}" x="${ENHANCER_LITE_PLOT.width - ENHANCER_LITE_PLOT.right + 8}" y="${Number(y) + 3}" text-anchor="start">${levelDbfs}</text>`;
         }).join("");
         return `
-            <section class="response-panel" aria-label="Enhancer Lite response">
+            <section class="response-panel" aria-label="Enhance That response">
                 <div class="plot-heading">
                     <span>HARMONIC SHAPE</span>
                     <span class="analyzer-legend" aria-label="Input and output spectrum peaks">
@@ -1036,7 +1067,7 @@ class EnhancerLiteView extends HTMLElement {
             <main class="shell">
                 <header class="topline">
                     <div>
-                        <h1>Enhancer Lite</h1>
+                        <h1>Enhance That</h1>
                         <div class="tag">ONE BAND // STEREO + M/S</div>
                     </div>
                     <div class="engine-label">4X IIR // FAST CURVE</div>

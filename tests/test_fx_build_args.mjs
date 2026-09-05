@@ -782,12 +782,13 @@ test("every shipped plugin uses one <Name>.plugin.json and only enhancer_lite ca
     });
     assert.deepEqual(plugin.identity, {
         ID: "dev.cosimo.enhancer-lite",
-        name: "Cosimo Enhancer Lite",
+        name: "Enhance That",
         manufacturer: "Cosimo",
         version: "0.1.0",
         plugin: { pluginCode: "CsEL", manufacturerCode: "Cosi" },
     });
-    assert.equal(plugin.productName, "CosimoEnhancerLite");
+    assert.equal(plugin.productName, "EnhanceThat");
+    assert.equal(plugin.cmakeTarget, "EnhanceThat");
     assert.equal(plugin.product.wordmark, undefined, "the rejected wordmark no longer ships");
     assert.equal(plugin.product.supportUrl, owner.owner.supportUrl, "the support URL is inherited from product-owner.json");
 

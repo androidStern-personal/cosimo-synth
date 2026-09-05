@@ -94,6 +94,7 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
         const storedStateListeners = new Set();
         const storedState = new Map();
         const sent = [];
+        const automationMessages = [];
         const storedWrites = [];
 
         const emit = (endpointID, value) => {
@@ -133,7 +134,15 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
             },
             sendEventOrValue(endpointID, value) {
                 sent.push({ endpointID, value });
+                if (Object.hasOwn(values, endpointID))
+                    automationMessages.push({ type: "value", endpointID, value });
                 emit(endpointID, value);
+            },
+            sendParameterGestureStart(endpointID) {
+                automationMessages.push({ type: "begin", endpointID });
+            },
+            sendParameterGestureEnd(endpointID) {
+                automationMessages.push({ type: "end", endpointID });
             },
         };
 
@@ -178,10 +187,13 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
             emit,
             emitEndpoint,
             sent,
+            automationMessages,
             storedWrites,
             clearSent: () => sent.splice(0),
+            clearAutomation: () => automationMessages.splice(0),
             endpointListenerCount: (endpointID) => endpointListeners.get(endpointID)?.size ?? 0,
             disconnect: () => document.querySelector("#mount").replaceChildren(),
+            reopen: () => document.querySelector("#mount").replaceChildren(module.default(patchConnection)),
         };
     }, { values: initialValues, sourceModulePath: modulePath, statusInputs: hostStatusInputs, withHost: host, manifest, userFileFixture, pauseFileLoads });
     await page.locator("cosimo-enhancer-lite-view").waitFor();
@@ -1064,7 +1076,7 @@ test("the editor enables live analysis only while its view is connected", async 
 test("the product heading is plain text and no wordmark asset ships", async () => {
     const source = await readFile(sourcePath, "utf8");
     assert.doesNotMatch(source, /wordmark/i);
-    assert.match(source, /<h1>Enhancer Lite<\/h1>/);
+    assert.match(source, /<h1>Enhance That<\/h1>/);
 
     for (const modulePath of [
         "/fx/enhancer_lite/view/source.ts",
@@ -1072,7 +1084,7 @@ test("the product heading is plain text and no wordmark asset ships", async () =
     ]) {
         const page = await openEnhancerLite(modulePath);
         try {
-            assert.equal(await shadow(page, ".shell h1").textContent(), "Enhancer Lite");
+            assert.equal(await shadow(page, ".shell h1").textContent(), "Enhance That");
             assert.equal(await shadow(page, ".shell h1 img").count(), 0);
             assert.equal(await shadow(page, ".shell img").count(), 0, "the view loads no image assets");
         } finally {
@@ -1147,7 +1159,7 @@ test("host-restored shape, character, and intensity select the truthful segment"
     }
 });
 
-test("the compiled VST view preserves the same gesture surface and eight static controls", async () => {
+test("the compiled VST view preserves the same gesture surface and eight sound controls", async () => {
     const page = await openEnhancerLite("/build/fx/enhancer_lite_runtime/view/app.js");
 
     try {
@@ -1428,3 +1440,118 @@ test("A-G snapshots capture and recall the Lite sound through the shared snapsho
         await page.close();
     }
 });
+
+for (const modulePath of [
+    "/fx/enhancer_lite/view/source.ts",
+    "/build/fx/enhancer_lite_runtime/view/app.js",
+]) {
+    test(`all eight controls send balanced host automation gestures: ${modulePath}`, async () => {
+        const page = await openEnhancerLite(modulePath);
+        try {
+            for (const selector of ["[data-mode='mid-side']", "[data-curve='tube']", "[data-saturation-mode='medium']", "[data-shape='high']"])
+                await shadow(page, selector).click();
+            await shadow(page, "[data-shape='bell']").click();
+            for (const [role, key] of [["frequency", "ArrowRight"], ["q", "ArrowUp"], ["primary-amount", "ArrowUp"], ["side-amount", "ArrowUp"]])
+                await shadow(page, `[data-readout-control='${role}']`).press(key);
+            const messages = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages);
+            assert.deepEqual([...new Set(messages.map(({ endpointID }) => endpointID))].sort(), Object.keys(initialValues).sort());
+            for (let i = 0; i < messages.length; i += 3) {
+                const [begin, value, end] = messages.slice(i, i + 3);
+                assert.deepEqual(begin, { type: "begin", endpointID: value.endpointID });
+                assert.equal(value.type, "value");
+                assert.deepEqual(end, { type: "end", endpointID: value.endpointID });
+            }
+            await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearAutomation());
+            await shadow(page, "[data-shape='bell']").click();
+            assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages), [], "an unchanged selection writes no automation");
+        } finally {
+            await page.close();
+        }
+    });
+
+    test(`a multi-parameter drag keeps host gestures open through modifier changes: ${modulePath}`, async () => {
+        const page = await openEnhancerLite(modulePath);
+        try {
+            const handle = shadow(page, ".response-handle.primary");
+            const bounds = await handle.boundingBox();
+            assert.ok(bounds);
+            const x = bounds.x + bounds.width / 2;
+            const y = bounds.y + bounds.height / 2;
+            await page.mouse.move(x, y);
+            await page.mouse.down();
+            assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages), [], "pointer down alone changes no sound");
+            await page.mouse.move(x + 25, y - 15, { steps: 4 });
+            await page.keyboard.down("Shift");
+            await page.mouse.move(x + 25, y - 30, { steps: 4 });
+            await page.keyboard.up("Shift");
+            const pending = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages);
+            assert.equal(pending.filter(({ type }) => type === "end").length, 0);
+            assert.deepEqual(pending.filter(({ type }) => type === "begin").map(({ endpointID }) => endpointID).sort(), ["freqHzIn", "midAmountIn", "qIn"]);
+            assert.ok(pending.filter(({ type }) => type === "value").length > 3);
+            await page.mouse.up();
+            const messages = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages);
+            for (const endpointID of ["freqHzIn", "midAmountIn", "qIn"]) {
+                const endpointMessages = messages.filter((message) => message.endpointID === endpointID);
+                assert.equal(endpointMessages[0].type, "begin");
+                assert.equal(endpointMessages.at(-1).type, "end");
+                assert.equal(endpointMessages.filter(({ type }) => type === "end").length, 1);
+            }
+        } finally {
+            await page.close();
+        }
+    });
+
+    test(`host playback updates all controls without feedback and survives editor reopen: ${modulePath}`, async () => {
+        const page = await openEnhancerLite(modulePath, { host: true });
+        try {
+            const playback = { freqHzIn: 440, qIn: 2.5, modeIn: 1, midAmountIn: 0.6, sideAmountIn: 0.35, curveIn: 0, saturationModeIn: 1, shapeIn: 2 };
+            await page.evaluate((values) => {
+                window.__ENHANCER_LITE_TEST__.clearSent();
+                for (const [endpointID, value] of Object.entries(values))
+                    window.__ENHANCER_LITE_TEST__.emit(endpointID, value);
+            }, playback);
+            for (const reopen of [false, true]) {
+                if (reopen) await page.evaluate(() => window.__ENHANCER_LITE_TEST__.reopen());
+                for (const [selector, value] of [["[data-mode='mid-side']", "true"], ["[data-curve='tube']", "true"], ["[data-saturation-mode='medium']", "true"], ["[data-shape='high']", "true"]])
+                    assert.equal(await shadow(page, selector).getAttribute("aria-pressed"), value);
+                assert.equal(await shadow(page, "[data-readout-control='frequency']").getAttribute("aria-valuenow"), "440");
+                assert.equal(await shadow(page, "[data-readout-control='q']").getAttribute("aria-valuenow"), "2.5");
+                assert.ok(Math.abs(Number(await shadow(page, "[data-readout-control='primary-amount']").getAttribute("aria-valuenow")) - 7.2) < 1e-9);
+                assert.ok(Math.abs(Number(await shadow(page, "[data-readout-control='side-amount']").getAttribute("aria-valuenow")) - 4.2) < 1e-9);
+            }
+            assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages), []);
+            assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.filter(({ endpointID }) => endpointID !== "analyzerEnabledIn")), []);
+        } finally {
+            await page.close();
+        }
+    });
+}
+
+for (const termination of ["pointercancel", "lostpointercapture", "disconnect"]) {
+    test(`readout automation closes exactly once on ${termination}`, async () => {
+        const page = await openEnhancerLite();
+        try {
+            const readout = shadow(page, "[data-readout-control='frequency']");
+            const bounds = await readout.boundingBox();
+            assert.ok(bounds);
+            await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+            await page.mouse.down();
+            await page.mouse.move(bounds.x + bounds.width / 2 + 20, bounds.y + bounds.height / 2, { steps: 3 });
+            const pending = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages);
+            assert.equal(pending.filter(({ type }) => type === "begin").length, 1);
+            assert.equal(pending.filter(({ type }) => type === "end").length, 0);
+            if (termination === "disconnect") {
+                await page.evaluate(() => window.__ENHANCER_LITE_TEST__.disconnect());
+            } else {
+                await readout.evaluate((element, type) => element.dispatchEvent(new PointerEvent(type, { pointerId: 1 })), termination);
+            }
+            await page.mouse.up();
+            const completed = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages);
+            assert.equal(completed.at(-1).type, "end");
+            assert.equal(completed.filter(({ type }) => type === "end").length, 1);
+            assert.ok(completed.every(({ endpointID }) => endpointID === "freqHzIn"));
+        } finally {
+            await page.close();
+        }
+    });
+}
