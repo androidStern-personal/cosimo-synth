@@ -125,8 +125,14 @@ It creates an unpublished candidate and never installs or publishes it.
 Source/workflow tests pass, including real temporary filesystem recovery with
 scripted signature adapters. Native build, real signing/notary, installer
 execution and extracted-plugin validation have not run for this entry point.
-The required tracked `legal/enhance-that/THIRD_PARTY_NOTICES.txt` still needs to
-be prepared from the actual dependency inventory; its absence blocks execution.
+`legal/enhance-that/THIRD_PARTY_NOTICES.txt` now contains 17 notice sections
+prepared from the actual L1 compiler dependency records and bundled React UI.
+`NOTICE_SOURCES.json` records source pins/versions, file hashes and selected
+license blocks. This includes CHOC's embedded FLAC/Ogg/minimp3, separately from
+JUCE's copies, and the preserved Vorbis LPC attribution. The actual pinned JUCE
+source identifies 8.0.12 and its JUCE 8 license text; no unrelated kit terms were
+changed. Reconcile this inventory against the final own build and extracted
+artifact before qualification. An included AU needs an additional inventory.
 
 The L1 build from `954207e4` still embeds UI source maps. Commit `5d0a84d1`
 adds generic `FX_DISTRIBUTABLE_RUNTIME=1` support while preserving normal builds
