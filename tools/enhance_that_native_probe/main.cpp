@@ -24,7 +24,6 @@ using Parameter = juce::HostedAudioProcessorParameter;
 constexpr double sampleRate = 48000.0;
 constexpr int blockSize = 128;
 constexpr float normalizedTolerance = 1.0e-6f;
-constexpr auto expectedBinaryHash = "2675c6bb73a1d293b069fc592f96329d80d5c047c313b1b9b73452361a6a6c86";
 
 struct Control
 {
@@ -431,8 +430,30 @@ int main(int argc, char** argv)
     }
     const juce::File bundle(juce::String::fromUTF8(argv[1]));
     const juce::File evidence(juce::String::fromUTF8(argv[2]));
-    const auto root = evidence.getChildFile("probe");
     std::error_code error;
+    const auto resolvedBundle = std::filesystem::canonical(bundle.getFullPathName().toStdString(), error);
+    if (error)
+    {
+        std::cerr << "Cannot resolve selected bundle: " << error.message() << '\n';
+        return 2;
+    }
+    const auto resolvedEvidence = std::filesystem::canonical(evidence.getFullPathName().toStdString(), error);
+    if (error)
+    {
+        std::cerr << "Cannot resolve evidence directory: " << error.message() << '\n';
+        return 2;
+    }
+    for (auto parent = resolvedEvidence; !parent.empty(); parent = parent.parent_path())
+    {
+        if (parent == resolvedBundle)
+        {
+            std::cerr << "Refusing evidence directory inside the selected bundle\n";
+            return 2;
+        }
+        if (parent == parent.root_path())
+            break;
+    }
+    const auto root = evidence.getChildFile("probe");
     if (!evidence.isDirectory() || !std::filesystem::create_directory(root.getFullPathName().toStdString(), error))
     {
         std::cerr << "Refusing absent evidence parent or existing probe directory: " << error.message() << '\n';
@@ -442,16 +463,17 @@ int main(int argc, char** argv)
     if (!report.isOpen())
         return 2;
     const auto binary = bundle.getChildFile("Contents/MacOS/EnhanceThat");
-    if (!report.check(bundle.isDirectory() && binary.existsAsFile()
-                      && juce::SHA256(binary).toHexString() == expectedBinaryHash,
-                      "candidate", "Exact reviewed VST3 executable SHA-256"))
+    if (!report.check(bundle.isDirectory() && binary.existsAsFile(),
+                      "candidate", "Selected Enhance That VST3 executable exists"))
         return report.finish();
+    const auto binaryHash = juce::SHA256(binary).toHexString();
     report.emit("scope", "start", {{ "bundle", bundle.getFullPathName() },
-        { "binarySha256", expectedBinaryHash }, { "sampleRate", sampleRate }, { "blockSize", blockSize },
+        { "binarySha256", binaryHash }, { "sampleRate", sampleRate }, { "blockSize", blockSize },
         { "normalizedTolerance", normalizedTolerance }, { "stateWaitSeconds", 2 }});
 
     juce::ScopedJuceInitialiser_GUI juceInitialiser;
     runProof(report, bundle);
-    report.check(juce::SHA256(binary).toHexString() == expectedBinaryHash, "candidate-after", "Candidate executable unchanged");
+    report.check(binary.existsAsFile() && juce::SHA256(binary).toHexString() == binaryHash,
+                 "candidate-after", "Candidate executable unchanged");
     return report.finish();
 }

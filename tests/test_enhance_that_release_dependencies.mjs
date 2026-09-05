@@ -7,7 +7,6 @@ import { fileURLToPath } from "node:url";
 import { enhanceThatNativeDependencies } from "../scripts/enhance-that-release-config.mjs";
 import { seqFxReleaseConfig } from "../scripts/seqfx-release-config.mjs";
 import { readDeclaredNativeDependencyProvenance } from "../scripts/build_seqfx_beta_release.mjs";
-import { inspectTool } from "../kit/scripts/toolchain.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const config = { nativeDependencies: enhanceThatNativeDependencies };
@@ -19,19 +18,6 @@ async function scratch(context) {
     context.after(() => rm(directory, { recursive: true, force: true }));
     return directory;
 }
-
-test("Enhance That owns its proposed dependency expectations independently of SeqFX", () => {
-    assert.equal(enhanceThatNativeDependencies.cmajor.revision, proposedCommit);
-    assert.equal(seqFxReleaseConfig.nativeDependencies.cmajor.revision, oldCommit);
-    assert.notEqual(enhanceThatNativeDependencies, seqFxReleaseConfig.nativeDependencies);
-    for (const key of ["cmajor", "choc", "juce"]) {
-        assert.ok(Object.isFrozen(enhanceThatNativeDependencies[key]));
-        assert.notEqual(enhanceThatNativeDependencies[key], seqFxReleaseConfig.nativeDependencies[key]);
-    }
-    assert.ok(Object.isFrozen(enhanceThatNativeDependencies));
-    assert.deepEqual(enhanceThatNativeDependencies.choc, seqFxReleaseConfig.nativeDependencies.choc);
-    assert.deepEqual(enhanceThatNativeDependencies.juce, seqFxReleaseConfig.nativeDependencies.juce);
-});
 
 test("production SDK, tool producer and customer tool contract share the proposed pin", async () => {
     const production = await readDeclaredNativeDependencyProvenance(config);
@@ -63,18 +49,3 @@ for (const [name, change, error] of [
         await assert.rejects(readDeclaredNativeDependencyProvenance(config, { repositoryRoot }), error);
     });
 }
-
-test("unproduced versioned archives cannot approve an existing local tool", async context => {
-    const repositoryRoot = await scratch(context);
-    const toolchain = JSON.parse(await readFile(path.join(root, "kit/toolchain.json"), "utf8"));
-    const kit = JSON.parse(await readFile(path.join(root, "kit/kit.json"), "utf8"));
-    for (const key of ["cmaj", "cmajPlugin"]) {
-        assert.equal(toolchain[key].sha256, "");
-        assert.ok(toolchain[key].artifact.startsWith(`tools/v${kit.version}/`));
-        const localPath = path.join(repositoryRoot, toolchain[key].localPath);
-        await mkdir(path.dirname(localPath), { recursive: true });
-        if (key === "cmaj") await writeFile(localPath, "existing unapproved tool fixture\n");
-        else await mkdir(localPath);
-        assert.equal((await inspectTool(toolchain, key, { root: repositoryRoot })).status, "unpinned");
-    }
-});

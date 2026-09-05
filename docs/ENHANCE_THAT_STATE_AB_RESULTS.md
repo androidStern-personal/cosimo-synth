@@ -80,7 +80,7 @@ Full retained output:
 `/Users/winterfell/.codex/worktrees/1388/cosimo-synth/build/l1-state-gain-ab-2fc4c2dc-01`.
 Both complete build trees, generated C++, executables, phase command/PID/log/result
 files, classifications, comparison, plan/preflight and release record remain.
-No automatic cleanup or reuse is authorized by this result.
+Keep the original failures and results when testing a newer candidate.
 
 Durable evidence copy:
 `/Users/winterfell/.codex/visualizations/2026/09/05/01a07068-7376-7012-a350-a5999d5bd51c/l1/state-ab-results-01`.
@@ -104,7 +104,7 @@ Supervisor SHA-256 is
 `58165e21c4830817066d47c9d5fbd2832e27052101b7d74cc7db0700cd52f84d`;
 plan SHA-256 is
 `59e3e097862f5087aa26a51c2782fbb0f43fcbc095093ebf327c000380c436db`.
-Its launch/preflight refuses reuse of this output directory.
+These files describe that historical run, not a current launch prerequisite.
 
 All 35 pinned input/evidence files and the original failed VST3 binary/payload
 were reverified at completion. Compiler, toolchain, shared dependencies and
@@ -117,12 +117,8 @@ the 1 GiB ceiling. Free space at release was **45.3666 GiB**, above the 44 GiB
 floor. Small durable evidence copies are additional retained documentation;
 no native allocation remains active.
 
-Next gates remain separately routed: coherent framework/tool provenance and
-product rebuild, independently reviewed new binary/payload pins in the external
-host fixture, original product VST3 state/validator checks, shared JIT behavior
-before a global pin advance, and editor/AU/DAW/install/listening/release acceptance.
-No product target, JIT or compiler build, pin/feed/receipt mutation, installation,
-editor, DAW, audio device or clipboard work occurred in this A/B.
-The [repaired-product qualification proposal](ENHANCE_THAT_PRODUCT_QUALIFICATION_PLAN.md)
-now records the isolated build, candidate pin review, product audio boundary and
-separate JIT/global-pin prerequisites. It has no native allocation.
+The product VST3 state/validator, generic JIT, editor/DAW, install and listening
+checks remain separate from this one-control result. See
+[the release guide](ENHANCE_THAT_RELEASE.md) for current commands and remaining
+customer checks. The old supervisor, plans and outputs above are retained as
+historical evidence; they are not the active build/run workflow.

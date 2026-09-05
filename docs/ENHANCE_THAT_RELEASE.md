@@ -1,312 +1,209 @@
-# Enhance That release preparation
+# Enhance That release guide
 
-L3 owner: task `01a07068-7379-7cf2-80a0-b6dde894e350`, managed by Bob.
-Branch: `codex/enhance-that-release`, initially based on
-`origin/master@c297eeed62aec66e85118df06a229d9cdd8491da`.
-Authority: the September 5 approved Enhance That launch handoff, SHA-256
-`7ab692893201e3943912fcde4534146eb9bdcfe5c3014b7ed49f4535a8ee60b9`.
-This is preparation, not a frozen candidate, qualified download, or publication.
+The [launch handoff](../ENHANCE_THAT_LAUNCH_HANDOFF.md) defines the product and
+customer promises. Bob manages the queue; L3 owns launch source composition,
+compiler/product builds, installation and customer validation. L1 owns the
+remaining focused state/JIT regression work. Use normal commands with bounded
+execution. Historical one-off supervisors, frozen packets and review machinery
+remain inactive evidence, not prerequisites for the next build.
 
-## Proposed coherent repair pin — source only
+## Product and dependency identity
 
-Bob authorized an isolated source proposal for Cmajor
-`2fc4c2dce2a1b625c1578409e10bf312a5ac39b5`; integration requires independent
-review. `scripts/enhance-that-release-config.mjs` owns Enhance That's expected
-native inputs, with unchanged CHOC `11f7dc63` and JUCE `501c0767`. The packager
-checks declarations before building and retains the shared strict post-build
-checkout, origin, clean-tree and CHOC-gitlink validation.
+Keep the name **Enhance That**, bundle `EnhanceThat.vst3`, patch/bundle ID
+`dev.cosimo.enhancer-lite`, codes `CsEL` / `Cosi`, and processor CID
+`ABCDEF019182FAEB436F73694373454C`. The rename preserves saved sounds and stable
+parameter IDs. `previousProductName: CosimoEnhancerLite` enables recovery from
+the old filename; do not invent a new plugin identity to bypass an old copy.
 
-The existing single CMake pin supplies both SDK and tool-producer checkouts;
-`kit/toolchain.json` proposes that same commit. Both `tools/v0.1.3/` archives
-remain unproduced and unqualified with blank hashes. Producer, archive/payload
-receipt validation and setup code are unchanged; old tools cannot be relabelled.
-SeqFX's dependency expectations and tool attestation remain at `7820a453` and
-deliberately reject the proposed declaration until its owner acts.
+The eight sound controls remain Frequency, Q, Routing, Amount / Mid, Side,
+Character, Intensity and Shape. Keep their automation/gesture repairs: a changed
+button or key step sends one begin/value/end; a pointer touch ends on release,
+cancel, capture loss or editor removal. Modifier-Q and arrow edits during a
+pointer touch reuse that touch. Host notifications update the display without
+sending values or gestures back. The native analyzer parameter is separate
+from the eight saved sound controls and must not be removed to pass inventory.
 
-Focused source checks: seven Enhance That dependency tests, three shared
-provenance tests and three release-contract tests pass. The shared Git fixture
-needs `TMPDIR=/private/tmp` on this host to avoid `/var` versus `/private/var`
-origin spelling; the initial failed run is retained. A separate read-only probe
-through a synthetic CMake cache refuses both the actual old `7820a453` checkout
-and L1's diagnostic `2fc4c2dc` checkout with its local origin. That diagnostic
-checkout cannot substitute for the normal provenance-verified production input.
-These are source/metadata checks, not native build or tool-archive qualification.
-No build, download, cache change, receipt, installation or publication was made;
-the macOS 15 VM stays paused and the private transport stays in place.
+The state repair is Cmajor `2fc4c2dce2a1b625c1578409e10bf312a5ac39b5`, with
+CHOC `11f7dc63d7cb78f6dbaa559fe09ade8e941c0188` and stock JUCE
+`501c07674e1ad693085a7e7c398f205c2677f5da`. Keep actual SDK/compiler identities
+consistent with the selected build. Do not relabel old tools or substitute a
+diagnostic checkout with a different origin. Separate generic JIT behavior
+must be tested before a shared toolchain release; the compiled-product result
+does not settle that behavior. SeqFX's independent expectations are unchanged.
 
-## Initial verified inputs
+## Build, package and sign
 
-Historical preparation observations on September 5, 2026; later source and VM
-work is recorded above and in `ENHANCE_THAT_MACOS15.md`:
-
-| Input | Observation | Boundary |
-| --- | --- | --- |
-| Published feed | HTTP manifest and live Git tags identify `0.1.2`, source `b48a09575477b67e391e6b17476c04ddd90ad08d`, kit `5d19dfe2aabeeb77a63e83470b8115dbf08c823a` | Predates the current fixes |
-| Available next kit version | Live tags are `v0.1.0`, `v0.1.1`, `v0.1.2`; R2 tool directories are `v0.1.1`, `v0.1.2`. Select `0.1.3` for preparation | Recheck tags and immutable objects before staging/publishing; this read does not reserve a version |
-| Private candidate | Source `c297eeed`, kit `c840a394094f3c6a9ea14b5f1a8041eb424b22ac` | Its private `0.1.2` label must never overwrite published `0.1.2` |
-| Cmajor / CHOC / JUCE | `7820a453f25e1b6eaf898d0bb2feb7e4ce01c207` / `11f7dc63d7cb78f6dbaa559fe09ade8e941c0188` / `501c07674e1ad693085a7e7c398f205c2677f5da` | Final source, generated project and tool receipts must agree |
-| Signing access | One Developer ID Application identity and one Developer ID Installer identity; existing notary profile reads two Accepted submissions | Availability only, not a signature or notarization for Enhance That |
-| Local host | Apple Silicon macOS `26.6.2` (`25G83`); Ableton Live `11.3.43`; GarageBand `10.4.14` | Installed application metadata; no host launched or tested by L3 |
-| Existing guests | Two installed VirtualBuddy guests both originate from macOS `26.6.2` (`25G83`); VirtualBuddy `2.1` | Guest cleanliness, host suitability and current running OS remain to be checked in an allocated slot |
-| macOS 15 | Apple 15.6.1 restore image downloaded and hashed after authorized cleanup; separate guest not yet created | See `ENHANCE_THAT_MACOS15.md`; retained qualification remains open |
-
-The live manifest SHA-256 was
-`71c6adbc305a49ccdd0c6cc14575a7f370fab3b0f269f13ccabaa9857da63301`.
-The initial HTTP 403 was specific to Python's default User-Agent: the same
-authenticated location succeeded with a curl User-Agent. No capability changed.
-Keep the feed URL, cohort, delivery command and credentials out of this document,
-manifests, ordinary logs and public downloads.
-
-## Exact inventory baseline
-
-The canonical `kit/scripts/export_kit.mjs` exported committed `c297eeed` into
-an isolated outside-repository directory. Required-file, allowlist and forbidden
-string gates passed. The export reports 140 files before adding
-`EXPORT_MANIFEST.json`; the resulting inventory contains 139 regular files,
-two relative symlinks and 33 directories. No image, font, audio or SVG files
-occur in this source export. This is not the final L1/L2 export or a build test.
-
-Its canonical inventory tree SHA-256 is
-`eb9b230cdf5e8948b98576176c68ba427358cf0bebfd69959ffb324b47b97ef6`.
-The inventory includes relative paths, file sizes, SHA-256s, modes, directories
-and symlink targets. It excludes neither files nor metadata silently.
-
-| Shipped surface | Inventory and notices to finish against the final bytes |
-| --- | --- |
-| Free plugin | Generated ahead-of-time DSP, native wrapper and linked JUCE/CHOC/helper code; compiled WebView JavaScript/CSS and actual embedded assets; plugin and installer identities |
-| Builder Kit source | Exact allowlisted export, root MIT license and third-party notices, L2 modification reference and instructions, source and lockfiles actually included |
-| `cmaj` archive | Compiler/tool payload and archive hash, dependency pin and payload receipt; development tooling, permitted to contain JIT |
-| `CmajPlugin` archive | Generic development loader payload, archive hash and receipt; development tooling, distinct from the finished plugin |
-| Customer runtime downloads | Node/CMake installer pins and applicable upstream files; distinguish fetched prerequisites from files bundled in our downloads |
-
-The existing `kit/template/root/THIRD_PARTY_NOTICES.md` is the customer notice
-foundation. Retain broad Cosimo modification/distribution/sale rights and the
-customer's JUCE disclosure. Do not copy `legal/seqfx/THIRD_PARTY_NOTICES.txt`
-wholesale: it contains SeqFX assets, dependency assumptions and historical
-unsettled-rights language that do not establish this release's actual inventory.
-For example, a React re-export in `kit/index.ts` does not prove React survives
-tree shaking into this plugin; inspect the generated bundle and native link
-inputs before deciding the final embedded dependency list.
-
-## Packaging operations after L1/L2 review
-
-1. Bob supplies the exact composed source and explicit AU decision. Keep stable
-   patch ID `dev.cosimo.enhancer-lite`, codes `CsEL` / `Cosi`, parameters and
-   saved-state identities. Packaging reads the final plugin's own configuration.
-2. Stage in a new owned directory with the newly verified version. Export with
-   the existing canonical exporter and release APIs. `kit:release --dry-run`
-   still performs substantial local proof/build work on macOS: it needs the
-   allocated native slot. Do not run the normal publishing command merely to
-   prepare a candidate; it pushes lineage and promotes the customer manifest.
-3. Use worktree-local pinned tools and normal CPM dependency acquisition. Record
-   source, kit lineage, archive hashes, payload hashes and actual dependency
-   commits. Reuse verified archive bytes through canonical setup APIs; do not
-   copy another worktree's installed tools or dependency checkout.
-4. Build the dedicated plugin; retain generated CMake, actual compile/link
-   inputs and binary dependency evidence. Demonstrate generated static DSP and
-   absence of Cmajor JIT/LLVM engine linkage in the final plugin. Inspect the
-   extracted distributed binary too. A strings scan alone does not prove this.
-   The development compiler and generic loader are outside that no-JIT claim.
-5. Assemble the same normalized unsigned payload twice and compare payload,
-   package and ZIP bytes. This checks packaging repeatability of one native
-   build, not independent native-build or signed-byte reproducibility.
-6. Sign the finished payload and installer using the available Developer ID
-   identities; submit to the existing notary profile; require Accepted, staple,
-   stapler validation and Gatekeeper acceptance. Record exact signature facts
-   and submission ID privately in the operator evidence, with only appropriate
-   public signature metadata in the release manifest.
-7. Expand the actual installer and ZIP. Verify payload inventory, signatures,
-   architectures, metadata hygiene, matching executable/asset bytes, no-JIT
-   evidence and native validator result on the extracted payload. Generate
-   checksums only after signing/stapling has finished changing bytes.
-8. Use those exact downloads for installation, host, clean-environment and L2
-   final customer qualification. The existing generic installer preserves the
-   candidate signature: do not ad-hoc re-sign a finished Developer ID plugin.
-9. Bind all evidence to the final candidate digest. Requalify affected surfaces
-   after changes. Keep the candidate unpublished until Andrew approves the
-   exact publication and claims through the assigned operator.
-
-`scripts/build_enhance_that_release.mjs` is the scoped Enhance That entry point.
-It reuses the existing signing, notarization and deterministic archive helpers;
-the SeqFX command itself remains bound to SeqFX. Read-only inspection is:
+From the selected source checkout, normal product commands are:
 
 ```sh
+FX_DISTRIBUTABLE_RUNTIME=1 npm run fx:prod:build -- enhancer-lite --clean
 node scripts/build_enhance_that_release.mjs --plan
 ```
 
-Once the composed source is reviewed, notices are committed, Bob allocates the
-native/package slot, and AU has an explicit recorded defer decision, use
-`--unsigned --verify-repeatable-packaging --au-deferred '<recorded decision>'`
-for two assemblies of one fresh native build, then `--release` with the same AU
-decision and the existing notary profile. Set `COSIMO_CMAKE_JOBS` to the allocated
-job count. This VST3 entry point cannot include AU; an AU-included decision needs
-its own reviewed packaging extension before execution.
+`FX_DISTRIBUTABLE_RUNTIME=1` omits distributable UI source maps while preserving
+normal development builds. The normal production helper accepts its own pinned
+source-built compiler or verified setup download; it is not an arbitrary
+compiler-path override. Select the macOS-15-capable tool/source through that
+supported build workflow. L3's current compiler checkout and artifacts are
+separate from this documentation cleanup.
 
-The versioned `release/enhance-that/<kit-version>/{unsigned,release}` directory
-must be absent; existing candidates and linked output ancestors are refused.
-The package version follows the kit release while the embedded plugin retains
-its declared plugin version. The builder checks its own generated static DSP,
-native archive/link inputs, copied and extracted plugin identities, source-map
-absence, signatures, universal architectures, payload and preinstall bytes.
-It creates an unpublished candidate and never installs or publishes it.
-
-Source/workflow tests pass, including real temporary filesystem recovery with
-scripted signature adapters. Native build, real signing/notary, installer
-execution and extracted-plugin validation have not run for this entry point.
-`legal/enhance-that/THIRD_PARTY_NOTICES.txt` now contains 26 notice sections
-prepared from the actual L1 compiler dependency records and bundled React UI.
-`NOTICE_SOURCES.json` records source pins/versions, file hashes and selected
-license blocks. This includes CHOC's embedded FLAC/Ogg/minimp3, separately from
-JUCE's copies, and the preserved Vorbis LPC attribution. The actual pinned JUCE
-source identifies 8.0.12 and its JUCE 8 license text; no unrelated kit terms were
-changed. Review found a missing per-file HarfBuzz UCD notice. The correction
-preserves its exact ISC block, the embedded sort's MIT block, five supplemental
-copyright blocks absent from the root aggregation, and generated Unicode data
-attribution/license. All 314 compiler-recorded HarfBuzz input files were read
-against the pinned Git source; the notice index identifies the scan receipt.
-Independent review passed corrected source `113ed00a`, including all 26 sections,
-the 314 HarfBuzz inputs, 29 compiler dependency records and Unicode source.
-Reconcile this inventory against the final own build and extracted
-artifact before qualification. An included AU needs an additional inventory.
-
-The L1 build from `954207e4` still embeds UI source maps. Commit `5d0a84d1`
-adds generic `FX_DISTRIBUTABLE_RUNTIME=1` support while preserving normal builds
-and the existing SeqFX switch. All 59 configuration tests pass. An actual L3
-runtime build demonstrated the failure before the fix, then absence of the map
-file/reference after it. The JavaScript excluding only the map-reference line
-is byte-identical across ordinary and distribution builds. Final packaging
-must use this switch and recheck its own generated and extracted native bytes.
-
-Read-only L1 inventory confirms generated static-performer DSP, the
-`GeneratedPlugin` wrapper, QuickJS, React and JUCE link inputs. Its dynamic
-dependencies are Apple frameworks/system libraries, with no LLVM linkage
-observed. Hashed source-map, generated-C++, link-recipe and notice inputs are
-retained in the private evidence directory. These are preparation inputs;
-the final no-JIT and notice records must come from the final own build and
-extracted download.
-
-## Rename migration discovered during preparation
-
-L1's presentation rename changes the bundle filename from
-`CosimoEnhancerLite.vst3` to `EnhanceThat.vst3` while retaining the real plugin
-identity. The normal installer currently checks only the requested destination.
-It would treat the new filename as a first install and leave the old filename
-in the scan directory. Commit `e5d37fac` adds a generic `previousProductName`
-config field and recoverable same-directory migration; 58 configuration tests
-pass. Independent re-review passed the reporting repair in `4a4049e6`: failed
-archive verification names the observed retained paths, and failure to remove
-the old filename guard produces an explicit cleanup warning. Both workflow
-replays passed, using scripted signing/factory adapters. The final composed product
-still needs the legacy field applied to its sidecar through the L1/integration
-owner.
-
-The real macOS 26.6.2 arm64 native fixture gate now passes **44/44, zero skips**
-at source `113ed00a`; all relevant installer, fixture, probe and build-helper
-bytes match reviewed `4a4049e6`. The unchanged test file compiled nine tiny
-factory modules and its identity probe with AppleClang 21 at two jobs. It used
-the verified existing JUCE pin as a read-only input; configure recorded no
-dependency download, update, patch or library build. Actual temporary ad-hoc
-signatures, factory identity loading, exclusive moves, rename recovery,
-rollback failures, competing files and both reporting repairs passed.
-
-Evidence lives in this owner's `enhance-that-release/migration-native-retry-3z4wl80g/`:
-`preflight.json`, `result.json`, `native-fixtures.tap`, `cmake-audit/` and retained
-native inputs/hashes. TAP SHA-256:
-`b422045c5d8d90962e8562046d2c4049edbe086809e7d7dcaa01bd16ca20428e`.
-The run exited 0 in 26.963 seconds; no process-group descendants or temporary
-test entries remained. Sampled peak owned allocation was 3,031,040 bytes;
-retained evidence was 593,920 bytes and free space 49,361,256,448 bytes, leaving
-the 44 GiB VM reservation intact. The slot was released immediately afterward.
-
-The first attempt, `migration-native-ow9g_5kx/`, is retained as a harness failure:
-its temporary logging wrapper had a syntax error before CMake or any native
-fixture ran. The corrected retry did not change installer/test source. This
-generic installer gate is separate from actual Enhance That package installation,
-macOS 15 qualification and host state/audio acceptance. L1's separately reported
-product state-restoration defect remains under diagnosis before final packaging.
-
-Read-only local inventory found the old user-level bundle, version `0.1.0`,
-bundle identifier `dev.cosimo.enhancer-lite`, executable SHA-256
-`f613554813c461e1bf67fb122402f03deb297fe346e3bac7f2adb5ced44899ea`.
-Neither filename exists in the system scan root; the new filename is absent
-from the user root. No bundle was moved or installed.
-
-Migration must identify the actual signed prior binary by both bundle ID and
-processor CID, capture it outside scan roots without overwriting anything,
-verify the replacement, and roll back to the original path on failure. Reject
-different identities and ambiguous duplicates. Test first install, same-path
-update, renamed-path update, interrupted promotion, rollback, and cross-root
-duplicates. Preserve a recoverable old bundle. Bob allocated the generic source
-files to L3; native/install slots remain separately allocated.
-
-The package preinstall now checks the system root and every enumerated local
-account home. It refuses any legacy filename or user-level new copy, reporting
-the exact path without removing it. An existing new system copy must have the
-same Apple signing team, bundle identifier and sealed processor CID; the script
-does not load an old plugin's executable as root. It retains and verifies that
-copy outside the scan root before allowing the package engine to replace it.
-Recovery is manual using the retained `RECOVERY.txt`; package failure does not
-claim automatic rollback. Alternate volumes, linked system ancestors and an
-unsigned candidate replacing an existing system plugin are refused. Real
-package first-install/update/failure execution remains unqualified.
-
-## Qualification matrix and smallest remaining environment decision
-
-Required formats: VST3. AU is pending L1's bounded generated-AU/free-host
-feasibility; GarageBand is installed. No Logic-access check is needed.
-If AU is impractical, record the explicit VST3-only decision and align claims.
-Both macOS 15 and 26 remain required for every retained format.
-
-For each OS/format record exact OS/build/CPU, host/version, clean-user/private
-credential boundary, artifact hashes, steps, observation and evidence file:
-
-- Install, rescan and displayed name.
-- Space ownership on ordinary controls, genuine text, numeric entry and drag.
-- All eight sound controls: automation write/playback and continuous/discrete
-  values, saved preset and **disk-saved DAW project** close/reload.
-- Editor close/reopen; playback and offline export.
-- Captured input/output audio with hashes and format details; Andrew's explicit
-  musical acceptance of identified audio/settings. Spectra are not listening.
-
-Prior evidence in `docs/BK_HOST_INTEGRATION.md` and the private customer RESULTS
-is retained as history. The prior unchanged-example first install, preset/editor
-round trip and Space/drag checks are not final-artifact, disk-saved project,
-macOS 15/26 clean-environment, automation or listening completion.
-
-The concrete parameter states, host-gesture recording, disk-project recall and
-audio comparison procedure are in `docs/ENHANCE_THAT_HOST_QUALIFICATION.md`.
-
-The macOS 15 image download is complete. `ENHANCE_THAT_MACOS15.md` records its
-hash, remaining 44 GiB storage reservation, supported-hardware preflight and
-separate clean-customer guest plan. Provisioning and guest builds await Bob's
-slot after audio capture and the queued L2 native build. Existing guests remain
-unchanged. Do not relabel the missing platform qualification as deferred.
-
-## Evidence tooling
-
-`scripts/enhance_that_release_manifest.py` is a maintainer-only file inventory
-and evidence-index checker. It does not certify the truth of host observations
-or inspect signatures on behalf of the native verification commands.
+For an explicitly VST3-only release, set `au_decision` to the agreed reason and
+use the existing packager:
 
 ```sh
-python3 scripts/enhance_that_release_manifest.py inventory <payload-root> <new-inventory.json>
-python3 scripts/enhance_that_release_manifest.py template <new-candidate.json>
-python3 scripts/enhance_that_release_manifest.py subject <candidate.json>
-python3 scripts/enhance_that_release_manifest.py check <candidate.json> --root <artifact-and-evidence-root>
-python3 tests/test_enhance_that_release_manifest.py
+COSIMO_CMAKE_JOBS=4 node scripts/build_enhance_that_release.mjs \
+  --unsigned --verify-repeatable-packaging --au-deferred "$au_decision"
+COSIMO_CMAKE_JOBS=4 COSIMO_NOTARY_PROFILE="$notary_profile" \
+  node scripts/build_enhance_that_release.mjs --release --au-deferred "$au_decision"
 ```
 
-The template starts entirely pending. Set exact source/kit/dependency commits,
-version, formats and five artifact paths/hashes. Hash the candidate with
-`subject`, then bind each result to that digest and its own evidence file/hash.
-Evidence records should include command exit status and signature/notary facts
-for package checks, and operator, host, OS, observations and captured-audio
-references for human/host checks. One report may support several rows only when
-it actually contains their separate observations. Retain limitations in the
-manifest. A changed artifact invalidates older bindings; AU inclusion adds its
-own matrix. A complete index never grants publication authorization.
+Set `notary_profile` to the existing authorized profile; keep credentials out
+of source/logs. The packager requires a clean source checkout and tracked
+notices, performs a fresh product build, and uses an absent versioned
+`release/enhance-that/<kit-version>/{unsigned,release}` destination. It signs
+with Developer ID, notarizes/staples and checks the extracted payload. It never
+installs or publishes. Do not rerun it merely to validate an already-built
+candidate. Repeatable unsigned assembly is not a claim of reproducible signed
+bytes or independent native builds. AU needs its explicit include/defer decision;
+this entry point packages VST3 only.
 
-Preparation artifacts are held under this owner's dated visualization directory
-in `enhance-that-release/`: `source-baseline-export/`,
-`source-baseline-inventory.json`, `live-feed-readback.json` and
-`candidate-evidence.pending.json`. They contain no delivery capability.
+Preserve the existing canonical kit export/setup/release machinery. A normal
+`kit:release` publishes; even its dry-run can perform substantial builds.
+Use a new release version, never overwrite published `0.1.2`, and compute final
+checksums after signing/stapling. Record the source/version, downloads, actual
+signature/notary outcome and remaining customer limitations in the normal
+release output; no additional manifest validator is required.
+
+Check the final plugin and extracted download for matching identities,
+architectures, signatures and assets, absent UI source maps, and generated
+static DSP without Cmajor JIT/LLVM engine linkage. The separate development
+compiler and generic loader are outside the finished plugin's no-JIT claim.
+Retain [the product notices](../legal/enhance-that/THIRD_PARTY_NOTICES.txt),
+[notice sources](../legal/enhance-that/NOTICE_SOURCES.json), and the kit's
+[customer notices](../kit/template/root/THIRD_PARTY_NOTICES.md). Reconcile them
+with actual shipped dependencies; keep the reviewed HarfBuzz/Unicode and
+embedded codec notices, commercial modification/sale rights and JUCE disclosure.
+
+## Focused native checks and original state bug
+
+Build/run the [VST3 probe](../tools/enhance_that_native_probe/README.md) directly
+against the selected bundle. It records the observed hash and checks unchanged
+binary bytes afterward; no per-build source literal or Node supervisor is needed.
+For broader headless validation, set absolute `selected_vst3` and a fresh
+`validation_results` directory, then run pluginval with ordinary bounded command
+execution (ten minutes overall):
+
+```sh
+mkdir "$validation_results"
+/Applications/pluginval.app/Contents/MacOS/pluginval \
+  --strictness-level 8 --skip-gui-tests --random-seed 954207 \
+  --sample-rates 44100,48000,96000 --block-sizes 64,512,1024 \
+  --timeout-ms 120000 --verbose --output-dir "$validation_results" \
+  --output-filename enhance-that-vst3.txt --validate "$selected_vst3"
+```
+
+Keep failures and diagnose them; do not lower strictness or write expected
+values into the plugin to repair a restore. The original product probe had
+813 assertions/27 state failures; pluginval reported seven immediate readback
+failures. After editing T and restoring S, hosted values stayed T while the
+first/fresh instance serialized S. Restoring identical S again left both at T.
+
+Two wrapper defects explained this: `lastLoadedStateHash` suppressed repeated
+S even after edits, and asynchronous restore let JUCE cache T before S was
+applied; rebound parameters then did not publish restored values. The repair
+removes request-hash suppression, restores compiled message-thread calls
+synchronously and republishes rebound values. Superseded compiled requests
+cannot undo newer state; callback-originated requests are applied after the
+current transaction, with the outermost call completing at the latest state.
+No user gesture is invented. JIT compilation remains asynchronous.
+
+The real one-control wrapper/audio A/B produced the predicted 31 baseline
+failures and 104/104 repaired assertions with identical generated DSP. Keep
+[the A/B results and original evidence](ENHANCE_THAT_STATE_AB_RESULTS.md).
+That result is not final Enhance That host, generic JIT or listening acceptance.
+
+## Installation and recovery
+
+Enumerate user and system plugin scan roots before replacement. The generic
+installer checks bundle ID and processor CID, keeps a recoverable old bundle
+outside scan roots, rejects different identities/ambiguous duplicates, and
+reports retained paths on failure. Preserve signed release bytes; do not
+ad-hoc re-sign a finished Developer ID plugin.
+
+The package preinstall refuses legacy/user-level copies and reports their paths
+without deleting them or loading their executables as root. A matching system
+update retains its prior bundle and `RECOVERY.txt` outside the scan root.
+Package failure uses that manual recovery; do not promise automatic rollback.
+Keep real first-install, same-path/renamed update, interrupted update and recovery
+checks, plus customer preset-bank ownership and safe dirty-work preservation.
+
+## macOS floor and VM gotchas
+
+Apple Silicon macOS 15 and 26 remain required for retained formats. Inspect
+actual Mach-O minimum OS in every distributed executable/tool: a cmaj built
+with an implicit macOS 26 minimum cannot be a macOS 15 customer download, even
+when plugin slices have lower minima. L3 owns the explicit-floor compiler work;
+a declared deployment target still needs actual binary and guest validation.
+
+The existing clean-customer VM reached macOS **15.6.1 / 24G90**, with a neutral
+local account and no maintainer Apple/GitHub login or shared source/cache. Its
+historical setup ended paused; inspect current state before resuming. The VM is
+`~/Library/Application Support/VirtualBuddy/Enhance That macOS 15 Clean Customer.vbvm`.
+The retained `UniversalMac_15.6.1_24G90_Restore.ipsw` is 16,814,137,790 bytes, SHA-256
+`3d87686b691ac765eb6a6b3082b2334e2af9710096a00432dd519af89ff2ea78`.
+Original guest screenshots and setup reports remain with L3.
+
+- The macOS license for this VM was already accepted with Andrew's approval;
+  do not ask again for that same agreement. Account sign-in was not authorized.
+- VirtualBuddy 2.1's `vctool` inspects IPSWs but does not create/install a VM.
+  Use the existing guest, not another restore. Raw boot disks grow physically;
+  logical capacity is not free-space reservation. Recheck real disk headroom.
+- Pause does not release all VM memory. Do not kill the app or touch another
+  guest to enforce an elapsed-time limit. Stopping/pausing a macOS installation
+  is not proven safe or resumable; preserve failed installation evidence.
+- CUA modifier input did not reliably preserve uppercase/underscore in this
+  guest; verify typed text and use tab completion where appropriate.
+- Setup selected Only Download Automatically. Account for future downloads
+  before long runs. Do not copy private credentials, source or dependency trees
+  into the guest. A host-loopback delivery URL is not a guest delivery path.
+- macOS temporary-path aliases (`/var` versus `/private/var`) can change exact
+  Git-origin assertions; use canonical paths. UUID-containing temporary paths
+  can make npm redact `config get cache`; use an owned UUID-free temp path.
+
+## Uncompleted customer checks
+
+Use the actual downloads on macOS 15 and 26. VST3 is required; use a suitable free
+host for AU if practical or record AU deferral. Logic access is not a blocker.
+REAPER's evaluation is a no-purchase option; record the actual host/version.
+Preserve existing tracks, clips, plugin copies and unsaved sessions. Use an owned
+saved project for close/reload, not the user's unsaved set.
+
+| Control / endpoint | State A | State B |
+| --- | --- | --- |
+| Frequency / `freqHzIn` | 220 Hz | 1800 Hz |
+| Q / `qIn` | 0.71 | 2.5 |
+| Routing / `modeIn` | Stereo | Mid/Side |
+| Amount / Mid / `midAmountIn` | 0.20 | 0.65 |
+| Side / `sideAmountIn` | 0.10 | 0.55 |
+| Character / `curveIn` | Solid | Tube |
+| Intensity / `saturationModeIn` | Subtle | Medium |
+| Shape / `shapeIn` | Bell | Low; also exercise High |
+
+Record actual editor gestures into automation and play them back, including
+pointer/modifier-Q/arrow interactions and cancellation. Confirm host values,
+editor display and audio; programmatically inserted envelope points alone do
+not prove editor gesture recording. Save preset A, change to B and recall A;
+save B/automation to disk, close/reopen that exact project and check every value.
+Check editor reopen and an available preserved pre-rename project separately.
+Exercise Space, keyup/focus loss, genuine text/numeric entry and active drags in
+the actual host; DOM key synthesis is not that result.
+
+Use identified stereo audio with distinct left/right content for Side processing.
+Keep dry, A, B and post-reload playback/offline exports over the same interval,
+with sample rate/frame counts and normalization/dither settings recorded. Check
+finite output, unexpected silence and aligned pre/post-reload differences;
+do not assume different render modes are bit-identical. Andrew's listening
+acceptance names the actual audio/settings heard; spectra are not listening.
+Also finish clean customer setup/build/install, successful and failed kit updates,
+recovery, exact download delivery and retained-format/platform qualification.
+Public launch, payments and sends keep their explicit approval checkpoints.
