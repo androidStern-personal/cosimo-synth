@@ -112,8 +112,11 @@ identity. The normal installer currently checks only the requested destination.
 It would treat the new filename as a first install and leave the old filename
 in the scan directory. Commit `e5d37fac` adds a generic `previousProductName`
 config field and recoverable same-directory migration; 58 configuration tests
-pass. Independent source review and its new native fault-injection cases are
-pending the assigned resource slot. The final composed product still needs the
+pass. Independent re-review passed the reporting repair in `4a4049e6`: failed
+archive verification names the observed retained paths, and failure to remove
+the old filename guard produces an explicit cleanup warning. Both workflow
+replays passed, using scripted signing/factory adapters; native fault-injection
+cases remain pending the assigned resource slot. The final composed product still needs the
 legacy field applied to its sidecar through the L1/integration owner.
 
 Read-only local inventory found the old user-level bundle, version `0.1.0`,
@@ -153,6 +156,9 @@ Prior evidence in `docs/BK_HOST_INTEGRATION.md` and the private customer RESULTS
 is retained as history. The prior unchanged-example first install, preset/editor
 round trip and Space/drag checks are not final-artifact, disk-saved project,
 macOS 15/26 clean-environment, automation or listening completion.
+
+The concrete parameter states, host-gesture recording, disk-project recall and
+audio comparison procedure are in `docs/ENHANCE_THAT_HOST_QUALIFICATION.md`.
 
 The smallest macOS 15 decision is access to an existing Apple Silicon Mac or
 safe disposable VM running 15 with a suitable host, or authorization to prepare
