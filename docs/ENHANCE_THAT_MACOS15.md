@@ -46,20 +46,86 @@ observations of existing customer guests, not a measured fresh macOS 15 peak.
 | Total | 59.66 GiB |
 
 The completed image occupies the 15.66 GiB allocation. The remaining reservation
-is **44 GiB** for guest growth and scratch, against **46.75 GiB** measured free
-after download. These are planning allowances, not an Apple guarantee. Bob will
-serialize L2's estimated 2 GiB native-build peak before VM work; recheck actual
-free space after that build and before provisioning. Do not repeat cleanup,
-delete shared caches, or use an existing guest's storage to fit the budget.
+is **44 GiB** for guest growth and scratch. The latest read-only observation at
+2026-09-05 10:13 UTC is **45.77 GiB free**, leaving **1.77 GiB** above that estimate.
+L2's native build and L3's migration fixtures have finished; Bob allocated the
+next short native slot to resident research. Recheck disk and resource ownership
+after that slot and immediately before provisioning.
+
+VirtualBuddy 2.1's actual `bootDiskImagesUseASIF=false` preference selects a raw
+`Disk.img`. Its generator uses `ftruncate` on the APFS host volume: 64 GiB is
+logical capacity, not an up-front allocation or a host physical-space limit.
+The local IPSW is passed directly to Apple's installer without an app-level
+second copy. This supports the estimate's plausibility, but **44 GiB is not a
+verified worst-case requirement**. Neither the inspected application source nor
+Apple's installer documentation specifies a maximum temporary-space peak. The
+IPSW central directory totals 16.07 GiB uncompressed; that is archive metadata,
+not a measurement of the framework's scratch use. Do not represent the 8 GiB
+scratch allowance as proven, or begin customer builds in the initial base slot.
+
+Private `macos15-base-preparation/` evidence contains installed settings, exact
+source receipts for tag 2.1 commit `088351b0fc67e0b24b83e7954ad48314dda4ce04`,
+Apple documentation, the destination check and a concrete `HANDOFF.md`.
+Do not repeat cleanup, delete shared caches or borrow another guest's storage.
+
+## Actual provisioning procedure and boundaries
+
+Installed `vctool` offers catalog, IPSW and MobileDevice inspection; it has no
+VM-create/install command. The actual route is VirtualBuddy's new macOS wizard:
+select the completed **local** IPSW, enter the owned name, enter configuration,
+then confirm the configuration to start `VZMacOSInstaller`.
+
+The owned destination is
+`~/Library/Application Support/VirtualBuddy/Enhance That macOS 15 Clean Customer.vbvm`.
+It is absent and its ancestors are not symlinks at the latest observation.
+Recheck before entering configuration: that step already creates the bundle,
+and the underlying model initializer can load an existing same-name bundle.
+Set two CPUs, 8 GiB RAM and a 64 GiB raw growing boot disk explicitly, with NAT,
+no shared folders, no additional disks and guest additions disabled for the
+base installation. A later customer-delivery attachment is a separate step.
+
+The app loads the IPSW through `VZMacOSRestoreImage`, requires a non-nil
+`mostFeaturefulSupportedConfiguration`, and checks `hardwareModel.isSupported`
+before creating boot storage. These checks have not run yet. The configuration
+sheet skips VZ validation during pre-install; a visually accepted configuration
+is not support proof. The app's separate TSS check is in its download path,
+which local-file selection bypasses. Retain actual installer/signing success or
+failure as evidence; the enabled TSS preference alone is not a signing result.
+
+An existing, unowned **New Storage Device** dialog was observed and left
+untouched. Bob has been told; its owner must finish or release it before L3
+uses that UI. No actual license, Apple-account or other personal-authentication
+prompt has been reached. Record any such prompt when it appears; the approved
+base-provisioning policy and completed download remain settled.
 
 ## Scheduled continuation
 
-After Bob allocates the operations and the fresh disk check passes, validate
-the retained image's Apple signing and VZ hardware support. Create a separate
-`Enhance That macOS 15 Clean Customer`
-guest with a 64 GiB sparse disk, 8 GiB RAM and two CPUs. Installation, boot and
-guest native builds wait for release of L5's audible-capture slot. Record actual
-peak allocation and reduce concurrency if measured headroom is consumed.
+The next proposed allocation is one exclusive **base-install** observation
+window of 30 minutes, with the configuration above and no simultaneous native
+work, audible capture or other guest activity. Thirty minutes is a scheduling
+estimate, not a measured completion time or permission to kill an installer.
+Observe progress at least once per minute and sample host-volume free space
+and owned allocated blocks every five seconds; record the actual peak. An
+8 GiB free-space alert and a stalled-progress alert inform Bob before extending
+the slot. Neither is a verified automatic cutoff.
+
+Cancellation has a concrete limitation: VirtualBuddy 2.1's backend cancels its
+own mirrored Progress object, then calls `virtualMachine.stop()` if allowed.
+It does not explicitly cancel `VZMacOSInstaller.progress`. [Apple's documentation](https://developer.apple.com/documentation/virtualization/installing-macos-on-a-virtual-machine)
+directs cancellation through installer progress and says stopping or pausing
+during installation has undefined behavior. Therefore do not promise a safe,
+resumable timed cancel or use an app-wide kill that could affect another guest.
+Keep failed installation evidence; do not reuse or remove other VM storage.
+
+The allocation handoff must acknowledge the unmeasured scratch peak and this
+cancellation behavior. Provision the base OS first, then measure its retained
+allocation and remaining space before scheduling customer tools or builds.
+No VM has been created, booted or installed in this preparation.
+
+These implementation findings use the version-matched
+[VirtualBuddy 2.1 disk generator](https://github.com/insidegui/VirtualBuddy/blob/088351b0fc67e0b24b83e7954ad48314dda4ce04/VirtualCore/Source/Virtualization/Helpers/DiskImageGenerator.swift)
+and [restore backend](https://github.com/insidegui/VirtualBuddy/blob/088351b0fc67e0b24b83e7954ad48314dda4ce04/VirtualCore/Source/Restore/Installation/VirtualizationRestoreBackend.swift),
+not a claim that the installed binary was rebuilt from those sources.
 
 Create a fresh local customer account without a maintainer Apple/GitHub login,
 SSH keys, home-directory shares or copied dependency/tool checkouts. Use only
