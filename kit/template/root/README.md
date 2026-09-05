@@ -11,6 +11,9 @@ After setup, a good first request for your coding agent is:
 Try the included plugin as it is, then choose what you would like to change.
 If you already have another request, start with that instead.
 
+When you are ready: [try the Wavefold example](WAVEFOLD.md),
+[update or recover your kit](UPDATING.md), or [get setup help](SUPPORT.md).
+
 ## For your coding agent
 
 Read `kit/AGENTS.md`. For the request above, use the included `enhancer-lite`
