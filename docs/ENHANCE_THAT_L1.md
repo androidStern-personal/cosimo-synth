@@ -112,6 +112,20 @@ constraint, available free validators, separate slot needs and stop conditions.
 It also outlines exact-binary VST3 automation/state and editor-notification
 checks without a live DAW. It is a proposal, not executed qualification.
 
+The VST3-only offline fixture source is prepared under
+[`tools/enhance_that_native_probe`](../tools/enhance_that_native_probe/README.md).
+It is a separate host with locked artifact hashes, eight-control assertions,
+same/fresh-instance and repeated identical-state restoration, and owned evidence
+and timeout handling. C++ configure/build and native execution remain held;
+source/refusal checks do not establish host behavior or editor notifications.
+
+Separate product metadata checkpoint `08885585` declares
+`previousProductName: "CosimoEnhancerLite"` for L3's reviewed identity-gated
+rename installer. It must integrate with L3's generic discovery/installation
+contract; L1's older local kit parser does not yet accept that field. Actual
+L3 discovery against this worktree's product files passes with the current and
+prior basenames and all permanent identity fields preserved. No install ran.
+
 The reviewed candidate's VST3 build and binary identity checks passed. Still
 needed: enumerate all eight parameters through a native host, exercise
 continuous/discrete automation and state restoration, and settle the AU outcome with a bounded
