@@ -136,6 +136,8 @@ preserves its exact ISC block, the embedded sort's MIT block, five supplemental
 copyright blocks absent from the root aggregation, and generated Unicode data
 attribution/license. All 314 compiler-recorded HarfBuzz input files were read
 against the pinned Git source; the notice index identifies the scan receipt.
+Independent review passed corrected source `113ed00a`, including all 26 sections,
+the 314 HarfBuzz inputs, 29 compiler dependency records and Unicode source.
 Reconcile this inventory against the final own build and extracted
 artifact before qualification. An included AU needs an additional inventory.
 
@@ -166,10 +168,34 @@ config field and recoverable same-directory migration; 58 configuration tests
 pass. Independent re-review passed the reporting repair in `4a4049e6`: failed
 archive verification names the observed retained paths, and failure to remove
 the old filename guard produces an explicit cleanup warning. Both workflow
-replays passed, using scripted signing/factory adapters; native fault-injection
-cases remain pending the assigned resource slot. The final composed product
+replays passed, using scripted signing/factory adapters. The final composed product
 still needs the legacy field applied to its sidecar through the L1/integration
 owner.
+
+The real macOS 26.6.2 arm64 native fixture gate now passes **44/44, zero skips**
+at source `113ed00a`; all relevant installer, fixture, probe and build-helper
+bytes match reviewed `4a4049e6`. The unchanged test file compiled nine tiny
+factory modules and its identity probe with AppleClang 21 at two jobs. It used
+the verified existing JUCE pin as a read-only input; configure recorded no
+dependency download, update, patch or library build. Actual temporary ad-hoc
+signatures, factory identity loading, exclusive moves, rename recovery,
+rollback failures, competing files and both reporting repairs passed.
+
+Evidence lives in this owner's `enhance-that-release/migration-native-retry-3z4wl80g/`:
+`preflight.json`, `result.json`, `native-fixtures.tap`, `cmake-audit/` and retained
+native inputs/hashes. TAP SHA-256:
+`b422045c5d8d90962e8562046d2c4049edbe086809e7d7dcaa01bd16ca20428e`.
+The run exited 0 in 26.963 seconds; no process-group descendants or temporary
+test entries remained. Sampled peak owned allocation was 3,031,040 bytes;
+retained evidence was 593,920 bytes and free space 49,361,256,448 bytes, leaving
+the 44 GiB VM reservation intact. The slot was released immediately afterward.
+
+The first attempt, `migration-native-ow9g_5kx/`, is retained as a harness failure:
+its temporary logging wrapper had a syntax error before CMake or any native
+fixture ran. The corrected retry did not change installer/test source. This
+generic installer gate is separate from actual Enhance That package installation,
+macOS 15 qualification and host state/audio acceptance. L1's separately reported
+product state-restoration defect remains under diagnosis before final packaging.
 
 Read-only local inventory found the old user-level bundle, version `0.1.0`,
 bundle identifier `dev.cosimo.enhancer-lite`, executable SHA-256
