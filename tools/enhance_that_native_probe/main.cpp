@@ -331,6 +331,15 @@ private:
                               && analyzerParameter.getNumSteps() == juce::AudioProcessor::getDefaultNumParameterSteps()
                               && analyzerParameter.getDefaultValue() == 0.0f,
                               stage, "Existing analyzer title, unit, automation, steps and default preserved") && passed;
+        for (const auto normalized : { 0.0f, 1.0f })
+        {
+            const auto text = analyzerParameter.getText(normalized, 128).trim().toStdString();
+            char* end = nullptr;
+            const double number = std::strtod(text.c_str(), &end);
+            passed = report.check(!text.empty() && end == text.c_str() + text.size() && std::isfinite(number)
+                                  && number == static_cast<double>(normalized), stage,
+                                  "analyzerEnabledIn physical range endpoint " + juce::String(normalized)) && passed;
+        }
         parameters.erase(analyzer);
         for (const auto& entry : parameters)
         {

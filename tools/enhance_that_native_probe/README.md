@@ -31,7 +31,10 @@ correctness. The actual candidate path still requires the scheduled native run.
   are continuous; Routing, Character, Intensity and Shape have their exact
   discrete steps and labels. The existing `analyzerEnabledIn` / `Analyzer Enable`
   parameter is required separately by its stable ID, name, empty unit,
-  automation flag, continuous host steps and zero default. Only the wrapper's
+  automation flag, continuous host steps, zero default and physical range 0–1.
+  Both analyzer range endpoints use strict, finite, fully consumed numeric text
+  parsing and exact equality to 0 or 1; these checks do not write analyzer values.
+  Only the wrapper's
   actual bypass parameter may appear beyond these nine; other extras fail.
 - Host writes traverse five normalized positions for each continuous control
   and every legal discrete selection. Deterministic stereo buffers are
