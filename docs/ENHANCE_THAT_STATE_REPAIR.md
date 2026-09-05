@@ -11,11 +11,16 @@ the actual runtime witness. The smaller regression below is prepared but unrun.
 - Owned Cmajor clone: `build/l1-cmajor-state-repair`, relative to L1's
   `/Users/winterfell/.codex/worktrees/1388/cosimo-synth` worktree.
 - Branch: `codex/enhance-that-state-restore`; clean at
-  `f229dd1a8d75fec9d3dbae4ae3c6b2f802741cf5`.
+  `2fc4c2dce2a1b625c1578409e10bf312a5ac39b5`.
 - Exact base: `7820a453f25e1b6eaf898d0bb2feb7e4ce01c207`.
-- Regression-source commit: `c0bdc06be71063f7d256977d14dc3f009b5d968a`.
-- Repair commit: `f229dd1a8d75fec9d3dbae4ae3c6b2f802741cf5`;
-  one header, 30 insertions / 9 deletions.
+- Initial regression-source commit: `c0bdc06be71063f7d256977d14dc3f009b5d968a`.
+- Initial repair: `f229dd1a8d75fec9d3dbae4ae3c6b2f802741cf5`; superseded after
+  L2's P2 review finding about callback reentrancy.
+- Correction: `2fc4c2dce2a1b625c1578409e10bf312a5ac39b5`, adding the shared
+  application boundary and real callback regressions. Correction scope is
+  23 header lines, 70 regression lines and README policy clarification.
+  The complete repair from base changes one production header: 53 insertions /
+  9 deletions. Corrected source is awaiting independent re-review.
 - No shared CPM checkout, primary Cmajor checkout, dependency pin, compiler
   receipt, JUCE source, product DSP, identity, endpoint or migration code changed.
 
@@ -86,8 +91,8 @@ as runtime proof.
 ## Restore contract and narrow repair
 
 Reapplying saved state after an edit must restore its parameters regardless of
-whether the bytes match a previous request. For a compiled plugin restored on
-the message thread, processor readback must be correct when the call returns;
+whether the bytes match a previous request. For an ordinary outermost compiled
+restore on the message thread, processor readback must be correct on return;
 processed audio must then use those values. A deferred restore must publish its
 completed values to listeners. A restore introduces no user touch gesture.
 
@@ -106,6 +111,28 @@ The single-header repair:
   queued restore. The ordering guard is a regression precaution, not a third
   failure claimed from the frozen product run. JIT message handling does not
   use the coalescing guard.
+- Serializes application through the common `setNewState` boundary. A nested
+  request from a notification updates a pending state and returns without
+  recursively publishing a renderer. After the current transaction completes,
+  the outermost call drains the latest pending state. Both direct and dequeued
+  application use this boundary.
+
+**Nested-call completion policy:** a call made inside a restore notification
+does not promise immediate readback of its requested state within that callback.
+It returns deferred. With a finite sequence of nested requests, the outermost
+application completes with the latest nested state applied. Normal outermost
+compiled message-thread calls retain immediate readback; no new event-loop wait
+is introduced for them. Multiple nested requests coalesce to the latest one.
+
+L2's source review found why the earlier queue sequence guard alone was
+insufficient: `Patch::setNewRenderer` removes the old renderer, calls
+`sendPatchChange`, then publishes its local S. The real synchronous
+`AudioProcessorListener::audioProcessorChanged` callback can request newer T
+during that gap. At `f229dd1a`, T recursively publishes, then outer S overwrites
+it. The correction lets S finish before applying pending T. The pending state
+is cleared before each application and the active flag uses a scoped guard,
+so nested callbacks cannot start another renderer transaction on that stack.
+This remains source-established reachability, not a runtime reproduction.
 
 The shared callback repair and removal of deduplication also affect the generic
 JIT wrapper. JIT compilation remains asynchronous; JIT qualification is not
@@ -123,7 +150,13 @@ provides a sample-wise oracle independent of serialized state.
 
 It checks same-instance, repeated identical S after another edit, fresh-instance,
 two background restores separated by edits, and older-queued/newer-synchronous
-ordering. The message-thread cases observe values, bytes, notifications and
+ordering. It also attaches a real one-shot `AudioProcessorListener` that
+requests T inside S's first change callback. Separate cases start S directly
+and through the background/queued entry. They assert that nested publication
+does not recurse, then check final T independently in parameter readback,
+serialized state, value listeners and actual stereo samples. The synchronous
+case also checks T at the outermost return, before pumping messages.
+The other message-thread cases observe values, bytes, notifications and
 audio before pumping messages, then again after a bounded message barrier.
 The existing product fixture's assertions, state sequence, timing and source
 hash locks remain unchanged. No DSP-observation change was made to that fixture.
@@ -142,7 +175,7 @@ boundary, even though the original full product failure is already reproduced.
 
 ## Build, dependency and disk implications
 
-- Cmajor baseline is the exact pin above. Repair is owned commit `f229dd1a`.
+- Cmajor baseline is the exact pin above. Repair is owned commit `2fc4c2dc`.
   CHOC remains `11f7dc63d7cb78f6dbaa559fe09ade8e941c0188`; stock JUCE remains
   `501c07674e1ad693085a7e7c398f205c2677f5da`.
 - The existing local `build/kit-tools/cmaj` has SHA-256
@@ -189,16 +222,23 @@ boundary, even though the original full product failure is already reproduced.
 ## Preserved evidence and remaining gates
 
 Preservation record:
-`/Users/winterfell/.codex/visualizations/2026/09/05/01a07068-7376-7012-a350-a5999d5bd51c/l1/state-repair-source-01/preservation.json`.
-It records 25 frozen evidence/fixture files and verifies the VST3 binary,
+`/Users/winterfell/.codex/visualizations/2026/09/05/01a07068-7376-7012-a350-a5999d5bd51c/l1/state-repair-source-02/preservation.json`.
+It rechecks all 25 frozen evidence/fixture files against the prior preservation
+record and verifies the VST3 binary,
 canonical payload, compiler and original toolchain hashes against their prior
 values. Shared Cmajor/JUCE source checkouts remain clean. The native fixture's
 executable source is unchanged from `9c201678`; its README already records the
 failed run in the prior documentation commit.
 
-The adjacent `cmajor-state-repair.bundle` preserves both owned Cmajor commits
+The adjacent `cmajor-state-repair.bundle` preserves all three owned Cmajor commits
 outside the build tree. `git bundle verify` passed; importing it requires the
 exact `7820a453` base. Bundle SHA-256:
+`a91f8bb02a3fb1c98540921a77b01aa6487418ebaf1f380832288d1bc3df2d38`.
+The adjacent `reentrancy-correction.patch` is the exact `f229dd1a..2fc4c2dc`
+diff; SHA-256:
+`eaf2183a740436aaeffe382330fd09b6afc8116b00f92a36b87b2f23e09e09f1`.
+The original `state-repair-source-01` record and bundle remain unchanged;
+the latter's SHA-256 was reverified as
 `b489c4c7020129653cde679ed4950b98a321cc7d20642d718fb3f13d10bcaa56`.
 
 Next: independent source review, authorized baseline/repaired gain witness,
