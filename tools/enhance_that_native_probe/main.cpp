@@ -317,10 +317,25 @@ private:
                 }
             }
         }
+        // The existing hidden analyzer event is still a native parameter. It is
+        // not one of the eight sound controls, and must not be removed to make
+        // this inventory pass. Pinned Cmajor defaults its automation flag to true.
+        const auto analyzer = parameters.find(stableID("analyzerEnabledIn"));
+        if (!report.check(analyzer != parameters.end(), stage, "Existing analyzerEnabledIn stable ID present"))
+            return false;
+        const auto& analyzerParameter = *analyzer->second;
+        passed = report.check(analyzerParameter.getName(256) == "Analyzer Enable"
+                              && analyzerParameter.getLabel().isEmpty()
+                              && analyzerParameter.isAutomatable()
+                              && !analyzerParameter.isDiscrete()
+                              && analyzerParameter.getNumSteps() == juce::AudioProcessor::getDefaultNumParameterSteps()
+                              && analyzerParameter.getDefaultValue() == 0.0f,
+                              stage, "Existing analyzer title, unit, automation, steps and default preserved") && passed;
+        parameters.erase(analyzer);
         for (const auto& entry : parameters)
         {
             const bool bypass = entry.second == plugin->getBypassParameter();
-            passed = report.check(bypass, stage, "Only wrapper bypass may appear beyond the eight sound controls") && passed;
+            passed = report.check(bypass, stage, "Only wrapper bypass may appear beyond eight sound controls and the existing analyzer") && passed;
             if (bypass)
                 entry.second->setValue(0.0f);
         }

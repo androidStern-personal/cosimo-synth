@@ -29,8 +29,10 @@ correctness. The actual candidate path still requires the scheduled native run.
 - All eight endpoint-derived Steinberg IDs must be present and unique, with
   their expected titles, units, defaults and automation flags. Four controls
   are continuous; Routing, Character, Intensity and Shape have their exact
-  discrete steps and labels. Only the wrapper's actual bypass parameter may
-  appear beyond those eight; an exposed analyzer or extra sound control fails.
+  discrete steps and labels. The existing `analyzerEnabledIn` / `Analyzer Enable`
+  parameter is required separately by its stable ID, name, empty unit,
+  automation flag, continuous host steps and zero default. Only the wrapper's
+  actual bypass parameter may appear beyond these nine; other extras fail.
 - Host writes traverse five normalized positions for each continuous control
   and every legal discrete selection. Deterministic stereo buffers are
   processed directly at 48 kHz/128 samples. Every output sample must be finite.
@@ -65,6 +67,19 @@ correctness. The actual candidate path still requires the scheduled native run.
 No begin/end calls are manufactured by this fixture, and no hosted write is
 counted as a received editor gesture. Actual editor notifications are outside
 this checkpoint and need the separately scheduled real-editor proof.
+
+The analyzer expectation follows the unchanged graph and the reviewed build's
+`cmajor_plugin.cpp`: its `inputParameters` and `programDetailsJSON` contain
+all nine parameters. `hidden: true` does not exclude the named scalar event in
+Cmajor's `EndpointDetails::isParameter()` or `createParameterTree()`.
+`PatchParameterProperties` defaults this endpoint to automatable, range 0–1,
+initial 0 and non-discrete. Cmajor maps `hidden` to `isMetaParameter()`, but the
+pinned JUCE VST3 wrapper does not use that property to hide the parameter.
+The eight sound presets and snapshots exclude it; the native parameter
+inventory does not. The fixture leaves its value alone and keeps the eight
+sound-control array and state assertions unchanged. There is no `Device On`
+endpoint in the generated metadata; wrapper bypass is recognized by the host
+API's bypass identity, not by a Live-specific display name.
 
 ## Commands after Bob allocates a native slot
 

@@ -84,8 +84,11 @@ Required observations:
 
 - Read actual hosted Steinberg parameter IDs, titles, automation flags, ranges,
   defaults and discrete steps. Require all eight unique endpoint-derived IDs
-  with automation enabled. Report wrapper-added parameters such as bypass
-  separately; reject unexpected visible sound controls or an exposed analyzer.
+  with automation enabled. Require the existing `analyzerEnabledIn` parameter
+  separately with its preserved host metadata; it is outside the eight-control
+  sound model. Report wrapper bypass separately and reject other unexpected
+  parameters. The analyzer's `hidden` annotation does not remove it from native
+  enumeration in the pinned Cmajor/JUCE path.
   Derive expected numeric IDs using the pinned JUCE conversion, as T78 does,
   not from the host's parameter order.
 - Drive continuous controls through endpoints and interior values, and every
