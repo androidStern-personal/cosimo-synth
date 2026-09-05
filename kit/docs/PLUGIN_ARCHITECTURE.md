@@ -329,6 +329,11 @@ Details:
   `worker` key is rewritten to that file.
 - The UI bundle is a single-file ES module (`inlineDynamicImports`), unminified,
   with source maps by default.
+- Set `FX_DISTRIBUTABLE_RUNTIME=1` for a distribution build to omit UI and worker
+  source maps. For example, `FX_DISTRIBUTABLE_RUNTIME=1 npm run fx:prod:build -- <alias>`
+  rebuilds the runtime without maps before generating the dedicated plugin.
+  Ordinary builds retain maps for debugging. This switch does not sign, notarize,
+  or qualify a plugin for release.
 
 **The prod devModule strip**: `npm run fx:prod:build` builds runtime folders
 with `stripDevModule`, which removes `view.devModule` from the runtime patch

@@ -1167,6 +1167,18 @@ test("SeqFX release runtime source-map suppression is opt-in and leaves local qu
     }), true);
 });
 
+test("any effect can explicitly omit distribution source maps without changing normal builds", async () => {
+    const { buildModule } = await loadBuildModules();
+    const environmentKey = buildModule.effectDistributableRuntimeEnvironmentKey;
+
+    assert.equal(environmentKey, "FX_DISTRIBUTABLE_RUNTIME");
+    for (const pluginName of ["enhancer-lite", "seqfx", "spectral"]) {
+        assert.equal(buildModule.shouldEmitEffectRuntimeSourceMaps(pluginName, {}), true);
+        assert.equal(buildModule.shouldEmitEffectRuntimeSourceMaps(pluginName, { [environmentKey]: "true" }), true);
+        assert.equal(buildModule.shouldEmitEffectRuntimeSourceMaps(pluginName, { [environmentKey]: "1" }), false);
+    }
+});
+
 test("manifest entries that escape the patch directory are flattened into the runtime directory and rewritten", async () => {
     const { buildModule } = await loadBuildModules();
     const manifest = {

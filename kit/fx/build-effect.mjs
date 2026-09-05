@@ -10,6 +10,7 @@ export const repoRoot = path.resolve(scriptDir, "../..");
 const defaultFxRoot = path.join(repoRoot, "fx");
 export const seqFxCanonicalRuntimePrebuiltEnvironmentKey = "SEQFX_CANONICAL_RUNTIME_PREBUILT";
 export const seqFxDistributableRuntimeEnvironmentKey = "SEQFX_DISTRIBUTABLE_RUNTIME";
+export const effectDistributableRuntimeEnvironmentKey = "FX_DISTRIBUTABLE_RUNTIME";
 
 /**
  * Plugin registry, derived by discovery instead of hand-written lists.
@@ -949,10 +950,11 @@ export function shouldReuseSeqFxCanonicalRuntime(
         && environment[seqFxCanonicalRuntimePrebuiltEnvironmentKey] === "1";
 }
 
-/** Keep qualification provenance local while removing source maps from SeqFX distribution builds. */
+/** Keep local source maps unless the caller explicitly builds a distributable runtime. */
 export function shouldEmitEffectRuntimeSourceMaps(pluginName, environment = process.env) {
-    return pluginName !== "seqfx"
-        || environment[seqFxDistributableRuntimeEnvironmentKey] !== "1";
+    return environment[effectDistributableRuntimeEnvironmentKey] !== "1"
+        && (pluginName !== "seqfx"
+            || environment[seqFxDistributableRuntimeEnvironmentKey] !== "1");
 }
 
 function asList(value) {
