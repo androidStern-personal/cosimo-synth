@@ -28,7 +28,7 @@ const identity = Object.freeze({
 });
 
 export function parseEnhanceThatArgs(args) {
-    const options = { mode: "plan", repeat: false, auDeferred: null };
+    const options = { mode: "plan", repeat: false, auDeferred: null, useExistingBuild: false };
     let modeSpecified = false;
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
@@ -37,6 +37,7 @@ export function parseEnhanceThatArgs(args) {
             options.mode = arg.slice(2);
             modeSpecified = true;
         } else if (arg === "--verify-repeatable-packaging") options.repeat = true;
+        else if (arg === "--use-existing-build") options.useExistingBuild = true;
         else if (arg === "--au-deferred") {
             if (options.auDeferred !== null || !args[i + 1] || args[i + 1].startsWith("--"))
                 throw new Error("--au-deferred needs the recorded format decision.");
@@ -288,7 +289,8 @@ export async function main(args = process.argv.slice(2)) {
             throw error;
         });
         console.log(JSON.stringify({ mode: "plan", sourceCommit: source.commit, releaseVersion: kit.version,
-            nativeCommand: "FX_DISTRIBUTABLE_RUNTIME=1 npm run fx:prod:build -- enhancer-lite --clean",
+            nativeCommand: options.useExistingBuild ? null : "FX_DISTRIBUTABLE_RUNTIME=1 npm run fx:prod:build -- enhancer-lite --clean",
+            useExistingBuild: options.useExistingBuild,
             outputParent: path.dirname(output), sourceErrors: errors, auDecision: options.auDeferred ?? "pending",
             notices: { file: "legal/enhance-that/THIRD_PARTY_NOTICES.txt", regularFileExists: noticesEntry?.isFile() ?? false },
             execution: "Requires a clean reviewed worktree, tracked notices, and Bob's native/package slot. Never installs or publishes." }, null, 2));
@@ -308,9 +310,11 @@ export async function main(args = process.argv.slice(2)) {
     const epoch = Number(run("/usr/bin/git", ["show", "-s", "--format=%ct", "HEAD"]));
     const cmake = await realpath(run("/usr/bin/which", ["cmake"]));
     await claimEnhanceThatOutput(output);
-    run(process.execPath, ["kit/fx/prod-effect.mjs", "build", "enhancer-lite", "--clean"], {
-        capture: false, env: { ...process.env, FX_DISTRIBUTABLE_RUNTIME: "1", COSIMO_RELEASE_NODE: process.execPath, COSIMO_RELEASE_CMAKE: cmake },
-    });
+    if (!options.useExistingBuild) {
+        run(process.execPath, ["kit/fx/prod-effect.mjs", "build", "enhancer-lite", "--clean"], {
+            capture: false, env: { ...process.env, FX_DISTRIBUTABLE_RUNTIME: "1", COSIMO_RELEASE_NODE: process.execPath, COSIMO_RELEASE_CMAKE: cmake },
+        });
+    }
     assertSourceStateUnchanged(source, getReleaseGitState());
     const provenance = await captureActualNativeDependencyProvenance(config);
     const native = await staticDspEvidence(config, cmake, output);

@@ -67,6 +67,12 @@ candidate. Repeatable unsigned assembly is not a claim of reproducible signed
 bytes or independent native builds. AU needs its explicit include/defer decision;
 this entry point packages VST3 only.
 
+Use `--use-existing-build` when packaging the current checkout's already
+qualified product build. The owner must establish that product inputs still
+match that build, including after source composition. This skips only rebuilding;
+dependency provenance, generated-DSP/link checks, bundle validation and extracted
+payload verification still run. It does not accept an external bundle path.
+
 Preserve the existing canonical kit export/setup/release machinery. A normal
 `kit:release` publishes; even its dry-run can perform substantial builds.
 Use a new release version, never overwrite published `0.1.2`, and compute final
