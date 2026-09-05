@@ -4,9 +4,11 @@
 
 Source candidate prepared September 5, 2026 from
 `c297eeed62aec66e85118df06a229d9cdd8491da`, on `codex/enhance-that-plugin`.
-Bob coordinates independent review, integration and resource slots. This record
-is source/UI evidence, not installed-host automation, listening or release
-acceptance. L3 owns the final downloads and clean macOS 15/26 qualification.
+Bob coordinates independent review, integration and resource slots. Reviewed
+source `954207e4b19c6896e6a9ab1cd4b18a8bd566af06` passed its native VST3 build and
+binary identity/signature readback. This record establishes source/UI/build
+evidence, not installed-host automation, listening or release acceptance. L3
+owns final downloads and clean macOS 15/26 qualification.
 
 ## Observable change
 
@@ -57,7 +59,8 @@ code changed. The only kit edit updates its preview test's expected name.
 - Cmajor's generated JUCE project explicitly sets
   `JUCE_VST3_CAN_REPLACE_VST2=0`; with pinned stock JUCE
   `501c07674e1ad693085a7e7c398f205c2677f5da`, VST3 class IDs derive from the
-  manufacturer/plugin codes. Native binary identity still needs readback.
+  manufacturer/plugin codes. Native readback below confirms the candidate's
+  processor class ID and visible name.
 - Native saved state uses endpoint ID/value pairs (`PARAMS/PARAM` with `ID/V`)
   plus the existing stored-state values. Presentation is not the parameter
   identity. Exact old/new host-project recall remains an explicit host gate.
@@ -103,10 +106,53 @@ No AU support claim is established yet. The historical generic-AU notification
 crash in `kit/docs/HOST_COMPATIBILITY.md` is not evidence that this compiled
 candidate fails, nor that it is fixed.
 
-After review and Bob's native slot grant: build the exact candidate, verify
-binary identity and all eight host parameters, exercise continuous/discrete
-automation and state restoration, and settle the AU outcome with a bounded
+The reviewed candidate's VST3 build and binary identity checks passed. Still
+needed: enumerate all eight parameters through a native host, exercise
+continuous/discrete automation and state restoration, and settle the AU outcome with a bounded
 generated-project/free-host proof or explicit defer. Retain Apple Silicon macOS
 15 and 26 in scope. Final signing/notarization, downloadable artifacts,
 installation/rescan, disk-saved project recall, playback/offline export,
 listening and clean supported Macs remain L3/Andrew acceptance surfaces.
+
+## Native build and artifact readback — September 5, 2026
+
+Exact product source: `954207e4b19c6896e6a9ab1cd4b18a8bd566af06`. Bob granted
+the serialized native slot after independent source review. Command:
+`COSIMO_CMAKE_JOBS=4 npm run fx:prod:build -- enhancer-lite`.
+
+The current candidate compiler archive was installed with the canonical
+`installArtifact` path and verified by `inspectTool` using both its archive
+receipt and installed payload. Only the local `cmaj` toolchain metadata was
+temporarily stamped for this build; its exact original bytes were restored
+after success. No toolchain stamp or generated artifact is committed.
+
+| Build provenance | SHA-256 / pin |
+| --- | --- |
+| Cmajor fork | `7820a453f25e1b6eaf898d0bb2feb7e4ce01c207` |
+| Stock JUCE | `501c07674e1ad693085a7e7c398f205c2677f5da` |
+| Compiler archive | `e9aa87339bdf1326459cfd67cc940057a5e438b831f02baef2fe0d9d10c54df4` |
+| Raw compiler executable | `cd83280092e35ad7e3fa7c2824f52c171ee1ddc3ccad435caaa8a58debdd9c99` |
+| Original/restored toolchain file | `ca0864d445f4ffa26598ef68de44c657f87418682f48d71340ce19d77fe32b3e` |
+| Temporary toolchain file | `a9774776ec0e8cbbb0f97b8bee4cedad6c20a61b39604d6bb10de50fbc7e030c` |
+
+Built artifact:
+`build/enhancer_lite_juce/_build/plugin/EnhanceThat_artefacts/Release/VST3/EnhanceThat.vst3`.
+The build-produced factory probe loaded this actual bundle and returned:
+
+- Display name `Enhance That`, bundle ID `dev.cosimo.enhancer-lite`.
+- Processor class ID `ABCDEF019182FAEB436F73694373454C`, matching the preserved
+  manufacturer/plugin codes.
+- Mach-O architectures `x86_64 arm64`.
+- Deep strict code-signature verification passed. Signature is **ad hoc**, with
+  no Team ID; this is not a notarized or releasable download.
+- Binary SHA-256:
+  `2675c6bb73a1d293b069fc592f96329d80d5c047c313b1b9b73452361a6a6c86`.
+- Canonical `hashInstalledPayload` digest (includes relative names, modes and
+  file bytes): `1abaa6e6558f2c407a7f52dd827fce3a9e9f16c27dd4a56bb2dacd550b2049a5`.
+
+The production runtime has no `view.devModule`, and its graph exactly matches
+the reviewed source with all eight automation annotations enabled. The native
+build verifies the existing CHOC WebView markers. No compiler source rebuild,
+plugin installation, DAW or AU-host launch, pluginval, native automation/state
+playback or listening occurred in this slot. AU source files listed under the
+VST3 target are JUCE's format-guarded compilation units, not a built AU result.
