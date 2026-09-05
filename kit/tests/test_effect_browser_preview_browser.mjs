@@ -83,7 +83,8 @@ async function saveProof(page, name) {
 test("documented included-example route initializes the production UI and normal preset bindings", async () => {
     const { page, errors, requests } = await openPreview("enhancer_lite");
     try {
-        assert.match(await page.locator("#preview-title").innerText(), /Enhance That — UI preview/u);
+        const manifest = JSON.parse(await fs.readFile(path.join(fixtureRoot, "fx/enhancer_lite/EnhancerLite.cmajorpatch"), "utf8"));
+        assert.equal(await page.locator("#preview-title").innerText(), `${manifest.name} — UI preview`);
         const view = page.locator("cosimo-enhancer-lite-view");
         assert.equal(await view.locator("[data-readout='frequency']").textContent(), "130 Hz");
         assert.equal(await view.locator("[data-readout='q']").textContent(), "0.71");
