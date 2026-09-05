@@ -72,6 +72,15 @@ The caller supplies the legacy name; the generic kit knows no product-specific
 names or identities. This API only migrates within one install directory;
 user/system-root migration requires separately qualified package behavior.
 
+If an archive move completes but its verification fails, recovery reporting
+lists every observed archive/transaction/old-lock location, without declaring
+the archive valid or attempting compensation through a stale source path.
+After a verified installation, failure to remove the previous filename's lock
+returns `cleanupWarning` with code `previous-lock-retained` and the exact lock
+path. The CLI displays that warning separately from ordinary archive retention.
+The installed plugin and retained files are preserved; an unexpected lock child
+is never recursively deleted to make the next update succeed.
+
 ## Verification boundary
 
 `npm run test:kit:native-install` in a customer repository runs

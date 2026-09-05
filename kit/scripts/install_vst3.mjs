@@ -11,25 +11,32 @@ const executeFile = promisify(execFile);
 
 /** @typedef {{bundleIdentifier: string, processorClassId: string, displayName: string}} VST3Identity */
 /** @typedef {"platform" | "unsafe-path" | "unreadable-identity" | "signature" | "markers" | "identity-conflict" | "candidate-changed" | "installed-changed" | "pending-install" | "recovery-required" | "filesystem" | "tool-failed" | "unexpected-capture" | "move-failed"} InstallFailureCode */
-/** @typedef {{code: InstallFailureCode, message: string, recoveryDirectory?: string}} InstallFailure */
+/** @typedef {{code: InstallFailureCode, message: string, recoveryDirectory?: string, recoveryDirectories?: string[]}} InstallFailure */
+/** @typedef {{code: "previous-lock-retained", path: string}} InstallCleanupWarning */
 /** @typedef {{status: "failed", error: InstallFailure}} FailedInstall */
 /** @typedef {{status: "verified", identity: VST3Identity, digest: string, entry: {dev: number, ino: number}}} VerifiedBundle */
 /** @typedef {{identityProbe: string, codesign?: string, probeTimeoutMs?: number}} BundleTools */
-/** @typedef {FailedInstall | {status: "installed", destination: string, identity: VST3Identity, recoveryDirectory?: string} | {status: "dry-run", destination: string, identity: VST3Identity}} InstallResult */
+/** @typedef {FailedInstall | {status: "installed", destination: string, identity: VST3Identity, recoveryDirectory?: string, cleanupWarning?: InstallCleanupWarning} | {status: "dry-run", destination: string, identity: VST3Identity}} InstallResult */
 
 /**
  * Render an install failure for the CLI, including any retained recovery path.
  * @param {InstallFailure} failure
  */
 export function formatVST3InstallFailure(failure) {
-    return failure.recoveryDirectory
-        ? `${failure.message}\nRetained recovery directory: ${failure.recoveryDirectory}`
-        : failure.message;
+    const directories = failure.recoveryDirectories ?? (failure.recoveryDirectory ? [failure.recoveryDirectory] : []);
+    return [failure.message, ...directories.map(directory => `Retained recovery directory: ${directory}`)].join("\n");
 }
 
-/** @param {InstallFailureCode} code @param {string} message @param {string} [recoveryDirectory] @returns {FailedInstall} */
-function failed(code, message, recoveryDirectory) {
-    return { status: "failed", error: { code, message, ...(recoveryDirectory ? { recoveryDirectory } : {}) } };
+/** @param {InstallCleanupWarning} warning */
+export function formatVST3InstallCleanupWarning(warning) {
+    return `The plugin installation is verified, but the previous filename's lock could not be removed. `
+        + `Inspect the retained lock before another update: ${warning.path}`;
+}
+
+/** @param {InstallFailureCode} code @param {string} message @param {string} [recoveryDirectory] @param {string[]} [recoveryDirectories] @returns {FailedInstall} */
+function failed(code, message, recoveryDirectory, recoveryDirectories) {
+    return { status: "failed", error: { code, message, ...(recoveryDirectory ? { recoveryDirectory } : {}),
+        ...(recoveryDirectories ? { recoveryDirectories } : {}) } };
 }
 
 function describe(error) {
@@ -326,13 +333,16 @@ export async function installVST3Bundle({ candidate, destination, previousDestin
             const expected = { entry: { dev: entry.dev, ino: entry.ino }, digest: await hashInstalledPayload(transactionDirectory) };
             const archived = await captureMove(transactionDirectory, recoveryDirectory, expected, identityProbe);
             if (archived.status === "failed")
-                return retained(`The new plugin is verified, but its prior bundle could not be archived safely. ${archived.error.message}`);
+                return await retainArchiveFailure(archived.error.message, recoveryDirectory);
             transactionDirectory = recoveryDirectory;
             try { await releasePreviousFilenameLock(); }
             catch {
                 // The verified new install and archived prior copy are already
                 // complete. A lock cleanup failure must not undo either one.
-                return { status: "installed", destination, identity: installed.identity, recoveryDirectory };
+                return { status: "installed", destination, identity: installed.identity, recoveryDirectory,
+                    ...(previousFilenameLock === undefined ? {} : {
+                        cleanupWarning: { code: "previous-lock-retained", path: previousFilenameLock },
+                    }) };
             }
             return { status: "installed", destination, identity: installed.identity, recoveryDirectory };
         }
@@ -344,7 +354,10 @@ export async function installVST3Bundle({ candidate, destination, previousDestin
             await rm(transactionDirectory, { recursive: true });
         }
         catch {
-            return { status: "installed", destination, identity: installed.identity, recoveryDirectory: transactionDirectory };
+            return { status: "installed", destination, identity: installed.identity, recoveryDirectory: transactionDirectory,
+                ...(previousFilenameLock === undefined ? {} : {
+                    cleanupWarning: { code: "previous-lock-retained", path: previousFilenameLock },
+                }) };
         }
         return { status: "installed", destination, identity: installed.identity };
     } catch (error) {
@@ -355,6 +368,25 @@ export async function installVST3Bundle({ candidate, destination, previousDestin
         const detail = previousFilenameLock === undefined ? message
             : `${message} The previous filename remains locked at ${previousFilenameLock}.`;
         return failed("recovery-required", detail, transactionDirectory ?? previousFilenameLock);
+    }
+
+    async function retainArchiveFailure(message, archiveDestination) {
+        // The move may have succeeded even when verification failed. Observe
+        // both locations without treating either as verified or compensating
+        // an uncertain archive move. Keep every observed entry for inspection.
+        const directories = [];
+        const uninspected = [];
+        for (const location of [archiveDestination, transactionDirectory, previousFilenameLock]) {
+            if (location === undefined) continue;
+            try {
+                if (await maybeEntry(location) !== null) directories.push(location);
+            } catch {
+                uninspected.push(location);
+            }
+        }
+        const explanation = `The new plugin is verified, but its prior bundle could not be archived safely. ${message}`
+            + uninspected.map(location => ` Recovery location could not be inspected: ${location}.`).join("");
+        return failed("recovery-required", explanation, directories[0], directories);
     }
 
     async function releasePreviousFilenameLock() {

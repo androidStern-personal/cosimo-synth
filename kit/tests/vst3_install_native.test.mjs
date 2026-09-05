@@ -6,7 +6,7 @@ import { access, chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, readlink, 
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { formatVST3InstallFailure, installVST3Bundle } from "../scripts/install_vst3.mjs";
+import { formatVST3InstallCleanupWarning, formatVST3InstallFailure, installVST3Bundle } from "../scripts/install_vst3.mjs";
 import { hashInstalledPayload } from "../scripts/toolchain.mjs";
 
 const exec = promisify(execFile);
@@ -211,6 +211,53 @@ test("renamed install refuses a different scan root and dry run preserves the ol
     });
 });
 
+test("archive verification failure reports the actual moved archive and retained old lock", { skip: !native }, async () => {
+    await withInstallFixture(async ({ root, candidate, destination, installDirectory }) => {
+        const previousDestination = path.join(installDirectory, "OldTone.vst3");
+        const oldLock = path.join(root, "Plug-Ins/.OldTone.vst3.install");
+        await createBundle(previousDestination, { payload: "old" });
+        const oldDigest = await hashInstalledPayload(previousDestination);
+        const probe = await probeWithFailure(root, `
+            if (args[0] === '--move-exclusive' && args[1].endsWith('.install'))
+                writeFileSync(args[2] + '/unexpected-file', 'verification failure after move');`);
+        const result = await installVST3Bundle({ candidate, destination, previousDestination, identityProbe: probe });
+        assert.equal(result.status, "failed");
+        assert.equal(result.error.code, "recovery-required");
+        assert.ok(result.error.recoveryDirectory.includes(".previous-"));
+        await access(result.error.recoveryDirectory);
+        assert.deepEqual(result.error.recoveryDirectories, [result.error.recoveryDirectory, oldLock]);
+        assert.equal(await hashInstalledPayload(path.join(result.error.recoveryDirectory, "previous.bundle")), oldDigest);
+        assert.equal(await payload(destination), "new");
+        const formatted = formatVST3InstallFailure(result.error);
+        assert.ok(formatted.includes(`Retained recovery directory: ${result.error.recoveryDirectory}`));
+        assert.ok(formatted.includes(`Retained recovery directory: ${oldLock}`));
+        await assert.rejects(access(path.join(root, "Plug-Ins/.FixtureTone.vst3.install")), { code: "ENOENT" });
+    });
+});
+
+test("successful migration reports a retained old lock as a distinct cleanup warning", { skip: !native }, async () => {
+    await withInstallFixture(async ({ root, candidate, destination, installDirectory }) => {
+        const previousDestination = path.join(installDirectory, "OldTone.vst3");
+        const oldLock = path.join(root, "Plug-Ins/.OldTone.vst3.install");
+        await createBundle(previousDestination, { payload: "old" });
+        const oldDigest = await hashInstalledPayload(previousDestination);
+        const probe = await probeWithFailure(root, `
+            if (args[0] === '--move-exclusive' && args[1].endsWith('.install'))
+                writeFileSync(${JSON.stringify(oldLock)} + '/unexpected-child', 'keep this child');`);
+        const result = await installVST3Bundle({ candidate, destination, previousDestination, identityProbe: probe });
+        assert.equal(result.status, "installed", JSON.stringify(result));
+        assert.deepEqual(result.cleanupWarning, { code: "previous-lock-retained", path: oldLock });
+        assert.ok(formatVST3InstallCleanupWarning(result.cleanupWarning).includes(oldLock));
+        assert.equal(await readFile(path.join(oldLock, "unexpected-child"), "utf8"), "keep this child");
+        assert.equal(await hashInstalledPayload(path.join(result.recoveryDirectory, "previous.bundle")), oldDigest);
+        assert.equal(await payload(destination), "new");
+        const retry = await installVST3Bundle({ candidate, destination, previousDestination, identityProbe });
+        assert.equal(retry.status, "failed");
+        assert.equal(retry.error.code, "pending-install");
+        assert.equal(retry.error.recoveryDirectory, result.cleanupWarning.path);
+    });
+});
+
 for (const collision of [
     { label: "different bundle identifier", options: { bundleIdentifier: "com.other.fixture-tone" } },
     { label: "different binary processor class identifier", options: { variant: 1 } },
@@ -331,7 +378,7 @@ async function probeWithFailure(root, afterRealProbe, beforeRealProbe = "") {
     const wrapper = path.join(root, "fixture-probe.mjs");
     await writeFile(wrapper, `#!${process.execPath}
 import { spawnSync } from 'node:child_process';
-import { chmodSync, readFileSync, renameSync } from 'node:fs';
+import { chmodSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 const args = process.argv.slice(2);
 const bundle = args[0];
 ${beforeRealProbe}
