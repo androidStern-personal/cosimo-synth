@@ -1,0 +1,53 @@
+{
+  "records": [
+    {
+      "threadId": "01a06ded-e922-7b60-83a7-44332a0e3fee",
+      "logRowId": 888179585,
+      "timestamp": 1788591527,
+      "source": "Codex runtime dispatch log, read-only",
+      "serviceTierOverride": [
+        "Some(None)"
+      ],
+      "model": [
+        "gpt-6-astra"
+      ],
+      "effort": [
+        "XHigh"
+      ],
+      "approval": [
+        "Some(Never)"
+      ],
+      "permission": [
+        "Some(Disabled)",
+        "Some(ActivePermissionProfile { id: \":danger-full-access\""
+      ]
+    },
+    {
+      "threadId": "01a07063-9aff-7580-9ab4-21b998b06fa2",
+      "logRowId": 888180954,
+      "timestamp": 1788591971,
+      "source": "Codex runtime dispatch log, read-only",
+      "serviceTierOverride": [
+        "Some(None)"
+      ],
+      "model": [
+        "gpt-6-astra"
+      ],
+      "effort": [
+        "XHigh"
+      ],
+      "approval": [
+        "Some(Never)"
+      ],
+      "permission": [
+        "Some(Disabled)",
+        "Some(ActivePermissionProfile { id: \":danger-full-access\""
+      ]
+    }
+  ],
+  "interpretation": "Explicit Some(None) clears service-tier override at actual turn dispatch; default/standard, Fast off. Model/effort/permissions separately verified in actual turn_context.",
+  "probeId": "01a07063-9aff-7580-9ab4-21b998b06fa2",
+  "probeBase": "c297eeed62aec66e85118df06a229d9cdd8491da",
+  "probeBranch": "detached HEAD",
+  "scope": "one no-op, no product mutations"
+}

@@ -1,0 +1,168 @@
+{
+  "capturedAtUtc": "2026-09-05T07:18:42.626696+00:00",
+  "sourceLocatorRelativeToCodexVisualizations": "2026/09/04/01a06ded-e922-7b60-83a7-44332a0e3fee/enhance-launch/owner-ledger.json",
+  "boundary": "Immutable dispatch snapshot. Bob owns the live ledger and current starts, dependencies and resource slots. Runtime verified and GO issued alone do not establish substantive work or completion. Git/status/evidence fields below preserve Bob supplied observations at capture time, not later task state. Absolute workspace paths are represented by worktree identifiers or projectless directory names; other absolute paths and URLs are redacted.",
+  "ledger": {
+    "authority": "Approved handoff SHA256 7ab692893201e3943912fcde4534146eb9bdcfe5c3014b7ed49f4535a8ee60b9; Andrew via Woods",
+    "coordinator": "01a06ded-e922-7b60-83a7-44332a0e3fee",
+    "role": "Management only; implementation, assets, tests/builds and integration delegated",
+    "sourceBase": "c297eeed62aec66e85118df06a229d9cdd8491da",
+    "firstMilestone": "Recruitment-ready product, page, real screenshots, short honest demo, compact press sheet and tester brief",
+    "probe": "01a07063-9aff-7580-9ab4-21b998b06fa2; exactly one no-op completed",
+    "runtime": "All owners verified actual Astra/xhigh, explicit default service tier / Fast off, never/danger-full-access",
+    "owners": [
+      {
+        "packet": "L1",
+        "threadId": "01a07068-7376-7012-a350-a5999d5bd51c",
+        "hostId": "local",
+        "title": "Enhance That \u2014 plugin automation and\u2026",
+        "git": {
+          "branch": "codex/enhance-that-plugin",
+          "head": "c297eeed62aec66e85118df06a229d9cdd8491da"
+        },
+        "scope": "Plugin naming and eight automation controls; focused state proof and conditional AU decision",
+        "runtimeVerified": true,
+        "status": "In progress; substantive start confirmed",
+        "startEvidence": "Traced eight real endpoints and UI notifications; identified missing host gesture begin/end; scoped automation patch underway.",
+        "workspace": {
+          "type": "linked-worktree",
+          "worktreeId": "1388"
+        }
+      },
+      {
+        "packet": "L2",
+        "threadId": "01a07068-737c-7fe3-ae4d-cf4937edce81",
+        "hostId": "local",
+        "title": "Enhance That \u2014 customer modification\u2026",
+        "git": {
+          "branch": "codex/enhance-that-customer-workflow",
+          "head": "c297eeed62aec66e85118df06a229d9cdd8491da"
+        },
+        "scope": "Wavefold modification reference, concise customer guidance and final-candidate upgrade/recovery",
+        "runtimeVerified": true,
+        "status": "In progress; substantive start confirmed",
+        "startEvidence": "Traced shipped customer/update/identity seams; separate Wavefold reference and concise guidance underway; identified conflict preservation gap.",
+        "workspace": {
+          "type": "linked-worktree",
+          "worktreeId": "c648"
+        }
+      },
+      {
+        "packet": "L3",
+        "threadId": "01a07068-7379-7cf2-80a0-b6dde894e350",
+        "hostId": "local",
+        "title": "Enhance That \u2014 release packaging and\u2026",
+        "git": {
+          "branch": "codex/enhance-that-release",
+          "head": "c297eeed62aec66e85118df06a229d9cdd8491da"
+        },
+        "scope": "Release packaging, notices, clean macOS15/26 and exact-artifact qualification",
+        "runtimeVerified": true,
+        "status": "In progress; substantive start confirmed",
+        "startEvidence": "Inspected actual package/tool pins and Mac environment; macOS26 host and VirtualBuddy available; macOS15 still unverified; evidence matrix underway.",
+        "workspace": {
+          "type": "linked-worktree",
+          "worktreeId": "cbfa"
+        }
+      },
+      {
+        "packet": "L4",
+        "threadId": "01a07068-6002-7091-95c9-a9424541a669",
+        "hostId": "local",
+        "title": "Enhance That \u2014 website commerce and\u2026",
+        "git": {
+          "branch": "codex/enhance-that-site-commerce",
+          "head": "6cc89d1ca6421e02910fb2c7d36811af9cea2b18"
+        },
+        "scope": "Existing-site review copy, responsive page, sandbox commerce/delivery and consent",
+        "runtimeVerified": true,
+        "status": "In progress; substantive start confirmed",
+        "startEvidence": "Verified live/source bytes; created sanitized isolated site Git baseline6cc89d1; building responsive page and sandbox/recovery flow.",
+        "repository": "[local path omitted]",
+        "workspace": {
+          "type": "projectless",
+          "directoryName": "enhance-that-site-commerce"
+        }
+      },
+      {
+        "packet": "L5",
+        "threadId": "01a07068-6208-7c11-8c66-3ad5c4fd223d",
+        "hostId": "local",
+        "title": "Enhance That \u2014 creative and recruitment\u2026",
+        "git": null,
+        "scope": "2-3 concepts and real recruitment assets, then launch creative/promotion drafts",
+        "runtimeVerified": true,
+        "status": "In progress; substantive start confirmed",
+        "startEvidence": "Inspected real c297eeed plugin/UI and customer evidence; developing three concepts and real silent-preview recruitment assets.",
+        "workspace": {
+          "type": "projectless",
+          "directoryName": "enhance-that-creative"
+        }
+      },
+      {
+        "packet": "L6",
+        "threadId": "01a07068-6470-7e02-8c86-aac833bc47b3",
+        "hostId": "local",
+        "title": "Enhance That \u2014 beta and launch operations",
+        "git": null,
+        "scope": "Tester brief/intake/coverage and rehearsal, later real seven-day beta",
+        "runtimeVerified": true,
+        "status": "In progress; substantive start confirmed",
+        "startEvidence": "Read acceptance/coverage source and checked actual PDF/workbook runtime; creating usable tester brief, fillable feedback and operator records.",
+        "workspace": {
+          "type": "projectless",
+          "directoryName": "enhance-that-beta-operations"
+        }
+      },
+      {
+        "packet": "INT",
+        "threadId": "01a07068-e3f1-7553-ad61-5b39a3b226da",
+        "hostId": "local",
+        "title": "Enhance That \u2014 launch integration operator",
+        "git": {
+          "branch": "codex/enhance-that-launch-integration",
+          "head": "c297eeed62aec66e85118df06a229d9cdd8491da"
+        },
+        "scope": "Scoped handoff adoption and reviewed integrations under Bob resource scheduling",
+        "runtimeVerified": true,
+        "status": "In progress; substantive start confirmed",
+        "startEvidence": "Created source branch and copied exact approved handoff; preparing sanitized durable source/evidence index for independent review.",
+        "workspace": {
+          "type": "linked-worktree",
+          "worktreeId": "ed83"
+        }
+      },
+      {
+        "packet": "REV",
+        "threadId": "01a07068-e3f2-72d2-baf3-e0b264615c1b",
+        "hostId": "local",
+        "title": "Enhance That \u2014 independent launch review",
+        "git": {
+          "branch": "HEAD",
+          "head": "c297eeed62aec66e85118df06a229d9cdd8491da"
+        },
+        "scope": "Independent source, adoption, recruitment and release-evidence review",
+        "runtimeVerified": true,
+        "status": "In progress; substantive start confirmed",
+        "startEvidence": "Independently traced current source/automation/VST3/export contracts; review underway with exact adoption commit pending.",
+        "workspace": {
+          "type": "linked-worktree",
+          "worktreeId": "9998"
+        }
+      }
+    ],
+    "sharedSlots": {
+      "nativeBuild": "unallocated",
+      "DAW_pluginInstall_capture": "unallocated",
+      "masterIntegration_push": "unallocated",
+      "publicPublication": "Andrew approval held"
+    },
+    "heldDependencies": [
+      "Final L3 artifacts await L1 and relevant L2",
+      "Final L2 update/customer acceptance awaits exact L3 candidate",
+      "Final creative awaits Andrew choice; recruitment concepts proceed",
+      "Actual beta awaits qualified frozen package and real roster; seven full days cannot be simulated",
+      "Public sales/publication, real financial tests/refunds and sends await explicit approval"
+    ]
+  }
+}

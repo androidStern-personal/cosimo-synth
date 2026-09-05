@@ -1,0 +1,13 @@
+{
+  "version": "0.1.2",
+  "source": "b48a09575477b67e391e6b17476c04ddd90ad08d",
+  "kitCommit": "5d19dfe2aabeeb77a63e83470b8115dbf08c823a",
+  "installation": {
+    "artifact": "installers/0a6e159cec49ad298f7cb07af84cbc02d9b93c17ba0a4053ee0a5a70ecd1f30a.sh",
+    "sha256": "0a6e159cec49ad298f7cb07af84cbc02d9b93c17ba0a4053ee0a5a70ecd1f30a"
+  },
+  "liveInstallerMatches": true,
+  "newAndPreviousToolBytesMatch": true,
+  "oldAndNewTagsDiscoverable": true,
+  "vmProofPending": true
+}

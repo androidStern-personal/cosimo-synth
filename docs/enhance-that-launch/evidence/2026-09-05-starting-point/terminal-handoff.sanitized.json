@@ -1,0 +1,97 @@
+{
+  "status": "fixes landed; matching private candidate ready for Woods complete customer experience",
+  "acceptedScope": {
+    "unicode": "excluded by Andrew; rejected historical proposal; no JUCE fork/source/pin/delivery change",
+    "cmajor": "7820a453f25e1b6eaf898d0bb2feb7e4ce01c207",
+    "choc": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+    "juce": "501c07674e1ad693085a7e7c398f205c2677f5da"
+  },
+  "host": {
+    "application": "Ableton Live 11.3.43",
+    "baseline": "Original SeqFX START numeric field swallowed both Spaces with focus/value1 unchanged.",
+    "fixed": "Final dedicated SeqFX wrapper START stays focused at1 while Space toggles stopped/playing/stopped. Pattern interaction and active Mix drag also forward Space. Genuine preset-name text and native rate selector keep Space.",
+    "textCancellationBoundary": "CANCEL action and dialog closure are supported by same-session operator/tool transcript, not independent persisted preset inventory.",
+    "originalTracks": "First three before/after snapshots identical. Owned fourth test track retains baseline and fixed instances.",
+    "transport": "stopped",
+    "name": "Actual v1/v2/v3 factory names/CIDs, Ableton browser/device/editor report Cosimo SeqFX Numeric Focus Host Test.",
+    "loadedExecutableSha256": "f887e5fa1e00e7ed99f62e56493fdc0ff6d5eb0b4cdf0a6ca9bd4a0e83b0e57d",
+    "pluginval": "strictness5 success",
+    "independentEvidenceReview": "Meitner confirmed scope and observations; missing process/slice receipts added and verified."
+  },
+  "tests": {
+    "source": {
+      "passed": 1228,
+      "failed": 0,
+      "skipped": 1,
+      "skip": "Existing optional ignored Spectre shelf corpus unavailable"
+    },
+    "typecheck": "passed",
+    "router": {
+      "passed": 23,
+      "skipped": 0
+    },
+    "releaseProvenance": 44,
+    "plainCpm": 5,
+    "cmajUnits": 57,
+    "nameCmakeCompilerMatrix": 11,
+    "exportProof": "canonical typecheck/test, Enhancer Lite UI build and update-merge flow passed; all10 exported example source files unchanged"
+  },
+  "knownBoundary": "A window key listener dynamically registered during that same dispatch can run after the router finalizer; reviewed low severity, no current product handler uses that pattern. IME browser test uses a constructed composition event; actual DAW musical-typing/listening/persisted-state recovery is not claimed here.",
+  "completedAt": "2026-09-04T23:20:15.995838+00:00",
+  "candidateCmajExecutableSha256": "cd83280092e35ad7e3fa7c2824f52c171ee1ddc3ccad435caaa8a58debdd9c99",
+  "candidateCmajPluginExecutableSha256": "63a36bb17f8eefb75b7dabec86f630a1fe96ebeea3aff29fe0059edb918b3782",
+  "candidateLoaderSigningBoundary": "Raw CmajPlugin bundle has a sealed-resource signature failure before normal install. Existing canonical installer signs the copied bundle and requires strict verification. A private extraction replayed those exact signing/verification/marker steps successfully. No actual CmajPlugin install, association or archive/source mutation occurred. This is an existing install boundary, independently reviewed, not a pre-signed archive claim.",
+  "ci": {
+    "kit-ci.json": {
+      "url": "[URL omitted]",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "kit",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    "native-ci.json": {
+      "url": "[URL omitted]",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "Native gate contract (fast)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Native gate pending runner configuration",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Exported kit on Apple silicon",
+          "status": "completed",
+          "conclusion": "skipped"
+        }
+      ]
+    }
+  },
+  "candidate": {
+    "schemaVersion": 1,
+    "sourceCommit": "c297eeed62aec66e85118df06a229d9cdd8491da",
+    "version": "0.1.2",
+    "lineageCommit": "c840a394094f3c6a9ea14b5f1a8041eb424b22ac",
+    "cmajorCommit": "7820a453f25e1b6eaf898d0bb2feb7e4ce01c207",
+    "chocCommit": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+    "tools": {
+      "cmaj": "e9aa87339bdf1326459cfd67cc940057a5e438b831f02baef2fe0d9d10c54df4",
+      "cmajPlugin": "99a8167814b403eb46a0196398af94c968ac25fbf4b033872d579257e45d8d71"
+    },
+    "installerSha256": "6cb276bc30c9165a619ac1a222bcae6bf4a5a83c56e87ada6f71837727058cf0"
+  },
+  "candidateCmajUnits": {
+    "passed": 57,
+    "failed": 0
+  }
+}

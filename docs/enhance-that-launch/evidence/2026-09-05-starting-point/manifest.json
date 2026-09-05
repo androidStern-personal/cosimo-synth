@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "preservedOn": "2026-09-05",
+  "purpose": "Historical dispatch starting-point evidence; preservation is not a rerun, current service verification, new release qualification, or listening acceptance.",
+  "redaction": "Candidate/publication JSON retain selected identity and proof fields; private delivery, access, environment and customer-command fields are excluded. URLs and absolute machine paths in selected text are replaced with explicit omission markers. Customer report prose is otherwise unchanged. Original evidence locations are in the exact approved launch handoff. Dispatch ledger retains task/scope/Git/status fields and replaces absolute cwds with workspace identifiers. Runtime files retain Bob-supplied structured summaries with absolute workspace paths removed; no raw runtime logs or rollouts are copied.",
+  "records": [
+    {
+      "sourceLabel": "candidate-summary.json",
+      "sourceSha256": "68747211df7f0ba4a196a9f232b7999eefc3c3ba8570581afedc3836314279fd",
+      "preservedFile": "candidate-summary.sanitized.json",
+      "preservedSha256": "d7bc9fdeec427c55d15df8c63748781f1eb054a5d696689f26037965ad43e004"
+    },
+    {
+      "sourceLabel": "terminal-handoff.json",
+      "sourceSha256": "d9c4c8ab045856434f2ac727f638bb4f4023e056f15883af6b1043c1c487c3fb",
+      "preservedFile": "terminal-handoff.sanitized.json",
+      "preservedSha256": "9ee4ca9e2dd22a33e58f6c7cedaaa5c3925647f95fffe194718c217f55fa828c"
+    },
+    {
+      "sourceLabel": "RESULTS.md",
+      "sourceSha256": "5c7b351a129838fca90016f175305b36c82e3ca2fc5007b3d1ff1eaac858b9a6",
+      "preservedFile": "customer-acceptance.sanitized.md",
+      "preservedSha256": "e265402bdcc41fec5e2af8237e9c5246a93836e36da3e942f0644c995615fab9"
+    },
+    {
+      "sourceLabel": "live-verification.json",
+      "sourceSha256": "ae8f6d921e531d07955af1d6ffc3e2c55da060e0d4575ea8202dca7058574358",
+      "preservedFile": "published-v0.1.2-verification.sanitized.json",
+      "preservedSha256": "9dc8a5b9dd0eb81788cc2d1c568de9550d0f320ededb66b66cbd507da7073846"
+    },
+    {
+      "sourceLabel": "Bob task artifacts: enhance-launch/owner-ledger.json",
+      "sourceSha256": "faef572ae37e54213b9c9fb03440724340497756e7b9fa3b67ef2462f09bc384",
+      "preservedFile": "owner-ledger.snapshot.json",
+      "preservedSha256": "fe8736c83a20265a830e4566514a385200d07ebfbc2c8b027d9a60be3904ffa0"
+    },
+    {
+      "sourceLabel": "Bob task artifacts: enhance-launch/runtime-preflight.json",
+      "sourceSha256": "e0419813ac9be493daafa48bb489a1e760d832f7a0a7aa8826601787b48b0fe1",
+      "preservedFile": "coordinator-runtime.sanitized.json",
+      "preservedSha256": "b69103d2b4dd7ab90b7c450b114398ca097bb3da05de099d2380b797373aa589"
+    },
+    {
+      "sourceLabel": "Bob task artifacts: enhance-launch/owner-runtime-preflight.json",
+      "sourceSha256": "b2531bd2feb5ef7dd6cb6cf2f9413b59a2c2b699f519e838035a822b4f03824b",
+      "preservedFile": "owner-runtime.sanitized.json",
+      "preservedSha256": "59ecfa02953a52219d0583baf9f152407979ebac11877d526eed7e00f4bb7b50"
+    }
+  ]
+}

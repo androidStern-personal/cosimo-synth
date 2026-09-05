@@ -1,3 +1,7 @@
+Enhance That launch — scoped dispatch adoption 2026-09-05
+- Current scope is ENHANCE_THAT_LAUNCH_HANDOFF.md (approved SHA-256 7ab692893201e3943912fcde4534146eb9bdcfe5c3014b7ed49f4535a8ee60b9). docs/enhance-that-launch/README.md links Bob's live ownership ledger, independent reviewer and preserved sanitized starting-point evidence. Historical roadmap/host records do not add superseded launch gates.
+- Bob remains management-only and allocates shared resources; INT prepares reviewed integrations. This adoption does not authorize master/push/publication or complete a product gate. First milestone is recruitment-ready product/page/screenshots/short demo/press sheet/tester brief; final candidate, macOS 15/26, customer update/recovery, listening and actual beta remain separate.
+
 Builder Kit readable names and Ableton Space — engineering qualified 2026-09-05
 - Owning queue/spec: docs/BK_HOST_INTEGRATION.md and BUILDER_KIT_HOST_CLEANUP.md. Cmajor 7820a453f25e1b6eaf898d0bb2feb7e4ce01c207 composes naming 66aaabfd with CHOC 11f7dc63; JUCE stays 501c0767. Andrew explicitly stopped Unicode/JUCE-fork work. Historical proposal is rejected, not a gate.
 - Keep public JUCE target setup/internal names and stable identities. The generator replaces only the compiled display-name definition using literal encoded bytes, applied last so template-looking names remain data. No generated header splice or private JUCE helper.

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "c297eeed62aec66e85118df06a229d9cdd8491da",
+  "version": "0.1.2",
+  "lineageCommit": "c840a394094f3c6a9ea14b5f1a8041eb424b22ac",
+  "cmajorCommit": "7820a453f25e1b6eaf898d0bb2feb7e4ce01c207",
+  "chocCommit": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+  "tools": {
+    "cmaj": "e9aa87339bdf1326459cfd67cc940057a5e438b831f02baef2fe0d9d10c54df4",
+    "cmajPlugin": "99a8167814b403eb46a0196398af94c968ac25fbf4b033872d579257e45d8d71"
+  },
+  "installerSha256": "6cb276bc30c9165a619ac1a222bcae6bf4a5a83c56e87ada6f71837727058cf0"
+}

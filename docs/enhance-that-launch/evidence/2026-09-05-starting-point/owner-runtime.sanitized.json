@@ -1,0 +1,205 @@
+{
+  "boundary": "Bob supplied independently verified turn-context/dispatch summaries; raw logs and rollouts are not included. Exact dispatch records establish configuration for those turns, not future turns or completed product work.",
+  "owners": [
+    {
+      "id": "01a07068-6002-7091-95c9-a9424541a669",
+      "name": "Enhance That \u2014 website commerce and\u2026",
+      "actualContext": {
+        "model": "gpt-6-astra",
+        "effort": "xhigh",
+        "approval_policy": "never",
+        "sandbox_policy": {
+          "type": "danger-full-access"
+        },
+        "permission_profile": {
+          "type": "disabled"
+        },
+        "active_permission_profile": {
+          "id": ":danger-full-access"
+        },
+        "turn_id": "01a07068-612c-73f1-98fe-f407a54ff3d5"
+      },
+      "speedEvidence": {
+        "runtimeLogRow": 888183289,
+        "serviceTierOverride": "Some(None)",
+        "meaning": "explicit default / standard; Fast off"
+      },
+      "pass": true
+    },
+    {
+      "id": "01a07068-6208-7c11-8c66-3ad5c4fd223d",
+      "name": "Enhance That \u2014 creative and recruitment\u2026",
+      "actualContext": {
+        "model": "gpt-6-astra",
+        "effort": "xhigh",
+        "approval_policy": "never",
+        "sandbox_policy": {
+          "type": "danger-full-access"
+        },
+        "permission_profile": {
+          "type": "disabled"
+        },
+        "active_permission_profile": {
+          "id": ":danger-full-access"
+        },
+        "turn_id": "01a07068-638f-7cb2-a401-996b29ceb4f1"
+      },
+      "speedEvidence": {
+        "runtimeLogRow": 888183561,
+        "serviceTierOverride": "Some(None)",
+        "meaning": "explicit default / standard; Fast off"
+      },
+      "pass": true
+    },
+    {
+      "id": "01a07068-6470-7e02-8c86-aac833bc47b3",
+      "name": "Enhance That \u2014 beta and launch operations",
+      "actualContext": {
+        "model": "gpt-6-astra",
+        "effort": "xhigh",
+        "approval_policy": "never",
+        "sandbox_policy": {
+          "type": "danger-full-access"
+        },
+        "permission_profile": {
+          "type": "disabled"
+        },
+        "active_permission_profile": {
+          "id": ":danger-full-access"
+        },
+        "turn_id": "01a07068-65ae-72f2-ba9e-3618fd983269"
+      },
+      "speedEvidence": {
+        "runtimeLogRow": 888183844,
+        "serviceTierOverride": "Some(None)",
+        "meaning": "explicit default / standard; Fast off"
+      },
+      "pass": true
+    },
+    {
+      "id": "01a07068-7376-7012-a350-a5999d5bd51c",
+      "name": "Enhance That \u2014 plugin automation and\u2026",
+      "actualContext": {
+        "model": "gpt-6-astra",
+        "effort": "xhigh",
+        "approval_policy": "never",
+        "sandbox_policy": {
+          "type": "danger-full-access"
+        },
+        "permission_profile": {
+          "type": "disabled"
+        },
+        "active_permission_profile": {
+          "id": ":danger-full-access"
+        },
+        "turn_id": "01a07068-7618-7053-b610-162646522561"
+      },
+      "speedEvidence": {
+        "runtimeLogRow": 888184680,
+        "serviceTierOverride": "Some(None)",
+        "meaning": "explicit default / standard; Fast off"
+      },
+      "pass": true
+    },
+    {
+      "id": "01a07068-7379-7cf2-80a0-b6dde894e350",
+      "name": "Enhance That \u2014 release packaging and\u2026",
+      "actualContext": {
+        "model": "gpt-6-astra",
+        "effort": "xhigh",
+        "approval_policy": "never",
+        "sandbox_policy": {
+          "type": "danger-full-access"
+        },
+        "permission_profile": {
+          "type": "disabled"
+        },
+        "active_permission_profile": {
+          "id": ":danger-full-access"
+        },
+        "turn_id": "01a07068-75f9-7060-a4ff-3ca19ae1a6c0"
+      },
+      "speedEvidence": {
+        "runtimeLogRow": 888184661,
+        "serviceTierOverride": "Some(None)",
+        "meaning": "explicit default / standard; Fast off"
+      },
+      "pass": true
+    },
+    {
+      "id": "01a07068-737c-7fe3-ae4d-cf4937edce81",
+      "name": "Enhance That \u2014 customer modification\u2026",
+      "actualContext": {
+        "model": "gpt-6-astra",
+        "effort": "xhigh",
+        "approval_policy": "never",
+        "sandbox_policy": {
+          "type": "danger-full-access"
+        },
+        "permission_profile": {
+          "type": "disabled"
+        },
+        "active_permission_profile": {
+          "id": ":danger-full-access"
+        },
+        "turn_id": "01a07068-7638-7f83-ada7-ab0f3d34fab2"
+      },
+      "speedEvidence": {
+        "runtimeLogRow": 888184705,
+        "serviceTierOverride": "Some(None)",
+        "meaning": "explicit default / standard; Fast off"
+      },
+      "pass": true
+    },
+    {
+      "id": "01a07068-e3f1-7553-ad61-5b39a3b226da",
+      "name": "Enhance That \u2014 launch integration operator",
+      "actualContext": {
+        "model": "gpt-6-astra",
+        "effort": "xhigh",
+        "approval_policy": "never",
+        "sandbox_policy": {
+          "type": "danger-full-access"
+        },
+        "permission_profile": {
+          "type": "disabled"
+        },
+        "active_permission_profile": {
+          "id": ":danger-full-access"
+        },
+        "turn_id": "01a07068-e5bc-7323-86b0-4dd8f8e1ef1d"
+      },
+      "speedEvidence": {
+        "runtimeLogRow": 888186379,
+        "serviceTierOverride": "Some(None)",
+        "meaning": "explicit default / standard; Fast off"
+      },
+      "pass": true
+    },
+    {
+      "id": "01a07068-e3f2-72d2-baf3-e0b264615c1b",
+      "name": "Enhance That \u2014 independent launch review",
+      "actualContext": {
+        "model": "gpt-6-astra",
+        "effort": "xhigh",
+        "approval_policy": "never",
+        "sandbox_policy": {
+          "type": "danger-full-access"
+        },
+        "permission_profile": {
+          "type": "disabled"
+        },
+        "active_permission_profile": {
+          "id": ":danger-full-access"
+        },
+        "turn_id": "01a07068-e5d9-7170-a2bc-c3be57a3802e"
+      },
+      "speedEvidence": {
+        "runtimeLogRow": 888186389,
+        "serviceTierOverride": "Some(None)",
+        "meaning": "explicit default / standard; Fast off"
+      },
+      "pass": true
+    }
+  ]
+}
