@@ -1555,3 +1555,62 @@ for (const termination of ["pointercancel", "lostpointercapture", "disconnect"])
         }
     });
 }
+
+for (const modulePath of [
+    "/fx/enhancer_lite/view/source.ts",
+    "/build/fx/enhancer_lite_runtime/view/app.js",
+]) {
+    for (const [surface, selector] of [
+        ["readout", "[data-readout-control='frequency']"],
+        ["graph", ".response-handle.primary"],
+    ]) {
+        for (const termination of ["pointerup", "pointercancel"]) {
+            test(`keyboard edits share the ${surface} drag gesture until ${termination}: ${modulePath}`, async () => {
+                const page = await openEnhancerLite(modulePath);
+                try {
+                    const target = shadow(page, selector);
+                    const { originX, originY, pointerID } = await beginCapturedDrag(page, target);
+                    const frequencyMessages = () => page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages.filter(({ endpointID }) => endpointID === "freqHzIn"));
+                    const assertTouchOpen = (messages) => {
+                        assert.deepEqual(messages[0], { type: "begin", endpointID: "freqHzIn" });
+                        assert.ok(messages.length > 1);
+                        assert.ok(messages.slice(1).every(({ type }) => type === "value"), "one host touch must stay open without nested begins or early ends");
+                    };
+
+                    await page.mouse.move(originX + 20, originY, { steps: 2 });
+                    const beforeKey = await frequencyMessages();
+                    assertTouchOpen(beforeKey);
+                    // A second keydown while held is how the browser delivers repeat.
+                    await page.keyboard.down("ArrowRight");
+                    await page.keyboard.down("ArrowRight");
+                    const afterKey = await frequencyMessages();
+                    assertTouchOpen(afterKey);
+                    assert.equal(afterKey.length, beforeKey.length + 2, "both keyboard edits still reach the host");
+                    assert.ok(afterKey.at(-1).value > beforeKey.at(-1).value);
+                    assert.equal(await target.getAttribute("data-dragging"), "");
+
+                    await page.mouse.move(originX + 35, originY, { steps: 2 });
+                    const continued = await frequencyMessages();
+                    assertTouchOpen(continued);
+                    assert.ok(continued.length > afterKey.length, "pointer motion continues to write under the original touch");
+                    if (termination === "pointercancel")
+                        await target.evaluate((element, id) => element.dispatchEvent(new PointerEvent("pointercancel", { pointerId: id })), pointerID);
+                    await page.mouse.up();
+                    await page.keyboard.up("ArrowRight");
+                    const complete = await frequencyMessages();
+                    assert.deepEqual(complete.slice(0, -1), continued);
+                    assert.deepEqual(complete.at(-1), { type: "end", endpointID: "freqHzIn" });
+                    assert.equal(await target.getAttribute("data-dragging"), null);
+
+                    await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearAutomation());
+                    await page.keyboard.press("ArrowRight");
+                    assert.deepEqual((await frequencyMessages()).map(({ type }) => type), ["begin", "value", "end"], "the next standalone key owns a fresh gesture");
+                } finally {
+                    await page.keyboard.up("ArrowRight");
+                    await page.mouse.up();
+                    await page.close();
+                }
+            });
+        }
+    }
+}

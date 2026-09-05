@@ -441,17 +441,22 @@ class EnhancerLiteView extends HTMLElement {
 
         this.values.set(endpointID, value);
         this.renderEndpoint(endpointID);
+        const pointerGestureEndpointIDs = (this.readoutDrag ?? this.drag)?.gestureEndpointIDs;
+        const gestureOwner = gestureEndpointIDs ?? (
+            pointerGestureEndpointIDs?.has(endpointID) ? pointerGestureEndpointIDs : undefined
+        );
         // A pointer gesture may edit frequency, amount and Q. Begin each
         // endpoint only when it changes, and keep it touched until release.
-        // Buttons and keyboard steps own one complete gesture per edit.
-        if (!gestureEndpointIDs?.has(endpointID)) {
-            gestureEndpointIDs?.add(endpointID);
+        // Keyboard edits to an already-touched endpoint share that ownership:
+        // JUCE does not nest gestures, so an atomic end would close the drag.
+        if (!gestureOwner?.has(endpointID)) {
+            gestureOwner?.add(endpointID);
             this.patchConnection.sendParameterGestureStart?.(endpointID);
         }
         try {
             this.patchConnection.sendEventOrValue(endpointID, value, 0);
         } finally {
-            if (!gestureEndpointIDs)
+            if (!gestureOwner)
                 this.patchConnection.sendParameterGestureEnd?.(endpointID);
         }
     }

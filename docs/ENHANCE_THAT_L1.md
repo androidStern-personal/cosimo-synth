@@ -13,10 +13,12 @@ acceptance. L3 owns the final downloads and clean macOS 15/26 qualification.
 The plugin is presented as **Enhance That** in its manifest, editor heading,
 accessible response label and generated package name (`EnhanceThat.vst3`). The
 existing eight sound controls now declare `automatable: true`. A changed button
-selection or arrow-key step sends one begin/value/end gesture. A pointer drag
+selection or standalone arrow-key step sends one begin/value/end gesture. A pointer drag
 begins each changed parameter once and closes it on release, cancellation,
 lost capture or editor removal. Modifier changes can add Q to the same drag.
-Incoming host parameter notifications update the display without writing
+Arrow keys editing a parameter already touched by the pointer reuse its gesture;
+they do not open a nested gesture or close the pointer's host touch. Incoming
+host parameter notifications update the display without writing
 values or gestures back to the host.
 
 The endpoint inventory remains:
@@ -72,11 +74,15 @@ duplicate discovery, or replace an unrelated plugin.
   discovery/identity/build configuration.
 - `npm run fx:build -- enhancer-lite`: worktree-local runtime built successfully.
 - `node --test kit/tests/test_effect_browser_preview_browser.mjs
-  tests/test_enhancer_lite_view_browser.mjs`: 43 passed, no skips. Both source and
+  tests/test_enhancer_lite_view_browser.mjs`: 51 passed, no skips. Both source and
   packaged view exercise all eight controls' gesture messages, multi-parameter
   drag/modifier behavior and incoming-host-value/editor-reopen behavior. The
   same suite retains layout, gestures, analyzer, factory/user presets,
   legacy-bank isolation and A–G snapshot checks.
+- The eight source/packaged readout/graph keyboard-during-drag cases failed on
+  `d8e9ee69` and passed after the ownership repair. They include repeated keydown
+  while the pointer remains held, continued pointer motion, release and cancel,
+  exactly one closing notification, and a subsequent standalone key gesture.
 - `npm run typecheck`: passed.
 - `git diff --check`: passed.
 
