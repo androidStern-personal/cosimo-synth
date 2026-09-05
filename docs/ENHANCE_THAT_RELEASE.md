@@ -110,8 +110,11 @@ L1's presentation rename changes the bundle filename from
 `CosimoEnhancerLite.vst3` to `EnhanceThat.vst3` while retaining the real plugin
 identity. The normal installer currently checks only the requested destination.
 It would treat the new filename as a first install and leave the old filename
-in the scan directory. This needs a scoped migration correction before the
-normal customer install and final installer can be qualified.
+in the scan directory. Commit `e5d37fac` adds a generic `previousProductName`
+config field and recoverable same-directory migration; 58 configuration tests
+pass. Independent source review and its new native fault-injection cases are
+pending the assigned resource slot. The final composed product still needs the
+legacy field applied to its sidecar through the L1/integration owner.
 
 Read-only local inventory found the old user-level bundle, version `0.1.0`,
 bundle identifier `dev.cosimo.enhancer-lite`, executable SHA-256
@@ -124,8 +127,9 @@ processor CID, capture it outside scan roots without overwriting anything,
 verify the replacement, and roll back to the original path on failure. Reject
 different identities and ambiguous duplicates. Test first install, same-path
 update, renamed-path update, interrupted promotion, rollback, and cross-root
-duplicates. Preserve a recoverable old bundle. Bob allocates shared-file
-ownership and native/install slots before this work.
+duplicates. Preserve a recoverable old bundle. Bob allocated the generic source
+files to L3; native/install slots remain separately allocated. The package's
+cross-root behavior is still unimplemented and unqualified.
 
 ## Qualification matrix and smallest remaining environment decision
 
