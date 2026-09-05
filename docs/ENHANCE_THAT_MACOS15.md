@@ -1,15 +1,15 @@
 # macOS 15 clean-customer continuation
 
-September 5, 2026: **the exact macOS 15.6.1 base restoration passed** in the
-separate `Enhance That macOS 15 Clean Customer` VM. VirtualBuddy displayed
-“Your macOS Virtual Machine is Ready!” and persisted `installFinished=true`.
-The subsequent allocated first boot reached Setup Assistant's Language screen
-with English selected. Its software-license notice is the current checkpoint;
-L3 stopped before advancing, then used normal GUI Pause under Bob's explicit
-allocation. The paused view is confirmed; the UI/native CPU lease is released.
-The VM backend remains present and retains memory.
-Guest OS readback, account creation and product/kit/host qualification remain
-pending. The earlier base-restoration slot was released before first boot.
+September 5, 2026: **base restoration and ordinary guest setup passed** in the
+separate `Enhance That macOS 15 Clean Customer` VM. Actual guest Terminal
+`sw_vers` reports **macOS 15.6.1, build 24G90**. The guest reached its desktop
+with a neutral local-only test account after Andrew explicitly approved the
+Apple macOS license through Woods and Bob.
+
+Normal Pause is confirmed and the UI/native CPU lease is released. Backend
+PID79640 remains present and retains memory; the setup monitor exited normally.
+Current observed host free space is **24.09 GiB**, with **20.484 GiB** allocated
+to the owned guest. Product, kit and host qualification remain pending.
 
 ## Executed restore preflight
 
@@ -95,7 +95,8 @@ observations of existing customer guests, not a measured fresh macOS 15 peak.
 The completed IPSW still occupies its 15.66 GiB allocation. The historical
 **44 GiB** guest-growth/scratch estimate was used for the completed base run;
 it is not 44 GiB of remaining capacity. Plan subsequent customer tools/builds
-from the fresh **26.55 GiB free** observation and measured 18.255 GiB guest.
+from the latest **24.09 GiB free** observation and measured 20.484 GiB guest
+after setup; the 26.55/18.255 GiB restoration values are historical.
 Customer-build growth remains unmeasured. Recheck disk and resource ownership
 before any further guest execution. No cleanup or deletion is implied.
 
@@ -147,7 +148,10 @@ No force kill, preference reset or app patch was used. Evidence and the narrower
 app-lifecycle hypothesis are in `macos15-base-preparation/NAVIGATION_DIAGNOSIS.md`;
 do not confuse the successful remedy with proof of the underlying framework bug.
 
-## First-boot checkpoint
+## First-boot checkpoint before license approval
+
+This section preserves the earlier stop and pause; the subsequent approved
+setup below resolves this checkpoint.
 
 Bob separately allocated first boot and nonpersonal base choices, with an
 explicit stop at the first actual legal, credential, security or account-creation
@@ -188,14 +192,60 @@ samples. Before/after guest screenshots and AX are retained in the task's
 native CUA transcript. Both old VM Config hashes and boot-disk mtimes were
 rechecked unchanged; the new saved Config hash also remains unchanged.
 
+## Completed ordinary setup
+
+Andrew explicitly answered YES to accepting Apple's macOS license for this
+new test VM. Woods relayed the approval and Bob allocated resume and ordinary
+setup, including a neutral local-only test user. This approval is recorded;
+do not ask again for the same macOS agreement and VM. It did not authorize
+Apple Account sign-in, other service agreements or unrelated permissions.
+
+Preflight verified the saved configuration and both old VM receipts unchanged,
+with 25.90 GiB host free space. The separate setup allocation allowed two GiB
+additional guest growth, an eight GiB host floor and a 30-minute checkpoint.
+L3 resumed only the new VM, completed setup and opened the actual guest desktop.
+The explicit macOS Software License Agreement and its confirmation were
+accepted after the existing usage notice, under that recorded approval.
+
+Setup used English/US defaults, no migration, a new neutral local account,
+no Apple Account or linked account recovery, no location services, optional
+analytics or Siri, no Screen Time configuration, and Light appearance.
+Credentials are fresh and retained in a separate owner-readable local file
+outside Git; their values are absent from reports and transcripts.
+The final update page's **Only Download Automatically** option was selected;
+no update installation was invoked. This leaves a future-download setting to
+account for before any longer guest run; no update-settings customization was
+performed after setup.
+
+The guest's About This Mac reports 15.6.1, and its Terminal `sw_vers` reports
+ProductName macOS, ProductVersion 15.6.1 and BuildVersion 24G90. CUA's modifier
+input did not preserve uppercase/underscore in this guest; mouse selection
+corrected the neutral account name before creation, and shell tab completion
+supplied the exact `sw_vers` command before Return. No mistyped command ran and
+no keyboard, GuestApp, share or permission configuration was changed.
+
+Normal host Pause then produced the blurred screen with central/toolbar Play.
+Backend PID79640 remains present, sampled at 0.0% CPU and RSS 11,017,952 KiB
+(about 10.51 GiB); this is not a memory-release claim. The UI/native CPU lease
+was released. Owned monitor PID90995 stopped through its stop-file and exited
+0 after the paused sample: **91 samples over 461.776 seconds**, no alerts,
+maximum growth **1.740 GiB**, peak/final owned allocation **20.484 GiB**, and
+minimum host free space **24.090 GiB**. Both old Config hashes and disk mtimes,
+and the new Config hash, remain unchanged. Private transport PID77849 stays up.
+
+Private `macos15-setup-20260905/FINAL_SETUP_REPORT.json` binds the setup receipt,
+monitor result, and screenshot hashes. `guest-sw-vers.png` and its transcribed
+text retain the actual OS readback; `apple-macos-terms.png` and
+`setup-complete-paused.png` retain the approved license and final paused UI.
+No tool, kit, plugin or DAW was installed or qualified in this setup allocation.
+
 ## Scheduled continuation
 
 The completed base run used the initial 30-minute observation allocation and
 finished inside its first four minutes of monitoring. That allocation is now
-released. The separate first-boot UI/native CPU lease is also released, with
-the guest paused at the actual license notice above. Bob is routing its
-disposition through Woods. Further Setup Assistant, guest `sw_vers` readback
-and customer tools require that disposition and appropriate resource allocation.
+released. First-boot and ordinary-setup UI/native CPU leases are also released.
+The guest is paused after desktop and actual OS readback. Customer tooling and
+qualification require the final candidate and a new resource allocation.
 Do not treat elapsed time or the 8 GiB space alert as an automatic kill rule.
 
 Cancellation has a concrete limitation: VirtualBuddy 2.1's backend cancels its
@@ -215,8 +265,8 @@ These implementation findings use the version-matched
 and [restore backend](https://github.com/insidegui/VirtualBuddy/blob/088351b0fc67e0b24b83e7954ad48314dda4ce04/VirtualCore/Source/Restore/Installation/VirtualizationRestoreBackend.swift),
 not a claim that the installed binary was rebuilt from those sources.
 
-Create a fresh local customer account without a maintainer Apple/GitHub login,
-SSH keys, home-directory shares or copied dependency/tool checkouts. Use only
+The fresh local customer account now exists without a maintainer Apple/GitHub
+login, SSH keys, home-directory shares or copied dependency/tool checkouts. Use only
 the customer kit, tool archives and documented setup/dependency delivery.
 An approved read-only delivery disk/share may contain the exact downloads and
 test audio only. A host-loopback feed URL is not automatically reachable in a
