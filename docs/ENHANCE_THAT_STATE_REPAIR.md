@@ -169,14 +169,22 @@ boundary, even though the original full product failure is already reproduced.
   decision is made by this local diagnostic repair. Final migration still uses
   L3's reviewed identity-gated installer; no parser or migration bypass was added.
 - Owned source plus CHOC occupies **101 MiB**. Proposed A/B builds are estimated
-  at **0.4–0.8 GiB** total; a later isolated product rebuild adds approximately
-  **0.2–0.4 GiB**, based on the frozen 204 MiB product tree. Request a conservative
-  **2 GiB total native-work allowance**, excluding any full compiler build.
-  Actual allocation and cleanup remain serialized by Bob.
+  at **0.4–0.8 GiB** total. The **smallest next gate requests a 1 GiB ceiling for
+  the two serial gain-regression builds and runs only**: four build jobs,
+  ten-minute owned watchdog per configure/build variant, 30 seconds per runtime,
+  and 25 minutes overall. First build/run the exact original header as the
+  negative control; preserve its expected failures before building/running the
+  repair. Require identical generated `cmajor_plugin.cpp` bytes on both sides.
+  No product target or compiler build is part of this request.
+- A later isolated product rebuild adds approximately **0.2–0.4 GiB**, based on
+  the frozen 204 MiB product tree. Reserve a conservative **2 GiB total allowance**
+  if that later phase is authorized. No product retry is allocated. Actual
+  allocation and cleanup remain serialized by Bob.
 - Last measured free space was **45.77 GiB**; L3's **44 GiB reserve** leaves about
-  1.77 GiB. That is below the conservative 2 GiB allowance. Recheck space and
-  obtain Bob's resource allocation before any native step; do not reclaim
-  another task's files. No native slot is currently held by L1.
+  1.77 GiB. The proposed 1 GiB A/B-only ceiling fits that snapshot; the combined
+  2 GiB later-phase allowance does not. Recheck space and obtain Bob's resource
+  allocation before any native step; do not reclaim another task's files.
+  No native slot is currently held by L1.
 
 ## Preserved evidence and remaining gates
 
