@@ -188,7 +188,9 @@ public:
 
     bool settle(const Sound& target, const juce::String& stage)
     {
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        const auto started = std::chrono::steady_clock::now();
+        const auto deadline = started + std::chrono::seconds(2);
+        auto readbackCompleted = started;
         int consecutive = 0;
         int blocks = 0;
         bool finite = true;
@@ -200,18 +202,21 @@ public:
             juce::MessageManager::getInstance()->runDispatchLoopUntil(5);
             finite = process() && finite;
             actual = current();
+            readbackCompleted = std::chrono::steady_clock::now();
             bool matches = true;
             for (size_t index = 0; index < controls.size(); ++index)
                 matches = sameValue(index, actual[index], target[index]) && matches;
             consecutive = matches ? consecutive + 1 : 0;
             ++blocks;
         }
-        while (finite && (blocks < 32 || consecutive < 8) && std::chrono::steady_clock::now() < deadline);
+        while (finite && (blocks < 32 || consecutive < 8) && readbackCompleted < deadline);
 
         report.emit("values", stage, {{ "expected", values(target) }, { "actual", values(actual) },
-                                      { "processedBlocks", blocks }, { "stableBlocks", consecutive }});
+            { "processedBlocks", blocks }, { "stableBlocks", consecutive },
+            { "readbackElapsedMs", std::chrono::duration<double, std::milli>(readbackCompleted - started).count() }});
         bool passed = report.check(finite, stage, "All directly processed output samples are finite");
-        passed = report.check(blocks >= 32 && consecutive >= 8, stage, "Values settle within two seconds") && passed;
+        passed = report.check(blocks >= 32 && consecutive >= 8 && readbackCompleted < deadline,
+                              stage, "Values settle before the two-second deadline") && passed;
         for (size_t index = 0; index < controls.size(); ++index)
             passed = report.check(sameValue(index, actual[index], target[index]), stage,
                                   juce::String(controls[index].endpoint) + " normalized readback") && passed;

@@ -10,15 +10,19 @@ source `954207e4`. It never builds the product, installs a bundle, scans global
 plug-in directories, creates an editor, opens an audio device or changes the
 shared desktop host. The Node runner checks the exact executable and canonical
 bundle payload hashes before and after. Its two-minute watchdog signals only
-the process group it creates. Output requires a new evidence directory and
+the process group it creates. After timeout it awaits group exit independently
+of leader exit, allowing two seconds after SIGTERM and then two seconds after
+SIGKILL; surviving members produce an explicit cleanup failure. Output requires a new evidence directory and
 includes the actual host executable hash, JSONL assertions, process output and
 saved native state blobs.
 
-Source-only checks: `node --check tools/enhance_that_native_probe/run.mjs` and
+Checks without native plug-in activity: `node --check tools/enhance_that_native_probe/run.mjs` and
 `node --test tools/enhance_that_native_probe/run.test.mjs`. These exercise real
-argument/hash/output-location refusals with an inert temporary file, and do
-not load the candidate or establish C++ build/runtime correctness. The allowed
-execution path and watchdog still require the scheduled native run.
+argument/hash/output-location refusals with an inert temporary file. An inert
+Node process-group regression also requires cleanup of a SIGTERM-resistant
+descendant after its leader exits; it failed before the watchdog repair and
+passes afterward. These do not load the candidate or establish C++ build/runtime
+correctness. The actual candidate path still requires the scheduled native run.
 
 ## Assertions and limits
 
@@ -34,7 +38,10 @@ execution path and watchdog still require the scheduled native run.
   equality for discrete values. This checks finite processing, not audible
   quality or equivalence to a previous DSP implementation.
 - Each transition pumps the message loop and processes at least 32 blocks,
-  requiring eight consecutive matching readbacks within two seconds. Host
+  requiring eight consecutive matching readbacks completed before two seconds.
+  The final readback timestamp is asserted and its elapsed milliseconds are
+  recorded, so a matching loop body that returns late cannot pass. The outer
+  watchdog still bounds a blocked native call. Host
   parameter handles are reacquired after pumping, since a restart can rebuild
   them. The waits accommodate asynchronous dispatch without extending a failed
   deadline or resending expected values during restoration.

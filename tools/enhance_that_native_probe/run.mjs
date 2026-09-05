@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import { constants } from "node:fs";
 import { access, mkdir, open, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { hashInstalledPayload, sha256File } from "../../kit/scripts/toolchain.mjs";
 
 const expectedBinary = "2675c6bb73a1d293b069fc592f96329d80d5c047c313b1b9b73452361a6a6c86";
@@ -19,34 +21,57 @@ function matchesCandidate(observed) {
     return observed.binarySha256 === expectedBinary && observed.payloadSha256 === expectedPayload;
 }
 
-async function runChild(probe, bundle, evidence) {
+async function stopOwnedGroup(pid) {
+    const signal = (value) => {
+        try { process.kill(-pid, value); }
+        catch (error) { if (error?.code !== "ESRCH") throw error; }
+    };
+    const exists = () => {
+        try { process.kill(-pid, 0); return true; }
+        catch (error) { if (error?.code === "ESRCH") return false; throw error; }
+    };
+    const waitForExit = async () => {
+        const deadline = performance.now() + 2_000;
+        while (exists()) {
+            if (performance.now() >= deadline) return false;
+            await delay(20);
+        }
+        return true;
+    };
+
+    signal("SIGTERM");
+    if (await waitForExit()) return;
+    signal("SIGKILL");
+    if (!await waitForExit())
+        throw new Error(`Timed-out process group ${pid} remains after SIGKILL; cleanup could not be confirmed.`);
+}
+
+export async function runChild(probe, bundle, evidence, timeoutMs = wallTimeoutMs) {
     const output = await open(path.join(evidence, "process.log"), "wx", 0o600);
     let wallTimer;
-    let killTimer;
-    let timedOut = false;
     try {
-        return await new Promise((resolve, reject) => {
-            const child = spawn(probe, [bundle, evidence], {
-                cwd: evidence,
-                detached: true,
-                stdio: ["ignore", output.fd, output.fd],
-            });
-            const signalOwnedGroup = (signal) => {
-                if (child.pid === undefined) return;
-                try { process.kill(-child.pid, signal); }
-                catch (error) { if (error?.code !== "ESRCH") reject(error); }
-            };
-            wallTimer = setTimeout(() => {
-                timedOut = true;
-                signalOwnedGroup("SIGTERM");
-                killTimer = setTimeout(() => signalOwnedGroup("SIGKILL"), 2_000);
-            }, wallTimeoutMs);
-            child.once("error", reject);
-            child.once("close", (code, signal) => resolve({ code, signal, timedOut }));
+        const child = spawn(probe, [bundle, evidence], {
+            cwd: evidence,
+            detached: true,
+            stdio: ["ignore", output.fd, output.fd],
         });
+        const closed = new Promise((resolve, reject) => {
+            child.once("error", reject);
+            child.once("close", (code, signal) => resolve({ code, signal }));
+        });
+        const expired = Symbol("wall-timeout");
+        const timeout = new Promise((resolve) => {
+            wallTimer = setTimeout(() => resolve(expired), timeoutMs);
+        });
+        const first = await Promise.race([closed, timeout]);
+        if (first !== expired) return { ...first, timedOut: false };
+
+        // Once timeout wins, cleanup owns completion. Leader close can no longer
+        // cancel escalation or release the output handle while descendants live.
+        await stopOwnedGroup(child.pid);
+        return { ...await closed, timedOut: true, processGroupCleaned: true };
     } finally {
         clearTimeout(wallTimer);
-        clearTimeout(killTimer);
         await output.close();
     }
 }
@@ -102,7 +127,9 @@ async function main() {
     process.exitCode = passed ? 0 : 1;
 }
 
-await main().catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 2;
-});
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    await main().catch((error) => {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 2;
+    });
+}
