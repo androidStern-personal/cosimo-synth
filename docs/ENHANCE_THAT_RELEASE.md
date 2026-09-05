@@ -7,9 +7,37 @@ Authority: the September 5 approved Enhance That launch handoff, SHA-256
 `7ab692893201e3943912fcde4534146eb9bdcfe5c3014b7ed49f4535a8ee60b9`.
 This is preparation, not a frozen candidate, qualified download, or publication.
 
-## Current verified inputs
+## Proposed coherent repair pin — source only
 
-Read-only observations on September 5, 2026:
+Bob authorized an isolated source proposal for Cmajor
+`2fc4c2dce2a1b625c1578409e10bf312a5ac39b5`; integration requires independent
+review. `scripts/enhance-that-release-config.mjs` owns Enhance That's expected
+native inputs, with unchanged CHOC `11f7dc63` and JUCE `501c0767`. The packager
+checks declarations before building and retains the shared strict post-build
+checkout, origin, clean-tree and CHOC-gitlink validation.
+
+The existing single CMake pin supplies both SDK and tool-producer checkouts;
+`kit/toolchain.json` proposes that same commit. Both `tools/v0.1.3/` archives
+remain unproduced and unqualified with blank hashes. Producer, archive/payload
+receipt validation and setup code are unchanged; old tools cannot be relabelled.
+SeqFX's dependency expectations and tool attestation remain at `7820a453` and
+deliberately reject the proposed declaration until its owner acts.
+
+Focused source checks: seven Enhance That dependency tests, three shared
+provenance tests and three release-contract tests pass. The shared Git fixture
+needs `TMPDIR=/private/tmp` on this host to avoid `/var` versus `/private/var`
+origin spelling; the initial failed run is retained. A separate read-only probe
+through a synthetic CMake cache refuses both the actual old `7820a453` checkout
+and L1's diagnostic `2fc4c2dc` checkout with its local origin. That diagnostic
+checkout cannot substitute for the normal provenance-verified production input.
+These are source/metadata checks, not native build or tool-archive qualification.
+No build, download, cache change, receipt, installation or publication was made;
+the macOS 15 VM stays paused and the private transport stays in place.
+
+## Initial verified inputs
+
+Historical preparation observations on September 5, 2026; later source and VM
+work is recorded above and in `ENHANCE_THAT_MACOS15.md`:
 
 | Input | Observation | Boundary |
 | --- | --- | --- |

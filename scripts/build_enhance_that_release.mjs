@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { effectPlugins, repoRoot } from "../kit/fx/build-effect.mjs";
 import { inspectVST3Bundle } from "../kit/scripts/install_vst3.mjs";
-import { seqFxReleaseConfig } from "./seqfx-release-config.mjs";
+import { enhanceThatNativeDependencies } from "./enhance-that-release-config.mjs";
 import { renderEnhanceThatPreinstall } from "./enhance-that-installer.mjs";
 import {
     adHocVst3SigningArgs, assertArchiveTreeContainsOnlyFilesAndDirectories,
@@ -15,6 +15,7 @@ import {
     captureActualNativeDependencyProvenance, createDeterministicZip,
     getReleaseGitState, normalizePayloadModes, normalizeTreeTimestamps,
     notarizeStapleAndAssess, parseJsonWithTrailingCommas, payloadInventoryErrors,
+    readDeclaredNativeDependencyProvenance,
     signInstaller, signStagedVst3,
 } from "./build_seqfx_beta_release.mjs";
 
@@ -272,7 +273,7 @@ export async function main(args = process.argv.slice(2)) {
     if (!/^\d+\.\d+\.\d+$/u.test(kit.version)) throw new Error("Invalid kit release version.");
     const config = {
         identity: { ...identity, pluginVersion: patch.version }, releaseVersion: kit.version,
-        nativeRoot: plugin.juceOut, nativeDependencies: seqFxReleaseConfig.nativeDependencies,
+        nativeRoot: plugin.juceOut, nativeDependencies: enhanceThatNativeDependencies,
         paths: { nativeBuildCmakeCache: `${plugin.juceOut}/_build/CMakeCache.txt` },
         builtVst3: path.join(repoRoot, plugin.juceOut, "_build/plugin/EnhanceThat_artefacts/Release/VST3/EnhanceThat.vst3"),
         identityProbe: path.join(repoRoot, plugin.juceOut, "_build/identity_probe/kit_vst3_identity_probe"),
@@ -296,6 +297,7 @@ export async function main(args = process.argv.slice(2)) {
     if (process.platform !== "darwin") throw new Error("Enhance That packaging requires macOS.");
     if (errors.length) throw new Error(errors.join("\n"));
     if (source.worktreeStatus) throw new Error("Release packaging requires a clean worktree including untracked files.");
+    await readDeclaredNativeDependencyProvenance(config);
     if (!/^[1-9][0-9]*$/u.test(process.env.COSIMO_CMAKE_JOBS ?? ""))
         throw new Error("Set COSIMO_CMAKE_JOBS to the native job budget allocated for this run.");
     if (!options.auDeferred?.trim()) throw new Error("Record the explicit AU defer decision; this entrypoint packages VST3 only.");
