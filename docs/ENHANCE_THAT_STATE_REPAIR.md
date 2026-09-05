@@ -2,11 +2,13 @@
 
 ## Review checkpoint
 
-September 5, 2026. The source diagnosis and proposed repair are frozen for Bob's
-independent review. **No repaired build or runtime result is claimed.** Bob's
-current authorization stops before compiler/code generation, native builds or
-retries. The original failed VST3, host fixture, state blobs and results remain
-the actual runtime witness. The smaller regression below is prepared but unrun.
+September 5, 2026. L2 independently passed the corrected source, and Bob's
+subsequent isolated gain A/B completed: **original baseline 31 predicted
+failures; corrected wrapper 104/104 assertions passed** with identical generated
+C++. See the [executed A/B result](ENHANCE_THAT_STATE_AB_RESULTS.md). The original
+failed product VST3, host fixture, state blobs and results remain unchanged.
+Product retry is not covered by this minimal regression; the native slot is
+released and further native work requires separate routing.
 
 - Owned Cmajor clone: `build/l1-cmajor-state-repair`, relative to L1's
   `/Users/winterfell/.codex/worktrees/1388/cosimo-synth` worktree.
@@ -20,7 +22,7 @@ the actual runtime witness. The smaller regression below is prepared but unrun.
   application boundary and real callback regressions. Correction scope is
   23 header lines, 70 regression lines and README policy clarification.
   The complete repair from base changes one production header: 53 insertions /
-  9 deletions. Corrected source is awaiting independent re-review.
+  9 deletions. Corrected source passed independent re-review and the isolated A/B.
 - No shared CPM checkout, primary Cmajor checkout, dependency pin, compiler
   receipt, JUCE source, product DSP, identity, endpoint or migration code changed.
 
@@ -84,9 +86,10 @@ appeared in the two-second processing/message window. Neither observation
 establishes audio restoration: `getUpdatedState` reads patch parameter values
 (`cmaj_JUCEPlugin.h:536`), and their serialization is not an audio oracle.
 
-This is a source-supported diagnosis, not yet a baseline/repaired experimental
-confirmation of the smaller witness. No synthetic reimplementation is offered
-as runtime proof.
+The smaller real-wrapper A/B now experimentally confirms the original mechanisms
+and the corrected parameter/state/listener/audio contract. No synthetic
+reimplementation is offered as runtime proof; repaired product-host qualification
+remains separate.
 
 ## Restore contract and narrow repair
 
@@ -132,7 +135,9 @@ during that gap. At `f229dd1a`, T recursively publishes, then outer S overwrites
 it. The correction lets S finish before applying pending T. The pending state
 is cleared before each application and the active flag uses a scoped guard,
 so nested callbacks cannot start another renderer transaction on that stack.
-This remains source-established reachability, not a runtime reproduction.
+The intermediate `f229dd1a` failure remains source-established reachability; it
+was not compiled as a third variant. The corrected callback contract passed its
+real runtime cases in the authorized A/B.
 
 The shared callback repair and removal of deduplication also affect the generic
 JIT wrapper. JIT compilation remains asynchronous; JIT qualification is not
@@ -140,7 +145,7 @@ covered by this compiled-gain witness. The coordinator must account for that
 shared-header scope before advancing a global Cmajor pin. AU and other host
 threading contracts also remain separate qualification surfaces.
 
-## Minimal faithful witness prepared
+## Minimal faithful witness
 
 `build/l1-cmajor-state-repair/tests/juce_plugin_state/` contains a real generated
 one-parameter stereo gain patch and a JUCE console regression. It exercises the
@@ -167,11 +172,13 @@ both sides and changes only the Cmajor include tree. No mock host-cache test is
 substituted for the original VST3 host run. A passing gain test would establish
 the wrapper/DSP mechanism for this fixture, not Enhance That audio acceptance.
 
-Performed checks: patch JSON parses; all staged source passes `git diff
---check`; scoped diff and pinned dependency paths reviewed. **CMake configure,
-Cmajor generation, C++ compilation and the new regression have not run.**
-Runtime red/green confirmation remains held under Bob's explicit source-first
-boundary, even though the original full product failure is already reproduced.
+Source checks passed before native allocation. The subsequent authorized run
+configured, generated and compiled both variants, then observed exactly the
+predicted 31 baseline failures and all 104 corrected assertions passing. Complete
+generated C++ matched before corrected compilation. Commands, timing, hashes,
+actual resource usage and process release are in the
+[A/B result](ENHANCE_THAT_STATE_AB_RESULTS.md); the build plan below records the
+constraints used to prepare that allocation.
 
 ## Build, dependency and disk implications
 
@@ -241,8 +248,7 @@ The original `state-repair-source-01` record and bundle remain unchanged;
 the latter's SHA-256 was reverified as
 `b489c4c7020129653cde679ed4950b98a321cc7d20642d718fb3f13d10bcaa56`.
 
-Next: independent source review, authorized baseline/repaired gain witness,
-then an independently reviewed product rebuild/fixture-pin checkpoint and the
+Next: an independently reviewed product rebuild/fixture-pin checkpoint and the
 original exact-host state/validator gate. Product audio, actual editor
 notifications, DAW projects, AU, installation/migration, listening, clean macOS
 15/26 and release acceptance remain unperformed. No user account, publication,

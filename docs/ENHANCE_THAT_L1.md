@@ -248,5 +248,8 @@ be routed after this released slot.
 The subsequent [state source repair checkpoint](ENHANCE_THAT_STATE_REPAIR.md)
 traces the deduplication and notification failures and freezes a one-header
 Cmajor repair plus a real gain/DSP regression in L1's owned clone. The repair
-and smaller witness are unbuilt and unrun; native retry remains held for review
-and resource allocation. The failed binary and original evidence are preserved.
+subsequently passed L2 source review and the [isolated native gain
+A/B](ENHANCE_THAT_STATE_AB_RESULTS.md): exactly 31 predicted baseline failures,
+104/104 corrected assertions, identical generated C++. The slot is released;
+product retry remains separately routed. The failed binary and original evidence
+are preserved.
