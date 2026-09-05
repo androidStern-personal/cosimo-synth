@@ -54,6 +54,24 @@ staged file survived cleanup. Bundle identity paths cannot be symlinks;
 contained relative resource links are supported, while escaping links stop
 installation.
 
+**Renamed bundles explicitly name the prior filename.** A product config can
+set `previousProductName` to its former filename stem. The production installer
+passes that sibling path as `previousDestination`. Both filenames' existing
+transaction locks are respected; both installed filenames being present is an
+ambiguous state and stops installation before mutation. The old binary must
+pass the same actual signature and bundle/processor identity checks as a
+same-path update. A failed promotion restores its original filename.
+
+After a successful rename, the entire transaction is moved exclusively to a
+unique sibling `.<new-name>.vst3.previous-<id>` directory outside the scan folder.
+It keeps the verified `previous.bundle` plus `recovery.json`, which records the
+old/new filenames, prior identity and payload digest. The pending-install locks
+are released, so a later normal update can proceed without deleting this saved
+copy. No automatic cleanup of these retained migration backups is performed.
+The caller supplies the legacy name; the generic kit knows no product-specific
+names or identities. This API only migrates within one install directory;
+user/system-root migration requires separately qualified package behavior.
+
 ## Verification boundary
 
 `npm run test:kit:native-install` in a customer repository runs
@@ -68,5 +86,7 @@ dependency-download requirements. Non-macOS runs skip the native cases.
 
 The gate covers identity collisions, signatures, markers, failed copy and
 promotion, rollback, concurrent replacements, subprocess failures, and symlink
-containment. It does not install into a user's plugin folder or prove DAW scan,
+containment. Renamed-path cases check one resulting scan entry, retained old
+bytes, old/new ambiguity, wrong identities, old-filename locking and restoration
+to the original filename. It does not install into a user's plugin folder or prove DAW scan,
 display, editor, parameter, or audio behavior.

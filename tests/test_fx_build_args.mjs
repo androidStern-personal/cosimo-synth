@@ -461,6 +461,8 @@ test("plugin config build identifiers and worker paths must be separator-free or
         [{ cmakeTarget: "../Escape" }, /invalid "cmakeTarget" value/],
         [{ productName: "Evil/../../Product" }, /invalid "productName" value/],
         [{ productName: ".." }, /invalid "productName" value/],
+        [{ previousProductName: "../Other" }, /invalid "previousProductName" value/],
+        [{ previousProductName: ["OldName"] }, /invalid "previousProductName" value/],
         [
             { workerSource: "../outside/worker.ts", workerOut: "worker.js" },
             /invalid "workerSource" value/,
@@ -481,6 +483,22 @@ test("plugin config build identifiers and worker paths must be separator-free or
             );
         });
     }
+});
+
+test("explicit former bundle filename reaches the installer config without changing identity", async () => {
+    const { buildModule } = await loadBuildModules();
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "renamed_tone", "Tone.cmajorpatch", { name: "Tone" }, {
+            productName: "NewTone", previousProductName: "OldTone",
+        });
+        const plugin = buildModule.discoverEffectPlugins({ fxRoot })["renamed-tone"];
+        assert.equal(plugin.productName, "NewTone");
+        assert.equal(plugin.previousProductName, "OldTone");
+        await writeFixturePlugin(fxRoot, "renamed_tone", "Tone.cmajorpatch", { name: "Tone" }, {
+            productName: "NewTone", previousProductName: "NewTone",
+        });
+        assert.throws(() => buildModule.discoverEffectPlugins({ fxRoot }), /previousProductName must differ/);
+    });
 });
 
 test("the product object is read at discovery and derives the manifest-facing identity", async () => {

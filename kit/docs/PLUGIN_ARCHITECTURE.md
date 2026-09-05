@@ -122,6 +122,12 @@ Every other field is optional and falls back to a derivation:
   `_build/generated-project-stage` into durable `juceOut` so unchanged files
   keep their timestamps while removed, changed, or missing outputs converge to
   the current inputs. `--clean` remains the explicit full `juceOut` reset.
+- `previousProductName`: optional former bundle filename stem when renaming a
+  plugin while retaining its identity. It must differ from `productName` and
+  use the same identifier syntax. Installation verifies the actual old binary,
+  migrates within the user scan directory, and preserves a recoverable copy
+  outside it; old/new coexistence or a different identity stops the install.
+  See [native installation](decisions/native-vst3-installation.md).
 - `jitInstallRuntime`: defaults to true when the plugin has a worker bundle.
 
 Config-only fields: `workerSource`/`workerOut` (repo-relative worker entry and
