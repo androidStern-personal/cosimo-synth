@@ -104,6 +104,22 @@ source-map policy. It is not an Enhance That build command. Final Enhance That
 packaging needs its own scoped entry point; this preparation does not claim
 that entry point or final signed artifacts already exist.
 
+The L1 build from `954207e4` still embeds UI source maps. Commit `5d0a84d1`
+adds generic `FX_DISTRIBUTABLE_RUNTIME=1` support while preserving normal builds
+and the existing SeqFX switch. All 59 configuration tests pass. An actual L3
+runtime build demonstrated the failure before the fix, then absence of the map
+file/reference after it. The JavaScript excluding only the map-reference line
+is byte-identical across ordinary and distribution builds. Final packaging
+must use this switch and recheck its own generated and extracted native bytes.
+
+Read-only L1 inventory confirms generated static-performer DSP, the
+`GeneratedPlugin` wrapper, QuickJS, React and JUCE link inputs. Its dynamic
+dependencies are Apple frameworks/system libraries, with no LLVM linkage
+observed. Hashed source-map, generated-C++, link-recipe and notice inputs are
+retained in the private evidence directory. These are preparation inputs;
+the final no-JIT and notice records must come from the final own build and
+extracted download.
+
 ## Rename migration discovered during preparation
 
 L1's presentation rename changes the bundle filename from
@@ -116,8 +132,9 @@ pass. Independent re-review passed the reporting repair in `4a4049e6`: failed
 archive verification names the observed retained paths, and failure to remove
 the old filename guard produces an explicit cleanup warning. Both workflow
 replays passed, using scripted signing/factory adapters; native fault-injection
-cases remain pending the assigned resource slot. The final composed product still needs the
-legacy field applied to its sidecar through the L1/integration owner.
+cases remain pending the assigned resource slot. The final composed product
+still needs the legacy field applied to its sidecar through the L1/integration
+owner.
 
 Read-only local inventory found the old user-level bundle, version `0.1.0`,
 bundle identifier `dev.cosimo.enhancer-lite`, executable SHA-256
