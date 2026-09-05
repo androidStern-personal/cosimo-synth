@@ -3,9 +3,12 @@
 September 5, 2026: **the exact macOS 15.6.1 base restoration passed** in the
 separate `Enhance That macOS 15 Clean Customer` VM. VirtualBuddy displayed
 “Your macOS Virtual Machine is Ready!” and persisted `installFinished=true`.
-The VM is stopped in Library. First boot, Setup Assistant/account creation,
-guest OS readback and product/kit/host qualification remain pending.
-The installation and UI resource slot has been released to Bob.
+The subsequent allocated first boot reached Setup Assistant's Language screen
+with English selected. Its software-license notice is the current checkpoint;
+L3 stopped before advancing. The guest is running and normal GUI Pause is
+available; the first-boot resource slot has not yet been released.
+Guest OS readback, account creation and product/kit/host qualification remain
+pending. The earlier base-restoration slot was released before first boot.
 
 ## Executed restore preflight
 
@@ -49,8 +52,9 @@ completed. The model hash is
 `976e66740c64041cf9f127588f93eabf7efb9e7d3cbaee9582bcded88ba5e8d3`.
 Completion was observed in the GUI and metadata by 10:46 UTC. Done closed the
 owned installer and returned to Library with the new VM and both old guests.
-No terms, sign-in or security prompt was encountered or accepted. No
-post-install guest boot or customer software installation was performed.
+No terms, sign-in or security prompt was encountered or accepted during
+restoration. Post-install first boot was performed only under the subsequent
+allocation below; no customer software installation has been performed.
 
 The five-second monitor recorded **48 samples over 242.727 seconds**:
 
@@ -62,7 +66,8 @@ The five-second monitor recorded **48 samples over 242.727 seconds**:
 | Fresh free space after cleanup | 26.553 |
 
 No alert or installer cancellation occurred. Monitor PID75020 exited normally;
-the VZ backend PID75106 exited. VirtualBuddy PID71906 remains idle at Library.
+the restoration VZ backend PID75106 exited. VirtualBuddy PID71906 was idle at
+Library when that restoration slot was released.
 Both old saved Config hashes are unchanged, and their boot-disk mtimes remain
 September 4; no old guest was booted, stopped, edited or removed. Private
 transport PID77849 remains running under its separate keepalive instruction.
@@ -141,13 +146,38 @@ No force kill, preference reset or app patch was used. Evidence and the narrower
 app-lifecycle hypothesis are in `macos15-base-preparation/NAVIGATION_DIAGNOSIS.md`;
 do not confuse the successful remedy with proof of the underlying framework bug.
 
+## First-boot checkpoint
+
+Bob separately allocated first boot and nonpersonal base choices, with an
+explicit stop at the first actual legal, credential, security or account-creation
+checkpoint. L3 opened only the new VM and clicked Play. The actual guest showed
+Hello; clicking its start control reached Language, with English already
+selected. No guest language choice or forward action was made.
+
+The Language page displays this notice beneath its language list and forward
+arrow (there is no separate Agree/Disagree button):
+
+> By using this software, you agree to the terms of the software license agreement for the software. You can view the terms of the software license agreement at https://www.apple.com/legal/sla/
+
+L3 stopped there and reported the exact notice to Bob. Normal VirtualBuddy
+Pause is visibly enabled. The guest remains running pending disposition;
+availability of Pause does not prove it was used. Guest `sw_vers` is unavailable
+at this checkpoint and has not been substituted with restore-image metadata.
+No account, credentials, permissions, tools, kit, plugin or DAW were provisioned.
+
+The separate five-second first-boot monitor PID79442 remains active; the owned
+VZ backend is PID79640. Private evidence is
+`macos15-first-boot-20260905/language-license-checkpoint.json` and
+`samples.jsonl`; actual guest screens are in the task's native CUA transcript.
+Both old VM Config hashes and boot-disk mtimes were rechecked unchanged.
+
 ## Scheduled continuation
 
 The completed base run used the initial 30-minute observation allocation and
 finished inside its first four minutes of monitoring. That allocation is now
-released. First boot/Setup Assistant, guest `sw_vers` readback and customer tools
-require subsequent resource allocation. Stop at any actual terms, personal
-authentication or security-permission checkpoint; none has yet been reached.
+released. The separate first-boot allocation is held at the actual license
+notice above. Further Setup Assistant, guest `sw_vers` readback and customer
+tools require that checkpoint's disposition and appropriate resource allocation.
 Do not treat elapsed time or the 8 GiB space alert as an automatic kill rule.
 
 Cancellation has a concrete limitation: VirtualBuddy 2.1's backend cancels its
