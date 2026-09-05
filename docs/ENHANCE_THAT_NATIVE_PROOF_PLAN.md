@@ -1,9 +1,10 @@
 # Enhance That: bounded native proof proposal
 
-Status: proposal only, September 5, 2026. Bob has released L1's native slot to
-L2. No command below has been executed, no AU binary has been built, and no
-installation, validator run or editor launch is authorized by this document.
-The completed VST3 build is recorded in [the L1 handoff](ENHANCE_THAT_L1.md).
+Planning record, September 5, 2026. Bob subsequently authorized the headless
+VST3 phases: fixture build passed, but pluginval and focused native state checks
+failed. Exact results and slot release are recorded in
+[the L1 handoff](ENHANCE_THAT_L1.md). AU and editor phases remain proposed; this
+document does not authorize further execution or installation.
 
 Recommended order: qualify the existing VST3 through an offline host first;
 then use the already-generated AU target for one bounded feasibility attempt.

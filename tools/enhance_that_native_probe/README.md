@@ -1,8 +1,12 @@
 # Enhance That exact-VST3 fixture
 
-Source checkpoint only. **Not compiled or run.** Bob authorized preparation
-while L5 owns the audible slot; native configure/build, validation, UI and AU
-registration remain held. The broader plan is
+Frozen source `9c201678` was compiled and run in Bob's September 5 native slot.
+**Build passed; state qualification failed.** Inventory, analyzer range,
+deterministic value changes and finite processing passed; all three state
+restore cases retained stale hosted values, and repeated identical-state restore
+also retained edited state bytes. The slot is released; further native work,
+editor use and AU registration need separate routing. Results are recorded in
+[`docs/ENHANCE_THAT_L1.md`](../../docs/ENHANCE_THAT_L1.md). The broader plan is
 [`docs/ENHANCE_THAT_NATIVE_PROOF_PLAN.md`](../../docs/ENHANCE_THAT_NATIVE_PROOF_PLAN.md).
 
 This independent stock-JUCE host loads the already-built VST3 from reviewed
@@ -22,7 +26,7 @@ argument/hash/output-location refusals with an inert temporary file. An inert
 Node process-group regression also requires cleanup of a SIGTERM-resistant
 descendant after its leader exits; it failed before the watchdog repair and
 passes afterward. These do not load the candidate or establish C++ build/runtime
-correctness. The actual candidate path still requires the scheduled native run.
+correctness. The subsequent actual-candidate run is recorded separately above.
 
 ## Assertions and limits
 

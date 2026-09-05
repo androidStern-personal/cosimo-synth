@@ -116,8 +116,9 @@ The VST3-only offline fixture source is prepared under
 [`tools/enhance_that_native_probe`](../tools/enhance_that_native_probe/README.md).
 It is a separate host with locked artifact hashes, eight-control assertions,
 same/fresh-instance and repeated identical-state restoration, and owned evidence
-and timeout handling. C++ configure/build and native execution remain held;
-source/refusal checks do not establish host behavior or editor notifications.
+and timeout handling. The frozen fixture was subsequently compiled and run;
+the state qualification failure is recorded below. Editor notifications remain
+unproven, and further native execution requires Bob's routing.
 
 Separate product metadata checkpoint `08885585` declares
 `previousProductName: "CosimoEnhancerLite"` for L3's reviewed identity-gated
@@ -126,9 +127,10 @@ contract; L1's older local kit parser does not yet accept that field. Actual
 L3 discovery against this worktree's product files passes with the current and
 prior basenames and all permanent identity fields preserved. No install ran.
 
-The reviewed candidate's VST3 build and binary identity checks passed. Still
-needed: enumerate all eight parameters through a native host, exercise
-continuous/discrete automation and state restoration, and settle the AU outcome with a bounded
+The reviewed candidate's VST3 build, binary identity and focused native
+parameter/value/finite-processing checks passed. State qualification failed as
+recorded below. Still needed: resolve and requalify native state restoration,
+prove actual editor notifications, and settle the AU outcome with a bounded
 generated-project/free-host proof or explicit defer. Retain Apple Silicon macOS
 15 and 26 in scope. Final signing/notarization, downloadable artifacts,
 installation/rescan, disk-saved project recall, playback/offline export,
@@ -176,3 +178,69 @@ build verifies the existing CHOC WebView markers. No compiler source rebuild,
 plugin installation, DAW or AU-host launch, pluginval, native automation/state
 playback or listening occurred in this slot. AU source files listed under the
 VST3 target are JUCE's format-guarded compilation units, not a built AU result.
+
+## Headless native qualification — September 5, 2026
+
+**Overall result: FAIL on state restoration.** Bob authorized three serialized
+phases using frozen fixture source `9c201678b62fe5dc33006f86b09d3e6e8403e500`
+and the unchanged product bundle built from `954207e4`. The owned native slot
+was released after all processes exited. No repair or rerun occurred.
+
+| Phase | Actual result |
+| --- | --- |
+| pluginval 1.0.4, strictness 8, GUI skipped | Exit 1 in 1.5 seconds; seven state-restoration assertions failed. No reported processing/automation matrix failure, timeout or crash. |
+| arm64 fixture configure/build, four jobs | Exit 0 in 27.2 seconds, including juceaide. One dependency deprecation warning. No Cmajor build or metadata stamp. |
+| Exact VST3 fixture run | Exit 1; 813 assertions, 27 failures, all in three restore cases. No timeout or crash. |
+
+The validator used seed `954207` (logged as `0xe8f5f`), sample rates
+44100/48000/96000 and blocks 64/512/1024. Its seven immediate restoration
+failures named Analyzer Enable, Frequency, Q, Amount / Mid, Side, Character
+and Shape. The failure was retained without lowering strictness.
+
+The compiled fixture passed the actual eight sound parameters' stable IDs,
+titles/units, defaults, automation flags, physical ranges and discrete choices.
+It also passed the existing Analyzer Enable contract: ID `303068736`, default
+0, physical 0–1, automatable and non-discrete in the host. The sole remaining
+parameter was JUCE's actual Bypass (`1652125811`). Deterministic continuous and
+discrete changes and all directly processed finite-output checks passed.
+
+State evidence distinguishes two observable seams. Each restore used exactly
+the same 683-byte saved state S. No expected values were resent during restore:
+
+| Restore case | Host readback after two seconds | Recaptured native state |
+| --- | --- | --- |
+| Same instance, first restore of S after edits | All eight values remain edited | Exactly S |
+| Same instance, edit again then restore identical S | All eight values remain edited | Exactly the edited state |
+| Fresh instance, edit then restore S | All eight values remain edited | Exactly S |
+
+Each case failed eight value assertions and its settling deadline, accounting
+for all 27 failures. Final readbacks completed at approximately 2003 ms with
+zero matching blocks. Thus the host-readback failure persists through the
+fixture's explicit message-loop/processing window; it is not only the
+validator's immediate read timing. The first/fresh serialized-state recovery
+and repeated-state failure must remain distinct findings. They are consistent
+with notification and identical-state reapplication concerns, but the root
+cause and audible DSP consequences have not been established.
+
+- Saved S SHA-256:
+  `778baf9cef9de6788d30948ed0879b19d0f4c4b61594d6573ad8e4f21fb1e226`.
+- Edited-state SHA-256:
+  `5de7261a3947ecee08f90ec5dd0ab8247df902fd4793c23520ce6cc6f2a3f9aa`.
+- Actual arm64 host executable SHA-256:
+  `ddf30acc49a4031715d01bd1b79c386cd605a4e911aedd4124d9b17a7be17fb3`.
+
+Local evidence root:
+`/Users/winterfell/.codex/visualizations/2026/09/05/01a07068-7376-7012-a350-a5999d5bd51c/l1/`.
+`native-proof-9c201678/pluginval/` and `fixture-build/` contain command logs and
+phase results. `exact-vst3-probe-01/` contains candidate/probe hashes, process
+output, result JSON and `probe/` with JSONL assertions and the unmodified state
+blobs. Validator/build process groups were verified gone, and no owned fixture
+process remained. The build occupied about 80 MiB and evidence under 0.4 MiB,
+within the 2 GiB allowance; final free space was 46.07 GiB.
+
+Candidate binary/payload and original toolchain hashes still match the build
+record. No product, generated bundle or framework change, installation, editor
+GUI, AU registration, DAW, audio-device or listening activity occurred. Actual
+editor gestures, DAW scheduling/projects, clean macOS 15/26 acceptance and final
+packaging remain separate gates. New diagnosis/repair and any native retry must
+be routed after this released slot.
