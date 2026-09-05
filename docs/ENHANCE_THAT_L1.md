@@ -244,3 +244,9 @@ GUI, AU registration, DAW, audio-device or listening activity occurred. Actual
 editor gestures, DAW scheduling/projects, clean macOS 15/26 acceptance and final
 packaging remain separate gates. New diagnosis/repair and any native retry must
 be routed after this released slot.
+
+The subsequent [state source repair checkpoint](ENHANCE_THAT_STATE_REPAIR.md)
+traces the deduplication and notification failures and freezes a one-header
+Cmajor repair plus a real gain/DSP regression in L1's owned clone. The repair
+and smaller witness are unbuilt and unrun; native retry remains held for review
+and resource allocation. The failed binary and original evidence are preserved.
