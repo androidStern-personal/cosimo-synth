@@ -1,10 +1,10 @@
 # Enhance That — consolidated launch handoff
 
-Prepared September 5, 2026. **Execution authorized.** Authority: Andrew's decisions in Woods thread `01a03885-0e68-7411-8b3f-f69ae41b6d89`, including the latest management-only Bob and Astra/standard-speed instructions.
+Prepared September 5, 2026; active scope updated September 6, 2026. **Execution authorized.** Authority: Andrew's decisions in Woods thread `01a03885-0e68-7411-8b3f-f69ae41b6d89`, including the latest management-only Bob and Astra/standard-speed instructions.
 
 This is the execution handoff for the remaining launch work. It supersedes conflicting statuses, dates and requirements in the historical roadmap (`ENHANCER_LITE_BUILDER_KIT_ROADMAP.md`) and twenty-day schedule (`ENHANCER_LITE_BUILDER_KIT_20_DAY_COVERAGE.md`). Those documents retain useful background, not additional launch gates. The six packets below group existing BK tickets; they are not six rival coordinators or replacements for the ticket IDs.
 
-**Outcome:** a working, qualified product and Builder Kit, finished website and purchase/download experience, usable creative and press assets, completed beta evidence, and a rehearsed launch awaiting Andrew's publication approval. Neither a code-only delivery nor a folder of plans counts as that outcome. Post-launch follow-up remains scheduled work, not something that can be completed before launch.
+**Outcome:** a working, qualified product and Builder Kit, functional website and purchase/download experience using neutral presentation and existing assets, completed beta evidence, and a rehearsed launch awaiting Andrew's publication approval. Neither a code-only delivery nor a folder of plans counts as that outcome. Post-launch follow-up remains scheduled work, not something that can be completed before launch.
 
 Andrew has authorized handing this queue to Bob and getting it genuinely in flight. Bob delegates implementation, review, integration and qualification to top-level Codex tasks; this includes scoped commits, reviewed integration/push and isolated build/test/install work needed for the approved plan. Public launch, live payment/refund tests, campaign sends, new paid services, new access and personal account/terms actions retain their explicit checkpoints. Account/commerce preparation must not activate public sales or disturb existing products. No authorization expands to unrelated repositories, tasks, source changes or deployments.
 
@@ -20,10 +20,12 @@ Andrew has authorized handing this queue to Bob and getting it genuinely in flig
 - **Refunds:** approved copy is “For refund requests, contact support with the reason for your request. We review each request individually.” No fixed 14-day cutoff or advertised unlimited promise; Andrew decides individual refunds.
 - **Support:** purchase/download and genuine setup help, not bespoke development or merge support. No fixed public response-time guarantee.
 - **Channels:** `song-machines.com`, `andrew@song-machines.com`, Polar commerce/transactional delivery, separate affirmative unchecked Resend marketing opt-in. Preserve unrelated existing site content and account products. Organic acquisition first; no paid ads, affiliates or automatic paid service upgrades.
-- **People and timing:** Andrew has five testers and recruits more once there is something showable. Target ten plus two backups. The final launch film is not a recruitment prerequisite. Use completion gates, not the stale August–September calendar.
+- **People and timing:** Andrew has five testers and recruits more once there is something showable. Target ten plus two backups. New video, demo, hero, animation and promotional generation are outside the active roadmap; preserve existing assets. Use completion gates, not the stale August–September calendar.
 - **Separate/deferred:** hosted-Mac CI and automatic releases, unrelated dynamic-data research, customer publishing tools, paid acquisition and speculative Unicode/JUCE-fork work. No decision-provenance requirement. None is silently reintroduced as a launch dependency.
 
 ## 2. Starting point — reuse what is finished
+
+The separable documentation/evidence cleanup landed on remote master at `8e34fcb0`. The larger reviewed probe/release cleanup (`674c048c`, wording `56901443`) remains in the reduced private product composition, including L3’s equivalent commits; its removed machinery never reached master. Product/dependency integration and final qualification remain separate. No new JUCE fork or execution machinery is authorized.
 
 Historical audit snapshot; consult the launch index and the current product owner for source and qualification status:
 
@@ -89,7 +91,7 @@ Evidence starting points: source `docs/BK_HOST_INTEGRATION.md`; `/private/tmp/bu
 
 **Owner:** Bob; Woods independently checks customer-facing artifacts; Andrew supplies required Apple access and listening acceptance. **Tickets:** BK-03, BK-04 final-artifact review, BK-15 publication, BK-31, BK-32, BK-33, BK-34.
 
-**Can start:** packaging/qualification preparation and clean-environment planning immediately. Final artifacts depend on L1 and relevant L2 changes.
+**Current work:** L3 continues the actual AU discrepancy resolution, macOS 15 testing in the existing VM, and the reviewed candidate through signing, notarization, packaging and direct customer/store tests. Reuse existing permissions and working environments; record remaining platform/host results separately.
 
 **Deliver:**
 
@@ -105,38 +107,29 @@ Evidence starting points: source `docs/BK_HOST_INTEGRATION.md`; `/private/tmp/bu
 
 **Owner:** Woods for offer/content; Bob for implementation and technical verification; Andrew for required account actions. **Tickets:** BK-50, BK-51, BK-52.
 
-**Can start:** page structure, commerce/delivery and consent implementation immediately with provisional copy. Final creative selection only blocks final appearance/copy. Final downloads depend on L3.
+**Can start:** functional store work now with neutral presentation. Visual redesign is deferred until Andrew supplies a reference; it does not block checkout, entitlement, delivery, recovery or email. Final downloads use the exact L3 candidate.
 
 **Deliver:**
 
-- A functioning Enhance That product page on the existing Song Machines site without replacing the unrelated product. Mobile and desktop layouts, honest demos, free-versus-paid explanation, compatibility, price/rights/disclosures, download/purchase calls to action, FAQ and support/refund copy.
-- A dedicated Polar product/checkout and reliable free/paid download path using the existing feed architecture; purchase confirmation, recovery/resend, repeat-customer behavior and future-release eligibility. Define and verify the first-50 offer without accidental over-selling or silent price changes.
+- A functioning Enhance That product page on the existing Song Machines site without replacing the unrelated product. Usable neutral mobile and desktop layouts, existing assets where useful, free-versus-paid explanation, compatibility, price/rights/disclosures, download/purchase calls to action, FAQ and support/refund copy.
+- A dedicated Polar product/checkout and reliable free/paid download path using the existing feed architecture; checkout → entitlement → delivery, purchase confirmation, recovery/resend, repeat-customer behavior and lifetime upstream-update eligibility. Verify the $29 first-50 offer without accidental over-selling or silent price changes; make refund outcomes and later update access behave consistently with the agreed policy.
 - Failure checks for interrupted payment/delivery, duplicate callbacks, wrong/expired access, repeat requests and recovery. Test mode first where available. Do not leak feed secrets in page code/logs or treat a working developer URL as proof of customer entitlement delivery. Do not invent revocation guarantees the cohort-feed design does not provide.
-- Song Machines sender/domain setup and verified transactional-versus-marketing separation. Marketing opt-in stays optional and unchecked, with functional unsubscribe and consent records. Draft onboarding/follow-up emails with clear trigger, audience, timing and exit behavior; no campaign sending yet.
-- A real rehearsal of page → download or purchase → receipt/access → installation → help/recovery, including relevant failure paths. Separately label sandbox proof and any later approved live purchase/refund proof.
+- Connected Song Machines transactional confirmation, delivery and recovery email, with verified separation from marketing. Marketing opt-in stays optional and unchecked, with functional unsubscribe and consent records. No marketing sends or newly generated promotional campaign material.
+- Direct connected customer/store checks of page → free download or paid checkout → entitlement → receipt/access → exact download → installation → help/recovery, including failure, duplicate-callback, refund/update-access and unsubscribe behavior. A local mock plus an isolated sandbox is insufficient: exercise the connected implementation with authorized test facilities and report any unperformed live-only behavior. No real charges/refunds or production publication.
 
-**Done when:** a usable review environment exists and the whole flow works; final approved copy/assets/downloads can be promoted without another engineering project. Public switch-on, real financial tests and sends remain approval-gated. Do not claim existing service access means this work is already built.
+**Done when:** the connected free/paid customer flow and transactional email work end to end with the exact candidate; visual redesign can follow without rebuilding commerce. Public switch-on, real financial tests and sends remain approval-gated. Do not claim existing service access means this work is already built.
 
-### L5 — Create branding, demonstrations and the promotion package
+### L5 — Preserve existing assets; new promotional generation inactive
 
-**Owner:** Woods; scoped asset contributors may be assigned after dispatch. Bob supplies real builds and technical review. **Tickets:** BK-52A, BK-60, BK-61.
+**Owner:** Woods. **Tickets:** BK-52A, BK-60, BK-61 are inactive for new generation.
 
-**Can start:** immediately with the selected product names and current real product. Work alongside L1–L4, not after all engineering finishes.
-
-**Deliver in two passes:**
-
-1. **Recruitment pass:** two or three coherent concepts combining visual identity, page layout/brand-and-offer copy, demo angle and press presentation. Recommend one for Andrew to choose. Then produce the showable page, current screenshots, short honest demonstration and compact press sheet needed to recruit more testers. Use clearly labelled provisional/mockup material only where it is not presented as working-product evidence.
-2. **Launch pass:** finish the chosen identity and copy, real screenshots and loudness-matched audio examples, approximately 90-second hero demo and longer modification walkthrough, downloadable press kit (description, features, requirements, pricing, rights/support details, images, audio/video and contact), and ready-to-review email/social/pitch copy. Andrew's voice/appearance is a named recording checkpoint if used, not a prerequisite for preparing scripts, captures or edits.
-
-Research current relevant submission/contact paths for outlets such as KVR, Bedroom Producers Blog, Rekkerd and Audio Plugin Guy, plus a focused list of 20–30 suitable smaller creators and appropriate audio-programming communities. Prepare individual pitches and an organic release/follow-up sequence. No fabricated reviews, testimonials or partnerships; customer quotes need permission. No mass sends, paid placements, ads or affiliate commitments.
-
-**Done when:** usable assets and publishable drafts exist, the chosen direction is applied consistently to the actual page/press/demo deliverables, claims match final evidence and remaining approvals are named. A moodboard, mockup or strategy document alone is not completion. Final film is not a prerequisite for recruitment.
+Preserve existing concepts, screenshots, audio, video, demos and drafts. Do not create new video, demo, hero, animation, promotional assets, campaigns or alternative visual directions. Reuse suitable existing material without treating provisional styling as approved branding. Andrew will supply the visual reference later; L4’s neutral functional store continues now. Blender and robot work are separate and do not re-enter this launch roadmap by inference.
 
 ### L6 — Run beta, rehearse launch and manage the first customers
 
 **Owner:** Woods for overall readiness/tester operations; Bob for fixes and release operation; Andrew recruits and approves launch. **Tickets:** BK-70, BK-71, BK-72, BK-80, BK-81, BK-82.
 
-**Can start:** beta brief, recruitment kit, feedback/support intake and launch/rollback checklist immediately. Recruitment follows the L4/L5 showable milestone. Formal beta requires the qualified frozen package and actual participants.
+**Can start:** beta brief, recruitment kit, feedback/support intake and launch/rollback checklist immediately. Recruitment uses the functional L4 page, current product and existing assets; new L5 generation is not a prerequisite. Formal beta requires the qualified frozen package and actual participants.
 
 **Deliver:**
 
@@ -154,12 +147,12 @@ Research current relevant submission/contact paths for outlets such as KVR, Bedr
 | Milestone | Required result | What can continue while waiting |
 |---|---|---|
 | Execution | Bob assigns scoped work to the existing owners and schedules shared resources. | Andrew has authorized execution; dependent work follows its actual source and artifact requirements. |
-| **First delivery: recruitment-ready** | Showable current product, presentable page, real screenshots, short honest demo, compact press sheet and tester brief. | Automation, release qualification, commerce, modification example, final video and email drafts. Andrew can recruit without waiting for the final film. |
-| **Beta-ready** | Retained format/platform decision, qualified candidate and kit/tools, functioning customer flows/instructions, frozen manifest and tester roster. | Final media polish/outreach preparation and independent low-risk work. No unverified release claims. |
-| **Launch-ready review** | Actual seven-day beta results, reviewed fixes/requalification, finished page/store/assets, rehearsed delivery/recovery and explicit unresolved gaps. | Only affected deliverables wait for creative choice, recordings, account access or listening; unrelated tasks keep moving. |
+| **First delivery: recruitment-ready** | Current product, neutral functional store, existing assets and tester brief. | L3 qualification and connected customer/store checks continue; visual redesign and new promotional generation do not block them. |
+| **Beta-ready** | Retained format/platform decision, qualified candidate and kit/tools, functioning customer flows/instructions, frozen manifest and tester roster. | Independent product/customer work; no new promotional generation or unverified release claims. |
+| **Launch-ready review** | Actual seven-day beta results, reviewed fixes/requalification, functional page/store using existing assets, rehearsed delivery/recovery and explicit unresolved gaps. | Only affected deliverables wait for required account access or listening; unrelated tasks keep moving. |
 | **Public launch** | Andrew approves exact publication/claims and actual sends; authorized owners promote and verify the named artifacts. | Post-launch support and approved follow-up begin; spending and individual refunds remain separate decisions. |
 
-The necessary human inputs are creative selection/claims, musical acceptance, recordings if used, recruitment and actual tester participation, personal account authentication/terms, and launch/financial/send approval. Do not add approval chores for minor implementation choices. Do not promise that a fully autonomous run can supply external beta participants, their seven days of use, Andrew's performance or personal account actions.
+The necessary human inputs are claims, musical acceptance, recruitment and actual tester participation, personal account authentication/terms, and launch/financial/send approval. Do not add approval chores for minor implementation choices. Do not promise that a fully autonomous run can supply external beta participants, their seven days of use or personal account actions.
 
 If an actual account, OS environment or compatibility problem appears, exhaust safe in-scope checks and present the smallest concrete decision with evidence. Do not expand into paid infrastructure or architecture work merely to avoid reporting it. AU has the explicit defer option above; macOS 15/26 does not.
 
@@ -175,7 +168,7 @@ Every historical ticket is either represented above or explicitly retained as co
 | BK-05, BK-07, BK-10, BK-12 | L1: selected name application/checks, product separation/freeze, automation/state. |
 | BK-11, BK-20 | Sanitized export and shared toolchain foundation complete; use them, qualify final release in L3. |
 | BK-13, BK-13A, BK-13B | Permanent identity/preset isolation/readable-name fixes landed; L1 applies new presentation, preserves behavior. |
-| BK-14 | L2 modification reference; feeds L5 demonstration. |
+| BK-14 | L2 customer modification reference; no new promotional demonstration required. |
 | BK-15 | Feed/tooling foundation complete; exact next release and publication remain L3/L6. |
 | BK-21, BK-21A, BK-21B | Setup/JUCE continuation/short installer delivered; L2/L3 validate final composition, no long command rewrite. |
 | BK-22, BK-22A, BK-22B, BK-22C | Build/install, Space, safe replacement and optional real preview delivered; L2/L3 retain regression proof. |
@@ -185,8 +178,10 @@ Every historical ticket is either represented above or explicitly retained as co
 | BK-31, BK-32, BK-33, BK-34 | Our finished release signing, exact-artifact qualification, host/audio acceptance and clean supported Macs in L3. Customer publishing tools deferred. |
 | BK-40, BK-40A, BK-41, BK-42 | L2 final customer workflow, practical guidance and bounded support. No mandatory copying or auto-opening onboarding page. |
 | BK-50, BK-51, BK-52 | L4 real account/product/store/site/email work; connected services are not finished delivery. |
-| BK-52A, BK-60, BK-61 | L5 complete creative options, actual demo/assets and researched outreach drafts, not only final copy. |
-| BK-70, BK-71, BK-72 | L6 recruitment, real beta and fixes; five testers currently, assets first, no fictitious elapsed beta. |
+| BK-52A, BK-60, BK-61 | New creative/video/demo/hero/animation/promotional generation inactive; preserve existing assets. Visual redesign awaits Andrew’s reference. |
+| BK-70, BK-71, BK-72 | L6 recruitment, real beta and fixes; five testers currently, existing assets and functional store, no fictitious elapsed beta. |
 | BK-80, BK-81, BK-82 | L6 rehearsal/approved launch, first-customer follow-up and evidence-led later price/scale decision. |
 
 Old automatic onboarding pages, customer publishing tools, mandatory Logic, unconditional AU, fixed refund/support deadlines, custom signed-bundle delivery, unresolved-rights calendar stops and paid/hosted release infrastructure are not hidden extra work. Where a retained requirement is not proven, keep it open rather than converting “planned,” “built,” “tested locally” or “privately staged” into “launched.”
+
+Reuse existing permissions for authorized work. This update authorizes no production publication, real charges/refunds, marketing sends, new accounts, agreements or purchases.
