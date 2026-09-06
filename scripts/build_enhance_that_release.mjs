@@ -162,7 +162,7 @@ async function staticDspEvidence(config, cmakeExecutable, output) {
             run("/usr/bin/lipo", [shared, "-thin", architecture, "-output", thin]);
             const members = run("/usr/bin/ar", ["-t", thin]).split(/\r?\n/u).filter(Boolean);
             assert.ok(members.includes("cmajor_plugin.cpp.o"));
-            assert.ok(members.every(name => name === "cmajor_plugin.cpp.o" || /^juce_[A-Za-z0-9_]+\.(?:cpp|mm|c)\.o$/u.test(name)), "Unexpected native archive member");
+            assert.ok(members.every(name => name === "__.SYMDEF" || name === "cmajor_plugin.cpp.o" || /^juce_[A-Za-z0-9_]+\.(?:cpp|mm|c)\.o$/u.test(name)), "Unexpected native archive member");
             membersByArchitecture[architecture] = members;
         }
     } finally { await rm(memberDirectory, { recursive: true }); }
